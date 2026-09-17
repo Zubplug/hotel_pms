@@ -78,20 +78,7 @@ class ProfileScreen extends ConsumerWidget {
                 _ProfileHeaderCard(profile: profile),
                 const SizedBox(height: 32),
 
-                // ── Hub Section ──────────────────────────────────────────────
-                _buildSectionTitle('HUB'),
-                _buildSettingsGroup([
-                  _SettingsTile(
-                    title: 'Management Hub',
-                    icon: Icons.apps_rounded,
-                    value: 'Alerts, Approvals & More',
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const HubScreen()),
-                    ),
-                  ),
-                ]),
-                const SizedBox(height: 24),
+
 
                 // ── Account Section ─────────────────────────────────────────
                 _buildSectionTitle('ACCOUNT'),

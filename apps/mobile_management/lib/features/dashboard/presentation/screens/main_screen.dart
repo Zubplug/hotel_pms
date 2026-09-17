@@ -84,12 +84,88 @@ class _MainScreenState extends ConsumerState<MainScreen> {
               ),
               _PremiumNavBar(
                 currentIndex: _currentIndex,
-                onTap: (i) => setState(() => _currentIndex = i),
+                onTap: (i) {
+                  if (i == 4) {
+                    _showComingSoonPopup(context);
+                  } else {
+                    setState(() => _currentIndex = i);
+                  }
+                },
               ),
             ],
           ),
         );
       },
+    );
+  }
+
+  void _showComingSoonPopup(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: _bgDeep,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
+          side: BorderSide(color: _gold.withValues(alpha: 0.3), width: 1.5),
+        ),
+        contentPadding: const EdgeInsets.all(32),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: _gold.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.rocket_launch_rounded, color: _gold, size: 48),
+            ),
+            const SizedBox(height: 24),
+            const Text(
+              'COMING SOON',
+              style: TextStyle(
+                color: _gold,
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 2,
+              ),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'The Management Hub is currently under development. Stay tuned for advanced alerts and approvals.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: _textMuted,
+                fontSize: 14,
+                height: 1.5,
+              ),
+            ),
+            const SizedBox(height: 32),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () => Navigator.pop(ctx),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _gold,
+                  foregroundColor: _bgDeep,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  elevation: 0,
+                ),
+                child: const Text(
+                  'Got it',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -108,7 +184,7 @@ class _PremiumNavBar extends ConsumerWidget {
       _NavItem(icon: Icons.king_bed_outlined, activeIcon: Icons.king_bed_rounded, label: 'Rooms', badge: 0),
       _NavItem(icon: Icons.account_balance_wallet_outlined, activeIcon: Icons.account_balance_wallet_rounded, label: 'Finance', badge: 0),
       _NavItem(icon: Icons.restaurant_outlined, activeIcon: Icons.restaurant_rounded, label: 'F&B', badge: 0),
-      _NavItem(icon: Icons.person_outline, activeIcon: Icons.person_rounded, label: 'You', badge: 0),
+      _NavItem(icon: Icons.apps_rounded, activeIcon: Icons.apps_rounded, label: 'Hub', badge: 0),
     ];
 
     return Container(
