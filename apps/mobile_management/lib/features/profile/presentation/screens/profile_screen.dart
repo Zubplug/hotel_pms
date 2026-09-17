@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../authentication/presentation/providers/auth_provider.dart';
 import '../providers/profile_provider.dart';
 import '../models/user_profile.dart';
+import '../../../hub/presentation/screens/hub_screen.dart';
 
 
 // ─── Design Tokens ───────────────────────────────────────────────────────────
@@ -76,6 +77,21 @@ class ProfileScreen extends ConsumerWidget {
                 // ── Header Profile Card ──────────────────────────────────────
                 _ProfileHeaderCard(profile: profile),
                 const SizedBox(height: 32),
+
+                // ── Hub Section ──────────────────────────────────────────────
+                _buildSectionTitle('HUB'),
+                _buildSettingsGroup([
+                  _SettingsTile(
+                    title: 'Management Hub',
+                    icon: Icons.apps_rounded,
+                    value: 'Alerts, Approvals & More',
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const HubScreen()),
+                    ),
+                  ),
+                ]),
+                const SizedBox(height: 24),
 
                 // ── Account Section ─────────────────────────────────────────
                 _buildSectionTitle('ACCOUNT'),

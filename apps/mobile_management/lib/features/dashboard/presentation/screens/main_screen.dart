@@ -6,8 +6,9 @@ import 'package:mobile_management/features/rooms/presentation/screens/rooms_scre
 import 'package:mobile_management/features/finance/presentation/screens/finance_screen.dart';
 import 'package:mobile_management/features/profile/presentation/screens/profile_screen.dart';
 import 'package:mobile_management/features/profile/presentation/providers/profile_provider.dart';
-import 'package:mobile_management/features/hub/presentation/screens/hub_screen.dart';
-import '../providers/dashboard_provider.dart';
+import 'package:mobile_management/features/fnb/presentation/screens/fnb_screen.dart';
+
+
 
 // ─── Design Tokens ────────────────────────────────────────────────────────────
 const _bgDeep = Color(0xFF070D1A);
@@ -58,7 +59,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
           const DashboardScreen(),
           const RoomsScreen(),
           const FinanceScreen(),
-          const HubScreen(),
+          const FnbScreen(),
           const ProfileScreen(),
         ];
 
@@ -102,22 +103,11 @@ class _PremiumNavBar extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Count pending approvals from dashboard alerts for Hub badge
-    int hubPending = 0;
-    try {
-      final dashState = ref.watch(dashboardDataProvider);
-      dashState.whenData((data) {
-        hubPending = data.requiresAttention
-            .where((a) => a.action == 'VIEW_APPROVALS')
-            .fold(0, (sum, a) => sum + a.affectedCount);
-      });
-    } catch (_) {}
-
     final items = [
       _NavItem(icon: Icons.home_outlined, activeIcon: Icons.home_rounded, label: 'Home', badge: 0),
       _NavItem(icon: Icons.king_bed_outlined, activeIcon: Icons.king_bed_rounded, label: 'Rooms', badge: 0),
       _NavItem(icon: Icons.account_balance_wallet_outlined, activeIcon: Icons.account_balance_wallet_rounded, label: 'Finance', badge: 0),
-      _NavItem(icon: Icons.apps_outlined, activeIcon: Icons.apps_rounded, label: 'Hub', badge: hubPending),
+      _NavItem(icon: Icons.restaurant_outlined, activeIcon: Icons.restaurant_rounded, label: 'F&B', badge: 0),
       _NavItem(icon: Icons.person_outline, activeIcon: Icons.person_rounded, label: 'You', badge: 0),
     ];
 
