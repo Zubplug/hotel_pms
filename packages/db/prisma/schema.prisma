@@ -3113,22 +3113,24 @@ enum PosCashMovementType {
 }
 
 model CashAccount {
-  id            String     @id @default(uuid()) @db.Uuid
-  propertyId    String     @db.Uuid
-  property      Property   @relation(fields: [propertyId], references: [id])
-  outletId      String?    @db.Uuid
-  outlet        PosOutlet? @relation(fields: [outletId], references: [id])
+  id            String          @id @default(uuid()) @db.Uuid
+  propertyId    String          @db.Uuid
+  property      Property        @relation(fields: [propertyId], references: [id])
+  outletId      String?         @db.Uuid
+  outlet        PosOutlet?      @relation(fields: [outletId], references: [id])
   name          String
   type          String // e.g. SAFE, SERVER_BANK, STATION_BANK, EMERGENCY_BANK, BANK_ACCOUNT, EXTERNAL
   bankName      String?
   accountNumber String?
-  isDefault     Boolean    @default(false)
-  balance       Decimal    @default(0) @db.Decimal(18, 4)
-  ownerId       String?    @db.Uuid
-  owner         Staff?     @relation(fields: [ownerId], references: [id])
-  isActive      Boolean    @default(true)
-  createdAt     DateTime   @default(now()) @db.Timestamptz
-  updatedAt     DateTime   @updatedAt @db.Timestamptz
+  isDefault     Boolean         @default(false)
+  balance       Decimal         @default(0) @db.Decimal(18, 4)
+  ownerId       String?         @db.Uuid
+  owner         Staff?          @relation(fields: [ownerId], references: [id])
+  glAccountId   String?         @db.Uuid
+  glAccount     ChartOfAccount? @relation(fields: [glAccountId], references: [id])
+  isActive      Boolean         @default(true)
+  createdAt     DateTime        @default(now()) @db.Timestamptz
+  updatedAt     DateTime        @updatedAt @db.Timestamptz
 
   sourceMovements      PosCashMovement[]  @relation("SourceAccount")
   destinationMovements PosCashMovement[]  @relation("DestinationAccount")
@@ -4540,11 +4542,11 @@ model EventEquipment {
 
 model EventEquipmentBooking {
   id String @id @default(uuid()) @db.Uuid
-  
-  eventBookingId String @db.Uuid
+
+  eventBookingId String       @db.Uuid
   eventBooking   EventBooking @relation(fields: [eventBookingId], references: [id])
 
-  equipmentId String @db.Uuid
+  equipmentId String         @db.Uuid
   equipment   EventEquipment @relation(fields: [equipmentId], references: [id])
 
   quantity Int @default(1)
@@ -5069,6 +5071,7 @@ model ChartOfAccount {
   isActive      Boolean     @default(true)
 
   journalLines JournalEntryLine[]
+  cashAccounts CashAccount[]
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz

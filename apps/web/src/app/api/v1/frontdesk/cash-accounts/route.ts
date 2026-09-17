@@ -9,6 +9,14 @@ export async function GET(req: NextRequest) {
     const ctx = await requireOrganizationContext((session.user as any).id || (session as any).user.id);
   const propertyId = new URL(req.url).searchParams.get('propertyId') || (session.user as any).propertyId;
   if (!propertyId) return NextResponse.json({ error: 'Property ID is required' }, { status: 400 });
-  const accounts = await prisma.cashAccount.findMany({ where: { propertyId: { in: ctx.propertyIds as string[] }, isActive: true }, orderBy: { name: 'asc' }, select: { id: true, name: true, type: true, balance: true } });
+  const accounts = await prisma.cashAccount.findMany({ 
+    where: { 
+      propertyId: { in: ctx.propertyIds as string[] }, 
+      isActive: true,
+      type: 'FRONTDESK_TILL'
+    }, 
+    orderBy: { name: 'asc' }, 
+    select: { id: true, name: true, type: true, balance: true } 
+  });
   return NextResponse.json({ data: accounts.map(account => ({ ...account, balance: Number(account.balance) })) });
 }

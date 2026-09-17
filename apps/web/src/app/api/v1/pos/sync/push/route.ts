@@ -4,6 +4,7 @@ import crypto, { randomUUID } from "crypto";
 import { InventoryService } from "@/lib/inventory/InventoryService";
 import { isNightAuditCutoverActive } from "@/lib/night-audit-guard";
 import { requireOrganizationContext } from "@/lib/organization-access";
+import { PosPaymentAccountingService } from "@/lib/services/pos-payment-accounting-service";
 import { NotificationEngine } from "@/lib/notification-engine";
 
 // Legacy desktop SyncEvents use operation IDs such as `op_<device>_<ticks>`,
@@ -526,14 +527,17 @@ export async function POST(req: NextRequest) {
           else if (event.eventType === 'PAYMENT_RECORDED') {
               const method = payload.Method || payload.method || 'CASH';
               const orderId = payload.OrderId || payload.orderId || event.aggregateId;
-              const order = await tx.posOrder.findUnique({ where: { id: orderId }, select: { id: true, total: true, status: true, businessDate: true, sessionId: true } });
+              const order = await tx.posOrder.findUnique({ 
+                where: { id: orderId }, 
+                select: { id: true, total: true, status: true, businessDate: true, sessionId: true, propertyId: true, property: { select: { organizationId: true } } } 
+              });
               if (!order) {
                   // A payment cannot be applied safely until ORDER_CREATED has
                   // been accepted. Leave it retryable instead of dead-lettering
                   // it with a misleading foreign-key error.
                   throw new Error(`RETRYABLE_ORDER_NOT_FOUND: POS order ${orderId} has not reached the cloud yet`);
               }
-              await tx.posPayment.create({
+              const payment = await tx.posPayment.create({
                   data: {
                       id: payload.Id || payload.id || crypto.randomUUID(), // If entityId was the order, payment needs its own ID
                       orderId,
@@ -545,9 +549,29 @@ export async function POST(req: NextRequest) {
                       businessDate: order.businessDate,
                       sessionId: order.sessionId,
                       processedById: isUuid(payload.processedById) ? payload.processedById : operatorId,
-                      createdAt: new Date(event.occurredAt)
+                      createdAt: new Date(event.occurredAt),
+                      reference: event.idempotencyKey // Store idempotency on payment itself for journaling
                   }
               });
+
+              // Fetch full relations needed for double-entry GL logic
+              const orderWithRelations = await tx.posOrder.findUnique({
+                where: { id: orderId },
+                include: {
+                  property: { select: { organizationId: true } },
+                  items: { include: { product: { include: { category: true } } } }
+                }
+              });
+
+              // Safely construct double-entry GL inside the exact same sync transaction boundary
+              if (orderWithRelations) {
+                await PosPaymentAccountingService.processPaymentAccounting(
+                  tx,
+                  payment,
+                  orderWithRelations,
+                  operatorId
+                );
+              }
 
               // Update cashSales on PosSession if it's a CASH payment
               if (method === 'CASH' && order.sessionId) {

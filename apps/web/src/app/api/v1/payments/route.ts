@@ -8,6 +8,10 @@ import { NotificationEngine } from '@/lib/notification-engine';
 import { findActiveFrontdeskSession, isFrontdeskCashierRole } from '@/lib/frontdesk/active-session';
 import { canOverrideNightAudit, getNightAuditOverrideReason, isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
 import { getPropertyBusinessDate } from '@/lib/date-utils';
+import { GLMappingService } from '@/lib/services/gl-mapping-service';
+import { GeneralLedgerService } from '@/lib/services/general-ledger-service';
+import { FolioPaymentAccountingService } from '@/lib/services/folio-payment-accounting-service';
+
 export async function POST(req: NextRequest) {
   try {
     const session = await auth();
@@ -24,7 +28,7 @@ export async function POST(req: NextRequest) {
       return errorResponse('BAD_REQUEST', 'Amount must be greater than zero', 400);
     }
     // Validate enum
-    const validMethods = ['CASH', 'POS', 'BANK_TRANSFER', 'CARD'];
+    const validMethods = ['CASH', 'POS', 'BANK_TRANSFER', 'CARD', 'CITY_LEDGER'];
     if (!validMethods.includes(method)) {
       return errorResponse('BAD_REQUEST', `Invalid payment method. Allowed: ${validMethods.join(', ')}`, 400);
     }
@@ -58,7 +62,8 @@ export async function POST(req: NextRequest) {
     }
     // ----------------------------
     // Ensure staff has property access
-    const allowedPropertyIds = (await requireOrganizationContext(session.user.id)).propertyIds;
+    const ctx = await requireOrganizationContext(session.user.id);
+    const allowedPropertyIds = ctx.propertyIds;
     if (!allowedPropertyIds.includes(folio.propertyId)) {
       return errorResponse('FORBIDDEN', 'No access to this property', 403);
     }
@@ -76,6 +81,20 @@ export async function POST(req: NextRequest) {
     if (numericAmount > currentBalance) {
       return errorResponse('BAD_REQUEST', 'Payment amount exceeds outstanding balance. Overpayments are not currently permitted.', 400);
     }
+
+    // Pre-resolve GL accounts outside the transaction to avoid slow async in tx if possible
+    let debitGlAccountId: string | null = null;
+    let creditGlAccountId: string | null = null;
+    
+    if (method !== 'CASH') {
+      try {
+        debitGlAccountId = await GLMappingService.getAssetAccountForMethod(folio.propertyId, method);
+        creditGlAccountId = await GLMappingService.getGuestLedgerAccount(folio.propertyId);
+      } catch (e: any) {
+        return errorResponse('BAD_REQUEST', `GL Mapping Error: ${e.message}`, 400);
+      }
+    }
+
     // 3. Atomic Transaction for Financial Integrity
     const result = await prisma.$transaction(async (tx: any) => {
       // A. Optimistic Concurrency Control update on Folio
@@ -91,10 +110,11 @@ export async function POST(req: NextRequest) {
         }
       });
       // B. Create the FolioItem (Financial Event)
+      const businessDate = folio.property.businessDate || getPropertyBusinessDate(folio.property.timezone);
       const folioItem = await tx.folioItem.create({
         data: {
           folioId: folio.id,
-          businessDate: folio.property.businessDate || getPropertyBusinessDate(folio.property.timezone),
+          businessDate,
           type: 'PAYMENT',
           source: method === 'POS' ? 'POS' : 'MANUAL',
           description: `Payment - ${method}`,
@@ -122,7 +142,7 @@ export async function POST(req: NextRequest) {
           currency: currency,
           baseAmount: numericAmount,
           status: 'COMPLETED',
-          businessDate: folio.property.businessDate || getPropertyBusinessDate(folio.property.timezone),
+          businessDate,
           idempotencyKey,
           receiptNumber: receiptNumber as any,
           providerTransactionId,
@@ -134,6 +154,7 @@ export async function POST(req: NextRequest) {
           notes
         } as any
       });
+      
       if (activeFrontdeskSession && method === 'CASH' && staff) {
         await tx.cashAccount.update({
           where: { id: activeFrontdeskSession.cashAccountId },
@@ -157,6 +178,17 @@ export async function POST(req: NextRequest) {
           }
         });
       }
+
+      // 🚨 DOUBLE-ENTRY GL POSTING FOR NON-CASH FOLIO PAYMENTS
+      // This is now securely extracted to ensure 100% offline sync parity.
+      await FolioPaymentAccountingService.processPaymentAccounting(
+        tx,
+        payment,
+        folio.propertyId,
+        folio.property.organizationId,
+        session.user.id
+      );
+
       // D. Write Atomic Audit Log
       await tx.auditLog.create({
         data: {

@@ -17,13 +17,15 @@ import {
   ArrowDownRight,
   Plus,
   History,
-  MoreHorizontal
+  MoreHorizontal,
+  Link as LinkIcon
 } from 'lucide-react';
 
 import { auth } from '@/lib/auth';
 import { prisma } from '@hotel-pms/db';
 import { RecordCashDropModal } from '@/components/accountant/RecordCashDropModal';
 import { BankReconForm } from '@/components/accountant/BankReconForm';
+import { GLMappingTab } from '@/components/accountant/GLMappingTab';
 
 export default async function CashBankPage() {
   const session = await auth();
@@ -46,6 +48,17 @@ export default async function CashBankPage() {
     where: { propertyId },
     take: 10,
     orderBy: { amount: 'desc' } // or createdAt, assuming amount for now
+  }) : [];
+
+  const cashAccounts = propertyId ? await prisma.cashAccount.findMany({
+    where: { propertyId },
+    include: { glAccount: true },
+    orderBy: { type: 'asc' }
+  }) : [];
+
+  const chartOfAccounts = propertyId ? await prisma.chartOfAccount.findMany({
+    where: { propertyId, type: 'ASSET' },
+    orderBy: { code: 'asc' }
   }) : [];
 
   const totalCashOnHand = posSessions.reduce((acc, curr) => acc + (Number(curr.version || 0)), 0); // Using version just as mock fallback, normally opening/closing balance
@@ -119,6 +132,9 @@ export default async function CashBankPage() {
           </TabsTrigger>
           <TabsTrigger value="petty-cash" className="data-[state=active]:bg-emerald-600 data-[state=active]:text-white">
             <Coins className="w-4 h-4 mr-2" /> Petty Cash
+          </TabsTrigger>
+          <TabsTrigger value="gl-mapping" className="data-[state=active]:bg-emerald-600 data-[state=active]:text-white">
+            <LinkIcon className="w-4 h-4 mr-2" /> GL Mapping
           </TabsTrigger>
         </TabsList>
 
@@ -292,6 +308,11 @@ export default async function CashBankPage() {
               </Table>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* GL Mapping Tab */}
+        <TabsContent value="gl-mapping" className="space-y-4">
+          <GLMappingTab cashAccounts={cashAccounts} chartOfAccounts={chartOfAccounts} />
         </TabsContent>
       </Tabs>
     </div>

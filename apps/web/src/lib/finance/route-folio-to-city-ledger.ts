@@ -1,4 +1,5 @@
 type Tx = any;
+import { CityLedgerAccountingService } from '@/lib/services/city-ledger-accounting-service';
 
 type CheckoutFolio = {
   id: string;
@@ -163,6 +164,26 @@ export async function routeFoliosToCityLedger(input: RouteInput) {
       await tx.cityLedgerAccount.update({ where: { id: accountId }, data: { balance: { decrement: credit } } });
       transferredCredit += credit;
     }
+
+    // 🚨 DOUBLE-ENTRY GL POSTING FOR CITY LEDGER TRANSFER
+    // This correctly routes Guest Ledger (1100) to City Ledger (1140).
+    // The service handles both positive (debit) and negative (credit) transfers.
+    // Fetch property to get organizationId
+    const property = await tx.property.findUnique({
+      where: { id: propertyId },
+      select: { organizationId: true }
+    });
+    const invoiceNumber = amount > 0 ? `AR-${confirmationNumber}-${String(folio.id).slice(0, 8).toUpperCase()}` : `CR-${confirmationNumber}-${String(folio.id).slice(0, 8).toUpperCase()}`;
+    await CityLedgerAccountingService.processCityLedgerRouting(
+      tx,
+      propertyId,
+      property?.organizationId || null,
+      createdBy,
+      amount,
+      folio.id,
+      invoiceNumber,
+      `cl_route_${folio.id}_${confirmationNumber}`
+    );
 
     await tx.folioItem.create({
       data: {

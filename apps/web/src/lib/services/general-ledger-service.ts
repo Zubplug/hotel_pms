@@ -59,7 +59,8 @@ export class GeneralLedgerService {
       reference?: string;
       sourceModule: string; // 'MANUAL', 'PAYROLL', 'AP', 'AR', etc.
       lines: Array<{ accountId: string; debit: number; credit: number; description?: string; reference?: string; sourceType?: string; sourceId?: string }>;
-    }
+    },
+    parentTx?: any
   ) {
     if (!ctx.propertyIds.includes(input.propertyId)) throw new Error('Unauthorized');
 
@@ -84,7 +85,7 @@ export class GeneralLedgerService {
     const period = await AccountingPeriodService.getActive(input.propertyId);
     if (!period) throw new Error('No open accounting period found for this property');
 
-    return prisma.$transaction(async (tx) => {
+    const operation = async (tx: any) => {
       const entry = await tx.journalEntry.create({
         data: {
           propertyId: input.propertyId,
@@ -148,7 +149,9 @@ export class GeneralLedgerService {
       });
 
       return entry;
-    });
+    };
+
+    return parentTx ? operation(parentTx) : prisma.$transaction(operation);
   }
 
   static async reverseJournal(ctx: TenantContext, entryId: string, reversalDate: Date, reason: string) {

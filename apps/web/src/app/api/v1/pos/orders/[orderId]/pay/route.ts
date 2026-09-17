@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
 import { verifyOperatorToken } from '@/lib/pos/operatorAuth';
+import { requireOrganizationContext } from "@/lib/organization-access";
+import { PosPaymentAccountingService } from "@/lib/services/pos-payment-accounting-service";
 import { z } from 'zod';
 import { InventoryService } from '@/lib/inventory/InventoryService';
 import { isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
+import { GLMappingService } from '@/lib/services/gl-mapping-service';
+import { GeneralLedgerService } from '@/lib/services/general-ledger-service';
 
 const PaymentSchema = z.object({
   method: z.string(),
@@ -48,7 +52,8 @@ export async function POST(
     }
 
     const order = await prisma.posOrder.findUnique({
-      where: { id: orderId }
+      where: { id: orderId },
+      include: { property: true, items: { include: { product: { include: { category: true } } } } }
     });
 
     if (!order) {
@@ -71,6 +76,20 @@ export async function POST(
       return NextResponse.json({ error: 'This POS till is closed or pending approval. Open an active till to continue.' }, { status: 409 });
     }
 
+    // 1. Idempotency Check for POS Payments
+    // If a reference (idempotency key) is provided by the client, check if we already processed it
+    if (reference) {
+      const existingPayment = await prisma.posPayment.findFirst({
+        where: { orderId, reference }
+      });
+      if (existingPayment) {
+        // Idempotent success: return the existing state
+        return NextResponse.json({ data: { payment: existingPayment, order }, error: null }, { status: 200 });
+      }
+    }
+    
+    const idKey = reference || `PAY-${orderId}-${Date.now()}`;
+
     const result = await prisma.$transaction(async (tx: any) => {
       // Create payment
       const payment = await tx.posPayment.create({
@@ -84,7 +103,7 @@ export async function POST(
           operationId: `op_pay_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
           sessionId: sessionId || undefined,
           processedById: staffId || undefined,
-          reference: reference || undefined,
+          reference: idKey,
         }
       });
 
@@ -95,6 +114,15 @@ export async function POST(
           data: { cashSales: { increment: amount } }
         });
       }
+
+      // 🚨 DOUBLE-ENTRY GL POSTING FOR NON-CASH POS PAYMENTS
+      // This is now securely extracted to ensure 100% offline sync parity.
+      await PosPaymentAccountingService.processPaymentAccounting(
+        tx,
+        payment,
+        order as any, // TypeScript mapping for the included relations
+        staffId || null
+      );
 
       // Check if order is fully paid
       const allOrderPayments = await tx.posPayment.aggregate({

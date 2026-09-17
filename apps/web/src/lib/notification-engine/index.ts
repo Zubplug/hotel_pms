@@ -804,12 +804,13 @@ async function evaluateEvent(
       let targetDetails = "Guest/Room";
       
       if (event.entityType === "complimentary") {
-         const comp = await prisma.posComplimentary.findUnique({
-           where: { id: event.entityId },
-           include: { order: true }
+         const comp = await prisma.complimentaryRecord.findUnique({
+           where: { id: event.entityId }
          });
-         if (comp?.order) {
-            targetDetails = `Order #${comp.order.orderNumber}`;
+         
+         if (comp?.posOrderId) {
+            const posOrder = await prisma.posOrder.findUnique({ where: { id: comp.posOrderId } });
+            if (posOrder) targetDetails = `Order #${posOrder.orderNumber}`;
          }
       }
 

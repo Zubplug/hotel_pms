@@ -13,6 +13,8 @@ import { isNightAuditCutoverActive } from "@/lib/night-audit-guard";
 import { getPropertyBusinessDate } from "@/lib/date-utils";
 import { InventoryService } from "@/lib/inventory/InventoryService";
 import { routeFoliosToCityLedger } from "@/lib/finance/route-folio-to-city-ledger";
+import { FolioPaymentAccountingService } from "@/lib/services/folio-payment-accounting-service";
+import { CityLedgerAccountingService } from "@/lib/services/city-ledger-accounting-service";
 
 const parseLocalDateString = (dateString: string | Date | undefined): Date | undefined => {
   if (!dateString) return undefined;
@@ -1727,7 +1729,7 @@ export async function POST(req: NextRequest) {
               ];
               if (!validMethods.includes(methodStr)) methodStr = "OTHER";
 
-              await tx.payment.create({
+              const payment = await tx.payment.create({
                 data: {
                   folioId: aggregateId,
                   propertyId,
@@ -1783,6 +1785,17 @@ export async function POST(req: NextRequest) {
                   balance: { decrement: amount },
                 },
               });
+
+              // Safely construct double-entry GL inside the exact same sync transaction boundary
+              // The service is shared with the online /api/v1/payments route.
+              const organizationId = typeof property !== 'undefined' ? property.organizationId : null;
+              await FolioPaymentAccountingService.processPaymentAccounting(
+                tx,
+                payment,
+                propertyId,
+                organizationId,
+                actorId
+              );
             }
           } else if (aggregateType === "FOLIO" && eventType === "CITY_LEDGER_SETTLEMENT") {
             const amount = Number(payload.amount ?? payload.Amount);
@@ -1851,6 +1864,22 @@ export async function POST(req: NextRequest) {
                   balance: { decrement: amount },
                 },
               });
+
+              // Safely construct double-entry GL inside the exact same sync transaction boundary
+              const property = await tx.property.findUnique({
+                where: { id: propertyId },
+                select: { organizationId: true }
+              });
+              await CityLedgerAccountingService.processCityLedgerRouting(
+                tx,
+                propertyId,
+                property?.organizationId || null,
+                actorId,
+                amount,
+                aggregateId,
+                invoiceNumber,
+                `cl_sync_${aggregateId}_${idempotencyKey}`
+              );
             }
           } else if (aggregateType === "FOLIO" && eventType === "REFUND_REQUESTED") {
             const amount = Math.abs(Number(payload.amount ?? payload.Amount));

@@ -2,6 +2,7 @@ import prisma from '@hotel-pms/db';
 import crypto from 'crypto';
 import { ShiftControlError } from './shift-control-service';
 import { ensureCashierControlAccountsForClient } from './cash-account-service';
+import { GeneralLedgerService } from './general-ledger-service';
 import { TenantContext } from '../organization-access';
 
 export class CashHandoverService {
@@ -188,15 +189,26 @@ export class CashHandoverService {
       const controlAccounts = await ensureCashierControlAccountsForClient(ctx, tx, handover.propertyId);
       const safeAccount = controlAccounts.find((account: any) => account.type === 'SAFE');
       if (!safeAccount) throw new ShiftControlError('General Cashier Safe account is unavailable.', 'INTERNAL_ERROR', 500);
+      if (!safeAccount.glAccountId) throw new ShiftControlError('The General Cashier Safe account must be mapped to a GL Chart of Account before receiving handovers.', 'BAD_REQUEST', 400);
+
+      // Track journal lines to post a single consolidated double-entry accounting event
+      const journalLines: Array<{ accountId: string; debit: number; credit: number; description: string; sourceType?: string; sourceId?: string }> = [];
+      let totalHandoverAmount = 0;
 
       // Post the custody transfer at the moment the physical handover is
       // accepted. Each session gets its own movement for a traceable audit.
       for (const session of handover.frontdeskSessions) {
         const amount = Number(session.declaredCash || 0);
         if (amount <= 0) continue;
+        
+        const sourceAccount = await tx.cashAccount.findUnique({ where: { id: session.cashAccountId } });
+        if (!sourceAccount) throw new ShiftControlError(`Source CashAccount ${session.cashAccountId} not found.`, 'NOT_FOUND', 404);
+        if (!sourceAccount.glAccountId) throw new ShiftControlError(`The Frontdesk Cash Account (${sourceAccount.name}) must be mapped to a GL Chart of Account.`, 'BAD_REQUEST', 400);
+        
         await tx.cashAccount.update({ where: { id: session.cashAccountId }, data: { balance: { decrement: amount } } });
         await tx.cashAccount.update({ where: { id: safeAccount.id }, data: { balance: { increment: amount } } });
-        await tx.posCashMovement.create({
+        
+        const movement = await tx.posCashMovement.create({
           data: {
             propertyId: handover.propertyId,
             deviceId: 'web-cash-management',
@@ -212,15 +224,27 @@ export class CashHandoverService {
             businessDate: session.businessDate,
           },
         });
+
+        journalLines.push({
+          accountId: sourceAccount.glAccountId,
+          debit: 0,
+          credit: amount,
+          description: `Cash Handover Transfer Out - FD Session ${session.id}`,
+          sourceType: 'CASH_HANDOVER',
+          sourceId: movement.id,
+        });
+        totalHandoverAmount += amount;
       }
 
       for (const session of handover.posSessions) {
         const amount = Number(session.actualCash || 0);
         if (amount <= 0) continue;
+        
         const sourceType = session.bankingModel === 'SERVER_BANKING' ? 'SERVER_BANK' : 'STATION_BANK';
         let sourceAccount = await tx.cashAccount.findFirst({
           where: { propertyId: handover.propertyId, outletId: session.outletId, type: sourceType, isActive: true },
         });
+        
         if (!sourceAccount) {
           sourceAccount = await tx.cashAccount.create({
             data: {
@@ -233,9 +257,15 @@ export class CashHandoverService {
             },
           });
         }
+        
+        if (!sourceAccount.glAccountId) {
+          throw new ShiftControlError(`The POS Cash Account (${sourceAccount.name}) must be mapped to a GL Chart of Account before receiving handovers.`, 'BAD_REQUEST', 400);
+        }
+
         await tx.cashAccount.update({ where: { id: sourceAccount.id }, data: { balance: { decrement: amount } } });
         await tx.cashAccount.update({ where: { id: safeAccount.id }, data: { balance: { increment: amount } } });
-        await tx.posCashMovement.create({
+        
+        const movement = await tx.posCashMovement.create({
           data: {
             propertyId: handover.propertyId,
             deviceId: 'web-cash-management',
@@ -251,6 +281,37 @@ export class CashHandoverService {
             businessDate: session.businessDate,
           },
         });
+
+        journalLines.push({
+          accountId: sourceAccount.glAccountId,
+          debit: 0,
+          credit: amount,
+          description: `Cash Handover Transfer Out - POS Session ${session.id}`,
+          sourceType: 'CASH_HANDOVER',
+          sourceId: movement.id,
+        });
+        totalHandoverAmount += amount;
+      }
+
+      // Post the General Ledger Journal Entry for the entire handover consolidated
+      if (totalHandoverAmount > 0 && journalLines.length > 0) {
+        journalLines.push({
+          accountId: safeAccount.glAccountId,
+          debit: totalHandoverAmount,
+          credit: 0,
+          description: `Cash Handover Received into Safe - ${handover.handoverReference}`,
+          sourceType: 'CASH_HANDOVER',
+          sourceId: handover.id,
+        });
+
+        await GeneralLedgerService.postJournal(ctx, {
+          propertyId: handover.propertyId,
+          entryDate: new Date(),
+          description: `Cash Handover: ${handover.handoverReference}${params.notes ? ` - ${params.notes}` : ''}`,
+          reference: handover.handoverReference,
+          sourceModule: 'CASH_MANAGEMENT',
+          lines: journalLines
+        }, tx);
       }
 
       // Update linked shifts to HANDED_OVER

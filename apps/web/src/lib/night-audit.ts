@@ -747,7 +747,7 @@ export async function executeNightAudit(
     }
 
     const postedJournals = await tx.journalEntry.findMany({
-      where: { propertyId, nightAuditId: auditRun.id, status: 'POSTED' },
+      where: { propertyId, entryDate: journalBusinessDate, status: 'POSTED' },
       select: { id: true },
     });
     const journalLines = postedJournals.length ? await tx.journalEntryLine.findMany({
