@@ -1,278 +1,530 @@
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../providers/finance_provider.dart';
 import '../models/finance_data.dart';
 
-// ─── Design Tokens ────────────────────────────────────────────────────────────
-const _navy = Color(0xFF0F172A);
-const _surface = Color(0xFF1E293B);
-const _border = Color(0xFF2D3E52);
-const _textPrimary = Color(0xFFF8FAFC);
-const _textSecondary = Color(0xFFCBD5E1);
-const _textMuted = Color(0xFF94A3B8);
-const _gold = Color(0xFFD4AF37);
-const _green = Color(0xFF22C55E);
-const _red = Color(0xFFEF4444);
-const _orange = Color(0xFFF97316);
-const _blue = Color(0xFF3B82F6);
-const _purple = Color(0xFFA855F7);
+// ─── Design System ─────────────────────────────────────────────────────────────
+const _bg0       = Color(0xFF060B14);   // deepest bg
+const _bg1       = Color(0xFF0D1526);   // page bg
+const _bg2       = Color(0xFF111E35);   // card bg
+const _bg3       = Color(0xFF172240);   // elevated card
+const _border    = Color(0xFF1E2F4A);
+const _borderHi  = Color(0xFF2A4166);
+
+const _gold      = Color(0xFFD4A853);
+const _goldDim   = Color(0xFF8A6B2E);
+const _goldGlow  = Color(0x33D4A853);
+
+const _emerald   = Color(0xFF10B981);
+const _rose      = Color(0xFFF43F5E);
+const _roseDim   = Color(0xFF4C0519);
+const _amber     = Color(0xFFF59E0B);
+const _sky       = Color(0xFF38BDF8);
+const _violet    = Color(0xFF8B5CF6);
+
+const _textPrimary   = Color(0xFFF0F6FF);
+const _textSecondary = Color(0xFFADBDD4);
+const _textMuted     = Color(0xFF526078);
+const _textDim       = Color(0xFF374B63);
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+String _fmtCurrency(double v, String symbol) {
+  final s = symbol.isEmpty ? '₦' : symbol;
+  if (v >= 1000000000) return '$s${(v / 1000000000).toStringAsFixed(2)}B';
+  if (v >= 1000000)    return '$s${(v / 1000000).toStringAsFixed(2)}M';
+  if (v >= 1000)       return '$s${(v / 1000).toStringAsFixed(1)}K';
+  return '$s${NumberFormat('#,##0').format(v)}';
+}
+
+String _fmtDate(String s) {
+  if (s.isEmpty) return '—';
+  try { return DateFormat('dd MMM yyyy').format(DateTime.parse(s)); } catch (_) { return s; }
+}
+
+
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 class FinanceScreen extends ConsumerStatefulWidget {
   const FinanceScreen({super.key});
-
   @override
   ConsumerState<FinanceScreen> createState() => _FinanceScreenState();
 }
 
-class _FinanceScreenState extends ConsumerState<FinanceScreen> {
-  final _fmt = NumberFormat.currency(symbol: '₦', decimalDigits: 0);
-  final _dateFmt = DateFormat('dd MMM yyyy');
-  final _timeFmt = DateFormat('dd MMM • HH:mm');
+class _FinanceScreenState extends ConsumerState<FinanceScreen>
+    with TickerProviderStateMixin {
 
-  String _fmtAmount(double v) {
-    if (v >= 1000000) return '₦${(v / 1000000).toStringAsFixed(2)}M';
-    if (v >= 1000) return '₦${(v / 1000).toStringAsFixed(1)}K';
-    return _fmt.format(v);
+  late final AnimationController _entryCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _entryCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..forward();
   }
 
-  String _fmtDate(String s) {
-    if (s.isEmpty) return '—';
-    try { return _dateFmt.format(DateTime.parse(s)); } catch (_) { return s; }
-  }
-
-  String _fmtDateTime(String? s) {
-    if (s == null || s.isEmpty) return '—';
-    try { return _timeFmt.format(DateTime.parse(s).toLocal()); } catch (_) { return s; }
+  @override
+  void dispose() {
+    _entryCtrl.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final state = ref.watch(financeDataProvider);
+    final state  = ref.watch(financeDataProvider);
     final period = ref.watch(financePeriodProvider);
-    final periodSuffix = period == 'TODAY' ? 'TODAY' : period;
 
-    return Scaffold(
-      backgroundColor: _navy,
-      appBar: _buildAppBar(state.value),
-      body: state.when(
-        loading: () => _buildSkeleton(),
-        error: (e, _) => _buildError(() => ref.refresh(financeDataProvider.future)),
-        data: (data) => RefreshIndicator(
-          onRefresh: () => ref.refresh(financeDataProvider.future),
-          color: _gold,
-          backgroundColor: _surface,
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 80),
-            children: [
-              // 1. Night Audit Status
-              _NightAuditBanner(data: data, fmtDateTime: _fmtDateTime, fmtDate: _fmtDate),
-              const SizedBox(height: 16),
-
-              // 2. Revenue — Audited + Live (side by side)
-              _RevenueStatusSection(data: data, fmtAmount: _fmtAmount, fmtDate: _fmtDate, period: period),
-              const SizedBox(height: 20),
-
-              // 3. Revenue KPI Grid (Audited)
-              _SectionHeader(label: 'AUDITED BREAKDOWN ($period)'),
-              const SizedBox(height: 10),
-              _RevenueKpiGrid(rev: data.audited, fmtAmount: _fmtAmount),
-              const SizedBox(height: 20),
-
-              // 4. Live Unaudited Activity
-              _SectionHeader(label: 'LIVE UNAUDITED ACTIVITY', trailing: 'SINCE AUDIT'),
-              const SizedBox(height: 10),
-              _LiveActivityCard(live: data.liveSinceLastAudit, fmtAmount: _fmtAmount),
-              const SizedBox(height: 20),
-
-              // 5. Cash Control
-              _SectionHeader(label: 'CASH CONTROL', trailing: period == 'TODAY' ? 'TODAY\'S SHIFTS' : 'SHIFTS ($period)'),
-              const SizedBox(height: 10),
-              _CashControlCard(cashControl: data.cashControl, fmtAmount: _fmtAmount, period: period),
-              const SizedBox(height: 20),
-
-              // 6. Transaction Controls
-              _SectionHeader(label: 'TRANSACTION CONTROLS', trailing: periodSuffix),
-              const SizedBox(height: 10),
-              _TransactionControlsCard(controls: data.transactionControls, fmtAmount: _fmtAmount),
-              const SizedBox(height: 20),
-
-              // 7. Outstanding Receivables
-              _SectionHeader(label: 'OUTSTANDING RECEIVABLES', trailing: 'CURRENT'),
-              const SizedBox(height: 10),
-              _OutstandingCard(outstanding: data.outstanding, fmtAmount: _fmtAmount),
-              const SizedBox(height: 20),
-
-              // 8. Guest Credits
-              _SectionHeader(label: 'GUEST CREDITS & DEPOSITS', trailing: 'CURRENT'),
-              const SizedBox(height: 10),
-              _GuestCreditsCard(credits: data.guestCredits, fmtAmount: _fmtAmount),
-              const SizedBox(height: 20),
-
-              // 9. Financial Alerts
-              if (data.currentAlerts.isNotEmpty) ...[
-                _SectionHeader(label: 'CURRENT ALERTS', count: data.currentAlerts.length),
-                const SizedBox(height: 10),
-                ...data.currentAlerts.map((a) => Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: _AttentionCard(alert: a, fmtAmount: _fmtAmount),
-                )),
-              ],
-            ],
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.light,
+      child: Scaffold(
+        backgroundColor: _bg1,
+        body: state.when(
+          loading: () => _buildSkeleton(),
+          error:   (e, _) => _buildError(() => ref.refresh(financeDataProvider.future)),
+          data:    (data) => RefreshIndicator(
+            onRefresh: () => ref.refresh(financeDataProvider.future),
+            color: _gold,
+            backgroundColor: _bg2,
+            child: _buildBody(data, period),
           ),
         ),
       ),
     );
   }
 
-  AppBar _buildAppBar(FinanceDashboardData? data) {
-    return AppBar(
-      backgroundColor: _navy,
-      elevation: 0,
-      centerTitle: false,
-      title: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('FINANCE', style: TextStyle(fontSize: 10, letterSpacing: 2.0, fontWeight: FontWeight.w700, color: _gold)),
-          const SizedBox(height: 2),
-          Text(data?.property.name ?? 'Loading…', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: _textPrimary, letterSpacing: -0.3)),
-          if (data != null) Text(_fmtDate(data.businessDate), style: const TextStyle(fontSize: 11, color: _textMuted, fontWeight: FontWeight.w500)),
-        ],
+  Widget _buildBody(FinanceDashboardData data, String period) {
+    final sym = _getCurrencySymbol(data.property.currency);
+    String fmt(double v) => _fmtCurrency(v, sym);
+
+    return CustomScrollView(
+      physics: const AlwaysScrollableScrollPhysics(
+        parent: BouncingScrollPhysics(),
       ),
-      actions: [
-        IconButton(
-          icon: const Icon(Icons.refresh_rounded, color: _textMuted),
-          onPressed: () => ref.refresh(financeDataProvider.future),
-        ),
-        const SizedBox(width: 8),
+      slivers: [
+        _buildSliverAppBar(data, period),
+        SliverToBoxAdapter(child: _buildContent(data, period, fmt)),
       ],
-      bottom: PreferredSize(
-        preferredSize: const Size.fromHeight(50),
-        child: _PeriodTabs(),
+    );
+  }
+
+  // ─── Sliver App Bar ──────────────────────────────────────────────────────────
+  Widget _buildSliverAppBar(FinanceDashboardData data, String period) {
+    return SliverAppBar(
+      expandedHeight: 160,
+      floating: false,
+      pinned: true,
+      backgroundColor: _bg1,
+      elevation: 0,
+      systemOverlayStyle: SystemUiOverlayStyle.light,
+      flexibleSpace: FlexibleSpaceBar(
+        collapseMode: CollapseMode.parallax,
+        background: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFF0A1628), Color(0xFF060B14)],
+            ),
+          ),
+          child: Stack(
+            children: [
+              // Ambient glow
+              Positioned(
+                top: -60, right: -60,
+                child: Container(
+                  width: 220, height: 220,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: RadialGradient(colors: [
+                      Color(0x1AD4A853), Colors.transparent,
+                    ]),
+                  ),
+                ),
+              ),
+              SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: _goldGlow,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: _goldDim, width: 0.5),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  width: 6, height: 6,
+                                  decoration: const BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: _gold,
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                const Text('LIVE', style: TextStyle(
+                                  fontSize: 10, fontWeight: FontWeight.w700,
+                                  color: _gold, letterSpacing: 1.5,
+                                )),
+                              ],
+                            ),
+                          ),
+                          const Spacer(),
+                          _PeriodSelector(
+                            selected: ref.watch(financePeriodProvider),
+                            onChanged: (p) => ref.read(financePeriodProvider.notifier).state = p,
+                          ),
+                          const SizedBox(width: 8),
+                          GestureDetector(
+                            onTap: () => ref.refresh(financeDataProvider.future),
+                            child: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: _bg2,
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: _border),
+                              ),
+                              child: const Icon(Icons.refresh_rounded, color: _textSecondary, size: 18),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      const Text(
+                        'Financial Intelligence',
+                        style: TextStyle(
+                          fontSize: 26, fontWeight: FontWeight.w800,
+                          color: _textPrimary, letterSpacing: -0.8,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '${data.property.name}  •  ${_fmtDate(data.businessDate)}',
+                        style: const TextStyle(
+                          fontSize: 12, color: _textMuted, letterSpacing: 0.3,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+      // pinned title
+      title: Padding(
+        padding: const EdgeInsets.only(top: 2),
+        child: Row(
+          children: [
+            const Text(
+              'Finance',
+              style: TextStyle(
+                fontSize: 17, fontWeight: FontWeight.w700,
+                color: _textPrimary, letterSpacing: -0.3,
+              ),
+            ),
+            const Spacer(),
+            _PeriodSelector(
+              selected: ref.watch(financePeriodProvider),
+              onChanged: (p) => ref.read(financePeriodProvider.notifier).state = p,
+              compact: true,
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildSkeleton() => ListView(
-    padding: const EdgeInsets.all(16),
-    children: List.generate(6, (_) => Padding(
-      padding: const EdgeInsets.only(bottom: 14),
-      child: _Skeleton(height: 100, borderRadius: 16),
-    )),
-  );
+  // ─── Body Content ─────────────────────────────────────────────────────────────
+  Widget _buildContent(FinanceDashboardData data, String period, String Function(double) fmt) {
+    return AnimatedBuilder(
+      animation: _entryCtrl,
+      builder: (context, child) {
+        return Opacity(
+          opacity: _entryCtrl.value,
+          child: Transform.translate(
+            offset: Offset(0, 20 * (1 - _entryCtrl.value)),
+            child: child,
+          ),
+        );
+      },
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 100),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ── Audit Status Banner ──
+            if (data.lastAuditedBusinessDate != null)
+              _AuditStatusBanner(data: data),
+            const SizedBox(height: 16),
 
-  Widget _buildError(VoidCallback onRetry) => Center(
-    child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-      const Icon(Icons.cloud_off_rounded, color: _textMuted, size: 48),
-      const SizedBox(height: 16),
-      const Text('Unable to load Finance', style: TextStyle(color: _textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
-      const SizedBox(height: 8),
-      const Text('Check your connection and try again.', style: TextStyle(color: _textMuted, fontSize: 13)),
-      const SizedBox(height: 20),
-      ElevatedButton(
-        onPressed: onRetry,
-        style: ElevatedButton.styleFrom(backgroundColor: _surface, foregroundColor: _gold),
-        child: const Text('Retry'),
+            // ── Hero Revenue Cards ──
+            _HeroRevenueRow(data: data, fmt: fmt),
+            const SizedBox(height: 20),
+
+            // ── Revenue Composition ──
+            _SectionLabel(title: 'REVENUE BREAKDOWN', subtitle: 'Audited period'),
+            const SizedBox(height: 12),
+            _RevenueCompositionCard(data: data, fmt: fmt),
+            const SizedBox(height: 20),
+
+            // ── Live Unaudited Activity ──
+            _SectionLabel(title: 'LIVE ACTIVITY', subtitle: 'Since last audit'),
+            const SizedBox(height: 12),
+            _LiveActivityCard(data: data, fmt: fmt),
+            const SizedBox(height: 20),
+
+            // ── Cash Control ──
+            _SectionLabel(
+              title: 'CASH CONTROL',
+              subtitle: '${data.cashControl.sessions.length} sessions',
+              trailingBadge: data.cashControl.significantVariances > 0
+                  ? '${data.cashControl.significantVariances} ALERT${data.cashControl.significantVariances > 1 ? 'S' : ''}'
+                  : null,
+              trailingBadgeColor: _rose,
+            ),
+            const SizedBox(height: 12),
+            _CashControlCard(data: data, fmt: fmt),
+            const SizedBox(height: 20),
+
+            // ── Transaction Controls ──
+            _SectionLabel(title: 'TRANSACTION CONTROLS', subtitle: 'Exceptions & overrides'),
+            const SizedBox(height: 12),
+            _TransactionControlsCard(data: data, fmt: fmt),
+            const SizedBox(height: 20),
+
+            // ── Receivables & Guest Credit ──
+            _SectionLabel(title: 'BALANCE SHEET SNAPSHOT', subtitle: 'Receivables & liabilities'),
+            const SizedBox(height: 12),
+            _BalanceSheetRow(data: data, fmt: fmt),
+            const SizedBox(height: 20),
+
+            // ── Alerts ──
+            if (data.currentAlerts.isNotEmpty) ...[
+              _SectionLabel(
+                title: 'ACTIVE ALERTS',
+                subtitle: '${data.currentAlerts.length} item${data.currentAlerts.length > 1 ? 's' : ''} require attention',
+                trailingBadge: '${data.currentAlerts.length}',
+                trailingBadgeColor: _rose,
+              ),
+              const SizedBox(height: 12),
+              _AlertsList(alerts: data.currentAlerts, fmt: fmt),
+            ],
+          ],
+        ),
       ),
-    ]),
-  );
+    );
+  }
+
+  // ─── Skeleton ────────────────────────────────────────────────────────────────
+  Widget _buildSkeleton() {
+    return const _ShimmerSkeleton();
+  }
+
+  Widget _buildError(VoidCallback onRetry) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: _roseDim, borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: _rose.withValues(alpha: 0.3)),
+            ),
+            child: const Icon(Icons.cloud_off_rounded, color: _rose, size: 40),
+          ),
+          const SizedBox(height: 20),
+          const Text('Unable to load financial data',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: _textPrimary)),
+          const SizedBox(height: 6),
+          const Text('Check your connection and try again',
+              style: TextStyle(fontSize: 13, color: _textMuted)),
+          const SizedBox(height: 24),
+          GestureDetector(
+            onTap: onRetry,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(colors: [Color(0xFFB8862A), _gold]),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: const Text('Retry', style: TextStyle(
+                fontWeight: FontWeight.w700, fontSize: 15, color: Colors.white,
+              )),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
-class _PeriodTabs extends ConsumerWidget {
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+String _getCurrencySymbol(String currency) {
+  switch (currency.toUpperCase()) {
+    case 'NGN': return '₦';
+    case 'USD': return '\$';
+    case 'GBP': return '£';
+    case 'EUR': return '€';
+    case 'KES': return 'KSh';
+    default:    return '₦';
+  }
+}
+
+// ─── Period Selector ─────────────────────────────────────────────────────────
+class _PeriodSelector extends StatelessWidget {
+  final String selected;
+  final void Function(String) onChanged;
+  final bool compact;
+
+  const _PeriodSelector({
+    required this.selected,
+    required this.onChanged,
+    this.compact = false,
+  });
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final period = ref.watch(financePeriodProvider);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 8, 12),
+  Widget build(BuildContext context) {
+    final periods = ['TODAY', 'WEEK', 'MONTH'];
+    final labels  = compact
+        ? ['D', 'W', 'M']
+        : ['Today', 'Week', 'Month'];
+
+    return Container(
+      height: 32,
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: _bg0, borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: _border),
+      ),
       child: Row(
-        children: ['TODAY', 'MTD', 'YTD'].map((p) {
-          final isSelected = p == period;
-          return Expanded(
-            child: GestureDetector(
-              onTap: () => ref.read(financePeriodProvider.notifier).state = p,
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                margin: const EdgeInsets.only(right: 8),
-                decoration: BoxDecoration(
-                  color: isSelected ? _gold : _surface,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  p,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: isSelected ? _navy : _textMuted,
-                  ),
+        mainAxisSize: MainAxisSize.min,
+        children: List.generate(periods.length, (i) {
+          final active = periods[i] == selected;
+          return GestureDetector(
+            onTap: () {
+              HapticFeedback.selectionClick();
+              onChanged(periods[i]);
+            },
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              padding: EdgeInsets.symmetric(horizontal: compact ? 10 : 12),
+              decoration: BoxDecoration(
+                color: active ? _gold : Colors.transparent,
+                borderRadius: BorderRadius.circular(7),
+              ),
+              child: Text(
+                labels[i],
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: active ? Colors.black : _textMuted,
+                  letterSpacing: compact ? 0 : 0.3,
                 ),
               ),
             ),
           );
-        }).toList(),
+        }),
       ),
     );
   }
 }
 
-// ─── 1. Night Audit Banner ────────────────────────────────────────────────────
-class _NightAuditBanner extends StatelessWidget {
-  final FinanceDashboardData data;
-  final String Function(String?) fmtDateTime;
-  final String Function(String) fmtDate;
+// ─── Section Label ───────────────────────────────────────────────────────────
+class _SectionLabel extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final String? trailingBadge;
+  final Color? trailingBadgeColor;
 
-  const _NightAuditBanner({required this.data, required this.fmtDateTime, required this.fmtDate});
+  const _SectionLabel({
+    required this.title,
+    required this.subtitle,
+    this.trailingBadge,
+    this.trailingBadgeColor,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final isAudited = data.lastAuditedBusinessDate != null;
-    final color = isAudited ? _green : _orange;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title, style: const TextStyle(
+              fontSize: 10, fontWeight: FontWeight.w800,
+              color: _textMuted, letterSpacing: 1.5,
+            )),
+            const SizedBox(height: 2),
+            Text(subtitle, style: const TextStyle(
+              fontSize: 12, color: _textSecondary, fontWeight: FontWeight.w500,
+            )),
+          ],
+        ),
+        const Spacer(),
+        if (trailingBadge != null)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+            decoration: BoxDecoration(
+              color: (trailingBadgeColor ?? _gold).withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: (trailingBadgeColor ?? _gold).withValues(alpha: 0.4)),
+            ),
+            child: Text(
+              trailingBadge!,
+              style: TextStyle(
+                fontSize: 10, fontWeight: FontWeight.w800,
+                color: trailingBadgeColor ?? _gold, letterSpacing: 0.8,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+// ─── Audit Status Banner ─────────────────────────────────────────────────────
+class _AuditStatusBanner extends StatelessWidget {
+  final FinanceDashboardData data;
+  const _AuditStatusBanner({required this.data});
+
+  @override
+  Widget build(BuildContext context) {
+    final isCurrent = data.lastAuditedBusinessDate == data.businessDate;
+    final color = isCurrent ? _emerald : _amber;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: color.withValues(alpha: 0.3)),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.25)),
       ),
       child: Row(
         children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(color: color.withValues(alpha: 0.15), shape: BoxShape.circle),
-            child: Icon(isAudited ? Icons.check_circle_rounded : Icons.pending_rounded, color: color, size: 22),
+          Icon(
+            isCurrent ? Icons.verified_rounded : Icons.schedule_rounded,
+            color: color, size: 16,
           ),
-          const SizedBox(width: 14),
+          const SizedBox(width: 10),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('NIGHT AUDIT', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, letterSpacing: 1.4, color: color)),
-                const SizedBox(height: 3),
-                Text(
-                  isAudited ? '✓ Audit Completed' : '⏳ Audit Pending',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: color),
-                ),
-                const SizedBox(height: 2),
-                if (isAudited)
-                  Text('Business date ${fmtDate(data.lastAuditedBusinessDate!)}',
-                      style: const TextStyle(fontSize: 11, color: _textMuted))
-                else
-                  const Text('Official revenue has not yet been finalised for today.', style: TextStyle(fontSize: 11, color: _textMuted)),
-              ],
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: color.withValues(alpha: 0.3)),
-            ),
             child: Text(
-              isAudited ? 'FINAL' : 'PROVISIONAL',
-              style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: color, letterSpacing: 0.8),
+              isCurrent
+                  ? 'Night audit complete for ${_fmtDate(data.businessDate)}'
+                  : 'Last audit: ${_fmtDate(data.lastAuditedBusinessDate ?? '')} — live data shown since',
+              style: TextStyle(fontSize: 12, color: color, fontWeight: FontWeight.w600),
             ),
           ),
         ],
@@ -281,77 +533,154 @@ class _NightAuditBanner extends StatelessWidget {
   }
 }
 
-// ─── 2. Revenue Status ────────────────────────────────────────────────────────
-class _RevenueStatusSection extends StatelessWidget {
+// ─── Hero Revenue Row ────────────────────────────────────────────────────────
+class _HeroRevenueRow extends StatelessWidget {
   final FinanceDashboardData data;
-  final String Function(double) fmtAmount;
-  final String Function(String) fmtDate;
-  final String period;
-
-  const _RevenueStatusSection({required this.data, required this.fmtAmount, required this.fmtDate, required this.period});
+  final String Function(double) fmt;
+  const _HeroRevenueRow({required this.data, required this.fmt});
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    final rev  = data.audited;
+    final netPct = rev.revenue > 0
+        ? (rev.netRevenue / rev.revenue * 100)
+        : 0.0;
+
+    return Column(
       children: [
-        // Audited Revenue
-        Expanded(
-          child: _RevenueCard(
-            label: 'OFFICIAL / AUDITED',
-            amount: data.audited.revenue,
-            subtitle: data.lastAuditedBusinessDate != null ? fmtDate(data.lastAuditedBusinessDate!) : 'No audits yet',
-            badge: '✓ AUDITED',
-            badgeColor: _green,
-            isAudited: true,
-            breakdown: [
-              ('Rooms', data.audited.roomRevenue),
-              ('POS', data.audited.fbRevenue),
+        // Main hero
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFF172240), Color(0xFF0F1A30)],
+            ),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: _borderHi),
+            boxShadow: [
+              BoxShadow(color: _goldGlow.withValues(alpha: 0.5), blurRadius: 30, offset: const Offset(0, 8)),
             ],
-            fmtAmount: fmtAmount,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Text('GROSS REVENUE', style: TextStyle(
+                    fontSize: 10, fontWeight: FontWeight.w700,
+                    color: _textMuted, letterSpacing: 1.5,
+                  )),
+                  const Spacer(),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: _goldGlow,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: const Text('AUDITED', style: TextStyle(
+                      fontSize: 9, fontWeight: FontWeight.w800,
+                      color: _gold, letterSpacing: 1,
+                    )),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                fmt(rev.revenue),
+                style: const TextStyle(
+                  fontSize: 36, fontWeight: FontWeight.w900,
+                  color: _textPrimary, letterSpacing: -1.5,
+                  height: 1,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  const Icon(Icons.arrow_downward_rounded, size: 14, color: _rose),
+                  const SizedBox(width: 4),
+                  Text('${fmt(rev.discounts + rev.refunds)} in deductions',
+                      style: const TextStyle(fontSize: 12, color: _textMuted)),
+                  const Spacer(),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        fmt(rev.netRevenue),
+                        style: const TextStyle(
+                          fontSize: 16, fontWeight: FontWeight.w800,
+                          color: _emerald,
+                        ),
+                      ),
+                      Text(
+                        'Net  ${netPct.toStringAsFixed(1)}% retained',
+                        style: const TextStyle(fontSize: 10, color: _textMuted),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              // Net revenue bar
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: Stack(
+                  children: [
+                    Container(height: 5, color: _bg0),
+                    FractionallySizedBox(
+                      widthFactor: (netPct / 100).clamp(0.0, 1.0),
+                      child: Container(
+                        height: 5,
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(colors: [_gold, _emerald]),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
-        const SizedBox(width: 10),
-        // Live Since Last Audit
-        Expanded(
-          child: _RevenueCard(
-            label: 'LIVE SINCE AUDIT',
-            amount: data.liveSinceLastAudit.revenueActivity,
-            subtitle: 'Unaudited Activity',
-            badge: '*UNAUDITED',
-            badgeColor: _orange,
-            isAudited: false,
-            breakdown: [
-              ('Rooms', data.liveSinceLastAudit.roomCharges),
-              ('POS', data.liveSinceLastAudit.posSales),
-            ],
-            fmtAmount: fmtAmount,
-          ),
+        const SizedBox(height: 12),
+        // Sub KPI row
+        Row(
+          children: [
+            Expanded(child: _MiniKpiCard(
+              label: 'ROOMS', value: fmt(rev.roomRevenue),
+              icon: Icons.bed_rounded, color: _sky,
+              pct: rev.revenue > 0 ? rev.roomRevenue / rev.revenue : 0,
+            )),
+            const SizedBox(width: 10),
+            Expanded(child: _MiniKpiCard(
+              label: 'F&B', value: fmt(rev.fbRevenue),
+              icon: Icons.restaurant_rounded, color: _violet,
+              pct: rev.revenue > 0 ? rev.fbRevenue / rev.revenue : 0,
+            )),
+            const SizedBox(width: 10),
+            Expanded(child: _MiniKpiCard(
+              label: 'OTHER', value: fmt(rev.otherRevenue),
+              icon: Icons.more_horiz_rounded, color: _amber,
+              pct: rev.revenue > 0 ? rev.otherRevenue / rev.revenue : 0,
+            )),
+          ],
         ),
       ],
     );
   }
 }
 
-class _RevenueCard extends StatelessWidget {
+class _MiniKpiCard extends StatelessWidget {
   final String label;
-  final double amount;
-  final String subtitle;
-  final String badge;
-  final Color badgeColor;
-  final bool isAudited;
-  final List<(String, double)>? breakdown;
-  final String Function(double) fmtAmount;
-
-  const _RevenueCard({
-    required this.label,
-    required this.amount,
-    required this.subtitle,
-    required this.badge,
-    required this.badgeColor,
-    required this.isAudited,
-    required this.fmtAmount,
-    this.breakdown,
+  final String value;
+  final IconData icon;
+  final Color color;
+  final double pct;
+  const _MiniKpiCard({
+    required this.label, required this.value,
+    required this.icon, required this.color, required this.pct,
   });
 
   @override
@@ -359,360 +688,606 @@ class _RevenueCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: _surface,
-        borderRadius: BorderRadius.circular(16),
+        color: _bg2, borderRadius: BorderRadius.circular(16),
         border: Border.all(color: _border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w800, letterSpacing: 1.2, color: _textMuted)),
-          const SizedBox(height: 8),
-          Text(fmtAmount(amount), style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: _textPrimary, letterSpacing: -0.5)),
-          const SizedBox(height: 4),
-          Text(subtitle, style: const TextStyle(fontSize: 11, color: _textMuted)),
-          const SizedBox(height: 8),
-          if (breakdown != null) ...[
-            ...breakdown!.map((row) => Padding(
-              padding: const EdgeInsets.only(bottom: 3),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(row.$1, style: const TextStyle(fontSize: 11, color: _textMuted)),
-                  Text(fmtAmount(row.$2), style: const TextStyle(fontSize: 11, color: _textSecondary, fontWeight: FontWeight.w600)),
-                ],
-              ),
-            )),
-            const SizedBox(height: 4),
-          ],
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: badgeColor.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: badgeColor.withValues(alpha: 0.3)),
-            ),
-            child: Text(badge, style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: badgeColor, letterSpacing: 0.5)),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─── 3. Revenue KPI Grid ──────────────────────────────────────────────────────
-class _RevenueKpiGrid extends StatelessWidget {
-  final AuditedPeriodData rev;
-  final String Function(double) fmtAmount;
-
-  const _RevenueKpiGrid({required this.rev, required this.fmtAmount});
-
-  @override
-  Widget build(BuildContext context) {
-    final items = [
-      ('Rooms', rev.roomRevenue, _blue, false),
-      ('F&B / POS', rev.fbRevenue, _purple, false),
-      ('Other', rev.otherRevenue, _textMuted, false),
-      ('Net Revenue', rev.netRevenue, _gold, false),
-      ('Discounts', rev.discounts, _orange, true),
-      ('Refunds', rev.refunds, _red, true),
-      ('Gross Revenue', rev.revenue, _green, false),
-    ];
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: _surface, borderRadius: BorderRadius.circular(16), border: Border.all(color: _border)),
-      child: Column(
-        children: [
-          for (int i = 0; i < items.length; i += 2)
-            Padding(
-              padding: EdgeInsets.only(bottom: i + 2 < items.length ? 12 : 0),
-              child: Row(
-                children: [
-                  Expanded(child: _KpiItem(label: items[i].$1, value: fmtAmount(items[i].$2), color: items[i].$3, isDeduction: items[i].$4)),
-                  if (i + 1 < items.length) ...[
-                    Container(width: 1, height: 40, color: _border),
-                    Expanded(child: _KpiItem(label: items[i + 1].$1, value: fmtAmount(items[i + 1].$2), color: items[i + 1].$3, isDeduction: items[i + 1].$4)),
-                  ],
-                ],
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _KpiItem extends StatelessWidget {
-  final String label;
-  final String value;
-  final Color color;
-  final bool isDeduction;
-
-  const _KpiItem({required this.label, required this.value, required this.color, required this.isDeduction});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label, style: const TextStyle(fontSize: 10, color: _textMuted, fontWeight: FontWeight.w600)),
-          const SizedBox(height: 4),
           Row(
             children: [
-              if (isDeduction) Text('−', style: TextStyle(fontSize: 13, color: color, fontWeight: FontWeight.w700)),
-              Text(value, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: color)),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─── 4. Live Unaudited Activity ───────────────────────────────────────────────
-class _LiveActivityCard extends StatelessWidget {
-  final LiveActivityData live;
-  final String Function(double) fmtAmount;
-
-  const _LiveActivityCard({required this.live, required this.fmtAmount});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: _surface, borderRadius: BorderRadius.circular(16), border: Border.all(color: _border)),
-      child: Column(
-        children: [
-          _RowItem(label: 'Room Charges', amount: live.roomCharges, color: _blue, fmtAmount: fmtAmount),
-          const Divider(color: _border, height: 20),
-          _RowItem(label: 'F&B / POS Sales', amount: live.posSales, color: _purple, fmtAmount: fmtAmount),
-          const Divider(color: _border, height: 20),
-          _RowItem(label: 'Collections (Payments)', amount: live.collections, color: _gold, fmtAmount: fmtAmount),
-        ],
-      ),
-    );
-  }
-}
-
-// Shared row helper
-class _RowItem extends StatelessWidget {
-  final String label;
-  final double amount;
-  final Color color;
-  final String Function(double) fmtAmount;
-  const _RowItem({required this.label, required this.amount, required this.color, required this.fmtAmount});
-
-  @override
-  Widget build(BuildContext context) => Row(
-    children: [
-      Container(width: 8, height: 8, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
-      const SizedBox(width: 10),
-      Expanded(child: Text(label, style: const TextStyle(fontSize: 13, color: _textSecondary))),
-      Text(fmtAmount(amount), style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: color)),
-    ],
-  );
-}
-
-
-// ─── 7. Outstanding ───────────────────────────────────────────────────────────
-class _OutstandingCard extends StatelessWidget {
-  final OutstandingReceivables outstanding;
-  final String Function(double) fmtAmount;
-
-  const _OutstandingCard({required this.outstanding, required this.fmtAmount});
-
-  @override
-  Widget build(BuildContext context) {
-    final rows = [
-      ('Guest Balances', outstanding.guestBalances, _orange),
-      ('Corporate', outstanding.corporateReceivables, _purple),
-      if (outstanding.other > 0) ('Other', outstanding.other, _textMuted),
-    ];
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: _surface, borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: outstanding.total > 1_000_000 ? _orange.withValues(alpha: 0.4) : _border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Text('OUTSTANDING RECEIVABLES', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, letterSpacing: 1.2, color: _textMuted)),
-              const Spacer(),
-              if (outstanding.total > 1_000_000)
-                const Icon(Icons.warning_amber_rounded, color: _orange, size: 16),
-            ],
-          ),
-          const SizedBox(height: 12),
-          ...rows.map((r) => Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Row(
-              children: [
-                Container(width: 8, height: 8, decoration: BoxDecoration(color: r.$3, shape: BoxShape.circle)),
-                const SizedBox(width: 10),
-                Text(r.$1, style: const TextStyle(fontSize: 13, color: _textSecondary)),
-                const Spacer(),
-                Text(fmtAmount(r.$2), style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: r.$3)),
-              ],
-            ),
-          )),
-          const Divider(color: _border, height: 1),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              const Text('TOTAL', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 0.8, color: _textMuted)),
-              const Spacer(),
-              Text(fmtAmount(outstanding.total), style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: _textPrimary)),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─── 8. Cash Control ─────────────────────────────────────────────────────────
-class _CashControlCard extends StatelessWidget {
-  final CashControlAggregate cashControl;
-  final String Function(double) fmtAmount;
-  final String period;
-
-  const _CashControlCard({required this.cashControl, required this.fmtAmount, required this.period});
-
-  Color _statusColor(String status) {
-    switch (status) {
-      case 'OK': return _green;
-      case 'VARIANCE': return _red;
-      case 'OVERAGE': return _orange;
-      default: return _textMuted;
-    }
-  }
-
-  Widget _statusIcon(String status) {
-    switch (status) {
-      case 'OK': return const Icon(Icons.check_circle_rounded, color: _green, size: 16);
-      case 'VARIANCE': return const Icon(Icons.error_rounded, color: _red, size: 16);
-      case 'OVERAGE': return const Icon(Icons.warning_rounded, color: _orange, size: 16);
-      default: return const Icon(Icons.pending_rounded, color: _textMuted, size: 16);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    // MTD/YTD: show aggregate summary + variance count only
-    if (period != 'TODAY') {
-      return Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(color: _surface, borderRadius: BorderRadius.circular(16), border: Border.all(color: _border)),
-        child: Column(
-          children: [
-            Row(
-              children: [
-                Expanded(child: _CashSummaryChip(label: 'Expected', amount: fmtAmount(cashControl.expected), color: _textSecondary)),
-                Expanded(child: _CashSummaryChip(label: 'Declared', amount: fmtAmount(cashControl.declared), color: _textSecondary)),
-                Expanded(child: _CashSummaryChip(
-                  label: 'Net Variance',
-                  amount: '${cashControl.variance >= 0 ? '+' : ''}${fmtAmount(cashControl.variance)}',
-                  color: cashControl.variance == 0 ? _green : cashControl.variance < 0 ? _red : _orange,
-                )),
-              ],
-            ),
-            if (cashControl.sessionsWithVariance > 0) ...[
-              const Divider(color: _border, height: 20),
-              Row(
-                children: [
-                  Text('${cashControl.sessionsWithVariance} sessions with variance',
-                      style: const TextStyle(fontSize: 12, color: _textMuted)),
-                  const Spacer(),
-                  if (cashControl.significantVariances > 0)
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(color: _red.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
-                      child: Text('${cashControl.significantVariances} significant',
-                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: _red)),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton(
-                  onPressed: () {},
-                  style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: _gold),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-                  child: const Text('View Variances →',
-                      style: TextStyle(color: _gold, fontSize: 13, fontWeight: FontWeight.w600)),
-                ),
-              ),
-            ],
-          ],
-        ),
-      );
-    }
-
-    // TODAY: show individual sessions
-    if (cashControl.sessions.isEmpty) {
-      return Container(
-        height: 70,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(color: _surface, borderRadius: BorderRadius.circular(16), border: Border.all(color: _border)),
-        child: const Text('No open sessions today', style: TextStyle(color: _textMuted, fontSize: 12)),
-      );
-    }
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: _surface, borderRadius: BorderRadius.circular(16), border: Border.all(color: _border)),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Expanded(child: _CashSummaryChip(label: 'Expected', amount: fmtAmount(cashControl.expected), color: _textSecondary)),
-              Expanded(child: _CashSummaryChip(label: 'Declared', amount: fmtAmount(cashControl.declared), color: _textSecondary)),
-              Expanded(child: _CashSummaryChip(
-                label: 'Variance',
-                amount: '${cashControl.variance >= 0 ? '+' : ''}${fmtAmount(cashControl.variance)}',
-                color: cashControl.variance == 0 ? _green : cashControl.variance < 0 ? _red : _orange,
+              Icon(icon, size: 14, color: color),
+              const SizedBox(width: 5),
+              Text(label, style: const TextStyle(
+                fontSize: 9, fontWeight: FontWeight.w700,
+                color: _textMuted, letterSpacing: 1,
               )),
             ],
           ),
-          const Divider(color: _border, height: 20),
-          ...cashControl.sessions.map((s) => Padding(
-            padding: const EdgeInsets.only(bottom: 12),
+          const SizedBox(height: 8),
+          Text(value, style: TextStyle(
+            fontSize: 14, fontWeight: FontWeight.w800,
+            color: color,
+          )),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(3),
+            child: Stack(
+              children: [
+                Container(height: 3, color: _bg0),
+                FractionallySizedBox(
+                  widthFactor: pct.clamp(0.0, 1.0),
+                  child: Container(
+                    height: 3,
+                    color: color,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text('${(pct * 100).toStringAsFixed(0)}% of total',
+              style: const TextStyle(fontSize: 10, color: _textDim)),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Revenue Composition Card ────────────────────────────────────────────────
+class _RevenueCompositionCard extends StatelessWidget {
+  final FinanceDashboardData data;
+  final String Function(double) fmt;
+  const _RevenueCompositionCard({required this.data, required this.fmt});
+
+  @override
+  Widget build(BuildContext context) {
+    final rev = data.audited;
+    final total = rev.revenue;
+
+    final segments = [
+      _RevSegment('Rooms Revenue',     rev.roomRevenue, _sky),
+      _RevSegment('F&B Revenue',       rev.fbRevenue,   _violet),
+      _RevSegment('Other Revenue',     rev.otherRevenue,_amber),
+      _RevSegment('Discounts',         rev.discounts,   _rose),
+      _RevSegment('Refunds',           rev.refunds,     _rose.withValues(alpha: 0.6)),
+    ];
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: _bg2, borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: _border),
+      ),
+      child: Column(
+        children: [
+          // Stacked bar
+          ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: SizedBox(
+              height: 10,
+              child: Row(
+                children: segments.where((s) => s.value > 0).map((s) {
+                  return Expanded(
+                    flex: (s.value / (total > 0 ? total : 1) * 1000).round(),
+                    child: Container(color: s.color),
+                  );
+                }).toList(),
+              ),
+            ),
+          ),
+          const SizedBox(height: 18),
+          ...segments.map((s) => _RevRow(segment: s, total: total, fmt: fmt)),
+        ],
+      ),
+    );
+  }
+}
+
+class _RevSegment {
+  final String label;
+  final double value;
+  final Color color;
+  const _RevSegment(this.label, this.value, this.color);
+}
+
+class _RevRow extends StatelessWidget {
+  final _RevSegment segment;
+  final double total;
+  final String Function(double) fmt;
+  const _RevRow({required this.segment, required this.total, required this.fmt});
+
+  @override
+  Widget build(BuildContext context) {
+    final pct = total > 0 ? (segment.value / total * 100) : 0.0;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        children: [
+          Container(
+            width: 8, height: 8,
+            decoration: BoxDecoration(color: segment.color, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 10),
+          Text(segment.label, style: const TextStyle(
+            fontSize: 13, color: _textSecondary,
+          )),
+          const Spacer(),
+          Text('${pct.toStringAsFixed(1)}%', style: const TextStyle(
+            fontSize: 12, color: _textMuted,
+          )),
+          const SizedBox(width: 12),
+          SizedBox(
+            width: 90,
+            child: Text(fmt(segment.value), textAlign: TextAlign.right,
+                style: const TextStyle(
+                  fontSize: 13, fontWeight: FontWeight.w700, color: _textPrimary,
+                )),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Live Activity ────────────────────────────────────────────────────────────
+class _LiveActivityCard extends StatelessWidget {
+  final FinanceDashboardData data;
+  final String Function(double) fmt;
+  const _LiveActivityCard({required this.data, required this.fmt});
+
+  @override
+  Widget build(BuildContext context) {
+    final live = data.liveSinceLastAudit;
+
+    final items = [
+      _LiveItem('Revenue Activity', live.revenueActivity, Icons.trending_up_rounded,  _emerald),
+      _LiveItem('Room Charges',     live.roomCharges,     Icons.bed_rounded,           _sky),
+      _LiveItem('POS Sales',        live.posSales,        Icons.point_of_sale_rounded, _violet),
+      _LiveItem('Collections',      live.collections,     Icons.payments_rounded,      _gold),
+    ];
+
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: _bg2, borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: _border),
+      ),
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            child: Row(
+              children: [
+                Container(
+                  width: 8, height: 8,
+                  decoration: const BoxDecoration(shape: BoxShape.circle, color: _emerald),
+                ),
+                const SizedBox(width: 8),
+                const Text('UNAUDITED — IN PROGRESS', style: TextStyle(
+                  fontSize: 10, fontWeight: FontWeight.w700,
+                  color: _emerald, letterSpacing: 1,
+                )),
+              ],
+            ),
+          ),
+          GridView.count(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            crossAxisCount: 2,
+            childAspectRatio: 1.8,
+            padding: const EdgeInsets.all(4),
+            mainAxisSpacing: 4,
+            crossAxisSpacing: 4,
+            children: items.map((item) => _LiveItemCell(item: item, fmt: fmt)).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LiveItem {
+  final String label;
+  final double value;
+  final IconData icon;
+  final Color color;
+  const _LiveItem(this.label, this.value, this.icon, this.color);
+}
+
+class _LiveItemCell extends StatelessWidget {
+  final _LiveItem item;
+  final String Function(double) fmt;
+  const _LiveItemCell({required this.item, required this.fmt});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: _bg3,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Icon(item.icon, size: 16, color: item.color),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(fmt(item.value), style: TextStyle(
+                fontSize: 15, fontWeight: FontWeight.w800, color: item.color,
+              )),
+              Text(item.label, style: const TextStyle(
+                fontSize: 10, color: _textMuted,
+              )),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Cash Control ─────────────────────────────────────────────────────────────
+class _CashControlCard extends StatelessWidget {
+  final FinanceDashboardData data;
+  final String Function(double) fmt;
+  const _CashControlCard({required this.data, required this.fmt});
+
+  @override
+  Widget build(BuildContext context) {
+    final cc = data.cashControl;
+    final varianceColor = cc.variance < 0 ? _rose : cc.variance > 0 ? _amber : _emerald;
+
+    return Column(
+      children: [
+        // Summary strip
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: _bg2, borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: _border),
+          ),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  _CashStat('Expected', fmt(cc.expected), _textSecondary),
+                  const _Divider(),
+                  _CashStat('Declared', fmt(cc.declared), _textPrimary),
+                  const _Divider(),
+                  _CashStat('Variance', fmt(cc.variance), varianceColor),
+                ],
+              ),
+              if (cc.sessionsWithVariance > 0) ...[
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: _roseDim,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: _rose.withValues(alpha: 0.3)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.warning_amber_rounded, size: 14, color: _rose),
+                      const SizedBox(width: 8),
+                      Text(
+                        '${cc.sessionsWithVariance} session${cc.sessionsWithVariance > 1 ? 's' : ''} with variance · '
+                        '${cc.significantVariances} significant',
+                        style: const TextStyle(fontSize: 12, color: _rose, fontWeight: FontWeight.w600),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        // Session list
+        if (cc.sessions.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          ...cc.sessions.map((s) => _CashSessionTile(session: s, fmt: fmt)),
+        ],
+      ],
+    );
+  }
+}
+
+class _CashStat extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color color;
+  const _CashStat(this.label, this.value, this.color);
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Column(
+        children: [
+          Text(label, style: const TextStyle(
+            fontSize: 10, color: _textMuted, fontWeight: FontWeight.w600, letterSpacing: 0.5,
+          )),
+          const SizedBox(height: 4),
+          Text(value, style: TextStyle(
+            fontSize: 14, fontWeight: FontWeight.w800, color: color,
+          )),
+        ],
+      ),
+    );
+  }
+}
+
+class _Divider extends StatelessWidget {
+  const _Divider();
+  @override
+  Widget build(BuildContext context) {
+    return Container(width: 1, height: 32, color: _border, margin: const EdgeInsets.symmetric(horizontal: 4));
+  }
+}
+
+class _CashSessionTile extends StatelessWidget {
+  final CashSession session;
+  final String Function(double) fmt;
+  const _CashSessionTile({required this.session, required this.fmt});
+
+  @override
+  Widget build(BuildContext context) {
+    final hasVariance = session.variance != null && session.variance != 0;
+    final color = hasVariance
+        ? (session.variance! < 0 ? _rose : _amber)
+        : _emerald;
+    final isOpen = session.status == 'OPEN';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: _bg2, borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: hasVariance ? color.withValues(alpha: 0.3) : _border),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 8, height: 8,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: isOpen ? _amber : _emerald,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    _statusIcon(s.status),
-                    const SizedBox(width: 8),
-                    Expanded(child: Text(s.label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _textPrimary))),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                      decoration: BoxDecoration(color: _statusColor(s.status).withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)),
-                      child: Text(s.status, style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: _statusColor(s.status))),
-                    ),
-                  ],
+                Text(session.label, style: const TextStyle(
+                  fontSize: 13, fontWeight: FontWeight.w600, color: _textPrimary,
+                )),
+                Text(isOpen ? 'Shift in progress' : 'Shift closed',
+                    style: const TextStyle(fontSize: 11, color: _textMuted)),
+              ],
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(fmt(session.expected), style: const TextStyle(
+                fontSize: 13, fontWeight: FontWeight.w700, color: _textSecondary,
+              )),
+              if (session.variance != null)
+                Text(
+                  '${session.variance! >= 0 ? '+' : ''}${fmt(session.variance!)}',
+                  style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.w700),
                 ),
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    _SessionStat(label: 'Expected', value: fmtAmount(s.expected)),
-                    _SessionStat(label: 'Declared', value: s.declared != null ? fmtAmount(s.declared!) : '—'),
-                    _SessionStat(
-                      label: 'Variance',
-                      value: s.variance != null ? '${s.variance! >= 0 ? '+' : ''}${fmtAmount(s.variance!)}' : '—',
-                      color: s.variance == null ? _textMuted : s.variance! == 0 ? _green : s.variance! < 0 ? _red : _orange,
-                    ),
-                  ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Transaction Controls ─────────────────────────────────────────────────────
+class _TransactionControlsCard extends StatelessWidget {
+  final FinanceDashboardData data;
+  final String Function(double) fmt;
+  const _TransactionControlsCard({required this.data, required this.fmt});
+
+  @override
+  Widget build(BuildContext context) {
+    final tc = data.transactionControls;
+    final items = [
+      _TxItem('Discounts Given', fmt(tc.discounts), Icons.local_offer_rounded,    _amber,  'Authorized reductions'),
+      _TxItem('Voids Processed', fmt(tc.voids),     Icons.remove_circle_rounded,  _rose,   'Cancelled transactions'),
+      _TxItem('Refunds Issued',  fmt(tc.refunds),   Icons.assignment_return_rounded,_violet,'Cash back to guests'),
+      _TxItem('Overrides',       tc.overrides.toString(), Icons.manage_accounts_rounded, _sky, 'Manager interventions'),
+    ];
+
+    return GridView.count(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      crossAxisCount: 2,
+      childAspectRatio: 1.6,
+      mainAxisSpacing: 10,
+      crossAxisSpacing: 10,
+      children: items.map((item) => _TxCard(item: item)).toList(),
+    );
+  }
+}
+
+class _TxItem {
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color color;
+  final String sublabel;
+  const _TxItem(this.label, this.value, this.icon, this.color, this.sublabel);
+}
+
+class _TxCard extends StatelessWidget {
+  final _TxItem item;
+  const _TxCard({required this.item});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: _bg2,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: item.color.withValues(alpha: 0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(7),
+                decoration: BoxDecoration(
+                  color: item.color.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(9),
                 ),
+                child: Icon(item.icon, size: 14, color: item.color),
+              ),
+            ],
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(item.value, style: TextStyle(
+                fontSize: 18, fontWeight: FontWeight.w900,
+                color: item.color, letterSpacing: -0.5,
+              )),
+              Text(item.label, style: const TextStyle(
+                fontSize: 11, fontWeight: FontWeight.w600, color: _textSecondary,
+              )),
+              Text(item.sublabel, style: const TextStyle(
+                fontSize: 10, color: _textMuted,
+              )),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Balance Sheet Row ────────────────────────────────────────────────────────
+class _BalanceSheetRow extends StatelessWidget {
+  final FinanceDashboardData data;
+  final String Function(double) fmt;
+  const _BalanceSheetRow({required this.data, required this.fmt});
+
+  @override
+  Widget build(BuildContext context) {
+    final out = data.outstanding;
+    final gc  = data.guestCredits;
+
+    return Row(
+      children: [
+        Expanded(
+          child: _BalanceCard(
+            title: 'RECEIVABLES',
+            total: out.total,
+            totalLabel: 'Total Outstanding',
+            color: _rose,
+            icon: Icons.account_balance_rounded,
+            lines: [
+              _BalanceLine('Guest Balances',     out.guestBalances,       fmt),
+              _BalanceLine('Corporate A/R',      out.corporateReceivables,fmt),
+              _BalanceLine('Other',              out.other,               fmt),
+            ],
+            fmt: fmt,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: _BalanceCard(
+            title: 'GUEST CREDIT',
+            total: gc.depositsHeld,
+            totalLabel: 'Deposits Held',
+            color: _emerald,
+            icon: Icons.savings_rounded,
+            lines: [
+              _BalanceLine('Available Credits', gc.creditsAvailable, fmt),
+              _BalanceLine('Consumed Credits',  gc.creditsConsumed,  fmt),
+            ],
+            fmt: fmt,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _BalanceLine {
+  final String label;
+  final double value;
+  final String Function(double) fmt;
+  const _BalanceLine(this.label, this.value, this.fmt);
+}
+
+class _BalanceCard extends StatelessWidget {
+  final String title;
+  final double total;
+  final String totalLabel;
+  final Color color;
+  final IconData icon;
+  final List<_BalanceLine> lines;
+  final String Function(double) fmt;
+
+  const _BalanceCard({
+    required this.title, required this.total, required this.totalLabel,
+    required this.color, required this.icon, required this.lines, required this.fmt,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: _bg2,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 14, color: color),
+              const SizedBox(width: 6),
+              Text(title, style: TextStyle(
+                fontSize: 9, fontWeight: FontWeight.w800,
+                color: color, letterSpacing: 1,
+              )),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(fmt(total), style: TextStyle(
+            fontSize: 18, fontWeight: FontWeight.w900,
+            color: color, letterSpacing: -0.5,
+          )),
+          Text(totalLabel, style: const TextStyle(
+            fontSize: 10, color: _textMuted,
+          )),
+          const SizedBox(height: 12),
+          const Divider(color: _border, height: 1),
+          const SizedBox(height: 10),
+          ...lines.map((l) => Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Row(
+              children: [
+                Expanded(child: Text(l.label, style: const TextStyle(
+                  fontSize: 11, color: _textMuted,
+                ))),
+                Text(l.fmt(l.value), style: const TextStyle(
+                  fontSize: 11, fontWeight: FontWeight.w700, color: _textSecondary,
+                )),
               ],
             ),
           )),
@@ -722,159 +1297,47 @@ class _CashControlCard extends StatelessWidget {
   }
 }
 
-class _CashSummaryChip extends StatelessWidget {
-  final String label;
-  final String amount;
-  final Color color;
-  const _CashSummaryChip({required this.label, required this.amount, required this.color});
-
-  @override
-  Widget build(BuildContext context) => Column(
-    children: [
-      Text(label, style: const TextStyle(fontSize: 10, color: _textMuted)),
-      const SizedBox(height: 3),
-      Text(amount, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: color)),
-    ],
-  );
-}
-
-class _SessionStat extends StatelessWidget {
-  final String label;
-  final String value;
-  final Color color;
-  const _SessionStat({required this.label, required this.value, this.color = _textSecondary});
-
-  @override
-  Widget build(BuildContext context) => Expanded(
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: const TextStyle(fontSize: 9, color: _textMuted)),
-        Text(value, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: color)),
-      ],
-    ),
-  );
-}
-
-// ─── 9. Transaction Controls ──────────────────────────────────────────────────
-class _TransactionControlsCard extends StatelessWidget {
-  final TransactionControlAggregate controls;
-  final String Function(double) fmtAmount;
-
-  const _TransactionControlsCard({required this.controls, required this.fmtAmount});
+// ─── Alerts List ──────────────────────────────────────────────────────────────
+class _AlertsList extends StatelessWidget {
+  final List<CurrentAlert> alerts;
+  final String Function(double) fmt;
+  const _AlertsList({required this.alerts, required this.fmt});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: _surface, borderRadius: BorderRadius.circular(16), border: Border.all(color: _border)),
-      child: Column(
-        children: [
-          _TxRow(label: 'Discounts', amount: fmtAmount(controls.discounts), color: _orange, icon: Icons.discount_rounded),
-          const Divider(color: _border, height: 16),
-          _TxRow(label: 'Voids', amount: fmtAmount(controls.voids), color: _red, icon: Icons.block_rounded),
-          const Divider(color: _border, height: 16),
-          _TxRow(label: 'Refunds', amount: fmtAmount(controls.refunds), color: _red, icon: Icons.undo_rounded),
-          const Divider(color: _border, height: 16),
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(color: _textMuted.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
-                child: const Icon(Icons.admin_panel_settings_rounded, color: _textMuted, size: 16),
-              ),
-              const SizedBox(width: 12),
-              const Text('Overrides / Approvals', style: TextStyle(fontSize: 13, color: _textSecondary)),
-              const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(color: _border, borderRadius: BorderRadius.circular(20)),
-                child: Text('${controls.overrides}', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _textPrimary)),
-              ),
-            ],
-          ),
-        ],
-      ),
+    return Column(
+      children: alerts.map((a) => _AlertTile(alert: a, fmt: fmt)).toList(),
     );
   }
 }
 
-class _TxRow extends StatelessWidget {
-  final String label;
-  final String amount;
-  final Color color;
-  final IconData icon;
-
-  const _TxRow({required this.label, required this.amount, required this.color, required this.icon});
-
-  @override
-  Widget build(BuildContext context) => Row(
-    children: [
-      Container(
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
-        child: Icon(icon, color: color, size: 16),
-      ),
-      const SizedBox(width: 12),
-      Expanded(child: Text(label, style: const TextStyle(fontSize: 13, color: _textSecondary))),
-      Text(amount, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: color)),
-    ],
-  );
-}
-
-// ─── 10. Guest Credits ────────────────────────────────────────────────────────
-class _GuestCreditsCard extends StatelessWidget {
-  final GuestCredits credits;
-  final String Function(double) fmtAmount;
-
-  const _GuestCreditsCard({required this.credits, required this.fmtAmount});
-
-  @override
-  Widget build(BuildContext context) {
-    final rows = [
-      ('Deposits Held', credits.depositsHeld, _gold, Icons.account_balance_wallet_rounded),
-      ('Credits Available', credits.creditsAvailable, _green, Icons.savings_rounded),
-      ('Credits Consumed', credits.creditsConsumed, _blue, Icons.check_circle_rounded),
-    ];
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: _surface, borderRadius: BorderRadius.circular(16), border: Border.all(color: _border)),
-      child: Column(
-        children: rows.map((r) => Padding(
-          padding: const EdgeInsets.only(bottom: 12),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(color: r.$3.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
-                child: Icon(r.$4, color: r.$3, size: 16),
-              ),
-              const SizedBox(width: 12),
-              Text(r.$1, style: const TextStyle(fontSize: 13, color: _textSecondary)),
-              const Spacer(),
-              Text(fmtAmount(r.$2), style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: r.$3)),
-            ],
-          ),
-        )).toList(),
-      ),
-    );
-  }
-}
-
-// ─── 11. Financial Alerts ─────────────────────────────────────────────────────
-class _AttentionCard extends StatelessWidget {
+class _AlertTile extends StatelessWidget {
   final CurrentAlert alert;
-  final String Function(double) fmtAmount;
+  final String Function(double) fmt;
+  const _AlertTile({required this.alert, required this.fmt});
 
-  const _AttentionCard({required this.alert, required this.fmtAmount});
+  Color get _priorityColor {
+    switch (alert.priority) {
+      case 'P1': return _rose;
+      case 'P2': return _amber;
+      default:   return _sky;
+    }
+  }
+
+  IconData get _categoryIcon {
+    switch (alert.category) {
+      case 'CASH':    return Icons.payments_rounded;
+      case 'REVENUE': return Icons.trending_up_rounded;
+      case 'CREDIT':  return Icons.credit_card_rounded;
+      default:        return Icons.notifications_rounded;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final isP0 = alert.priority == 'P0';
-    final color = isP0 ? _red : _orange;
-
+    final color = _priorityColor;
     return Container(
+      margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.06),
@@ -886,8 +1349,11 @@ class _AttentionCard extends StatelessWidget {
         children: [
           Container(
             padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)),
-            child: Icon(isP0 ? Icons.error_outline_rounded : Icons.warning_amber_rounded, color: color, size: 20),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(_categoryIcon, size: 16, color: color),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -896,93 +1362,151 @@ class _AttentionCard extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(color: color.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(4)),
-                      child: Text(alert.priority, style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: color)),
+                    Expanded(
+                      child: Text(alert.title, style: const TextStyle(
+                        fontSize: 13, fontWeight: FontWeight.w700, color: _textPrimary,
+                      )),
                     ),
-                    const SizedBox(width: 8),
-                    Text(alert.category, style: const TextStyle(fontSize: 10, color: _textMuted, letterSpacing: 0.5)),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: color.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(5),
+                      ),
+                      child: Text(alert.priority, style: TextStyle(
+                        fontSize: 9, fontWeight: FontWeight.w900,
+                        color: color, letterSpacing: 1,
+                      )),
+                    ),
                   ],
                 ),
-                const SizedBox(height: 6),
-                Text('${alert.affectedCount > 1 ? '${alert.affectedCount}× ' : ''}${alert.title}',
-                    style: const TextStyle(color: _textPrimary, fontSize: 14, fontWeight: FontWeight.w700)),
-                if (alert.summary.isNotEmpty) ...[
-                  const SizedBox(height: 3),
-                  Text(alert.summary, style: const TextStyle(color: _textSecondary, fontSize: 12)),
+                const SizedBox(height: 4),
+                Text(alert.summary, style: const TextStyle(
+                  fontSize: 12, color: _textMuted,
+                )),
+                if (alert.totalAmount > 0 || alert.affectedCount > 0) ...[
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      if (alert.affectedCount > 0)
+                        _AlertChip('${alert.affectedCount} affected', color),
+                      if (alert.totalAmount > 0) ...[
+                        const SizedBox(width: 6),
+                        _AlertChip(fmt(alert.totalAmount), color),
+                      ],
+                    ],
+                  ),
                 ],
-                const SizedBox(height: 6),
-                Text(fmtAmount(alert.totalAmount), style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: color)),
               ],
             ),
           ),
-          Icon(Icons.chevron_right_rounded, color: color.withValues(alpha: 0.5), size: 18),
         ],
       ),
     );
   }
 }
 
-// ─── Shared Widgets ───────────────────────────────────────────────────────────
-class _SectionHeader extends StatelessWidget {
+class _AlertChip extends StatelessWidget {
   final String label;
-  final String? trailing;
-  final int? count;
-
-  const _SectionHeader({required this.label, this.trailing, this.count});
+  final Color color;
+  const _AlertChip(this.label, this.color);
 
   @override
-  Widget build(BuildContext context) => Row(
-    children: [
-      Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1.4, color: _textMuted)),
-      if (count != null) ...[
-        const SizedBox(width: 8),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-          decoration: BoxDecoration(color: _red.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(10), border: Border.all(color: _red.withValues(alpha: 0.3))),
-          child: Text('$count', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: _red)),
-        ),
-      ],
-      const Spacer(),
-      if (trailing != null)
-        Text(trailing!, style: const TextStyle(fontSize: 10, color: _textMuted, fontWeight: FontWeight.w600)),
-    ],
-  );
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Text(label, style: TextStyle(
+        fontSize: 10, fontWeight: FontWeight.w700, color: color,
+      )),
+    );
+  }
 }
 
-class _Skeleton extends StatefulWidget {
-  final double height;
-  final double borderRadius;
-  const _Skeleton({required this.height, required this.borderRadius});
-
+// ─── Shimmer Skeleton ─────────────────────────────────────────────────────────
+class _ShimmerSkeleton extends StatefulWidget {
+  const _ShimmerSkeleton();
   @override
-  State<_Skeleton> createState() => _SkeletonState();
+  State<_ShimmerSkeleton> createState() => _ShimmerSkeletonState();
 }
 
-class _SkeletonState extends State<_Skeleton> with SingleTickerProviderStateMixin {
-  late AnimationController _c;
-  late Animation<double> _a;
+class _ShimmerSkeletonState extends State<_ShimmerSkeleton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _anim;
 
   @override
   void initState() {
     super.initState();
-    _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 1200))..repeat(reverse: true);
-    _a = Tween<double>(begin: 0.3, end: 0.7).animate(CurvedAnimation(parent: _c, curve: Curves.easeInOut));
+    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1400))
+      ..repeat();
+    _anim = Tween<double>(begin: -2, end: 2).animate(
+      CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut),
+    );
   }
 
   @override
-  void dispose() { _c.dispose(); super.dispose(); }
+  void dispose() { _ctrl.dispose(); super.dispose(); }
 
   @override
-  Widget build(BuildContext context) => AnimatedBuilder(
-    animation: _a,
-    builder: (_, child) => Container(
-      height: widget.height,
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _anim,
+      builder: (context, _) {
+        return ListView(
+          padding: const EdgeInsets.fromLTRB(16, 100, 16, 40),
+          children: [
+            _skBox(height: 120),
+            const SizedBox(height: 12),
+            Row(children: [
+              Expanded(child: _skBox(height: 80)),
+              const SizedBox(width: 10),
+              Expanded(child: _skBox(height: 80)),
+              const SizedBox(width: 10),
+              Expanded(child: _skBox(height: 80)),
+            ]),
+            const SizedBox(height: 20),
+            _skBox(height: 16, width: 100),
+            const SizedBox(height: 10),
+            _skBox(height: 130),
+            const SizedBox(height: 20),
+            _skBox(height: 16, width: 120),
+            const SizedBox(height: 10),
+            _skBox(height: 100),
+            const SizedBox(height: 20),
+            _skBox(height: 16, width: 80),
+            const SizedBox(height: 10),
+            Row(children: [
+              Expanded(child: _skBox(height: 110)),
+              const SizedBox(width: 10),
+              Expanded(child: _skBox(height: 110)),
+            ]),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _skBox({double height = 60, double? width}) {
+    return Container(
+      height: height,
+      width: width,
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: _a.value * 0.08),
-        borderRadius: BorderRadius.circular(widget.borderRadius),
+        borderRadius: BorderRadius.circular(14),
+        gradient: LinearGradient(
+          begin: Alignment(_anim.value - 1, 0),
+          end:   Alignment(_anim.value + 1, 0),
+          colors: const [
+            Color(0xFF111E35),
+            Color(0xFF172240),
+            Color(0xFF111E35),
+          ],
+        ),
       ),
-    ),
-  );
+    );
+  }
 }
