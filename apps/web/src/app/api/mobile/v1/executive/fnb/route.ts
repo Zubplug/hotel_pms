@@ -75,13 +75,13 @@ export async function GET(req: NextRequest) {
       select: {
         amount: true,
         type: true,
-        posOrderId: true,
+        posTransactionId: true,
       },
     });
 
     // Collect posOrderIds to fetch product fnbClass
     const posOrderIds = [...new Set(
-      fnbFolioItems.map((fi) => fi.posOrderId).filter(Boolean) as string[]
+      fnbFolioItems.map((fi) => fi.posTransactionId).filter(Boolean) as string[]
     )];
 
     // For each posOrder, get fnbClass of the items (weighted proxy)
@@ -89,12 +89,12 @@ export async function GET(req: NextRequest) {
     const orderFnbClass = new Map<string, 'FOOD' | 'BEVERAGE' | 'OTHER'>();
     if (posOrderIds.length > 0) {
       const orderItems = await prisma.posOrderItem.findMany({
-        where: { orderId: { in: posOrderIds }, voidedAt: null },
+        where: { orderId: { in: posOrderIds }, voidReason: null },
         select: {
           orderId: true,
           unitPrice: true,
           quantity: true,
-          product: { select: { fnbClass: true } },
+          product: { select: { category: { select: { fnbClass: true } } } },
         },
       });
 
@@ -102,7 +102,7 @@ export async function GET(req: NextRequest) {
       const orderClassRevenue = new Map<string, { FOOD: number; BEVERAGE: number; OTHER: number }>();
       for (const item of orderItems) {
         const val = Number(item.unitPrice) * Number(item.quantity);
-        const cls = (item.product?.fnbClass ?? 'FOOD') as 'FOOD' | 'BEVERAGE' | 'OTHER';
+        const cls = (item.product?.category?.fnbClass ?? 'FOOD') as 'FOOD' | 'BEVERAGE' | 'OTHER';
         const existing = orderClassRevenue.get(item.orderId) ?? { FOOD: 0, BEVERAGE: 0, OTHER: 0 };
         existing[cls] += val;
         orderClassRevenue.set(item.orderId, existing);
@@ -120,7 +120,7 @@ export async function GET(req: NextRequest) {
     for (const fi of fnbFolioItems) {
       const sign = fi.type === 'CHARGE' ? 1 : -1;
       const amt = Number(fi.amount) * sign;
-      const cls = fi.posOrderId ? (orderFnbClass.get(fi.posOrderId) ?? 'FOOD') : 'FOOD';
+      const cls = fi.posTransactionId ? (orderFnbClass.get(fi.posTransactionId) ?? 'FOOD') : 'FOOD';
       if (cls === 'BEVERAGE') {
         beverageRevenue += amt;
       } else {
@@ -173,17 +173,16 @@ export async function GET(req: NextRequest) {
         source: { in: ['POS', 'RESTAURANT', 'BAR'] },
         type: { in: ['CHARGE', 'DISCOUNT'] },
         voidedAt: null,
-        posOrderId: { not: null },
       },
       select: {
         amount: true,
         type: true,
-        posOrderId: true,
+        posTransactionId: true,
       },
     });
 
     const allOrderIds = [...new Set(
-      allFnbFolioItemsWithOutlet.map((fi) => fi.posOrderId).filter(Boolean) as string[]
+      allFnbFolioItemsWithOutlet.map((fi) => fi.posTransactionId).filter(Boolean) as string[]
     )];
 
     const ordersWithMeta = allOrderIds.length > 0
@@ -206,7 +205,7 @@ export async function GET(req: NextRequest) {
     for (const fi of allFnbFolioItemsWithOutlet) {
       const sign = fi.type === 'CHARGE' ? 1 : -1;
       const amt = Number(fi.amount) * sign;
-      const orderMeta = fi.posOrderId ? orderMetaMap.get(fi.posOrderId) : null;
+      const orderMeta = fi.posTransactionId ? orderMetaMap.get(fi.posTransactionId) : null;
       if (!orderMeta) continue;
       const { outletId, guestCount } = orderMeta;
       outletRevenue.set(outletId, (outletRevenue.get(outletId) ?? 0) + amt);
@@ -222,7 +221,7 @@ export async function GET(req: NextRequest) {
       const outletItems = await prisma.posOrderItem.findMany({
         where: {
           orderId: { in: allOrderIds },
-          voidedAt: null,
+          voidReason: null,
         },
         select: {
           orderId: true,
@@ -270,7 +269,7 @@ export async function GET(req: NextRequest) {
           by: ['productId'],
           where: {
             orderId: { in: allClosedOrderIds },
-            voidedAt: null,
+            voidReason: null,
             productId: { not: null },
           },
           _sum: { quantity: true },
@@ -284,7 +283,7 @@ export async function GET(req: NextRequest) {
     const topProducts = topProductIds.length > 0
       ? await prisma.posProduct.findMany({
           where: { id: { in: topProductIds } },
-          select: { id: true, name: true, fnbClass: true, price: true },
+          select: { id: true, name: true, category: { select: { fnbClass: true } }, price: true },
         })
       : [];
 
@@ -296,7 +295,7 @@ export async function GET(req: NextRequest) {
       const topItemsWithRevenue = await prisma.posOrderItem.findMany({
         where: {
           orderId: { in: allClosedOrderIds },
-          voidedAt: null,
+          voidReason: null,
           productId: { in: topProductIds },
         },
         select: { productId: true, quantity: true, unitPrice: true },
@@ -314,7 +313,7 @@ export async function GET(req: NextRequest) {
         if (!product) return null;
         return {
           productName: product.name,
-          fnbClass: product.fnbClass,
+          fnbClass: product.category?.fnbClass ?? 'FOOD',
           qty: row._sum.quantity ?? 0,
           revenue: topItemRevenue[product.id] ?? 0,
         };
@@ -388,7 +387,6 @@ export async function GET(req: NextRequest) {
         },
       },
       _count: { id: true },
-      _sum: { amount: true },
     });
 
     // ── Discounts Summary ─────────────────────────────────────────────────────
@@ -505,7 +503,7 @@ export async function GET(req: NextRequest) {
         activeSessions,
         voids: {
           count: voidedItemCount,
-          amount: Number(voidsSummary._sum.amount ?? 0),
+          amount: 0,
         },
         discounts: {
           count: discountsSummary._count.id ?? 0,
