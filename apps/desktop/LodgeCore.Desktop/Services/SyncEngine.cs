@@ -717,9 +717,8 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
         {
             return await dbContext.SyncEvents.AnyAsync(e =>
                 (e.EntityId == aggregateId || e.SessionId == aggregateId) &&
-                (e.Status == "PENDING" || e.Status == "FAILED" ||
-                 e.Status == "PROCESSING" || e.Status == "CONFLICT" ||
-                 e.Status == "DEAD_LETTER"), stoppingToken);
+                (e.Status == "PENDING" || e.Status == "PROCESSING" || 
+                 (e.Status == "FAILED" && e.AttemptCount < 5)), stoppingToken);
         }
         
         var token = await GetActiveTokenAsync();
