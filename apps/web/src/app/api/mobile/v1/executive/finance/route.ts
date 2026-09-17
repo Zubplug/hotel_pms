@@ -84,7 +84,7 @@ export async function GET(req: NextRequest) {
     };
 
     if (auditedBusinessDate && auditedStartDate && auditedEndDate) {
-      const [chargeItems, voidedItems] = await Promise.all([
+      const [chargeItems, nonFolioPosOrders] = await Promise.all([
         prisma.folioItem.findMany({
           where: {
             folio: { propertyId: primaryPropertyId },
@@ -93,23 +93,30 @@ export async function GET(req: NextRequest) {
           },
           select: { amount: true, type: true, source: true },
         }),
-        prisma.folioItem.findMany({
+        // Non-folio POS orders (direct cash/card sales never posted to a room folio)
+        // kpi.ts includes these — we must too for parity.
+        prisma.posOrder.findMany({
           where: {
-            folio: { propertyId: primaryPropertyId },
+            propertyId: primaryPropertyId,
             businessDate: { gte: auditedStartDate, lte: auditedEndDate },
-            type: 'CHARGE',
-            voidedAt: { not: null },
+            status: { not: 'VOIDED' },
+            folioId: null,
           },
-          select: { amount: true },
+          include: { outlet: { select: { type: true } } },
         }),
       ]);
 
       for (const item of chargeItems) {
         const amt = Number(item.amount);
         if (item.type === 'CHARGE') {
-          if (item.source === 'ROOM_CHARGE') audited.roomRevenue += amt;
-          else if (['POS', 'RESTAURANT', 'BAR'].includes(item.source)) audited.fbRevenue += amt;
-          else audited.otherRevenue += amt;
+          // Mirror kpi.ts room source list exactly
+          if (['ROOM_CHARGE', 'ROOM_UPGRADE', 'ROOM_DOWNGRADE_CREDIT'].includes(item.source)) {
+            audited.roomRevenue += amt;
+          } else if (['POS', 'RESTAURANT', 'BAR'].includes(item.source)) {
+            audited.fbRevenue += amt;
+          } else {
+            audited.otherRevenue += amt;
+          }
         } else if (item.type === 'DISCOUNT') {
           audited.discounts += Math.abs(amt);
         } else if (item.type === 'REFUND') {
@@ -117,26 +124,48 @@ export async function GET(req: NextRequest) {
         }
       }
 
-      const auditedVoids = voidedItems.reduce((s: number, i: any) => s + Number(i.amount), 0);
+      // Add non-folio POS revenue to F&B (mirrors kpi.ts logic)
+      for (const order of nonFolioPosOrders) {
+        audited.fbRevenue += Number(order.total || 0);
+      }
+
       audited.revenue = audited.roomRevenue + audited.fbRevenue + audited.otherRevenue;
       audited.netRevenue = audited.revenue - audited.discounts - audited.refunds;
     }
 
     // ── 3. Live Since Last Audit (Unaudited Activity) ──────────────────────
-    const liveFolioItems = await prisma.folioItem.findMany({
-      where: {
-        folio: { propertyId: primaryPropertyId },
-        businessDate: liveBusinessDateFilter,
-        type: { in: ['CHARGE', 'DISCOUNT'] },
-        source: { in: ['POS', 'RESTAURANT', 'BAR'] },
-        voidedAt: null,
-      },
-      select: { amount: true, type: true },
-    });
-    const livePosSales = liveFolioItems.reduce(
+    const [liveFolioItems, liveNonFolioPosOrders] = await Promise.all([
+      prisma.folioItem.findMany({
+        where: {
+          folio: { propertyId: primaryPropertyId },
+          businessDate: liveBusinessDateFilter,
+          type: { in: ['CHARGE', 'DISCOUNT'] },
+          source: { in: ['POS', 'RESTAURANT', 'BAR'] },
+          voidedAt: null,
+        },
+        select: { amount: true, type: true },
+      }),
+      // Non-folio POS orders in live period (cash/card walkups not posted to a folio)
+      prisma.posOrder.findMany({
+        where: {
+          propertyId: primaryPropertyId,
+          businessDate: liveBusinessDateFilter,
+          status: { not: 'VOIDED' },
+          folioId: null,
+        },
+        select: { total: true },
+      }),
+    ]);
+
+    const liveFolioPosSales = liveFolioItems.reduce(
       (s: number, i: any) => s + (i.type === 'DISCOUNT' ? -1 : 1) * Number(i.amount),
       0,
     );
+    const liveNonFolioPosSales = liveNonFolioPosOrders.reduce(
+      (s: number, o: any) => s + Number(o.total || 0),
+      0,
+    );
+    const livePosSales = liveFolioPosSales + liveNonFolioPosSales;
 
     const stayovers = await prisma.reservation.findMany({
       where: {
