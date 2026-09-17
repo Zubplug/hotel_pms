@@ -82,48 +82,34 @@ export async function GET(req: NextRequest) {
       discounts: 0, refunds: 0, netRevenue: 0,
     };
 
-    if (auditedBusinessDate) {
-      // Build the date range for the audited period
-      const auditedRangeStart = period === 'MTD'
-        ? startOfDay(startOfMonth(businessDate))
-        : period === 'YTD'
-          ? startOfDay(startOfYear(businessDate))
-          : startOfDay(auditedBusinessDate); // TODAY / WEEK: just the last audited date
-      const auditedRangeEnd = endOfDay(auditedBusinessDate);
+    if (auditedBusinessDate && auditedStartDate && auditedEndDate) {
+      // ── Revenue via NightAudit table (matches home screen exactly) ──
+      // This correctly aggregates if period is MTD/YTD, and captures the exact
+      // locked-in figures from the Night Audit, rather than live recalculated data.
+      const audits = await prisma.nightAudit.findMany({
+        where: {
+          propertyId: primaryPropertyId,
+          status: 'COMPLETED',
+          businessDate: { gte: auditedStartDate, lte: auditedEndDate },
+        },
+        include: { financialSnapshot: true },
+      });
 
-      // ── Revenue via authoritative kpi.ts function (matches home screen exactly) ──
-      const auditedRevData = await calculateDailyRevenue(primaryPropertyId, auditedBusinessDate);
-      audited.roomRevenue = auditedRevData.roomRevenue;
-      audited.fbRevenue   = auditedRevData.fbRevenue + auditedRevData.barRevenue;
-      audited.otherRevenue = auditedRevData.otherRevenue;
-      // calculateDailyRevenue returns NET (discounts already subtracted per category).
-      // Query discounts + refunds separately so Finance screen can show them in the breakdown.
-      const [discAgg, refAgg] = await Promise.all([
-        prisma.folioItem.aggregate({
-          where: {
-            folio: { propertyId: primaryPropertyId },
-            businessDate: { gte: auditedRangeStart, lte: auditedRangeEnd },
-            type: 'DISCOUNT',
-            voidedAt: null,
-          },
-          _sum: { amount: true },
-        }),
-        prisma.folioItem.aggregate({
-          where: {
-            folio: { propertyId: primaryPropertyId },
-            businessDate: { gte: auditedRangeStart, lte: auditedRangeEnd },
-            type: 'REFUND',
-            voidedAt: null,
-          },
-          _sum: { amount: true },
-        }),
-      ]);
-      audited.discounts = Math.abs(Number(discAgg._sum.amount || 0));
-      audited.refunds   = Math.abs(Number(refAgg._sum.amount || 0));
-      // Gross = net revenue returned by calculateDailyRevenue + discounts
-      // (calculateDailyRevenue already subtracts discounts, so add them back for gross display)
-      audited.revenue    = auditedRevData.totalRevenue + audited.discounts;
-      audited.netRevenue = auditedRevData.totalRevenue - audited.refunds;
+      for (const audit of audits) {
+        audited.roomRevenue += Number(audit.totalRoomRevenue || 0);
+        if (audit.financialSnapshot) {
+          audited.fbRevenue += Number(audit.financialSnapshot.fnbRevenue || 0);
+          audited.otherRevenue += Number(audit.financialSnapshot.otherRevenue || 0);
+          audited.discounts += Number(audit.financialSnapshot.discounts || 0);
+          audited.refunds += Number(audit.financialSnapshot.refunds || 0);
+          audited.revenue += Number(audit.financialSnapshot.grossRevenue || audit.totalRevenue || 0);
+          audited.netRevenue += Number(audit.financialSnapshot.netRevenue || audit.totalRevenue || 0);
+        } else {
+          // Fallback if financialSnapshot doesn't exist for some reason
+          audited.revenue += Number(audit.totalRevenue || 0);
+          audited.netRevenue += Number(audit.totalRevenue || 0);
+        }
+      }
     }
 
     // ── 3. Live Since Last Audit (Unaudited Activity) ──────────────────────
