@@ -2,9 +2,9 @@ import { NextRequest } from 'next/server';
 import { successResponse, errorResponse } from '@/lib/api-response';
 import { resolveUser } from '@/lib/resolve-user';
 import { requireOrganizationContext } from '@/lib/organization-access';
-import { getPropertyBusinessDate } from '@/lib/kpi';
+import { getPropertyBusinessDate, calculateDailyRevenue } from '@/lib/kpi';
 import { prisma } from '@hotel-pms/db';
-import { addDays, format, startOfMonth, startOfYear } from 'date-fns';
+import { addDays, endOfDay, format, startOfDay, startOfMonth, startOfYear } from 'date-fns';
 import { fromZonedTime } from 'date-fns-tz';
 
 export const dynamic = 'force-dynamic';
@@ -75,148 +75,63 @@ export async function GET(req: NextRequest) {
     if (period === 'MTD') sessionStartDate = propertyDayStart(startOfMonth(businessDate));
     if (period === 'YTD') sessionStartDate = propertyDayStart(startOfYear(businessDate));
     const sessionEndDate = businessDayEnd;
-
-
-    // ── 2. Audited Revenue (Strictly from audited days) ────────────────────
+    // Uses calculateDailyRevenue from kpi.ts — the exact same function as the home
+    // screen dashboard — so Finance screen figures are guaranteed to match.
     let audited = {
       revenue: 0, roomRevenue: 0, fbRevenue: 0, otherRevenue: 0,
       discounts: 0, refunds: 0, netRevenue: 0,
     };
 
-    if (auditedBusinessDate && auditedStartDate && auditedEndDate) {
-      const [chargeItems, nonFolioPosOrders] = await Promise.all([
-        prisma.folioItem.findMany({
+    if (auditedBusinessDate) {
+      // Build the date range for the audited period
+      const auditedRangeStart = period === 'MTD'
+        ? startOfDay(startOfMonth(businessDate))
+        : period === 'YTD'
+          ? startOfDay(startOfYear(businessDate))
+          : startOfDay(auditedBusinessDate); // TODAY / WEEK: just the last audited date
+      const auditedRangeEnd = endOfDay(auditedBusinessDate);
+
+      // ── Revenue via authoritative kpi.ts function (matches home screen exactly) ──
+      const auditedRevData = await calculateDailyRevenue(primaryPropertyId, auditedBusinessDate);
+      audited.roomRevenue = auditedRevData.roomRevenue;
+      audited.fbRevenue   = auditedRevData.fbRevenue + auditedRevData.barRevenue;
+      audited.otherRevenue = auditedRevData.otherRevenue;
+      // calculateDailyRevenue returns NET (discounts already subtracted per category).
+      // Query discounts + refunds separately so Finance screen can show them in the breakdown.
+      const [discAgg, refAgg] = await Promise.all([
+        prisma.folioItem.aggregate({
           where: {
             folio: { propertyId: primaryPropertyId },
-            businessDate: { gte: auditedStartDate, lte: auditedEndDate },
+            businessDate: { gte: auditedRangeStart, lte: auditedRangeEnd },
+            type: 'DISCOUNT',
             voidedAt: null,
           },
-          select: { amount: true, type: true, source: true },
+          _sum: { amount: true },
         }),
-        // Non-folio POS orders (direct cash/card sales never posted to a room folio)
-        // kpi.ts includes these — we must too for parity.
-        prisma.posOrder.findMany({
+        prisma.folioItem.aggregate({
           where: {
-            propertyId: primaryPropertyId,
-            businessDate: { gte: auditedStartDate, lte: auditedEndDate },
-            status: { not: 'VOIDED' },
-            folioId: null,
+            folio: { propertyId: primaryPropertyId },
+            businessDate: { gte: auditedRangeStart, lte: auditedRangeEnd },
+            type: 'REFUND',
+            voidedAt: null,
           },
-          include: { outlet: { select: { type: true } } },
+          _sum: { amount: true },
         }),
       ]);
-
-      for (const item of chargeItems) {
-        const amt = Number(item.amount);
-        if (item.type === 'CHARGE') {
-          // Mirror kpi.ts room source list exactly
-          if (['ROOM_CHARGE', 'ROOM_UPGRADE', 'ROOM_DOWNGRADE_CREDIT'].includes(item.source)) {
-            audited.roomRevenue += amt;
-          } else if (['POS', 'RESTAURANT', 'BAR'].includes(item.source)) {
-            audited.fbRevenue += amt;
-          } else {
-            audited.otherRevenue += amt;
-          }
-        } else if (item.type === 'DISCOUNT') {
-          audited.discounts += Math.abs(amt);
-        } else if (item.type === 'REFUND') {
-          audited.refunds += Math.abs(amt);
-        }
-      }
-
-      // Add non-folio POS revenue to F&B (mirrors kpi.ts logic)
-      for (const order of nonFolioPosOrders) {
-        audited.fbRevenue += Number(order.total || 0);
-      }
-
-      audited.revenue = audited.roomRevenue + audited.fbRevenue + audited.otherRevenue;
-      audited.netRevenue = audited.revenue - audited.discounts - audited.refunds;
+      audited.discounts = Math.abs(Number(discAgg._sum.amount || 0));
+      audited.refunds   = Math.abs(Number(refAgg._sum.amount || 0));
+      // Gross = net revenue returned by calculateDailyRevenue + discounts
+      // (calculateDailyRevenue already subtracts discounts, so add them back for gross display)
+      audited.revenue    = auditedRevData.totalRevenue + audited.discounts;
+      audited.netRevenue = auditedRevData.totalRevenue - audited.refunds;
     }
 
     // ── 3. Live Since Last Audit (Unaudited Activity) ──────────────────────
-    const [liveFolioItems, liveNonFolioPosOrders] = await Promise.all([
-      prisma.folioItem.findMany({
-        where: {
-          folio: { propertyId: primaryPropertyId },
-          businessDate: liveBusinessDateFilter,
-          type: { in: ['CHARGE', 'DISCOUNT'] },
-          source: { in: ['POS', 'RESTAURANT', 'BAR'] },
-          voidedAt: null,
-        },
-        select: { amount: true, type: true },
-      }),
-      // Non-folio POS orders in live period (cash/card walkups not posted to a folio)
-      prisma.posOrder.findMany({
-        where: {
-          propertyId: primaryPropertyId,
-          businessDate: liveBusinessDateFilter,
-          status: { not: 'VOIDED' },
-          folioId: null,
-        },
-        select: { total: true },
-      }),
-    ]);
+    // Uses calculateDailyRevenue for businessDate (today) so live figures also
+    // match what the home screen shows as "LIVE TODAY".
+    const liveRevData = await calculateDailyRevenue(primaryPropertyId, businessDate);
 
-    const liveFolioPosSales = liveFolioItems.reduce(
-      (s: number, i: any) => s + (i.type === 'DISCOUNT' ? -1 : 1) * Number(i.amount),
-      0,
-    );
-    const liveNonFolioPosSales = liveNonFolioPosOrders.reduce(
-      (s: number, o: any) => s + Number(o.total || 0),
-      0,
-    );
-    const livePosSales = liveFolioPosSales + liveNonFolioPosSales;
-
-    const stayovers = await prisma.reservation.findMany({
-      where: {
-        propertyId: primaryPropertyId,
-        status: 'CHECKED_IN',
-        checkIn: { lte: businessDate },
-        checkOut: { gt: businessDate },
-      },
-      include: {
-        reservationRooms: { where: { status: 'ACTIVE' } },
-        folios: {
-          where: { type: { in: ['MAIN', 'ROOM'] } },
-          include: {
-            items: {
-              where: {
-                source: 'ROOM_CHARGE',
-                businessDate: { gte: businessDayStart, lte: businessDayEnd },
-                voidedAt: null,
-              },
-            },
-          },
-        },
-      },
-    });
-    const liveRoomItems = await prisma.folioItem.findMany({
-      where: {
-        folio: { propertyId: primaryPropertyId },
-        businessDate: liveBusinessDateFilter,
-        source: 'ROOM_CHARGE',
-        type: { in: ['CHARGE', 'DISCOUNT'] },
-        voidedAt: null,
-      },
-      select: { amount: true, type: true },
-    });
-    let liveRoomCharges = liveRoomItems.reduce(
-      (s: number, i: any) => s + (i.type === 'DISCOUNT' ? -1 : 1) * Number(i.amount),
-      0,
-    );
-    for (const res of stayovers) {
-      const hasPostedChargeToday = res.folios.some((folio: any) => folio.items.length > 0);
-      if (hasPostedChargeToday) continue;
-      for (const rr of res.reservationRooms) {
-        const rate = Number(rr.rateAmount || 0);
-        let discount = 0;
-        if (rr.discountType === 'FIXED_AMOUNT') discount = Number(rr.discountAmount || 0);
-        else if (rr.discountType === 'PERCENTAGE') discount = rate * (Number(rr.discountPercent || 0) / 100);
-        else if (rr.discountType === 'COMPLIMENTARY') discount = Number(rr.discountAmount || 0) || rate;
-        liveRoomCharges += Math.max(0, rate - discount);
-      }
-    }
-
+    // Payments collected since last audit (real-time)
     const livePayments = await prisma.payment.findMany({
       where: {
         propertyId: primaryPropertyId,
@@ -228,9 +143,9 @@ export async function GET(req: NextRequest) {
     const liveCollections = livePayments.reduce((s: number, p: any) => s + Number(p.amount), 0);
 
     const liveSinceLastAudit = {
-      revenueActivity: liveRoomCharges + livePosSales,
-      roomCharges: liveRoomCharges,
-      posSales: livePosSales,
+      revenueActivity: liveRevData.totalRevenue,
+      roomCharges: liveRevData.roomRevenue,
+      posSales: liveRevData.fbRevenue + liveRevData.barRevenue,
       collections: liveCollections,
     };
 
