@@ -6,6 +6,7 @@ import {
   ensureExpenseCounterpartyForClient,
 } from './cash-account-service';
 import { TenantContext } from '../organization-access';
+import { GeneralLedgerService } from './general-ledger-service';
 type ExpenseInput = {
   propertyId: string;
   amount: number;
@@ -151,8 +152,29 @@ export class CashExpenseService {
           operationId: `expense-paid-${expense.id}`,
         },
       });
-      const category = await tx.expenseCategory.findUnique({ where: { id: expense.categoryId! }, select: { debitAccount: true } });
-      await tx.cashExpenseJournal.create({ data: { expenseId: expense.id, debitAccount: category?.debitAccount || `EXPENSE:${expense.category}`, creditAccount: 'CASH:GENERAL_CASHIER_SAFE', amount, currency: expense.currency, postedBy: ctx.userId } });
+      const category = await tx.expenseCategory.findUnique({ where: { id: expense.categoryId! } });
+      if (!category) throw new ShiftControlError('Expense category not found.', 'INTERNAL_ERROR', 500);
+
+      const expenseGlAccount = await tx.chartOfAccount.findFirst({
+        where: { propertyId: expense.propertyId, code: category.debitAccount, isActive: true }
+      });
+
+      if (!expenseGlAccount) throw new ShiftControlError(`Expense category is mapped to GL Account Code ${category.debitAccount}, but that account is missing or inactive.`, 'BAD_REQUEST', 400);
+      if (!safe.glAccountId) throw new ShiftControlError(`The General Cashier Safe account (${safe.name}) must be mapped to a GL Chart of Account.`, 'BAD_REQUEST', 400);
+
+      await tx.cashExpenseJournal.create({ data: { expenseId: expense.id, debitAccount: category.debitAccount, creditAccount: 'CASH:GENERAL_CASHIER_SAFE', amount, currency: expense.currency, postedBy: ctx.userId } });
+
+      await GeneralLedgerService.postJournal(ctx, {
+          propertyId: expense.propertyId,
+          entryDate: new Date(),
+          description: `Cash Expense: ${expense.expenseReference}${expense.payee ? ` - Paid to ${expense.payee}` : ''}`,
+          reference: expense.expenseReference,
+          sourceModule: 'CASH_MANAGEMENT',
+          lines: [
+            { accountId: expenseGlAccount.id, debit: amount, credit: 0, description: `Cash Expense - ${category.name}`, sourceType: 'CASH_EXPENSE', sourceId: expense.id },
+            { accountId: safe.glAccountId, debit: 0, credit: amount, description: `Cash Expense Paid`, sourceType: 'CASH_EXPENSE', sourceId: expense.id }
+          ]
+      }, tx);
       await this.audit(tx, expense.id, ctx.userId, 'PAID', `Paid from ${safe.name}`);
       return updated;
     });
