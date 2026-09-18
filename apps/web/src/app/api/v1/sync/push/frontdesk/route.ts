@@ -1075,7 +1075,14 @@ export async function POST(req: NextRequest) {
                   where: { propertyId, corporateAccountId, type: "CITY_LEDGER", status: "OPEN" },
                 })
               : null;
-            const newFolio = sharedCorporateFolio ?? await tx.folio.create({
+              
+            const existingRoomFolio = corporateAccountId
+              ? null
+              : await tx.folio.findFirst({
+                  where: { reservationId: aggregateId, propertyId }
+                });
+
+            const newFolio = sharedCorporateFolio ?? existingRoomFolio ?? await tx.folio.create({
               data: {
                 id: isUuid(payload.FolioId || payload.folioId) && !corporateAccountId
                   ? payload.FolioId || payload.folioId
