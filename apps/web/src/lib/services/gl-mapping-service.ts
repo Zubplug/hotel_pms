@@ -99,4 +99,34 @@ export class GLMappingService {
 
     return account.id;
   }
+
+  /**
+   * Resolves the Laundry Revenue GL Account.
+   * Reads from accountingConfig.revenueAccounts.LAUNDRY, default seeded to 4300.
+   */
+  static async getLaundryRevenueAccount(propertyId: string): Promise<string> {
+    const property = await prisma.property.findUnique({
+      where: { id: propertyId }
+    });
+    if (!property) throw new Error('Property not found');
+
+    const settings = (property.settings as any) || {};
+    const revenueMap = settings?.accountingConfig?.revenueAccounts || {};
+
+    const configuredCode = revenueMap['LAUNDRY'];
+
+    if (!configuredCode) {
+      throw new Error(`Laundry revenue GL mapping required. Please configure Property Settings (accountingConfig.revenueAccounts.LAUNDRY).`);
+    }
+
+    const account = await prisma.chartOfAccount.findFirst({
+      where: { propertyId, code: configuredCode, isActive: true }
+    });
+
+    if (!account) {
+      throw new Error(`Configured Laundry Revenue GL Account Code ${configuredCode} is missing or inactive for this property.`);
+    }
+
+    return account.id;
+  }
 }

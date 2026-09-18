@@ -15,6 +15,8 @@ import { InventoryService } from "@/lib/inventory/InventoryService";
 import { routeFoliosToCityLedger } from "@/lib/finance/route-folio-to-city-ledger";
 import { FolioPaymentAccountingService } from "@/lib/services/folio-payment-accounting-service";
 import { CityLedgerAccountingService } from "@/lib/services/city-ledger-accounting-service";
+import { GeneralLedgerService } from "@/lib/services/general-ledger-service";
+import { GLMappingService } from "@/lib/services/gl-mapping-service";
 
 const parseLocalDateString = (dateString: string | Date | undefined): Date | undefined => {
   if (!dateString) return undefined;
@@ -3047,6 +3049,29 @@ export async function POST(req: NextRequest) {
                             balance: { increment: order.totalAmount },
                           },
                         });
+
+                        // GL Journal for Laundry Revenue
+                        const guestLedgerAccountId = await GLMappingService.getGuestLedgerAccount(order.propertyId);
+                        const laundryRevenueAccountId = await GLMappingService.getLaundryRevenueAccount(order.propertyId);
+
+                        const existingJournal = await tx.journalEntry.findFirst({
+                          where: { reference: idempotencyKey, propertyId: order.propertyId },
+                        });
+
+                        if (!existingJournal) {
+                          await GeneralLedgerService.postJournal({ propertyIds: [order.propertyId] } as any, {
+                            propertyId: order.propertyId,
+                            entryDate: postingBusinessDate,
+                            description: `Laundry Service - ${order.serviceType}`,
+                            reference: idempotencyKey,
+                            sourceModule: 'LAUNDRY',
+                            lines: [
+                              { accountId: guestLedgerAccountId, debit: Number(order.totalAmount), credit: 0, description: 'Guest Ledger (AR)' },
+                              { accountId: laundryRevenueAccountId, debit: 0, credit: Number(order.totalAmount), description: 'Laundry Revenue' }
+                            ]
+                          }, tx);
+                        }
+
                         await applyAvailableFolioCredit(tx, {
                           folioId: activeFolio.id,
                           propertyId: order.propertyId,

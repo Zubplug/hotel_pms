@@ -8,6 +8,8 @@ import { hasPermission } from '@/lib/rbac';
 import { findActiveFrontdeskSession } from '@/lib/frontdesk/active-session';
 import { isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
 import { getPropertyBusinessDate } from '@/lib/date-utils';
+import { GeneralLedgerService } from '@/lib/services/general-ledger-service';
+import { GLMappingService } from '@/lib/services/gl-mapping-service';
 const TRANSITIONS: Record<string, string[]> = {
   'PENDING': ['COLLECTED', 'CANCELLED'],
   'COLLECTED': ['WASHING', 'CANCELLED'],
@@ -144,6 +146,30 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
             }
         });
         updateData.folioItemId = folioItem.id;
+
+        // GL Journal for Laundry Revenue
+        const idempotencyKey = `${order.id}_DELIVERY_FOLIO_CHARGE`;
+        const guestLedgerAccountId = await GLMappingService.getGuestLedgerAccount(order.propertyId);
+        const laundryRevenueAccountId = await GLMappingService.getLaundryRevenueAccount(order.propertyId);
+        
+        const existingJournal = await tx.journalEntry.findFirst({
+          where: { reference: idempotencyKey, propertyId: order.propertyId },
+        });
+
+        if (!existingJournal) {
+          await GeneralLedgerService.postJournal({ propertyIds: [order.propertyId] } as any, {
+            propertyId: order.propertyId,
+            entryDate: property?.businessDate || getPropertyBusinessDate(property?.timezone),
+            description: `Laundry Service - ${order.serviceType}`,
+            reference: idempotencyKey,
+            sourceModule: 'LAUNDRY',
+            lines: [
+              { accountId: guestLedgerAccountId, debit: Number(order.totalAmount), credit: 0, description: 'Guest Ledger (AR)' },
+              { accountId: laundryRevenueAccountId, debit: 0, credit: Number(order.totalAmount), description: 'Laundry Revenue' }
+            ]
+          }, tx);
+        }
+
         let creditApplied = 0;
         const credits = await tx.folioCredit.findMany({
           where: {
