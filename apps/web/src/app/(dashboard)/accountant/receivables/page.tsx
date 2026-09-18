@@ -6,6 +6,10 @@ import {
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
+// Receivables are operational accounting data; never serve a stale dashboard snapshot.
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 import { ExportReceivablesButton } from '@/components/accountant/ExportReceivablesButton';
 import { auth } from '@/lib/auth';
 import { prisma } from '@hotel-pms/db';

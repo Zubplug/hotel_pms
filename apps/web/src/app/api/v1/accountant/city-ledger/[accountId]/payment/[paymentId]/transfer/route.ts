@@ -36,9 +36,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ acc
       if (entry.status === 'REVERSED') throw new Error('PAYMENT_REVERSED');
       if (entry.allocations.some(allocation => allocation.invoiceId)) throw new Error('PAYMENT_ALREADY_ALLOCATED');
       const amount = Number(entry.amount);
+      // New corporate advances are held in GL 2300 and deliberately do not
+      // change the AR subledger balance until they are allocated to an invoice.
+      // Preserve the legacy account-credit transfer behaviour for older rows.
+      const isLiabilityOnlyAdvance = source.type === 'CORPORATE'
+        && entry.allocations.length === 0
+        && Number(source.balance) >= -0.01
+        && /unapplied corporate advance|awaiting allocation/i.test(entry.reason || '');
       await tx.cityLedgerEntry.update({ where: { id: paymentId }, data: { accountId: targetAccountId, reason: `Transferred from ${source.name}: ${reason}` } });
-      await tx.cityLedgerAccount.update({ where: { id: accountId }, data: { balance: { increment: amount } } });
-      await tx.cityLedgerAccount.update({ where: { id: targetAccountId }, data: { balance: { decrement: amount } } });
+      if (!isLiabilityOnlyAdvance) {
+        await tx.cityLedgerAccount.update({ where: { id: accountId }, data: { balance: { increment: amount } } });
+        await tx.cityLedgerAccount.update({ where: { id: targetAccountId }, data: { balance: { decrement: amount } } });
+      }
       await tx.auditLog.create({ data: { organizationId: source.property.organizationId, propertyId: source.propertyId, userId: session.user.id, userEmail: session.user.email, userRole: role, action: 'AR_PAYMENT_TRANSFERRED', resource: 'CityLedgerEntry', resourceId: paymentId, newValue: { fromAccountId: accountId, toAccountId: targetAccountId, amount, reason }, ipAddress: req.headers.get('x-forwarded-for') || '127.0.0.1', userAgent: req.headers.get('user-agent') || 'Unknown', requestId: req.headers.get('x-request-id') || crypto.randomUUID() } });
       return { paymentId, fromAccountId: accountId, toAccountId: targetAccountId };
     });

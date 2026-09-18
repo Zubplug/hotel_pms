@@ -4,6 +4,9 @@ import prisma from '@hotel-pms/db';
 import { requireOrganizationContext } from '@/lib/organization-access';
 import { CityLedgerDetailClient } from './client';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export default async function CityLedgerDetailPage(props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
   const session = await auth();

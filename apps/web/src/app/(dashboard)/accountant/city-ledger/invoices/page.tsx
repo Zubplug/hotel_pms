@@ -6,6 +6,9 @@ import { redirect } from 'next/navigation';
 import { auth } from '@/lib/auth';
 import { prisma } from '@hotel-pms/db';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 const money = (value: number, currency: string) => new Intl.NumberFormat('en-NG', { style: 'currency', currency, maximumFractionDigits: 0 }).format(value);
 const date = (value: Date) => new Intl.DateTimeFormat('en-NG', { dateStyle: 'medium' }).format(value);
 const age = (dueDate: Date, now: number) => Math.max(0, Math.floor((now - dueDate.getTime()) / 86_400_000));

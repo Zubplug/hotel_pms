@@ -5,6 +5,7 @@ const ACCOUNT_CODES = {
   cardReceivable: '1110',
   cash: '1000',
   bankTransfer: '1130',
+  chequesInHand: '1150',
   posClearing: '1120',
   cityLedger: '1140',
   advancedDeposits: '2300',
@@ -69,6 +70,7 @@ export async function postNightAuditJournal(tx: any, input: {
     cardReceivable: byCode.get(ACCOUNT_CODES.cardReceivable),
     cash: byCode.get(ACCOUNT_CODES.cash),
     bankTransfer: byCode.get(ACCOUNT_CODES.bankTransfer),
+    chequesInHand: byCode.get(ACCOUNT_CODES.chequesInHand),
     posClearing: byCode.get(ACCOUNT_CODES.posClearing),
     cityLedger: byCode.get(ACCOUNT_CODES.cityLedger),
     advancedDeposits: byCode.get(ACCOUNT_CODES.advancedDeposits),
@@ -134,6 +136,8 @@ export async function postNightAuditJournal(tx: any, input: {
       ? account('cash')
       : refundMethod === 'BANK_TRANSFER' || (refundMethod === 'ORIGINAL_PAYMENT' && originalMethod === 'BANK_TRANSFER')
         ? account('bankTransfer')
+        : refundMethod === 'CHEQUE' || (refundMethod === 'ORIGINAL_PAYMENT' && originalMethod === 'CHEQUE')
+          ? account('chequesInHand')
         : refundMethod === 'POS' || (refundMethod === 'ORIGINAL_PAYMENT' && originalMethod === 'POS')
           ? account('posClearing')
           : account('cardReceivable');
@@ -222,6 +226,7 @@ export async function buildNightAuditBalanceProof(tx: any, input: {
     makeJournalBalanceRow('SETTLEMENT', 'CARD_RECEIVABLE', previousByKey.get('SETTLEMENT:CARD_RECEIVABLE'), accountBalance('1110'), 'Card receivable is sourced from dated posted payment and refund journals.'),
     makeJournalBalanceRow('SETTLEMENT', 'POS_CLEARING', previousByKey.get('SETTLEMENT:POS_CLEARING'), accountBalance('1120'), 'POS clearing is sourced from dated posted POS payment and refund journals.'),
     makeJournalBalanceRow('SETTLEMENT', 'BANK_TRANSFER', previousByKey.get('SETTLEMENT:BANK_TRANSFER'), accountBalance('1130'), 'Bank transfer receivable is sourced from dated posted payment and refund journals.'),
+    makeJournalBalanceRow('SETTLEMENT', 'CHEQUES_IN_HAND', previousByKey.get('SETTLEMENT:CHEQUES_IN_HAND'), accountBalance('1150'), 'Cheques in hand are sourced from dated posted payment and refund journals.'),
     makeJournalBalanceRow('LIABILITY', 'TAX_PAYABLE', previousByKey.get('LIABILITY:TAX_PAYABLE'), accountBalance('2200'), 'Tax payable is sourced from dated posted tax journals.'),
     makeJournalBalanceRow('LIABILITY', 'ADVANCED_DEPOSITS', previousByKey.get('LIABILITY:ADVANCED_DEPOSITS'), accountBalance('2300'), 'Corporate and guest advance payments are sourced from dated posted advance journals.'),
   ];

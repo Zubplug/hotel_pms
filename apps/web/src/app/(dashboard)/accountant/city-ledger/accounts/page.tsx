@@ -5,6 +5,9 @@ import { redirect } from 'next/navigation';
 import { auth } from '@/lib/auth';
 import { prisma } from '@hotel-pms/db';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 const money = (value: number, currency: string) => new Intl.NumberFormat('en-NG', { style: 'currency', currency, maximumFractionDigits: 0 }).format(value);
 const classify = (value: number) => value > .01 ? ['DEBIT', 'Owed to property', 'text-rose-300'] : value < -.01 ? ['CREDIT', 'Owed to account', 'text-emerald-300'] : ['SETTLED', 'Zero balance', 'text-slate-500'];
 

@@ -7,6 +7,7 @@ export class GLMappingService {
    * CASH -> 1000 Cash on Hand
    * CARD -> 1110 Credit Card Receivable
    * BANK_TRANSFER -> 1130 Bank Transfer Receivable
+   * CHEQUE -> 1150 Cheques in Hand
    * ROOM_CHARGE -> 1100 Guest Ledger Receivable
    * CITY_LEDGER -> 1140 City Ledger Receivable
    */
@@ -35,8 +36,10 @@ export class GLMappingService {
           targetCode = '1110'; // Credit Card Receivable
           break;
         case 'BANK_TRANSFER':
-        case 'CHEQUE':
           targetCode = '1130'; // Bank Transfer Receivable
+          break;
+        case 'CHEQUE':
+          targetCode = '1150'; // Cheques in Hand
           break;
         case 'MOBILE_PAYMENT':
           targetCode = '1135'; // Mobile Money Receivable
@@ -103,6 +106,23 @@ export class GLMappingService {
     const targetCode = typeof liabilityAccounts.GUEST_REFUNDS === 'string' ? liabilityAccounts.GUEST_REFUNDS : '2160';
     const account = await prisma.chartOfAccount.findFirst({ where: { propertyId, code: targetCode, type: 'LIABILITY', isActive: true } });
     if (!account) throw new Error(`Guest Refunds Payable GL Account Code ${targetCode} is missing or inactive for this property.`);
+    return account.id;
+  }
+
+  /** Resolves the liability used for unapplied corporate receipts. */
+  static async getCorporateAdvancesAccount(propertyId: string): Promise<string> {
+    const property = await prisma.property.findUnique({ where: { id: propertyId } });
+    if (!property) throw new Error('Property not found');
+    const settings = (property.settings as Record<string, unknown>) || {};
+    const accountingConfig = (settings.accountingConfig as Record<string, unknown>) || {};
+    const liabilityAccounts = (accountingConfig.liabilityAccounts as Record<string, unknown>) || {};
+    const targetCode = typeof liabilityAccounts.CORPORATE_ADVANCES === 'string'
+      ? liabilityAccounts.CORPORATE_ADVANCES
+      : '2300';
+    const account = await prisma.chartOfAccount.findFirst({
+      where: { propertyId, code: targetCode, type: 'LIABILITY', isActive: true },
+    });
+    if (!account) throw new Error(`Corporate Advances GL Account Code ${targetCode} is missing or inactive for this property.`);
     return account.id;
   }
 

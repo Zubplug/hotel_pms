@@ -85,10 +85,10 @@ export async function POST(
           orderBy: [{ dueDate: 'asc' }, { issueDate: 'asc' }]
         });
         const totalOutstanding = invoicesToPay.reduce((sum, inv) => sum + Number(inv.outstandingAmount), 0);
-        // Corporate accounts may receive an unapplied advance when there are
-        // no invoices. Do not mix an invoice settlement and an advance in one
-        // payment: one payment must have one accounting classification.
-        if (amount > totalOutstanding && (account.type !== 'CORPORATE' || invoicesToPay.length > 0)) {
+        // Corporate receipts may exceed the open invoice portfolio. The
+        // applied portion settles AR; the remainder stays as an unapplied
+        // customer advance instead of creating a negative AR balance.
+        if (amount > totalOutstanding && account.type !== 'CORPORATE') {
           throw new Error('PAYMENT_EXCEEDS_BALANCE');
         }
       }
@@ -156,7 +156,7 @@ export async function POST(
         },
       });
 
-      // 7. Allocate to Invoices
+      // 7. Allocate to invoices, retaining any corporate excess as unapplied.
       let remaining = amount;
       for (const invoice of invoicesToPay) {
         if (remaining <= 0) break;
@@ -191,6 +191,10 @@ export async function POST(
         remaining -= applied;
       }
       
+      const appliedAmount = amount - remaining;
+      const corporateAdvancesAccountId = remaining > 0.01 && account.type === 'CORPORATE'
+        ? await GLMappingService.getCorporateAdvancesAccount(account.propertyId)
+        : null;
       if (remaining <= 0.01) {
         await tx.cityLedgerEntry.update({
           where: { id: created.id },
@@ -199,7 +203,9 @@ export async function POST(
       }
       
       // 8. Update Account Balance
-      await tx.cityLedgerAccount.update({ where: { id: accountId }, data: { balance: { decrement: amount } } });
+      if (appliedAmount > 0.01) {
+        await tx.cityLedgerAccount.update({ where: { id: accountId }, data: { balance: { decrement: appliedAmount } } });
+      }
 
       // Keep the master AR folio summary aligned with its payment records.
       await tx.folio.update({
@@ -227,7 +233,8 @@ export async function POST(
           sourceModule: 'AR',
           lines: [
             { accountId: debitAccountId, description: `Payment Received (${method})`, debit: amount, credit: 0, sourceType: 'PAYMENT', sourceId: payment.id },
-            { accountId: cityLedgerControlAccountId, description: 'AR Payment Collection', debit: 0, credit: amount, sourceType: 'PAYMENT', sourceId: payment.id },
+            ...(appliedAmount > 0.01 ? [{ accountId: cityLedgerControlAccountId, description: 'AR Payment Collection', debit: 0, credit: appliedAmount, sourceType: 'PAYMENT', sourceId: payment.id }] : []),
+            ...(remaining > 0.01 && corporateAdvancesAccountId ? [{ accountId: corporateAdvancesAccountId, description: 'Unapplied corporate advance', debit: 0, credit: remaining, sourceType: 'PAYMENT', sourceId: payment.id }] : []),
           ],
         },
         tx,

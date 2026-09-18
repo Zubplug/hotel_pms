@@ -38,6 +38,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ acc
       const payment = await tx.payment.findFirst({ where: { propertyId: account.propertyId, collectionSource: 'RECEIVABLES', OR: [{ reference: entry.reference || undefined }, { receiptNumber: entry.reference || undefined }] }, orderBy: { createdAt: 'desc' } });
       if (!payment) throw new Error('PAYMENT_RECORD_NOT_FOUND');
       if (payment.status === 'REFUNDED') throw new Error('PAYMENT_ALREADY_REVERSED');
+      const appliedAmount = entry.allocations.reduce((sum, allocation) => sum + Number(allocation.amount), 0);
 
       const journal = await tx.journalEntry.findFirst({
         where: { propertyId: account.propertyId, status: 'POSTED', lines: { some: { sourceType: 'PAYMENT', sourceId: payment.id } } },
@@ -76,7 +77,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ acc
       await tx.journalEntry.update({ where: { id: journal.id }, data: { status: 'REVERSED', isReversed: true, reversalOfId: reversal.id } });
       await tx.cityLedgerEntry.update({ where: { id: entry.id }, data: { status: 'REVERSED', reason: `Payment reversed: ${reason}` } });
       await tx.payment.update({ where: { id: payment.id }, data: { status: 'REFUNDED', notes: `${payment.notes || 'AR collection'} · Reversed: ${reason}` } });
-      await tx.cityLedgerAccount.update({ where: { id: accountId }, data: { balance: { increment: Number(entry.amount) } } });
+      if (appliedAmount > 0.01) await tx.cityLedgerAccount.update({ where: { id: accountId }, data: { balance: { increment: appliedAmount } } });
       if (payment.folioId) await tx.folio.update({ where: { id: payment.folioId }, data: { totalPayments: { decrement: Number(entry.amount) }, balance: { increment: Number(entry.amount) } } });
       await tx.auditLog.create({ data: { organizationId: account.property.organizationId, propertyId: account.propertyId, userId: session.user.id, userEmail: session.user.email, userRole: role, action: 'AR_PAYMENT_REVERSED', resource: 'CityLedgerEntry', resourceId: entry.id, newValue: { reason, paymentId: payment.id, originalJournalId: journal.id, reversalJournalId: reversal.id }, ipAddress: req.headers.get('x-forwarded-for') || '127.0.0.1', userAgent: req.headers.get('user-agent') || 'Unknown', requestId: req.headers.get('x-request-id') || crypto.randomUUID() } });
       return { paymentId: payment.id, entryId: entry.id, reversalJournalId: reversal.id };
