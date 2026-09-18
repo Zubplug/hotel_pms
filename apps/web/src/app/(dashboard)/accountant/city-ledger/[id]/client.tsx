@@ -178,16 +178,16 @@ export function CityLedgerDetailClient({ account, openInvoices, recentEntries, t
                         <span className="text-xs uppercase tracking-wider font-semibold text-slate-500 mb-1">Outstanding</span>
                         <span className="text-lg font-bold text-rose-500">{formatCurrency(inv.outstandingAmount)}</span>
                         
-                        {(isSkipper || true) && (
+                        <>
                           <Button 
                             variant="outline" 
                             size="sm" 
                             className="mt-2 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/10"
                             onClick={() => openTargetedPaymentModal(inv)}
                           >
-                            Record Payment
+                            Settle Invoice
                           </Button>
-                        )}
+                        </>
                       </div>
                     </div>
                   </div>

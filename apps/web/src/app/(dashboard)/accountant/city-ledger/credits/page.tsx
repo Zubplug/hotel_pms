@@ -1,0 +1,27 @@
+import React from 'react';
+import Link from 'next/link';
+import { ArrowLeft, ArrowRight, CreditCard, FileText, Wallet } from 'lucide-react';
+import { redirect } from 'next/navigation';
+import { auth } from '@/lib/auth';
+import { prisma } from '@hotel-pms/db';
+
+const money = (value: number, currency: string) => new Intl.NumberFormat('en-NG', { style: 'currency', currency, maximumFractionDigits: 0 }).format(value);
+
+export default async function CityLedgerCreditsPage() {
+  const session = await auth();
+  if (!session?.user) redirect('/login?callbackUrl=%2Faccountant%2Fcity-ledger%2Fcredits');
+  const propertyId = session.user.propertyId;
+  if (!propertyId) return <EmptyState title="No property assigned" />;
+  const [property, accounts, folios] = await Promise.all([
+    prisma.property.findUnique({ where: { id: propertyId }, select: { name: true, baseCurrency: true } }),
+    prisma.cityLedgerAccount.findMany({ where: { propertyId, balance: { lt: 0 } }, orderBy: { balance: 'asc' } }),
+    prisma.folio.findMany({ where: { propertyId, balance: { lt: 0 }, status: { not: 'VOID' } }, select: { id: true, folioNumber: true, balance: true, currency: true, guest: { select: { firstName: true, lastName: true } } }, orderBy: { balance: 'asc' } }),
+  ]);
+  const currency = property?.baseCurrency || accounts[0]?.currency || folios[0]?.currency || 'NGN';
+  const accountTotal = accounts.reduce((sum, account) => sum + Math.abs(Number(account.balance)), 0);
+  const folioTotal = folios.reduce((sum, folio) => sum + Math.abs(Number(folio.balance)), 0);
+  return <main className="min-h-screen bg-[#07111f] p-5 text-slate-100 md:p-8"><div className="mx-auto max-w-[1200px] space-y-6"><Link href="/accountant/city-ledger" className="inline-flex items-center gap-2 text-xs text-cyan-300 hover:text-cyan-200"><ArrowLeft className="h-3.5 w-3.5" />Back to city ledger</Link><div><div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[.22em] text-emerald-300"><CreditCard className="h-4 w-4" />Credit control</div><h1 className="text-3xl font-semibold text-white">Credits and advances</h1><p className="mt-2 text-sm text-slate-400">Balances owed to city-ledger accounts and guests, kept separate from debit receivables.</p></div><div className="grid gap-4 sm:grid-cols-2"><Stat title="City-ledger credits" value={money(accountTotal, currency)} detail={`${accounts.length} account credits`} /><Stat title="Guest folio credits" value={money(folioTotal, currency)} detail={`${folios.length} folios with credit`} tone="emerald" /></div><div className="grid gap-6 lg:grid-cols-2"><Panel title="City-ledger credit balances" subtitle="Credit available to corporate or other AR accounts">{accounts.length ? accounts.map(account => <Link key={account.id} href={`/accountant/city-ledger/${account.id}`} className="flex items-center justify-between border-b border-white/[.07] py-4 last:border-0 hover:bg-white/[.03]"><span><span className="block text-sm font-medium text-slate-200">{account.name}</span><span className="mt-1 block text-xs text-slate-500">{account.type}</span></span><span className="font-semibold text-emerald-300">{money(Math.abs(Number(account.balance)), account.currency || currency)} CR <ArrowRight className="ml-1 inline h-3.5 w-3.5" /></span></Link>) : <p className="py-8 text-sm text-slate-500">No city-ledger credit balances.</p>}</Panel><Panel title="Guest folio credits" subtitle="Negative folio balances retained during checkout"><div className="mb-3 rounded-xl border border-emerald-400/15 bg-emerald-400/[.05] p-3 text-xs leading-5 text-emerald-100"><Wallet className="mr-1 inline h-4 w-4" />Review, refund, or apply these credits according to the approved guest-credit workflow.</div>{folios.length ? folios.map(folio => <div key={folio.id} className="flex items-center justify-between border-b border-white/[.07] py-4 last:border-0"><span><span className="block text-sm font-medium text-slate-200">{folio.guest ? `${folio.guest.firstName} ${folio.guest.lastName}`.trim() : 'Unassigned guest'}</span><span className="mt-1 block text-xs text-slate-500">Folio {folio.folioNumber}</span></span><span className="font-semibold text-emerald-300">{money(Math.abs(Number(folio.balance)), folio.currency || currency)} CR</span></div>) : <p className="py-8 text-sm text-slate-500">No guest folio credits.</p>}</Panel></div></div></main>;
+}
+function Panel({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) { return <section className="rounded-2xl border border-white/10 bg-white/[.035] p-5"><h2 className="font-semibold text-white">{title}</h2><p className="mt-1 text-xs text-slate-500">{subtitle}</p><div className="mt-5">{children}</div></section>; }
+function Stat({ title, value, detail, tone = 'cyan' }: { title: string; value: string; detail: string; tone?: 'cyan' | 'emerald' }) { return <div className={`rounded-2xl border bg-white/[.035] p-5 ${tone === 'emerald' ? 'border-emerald-300/15 text-emerald-300' : 'border-cyan-300/15 text-cyan-300'}`}><p className="text-xs uppercase tracking-wider text-slate-500">{title}</p><p className="mt-4 text-2xl font-semibold text-white">{value}</p><p className="mt-2 text-xs text-slate-500">{detail}</p></div>; }
+function EmptyState({ title }: { title: string }) { return <div className="flex min-h-screen items-center justify-center bg-[#07111f] text-slate-300"><div><FileText className="mx-auto mb-3 h-10 w-10 text-slate-500" /><h1 className="text-xl font-semibold text-white">{title}</h1></div></div>; }
