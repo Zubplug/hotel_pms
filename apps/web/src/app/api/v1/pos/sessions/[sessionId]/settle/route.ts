@@ -27,7 +27,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     } else if (operatorPayload?.propertyId !== current.propertyId) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
-    if (current.status !== 'OPEN' && current.status !== 'RECONCILIATION_REQUIRED' && current.controlStatus !== 'RETURNED') return NextResponse.json({ error: `Session cannot be settled from ${current.status}` }, { status: 409 });
+    if (current.status !== 'OPEN' && current.controlStatus !== 'RETURNED') return NextResponse.json({ error: `Session cannot be settled from ${current.status}` }, { status: 409 });
 
     // ── Block shift close if cashier has open (unsettled) orders ──────────
     const openOrders = await prisma.posOrder.findMany({
@@ -137,14 +137,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         varianceStatus: variance !== 0 ? 'OPEN' : null,
         propertyId: current.propertyId as string,
       });
-      // SERVER banking sessions remain open for concurrent waiters until the
-      // central cashier physically collects; flag them for reconciliation.
-      if (current.bankType === 'SERVER') {
-        await tx.posSession.update({
-          where: { id: sessionId },
-          data: { status: 'RECONCILIATION_REQUIRED' }
-        });
-      }
       return settlement;
     });
     return NextResponse.json({ data: result });

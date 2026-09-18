@@ -999,7 +999,8 @@ export async function POST(req: NextRequest) {
                   await tx.posSession.updateMany({
                     where: { id: session.id },
                     data: {
-                      status: 'RECONCILIATION_REQUIRED',
+                      status: 'CLOSED',
+                      controlStatus: 'SUBMITTED',
                       expectedCash,
                       actualCash: declaredCash,
                       variance: calculatedVariance,
@@ -1045,10 +1046,17 @@ export async function POST(req: NextRequest) {
                 (conflict as any).currentVersion =  currentSession.controlStatus;
                 throw conflict;
               }
+              let opStatus;
+              if (status === 'RECONCILIATION_REQUIRED' || status === 'CLOSED' || status === 'CLOSING') {
+                opStatus = 'ENDED';
+              } else if (status === 'OPEN') {
+                opStatus = 'ACTIVE';
+              }
+
               await tx.posOperatorSession.updateMany({
                 where: { id: sessionId },
                 data: {
-                  ...(status ? { status } : {}),
+                  ...(opStatus ? { status: opStatus } : {}),
                   ...(closedAt ? { closedAt: new Date(closedAt) } : {}),
                   closedBy: operatorId
                 }

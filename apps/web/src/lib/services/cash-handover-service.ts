@@ -17,8 +17,9 @@ export class CashHandoverService {
     safeReference?: string;
     notes?: string;
     idempotencyKey?: string;
+    tx?: any;
   }) {
-    return prisma.$transaction(async tx => {
+    const execute = async (tx: any) => {
       if (params.idempotencyKey) {
         const existing = await tx.cashHandover.findUnique({ where: { idempotencyKey: params.idempotencyKey } });
         if (existing) return existing;
@@ -147,7 +148,8 @@ export class CashHandoverService {
       }
 
       return handover;
-    });
+    };
+    return params.tx ? execute(params.tx) : prisma.$transaction(execute);
   }
 
   /**

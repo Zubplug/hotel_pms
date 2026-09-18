@@ -74,8 +74,8 @@ export default function SettlementPage() {
     try {
       const res = await provider.pos.settleSession(sessionId, actualCash, (session?.user as any)?.id, authorizerId);
       if (!res.error) {
-        setShiftStatus(res.data?.session?.status || 'RECONCILIATION_REQUIRED');
-        setReportStatus(res.data?.status || 'PENDING_HANDOVER');
+        setShiftStatus(res.data?.session?.status || 'CLOSED');
+        setReportStatus(res.data?.session?.controlStatus || 'SUBMITTED');
         setSuccess(true);
       } else {
         setError(res.error || 'Failed to settle session.');
@@ -99,7 +99,7 @@ export default function SettlementPage() {
           </div>
           <h2 className="text-2xl font-bold text-slate-800 mb-2">Shift Report Submitted</h2>
           <p className="text-slate-500 mb-8">
-            Your shift has been closed and submitted for cashier or manager review. The data will sync automatically when online.
+            Your shift has been closed and is Awaiting General Cashier review. The data will sync automatically when online.
           </p>
           <div className="mb-8 rounded-xl border bg-slate-50 p-4 text-left">
             <div className="flex items-center justify-between text-sm"><span className="text-slate-500">Shift status</span><span className="font-semibold text-slate-800">{shiftStatus.replaceAll('_', ' ')}</span></div>

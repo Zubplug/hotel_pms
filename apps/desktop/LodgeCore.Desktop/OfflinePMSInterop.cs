@@ -2047,20 +2047,6 @@ public class OfflinePMSInterop
         }
     }
 
-    public async Task<string> ConfirmHandoverAsync(string sessionId)
-    {
-        try
-        {
-            var ctx = await GetSecureContextAsync();
-            var res = await _repo.ConfirmHandoverAsync(sessionId, ctx.UserId, ctx.DeviceId);
-            return JsonSerializer.Serialize(new { success = true, data = res }, _jsonOptions);
-        }
-        catch (Exception ex)
-        {
-            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
-        }
-    }
-
     public async Task<string> VoidWholeOrderAsync(string orderId, string reason, string supervisorPin, bool isBarOrder)
     {
         try

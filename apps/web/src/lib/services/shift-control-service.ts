@@ -285,7 +285,7 @@ export class ShiftControlService {
       if (type === 'POS') {
         updated = await tx.posSession.update({ where: { id: shiftId }, data: updateData });
         const settlement = await tx.posSettlement.findFirst({ where: { sessionId: shiftId }, orderBy: { settledAt: 'desc' } });
-        if (settlement) await tx.posSettlement.update({ where: { id: settlement.id }, data: { status: 'CLOSED', authorizerId: ctx.userId } });
+        if (settlement) await tx.posSettlement.update({ where: { id: settlement.id }, data: { authorizerId: ctx.userId } });
       } else {
         updated = await tx.frontdeskSession.update({ where: { id: shiftId }, data: updateData });
       }
@@ -300,6 +300,42 @@ export class ShiftControlService {
         performedBy: ctx.userId,
         metadata: { expected, declared, variance },
       });
+
+      // Atomic Cash Handover / Cashless bypass
+      if (expected === 0 && declared === 0) {
+        // Auto-reconcile cashless shift
+        updateData.controlStatus = 'RECONCILED';
+        if (type === 'POS') {
+          updated = await tx.posSession.update({ where: { id: shiftId }, data: { controlStatus: 'RECONCILED' } });
+        } else {
+          updated = await tx.frontdeskSession.update({ where: { id: shiftId }, data: { controlStatus: 'RECONCILED' } });
+        }
+        await this.audit(tx, {
+          propertyId: shift.propertyId,
+          posSessionId: type === 'POS' ? shiftId : undefined,
+          frontdeskSessionId: type === 'FRONT_DESK' ? shiftId : undefined,
+          action: 'SHIFT_RECONCILED',
+          fromStatus: 'APPROVED',
+          toStatus: 'RECONCILED',
+          performedBy: ctx.userId,
+          metadata: { note: 'Auto-reconciled cashless shift' },
+        });
+      } else {
+        const { CashHandoverService } = await import('./cash-handover-service');
+        await CashHandoverService.createHandover(ctx, {
+          propertyId: shift.propertyId,
+          posSessionIds: type === 'POS' ? [shiftId] : [],
+          frontdeskSessionIds: type === 'FRONT_DESK' ? [shiftId] : [],
+          notes: 'Automatically created upon shift approval.',
+          idempotencyKey: `handover_approval_${type}_${shiftId}`,
+          tx
+        });
+        if (type === 'POS') {
+          updated = await tx.posSession.findUnique({ where: { id: shiftId } });
+        } else {
+          updated = await tx.frontdeskSession.findUnique({ where: { id: shiftId } });
+        }
+      }
 
       return updated;
     });
@@ -358,7 +394,7 @@ export class ShiftControlService {
       if (type === 'POS') {
         updated = await tx.posSession.update({ where: { id: shiftId }, data: updateData });
         const settlement = await tx.posSettlement.findFirst({ where: { sessionId: shiftId }, orderBy: { settledAt: 'desc' } });
-        if (settlement) await tx.posSettlement.update({ where: { id: settlement.id }, data: { status: 'CLOSED', authorizerId: ctx.userId, variance } });
+        if (settlement) await tx.posSettlement.update({ where: { id: settlement.id }, data: { authorizerId: ctx.userId, variance } });
       } else {
         updated = await tx.frontdeskSession.update({ where: { id: shiftId }, data: updateData });
         await tx.reconciliationException.updateMany({
@@ -378,6 +414,42 @@ export class ShiftControlService {
         reason: reasonCode,
         metadata: { expected, declared, variance, notes },
       });
+
+      // Atomic Cash Handover / Cashless bypass
+      if (expected === 0 && declared === 0) {
+        // Auto-reconcile cashless shift
+        updateData.controlStatus = 'RECONCILED';
+        if (type === 'POS') {
+          updated = await tx.posSession.update({ where: { id: shiftId }, data: { controlStatus: 'RECONCILED' } });
+        } else {
+          updated = await tx.frontdeskSession.update({ where: { id: shiftId }, data: { controlStatus: 'RECONCILED' } });
+        }
+        await this.audit(tx, {
+          propertyId: shift.propertyId,
+          posSessionId: type === 'POS' ? shiftId : undefined,
+          frontdeskSessionId: type === 'FRONT_DESK' ? shiftId : undefined,
+          action: 'SHIFT_RECONCILED',
+          fromStatus: 'APPROVED_WITH_VARIANCE',
+          toStatus: 'RECONCILED',
+          performedBy: ctx.userId,
+          metadata: { note: 'Auto-reconciled cashless shift with variance' },
+        });
+      } else {
+        const { CashHandoverService } = await import('./cash-handover-service');
+        await CashHandoverService.createHandover(ctx, {
+          propertyId: shift.propertyId,
+          posSessionIds: type === 'POS' ? [shiftId] : [],
+          frontdeskSessionIds: type === 'FRONT_DESK' ? [shiftId] : [],
+          notes: 'Automatically created upon shift approval with variance.',
+          idempotencyKey: `handover_approval_variance_${type}_${shiftId}`,
+          tx
+        });
+        if (type === 'POS') {
+          updated = await tx.posSession.findUnique({ where: { id: shiftId } });
+        } else {
+          updated = await tx.frontdeskSession.findUnique({ where: { id: shiftId } });
+        }
+      }
 
       return updated;
     });

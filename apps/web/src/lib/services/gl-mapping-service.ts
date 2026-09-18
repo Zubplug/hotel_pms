@@ -129,4 +129,108 @@ export class GLMappingService {
 
     return account.id;
   }
+
+  /**
+   * Resolves the Discount Allowance (Contra-Revenue) GL Account.
+   * Reads from accountingConfig.contraRevenueAccounts.DISCOUNT.
+   */
+  static async getDiscountAllowanceAccount(propertyId: string): Promise<string> {
+    const property = await prisma.property.findUnique({
+      where: { id: propertyId }
+    });
+
+    const settings = (property?.settings as any) || {};
+    const contraMap = settings?.accountingConfig?.contraRevenueAccounts || {};
+    const configuredCode = contraMap['DISCOUNT'];
+
+    if (!configuredCode) {
+      throw new Error(`Discount allowance GL mapping required. Please configure Property Settings (accountingConfig.contraRevenueAccounts.DISCOUNT).`);
+    }
+
+    const account = await prisma.chartOfAccount.findFirst({
+      where: { propertyId, code: configuredCode, isActive: true }
+    });
+
+    if (!account) {
+      throw new Error(`GL Account Code ${configuredCode} is missing or inactive for property ${propertyId}.`);
+    }
+
+    return account.id;
+  }
+
+  /**
+   * Resolves the Complimentary Allowance (Contra-Revenue) GL Account.
+   * Reads from accountingConfig.contraRevenueAccounts.COMPLIMENTARY.
+   */
+  static async getComplimentaryAllowanceAccount(propertyId: string): Promise<string> {
+    const property = await prisma.property.findUnique({
+      where: { id: propertyId }
+    });
+
+    const settings = (property?.settings as any) || {};
+    const contraMap = settings?.accountingConfig?.contraRevenueAccounts || {};
+    const configuredCode = contraMap['COMPLIMENTARY'];
+
+    if (!configuredCode) {
+      throw new Error(`Complimentary allowance GL mapping required. Please configure Property Settings (accountingConfig.contraRevenueAccounts.COMPLIMENTARY).`);
+    }
+
+    const account = await prisma.chartOfAccount.findFirst({
+      where: { propertyId, code: configuredCode, isActive: true }
+    });
+
+    if (!account) {
+      throw new Error(`GL Account Code ${configuredCode} is missing or inactive for property ${propertyId}.`);
+    }
+
+    return account.id;
+  }
+
+  /**
+   * Resolves the Tax Payable (Liability) GL Account.
+   * Reads from accountingConfig.liabilityAccounts.TAX (defaulting to 2200).
+   */
+  static async getTaxPayableAccount(propertyId: string): Promise<string> {
+    const property = await prisma.property.findUnique({
+      where: { id: propertyId }
+    });
+
+    const settings = (property?.settings as any) || {};
+    const liabilityMap = settings?.accountingConfig?.liabilityAccounts || {};
+    const configuredCode = liabilityMap['TAX'] || '2200';
+
+    const account = await prisma.chartOfAccount.findFirst({
+      where: { propertyId, code: configuredCode, isActive: true }
+    });
+
+    if (!account) {
+      throw new Error(`Tax Liability GL Account Code ${configuredCode} is missing or inactive for property ${propertyId}.`);
+    }
+
+    return account.id;
+  }
+
+  /**
+   * Resolves the Service Charge Payable (Liability) GL Account.
+   * Reads from accountingConfig.liabilityAccounts.SERVICE_CHARGE (defaulting to 2210).
+   */
+  static async getServiceChargePayableAccount(propertyId: string): Promise<string> {
+    const property = await prisma.property.findUnique({
+      where: { id: propertyId }
+    });
+
+    const settings = (property?.settings as any) || {};
+    const liabilityMap = settings?.accountingConfig?.liabilityAccounts || {};
+    const configuredCode = liabilityMap['SERVICE_CHARGE'] || '2210';
+
+    const account = await prisma.chartOfAccount.findFirst({
+      where: { propertyId, code: configuredCode, isActive: true }
+    });
+
+    if (!account) {
+      throw new Error(`Service Charge Liability GL Account Code ${configuredCode} is missing or inactive for property ${propertyId}.`);
+    }
+
+    return account.id;
+  }
 }

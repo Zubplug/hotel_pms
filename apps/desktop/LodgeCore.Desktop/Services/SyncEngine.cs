@@ -2057,7 +2057,7 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                         : posSession.Status switch
                         {
                             "RECONCILED" => "RECONCILED",
-                            "RECONCILIATION_REQUIRED" or "CLOSED" => "SUBMITTED",
+                            "CLOSED" => "SUBMITTED",
                             _ => posSession.ControlStatus
                         };
                     posSession.VarianceStatus = el.TryGetProperty("varianceStatus", out var vsStatus) && vsStatus.ValueKind != System.Text.Json.JsonValueKind.Null ? vsStatus.GetString() : posSession.VarianceStatus;

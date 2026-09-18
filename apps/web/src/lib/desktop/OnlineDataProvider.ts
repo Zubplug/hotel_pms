@@ -427,12 +427,7 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
         body: JSON.stringify({ actualCash, operatorId, authorizerId })
       });
     },
-    confirmHandover: async (sessionId: string) => {
-      const res = await apiFetch(`/api/v1/pos/sessions/${sessionId}/confirm-handover`, {
-        method: 'POST'
-      });
-      return { success: !res.error, ...res };
-    },
+
     getPendingHandovers: async (propertyId: string) => {
       const token = localStorage.getItem('lodgecore_pos_operator_token');
       const headers = token ? { Authorization: `Bearer ${token}` } : undefined;

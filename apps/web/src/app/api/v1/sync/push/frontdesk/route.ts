@@ -1465,6 +1465,50 @@ export async function POST(req: NextRequest) {
                 },
               });
 
+              // POST DISCOUNT ACCOUNTING
+              try {
+                const discountGlAccountId = await GLMappingService.getDiscountAllowanceAccount(propertyId);
+                const arGlAccountId = await GLMappingService.getGuestLedgerAccount(propertyId);
+
+                await GeneralLedgerService.postJournal({
+                  userId: actorId || 'system',
+                  propertyIds: [propertyId],
+                  organizationId: property.organizationId || '',
+                  role: 'SYSTEM',
+                  permissions: [],
+                  outletIds: []
+                } as any, {
+                  propertyId,
+                  entryDate: postingBusinessDate,
+                  reference: `FOL_DISC_${aggregateId}_${idempotencyKey}`,
+                  description: `Folio Discount - ${payload.description || payload.reason || 'Offline Applied'}`,
+                  sourceModule: 'AR',
+                  lines: [
+                    {
+                      accountId: discountGlAccountId,
+                      debit: amount,
+                      credit: 0,
+                      description: `Discount Allowance for Folio ${aggregateId}`,
+                      sourceType: 'FOLIO_DISCOUNT',
+                      sourceId: idempotencyKey,
+                    },
+                    {
+                      accountId: arGlAccountId,
+                      debit: 0,
+                      credit: amount,
+                      description: `Relieve Guest Ledger for Folio ${aggregateId}`,
+                      sourceType: 'FOLIO_DISCOUNT',
+                      sourceId: idempotencyKey,
+                    }
+                  ]
+                }, tx);
+              } catch (e: any) {
+                if (e.message?.includes('Missing') || e.message?.includes('mapping required') || e.message?.includes('is missing')) {
+                  throw new Error(`RETRYABLE_ACCOUNTING_CONFIG: Accounting Configuration Required: ${e.message}`);
+                }
+                throw e;
+              }
+
               const approvalKey = `approval:${idempotencyKey}`;
               await tx.approvalRequest.upsert({
                 where: { idempotencyKey: approvalKey },

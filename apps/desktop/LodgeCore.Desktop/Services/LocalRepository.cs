@@ -4486,7 +4486,7 @@ public class LocalRepository
             });
         }
 
-        session.Status = session.BankType == "SERVER" ? "RECONCILIATION_REQUIRED" : "CLOSED";
+        session.Status = "CLOSED";
         session.ControlStatus = "SUBMITTED";
         session.VarianceStatus = settlement.Variance != 0 ? "OPEN" : null;
         var closedAt = DateTime.UtcNow;
@@ -4565,136 +4565,7 @@ public class LocalRepository
         return account;
     }
 
-    public async Task<LocalPosSettlement> ConfirmHandoverAsync(string sessionId, string authorizerId, string deviceId)
-    {
-        using var transaction = await _dbContext.Database.BeginTransactionAsync();
-        try
-        {
-            var session = await _dbContext.PosSessions.FindAsync(sessionId);
-            if (session == null) throw new Exception("Session not found");
-            await AssertNightAuditAllowsAsync(session.PropertyId, session.BusinessDate);
-            if (session.Status != "PENDING_HANDOVER" && session.Status != "RECONCILIATION_REQUIRED") 
-                throw new Exception("Session is not in a handover state.");
 
-            var settlement = await _dbContext.PosSettlements.FirstOrDefaultAsync(s => s.SessionId == sessionId);
-            if (settlement == null) throw new Exception("Settlement record not found.");
-            if (settlement.Status == "CLOSED") throw new Exception("Settlement has already been confirmed.");
-
-            // Idempotency: Check if a SERVER_HANDOVER movement already exists for this session
-            bool handoverExists = await _dbContext.PosCashMovements.AnyAsync(m => m.PosSessionId == sessionId && m.Type == "SERVER_HANDOVER");
-            if (handoverExists) throw new Exception("Handover movement already exists for this session.");
-
-            // Authorize Manager (no PIN check, relies on logged-in user context)
-            var authorizer = await _dbContext.Staff.FindAsync(authorizerId);
-            if (authorizer == null) throw new UnauthorizedAccessException("Invalid Authorizer");
-
-            // Separation of Duties check
-            if (authorizer.Id == settlement.OperatorId || authorizer.Id == session.UserId)
-                throw new UnauthorizedAccessException("The authorizing manager cannot be the same operator who declared the shift.");
-
-            // Resolve correct source account based on BankType
-            LodgeCore.Desktop.Data.Entities.LocalCashAccount sourceAccount;
-            if (session.BankType == PosConstants.BankTypes.Emergency) {
-                sourceAccount = await _dbContext.CashAccounts.FirstOrDefaultAsync(a => a.Type == PosConstants.CashAccountTypes.EmergencyBank && a.OwnerId == session.AuthorizedBy)
-                                ?? throw new Exception("Emergency Bank account not found.");
-            } else if (session.BankType == PosConstants.BankTypes.Central || session.BankingModel == PosConstants.BankingModels.CentralCashier) {
-                sourceAccount = await EnsureCashAccountAsync(session.PropertyId, PosConstants.CashAccountTypes.StationBank, $"Station Bank - {session.UserId}", session.UserId);
-            } else {
-                sourceAccount = await EnsureCashAccountAsync(session.PropertyId, PosConstants.CashAccountTypes.ServerBank, $"Server Bank - {session.UserId}", session.UserId);
-            }
-            
-            var safeAccount = await EnsureCashAccountAsync(session.PropertyId, PosConstants.CashAccountTypes.Safe, "Central Safe");
-
-            string handoverType = session.BankType == PosConstants.BankTypes.Emergency ? PosConstants.HandoverTypes.EmergencyHandover : 
-                                 (session.BankType == PosConstants.BankTypes.Central || session.BankingModel == PosConstants.BankingModels.CentralCashier ? PosConstants.HandoverTypes.StationHandover : PosConstants.HandoverTypes.ServerHandover);
-
-            var prop = await _dbContext.Properties.FindAsync(session.PropertyId);
-            string currency = prop?.Currency ?? "NGN";
-
-            var handoverMovement = new LocalPosCashMovement
-            {
-                Id = Guid.NewGuid().ToString(),
-                PropertyId = session.PropertyId,
-                PosSessionId = sessionId,
-                DeviceId = deviceId,
-                UserId = authorizer.Id,
-                Amount = settlement.ActualCash, // Actual Cash moved!
-                Currency = currency,
-                Type = handoverType,
-                SourceAccountId = sourceAccount.Id,
-                DestinationAccountId = safeAccount.Id,
-                ReasonCode = "MANAGER_CONFIRMATION",
-                OperationId = $"op_handover_mvt_{deviceId}_{DateTime.UtcNow.Ticks}",
-                AuthorizedBy = authorizer.Id,
-                CreatedAt = DateTime.UtcNow,
-                BusinessDate = session.OpenedAt.Date
-            };
-
-            _dbContext.PosCashMovements.Add(handoverMovement);
-
-            _dbContext.SyncEvents.Add(new LocalSyncEvent
-            {
-                OperationId = handoverMovement.OperationId,
-                EntityType = "POS_CASH_MOVEMENT",
-                EntityId = handoverMovement.Id,
-                OperationType = "POS_CASH_MOVEMENT",
-                PayloadJson = JsonSerializer.Serialize(handoverMovement),
-                UserId = authorizer.Id,
-                DeviceId = deviceId,
-                SessionId = sessionId,
-                OperatorId = authorizer.Id,
-                OutletId = session.OutletId,
-                TerminalId = deviceId
-            });
-
-            settlement.Status = "CLOSED";
-            settlement.AuthorizerId = authorizer.Id;
-
-            session.Status = "CLOSED";
-            session.ControlStatus = "HANDED_OVER";
-            session.HandoverAt = DateTime.UtcNow;
-            
-            _dbContext.SyncEvents.Add(new LocalSyncEvent
-            {
-                OperationId = $"op_handover_conf_{deviceId}_{DateTime.UtcNow.Ticks}",
-                EntityType = "POS_SESSION",
-                EntityId = session.Id,
-                OperationType = "POS_SESSION_UPDATED",
-                PayloadJson = JsonSerializer.Serialize(new { Status = "CLOSED", ControlStatus = session.ControlStatus, HandoverAt = session.HandoverAt }),
-                UserId = authorizer.Id,
-                DeviceId = deviceId,
-                SessionId = sessionId,
-                OperatorId = authorizer.Id,
-                OutletId = session.OutletId,
-                TerminalId = deviceId
-            });
-
-            _dbContext.SyncEvents.Add(new LocalSyncEvent
-            {
-                OperationId = $"op_settlement_conf_{deviceId}_{DateTime.UtcNow.Ticks}",
-                EntityType = "POS_SETTLEMENT",
-                EntityId = settlement.Id,
-                OperationType = "POS_SETTLEMENT",
-                PayloadJson = JsonSerializer.Serialize(new { Status = "CLOSED", AuthorizerId = authorizer.Id }),
-                UserId = authorizer.Id,
-                DeviceId = deviceId,
-                SessionId = sessionId,
-                OperatorId = authorizer.Id,
-                OutletId = session.OutletId,
-                TerminalId = deviceId
-            });
-
-            await _dbContext.SaveChangesAsync();
-            await transaction.CommitAsync();
-            SyncEngine.Instance?.TriggerManualSync();
-            return settlement;
-        }
-        catch (Exception)
-        {
-            await transaction.RollbackAsync();
-            throw;
-        }
-    }
 
     public async Task<(decimal ExpectedCash, decimal Variance, decimal OpeningFloat, decimal CashSales, decimal CardSales, decimal BankTransferSales, decimal RoomChargeSales, decimal OtherSales, decimal TotalSales, decimal CashIn, decimal CashDrops, decimal PaidOuts, decimal TransfersOut, decimal CashRefunds)> GetSessionSettlementDetailsAsync(string sessionId)
     {
@@ -5036,7 +4907,7 @@ public class LocalRepository
     public async Task<List<object>> GetPendingHandoversAsync(string propertyId)
     {
         var pendingSessions = await _dbContext.PosSessions
-            .Where(s => s.PropertyId == propertyId && (s.Status == "PENDING_HANDOVER" || s.Status == "RECONCILIATION_REQUIRED"))
+            .Where(s => s.PropertyId == propertyId && s.Status == "PENDING_HANDOVER")
             .ToListAsync();
             
         var settlements = await _dbContext.PosSettlements
@@ -5057,10 +4928,10 @@ public class LocalRepository
         var safeAccount = await EnsureCashAccountAsync(propertyId, PosConstants.CashAccountTypes.Safe, "Central Safe");
         
         var pendingHandoversCount = await _dbContext.PosSessions
-            .CountAsync(s => s.PropertyId == propertyId && (s.Status == "PENDING_HANDOVER" || s.Status == "RECONCILIATION_REQUIRED"));
+            .CountAsync(s => s.PropertyId == propertyId && s.Status == "PENDING_HANDOVER");
 
         var pendingSessions = await _dbContext.PosSessions
-            .Where(s => s.PropertyId == propertyId && (s.Status == "PENDING_HANDOVER" || s.Status == "RECONCILIATION_REQUIRED"))
+            .Where(s => s.PropertyId == propertyId && s.Status == "PENDING_HANDOVER")
             .Select(s => s.Id)
             .ToListAsync();
             

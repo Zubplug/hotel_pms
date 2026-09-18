@@ -645,11 +645,7 @@ public partial class MainPage : ContentPage
                         parameters?["sessionId"]?.ToString() ?? ""
                     );
                     break;
-                case "pos.confirmHandover":
-                    responseData = await pmsInterop.ConfirmHandoverAsync(
-                        parameters?["sessionId"]?.ToString() ?? ""
-                    );
-                    break;
+
                 case "pos.getPendingHandovers":
                     responseData = await pmsInterop.GetPendingHandoversAsync(
                         parameters?["propertyId"]?.ToString() ?? ""

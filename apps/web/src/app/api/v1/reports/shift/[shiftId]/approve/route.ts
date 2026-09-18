@@ -54,44 +54,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ shi
     } else {
       return errorResponse('BAD_REQUEST', 'Invalid approval decision', 400);
     }
-    if (decision === 'APPROVED' || decision === 'APPROVED_WITH_VARIANCE') {
-      try {
-        let expectedCash = 0;
-        let declaredCash = 0;
-        
-        if (type === 'POS') {
-           expectedCash = Number((updated as any).expectedCash || 0);
-           declaredCash = Number((updated as any).actualCash || 0);
-        } else {
-           expectedCash = Number((updated as any).systemExpectedCash || 0);
-           declaredCash = Number((updated as any).declaredCash || 0);
-        }
-        
-        if (expectedCash === 0 && declaredCash === 0) {
-          // Cashless shift: bypass handover and automatically acknowledge it
-          updated = await ShiftControlService.acknowledgeCashlessShift(await requireOrganizationContext(actorUserId), type, shiftId);
-        } else {
-          // Shift has cash: auto-create a handover
-          const { CashHandoverService } = await import('@/lib/services/cash-handover-service');
-          const posSessionIds = type === 'POS' ? [shiftId] : [];
-          const frontdeskSessionIds = type === 'FRONT_DESK' ? [shiftId] : [];
-          await CashHandoverService.createHandover(await requireOrganizationContext(actorUserId), {
-            propertyId,
-            posSessionIds,
-            frontdeskSessionIds,
-            notes: 'Automatically created upon shift approval.',
-          });
-          // Re-fetch updated shift since its controlStatus is now HANDOVER_PENDING
-          if (type === 'POS') {
-            updated = await prisma.posSession.findUnique({ where: { id: shiftId } });
-          } else {
-            updated = await prisma.frontdeskSession.findUnique({ where: { id: shiftId } });
-          }
-        }
-      } catch (handoverError) {
-        console.error('[Shift approval] Failed to process post-approval automation:', handoverError);
-      }
-    }
+
     return successResponse({ type, shift: updated });
   } catch (error: any) {
     console.error('[Shift approval POST]', error);
