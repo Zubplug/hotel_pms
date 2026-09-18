@@ -123,6 +123,8 @@ export default function AccountantOverviewPage() {
   if (isError || !kpis) return <div className="flex min-h-[80vh] flex-col items-center justify-center gap-4 bg-[#09111f] p-8 text-center text-white"><FileWarning className="h-10 w-10 text-rose-300" /><div><h2 className="font-semibold">Finance data is unavailable</h2><p className="mt-1 text-sm text-slate-400">We could not load the live accountant dashboard.</p></div><button onClick={() => refetch()} className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm hover:bg-white/10"><RefreshCw className="h-4 w-4" /> Try again</button></div>;
 
   const businessDate = kpis.businessDate ? new Date(kpis.businessDate) : new Date();
+  const currentHour = new Date().getHours();
+  const greeting = currentHour < 12 ? 'Good morning' : currentHour < 17 ? 'Good afternoon' : 'Good evening';
   const totalIssues = Object.values(flags).reduce((sum: number, value: unknown) => sum + Number(value || 0), 0);
   const closeReady = totalIssues === 0 && kpis.audit?.lastAuditStatus === 'COMPLETED';
   const netCash = cashFlow.at(-1)?.net || 0;
@@ -148,7 +150,7 @@ export default function AccountantOverviewPage() {
         <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
           <div>
             <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[.18em] text-emerald-300"><Sparkles className="h-3.5 w-3.5" /> Finance command centre</div>
-            <h1 className="text-3xl font-semibold tracking-[-.04em] text-white sm:text-4xl">Good morning, let’s close clean.</h1>
+            <h1 className="text-3xl font-semibold tracking-[-.04em] text-white sm:text-4xl">{greeting}, let’s close clean.</h1>
             <p className="mt-2 max-w-2xl text-sm text-slate-400">A live view of revenue integrity, liquidity, ledger exposure, and the controls that need an accountant’s attention.</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
