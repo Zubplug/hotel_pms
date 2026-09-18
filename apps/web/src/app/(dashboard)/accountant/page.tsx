@@ -236,7 +236,7 @@ export default function AccountantOverviewPage() {
                     <CartesianGrid stroke="#ffffff0a" vertical={false} />
                     <XAxis dataKey="date" tick={{ fill: '#64748b', fontSize: 11 }} tickFormatter={(value) => format(new Date(value), 'E')} axisLine={false} tickLine={false} />
                     <YAxis tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(value) => `₦${Number(value).toLocaleString('en-NG')}`} width={70} />
-                    <Tooltip contentStyle={{ background: '#0f172a', border: '1px solid #ffffff1a', borderRadius: 8, color: '#fff', fontSize: '13px' }} formatter={(value: any, name: string) => [`₦${Number(value || 0).toLocaleString('en-NG')}`, name === 'inflow' ? 'Inflows' : name === 'outflow' ? 'Outflows' : 'Net Movement']} labelFormatter={(label) => format(new Date(label), 'dd MMM yyyy')} />
+                    <Tooltip contentStyle={{ background: '#0f172a', border: '1px solid #ffffff1a', borderRadius: 8, color: '#fff', fontSize: '13px' }} formatter={(value: any, name: any) => [`₦${Number(value || 0).toLocaleString('en-NG')}`, String(name) === 'inflow' ? 'Inflows' : String(name) === 'outflow' ? 'Outflows' : 'Net Movement']} labelFormatter={(label: any) => label ? format(new Date(label), 'dd MMM yyyy') : ''} />
                     <Area type="monotone" dataKey="inflow" name="inflow" stroke="#34d399" fill="url(#cashIn)" strokeWidth={2} />
                     <Area type="monotone" dataKey="outflow" name="outflow" stroke="#f43f5e" fill="url(#cashOut)" strokeWidth={2} />
                   </AreaChart>
