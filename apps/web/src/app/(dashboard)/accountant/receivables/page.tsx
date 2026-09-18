@@ -7,7 +7,6 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
 import { ExportReceivablesButton } from '@/components/accountant/ExportReceivablesButton';
-import { RecordCityLedgerPaymentModal } from '@/components/accountant/RecordCityLedgerPaymentModal';
 import { auth } from '@/lib/auth';
 import { prisma } from '@hotel-pms/db';
 
@@ -68,8 +67,6 @@ export default async function ReceivablesPage() {
   const unmatchedPayments = payments.filter(payment => payment.status !== 'SETTLED');
   const payments90 = payments.filter(payment => payment.createdAt.getTime() >= now - 90 * 86_400_000);
   const collected90 = payments90.reduce((sum, payment) => sum + Number(payment.amount), 0);
-  const lastPaymentByAccount = new Map<string, Date>();
-  payments.slice().reverse().forEach(payment => { if (!lastPaymentByAccount.has(payment.accountId)) lastPaymentByAccount.set(payment.accountId, payment.createdAt); });
   const focusInvoices = openInvoiceRows.slice().sort((a, b) => Number(b.invoice.outstandingAmount) - Number(a.invoice.outstandingAmount)).slice(0, 6);
   const weekly = Array.from({ length: 8 }, (_, index) => {
     const end = now - (7 - index) * 7 * 86_400_000;
@@ -83,7 +80,7 @@ export default async function ReceivablesPage() {
   }) : null;
   const glBalance = glControl ? Number(glControl._sum.debit || 0) - Number(glControl._sum.credit || 0) : null;
   const controlVariance = glBalance === null ? null : glBalance - totalOutstanding;
-  const exportRows = positiveAccounts.map(account => ({ name: account.name, type: account.type, balance: Number(account.balance), oldestOpenItem: 'Invoice-level aging', lastPayment: date(lastPaymentByAccount.get(account.id) || null), status: Number(account.balance) > 0 ? 'OPEN' : 'CREDIT' }));
+  const exportRows = positiveAccounts.map(account => ({ name: account.name, type: account.type, balance: Number(account.balance), oldestOpenItem: 'Invoice-level aging', lastPayment: '—', status: Number(account.balance) > 0 ? 'OPEN' : 'CREDIT' }));
 
   return (
     <main className="min-h-screen bg-[#07111f] p-5 text-slate-100 md:p-8">
@@ -119,7 +116,6 @@ export default async function ReceivablesPage() {
 
         <section className="grid gap-6 lg:grid-cols-3"><Insight icon={Sparkles} title="Accountant insight" text={overdueAmount ? `${Math.round(overdueAmount / Math.max(totalOutstanding, 1) * 100)}% of current AR is beyond 30 days. Prioritise the ${money(aging.find(item => item.key === 'OVER_90')?.amount || 0, currency)} in critical exposure.` : 'No overdue invoice exposure detected in the live city ledger.'} tone="cyan" /><Insight icon={Clock3} title="Follow-up queue" text={`${focusInvoices.length} high-value invoice${focusInvoices.length === 1 ? '' : 's'} are ready for collection follow-up. Open the account to record a payment or review its ledger history.`} tone="amber" /><Insight icon={Receipt} title="Audit trail" text={`${payments.length} city-ledger payment${payments.length === 1 ? '' : 's'} captured. ${unmatchedPayments.length ? 'Unapplied cash needs reconciliation.' : 'All captured payments are marked settled.'}`} tone="emerald" /></section>
 
-        <section className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03]"><div className="flex flex-col justify-between gap-3 border-b border-white/10 p-5 sm:flex-row sm:items-center"><div><h2 className="text-lg font-semibold text-white">Debtor portfolio</h2><p className="mt-1 text-sm text-slate-500">Click any account to open its full city-ledger dashboard and payment history.</p></div><Link href="/accountant/city-ledger" className="text-sm text-cyan-300 hover:text-cyan-200">Manage city ledger <ArrowRight className="ml-1 inline h-4 w-4" /></Link></div><div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left text-sm"><thead className="bg-slate-950/40 text-[10px] uppercase tracking-wider text-slate-500"><tr><th className="px-5 py-3 font-medium">Account</th><th className="px-5 py-3 font-medium">Type</th><th className="px-5 py-3 font-medium">Last payment</th><th className="px-5 py-3 text-right font-medium">Balance</th><th className="px-5 py-3 text-right font-medium">Action</th></tr></thead><tbody className="divide-y divide-white/[0.07]">{positiveAccounts.length ? positiveAccounts.map(account => <tr key={account.id} className="hover:bg-white/[0.025]"><td className="px-5 py-4"><Link href={`/accountant/city-ledger/${account.id}`} className="font-medium text-cyan-300 hover:text-cyan-200">{account.name}</Link><div className="mt-1 font-mono text-[10px] text-slate-600">{account.id.slice(0, 8)}</div></td><td className="px-5 py-4 text-slate-400">{account.type}</td><td className="px-5 py-4 text-slate-400">{date(lastPaymentByAccount.get(account.id) || null)}</td><td className="px-5 py-4 text-right font-semibold text-rose-300">{money(Number(account.balance), account.currency || currency)}</td><td className="px-5 py-4 text-right"><RecordCityLedgerPaymentModal accountId={account.id} accountName={account.name} balance={Number(account.balance)} currency={account.currency || currency} /></td></tr>) : <tr><td colSpan={5} className="py-12 text-center text-slate-500">No outstanding debtor accounts.</td></tr>}</tbody></table></div></section>
       </div>
     </main>
   );
