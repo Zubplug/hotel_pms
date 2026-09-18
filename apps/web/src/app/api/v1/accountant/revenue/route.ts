@@ -67,25 +67,41 @@ export async function GET(req: NextRequest) {
       }),
     ]);
 
-    const totals = new Map<string, { today: number; mtd: number; ytd: number; priorYear: number; count: number }>();
+    const totals = new Map<string, { today: number; mtd: number; ytd: number; priorYear: number; count: number; gross: number; discounts: number }>();
     const getTotals = (department: string) => {
       const existing = totals.get(department);
       if (existing) return existing;
-      const created = { today: 0, mtd: 0, ytd: 0, priorYear: 0, count: 0 };
+      const created = { today: 0, mtd: 0, ytd: 0, priorYear: 0, count: 0, gross: 0, discounts: 0 };
       totals.set(department, created);
       return created;
     };
+
+    const daily = new Map<string, { revenue: number; gross: number; discounts: number; transactions: number }>();
 
     for (const item of items) {
       const itemDate = dateOnly(new Date(item.businessDate));
       const value = amountForItem(item);
       const department = departmentForSource[item.source] || 'OTHER OPERATING REVENUE';
       const departmentTotals = getTotals(department);
+      const dayKey = key(itemDate);
+      const day = daily.get(dayKey) || { revenue: 0, gross: 0, discounts: 0, transactions: 0 };
+      day.revenue += value;
+      if (item.type === 'DISCOUNT') day.discounts += Math.abs(Number(item.amount || 0));
+      else {
+        day.gross += Number(item.amount || 0);
+        day.transactions += 1;
+      }
+      daily.set(dayKey, day);
       if (key(itemDate) === key(businessDate)) departmentTotals.today += value;
       if (itemDate >= monthStart && itemDate <= businessDate) departmentTotals.mtd += value;
       if (itemDate >= yearStart && itemDate <= businessDate) departmentTotals.ytd += value;
       if (key(itemDate) === key(priorYearDate)) departmentTotals.priorYear += value;
-      if (item.type === 'CHARGE') departmentTotals.count += 1;
+      if (item.type === 'CHARGE') {
+        departmentTotals.count += 1;
+        departmentTotals.gross += Number(item.amount || 0);
+      } else {
+        departmentTotals.discounts += Math.abs(Number(item.amount || 0));
+      }
     }
 
     const departments = reportDepartments
@@ -103,6 +119,8 @@ export async function GET(req: NextRequest) {
           ytd,
           priorYear,
           count: values.count,
+          gross: Number(values.gross.toFixed(2)),
+          discounts: Number(values.discounts.toFixed(2)),
           variance: priorYear === 0 ? null : Number((((today - priorYear) / Math.abs(priorYear)) * 100).toFixed(1)),
           isUp: priorYear > 0 && today >= priorYear,
         };
@@ -111,6 +129,18 @@ export async function GET(req: NextRequest) {
     const sum = (field: 'today' | 'mtd' | 'ytd' | 'priorYear') => departments.reduce((total, item) => total + Number(item[field] || 0), 0);
     const today = sum('today');
     const priorYear = sum('priorYear');
+    const dailyTrend = Array.from({ length: 14 }, (_, index) => {
+      const date = addDays(businessDate, index - 13);
+      const values = daily.get(key(date)) || { revenue: 0, gross: 0, discounts: 0, transactions: 0 };
+      return {
+        date: key(date),
+        revenue: Number(values.revenue.toFixed(2)),
+        gross: Number(values.gross.toFixed(2)),
+        discounts: Number(values.discounts.toFixed(2)),
+        transactions: values.transactions,
+      };
+    });
+    const todayActivity = daily.get(key(businessDate)) || { revenue: 0, gross: 0, discounts: 0, transactions: 0 };
 
     return successResponse({
       property: { id: propertyId, name: property?.name || 'Property', currency: property?.baseCurrency || 'NGN' },
@@ -120,13 +150,17 @@ export async function GET(req: NextRequest) {
         mtd: Number(sum('mtd').toFixed(2)),
         ytd: Number(sum('ytd').toFixed(2)),
         priorYear: Number(priorYear.toFixed(2)),
+        grossToday: Number(todayActivity.gross.toFixed(2)),
+        discountsToday: Number(todayActivity.discounts.toFixed(2)),
+        transactionCountToday: todayActivity.transactions,
         variance: priorYear === 0 ? null : Number((((today - priorYear) / Math.abs(priorYear)) * 100).toFixed(1)),
         isUp: priorYear > 0 && today >= priorYear,
       },
       departments,
+      dailyTrend,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[Accountant Revenue GET]', error);
-    return errorResponse('INTERNAL_ERROR', error.message || 'Unable to load revenue report', 500);
+    return errorResponse('INTERNAL_ERROR', error instanceof Error ? error.message : 'Unable to load revenue report', 500);
   }
 }
