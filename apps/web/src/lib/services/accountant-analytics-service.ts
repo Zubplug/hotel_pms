@@ -20,11 +20,13 @@ export class AccountantAnalyticsService {
       calculateDailyRevenue(propertyId, yesterday)
     ]);
 
-    // 2. Safe balance
-    const safeAccount = await prisma.cashAccount.findFirst({
-      where: { propertyId, type: 'SAFE' }
+    // 2. Financial Position: Cash & Bank
+    const cashAccounts = await prisma.cashAccount.findMany({
+      where: { propertyId, type: { in: ['SAFE', 'BANK_ACCOUNT'] } }
     });
-    const safeBalance = safeAccount ? Number(safeAccount.balance) : 0;
+    const safeBalance = cashAccounts.filter(a => a.type === 'SAFE').reduce((sum, a) => sum + Number(a.balance), 0);
+    const bankBalance = cashAccounts.filter(a => a.type === 'BANK_ACCOUNT').reduce((sum, a) => sum + Number(a.balance), 0);
+    const totalCash = safeBalance + bankBalance;
 
     // 3. AR Outstanding (Guest Folios)
     const arGuests = await prisma.folio.aggregate({
@@ -61,12 +63,23 @@ export class AccountantAnalyticsService {
     
     const taxLiability = currentTaxes.total - Number(remitted._sum.remittedAmount || 0);
 
-    // 7. Pending actions count
-    const [pendingHandovers, pendingDeposits, pendingExpenses, pendingExceptions] = await Promise.all([
+    // 7. Action Center / Flags
+    const [
+      pendingHandovers, 
+      pendingDeposits, 
+      pendingExpenses, 
+      pendingExceptions,
+      overdueReceivables,
+      glExceptions,
+      reconciliationDifferences
+    ] = await Promise.all([
       prisma.cashHandover.count({ where: { propertyId, status: 'PENDING' } }),
       prisma.bankDeposit.count({ where: { propertyId, status: 'DRAFT' } }),
       prisma.cashExpense.count({ where: { propertyId, status: 'PENDING_APPROVAL' } }),
-      prisma.transactionException.count({ where: { OR: [{ payment: { propertyId } }, { posPayment: { order: { propertyId } } }], status: 'OPEN' } })
+      prisma.transactionException.count({ where: { OR: [{ payment: { propertyId } }, { posPayment: { order: { propertyId } } }], status: 'OPEN' } }),
+      prisma.cityLedgerInvoice.count({ where: { propertyId, status: { in: ['OPEN', 'PARTIALLY_PAID'] }, dueDate: { lt: new Date() } } }),
+      prisma.journalEntry.count({ where: { propertyId, status: 'DRAFT' } }),
+      prisma.bankDeposit.count({ where: { propertyId, status: 'EXCEPTION' } })
     ]);
 
     // 8. Trends
@@ -114,22 +127,31 @@ export class AccountantAnalyticsService {
     });
 
     return {
+      businessDate: businessDate.toISOString(),
       revenue: {
         today: revenueToday,
         yesterday: revenueYesterday
       },
       balances: {
+        cashTotal: totalCash,
         safe: safeBalance,
+        bank: bankBalance,
         arTotal: totalAR,
         apOutstanding: Number(apOutstanding._sum.outstandingAmount || 0),
-        taxLiability
+        taxLiability: {
+          total: taxLiability,
+          lastCalculationDate: lastAudit?.businessDate
+        }
       },
       flags: {
+        openExceptions: pendingExceptions,
+        overdueReceivables,
         overdueInvoices,
-        pendingHandovers,
-        pendingDeposits,
         pendingExpenses,
-        pendingExceptions
+        pendingDeposits,
+        pendingHandovers,
+        glExceptions,
+        reconciliationDifferences
       },
       audit: {
         lastAuditDate: lastAudit?.businessDate,

@@ -43,7 +43,7 @@ export class GLMappingService {
         case 'COMPLIMENTARY':
           // For POS orders settled as COMPLIMENTARY, we debit the contra-revenue allowance account
           const compCode = (property.settings as any)?.accountingConfig?.contraRevenueAccounts?.COMPLIMENTARY;
-          targetCode = compCode || '4090'; // 4090 is standard USALI Complimentary Allowance
+          targetCode = compCode || '4900'; // 4900 is 'Revenue Rebates and Discounts' in the current DB schema
           break;
         default:
           throw new Error(`Cannot resolve automatic GL mapping for payment method: ${method}`);
