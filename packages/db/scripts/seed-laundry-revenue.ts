@@ -8,22 +8,26 @@ async function main() {
   const properties = await prisma.property.findMany();
 
   for (const property of properties) {
-    // Check if 4300 is already taken
+    // Prefer an existing Laundry account wherever the property has already
+    // established its own chart numbering. This prevents a property with
+    // Laundry at 4200 and Events at 4300 from being remapped to a duplicate.
+    const existingLaundryByName = await prisma.chartOfAccount.findFirst({
+      where: { propertyId: property.id, type: 'REVENUE', name: { contains: 'laundry', mode: 'insensitive' } },
+      orderBy: { code: 'asc' },
+    });
     const existing4300 = await prisma.chartOfAccount.findFirst({
       where: { propertyId: property.id, code: '4300' }
     });
 
-    let targetCode = '4300';
+    let targetCode = existingLaundryByName?.code || '4300';
     let accountId = '';
 
-    if (existing4300 && !existing4300.name.toLowerCase().includes('laundry')) {
+    if (!existingLaundryByName && existing4300 && !existing4300.name.toLowerCase().includes('laundry')) {
       console.log(`Code 4300 is taken by "${existing4300.name}" in ${property.name}. Using fallback code 4350.`);
       targetCode = '4350';
     }
 
-    const existingLaundry = await prisma.chartOfAccount.findFirst({
-      where: { propertyId: property.id, code: targetCode }
-    });
+    const existingLaundry = existingLaundryByName || await prisma.chartOfAccount.findFirst({ where: { propertyId: property.id, code: targetCode } });
 
     if (!existingLaundry) {
       const glAccount = await prisma.chartOfAccount.create({
