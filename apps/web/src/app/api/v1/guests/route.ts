@@ -21,17 +21,23 @@ export async function GET(req: NextRequest) {
       return errorResponse('FORBIDDEN', 'No access to this property', 403);
     }
 
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(search);
+    const searchConditions: any[] = [
+      { firstName: { contains: search, mode: 'insensitive' } },
+      { lastName: { contains: search, mode: 'insensitive' } },
+      { email: { contains: search, mode: 'insensitive' } },
+      { phone: { contains: search, mode: 'insensitive' } },
+    ];
+    if (isUUID) {
+      searchConditions.push({ id: search });
+    }
+
     const where: any = {
         organizationId: ctx.organizationId,
         propertyId: propertyId ? propertyId : { in: [...ctx.propertyIds] },
         ...(search
           ? {
-              OR: [
-                { firstName: { contains: search, mode: 'insensitive' } },
-                { lastName: { contains: search, mode: 'insensitive' } },
-                { email: { contains: search, mode: 'insensitive' } },
-                { phone: { contains: search, mode: 'insensitive' } },
-              ],
+              OR: searchConditions,
             }
           : {}),
       };

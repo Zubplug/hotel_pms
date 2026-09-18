@@ -2383,7 +2383,8 @@ public class LocalRepository
         query = query.ToLower();
         return await _dbContext.Guests
             .Where(g => g.DeletedAt == null && 
-                        (g.FirstName.ToLower().Contains(query) || 
+                        (g.Id == query ||
+                         g.FirstName.ToLower().Contains(query) || 
                          g.LastName.ToLower().Contains(query) || 
                          (g.Email != null && g.Email.ToLower().Contains(query)) || 
                          (g.Phone != null && g.Phone.Contains(query))))
