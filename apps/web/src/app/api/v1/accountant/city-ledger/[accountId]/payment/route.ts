@@ -1,10 +1,12 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { auth } from '@/lib/auth';
 import { requireOrganizationContext } from '@/lib/organization-access';
 import { hasPermission } from '@/lib/rbac';
 import { errorResponse, successResponse } from '@/lib/api-response';
+import { GLMappingService } from '@/lib/services/gl-mapping-service';
+import { GeneralLedgerService } from '@/lib/services/general-ledger-service';
 import { getPropertyBusinessDate } from '@/lib/date-utils';
-import prisma from '@hotel-pms/db';
+import prisma, { PaymentMethod } from '@hotel-pms/db';
 
 const ALLOWED_METHODS = ['CASH', 'BANK_TRANSFER', 'POS', 'CARD', 'CARD_OFFLINE', 'PAYMENT_GATEWAY', 'MOBILE_PAYMENT', 'CHEQUE', 'OTHER'];
 
@@ -34,13 +36,19 @@ export async function POST(
     if (account.status !== 'ACTIVE') return errorResponse('INVALID_STATE', 'City ledger account is not active', 409);
 
     // Permission enforcement
-    const userRole = (session.user as any).role;
+    const userRole = session.user.role || 'UNKNOWN';
     const isAccountant = ['ACCOUNTANT', 'MANAGER', 'HOTEL_MANAGER', 'FINANCE_MANAGER', 'ADMIN', 'SUPER_ADMIN'].includes(userRole);
     const canCollect = isAccountant || await hasPermission(session.user.id, 'receivables', 'collect', account.propertyId);
     
     if (!canCollect) {
       return errorResponse('FORBIDDEN', 'Insufficient permissions to post receivables collections.', 403);
     }
+
+    // Resolve the posting accounts before changing any subledger state. A
+    // missing or inactive mapping must block the entire settlement.
+    const debitAccountId = await GLMappingService.getAssetAccountForMethod(account.propertyId, method);
+    const cityLedgerControlAccountId = await GLMappingService.getCityLedgerAccount(account.propertyId);
+    const businessDate = account.property.businessDate || getPropertyBusinessDate(account.property.timezone);
 
     if (account.type === 'SKIPPER' && !invoiceId) {
       return errorResponse('BAD_REQUEST', 'Skipper accounts require a specific invoiceId to be settled individually.', 400);
@@ -61,7 +69,7 @@ export async function POST(
       }
 
       // 2. Lock account
-      const locked = await tx.$queryRaw<Array<{ balance: number }>>`SELECT balance FROM "CityLedgerAccount" WHERE id = ${accountId}::uuid FOR UPDATE`;
+      await tx.$queryRaw`SELECT balance FROM "CityLedgerAccount" WHERE id = ${accountId}::uuid FOR UPDATE`;
 
       // 3. Invoice validation
       let invoicesToPay = [];
@@ -110,13 +118,13 @@ export async function POST(
         data: {
           folioId: masterFolio.id,
           propertyId: account.propertyId,
-          method: method as any,
+          method: method as PaymentMethod,
           collectionSource: 'RECEIVABLES',
           amount,
           currency: account.currency,
           baseAmount: amount,
           status: 'COMPLETED',
-          businessDate: account.property.businessDate || getPropertyBusinessDate(account.property.timezone),
+          businessDate,
           idempotencyKey,
           receiptNumber,
           reference: reference || undefined,
@@ -126,7 +134,7 @@ export async function POST(
             : invoicesToPay.length
               ? 'Bulk AR Collection'
               : 'Unapplied corporate advance'
-        } as any
+        }
       });
 
       // 6. Create CityLedgerEntry for AR Ledger (Assets: AR Decrease)
@@ -193,34 +201,37 @@ export async function POST(
       // 8. Update Account Balance
       await tx.cityLedgerAccount.update({ where: { id: accountId }, data: { balance: { decrement: amount } } });
 
-      // 8.5 Create the General Ledger Journal Entry for the Payment
-      const cashAccCode = method === 'CASH' ? '1000' : '1010'; // Map method to Cash/Bank
-      const debitAcc = await tx.chartOfAccount.findFirst({ where: { propertyId: account.propertyId, code: cashAccCode } });
-      const creditAcc = await tx.chartOfAccount.findFirst({ where: { propertyId: account.propertyId, code: '1140' } }); // AR City Ledger
+      // Keep the master AR folio summary aligned with its payment records.
+      await tx.folio.update({
+        where: { id: masterFolio.id },
+        data: { totalPayments: { increment: amount }, balance: { decrement: amount } },
+      });
 
-      if (debitAcc && creditAcc) {
-        const jeEntryNumber = `JE-${account.propertyId.slice(0, 8).toUpperCase()}-${year}-${crypto.randomUUID().split('-')[0].toUpperCase().slice(0,6)}`;
-        await tx.journalEntry.create({
-          data: {
-            propertyId: account.propertyId,
-            entryDate: payment.createdAt,
-            entryNumber: jeEntryNumber,
-            reference: payment.receiptNumber,
-            description: payment.notes || `AR Payment Collection`,
-            source: 'AUTO_PAYMENT',
-            status: 'POSTED',
-            totalDebit: amount,
-            totalCredit: amount,
-            createdBy: session.user.id,
-            lines: {
-              create: [
-                { accountId: debitAcc.id, description: `Payment Received (${method})`, debit: amount, credit: 0, sourceType: 'PAYMENT', sourceId: payment.id },
-                { accountId: creditAcc.id, description: 'AR Payment Collection', debit: 0, credit: amount, sourceType: 'PAYMENT', sourceId: payment.id }
-              ]
-            }
-          }
-        });
-      }
+      // 8.5 Post the controlled double-entry AR settlement. This validates
+      // the accounting period and rolls back the complete transaction if GL
+      // posting fails.
+      await GeneralLedgerService.postJournal(
+        {
+          userId: session.user.id,
+          propertyIds: [account.propertyId],
+          organizationId: account.property.organizationId,
+          role: userRole,
+          permissions: [],
+          outletIds: [],
+        },
+        {
+          propertyId: account.propertyId,
+          entryDate: businessDate,
+          reference: payment.receiptNumber || undefined,
+          description: payment.notes || 'AR Payment Collection',
+          sourceModule: 'AR',
+          lines: [
+            { accountId: debitAccountId, description: `Payment Received (${method})`, debit: amount, credit: 0, sourceType: 'PAYMENT', sourceId: payment.id },
+            { accountId: cityLedgerControlAccountId, description: 'AR Payment Collection', debit: 0, credit: amount, sourceType: 'PAYMENT', sourceId: payment.id },
+          ],
+        },
+        tx,
+      );
 
       // 9. Audit Trail
       await tx.auditLog.create({
@@ -252,19 +263,25 @@ export async function POST(
     });
 
     return successResponse({ entry });
-  } catch (error: any) {
-    if (error.message === 'IDEMPOTENCY_CONFLICT') return errorResponse('CONFLICT', 'A different payment with this idempotency key already exists.', 409);
-    if (error.message === 'INVOICE_NOT_FOUND') return errorResponse('NOT_FOUND', 'Target invoice not found in this account.', 404);
-    if (error.message === 'INVOICE_ALREADY_PAID') return errorResponse('CONFLICT', 'Target invoice is already paid.', 409);
-    if (error.message === 'PAYMENT_EXCEEDS_INVOICE_BALANCE') return errorResponse('BAD_REQUEST', 'Payment exceeds outstanding invoice balance.', 400);
-    if (error.message === 'PAYMENT_EXCEEDS_BALANCE') return errorResponse('PAYMENT_EXCEEDS_BALANCE', 'Payment cannot exceed the outstanding city ledger balance', 409);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Unable to record city ledger payment';
+    const errorCode = error && typeof error === 'object' && 'code' in error ? String((error as { code?: unknown }).code) : '';
+    const errorMeta = error && typeof error === 'object' && 'meta' in error ? (error as { meta?: { target?: unknown } }).meta : undefined;
+    if (message === 'IDEMPOTENCY_CONFLICT') return errorResponse('CONFLICT', 'A different payment with this idempotency key already exists.', 409);
+    if (message === 'INVOICE_NOT_FOUND') return errorResponse('NOT_FOUND', 'Target invoice not found in this account.', 404);
+    if (message === 'INVOICE_ALREADY_PAID') return errorResponse('CONFLICT', 'Target invoice is already paid.', 409);
+    if (message === 'PAYMENT_EXCEEDS_INVOICE_BALANCE') return errorResponse('BAD_REQUEST', 'Payment exceeds outstanding invoice balance.', 400);
+    if (message === 'PAYMENT_EXCEEDS_BALANCE') return errorResponse('PAYMENT_EXCEEDS_BALANCE', 'Payment cannot exceed the outstanding city ledger balance', 409);
+    if (message.includes('Required GL Account') || message.includes('GL Account') || message.includes('No open accounting period')) {
+      return errorResponse('ACCOUNTING_CONFIGURATION_REQUIRED', message, 409);
+    }
     
     // Catch Prisma P2002 explicitly just in case race condition hits between `findUnique` and `create`
-    if (error.code === 'P2002' && error.meta?.target?.includes('idempotencyKey')) {
+    if (errorCode === 'P2002' && String(errorMeta?.target || '').includes('idempotencyKey')) {
       return errorResponse('CONFLICT', 'A payment with this operation ID is already processing.', 409);
     }
     
     console.error('[City Ledger Payment POST]', error);
-    return errorResponse('INTERNAL_ERROR', error.message || 'Unable to record city ledger payment', 500);
+    return errorResponse('INTERNAL_ERROR', message, 500);
   }
 }

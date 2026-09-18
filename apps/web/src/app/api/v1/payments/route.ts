@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
       return errorResponse('BAD_REQUEST', 'Amount must be greater than zero', 400);
     }
     // Validate enum
-    const validMethods = ['CASH', 'POS', 'BANK_TRANSFER', 'CARD', 'CITY_LEDGER'];
+    const validMethods = ['CASH', 'POS', 'BANK_TRANSFER', 'CARD'];
     if (!validMethods.includes(method)) {
       return errorResponse('BAD_REQUEST', `Invalid payment method. Allowed: ${validMethods.join(', ')}`, 400);
     }

@@ -4,6 +4,9 @@ import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
 import { hasPermission } from '@/lib/rbac';
 import { assertPropertyAccess } from '@/lib/property-access';
+import { getPropertyBusinessDate } from '@/lib/date-utils';
+import { GLMappingService } from '@/lib/services/gl-mapping-service';
+import { GeneralLedgerService } from '@/lib/services/general-ledger-service';
 
 export async function POST(
   req: NextRequest,
@@ -21,6 +24,9 @@ export async function POST(
 
     if (!applyAmount || applyAmount <= 0) {
       return errorResponse('BAD_REQUEST', 'Amount must be greater than zero.', 400);
+    }
+    if (creditEntryId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(creditEntryId)) {
+      return errorResponse('BAD_REQUEST', 'Invalid credit entry id.', 400);
     }
 
     const folio = await prisma.folio.findUnique({
@@ -46,6 +52,9 @@ export async function POST(
     if (!guestId) return errorResponse('BAD_REQUEST', 'Reservation has no primary guest.', 400);
 
     const txResult = await prisma.$transaction(async (tx: any) => {
+      const property = await tx.property.findUnique({ where: { id: folio.propertyId }, select: { organizationId: true, businessDate: true, timezone: true } });
+      if (!property) throw new Error('PROPERTY_NOT_FOUND');
+      const businessDate = property.businessDate || getPropertyBusinessDate(property.timezone);
       // ── Idempotency guard: check if this offline operation was already applied ──
       if (offlineOperationId) {
         const priorAudit = await tx.auditLog.findFirst({
@@ -133,7 +142,7 @@ export async function POST(
       await tx.folioItem.create({
         data: {
           folioId: folio.id,
-          businessDate: new Date(),
+          businessDate,
           type: 'PAYMENT',
           source: 'CITY_LEDGER',
           description: 'Applied guest credit',
@@ -156,11 +165,29 @@ export async function POST(
         }
       });
 
+      const guestLedgerAccountId = await GLMappingService.getGuestLedgerAccount(folio.propertyId);
+      const refundsPayableAccountId = await GLMappingService.getGuestRefundsPayableAccount(folio.propertyId);
+      await GeneralLedgerService.postJournal(
+        { userId: session.user.id, propertyIds: [folio.propertyId], organizationId: property.organizationId, role: String((session.user as any).role || 'STAFF'), permissions: [], outletIds: [] },
+        {
+          propertyId: folio.propertyId,
+          entryDate: businessDate,
+          reference: `CREDIT-${folio.id.slice(0, 8).toUpperCase()}`,
+          description: 'Apply guest refund credit to folio',
+          sourceModule: 'AR',
+          lines: [
+            { accountId: refundsPayableAccountId, description: 'Release guest refund payable', debit: applyAmount, credit: 0, sourceType: 'GUEST_CREDIT_APPLICATION', sourceId: folio.id },
+            { accountId: guestLedgerAccountId, description: 'Apply guest credit to folio', debit: 0, credit: applyAmount, sourceType: 'GUEST_CREDIT_APPLICATION', sourceId: folio.id },
+          ],
+        },
+        tx,
+      );
+
       // ── Audit log ────────────────────────────────────────────────────────
-      const property = await tx.property.findUnique({ where: { id: folio.propertyId } });
+      const auditProperty = property;
       await tx.auditLog.create({
         data: {
-          organizationId: property.organizationId,
+          organizationId: auditProperty.organizationId,
           propertyId: folio.propertyId,
           userId: session.user.id,
           userEmail: session.user.email,

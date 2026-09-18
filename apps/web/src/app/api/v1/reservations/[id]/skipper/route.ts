@@ -10,6 +10,8 @@ import crypto from 'crypto';
 import { NotificationEngine } from '@/lib/notification-engine';
 import { requireOrganizationContext } from "@/lib/organization-access";
 import { upsertCheckoutHousekeepingTask } from '@/lib/housekeeping-task';
+import { CityLedgerAccountingService } from '@/lib/services/city-ledger-accounting-service';
+import { getPropertyBusinessDate } from '@/lib/date-utils';
 
 export async function POST(
   req: NextRequest,
@@ -56,6 +58,9 @@ export async function POST(
     if (!canCheckOut && !isNightAuditor) return errorResponse('FORBIDDEN', 'Insufficient permissions', 403);
 
     const txResult = await prisma.$transaction(async (tx: any) => {
+      const property = await tx.property.findUnique({ where: { id: reservation.propertyId }, select: { organizationId: true, businessDate: true, timezone: true, supportedCurrencies: true } });
+      if (!property) throw new Error('PROPERTY_NOT_FOUND');
+      const businessDate = property.businessDate || getPropertyBusinessDate(property.timezone);
       // 1. Lock Folios
       const folios = await tx.$queryRaw<any[]>`
         SELECT id, balance, version 
@@ -79,21 +84,19 @@ export async function POST(
       });
 
       if (!skipperAccount) {
-        const property = await tx.property.findUnique({ where: { id: reservation.propertyId } });
         skipperAccount = await tx.cityLedgerAccount.create({
           data: {
             organizationId: property.organizationId,
             propertyId: reservation.propertyId,
             name: 'Skippers / Walk-Outs',
             type: 'SKIPPER',
-            currency: 'NGN' // Simplified
+            currency: property.supportedCurrencies[0] || 'NGN'
           }
         });
       }
 
       // 3. Create City Ledger Invoice and Entry
-      const issueDate = new Date();
-      issueDate.setUTCHours(0, 0, 0, 0);
+      const issueDate = businessDate;
       const dueDate = new Date(issueDate);
       dueDate.setUTCDate(dueDate.getUTCDate() + 30);
       
@@ -111,7 +114,7 @@ export async function POST(
           description: `Walk-out/Skipper checkout for reservation ${reservation.confirmationNumber || 'Unknown'} (Guest: ${guestName}${guestPhone ? ` - ${guestPhone}` : ''})`,
           amount: totalBalance,
           outstandingAmount: totalBalance,
-          currency: 'NGN',
+          currency: skipperAccount.currency,
           createdBy: session.user.id,
         }
       });
@@ -123,7 +126,7 @@ export async function POST(
           guestId: reservation.primaryGuestId,
           reservationId: id,
           amount: totalBalance,
-          currency: 'NGN',
+          currency: skipperAccount.currency,
           type: 'TRANSFER_IN',
           status: 'OPEN',
           reason: reason,
@@ -144,9 +147,6 @@ export async function POST(
         const folioBalance = Number(folio.balance);
         if (folioBalance > 0) {
           // Post the offsetting payment
-          const businessDate = new Date(); // In reality, get from NightAudit
-          businessDate.setUTCHours(0,0,0,0);
-          
           await tx.folioItem.create({
             data: {
               folioId: folio.id,
@@ -157,7 +157,7 @@ export async function POST(
               quantity: 1,
               unitAmount: -folioBalance,
               amount: -folioBalance,
-              currency: 'NGN',
+              currency: folio.currency || skipperAccount.currency,
               baseAmount: -folioBalance,
               postedBy: session.user.id,
             }
@@ -187,6 +187,18 @@ export async function POST(
         }
       }
 
+      await CityLedgerAccountingService.processCityLedgerRouting(
+        tx,
+        reservation.propertyId,
+        property.organizationId,
+        session.user.id,
+        totalBalance,
+        folios[0]?.id || id,
+        invoiceNumber,
+        `skipper_route_${id}`,
+        businessDate,
+      );
+
       // 5. Checkout Reservation
       await tx.reservation.update({
         where: { id },
@@ -194,8 +206,7 @@ export async function POST(
       });
 
       // 6. Housekeeping Tasks
-      const businessDate = new Date();
-      businessDate.setUTCHours(0, 0, 0, 0);
+      const housekeepingDate = businessDate;
       
       let tasksCreated = 0;
       for (const rr of reservation.reservationRooms) {
@@ -204,8 +215,8 @@ export async function POST(
             where: {
               roomId: rr.room.id,
               checkIn: {
-                gte: businessDate,
-                lt: new Date(businessDate.getTime() + 86400000)
+                gte: housekeepingDate,
+                lt: new Date(housekeepingDate.getTime() + 86400000)
               },
               reservation: { status: 'CONFIRMED' }
             },
@@ -230,20 +241,20 @@ export async function POST(
             propertyId: reservation.propertyId,
             roomId: rr.room.id,
             priority,
-            businessDate,
+            businessDate: housekeepingDate,
             notes: priority === 'HIGH' ? 'Back-to-back arrival expected today.' : null,
           });
-          if (hskTask.createdAt >= businessDate) { tasksCreated++; }
+          if (hskTask.createdAt >= housekeepingDate) { tasksCreated++; }
         }
       }
 
       // 7. Audit Logging
-      const property = await tx.property.findUnique({ where: { id: reservation.propertyId } });
-      if (property) {
+      const auditProperty = await tx.property.findUnique({ where: { id: reservation.propertyId } });
+      if (auditProperty) {
         await tx.auditLog.create({
           data: {
-            organizationId: property.organizationId,
-            propertyId: property.id,
+            organizationId: auditProperty.organizationId,
+            propertyId: auditProperty.id,
             userId: session.user.id,
             userEmail: session.user.email,
             userRole: (session.user as any).role || 'STAFF',

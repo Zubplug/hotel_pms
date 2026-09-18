@@ -10,6 +10,8 @@ import crypto from 'crypto';
 import { NotificationEngine } from '@/lib/notification-engine';
 import { requireOrganizationContext } from "@/lib/organization-access";
 import { upsertCheckoutHousekeepingTask } from '@/lib/housekeeping-task';
+import { CityLedgerAccountingService } from '@/lib/services/city-ledger-accounting-service';
+import { getPropertyBusinessDate } from '@/lib/date-utils';
 
 export async function POST(
   req: NextRequest,
@@ -51,6 +53,9 @@ export async function POST(
     let creditAmount = 0;
 
     const txResult = await prisma.$transaction(async (tx: any) => {
+      const property = await tx.property.findUnique({ where: { id: reservation.propertyId }, select: { organizationId: true, businessDate: true, timezone: true, supportedCurrencies: true } });
+      if (!property) throw new Error('PROPERTY_NOT_FOUND');
+      const businessDate = property.businessDate || getPropertyBusinessDate(property.timezone);
       // 1. Lock Folios and Calculate Authoritative Net Balance
       const folios = await tx.$queryRaw<any[]>`
         SELECT id, balance, version 
@@ -77,14 +82,13 @@ export async function POST(
       });
 
       if (!refundAccount) {
-        const property = await tx.property.findUnique({ where: { id: reservation.propertyId } });
         refundAccount = await tx.cityLedgerAccount.create({
           data: {
             organizationId: property.organizationId,
             propertyId: reservation.propertyId,
             name: 'Pending Guest Refunds',
             type: 'REFUND_PAYABLE',
-            currency: 'NGN'
+            currency: property.supportedCurrencies[0] || 'NGN'
           }
         });
       }
@@ -97,7 +101,7 @@ export async function POST(
           guestId: reservation.primaryGuestId,
           reservationId: id,
           amount: creditAmount,
-          currency: 'NGN',
+          currency: refundAccount.currency,
           type: 'REFUND_OWED',
           reason: reason,
           createdBy: session.user.id,
@@ -110,15 +114,23 @@ export async function POST(
         data: { balance: { increment: creditAmount } }
       });
 
-      // 4. Zero Out the Folios and Close Them
-      const businessDate = new Date();
-      businessDate.setUTCHours(0, 0, 0, 0);
+      await CityLedgerAccountingService.processCityLedgerRouting(
+        tx,
+        reservation.propertyId,
+        property.organizationId,
+        session.user.id,
+        -creditAmount,
+        folios[0]?.id || id,
+        `CR-${reservation.id.slice(0, 8).toUpperCase()}`,
+        `guest_credit_${id}`,
+        businessDate,
+      );
 
-      let chargeApplied = false;
+      // 4. Zero Out the Folios and Close Them
       for (const folio of folios) {
         const folioBalance = Number(folio.balance);
         
-        if (!chargeApplied && folioBalance < 0) {
+        if (folioBalance < 0) {
           // Post the offsetting charge representing the transfer of liability out of the front desk
           await tx.folioItem.create({
             data: {
@@ -130,17 +142,17 @@ export async function POST(
               quantity: 1,
               unitAmount: Math.abs(folioBalance),
               amount: Math.abs(folioBalance),
-              currency: 'NGN',
+              currency: folio.currency || refundAccount.currency,
               baseAmount: Math.abs(folioBalance),
             }
           });
-          chargeApplied = true;
         }
 
         await tx.folio.update({
           where: { id: folio.id, version: folio.version },
           data: {
             balance: 0,
+            ...(folioBalance < 0 ? { totalCharges: { increment: Math.abs(folioBalance) } } : {}),
             status: 'CLOSED',
             closedAt: new Date(),
             closedBy: session.user.id,
@@ -197,7 +209,6 @@ export async function POST(
       }
 
       // 7. Audit Logging
-      const property = await tx.property.findUnique({ where: { id: reservation.propertyId } });
       if (property) {
         await tx.auditLog.create({
           data: {

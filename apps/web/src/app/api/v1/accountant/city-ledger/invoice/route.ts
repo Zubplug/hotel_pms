@@ -2,6 +2,9 @@ import { NextRequest } from 'next/server';
 import { auth } from '@/lib/auth';
 import { requireOrganizationContext } from '@/lib/organization-access';
 import { errorResponse, successResponse } from '@/lib/api-response';
+import { GLMappingService } from '@/lib/services/gl-mapping-service';
+import { GeneralLedgerService } from '@/lib/services/general-ledger-service';
+import { getPropertyBusinessDate } from '@/lib/date-utils';
 import prisma from '@hotel-pms/db';
 
 export async function POST(req: NextRequest) {
@@ -26,6 +29,9 @@ export async function POST(req: NextRequest) {
     if (account.status !== 'ACTIVE') return errorResponse('INVALID_STATE', 'City ledger account is not active', 409);
     const existingInvoice = await prisma.cityLedgerInvoice.findUnique({ where: { propertyId_invoiceNumber: { propertyId: account.propertyId, invoiceNumber } } });
     if (existingInvoice) return errorResponse('DUPLICATE_INVOICE_NUMBER', 'Invoice number already exists for this property', 409);
+    const cityLedgerAccountId = await GLMappingService.getCityLedgerAccount(account.propertyId);
+    const revenueAccountId = await GLMappingService.getOtherRevenueAccount(account.propertyId);
+    const businessDate = getPropertyBusinessDate((await prisma.property.findUniqueOrThrow({ where: { id: account.propertyId }, select: { timezone: true } })).timezone);
 
     const result = await prisma.$transaction(async tx => {
       const invoice = await tx.cityLedgerInvoice.create({
@@ -57,12 +63,21 @@ export async function POST(req: NextRequest) {
         },
       });
       await tx.cityLedgerAccount.update({ where: { id: accountId }, data: { balance: { increment: amount } } });
+      await GeneralLedgerService.postJournal(
+        { userId: session.user.id, propertyIds: [account.propertyId], organizationId: account.organizationId, role: session.user.role || 'UNKNOWN', permissions: [], outletIds: [] },
+        { propertyId: account.propertyId, entryDate: issueDate || businessDate, reference: invoiceNumber, description: `Manual AR invoice ${invoiceNumber}`, sourceModule: 'AR', lines: [
+          { accountId: cityLedgerAccountId, description: 'Manual city-ledger invoice', debit: amount, credit: 0, sourceType: 'CITY_LEDGER_INVOICE', sourceId: invoice.id },
+          { accountId: revenueAccountId, description: description, debit: 0, credit: amount, sourceType: 'CITY_LEDGER_INVOICE', sourceId: invoice.id },
+        ] }, tx,
+      );
       return { invoice, entry: created };
     });
 
     return successResponse(result);
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Unable to create city ledger debit';
     console.error('[City Ledger Invoice POST]', error);
-    return errorResponse('INTERNAL_ERROR', error.message || 'Unable to create city ledger debit', 500);
+    if (message.includes('GL Account') || message.includes('No open accounting period')) return errorResponse('ACCOUNTING_CONFIGURATION_REQUIRED', message, 409);
+    return errorResponse('INTERNAL_ERROR', message, 500);
   }
 }

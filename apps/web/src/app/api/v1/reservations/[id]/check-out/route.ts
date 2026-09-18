@@ -163,15 +163,15 @@ export async function POST(
         const orgId = propRes[0].organizationId;
         
         let guestLedgerAccount = await tx.cityLedgerAccount.findFirst({
-          where: { propertyId: reservation.propertyId, type: 'HOUSE', name: 'Guest Ledger', status: 'ACTIVE' }
+          where: { propertyId: reservation.propertyId, type: 'REFUND_PAYABLE', name: 'Pending Guest Refunds', status: 'ACTIVE' }
         });
         if (!guestLedgerAccount) {
           guestLedgerAccount = await tx.cityLedgerAccount.create({
             data: {
               organizationId: orgId,
               propertyId: reservation.propertyId,
-              name: 'Guest Ledger',
-              type: 'HOUSE',
+              name: 'Pending Guest Refunds',
+              type: 'REFUND_PAYABLE',
               currency: folios[0]?.currency || 'NGN'
             }
           });

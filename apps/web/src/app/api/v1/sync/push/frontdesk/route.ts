@@ -1466,15 +1466,15 @@ export async function POST(req: NextRequest) {
               const orgId = propRes[0].organizationId;
               
               let guestLedgerAccount = await tx.cityLedgerAccount.findFirst({
-                where: { propertyId, type: 'HOUSE', name: 'Guest Ledger', status: 'ACTIVE' }
+                where: { propertyId, type: 'REFUND_PAYABLE', name: 'Pending Guest Refunds', status: 'ACTIVE' }
               });
               if (!guestLedgerAccount) {
                 guestLedgerAccount = await tx.cityLedgerAccount.create({
                   data: {
                     organizationId: orgId,
                     propertyId,
-                    name: 'Guest Ledger',
-                    type: 'HOUSE',
+                    name: 'Pending Guest Refunds',
+                    type: 'REFUND_PAYABLE',
                     currency: folio.currency || 'NGN'
                   }
                 });
@@ -1509,14 +1509,14 @@ export async function POST(req: NextRequest) {
                 data: {
                   folioId: aggregateId,
                   businessDate: payload.businessDate || authoritativeBusinessDate,
-                  type: "PAYMENT",
+                  type: "CHARGE",
                   source: "CITY_LEDGER",
                   description: "City Ledger credit at offline checkout",
                   quantity: 1,
-                  unitAmount: -amount,
-                  amount: -amount,
+                  unitAmount: amount,
+                  amount,
                   currency: folio.currency || "NGN",
-                  baseAmount: -amount,
+                  baseAmount: amount,
                   postedBy: actorId,
                   deviceId: device.id,
                   isLatePosting: true,
@@ -1527,7 +1527,7 @@ export async function POST(req: NextRequest) {
               await tx.folio.update({
                 where: { id: aggregateId },
                 data: {
-                  totalPayments: { increment: amount },
+                  totalCharges: { increment: amount },
                   balance: { increment: amount },
                 },
               });
@@ -1541,7 +1541,8 @@ export async function POST(req: NextRequest) {
                 -amount,
                 aggregateId,
                 refKey,
-                `cl_sync_${idempotencyKey}`
+                `cl_sync_${idempotencyKey}`,
+                authoritativeBusinessDate
               );
             }
           } else if (aggregateType === "FOLIO" && eventType === "FOLIO_DISCOUNT_APPLIED") {
@@ -2044,7 +2045,8 @@ export async function POST(req: NextRequest) {
                 amount,
                 aggregateId,
                 invoiceNumber,
-                `cl_sync_${aggregateId}_${idempotencyKey}`
+                `cl_sync_${aggregateId}_${idempotencyKey}`,
+                authoritativeBusinessDate
               );
             }
           } else if (aggregateType === "FOLIO" && eventType === "REFUND_REQUESTED") {

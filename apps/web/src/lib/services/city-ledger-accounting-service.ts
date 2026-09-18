@@ -15,7 +15,8 @@ export class CityLedgerAccountingService {
     amount: number,
     folioId: string,
     invoiceNumber: string | null, // Reference for the AR Invoice
-    idempotencyKey: string // Crucial for deduplication
+    idempotencyKey: string, // Crucial for deduplication
+    businessDate: Date
   ) {
     if (Math.abs(amount) <= 0.01) {
       return;
@@ -26,7 +27,9 @@ export class CityLedgerAccountingService {
 
     // 1. Resolve Asset GL Accounts
     try {
-      cityLedgerAssetAccountId = await GLMappingService.getAssetAccountForMethod(propertyId, 'CITY_LEDGER');
+      cityLedgerAssetAccountId = amount < 0
+        ? await GLMappingService.getGuestRefundsPayableAccount(propertyId)
+        : await GLMappingService.getAssetAccountForMethod(propertyId, 'CITY_LEDGER');
       guestLedgerAccountId = await GLMappingService.getGuestLedgerAccount(propertyId);
     } catch (e: any) {
       // Differentiate missing GL configuration from other errors for offline sync
@@ -74,7 +77,7 @@ export class CityLedgerAccountingService {
       systemCtx,
       {
         propertyId,
-        entryDate: new Date(),
+        entryDate: businessDate,
         reference: invoiceNumber || idempotencyKey, // Idempotency
         description: `Auto-routed outstanding balance to City Ledger (Folio ${folioId})`,
         sourceModule: 'AR',

@@ -1,5 +1,6 @@
 type Tx = any;
 import { CityLedgerAccountingService } from '@/lib/services/city-ledger-accounting-service';
+import { getPropertyBusinessDate } from '@/lib/date-utils';
 
 type CheckoutFolio = {
   id: string;
@@ -51,8 +52,10 @@ export async function routeFoliosToCityLedger(input: RouteInput) {
 
     const currency = folio.currency || 'NGN';
     if (amount > 0) {
-      const issueDate = new Date();
-      issueDate.setUTCHours(0, 0, 0, 0);
+      const property = await tx.property.findUnique({ where: { id: propertyId }, select: { organizationId: true, businessDate: true, timezone: true } });
+      if (!property) throw new Error('PROPERTY_NOT_FOUND');
+      const businessDate = property.businessDate || getPropertyBusinessDate(property.timezone);
+      const issueDate = businessDate;
       const dueDate = new Date(issueDate);
       dueDate.setUTCDate(dueDate.getUTCDate() + 30);
       const invoiceNumber = `AR-${confirmationNumber}-${String(folio.id).slice(0, 8).toUpperCase()}`;
@@ -171,8 +174,10 @@ export async function routeFoliosToCityLedger(input: RouteInput) {
     // Fetch property to get organizationId
     const property = await tx.property.findUnique({
       where: { id: propertyId },
-      select: { organizationId: true }
+      select: { organizationId: true, businessDate: true, timezone: true }
     });
+    if (!property) throw new Error('PROPERTY_NOT_FOUND');
+    const businessDate = property.businessDate || getPropertyBusinessDate(property.timezone);
     const invoiceNumber = amount > 0 ? `AR-${confirmationNumber}-${String(folio.id).slice(0, 8).toUpperCase()}` : `CR-${confirmationNumber}-${String(folio.id).slice(0, 8).toUpperCase()}`;
     await CityLedgerAccountingService.processCityLedgerRouting(
       tx,
@@ -183,13 +188,14 @@ export async function routeFoliosToCityLedger(input: RouteInput) {
       folio.id,
       invoiceNumber,
       `cl_route_${folio.id}_${confirmationNumber}`
+      ,businessDate
     );
 
     await tx.folioItem.create({
       data: {
         folioId: folio.id,
-        businessDate: new Date(),
-        type: 'PAYMENT',
+        businessDate,
+        type: amount > 0 ? 'PAYMENT' : 'CHARGE',
         source: 'CITY_LEDGER',
         description: amount > 0 ? 'City Ledger transfer at checkout' : 'City Ledger credit at checkout',
         quantity: 1,
@@ -205,8 +211,12 @@ export async function routeFoliosToCityLedger(input: RouteInput) {
     await tx.folio.update({
       where: { id: folio.id },
       data: input.keepFolioOpen
-        ? { balance: { decrement: amount }, totalPayments: { increment: Math.abs(amount) } }
-        : { balance: 0, totalPayments: { increment: Math.abs(amount) } },
+        ? amount > 0
+          ? { balance: { decrement: amount }, totalPayments: { increment: amount } }
+          : { balance: { decrement: amount }, totalCharges: { increment: Math.abs(amount) } }
+        : amount > 0
+          ? { balance: 0, totalPayments: { increment: amount } }
+          : { balance: 0, totalCharges: { increment: Math.abs(amount) } },
     });
   }
 

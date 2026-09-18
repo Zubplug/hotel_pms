@@ -4,6 +4,7 @@ export class GLMappingService {
   /**
    * Resolves the Asset/Clearing GL account ID for a given Payment Method.
    * Maps:
+   * CASH -> 1000 Cash on Hand
    * CARD -> 1110 Credit Card Receivable
    * BANK_TRANSFER -> 1130 Bank Transfer Receivable
    * ROOM_CHARGE -> 1100 Guest Ledger Receivable
@@ -24,11 +25,17 @@ export class GLMappingService {
     // 2. If no explicit override, use the standard USALI default mappings
     if (!targetCode) {
       switch (method) {
+        case 'CASH':
+          targetCode = '1000'; // Cash on Hand
+          break;
         case 'CARD':
         case 'POS':
+        case 'CARD_OFFLINE':
+        case 'PAYMENT_GATEWAY':
           targetCode = '1110'; // Credit Card Receivable
           break;
         case 'BANK_TRANSFER':
+        case 'CHEQUE':
           targetCode = '1130'; // Bank Transfer Receivable
           break;
         case 'MOBILE_PAYMENT':
@@ -72,6 +79,30 @@ export class GLMappingService {
     if (!account) {
       throw new Error(`Guest Ledger GL Account (1100) is missing for this property.`);
     }
+    return account.id;
+  }
+
+  /** Resolves the city-ledger AR control account (1140). */
+  static async getCityLedgerAccount(propertyId: string): Promise<string> {
+    const account = await prisma.chartOfAccount.findFirst({
+      where: { propertyId, code: '1140', isActive: true }
+    });
+    if (!account) {
+      throw new Error(`City Ledger Receivable GL Account (1140) is missing for this property.`);
+    }
+    return account.id;
+  }
+
+  /** Resolves the liability used for guest credits transferred for refund. */
+  static async getGuestRefundsPayableAccount(propertyId: string): Promise<string> {
+    const property = await prisma.property.findUnique({ where: { id: propertyId } });
+    if (!property) throw new Error('Property not found');
+    const settings = (property.settings as Record<string, unknown>) || {};
+    const accountingConfig = (settings.accountingConfig as Record<string, unknown>) || {};
+    const liabilityAccounts = (accountingConfig.liabilityAccounts as Record<string, unknown>) || {};
+    const targetCode = typeof liabilityAccounts.GUEST_REFUNDS === 'string' ? liabilityAccounts.GUEST_REFUNDS : '2160';
+    const account = await prisma.chartOfAccount.findFirst({ where: { propertyId, code: targetCode, type: 'LIABILITY', isActive: true } });
+    if (!account) throw new Error(`Guest Refunds Payable GL Account Code ${targetCode} is missing or inactive for this property.`);
     return account.id;
   }
 
@@ -132,6 +163,19 @@ export class GLMappingService {
       throw new Error(`Configured Laundry Revenue GL Account Code ${configuredCode} is missing or inactive for this property.`);
     }
 
+    return account.id;
+  }
+
+  /** Resolves the configured fallback revenue account for manually issued AR invoices. */
+  static async getOtherRevenueAccount(propertyId: string): Promise<string> {
+    const property = await prisma.property.findUnique({ where: { id: propertyId } });
+    if (!property) throw new Error('Property not found');
+    const settings = (property.settings as Record<string, unknown>) || {};
+    const accountingConfig = (settings.accountingConfig as Record<string, unknown>) || {};
+    const revenueAccounts = (accountingConfig.revenueAccounts as Record<string, unknown>) || {};
+    const targetCode = typeof revenueAccounts.OTHER === 'string' ? revenueAccounts.OTHER : '4400';
+    const account = await prisma.chartOfAccount.findFirst({ where: { propertyId, code: targetCode, type: 'REVENUE', isActive: true } });
+    if (!account) throw new Error(`Other operating revenue GL Account Code ${targetCode} is missing or inactive for this property.`);
     return account.id;
   }
 
