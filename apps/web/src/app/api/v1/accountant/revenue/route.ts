@@ -61,7 +61,10 @@ function resolveAccountCode(
 
   if (item.source === 'POS' || item.source === 'RESTAURANT' || item.source === 'BAR' || item.source === 'MINIBAR' || item.revenueCategory === 'FNB') {
     const configured = item.source === 'BAR' ? revenueAccounts.BEVERAGE : revenueAccounts.FOOD;
-    return activeCode(configured) || findByName('food and beverage', 'f&b', 'food') || activeCode('4250') || [...accounts.keys()][0];
+    // 4250 is the canonical F&B revenue account. Prefer it before legacy
+    // name-based matching, otherwise an old 4100 account labelled "F&B
+    // Revenue" can steal current POS and folio production.
+    return activeCode(configured) || activeCode('4250') || findByName('food and beverage', 'f&b', 'food') || [...accounts.keys()][0];
   }
 
   return activeCode(revenueAccounts.OTHER) || findByName('other operating revenue') || activeCode('4400') || [...accounts.keys()][0];
