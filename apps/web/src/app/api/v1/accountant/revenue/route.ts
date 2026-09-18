@@ -105,7 +105,7 @@ export async function GET(req: NextRequest) {
     }
 
     const departments = reportDepartments
-      .map(department => [department, totals.get(department) || { today: 0, mtd: 0, ytd: 0, priorYear: 0, count: 0 }] as const)
+      .map(department => [department, totals.get(department) || { today: 0, mtd: 0, ytd: 0, priorYear: 0, count: 0, gross: 0, discounts: 0 }] as const)
       .map(([department, values]) => {
         const today = Number(values.today.toFixed(2));
         const mtd = Number(values.mtd.toFixed(2));
