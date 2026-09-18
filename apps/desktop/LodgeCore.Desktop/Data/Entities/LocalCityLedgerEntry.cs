@@ -19,6 +19,8 @@ public class LocalCityLedgerEntry
     public string? FolioId { get; set; }
     public string? PosTransactionId { get; set; }
     
+    public string? Status { get; set; } = "OPEN";
+    
     public string? Description { get; set; }
     public string? OperatorId { get; set; }
     public string? DeviceId { get; set; }

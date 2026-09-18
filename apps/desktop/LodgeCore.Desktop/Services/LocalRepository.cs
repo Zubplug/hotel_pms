@@ -1843,6 +1843,8 @@ public class LocalRepository
             }
         }
 
+        var frontdeskSession = await GetActiveFrontdeskSessionAsync(res.PropertyId, userId);
+
         if (res.CorporateAccountId != null && res.CorporateAccount != null && res.Folio != null && res.Folio.NetBalance > 0.01m)
         {
             if (string.IsNullOrEmpty(res.CorporateAccount.CityLedgerAccountId))
@@ -1865,7 +1867,6 @@ public class LocalRepository
 
             var idempotencyKey = Guid.NewGuid().ToString();
             decimal settleAmount = res.Folio.NetBalance;
-            var frontdeskSession = await GetActiveFrontdeskSessionAsync(res.PropertyId, userId);
             
             res.Folio.TotalPayments += settleAmount;
             res.Folio.UpdatedAt = DateTime.UtcNow;
@@ -6646,25 +6647,24 @@ public class LocalRepository
             }
 
             // ── 4. Post PAYMENT folio item ────────────────────────────────────
-            var folioItem = new LocalFolioItem
+            var folioItem = new
             {
-                Id = Guid.NewGuid().ToString(),
-                FolioId = folioId,
-                Type = "PAYMENT",
-                Source = "CITY_LEDGER",
-                Description = "Applied guest credit (offline)",
-                Quantity = 1,
-                UnitAmount = -amount,
-                Amount = -amount,
-                Currency = folio.Currency ?? "NGN",
-                BusinessDate = businessDate,
-                PostedBy = appliedBy,
-                CreatedAt = DateTime.UtcNow
+                id = Guid.NewGuid().ToString(),
+                folioId = folioId,
+                type = "PAYMENT",
+                source = "CITY_LEDGER",
+                description = "Applied guest credit (offline)",
+                quantity = 1,
+                unitAmount = -amount,
+                amount = -amount,
+                currency = folio.Currency ?? "NGN",
+                businessDate = businessDate.ToString("yyyy-MM-dd"),
+                postedBy = appliedBy,
+                createdAt = DateTime.UtcNow
             };
-            _dbContext.FolioItems.Add(folioItem);
+            UpdateFolioTransactionsJson(folio, "items", folioItem);
 
             // Update folio balance
-            folio.Balance -= amount;
             folio.TotalPayments += amount;
             folio.Version += 1;
             _dbContext.Folios.Update(folio);
