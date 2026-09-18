@@ -54,7 +54,7 @@ export async function GET(req: NextRequest) {
     const priorYearDate = addYears(businessDate, -1);
     const queryStart = addYears(yearStart, -1);
 
-    const [property, items] = await Promise.all([
+    const [property, items, posOrders] = await Promise.all([
       prisma.property.findUnique({ where: { id: propertyId }, select: { name: true, baseCurrency: true } }),
       prisma.folioItem.findMany({
         where: {
@@ -64,6 +64,15 @@ export async function GET(req: NextRequest) {
           voidedAt: null,
         },
         select: { businessDate: true, source: true, type: true, amount: true },
+      }),
+      prisma.posOrder.findMany({
+        where: {
+          propertyId,
+          businessDate: { gte: queryStart, lte: businessDate },
+          status: { not: 'VOIDED' },
+          folioId: null,
+        },
+        select: { businessDate: true, total: true },
       }),
     ]);
 
@@ -102,6 +111,28 @@ export async function GET(req: NextRequest) {
       } else {
         departmentTotals.discounts += Math.abs(Number(item.amount || 0));
       }
+    }
+
+    // Direct POS sales are authoritative revenue when they were paid without
+    // routing to a guest folio. Folio-routed POS sales are already represented
+    // by their FolioItem and must not be counted twice.
+    for (const order of posOrders) {
+      if (!order.businessDate) continue;
+      const itemDate = dateOnly(new Date(order.businessDate));
+      const value = Number(order.total || 0);
+      const departmentTotals = getTotals('FOOD & BEVERAGE');
+      const dayKey = key(itemDate);
+      const day = daily.get(dayKey) || { revenue: 0, gross: 0, discounts: 0, transactions: 0 };
+      day.revenue += value;
+      day.gross += value;
+      day.transactions += 1;
+      daily.set(dayKey, day);
+      if (dayKey === key(businessDate)) departmentTotals.today += value;
+      if (itemDate >= monthStart && itemDate <= businessDate) departmentTotals.mtd += value;
+      if (itemDate >= yearStart && itemDate <= businessDate) departmentTotals.ytd += value;
+      if (dayKey === key(priorYearDate)) departmentTotals.priorYear += value;
+      departmentTotals.count += 1;
+      departmentTotals.gross += value;
     }
 
     const departments = reportDepartments
