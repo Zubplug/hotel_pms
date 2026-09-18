@@ -13,7 +13,7 @@ type Invoice = { id: string; invoiceNumber: string; outstandingAmount: number; c
 type Account = { id: string; name: string; type: string };
 type Allocation = { id: string; amount: number; invoice?: { invoiceNumber: string } | null };
 
-export function CityLedgerPaymentActions({ accountId, paymentId, amount, currency, invoices, accounts, allocations, status, onComplete }: { accountId: string; paymentId: string; amount: number; currency: string; invoices: Invoice[]; accounts: Account[]; allocations: Allocation[]; status: string; onComplete: () => void }) {
+export function CityLedgerPaymentActions({ accountId, paymentId, amount, currency, invoices, accounts, allocations, status, onComplete }: { accountId: string; paymentId: string; amount: number; currency: string; invoices: Invoice[]; accounts: Account[]; allocations: Allocation[]; status: string; onComplete?: () => void }) {
   const [action, setAction] = useState<'allocate' | 'transfer' | 'reverse' | 'unapply' | null>(null);
   const [invoiceId, setInvoiceId] = useState('');
   const [targetAccountId, setTargetAccountId] = useState('');
@@ -36,7 +36,8 @@ export function CityLedgerPaymentActions({ accountId, paymentId, amount, currenc
       const result = await response.json();
       if (!response.ok) throw new Error(result.error?.message || 'Action failed');
       toast.success(action === 'reverse' ? 'Payment reversed with GL audit trail' : action === 'transfer' ? 'Payment transferred' : action === 'unapply' ? 'Payment unapplied' : 'Payment allocated');
-      setAction(null); setInvoiceId(''); setTargetAccountId(''); setValue(''); setReason(''); setSelectedAllocation(null); onComplete();
+      setAction(null); setInvoiceId(''); setTargetAccountId(''); setValue(''); setReason(''); setSelectedAllocation(null); 
+      if (onComplete) { onComplete(); } else { window.location.reload(); }
     } catch (error) { toast.error(error instanceof Error ? error.message : 'Action failed'); } finally { setBusy(false); }
   };
 
