@@ -427,6 +427,17 @@ export async function GET(req: NextRequest) {
     laundryOrders.forEach(s => allEntities.push({ type: 'LaundryOrder', updatedAt: s.updatedAt, data: s }));
     allGuests.forEach(s => allEntities.push({ type: 'Guest', updatedAt: s.updatedAt, data: s }));
 
+    // ---- Fetch Guest Credits (Not Paginated with cursor) ----------------
+    const cityLedgerEntries = await prisma.cityLedgerEntry.findMany({
+      where: { propertyId, type: 'REFUND_OWED', status: 'OPEN' },
+      orderBy: { createdAt: 'asc' },
+    });
+    
+    const cityLedgerAllocations = await prisma.cityLedgerAllocation.findMany({
+      where: { payment: { propertyId, type: 'REFUND_OWED', status: 'OPEN' } },
+      orderBy: { createdAt: 'asc' },
+    });
+
     // Sort globally by updatedAt ascending
     allEntities.sort((a, b) => a.updatedAt.getTime() - b.updatedAt.getTime());
 
@@ -706,7 +717,9 @@ export async function GET(req: NextRequest) {
       housekeepingTasks: finalHousekeepingTasks,
       maintenanceTickets: finalMaintenanceTickets,
       laundryItems: finalLaundryItems,
-      laundryOrders: finalLaundryOrders
+      laundryOrders: finalLaundryOrders,
+      cityLedgerEntries,
+      cityLedgerAllocations
     });
 
   } catch (error: any) {

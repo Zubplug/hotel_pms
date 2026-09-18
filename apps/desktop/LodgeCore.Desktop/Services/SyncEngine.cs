@@ -2515,10 +2515,84 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                     ticket.RequiresRoomRestriction = ticket.Status == "IN_PROGRESS" || ticket.Status == "OPEN"; 
                 }
 
-                if (maintenanceTicketsArray.GetArrayLength() > 0)
+            if (maintenanceTicketsArray.GetArrayLength() > 0)
                 {
                     var stale = await dbContext.MaintenanceTickets.Where(t => t.PropertyId == propertyId && !incomingIds.Contains(t.Id)).ToListAsync(stoppingToken);
                     if (stale.Any() && !isIncremental) dbContext.MaintenanceTickets.RemoveRange(stale);
+                }
+            }
+
+            // 13. City Ledger Entries (Guest Credits)
+            if (root.TryGetProperty("cityLedgerEntries", out var cityLedgerEntriesArray))
+            {
+                foreach (var el in cityLedgerEntriesArray.EnumerateArray())
+                {
+                    var id = el.GetProperty("id").GetString();
+                    if (string.IsNullOrEmpty(id)) continue;
+                    
+                    var entry = await dbContext.CityLedgerEntries.FirstOrDefaultAsync(x => x.Id == id, stoppingToken);
+                    if (entry == null)
+                    {
+                        entry = new LodgeCore.Desktop.Data.Entities.LocalCityLedgerEntry { Id = id, PropertyId = propertyId };
+                        dbContext.CityLedgerEntries.Add(entry);
+                    }
+                    
+                    entry.PropertyId = propertyId;
+                    entry.OrganizationId = el.TryGetProperty("organizationId", out var org) && org.ValueKind != System.Text.Json.JsonValueKind.Null ? org.GetString() ?? "" : "";
+                    entry.AccountId = el.TryGetProperty("accountId", out var acc) && acc.ValueKind != System.Text.Json.JsonValueKind.Null ? acc.GetString() ?? "" : "";
+                    entry.Type = el.TryGetProperty("type", out var typ) && typ.ValueKind != System.Text.Json.JsonValueKind.Null ? typ.GetString() ?? "TRANSFER_IN" : "TRANSFER_IN";
+                    entry.Amount = ReadDecimal(el, "amount");
+                    entry.Currency = el.TryGetProperty("currency", out var curr) && curr.ValueKind != System.Text.Json.JsonValueKind.Null ? curr.GetString() ?? "NGN" : "NGN";
+                    entry.ReservationId = el.TryGetProperty("reservationId", out var resId) && resId.ValueKind != System.Text.Json.JsonValueKind.Null ? resId.GetString() : null;
+                    entry.GuestId = el.TryGetProperty("guestId", out var gId) && gId.ValueKind != System.Text.Json.JsonValueKind.Null ? gId.GetString() : null;
+                    entry.FolioId = el.TryGetProperty("folioId", out var fId) && fId.ValueKind != System.Text.Json.JsonValueKind.Null ? fId.GetString() : null;
+                    entry.PosTransactionId = el.TryGetProperty("posTransactionId", out var posId) && posId.ValueKind != System.Text.Json.JsonValueKind.Null ? posId.GetString() : null;
+                    entry.Status = el.TryGetProperty("status", out var st) && st.ValueKind != System.Text.Json.JsonValueKind.Null ? st.GetString() : "OPEN";
+                    entry.Description = el.TryGetProperty("description", out var desc) && desc.ValueKind != System.Text.Json.JsonValueKind.Null ? desc.GetString() : null;
+                    entry.OperatorId = el.TryGetProperty("createdBy", out var opId) && opId.ValueKind != System.Text.Json.JsonValueKind.Null ? opId.GetString() : null; // Cloud uses createdBy
+                    entry.IdempotencyKey = el.TryGetProperty("idempotencyKey", out var idem) && idem.ValueKind != System.Text.Json.JsonValueKind.Null ? idem.GetString() : null;
+                    if (el.TryGetProperty("businessDate", out var bd) && bd.ValueKind != System.Text.Json.JsonValueKind.Null) entry.BusinessDate = bd.GetDateTime();
+                    if (el.TryGetProperty("createdAt", out var crt) && crt.ValueKind != System.Text.Json.JsonValueKind.Null) entry.CreatedAt = crt.GetDateTime();
+                }
+            }
+
+            // 14. City Ledger Allocations
+            if (root.TryGetProperty("cityLedgerAllocations", out var cityLedgerAllocationsArray))
+            {
+                foreach (var el in cityLedgerAllocationsArray.EnumerateArray())
+                {
+                    var id = el.GetProperty("id").GetString();
+                    if (string.IsNullOrEmpty(id)) continue;
+                    
+                    var alloc = await dbContext.CityLedgerAllocations.FirstOrDefaultAsync(x => x.Id == id, stoppingToken);
+                    if (alloc == null)
+                    {
+                        alloc = new LodgeCore.Desktop.Data.Entities.LocalCityLedgerAllocation { Id = id, PropertyId = propertyId, SyncStatus = "SYNCED" };
+                        dbContext.CityLedgerAllocations.Add(alloc);
+                    }
+                    else
+                    {
+                        if (alloc.SyncStatus == "PENDING")
+                        {
+                            alloc.SyncStatus = "SYNCED";
+                            alloc.ConflictReason = null;
+                            alloc.ServerMessage = null;
+                        }
+                    }
+                    
+                    alloc.PropertyId = propertyId;
+                    alloc.CreditEntryId = el.TryGetProperty("paymentId", out var pId) && pId.ValueKind != System.Text.Json.JsonValueKind.Null ? pId.GetString() ?? "" : ""; // Cloud uses paymentId
+                    alloc.FolioId = el.TryGetProperty("folioId", out var fId) && fId.ValueKind != System.Text.Json.JsonValueKind.Null ? fId.GetString() ?? "" : "";
+                    alloc.Amount = ReadDecimal(el, "amount");
+                    alloc.Currency = el.TryGetProperty("currency", out var curr) && curr.ValueKind != System.Text.Json.JsonValueKind.Null ? curr.GetString() ?? "NGN" : "NGN";
+                    alloc.AppliedBy = el.TryGetProperty("createdBy", out var cb) && cb.ValueKind != System.Text.Json.JsonValueKind.Null ? cb.GetString() ?? "" : "";
+                    if (el.TryGetProperty("createdAt", out var crt) && crt.ValueKind != System.Text.Json.JsonValueKind.Null) alloc.CreatedAt = crt.GetDateTime();
+                    
+                    if (el.TryGetProperty("businessDate", out var bd) && bd.ValueKind != System.Text.Json.JsonValueKind.Null) {
+                        alloc.BusinessDate = bd.GetDateTime();
+                    } else {
+                        alloc.BusinessDate = alloc.CreatedAt.Date;
+                    }
                 }
             }
 
