@@ -40,6 +40,11 @@ export class GLMappingService {
         case 'CITY_LEDGER':
           targetCode = '1140'; // City Ledger
           break;
+        case 'COMPLIMENTARY':
+          // For POS orders settled as COMPLIMENTARY, we debit the contra-revenue allowance account
+          const compCode = (property.settings as any)?.accountingConfig?.contraRevenueAccounts?.COMPLIMENTARY;
+          targetCode = compCode || '4090'; // 4090 is standard USALI Complimentary Allowance
+          break;
         default:
           throw new Error(`Cannot resolve automatic GL mapping for payment method: ${method}`);
       }
