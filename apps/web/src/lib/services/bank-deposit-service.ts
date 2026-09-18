@@ -6,7 +6,7 @@ import {
   ensureCashierControlAccountsForClient,
 } from './cash-account-service';
 import { TenantContext } from '../organization-access';
-
+import { GeneralLedgerService } from './general-ledger-service';
 export class BankDepositService {
   /**
    * General Cashier bundles handed-over shifts into a Bank Deposit.
@@ -171,6 +171,9 @@ export class BankDepositService {
         where: { id: params.bankAccountId, propertyId: params.propertyId, type: 'BANK_ACCOUNT', isActive: true },
       });
       if (!bankAccount) throw new ShiftControlError('Select a valid configured bank account.', 'BAD_REQUEST');
+      if (!bankAccount.glAccountId) throw new ShiftControlError(`The Bank account (${bankAccount.bankName}) must be mapped to a GL Chart of Account.`, 'BAD_REQUEST', 400);
+      if (!safeAccount.glAccountId) throw new ShiftControlError('The General Cashier Safe account must be mapped to a GL Chart of Account.', 'BAD_REQUEST', 400);
+      if (transitBalance > 0 && !transitAccount.glAccountId) throw new ShiftControlError('The Cash In Transit account must be mapped to a GL Chart of Account.', 'BAD_REQUEST', 400);
 
       const depositReference = `DEP-${Date.now()}-${crypto.randomBytes(2).toString('hex').toUpperCase()}`;
       const deposit = await tx.bankDeposit.create({
@@ -233,6 +236,25 @@ export class BankDepositService {
         });
       }
       await tx.cashAccount.update({ where: { id: bankAccount.id }, data: { balance: { increment: amount } } });
+
+      const journalLines: Array<{ accountId: string; debit: number; credit: number; description: string; sourceType?: string; sourceId?: string }> = [];
+      if (transitApplied > 0) {
+        journalLines.push({ accountId: transitAccount.glAccountId, debit: 0, credit: transitApplied, description: `Bank Deposit - From Transit`, sourceType: 'BANK_DEPOSIT', sourceId: deposit.id });
+      }
+      if (remaining > 0) {
+        journalLines.push({ accountId: safeAccount.glAccountId, debit: 0, credit: remaining, description: `Bank Deposit - From Safe`, sourceType: 'BANK_DEPOSIT', sourceId: deposit.id });
+      }
+      journalLines.push({ accountId: bankAccount.glAccountId, debit: amount, credit: 0, description: `Bank Deposit Received`, sourceType: 'BANK_DEPOSIT', sourceId: deposit.id });
+
+      await GeneralLedgerService.postJournal(ctx, {
+        propertyId: params.propertyId,
+        entryDate: new Date(),
+        description: `Bank Deposit: ${depositReference}${params.notes ? ` - ${params.notes}` : ''}`,
+        reference: depositReference,
+        sourceModule: 'CASH_MANAGEMENT',
+        lines: journalLines
+      }, tx);
+
       return deposit;
     });
   }
@@ -250,6 +272,7 @@ export class BankDepositService {
       if (!transitAccount) throw new ShiftControlError('Cash in Transit account is unavailable.', 'INTERNAL_ERROR', 500);
       const bankAccount = await tx.cashAccount.findFirst({ where: { id: params.bankAccountId, propertyId: deposit.propertyId, type: 'BANK_ACCOUNT', isActive: true } });
       if (!bankAccount) throw new ShiftControlError('Select a valid configured bank account.', 'BAD_REQUEST');
+      if (!bankAccount.glAccountId) throw new ShiftControlError(`The Bank account (${bankAccount.bankName}) must be mapped to a GL Chart of Account.`, 'BAD_REQUEST', 400);
 
       const updated = await tx.bankDeposit.update({
         where: { id: params.depositId },
@@ -307,6 +330,20 @@ export class BankDepositService {
             operationId: `deposit-submitted-${deposit.id}`,
           },
         });
+
+        if (!sourceAccount.glAccountId) throw new ShiftControlError(`The source account (${sourceAccount.name}) must be mapped to a GL Chart of Account.`, 'BAD_REQUEST', 400);
+
+        await GeneralLedgerService.postJournal(ctx, {
+          propertyId: deposit.propertyId,
+          entryDate: new Date(),
+          description: `Bank Deposit: ${deposit.depositReference}`,
+          reference: deposit.depositReference,
+          sourceModule: 'CASH_MANAGEMENT',
+          lines: [
+            { accountId: sourceAccount.glAccountId, debit: 0, credit: amount, description: `Bank Deposit - Transfer Out`, sourceType: 'BANK_DEPOSIT', sourceId: deposit.id },
+            { accountId: bankAccount.glAccountId, debit: amount, credit: 0, description: `Bank Deposit Received`, sourceType: 'BANK_DEPOSIT', sourceId: deposit.id }
+          ]
+        }, tx);
       }
 
       return updated;
