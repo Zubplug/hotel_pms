@@ -1,4 +1,5 @@
 'use client';
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 import React, { useMemo, useState } from 'react';
 import Link from 'next/link';
@@ -56,13 +57,14 @@ const tooltipStyle = {
   fontSize: 12,
 };
 
-function MetricCard({ label, value, detail, icon: Icon, tone = 'emerald', trend }: {
+function MetricCard({ label, value, detail, icon: Icon, tone = 'emerald', trend, href }: {
   label: string;
   value: string;
   detail: string;
   icon: React.ElementType;
   tone?: 'emerald' | 'blue' | 'amber' | 'violet';
   trend?: string;
+  href: string;
 }) {
   const tones = {
     emerald: 'bg-emerald-400/10 text-emerald-300 ring-emerald-300/10',
@@ -71,7 +73,7 @@ function MetricCard({ label, value, detail, icon: Icon, tone = 'emerald', trend 
     violet: 'bg-violet-400/10 text-violet-300 ring-violet-300/10',
   };
   return (
-    <div className="group rounded-2xl border border-white/[0.08] bg-[#111a2b]/80 p-5 shadow-[0_16px_40px_rgba(0,0,0,.12)] transition hover:-translate-y-0.5 hover:border-white/[0.15]">
+    <Link href={href} className="group block rounded-2xl border border-white/[0.08] bg-[#111a2b]/80 p-5 shadow-[0_16px_40px_rgba(0,0,0,.12)] transition hover:-translate-y-0.5 hover:border-white/[0.15] focus:outline-none focus:ring-2 focus:ring-emerald-400/50">
       <div className="flex items-start justify-between gap-3">
         <div className="text-[11px] font-semibold uppercase tracking-[.16em] text-slate-500">{label}</div>
         <div className={`flex h-9 w-9 items-center justify-center rounded-xl ring-1 ${tones[tone]}`}><Icon className="h-4 w-4" /></div>
@@ -81,7 +83,7 @@ function MetricCard({ label, value, detail, icon: Icon, tone = 'emerald', trend 
         {trend && <span className="mb-1 inline-flex items-center gap-1 text-xs font-medium text-emerald-300"><ArrowUpRight className="h-3.5 w-3.5" />{trend}</span>}
       </div>
       <div className="mt-1 text-xs text-slate-500">{detail}</div>
-    </div>
+    </Link>
   );
 }
 
@@ -166,10 +168,10 @@ export default function AccountantOverviewPage() {
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <MetricCard label="Revenue today" value={money(revenueToday, true)} detail="Posted + expected room revenue" icon={CircleDollarSign} trend={`${revGrowth >= 0 ? '+' : ''}${revGrowth.toFixed(1)}% vs yesterday`} />
-          <MetricCard label="Cash & bank" value={money(balances.cashTotal, true)} detail={`${money(balances.safe)} safe · ${money(balances.bank)} bank`} icon={Banknote} tone="blue" />
-          <MetricCard label="Receivables" value={money(balances.arTotal, true)} detail="Guest ledger + city ledger exposure" icon={WalletCards} tone="amber" />
-          <MetricCard label="Payables" value={money(balances.apOutstanding, true)} detail={`${flags.overdueInvoices || 0} supplier invoices overdue`} icon={Landmark} tone="violet" />
+          <MetricCard href="/accountant/revenue" label="Revenue today" value={money(revenueToday, true)} detail="Posted + expected room revenue" icon={CircleDollarSign} trend={`${revGrowth >= 0 ? '+' : ''}${revGrowth.toFixed(1)}% vs yesterday`} />
+          <MetricCard href="/accountant/cash-bank" label="Cash & bank" value={money(balances.cashTotal, true)} detail={`${money(balances.safe)} safe · ${money(balances.bank)} bank`} icon={Banknote} tone="blue" />
+          <MetricCard href="/accountant/receivables" label="Receivables" value={money(balances.arTotal, true)} detail="Guest ledger + city ledger exposure" icon={WalletCards} tone="amber" />
+          <MetricCard href="/accountant/payables" label="Payables" value={money(balances.apOutstanding, true)} detail={`${flags.overdueInvoices || 0} supplier invoices overdue`} icon={Landmark} tone="violet" />
         </div>
 
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1.55fr)_minmax(320px,.8fr)]">
