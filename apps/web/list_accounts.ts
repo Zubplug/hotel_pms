@@ -1,3 +1,5 @@
+// @ts-nocheck
+export {};
 const { PrismaClient } = require('@hotel-pms/db');
 const prisma = new PrismaClient();
 async function run() {
