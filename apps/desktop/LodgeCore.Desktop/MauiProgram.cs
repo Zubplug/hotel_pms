@@ -21,8 +21,8 @@ public static class MauiProgram
         builder.Services.AddSingleton<ILockProvider>(sp =>
         {
             var loggerFactory = sp.GetRequiredService<ILoggerFactory>();
-            // Retrieve configured provider, defaulting to the Xeeder encoder.
-            var providerType = Microsoft.Maui.Storage.Preferences.Default.Get("LockProviderType", "xeeder");
+            // Retrieve configured provider, defaulting to the Deluns encoder.
+            var providerType = Microsoft.Maui.Storage.Preferences.Default.Get("LockProviderType", "deluns");
             
             return providerType.ToLowerInvariant() switch
             {
@@ -36,13 +36,7 @@ public static class MauiProgram
                     Microsoft.Maui.Storage.Preferences.Default.Get("XeederConnectTimeoutMs", 3000),
                     Microsoft.Maui.Storage.Preferences.Default.Get("XeederCommandTimeoutMs", 5000)
                 ),
-                _        => new XeederLockProvider(
-                    loggerFactory.CreateLogger<XeederLockProvider>(),
-                    Microsoft.Maui.Storage.Preferences.Default.Get("XeederHost", "127.0.0.1"),
-                    Microsoft.Maui.Storage.Preferences.Default.Get("XeederPort", 7800),
-                    Microsoft.Maui.Storage.Preferences.Default.Get("XeederConnectTimeoutMs", 3000),
-                    Microsoft.Maui.Storage.Preferences.Default.Get("XeederCommandTimeoutMs", 5000)
-                )
+                _        => new DelunsLockProvider(loggerFactory.CreateLogger<DelunsLockProvider>())
             };
         });
         builder.Services.AddSingleton<HardwareInterop>();
@@ -114,6 +108,7 @@ public static class MauiProgram
             db.ApplyDiscountSchemaAsync().GetAwaiter().GetResult();
             db.ApplyCorporateFolioSchemaAsync().GetAwaiter().GetResult();
             db.ApplySettlementSchemaAsync().GetAwaiter().GetResult();   // fixes shift-submit DbUpdateException
+            db.ApplyGuestCreditAllocationSchemaAsync().GetAwaiter().GetResult(); // offline credit allocation table
         }
 
         return app;

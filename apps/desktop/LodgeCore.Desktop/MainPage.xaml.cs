@@ -378,6 +378,13 @@ public partial class MainPage : ContentPage
                 case "reservations.list":
                     responseData = await pmsInterop.GetActiveReservationsAsync();
                     break;
+                case "guestCredits.list":
+                    responseData = await pmsInterop.GetGuestCreditsAsync();
+                    break;
+                case "guestCredits.apply":
+                    responseData = await pmsInterop.ApplyGuestCreditAsync(
+                        parameters?["payload"]?.ToString() ?? "{}");
+                    break;
                 case "sync.outbox":
                     responseData = await pmsInterop.GetOutboxEventsAsync();
                     break;

@@ -227,6 +227,17 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
     },
     addDeposit: async () => ({ success: false, error: 'Advance deposits are available on the desktop front desk.' })
   },
+  guestCredits: {
+    list: async (propertyId: string) => {
+      return apiFetch(`/api/v1/guests/credits?propertyId=${encodeURIComponent(propertyId)}`);
+    },
+    apply: async (data: { folioId: string; creditEntryId?: string; guestId: string; amount: number; businessDate?: string }) => {
+      return apiFetch(`/api/v1/folios/${data.folioId}/apply-credit`, {
+        method: 'POST',
+        body: JSON.stringify({ amount: data.amount, creditEntryId: data.creditEntryId })
+      });
+    }
+  },
   keycards: {
     encodeMasterCard: async () => {
       throw new Error('Master Card encoding is only supported on the Desktop Client with hardware connected.');

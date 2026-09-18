@@ -449,6 +449,59 @@ public class OfflinePMSInterop
         }
     }
 
+    /// <summary>
+    /// Returns all guests with available guest credit (REFUND_OWED) for the
+    /// current property.  Displayed on the Front Desk "Guest Credits" tab.
+    /// </summary>
+    public async Task<string> GetGuestCreditsAsync()
+    {
+        try
+        {
+            var session = await _authManager.GetSessionAsync();
+            var propertyId = session?.PropertyId ?? string.Empty;
+            var credits = await _repo.GetGuestCreditsAsync(propertyId);
+            return JsonSerializer.Serialize(new { success = true, data = credits }, _jsonOptions);
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
+        }
+    }
+
+    /// <summary>
+    /// Atomically applies a guest credit to a folio offline and queues an outbox
+    /// event for cloud sync.  Returns success/error.
+    /// </summary>
+    public async Task<string> ApplyGuestCreditAsync(string payloadJson)
+    {
+        try
+        {
+            var ctx = await GetSecureContextAsync("folio:apply_guest_credit", "frontdesk:all");
+            var opts = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            var payload = JsonSerializer.Deserialize<JsonElement>(payloadJson, opts);
+
+            var folioId = payload.GetProperty("folioId").GetString() ?? "";
+            var creditEntryId = payload.TryGetProperty("creditEntryId", out var ceId) ? ceId.GetString() : null;
+            var guestId = payload.GetProperty("guestId").GetString() ?? "";
+            var amount = payload.GetProperty("amount").GetDecimal();
+            var businessDateStr = payload.TryGetProperty("businessDate", out var bd) ? bd.GetString() : null;
+            var businessDate = businessDateStr != null ? DateTime.Parse(businessDateStr) : DateTime.UtcNow.Date;
+
+            var (success, error) = await _repo.ApplyGuestCreditAsync(
+                folioId, creditEntryId, guestId, amount,
+                ctx.UserId, ctx.DeviceId, businessDate);
+
+            if (!success)
+                return JsonSerializer.Serialize(new { success = false, error }, _jsonOptions);
+
+            return JsonSerializer.Serialize(new { success = true }, _jsonOptions);
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
+        }
+    }
+
     public async Task<string> GetRefundRequestsAsync(string propertyId)
     {
         try
@@ -1327,7 +1380,8 @@ public class OfflinePMSInterop
             }
 
             
-            var created = await _repo.CreateReservationAsync(res, "System", "Device1");
+            var ctx = await GetSecureContextAsync("reservation:create", "frontdesk:all");
+            var created = await _repo.CreateReservationAsync(res, ctx.UserId, ctx.DeviceId);
             return JsonSerializer.Serialize(new { success = true, data = new { id = created.Id } }, _jsonOptions);
         }
         catch (Exception ex)

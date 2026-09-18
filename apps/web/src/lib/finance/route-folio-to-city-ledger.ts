@@ -154,7 +154,7 @@ export async function routeFoliosToCityLedger(input: RouteInput) {
           folioId: folio.id,
           amount: credit,
           currency,
-          type: 'PAYMENT',
+          type: 'REFUND_OWED',
           status: 'OPEN',
           reason: 'Auto-routed guest credit to City Ledger upon checkout',
           reference: `CR-${confirmationNumber}-${String(folio.id).slice(0, 8).toUpperCase()}`,

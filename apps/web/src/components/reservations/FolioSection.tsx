@@ -11,9 +11,11 @@ import { RefundDialog } from './RefundDialog';
 import { FrontDeskAddPaymentDialog } from '../frontdesk/FrontDeskAddPaymentDialog';
 import { FrontDeskRefundDialog } from '../frontdesk/FrontDeskRefundDialog';
 import { FrontDeskQuickCheckoutDialog } from '../frontdesk/FrontDeskQuickCheckoutDialog';
+import { FrontDeskApplyCreditDialog } from '../frontdesk/FrontDeskApplyCreditDialog';
 import { CheckOutDialog } from './CheckOutDialog';
 import { FrontDeskDiscountModal } from '../frontdesk/FrontDeskDiscountModal';
 import { usePathname } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import { HardwareBridge } from '@/lib/desktop/HardwareBridge';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { formatRoomNumber } from '@/lib/format-room';
@@ -25,6 +27,12 @@ export function FolioSection({ reservation, readOnly = false }: { reservation: a
   const [isAddDepositOpen, setIsAddDepositOpen] = useState(false);
   const [refundPaymentId, setRefundPaymentId] = useState<string | null>(null);
   const [isCheckOutOpen, setIsCheckOutOpen] = useState(false);
+  const [isApplyCreditOpen, setIsApplyCreditOpen] = useState(false);
+  
+  const { data: session } = useSession();
+  const permissions = (session?.user as any)?.capabilities || (session?.user as any)?.permissions || [];
+  const canApplyGuestCredit = permissions.includes('FOLIO_APPLY_GUEST_CREDIT') || 
+                              ['MANAGER', 'ADMIN', 'SUPER_ADMIN', 'ACCOUNTANT'].includes(String((session?.user as any)?.role).toUpperCase());
   
   // Discount state
   const [discountTarget, setDiscountTarget] = useState<{ id: string, total: number } | null>(null);
@@ -226,6 +234,16 @@ export function FolioSection({ reservation, readOnly = false }: { reservation: a
                     <Wallet className="w-4 h-4 mr-2" /> Add Deposit/Credit
                   </Button>
                 )}
+                {isFrontDesk && availableCredit > 0 && canApplyGuestCredit && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="whitespace-nowrap shrink-0 border-white/40 bg-white/10 text-white hover:bg-white/20 hover:text-white"
+                    onClick={() => setIsApplyCreditOpen(true)}
+                  >
+                    <Wallet className="w-4 h-4 mr-2" /> Apply Guest Credit
+                  </Button>
+                )}
               </>
             )}
             {reservation.status === 'CHECKED_IN' && !isClosed && (
@@ -393,6 +411,14 @@ export function FolioSection({ reservation, readOnly = false }: { reservation: a
           onOpenChange={setIsCheckOutOpen}
           reservation={reservation}
           folio={folio}
+        />
+      )}
+      {isFrontDesk && (
+        <FrontDeskApplyCreditDialog
+          open={isApplyCreditOpen}
+          onOpenChange={setIsApplyCreditOpen}
+          folio={folio}
+          guestId={reservation.primaryGuestId}
         />
       )}
       

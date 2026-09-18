@@ -80,11 +80,11 @@ export function CheckOutDialog({ open, onOpenChange, reservation, folio }: { ope
           )}
 
           {balance < 0 && (
-            <Alert variant="destructive" className="border-amber-500 text-amber-800 bg-amber-50 [&>svg]:text-amber-800">
-              <AlertTriangle className="h-4 w-4" />
-              <AlertTitle>Refund / Credit Required</AlertTitle>
+            <Alert className="bg-blue-50 border-blue-500 text-blue-800 [&>svg]:text-blue-800">
+              <CheckCircle2 className="h-4 w-4" />
+              <AlertTitle>Guest Credit: {folio.currency} {Math.abs(balance).toFixed(2)}</AlertTitle>
               <AlertDescription>
-                This guest has a credit balance of {folio.currency} {Math.abs(balance).toFixed(2)}. Please process a refund or credit adjustment before check-out.
+                This folio has a {folio.currency} {Math.abs(balance).toFixed(2)} credit balance. No refund has been processed. Checking out will retain the {folio.currency} {Math.abs(balance).toFixed(2)} as guest credit for this guest, which can be refunded or applied to a future stay.
               </AlertDescription>
             </Alert>
           )}
@@ -133,11 +133,11 @@ export function CheckOutDialog({ open, onOpenChange, reservation, folio }: { ope
               )}
               <Button 
                 onClick={() => handleCheckOut(false)} 
-                disabled={isSubmitting || balance !== 0}
+                disabled={isSubmitting || balance > 0}
                 className="bg-blue-600 hover:bg-blue-700"
               >
                 {isSubmitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                Confirm Check-Out
+                {balance < 0 ? 'Check Out & Retain Credit' : 'Confirm Check-Out'}
               </Button>
             </>
           )}

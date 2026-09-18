@@ -156,7 +156,31 @@ export async function POST(
         routeToSkipper = true;
       }
 
-      if ((reservation.corporateAccountId || routeToSkipper) && Math.abs(totalBalance) > 0.01) {
+      let routeToGuestLedger = false;
+      if (!reservation.corporateAccountId && totalBalance < -0.01) {
+        // Lock property to ensure race-safe ledger provisioning
+        const propRes = await tx.$queryRaw<any[]>`SELECT id, "organizationId" FROM "Property" WHERE id = ${reservation.propertyId}::uuid FOR UPDATE`;
+        const orgId = propRes[0].organizationId;
+        
+        let guestLedgerAccount = await tx.cityLedgerAccount.findFirst({
+          where: { propertyId: reservation.propertyId, type: 'HOUSE', name: 'Guest Ledger', status: 'ACTIVE' }
+        });
+        if (!guestLedgerAccount) {
+          guestLedgerAccount = await tx.cityLedgerAccount.create({
+            data: {
+              organizationId: orgId,
+              propertyId: reservation.propertyId,
+              name: 'Guest Ledger',
+              type: 'HOUSE',
+              currency: folios[0]?.currency || 'NGN'
+            }
+          });
+        }
+        targetAccountId = guestLedgerAccount.id;
+        routeToGuestLedger = true;
+      }
+
+      if ((reservation.corporateAccountId || routeToSkipper || routeToGuestLedger) && Math.abs(totalBalance) > 0.01) {
         await routeFoliosToCityLedger({
           tx,
           folios: checkoutFolios,
@@ -165,16 +189,14 @@ export async function POST(
           propertyId: reservation.propertyId,
           corporateAccountId: reservation.corporateAccountId || undefined,
           targetAccountId,
-          guestName: routeToSkipper && reservation.primaryGuest ? `${reservation.primaryGuest.firstName} ${reservation.primaryGuest.lastName}` : undefined,
-          guestPhone: routeToSkipper && reservation.primaryGuest?.phone ? reservation.primaryGuest.phone : undefined,
+          guestName: (routeToSkipper || routeToGuestLedger) && reservation.primaryGuest ? `${reservation.primaryGuest.firstName} ${reservation.primaryGuest.lastName}` : undefined,
+          guestPhone: (routeToSkipper || routeToGuestLedger) && reservation.primaryGuest?.phone ? reservation.primaryGuest.phone : undefined,
           confirmationNumber: reservation.confirmationNumber,
           createdBy: session.user.id,
           keepFolioOpen: Boolean(reservation.corporateAccountId),
         });
       } else if (totalBalance > 0) {
         throw new Error('PAYMENT_REQUIRED');
-      } else if (totalBalance < 0) {
-        throw new Error('REFUND_REQUIRED');
       }
 
       // 2. Transition reservation to CHECKED_OUT

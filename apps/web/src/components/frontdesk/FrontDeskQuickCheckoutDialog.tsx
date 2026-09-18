@@ -340,26 +340,13 @@ export function FrontDeskQuickCheckoutDialog({ open, onOpenChange, propertyId, i
                     </div>
                   </div>
                 ) : hasGuestCredit ? (
-                  <div className="bg-amber-50 rounded-xl p-4 border border-amber-100 flex items-start gap-3">
-                    <Wallet className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                  <div className="bg-blue-50 rounded-xl p-4 border border-blue-100 flex items-start gap-3">
+                    <CheckCircle2 className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
                     <div>
-                      <p className="text-amber-900 font-bold">Guest Credit</p>
-                      <p className="text-amber-700 text-sm mt-1 mb-2">Refund {formatCurrency(Math.abs(balance))} or resolve the credit before checkout.</p>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="w-full rounded-lg border-amber-300 text-amber-900 hover:bg-amber-100"
-                        onClick={() => {
-                          if (creditRefundPayment) {
-                            setRefundPaymentId(creditRefundPayment.id);
-                            onOpenChange(false);
-                          } else {
-                            onOpenChange(false);
-                          }
-                        }}
-                      >
-                        {creditRefundPayment ? 'Start Credit Refund' : 'View Folio for Refund'}
-                      </Button>
+                      <p className="text-blue-900 font-bold">Guest Credit: {formatCurrency(Math.abs(balance))}</p>
+                      <p className="text-blue-700 text-sm mt-1 mb-2">
+                        This folio has a {formatCurrency(Math.abs(balance))} credit balance. No refund has been processed. Checking out will retain the {formatCurrency(Math.abs(balance))} as guest credit for this guest, which can be refunded or applied to a future stay.
+                      </p>
                     </div>
                   </div>
                 ) : (
@@ -380,10 +367,10 @@ export function FrontDeskQuickCheckoutDialog({ open, onOpenChange, propertyId, i
                 <Button 
                   className="flex-1 h-12 rounded-xl font-bold shadow-sm"
                   onClick={() => handleCheckout()} 
-                  disabled={!isFolioSettled}
-                  variant={!isFolioSettled ? "secondary" : "default"}
+                  disabled={isUnpaid}
+                  variant={isUnpaid ? "secondary" : "default"}
                 >
-                  Confirm Checkout
+                  {hasGuestCredit ? 'Check Out & Retain Credit' : 'Confirm Checkout'}
                 </Button>
               </div>
             </div>

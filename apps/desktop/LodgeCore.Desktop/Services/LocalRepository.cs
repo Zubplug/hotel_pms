@@ -1938,7 +1938,53 @@ public class LocalRepository
 
         if (res.Folio != null && res.Folio.NetBalance < -0.01m)
         {
-            throw new InvalidOperationException($"Cannot check out with a guest credit of {Math.Abs(res.Folio.NetBalance):N2}. Process a refund first.");
+            var creditAmount = Math.Abs(res.Folio.NetBalance);
+            var idempotencyKey = $"checkout_cr_routing_{res.Id}_{DateTime.UtcNow.Ticks}";
+            
+            if (!CheckFolioIdempotency(res.Folio, idempotencyKey))
+            {
+                var newItem = new
+                {
+                    id = Guid.NewGuid().ToString(),
+                    amount = -creditAmount,
+                    description = "City Ledger credit at checkout",
+                    type = "PAYMENT",
+                    source = "CITY_LEDGER",
+                    idempotencyKey = idempotencyKey,
+                    frontdeskSessionId = frontdeskSession?.Id,
+                    createdAt = DateTime.UtcNow
+                };
+                UpdateFolioTransactionsJson(res.Folio, "items", newItem);
+                
+                res.Folio.TotalPayments += creditAmount;
+                res.Folio.UpdatedAt = DateTime.UtcNow;
+                res.Folio.IsDirty = true;
+                res.Folio.LocalSequence++;
+                int folioEventVersion = res.Folio.Version;
+                res.Folio.Version++;
+                
+                _dbContext.OutboxEvents.Add(new LocalOutboxEvent
+                {
+                    PropertyId = res.PropertyId,
+                    DeviceId = deviceId,
+                    OperatorId = userId,
+                    AggregateType = "FOLIO",
+                    AggregateId = res.Folio.Id,
+                    AggregateVersion = folioEventVersion,
+                    EventType = "GUEST_CREDIT_TRANSFER",
+                    Sequence = res.Folio.LocalSequence,
+                    IdempotencyKey = idempotencyKey,
+                    PayloadJson = JsonSerializer.Serialize(new { 
+                        amount = creditAmount, 
+                        guestId = res.GuestId,
+                        reservationId = res.Id,
+                        folioId = res.Folio.Id,
+                        propertyId = res.PropertyId,
+                        businessDate = frontdeskSession?.BusinessDate ?? DateTime.UtcNow.Date,
+                        offlineOperationId = idempotencyKey
+                    })
+                });
+            }
         }
 
         res.Status = "CHECKED_OUT";
@@ -6414,6 +6460,242 @@ public class LocalRepository
         if (kot == null) return;
         kot.PrintStatus = "PRINTED";
         kot.PrintedAt = DateTime.UtcNow;
+        await _dbContext.SaveChangesAsync();
+    }
+
+    #endregion
+
+    #region Guest Credit (Offline Allocation Model)
+
+    /// <summary>
+    /// Returns all guests who have available credit for this property.
+    /// Available = REFUND_OWED entry amount - SUM of all local allocations.
+    /// Guests with zero or negative available credit are excluded.
+    /// </summary>
+    public async Task<List<GuestCreditSummary>> GetGuestCreditsAsync(string propertyId)
+    {
+        var entries = await _dbContext.CityLedgerEntries
+            .Where(e => e.PropertyId == propertyId && e.Type == "REFUND_OWED" && (e.Status == "OPEN" || e.Status == null))
+            .ToListAsync();
+
+        if (entries.Count == 0) return [];
+
+        var entryIds = entries.Select(e => e.Id).ToList();
+
+        // Fetch all local allocations for these entries
+        var allocations = await _dbContext.CityLedgerAllocations
+            .Where(a => entryIds.Contains(a.CreditEntryId))
+            .ToListAsync();
+
+        var allocationsByEntry = allocations
+            .GroupBy(a => a.CreditEntryId)
+            .ToDictionary(g => g.Key, g => g.Sum(a => a.Amount));
+
+        var guestIds = entries.Select(e => e.GuestId).Where(g => g != null).Distinct().ToList();
+        var guests = await _dbContext.Guests
+            .Where(g => guestIds.Contains(g.Id))
+            .ToDictionaryAsync(g => g.Id, g => g);
+
+        var summaries = new List<GuestCreditSummary>();
+        foreach (var entryGroup in entries.GroupBy(e => e.GuestId))
+        {
+            var totalCredit = entryGroup.Sum(e => e.Amount);
+            var totalAllocated = entryGroup.Sum(e => allocationsByEntry.TryGetValue(e.Id, out var a) ? a : 0m);
+            var available = totalCredit - totalAllocated;
+
+            if (available <= 0.01m) continue;
+
+            var guestId = entryGroup.Key;
+            guests.TryGetValue(guestId ?? "", out var guest);
+
+            summaries.Add(new GuestCreditSummary
+            {
+                GuestId = guestId ?? "",
+                GuestName = guest != null ? $"{guest.FirstName} {guest.LastName}".Trim() : "Unknown Guest",
+                GuestPhone = guest?.Phone ?? "",
+                GuestEmail = guest?.Email ?? "",
+                AvailableAmount = available,
+                Currency = entryGroup.First().Currency,
+                LastActivityAt = entryGroup.Max(e => e.CreatedAt),
+                // Carry the entry ids so the UI can send them to ApplyGuestCreditAsync
+                CreditEntryIds = entryGroup.Select(e => e.Id).ToList()
+            });
+        }
+
+        return summaries;
+    }
+
+    /// <summary>
+    /// Atomically applies guest credit to a folio offline.
+    ///
+    /// Invariants (all or nothing):
+    ///   1. Validates sufficient available credit
+    ///   2. Creates LocalCityLedgerAllocation
+    ///   3. Posts a negative PAYMENT item on the folio
+    ///   4. Queues GUEST_CREDIT_APPLICATION outbox event
+    ///
+    /// Returns false if credit is insufficient or the folio is not found.
+    /// </summary>
+    public async Task<(bool Success, string? Error)> ApplyGuestCreditAsync(
+        string folioId,
+        string? creditEntryId,
+        string guestId,
+        decimal amount,
+        string appliedBy,
+        string deviceId,
+        DateTime businessDate)
+    {
+        await using var tx = await _dbContext.Database.BeginTransactionAsync();
+        try
+        {
+            // ── 1. Load and validate credit entries ───────────────────────────
+            var query = _dbContext.CityLedgerEntries
+                .Where(e => e.GuestId == guestId && e.Status == "OPEN");
+
+            if (!string.IsNullOrEmpty(creditEntryId))
+            {
+                query = query.Where(e => e.Id == creditEntryId);
+            }
+            else
+            {
+                query = query.Where(e => e.Type == "REFUND_OWED").OrderBy(e => e.CreatedAt);
+            }
+
+            var entries = await query.ToListAsync();
+
+            if (!entries.Any()) return (false, "No available credit entries found.");
+
+            // ── 2. Load folio ─────────────────────────────────────────────────
+            var folio = await _dbContext.Folios.FirstOrDefaultAsync(f => f.Id == folioId);
+            if (folio == null) return (false, "Folio not found.");
+            if (folio.Status == "CLOSED") return (false, "Cannot apply credit to a closed folio.");
+
+            // ── 3. Distribute amount across entries ───────────────────────────
+            decimal remainingToApply = amount;
+            var allocations = new List<LocalCityLedgerAllocation>();
+            var outboxEvents = new List<LocalOutboxEvent>();
+
+            foreach (var entry in entries)
+            {
+                if (remainingToApply <= 0) break;
+
+                var existingAllocations = await _dbContext.CityLedgerAllocations
+                    .Where(a => a.CreditEntryId == entry.Id)
+                    .SumAsync(a => a.Amount);
+
+                var available = entry.Amount - existingAllocations;
+                if (available <= 0.01m) continue;
+
+                var applyNow = Math.Min(available, remainingToApply);
+                var offlineOperationId = Guid.NewGuid().ToString();
+                
+                var allocation = new LocalCityLedgerAllocation
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    CreditEntryId = entry.Id,
+                    FolioId = folioId,
+                    GuestId = guestId,
+                    PropertyId = folio.PropertyId,
+                    Amount = applyNow,
+                    Currency = folio.Currency ?? "NGN",
+                    OfflineOperationId = offlineOperationId,
+                    AppliedBy = appliedBy,
+                    DeviceId = deviceId,
+                    BusinessDate = businessDate,
+                    CreatedAt = DateTime.UtcNow,
+                    SyncStatus = "PENDING"
+                };
+                
+                _dbContext.CityLedgerAllocations.Add(allocation);
+                allocations.Add(allocation);
+
+                // Queue GUEST_CREDIT_APPLICATION outbox event per allocation
+                var outboxEvent = new LocalOutboxEvent
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    IdempotencyKey = offlineOperationId,
+                    AggregateType = "CITY_LEDGER",
+                    AggregateId = entry.Id,
+                    EventType = "GUEST_CREDIT_APPLICATION",
+                    PayloadJson = System.Text.Json.JsonSerializer.Serialize(new
+                    {
+                        type = "GUEST_CREDIT_APPLICATION",
+                        guestId,
+                        folioId,
+                        creditEntryId = entry.Id,
+                        allocationId = allocation.Id,
+                        offlineOperationId,
+                        amount = applyNow,
+                        currency = folio.Currency ?? "NGN",
+                        appliedBy,
+                        deviceId,
+                        businessDate = businessDate.ToString("yyyy-MM-dd"),
+                        timestamp = DateTime.UtcNow.ToString("O")
+                    }),
+                    Status = "PENDING",
+                    CreatedAt = DateTime.UtcNow
+                };
+                _dbContext.OutboxEvents.Add(outboxEvent);
+
+                remainingToApply -= applyNow;
+            }
+
+            if (remainingToApply > 0.01m)
+            {
+                return (false, $"Insufficient credit. Requested: {amount:F2}, but only {(amount - remainingToApply):F2} was available.");
+            }
+
+            // ── 4. Post PAYMENT folio item ────────────────────────────────────
+            var folioItem = new LocalFolioItem
+            {
+                Id = Guid.NewGuid().ToString(),
+                FolioId = folioId,
+                Type = "PAYMENT",
+                Source = "CITY_LEDGER",
+                Description = "Applied guest credit (offline)",
+                Quantity = 1,
+                UnitAmount = -amount,
+                Amount = -amount,
+                Currency = folio.Currency ?? "NGN",
+                BusinessDate = businessDate,
+                PostedBy = appliedBy,
+                CreatedAt = DateTime.UtcNow
+            };
+            _dbContext.FolioItems.Add(folioItem);
+
+            // Update folio balance
+            folio.Balance -= amount;
+            folio.TotalPayments += amount;
+            folio.Version += 1;
+            _dbContext.Folios.Update(folio);
+
+            await _dbContext.SaveChangesAsync();
+            await tx.CommitAsync();
+
+            return (true, null);
+        }
+        catch (Exception ex)
+        {
+            await tx.RollbackAsync();
+            return (false, $"Transaction failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Called by SyncEngine when the cloud rejects a GUEST_CREDIT_APPLICATION
+    /// with a 409 CONFLICT.  Marks the local allocation as CONFLICTED so the
+    /// UI can display a meaningful message to Front Desk.
+    /// </summary>
+    public async Task MarkCreditAllocationConflictedAsync(string offlineOperationId, string serverMessage)
+    {
+        var allocation = await _dbContext.CityLedgerAllocations
+            .FirstOrDefaultAsync(a => a.OfflineOperationId == offlineOperationId);
+
+        if (allocation == null) return;
+
+        allocation.SyncStatus = "CONFLICTED";
+        allocation.ConflictReason = "INSUFFICIENT_CREDIT";
+        allocation.ServerMessage = serverMessage;
         await _dbContext.SaveChangesAsync();
     }
 

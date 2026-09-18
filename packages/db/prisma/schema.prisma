@@ -892,6 +892,7 @@ model Folio {
   refunds            Refund[]
   refundRequests     RefundRequest[]
   posOrders          PosOrder[]
+  cityLedgerAllocations CityLedgerAllocation[] @relation("FolioCityLedgerAllocations")
 
   createdAt       DateTime          @default(now()) @db.Timestamptz
   updatedAt       DateTime          @updatedAt @db.Timestamptz
@@ -4414,13 +4415,15 @@ model CityLedgerEntry {
 
 model CityLedgerAllocation {
   id        String  @id @default(uuid()) @db.Uuid
-  paymentId String  @db.Uuid // Refers to the CityLedgerEntry of type PAYMENT
-  invoiceId String  @db.Uuid
+  paymentId String  @db.Uuid // Refers to the CityLedgerEntry of type PAYMENT or REFUND_OWED
+  invoiceId String? @db.Uuid
+  folioId   String? @db.Uuid
   amount    Decimal @db.Decimal(18, 4)
   currency  String
 
-  payment CityLedgerEntry   @relation("PaymentAllocations", fields: [paymentId], references: [id])
-  invoice CityLedgerInvoice @relation("InvoiceAllocations", fields: [invoiceId], references: [id])
+  payment CityLedgerEntry    @relation("PaymentAllocations", fields: [paymentId], references: [id])
+  invoice CityLedgerInvoice? @relation("InvoiceAllocations", fields: [invoiceId], references: [id])
+  folio   Folio?             @relation("FolioCityLedgerAllocations", fields: [folioId], references: [id])
 
   createdBy String   @db.Uuid
   createdAt DateTime @default(now()) @db.Timestamptz

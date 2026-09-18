@@ -373,6 +373,15 @@ export async function POST(req: NextRequest) {
 
         // 1 & 2. Atomic Concurrency Control & Execution within a Single Transaction
         await prisma.$transaction(async (tx) => {
+          let staffOperatorId = actorId;
+          if (isUuid(actorId)) {
+            const staffRec = await tx.staff.findFirst({
+              where: { OR: [{ id: actorId }, { userId: actorId }] },
+              select: { id: true }
+            });
+            if (staffRec) staffOperatorId = staffRec.id;
+          }
+
           // 1. Idempotency Check (inside transaction lock)
           const existingEvent = await tx.hotelEvent.findUnique({
             where: { idempotencyKey },
@@ -988,7 +997,7 @@ export async function POST(req: NextRequest) {
                     sourceModule: 'FRONT_DESK',
                     roomId: createdReservationRoom.roomId,
                     guestId: finalGuestId,
-                    operatorId: actorId!,
+                    operatorId: staffOperatorId,
                     operationId: `COMP_CREATE_${aggregateId}`,
                     grossAmount: complimentaryAmount,
                     complAmount: complimentaryAmount,
@@ -1423,6 +1432,110 @@ export async function POST(req: NextRequest) {
                 },
                 update: {},
               });
+            }
+          } else if (aggregateType === "FOLIO" && eventType === "GUEST_CREDIT_TRANSFER") {
+            const amount = Number(payload.amount);
+            if (!Number.isFinite(amount) || amount <= 0) {
+              throw new Error("Credit transfer amount must be positive");
+            }
+            if (!payload.guestId) {
+              throw new Error("Guest ID is required for credit transfer");
+            }
+
+            const refKey = `CR_SYNC_${idempotencyKey}`;
+            const existingEntry = await tx.cityLedgerEntry.findFirst({
+              where: { reference: refKey }
+            });
+
+            if (!existingEntry) {
+              const folio = await tx.folio.findUnique({
+                where: { id: aggregateId, propertyId },
+                include: { reservation: true }
+              });
+              if (!folio) throw new Error("Folio not found");
+
+              // Lock property to ensure race-safe ledger provisioning
+              const propRes = await tx.$queryRaw<any[]>`SELECT id, "organizationId" FROM "Property" WHERE id = ${propertyId}::uuid FOR UPDATE`;
+              const orgId = propRes[0].organizationId;
+              
+              let guestLedgerAccount = await tx.cityLedgerAccount.findFirst({
+                where: { propertyId, type: 'HOUSE', name: 'Guest Ledger', status: 'ACTIVE' }
+              });
+              if (!guestLedgerAccount) {
+                guestLedgerAccount = await tx.cityLedgerAccount.create({
+                  data: {
+                    organizationId: orgId,
+                    propertyId,
+                    name: 'Guest Ledger',
+                    type: 'HOUSE',
+                    currency: folio.currency || 'NGN'
+                  }
+                });
+              }
+
+              // Create REFUND_OWED entry
+              await tx.cityLedgerEntry.create({
+                data: {
+                  accountId: guestLedgerAccount.id,
+                  propertyId,
+                  guestId: payload.guestId || folio.reservation?.primaryGuestId,
+                  reservationId: folio.reservationId,
+                  folioId: aggregateId,
+                  amount,
+                  currency: folio.currency || "NGN",
+                  type: 'REFUND_OWED',
+                  status: 'OPEN',
+                  reason: 'Auto-routed guest credit to Guest Ledger upon offline checkout',
+                  reference: refKey,
+                  createdBy: actorId,
+                }
+              });
+              
+              // Increment HOUSE account balance
+              await tx.cityLedgerAccount.update({
+                where: { id: guestLedgerAccount.id },
+                data: { balance: { increment: amount } }
+              });
+
+              // Create offsetting FolioItem
+              await tx.folioItem.create({
+                data: {
+                  folioId: aggregateId,
+                  businessDate: payload.businessDate || authoritativeBusinessDate,
+                  type: "PAYMENT",
+                  source: "CITY_LEDGER",
+                  description: "City Ledger credit at offline checkout",
+                  quantity: 1,
+                  unitAmount: -amount,
+                  amount: -amount,
+                  currency: folio.currency || "NGN",
+                  baseAmount: -amount,
+                  postedBy: actorId,
+                  deviceId: device.id,
+                  isLatePosting: true,
+                  posTransactionId: idempotencyKey,
+                },
+              });
+
+              await tx.folio.update({
+                where: { id: aggregateId },
+                data: {
+                  totalPayments: { increment: amount },
+                  balance: { increment: amount },
+                },
+              });
+
+              // DOUBLE-ENTRY GL POSTING
+              await CityLedgerAccountingService.processCityLedgerRouting(
+                tx,
+                propertyId,
+                orgId,
+                actorId,
+                -amount,
+                aggregateId,
+                refKey,
+                `cl_sync_${idempotencyKey}`
+              );
             }
           } else if (aggregateType === "FOLIO" && eventType === "FOLIO_DISCOUNT_APPLIED") {
             const existingDiscount = await tx.folioItem.findFirst({
@@ -3299,7 +3412,7 @@ export async function POST(req: NextRequest) {
                     roomId: resRoom.roomId,
                     guestId: resRoom.reservation?.primaryGuestId,
                     staffId: null,
-                    operatorId: actorId,
+                    operatorId: staffOperatorId,
                     operationId: idempotencyKey,
                     grossAmount: complimentaryAmount,
                     complAmount: complimentaryAmount,
@@ -3394,7 +3507,7 @@ export async function POST(req: NextRequest) {
                     roomId: resRoom.roomId,
                     guestId: resRoom.reservation?.primaryGuestId,
                     staffId: null,
-                    operatorId: actorId,
+                    operatorId: staffOperatorId,
                     operationId: idempotencyKey,
                     grossAmount: payload.compAmount,
                     complAmount: payload.compAmount,
@@ -3506,7 +3619,7 @@ export async function POST(req: NextRequest) {
                     sourceModule: "POS",
                     posOrderId: aggregateId,
                     staffId: null,
-                    operatorId: actorId,
+                    operatorId: staffOperatorId,
                     operationId: idempotencyKey,
                     grossAmount: payload.compAmount || 0,
                     complAmount: payload.compAmount || 0,
@@ -3577,7 +3690,7 @@ export async function POST(req: NextRequest) {
                     sourceModule: "POS",
                     posOrderId: aggregateId,
                     staffId: null,
-                    operatorId: actorId,
+                    operatorId: staffOperatorId,
                     operationId: idempotencyKey,
                     grossAmount: payload.compAmount,
                     complAmount: payload.compAmount,

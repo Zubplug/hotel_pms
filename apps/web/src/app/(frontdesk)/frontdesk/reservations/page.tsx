@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Search, User, LogIn, ArrowRight, Clock, ArrowLeft, CheckCircle2, UserPlus, CreditCard, CloudSync } from 'lucide-react';
+import { Search, User, LogIn, ArrowRight, Clock, ArrowLeft, CheckCircle2, UserPlus, CreditCard, Wallet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useProperty } from '@/components/PropertyProvider';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
@@ -64,15 +64,25 @@ export default function FrontDeskReservationsPage() {
   const { data, isLoading } = useQuery({
     queryKey: ['frontdesk', 'reservations', { search: debouncedSearch, filter: activeFilter }],
     queryFn: async () => {
+      if (activeFilter === 'GUEST_CREDITS') return { data: [] };
       const status = getStatusQuery();
       const params: any = {
         page: '1',
-        pageSize: '50', // Fetch more for workstation
+        pageSize: '50',
         ...(debouncedSearch ? { search: debouncedSearch } : {}),
         ...(status ? { status } : {}),
       };
       return await provider.reservations.list(propertyId, params);
     },
+  });
+
+  const { data: creditsData, isLoading: creditsLoading } = useQuery({
+    queryKey: ['frontdesk', 'guestCredits', propertyId],
+    queryFn: async () => {
+      return provider.guestCredits.list(propertyId);
+    },
+    enabled: activeFilter === 'GUEST_CREDITS',
+    refetchInterval: 30_000,
   });
 
   const rawData = data as any;
@@ -152,6 +162,7 @@ export default function FrontDeskReservationsPage() {
             { id: 'IN_HOUSE', label: 'In-House' },
             { id: 'DEPARTURES', label: 'Departures' },
             { id: 'UNPAID', label: 'Unpaid Balance', icon: CreditCard },
+            { id: 'GUEST_CREDITS', label: 'Guest Credits', icon: Wallet },
           ].map(filter => (
             <button
               key={filter.id}
@@ -174,6 +185,67 @@ export default function FrontDeskReservationsPage() {
         <div className="flex justify-center p-12">
           <div className="w-10 h-10 border-4 border-slate-200 border-t-blue-600 rounded-full animate-spin"></div>
         </div>
+      ) : activeFilter === 'GUEST_CREDITS' ? (
+        /* ── Guest Credits Panel ───────────────────────────────────────── */
+        creditsLoading ? (
+          <div className="flex justify-center p-12">
+            <div className="w-10 h-10 border-4 border-slate-200 border-t-emerald-600 rounded-full animate-spin"></div>
+          </div>
+        ) : (() => {
+          const credits: any[] = Array.isArray(creditsData) ? creditsData : ((creditsData as any)?.data ?? []);
+          return credits.length === 0 ? (
+            <div className="text-center p-12 bg-slate-50 rounded-3xl border border-slate-100">
+              <Wallet className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+              <h3 className="text-lg font-bold text-slate-900">No Guest Credits</h3>
+              <p className="text-slate-500">No guests with available credit (Refund Owed) at this property.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-8 duration-700">
+              {credits.map((credit: any) => (
+                <div key={credit.guestId} className="group bg-white rounded-3xl p-6 border border-emerald-200 shadow-sm hover:shadow-xl hover:border-emerald-400 transition-all flex flex-col h-full">
+                  <div className="absolute top-0 left-0 w-full h-1.5 bg-emerald-500 rounded-t-3xl" />
+
+                  <div className="flex justify-between items-start mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center font-bold text-emerald-700 text-lg">
+                        {credit.guestName?.[0] ?? '?'}
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-slate-900">{credit.guestName}</h3>
+                        <p className="text-xs text-slate-500">{credit.guestPhone}</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs font-bold text-slate-400 uppercase">Available Credit</p>
+                      <p className="text-xl font-extrabold text-emerald-600">
+                        {new Intl.NumberFormat('en-NG', { style: 'currency', currency: credit.currency || 'NGN', maximumFractionDigits: 0 }).format(credit.availableAmount)}
+                      </p>
+                    </div>
+                  </div>
+
+                  <p className="text-xs text-slate-400 mb-4">
+                    Last activity: {credit.lastActivityAt ? format(new Date(credit.lastActivityAt), 'MMM d, yyyy') : '—'}
+                  </p>
+
+                  <div className="mt-auto pt-4 border-t border-slate-100">
+                    <Button
+                      onClick={() => router.push(`/frontdesk/reservations/walk-in?guestId=${encodeURIComponent(credit.guestId)}`)}
+                      disabled={!isOnline}
+                      title={!isOnline ? 'Internet required to create new reservation' : ''}
+                      className="w-full rounded-xl h-10 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm disabled:opacity-50"
+                    >
+                      <UserPlus className="w-4 h-4 mr-2" />
+                      Walk-In / New Reservation
+                    </Button>
+                    {!isOnline && (
+                      <p className="text-xs text-amber-600 mt-1 text-center">Online required to create reservation</p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          );
+        })()
       ) : filteredReservations.length === 0 ? (
         <div className="text-center p-12 bg-slate-50 rounded-3xl border border-slate-100">
           <User className="w-12 h-12 text-slate-300 mx-auto mb-3" />

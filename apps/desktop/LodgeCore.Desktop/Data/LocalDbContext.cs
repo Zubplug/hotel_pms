@@ -14,6 +14,7 @@ public class LocalDbContext : DbContext
     public DbSet<LocalRatePlan> RatePlans { get; set; } = null!;
     public DbSet<LocalRate> Rates { get; set; } = null!;
     public DbSet<LocalCityLedgerEntry> CityLedgerEntries { get; set; } = null!;
+    public DbSet<LocalCityLedgerAllocation> CityLedgerAllocations { get; set; } = null!;
     public DbSet<LocalFolio> Folios { get; set; } = null!;
     public DbSet<LocalSyncEvent> SyncEvents { get; set; } = null!;
     public DbSet<LocalOutboxEvent> OutboxEvents { get; set; } = null!;
@@ -297,6 +298,37 @@ public class LocalDbContext : DbContext
     }
 
     /// <summary>
+    /// Creates the CityLedgerAllocations table if it does not already exist.
+    /// Call this during app start alongside other schema upgrade methods.
+    /// </summary>
+    public async Task ApplyGuestCreditAllocationSchemaAsync()
+    {
+        var sql = @"
+            CREATE TABLE IF NOT EXISTS CityLedgerAllocations (
+                Id                  TEXT NOT NULL PRIMARY KEY,
+                CreditEntryId       TEXT NOT NULL,
+                FolioId             TEXT NOT NULL,
+                GuestId             TEXT NOT NULL,
+                PropertyId          TEXT NOT NULL,
+                Amount              TEXT NOT NULL,
+                Currency            TEXT NOT NULL DEFAULT 'NGN',
+                OfflineOperationId  TEXT NOT NULL UNIQUE,
+                AppliedBy           TEXT NOT NULL DEFAULT '',
+                DeviceId            TEXT NOT NULL DEFAULT '',
+                BusinessDate        TEXT NOT NULL,
+                CreatedAt           TEXT NOT NULL,
+                SyncStatus          TEXT NOT NULL DEFAULT 'PENDING',
+                ConflictReason      TEXT NULL,
+                ServerMessage       TEXT NULL
+            );
+            CREATE INDEX IF NOT EXISTS IX_CityLedgerAllocations_CreditEntryId ON CityLedgerAllocations(CreditEntryId);
+            CREATE INDEX IF NOT EXISTS IX_CityLedgerAllocations_GuestId ON CityLedgerAllocations(GuestId);
+            CREATE INDEX IF NOT EXISTS IX_CityLedgerAllocations_FolioId ON CityLedgerAllocations(FolioId);
+        ";
+        await Database.ExecuteSqlRawAsync(sql);
+    }
+
+    /// <summary>
     /// Adds columns required for the POS shift-settlement and cash-movement workflow.
     /// Safe to call repeatedly — duplicate-column errors are silently swallowed.
     /// </summary>
@@ -445,6 +477,15 @@ public class LocalDbContext : DbContext
             entity.HasKey(e => e.Id);
             entity.HasIndex(e => e.AccountId);
             entity.HasIndex(e => e.PropertyId);
+        });
+
+        modelBuilder.Entity<LocalCityLedgerAllocation>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => e.CreditEntryId);
+            entity.HasIndex(e => e.GuestId);
+            entity.HasIndex(e => e.FolioId);
+            entity.HasIndex(e => e.OfflineOperationId).IsUnique();
         });
 
         modelBuilder.Entity<LocalRatePlan>(entity =>

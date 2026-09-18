@@ -84,9 +84,11 @@ const formSchema = z.object({
 
 interface FrontDeskReservationFormProps {
   isWalkIn?: boolean;
+  /** When set (from Guest Credits flow), auto-selects this guest on mount. */
+  prefillGuestId?: string;
 }
 
-export function FrontDeskReservationForm({ isWalkIn = false }: FrontDeskReservationFormProps) {
+export function FrontDeskReservationForm({ isWalkIn = false, prefillGuestId }: FrontDeskReservationFormProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { propertyId } = useProperty();
@@ -149,6 +151,30 @@ export function FrontDeskReservationForm({ isWalkIn = false }: FrontDeskReservat
   const [guestSearch, setGuestSearch] = useState('');
   const [guestDropdownOpen, setGuestDropdownOpen] = useState(false);
   const [selectedGuest, setSelectedGuest] = useState<any>(null);
+
+  // Auto-select guest when prefillGuestId is provided (from Guest Credits flow)
+  const { data: prefillGuestRes } = useQuery({
+    queryKey: ['guest', prefillGuestId],
+    queryFn: async () => {
+      if (!prefillGuestId) return null;
+      const res = await provider.guests.search(prefillGuestId);
+      return (res as any)?.data || [];
+    },
+    enabled: !!prefillGuestId && !selectedGuest,
+    staleTime: Infinity,
+  });
+
+  useEffect(() => {
+    if (prefillGuestId && prefillGuestRes && Array.isArray(prefillGuestRes) && prefillGuestRes.length > 0) {
+      const match = prefillGuestRes.find((g: any) => g.id === prefillGuestId) || prefillGuestRes[0];
+      if (match && !selectedGuest) {
+        setSelectedGuest(match);
+        form.setValue('guestId', match.id);
+        form.setValue('isNewGuest', false);
+      }
+    }
+  }, [prefillGuestId, prefillGuestRes, selectedGuest, form]);
+
   
   // Custom simple debounce for search
   const [debouncedSearch, setDebouncedSearch] = useState('');

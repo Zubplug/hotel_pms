@@ -1,8 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
+import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -54,6 +55,7 @@ const STATUS_LIGHT: Record<string, string> = {
 
 export function FrontDeskReservationDetail({ reservation, darkMode = false }: FrontDeskReservationDetailProps) {
   const queryClient = useQueryClient();
+  const { provider } = useLodgeCoreProvider();
   const [isCheckInDialogOpen, setIsCheckInDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isReassignDialogOpen, setIsReassignDialogOpen] = useState(false);
@@ -71,6 +73,18 @@ export function FrontDeskReservationDetail({ reservation, darkMode = false }: Fr
   const guest = reservation.primaryGuest;
   const corporateAccount = reservation.corporateAccount;
   const folio = reservation.folio || reservation.folios?.[0];
+
+  const { data: creditsData } = useQuery({
+    queryKey: ['guest-credits', guest?.id],
+    queryFn: async () => {
+      if (!guest?.id || !reservation.propertyId) return { availableCredit: 0 };
+      const res = await provider.guestCredits.list(reservation.propertyId);
+      const guestCredit = res?.credits?.find((c: any) => c.guestId === guest.id);
+      return { availableCredit: guestCredit?.availableAmount || 0 };
+    },
+    enabled: !!guest?.id && !!reservation.propertyId,
+  });
+  const availableCredit = creditsData?.availableCredit || 0;
 
   const balance = folio?.balance || 0;
   const isPaid = balance <= 0;
@@ -231,6 +245,22 @@ export function FrontDeskReservationDetail({ reservation, darkMode = false }: Fr
                 <p className="mt-1.5 text-sm font-semibold text-slate-300">{guest?.phone || 'No phone provided'}</p>
                 <p className="mt-0.5 text-xs text-slate-500">{guest?.email || 'No email'}</p>
               </div>
+              {availableCredit > 0 && (
+                <div className="border-t border-white/[0.06] px-6 py-4 flex items-center justify-between">
+                  <div>
+                    <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-blue-400">Available credit</p>
+                    <p className="font-bold text-white text-sm">{formatCurrency(availableCredit, folio?.currency)}</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      document.querySelector<HTMLButtonElement>('button:has(svg.lucide-wallet)')?.click();
+                    }}
+                    className="text-[10px] font-bold uppercase tracking-[0.1em] text-blue-400 hover:text-blue-300 bg-blue-400/10 hover:bg-blue-400/20 px-3 py-1.5 rounded-lg transition-colors"
+                  >
+                    View / Apply
+                  </button>
+                </div>
+              )}
             </div>
             {/* Corporate */}
             {corporateAccount ? (
@@ -398,6 +428,24 @@ export function FrontDeskReservationDetail({ reservation, darkMode = false }: Fr
                 <p className="text-sm text-slate-500">{guest?.email || 'No email'}</p>
               </div>
             </CardContent>
+            {availableCredit > 0 && (
+              <div className="px-6 py-4 border-t border-slate-100 bg-blue-50/50 flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wider text-blue-600 mb-0.5">Available credit</p>
+                  <p className="font-bold text-slate-800">{formatCurrency(availableCredit, folio?.currency)}</p>
+                </div>
+                <button
+                  onClick={() => {
+                    const btn = Array.from(document.querySelectorAll('button')).find(b => b.textContent?.includes('Apply Guest Credit'));
+                    if (btn) btn.click();
+                    else document.querySelector('.lucide-receipt')?.scrollIntoView({ behavior: 'smooth' });
+                  }}
+                  className="text-xs font-bold text-blue-700 hover:text-blue-800 bg-blue-100 hover:bg-blue-200 px-3 py-1.5 rounded-lg transition-colors"
+                >
+                  View / Apply
+                </button>
+              </div>
+            )}
           </Card>
 
           {corporateAccount ? (

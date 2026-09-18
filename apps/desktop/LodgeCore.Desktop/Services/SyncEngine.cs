@@ -2774,6 +2774,15 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                             else if (res.Status == "CONFLICT")
                             {
                                 evt.NextAttemptAt = null; // Requires manager resolution
+                                // If this is a GUEST_CREDIT_APPLICATION, mark the local
+                                // CityLedgerAllocation as CONFLICTED so the UI can warn staff.
+                                if (evt.EventType == "GUEST_CREDIT_APPLICATION")
+                                {
+                                    await MarkGuestCreditAllocationConflictedIfNeededAsync(
+                                        evt.IdempotencyKey,
+                                        res.Error ?? "Cloud rejected: credit already applied or insufficient.",
+                                        stoppingToken);
+                                }
                             }
                             else if (res.Status == "FAILED")
                             {
@@ -2856,6 +2865,15 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                         evt.Status = "CONFLICT";
                         evt.LastError = $"HTTP 409: Concurrency conflict. {FormatPushError(errorBody)}";
                         evt.NextAttemptAt = null;
+                        // If this is a GUEST_CREDIT_APPLICATION, mark the allocation
+                        // CONFLICTED so the UI surfaces a warning to the receptionist.
+                        if (evt.EventType == "GUEST_CREDIT_APPLICATION")
+                        {
+                            await MarkGuestCreditAllocationConflictedIfNeededAsync(
+                                evt.IdempotencyKey,
+                                $"HTTP 409: {FormatPushError(errorBody)}",
+                                stoppingToken);
+                        }
                     }
                     else 
                     {
@@ -2907,6 +2925,39 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
             }
             await dbContext.SaveChangesAsync(stoppingToken);
             throw;
+        }
+    }
+
+    /// <summary>
+    /// Called whenever a GUEST_CREDIT_APPLICATION outbox event is marked CONFLICT
+    /// (either via a per-event result from the cloud or a bulk 409 HTTP response).
+    /// Looks up the local CityLedgerAllocation by its offlineOperationId (stored as
+    /// IdempotencyKey on the outbox event) and marks it CONFLICTED so the Front Desk
+    /// UI can surface a warning and prompt staff to reconcile manually.
+    /// </summary>
+    private async Task MarkGuestCreditAllocationConflictedIfNeededAsync(
+        string idempotencyKey,
+        string serverMessage,
+        CancellationToken stoppingToken)
+    {
+        if (string.IsNullOrWhiteSpace(idempotencyKey)) return;
+        try
+        {
+            using var scope = _serviceProvider.CreateScope();
+            var repo = scope.ServiceProvider.GetRequiredService<LocalRepository>();
+            await repo.MarkCreditAllocationConflictedAsync(idempotencyKey, serverMessage);
+            _logger.LogWarning(
+                "[SYNC-CREDIT] Marked CityLedgerAllocation CONFLICTED. " +
+                "OfflineOperationId={OperationId} Reason={Reason}",
+                idempotencyKey, serverMessage);
+        }
+        catch (Exception ex)
+        {
+            // Non-fatal: log and continue. The outbox event is already marked CONFLICT;
+            // next sync cycle can re-attempt the allocation marking.
+            _logger.LogError(ex,
+                "[SYNC-CREDIT] Failed to mark CityLedgerAllocation CONFLICTED for OperationId={OperationId}.",
+                idempotencyKey);
         }
     }
 

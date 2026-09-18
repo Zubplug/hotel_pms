@@ -79,6 +79,15 @@ export interface LodgeCoreDataProvider {
     addPayment(folioId: string, payment: any): Promise<any>;
     addDeposit(folioId: string, deposit: any): Promise<any>;
   };
+  guestCredits: {
+    /** Returns guests with available credit for this property. */
+    list(propertyId: string): Promise<any>;
+    /**
+     * Applies credit to a folio.  Online: uses POST /api/v1/folios/[id]/apply-credit.
+     * Offline: uses atomic SQLite transaction + outbox event.
+     */
+    apply(data: { folioId: string; creditEntryId?: string; guestId: string; amount: number; businessDate?: string }): Promise<any>;
+  };
   keycards: {
     encode(roomId: string, lockCode: string, reservationId: string): Promise<any>;
     encodeMasterCard(payload: { startDate?: string, endDate?: string, acknowledgedByStaffId?: string, reason?: string }): Promise<any>;

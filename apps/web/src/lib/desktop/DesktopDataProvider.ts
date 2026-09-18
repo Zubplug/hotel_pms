@@ -285,6 +285,15 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
       return invokeDesktop('folios.addDeposit', { folioId, deposit });
     }
   },
+
+  guestCredits: {
+    list: async (_propertyId: string) => {
+      return invokeDesktop('guestCredits.list');
+    },
+    apply: async (data: { folioId: string; creditEntryId?: string; guestId: string; amount: number; businessDate?: string }) => {
+      return invokeDesktop('guestCredits.apply', { payload: JSON.stringify(data) });
+    }
+  },
   
   keycards: {
     encodeMasterCard: async (payload: { startDate?: string, endDate?: string, acknowledgedByStaffId?: string, reason?: string }) => {
