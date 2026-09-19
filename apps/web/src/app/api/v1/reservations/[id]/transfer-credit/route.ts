@@ -47,7 +47,8 @@ export async function POST(
     const userRole = String((session.user as any).role || 'STAFF').toUpperCase();
     const isNightAuditor = userRole === 'NIGHT_AUDITOR' || userRole === 'MANAGER' || userRole === 'ADMIN' || userRole === 'SUPER_ADMIN';
     const canCheckOut = await hasPermission(session.user.id, 'reservation', 'update', reservation.propertyId);
-    if (!canCheckOut && !isNightAuditor) return errorResponse('FORBIDDEN', 'Insufficient permissions', 403);
+    const canPostCityLedger = await hasPermission(session.user.id, 'LEDGER', 'CREATE', reservation.propertyId);
+    if (!canCheckOut && !canPostCityLedger && !isNightAuditor) return errorResponse('FORBIDDEN', 'Insufficient permissions to transfer the guest credit to City Ledger', 403);
 
     const idempotencyKey = req.headers.get('x-idempotency-key') || `SKIPPER_REFUND_TRANSFER_${id}_${crypto.randomUUID()}`;
     let creditAmount = 0;

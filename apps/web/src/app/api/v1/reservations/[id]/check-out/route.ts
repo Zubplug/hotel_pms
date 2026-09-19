@@ -46,7 +46,8 @@ export async function POST(
     const userRole = String((session.user as any).role || 'STAFF').toUpperCase();
     const isNightAuditor = userRole === 'NIGHT_AUDITOR' || userRole === 'MANAGER' || userRole === 'ADMIN' || userRole === 'SUPER_ADMIN';
     const canCheckOut = await hasPermission(session.user.id, 'reservation', 'update', reservation.propertyId);
-    if (!canCheckOut && !isNightAuditor) return errorResponse('FORBIDDEN', 'Insufficient permissions', 403);
+    const canPostCityLedger = await hasPermission(session.user.id, 'LEDGER', 'CREATE', reservation.propertyId);
+    if (!canCheckOut && !canPostCityLedger && !isNightAuditor) return errorResponse('FORBIDDEN', 'Insufficient permissions to complete checkout', 403);
 
     // Run the operational checkout transaction
     const txResult = await prisma.$transaction(async (tx: any) => {
@@ -142,8 +143,7 @@ export async function POST(
       let targetAccountId: string | undefined;
 
       if (!reservation.corporateAccountId && totalBalance > 0 && forceSkipper) {
-        const allowedRoles = ['MANAGER', 'ACCOUNTANT', 'NIGHT_AUDITOR', 'ADMIN', 'SUPER_ADMIN'];
-        if (!allowedRoles.includes(userRole)) {
+        if (!canPostCityLedger && !['MANAGER', 'ACCOUNTANT', 'NIGHT_AUDITOR', 'ADMIN', 'SUPER_ADMIN'].includes(userRole)) {
           throw new Error('FORBIDDEN_SKIPPER_CHECKOUT');
         }
         const skipperAccount = await tx.cityLedgerAccount.findFirst({

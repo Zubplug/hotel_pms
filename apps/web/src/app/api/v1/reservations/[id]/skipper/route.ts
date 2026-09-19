@@ -55,7 +55,8 @@ export async function POST(
     const userRole = String((session.user as any).role || 'STAFF').toUpperCase();
     const isNightAuditor = userRole === 'NIGHT_AUDITOR' || userRole === 'MANAGER' || userRole === 'ADMIN' || userRole === 'SUPER_ADMIN';
     const canCheckOut = await hasPermission(session.user.id, 'reservation', 'update', reservation.propertyId);
-    if (!canCheckOut && !isNightAuditor) return errorResponse('FORBIDDEN', 'Insufficient permissions', 403);
+    const canPostCityLedger = await hasPermission(session.user.id, 'LEDGER', 'CREATE', reservation.propertyId);
+    if (!canCheckOut && !canPostCityLedger && !isNightAuditor) return errorResponse('FORBIDDEN', 'Insufficient permissions to transfer the balance to City Ledger', 403);
 
     const txResult = await prisma.$transaction(async (tx: any) => {
       const property = await tx.property.findUnique({ where: { id: reservation.propertyId }, select: { organizationId: true, businessDate: true, timezone: true, supportedCurrencies: true } });
