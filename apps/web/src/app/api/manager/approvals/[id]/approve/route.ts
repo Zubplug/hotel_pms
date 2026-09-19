@@ -5,6 +5,7 @@ import { successResponse, errorResponse } from '@/lib/api-response';
 import { resolveUser } from '@/lib/resolve-user';
 import { PaystackProvider } from '@/lib/payment-providers/paystack';
 import { applyRefundToFolio } from '@/lib/refunds/settle-refund';
+import { CityLedgerAccountingService } from '@/lib/services/city-ledger-accounting-service';
 import { InventoryService } from '@/lib/inventory/InventoryService';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -445,6 +446,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         if (completed) {
           await applyRefundToFolio(tx, current, result.amount, user.id);
           await tx.folioItem.create({ data: { folioId: result.folioId, businessDate, type: 'REFUND', source: 'MANUAL', description: `Refund request ${current.id}`, quantity: 1, unitAmount: result.amount, amount: result.amount, currency: result.currency, baseAmount: result.amount, postedBy: user.id } });
+          if (current.cityLedgerEntryId) await CityLedgerAccountingService.settleGuestRefund(tx, { propertyId: result.propertyId, organizationId: property?.organizationId || '', staffId: user.id, cityLedgerEntryId: current.cityLedgerEntryId, refundRequestId: current.id, amount: result.amount, method: result.method === 'ORIGINAL_PAYMENT' ? current.payment.method : result.method, businessDate });
           const totalRefunded = result.committedRefunded + result.amount;
           await tx.payment.update({ where: { id: result.paymentId }, data: { status: totalRefunded >= Number(current.payment.amount) ? 'REFUNDED' : 'PARTIALLY_REFUNDED' } });
         }

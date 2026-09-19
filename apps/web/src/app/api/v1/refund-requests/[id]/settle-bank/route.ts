@@ -5,6 +5,7 @@ import { errorResponse, successResponse } from '@/lib/api-response';
 import { resolveUser } from '@/lib/resolve-user';
 import { applyRefundToFolio } from '@/lib/refunds/settle-refund';
 import { isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
+import { CityLedgerAccountingService } from '@/lib/services/city-ledger-accounting-service';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -26,6 +27,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       const property = await tx.property.findUnique({ where: { id: request.propertyId }, select: { organizationId: true, businessDate: true, timezone: true } });
       const businessDate = property?.businessDate || new Date();
       const refund = await tx.refund.create({ data: { refundRequestId: request.id, paymentId: request.paymentId, folioId: request.folioId, propertyId: request.propertyId, businessDate, amount, currency: request.currency, method: 'BANK_TRANSFER', reason: request.reason, authorizedBy: user.id, providerRefundId: `bank-transfer:${reference}`, status: 'COMPLETED', idempotencyKey: `refund-request:${request.id}` } });
+      if (request.cityLedgerEntryId) await CityLedgerAccountingService.settleGuestRefund(tx, { propertyId: request.propertyId, organizationId: property?.organizationId || '', staffId: user.id, cityLedgerEntryId: request.cityLedgerEntryId, refundRequestId: request.id, amount, method: 'BANK_TRANSFER', businessDate });
       await tx.folioItem.create({ data: { folioId: request.folioId, businessDate, type: 'REFUND', source: 'MANUAL', description: `Bank transfer refund ${reference}`, quantity: 1, unitAmount: amount, amount, currency: request.currency, baseAmount: amount, postedBy: user.id } });
       const refunded = await tx.refund.aggregate({ where: { paymentId: request.paymentId, status: { not: 'FAILED' } }, _sum: { amount: true } });
       await tx.payment.update({ where: { id: request.paymentId }, data: { status: Number(refunded._sum.amount || 0) >= Number(request.payment.amount) ? 'REFUNDED' : 'PARTIALLY_REFUNDED' } });

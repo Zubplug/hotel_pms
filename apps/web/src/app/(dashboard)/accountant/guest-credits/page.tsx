@@ -1,164 +1,43 @@
 import React from 'react';
+import Link from 'next/link';
+import { ArrowLeft, ArrowRight, Clock3, FileText, ShieldCheck, Wallet } from 'lucide-react';
 import { redirect } from 'next/navigation';
 import { auth } from '@/lib/auth';
 import { prisma } from '@hotel-pms/db';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
-import { Wallet, Users } from 'lucide-react';
+import { GuestCreditRefundDialog } from '@/components/accountant/GuestCreditRefundDialog';
 
-const formatCurrency = (amount: number, currency: string) => 
-  new Intl.NumberFormat('en-NG', { style: 'currency', currency, minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount);
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
-const formatDate = (date: Date) => 
-  new Intl.DateTimeFormat('en-NG', { dateStyle: 'medium', timeStyle: 'short' }).format(date);
+const money = (amount: number, currency: string) => new Intl.NumberFormat('en-NG', { style: 'currency', currency, maximumFractionDigits: 0 }).format(amount);
+const date = (value: Date) => new Intl.DateTimeFormat('en-NG', { dateStyle: 'medium' }).format(value);
 
 export default async function GuestCreditsPage() {
   const session = await auth();
   if (!session?.user) redirect('/login?callbackUrl=%2Faccountant%2Fguest-credits');
-  
   const propertyId = session.user.propertyId;
-  if (!propertyId) return <div className="p-8 text-slate-300">No property is assigned to this user.</div>;
+  if (!propertyId) return <EmptyState title="No property assigned" />;
+  const [property, entries] = await Promise.all([
+    prisma.property.findUnique({ where: { id: propertyId }, select: { name: true, baseCurrency: true } }),
+    prisma.cityLedgerEntry.findMany({ where: { propertyId, type: 'REFUND_OWED', status: 'OPEN' }, include: { guest: { select: { firstName: true, lastName: true, phone: true, email: true } }, account: { select: { name: true, type: true } }, allocations: { select: { amount: true } }, refundRequests: { where: { status: { in: ['PENDING_APPROVAL', 'APPROVED', 'PROCESSING'] } }, select: { status: true, requestedAmount: true } } }, orderBy: { createdAt: 'asc' } }),
+  ]);
+  const currency = property?.baseCurrency || entries[0]?.currency || 'NGN';
+  const now = Date.now();
+  const rows = entries.map(entry => { const allocated = entry.allocations.reduce((sum, allocation) => sum + Number(allocation.amount), 0); const pending = entry.refundRequests.reduce((sum, request) => sum + Number(request.requestedAmount), 0); return { entry, available: Math.max(0, Number(entry.amount) - allocated - pending), pending, age: Math.max(0, Math.floor((now - entry.createdAt.getTime()) / 86400000)) }; }).filter(row => row.available > 0.01 || row.pending > 0.01);
+  const openRows = rows.filter(row => row.available > 0.01);
+  const totalAvailable = openRows.reduce((sum, row) => sum + row.available, 0);
+  const totalPending = rows.reduce((sum, row) => sum + row.pending, 0);
+  const oldest = openRows.filter(row => row.age > 30).reduce((sum, row) => sum + row.available, 0);
+  const buckets = [{ label: '0–30 days', amount: openRows.filter(row => row.age <= 30).reduce((sum, row) => sum + row.available, 0), tone: 'bg-emerald-400' }, { label: '31–60 days', amount: openRows.filter(row => row.age > 30 && row.age <= 60).reduce((sum, row) => sum + row.available, 0), tone: 'bg-amber-400' }, { label: '61–90 days', amount: openRows.filter(row => row.age > 60 && row.age <= 90).reduce((sum, row) => sum + row.available, 0), tone: 'bg-orange-400' }, { label: '90+ days', amount: openRows.filter(row => row.age > 90).reduce((sum, row) => sum + row.available, 0), tone: 'bg-rose-400' }];
+  const maxBucket = Math.max(...buckets.map(bucket => bucket.amount), 1);
 
-  const entries = await prisma.cityLedgerEntry.findMany({
-    where: {
-      propertyId,
-      type: 'REFUND_OWED',
-      status: 'OPEN'
-    },
-    include: {
-      guest: {
-        select: { id: true, firstName: true, lastName: true, phone: true, email: true }
-      },
-      allocations: {
-        select: { id: true, amount: true, folioId: true }
-      }
-    },
-    orderBy: { createdAt: 'desc' }
-  });
-
-  const byGuest = new Map<string, {
-    guestId: string;
-    guestName: string;
-    guestPhone: string;
-    guestEmail: string;
-    availableAmount: number;
-    currency: string;
-    lastActivityAt: Date;
-    creditEntryIds: string[];
-  }>();
-
-  let totalOutstanding = 0;
-  const currencyCode = entries.length > 0 ? entries[0].currency : 'NGN';
-
-  for (const entry of entries) {
-    const guestId = entry.guestId;
-    if (!guestId) continue;
-
-    const allocated = entry.allocations.reduce((s: number, a: any) => s + Number(a.amount), 0);
-    const available = Number(entry.amount) - allocated;
-
-    if (available <= 0.01) continue;
-
-    if (!byGuest.has(guestId)) {
-      byGuest.set(guestId, {
-        guestId,
-        guestName: entry.guest ? `${entry.guest.firstName} ${entry.guest.lastName}`.trim() : 'Unknown Guest',
-        guestPhone: entry.guest?.phone ?? '',
-        guestEmail: entry.guest?.email ?? '',
-        availableAmount: 0,
-        currency: entry.currency,
-        lastActivityAt: entry.createdAt,
-        creditEntryIds: []
-      });
-    }
-
-    const rec = byGuest.get(guestId)!;
-    rec.availableAmount += available;
-    if (entry.createdAt > rec.lastActivityAt) rec.lastActivityAt = entry.createdAt;
-    rec.creditEntryIds.push(entry.id);
-    
-    totalOutstanding += available;
-  }
-
-  const guestsWithCredit = Array.from(byGuest.values()).sort((a, b) => b.availableAmount - a.availableAmount);
-
-  return (
-    <div className="p-8 space-y-8 max-w-7xl mx-auto">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-white mb-2">Guest Credits</h1>
-        <p className="text-slate-400">View and track all outstanding guest credit balances (Refunds Owed).</p>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="bg-slate-900 border-slate-800">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-slate-400">Total Outstanding Credit</CardTitle>
-            <Wallet className="h-4 w-4 text-emerald-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-white">{formatCurrency(totalOutstanding, currencyCode)}</div>
-          </CardContent>
-        </Card>
-        
-        <Card className="bg-slate-900 border-slate-800">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-slate-400">Guests with Balances</CardTitle>
-            <Users className="h-4 w-4 text-emerald-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-white">{guestsWithCredit.length}</div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card className="bg-slate-900 border-slate-800">
-        <CardHeader>
-          <CardTitle className="text-white">Active Guest Credits</CardTitle>
-          <CardDescription className="text-slate-400">Guests with a net positive credit balance.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {guestsWithCredit.length === 0 ? (
-            <div className="text-center p-8 text-slate-400 border border-slate-800 border-dashed rounded-lg">
-              No outstanding guest credits found.
-            </div>
-          ) : (
-            <div className="rounded-md border border-slate-800 overflow-hidden">
-              <Table>
-                <TableHeader className="bg-slate-950/50">
-                  <TableRow className="border-slate-800 hover:bg-transparent">
-                    <TableHead className="text-slate-400">Guest Name</TableHead>
-                    <TableHead className="text-slate-400">Contact</TableHead>
-                    <TableHead className="text-slate-400">Available Balance</TableHead>
-                    <TableHead className="text-slate-400">Last Activity</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {guestsWithCredit.map((guest) => (
-                    <TableRow key={guest.guestId} className="border-slate-800 hover:bg-slate-800/50 transition-colors">
-                      <TableCell className="font-medium text-slate-200">{guest.guestName}</TableCell>
-                      <TableCell>
-                        <div className="flex flex-col gap-1">
-                          {guest.guestEmail ? <span className="text-sm text-slate-300">{guest.guestEmail}</span> : <span className="text-sm text-slate-500 italic">No email</span>}
-                          {guest.guestPhone ? <span className="text-xs text-slate-400">{guest.guestPhone}</span> : null}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 font-semibold px-2 py-1">
-                          {formatCurrency(guest.availableAmount, guest.currency)}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-slate-400">
-                        {formatDate(guest.lastActivityAt)}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-    </div>
-  );
+  return <main className="min-h-screen bg-[#07111f] p-5 text-slate-100 md:p-8"><div className="mx-auto max-w-[1480px] space-y-6"><Link href="/accountant/city-ledger" className="inline-flex items-center gap-2 text-xs text-cyan-300 hover:text-cyan-200"><ArrowLeft className="h-3.5 w-3.5" />Back to city ledger</Link><header className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end"><div><div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[.22em] text-emerald-300"><Wallet className="h-4 w-4" />Guest credit control</div><h1 className="text-3xl font-semibold tracking-tight text-white md:text-4xl">Refund liabilities, under control.</h1><p className="mt-2 max-w-3xl text-sm text-slate-400">A decision-grade view of guest credits transferred out of closed folios, approval exposure, ageing, and the controlled refund workflow for {property?.name || 'this property'}.</p></div><div className="rounded-xl border border-white/10 bg-white/[.04] px-4 py-2 text-xs text-slate-400">As at <span className="ml-1 font-medium text-slate-200">{date(new Date())}</span><span className="ml-2 text-emerald-300">Live</span></div></header>
+    <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><Metric title="Available guest credits" value={money(totalAvailable, currency)} detail={`${openRows.length} credits awaiting guest decision`} tone="emerald" /><Metric title="Pending approval" value={money(totalPending, currency)} detail={`${rows.filter(row => row.pending > 0).length} refund requests in flight`} tone="amber" /><Metric title="Ageing over 30 days" value={money(oldest, currency)} detail="Liability requiring follow-up" tone="rose" /><Metric title="Control state" value="Liability mapped" detail="2160 Guest Refunds Payable" tone="cyan" /></section>
+    <section className="grid gap-6 xl:grid-cols-[1.2fr_.8fr]"><Panel title="Liability ageing" subtitle="Available credit by the date it became payable"><div className="space-y-4">{buckets.map(bucket => <div key={bucket.label}><div className="mb-2 flex items-center justify-between text-sm"><span className="text-slate-300">{bucket.label}</span><span className="font-semibold text-white">{money(bucket.amount, currency)}</span></div><div className="h-2 overflow-hidden rounded-full bg-slate-800"><div className={`h-full rounded-full ${bucket.tone}`} style={{ width: `${bucket.amount / maxBucket * 100}%` }} /></div></div>)}</div></Panel><Panel title="Refund control posture" subtitle="What needs an accountant’s attention"><Insight icon={ShieldCheck} title="Accounting treatment" text="On settlement, Dr 2160 Guest Refunds Payable and Cr the selected cash, bank, or original-payment clearing account." /><Insight icon={Clock3} title="Follow-up signal" text={oldest ? `${money(oldest, currency)} of open guest credit is older than 30 days.` : 'No guest credit is older than 30 days.'} /><Insight icon={FileText} title="Approval trail" text="Every request requires reason, method, approval, settlement evidence, and an immutable audit record." /></Panel></section>
+    <section className="overflow-hidden rounded-2xl border border-white/10 bg-white/[.035]"><div className="flex flex-col justify-between gap-3 border-b border-white/10 p-5 md:flex-row md:items-center"><div><h2 className="font-semibold text-white">Active guest credit register</h2><p className="mt-1 text-xs text-slate-500">Refund, apply to a future stay, or retain only with documented guest consent.</p></div><Link href="/refunds" className="text-xs text-cyan-300 hover:text-cyan-200">Open refund approvals <ArrowRight className="ml-1 inline h-3.5 w-3.5" /></Link></div><div className="overflow-x-auto"><table className="w-full min-w-[1100px] text-left text-sm"><thead className="bg-slate-950/40 text-[10px] uppercase tracking-wider text-slate-500"><tr><th className="px-5 py-3">Guest</th><th className="px-5 py-3">Credit entry</th><th className="px-5 py-3">Age</th><th className="px-5 py-3 text-right">Available</th><th className="px-5 py-3">Workflow</th><th className="px-5 py-3 text-right">Action</th></tr></thead><tbody className="divide-y divide-white/[.07]">{rows.map(row => { const guestName = row.entry.guest ? `${row.entry.guest.firstName} ${row.entry.guest.lastName}`.trim() : 'Unknown guest'; const requestStatus = row.entry.refundRequests[0]?.status; return <tr key={row.entry.id} className="hover:bg-white/[.025]"><td className="px-5 py-4"><div className="font-medium text-slate-200">{guestName}</div><div className="mt-1 text-xs text-slate-500">{row.entry.guest?.email || row.entry.guest?.phone || 'No contact recorded'}</div></td><td className="px-5 py-4"><Link href={`/accountant/city-ledger/${row.entry.accountId}`} className="font-mono text-xs text-cyan-300 hover:text-cyan-200">{row.entry.id.slice(0, 8)}</Link><div className="mt-1 text-xs text-slate-500">{row.entry.reference || 'REFUND_OWED'} · {date(row.entry.createdAt)}</div></td><td className="px-5 py-4 text-slate-400">{row.age}d</td><td className="px-5 py-4 text-right font-semibold text-emerald-300">{money(row.available, row.entry.currency || currency)}</td><td className="px-5 py-4">{requestStatus ? <span className="rounded-full bg-amber-400/10 px-2 py-1 text-[10px] font-semibold text-amber-300">{requestStatus.replaceAll('_', ' ')}</span> : <span className="rounded-full bg-emerald-400/10 px-2 py-1 text-[10px] font-semibold text-emerald-300">OPEN LIABILITY</span>}</td><td className="px-5 py-4 text-right">{row.available > 0.01 ? <GuestCreditRefundDialog entryId={row.entry.id} guestName={guestName} amount={row.available} currency={row.entry.currency || currency} /> : <span className="text-xs text-slate-500">Awaiting settlement</span>}</td></tr>})}{!rows.length && <tr><td colSpan={6} className="p-14 text-center text-slate-500">No active guest credits.</td></tr>}</tbody></table></div></section></div></main>;
 }
+
+function Metric({ title, value, detail, tone }: { title: string; value: string; detail: string; tone: 'cyan' | 'emerald' | 'amber' | 'rose' }) { const colors = { cyan: 'border-cyan-300/15 text-cyan-300', emerald: 'border-emerald-300/15 text-emerald-300', amber: 'border-amber-300/15 text-amber-300', rose: 'border-rose-300/15 text-rose-300' }; return <div className={`rounded-2xl border bg-white/[.035] p-5 ${colors[tone]}`}><p className="text-xs uppercase tracking-wider text-slate-500">{title}</p><p className="mt-4 text-2xl font-semibold text-white">{value}</p><p className="mt-2 text-xs text-slate-500">{detail}</p></div>; }
+function Panel({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) { return <section className="rounded-2xl border border-white/10 bg-white/[.035] p-5 shadow-[0_18px_50px_rgba(0,0,0,.12)]"><h2 className="font-semibold text-white">{title}</h2><p className="mt-1 text-xs text-slate-500">{subtitle}</p><div className="mt-5">{children}</div></section>; }
+function Insight({ icon: Icon, title, text }: { icon: React.ElementType; title: string; text: string }) { return <div className="flex gap-3 border-b border-white/[.07] py-3 last:border-0"><Icon className="mt-0.5 h-4 w-4 shrink-0 text-cyan-300" /><div><p className="text-sm font-medium text-slate-200">{title}</p><p className="mt-1 text-xs leading-5 text-slate-500">{text}</p></div></div>; }
+function EmptyState({ title }: { title: string }) { return <div className="flex min-h-screen items-center justify-center bg-[#07111f] text-slate-300"><div><Wallet className="mx-auto mb-3 h-10 w-10 text-slate-500" /><h1 className="text-xl font-semibold text-white">{title}</h1></div></div>; }

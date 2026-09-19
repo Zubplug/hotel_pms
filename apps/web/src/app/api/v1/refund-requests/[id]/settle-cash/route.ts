@@ -5,6 +5,7 @@ import { errorResponse, successResponse } from '@/lib/api-response';
 import { resolveUser } from '@/lib/resolve-user';
 import { applyRefundToFolio } from '@/lib/refunds/settle-refund';
 import { isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
+import { CityLedgerAccountingService } from '@/lib/services/city-ledger-accounting-service';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -42,6 +43,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         status: 'COMPLETED',
         idempotencyKey: `refund-request:${request.id}`
       } });
+      if (request.cityLedgerEntryId) await CityLedgerAccountingService.settleGuestRefund(tx, { propertyId: request.propertyId, organizationId: property?.organizationId || '', staffId: user.id, cityLedgerEntryId: request.cityLedgerEntryId, refundRequestId: request.id, amount, method: 'CASH', businessDate });
       const staff = await tx.staff.findFirst({ where: { userId: user.id } });
       const activeSession = staff ? await tx.frontdeskSession.findFirst({ where: { propertyId: request.propertyId, staffId: staff.id, status: 'OPEN' } }) : null;
       if (!activeSession || !staff) throw new Error('SHIFT_NOT_OPEN');

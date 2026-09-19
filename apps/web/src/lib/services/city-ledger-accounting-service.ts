@@ -2,6 +2,37 @@ import { GLMappingService } from './gl-mapping-service';
 import { GeneralLedgerService } from './general-ledger-service';
 
 export class CityLedgerAccountingService {
+  static async settleGuestRefund(
+    tx: any,
+    input: { propertyId: string; organizationId: string; staffId: string; cityLedgerEntryId: string; refundRequestId: string; amount: number; method: string; businessDate: Date },
+  ) {
+    const entry = await tx.cityLedgerEntry.findUnique({ where: { id: input.cityLedgerEntryId }, include: { allocations: true } });
+    if (!entry || entry.type !== 'REFUND_OWED' || entry.status === 'SETTLED') throw new Error('GUEST_CREDIT_NOT_AVAILABLE');
+    const allocated = entry.allocations.reduce((sum: number, allocation: any) => sum + Number(allocation.amount), 0);
+    const available = Number(entry.amount) - allocated;
+    if (input.amount <= 0 || input.amount > available + 0.01) throw new Error('GUEST_CREDIT_AMOUNT_EXCEEDED');
+
+    const liabilityAccountId = await GLMappingService.getGuestRefundsPayableAccount(input.propertyId);
+    const tenderMethod = input.method === 'ORIGINAL_PAYMENT' ? 'POS' : input.method;
+    const tenderAccountId = await GLMappingService.getAssetAccountForMethod(input.propertyId, tenderMethod);
+    const systemCtx = { userId: input.staffId, propertyIds: [input.propertyId], organizationId: input.organizationId, role: 'SYSTEM', permissions: [], outletIds: [] };
+    await GeneralLedgerService.postJournal(systemCtx, {
+      propertyId: input.propertyId,
+      entryDate: input.businessDate,
+      reference: `GUEST-CREDIT-REFUND-${input.refundRequestId}`,
+      description: `Settle guest credit refund for city-ledger entry ${input.cityLedgerEntryId}`,
+      sourceModule: 'AR',
+      lines: [
+        { accountId: liabilityAccountId, debit: input.amount, credit: 0, description: 'Reduce Guest Refunds Payable', sourceType: 'GUEST_CREDIT_REFUND', sourceId: input.cityLedgerEntryId },
+        { accountId: tenderAccountId, debit: 0, credit: input.amount, description: `Refund paid by ${tenderMethod}`, sourceType: 'GUEST_CREDIT_REFUND', sourceId: input.cityLedgerEntryId },
+      ],
+    }, tx);
+
+    await tx.cityLedgerAllocation.create({ data: { paymentId: input.cityLedgerEntryId, amount: input.amount, currency: entry.currency, createdBy: input.staffId } });
+    await tx.cityLedgerAccount.update({ where: { id: entry.accountId }, data: { balance: { decrement: input.amount } } });
+    if (available - input.amount <= 0.01) await tx.cityLedgerEntry.update({ where: { id: entry.id }, data: { status: 'SETTLED', reason: `Guest credit refunded; request ${input.refundRequestId}` } });
+  }
+
   /**
    * Processes the double-entry accounting journal for routing a Folio balance
    * to the City Ledger. This is explicitly extracted to guarantee offline sync

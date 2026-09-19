@@ -1206,12 +1206,14 @@ model RefundRequest {
   folioId        String  @db.Uuid
   paymentId      String  @db.Uuid
   guestId        String? @db.Uuid
+  cityLedgerEntryId String? @db.Uuid
 
   organization Organization @relation(fields: [organizationId], references: [id])
   property     Property     @relation(fields: [propertyId], references: [id])
   reservation  Reservation? @relation(fields: [reservationId], references: [id])
   folio        Folio        @relation(fields: [folioId], references: [id])
   payment      Payment      @relation(fields: [paymentId], references: [id])
+  cityLedgerEntry CityLedgerEntry? @relation(fields: [cityLedgerEntryId], references: [id])
 
   requestedAmount            Decimal             @db.Decimal(18, 4)
   approvedAmount             Decimal?            @db.Decimal(18, 4)
@@ -1246,6 +1248,7 @@ model RefundRequest {
 
   @@index([propertyId, status])
   @@index([paymentId, status])
+  @@index([cityLedgerEntryId, status])
   @@index([currentApproverId, status])
 }
 
@@ -4408,6 +4411,7 @@ model CityLedgerEntry {
   folio       Folio?                 @relation(fields: [folioId], references: [id])
   invoice     CityLedgerInvoice?     @relation(fields: [invoiceId], references: [id])
   allocations CityLedgerAllocation[] @relation("PaymentAllocations")
+  refundRequests RefundRequest[]
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
