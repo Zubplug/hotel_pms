@@ -197,7 +197,7 @@ export async function buildNightAuditBalanceProof(tx: any, input: {
     }),
   ]);
   const activity = Number(folioActivity._sum.amount || 0);
-  const journalAccounts = ['1000', '1100', '1110', '1120', '1130', '1140', '2200', '2300'].map((code) => {
+  const journalAccounts = ['1000', '1100', '1110', '1120', '1130', '1140', '1150', '2200', '2300'].map((code) => {
     const before = postedEntries.reduce((sum: number, entry: any) => entry.entryDate < input.businessDate
       ? sum + journalNet(code, entry.lines)
       : sum, 0);
