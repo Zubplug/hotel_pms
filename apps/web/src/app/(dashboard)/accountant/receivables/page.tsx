@@ -55,9 +55,10 @@ export default async function ReceivablesPage() {
   ]);
 
   const currency = property?.baseCurrency || accounts[0]?.currency || 'NGN';
-  const positiveAccounts = accounts.filter(account => Number(account.balance) > 0);
+  const arAccounts = accounts.filter(account => account.type !== 'REFUND_PAYABLE');
+  const positiveAccounts = arAccounts.filter(account => Number(account.balance) > 0);
   const totalOutstanding = positiveAccounts.reduce((sum, account) => sum + Number(account.balance), 0);
-  const creditBalances = accounts.reduce((sum, account) => sum + Math.abs(Math.min(0, Number(account.balance))), 0);
+  const creditBalances = arAccounts.reduce((sum, account) => sum + Math.abs(Math.min(0, Number(account.balance))), 0);
   const openInvoiceRows = invoices.map(invoice => {
     const days = daysBetween(invoice.dueDate, now);
     return { invoice, days, bucket: bucketFor(days), overdue: invoice.dueDate.getTime() < now };
