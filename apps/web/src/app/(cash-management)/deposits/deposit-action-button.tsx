@@ -122,7 +122,7 @@ export function DepositActionButton({
         open={dialog !== null}
         onOpenChange={(open) => !open && !loading && setDialog(null)}
       >
-        <DialogContent className="rounded-2xl border-slate-200 sm:max-w-lg">
+        <DialogContent className="rounded-2xl border-white/10 bg-[#101b2f] text-slate-100 sm:max-w-lg">
           {dialog === 'submit' && (
             <>
               <DialogHeader>
@@ -157,27 +157,27 @@ export function DepositActionButton({
           {dialog === 'verify' && (
             <>
               <DialogHeader>
-                <DialogTitle className="flex items-center gap-2 text-lg"><BadgeCheck className="h-5 w-5 text-emerald-600" />Reconcile bank deposit</DialogTitle>
-                <DialogDescription>
+                <DialogTitle className="flex items-center gap-2 text-lg text-white"><BadgeCheck className="h-5 w-5 text-emerald-300" />Reconcile bank deposit</DialogTitle>
+                <DialogDescription className="text-slate-400">
                   Enter the amount confirmed by the bank. Any difference will be flagged as an exception for investigation.
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-2">
-                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs leading-5 text-amber-900">Enter the amount confirmed by the bank. Any difference will remain visible as an exception until it is explained.</div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600">Bank-confirmed amount<Input
+                <div className="rounded-xl border border-amber-400/20 bg-amber-400/10 p-4 text-xs leading-5 text-amber-200">Enter the amount confirmed by the bank. Any difference will remain visible as an exception until it is explained.</div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300">Bank-confirmed amount<Input
                   type="number"
                   min="0"
                   step="0.01"
                   value={confirmedAmount}
                   onChange={(e) => setConfirmedAmount(e.target.value)}
                   placeholder="0.00"
-                  className="mt-1.5 rounded-xl"
+                  className="mt-1.5 rounded-xl border-white/10 bg-white/[.05] text-white placeholder:text-slate-500"
                 /></label>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600">Reconciliation notes <span className="font-normal normal-case text-slate-400">(optional)</span><Textarea
+                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300">Reconciliation notes <span className="font-normal normal-case text-slate-500">(optional)</span><Textarea
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   placeholder="Document any difference or verification notes"
-                  className="mt-1.5 rounded-xl"
+                  className="mt-1.5 rounded-xl border-white/10 bg-white/[.05] text-white placeholder:text-slate-500"
                 /></label>
               </div>
               <DialogFooter>
@@ -203,11 +203,11 @@ export function DepositActionButton({
           {dialog === 'success' && (
             <>
               <DialogHeader>
-                <DialogTitle className="flex items-center gap-2">
-                  <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+                <DialogTitle className="flex items-center gap-2 text-white">
+                  <CheckCircle2 className="h-5 w-5 text-emerald-300" />
                   Action Completed
                 </DialogTitle>
-                <DialogDescription>
+                <DialogDescription className="text-slate-400">
                   {isSubmit
                     ? 'The deposit is now marked as deposited with the bank.'
                     : 'The bank deposit has been reconciled successfully.'}
@@ -229,8 +229,8 @@ export function DepositActionButton({
           {dialog === 'error' && (
             <>
               <DialogHeader>
-                <DialogTitle>Action Failed</DialogTitle>
-                <DialogDescription>{message}</DialogDescription>
+                <DialogTitle className="text-white">Action Failed</DialogTitle>
+                <DialogDescription className="text-slate-400">{message}</DialogDescription>
               </DialogHeader>
               <DialogFooter>
                 <Button onClick={() => setDialog(null)}>Close</Button>

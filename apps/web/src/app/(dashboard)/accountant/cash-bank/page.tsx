@@ -63,7 +63,8 @@ export default async function CashBankPage() {
   const cashBalance = cashAccounts.filter(account => account.type !== 'BANK_ACCOUNT' && account.type !== 'EXTERNAL').reduce((sum, account) => sum + Number(account.balance), 0);
   const bankBalance = cashAccounts.filter(account => account.type === 'BANK_ACCOUNT').reduce((sum, account) => sum + Number(account.balance), 0);
   const transitBalance = cashAccounts.filter(account => account.type === 'CASH_IN_TRANSIT').reduce((sum, account) => sum + Number(account.balance), 0);
-  const pendingDeposits = deposits.filter(deposit => !['RECONCILED', 'CANCELLED', 'REJECTED'].includes(deposit.status));
+  const openDepositStatuses = ['PENDING_HANDOVER', 'HANDED_OVER', 'UNDER_RECONCILIATION', 'EXCEPTION'];
+  const pendingDeposits = deposits.filter(deposit => openDepositStatuses.includes(deposit.status));
   const exceptions = deposits.filter(deposit => deposit.status === 'EXCEPTION');
   const pendingExpenses = expenses.filter(expense => ['PENDING_APPROVAL', 'APPROVED'].includes(expense.status));
   const unpostedCashExpenses = expenses.filter(expense => expense.status === 'PAID' && !expense.journal);

@@ -45,7 +45,8 @@ export default async function DepositsPage() {
   const deposited = deposits.filter((deposit) => deposit.status === 'DEPOSITED');
   const reconciled = deposits.filter((deposit) => deposit.status === 'RECONCILED');
   const exceptions = deposits.filter((deposit) => deposit.status === 'EXCEPTION');
-  const pipelineAmount = deposits.filter((deposit) => !['RECONCILED'].includes(deposit.status)).reduce((sum, deposit) => sum + Number(deposit.expectedAmount || 0), 0);
+  const openDepositStatuses = ['PENDING_HANDOVER', 'HANDED_OVER', 'UNDER_RECONCILIATION', 'EXCEPTION'];
+  const pipelineAmount = deposits.filter((deposit) => openDepositStatuses.includes(deposit.status)).reduce((sum, deposit) => sum + Number(deposit.expectedAmount || 0), 0);
   const reconciledAmount = reconciled.reduce((sum, deposit) => sum + Number(deposit.expectedAmount || 0), 0);
   const exceptionAmount = exceptions.reduce((sum, deposit) => sum + Number(deposit.difference || 0), 0);
 
