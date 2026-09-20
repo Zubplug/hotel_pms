@@ -27,13 +27,14 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const drawerId = String(body.drawerId || '');
+    const selectedSession = String(body.drawerId || '');
+    const [sessionType, sessionId] = selectedSession.includes(':') ? selectedSession.split(':', 2) : ['POS', selectedSession];
     const amount = amountOf(body.amount);
     const notes = typeof body.notes === 'string' ? body.notes.trim() : '';
     const operationId = String(body.operationId || `cash-drop-${crypto.randomUUID()}`);
 
-    if (!drawerId || !Number.isFinite(amount) || amount <= 0) {
-      return NextResponse.json({ error: 'A drawer and a valid positive amount are required' }, { status: 400 });
+    if (!sessionId || !['POS', 'FRONT_DESK'].includes(sessionType) || !Number.isFinite(amount) || amount <= 0) {
+      return NextResponse.json({ error: 'An open POS/front-desk session and a valid positive amount are required' }, { status: 400 });
     }
 
     const ctx = await requireOrganizationContext(actor.user.id);
@@ -41,25 +42,37 @@ export async function POST(request: NextRequest) {
       const existing = await tx.posCashMovement.findUnique({ where: { operationId } });
       if (existing) return existing;
 
-      const drawer = await tx.posSession.findUnique({
-        where: { id: drawerId },
+      const drawer: any = sessionType === 'POS' ? await tx.posSession.findUnique({
+        where: { id: sessionId },
         include: { cashMovements: { orderBy: { createdAt: 'asc' } }, outlet: { select: { name: true } }, property: { select: { id: true, baseCurrency: true, businessDate: true, organizationId: true } } },
+      }) : await tx.frontdeskSession.findUnique({
+        where: { id: sessionId },
+        include: { cashMovements: { orderBy: { createdAt: 'asc' } }, cashAccount: true, staff: { select: { firstName: true, lastName: true } }, property: { select: { id: true, baseCurrency: true, businessDate: true, organizationId: true } } },
       });
       if (!drawer || !drawer.propertyId || !drawer.property || !ctx.propertyIds.includes(drawer.propertyId)) {
-        throw new Error('Drawer not found or access denied');
+        throw new Error('Session not found or access denied');
       }
       if (await isNightAuditTransactionLocked(drawer.propertyId)) {
         throw new Error('Cash drops are temporarily locked while Night Audit is posting');
       }
-      if (!['OPEN', 'SUBMITTED', 'UNDER_REVIEW', 'RETURNED', 'HANDOVER_PENDING'].includes(drawer.controlStatus)) {
-        throw new Error(`Cash drop is not allowed from a drawer in ${drawer.controlStatus} status`);
+      const sessionStatus = sessionType === 'POS' ? drawer.controlStatus : drawer.status;
+      const allowedStatuses = sessionType === 'POS'
+        ? ['OPEN', 'SUBMITTED', 'UNDER_REVIEW', 'RETURNED', 'HANDOVER_PENDING']
+        : ['OPEN', 'CLOSING', 'SUBMITTED', 'UNDER_REVIEW', 'RETURNED', 'HANDOVER_PENDING'];
+      if (!allowedStatuses.includes(sessionStatus)) {
+        throw new Error(`Cash drop is not allowed from a session in ${sessionStatus} status`);
       }
 
-      const sourceType = drawer.bankingModel === 'SERVER_BANKING' ? 'SERVER_BANK' : 'STATION_BANK';
-      const sourceMovement = drawer.cashMovements.find(movement => movement.type === 'PAYMENT') || drawer.cashMovements[0];
-      const sourceAccount = (drawer.outletId
-        ? await tx.cashAccount.findFirst({ where: { propertyId: drawer.propertyId, outletId: drawer.outletId, type: sourceType, isActive: true } })
-        : null) || (sourceMovement ? await tx.cashAccount.findUnique({ where: { id: sourceMovement.sourceAccountId } }) : null);
+      const sourceAccount = sessionType === 'FRONT_DESK'
+        ? drawer.cashAccount
+        : await (async () => {
+          const sourceType = drawer.bankingModel === 'SERVER_BANKING' ? 'SERVER_BANK' : 'STATION_BANK';
+          const sourceMovement = drawer.cashMovements.find((movement: any) => movement.type === 'PAYMENT') || drawer.cashMovements[0];
+          const outletAccount = drawer.outletId
+            ? await tx.cashAccount.findFirst({ where: { propertyId: drawer.propertyId, outletId: drawer.outletId, type: sourceType, isActive: true } })
+            : null;
+          return outletAccount || (sourceMovement ? tx.cashAccount.findUnique({ where: { id: sourceMovement.sourceAccountId } }) : null);
+        })();
       if (!sourceAccount) throw new Error('The drawer cash account is unavailable');
       if (!sourceAccount || sourceAccount.propertyId !== drawer.propertyId || !sourceAccount.isActive) {
         throw new Error('The drawer cash account is unavailable');
@@ -71,7 +84,7 @@ export async function POST(request: NextRequest) {
       if (!safeAccount) throw new Error('General Cashier Safe is unavailable');
       if (!safeAccount.glAccountId) throw new Error('Map General Cashier Safe to a GL account before recording a cash drop');
 
-      const available = await ShiftControlService.recalculateExpectedCash(tx, 'POS', drawer.id);
+      const available = await ShiftControlService.recalculateExpectedCash(tx, sessionType === 'FRONT_DESK' ? 'FRONT_DESK' : 'POS', drawer.id);
       if (amount > available + 0.005) {
         throw new Error(`Amount exceeds the drawer cash available of ${available.toFixed(2)}`);
       }
@@ -83,7 +96,8 @@ export async function POST(request: NextRequest) {
           id: crypto.randomUUID(),
           propertyId: drawer.propertyId,
           deviceId: 'web-accountant-cash-bank',
-          posSessionId: drawer.id,
+          posSessionId: sessionType === 'POS' ? drawer.id : undefined,
+          frontdeskSessionId: sessionType === 'FRONT_DESK' ? drawer.id : undefined,
           userId: ctx.userId,
           amount,
           currency,
@@ -101,11 +115,16 @@ export async function POST(request: NextRequest) {
 
       await tx.cashAccount.update({ where: { id: sourceAccount.id }, data: { balance: { decrement: amount } } });
       await tx.cashAccount.update({ where: { id: safeAccount.id }, data: { balance: { increment: amount } } });
+      if (sessionType === 'POS') {
+        await tx.posSession.update({ where: { id: drawer.id }, data: { updatedAt: new Date() } });
+      } else {
+        await tx.frontdeskSession.update({ where: { id: drawer.id }, data: { updatedAt: new Date() } });
+      }
 
       await GeneralLedgerService.postJournal(ctx, {
         propertyId: drawer.propertyId,
         entryDate: drawer.businessDate,
-        description: `Cash drop from ${drawer.outlet?.name || drawer.outletId} to General Cashier Safe`,
+        description: `Cash drop from ${sessionType === 'POS' ? (drawer.outlet?.name || drawer.outletId) : `front desk ${drawer.shiftReference}`} to General Cashier Safe`,
         reference,
         sourceModule: 'CASH_MANAGEMENT',
         lines: [
@@ -118,7 +137,8 @@ export async function POST(request: NextRequest) {
         data: {
           id: crypto.randomUUID(),
           propertyId: drawer.propertyId,
-          posSessionId: drawer.id,
+          posSessionId: sessionType === 'POS' ? drawer.id : undefined,
+          frontdeskSessionId: sessionType === 'FRONT_DESK' ? drawer.id : undefined,
           action: 'CASH_DROP_RECORDED',
           fromStatus: drawer.controlStatus,
           toStatus: drawer.controlStatus,

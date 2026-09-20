@@ -11,6 +11,7 @@ const EXACT_USALI_MATCHES: Record<string, string[]> = {
   'STATION_BANK': ['1100', '11000'],
   'SERVER_BANK': ['1100', '11000'],
   'PETTY_CASH': ['1110', '11100'],
+  'CASH_IN_TRANSIT': ['1160'],
 };
 
 async function main() {

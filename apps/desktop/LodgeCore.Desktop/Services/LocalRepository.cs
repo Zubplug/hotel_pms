@@ -1129,7 +1129,10 @@ public class LocalRepository
 
     public async Task<List<LocalCashAccount>> GetCashAccountsAsync(string propertyId)
     {
-        return await _dbContext.CashAccounts.Where(account => account.PropertyId == propertyId && account.IsActive).OrderBy(account => account.Name).ToListAsync();
+        return await _dbContext.CashAccounts
+            .Where(account => account.PropertyId == propertyId && account.IsActive && account.Type == "FRONTDESK_TILL")
+            .OrderBy(account => account.Name)
+            .ToListAsync();
     }
 
     public async Task<object> GetFrontdeskReconciliationReportAsync(string propertyId, DateTime startDate, DateTime endDate)

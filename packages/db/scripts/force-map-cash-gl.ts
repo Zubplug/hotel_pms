@@ -41,9 +41,9 @@ async function main() {
       else if (ca.type === 'BANK_ACCOUNT' && ca.name.includes('Main Corporate Bank Account')) {
         targetGlCode = '1010';
       }
-      // Rule: Cash in Transit -> leave unmapped
+      // Cash in Transit is a dedicated current-asset clearing account.
       else if (ca.type === 'CASH_IN_TRANSIT') {
-        targetGlCode = null;
+        targetGlCode = '1160';
       }
 
       if (targetGlCode) {
@@ -57,7 +57,7 @@ async function main() {
         } else {
           console.warn(`  [WARNING] GL Code ${targetGlCode} not found in property ${property.name} for ${ca.name}`);
         }
-      } else {
+      } else if (ca.type !== 'CASH_IN_TRANSIT') {
         console.log(`  [SKIPPING] ${ca.name} - Left unmapped`);
         await prisma.cashAccount.update({
             where: { id: ca.id },

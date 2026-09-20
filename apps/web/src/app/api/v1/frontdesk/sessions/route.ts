@@ -45,8 +45,8 @@ export async function POST(req: NextRequest) {
     if (!property) return errorResponse('NOT_FOUND', 'Property not found', 404);
     if (!((await requireOrganizationContext(session.user.id)).propertyIds).includes(propertyId)) return errorResponse('FORBIDDEN', 'No access to this property', 403);
     if (await isNightAuditTransactionLocked(propertyId)) return errorResponse('NIGHT_AUDIT_IN_PROGRESS', 'Night audit cutover is in progress. Open a cashier shift after the new business date is active.', 409);
-    const cashAccount = await prisma.cashAccount.findFirst({ where: { id: cashAccountId, propertyId: { in: ctx.propertyIds as string[] }, isActive: true } });
-    if (!cashAccount) return errorResponse('BAD_REQUEST', 'Cashier till is not active for this property', 400);
+    const cashAccount = await prisma.cashAccount.findFirst({ where: { id: cashAccountId, propertyId, type: 'FRONTDESK_TILL', isActive: true } });
+    if (!cashAccount) return errorResponse('BAD_REQUEST', 'Select an active Front Desk Till. Cash in Transit and control accounts cannot be used for a cashier shift.', 400);
     const businessDate = property.businessDate || new Date(new Intl.DateTimeFormat('en-CA', { timeZone: property.timezone || 'Africa/Lagos' }).format(new Date()) + 'T00:00:00.000Z');
     const floatValue = Number(openingFloat) || 0;
     const shiftReference = `FD-${businessDate.toISOString().slice(0, 10).replace(/-/g, '')}-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;

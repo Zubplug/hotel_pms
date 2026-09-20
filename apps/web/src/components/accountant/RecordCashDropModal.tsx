@@ -49,11 +49,18 @@ interface PosSession {
   primaryOperator?: { firstName: string; lastName: string } | null;
 }
 
-interface RecordCashDropModalProps {
-  posSessions: PosSession[];
+interface FrontdeskSession {
+  id: string;
+  shiftReference: string;
+  staff?: { firstName: string; lastName: string } | null;
 }
 
-export function RecordCashDropModal({ posSessions }: RecordCashDropModalProps) {
+interface RecordCashDropModalProps {
+  posSessions: PosSession[];
+  frontdeskSessions: FrontdeskSession[];
+}
+
+export function RecordCashDropModal({ posSessions, frontdeskSessions }: RecordCashDropModalProps) {
   const [open, setOpen] = useState(false);
   const router = useRouter();
 
@@ -102,8 +109,8 @@ export function RecordCashDropModal({ posSessions }: RecordCashDropModalProps) {
       <DialogContent className="sm:max-w-[425px] bg-slate-900 border-white/10 text-white">
         <DialogHeader>
           <DialogTitle>Record Cash Drop</DialogTitle>
-          <DialogDescription className="text-slate-400">
-            Transfer counted cash from a POS drawer into the General Cashier Safe. The drop is posted to the business date and remains available for the live deposit workflow.
+            <DialogDescription className="text-slate-400">
+            Transfer counted cash from an open POS or front-desk session into the General Cashier Safe. The drop is posted to the session business date and remains available for the live deposit workflow.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -121,9 +128,14 @@ export function RecordCashDropModal({ posSessions }: RecordCashDropModalProps) {
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent className="bg-slate-900 border-white/10 text-white">
-                      {posSessions.map((session) => (
-                        <SelectItem key={session.id} value={session.id} className="focus:bg-slate-800 focus:text-white">
-                          {session.id.substring(0, 8)} - {session.outlet?.name || 'Unknown'}
+                          {posSessions.map((session) => (
+                        <SelectItem key={`POS:${session.id}`} value={`POS:${session.id}`} className="focus:bg-slate-800 focus:text-white">
+                          POS · {session.outlet?.name || 'Unknown'} · {session.id.substring(0, 8)}
+                        </SelectItem>
+                      ))}
+                      {frontdeskSessions.map((session) => (
+                        <SelectItem key={`FRONT_DESK:${session.id}`} value={`FRONT_DESK:${session.id}`} className="focus:bg-slate-800 focus:text-white">
+                          Front desk · {session.shiftReference} · {session.staff ? `${session.staff.firstName} ${session.staff.lastName}` : 'Unassigned'}
                         </SelectItem>
                       ))}
                     </SelectContent>

@@ -2093,6 +2093,42 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                     
                     if (el.TryGetProperty("businessDate", out var bd) && bd.ValueKind != System.Text.Json.JsonValueKind.Null) posSession.BusinessDate = bd.GetDateTime();
 
+                    // Accountant-created cash drops are pulled with the POS
+                    // session so offline settlement screens remain aligned
+                    // after the device reconnects. Upsert by immutable ID for
+                    // idempotent replay.
+                    if (el.TryGetProperty("cashMovements", out var posMovements) && posMovements.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var movementEl in posMovements.EnumerateArray())
+                        {
+                            var movementId = movementEl.TryGetProperty("id", out var mid) ? mid.GetString() : null;
+                            if (string.IsNullOrWhiteSpace(movementId)) continue;
+                            var movement = await dbContext.PosCashMovements.FirstOrDefaultAsync(m => m.Id == movementId, stoppingToken);
+                            if (movement == null)
+                            {
+                                movement = new LodgeCore.Desktop.Data.Entities.LocalPosCashMovement { Id = movementId };
+                                dbContext.PosCashMovements.Add(movement);
+                            }
+                            movement.PropertyId = propertyId;
+                            movement.PosSessionId = id;
+                            movement.FrontdeskSessionId = null;
+                            movement.DeviceId = movementEl.TryGetProperty("deviceId", out var movementDevice) ? movementDevice.GetString() ?? "" : movement.DeviceId;
+                            movement.UserId = movementEl.TryGetProperty("userId", out var movementUser) ? movementUser.GetString() ?? "" : movement.UserId;
+                            movement.Amount = movementEl.TryGetProperty("amount", out var movementAmount) && decimal.TryParse(movementAmount.ToString(), out var parsedAmount) ? parsedAmount : movement.Amount;
+                            movement.Currency = movementEl.TryGetProperty("currency", out var movementCurrency) ? movementCurrency.GetString() ?? "NGN" : movement.Currency;
+                            movement.Type = movementEl.TryGetProperty("type", out var movementType) ? movementType.ToString() : movement.Type;
+                            movement.SourceAccountId = movementEl.TryGetProperty("sourceAccountId", out var sourceAccount) ? sourceAccount.GetString() ?? "" : movement.SourceAccountId;
+                            movement.DestinationAccountId = movementEl.TryGetProperty("destinationAccountId", out var destinationAccount) ? destinationAccount.GetString() ?? "" : movement.DestinationAccountId;
+                            movement.ReasonCode = movementEl.TryGetProperty("reasonCode", out var reasonCode) ? reasonCode.GetString() ?? "" : movement.ReasonCode;
+                            movement.Notes = movementEl.TryGetProperty("notes", out var movementNotes) && movementNotes.ValueKind != JsonValueKind.Null ? movementNotes.GetString() : movement.Notes;
+                            movement.ReceiptReference = movementEl.TryGetProperty("receiptReference", out var receiptReference) && receiptReference.ValueKind != JsonValueKind.Null ? receiptReference.GetString() : movement.ReceiptReference;
+                            movement.OperationId = movementEl.TryGetProperty("operationId", out var operationId) ? operationId.GetString() ?? "" : movement.OperationId;
+                            movement.BusinessDate = movementEl.TryGetProperty("businessDate", out var movementDate) && movementDate.ValueKind != JsonValueKind.Null && DateTime.TryParse(movementDate.GetString(), out var parsedMovementDate) ? parsedMovementDate : movement.BusinessDate;
+                            movement.AuthorizedBy = movementEl.TryGetProperty("authorizedBy", out var authorizedBy) && authorizedBy.ValueKind != JsonValueKind.Null ? authorizedBy.GetString() : movement.AuthorizedBy;
+                            movement.CreatedAt = movementEl.TryGetProperty("createdAt", out var movementCreatedAt) && DateTime.TryParse(movementCreatedAt.GetString(), out var parsedMovementCreatedAt) ? parsedMovementCreatedAt : movement.CreatedAt;
+                        }
+                    }
+
                     // Pulling a closed/submitted shift is also a security
                     // boundary: invalidate the desktop operator context so
                     // the next POS use cannot continue under the old waiter.

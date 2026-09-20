@@ -24,6 +24,12 @@ export async function ensureCashierControlAccountsForClient(ctx: TenantContext, 
 
     const accounts = [];
     for (const definition of definitions) {
+      const controlGlAccount = definition.type === CASH_IN_TRANSIT
+        ? await tx.chartOfAccount.findFirst({
+            where: { propertyId, code: '1160', type: 'ASSET', isActive: true },
+            select: { id: true },
+          })
+        : null;
       const existing = await tx.cashAccount.findFirst({
         where: {
           propertyId,
@@ -37,10 +43,18 @@ export async function ensureCashierControlAccountsForClient(ctx: TenantContext, 
 
       const account = existing
         ? existing.type === definition.type
-          ? existing
+          ? existing.glAccountId || !controlGlAccount
+            ? existing
+            : await tx.cashAccount.update({
+                where: { id: existing.id },
+                data: { glAccountId: controlGlAccount.id },
+              })
           : await tx.cashAccount.update({
               where: { id: existing.id },
-              data: { type: definition.type },
+              data: {
+                type: definition.type,
+                ...(controlGlAccount && !existing.glAccountId ? { glAccountId: controlGlAccount.id } : {}),
+              },
             })
         : await tx.cashAccount.create({
             data: {
@@ -49,6 +63,7 @@ export async function ensureCashierControlAccountsForClient(ctx: TenantContext, 
               type: definition.type,
               balance: 0,
               isActive: true,
+              ...(controlGlAccount ? { glAccountId: controlGlAccount.id } : {}),
             },
           });
       accounts.push(account);

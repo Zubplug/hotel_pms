@@ -541,6 +541,19 @@ export async function POST(req: NextRequest) {
               where: { id: sessionId },
             });
             if (!existingSession) {
+              const cashAccount = await tx.cashAccount.findFirst({
+                where: {
+                  id: payload.cashAccountId,
+                  propertyId,
+                  type: "FRONTDESK_TILL",
+                  isActive: true,
+                },
+              });
+              if (!cashAccount) {
+                throw new Error(
+                  "FRONTDESK_TILL_REQUIRED: Offline session must use an active Front Desk Till.",
+                );
+              }
               await tx.frontdeskSession.create({
                 data: {
                   id: sessionId,

@@ -88,6 +88,8 @@ export async function GET(req: NextRequest) {
     });
 
     const cashAccounts = await prisma.cashAccount.findMany({
+      // The shared sync feed also hydrates POS/server-banking accounts. The
+      // front-desk client filters this set to FRONTDESK_TILL locally.
       where: buildWhere({ propertyId, isActive: true }),
       take: limit,
       orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
@@ -327,6 +329,7 @@ export async function GET(req: NextRequest) {
 
     const posSessions = await prisma.posSession.findMany({
       where: buildOutletWhere(buildPosSessionWhere({ outletId: { in: outletIds } })),
+      include: { cashMovements: true },
       take: limit,
       orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
     });
