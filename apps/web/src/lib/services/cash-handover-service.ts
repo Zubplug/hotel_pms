@@ -348,17 +348,38 @@ export class CashHandoverService {
         ...handover.posSessions.map((session) => ({ posSessionId: session.id, allocatedAmount: Number(session.actualCash || 0) })),
         ...handover.frontdeskSessions.map((session) => ({ frontdeskSessionId: session.id, allocatedAmount: Number(session.declaredCash || 0) })),
       ];
-      const deposit = await tx.bankDeposit.create({
-        data: {
-          id: crypto.randomUUID(),
-          propertyId: handover.propertyId,
-          depositReference: `DEP-${Date.now()}-${crypto.randomBytes(2).toString('hex').toUpperCase()}`,
-          expectedAmount: handover.amount,
-          status: 'PENDING_HANDOVER',
-          createdById: ctx.userId,
-          allocations: { create: allocations.map((allocation) => ({ ...allocation, id: crypto.randomUUID() })) },
-        },
+      // A received handover is an allocation into the property's open bank
+      // batch, not a bank deposit by itself. Keep one pending batch open so
+      // the General Cashier can submit the combined custody balance once.
+      const openDeposit = await tx.bankDeposit.findFirst({
+        where: { propertyId: handover.propertyId, status: 'PENDING_HANDOVER' },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        select: { id: true, depositReference: true },
       });
+      const deposit = openDeposit
+        ? await tx.bankDeposit.update({
+            where: { id: openDeposit.id },
+            data: { expectedAmount: { increment: handover.amount } },
+          })
+        : await tx.bankDeposit.create({
+            data: {
+              id: crypto.randomUUID(),
+              propertyId: handover.propertyId,
+              depositReference: `DEP-${Date.now()}-${crypto.randomBytes(2).toString('hex').toUpperCase()}`,
+              expectedAmount: handover.amount,
+              status: 'PENDING_HANDOVER',
+              createdById: ctx.userId,
+            },
+          });
+      if (allocations.length > 0) {
+        await tx.bankDepositAllocation.createMany({
+          data: allocations.map((allocation) => ({
+            ...allocation,
+            id: crypto.randomUUID(),
+            bankDepositId: deposit.id,
+          })),
+        });
+      }
       if (handover.posSessions.length > 0) {
         await tx.posSession.updateMany({ where: { id: { in: handover.posSessions.map((session) => session.id) } }, data: { controlStatus: 'DEPOSIT_PENDING', updatedAt: new Date() } });
       }
