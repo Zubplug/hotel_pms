@@ -6,7 +6,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   try {
     const user = await resolveUser(req);
     if (!user) return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
-    if (!['ADMIN', 'SUPER_ADMIN'].includes(user.role) && !user.isSuperAdmin) {
+    if (!['ADMIN', 'SUPER_ADMIN', 'MANAGER', 'FINANCE_MANAGER', 'ACCOUNTANT', 'NIGHT_AUDITOR'].includes(user.role) && !user.isSuperAdmin) {
       return NextResponse.json({ error: 'Administrator access required' }, { status: 403 });
     }
 
