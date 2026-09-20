@@ -75,14 +75,13 @@ export function AccountantLayout({ children }: { children: React.ReactNode }) {
     }
   }, [status, router]);
 
-  const userInitials = session?.user?.email
-    ? session.user.email.slice(0, 2).toUpperCase()
-    : '??';
-
-  const userFullName =
-    (session?.user as any)?.firstName && (session?.user as any)?.lastName
-      ? `${(session?.user as any).firstName} ${(session?.user as any).lastName}`
-      : session?.user?.email ?? '';
+  const userFullName = session?.user?.name?.trim() || 'Staff member';
+  const userInitials = userFullName
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join('') || 'ST';
 
   if (status === 'loading') {
     return (
