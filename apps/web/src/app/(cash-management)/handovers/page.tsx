@@ -7,8 +7,8 @@ import { CreateHandoverButton } from './create-handover-button';
 import { ArrowLeftRight, Banknote, CheckCircle2, Clock3, ShieldCheck, TrendingUp, Activity, WalletCards } from 'lucide-react';
 
 const statusMeta: Record<string, { label: string; classes: string }> = {
-  PENDING:   { label: 'Pending Receipt', classes: 'bg-amber-50 text-amber-700 border-amber-200' },
-  COMPLETED: { label: 'Completed',       classes: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  PENDING:   { label: 'Pending Receipt', classes: 'bg-amber-400/10 text-amber-300 border-amber-400/20' },
+  COMPLETED: { label: 'Completed',       classes: 'bg-emerald-400/10 text-emerald-300 border-emerald-400/20' },
 };
 
 export default async function HandoversPage() {
@@ -89,7 +89,7 @@ export default async function HandoversPage() {
         </div>
       </div>
 
-      <div className="mx-auto max-w-[1440px] space-y-6 px-5 py-7 sm:px-8">
+      <div className="mx-auto max-w-[1440px] space-y-6 bg-[#08111f] px-5 py-7 text-slate-100 sm:px-8">
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {[
             { label: 'Awaiting receipt', value: pendingHandovers.length, detail: `₦${pendingAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })} in custody queue`, icon: Clock3, tone: 'bg-amber-50 text-amber-700' },
@@ -102,13 +102,13 @@ export default async function HandoversPage() {
           <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><div className="flex items-start justify-between"><div><div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.15em] text-indigo-600"><Activity className="h-4 w-4" />Custody flow</div><h2 className="mt-1 text-lg font-semibold text-slate-900">Seven-day handover activity</h2><p className="mt-1 text-sm text-slate-500">Volume of custody transfers created across your properties.</p></div><TrendingUp className="h-5 w-5 text-emerald-500" /></div><div className="mt-7 flex h-36 items-end gap-3">{handoverTrend.map((day) => <div key={day.date.toISOString()} className="group flex h-full flex-1 flex-col items-center justify-end gap-2"><div className="relative flex h-full w-full items-end justify-center"><span className="absolute bottom-full mb-1 hidden rounded bg-slate-900 px-1.5 py-0.5 text-[10px] text-white group-hover:block">{day.count}</span><div className="w-full max-w-12 rounded-t-lg bg-indigo-100 transition group-hover:bg-indigo-400" style={{ height: `${Math.max((day.count / trendMax) * 100, day.count ? 12 : 4)}%` }} /></div><span className="text-[10px] font-semibold uppercase text-slate-400">{day.date.toLocaleDateString('en-GB', { weekday: 'short' }).slice(0, 3)}</span></div>)}</div></section>
           <section className="rounded-2xl border border-slate-200 bg-slate-950 p-6 text-white shadow-sm"><div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.15em] text-indigo-300"><Banknote className="h-4 w-4" />Custody insight</div><h2 className="mt-2 text-lg font-semibold">What needs attention</h2><div className="mt-6 space-y-3"><div className="rounded-xl bg-white/10 p-4"><p className="text-xs text-slate-400">Pending physical receipt</p><p className="mt-1 text-xl font-bold">{pendingHandovers.length} handover{pendingHandovers.length === 1 ? '' : 's'}</p><p className="mt-1 text-xs text-amber-300">₦{pendingAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })} awaiting custody confirmation</p></div><div className="rounded-xl bg-white/10 p-4"><p className="text-xs text-slate-400">Control posture</p><p className="mt-1 text-sm font-semibold text-emerald-300">{pendingHandovers.length === 0 ? 'Clear — no custody backlog' : 'Monitor — receipt action required'}</p></div></div></section>
         </div>
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/[.045] shadow-sm">
           {/* Table header bar */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/60">
+          <div className="flex items-center justify-between border-b border-white/10 bg-white/[.03] px-6 py-4">
             <div className="flex items-center gap-2">
               <ArrowLeftRight className="h-4 w-4 text-slate-500" />
-              <span className="text-sm font-semibold text-slate-700">Custody transfer register</span>
-              <span className="ml-1 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-slate-200 text-slate-600 text-xs font-bold">
+              <span className="text-sm font-semibold text-slate-200">Custody transfer register</span>
+              <span className="ml-1 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-white/10 px-1.5 text-xs font-bold text-slate-300">
                 {handovers.length}
               </span>
             </div>
@@ -116,10 +116,10 @@ export default async function HandoversPage() {
 
           {handovers.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 text-center px-6">
-              <div className="h-16 w-16 rounded-full bg-slate-100 flex items-center justify-center mb-4">
+              <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-white/10">
                 <ArrowLeftRight className="h-8 w-8 text-slate-400" />
               </div>
-              <p className="text-sm font-semibold text-slate-600">No handovers yet</p>
+              <p className="text-sm font-semibold text-slate-300">No handovers yet</p>
               <p className="text-sm text-slate-400 mt-1">
                 Payment handovers will appear here once approved shifts are transferred to the general cashier.
               </p>
@@ -128,7 +128,7 @@ export default async function HandoversPage() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="bg-slate-50/80 border-b border-slate-100">
+                  <tr className="border-b border-white/10 bg-white/[.03]">
                     {[
                       'Reference',
                       'Property',
@@ -142,10 +142,10 @@ export default async function HandoversPage() {
                     ].map((h, i) => (
                       <th
                         key={i}
-                        className={`px-6 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wider whitespace-nowrap ${
+                          className={`whitespace-nowrap px-6 py-3 text-xs font-semibold uppercase tracking-wider text-slate-400 ${
                           i >= 2 ? 'text-right' : 'text-left'
                         } ${
-                          i === 8 ? 'sticky right-0 bg-slate-50/90 backdrop-blur-sm border-l border-slate-100 z-10 shadow-[-4px_0_12px_rgba(0,0,0,0.02)]' : ''
+                          i === 8 ? 'sticky right-0 z-10 border-l border-white/10 bg-[#101b2f]/90 shadow-[-4px_0_12px_rgba(0,0,0,0.2)] backdrop-blur-sm' : ''
                         }`}
                       >
                         {h}
@@ -153,7 +153,7 @@ export default async function HandoversPage() {
                     ))}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody className="divide-y divide-white/[.06]">
                   {handovers.map((h) => {
                     const meta =
                       statusMeta[h.status] ?? {
@@ -166,13 +166,13 @@ export default async function HandoversPage() {
                     return (
                       <tr
                         key={h.id}
-                        className="hover:bg-slate-50/70 transition-colors"
+                        className="transition-colors hover:bg-white/[.04]"
                       >
-                        <td className="px-6 py-4 font-mono text-xs font-semibold text-slate-800">
+                        <td className="px-6 py-4 font-mono text-xs font-semibold text-slate-200">
                           {h.handoverReference}
                         </td>
-                        <td className="px-6 py-4 text-slate-600">{h.property.name}</td>
-                        <td className="px-6 py-4 text-right font-semibold text-slate-800">
+                        <td className="px-6 py-4 text-slate-300">{h.property.name}</td>
+                        <td className="px-6 py-4 text-right font-semibold text-slate-200">
                           ₦{Number(h.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                           <div className="mt-1 flex flex-wrap justify-end gap-1">
                             {Object.entries(paymentBreakdown).map(([method, value]) => (

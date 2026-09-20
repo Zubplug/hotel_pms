@@ -8,10 +8,10 @@ import { ensureCashierControlAccounts } from '@/lib/services/cash-account-servic
 import { Landmark, AlertTriangle, Banknote, CheckCircle2, Clock3, Activity, ShieldCheck, TrendingUp } from 'lucide-react';
 
 const statusMeta: Record<string, { label: string; classes: string }> = {
-  RECONCILED: { label: 'Reconciled', classes: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-  EXCEPTION:  { label: 'Exception',  classes: 'bg-red-50 text-red-700 border-red-200' },
-  DEPOSITED:  { label: 'Deposited',  classes: 'bg-blue-50 text-blue-700 border-blue-200' },
-  PENDING_HANDOVER: { label: 'Available to submit', classes: 'bg-amber-50 text-amber-700 border-amber-200' },
+  RECONCILED: { label: 'Reconciled', classes: 'bg-emerald-400/10 text-emerald-300 border-emerald-400/20' },
+  EXCEPTION:  { label: 'Exception',  classes: 'bg-rose-400/10 text-rose-300 border-rose-400/20' },
+  DEPOSITED:  { label: 'Deposited',  classes: 'bg-cyan-400/10 text-cyan-300 border-cyan-400/20' },
+  PENDING_HANDOVER: { label: 'Available to submit', classes: 'bg-amber-400/10 text-amber-300 border-amber-400/20' },
 };
 
 export default async function DepositsPage() {
@@ -67,7 +67,7 @@ export default async function DepositsPage() {
         </div>
       </div>
 
-      <div className="mx-auto max-w-[1440px] space-y-6 px-5 py-7 sm:px-8">
+      <div className="mx-auto max-w-[1440px] space-y-6 bg-[#08111f] px-5 py-7 text-slate-100 sm:px-8">
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {[
             { label: 'Deposit pipeline', value: `₦${pipelineAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, detail: `${pendingDeposits.length} pending handover`, icon: Banknote, tone: 'bg-amber-50 text-amber-700' },
@@ -99,15 +99,15 @@ export default async function DepositsPage() {
         {allowedProperties.length === 1 && availableCash <= 0 && (
           <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 text-sm text-slate-500 shadow-sm">No cash is currently available for bank submission. Received cash will appear here after the cashier custody workflow posts it.</div>
         )}
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/[.045] shadow-sm">
           {/* Table header bar */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/60">
+          <div className="flex items-center justify-between border-b border-white/10 bg-white/[.03] px-6 py-4">
             <div className="flex items-center gap-2">
               <Landmark className="h-4 w-4 text-slate-500" />
-              <span className="text-sm font-semibold text-slate-700">
+              <span className="text-sm font-semibold text-slate-200">
                 Deposit register
               </span>
-              <span className="ml-1 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-slate-200 text-slate-600 text-xs font-bold">
+              <span className="ml-1 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-white/10 px-1.5 text-xs font-bold text-slate-300">
                 {deposits.length}
               </span>
             </div>
@@ -115,10 +115,10 @@ export default async function DepositsPage() {
 
           {deposits.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 text-center px-6">
-              <div className="h-16 w-16 rounded-full bg-slate-100 flex items-center justify-center mb-4">
+              <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-white/10">
                 <Landmark className="h-8 w-8 text-slate-400" />
               </div>
-              <p className="text-sm font-semibold text-slate-600">No deposits yet</p>
+              <p className="text-sm font-semibold text-slate-300">No deposits yet</p>
               <p className="text-sm text-slate-400 mt-1">
                 Deposits will appear here once cash handovers are bundled for banking.
               </p>
@@ -127,12 +127,12 @@ export default async function DepositsPage() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="bg-slate-50/80 border-b border-slate-100">
+                  <tr className="border-b border-white/10 bg-white/[.03]">
                     {['Reference', 'Property', 'Bank / Account', 'Expected', 'Difference', 'Status', 'Shifts', 'Date', ''].map(
                       (h, i) => (
                         <th
                           key={i}
-                          className={`px-6 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wider whitespace-nowrap ${
+                          className={`whitespace-nowrap px-6 py-3 text-xs font-semibold uppercase tracking-wider text-slate-400 ${
                             i >= 3 ? 'text-right' : 'text-left'
                           }`}
                         >
@@ -142,21 +142,21 @@ export default async function DepositsPage() {
                     )}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody className="divide-y divide-white/[.06]">
                   {deposits.map((d) => {
                     const diff = Number(d.difference);
                     const meta =
                       statusMeta[d.status] ?? { label: d.status, classes: 'bg-slate-100 text-slate-700 border-slate-200' };
                     return (
-                      <tr key={d.id} className="hover:bg-slate-50/70 transition-colors group">
-                        <td className="px-6 py-4 font-mono text-xs font-semibold text-slate-800">
+                      <tr key={d.id} className="group transition-colors hover:bg-white/[.04]">
+                        <td className="px-6 py-4 font-mono text-xs font-semibold text-slate-200">
                           {d.depositReference}
                         </td>
-                        <td className="px-6 py-4 text-slate-600">{d.property.name}</td>
-                        <td className="px-6 py-4 text-slate-600">
+                        <td className="px-6 py-4 text-slate-300">{d.property.name}</td>
+                        <td className="px-6 py-4 text-slate-300">
                           {d.bankName || '—'} / {d.bankAccount || '—'}
                         </td>
-                        <td className="px-6 py-4 text-right font-semibold text-slate-800">
+                        <td className="px-6 py-4 text-right font-semibold text-slate-200">
                           ₦{Number(d.expectedAmount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                         </td>
                         <td
