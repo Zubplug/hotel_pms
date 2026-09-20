@@ -94,7 +94,7 @@ export default async function SettingsPage() {
               <h2 className="text-xl font-semibold">Fiscal Periods</h2>
               <p className="text-sm text-slate-400">Manage accounting cycles and period locks.</p>
             </div>
-            <NewPeriodModal />
+            <NewPeriodModal propertyId={propertyId || ''} />
           </div>
           <div className="bg-white/5 border border-white/10 rounded-xl backdrop-blur-sm overflow-hidden">
             <table className="w-full text-left text-sm whitespace-nowrap">
