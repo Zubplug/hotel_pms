@@ -14,6 +14,7 @@ export function InventoryLayout({ children }: { children: React.ReactNode }) {
   const { data: session, status } = useLodgeCoreSession();
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [hasMultipleProperties, setHasMultipleProperties] = useState(false);
   const role = (session?.user as any)?.role;
 
   useEffect(() => {
@@ -41,7 +42,7 @@ export function InventoryLayout({ children }: { children: React.ReactNode }) {
   if (status === 'unauthenticated' || !session?.user) return null;
 
   return (
-    <div className="flex h-screen bg-slate-50 overflow-hidden font-sans">
+    <div className="flex h-screen bg-[#08111f] overflow-hidden font-sans">
       {/* Mobile overlay */}
       {sidebarOpen && (
         <div
@@ -70,7 +71,10 @@ export function InventoryLayout({ children }: { children: React.ReactNode }) {
       {/* Main */}
       <main className="flex-1 flex flex-col h-screen overflow-hidden min-w-0">
         {/* Top header */}
-        <header className="h-14 shrink-0 border-b border-slate-200 bg-white flex items-center px-4 justify-between sticky top-0 z-30 shadow-sm">
+        <div className="hidden" aria-hidden="true">
+          <PropertySelector onMultiplePropertiesChange={setHasMultipleProperties} />
+        </div>
+        {hasMultipleProperties && <header className="h-14 shrink-0 border-b border-white/[0.07] bg-[#0b1728] flex items-center px-4 justify-between sticky top-0 z-30">
           <div className="flex items-center gap-3">
             <Button
               variant="ghost"
@@ -82,12 +86,12 @@ export function InventoryLayout({ children }: { children: React.ReactNode }) {
             </Button>
           </div>
           <div className="flex items-center gap-3">
-            <PropertySelector />
+            <PropertySelector onMultiplePropertiesChange={setHasMultipleProperties} />
           </div>
-        </header>
+        </header>}
 
         {/* Page content */}
-        <div className="flex-1 overflow-y-auto bg-slate-50">
+        <div className="flex-1 overflow-y-auto bg-[#08111f]">
           {children}
         </div>
       </main>
