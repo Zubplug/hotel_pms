@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
-import prisma from '@hotel-pms/db';
+import prisma, { FnbClass } from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
 import { requireOrganizationContext } from "@/lib/organization-access";
 
@@ -66,7 +66,9 @@ export async function POST(req: NextRequest) {
 
     const requestedClass = String(body.fnbClass || '').toUpperCase();
     const inferredClass = inferFnbClass(name);
-    const fnbClass = ['FOOD', 'BEVERAGE', 'OTHER'].includes(requestedClass) ? requestedClass : inferredClass;
+    const fnbClass: FnbClass = ['FOOD', 'BEVERAGE', 'OTHER'].includes(requestedClass)
+      ? requestedClass as FnbClass
+      : inferredClass;
     const categories = await prisma.$transaction(async (tx) => {
       const created = [];
       for (const outlet of outlets) {
@@ -90,9 +92,9 @@ export async function POST(req: NextRequest) {
   }
 }
 
-function inferFnbClass(name: string): 'FOOD' | 'BEVERAGE' | 'OTHER' {
+function inferFnbClass(name: string): FnbClass {
   const normalized = name.toLowerCase();
-  if (/(beer|cider|liqueur|spirit|whiskey|brandy|gin|vodka|wine|champagne|soft drink|water|malt|juice|cocktail|drink)/.test(normalized)) return 'BEVERAGE';
-  if (/(breakfast|rice|pasta|starter|main course|salad|dessert|snack|extra|side|pepper soup)/.test(normalized)) return 'FOOD';
-  return 'OTHER';
+  if (/(beer|cider|liqueur|spirit|whiskey|brandy|gin|vodka|wine|champagne|soft drink|water|malt|juice|cocktail|drink)/.test(normalized)) return FnbClass.BEVERAGE;
+  if (/(breakfast|rice|pasta|starter|main course|salad|dessert|snack|extra|side|pepper soup)/.test(normalized)) return FnbClass.FOOD;
+  return FnbClass.OTHER;
 }
