@@ -68,10 +68,13 @@ export function RecordCashDropModal({ posSessions }: RecordCashDropModalProps) {
 
   const onSubmit = async (values: FormValues) => {
     try {
+      const operationId = typeof crypto !== "undefined" && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `cash-drop-${Date.now()}`;
       const response = await fetch("/api/v1/accountant/cash-bank/drop", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(values),
+        body: JSON.stringify({ ...values, operationId }),
       });
 
       if (!response.ok) {
@@ -100,7 +103,7 @@ export function RecordCashDropModal({ posSessions }: RecordCashDropModalProps) {
         <DialogHeader>
           <DialogTitle>Record Cash Drop</DialogTitle>
           <DialogDescription className="text-slate-400">
-            Record a cash drop from a drawer to the bank.
+            Transfer counted cash from a POS drawer into the General Cashier Safe. The drop is posted to the business date and remains available for the live deposit workflow.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
