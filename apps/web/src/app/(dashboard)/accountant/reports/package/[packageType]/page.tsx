@@ -9,7 +9,8 @@ import { PrintPackageButton } from '@/components/accountant/PrintPackageButton';
 export const dynamic = 'force-dynamic';
 
 export default async function ReportPackagePage({ params, searchParams }: { params: Promise<{ packageType: string }>, searchParams: Promise<{ businessDate?: string }> }) {
-  const [{ packageType }, query] = await Promise.all([params, searchParams]);
+  const [{ packageType: rawPackageType }, query] = await Promise.all([params, searchParams]);
+  const packageType = String(rawPackageType || '').trim().toLowerCase();
   const session = await auth();
   if (!session?.user) redirect('/login?callbackUrl=%2Faccountant%2Freports');
 
