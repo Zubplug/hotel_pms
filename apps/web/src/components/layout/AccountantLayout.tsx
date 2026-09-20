@@ -27,7 +27,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { PropertySelector } from '@/components/properties/PropertySelector';
@@ -56,6 +55,7 @@ const ACCOUNTANT_NAV = [
       { name: 'Fixed Assets', href: '/accountant/assets' },
       { name: 'Payroll Periods', href: '/accountant/payroll' },
       { name: 'Audit', href: '/accountant/audit' },
+      { name: 'Accounting Reports', href: '/accountant/reports' },
       { name: 'Tax Remittances', href: '/accountant/taxes' },
       { name: 'Budgets', href: '/accountant/budgets' },
     ],
@@ -167,13 +167,6 @@ export function AccountantLayout({ children }: { children: React.ReactNode }) {
             align="end"
             className="w-56 rounded-xl border-slate-800 bg-slate-900 text-slate-200"
           >
-            <DropdownMenuItem
-              className="hover:bg-slate-800 focus:bg-slate-800 focus:text-white cursor-pointer rounded-lg mx-1 my-1"
-              onClick={() => router.push('/settings/general')}
-            >
-              System Settings
-            </DropdownMenuItem>
-            <DropdownMenuSeparator className="bg-slate-800" />
             <DropdownMenuItem
               onClick={() => logout()}
               className="text-rose-400 hover:bg-rose-500/10 focus:bg-rose-500/10 focus:text-rose-400 cursor-pointer rounded-lg mx-1 my-1"

@@ -7,7 +7,6 @@ import {
   Coffee,
   Wine,
   Percent,
-  Download
 } from 'lucide-react';
 
 const InventoryCostingPage = () => {
@@ -36,12 +35,6 @@ const InventoryCostingPage = () => {
               Inventory Costing
             </h1>
             <p className="text-slate-400 mt-1">COGS summary and variance analysis for Food & Beverage</p>
-          </div>
-          <div className="flex items-center gap-3">
-            <button className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 transition-colors text-sm font-medium">
-              <Download className="w-4 h-4" />
-              Export Report
-            </button>
           </div>
         </div>
 

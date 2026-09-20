@@ -15,12 +15,10 @@ import {
   Check,
   CircleDollarSign,
   Clock3,
-  Download,
   FileWarning,
   Landmark,
   ListChecks,
   MoreHorizontal,
-  RefreshCw,
   Scale,
   ShieldCheck,
   Sparkles,
@@ -96,7 +94,7 @@ export default function AccountantOverviewPage() {
   const propertyId = session?.user?.propertyId;
   const [range, setRange] = useState('7D');
 
-  const { data: kpis, isLoading, isError, refetch, dataUpdatedAt } = useQuery({
+  const { data: kpis, isLoading, isError, dataUpdatedAt } = useQuery({
     queryKey: ['accountant-kpis', propertyId],
     queryFn: async () => {
       const res = await fetch(`/api/v1/dashboard/accountant-analytics?propertyId=${propertyId}`);
@@ -122,7 +120,7 @@ export default function AccountantOverviewPage() {
   ].filter(item => item.value > 0), [kpis]);
 
   if (isLoading) return <div className="flex min-h-[80vh] items-center justify-center bg-[#09111f]"><div className="h-9 w-9 animate-spin rounded-full border-[3px] border-emerald-400 border-t-transparent" /></div>;
-  if (isError || !kpis) return <div className="flex min-h-[80vh] flex-col items-center justify-center gap-4 bg-[#09111f] p-8 text-center text-white"><FileWarning className="h-10 w-10 text-rose-300" /><div><h2 className="font-semibold">Finance data is unavailable</h2><p className="mt-1 text-sm text-slate-400">We could not load the live accountant dashboard.</p></div><button onClick={() => refetch()} className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm hover:bg-white/10"><RefreshCw className="h-4 w-4" /> Try again</button></div>;
+  if (isError || !kpis) return <div className="flex min-h-[80vh] flex-col items-center justify-center gap-4 bg-[#09111f] p-8 text-center text-white"><FileWarning className="h-10 w-10 text-rose-300" /><div><h2 className="font-semibold">Finance data is unavailable</h2><p className="mt-1 text-sm text-slate-400">We could not load the live accountant dashboard.</p></div></div>;
 
   const businessDate = kpis.businessDate ? new Date(kpis.businessDate) : new Date();
   const currentHour = new Date().getHours();
@@ -130,12 +128,6 @@ export default function AccountantOverviewPage() {
   const totalIssues = Object.values(flags).reduce((sum: number, value: unknown) => sum + Number(value || 0), 0);
   const closeReady = totalIssues === 0 && kpis.audit?.lastAuditStatus === 'COMPLETED';
   const netCash = cashFlow.at(-1)?.net || 0;
-  const exportCsv = () => {
-    const rows = [['Metric', 'Value'], ['Business date', format(businessDate, 'yyyy-MM-dd')], ['Revenue today', revenueToday], ['Cash position', balances.cashTotal || 0], ['Accounts receivable', balances.arTotal || 0], ['Accounts payable', balances.apOutstanding || 0], ['Tax liability', balances.taxLiability?.total || 0], ['Open controls', totalIssues]];
-    const csv = rows.map(row => row.map(value => `"${String(value).replaceAll('"', '""')}"`).join(',')).join('\n');
-    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
-    const anchor = document.createElement('a'); anchor.href = url; anchor.download = `finance-overview-${format(businessDate, 'yyyy-MM-dd')}.csv`; anchor.click(); URL.revokeObjectURL(url);
-  };
 
   const controls = [
     { title: 'Open exceptions', count: flags.openExceptions, href: '/cash-management/transaction-exceptions', tone: 'rose', icon: AlertCircle },
@@ -157,8 +149,6 @@ export default function AccountantOverviewPage() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <div className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-slate-300"><CalendarDays className="h-4 w-4 text-emerald-300" /> Business date <span className="font-semibold text-white">{format(businessDate, 'dd MMM yyyy')}</span></div>
-            <button onClick={exportCsv} className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-slate-200 transition hover:bg-white/[0.08]"><Download className="h-4 w-4" /> Export</button>
-            <button onClick={() => refetch()} className="rounded-xl border border-white/10 bg-white/[0.04] p-2.5 text-slate-300 transition hover:bg-white/[0.08]" title="Refresh"><RefreshCw className="h-4 w-4" /></button>
           </div>
         </div>
 

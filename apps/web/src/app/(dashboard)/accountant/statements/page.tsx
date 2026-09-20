@@ -6,7 +6,6 @@ import {
   TrendingUp, 
   TrendingDown, 
   DollarSign, 
-  Download, 
   Calendar,
   Filter,
   BarChart3
@@ -22,16 +21,12 @@ export default function StatementsPage() {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-emerald-400">Financial Statements</h1>
-            <p className="text-slate-400 mt-1">View and export your core financial summaries.</p>
+            <p className="text-slate-400 mt-1">View your core financial summaries.</p>
           </div>
           <div className="flex items-center gap-3">
             <button className="flex items-center gap-2 px-4 py-2 bg-slate-900 border border-slate-800 rounded-lg hover:bg-slate-800 transition-colors">
               <Calendar className="w-4 h-4 text-slate-400" />
               <span className="text-sm">Sep 2026</span>
-            </button>
-            <button className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition-colors font-medium">
-              <Download className="w-4 h-4" />
-              <span className="text-sm">Export All</span>
             </button>
           </div>
         </div>

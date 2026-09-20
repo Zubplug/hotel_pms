@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { 
-  Building2, 
+  Building2,
   CreditCard,
   Bell,
   MonitorSmartphone,

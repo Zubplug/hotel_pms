@@ -10,7 +10,6 @@ import { redirect } from 'next/navigation';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-import { ExportReceivablesButton } from '@/components/accountant/ExportReceivablesButton';
 import { auth } from '@/lib/auth';
 import { prisma } from '@hotel-pms/db';
 
@@ -85,14 +84,13 @@ export default async function ReceivablesPage() {
   }) : null;
   const glBalance = glControl ? Number(glControl._sum.debit || 0) - Number(glControl._sum.credit || 0) : null;
   const controlVariance = glBalance === null ? null : glBalance - totalOutstanding;
-  const exportRows = positiveAccounts.map(account => ({ name: account.name, type: account.type, balance: Number(account.balance), oldestOpenItem: 'Invoice-level aging', lastPayment: '—', status: Number(account.balance) > 0 ? 'OPEN' : 'CREDIT' }));
 
   return (
     <main className="min-h-screen bg-[#07111f] p-5 text-slate-100 md:p-8">
       <div className="mx-auto max-w-[1480px] space-y-6">
         <header className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
           <div><div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.22em] text-cyan-300"><span className="h-2 w-2 rounded-full bg-cyan-300 shadow-[0_0_14px_#67e8f9]" />Receivables control centre</div><h1 className="text-3xl font-semibold tracking-tight text-white md:text-4xl">Accounts receivable</h1><p className="mt-2 max-w-3xl text-sm text-slate-400">A live subledger view of exposure, ageing, collection velocity, and the controls that keep corporate balances audit-ready for {property?.name || 'this property'}.</p></div>
-          <div className="flex flex-wrap items-center gap-2"><div className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2 text-xs text-slate-400"><span className="mr-2 text-slate-500">As at</span><span className="font-medium text-slate-200">{date(asAt)}</span><span className="ml-2 text-emerald-300">Live</span></div><ExportReceivablesButton currency={currency} rows={exportRows} /></div>
+          <div className="flex flex-wrap items-center gap-2"><div className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2 text-xs text-slate-400"><span className="mr-2 text-slate-500">As at</span><span className="font-medium text-slate-200">{date(asAt)}</span><span className="ml-2 text-emerald-300">Live</span></div></div>
         </header>
 
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
