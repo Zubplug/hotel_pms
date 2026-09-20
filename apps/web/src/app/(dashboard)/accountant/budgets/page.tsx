@@ -1,171 +1,77 @@
-import React from 'react';
+import type React from 'react';
 import { auth } from '@/lib/auth';
 import { prisma } from '@hotel-pms/db';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { 
-  PieChart, 
-  TrendingUp, 
-  Download, 
-  CalendarDays,
-  Target,
-  AlertCircle
-} from 'lucide-react';
+import { requireOrganizationContext } from '@/lib/organization-access';
+import { BudgetService } from '@/lib/services/budget-service';
+import { BudgetActions } from '@/components/accountant/BudgetActions';
+import { NewBudgetModal } from '@/components/accountant/NewBudgetModal';
+import { ArrowUpRight, BarChart3, CalendarDays, CheckCircle2, CircleAlert, ClipboardCheck, Coins, FileText, Gauge, Layers3, ReceiptText, ShieldCheck, WalletCards } from 'lucide-react';
+
+const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const money = (amount: number, currency: string, compact = false) => new Intl.NumberFormat('en-NG', { style: 'currency', currency, notation: compact ? 'compact' : 'standard', maximumFractionDigits: compact ? 1 : 0 }).format(amount);
+const dateLabel = (value: Date) => new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).format(value);
+const pct = (value: number) => `${Math.abs(value).toFixed(1)}%`;
+
+function Metric({ label, value, detail, icon: Icon, tone = 'emerald' }: { label: string; value: string; detail: string; icon: typeof Gauge; tone?: 'emerald' | 'amber' | 'rose' | 'violet' }) {
+  const colors = { emerald: 'text-emerald-300 bg-emerald-400/10', amber: 'text-amber-300 bg-amber-400/10', rose: 'text-rose-300 bg-rose-400/10', violet: 'text-violet-300 bg-violet-400/10' };
+  return <div className="rounded-2xl border border-white/[.08] bg-white/[.035] p-5"><div className="flex items-start justify-between gap-3"><div><p className="text-xs text-slate-500">{label}</p><p className="mt-2 text-2xl font-semibold tracking-tight text-white">{value}</p><p className="mt-1 text-xs text-slate-500">{detail}</p></div><span className={`rounded-xl p-2.5 ${colors[tone]}`}><Icon className="h-4 w-4" /></span></div></div>;
+}
 
 export default async function BudgetsPage() {
   const session = await auth();
-  const propertyId = session?.user?.propertyId;
-  const budgets = propertyId ? await prisma.budget.findMany({ 
-    where: { propertyId }
-  }) : [];
+  if (!session?.user?.id) return null;
+  const context = await requireOrganizationContext(session.user.id);
+  const propertyId = session.user.propertyId && context.propertyIds.includes(session.user.propertyId) ? session.user.propertyId : context.propertyIds[0];
+  if (!propertyId) return <div className="p-8 text-slate-400">No property is assigned to this account.</div>;
 
-  const colors = ['bg-emerald-500', 'bg-rose-500', 'bg-emerald-400', 'bg-blue-500', 'bg-emerald-300'];
-  const departments = budgets.map((b, i) => ({
-    name: b.name || 'Unnamed Budget',
-    budget: Number(b.totalExpenseBudget || 0),
-    actual: 0,
-    color: colors[i % colors.length]
-  }));
+  const property = await prisma.property.findUnique({ where: { id: propertyId }, select: { name: true, baseCurrency: true, businessDate: true } });
+  const businessDate = property?.businessDate || new Date();
+  const year = businessDate.getUTCFullYear();
+  const startOfYear = new Date(Date.UTC(year, 0, 1));
+  const endOfYear = new Date(Date.UTC(year, 11, 31, 23, 59, 59, 999));
+  const [budgets, paidExpenses, revenueItems, openBills] = await Promise.all([
+    prisma.budget.findMany({ where: { propertyId }, include: { lines: true }, orderBy: { periodStart: 'desc' } }),
+    prisma.cashExpense.findMany({ where: { propertyId, status: 'PAID', paidAt: { gte: startOfYear, lte: endOfYear } }, select: { amount: true, category: true, costCenter: true, paidAt: true } }),
+    prisma.folioItem.findMany({ where: { folio: { propertyId }, type: 'CHARGE', voidedAt: null, businessDate: { gte: startOfYear, lte: endOfYear } }, select: { amount: true, businessDate: true, revenueCategory: true } }),
+    prisma.supplierInvoice.findMany({ where: { propertyId, outstandingAmount: { gt: 0 } }, select: { outstandingAmount: true, dueDate: true } })
+  ]);
+  const actuals = await Promise.all(budgets.map(budget => BudgetService.getActuals(propertyId, budget.id)));
+  const activeIndex = budgets.findIndex(budget => budget.periodStart <= businessDate && budget.periodEnd >= businessDate && ['APPROVED', 'ACTIVE'].includes(budget.status));
+  const activeBudget = budgets[activeIndex] || budgets.find(budget => budget.periodStart <= businessDate && budget.periodEnd >= businessDate) || budgets[0];
+  const activeActuals = activeIndex >= 0 ? actuals[activeIndex] : activeBudget ? await BudgetService.getActuals(propertyId, activeBudget.id) : null;
+  const revenueBudget = activeActuals?.budgetedRevenue || 0;
+  const expenseBudget = activeActuals?.budgetedExpense || 0;
+  const actualRevenue = activeActuals?.actualRevenue || 0;
+  const actualExpense = activeActuals?.actualExpense || 0;
+  const burn = expenseBudget ? (actualExpense / expenseBudget) * 100 : 0;
+  const pending = budgets.filter(budget => budget.status === 'SUBMITTED');
+  const overBudget = budgets.filter((budget, index) => actuals[index].actualExpense > actuals[index].budgetedExpense && actuals[index].budgetedExpense > 0);
+  const monthExpenses = monthNames.map((name, index) => paidExpenses.filter(item => item.paidAt && item.paidAt.getUTCMonth() === index).reduce((sum, item) => sum + Number(item.amount), 0));
+  const monthRevenue = monthNames.map((name, index) => revenueItems.filter(item => item.businessDate.getUTCMonth() === index).reduce((sum, item) => sum + Number(item.amount), 0));
+  const monthlyRunRate = expenseBudget && activeBudget ? expenseBudget / Math.max(1, Math.round((activeBudget.periodEnd.getTime() - activeBudget.periodStart.getTime()) / (86400000 * 30.44))) : 0;
+  const spendByCategory = Object.entries(paidExpenses.reduce<Record<string, number>>((result, item) => { const key = item.category || item.costCenter || 'Unclassified'; result[key] = (result[key] || 0) + Number(item.amount); return result; }, {})).sort((a, b) => b[1] - a[1]).slice(0, 6);
+  const maxChart = Math.max(...monthExpenses, monthlyRunRate, 1);
+  const currency = property?.baseCurrency || 'NGN';
+  const canApprove = ['GENERAL_MANAGER', 'SUPER_ADMIN'].includes(session.user.role || '');
+  const expenseVariance = activeActuals ? expenseBudget - actualExpense : 0;
+  const revenueVariance = activeActuals ? actualRevenue - revenueBudget : 0;
 
-  const totalBudget = departments.reduce((acc, curr) => acc + curr.budget, 0);
-  const totalActual = departments.reduce((acc, curr) => acc + curr.actual, 0);
-  const totalPercent = totalBudget > 0 ? (totalActual / totalBudget) * 100 : 0;
+  return <main className="min-h-screen bg-[#080d16] px-5 py-8 text-slate-100 sm:px-8 lg:px-10">
+    <div className="mx-auto max-w-[1600px] space-y-7">
+      <header className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end"><div><div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[.2em] text-cyan-300"><BarChart3 className="h-4 w-4" />Budget control room</div><h1 className="text-3xl font-semibold tracking-[-.04em] text-white sm:text-4xl">Plan with evidence. Act on variance.</h1><p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">A live operating-budget view for {property?.name || 'this property'}: approved plan, posted production, paid spend, commitments, and the decisions required before the next close.</p></div><div className="flex flex-wrap items-center gap-2"><span className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[.04] px-3 py-2 text-xs text-slate-400"><CalendarDays className="h-4 w-4 text-cyan-300" /> Business date <strong className="text-slate-200">{dateLabel(businessDate)}</strong></span><NewBudgetModal propertyId={propertyId} currency={currency} /></div></header>
 
-  return (
-    <div className="p-8 space-y-8 bg-slate-950 min-h-screen text-slate-50">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-emerald-400 to-emerald-600">
-            Departmental Budgets
-          </h1>
-          <p className="text-slate-400 mt-1">Track budget vs actuals across all departments</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <Button variant="outline" className="border-slate-800 bg-slate-900/50 hover:bg-slate-800 hover:text-slate-50">
-            <CalendarDays className="w-4 h-4 mr-2" />
-            FY 2026
-          </Button>
-          <Button className="bg-emerald-600 hover:bg-emerald-700 text-white">
-            <Download className="w-4 h-4 mr-2" />
-            Export Report
-          </Button>
-        </div>
-      </div>
+      <section className={`rounded-2xl border p-4 ${activeBudget && overBudget.some(item => item.id === activeBudget.id) ? 'border-rose-400/25 bg-rose-400/[.06]' : activeBudget ? 'border-emerald-400/20 bg-emerald-400/[.05]' : 'border-amber-400/20 bg-amber-400/[.05]'}`}><div className="flex flex-col justify-between gap-3 md:flex-row md:items-center"><div className="flex items-start gap-3"><span className="mt-0.5 rounded-xl bg-white/[.06] p-2.5">{activeBudget && !overBudget.some(item => item.id === activeBudget.id) ? <ShieldCheck className="h-4 w-4 text-emerald-300" /> : <CircleAlert className="h-4 w-4 text-amber-300" />}</span><div><p className="text-sm font-semibold text-white">{activeBudget ? `${activeBudget.name} · ${activeBudget.status}` : 'No approved budget covers the business date'}</p><p className="mt-1 text-xs text-slate-400">{activeBudget ? `Period ${dateLabel(activeBudget.periodStart)} – ${dateLabel(activeBudget.periodEnd)}. ${overBudget.some(item => item.id === activeBudget.id) ? 'Paid expense is above plan and needs review.' : 'Live actuals are being compared with the approved operating plan.'}` : 'Create a draft budget, submit it for review, and have an authorised approver release it.'}</p></div></div><a href="/accountant/expenses" className="inline-flex items-center gap-1.5 text-xs font-semibold text-cyan-300 hover:text-cyan-200">Review spend controls <ArrowUpRight className="h-3.5 w-3.5" /></a></div></section>
 
-      {/* Overview Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card className="bg-white/5 border-slate-800/60 backdrop-blur-md">
-          <CardContent className="p-6">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-slate-400 text-sm font-medium">Total Allocated Budget</p>
-                <h3 className="text-3xl font-semibold mt-2 text-slate-100">
-                  ₦{(totalBudget / 1000000).toFixed(1)}M
-                </h3>
-              </div>
-              <div className="p-3 bg-emerald-500/10 rounded-lg">
-                <Target className="w-6 h-6 text-emerald-400" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="bg-white/5 border-slate-800/60 backdrop-blur-md">
-          <CardContent className="p-6">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-slate-400 text-sm font-medium">Total Actual Spend</p>
-                <h3 className="text-3xl font-semibold mt-2 text-slate-100">
-                  ₦{(totalActual / 1000000).toFixed(2)}M
-                </h3>
-              </div>
-              <div className="p-3 bg-blue-500/10 rounded-lg">
-                <TrendingUp className="w-6 h-6 text-blue-400" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="bg-white/5 border-slate-800/60 backdrop-blur-md">
-          <CardContent className="p-6">
-            <div className="flex justify-between items-start">
-              <div className="w-full">
-                <p className="text-slate-400 text-sm font-medium">Overall Burn Rate</p>
-                <div className="flex items-end justify-between mt-2">
-                  <h3 className="text-3xl font-semibold text-slate-100">
-                    {totalPercent.toFixed(1)}%
-                  </h3>
-                  <span className="text-slate-500 text-sm mb-1">of total budget</span>
-                </div>
-                <div className="w-full bg-slate-800/80 rounded-full h-2.5 mt-4 overflow-hidden">
-                  <div 
-                    className="bg-gradient-to-r from-emerald-500 to-emerald-400 h-2.5 rounded-full transition-all duration-500" 
-                    style={{ width: `${Math.min(totalPercent, 100)}%` }}
-                  ></div>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6"><Metric label="Approved plan" value={activeBudget ? money(revenueBudget + expenseBudget, currency, true) : '—'} detail={activeBudget ? `${money(revenueBudget, currency, true)} revenue · ${money(expenseBudget, currency, true)} expense` : 'No current budget'} icon={TargetIcon} tone="violet" /><Metric label="Paid expense actual" value={money(actualExpense, currency, true)} detail={expenseBudget ? `${pct(burn)} of expense plan` : 'No expense baseline'} icon={Coins} tone={burn > 100 ? 'rose' : 'emerald'} /><Metric label="Expense headroom" value={money(expenseVariance, currency, true)} detail={expenseVariance >= 0 ? 'Remaining under plan' : 'Over plan'} icon={Gauge} tone={expenseVariance >= 0 ? 'emerald' : 'rose'} /><Metric label="Revenue variance" value={`${revenueVariance >= 0 ? '+' : '−'}${money(Math.abs(revenueVariance), currency, true)}`} detail={revenueBudget ? `${pct((revenueVariance / revenueBudget) * 100)} vs plan` : 'No revenue baseline'} icon={TrendingIcon} tone={revenueVariance >= 0 ? 'emerald' : 'amber'} /><Metric label="Pending approval" value={String(pending.length)} detail={pending.length ? 'Budgets awaiting owner' : 'Approval queue clear'} icon={ClipboardCheck} tone={pending.length ? 'amber' : 'emerald'} /><Metric label="Open AP commitment" value={money(openBills.reduce((sum, bill) => sum + Number(bill.outstandingAmount), 0), currency, true)} detail={`${openBills.filter(bill => bill.dueDate < businessDate).length} overdue invoices`} icon={WalletCards} tone="amber" /></section>
 
-      {/* Budget vs Actuals Tracking */}
-      <Card className="bg-white/5 border-slate-800/60 backdrop-blur-md shadow-xl">
-        <CardHeader className="border-b border-slate-800/60 pb-6">
-          <div className="flex items-center gap-2">
-            <PieChart className="w-5 h-5 text-emerald-400" />
-            <CardTitle className="text-xl text-slate-100">Department Breakdown</CardTitle>
-          </div>
-          <CardDescription className="text-slate-400">
-            Monitor expenditure against allocated departmental budgets
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="p-6 space-y-8">
-          {departments.length === 0 ? (
-            <div className="text-center text-slate-400 py-4">No data</div>
-          ) : departments.map((dept) => {
-            const percent = dept.budget > 0 ? (dept.actual / dept.budget) * 100 : 0;
-            const isOver = percent > 100;
-            
-            return (
-              <div key={dept.name} className="space-y-3">
-                <div className="flex justify-between items-end">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h4 className="font-medium text-slate-200">{dept.name}</h4>
-                      {isOver && (
-                        <AlertCircle className="w-4 h-4 text-rose-500" />
-                      )}
-                    </div>
-                    <p className="text-xs text-slate-400 mt-1">
-                      ₦{dept.actual.toLocaleString()} / ₦{dept.budget.toLocaleString()}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <span className={`text-sm font-semibold ₦{isOver ? 'text-rose-400' : 'text-emerald-400'}`}>
-                      {percent.toFixed(1)}%
-                    </span>
-                  </div>
-                </div>
-                
-                {/* Progress Bar */}
-                <div className="relative w-full bg-slate-800/60 rounded-full h-3 overflow-hidden">
-                  <div 
-                    className={`absolute top-0 left-0 h-full rounded-full transition-all duration-700 ₦{isOver ? 'bg-rose-500' : dept.color}`}
-                    style={{ width: `${Math.min(percent, 100)}%` }}
-                  />
-                  {/* Budget Marker line if actual exceeds budget (conceptually, we cap the bar at 100%, so let's show an over-budget indicator differently if needed, but topping at 100% and coloring red is standard) */}
-                </div>
-                
-                {isOver && (
-                  <p className="text-xs text-rose-400/80">
-                    Over budget by ₦{(dept.actual - dept.budget).toLocaleString()}
-                  </p>
-                )}
-              </div>
-            );
-          })}
-        </CardContent>
-      </Card>
+      <section className="grid gap-5 xl:grid-cols-[1.7fr_1fr]"><div className="rounded-2xl border border-white/[.08] bg-white/[.035] p-5"><div className="flex items-start justify-between"><div><p className="text-sm font-semibold text-white">Paid spend run-rate</p><p className="mt-1 text-xs text-slate-500">Live cash-expense actuals by business month. The line is the current budget run-rate.</p></div><span className="rounded-lg border border-white/10 bg-white/[.03] px-2 py-1 text-[10px] text-slate-500">{year}</span></div><div className="mt-7 flex h-56 items-end gap-2 sm:gap-3">{monthExpenses.map((amount, index) => <div key={monthNames[index]} className="flex min-w-0 flex-1 flex-col items-center gap-2"><div className="relative flex h-44 w-full items-end justify-center rounded-t-md bg-white/[.025]"><div className={`w-full max-w-8 rounded-t-md ${amount > monthlyRunRate && monthlyRunRate > 0 ? 'bg-rose-400/80' : 'bg-cyan-400/75'}`} style={{ height: `${Math.max(amount ? 3 : 0, (amount / maxChart) * 100)}%` }} title={`${monthNames[index]}: ${money(amount, currency)}`} />{monthlyRunRate > 0 && <div className="absolute inset-x-0 border-t border-dashed border-amber-300/70" style={{ bottom: `${Math.min(100, (monthlyRunRate / maxChart) * 100)}%` }} />}</div><span className="text-[10px] text-slate-600">{monthNames[index]}</span></div>)}</div><div className="mt-4 flex flex-wrap gap-4 text-[11px] text-slate-500"><span><i className="mr-1 inline-block h-2 w-2 rounded-full bg-cyan-400" />Paid expense</span><span><i className="mr-1 inline-block h-2 w-2 border-t border-dashed border-amber-300" />Budget run-rate {monthlyRunRate ? money(monthlyRunRate, currency, true) : 'not configured'}</span></div></div><div className="rounded-2xl border border-white/[.08] bg-white/[.035] p-5"><div className="flex items-start justify-between"><div><p className="text-sm font-semibold text-white">Spend mix</p><p className="mt-1 text-xs text-slate-500">Paid expense by operational category.</p></div><ReceiptText className="h-4 w-4 text-cyan-300" /></div><div className="mt-6 space-y-4">{spendByCategory.length ? spendByCategory.map(([category, amount]) => <div key={category}><div className="mb-1.5 flex justify-between gap-3 text-xs"><span className="truncate text-slate-300">{category}</span><span className="text-slate-500">{money(amount, currency, true)}</span></div><div className="h-1.5 rounded-full bg-white/[.07]"><div className="h-full rounded-full bg-cyan-400/70" style={{ width: `${Math.max(4, (amount / (spendByCategory[0]?.[1] || 1)) * 100)}%` }} /></div></div>) : <div className="rounded-xl border border-dashed border-white/10 p-5 text-center text-xs text-slate-500">No paid expense actuals in the live period.</div>}</div></div></section>
+
+      <section className="grid gap-5 xl:grid-cols-[1.6fr_1fr]"><div className="rounded-2xl border border-white/[.08] bg-white/[.035] p-5"><div className="flex items-start justify-between"><div><p className="text-sm font-semibold text-white">Budget portfolio</p><p className="mt-1 text-xs text-slate-500">Every budget, its control status, actual expense, and accountable next action.</p></div><a href="/accountant/expenses" className="text-xs font-semibold text-cyan-300">View expenses <ArrowUpRight className="ml-1 inline h-3.5 w-3.5" /></a></div><div className="mt-5 overflow-x-auto"><table className="w-full min-w-[760px] text-left text-sm"><thead><tr className="border-b border-white/[.07] text-[10px] uppercase tracking-[.14em] text-slate-500"><th className="pb-3">Budget</th><th className="pb-3">Status</th><th className="pb-3 text-right">Revenue plan</th><th className="pb-3 text-right">Expense plan</th><th className="pb-3 text-right">Paid actual</th><th className="pb-3 text-right">Variance</th><th className="pb-3 text-right">Action</th></tr></thead><tbody className="divide-y divide-white/[.06]">{budgets.map((budget, index) => { const item = actuals[index]; const variance = item.budgetedExpense - item.actualExpense; return <tr key={budget.id}><td className="py-3"><div className="font-medium text-slate-200">{budget.name}</div><div className="mt-1 text-[11px] text-slate-600">{dateLabel(budget.periodStart)} – {dateLabel(budget.periodEnd)}</div></td><td className="py-3"><span className={`rounded-md px-2 py-1 text-[10px] font-semibold ${budget.status === 'APPROVED' || budget.status === 'ACTIVE' ? 'bg-emerald-400/10 text-emerald-300' : budget.status === 'SUBMITTED' ? 'bg-amber-400/10 text-amber-300' : 'bg-white/[.06] text-slate-400'}`}>{budget.status}</span></td><td className="py-3 text-right text-slate-400">{money(item.budgetedRevenue, currency, true)}</td><td className="py-3 text-right text-slate-400">{money(item.budgetedExpense, currency, true)}</td><td className="py-3 text-right text-slate-300">{money(item.actualExpense, currency, true)}</td><td className={`py-3 text-right font-medium ${variance >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>{variance >= 0 ? '+' : '−'}{money(Math.abs(variance), currency, true)}</td><td className="py-3 text-right"><BudgetActions budgetId={budget.id} status={budget.status} canApprove={canApprove} /></td></tr>; })}</tbody></table>{budgets.length === 0 && <div className="py-12 text-center text-sm text-slate-500">No budgets exist for this property. Create the first draft to start controlled planning.</div>}</div></div><div className="rounded-2xl border border-white/[.08] bg-white/[.035] p-5"><p className="text-sm font-semibold text-white">Control signals</p><p className="mt-1 text-xs text-slate-500">The exceptions worth an accountant’s attention today.</p><div className="mt-5 space-y-3">{pending.length > 0 && <Signal icon={ClipboardCheck} title={`${pending.length} budget${pending.length > 1 ? 's' : ''} awaiting approval`} detail="Submitter and approver ownership should be clear before activation." tone="amber" />}{overBudget.length > 0 && <Signal icon={CircleAlert} title={`${overBudget.length} budget${overBudget.length > 1 ? 's are' : ' is'} over expense plan`} detail="Review category drivers and open a controlled reforecast." tone="rose" />}{openBills.filter(bill => bill.dueDate < businessDate).length > 0 && <Signal icon={FileText} title="Overdue AP is not yet a paid actual" detail="Keep committed liabilities separate from cash-basis budget performance." tone="amber" />}{pending.length === 0 && overBudget.length === 0 && <Signal icon={CheckCircle2} title="No portfolio exceptions detected" detail="Approval queue and paid-expense variance are currently clear." tone="emerald" />}</div><div className="mt-6 border-t border-white/[.07] pt-5"><p className="text-[10px] font-semibold uppercase tracking-[.16em] text-slate-600">Revenue production reference</p><div className="mt-3 flex items-end gap-1.5">{monthRevenue.map((amount, index) => <div key={monthNames[index]} className="flex-1 rounded-t bg-emerald-400/60" style={{ height: `${Math.max(amount ? 4 : 0, (amount / Math.max(...monthRevenue, 1)) * 72)}px` }} title={`${monthNames[index]}: ${money(amount, currency)}`} />)}</div><p className="mt-3 text-xs text-slate-500">{money(monthRevenue.reduce((sum, value) => sum + value, 0), currency, true)} posted folio charges in the calendar year.</p></div></div></section>
+      <footer className="flex flex-col justify-between gap-2 border-t border-white/10 pt-4 text-xs text-slate-600 sm:flex-row"><span>Live source: budget register, folio charge production, paid cash expenses, supplier commitments, and approval state.</span><span>As of {dateLabel(businessDate)}</span></footer>
     </div>
-  );
+  </main>;
 }
+
+function Signal({ icon: Icon, title, detail, tone }: { icon: typeof Gauge; title: string; detail: string; tone: 'amber' | 'rose' | 'emerald' }) { const colors = { amber: 'text-amber-300 bg-amber-400/10', rose: 'text-rose-300 bg-rose-400/10', emerald: 'text-emerald-300 bg-emerald-400/10' }; return <div className="flex gap-3 rounded-xl border border-white/[.07] bg-white/[.025] p-3"><span className={`mt-0.5 rounded-lg p-2 ${colors[tone]}`}><Icon className="h-4 w-4" /></span><div><p className="text-xs font-semibold text-slate-200">{title}</p><p className="mt-1 text-[11px] leading-5 text-slate-500">{detail}</p></div></div>; }
+function TargetIcon(props: React.ComponentProps<typeof Gauge>) { return <Layers3 {...props} />; }
+function TrendingIcon(props: React.ComponentProps<typeof Gauge>) { return <BarChart3 {...props} />; }
