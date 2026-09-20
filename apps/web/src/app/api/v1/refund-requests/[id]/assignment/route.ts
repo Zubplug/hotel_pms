@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import crypto from 'crypto';
 import prisma from '@hotel-pms/db';
 import { resolveUser } from '@/lib/resolve-user';
 
@@ -6,7 +7,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   try {
     const user = await resolveUser(req);
     if (!user) return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
-    if (!['ADMIN', 'SUPER_ADMIN', 'MANAGER', 'FINANCE_MANAGER', 'ACCOUNTANT', 'NIGHT_AUDITOR'].includes(user.role) && !user.isSuperAdmin) {
+    if (!['ADMIN', 'SUPER_ADMIN', 'FINANCE_MANAGER', 'GENERAL_MANAGER'].includes(user.role) && !user.isSuperAdmin) {
       return NextResponse.json({ error: 'Administrator access required' }, { status: 403 });
     }
 
@@ -21,8 +22,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       return NextResponse.json({ error: 'Only pending requests can be reassigned' }, { status: 409 });
     }
 
-    const approverId = body.approverId ? String(body.approverId) : null;
-    const approvalRoleId = body.approvalRoleId ? String(body.approvalRoleId) : null;
+    const hasApproverOverride = Object.prototype.hasOwnProperty.call(body, 'approverId');
+    const hasRoleOverride = Object.prototype.hasOwnProperty.call(body, 'approvalRoleId');
+    const approverId = hasApproverOverride ? (body.approverId ? String(body.approverId) : null) : request.currentApproverId;
+    const approvalRoleId = hasRoleOverride ? (body.approvalRoleId ? String(body.approvalRoleId) : null) : request.approvalRoleId;
     const updated = await prisma.$transaction(async tx => {
       if (approverId) {
         const membership = await tx.userRole.findFirst({
@@ -37,7 +40,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       const approval = await tx.approvalRequest.findFirst({ where: { type: 'REFUND', details: { path: ['refundRequestId'], equals: request.id } } });
       const details = { refundRequestId: request.id, category: request.category, requestedAmount: Number(request.requestedAmount), approverId, approverRoleId: approvalRoleId };
       if (approval) await tx.approvalRequest.update({ where: { id: approval.id }, data: { details } });
-      return tx.refundRequest.update({ where: { id }, data: { currentApproverId: approverId, approvalRoleId } });
+      const updated = await tx.refundRequest.update({ where: { id }, data: { currentApproverId: approverId, approvalRoleId } });
+      await tx.auditLog.create({ data: { organizationId: request.organizationId, propertyId: request.propertyId, userId: user.id, action: 'REFUND_APPROVAL_OWNERSHIP_CHANGED', resource: 'RefundRequest', resourceId: request.id, previousValue: { approverId: request.currentApproverId, approvalRoleId: request.approvalRoleId }, newValue: { approverId, approvalRoleId }, requestId: crypto.randomUUID() } });
+      return updated;
     });
     return NextResponse.json({ data: updated });
   } catch (error: any) {

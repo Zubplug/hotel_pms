@@ -7,7 +7,7 @@ export async function GET(req: NextRequest) {
     const user = await resolveUser(req);
     if (!user) return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     const canManageWorkflow = user.isSuperAdmin
-      || ['ADMIN', 'SUPER_ADMIN', 'MANAGER', 'CEO', 'FINANCE_MANAGER', 'ACCOUNTANT', 'NIGHT_AUDITOR'].includes(user.role)
+      || ['ADMIN', 'SUPER_ADMIN', 'FINANCE_MANAGER', 'GENERAL_MANAGER'].includes(user.role)
       || user.capabilities.includes('MANAGE_REFUND_WORKFLOW');
     if (!canManageWorkflow) return NextResponse.json({ error: 'Refund workflow administrator access required' }, { status: 403 });
     const propertyId = new URL(req.url).searchParams.get('propertyId');

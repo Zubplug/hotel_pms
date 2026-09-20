@@ -27,7 +27,7 @@ const formSchema = z.object({
 
 type FormValues = z.infer<typeof formSchema>;
 
-export function RecordSupplierBillModal({ suppliers = [] }: { suppliers?: { id: string; name: string }[] }) {
+export function RecordSupplierBillModal({ propertyId, suppliers = [] }: { propertyId: string; suppliers?: { id: string; name: string }[] }) {
   const [open, setOpen] = useState(false);
   const router = useRouter();
 
@@ -48,7 +48,7 @@ export function RecordSupplierBillModal({ suppliers = [] }: { suppliers?: { id: 
       const res = await fetch('/api/v1/accountant/payables', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
+        body: JSON.stringify({ propertyId, ...data }),
       });
 
       if (!res.ok) {

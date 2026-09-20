@@ -1,233 +1,63 @@
-import React from 'react';
+import Link from 'next/link';
+import { redirect } from 'next/navigation';
+import { AlertCircle, ArrowRight, BarChart3, CalendarClock, CheckCircle2, CreditCard, FileCheck2, Landmark, Receipt, ShieldCheck, Wallet } from 'lucide-react';
 import { auth } from '@/lib/auth';
 import { prisma } from '@hotel-pms/db';
-import { 
-  CreditCard, 
-  Search, 
-  Filter, 
-  ArrowUpRight,
-  MoreVertical,
-  CheckCircle2,
-  Clock,
-  AlertCircle,
-  FileText,
-  Wallet
-} from 'lucide-react';
-
 import { RecordSupplierBillModal } from '@/components/accountant/RecordSupplierBillModal';
+import { PayablesRegister, type PayablesRow } from '@/components/accountant/PayablesRegister';
 
-const AP_AGING_SUMMARY = [
-  { label: 'Current (0-30 Days)', amount: '₦28,450.00', count: 18, status: 'healthy' },
-  { label: '31-60 Days', amount: '₦5,210.00', count: 4, status: 'warning' },
-  { label: '61-90 Days', amount: '₦1,150.00', count: 1, status: 'danger' },
-  { label: '90+ Days', amount: '₦0.00', count: 0, status: 'healthy' },
-];
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
+const money = (amount: number, currency: string) => new Intl.NumberFormat('en-NG', { style: 'currency', currency, maximumFractionDigits: 0 }).format(amount);
+const date = (value: Date) => new Intl.DateTimeFormat('en-NG', { dateStyle: 'medium' }).format(value);
+const daysBetween = (from: Date, to: Date) => Math.floor((to.getTime() - from.getTime()) / 86400000);
 
 export default async function PayablesPage() {
   const session = await auth();
-  const propertyId = session?.user?.propertyId;
-  const supplierInvoices = propertyId ? await prisma.supplierInvoice.findMany({ 
-    where: { propertyId },
-    include: { supplier: true }
-  }) : [];
-  
-  const suppliers = propertyId ? await prisma.supplier.findMany({
-    where: { propertyId },
-    select: { id: true, name: true }
-  }) : [];
+  if (!session?.user) redirect('/login?callbackUrl=%2Faccountant%2Fpayables');
+  const propertyId = session.user.propertyId;
+  if (!propertyId) return <EmptyState title="No property assigned" />;
 
-  return (
-    <div className="min-h-screen bg-slate-950 text-slate-50 p-6 md:p-8 font-sans selection:bg-emerald-500/30">
-      <div className="max-w-7xl mx-auto space-y-8">
-        
-        {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight text-white flex items-center gap-2">
-              <CreditCard className="h-8 w-8 text-emerald-400" />
-              Accounts Payable
-            </h1>
-            <p className="text-slate-400 mt-1 text-sm">
-              Manage supplier invoices, approvals, and AP aging
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-            <button className="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
-              <FileText className="h-4 w-4" />
-              Run AP Report
-            </button>
-            <RecordSupplierBillModal suppliers={suppliers} />
-          </div>
-        </div>
+  const [property, invoices, suppliers] = await Promise.all([
+    prisma.property.findUnique({ where: { id: propertyId }, select: { name: true, baseCurrency: true, businessDate: true } }),
+    prisma.supplierInvoice.findMany({ where: { propertyId }, include: { supplier: { select: { id: true, name: true } }, payments: { select: { amount: true, paymentDate: true } } }, orderBy: [{ dueDate: 'asc' }, { createdAt: 'desc' }] }),
+    prisma.supplier.findMany({ where: { propertyId, isActive: true }, select: { id: true, name: true }, orderBy: { name: 'asc' } }),
+  ]);
 
-        {/* AP Aging Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {AP_AGING_SUMMARY.map((item, idx) => (
-            <div 
-              key={idx} 
-              className="bg-white/5 border border-white/10 rounded-xl p-5 backdrop-blur-sm relative overflow-hidden group hover:border-emerald-500/50 transition-colors"
-            >
-              <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-emerald-500/10 to-transparent rounded-bl-full -mr-4 -mt-4 transition-transform group-hover:scale-110" />
-              <div className="relative z-10">
-                <p className="text-slate-400 text-sm font-medium mb-1">{item.label}</p>
-                <div className="flex items-end justify-between">
-                  <h3 className="text-2xl font-bold text-white">{item.amount}</h3>
-                  <div className="flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full bg-white/5 border border-white/10">
-                    <span>{item.count}</span>
-                    <span className="text-slate-400 ml-1">inv</span>
-                  </div>
-                </div>
-                
-                <div className="mt-4 w-full bg-slate-900 rounded-full h-1.5 overflow-hidden">
-                  <div 
-                    className={`h-full rounded-full ₦{
-                      item.status === 'healthy' ? 'bg-emerald-400' :
-                      item.status === 'warning' ? 'bg-amber-400' :
-                      item.status === 'danger' ? 'bg-orange-500' :
-                      'bg-slate-700'
-                    }`} 
-                    style={{ width: item.count === 0 ? '0%' : `${Math.max(10, 100 - (idx * 25))}%` }}
-                  />
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
+  const currency = property?.baseCurrency || invoices[0]?.currency || 'NGN';
+  const asOf = property?.businessDate || new Date();
+  const open = invoices.filter(invoice => !['PAID', 'CANCELLED'].includes(invoice.status) && Number(invoice.outstandingAmount) > 0.009);
+  const totalOutstanding = open.reduce((sum, invoice) => sum + Number(invoice.outstandingAmount), 0);
+  const overdue = open.filter(invoice => invoice.dueDate < asOf);
+  const overdueAmount = overdue.reduce((sum, invoice) => sum + Number(invoice.outstandingAmount), 0);
+  const dueNextSeven = open.filter(invoice => invoice.dueDate >= asOf && daysBetween(asOf, invoice.dueDate) <= 7).reduce((sum, invoice) => sum + Number(invoice.outstandingAmount), 0);
+  const pendingReview = invoices.filter(invoice => ['RECEIVED', 'UNDER_REVIEW'].includes(invoice.status));
+  const readyToPay = invoices.filter(invoice => ['APPROVED', 'PARTIAL'].includes(invoice.status) && Number(invoice.outstandingAmount) > 0.009);
+  const settledThisMonth = invoices.flatMap(invoice => invoice.payments).filter(payment => { const d = new Date(payment.paymentDate); return d.getUTCFullYear() === asOf.getUTCFullYear() && d.getUTCMonth() === asOf.getUTCMonth(); }).reduce((sum, payment) => sum + Number(payment.amount), 0);
+  const aging = [
+    { label: 'Current', detail: 'Not yet due', amount: open.filter(invoice => invoice.dueDate >= asOf).reduce((sum, invoice) => sum + Number(invoice.outstandingAmount), 0), color: 'bg-emerald-400' },
+    { label: '1–30 days', detail: 'Recently overdue', amount: open.filter(invoice => { const d = daysBetween(invoice.dueDate, asOf); return d > 0 && d <= 30; }).reduce((sum, invoice) => sum + Number(invoice.outstandingAmount), 0), color: 'bg-amber-400' },
+    { label: '31–60 days', detail: 'Needs owner follow-up', amount: open.filter(invoice => { const d = daysBetween(invoice.dueDate, asOf); return d > 30 && d <= 60; }).reduce((sum, invoice) => sum + Number(invoice.outstandingAmount), 0), color: 'bg-orange-400' },
+    { label: '61–90 days', detail: 'Escalation queue', amount: open.filter(invoice => { const d = daysBetween(invoice.dueDate, asOf); return d > 60 && d <= 90; }).reduce((sum, invoice) => sum + Number(invoice.outstandingAmount), 0), color: 'bg-rose-400' },
+    { label: '90+ days', detail: 'Executive attention', amount: open.filter(invoice => daysBetween(invoice.dueDate, asOf) > 90).reduce((sum, invoice) => sum + Number(invoice.outstandingAmount), 0), color: 'bg-fuchsia-400' },
+  ];
+  const maxAging = Math.max(...aging.map(item => item.amount), 1);
+  const supplierExposure = Array.from(open.reduce((map, invoice) => map.set(invoice.supplier.name, (map.get(invoice.supplier.name) || 0) + Number(invoice.outstandingAmount)), new Map<string, number>()).entries()).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  const rows: PayablesRow[] = invoices.map(invoice => ({ id: invoice.id, invoiceNumber: invoice.invoiceNumber, supplierName: invoice.supplier.name, supplierId: invoice.supplier.id, invoiceDate: invoice.invoiceDate.toISOString(), dueDate: invoice.dueDate.toISOString(), totalAmount: Number(invoice.totalAmount), outstandingAmount: Number(invoice.outstandingAmount), currency: invoice.currency || currency, status: invoice.status, daysPastDue: Math.max(0, daysBetween(invoice.dueDate, asOf)), hasGrn: false }));
 
-        {/* Quick Actions & Status */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 bg-white/5 border border-white/10 rounded-xl p-6 backdrop-blur-sm flex flex-col md:flex-row items-center justify-between gap-6">
-            <div>
-              <p className="text-slate-400 text-sm font-medium">Total Payables Outstanding</p>
-              <h2 className="text-4xl font-bold text-white mt-1">₦34,810.00</h2>
-              <div className="flex items-center gap-2 mt-2 text-sm">
-                <span className="flex items-center text-red-400 bg-red-400/10 px-2 py-0.5 rounded text-xs font-medium">
-                  <ArrowUpRight className="h-3 w-3 mr-1" />
-                  5.1%
-                </span>
-                <span className="text-slate-500">vs last month</span>
-              </div>
-            </div>
-            
-            <div className="h-full w-[1px] bg-white/10 hidden md:block"></div>
-            
-            <div className="flex flex-col gap-3 w-full md:w-auto">
-              <button className="w-full md:w-48 px-4 py-2.5 bg-slate-900 border border-white/10 rounded-lg text-sm font-medium text-white hover:bg-white/10 hover:border-emerald-500/50 transition-all flex items-center justify-between group">
-                <span className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-400 group-hover:text-emerald-300" /> Pending Approval</span>
-                <span className="bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full text-xs">12</span>
-              </button>
-              <button className="w-full md:w-48 px-4 py-2.5 bg-slate-900 border border-white/10 rounded-lg text-sm font-medium text-white hover:bg-white/10 hover:border-emerald-500/50 transition-all flex items-center justify-between group">
-                <span className="flex items-center gap-2"><Wallet className="h-4 w-4 text-emerald-400 group-hover:text-emerald-300" /> Ready to Pay</span>
-                <span className="bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full text-xs">8</span>
-              </button>
-            </div>
-          </div>
-
-          <div className="bg-gradient-to-br from-emerald-900/40 to-slate-900 border border-emerald-500/20 rounded-xl p-6 backdrop-blur-sm relative overflow-hidden">
-            <div className="absolute -right-10 -bottom-10 w-40 h-40 bg-emerald-500/10 rounded-full blur-2xl" />
-            <h3 className="text-lg font-semibold text-white mb-2">Payment Run</h3>
-            <p className="text-sm text-slate-400 mb-6 relative z-10">
-              You have 8 approved invoices scheduled for payment this week.
-            </p>
-            <button className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-medium transition-colors shadow-[0_0_15px_rgba(16,185,129,0.2)] relative z-10">
-              Review Payment Run
-            </button>
-          </div>
-        </div>
-
-        {/* Supplier Invoices Table */}
-        <div className="bg-white/5 border border-white/10 rounded-xl backdrop-blur-sm overflow-hidden flex flex-col">
-          <div className="p-5 border-b border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <h3 className="text-lg font-semibold text-white">Recent Supplier Invoices</h3>
-            <div className="flex items-center gap-3">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                <input 
-                  type="text" 
-                  placeholder="Search supplier or ID..." 
-                  className="bg-slate-900 border border-white/10 text-sm rounded-lg pl-9 pr-4 py-2 w-full sm:w-64 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 text-slate-200 placeholder:text-slate-500 transition-all"
-                />
-              </div>
-              <button className="p-2 bg-slate-900 border border-white/10 rounded-lg text-slate-400 hover:text-white hover:border-white/20 transition-colors">
-                <Filter className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
-          
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm whitespace-nowrap">
-              <thead className="bg-slate-900/50 text-slate-400 border-b border-white/10 uppercase tracking-wider text-xs">
-                <tr>
-                  <th className="px-6 py-4 font-medium">Invoice ID</th>
-                  <th className="px-6 py-4 font-medium">Supplier</th>
-                  <th className="px-6 py-4 font-medium">Category</th>
-                  <th className="px-6 py-4 font-medium">Due Date</th>
-                  <th className="px-6 py-4 font-medium text-right">Amount</th>
-                  <th className="px-6 py-4 font-medium">Status</th>
-                  <th className="px-6 py-4 font-medium text-center">Actions</th>
-                </tr>
-              </thead>
-               <tbody className="divide-y divide-white/5">
-                {supplierInvoices.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="px-6 py-4 text-center text-slate-400">No data</td>
-                  </tr>
-                ) : (
-                  supplierInvoices.map((invoice) => {
-                    const statusStr = invoice.status.replace(/_/g, ' ');
-                    const displayStatus = statusStr.charAt(0).toUpperCase() + statusStr.slice(1).toLowerCase();
-                    
-                    return (
-                      <tr key={invoice.id} className="hover:bg-white/[0.02] transition-colors group">
-                        <td className="px-6 py-4 font-medium text-slate-300 group-hover:text-emerald-400 transition-colors">
-                          {invoice.invoiceNumber || 'N/A'}
-                        </td>
-                        <td className="px-6 py-4 font-medium text-white">
-                          {invoice.supplier?.name || 'N/A'}
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className="px-2.5 py-1 bg-slate-800 rounded text-xs font-medium text-slate-300 border border-white/5">
-                            General
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 text-slate-400">
-                          {invoice.dueDate ? invoice.dueDate.toLocaleDateString() : 'N/A'}
-                        </td>
-                        <td className="px-6 py-4 text-right font-medium text-white">
-                          ₦{invoice.totalAmount ? Number(invoice.totalAmount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${
-                            invoice.status === 'APPROVED' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
-                            invoice.status === 'RECEIVED' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
-                            invoice.status === 'PAID' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
-                            'bg-slate-500/10 text-slate-400 border-slate-500/20'
-                          }`}>
-                            {invoice.status === 'APPROVED' && <CheckCircle2 className="h-3 w-3" />}
-                            {(invoice.status === 'RECEIVED') && <Clock className="h-3 w-3" />}
-                            {invoice.status === 'PAID' && <CheckCircle2 className="h-3 w-3" />}
-                            {displayStatus}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 text-center">
-                          <button className="p-1.5 text-slate-400 hover:text-white rounded-md hover:bg-white/10 transition-colors">
-                            <MoreVertical className="h-4 w-4" />
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-          
-          <div className="p-4 border-t border-white/10 text-center text-sm text-slate-500 bg-slate-900/30">
-            Showing 5 of 23 invoices
-          </div>
-        </div>
-
-      </div>
-    </div>
-  );
+  return <main className="min-h-full bg-[#09111f] px-4 py-6 text-slate-200 sm:px-6 lg:px-8 lg:py-8"><div className="mx-auto max-w-[1500px] space-y-6">
+    <header className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end"><div><div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[.2em] text-emerald-300"><Landmark className="h-4 w-4" />Accounts payable control room</div><h1 className="text-3xl font-semibold tracking-[-.04em] text-white sm:text-4xl">Supplier liabilities, in control.</h1><p className="mt-2 max-w-3xl text-sm text-slate-400">Live invoice exposure, due-date pressure, approval queue, and payment readiness for {property?.name || 'this property'}.</p></div><div className="flex flex-wrap items-center gap-2"><span className="rounded-xl border border-white/10 bg-white/[.04] px-3 py-2 text-xs text-slate-400">Business date <strong className="ml-1 text-slate-200">{date(asOf)}</strong></span><RecordSupplierBillModal propertyId={propertyId} suppliers={suppliers} /></div></header>
+    <section className="flex flex-col justify-between gap-4 rounded-2xl border border-emerald-400/15 bg-emerald-400/[.055] px-5 py-4 sm:flex-row sm:items-center"><div className="flex items-start gap-3"><div className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-400/15 text-emerald-300"><ShieldCheck className="h-5 w-5" /></div><div><p className="text-sm font-semibold text-white">AP close posture</p><p className="mt-1 text-xs text-slate-400">{pendingReview.length ? `${pendingReview.length} invoice${pendingReview.length === 1 ? '' : 's'} still need review before payment.` : 'No invoice is waiting in the initial review queue.'}</p></div></div><Link href="/accountant/gl" className="inline-flex items-center gap-2 text-xs font-semibold text-emerald-300 hover:text-emerald-200">Inspect GL control <ArrowRight className="h-3.5 w-3.5" /></Link></section>
+    <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5"><Metric label="Open AP" value={money(totalOutstanding, currency)} detail={`${open.length} unpaid invoices`} icon={CreditCard} tone="amber" /><Metric label="Overdue" value={money(overdueAmount, currency)} detail={`${overdue.length} past due`} icon={AlertCircle} tone="rose" /><Metric label="Due in 7 days" value={money(dueNextSeven, currency)} detail="Near-term cash requirement" icon={CalendarClock} tone="blue" /><Metric label="Ready to pay" value={money(readyToPay.reduce((sum, invoice) => sum + Number(invoice.outstandingAmount), 0), currency)} detail={`${readyToPay.length} approved invoices`} icon={FileCheck2} tone="emerald" /><Metric label="Paid this month" value={money(settledThisMonth, currency)} detail="Supplier payments posted" icon={Wallet} tone="violet" /></section>
+    <section className="grid gap-6 xl:grid-cols-[1.15fr_.85fr]"><Panel title="Payables ageing" subtitle="Live outstanding balance grouped by contractual due date"><div className="space-y-4">{aging.map(item => <div key={item.label}><div className="mb-2 flex items-center justify-between gap-3 text-sm"><span><span className="text-slate-200">{item.label}</span><span className="ml-2 text-xs text-slate-600">{item.detail}</span></span><strong className="text-white">{money(item.amount, currency)}</strong></div><div className="h-2 overflow-hidden rounded-full bg-slate-800"><div className={`h-full rounded-full ${item.color}`} style={{ width: `${item.amount / maxAging * 100}%` }} /></div></div>)}</div></Panel><Panel title="Supplier concentration" subtitle="Largest open liabilities by supplier"><div className="space-y-4">{supplierExposure.length ? supplierExposure.map(([name, amount], index) => <div key={name}><div className="mb-2 flex items-center justify-between gap-3 text-sm"><span className="flex min-w-0 items-center gap-2"><span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-white/[.06] text-[10px] text-slate-500">{index + 1}</span><span className="truncate text-slate-300">{name}</span></span><strong className="shrink-0 text-white">{money(amount, currency)}</strong></div><div className="h-1.5 overflow-hidden rounded-full bg-slate-800"><div className="h-full rounded-full bg-cyan-400" style={{ width: `${amount / Math.max(supplierExposure[0]?.[1] || 1, 1) * 100}%` }} /></div></div>) : <EmptyInline text="No open supplier exposure." />}</div><div className="mt-5 border-t border-white/[.07] pt-4 text-xs text-slate-500">Payment execution should follow approved invoice status, open-period controls, and bank reconciliation.</div></Panel></section>
+    <section className="grid gap-4 sm:grid-cols-3"><Signal icon={Receipt} title="Review queue" value={`${pendingReview.length} invoice${pendingReview.length === 1 ? '' : 's'}`} detail="Received or under review" href="#invoice-register" tone="amber" /><Signal icon={CheckCircle2} title="Approval queue" value={`${readyToPay.length} ready`} detail="Approved or partially paid" href="#invoice-register" tone="emerald" /><Signal icon={BarChart3} title="Control insight" value={overdueAmount ? `${Math.round(overdueAmount / Math.max(totalOutstanding, 1) * 100)}% overdue` : '0% overdue'} detail="Share of open AP exposure" href="#invoice-register" tone={overdueAmount ? 'rose' : 'blue'} /></section>
+    <PayablesRegister rows={rows} currency={currency} />
+  </div></main>;
 }
+
+function Metric({ label, value, detail, icon: Icon, tone }: { label: string; value: string; detail: string; icon: React.ElementType; tone: 'emerald' | 'blue' | 'amber' | 'rose' | 'violet' }) { const colors = { emerald: 'text-emerald-300 bg-emerald-400/10 ring-emerald-400/15', blue: 'text-blue-300 bg-blue-400/10 ring-blue-400/15', amber: 'text-amber-300 bg-amber-400/10 ring-amber-400/15', rose: 'text-rose-300 bg-rose-400/10 ring-rose-400/15', violet: 'text-violet-300 bg-violet-400/10 ring-violet-400/15' }; return <div className="rounded-2xl border border-white/[.08] bg-[#111a2b]/75 p-5"><div className="flex items-start justify-between gap-3"><p className="text-[10px] font-semibold uppercase tracking-[.15em] text-slate-500">{label}</p><span className={`flex h-9 w-9 items-center justify-center rounded-xl ring-1 ${colors[tone]}`}><Icon className="h-4 w-4" /></span></div><p className="mt-4 text-2xl font-semibold tracking-[-.03em] text-white">{value}</p><p className="mt-1 text-xs text-slate-500">{detail}</p></div>; }
+function Panel({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) { return <section className="rounded-2xl border border-white/[.08] bg-[#111a2b]/75 p-5 shadow-[0_18px_50px_rgba(0,0,0,.1)]"><h2 className="font-semibold text-white">{title}</h2><p className="mt-1 text-xs text-slate-500">{subtitle}</p><div className="mt-5">{children}</div></section>; }
+function Signal({ icon: Icon, title, value, detail, href, tone }: { icon: React.ElementType; title: string; value: string; detail: string; href: string; tone: 'emerald' | 'blue' | 'amber' | 'rose' }) { const colors = { emerald: 'text-emerald-300', blue: 'text-blue-300', amber: 'text-amber-300', rose: 'text-rose-300' }; return <Link href={href} className="flex items-center gap-4 rounded-2xl border border-white/[.08] bg-white/[.025] p-4 transition hover:border-white/20 hover:bg-white/[.05]"><Icon className={`h-5 w-5 ${colors[tone]}`} /><span><span className="block text-xs text-slate-500">{title}</span><strong className="mt-1 block text-sm text-white">{value}</strong><span className="mt-1 block text-xs text-slate-600">{detail}</span></span><ArrowRight className="ml-auto h-4 w-4 text-slate-600" /></Link>; }
+function EmptyInline({ text }: { text: string }) { return <div className="rounded-xl border border-dashed border-white/10 py-8 text-center text-xs text-slate-600">{text}</div>; }
+function EmptyState({ title }: { title: string }) { return <main className="flex min-h-full items-center justify-center bg-[#09111f] text-slate-300"><div className="text-center"><Landmark className="mx-auto mb-3 h-10 w-10 text-slate-600" /><h1 className="text-xl font-semibold text-white">{title}</h1></div></main>; }
