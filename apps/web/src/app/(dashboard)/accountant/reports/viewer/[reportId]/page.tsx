@@ -11,7 +11,8 @@ import { prisma } from '@hotel-pms/db';
 
 export const dynamic = 'force-dynamic';
 
-export default async function GenericReportViewerPage({ params, searchParams }: { params: { reportId: string }, searchParams: { businessDate?: string, startDate?: string, endDate?: string } }) {
+export default async function GenericReportViewerPage({ params, searchParams }: { params: Promise<{ reportId: string }>, searchParams: Promise<{ businessDate?: string, startDate?: string, endDate?: string }> }) {
+  const [{ reportId }, query] = await Promise.all([params, searchParams]);
   const session = await auth();
   if (!session?.user) redirect('/login?callbackUrl=%2Faccountant%2Freports');
 
@@ -21,10 +22,10 @@ export default async function GenericReportViewerPage({ params, searchParams }: 
 
   const property = await prisma.property.findUnique({ where: { id: propertyId }, select: { name: true, baseCurrency: true, businessDate: true } });
 
-  const bDateStr = searchParams.businessDate || property?.businessDate?.toISOString().slice(0, 10) || new Date().toISOString().slice(0, 10);
+  const bDateStr = query.businessDate || property?.businessDate?.toISOString().slice(0, 10) || new Date().toISOString().slice(0, 10);
   const businessDate = new Date(bDateStr);
 
-  const sDateStr = searchParams.startDate || new Date(businessDate.getFullYear(), businessDate.getMonth(), 1).toISOString().slice(0, 10);
+  const sDateStr = query.startDate || new Date(businessDate.getFullYear(), businessDate.getMonth(), 1).toISOString().slice(0, 10);
   const startDate = new Date(sDateStr);
   const endDate = businessDate;
 
@@ -32,9 +33,9 @@ export default async function GenericReportViewerPage({ params, searchParams }: 
   const generatedAt = new Date();
   const generatedBy = session.user.name || session.user.email || 'System User';
   const filtersHash = Buffer.from(`${propertyId}-${bDateStr}-${sDateStr}`).toString('base64').substring(0, 12);
-  const deterministicId = `${params.reportId.toUpperCase()}-${propertyId.slice(0, 8).toUpperCase()}-${bDateStr.replace(/-/g, '')}-${filtersHash}`;
+  const deterministicId = `${reportId.toUpperCase()}-${propertyId.slice(0, 8).toUpperCase()}-${bDateStr.replace(/-/g, '')}-${filtersHash}`;
 
-  switch (params.reportId) {
+  switch (reportId) {
     case 'trial-balance': {
       const tb = await FinancialStatementService.getTrialBalance(propertyId, businessDate);
       reportData = {

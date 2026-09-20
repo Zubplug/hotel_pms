@@ -8,7 +8,8 @@ import { PrintPackageButton } from '@/components/accountant/PrintPackageButton';
 
 export const dynamic = 'force-dynamic';
 
-export default async function ReportPackagePage({ params, searchParams }: { params: { packageType: string }, searchParams: { businessDate?: string } }) {
+export default async function ReportPackagePage({ params, searchParams }: { params: Promise<{ packageType: string }>, searchParams: Promise<{ businessDate?: string }> }) {
+  const [{ packageType }, query] = await Promise.all([params, searchParams]);
   const session = await auth();
   if (!session?.user) redirect('/login?callbackUrl=%2Faccountant%2Freports');
 
@@ -18,14 +19,14 @@ export default async function ReportPackagePage({ params, searchParams }: { para
 
   const property = await prisma.property.findUnique({ where: { id: propertyId }, select: { name: true, baseCurrency: true, businessDate: true } });
 
-  const bDateStr = searchParams.businessDate || property?.businessDate?.toISOString().slice(0, 10) || new Date().toISOString().slice(0, 10);
+  const bDateStr = query.businessDate || property?.businessDate?.toISOString().slice(0, 10) || new Date().toISOString().slice(0, 10);
 
   let title = '';
   let description = '';
   let checklist: string[] = [];
   let reports: { name: string, href: string }[] = [];
 
-  if (params.packageType === 'daily') {
+  if (packageType === 'daily') {
     title = 'Daily Financial Close Package';
     description = 'Standard operating package required for daily hotel reconciliation and night audit sign-off.';
     checklist = [
@@ -43,7 +44,7 @@ export default async function ReportPackagePage({ params, searchParams }: { para
       { name: 'City Ledger Transfers', href: '/accountant/reports/viewer/city-ledger-transfer' },
       { name: 'Night Audit Log', href: '/accountant/reports/viewer/night-audit' }
     ];
-  } else if (params.packageType === 'monthly') {
+  } else if (packageType === 'monthly') {
     title = 'Month-End Close Package';
     description = 'Comprehensive accounting package required for period-end closure and financial reporting.';
     checklist = [
