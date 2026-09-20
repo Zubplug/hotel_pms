@@ -113,7 +113,7 @@ export class DailyAccountingService {
     const rows = [
       ...posShifts.map(s => ({
         shiftId: s.id.substring(0, 8),
-        cashier: s.primaryOperator?.name || 'Unassigned',
+        cashier: s.primaryOperator ? `${s.primaryOperator.firstName} ${s.primaryOperator.lastName}`.trim() : 'Unassigned',
         location: s.outlet.name,
         expected: Number(s.expectedCash),
         declared: Number(s.actualCash || 0),
@@ -122,7 +122,7 @@ export class DailyAccountingService {
       })),
       ...fdShifts.map(s => ({
         shiftId: s.id.substring(0, 8),
-        cashier: s.staff.name,
+        cashier: `${s.staff.firstName} ${s.staff.lastName}`.trim(),
         location: 'Front Desk',
         expected: Number(s.systemExpectedCash),
         declared: Number(s.declaredCash || 0),
