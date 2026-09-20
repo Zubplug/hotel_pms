@@ -23,7 +23,7 @@ const schema = z.object({
 
 type FormData = z.infer<typeof schema>;
 
-export function RegisterAssetForm({ categories }: { categories: { id: string; name: string }[] }) {
+export function RegisterAssetForm({ propertyId, categories }: { propertyId: string; categories: { id: string; name: string }[] }) {
   const [open, setOpen] = useState(false);
   const router = useRouter();
   const { register, handleSubmit, formState: { errors, isSubmitting }, reset } = useForm<FormData>({
@@ -37,8 +37,15 @@ export function RegisterAssetForm({ categories }: { categories: { id: string; na
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ...data,
-          purchaseDate: new Date(data.purchaseDate).toISOString()
+          propertyId,
+          assetNumber: data.code,
+          categoryId: data.categoryId,
+          name: data.name,
+          acquisitionDate: new Date(data.purchaseDate).toISOString(),
+          acquisitionCost: data.purchasePrice,
+          salvageValue: data.salvageValue,
+          usefulLifeYears: data.usefulLifeYears,
+          depreciationMethod: 'STRAIGHT_LINE'
         })
       });
       if (!res.ok) throw new Error('Failed to register asset');
@@ -46,8 +53,8 @@ export function RegisterAssetForm({ categories }: { categories: { id: string; na
       setOpen(false);
       reset();
       router.refresh();
-    } catch (e: any) {
-      toast.error(e.message);
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Unable to register asset');
     }
   };
 

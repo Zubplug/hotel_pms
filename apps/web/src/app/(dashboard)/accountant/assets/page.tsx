@@ -1,160 +1,60 @@
-import React from 'react';
+import Link from 'next/link';
+import { redirect } from 'next/navigation';
+import { ArrowRight, CalendarClock, CheckCircle2, CircleDollarSign, FileCheck2, Landmark, PackageOpen, ShieldCheck, TrendingDown } from 'lucide-react';
 import { auth } from '@/lib/auth';
+import { requireOrganizationContext } from '@/lib/organization-access';
 import { prisma } from '@hotel-pms/db';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { 
-  Building, 
-  Monitor, 
-  Car, 
-  Search, 
-  Plus, 
-  TrendingDown, 
-  Wallet,
-  Activity
-} from 'lucide-react';
 import { RegisterAssetForm } from '@/components/accountant/RegisterAssetForm';
+
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
+const money = (value: number, currency: string) => new Intl.NumberFormat('en-NG', { style: 'currency', currency, maximumFractionDigits: 0 }).format(value);
+const dateLabel = (value: Date) => new Intl.DateTimeFormat('en-NG', { dateStyle: 'medium' }).format(value);
 
 export default async function AssetsPage() {
   const session = await auth();
-  const propertyId = session?.user?.propertyId;
-  const assets = propertyId ? await prisma.fixedAsset.findMany({ 
-    where: { propertyId },
-    include: { category: true }
-  }) : [];
-  
-  const categories = propertyId ? await prisma.fixedAssetCategory.findMany({
-    where: { propertyId }
-  }) : [];
+  if (!session?.user) redirect('/login?callbackUrl=%2Faccountant%2Fassets');
+  const propertyIds = (await requireOrganizationContext(session.user.id)).propertyIds;
+  const propertyId = session.user.propertyId && propertyIds.includes(session.user.propertyId) ? session.user.propertyId : propertyIds[0];
+  if (!propertyId) return <EmptyState title="No property assigned" />;
 
-  const totalAssetsValue = assets.reduce((sum, a) => sum + Number(a.acquisitionCost || 0), 0);
-  const totalDepreciation = assets.reduce((sum, a) => sum + Number(a.accumulatedDepreciation || 0), 0);
-  const netBookValue = assets.reduce((sum, a) => sum + Number(a.currentBookValue || 0), 0);
+  const [property, assets, categories, depreciation, periods] = await Promise.all([
+    prisma.property.findUnique({ where: { id: propertyId }, select: { name: true, baseCurrency: true, businessDate: true } }),
+    prisma.fixedAsset.findMany({ where: { propertyId }, include: { category: true }, orderBy: { acquisitionDate: 'desc' } }),
+    prisma.fixedAssetCategory.findMany({ where: { propertyId, isActive: true }, orderBy: { name: 'asc' } }),
+    prisma.assetDepreciation.findMany({ where: { propertyId }, orderBy: { depreciationDate: 'desc' }, take: 500 }),
+    prisma.accountingPeriod.findMany({ where: { propertyId }, orderBy: { periodStart: 'desc' }, take: 12 }),
+  ]);
+  const currency = property?.baseCurrency || 'NGN';
+  const businessDate = property?.businessDate || new Date();
+  const currentPeriod = periods.find(period => period.periodStart <= businessDate && period.periodEnd >= businessDate);
+  const activeAssets = assets.filter(asset => asset.status === 'ACTIVE');
+  const disposedAssets = assets.filter(asset => asset.status === 'DISPOSED');
+  const fullyDepreciated = assets.filter(asset => asset.status === 'FULLY_DEPRECIATED');
+  const cost = assets.reduce((sum, asset) => sum + Number(asset.acquisitionCost), 0);
+  const accumulated = assets.reduce((sum, asset) => sum + Number(asset.accumulatedDepreciation), 0);
+  const bookValue = assets.reduce((sum, asset) => sum + Number(asset.currentBookValue), 0);
+  const currentMonth = businessDate.getUTCMonth();
+  const currentYear = businessDate.getUTCFullYear();
+  const monthlyDepreciation = depreciation.filter(item => item.depreciationDate.getUTCMonth() === currentMonth && item.depreciationDate.getUTCFullYear() === currentYear).reduce((sum, item) => sum + Number(item.amount), 0);
+  const warrantyDue = activeAssets.filter(asset => asset.warrantyExpiry && asset.warrantyExpiry >= businessDate && asset.warrantyExpiry <= new Date(businessDate.getTime() + 90 * 86400000));
+  const categoryMix = Array.from(assets.reduce((map, asset) => map.set(asset.category.name, (map.get(asset.category.name) || 0) + Number(asset.currentBookValue)), new Map<string, number>()).entries()).sort((a, b) => b[1] - a[1]).slice(0, 6);
+  const maxCategory = Math.max(...categoryMix.map(([, amount]) => amount), 1);
 
-  const stats = [
-    { label: 'Total Assets Value', value: `₦${totalAssetsValue.toLocaleString()}`, icon: Wallet, trend: '+4.5%' },
-    { label: 'Accumulated Depreciation', value: `₦${totalDepreciation.toLocaleString()}`, icon: TrendingDown, trend: '+12.3%' },
-    { label: 'Net Book Value', value: `₦${netBookValue.toLocaleString()}`, icon: Activity, trend: '-2.1%' },
-  ];
-
-  return (
-    <div className="p-8 space-y-8 bg-slate-950 min-h-screen text-slate-50">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-emerald-400 to-emerald-600">
-            Fixed Assets
-          </h1>
-          <p className="text-slate-400 mt-1">Manage corporate fixed assets and depreciation</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <Button variant="outline" className="border-slate-800 bg-slate-900/50 hover:bg-slate-800 hover:text-slate-50">
-            Export Register
-          </Button>
-          <RegisterAssetForm categories={categories.map(c => ({ id: c.id, name: c.name }))} />
-        </div>
-      </div>
-
-      {/* Stats row */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {stats.map((stat, i) => (
-          <Card key={i} className="bg-white/5 border-slate-800/60 backdrop-blur-md">
-            <CardContent className="p-6">
-              <div className="flex justify-between items-start">
-                <div>
-                  <p className="text-slate-400 text-sm font-medium">{stat.label}</p>
-                  <h3 className="text-3xl font-semibold mt-2 text-slate-100">{stat.value}</h3>
-                </div>
-                <div className="p-3 bg-emerald-500/10 rounded-lg">
-                  <stat.icon className="w-6 h-6 text-emerald-400" />
-                </div>
-              </div>
-              <div className="mt-4 flex items-center text-sm">
-                <span className={stat.trend.startsWith('+') ? 'text-emerald-400' : 'text-red-400'}>
-                  {stat.trend}
-                </span>
-                <span className="text-slate-500 ml-2">vs last year</span>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {/* Asset Register */}
-      <Card className="bg-white/5 border-slate-800/60 backdrop-blur-md shadow-xl">
-        <CardHeader className="border-b border-slate-800/60 pb-6">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-            <div>
-              <CardTitle className="text-xl text-slate-100">Asset Register</CardTitle>
-              <CardDescription className="text-slate-400">Detailed view of all registered fixed assets</CardDescription>
-            </div>
-            <div className="relative w-full sm:w-64">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <Input 
-                placeholder="Search assets..." 
-                className="pl-9 bg-slate-900/50 border-slate-800 text-slate-200 placeholder:text-slate-500 focus-visible:ring-emerald-500"
-              />
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader className="bg-slate-900/40">
-              <TableRow className="border-slate-800 hover:bg-transparent">
-                <TableHead className="text-slate-400 font-medium">Asset</TableHead>
-                <TableHead className="text-slate-400 font-medium">Category</TableHead>
-                <TableHead className="text-slate-400 font-medium text-right">Original Value</TableHead>
-                <TableHead className="text-slate-400 font-medium text-right">Depreciation</TableHead>
-                <TableHead className="text-slate-400 font-medium text-right">Book Value</TableHead>
-                <TableHead className="text-slate-400 font-medium text-center">Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {assets.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center text-slate-400 py-4">No data</TableCell>
-                </TableRow>
-              ) : assets.map((asset) => {
-                const statusStr = asset.status.replace(/_/g, ' ');
-                const displayStatus = statusStr.charAt(0).toUpperCase() + statusStr.slice(1).toLowerCase();
-                const Icon = asset.category?.name?.toLowerCase().includes('vehicle') ? Car : asset.category?.name?.toLowerCase().includes('furniture') ? Building : Monitor;
-                
-                return (
-                  <TableRow key={asset.id} className="border-slate-800/60 hover:bg-white/[0.02] transition-colors">
-                    <TableCell className="font-medium text-slate-200">
-                      <div className="flex items-center gap-3">
-                        <div className="p-2 bg-slate-800/50 rounded-md">
-                          <Icon className="w-4 h-4 text-emerald-400" />
-                        </div>
-                        <div>
-                          <div>{asset.name || 'N/A'}</div>
-                          <div className="text-xs text-slate-500">{asset.assetNumber || 'N/A'}</div>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-slate-300">{asset.category?.name || 'N/A'}</TableCell>
-                    <TableCell className="text-right text-slate-300">₦{asset.acquisitionCost ? Number(asset.acquisitionCost).toLocaleString() : '0'}</TableCell>
-                    <TableCell className="text-right text-red-400">-₦{asset.accumulatedDepreciation ? Number(asset.accumulatedDepreciation).toLocaleString() : '0'}</TableCell>
-                    <TableCell className="text-right text-emerald-400 font-medium">₦{asset.currentBookValue ? Number(asset.currentBookValue).toLocaleString() : '0'}</TableCell>
-                    <TableCell className="text-center">
-                      <Badge variant="outline" className={
-                        asset.status === 'ACTIVE' 
-                          ? 'border-emerald-500/30 text-emerald-400 bg-emerald-500/10' 
-                          : 'border-amber-500/30 text-amber-400 bg-amber-500/10'
-                      }>
-                        {displayStatus}
-                      </Badge>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-    </div>
-  );
+  return <main className="min-h-full bg-[#08111f] px-4 py-6 text-slate-200 sm:px-6 lg:px-8 lg:py-8"><div className="mx-auto max-w-[1540px] space-y-6">
+    <header className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end"><div><div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[.2em] text-cyan-300"><PackageOpen className="h-4 w-4" />Fixed asset control room</div><h1 className="text-3xl font-semibold tracking-[-.04em] text-white sm:text-4xl">The property’s capital, accounted for.</h1><p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">Live asset register, book value, depreciation run-rate, warranty exposure, and the controls required before a period is closed.</p></div><div className="flex flex-wrap items-center gap-2"><span className="rounded-xl border border-white/10 bg-white/[.04] px-3 py-2 text-xs text-slate-400">Business date <strong className="ml-1 text-slate-200">{dateLabel(businessDate)}</strong></span><RegisterAssetForm propertyId={propertyId} categories={categories.map(category => ({ id: category.id, name: category.name }))} /></div></header>
+    <section className={`flex flex-col justify-between gap-4 rounded-2xl border px-5 py-4 sm:flex-row sm:items-center ${currentPeriod?.status === 'OPEN' ? 'border-cyan-400/15 bg-cyan-400/[.055]' : 'border-amber-400/20 bg-amber-400/[.06]'}`}><div className="flex items-start gap-3"><div className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-xl bg-cyan-400/15 text-cyan-300"><ShieldCheck className="h-5 w-5" /></div><div><p className="text-sm font-semibold text-white">Asset close posture</p><p className="mt-1 text-xs text-slate-400">{currentPeriod ? `${currentPeriod.name} is ${currentPeriod.status.toLowerCase()}.` : 'No accounting period covers the current business date.'} {warrantyDue.length ? `${warrantyDue.length} warranty${warrantyDue.length === 1 ? '' : 'ies'} expire within 90 days.` : 'No near-term warranty expiries are recorded.'}</p></div></div><Link href="/accountant/gl" className="inline-flex items-center gap-2 text-xs font-semibold text-cyan-300">Review depreciation journals <ArrowRight className="h-3.5 w-3.5" /></Link></section>
+    <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6"><Metric label="Gross asset cost" value={money(cost, currency)} detail={`${assets.length} registered assets`} icon={Landmark} tone="cyan" /><Metric label="Accumulated depreciation" value={money(accumulated, currency)} detail={`${depreciation.length} depreciation postings`} icon={TrendingDown} tone="rose" /><Metric label="Net book value" value={money(bookValue, currency)} detail={`${activeAssets.length} assets in service`} icon={CircleDollarSign} tone="emerald" /><Metric label="Monthly charge" value={money(monthlyDepreciation, currency)} detail="Current business month" icon={CalendarClock} tone="violet" /><Metric label="Fully depreciated" value={fullyDepreciated.length.toLocaleString()} detail="Still held in register" icon={FileCheck2} tone="amber" /><Metric label="Disposed" value={disposedAssets.length.toLocaleString()} detail="Historical asset records" icon={CheckCircle2} tone="cyan" /></section>
+    <section className="grid gap-5 xl:grid-cols-[1.05fr_.95fr]"><Panel title="Net book value by category" subtitle="Live balance by fixed-asset category"><div className="space-y-4">{categoryMix.length ? categoryMix.map(([category, amount]) => <div key={category}><div className="mb-2 flex items-center justify-between gap-3 text-sm"><span className="truncate text-slate-300">{category}</span><strong className="text-white">{money(amount, currency)}</strong></div><div className="h-2 overflow-hidden rounded-full bg-slate-800"><div className="h-full rounded-full bg-cyan-400" style={{ width: `${amount / maxCategory * 100}%` }} /></div></div>) : <EmptyInline text="No fixed assets have been registered." />}</div></Panel><Panel title="Asset controls" subtitle="Signals that need an accountant’s review"><div className="space-y-2"><Signal title="Register completeness" value={`${assets.length} assets`} detail={`${categories.length} active categories configured`} icon={PackageOpen} tone="cyan" /><Signal title="Depreciation run" value={money(monthlyDepreciation, currency)} detail="Current month posted charge" icon={TrendingDown} tone="violet" /><Signal title="Warranty watch" value={`${warrantyDue.length} due soon`} detail="Within the next 90 days" icon={CalendarClock} tone={warrantyDue.length ? 'amber' : 'emerald'} /><Signal title="Period control" value={currentPeriod?.status || 'Missing'} detail={currentPeriod?.name || 'Create an accounting period'} icon={LockIcon} tone={currentPeriod?.status === 'OPEN' ? 'emerald' : 'rose'} /></div></Panel></section>
+    <section className="rounded-2xl border border-white/[.08] bg-[#111a2b]/75 p-5 shadow-[0_18px_50px_rgba(0,0,0,.1)] sm:p-6"><div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end"><div><div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[.16em] text-cyan-300"><PackageOpen className="h-4 w-4" />Live asset register</div><h2 className="mt-1 text-lg font-semibold text-white">Capital assets and depreciation position</h2><p className="mt-1 text-xs text-slate-500">Every balance below is read from the fixed-asset subledger.</p></div><Link href="/accountant/gl" className="text-xs font-semibold text-cyan-300">Open GL control <ArrowRight className="ml-1 inline h-3.5 w-3.5" /></Link></div><div className="mt-5 overflow-x-auto"><table className="w-full min-w-[940px] text-left text-sm"><thead><tr className="border-b border-white/[.07] text-[10px] uppercase tracking-[.14em] text-slate-500"><th className="py-3">Asset</th><th className="py-3">Category</th><th className="py-3">Acquired</th><th className="py-3 text-right">Cost</th><th className="py-3 text-right">Accumulated dep.</th><th className="py-3 text-right">Book value</th><th className="py-3 text-right">Status</th></tr></thead><tbody className="divide-y divide-white/[.06]">{assets.map(asset => <tr key={asset.id} className="transition hover:bg-white/[.03]"><td className="py-3"><p className="font-medium text-slate-200">{asset.name}</p><p className="font-mono text-[11px] text-cyan-300">{asset.assetNumber}</p></td><td className="py-3 text-slate-400">{asset.category.name}</td><td className="py-3 text-xs text-slate-500">{dateLabel(asset.acquisitionDate)}</td><td className="py-3 text-right text-slate-300">{money(Number(asset.acquisitionCost), currency)}</td><td className="py-3 text-right text-rose-300">{money(Number(asset.accumulatedDepreciation), currency)}</td><td className="py-3 text-right font-semibold text-white">{money(Number(asset.currentBookValue), currency)}</td><td className="py-3 text-right"><span className={`rounded-full border px-2 py-1 text-[10px] font-semibold ${asset.status === 'ACTIVE' ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300' : asset.status === 'FULLY_DEPRECIATED' ? 'border-amber-400/20 bg-amber-400/10 text-amber-300' : 'border-slate-400/20 bg-slate-400/10 text-slate-400'}`}>{asset.status.replaceAll('_', ' ')}</span></td></tr>)}{!assets.length && <tr><td colSpan={7} className="py-12 text-center text-sm text-slate-600">No fixed assets are registered for this property.</td></tr>}</tbody></table></div></section>
+    <footer className="flex flex-col justify-between gap-2 border-t border-white/10 pt-4 text-xs text-slate-600 sm:flex-row"><span>Live source: fixed-asset register, depreciation subledger, accounting periods, and property categories.</span><span>As of {dateLabel(businessDate)}</span></footer>
+  </div></main>;
 }
+
+function Metric({ label, value, detail, icon: Icon, tone }: { label: string; value: string; detail: string; icon: React.ElementType; tone: 'emerald' | 'amber' | 'rose' | 'cyan' | 'violet' }) { const colors = { emerald: 'text-emerald-300 bg-emerald-400/10 ring-emerald-400/15', amber: 'text-amber-300 bg-amber-400/10 ring-amber-400/15', rose: 'text-rose-300 bg-rose-400/10 ring-rose-400/15', cyan: 'text-cyan-300 bg-cyan-400/10 ring-cyan-400/15', violet: 'text-violet-300 bg-violet-400/10 ring-violet-400/15' }; return <div className="rounded-2xl border border-white/[.08] bg-[#111a2b]/75 p-5"><div className="flex items-start justify-between gap-3"><div><p className="text-[10px] font-semibold uppercase tracking-[.15em] text-slate-500">{label}</p><p className="mt-3 text-2xl font-semibold tracking-[-.03em] text-white">{value}</p><p className="mt-1 text-xs leading-5 text-slate-500">{detail}</p></div><span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ring-1 ${colors[tone]}`}><Icon className="h-4 w-4" /></span></div></div>; }
+function Panel({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) { return <section className="rounded-2xl border border-white/[.08] bg-[#111a2b]/75 p-5 shadow-[0_18px_50px_rgba(0,0,0,.1)] sm:p-6"><h2 className="font-semibold text-white">{title}</h2><p className="mt-1 text-xs text-slate-500">{subtitle}</p><div className="mt-5">{children}</div></section>; }
+function Signal({ title, value, detail, icon: Icon, tone }: { title: string; value: string; detail: string; icon: React.ElementType; tone: 'emerald' | 'amber' | 'rose' | 'cyan' | 'violet' }) { const colors = { emerald: 'text-emerald-300', amber: 'text-amber-300', rose: 'text-rose-300', cyan: 'text-cyan-300', violet: 'text-violet-300' }; return <div className="flex items-center gap-3 rounded-xl border border-white/[.08] bg-white/[.025] px-3 py-3"><Icon className={`h-4 w-4 shrink-0 ${colors[tone]}`} /><span className="min-w-0"><span className="block text-[11px] text-slate-500">{title}</span><strong className="mt-1 block truncate text-sm text-white">{value}</strong><span className="mt-1 block truncate text-[11px] text-slate-600">{detail}</span></span></div>; }
+function EmptyInline({ text }: { text: string }) { return <div className="rounded-xl border border-dashed border-white/10 py-8 text-center text-xs text-slate-600">{text}</div>; }
+function EmptyState({ title }: { title: string }) { return <main className="flex min-h-full items-center justify-center bg-[#08111f] text-slate-300"><div className="text-center"><PackageOpen className="mx-auto mb-3 h-10 w-10 text-slate-600" /><h1 className="text-xl font-semibold text-white">{title}</h1></div></main>; }
+function LockIcon({ className }: { className?: string }) { return <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>; }

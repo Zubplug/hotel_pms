@@ -6,224 +6,64 @@ import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
 import { toast } from 'sonner';
 import { AuditWizard } from '@/components/night-audit/audit-wizard';
 import { NightAuditData } from '@/types/night-audit';
-import {
-  AlertTriangle, ArrowRight, CheckCircle2, Clock, FileCheck, FileWarning,
-  Loader2, RefreshCw, ShieldAlert, Wallet, TrendingUp, Bed, Percent, Activity,
-  Users, LogOut, LogIn, UserX, Receipt
-} from 'lucide-react';
+import { AlertTriangle, ArrowRight, BedDouble, CheckCircle2, CircleDollarSign, Clock3, FileCheck2, FileWarning, Loader2, LogIn, LogOut, Percent, RefreshCw, ShieldAlert, Users, WalletCards } from 'lucide-react';
 
-type TrialBalance = {
-  auditStatus: string;
-  reportSource?: string;
-  postedEntryCount?: number;
-  totals: { debit: number; credit: number; difference: number; status: string };
-  accounts: Array<{ accountCode: string; accountName: string; department: string; debit: number; credit: number; netBalance: number; transactionCount: number }>;
-};
+type TrialBalance = { auditStatus: string; postedEntryCount?: number; totals: { debit: number; credit: number; difference: number; status: string }; accounts: Array<{ accountCode: string; accountName: string; department: string; debit: number; credit: number; netBalance: number; transactionCount: number }> };
+type Receivable = { folioNumber: string; guest?: { name?: string } | null; reservation?: { room?: string | null } | null; financials: { balance: number; currency: string }; aging: { status: string; daysOutstanding: number } };
+type FlashReport = { netRevenue?: number; roomRevenue?: number; fbRevenue?: number; grossRevenue?: number; occupancyPercentage?: number; adr?: number; revPar?: number; arrivals?: number; departures?: number; walkIns?: number; noShows?: number };
 
-type Receivable = {
-  folioNumber: string;
-  guest?: { name?: string } | null;
-  reservation?: { room?: string | null; status?: string } | null;
-  financials: { balance: number; currency: string };
-  aging: { status: string; daysOutstanding: number };
-};
-
-async function readApi<T>(url: string): Promise<T> {
-  const response = await fetch(url);
-  const body = await response.json();
-  if (!response.ok || body.success === false) {
-    throw new Error(body.error?.message || body.error || 'Request failed');
-  }
-  return body.data ?? body;
-}
-
-const money = (value: unknown, currency = 'NGN') =>
-  new Intl.NumberFormat('en-NG', { style: 'currency', currency, maximumFractionDigits: 2 }).format(Number(value || 0));
+async function readApi<T>(url: string): Promise<T> { const response = await fetch(url); const body = await response.json(); if (!response.ok || body.success === false) throw new Error(body.error?.message || body.error || 'Request failed'); return body.data ?? body; }
+const money = (value: unknown, currency = 'NGN') => new Intl.NumberFormat('en-NG', { style: 'currency', currency, maximumFractionDigits: 0 }).format(Number(value || 0));
 
 export default function AccountantAuditPage() {
   const { data: session } = useLodgeCoreSession();
   const propertyId = session?.user?.propertyId;
   const [isExecuting, setIsExecuting] = React.useState(false);
   const [wizardOpen, setWizardOpen] = React.useState(false);
-
-  const statusQuery = useQuery<NightAuditData>({
-    queryKey: ['accountant-audit-status', propertyId],
-    queryFn: () => readApi(`/api/v1/night-audit/status?propertyId=${propertyId}`),
-    enabled: Boolean(propertyId),
-    refetchInterval: 30000,
-  });
-
+  const statusQuery = useQuery<NightAuditData>({ queryKey: ['accountant-audit-status', propertyId], queryFn: () => readApi(`/api/v1/night-audit/status?propertyId=${propertyId}`), enabled: Boolean(propertyId), refetchInterval: 30000 });
   const businessDate = statusQuery.data?.businessDate;
-  const trialQuery = useQuery<TrialBalance>({
-    queryKey: ['accountant-trial-balance', propertyId, businessDate],
-    queryFn: () => readApi(`/api/v1/night-audit/reports/trial-balance?propertyId=${propertyId}&businessDate=${businessDate}`),
-    enabled: Boolean(propertyId && businessDate),
-  });
+  const trialQuery = useQuery<TrialBalance>({ queryKey: ['accountant-trial-balance', propertyId, businessDate], queryFn: () => readApi(`/api/v1/night-audit/reports/trial-balance?propertyId=${propertyId}&businessDate=${businessDate}`), enabled: Boolean(propertyId && businessDate) });
+  const receivablesQuery = useQuery<{ receivables: Receivable[] }>({ queryKey: ['accountant-audit-receivables', propertyId], queryFn: () => readApi(`/api/v1/reports/receivables?propertyId=${propertyId}&minBalance=0`), enabled: Boolean(propertyId) });
+  const flashQuery = useQuery<FlashReport>({ queryKey: ['accountant-flash-report', propertyId, businessDate], queryFn: () => readApi(`/api/v1/night-audit/reports/managers-flash?propertyId=${propertyId}&businessDate=${businessDate}`), enabled: Boolean(propertyId && businessDate) });
+  const refresh = () => { void statusQuery.refetch(); void trialQuery.refetch(); void receivablesQuery.refetch(); void flashQuery.refetch(); };
+  const executeAudit = async () => { if (!propertyId) return; setIsExecuting(true); try { const response = await fetch('/api/v1/night-audit/execute', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ propertyId }) }); const body = await response.json(); if (!response.ok || body.success === false) throw new Error(body.error?.message || body.error || 'Night Audit could not be started'); setWizardOpen(false); toast.success('Night Audit completed successfully'); refresh(); } catch (error: unknown) { toast.error(error instanceof Error ? error.message : 'Night Audit could not be started'); } finally { setIsExecuting(false); } };
 
-  const receivablesQuery = useQuery<{ receivables: Receivable[] }>({
-    queryKey: ['accountant-audit-receivables', propertyId],
-    queryFn: () => readApi(`/api/v1/reports/receivables?propertyId=${propertyId}&minBalance=0`),
-    enabled: Boolean(propertyId),
-  });
-
-  const flashQuery = useQuery<any>({
-    queryKey: ['accountant-flash-report', propertyId, businessDate],
-    queryFn: () => readApi(`/api/v1/night-audit/reports/managers-flash?propertyId=${propertyId}&businessDate=${businessDate}`),
-    enabled: Boolean(propertyId && businessDate),
-  });
-
-  const refresh = () => {
-    void statusQuery.refetch();
-    void trialQuery.refetch();
-    void receivablesQuery.refetch();
-    void flashQuery.refetch();
-  };
-
-  const executeAudit = async () => {
-    if (!propertyId) return;
-    setIsExecuting(true);
-    try {
-      const response = await fetch('/api/v1/night-audit/execute', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ propertyId }),
-      });
-      const body = await response.json();
-      if (!response.ok || body.success === false) throw new Error(body.error?.message || body.error || 'Night Audit could not be started');
-      setWizardOpen(false);
-      toast.success('Night Audit completed successfully');
-      refresh();
-    } catch (error: any) {
-      toast.error(error.message || 'Night Audit could not be started');
-    } finally {
-      setIsExecuting(false);
-    }
-  };
-
-  if (statusQuery.isLoading) {
-    return <div className="flex min-h-full items-center justify-center bg-slate-950"><Loader2 className="h-8 w-8 animate-spin text-emerald-400" /></div>;
-  }
-
-  if (statusQuery.isError || !statusQuery.data) {
-    return <div className="flex min-h-full flex-col items-center justify-center gap-4 bg-slate-950 p-8 text-center text-slate-300"><FileWarning className="h-10 w-10 text-rose-400" /><p>Audit data could not be loaded.</p><button onClick={refresh} className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-4 py-2 text-sm hover:bg-white/10"><RefreshCw className="h-4 w-4" />Retry</button></div>;
-  }
+  if (statusQuery.isLoading) return <div className="flex min-h-full items-center justify-center bg-[#08111f]"><Loader2 className="h-8 w-8 animate-spin text-emerald-300" /></div>;
+  if (statusQuery.isError || !statusQuery.data) return <div className="flex min-h-full flex-col items-center justify-center gap-4 bg-[#08111f] p-8 text-center text-slate-300"><FileWarning className="h-10 w-10 text-rose-300" /><p>Audit data could not be loaded.</p><button onClick={refresh} className="inline-flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2 text-sm hover:bg-white/10"><RefreshCw className="h-4 w-4" />Retry</button></div>;
 
   const audit = statusQuery.data;
   const trial = trialQuery.data;
   const receivables = receivablesQuery.data?.receivables || [];
   const blockers = [
-    ...(audit.system.openPosSessions || []).map((item: any) => ({ id: item.id, description: `Open POS session${item.outlet?.name ? ` — ${item.outlet.name}` : ''}`, amount: item.expectedCash, severity: 'HIGH' })),
-    ...(audit.system.openFrontdeskSessions || []).map((item: any) => ({ id: item.id, description: `Open front-desk session — ${item.shiftReference || 'unreferenced'}`, amount: item.expectedCash, severity: 'HIGH' })),
-    ...(audit.system.openPosOrders || []).map((item: any) => ({ id: item.id, description: `Unsettled POS order ${item.orderNumber || item.displayName || ''}`, amount: item.total, severity: 'HIGH' })),
-    ...(audit.system.financialSyncConflicts || []).map((item: any) => ({ id: item.id, description: `Pending financial sync conflict — ${item.aggregateType || 'transaction'}`, amount: 0, severity: 'MEDIUM' })),
-    ...(audit.financial.rateVariances || []).map((item: any) => ({ id: item.id, description: `Room-rate variance — ${item.folio?.reservation?.primaryGuest ? `${item.folio.reservation.primaryGuest.firstName} ${item.folio.reservation.primaryGuest.lastName}` : 'guest'}`, amount: Number(item.unitAmount || 0) - Number(item.baseAmount || 0), severity: 'MEDIUM' })),
+    ...list(audit.system.openPosSessions).map(raw => { const item = record(raw); return { id: String(item.id || item.shiftReference || 'pos-session'), description: `Open POS session${record(item.outlet).name ? ` — ${String(record(item.outlet).name)}` : ''}`, amount: item.expectedCash, severity: 'HIGH' }; }),
+    ...list(audit.system.openFrontdeskSessions).map(raw => { const item = record(raw); return { id: String(item.id || item.shiftReference || 'frontdesk-session'), description: `Open front-desk session — ${String(item.shiftReference || 'unreferenced')}`, amount: item.expectedCash, severity: 'HIGH' }; }),
+    ...list(audit.system.openPosOrders).map(raw => { const item = record(raw); return { id: String(item.id || item.orderNumber || 'pos-order'), description: `Unsettled POS order ${String(item.orderNumber || item.displayName || '')}`, amount: item.total, severity: 'HIGH' }; }),
+    ...list(audit.system.financialSyncConflicts).map(raw => { const item = record(raw); return { id: String(item.id || item.aggregateType || 'sync-conflict'), description: `Pending financial sync conflict — ${String(item.aggregateType || 'transaction')}`, amount: 0, severity: 'MEDIUM' }; }),
+    ...list(audit.financial.rateVariances).map(raw => { const item = record(raw); return { id: String(item.id || 'rate-variance'), description: 'Room-rate variance requiring review', amount: Number(item.unitAmount || 0) - Number(item.baseAmount || 0), severity: 'MEDIUM' }; }),
   ];
-
   const stateLabel = audit.auditState.replaceAll('_', ' ');
-  const stateClass = audit.auditState === 'COMPLETED' ? 'text-emerald-400' : audit.auditState === 'FAILED' ? 'text-rose-400' : 'text-amber-400';
+  const stateTone = audit.auditState === 'COMPLETED' ? 'emerald' : audit.auditState === 'FAILED' ? 'rose' : 'amber';
+  const openReceivableAmount = receivables.reduce((sum, item) => sum + Number(item.financials?.balance || 0), 0);
 
-  return (
-    <div className="min-h-full space-y-6 bg-slate-950 p-6 text-slate-50 md:p-8">
-      <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
-        <div><h1 className="text-3xl font-bold tracking-tight text-emerald-400">Audit Workspace</h1><p className="mt-1 text-sm text-slate-400">Live night-audit readiness, trial balance, and receivables control.</p></div>
-        <div className="flex gap-2"><button onClick={refresh} className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-4 py-2 text-sm hover:bg-white/10"><RefreshCw className="h-4 w-4" />Refresh</button><button onClick={() => setWizardOpen(true)} disabled={isExecuting || audit.auditState === 'IN_PROGRESS' || audit.auditState === 'POSTING'} className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"><ArrowRight className="h-4 w-4" />Run Night Audit</button></div>
-      </div>
+  return <main className="min-h-full bg-[#08111f] px-4 py-6 text-slate-200 sm:px-6 lg:px-8 lg:py-8"><div className="mx-auto max-w-[1540px] space-y-6">
+    <header className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end"><div><div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[.2em] text-emerald-300"><ShieldAlert className="h-4 w-4" />Night audit control room</div><h1 className="text-3xl font-semibold tracking-[-.04em] text-white sm:text-4xl">Close the business date with proof.</h1><p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">Live readiness, operational exceptions, trial-balance integrity, revenue flash, and folio exposure before the hotel advances its business date.</p></div><div className="flex flex-wrap items-center gap-2"><span className="rounded-xl border border-white/10 bg-white/[.04] px-3 py-2 text-xs text-slate-400">Business date <strong className="ml-1 text-slate-200">{audit.businessDate}</strong></span><button onClick={refresh} className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[.04] px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-white/[.08]"><RefreshCw className="h-4 w-4" />Refresh</button><button onClick={() => setWizardOpen(true)} disabled={isExecuting || audit.auditState === 'IN_PROGRESS' || audit.auditState === 'POSTING'} className="inline-flex items-center gap-2 rounded-xl bg-emerald-400 px-3 py-2 text-xs font-semibold text-slate-950 hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"><ArrowRight className="h-4 w-4" />Run night audit</button></div></header>
+    <section className={`flex flex-col justify-between gap-4 rounded-2xl border px-5 py-4 sm:flex-row sm:items-center ${audit.summary.blockers === 0 ? 'border-emerald-400/15 bg-emerald-400/[.055]' : 'border-rose-400/20 bg-rose-400/[.06]'}`}><div className="flex items-start gap-3"><div className={`mt-0.5 flex h-9 w-9 items-center justify-center rounded-xl ${audit.summary.blockers === 0 ? 'bg-emerald-400/15 text-emerald-300' : 'bg-rose-400/15 text-rose-300'}`}>{audit.summary.blockers === 0 ? <CheckCircle2 className="h-5 w-5" /> : <AlertTriangle className="h-5 w-5" />}</div><div><p className="text-sm font-semibold text-white">Audit readiness: {audit.summary.blockers} blockers · {audit.summary.warnings} warnings</p><p className="mt-1 text-xs text-slate-400">{audit.summary.blockers === 0 ? 'No blocking operational exceptions are currently reported.' : 'Resolve the blocking exceptions before executing the final close.'}</p></div></div><span className={`text-xs font-semibold uppercase tracking-[.14em] text-${stateTone}-300`}>{stateLabel}</span></section>
+    <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6"><Metric label="Audit state" value={stateLabel} detail={`Business date ${audit.businessDate}`} icon={Clock3} tone={stateTone} /><Metric label="Readiness blockers" value={audit.summary.blockers} detail={`${audit.summary.warnings} warnings`} icon={ShieldAlert} tone={audit.summary.blockers ? 'rose' : 'emerald'} /><Metric label="Trial balance" value={trial?.totals.status || 'Loading'} detail={trial ? `Difference ${money(trial.totals.difference)}` : 'Live report pending'} icon={FileCheck2} tone={trial?.totals.status === 'BALANCED' ? 'emerald' : 'amber'} /><Metric label="Open receivables" value={receivables.length.toLocaleString()} detail={money(openReceivableAmount)} icon={WalletCards} tone="violet" /><Metric label="Open POS orders" value={(audit.system.openPosOrders || []).length.toLocaleString()} detail="Unsettled operational orders" icon={CircleDollarSign} tone="amber" /><Metric label="Financial conflicts" value={(audit.system.financialSyncConflicts || []).length.toLocaleString()} detail="Pending sync exceptions" icon={AlertTriangle} tone={(audit.system.financialSyncConflicts || []).length ? 'rose' : 'emerald'} /></section>
 
-      <div className="grid gap-4 md:grid-cols-4">
-        <Metric title="Audit status" value={stateLabel} detail={`Business date: ${audit.businessDate}`} icon={<Clock className={stateClass} />} />
-        <Metric title="Readiness blockers" value={audit.summary.blockers} detail={`${audit.summary.warnings} warnings`} icon={<ShieldAlert className="text-rose-400" />} />
-        <Metric title="Trial balance" value={trial ? trial.totals.status : 'Loading'} detail={trial ? `Difference ${money(trial.totals.difference)}` : 'Loading live report'} icon={<FileCheck className={trial?.totals.status === 'BALANCED' ? 'text-emerald-400' : 'text-amber-400'} />} />
-        <Metric title="Open receivables" value={receivables.length} detail={money(receivables.reduce((sum, item) => sum + Number(item.financials?.balance || 0), 0))} icon={<Wallet className="text-indigo-400" />} />
-      </div>
+    {flashQuery.data && <section className="grid gap-5 xl:grid-cols-[1.1fr_.9fr]"><Panel title="Manager’s flash" subtitle="Live revenue and operating performance through the business date"><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><Flash label="Net revenue" value={money(flashQuery.data.netRevenue)} /><Flash label="Room revenue" value={money(flashQuery.data.roomRevenue)} /><Flash label="F&B revenue" value={money(flashQuery.data.fbRevenue)} /><Flash label="Gross revenue" value={money(flashQuery.data.grossRevenue)} /></div><div className="mt-5 grid gap-3 sm:grid-cols-3"><Progress label="Occupancy" value={Number(flashQuery.data.occupancyPercentage || 0)} suffix="%" /><Flash label="ADR" value={money(flashQuery.data.adr)} icon={<BedDouble className="h-4 w-4 text-cyan-300" />} /><Flash label="RevPAR" value={money(flashQuery.data.revPar)} icon={<Percent className="h-4 w-4 text-violet-300" />} /></div></Panel><Panel title="Operational movement" subtitle="Arrivals and departures affecting close"><div className="grid grid-cols-2 gap-3"><Movement label="Arrivals" value={flashQuery.data.arrivals || 0} icon={LogIn} tone="cyan" /><Movement label="Departures" value={flashQuery.data.departures || 0} icon={LogOut} tone="amber" /><Movement label="Walk-ins" value={flashQuery.data.walkIns || 0} icon={Users} tone="emerald" /><Movement label="No-shows" value={flashQuery.data.noShows || 0} icon={AlertTriangle} tone="rose" /></div></Panel></section>}
 
-      {flashQuery.data && (
-        <section className="overflow-hidden rounded-xl border border-white/10 bg-white/[0.03]">
-          <div className="border-b border-white/10 p-5">
-            <h2 className="flex items-center gap-2 font-semibold text-emerald-400">
-              <Activity className="h-5 w-5" /> Manager's Flash & Revenue Analysis
-            </h2>
-            <p className="mt-1 text-xs text-slate-400">Live operational statistics, revenue breakdowns, and KPIs through the business date.</p>
-          </div>
-          <div className="grid gap-px bg-white/10 md:grid-cols-3">
-            <div className="bg-slate-950 p-6">
-              <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-400">Revenue Summary</h3>
-              <div className="space-y-4">
-                <div className="flex justify-between"><span className="text-sm text-slate-300">Room Revenue</span><span className="font-medium text-white">{money(flashQuery.data.roomRevenue)}</span></div>
-                <div className="flex justify-between"><span className="text-sm text-slate-300">F&B Revenue</span><span className="font-medium text-white">{money(flashQuery.data.fbRevenue)}</span></div>
-                <div className="flex justify-between"><span className="text-sm text-slate-300">Other Revenue</span><span className="font-medium text-white">{money(flashQuery.data.otherRevenue)}</span></div>
-                <div className="my-2 border-t border-white/10"></div>
-                <div className="flex justify-between"><span className="text-sm font-medium text-slate-300">Net Revenue</span><span className="font-bold text-emerald-400">{money(flashQuery.data.netRevenue)}</span></div>
-                <div className="flex justify-between"><span className="text-sm text-slate-400">Taxes</span><span className="text-slate-400">{money(flashQuery.data.totalTaxes)}</span></div>
-                <div className="flex justify-between"><span className="text-sm text-slate-400">Concessions/Discounts</span><span className="text-rose-400">-{money(flashQuery.data.totalDiscounts)}</span></div>
-                <div className="mt-2 border-t border-white/10 pt-2"></div>
-                <div className="flex justify-between"><span className="text-sm font-medium text-slate-300">Gross Revenue</span><span className="font-bold text-white">{money(flashQuery.data.grossRevenue)}</span></div>
-              </div>
-            </div>
-            
-            <div className="bg-slate-950 p-6">
-              <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-400">Performance Metrics</h3>
-              <div className="space-y-6">
-                <div>
-                  <div className="flex items-center justify-between text-sm"><span className="text-slate-300">Occupancy (OCC)</span><span className="font-bold text-emerald-400">{flashQuery.data.occupancyPercentage?.toFixed(1) || '0.0'}%</span></div>
-                  <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-white/10"><div className="h-full bg-emerald-500" style={{ width: `${Math.min(100, flashQuery.data.occupancyPercentage || 0)}%` }}></div></div>
-                  <div className="mt-1 text-right text-xs text-slate-500">{flashQuery.data.occupiedRooms || 0} / {flashQuery.data.totalRooms || 0} rooms</div>
-                </div>
-                <div className="flex items-center justify-between rounded-lg border border-white/5 bg-white/[0.02] p-3">
-                  <div className="flex items-center gap-3"><TrendingUp className="h-5 w-5 text-indigo-400" /><div><div className="text-xs text-slate-400">ADR</div><div className="font-medium text-white">{money(flashQuery.data.adr)}</div></div></div>
-                  <div className="h-8 w-px bg-white/10"></div>
-                  <div className="flex items-center gap-3 text-right"><div><div className="text-xs text-slate-400">RevPAR</div><div className="font-medium text-white">{money(flashQuery.data.revPar)}</div></div><Percent className="h-5 w-5 text-indigo-400" /></div>
-                </div>
-              </div>
-            </div>
+    <section className="grid gap-5 xl:grid-cols-[1.05fr_.95fr]"><Panel title="Live audit exceptions" subtitle="Operational and financial items currently blocking or warning the close"><div className="overflow-x-auto"><table className="w-full min-w-[620px] text-left text-sm"><thead><tr className="border-b border-white/[.07] text-[10px] uppercase tracking-[.14em] text-slate-500"><th className="py-3">Exception</th><th className="py-3 text-right">Amount</th><th className="py-3 text-right">Severity</th></tr></thead><tbody className="divide-y divide-white/[.06]">{blockers.length ? blockers.slice(0, 12).map(item => <tr key={item.id}><td className="py-3 text-slate-300">{item.description}</td><td className="py-3 text-right text-slate-300">{Number(item.amount || 0) ? money(item.amount) : '—'}</td><td className="py-3 text-right"><span className={`rounded-full border px-2 py-1 text-[10px] font-semibold ${item.severity === 'HIGH' ? 'border-rose-400/30 text-rose-300' : 'border-amber-400/30 text-amber-300'}`}>{item.severity}</span></td></tr>) : <tr><td colSpan={3} className="py-10 text-center text-sm text-slate-600"><CheckCircle2 className="mx-auto mb-2 h-6 w-6 text-emerald-300" />No live audit blockers detected.</td></tr>}</tbody></table></div></Panel><Panel title="Folio exposure" subtitle="Live unsettled guest balances to review before close"><div className="space-y-2">{receivables.slice(0, 8).map(item => <div key={item.folioNumber} className="flex items-center justify-between gap-3 rounded-xl border border-white/[.08] bg-white/[.025] px-3 py-3"><div className="min-w-0"><p className="truncate text-sm font-medium text-slate-200">{item.guest?.name || 'Unassigned guest'}</p><p className="mt-1 text-[11px] text-slate-600">{item.folioNumber} · Room {item.reservation?.room || '—'}</p></div><div className="text-right"><p className="text-sm font-semibold text-amber-300">{money(item.financials.balance, item.financials.currency || 'NGN')}</p><p className="mt-1 text-[10px] text-slate-600">{item.aging?.status?.replaceAll('_', ' ')}</p></div></div>)}{!receivables.length && <EmptyInline text="No open folio balances." />}</div></Panel></section>
 
-            <div className="bg-slate-950 p-6">
-              <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-400">Operational Movement</h3>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="rounded-lg border border-white/5 bg-white/[0.02] p-3 text-center">
-                  <LogIn className="mx-auto mb-1 h-5 w-5 text-blue-400" />
-                  <div className="text-xl font-bold text-white">{flashQuery.data.arrivals || 0}</div>
-                  <div className="text-[10px] uppercase tracking-wider text-slate-500">Arrivals</div>
-                </div>
-                <div className="rounded-lg border border-white/5 bg-white/[0.02] p-3 text-center">
-                  <LogOut className="mx-auto mb-1 h-5 w-5 text-amber-400" />
-                  <div className="text-xl font-bold text-white">{flashQuery.data.departures || 0}</div>
-                  <div className="text-[10px] uppercase tracking-wider text-slate-500">Departures</div>
-                </div>
-                <div className="rounded-lg border border-white/5 bg-white/[0.02] p-3 text-center">
-                  <Users className="mx-auto mb-1 h-5 w-5 text-emerald-400" />
-                  <div className="text-xl font-bold text-white">{flashQuery.data.walkIns || 0}</div>
-                  <div className="text-[10px] uppercase tracking-wider text-slate-500">Walk-ins</div>
-                </div>
-                <div className="rounded-lg border border-white/5 bg-white/[0.02] p-3 text-center">
-                  <UserX className="mx-auto mb-1 h-5 w-5 text-rose-400" />
-                  <div className="text-xl font-bold text-white">{flashQuery.data.noShows || 0}</div>
-                  <div className="text-[10px] uppercase tracking-wider text-slate-500">No-shows</div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-      )}
-
-      <div className="grid gap-6 lg:grid-cols-2">
-        <section className="overflow-hidden rounded-xl border border-white/10 bg-white/[0.03]"><div className="border-b border-white/10 p-5"><h2 className="flex items-center gap-2 font-semibold text-emerald-400"><AlertTriangle className="h-5 w-5" />Live audit exceptions</h2><p className="mt-1 text-xs text-slate-400">Open operational and financial items currently blocking or warning the audit.</p></div><div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="bg-white/[0.03] text-xs uppercase text-slate-400"><tr><th className="px-5 py-3">Description</th><th className="px-5 py-3 text-right">Amount</th><th className="px-5 py-3">Severity</th></tr></thead><tbody className="divide-y divide-white/5">{blockers.length === 0 ? <tr><td colSpan={3} className="px-5 py-8 text-center text-slate-500"><CheckCircle2 className="mx-auto mb-2 h-6 w-6 text-emerald-400" />No live audit blockers detected.</td></tr> : blockers.slice(0, 12).map(item => <tr key={item.id} className="hover:bg-white/[0.03]"><td className="px-5 py-3 text-slate-300">{item.description}</td><td className="px-5 py-3 text-right text-slate-300">{Number(item.amount || 0) ? money(item.amount) : '—'}</td><td className="px-5 py-3"><span className={`rounded-full border px-2 py-1 text-[10px] font-semibold ${item.severity === 'HIGH' ? 'border-rose-400/30 text-rose-400' : 'border-amber-400/30 text-amber-400'}`}>{item.severity}</span></td></tr>)}</tbody></table></div></section>
-
-        <section className="overflow-hidden rounded-xl border border-white/10 bg-white/[0.03]"><div className="border-b border-white/10 p-5"><h2 className="flex items-center gap-2 font-semibold text-emerald-400"><Wallet className="h-5 w-5" />Open folio balances</h2><p className="mt-1 text-xs text-slate-400">Live unsettled guest and city-ledger balances.</p></div><div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="bg-white/[0.03] text-xs uppercase text-slate-400"><tr><th className="px-5 py-3">Guest / Folio</th><th className="px-5 py-3">Room</th><th className="px-5 py-3">Status</th><th className="px-5 py-3 text-right">Balance</th></tr></thead><tbody className="divide-y divide-white/5">{receivables.length === 0 ? <tr><td colSpan={4} className="px-5 py-8 text-center text-slate-500">No open folio balances.</td></tr> : receivables.slice(0, 12).map(item => <tr key={item.folioNumber} className="hover:bg-white/[0.03]"><td className="px-5 py-3"><div className="font-medium text-slate-200">{item.guest?.name || 'Unassigned guest'}</div><div className="text-xs text-slate-500">{item.folioNumber}</div></td><td className="px-5 py-3 text-slate-300">{item.reservation?.room || '—'}</td><td className="px-5 py-3 text-xs text-slate-400">{item.aging?.status?.replaceAll('_', ' ')}</td><td className="px-5 py-3 text-right font-medium text-amber-300">{money(item.financials.balance, item.financials.currency || 'NGN')}</td></tr>)}</tbody></table></div></section>
-      </div>
-
-      <section className="overflow-hidden rounded-xl border border-white/10 bg-white/[0.03]"><div className="flex items-center justify-between border-b border-white/10 p-5"><div><h2 className="font-semibold text-emerald-400">Trial balance</h2><p className="mt-1 text-xs text-slate-400">Posted general-ledger balances through business date {audit.businessDate}. {trial ? `${trial.postedEntryCount || 0} posted journal entries included.` : ''}</p></div>{trial && <span className={`text-sm font-semibold ${trial.totals.status === 'BALANCED' ? 'text-emerald-400' : 'text-rose-400'}`}>{trial.totals.status} · Difference {money(trial.totals.difference)}</span>}</div><div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="bg-white/[0.03] text-xs uppercase text-slate-400"><tr><th className="px-5 py-3">Account</th><th className="px-5 py-3">Department</th><th className="px-5 py-3 text-right">Debit</th><th className="px-5 py-3 text-right">Credit</th></tr></thead><tbody className="divide-y divide-white/5">{trialQuery.isLoading ? <tr><td colSpan={4} className="px-5 py-8 text-center text-slate-500">Loading trial balance…</td></tr> : (trial?.accounts || []).slice(0, 20).map(account => <tr key={account.accountCode} className="hover:bg-white/[0.03]"><td className="px-5 py-3"><span className="font-mono text-emerald-400">{account.accountCode}</span><span className="ml-3 text-slate-300">{account.accountName}</span></td><td className="px-5 py-3 text-slate-400">{account.department}</td><td className="px-5 py-3 text-right text-slate-300">{money(account.debit)}</td><td className="px-5 py-3 text-right text-slate-300">{money(account.credit)}</td></tr>)}</tbody></table></div></section>
-      <AuditWizard
-        open={wizardOpen}
-        onOpenChange={setWizardOpen}
-        data={audit}
-        onExecute={executeAudit}
-        executing={isExecuting}
-        onRefresh={refresh}
-      />
-    </div>
-  );
+    <Panel title="Trial balance proof" subtitle={`Posted general-ledger balances through ${audit.businessDate}. ${trial?.postedEntryCount || 0} posted journal entries included.`}><div className="flex items-center justify-between rounded-xl border border-white/[.08] bg-white/[.025] px-4 py-3"><span className="text-xs text-slate-500">Debit {money(trial?.totals.debit || 0)} · Credit {money(trial?.totals.credit || 0)}</span><strong className={trial?.totals.status === 'BALANCED' ? 'text-emerald-300' : 'text-rose-300'}>{trial?.totals.status || 'Loading'} · Difference {money(trial?.totals.difference || 0)}</strong></div><div className="mt-4 overflow-x-auto"><table className="w-full min-w-[720px] text-left text-sm"><thead><tr className="border-b border-white/[.07] text-[10px] uppercase tracking-[.14em] text-slate-500"><th className="py-3">Account</th><th className="py-3">Department</th><th className="py-3 text-right">Debit</th><th className="py-3 text-right">Credit</th></tr></thead><tbody className="divide-y divide-white/[.06]">{(trial?.accounts || []).slice(0, 16).map(account => <tr key={account.accountCode}><td className="py-3"><span className="font-mono text-emerald-300">{account.accountCode}</span><span className="ml-3 text-slate-300">{account.accountName}</span></td><td className="py-3 text-slate-500">{account.department}</td><td className="py-3 text-right text-slate-300">{money(account.debit)}</td><td className="py-3 text-right text-slate-300">{money(account.credit)}</td></tr>)}</tbody></table></div></Panel>
+    <AuditWizard open={wizardOpen} onOpenChange={setWizardOpen} data={audit} onExecute={executeAudit} executing={isExecuting} onRefresh={refresh} />
+  </div></main>;
 }
 
-function Metric({ title, value, detail, icon }: { title: string; value: React.ReactNode; detail: string; icon: React.ReactNode }) {
-  return <div className="rounded-xl border border-white/10 bg-white/[0.03] p-5"><div className="flex items-center justify-between"><span className="text-xs font-medium uppercase tracking-wide text-slate-400">{title}</span>{icon}</div><div className="mt-3 text-2xl font-bold text-white">{value}</div><p className="mt-1 text-xs text-slate-500">{detail}</p></div>;
-}
+function Metric({ label, value, detail, icon: Icon, tone }: { label: string; value: React.ReactNode; detail: string; icon: React.ElementType; tone: string }) { const colors: Record<string, string> = { emerald: 'text-emerald-300 bg-emerald-400/10', amber: 'text-amber-300 bg-amber-400/10', rose: 'text-rose-300 bg-rose-400/10', cyan: 'text-cyan-300 bg-cyan-400/10', violet: 'text-violet-300 bg-violet-400/10' }; return <div className="rounded-2xl border border-white/[.08] bg-[#111a2b]/75 p-5"><div className="flex items-start justify-between gap-3"><div><p className="text-[10px] font-semibold uppercase tracking-[.15em] text-slate-500">{label}</p><p className="mt-3 text-2xl font-semibold tracking-[-.03em] text-white">{value}</p><p className="mt-1 text-xs leading-5 text-slate-500">{detail}</p></div><span className={`flex h-9 w-9 items-center justify-center rounded-xl ${colors[tone] || colors.cyan}`}><Icon className="h-4 w-4" /></span></div></div>; }
+function Panel({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) { return <section className="rounded-2xl border border-white/[.08] bg-[#111a2b]/75 p-5 shadow-[0_18px_50px_rgba(0,0,0,.1)] sm:p-6"><h2 className="font-semibold text-white">{title}</h2><p className="mt-1 text-xs text-slate-500">{subtitle}</p><div className="mt-5">{children}</div></section>; }
+function Flash({ label, value, icon }: { label: string; value: string; icon?: React.ReactNode }) { return <div className="rounded-xl border border-white/[.08] bg-white/[.025] p-4"><div className="flex items-center justify-between text-[11px] text-slate-500">{label}{icon}</div><p className="mt-2 text-lg font-semibold text-white">{value}</p></div>; }
+function Progress({ label, value, suffix }: { label: string; value: number; suffix: string }) { return <div className="rounded-xl border border-white/[.08] bg-white/[.025] p-4"><div className="flex justify-between text-xs"><span className="text-slate-400">{label}</span><strong className="text-emerald-300">{value.toFixed(1)}{suffix}</strong></div><div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-800"><div className="h-full rounded-full bg-emerald-400" style={{ width: `${Math.min(value, 100)}%` }} /></div></div>; }
+function Movement({ label, value, icon: Icon, tone }: { label: string; value: number; icon: React.ElementType; tone: string }) { return <div className="rounded-xl border border-white/[.08] bg-white/[.025] p-4 text-center"><Icon className={`mx-auto mb-2 h-5 w-5 text-${tone}-300`} /><p className="text-xl font-semibold text-white">{value}</p><p className="mt-1 text-[10px] uppercase tracking-[.14em] text-slate-600">{label}</p></div>; }
+function EmptyInline({ text }: { text: string }) { return <div className="rounded-xl border border-dashed border-white/10 py-8 text-center text-xs text-slate-600">{text}</div>; }
+function record(value: unknown): Record<string, unknown> { return value && typeof value === 'object' ? value as Record<string, unknown> : {}; }
+function list(value: unknown): unknown[] { return Array.isArray(value) ? value : []; }
