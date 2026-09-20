@@ -1,248 +1,60 @@
-import React from 'react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { 
-  Users, 
-  Banknote, 
-  Clock, 
-  CheckCircle2, 
-  FileText,
-  DollarSign,
-  Briefcase
-} from 'lucide-react';
-import { RunPayrollDialog } from '@/components/accountant/RunPayrollDialog';
-
+import type React from 'react';
 import { auth } from '@/lib/auth';
 import { prisma } from '@hotel-pms/db';
+import { requireOrganizationContext } from '@/lib/organization-access';
+import { RunPayrollDialog } from '@/components/accountant/RunPayrollDialog';
+import { PayrollPeriodActions } from '@/components/accountant/PayrollPeriodActions';
+import { ArrowUpRight, Banknote, CalendarDays, CheckCircle2, CircleAlert, Clock3, Coins, FileCheck2, Landmark, ReceiptText, ShieldCheck, Users, WalletCards } from 'lucide-react';
+
+const money = (value: number, currency: string, compact = false) => new Intl.NumberFormat('en-NG', { style: 'currency', currency, notation: compact ? 'compact' : 'standard', maximumFractionDigits: compact ? 1 : 0 }).format(value);
+const dateLabel = (value: Date | null) => value ? new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).format(value) : 'Not scheduled';
+const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+function Metric({ label, value, detail, icon: Icon, tone = 'emerald' }: { label: string; value: string; detail: string; icon: typeof Users; tone?: 'emerald' | 'amber' | 'rose' | 'violet' }) {
+  const colors = { emerald: 'text-emerald-300 bg-emerald-400/10', amber: 'text-amber-300 bg-amber-400/10', rose: 'text-rose-300 bg-rose-400/10', violet: 'text-violet-300 bg-violet-400/10' };
+  return <div className="rounded-2xl border border-white/[.08] bg-white/[.035] p-5"><div className="flex items-start justify-between gap-3"><div><p className="text-xs text-slate-500">{label}</p><p className="mt-2 text-2xl font-semibold tracking-tight text-white">{value}</p><p className="mt-1 text-xs text-slate-500">{detail}</p></div><span className={`rounded-xl p-2.5 ${colors[tone]}`}><Icon className="h-4 w-4" /></span></div></div>;
+}
 
 export default async function PayrollPage() {
   const session = await auth();
-  const propertyId = session?.user?.propertyId;
-
-  if (!propertyId) {
-    return <div className="p-8 text-slate-400">Property ID not found</div>;
-  }
-
-  const [payrollPeriods, staffList] = await Promise.all([
-    prisma.payrollPeriod.findMany({
-      where: { propertyId },
-      orderBy: { startDate: 'desc' },
-    }),
-    prisma.staff.findMany({
-      where: { propertyAccess: { has: propertyId } },
-    }),
+  if (!session?.user?.id) return null;
+  const context = await requireOrganizationContext(session.user.id);
+  const propertyId = session.user.propertyId && context.propertyIds.includes(session.user.propertyId) ? session.user.propertyId : context.propertyIds[0];
+  if (!propertyId) return <div className="p-8 text-slate-400">No property is assigned to this account.</div>;
+  const property = await prisma.property.findUnique({ where: { id: propertyId }, select: { name: true, baseCurrency: true, businessDate: true } });
+  const businessDate = property?.businessDate || new Date();
+  const year = businessDate.getUTCFullYear();
+  const yearStart = new Date(Date.UTC(year, 0, 1));
+  const yearEnd = new Date(Date.UTC(year, 11, 31, 23, 59, 59, 999));
+  const [periods, staff, structures, currentReceivables] = await Promise.all([
+    prisma.payrollPeriod.findMany({ where: { propertyId }, include: { payslips: { include: { staff: { select: { department: true, firstName: true, lastName: true } } } } }, orderBy: { startDate: 'desc' } }),
+    prisma.staff.findMany({ where: { propertyAccess: { has: propertyId }, isActive: true }, select: { id: true, department: true } }),
+    prisma.salaryStructure.findMany({ where: { propertyId, isActive: true }, select: { staffId: true } }),
+    prisma.staffReceivable.findMany({ where: { propertyId, outstanding: { gt: 0 } }, select: { outstanding: true } })
   ]);
+  const currency = property?.baseCurrency || 'NGN';
+  const activePeriod = periods.find(period => period.startDate <= businessDate && period.endDate >= businessDate) || periods[0];
+  const paidThisYear = periods.filter(period => period.status === 'PAID' && period.startDate >= yearStart && period.startDate <= yearEnd);
+  const ytdGross = paidThisYear.reduce((sum, period) => sum + Number(period.totalGross), 0);
+  const latestGross = activePeriod ? Number(activePeriod.totalGross) : 0;
+  const pendingApproval = periods.filter(period => period.status === 'PROCESSING' || period.status === 'PENDING_APPROVAL');
+  const unconfigured = Math.max(0, staff.length - structures.length);
+  const canApprove = ['GENERAL_MANAGER', 'SUPER_ADMIN'].includes(session.user.role || '');
+  const activePayslips = activePeriod?.payslips || [];
+  const departmental = Object.entries(activePayslips.reduce<Record<string, { gross: number; net: number; count: number }>>((result, slip) => { const department = slip.staff.department || 'Unassigned'; result[department] ||= { gross: 0, net: 0, count: 0 }; result[department].gross += Number(slip.grossEarnings); result[department].net += Number(slip.netPay); result[department].count += 1; return result; }, {})).sort((a, b) => b[1].gross - a[1].gross);
+  const monthlyGross = monthNames.map((_, index) => periods.filter(period => period.status === 'PAID' && period.startDate.getUTCFullYear() === year && period.startDate.getUTCMonth() === index).reduce((sum, period) => sum + Number(period.totalGross), 0));
+  const maxMonthly = Math.max(...monthlyGross, 1);
+  const statutory = activePeriod ? Number(activePeriod.totalPAYE) + Number(activePeriod.totalEmployerPension) : 0;
+  const payrollBalance = (activePeriod?.totalGross ? Number(activePeriod.totalGross) : 0) - (activePeriod?.totalNet ? Number(activePeriod.totalNet) : 0);
 
-  const totalEmployees = staffList.length;
-
-  const payrollRuns = payrollPeriods.map(p => ({
-    id: p.id,
-    period: p.name,
-    type: 'Regular', // Assuming regular for now
-    runDate: p.paymentDate ? p.paymentDate.toISOString().split('T')[0] : p.endDate.toISOString().split('T')[0],
-    totalAmount: Number(p.totalGross || 0),
-    status: p.status === 'PAID' ? 'Completed' : 'Processing',
-  }));
-
-  const ytdPayrollSpend = payrollPeriods
-    .filter(p => p.startDate.getFullYear() === new Date().getFullYear())
-    .reduce((acc, curr) => acc + Number(curr.totalGross || 0), 0);
-  
-  const mostRecentPayrollCost = payrollRuns[0]?.totalAmount || 0;
-  const totalMonthlyCost = mostRecentPayrollCost;
-
-  // Group staff by department
-  const deptMap = staffList.reduce((acc, curr) => {
-    const dept = curr.department || 'Unassigned';
-    if (!acc[dept]) acc[dept] = 0;
-    acc[dept]++;
-    return acc;
-  }, {} as Record<string, number>);
-
-  const deptLaborCosts = Object.keys(deptMap).map(dept => {
-    const count = deptMap[dept];
-    const cost = totalEmployees > 0 ? (count / totalEmployees) * totalMonthlyCost : 0;
-    return {
-      name: dept,
-      employees: count,
-      cost,
-    };
-  });
-
-  return (
-    <div className="p-8 space-y-8 bg-slate-950 min-h-screen text-slate-50">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-emerald-400 to-emerald-600">
-            Payroll Management
-          </h1>
-          <p className="text-slate-400 mt-1">Review payroll runs and departmental labor costs</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <Button variant="outline" className="border-slate-800 bg-slate-900/50 hover:bg-slate-800 hover:text-slate-50">
-            <FileText className="w-4 h-4 mr-2" />
-            Tax Documents
-          </Button>
-          <RunPayrollDialog />
-        </div>
-      </div>
-
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card className="bg-white/5 border-slate-800/60 backdrop-blur-md">
-          <CardContent className="p-6">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-slate-400 text-sm font-medium">Total Active Employees</p>
-                <h3 className="text-3xl font-semibold mt-2 text-slate-100">{totalEmployees}</h3>
-              </div>
-              <div className="p-3 bg-blue-500/10 rounded-lg">
-                <Users className="w-6 h-6 text-blue-400" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        
-        <Card className="bg-white/5 border-slate-800/60 backdrop-blur-md">
-          <CardContent className="p-6">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-slate-400 text-sm font-medium">Est. Monthly Labor Cost</p>
-                <h3 className="text-3xl font-semibold mt-2 text-slate-100">₦{(totalMonthlyCost / 1000).toFixed(0)}k</h3>
-              </div>
-              <div className="p-3 bg-emerald-500/10 rounded-lg">
-                <DollarSign className="w-6 h-6 text-emerald-400" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-white/5 border-slate-800/60 backdrop-blur-md">
-          <CardContent className="p-6">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-slate-400 text-sm font-medium">Next Run Date</p>
-                <h3 className="text-2xl font-semibold mt-2 text-slate-100">{payrollRuns.find(r => r.status === 'Processing')?.runDate ?? 'N/A'}</h3>
-              </div>
-              <div className="p-3 bg-amber-500/10 rounded-lg">
-                <Clock className="w-6 h-6 text-amber-400" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-white/5 border-slate-800/60 backdrop-blur-md">
-          <CardContent className="p-6">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-slate-400 text-sm font-medium">YTD Payroll Spend</p>
-                <h3 className="text-3xl font-semibold mt-2 text-slate-100">₦{(ytdPayrollSpend / 1000000).toFixed(1)}M</h3>
-              </div>
-              <div className="p-3 bg-purple-500/10 rounded-lg">
-                <Briefcase className="w-6 h-6 text-purple-400" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Payroll Runs */}
-        <div className="lg:col-span-2 space-y-6">
-          <Card className="bg-white/5 border-slate-800/60 backdrop-blur-md shadow-xl h-full">
-            <CardHeader className="border-b border-slate-800/60 pb-6">
-              <CardTitle className="text-xl text-slate-100">Recent Payroll Runs</CardTitle>
-              <CardDescription className="text-slate-400">History of processed and upcoming payrolls</CardDescription>
-            </CardHeader>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader className="bg-slate-900/40">
-                  <TableRow className="border-slate-800 hover:bg-transparent">
-                    <TableHead className="text-slate-400 font-medium">Period</TableHead>
-                    <TableHead className="text-slate-400 font-medium">Run Date</TableHead>
-                    <TableHead className="text-slate-400 font-medium">Type</TableHead>
-                    <TableHead className="text-slate-400 font-medium text-right">Total Amount</TableHead>
-                    <TableHead className="text-slate-400 font-medium text-center">Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {payrollRuns.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={5} className="text-center text-slate-400 py-6">No data</TableCell>
-                    </TableRow>
-                  )}
-                  {payrollRuns.map((run) => (
-                    <TableRow key={run.id} className="border-slate-800/60 hover:bg-white/[0.02] transition-colors">
-                      <TableCell className="font-medium text-slate-200">
-                        {run.period}
-                        <div className="text-xs text-slate-500">{run.id.slice(0, 8)}</div>
-                      </TableCell>
-                      <TableCell className="text-slate-300">{run.runDate}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="border-slate-700 text-slate-300 bg-slate-800/50">
-                          {run.type}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right font-medium text-slate-200">
-                        ₦{run.totalAmount.toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        {run.status === 'Completed' ? (
-                          <Badge className="bg-emerald-500/20 text-emerald-400 border-0 hover:bg-emerald-500/30">
-                            <CheckCircle2 className="w-3 h-3 mr-1" /> Completed
-                          </Badge>
-                        ) : (
-                          <Badge className="bg-amber-500/20 text-amber-400 border-0 hover:bg-amber-500/30">
-                            <Clock className="w-3 h-3 mr-1" /> Processing
-                          </Badge>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Departmental Labor Costs */}
-        <div className="space-y-6">
-          <Card className="bg-white/5 border-slate-800/60 backdrop-blur-md shadow-xl h-full">
-            <CardHeader className="border-b border-slate-800/60 pb-6">
-              <CardTitle className="text-xl text-slate-100">Labor by Department</CardTitle>
-              <CardDescription className="text-slate-400">Current monthly cost distribution</CardDescription>
-            </CardHeader>
-            <CardContent className="p-6">
-              <div className="space-y-6">
-                {deptLaborCosts.length === 0 && (
-                  <div className="text-center text-slate-400 py-6">No data</div>
-                )}
-                {deptLaborCosts.map((dept) => (
-                  <div key={dept.name} className="flex flex-col space-y-2">
-                    <div className="flex justify-between items-center">
-                      <span className="font-medium text-slate-200">{dept.name}</span>
-                      <span className="text-slate-300 font-medium">₦{dept.cost.toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                    </div>
-                    <div className="flex justify-between items-center text-xs text-slate-500">
-                      <span>{dept.employees} Employees</span>
-                      <span>{totalMonthlyCost > 0 ? ((dept.cost / totalMonthlyCost) * 100).toFixed(1) : 0}% of total</span>
-                    </div>
-                    <div className="w-full bg-slate-800/60 rounded-full h-1.5 mt-1 overflow-hidden">
-                      <div 
-                        className="bg-emerald-500 h-1.5 rounded-full" 
-                        style={{ width: `${totalMonthlyCost > 0 ? (dept.cost / totalMonthlyCost) * 100 : 0}%` }}
-                      ></div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    </div>
-  );
+  return <main className="min-h-screen bg-[#080d16] px-5 py-8 text-slate-100 sm:px-8 lg:px-10"><div className="mx-auto max-w-[1600px] space-y-7">
+    <header className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end"><div><div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[.2em] text-fuchsia-300"><WalletCards className="h-4 w-4" />Payroll control room</div><h1 className="text-3xl font-semibold tracking-[-.04em] text-white sm:text-4xl">Payroll cost, controlled before cash moves.</h1><p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">A live payroll view for {property?.name || 'this property'}: workforce coverage, gross-to-net exposure, statutory deductions, approval ownership, and payment readiness.</p></div><div className="flex flex-wrap items-center gap-2"><span className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[.04] px-3 py-2 text-xs text-slate-400"><CalendarDays className="h-4 w-4 text-fuchsia-300" /> Business date <strong className="text-slate-200">{dateLabel(businessDate)}</strong></span><RunPayrollDialog propertyId={propertyId} currency={currency} /></div></header>
+    <section className={`rounded-2xl border p-4 ${activePeriod?.status === 'PAID' ? 'border-emerald-400/20 bg-emerald-400/[.05]' : activePeriod?.status === 'APPROVED' ? 'border-cyan-400/20 bg-cyan-400/[.05]' : 'border-amber-400/20 bg-amber-400/[.05]'}`}><div className="flex flex-col justify-between gap-3 md:flex-row md:items-center"><div className="flex items-start gap-3"><span className="mt-0.5 rounded-xl bg-white/[.06] p-2.5">{activePeriod?.status === 'PAID' ? <ShieldCheck className="h-4 w-4 text-emerald-300" /> : <CircleAlert className="h-4 w-4 text-amber-300" />}</span><div><p className="text-sm font-semibold text-white">{activePeriod ? `${activePeriod.name} · ${activePeriod.status}` : 'No payroll period has been created'}</p><p className="mt-1 text-xs text-slate-400">{activePeriod ? `Period ${dateLabel(activePeriod.startDate)} – ${dateLabel(activePeriod.endDate)} · Payment ${dateLabel(activePeriod.paymentDate)}.` : 'Create a payroll period, calculate payslips, obtain approval, then release payment.'}</p></div></div><a href="/accountant/gl" className="inline-flex items-center gap-1.5 text-xs font-semibold text-fuchsia-300 hover:text-fuchsia-200">Review GL controls <ArrowUpRight className="h-3.5 w-3.5" /></a></div></section>
+    <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6"><Metric label="Active workforce" value={String(staff.length)} detail={`${structures.length} with active salary structure`} icon={Users} tone={unconfigured ? 'amber' : 'emerald'} /><Metric label="Current gross payroll" value={money(latestGross, currency, true)} detail={activePeriod ? activePeriod.name : 'No active run'} icon={Coins} tone="violet" /><Metric label="Current net pay" value={money(activePeriod ? Number(activePeriod.totalNet) : 0, currency, true)} detail="Employee payment exposure" icon={Banknote} /><Metric label="Statutory exposure" value={money(statutory, currency, true)} detail="PAYE plus employer pension" icon={Landmark} tone="amber" /><Metric label="YTD paid payroll" value={money(ytdGross, currency, true)} detail={`${paidThisYear.length} paid periods in ${year}`} icon={ReceiptText} /><Metric label="Staff receivables" value={money(currentReceivables.reduce((sum, item) => sum + Number(item.outstanding), 0), currency, true)} detail="Outstanding deductions outside payroll" icon={WalletCards} tone="amber" /></section>
+    <section className="grid gap-5 xl:grid-cols-[1.65fr_1fr]"><div className="rounded-2xl border border-white/[.08] bg-white/[.035] p-5"><div className="flex items-start justify-between"><div><p className="text-sm font-semibold text-white">Payroll cost trend</p><p className="mt-1 text-xs text-slate-500">Paid gross payroll by month from posted payroll periods.</p></div><span className="rounded-lg border border-white/10 bg-white/[.03] px-2 py-1 text-[10px] text-slate-500">{year}</span></div><div className="mt-7 flex h-56 items-end gap-2 sm:gap-3">{monthlyGross.map((amount, index) => <div key={monthNames[index]} className="flex min-w-0 flex-1 flex-col items-center gap-2"><div className="flex h-44 w-full items-end justify-center rounded-t-md bg-white/[.025]"><div className="w-full max-w-8 rounded-t-md bg-fuchsia-400/75" style={{ height: `${amount ? Math.max(3, amount / maxMonthly * 100) : 0}%` }} title={`${monthNames[index]}: ${money(amount, currency)}`} /></div><span className="text-[10px] text-slate-600">{monthNames[index]}</span></div>)}</div><div className="mt-4 flex items-center gap-2 text-[11px] text-slate-500"><i className="inline-block h-2 w-2 rounded-full bg-fuchsia-400" />Paid gross payroll; draft and unapproved runs are excluded.</div></div><div className="rounded-2xl border border-white/[.08] bg-white/[.035] p-5"><p className="text-sm font-semibold text-white">Payroll integrity</p><p className="mt-1 text-xs text-slate-500">Pre-payment checks for the current period.</p><div className="mt-5 space-y-3">{unconfigured > 0 && <Signal icon={CircleAlert} title={`${unconfigured} active staff lack salary structures`} detail="Do not calculate a complete payroll until compensation terms are configured." tone="amber" />}{pendingApproval.length > 0 && <Signal icon={Clock3} title={`${pendingApproval.length} run${pendingApproval.length > 1 ? 's' : ''} awaiting approval`} detail="A separate approver should review gross, deductions, and payment exposure." tone="amber" />}{activePeriod && !activePeriod.journalEntryId && ['APPROVED', 'PAID'].includes(activePeriod.status) && <Signal icon={FileCheck2} title="Payroll GL journal is not linked" detail="Reconcile the payroll liability and expense posting before closing the period." tone="rose" />}{unconfigured === 0 && pendingApproval.length === 0 && (!activePeriod || activePeriod.journalEntryId || !['APPROVED', 'PAID'].includes(activePeriod.status)) && <Signal icon={CheckCircle2} title="No payroll control exception detected" detail="Staff coverage, approval queue, and journal linkage are clear." tone="emerald" />}</div></div></section>
+    <section className="grid gap-5 xl:grid-cols-[1.6fr_1fr]"><div className="rounded-2xl border border-white/[.08] bg-white/[.035] p-5"><div className="flex items-start justify-between"><div><p className="text-sm font-semibold text-white">Payroll register</p><p className="mt-1 text-xs text-slate-500">Gross-to-net exposure and controlled lifecycle actions.</p></div><a href="/accountant/taxes" className="text-xs font-semibold text-fuchsia-300">Review statutory controls <ArrowUpRight className="ml-1 inline h-3.5 w-3.5" /></a></div><div className="mt-5 overflow-x-auto"><table className="w-full min-w-[860px] text-left text-sm"><thead><tr className="border-b border-white/[.07] text-[10px] uppercase tracking-[.14em] text-slate-500"><th className="pb-3">Period</th><th className="pb-3">Status</th><th className="pb-3 text-right">Employees</th><th className="pb-3 text-right">Gross</th><th className="pb-3 text-right">Deductions</th><th className="pb-3 text-right">Net pay</th><th className="pb-3 text-right">Action</th></tr></thead><tbody className="divide-y divide-white/[.06]">{periods.map(period => <tr key={period.id}><td className="py-3"><div className="font-medium text-slate-200">{period.name}</div><div className="mt-1 text-[11px] text-slate-600">{dateLabel(period.startDate)} – {dateLabel(period.endDate)}</div></td><td className="py-3"><span className={`rounded-md px-2 py-1 text-[10px] font-semibold ${period.status === 'PAID' ? 'bg-emerald-400/10 text-emerald-300' : period.status === 'APPROVED' ? 'bg-cyan-400/10 text-cyan-300' : period.status === 'PROCESSING' ? 'bg-amber-400/10 text-amber-300' : 'bg-white/[.06] text-slate-400'}`}>{period.status}</span></td><td className="py-3 text-right text-slate-400">{period.payslips.length}</td><td className="py-3 text-right text-slate-300">{money(Number(period.totalGross), currency, true)}</td><td className="py-3 text-right text-slate-400">{money(Number(period.totalDeductions), currency, true)}</td><td className="py-3 text-right text-slate-300">{money(Number(period.totalNet), currency, true)}</td><td className="py-3 text-right"><PayrollPeriodActions id={period.id} status={period.status} canApprove={canApprove} /></td></tr>)}</tbody></table>{periods.length === 0 && <div className="py-12 text-center text-sm text-slate-500">No payroll periods exist for this property.</div>}</div></div><div className="rounded-2xl border border-white/[.08] bg-white/[.035] p-5"><div className="flex items-start justify-between"><div><p className="text-sm font-semibold text-white">Labor by department</p><p className="mt-1 text-xs text-slate-500">Actual payslip gross for {activePeriod?.name || 'the latest run'}.</p></div><Users className="h-4 w-4 text-fuchsia-300" /></div><div className="mt-5 space-y-4">{departmental.length ? departmental.map(([department, data]) => <div key={department}><div className="mb-1.5 flex justify-between gap-3 text-xs"><span className="truncate text-slate-300">{department}</span><span className="text-slate-500">{money(data.gross, currency, true)}</span></div><div className="mb-1.5 h-1.5 rounded-full bg-white/[.07]"><div className="h-full rounded-full bg-fuchsia-400/70" style={{ width: `${Math.max(4, data.gross / Math.max(latestGross, 1) * 100)}%` }} /></div><p className="text-[11px] text-slate-600">{data.count} payslip{data.count === 1 ? '' : 's'} · net {money(data.net, currency, true)}</p></div>) : <div className="rounded-xl border border-dashed border-white/10 p-5 text-center text-xs text-slate-500">Calculate a payroll period to see actual departmental cost.</div>}</div><div className="mt-6 border-t border-white/[.07] pt-5"><p className="text-[10px] font-semibold uppercase tracking-[.16em] text-slate-600">Current period bridge</p><div className="mt-3 grid grid-cols-2 gap-3"><div><p className="text-xs text-slate-500">Gross</p><p className="mt-1 text-sm font-semibold text-white">{money(latestGross, currency, true)}</p></div><div><p className="text-xs text-slate-500">Gross less deductions</p><p className="mt-1 text-sm font-semibold text-emerald-300">{money(payrollBalance, currency, true)}</p></div></div></div></div></section>
+    <footer className="flex flex-col justify-between gap-2 border-t border-white/10 pt-4 text-xs text-slate-600 sm:flex-row"><span>Live source: staff register, salary structures, payslips, statutory deductions, payroll periods, and payroll lifecycle controls.</span><span>As of {dateLabel(businessDate)}</span></footer>
+  </div></main>;
 }
+
+function Signal({ icon: Icon, title, detail, tone }: { icon: typeof Users; title: string; detail: string; tone: 'amber' | 'rose' | 'emerald' }) { const colors = { amber: 'text-amber-300 bg-amber-400/10', rose: 'text-rose-300 bg-rose-400/10', emerald: 'text-emerald-300 bg-emerald-400/10' }; return <div className="flex gap-3 rounded-xl border border-white/[.07] bg-white/[.025] p-3"><span className={`mt-0.5 rounded-lg p-2 ${colors[tone]}`}><Icon className="h-4 w-4" /></span><div><p className="text-xs font-semibold text-slate-200">{title}</p><p className="mt-1 text-[11px] leading-5 text-slate-500">{detail}</p></div></div>; }

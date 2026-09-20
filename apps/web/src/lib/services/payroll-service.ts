@@ -141,7 +141,7 @@ export class PayrollService {
 
     const statutoryDeductions = pension + nhf;
     const cra = Math.max(200000 / 12, grossIncome * 0.01) + grossIncome * 0.2;
-    let taxableIncome = Math.max(0, grossIncome - statutoryDeductions - cra);
+    const taxableIncome = Math.max(0, grossIncome - statutoryDeductions - cra);
 
     // PAYE bands (monthly equivalent of annual bands)
     let paye = 0;
@@ -308,6 +308,9 @@ export class PayrollService {
     const period = await prisma.payrollPeriod.findUnique({ where: { id: periodId } });
     if (!period) throw new Error('Period not found');
     if (!ctx.propertyIds.includes(period.propertyId)) throw new Error('Unauthorized');
+    if (!['SUPER_ADMIN', 'GENERAL_MANAGER', 'FINANCE_MANAGER'].includes(ctx.role)) {
+      throw new Error('Only Finance Manager, General Manager, or Super Admin can release payroll');
+    }
     if (period.status !== 'APPROVED') throw new Error(`Cannot pay payroll with status ${period.status}`);
 
     return prisma.$transaction(async (tx) => {

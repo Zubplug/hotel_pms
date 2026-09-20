@@ -8,9 +8,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
-export function RunPayrollDialog() {
+export function RunPayrollDialog({ propertyId, currency = 'NGN' }: { propertyId: string; currency?: string }) {
   const [open, setOpen] = useState(false);
   const [periodDate, setPeriodDate] = useState('');
+  const [periodName, setPeriodName] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const router = useRouter();
 
@@ -21,18 +22,20 @@ export function RunPayrollDialog() {
       const res = await fetch('/api/v1/accountant/payroll/periods', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
+          propertyId,
+          name: periodName || `Payroll · ${periodDate}`,
           startDate: new Date(periodDate).toISOString(), 
-          endDate: new Date(new Date(periodDate).setMonth(new Date(periodDate).getMonth() + 1)).toISOString()
+          endDate: new Date(new Date(`${periodDate}T00:00:00`).setMonth(new Date(`${periodDate}T00:00:00`).getMonth() + 1) - 86400000).toISOString(),
         })
       });
       if (!res.ok) throw new Error('Failed to run payroll');
       
-      toast.success('Payroll run initiated');
+      toast.success(`Payroll period created in ${currency}`);
       setOpen(false);
       router.refresh();
-    } catch (e: any) {
-      toast.error(e.message || 'Error running payroll');
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Error running payroll');
     } finally {
       setIsSubmitting(false);
     }
@@ -48,6 +51,10 @@ export function RunPayrollDialog() {
           <DialogTitle>Initiate Payroll Run</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleRun} className="space-y-4 mt-4">
+          <div className="space-y-2">
+            <Label>Period Name</Label>
+            <Input required placeholder="September 2026 payroll" value={periodName} onChange={(e) => setPeriodName(e.target.value)} className="bg-slate-950 border-white/10 text-white" />
+          </div>
           <div className="space-y-2">
             <Label>Payroll Period Start</Label>
             <Input type="date" required value={periodDate} onChange={(e) => setPeriodDate(e.target.value)} className="bg-slate-950 border-white/10 text-white [color-scheme:dark]" />
