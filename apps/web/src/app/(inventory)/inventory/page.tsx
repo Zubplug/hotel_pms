@@ -9,6 +9,7 @@ import {
   Boxes, CalendarDays, CheckCircle2, ClipboardCheck, Clock3, FileText,
   Package, Plus, Receipt, ShoppingCart, Truck,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
 
@@ -98,10 +99,18 @@ export default async function InventoryDashboardPage() {
   });
   const maxMovement = Math.max(...dailyMovement.map((day) => Math.max(day.receipts, day.issues)), 1);
 
-  const actions = [
+  const actions: { label: string; href: string; icon: LucideIcon; tone: 'emerald' | 'cyan' | 'violet' }[] = [
     { label: 'New purchase order', href: '/inventory/purchase-orders/new', icon: Plus, tone: 'emerald' },
     { label: 'Receive goods', href: '/inventory/grns/new', icon: Truck, tone: 'cyan' },
     { label: 'Start stocktake', href: '/inventory/stocktakes/new', icon: ClipboardCheck, tone: 'violet' },
+  ];
+
+  const kpiCards: { label: string; value: string; sub: string; icon: LucideIcon; tone: 'emerald' | 'rose' | 'cyan' | 'violet' | 'amber' }[] = [
+    { label: 'Inventory value', value: money(totalValue), sub: `${itemsInStock} lines with stock`, icon: Boxes, tone: 'emerald' },
+    { label: 'Critical lines', value: String(outOfStockItems.length + lowStockItems.length), sub: `${outOfStockItems.length} out of stock`, icon: AlertTriangle, tone: 'rose' },
+    { label: 'Open procurement', value: money(pendingPOValue), sub: `${pendingPOs.length} submitted POs`, icon: ShoppingCart, tone: 'cyan' },
+    { label: 'Receipts · 30d', value: money(receipts30d), sub: `${recentActivity.filter((txn) => Number(txn.quantity) > 0).length} receipt movements`, icon: ArrowDownToLine, tone: 'violet' },
+    { label: 'Issues · 30d', value: money(issues30d), sub: `${recentActivity.filter((txn) => Number(txn.quantity) < 0).length} usage movements`, icon: ArrowUpFromLine, tone: 'amber' },
   ];
 
   return (
@@ -126,13 +135,7 @@ export default async function InventoryDashboardPage() {
 
       <main className="mx-auto max-w-[1500px] space-y-6 px-5 py-6 sm:px-8">
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-          {[
-            ['Inventory value', money(totalValue), `${itemsInStock} lines with stock`, Boxes, 'emerald'],
-            ['Critical lines', String(outOfStockItems.length + lowStockItems.length), `${outOfStockItems.length} out of stock`, AlertTriangle, 'rose'],
-            ['Open procurement', money(pendingPOValue), `${pendingPOs.length} submitted POs`, ShoppingCart, 'cyan'],
-            ['Receipts · 30d', money(receipts30d), `${recentActivity.filter((txn) => Number(txn.quantity) > 0).length} receipt movements`, ArrowDownToLine, 'violet'],
-            ['Issues · 30d', money(issues30d), `${recentActivity.filter((txn) => Number(txn.quantity) < 0).length} usage movements`, ArrowUpFromLine, 'amber'],
-          ].map(([label, value, sub, Icon, tone]) => (
+          {kpiCards.map(({ label, value, sub, icon: Icon, tone }) => (
             <div key={String(label)} className="rounded-2xl border border-white/[0.08] bg-[#111c2e] p-5 shadow-2xl shadow-black/10">
               <div className="flex items-start justify-between"><p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">{label}</p><div className={`rounded-xl p-2 ${tone === 'emerald' ? 'bg-emerald-400/10 text-emerald-300' : tone === 'rose' ? 'bg-rose-400/10 text-rose-300' : tone === 'cyan' ? 'bg-cyan-400/10 text-cyan-300' : tone === 'violet' ? 'bg-violet-400/10 text-violet-300' : 'bg-amber-400/10 text-amber-300'}`}><Icon className="h-4 w-4" /></div></div>
               <p className="mt-5 text-2xl font-semibold tracking-tight text-white">{value}</p><p className="mt-1 text-xs text-slate-500">{sub}</p>
