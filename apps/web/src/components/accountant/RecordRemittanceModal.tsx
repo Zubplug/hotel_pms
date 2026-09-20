@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
 const schema = z.object({
+  taxId: z.string().optional(),
   taxType: z.string().min(1, "Tax type is required"),
   periodStart: z.string().min(1, "Period start is required"),
   periodEnd: z.string().min(1, "Period end is required"),
@@ -21,7 +22,7 @@ const schema = z.object({
   notes: z.string().optional()
 });
 
-export function RecordRemittanceModal() {
+export function RecordRemittanceModal({ propertyId, taxes }: { propertyId: string; taxes: { id: string; name: string; code: string; type: string; rate: number }[] }) {
   const [open, setOpen] = useState(false);
   const router = useRouter();
   
@@ -36,7 +37,9 @@ export function RecordRemittanceModal() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          propertyId,
           ...data,
+          taxId: data.taxId || undefined,
           periodStart: new Date(data.periodStart).toISOString(),
           periodEnd: new Date(data.periodEnd).toISOString(),
           remittanceDate: new Date(data.remittanceDate).toISOString()
@@ -47,8 +50,8 @@ export function RecordRemittanceModal() {
       setOpen(false);
       reset();
       router.refresh();
-    } catch (e: any) {
-      toast.error(e.message);
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Unable to record remittance');
     }
   };
 
@@ -72,6 +75,14 @@ export function RecordRemittanceModal() {
               <option value="PAYE">PAYE (Income Tax)</option>
             </select>
             {errors.taxType && <p className="text-red-400 text-xs">{errors.taxType.message}</p>}
+          </div>
+
+          <div className="space-y-2">
+            <Label>Configured tax rule</Label>
+            <select {...register('taxId')} className="flex h-9 w-full rounded-md border border-white/10 bg-slate-950 px-3 py-1 text-sm text-white">
+              <option value="">Select configured rule (optional)</option>
+              {taxes.map(tax => <option key={tax.id} value={tax.id}>{tax.code} · {tax.name} · {tax.rate}{tax.type === 'PERCENTAGE' ? '%' : ''}</option>)}
+            </select>
           </div>
 
           <div className="grid grid-cols-2 gap-4">

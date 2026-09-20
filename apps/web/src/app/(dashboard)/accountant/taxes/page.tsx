@@ -1,190 +1,70 @@
-import React from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
-import { Landmark, FileSpreadsheet, CheckCircle2, Clock, AlertCircle, CalendarDays, ArrowRight, Download } from 'lucide-react';
-import { RecordRemittanceModal } from '@/components/accountant/RecordRemittanceModal';
-
+import Link from 'next/link';
+import { redirect } from 'next/navigation';
+import { AlertTriangle, ArrowRight, CalendarClock, CheckCircle2, CircleDollarSign, FileCheck2, Landmark, ReceiptText, ShieldCheck, TrendingUp } from 'lucide-react';
 import { auth } from '@/lib/auth';
+import { requireOrganizationContext } from '@/lib/organization-access';
 import { prisma } from '@hotel-pms/db';
+import { TaxRemittanceService } from '@/lib/services/tax-remittance-service';
+import { RecordRemittanceModal } from '@/components/accountant/RecordRemittanceModal';
+import { TaxRemittanceActions } from '@/components/accountant/TaxRemittanceActions';
+
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
+const money = (value: number, currency: string) => new Intl.NumberFormat('en-NG', { style: 'currency', currency, maximumFractionDigits: 0 }).format(value);
+const dateLabel = (value: Date) => new Intl.DateTimeFormat('en-NG', { dateStyle: 'medium' }).format(value);
+const startOfMonth = (value: Date) => new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), 1));
+const endOfMonth = (value: Date) => new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth() + 1, 0, 23, 59, 59, 999));
 
 export default async function TaxesPage() {
   const session = await auth();
-  const propertyId = session?.user?.propertyId;
+  if (!session?.user) redirect('/login?callbackUrl=%2Faccountant%2Ftaxes');
+  const propertyIds = (await requireOrganizationContext(session.user.id)).propertyIds;
+  const propertyId = session.user.propertyId && propertyIds.includes(session.user.propertyId) ? session.user.propertyId : propertyIds[0];
+  if (!propertyId) return <EmptyState title="No property assigned" />;
 
-  if (!propertyId) {
-    return <div className="p-8 text-slate-400">Property ID not found</div>;
-  }
-
-  const remittances = await prisma.taxRemittance.findMany({
-    where: { propertyId },
-    include: { tax: true },
-    orderBy: { periodStart: 'desc' },
+  const [property, remittances, taxes, periods] = await Promise.all([
+    prisma.property.findUnique({ where: { id: propertyId }, select: { name: true, baseCurrency: true, businessDate: true } }),
+    prisma.taxRemittance.findMany({ where: { propertyId }, include: { tax: true }, orderBy: [{ periodStart: 'desc' }, { createdAt: 'desc' }], take: 250 }),
+    prisma.tax.findMany({ where: { propertyId, isActive: true }, orderBy: { name: 'asc' } }),
+    prisma.accountingPeriod.findMany({ where: { propertyId }, orderBy: { periodStart: 'desc' }, take: 12 }),
+  ]);
+  const currency = property?.baseCurrency || remittances[0]?.currency || 'NGN';
+  const businessDate = property?.businessDate || new Date();
+  const monthStart = startOfMonth(businessDate);
+  const monthEnd = endOfMonth(businessDate);
+  const collected = await TaxRemittanceService.getCollectedForPeriod(propertyId, monthStart, businessDate);
+  const remittedThisMonth = remittances.filter(item => item.status === 'REMITTED' && item.periodStart >= monthStart && item.periodStart <= monthEnd).reduce((sum, item) => sum + Number(item.remittedAmount), 0);
+  const liability = Number(collected.total) - remittedThisMonth;
+  const submitted = remittances.filter(item => item.status === 'SUBMITTED');
+  const overdue = remittances.filter(item => !['REMITTED', 'REJECTED'].includes(item.status) && item.remittanceDate < businessDate);
+  const rejected = remittances.filter(item => item.status === 'REJECTED');
+  const currentPeriod = periods.find(period => period.periodStart <= businessDate && period.periodEnd >= businessDate);
+  const trend = Array.from({ length: 6 }, (_, index) => {
+    const end = new Date(Date.UTC(businessDate.getUTCFullYear(), businessDate.getUTCMonth() - (5 - index) + 1, 0, 23, 59, 59, 999));
+    const start = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), 1));
+    const periodCollected = remittances.filter(item => item.periodStart >= start && item.periodStart <= end).reduce((sum, item) => sum + Number(item.collectedAmount), 0);
+    const periodRemitted = remittances.filter(item => item.status === 'REMITTED' && item.periodStart >= start && item.periodStart <= end).reduce((sum, item) => sum + Number(item.remittedAmount), 0);
+    return { label: new Intl.DateTimeFormat('en-NG', { month: 'short' }).format(end), collected: periodCollected, remitted: periodRemitted };
   });
+  const maxTrend = Math.max(...trend.flatMap(item => [item.collected, item.remitted]), 1);
+  const taxMix = Array.from(remittances.reduce((map, item) => map.set(item.taxType, (map.get(item.taxType) || 0) + Number(item.collectedAmount)), new Map<string, number>()).entries()).sort((a, b) => b[1] - a[1]).slice(0, 6);
+  const maxTaxMix = Math.max(...taxMix.map(([, amount]) => amount), 1);
+  const canApprove = ['GENERAL_MANAGER', 'SUPER_ADMIN'].includes(String((session.user as any).role || '').toUpperCase());
 
-  // Generate summary
-  const summaryMap = remittances.reduce((acc, rem) => {
-    const type = rem.taxType || 'Other';
-    if (!acc[type]) {
-      acc[type] = {
-        type,
-        collected: 0,
-        rate: rem.tax?.rate ? `${Number(rem.tax.rate).toFixed(1)}%` : 'Varies',
-        due: rem.remittanceDate ? rem.remittanceDate.toISOString().split('T')[0] : 'N/A'
-      };
-    }
-    acc[type].collected += Number(rem.collectedAmount || 0);
-    return acc;
-  }, {} as Record<string, { type: string, collected: number, rate: string, due: string }>);
-
-  const taxSummary = Object.values(summaryMap).map(s => ({
-    ...s,
-    collected: `₦${s.collected.toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-  }));
-
-  // If no summary data, show a default empty state or fallback to empty array
-  // The UI will handle empty array by rendering no cards, but let's see.
-  return (
-    <div className="min-h-screen bg-slate-950 text-slate-50 p-6 md:p-8 space-y-8">
-      
-      {/* Header Section */}
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-emerald-400 to-indigo-400 bg-clip-text text-transparent">
-            Tax Management
-          </h1>
-          <p className="text-slate-400 mt-1">Monitor tax liabilities and manage remittance schedules.</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <Button variant="outline" className="border-slate-800 bg-white/5 hover:bg-white/10 text-slate-200">
-            <Download className="w-4 h-4 mr-2" />
-            Tax Report
-          </Button>
-          <RecordRemittanceModal />
-        </div>
-      </div>
-
-      {/* Tax Collected Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {taxSummary.length === 0 && (
-          <div className="col-span-full text-slate-400 p-4 border border-slate-800 rounded-lg">No tax data found.</div>
-        )}
-        {taxSummary.map((tax, idx) => (
-          <Card key={idx} className="border-slate-800 bg-white/5 backdrop-blur-md relative overflow-hidden group">
-            <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-              <Landmark className="w-16 h-16 text-emerald-400" />
-            </div>
-            <CardHeader className="pb-2">
-              <CardDescription className="text-slate-400 font-medium">
-                {tax.type}
-              </CardDescription>
-              <CardTitle className="text-2xl font-semibold text-slate-100 mt-1">
-                {tax.collected}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-col gap-2 text-sm mt-2">
-                <div className="flex justify-between items-center text-slate-400">
-                  <span>Effective Rate:</span>
-                  <span className="text-slate-200">{tax.rate}</span>
-                </div>
-                <div className="flex justify-between items-center text-slate-400">
-                  <span>Next Due:</span>
-                  <span className="flex items-center text-emerald-400">
-                    <CalendarDays className="w-3 h-3 mr-1" />
-                    {tax.due}
-                  </span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {/* Remittances List */}
-      <Card className="border-slate-800 bg-white/5 backdrop-blur-md">
-        <CardHeader className="flex flex-row items-center justify-between">
-          <div>
-            <CardTitle className="text-slate-100 flex items-center gap-2">
-              <Clock className="w-5 h-5 text-indigo-400" />
-              Remittance History & Pending
-            </CardTitle>
-            <CardDescription className="text-slate-400">
-              Track upcoming tax payments and historical submissions
-            </CardDescription>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader className="border-slate-800">
-              <TableRow className="hover:bg-transparent border-slate-800">
-                <TableHead className="text-slate-400">Remittance ID</TableHead>
-                <TableHead className="text-slate-400">Tax Type</TableHead>
-                <TableHead className="text-slate-400">Period</TableHead>
-                <TableHead className="text-slate-400">Due Date</TableHead>
-                <TableHead className="text-right text-slate-400">Amount</TableHead>
-                <TableHead className="text-center text-slate-400">Status</TableHead>
-                <TableHead className="text-right text-slate-400">Action</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {remittances.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={7} className="text-center text-slate-400 py-6">No data</TableCell>
-                </TableRow>
-              )}
-              {remittances.map((remittance) => {
-                const amountFormatted = `₦${Number(remittance.collectedAmount || 0).toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-                const dueDateFormatted = remittance.remittanceDate ? remittance.remittanceDate.toISOString().split('T')[0] : 'N/A';
-                const periodStartFormatted = remittance.periodStart ? remittance.periodStart.toISOString().split('T')[0] : 'N/A';
-                
-                let displayStatus = 'Pending';
-                if (remittance.status === 'REMITTED') displayStatus = 'Paid';
-                if (remittance.status === 'SUBMITTED' || remittance.status === 'APPROVED') displayStatus = 'Processing';
-
-                return (
-                  <TableRow key={remittance.id} className="border-slate-800 hover:bg-white/5 transition-colors">
-                    <TableCell className="font-medium text-slate-300">{remittance.remittanceRef || remittance.id.slice(0, 8)}</TableCell>
-                    <TableCell className="text-slate-200">{remittance.taxType ?? 'N/A'}</TableCell>
-                    <TableCell className="text-slate-400">{periodStartFormatted}</TableCell>
-                    <TableCell className="text-slate-300">{dueDateFormatted}</TableCell>
-                    <TableCell className="text-right font-medium text-slate-200">{amountFormatted}</TableCell>
-                    <TableCell className="text-center">
-                      <Badge 
-                        variant="outline" 
-                        className={`
-                          ₦{displayStatus === 'Paid' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : ''}
-                          ₦{displayStatus === 'Pending' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : ''}
-                          ₦{displayStatus === 'Processing' ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20' : ''}
-                        `}
-                      >
-                        {displayStatus === 'Paid' && <CheckCircle2 className="w-3 h-3 mr-1" />}
-                        {displayStatus === 'Pending' && <AlertCircle className="w-3 h-3 mr-1" />}
-                        {displayStatus === 'Processing' && <Clock className="w-3 h-3 mr-1" />}
-                        {displayStatus}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {displayStatus === 'Pending' ? (
-                        <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white h-8">
-                          Pay Now
-                        </Button>
-                      ) : (
-                        <Button size="sm" variant="ghost" className="text-slate-400 hover:text-slate-200 h-8">
-                          View
-                          <ArrowRight className="w-4 h-4 ml-1" />
-                        </Button>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-
-    </div>
-  );
+  return <main className="min-h-full bg-[#08111f] px-4 py-6 text-slate-200 sm:px-6 lg:px-8 lg:py-8"><div className="mx-auto max-w-[1540px] space-y-6">
+    <header className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end"><div><div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[.2em] text-amber-300"><ReceiptText className="h-4 w-4" />Tax control room</div><h1 className="text-3xl font-semibold tracking-[-.04em] text-white sm:text-4xl">Tax collected, reconciled, and ready to file.</h1><p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">A live view of tax generated from audited and open folio activity, remittances in flight, liability exposure, and filing controls for {property?.name || 'this property'}.</p></div><div className="flex flex-wrap items-center gap-2"><span className="rounded-xl border border-white/10 bg-white/[.04] px-3 py-2 text-xs text-slate-400">Business date <strong className="ml-1 text-slate-200">{dateLabel(businessDate)}</strong></span><RecordRemittanceModal propertyId={propertyId} taxes={taxes.map(tax => ({ id: tax.id, name: tax.name, code: tax.code, type: tax.type, rate: Number(tax.rate) }))} /></div></header>
+    <section className={`flex flex-col justify-between gap-4 rounded-2xl border px-5 py-4 sm:flex-row sm:items-center ${liability <= 0.01 && overdue.length === 0 ? 'border-emerald-400/15 bg-emerald-400/[.055]' : 'border-amber-400/20 bg-amber-400/[.06]'}`}><div className="flex items-start gap-3"><div className={`mt-0.5 flex h-9 w-9 items-center justify-center rounded-xl ${liability <= 0.01 && overdue.length === 0 ? 'bg-emerald-400/15 text-emerald-300' : 'bg-amber-400/15 text-amber-300'}`}>{liability <= 0.01 && overdue.length === 0 ? <ShieldCheck className="h-5 w-5" /> : <AlertTriangle className="h-5 w-5" />}</div><div><p className="text-sm font-semibold text-white">Tax close posture</p><p className="mt-1 text-xs text-slate-400">{overdue.length ? `${overdue.length} remittance${overdue.length === 1 ? '' : 's'} are past due.` : liability > 0.01 ? `${money(liability, currency)} remains in the current liability roll-forward.` : 'No current remittance exceptions are recorded.'} {currentPeriod ? `${currentPeriod.name} is ${currentPeriod.status.toLowerCase()}.` : 'No accounting period covers the business date.'}</p></div></div><Link href="/accountant/gl" className="inline-flex items-center gap-2 text-xs font-semibold text-amber-300">Review tax GL mappings <ArrowRight className="h-3.5 w-3.5" /></Link></section>
+    <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6"><Metric label="Tax collected MTD" value={money(Number(collected.total), currency)} detail={`${money(Number(collected.breakdown.audited), currency)} audited · ${money(Number(collected.breakdown.live), currency)} live`} icon={CircleDollarSign} tone="amber" /><Metric label="Remitted MTD" value={money(remittedThisMonth, currency)} detail="Approved remittance records" icon={CheckCircle2} tone="emerald" /><Metric label="Tax liability" value={money(Math.max(liability, 0), currency)} detail="Collected less remitted" icon={Landmark} tone={liability > 0.01 ? 'rose' : 'emerald'} /><Metric label="Awaiting approval" value={submitted.length.toLocaleString()} detail={money(submitted.reduce((sum, item) => sum + Number(item.remittedAmount), 0), currency)} icon={FileCheck2} tone={submitted.length ? 'violet' : 'emerald'} /><Metric label="Past due" value={overdue.length.toLocaleString()} detail="Remittances past due date" icon={CalendarClock} tone={overdue.length ? 'rose' : 'emerald'} /><Metric label="Tax rules" value={taxes.length.toLocaleString()} detail="Active property tax configurations" icon={TrendingUp} tone="cyan" /></section>
+    <section className="grid gap-5 xl:grid-cols-[1.2fr_.8fr]"><Panel title="Collected versus remitted" subtitle="Remittance activity recorded by period"><div className="flex h-52 items-end gap-2">{trend.map(item => <div key={item.label} className="group flex min-w-0 flex-1 flex-col items-center justify-end gap-2"><div className="flex h-40 w-full items-end justify-center gap-1"><span title={`${item.label} collected ${money(item.collected, currency)}`} className="w-1/2 rounded-t bg-amber-400/80" style={{ height: `${Math.max(item.collected / maxTrend * 100, item.collected ? 3 : 0)}%` }} /><span title={`${item.label} remitted ${money(item.remitted, currency)}`} className="w-1/2 rounded-t bg-emerald-400/75" style={{ height: `${Math.max(item.remitted / maxTrend * 100, item.remitted ? 3 : 0)}%` }} /></div><span className="truncate text-[10px] text-slate-600">{item.label}</span></div>)}</div><div className="mt-4 flex gap-5 text-xs text-slate-500"><span><i className="mr-1 inline-block h-2 w-2 rounded-full bg-amber-400" />Collected</span><span><i className="mr-1 inline-block h-2 w-2 rounded-full bg-emerald-400" />Remitted</span><span className="ml-auto">Current liability {money(Math.max(liability, 0), currency)}</span></div></Panel><Panel title="Tax mix" subtitle="Collected amount by remittance type"><div className="space-y-4">{taxMix.length ? taxMix.map(([type, amount]) => <div key={type}><div className="mb-2 flex items-center justify-between gap-3 text-sm"><span className="text-slate-300">{type.replaceAll('_', ' ')}</span><strong className="text-white">{money(amount, currency)}</strong></div><div className="h-2 overflow-hidden rounded-full bg-slate-800"><div className="h-full rounded-full bg-amber-400" style={{ width: `${amount / maxTaxMix * 100}%` }} /></div></div>) : <EmptyInline text="No remittance mix has been recorded." />}</div></Panel></section>
+    <section className="grid gap-5 xl:grid-cols-[.9fr_1.1fr]"><Panel title="Configured tax rules" subtitle="Property tax buckets used by folio posting and reporting"><div className="space-y-2">{taxes.map(tax => <div key={tax.id} className="flex items-center justify-between gap-3 rounded-xl border border-white/[.08] bg-white/[.025] px-3 py-3"><div><p className="text-sm font-medium text-slate-200">{tax.name}</p><p className="mt-1 text-[11px] text-slate-600">{tax.code} · {tax.type} · {tax.isInclusive ? 'Inclusive' : 'Exclusive'}</p></div><span className="text-sm font-semibold text-amber-300">{Number(tax.rate).toFixed(2)}{tax.type === 'PERCENTAGE' ? '%' : ''}</span></div>)}{!taxes.length && <EmptyInline text="No active tax rules configured." />}</div><Link href="/accountant/settings" className="mt-4 inline-flex items-center gap-2 text-xs font-semibold text-amber-300">Open tax settings <ArrowRight className="h-3.5 w-3.5" /></Link></Panel><Panel title="Remittance workflow" subtitle="Approval ownership and filing readiness"><div className="space-y-3"><Workflow label="Submitted for approval" value={submitted.length} detail="Waiting for General Manager or Super Admin approval" tone={submitted.length ? 'violet' : 'emerald'} /><Workflow label="Past due" value={overdue.length} detail="Requires a filing owner and evidence" tone={overdue.length ? 'rose' : 'emerald'} /><Workflow label="Rejected" value={rejected.length} detail="Needs correction and resubmission" tone={rejected.length ? 'amber' : 'emerald'} /><Workflow label="Current GL period" value={currentPeriod?.status || 'Missing'} detail={currentPeriod?.name || 'No period covers business date'} tone={currentPeriod?.status === 'OPEN' ? 'emerald' : 'rose'} /></div></Panel></section>
+    <section className="rounded-2xl border border-white/[.08] bg-[#111a2b]/75 p-5 shadow-[0_18px_50px_rgba(0,0,0,.1)] sm:p-6"><div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end"><div><div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[.16em] text-amber-300"><ReceiptText className="h-4 w-4" />Live remittance register</div><h2 className="mt-1 text-lg font-semibold text-white">Liability periods and filing evidence</h2><p className="mt-1 text-xs text-slate-500">Submitted remittances require approval before they become remitted in the control ledger.</p></div><Link href="/accountant/gl" className="text-xs font-semibold text-amber-300">Inspect tax journals <ArrowRight className="ml-1 inline h-3.5 w-3.5" /></Link></div><div className="mt-5 overflow-x-auto"><table className="w-full min-w-[980px] text-left text-sm"><thead><tr className="border-b border-white/[.07] text-[10px] uppercase tracking-[.14em] text-slate-500"><th className="py-3">Reference</th><th className="py-3">Tax type</th><th className="py-3">Period</th><th className="py-3">Due</th><th className="py-3 text-right">Collected</th><th className="py-3 text-right">Remitted</th><th className="py-3 text-right">Status</th><th className="py-3 text-right">Action</th></tr></thead><tbody className="divide-y divide-white/[.06]">{remittances.map(item => <tr key={item.id}><td className="py-3 font-mono text-xs text-amber-300">{item.remittanceRef || item.id.slice(0, 8)}</td><td className="py-3 text-slate-300">{item.taxType.replaceAll('_', ' ')}</td><td className="py-3 text-xs text-slate-500">{dateLabel(item.periodStart)} – {dateLabel(item.periodEnd)}</td><td className="py-3 text-xs text-slate-400">{dateLabel(item.remittanceDate)}</td><td className="py-3 text-right text-slate-300">{money(Number(item.collectedAmount), currency)}</td><td className="py-3 text-right text-slate-300">{money(Number(item.remittedAmount), currency)}</td><td className="py-3 text-right"><span className={`rounded-full border px-2 py-1 text-[10px] font-semibold ${item.status === 'REMITTED' ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300' : item.status === 'REJECTED' ? 'border-rose-400/20 bg-rose-400/10 text-rose-300' : 'border-amber-400/20 bg-amber-400/10 text-amber-300'}`}>{item.status}</span></td><td className="py-3 text-right">{item.status === 'SUBMITTED' && canApprove ? <TaxRemittanceActions remittanceId={item.id} /> : <span className="text-[11px] text-slate-600">{item.status === 'SUBMITTED' ? 'Approval required' : 'Recorded'}</span>}</td></tr>)}{!remittances.length && <tr><td colSpan={8} className="py-12 text-center text-sm text-slate-600">No tax remittances recorded for this property.</td></tr>}</tbody></table></div></section>
+    <footer className="flex flex-col justify-between gap-2 border-t border-white/10 pt-4 text-xs text-slate-600 sm:flex-row"><span>Live source: audited tax snapshots, open folio tax postings, remittance register, tax rules, and GL period controls.</span><span>As of {dateLabel(businessDate)}</span></footer>
+  </div></main>;
 }
+
+function Metric({ label, value, detail, icon: Icon, tone }: { label: string; value: string; detail: string; icon: React.ElementType; tone: 'emerald' | 'amber' | 'rose' | 'cyan' | 'violet' }) { const colors = { emerald: 'text-emerald-300 bg-emerald-400/10 ring-emerald-400/15', amber: 'text-amber-300 bg-amber-400/10 ring-amber-400/15', rose: 'text-rose-300 bg-rose-400/10 ring-rose-400/15', cyan: 'text-cyan-300 bg-cyan-400/10 ring-cyan-400/15', violet: 'text-violet-300 bg-violet-400/10 ring-violet-400/15' }; return <div className="rounded-2xl border border-white/[.08] bg-[#111a2b]/75 p-5"><div className="flex items-start justify-between gap-3"><div><p className="text-[10px] font-semibold uppercase tracking-[.15em] text-slate-500">{label}</p><p className="mt-3 text-2xl font-semibold tracking-[-.03em] text-white">{value}</p><p className="mt-1 text-xs leading-5 text-slate-500">{detail}</p></div><span className={`flex h-9 w-9 items-center justify-center rounded-xl ring-1 ${colors[tone]}`}><Icon className="h-4 w-4" /></span></div></div>; }
+function Panel({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) { return <section className="rounded-2xl border border-white/[.08] bg-[#111a2b]/75 p-5 shadow-[0_18px_50px_rgba(0,0,0,.1)] sm:p-6"><h2 className="font-semibold text-white">{title}</h2><p className="mt-1 text-xs text-slate-500">{subtitle}</p><div className="mt-5">{children}</div></section>; }
+function Workflow({ label, value, detail, tone }: { label: string; value: number | string; detail: string; tone: string }) { return <div className="flex items-center justify-between gap-3 rounded-xl border border-white/[.08] bg-white/[.025] px-4 py-3"><div><p className="text-sm text-slate-300">{label}</p><p className="mt-1 text-[11px] text-slate-600">{detail}</p></div><strong className={`text-lg ${tone === 'rose' ? 'text-rose-300' : tone === 'amber' ? 'text-amber-300' : tone === 'violet' ? 'text-violet-300' : 'text-emerald-300'}`}>{value}</strong></div>; }
+function EmptyInline({ text }: { text: string }) { return <div className="rounded-xl border border-dashed border-white/10 py-8 text-center text-xs text-slate-600">{text}</div>; }
+function EmptyState({ title }: { title: string }) { return <main className="flex min-h-full items-center justify-center bg-[#08111f] text-slate-300"><div className="text-center"><ReceiptText className="mx-auto mb-3 h-10 w-10 text-slate-600" /><h1 className="text-xl font-semibold text-white">{title}</h1></div></main>; }
