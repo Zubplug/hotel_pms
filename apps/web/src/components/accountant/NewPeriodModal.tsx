@@ -17,7 +17,7 @@ const schema = z.object({
   endDate: z.string().min(1, "End date is required"),
 });
 
-export function NewPeriodModal() {
+export function NewPeriodModal({ propertyId }: { propertyId: string }) {
   const [open, setOpen] = useState(false);
   const router = useRouter();
   const { register, handleSubmit, formState: { errors, isSubmitting }, reset } = useForm<z.infer<typeof schema>>({
@@ -30,6 +30,7 @@ export function NewPeriodModal() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          propertyId,
           name: data.name,
           startDate: new Date(data.startDate).toISOString(),
           endDate: new Date(data.endDate).toISOString()
@@ -40,8 +41,8 @@ export function NewPeriodModal() {
       setOpen(false);
       reset();
       router.refresh();
-    } catch (e: any) {
-      toast.error(e.message);
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Unable to create accounting period');
     }
   };
 

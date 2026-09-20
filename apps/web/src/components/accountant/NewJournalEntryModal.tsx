@@ -29,7 +29,7 @@ const schema = z.object({
 
 type FormData = z.infer<typeof schema>;
 
-export function NewJournalEntryModal({ accounts }: { accounts: { id: string; name: string; code: string }[] }) {
+export function NewJournalEntryModal({ propertyId, accounts }: { propertyId: string; accounts: { id: string; name: string; code: string }[] }) {
   const [open, setOpen] = useState(false);
   const router = useRouter();
   
@@ -49,8 +49,10 @@ export function NewJournalEntryModal({ accounts }: { accounts: { id: string; nam
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          propertyId,
+          entryDate: new Date(data.date).toISOString(),
+          sourceModule: 'MANUAL',
           ...data,
-          date: new Date(data.date).toISOString()
         })
       });
       if (!res.ok) throw new Error('Failed to post journal entry');
@@ -58,8 +60,8 @@ export function NewJournalEntryModal({ accounts }: { accounts: { id: string; nam
       setOpen(false);
       reset();
       router.refresh();
-    } catch (e: any) {
-      toast.error(e.message);
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Unable to post journal entry');
     }
   };
 
