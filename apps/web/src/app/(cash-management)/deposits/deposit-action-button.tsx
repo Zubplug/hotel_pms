@@ -105,7 +105,7 @@ export function DepositActionButton({
         disabled={loading}
         onClick={() => isSubmit ? openSubmit() : setDialog('verify')}
         className={isSubmit
-          ? 'gap-1.5 text-xs font-semibold'
+          ? 'gap-1.5 bg-cyan-400 text-xs font-semibold text-[#07101e] hover:bg-cyan-300'
           : 'gap-1.5 border-emerald-400/30 bg-emerald-400/10 text-xs font-semibold text-emerald-200 hover:bg-emerald-400/20 hover:text-emerald-100'}
       >
         {loading ? (

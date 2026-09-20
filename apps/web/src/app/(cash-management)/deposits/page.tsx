@@ -62,7 +62,7 @@ export default async function DepositsPage() {
           </div>
           <div className="flex flex-col items-start gap-2 text-xs text-slate-400 sm:items-end sm:text-right">
             <span>Deposits are prepared automatically after handover.</span>
-            {allowedProperties.length === 1 && availableCash > 0 && <SubmitAvailableCashButton propertyId={allowedProperties[0]} availableAmount={availableCash} />}
+            {allowedProperties.length === 1 && pendingDeposits.length === 0 && availableCash > 0 && <SubmitAvailableCashButton propertyId={allowedProperties[0]} availableAmount={availableCash} />}
           </div>
         </div>
       </div>
@@ -154,7 +154,7 @@ export default async function DepositsPage() {
                         </td>
                         <td className="px-6 py-4 text-slate-300">{d.property.name}</td>
                         <td className="px-6 py-4 text-slate-300">
-                          {d.bankName || '—'} / {d.bankAccount || '—'}
+                          {d.bankName || d.bankAccount ? `${d.bankName || 'Bank'} / ${d.bankAccount || 'Account pending'}` : <span className="text-amber-300">Unassigned · select on submission</span>}
                         </td>
                         <td className="px-6 py-4 text-right font-semibold text-slate-200">
                           ₦{Number(d.expectedAmount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
@@ -190,7 +190,7 @@ export default async function DepositsPage() {
                           })}
                         </td>
                         <td className="px-6 py-4 text-right">
-                          <DepositActionButton depositId={d.id} propertyId={d.propertyId} currentStatus={d.status} allowSubmit={false} />
+                          <DepositActionButton depositId={d.id} propertyId={d.propertyId} currentStatus={d.status} allowSubmit />
                         </td>
                       </tr>
                     );

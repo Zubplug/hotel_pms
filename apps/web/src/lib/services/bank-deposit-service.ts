@@ -259,7 +259,7 @@ export class BankDepositService {
     });
   }
 
-  static async submitDeposit(ctx: TenantContext, params: { depositId: string, bankAccountId: string, bankReceiptUrl?: string, bankReference?: string }) {
+  static async submitDeposit(ctx: TenantContext, params: { depositId: string, bankAccountId: string, bankReceiptUrl?: string, bankReference?: string, depositDate?: Date }) {
     return prisma.$transaction(async tx => {
       // ENFORCE OWNERSHIP PATH: Find the deposit and ensure it belongs to an authorized property
       const deposit = await tx.bankDeposit.findUnique({ where: { id: params.depositId }, include: { allocations: true } });
@@ -281,6 +281,7 @@ export class BankDepositService {
           submittedById: ctx.userId,
           submittedAt: new Date(),
           depositedAt: new Date(),
+          depositDate: params.depositDate || new Date(),
           bankReceiptUrl: params.bankReceiptUrl || deposit.bankReceiptUrl,
           bankReference: params.bankReference || deposit.bankReference,
           bankName: bankAccount.bankName || deposit.bankName,
@@ -335,7 +336,7 @@ export class BankDepositService {
 
         await GeneralLedgerService.postJournal(ctx, {
           propertyId: deposit.propertyId,
-          entryDate: new Date(),
+          entryDate: params.depositDate || new Date(),
           description: `Bank Deposit: ${deposit.depositReference}`,
           reference: deposit.depositReference,
           sourceModule: 'CASH_MANAGEMENT',
@@ -347,7 +348,7 @@ export class BankDepositService {
       }
 
       return updated;
-    });
+    }, { timeout: 30000 });
   }
 
   /**
