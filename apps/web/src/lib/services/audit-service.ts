@@ -28,21 +28,18 @@ export class AuditService {
         businessDate: { gte: new Date(businessDate.getTime() - 86400000 * 7) }, // Look back 7 days
         status: { in: ['OPEN', 'PENDING_APPROVAL'] }
       },
-      include: {
-        folioItem: { include: { folio: true } },
-        payment: { include: { folio: true } }
-      },
-      orderBy: { createdAt: 'desc' }
+      include: { payment: { include: { folio: true } }, posPayment: true },
+      orderBy: { questionedAt: 'desc' }
     });
 
     const rows = exceptions.map(ex => ({
       date: ex.businessDate,
       exceptionId: ex.id.substring(0, 8),
-      type: ex.type,
-      reference: ex.folioItem?.folio?.folioNumber || ex.payment?.folio?.folioNumber || 'System',
-      severity: ex.severity,
+      type: ex.proposedResolution || 'TRANSACTION_EXCEPTION',
+      reference: ex.payment?.folio?.folioNumber || ex.posPaymentId || 'System',
+      severity: ex.status,
       status: ex.status,
-      description: ex.description || 'No description provided'
+      description: ex.questionReason || ex.resolutionNotes || 'No description provided'
     }));
 
     return {
@@ -63,22 +60,8 @@ export class AuditService {
    * Generates the Night Audit Log for a specific date.
    */
   static async getNightAuditLog(propertyId: string, businessDate: Date) {
-    const runs = await prisma.nightAuditRun.findMany({
-      where: { propertyId, businessDate },
-      include: { steps: true, user: true }
-    });
-
-    const rows = runs.flatMap(run =>
-      run.steps.map(step => ({
-        timestamp: step.startedAt,
-        runId: run.id.substring(0, 8),
-        stepName: step.stepName,
-        status: step.status,
-        durationMs: step.completedAt ? step.completedAt.getTime() - step.startedAt.getTime() : 0,
-        notes: step.errorMessage || 'Completed successfully',
-        user: run.user?.name || 'System'
-      }))
-    );
+    const runs = await prisma.nightAudit.findMany({ where: { propertyId, businessDate }, orderBy: { createdAt: 'asc' } });
+    const rows = runs.map(run => ({ timestamp: run.completedAt || run.createdAt, runId: run.id.substring(0, 8), stepName: 'Night audit run', status: run.status, durationMs: run.startedAt && run.completedAt ? run.completedAt.getTime() - run.startedAt.getTime() : 0, notes: run.notes || `${run.errors} errors`, user: run.runBy || 'System' }));
 
     return {
       rows,

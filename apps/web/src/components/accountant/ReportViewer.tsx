@@ -30,7 +30,7 @@ export function ReportViewer({ data, currency = 'NGN' }: { data: ReportData, cur
   const formatCell = (val: unknown, formatType?: string) => {
     if (val === null || val === undefined) return '-';
     if (formatType === 'money') return money(Number(val));
-    if (formatType === 'date') return format(new Date(val), 'MMM dd, yyyy HH:mm');
+    if (formatType === 'date') return format(new Date(val as string | number | Date), 'MMM dd, yyyy HH:mm');
     if (formatType === 'number') return Number(val).toLocaleString();
     return String(val);
   };

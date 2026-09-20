@@ -1,26 +1,23 @@
 import { prisma } from '@hotel-pms/db';
 
 export class InventoryService {
-  /**
-   * Generates the Inventory Valuation report showing the value of all StockItems.
-   */
   static async getInventoryValuation(propertyId: string) {
     const items = await prisma.stockItem.findMany({
       where: { propertyId },
-      include: { category: true, department: true }
+      include: { inventoryCategory: true, warehouse: true }
     });
 
     const rows = items.map(item => {
-      const qty = Number(item.quantityOnHand);
-      const cost = Number(item.averageCost || item.lastCost || 0);
+      const quantity = Number(item.quantityOnHand);
+      const unitCost = Number(item.costPrice || 0);
       return {
-        category: item.category?.name || 'Uncategorized',
-        department: item.department?.name || 'General',
+        category: item.inventoryCategory?.name || 'Uncategorized',
+        department: item.warehouse?.name || 'General',
         sku: item.sku || '-',
         name: item.name,
-        quantity: qty,
-        unitCost: cost,
-        totalValue: qty * cost
+        quantity,
+        unitCost,
+        totalValue: quantity * unitCost
       };
     });
 
@@ -31,64 +28,62 @@ export class InventoryService {
         department: '',
         sku: 'TOTAL',
         name: 'Total Inventory Value',
-        quantity: rows.reduce((s, r) => s + r.quantity, 0),
+        quantity: rows.reduce((sum, row) => sum + row.quantity, 0),
         unitCost: 0,
-        totalValue: rows.reduce((s, r) => s + r.totalValue, 0)
+        totalValue: rows.reduce((sum, row) => sum + row.totalValue, 0)
       }
     };
   }
 
-  /**
-   * Generates the Cost of Sales report by aggregating StockTransactions of type ISSUE/USAGE or sales.
-   */
   static async getCostOfSales(propertyId: string, startDate: Date, endDate: Date) {
     const transactions = await prisma.stockTransaction.findMany({
       where: {
         propertyId,
-        type: { in: ['USAGE', 'WASTE', 'SALE'] }, // Assuming these types indicate consumption
-        date: { gte: startDate, lte: endDate }
+        source: { in: ['SALE', 'WASTE'] },
+        businessDate: { gte: startDate, lte: endDate }
       },
-      include: { item: { include: { category: true, department: true } } }
+      include: { stockItem: { include: { inventoryCategory: true, warehouse: true } } }
     });
 
-    const rowsMap = new Map<string, any>();
+    const rowsMap = new Map<string, {
+      category: string;
+      department: string;
+      name: string;
+      usageQty: number;
+      wasteQty: number;
+      costOfSales: number;
+    }>();
 
-    for (const tx of transactions) {
-      if (!rowsMap.has(tx.itemId)) {
-        rowsMap.set(tx.itemId, {
-          category: tx.item.category?.name || 'Uncategorized',
-          department: tx.item.department?.name || 'General',
-          name: tx.item.name,
+    for (const transaction of transactions) {
+      if (!rowsMap.has(transaction.stockItemId)) {
+        rowsMap.set(transaction.stockItemId, {
+          category: transaction.stockItem.inventoryCategory?.name || 'Uncategorized',
+          department: transaction.stockItem.warehouse?.name || 'General',
+          name: transaction.stockItem.name,
           usageQty: 0,
           wasteQty: 0,
           costOfSales: 0
         });
       }
 
-      const row = rowsMap.get(tx.itemId);
-      const qty = Number(tx.quantity);
-      const cost = Number(tx.unitCost || tx.item.averageCost || 0);
-
-      if (tx.type === 'USAGE' || tx.type === 'SALE') {
-        row.usageQty += Math.abs(qty); // Usually usage is recorded as negative
-        row.costOfSales += Math.abs(qty) * cost;
-      } else if (tx.type === 'WASTE') {
-        row.wasteQty += Math.abs(qty);
-        row.costOfSales += Math.abs(qty) * cost; // Often included in COGS or isolated
-      }
+      const row = rowsMap.get(transaction.stockItemId)!;
+      const quantity = Math.abs(Number(transaction.quantity));
+      const unitCost = Number(transaction.unitCost || transaction.stockItem.costPrice || 0);
+      if (transaction.source === 'SALE') row.usageQty += quantity;
+      if (transaction.source === 'WASTE') row.wasteQty += quantity;
+      row.costOfSales += quantity * unitCost;
     }
 
-    const rows = Array.from(rowsMap.values()).sort((a, b) => a.category.localeCompare(b.category));
-
+    const rows = [...rowsMap.values()].sort((a, b) => a.category.localeCompare(b.category));
     return {
       rows,
       summary: {
         category: '',
         department: '',
         name: 'TOTAL COST OF SALES',
-        usageQty: rows.reduce((s, r) => s + r.usageQty, 0),
-        wasteQty: rows.reduce((s, r) => s + r.wasteQty, 0),
-        costOfSales: rows.reduce((s, r) => s + r.costOfSales, 0)
+        usageQty: rows.reduce((sum, row) => sum + row.usageQty, 0),
+        wasteQty: rows.reduce((sum, row) => sum + row.wasteQty, 0),
+        costOfSales: rows.reduce((sum, row) => sum + row.costOfSales, 0)
       }
     };
   }

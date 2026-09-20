@@ -114,18 +114,15 @@ export class ReceivablesService {
         propertyId,
         status: 'OPEN'
       },
-      include: {
-        reservation: { include: { guest: true } },
-        guest: true
-      },
+      include: { guest: true },
       orderBy: { createdAt: 'asc' }
     });
 
     const rows = folios.map(f => ({
       folioNumber: f.folioNumber,
       type: f.type,
-      guestName: f.guest?.firstName ? `${f.guest.firstName} ${f.guest.lastName}` : (f.reservation?.guest?.firstName ? `${f.reservation.guest.firstName} ${f.reservation.guest.lastName}` : 'N/A'),
-      room: f.reservation?.roomId ? 'Assigned' : 'N/A', // In a real app we'd join Room to get roomNumber
+      guestName: f.guest?.firstName ? `${f.guest.firstName} ${f.guest.lastName}` : 'N/A',
+      room: 'N/A',
       totalCharges: Number(f.totalCharges),
       totalPayments: Number(f.totalPayments),
       balance: Number(f.balance)

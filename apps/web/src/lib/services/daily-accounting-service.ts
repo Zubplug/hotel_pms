@@ -14,8 +14,8 @@ export class DailyAccountingService {
   }
 
   static async getStockLedger(propertyId: string, startDate: Date, endDate: Date) {
-    const transactions = await prisma.stockTransaction.findMany({ where: { propertyId, businessDate: { gte: startDate, lte: endDate } }, include: { item: { select: { name: true, sku: true } } }, orderBy: { businessDate: 'asc' } });
-    const rows = transactions.map(transaction => ({ date: transaction.businessDate, source: transaction.source, item: transaction.item.name, sku: transaction.item.sku || '', quantity: Number(transaction.quantity), unitCost: Number(transaction.unitCost), totalValue: Number(transaction.totalValue), reference: transaction.reference || '', reason: transaction.reason || '' }));
+    const transactions = await prisma.stockTransaction.findMany({ where: { propertyId, businessDate: { gte: startDate, lte: endDate } }, include: { stockItem: { select: { name: true, sku: true } } }, orderBy: { businessDate: 'asc' } });
+    const rows = transactions.map(transaction => ({ date: transaction.businessDate, source: transaction.source, item: transaction.stockItem.name, sku: transaction.stockItem.sku || '', quantity: Number(transaction.quantity), unitCost: Number(transaction.unitCost), totalValue: Number(transaction.totalValue), reference: transaction.reference || '', reason: transaction.reason || '' }));
     return { rows, summary: { date: null, source: '', item: 'TOTAL', sku: '', quantity: rows.reduce((sum, row) => sum + row.quantity, 0), unitCost: 0, totalValue: rows.reduce((sum, row) => sum + row.totalValue, 0), reference: '', reason: '' } };
   }
   /**
@@ -102,31 +102,31 @@ export class DailyAccountingService {
   static async getCashierSettlement(propertyId: string, businessDate: Date) {
     const posShifts = await prisma.posSession.findMany({
       where: { propertyId, openedAt: { gte: businessDate, lte: new Date(businessDate.getTime() + 86400000) } },
-      include: { user: true, outlet: true }
+      include: { primaryOperator: true, outlet: true }
     });
 
     const fdShifts = await prisma.frontdeskSession.findMany({
       where: { propertyId, openedAt: { gte: businessDate, lte: new Date(businessDate.getTime() + 86400000) } },
-      include: { user: true }
+      include: { staff: true }
     });
 
     const rows = [
       ...posShifts.map(s => ({
         shiftId: s.id.substring(0, 8),
-        cashier: s.user.name || s.user.email,
+        cashier: s.primaryOperator?.name || 'Unassigned',
         location: s.outlet.name,
-        expected: Number(s.expectedCashBalance),
-        declared: Number(s.actualCashBalance),
-        variance: Number(s.cashVariance),
+        expected: Number(s.expectedCash),
+        declared: Number(s.actualCash || 0),
+        variance: Number(s.variance || 0),
         status: s.controlStatus
       })),
       ...fdShifts.map(s => ({
         shiftId: s.id.substring(0, 8),
-        cashier: s.user.name || s.user.email,
+        cashier: s.staff.name,
         location: 'Front Desk',
-        expected: Number(s.expectedCashBalance),
-        declared: Number(s.actualCashBalance),
-        variance: Number(s.cashVariance),
+        expected: Number(s.systemExpectedCash),
+        declared: Number(s.declaredCash || 0),
+        variance: Number(s.variance || 0),
         status: s.controlStatus
       }))
     ];
