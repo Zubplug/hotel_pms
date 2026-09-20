@@ -92,15 +92,15 @@ export default async function HandoversPage() {
       <div className="mx-auto max-w-[1440px] space-y-6 bg-[#08111f] px-5 py-7 text-slate-100 sm:px-8">
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {[
-            { label: 'Awaiting receipt', value: pendingHandovers.length, detail: `₦${pendingAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })} in custody queue`, icon: Clock3, tone: 'bg-amber-50 text-amber-700' },
-            { label: 'Completed handovers', value: completedHandovers.length, detail: `₦${completedAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })} received`, icon: CheckCircle2, tone: 'bg-emerald-50 text-emerald-700' },
-            { label: 'Sessions transferred', value: totalSessions, detail: 'POS and Front Desk sessions', icon: WalletCards, tone: 'bg-indigo-50 text-indigo-700' },
-            { label: 'Approved to transfer', value: approvedPos.length + approvedFrontdesk.length, detail: 'Ready for custody handover', icon: ShieldCheck, tone: 'bg-violet-50 text-violet-700' },
-          ].map((card) => { const Icon = card.icon; return <div key={card.label} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><div className="flex items-start justify-between"><div><p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">{card.label}</p><p className="mt-2 text-2xl font-black text-slate-950">{card.value}</p><p className="mt-1 text-xs text-slate-400">{card.detail}</p></div><span className={`flex h-10 w-10 items-center justify-center rounded-xl ${card.tone}`}><Icon className="h-5 w-5" /></span></div></div>; })}
+            { label: 'Awaiting receipt', value: pendingHandovers.length, detail: `₦${pendingAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })} in custody queue`, icon: Clock3, tone: 'bg-amber-400/10 text-amber-300' },
+            { label: 'Completed handovers', value: completedHandovers.length, detail: `₦${completedAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })} received`, icon: CheckCircle2, tone: 'bg-emerald-400/10 text-emerald-300' },
+            { label: 'Sessions transferred', value: totalSessions, detail: 'POS and Front Desk sessions', icon: WalletCards, tone: 'bg-indigo-400/10 text-indigo-300' },
+            { label: 'Approved to transfer', value: approvedPos.length + approvedFrontdesk.length, detail: 'Ready for custody handover', icon: ShieldCheck, tone: 'bg-violet-400/10 text-violet-300' },
+          ].map((card) => { const Icon = card.icon; return <div key={card.label} className="rounded-2xl border border-white/10 bg-[#101b2f] p-5 shadow-[0_12px_30px_rgba(0,0,0,.12)]"><div className="flex items-start justify-between"><div><p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">{card.label}</p><p className="mt-2 text-2xl font-black text-white">{card.value}</p><p className="mt-1 text-xs text-slate-500">{card.detail}</p></div><span className={`flex h-10 w-10 items-center justify-center rounded-xl ${card.tone}`}><Icon className="h-5 w-5" /></span></div></div>; })}
         </div>
         <div className="grid gap-5 xl:grid-cols-[1.25fr_0.75fr]">
-          <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><div className="flex items-start justify-between"><div><div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.15em] text-indigo-600"><Activity className="h-4 w-4" />Custody flow</div><h2 className="mt-1 text-lg font-semibold text-slate-900">Seven-day handover activity</h2><p className="mt-1 text-sm text-slate-500">Volume of custody transfers created across your properties.</p></div><TrendingUp className="h-5 w-5 text-emerald-500" /></div><div className="mt-7 flex h-36 items-end gap-3">{handoverTrend.map((day) => <div key={day.date.toISOString()} className="group flex h-full flex-1 flex-col items-center justify-end gap-2"><div className="relative flex h-full w-full items-end justify-center"><span className="absolute bottom-full mb-1 hidden rounded bg-slate-900 px-1.5 py-0.5 text-[10px] text-white group-hover:block">{day.count}</span><div className="w-full max-w-12 rounded-t-lg bg-indigo-100 transition group-hover:bg-indigo-400" style={{ height: `${Math.max((day.count / trendMax) * 100, day.count ? 12 : 4)}%` }} /></div><span className="text-[10px] font-semibold uppercase text-slate-400">{day.date.toLocaleDateString('en-GB', { weekday: 'short' }).slice(0, 3)}</span></div>)}</div></section>
-          <section className="rounded-2xl border border-slate-200 bg-slate-950 p-6 text-white shadow-sm"><div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.15em] text-indigo-300"><Banknote className="h-4 w-4" />Custody insight</div><h2 className="mt-2 text-lg font-semibold">What needs attention</h2><div className="mt-6 space-y-3"><div className="rounded-xl bg-white/10 p-4"><p className="text-xs text-slate-400">Pending physical receipt</p><p className="mt-1 text-xl font-bold">{pendingHandovers.length} handover{pendingHandovers.length === 1 ? '' : 's'}</p><p className="mt-1 text-xs text-amber-300">₦{pendingAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })} awaiting custody confirmation</p></div><div className="rounded-xl bg-white/10 p-4"><p className="text-xs text-slate-400">Control posture</p><p className="mt-1 text-sm font-semibold text-emerald-300">{pendingHandovers.length === 0 ? 'Clear — no custody backlog' : 'Monitor — receipt action required'}</p></div></div></section>
+          <section className="rounded-2xl border border-white/10 bg-[#101b2f] p-6 shadow-[0_12px_30px_rgba(0,0,0,.12)]"><div className="flex items-start justify-between"><div><div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.15em] text-indigo-300"><Activity className="h-4 w-4" />Custody flow</div><h2 className="mt-1 text-lg font-semibold text-white">Seven-day handover activity</h2><p className="mt-1 text-sm text-slate-400">Volume of custody transfers created across your properties.</p></div><TrendingUp className="h-5 w-5 text-emerald-300" /></div><div className="mt-7 flex h-36 items-end gap-3">{handoverTrend.map((day) => <div key={day.date.toISOString()} className="group flex h-full flex-1 flex-col items-center justify-end gap-2"><div className="relative flex h-full w-full items-end justify-center"><span className="absolute bottom-full mb-1 hidden rounded bg-[#07101e] px-1.5 py-0.5 text-[10px] text-white group-hover:block">{day.count}</span><div className="w-full max-w-12 rounded-t-lg bg-indigo-400/40 transition group-hover:bg-cyan-300" style={{ height: `${Math.max((day.count / trendMax) * 100, day.count ? 12 : 4)}%` }} /></div><span className="text-[10px] font-semibold uppercase text-slate-500">{day.date.toLocaleDateString('en-GB', { weekday: 'short' }).slice(0, 3)}</span></div>)}</div></section>
+          <section className="rounded-2xl border border-white/10 bg-[#101b2f] p-6 text-white shadow-[0_12px_30px_rgba(0,0,0,.12)]"><div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.15em] text-indigo-300"><Banknote className="h-4 w-4" />Custody insight</div><h2 className="mt-2 text-lg font-semibold">What needs attention</h2><div className="mt-6 space-y-3"><div className="rounded-xl bg-white/[.06] p-4"><p className="text-xs text-slate-400">Pending physical receipt</p><p className="mt-1 text-xl font-bold">{pendingHandovers.length} handover{pendingHandovers.length === 1 ? '' : 's'}</p><p className="mt-1 text-xs text-amber-300">₦{pendingAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })} awaiting custody confirmation</p></div><div className="rounded-xl bg-white/[.06] p-4"><p className="text-xs text-slate-400">Control posture</p><p className="mt-1 text-sm font-semibold text-emerald-300">{pendingHandovers.length === 0 ? 'Clear — no custody backlog' : 'Monitor — receipt action required'}</p></div></div></section>
         </div>
         <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/[.045] shadow-sm">
           {/* Table header bar */}
@@ -158,7 +158,7 @@ export default async function HandoversPage() {
                     const meta =
                       statusMeta[h.status] ?? {
                         label: h.status,
-                        classes: 'bg-slate-100 text-slate-700 border-slate-200',
+                        classes: 'bg-white/10 text-slate-300 border-white/10',
                       };
                     const sessionCount =
                       h.posSessions.length + h.frontdeskSessions.length;
@@ -176,7 +176,7 @@ export default async function HandoversPage() {
                           ₦{Number(h.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                           <div className="mt-1 flex flex-wrap justify-end gap-1">
                             {Object.entries(paymentBreakdown).map(([method, value]) => (
-                              <span key={method} className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
+                              <span key={method} className="rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-medium text-slate-400">
                                 {method.replace(/_/g, ' ')} ₦{Number(value.amount || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}
                               </span>
                             ))}
@@ -189,16 +189,16 @@ export default async function HandoversPage() {
                             {meta.label}
                           </span>
                         </td>
-                        <td className="px-6 py-4 text-right text-slate-600">
+                        <td className="px-6 py-4 text-right text-slate-300">
                           {h.handedOverBy.firstName} {h.handedOverBy.lastName}
                         </td>
-                        <td className="px-6 py-4 text-right text-slate-600">
+                        <td className="px-6 py-4 text-right text-slate-300">
                           {h.receivedBy
                             ? `${h.receivedBy.firstName} ${h.receivedBy.lastName}`
                             : <span className="text-slate-400">—</span>}
                         </td>
                         <td className="px-6 py-4 text-right">
-                          <span className="inline-flex items-center justify-center h-6 w-6 rounded-full bg-slate-100 text-slate-600 text-xs font-bold">
+                          <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-white/10 text-xs font-bold text-slate-300">
                             {sessionCount}
                           </span>
                         </td>
@@ -211,7 +211,7 @@ export default async function HandoversPage() {
                             minute: '2-digit',
                           })}
                         </td>
-                        <td className="px-6 py-4 text-right sticky right-0 bg-white border-l border-slate-100 shadow-[-4px_0_12px_rgba(0,0,0,0.02)]">
+                        <td className="sticky right-0 border-l border-white/10 bg-[#101b2f] px-6 py-4 text-right shadow-[-4px_0_12px_rgba(0,0,0,0.2)]">
                           <ReceiveHandoverButton
                             handoverId={h.id}
                             currentStatus={h.status}

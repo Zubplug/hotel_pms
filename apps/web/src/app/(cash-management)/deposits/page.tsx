@@ -70,21 +70,21 @@ export default async function DepositsPage() {
       <div className="mx-auto max-w-[1440px] space-y-6 bg-[#08111f] px-5 py-7 text-slate-100 sm:px-8">
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {[
-            { label: 'Deposit pipeline', value: `₦${pipelineAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, detail: `${pendingDeposits.length} pending handover`, icon: Banknote, tone: 'bg-amber-50 text-amber-700' },
-            { label: 'Reconciled value', value: `₦${reconciledAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, detail: `${reconciled.length} reconciled deposits`, icon: CheckCircle2, tone: 'bg-emerald-50 text-emerald-700' },
-            { label: 'Deposited', value: deposited.length, detail: 'Awaiting bank verification', icon: Clock3, tone: 'bg-blue-50 text-blue-700' },
-            { label: 'Exceptions', value: exceptions.length, detail: exceptionAmount ? `₦${Math.abs(exceptionAmount).toLocaleString(undefined, { minimumFractionDigits: 2 })} difference` : 'No amount differences', icon: AlertTriangle, tone: exceptions.length ? 'bg-rose-50 text-rose-700' : 'bg-slate-100 text-slate-500' },
-          ].map((card) => { const Icon = card.icon; return <div key={card.label} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><div className="flex items-start justify-between"><div><p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">{card.label}</p><p className="mt-2 text-2xl font-black text-slate-950">{card.value}</p><p className="mt-1 text-xs text-slate-400">{card.detail}</p></div><span className={`flex h-10 w-10 items-center justify-center rounded-xl ${card.tone}`}><Icon className="h-5 w-5" /></span></div></div>; })}
+            { label: 'Deposit pipeline', value: `₦${pipelineAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, detail: `${pendingDeposits.length} pending handover`, icon: Banknote, tone: 'bg-amber-400/10 text-amber-300' },
+            { label: 'Reconciled value', value: `₦${reconciledAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, detail: `${reconciled.length} reconciled deposits`, icon: CheckCircle2, tone: 'bg-emerald-400/10 text-emerald-300' },
+            { label: 'Deposited', value: deposited.length, detail: 'Awaiting bank verification', icon: Clock3, tone: 'bg-cyan-400/10 text-cyan-300' },
+            { label: 'Exceptions', value: exceptions.length, detail: exceptionAmount ? `₦${Math.abs(exceptionAmount).toLocaleString(undefined, { minimumFractionDigits: 2 })} difference` : 'No amount differences', icon: AlertTriangle, tone: exceptions.length ? 'bg-rose-400/10 text-rose-300' : 'bg-white/10 text-slate-400' },
+          ].map((card) => { const Icon = card.icon; return <div key={card.label} className="rounded-2xl border border-white/10 bg-[#101b2f] p-5 shadow-[0_12px_30px_rgba(0,0,0,.12)]"><div className="flex items-start justify-between"><div><p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">{card.label}</p><p className="mt-2 text-2xl font-black text-white">{card.value}</p><p className="mt-1 text-xs text-slate-500">{card.detail}</p></div><span className={`flex h-10 w-10 items-center justify-center rounded-xl ${card.tone}`}><Icon className="h-5 w-5" /></span></div></div>; })}
         </div>
         <div className="grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
-          <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><div className="flex items-start justify-between"><div><div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.15em] text-emerald-600"><Activity className="h-4 w-4" />Deposit lifecycle</div><h2 className="mt-1 text-lg font-semibold text-slate-900">Control pipeline</h2><p className="mt-1 text-sm text-slate-500">Every deposit should move from handover to verified bank receipt.</p></div><TrendingUp className="h-5 w-5 text-emerald-500" /></div><div className="mt-7 grid grid-cols-3 gap-3"><div className="rounded-xl bg-amber-50 p-4"><p className="text-xs font-semibold text-amber-700">Pending</p><p className="mt-2 text-2xl font-black text-slate-900">{pendingDeposits.length}</p><p className="mt-1 text-xs text-slate-500">Needs submission</p></div><div className="rounded-xl bg-blue-50 p-4"><p className="text-xs font-semibold text-blue-700">Deposited</p><p className="mt-2 text-2xl font-black text-slate-900">{deposited.length}</p><p className="mt-1 text-xs text-slate-500">Needs verification</p></div><div className="rounded-xl bg-emerald-50 p-4"><p className="text-xs font-semibold text-emerald-700">Reconciled</p><p className="mt-2 text-2xl font-black text-slate-900">{reconciled.length}</p><p className="mt-1 text-xs text-slate-500">Control complete</p></div></div></section>
-          <section className="rounded-2xl border border-slate-200 bg-slate-950 p-6 text-white shadow-sm"><div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.15em] text-indigo-300"><ShieldCheck className="h-4 w-4" />Banking posture</div><h2 className="mt-2 text-lg font-semibold">Reconciliation readiness</h2><p className="mt-2 text-sm leading-6 text-slate-400">Deposits with differences remain visible as exceptions until the bank-confirmed amount is explained.</p><div className="mt-6 flex items-center justify-between rounded-xl bg-white/10 p-4"><span className="text-sm text-slate-300">Exception queue</span><span className={exceptions.length ? 'font-bold text-rose-300' : 'font-bold text-emerald-300'}>{exceptions.length ? `${exceptions.length} action${exceptions.length === 1 ? '' : 's'} needed` : 'Clear'}</span></div></section>
+          <section className="rounded-2xl border border-white/10 bg-[#101b2f] p-6 shadow-[0_12px_30px_rgba(0,0,0,.12)]"><div className="flex items-start justify-between"><div><div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.15em] text-emerald-300"><Activity className="h-4 w-4" />Deposit lifecycle</div><h2 className="mt-1 text-lg font-semibold text-white">Control pipeline</h2><p className="mt-1 text-sm text-slate-400">Every deposit should move from handover to verified bank receipt.</p></div><TrendingUp className="h-5 w-5 text-emerald-300" /></div><div className="mt-7 grid grid-cols-3 gap-3"><div className="rounded-xl border border-amber-400/10 bg-amber-400/[.08] p-4"><p className="text-xs font-semibold text-amber-300">Pending</p><p className="mt-2 text-2xl font-black text-white">{pendingDeposits.length}</p><p className="mt-1 text-xs text-slate-500">Needs submission</p></div><div className="rounded-xl border border-cyan-400/10 bg-cyan-400/[.08] p-4"><p className="text-xs font-semibold text-cyan-300">Deposited</p><p className="mt-2 text-2xl font-black text-white">{deposited.length}</p><p className="mt-1 text-xs text-slate-500">Needs verification</p></div><div className="rounded-xl border border-emerald-400/10 bg-emerald-400/[.08] p-4"><p className="text-xs font-semibold text-emerald-300">Reconciled</p><p className="mt-2 text-2xl font-black text-white">{reconciled.length}</p><p className="mt-1 text-xs text-slate-500">Control complete</p></div></div></section>
+          <section className="rounded-2xl border border-white/10 bg-[#101b2f] p-6 text-white shadow-[0_12px_30px_rgba(0,0,0,.12)]"><div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.15em] text-indigo-300"><ShieldCheck className="h-4 w-4" />Banking posture</div><h2 className="mt-2 text-lg font-semibold">Reconciliation readiness</h2><p className="mt-2 text-sm leading-6 text-slate-400">Deposits with differences remain visible as exceptions until the bank-confirmed amount is explained.</p><div className="mt-6 flex items-center justify-between rounded-xl bg-white/[.06] p-4"><span className="text-sm text-slate-300">Exception queue</span><span className={exceptions.length ? 'font-bold text-rose-300' : 'font-bold text-emerald-300'}>{exceptions.length ? `${exceptions.length} action${exceptions.length === 1 ? '' : 's'} needed` : 'Clear'}</span></div></section>
         </div>
         {allowedProperties.length === 1 && generalCashierSafe && cashInTransit && (
           <div className="mb-6 grid gap-3 md:grid-cols-2">
             {[
-              { account: generalCashierSafe, label: 'General Cashier Safe', detail: 'Central custody for received handovers', tone: 'border-indigo-200 bg-indigo-50/60 text-indigo-700' },
-              { account: cashInTransit, label: 'Cash in Transit', detail: 'Cash staged for banking and reconciliation', tone: 'border-amber-200 bg-amber-50/60 text-amber-700' },
+              { account: generalCashierSafe, label: 'General Cashier Safe', detail: 'Central custody for received handovers', tone: 'border-indigo-400/20 bg-indigo-400/[.08] text-indigo-200' },
+              { account: cashInTransit, label: 'Cash in Transit', detail: 'Cash staged for banking and reconciliation', tone: 'border-amber-400/20 bg-amber-400/[.08] text-amber-200' },
             ].map(({ account, label, detail, tone }) => (
               <div key={account.id} className={`flex items-center justify-between rounded-2xl border px-5 py-4 ${tone}`}>
                 <div>
@@ -97,7 +97,7 @@ export default async function DepositsPage() {
           </div>
         )}
         {allowedProperties.length === 1 && availableCash <= 0 && (
-          <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 text-sm text-slate-500 shadow-sm">No cash is currently available for bank submission. Received cash will appear here after the cashier custody workflow posts it.</div>
+          <div className="rounded-2xl border border-white/10 bg-[#101b2f] px-5 py-4 text-sm text-slate-400 shadow-sm">No cash is currently available for bank submission. Received cash will appear here after the cashier custody workflow posts it.</div>
         )}
         <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/[.045] shadow-sm">
           {/* Table header bar */}
@@ -145,8 +145,8 @@ export default async function DepositsPage() {
                 <tbody className="divide-y divide-white/[.06]">
                   {deposits.map((d) => {
                     const diff = Number(d.difference);
-                    const meta =
-                      statusMeta[d.status] ?? { label: d.status, classes: 'bg-slate-100 text-slate-700 border-slate-200' };
+                      const meta =
+                      statusMeta[d.status] ?? { label: d.status, classes: 'bg-white/10 text-slate-300 border-white/10' };
                     return (
                       <tr key={d.id} className="group transition-colors hover:bg-white/[.04]">
                         <td className="px-6 py-4 font-mono text-xs font-semibold text-slate-200">
@@ -161,7 +161,7 @@ export default async function DepositsPage() {
                         </td>
                         <td
                           className={`px-6 py-4 text-right font-semibold ${
-                            diff < 0 ? 'text-red-600' : diff > 0 ? 'text-blue-600' : 'text-slate-400'
+                            diff < 0 ? 'text-rose-300' : diff > 0 ? 'text-cyan-300' : 'text-slate-500'
                           }`}
                         >
                           {d.difference !== null
@@ -176,7 +176,7 @@ export default async function DepositsPage() {
                           </span>
                         </td>
                         <td className="px-6 py-4 text-right">
-                          <span className="inline-flex items-center justify-center h-6 w-6 rounded-full bg-slate-100 text-slate-600 text-xs font-bold">
+                          <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-white/10 text-xs font-bold text-slate-300">
                             {d.allocations.length}
                           </span>
                         </td>
