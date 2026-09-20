@@ -64,6 +64,9 @@ export async function POST(req: NextRequest) {
     });
     if (!outlets.length) return errorResponse('BAD_REQUEST', 'Select a valid active outlet for this property', 400);
 
+    const requestedClass = String(body.fnbClass || '').toUpperCase();
+    const inferredClass = inferFnbClass(name);
+    const fnbClass = ['FOOD', 'BEVERAGE', 'OTHER'].includes(requestedClass) ? requestedClass : inferredClass;
     const categories = await prisma.$transaction(async (tx) => {
       const created = [];
       for (const outlet of outlets) {
@@ -72,7 +75,7 @@ export async function POST(req: NextRequest) {
           if (!allOutlets) throw new Error('DUPLICATE_CATEGORY');
           continue;
         }
-        created.push(await tx.productCategory.create({ data: { outletId: outlet.id, name, productionStation: body.productionStation || 'KITCHEN', fnbClass: body.fnbClass || 'OTHER' } }));
+        created.push(await tx.productCategory.create({ data: { outletId: outlet.id, name, productionStation: body.productionStation || 'KITCHEN', fnbClass } }));
       }
       return created;
     }).catch((error: any) => {
@@ -85,4 +88,11 @@ export async function POST(req: NextRequest) {
     console.error('[POS Categories POST]', err);
     return errorResponse('INTERNAL_ERROR', 'Unable to create category', 500);
   }
+}
+
+function inferFnbClass(name: string): 'FOOD' | 'BEVERAGE' | 'OTHER' {
+  const normalized = name.toLowerCase();
+  if (/(beer|cider|liqueur|spirit|whiskey|brandy|gin|vodka|wine|champagne|soft drink|water|malt|juice|cocktail|drink)/.test(normalized)) return 'BEVERAGE';
+  if (/(breakfast|rice|pasta|starter|main course|salad|dessert|snack|extra|side|pepper soup)/.test(normalized)) return 'FOOD';
+  return 'OTHER';
 }

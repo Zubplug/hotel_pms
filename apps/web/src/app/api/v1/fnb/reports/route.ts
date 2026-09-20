@@ -210,7 +210,10 @@ export async function GET(req: NextRequest) {
         if (item.kitchenStatus === 'VOIDED') continue;
 
         const fnbClass = item.product?.category?.fnbClass || 'OTHER';
-        const itemGross = Number(item.subtotal || 0);
+        const persistedSubtotal = Number(item.subtotal || 0);
+        const itemGross = persistedSubtotal > 0
+          ? persistedSubtotal
+          : Number(item.quantity || 0) * Number(item.unitPrice || 0);
         const itemDiscount = Number(item.discount || 0);
 
         if (fnbClass === 'FOOD') {

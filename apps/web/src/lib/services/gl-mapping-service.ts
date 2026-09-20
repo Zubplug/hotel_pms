@@ -139,10 +139,12 @@ export class GLMappingService {
     const settings = (property.settings as any) || {};
     const revenueMap = settings?.accountingConfig?.revenueAccounts || {};
 
-    const configuredCode = revenueMap[fnbClass];
+    const configuredCode = fnbClass === 'POOL'
+      ? (revenueMap.POOL || '4100')
+      : revenueMap[fnbClass];
 
     if (!configuredCode) {
-      throw new Error(`F&B revenue GL mapping required for class: ${fnbClass}. Please configure Property Settings (accountingConfig.revenueAccounts).`);
+      throw new Error(`Revenue GL mapping required for class: ${fnbClass}. Please configure Property Settings (accountingConfig.revenueAccounts).`);
     }
 
     const account = await prisma.chartOfAccount.findFirst({

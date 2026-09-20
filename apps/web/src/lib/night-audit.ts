@@ -631,7 +631,7 @@ export async function executeNightAudit(
           taxAmount: true,
           serviceCharge: true,
           outletId: true,
-          items: { select: { subtotal: true, product: { select: { itemCode: true } } } },
+          items: { select: { quantity: true, unitPrice: true, subtotal: true, product: { select: { itemCode: true } } } },
           payments: { where: { status: 'CONFIRMED' }, select: { amount: true, method: true } },
         },
       }),
@@ -678,7 +678,13 @@ export async function executeNightAudit(
       let orderFnb = 0;
       
       for (const item of (order.items || [])) {
-        const itemSubtotal = Number(item.subtotal);
+        // Some legacy/offline POS payloads persisted subtotal as zero while
+        // retaining the authoritative quantity and unit price. A zero here
+        // makes the whole paid order look like residual/Other revenue.
+        const persistedSubtotal = Number(item.subtotal);
+        const itemSubtotal = persistedSubtotal > 0
+          ? persistedSubtotal
+          : Number(item.quantity) * Number(item.unitPrice);
         if (itemSubtotal <= 0) continue;
         allocatedRevenue += itemSubtotal;
         
@@ -693,21 +699,30 @@ export async function executeNightAudit(
       const tax = Number(order.taxAmount || 0);
       const serviceCharge = Number(order.serviceCharge || 0);
       
-      // If the POS payment covers the entire bill (normal case)
-      if (netPaid >= (allocatedRevenue + tax + serviceCharge - 0.01)) {
-         fnbRevenueVal += orderFnb;
-         poolRevenueVal += orderPool;
-         taxesVal += tax;
-         serviceChargeVal += serviceCharge;
-         
-         const residual = netPaid - allocatedRevenue - tax - serviceCharge;
-         if (residual > 0.01) {
-            otherRevenueVal += residual;
-         }
-      } else {
-         // Partial payments / under-allocations fall entirely to other/fnb (fallback)
-         fnbRevenueVal += netPaid; 
+      // Allocate partial payments in the same order as the bill: revenue,
+      // then tax, then service charge. Never classify a payment shortfall as
+      // Other Revenue merely because the order was only partly settled.
+      const revenuePaid = Math.min(netPaid, allocatedRevenue);
+      const revenueRatio = allocatedRevenue > 0 ? revenuePaid / allocatedRevenue : 0;
+      fnbRevenueVal += orderFnb * revenueRatio;
+      poolRevenueVal += orderPool * revenueRatio;
+
+      let unapplied = Math.max(0, netPaid - revenuePaid);
+      const taxPaid = Math.min(tax, unapplied);
+      taxesVal += taxPaid;
+      unapplied -= taxPaid;
+      const serviceChargePaid = Math.min(serviceCharge, unapplied);
+      serviceChargeVal += serviceChargePaid;
+      unapplied -= serviceChargePaid;
+
+      // A legacy order can have no item allocation. Its paid net amount is
+      // still POS/F&B production, not Other Revenue; only a true overage is
+      // left in Other Revenue for accountant review.
+      if (allocatedRevenue === 0) {
+        fnbRevenueVal += Math.max(0, netPaid - tax - serviceCharge);
+        unapplied = 0;
       }
+      if (unapplied > 0.01) otherRevenueVal += unapplied;
     }
 
     for (const group of otherItemsByType) {

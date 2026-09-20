@@ -13,7 +13,8 @@ export class PosPaymentAccountingService {
     payment: PosPayment,
     order: PosOrder & {
       items: (PosOrderItem & { product: (PosProduct & { category: ProductCategory | null }) | null })[],
-      property: { organizationId: string | null }
+      property: { organizationId: string | null },
+      outlet?: { type: string } | null
     },
     staffId: string | null
   ) {
@@ -95,11 +96,20 @@ export class PosPaymentAccountingService {
       }
 
       // 5. Calculate and Distribute Gross Revenue Credits based on fnbClass proportions
+      const outlet = order.outlet ?? await tx.posOutlet.findUnique({
+        where: { id: order.outletId },
+        select: { type: true }
+      });
+      const isRecreationOutlet = outlet?.type === 'RECREATION';
       let orderTotalFromItems = 0;
       const classTotals = new Map<string, number>();
 
       for (const item of order.items) {
-        const fnbClass = item.product?.category?.fnbClass || 'OTHER';
+        const categoryName = item.product?.category?.name || '';
+        const isPoolItem = isRecreationOutlet
+          || item.product?.itemCode?.startsWith('REC-POOL')
+          || categoryName.toLowerCase().includes('pool');
+        const fnbClass = isPoolItem ? 'POOL' : (item.product?.category?.fnbClass || 'OTHER');
         const itemTotal = Number(item.quantity) * Number(item.unitPrice);
         classTotals.set(fnbClass, (classTotals.get(fnbClass) || 0) + itemTotal);
         orderTotalFromItems += itemTotal;
@@ -108,7 +118,7 @@ export class PosPaymentAccountingService {
       // Fallback if no items but subtotal exists
       if (orderTotalFromItems === 0) {
         orderTotalFromItems = orderTotalGross > 0 ? orderTotalGross : amount;
-        classTotals.set('OTHER', orderTotalFromItems);
+        classTotals.set(isRecreationOutlet ? 'POOL' : 'OTHER', orderTotalFromItems);
       }
 
       let totalRevenueCredited = 0;
