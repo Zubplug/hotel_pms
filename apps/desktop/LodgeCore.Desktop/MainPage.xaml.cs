@@ -154,18 +154,12 @@ public partial class MainPage : ContentPage
                     responseData = await pmsInterop.GetTerminalStatusAsync();
                     break;
                 case "system.forceSync":
-                    var dbContext = scope.ServiceProvider.GetRequiredService<LodgeCore.Desktop.Data.LocalDbContext>();
-                    var meta = dbContext.SyncMetadata.FirstOrDefault();
-                    if (meta != null)
-                    {
-                        meta.LastGuestSyncCursor = null;
-                        dbContext.SaveChanges();
-                    }
-                    if (LodgeCore.Desktop.Services.SyncEngine.Instance != null)
-                    {
-                        LodgeCore.Desktop.Services.SyncEngine.Instance.TriggerManualSync();
-                    }
-                    responseData = System.Text.Json.JsonSerializer.Serialize(new { success = true }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+                    var syncEngine = LodgeCore.Desktop.Services.SyncEngine.Instance;
+                    var syncCompleted = syncEngine != null
+                        && await syncEngine.ForceSyncAsync();
+                    responseData = System.Text.Json.JsonSerializer.Serialize(
+                        new { success = syncCompleted },
+                        new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
                     break;
                 case "system.getSyncHealth":
                     responseData = await pmsInterop.GetSyncHealthAsync();

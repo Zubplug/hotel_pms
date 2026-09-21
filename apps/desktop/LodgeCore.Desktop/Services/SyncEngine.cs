@@ -26,6 +26,8 @@ public class SyncEngine : BackgroundService
     private bool _isOnline = true; 
     private int _consecutiveFailures = 0; // Tracks failures for exponential backoff
     private readonly SemaphoreSlim _forceSyncSemaphore = new SemaphoreSlim(0, 1);
+    private readonly object _manualSyncWaitersLock = new();
+    private readonly List<TaskCompletionSource<bool>> _manualSyncWaiters = new();
 
     public enum NetworkState { ONLINE, OFFLINE }
     public enum SyncState { NEVER_SYNCED, SYNCING, UP_TO_DATE, ERROR }
@@ -120,6 +122,54 @@ public class SyncEngine : BackgroundService
         }
     }
 
+    /// <summary>
+    /// Requests a sync and waits until the corresponding sync cycle has
+    /// completed.  TriggerManualSync is intentionally fire-and-forget for
+    /// background callers, but authentication must not read the local shift
+    /// database until an online approval refresh has actually finished.
+    /// </summary>
+    public async Task<bool> ForceSyncAsync(CancellationToken cancellationToken = default)
+    {
+        if (!_isOnline) return false;
+
+        var waiter = new TaskCompletionSource<bool>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        lock (_manualSyncWaitersLock)
+        {
+            _manualSyncWaiters.Add(waiter);
+        }
+
+        TriggerManualSync();
+
+        using var registration = cancellationToken.Register(() => waiter.TrySetCanceled(cancellationToken));
+        try
+        {
+            return await waiter.Task.ConfigureAwait(false);
+        }
+        finally
+        {
+            lock (_manualSyncWaitersLock)
+            {
+                _manualSyncWaiters.Remove(waiter);
+            }
+        }
+    }
+
+    private void CompleteManualSyncWaiters(bool succeeded)
+    {
+        List<TaskCompletionSource<bool>> waiters;
+        lock (_manualSyncWaitersLock)
+        {
+            waiters = _manualSyncWaiters.ToList();
+            _manualSyncWaiters.Clear();
+        }
+
+        foreach (var waiter in waiters)
+        {
+            waiter.TrySetResult(succeeded);
+        }
+    }
+
     public async Task<bool> RetryDeadLetterEventAsync(string eventId)
     {
         using var scope = _serviceProvider.CreateScope();
@@ -209,6 +259,7 @@ public class SyncEngine : BackgroundService
         {
             if (_isOnline)
             {
+                var cycleSucceeded = false;
                 try
                 {
                     _logger.LogInformation("[SYNC-CYCLE] Starting sync cycle. Online={Online}", _isOnline);
@@ -239,6 +290,7 @@ public class SyncEngine : BackgroundService
                     _consecutiveFailures = 0;
                     _lastSuccess = DateTime.UtcNow;
                     _lastError = null;
+                    cycleSucceeded = true;
                     BroadcastHealth(SyncState.UP_TO_DATE, null, "COMPLETE", 1, 1, "Sync complete");
                 }
                 catch (Exception ex)
@@ -250,7 +302,14 @@ public class SyncEngine : BackgroundService
                 }
                 finally
                 {
-                    await LogSyncDiagnosticSummary(stoppingToken);
+                    try
+                    {
+                        await LogSyncDiagnosticSummary(stoppingToken);
+                    }
+                    finally
+                    {
+                        CompleteManualSyncWaiters(cycleSucceeded);
+                    }
                 }
             }
             else
@@ -2030,7 +2089,25 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                     var posSession = await dbContext.PosSessions.FirstOrDefaultAsync(x => x.Id == id, stoppingToken);
                     
                     var incomingUpdatedAt = el.TryGetProperty("updatedAt", out var u) ? u.GetDateTime() : DateTime.MinValue;
-                    if (posSession != null && (posSession.UpdatedAt >= incomingUpdatedAt || await HasPendingPosEventAsync(id))) continue;
+                    var incomingControlStatus = el.TryGetProperty("controlStatus", out var incomingControl)
+                        && incomingControl.ValueKind != System.Text.Json.JsonValueKind.Null
+                        ? incomingControl.GetString()
+                        : null;
+                    var incomingIsAuthoritativeFinal = incomingControlStatus is
+                        "APPROVED" or "APPROVED_WITH_VARIANCE" or "HANDOVER_PENDING" or
+                        "DEPOSIT_PENDING" or "DEPOSITED" or "HANDED_OVER" or "RECONCILED";
+                    var hasPendingLocalEvent = posSession != null && await HasPendingPosEventAsync(id);
+
+                    // Local events normally win while they are being pushed, but
+                    // an approval/deposit/reconciliation from the server is an
+                    // authoritative control-state transition. If it is newer
+                    // than the local projection, apply it so an old SUBMITTED
+                    // snapshot cannot block the next waiter login forever.
+                    var canApplyAuthoritativeFinal = incomingIsAuthoritativeFinal
+                        && posSession != null
+                        && incomingUpdatedAt > posSession.UpdatedAt;
+                    if (posSession != null && !canApplyAuthoritativeFinal
+                        && (posSession.UpdatedAt >= incomingUpdatedAt || hasPendingLocalEvent)) continue;
 
                     if (posSession == null)
                     {

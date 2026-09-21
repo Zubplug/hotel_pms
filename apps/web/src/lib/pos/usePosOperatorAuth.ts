@@ -57,7 +57,7 @@ export function usePosOperatorAuth({
   onAuthenticated: (operator: StaffProfile, token: string, authData?: any) => void;
   allowedRoles?: string[];
 }): UsePosOperatorAuthResult {
-  const { provider, isDesktopMode } = useLodgeCoreProvider();
+  const { provider, isDesktopMode, isOnline } = useLodgeCoreProvider();
   const { data: session } = useLodgeCoreSession();
   const [terminalPropertyId, setTerminalPropertyId] = useState('');
   const sessionPropertyId = (session?.user as any)?.propertyId || '';
@@ -162,8 +162,11 @@ export function usePosOperatorAuth({
     try {
       // Refresh the local POS session projection before PIN authentication so
       // a closed/submitted shift cannot be reopened from stale offline state.
-      if (isDesktopMode) {
-        await provider.system?.forceSync?.();
+      if (isDesktopMode && isOnline) {
+        const syncResult = await provider.system?.forceSync?.();
+        if (syncResult && (syncResult as any).success === false) {
+          throw new Error('Unable to refresh shift approval state. Check the terminal connection and try again.');
+        }
       }
       const existingSessionId =
         localStorage.getItem('lodgecore_pos_session_id') ||
