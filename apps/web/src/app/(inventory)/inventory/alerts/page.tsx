@@ -1,132 +1,58 @@
 import prisma from '@hotel-pms/db';
 import { auth } from '@/lib/auth';
-import AlertClientActions from './AlertClientActions';
-import { AlertCircle, AlertTriangle, Bell } from 'lucide-react';
 import Link from 'next/link';
+import type { LucideIcon } from 'lucide-react';
+import { AlertCircle, AlertTriangle, ArrowRight, Bell, Boxes, CheckCircle2, ClipboardCheck, PackagePlus, RefreshCw, ShieldAlert, Truck } from 'lucide-react';
+import AlertClientActions from './AlertClientActions';
 import { InventoryAlertService } from '@/lib/inventory/InventoryAlertService';
+
+export const dynamic = 'force-dynamic';
+
+const money = (value: number) => new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', maximumFractionDigits: 0 }).format(value);
+const dateLabel = (value: Date) => value.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+const typeLabel = (value: string) => value === 'NEGATIVE_STOCK' ? 'Stockout / negative stock' : value === 'REORDER_LEVEL' ? 'Reorder threshold' : value.replaceAll('_', ' ');
+const severity = (type: string) => type === 'NEGATIVE_STOCK' ? 'critical' : 'attention';
+const tone = (type: string) => type === 'NEGATIVE_STOCK' ? 'rose' : 'amber';
+
+type KPI = { label: string; value: string; detail: string; icon: LucideIcon; tone: 'rose' | 'amber' | 'cyan' | 'emerald' | 'violet' };
+const toneClasses = (value: KPI['tone']) => value === 'rose' ? 'bg-rose-400/10 text-rose-300' : value === 'amber' ? 'bg-amber-400/10 text-amber-300' : value === 'cyan' ? 'bg-cyan-400/10 text-cyan-300' : value === 'violet' ? 'bg-violet-400/10 text-violet-300' : 'bg-emerald-400/10 text-emerald-300';
 
 export default async function InventoryAlertsPage() {
   const session = await auth();
-  if (!session?.user?.propertyId) return null;
+  const propertyId = session?.user?.propertyId;
+  if (!propertyId) return <div className="p-8 text-sm text-slate-400">No property selected.</div>;
 
-  try {
-    await InventoryAlertService.sync(session.user.propertyId);
-  } catch (error) {
-    // Alert display should remain available even if a concurrent sync or
-    // temporary database issue prevents refreshing the alert snapshot.
-    console.error('[Inventory Alerts] Failed to sync alert snapshot', error);
-  }
+  try { await InventoryAlertService.sync(propertyId); } catch (error) { console.error('[Inventory Alerts] Failed to sync alert snapshot', error); }
 
-  const alerts = await prisma.inventoryAlert.findMany({
-    where: {
-      propertyId: session.user.propertyId,
-      status: { in: ['OPEN', 'ACKNOWLEDGED'] },
-    },
-    select: {
-      id: true,
-      stockItemId: true,
-      type: true,
-      message: true,
-      status: true,
-      createdAt: true,
-      stockItem: {
-        select: {
-          name: true,
-          stockType: true,
-          warehouse: { select: { name: true } },
-        },
-      },
-    },
-    orderBy: { createdAt: 'desc' },
-  });
+  const [alerts, items, openOrders] = await Promise.all([
+    prisma.inventoryAlert.findMany({ where: { propertyId, status: { in: ['OPEN', 'ACKNOWLEDGED'] } }, select: { id: true, stockItemId: true, type: true, message: true, status: true, createdAt: true, stockItem: { select: { name: true, stockType: true, quantityOnHand: true, reorderLevel: true, costPrice: true, baseUnit: true, warehouse: { select: { id: true, name: true } } } } }, orderBy: { createdAt: 'desc' } }),
+    prisma.stockItem.findMany({ where: { propertyId, isActive: true }, select: { id: true, name: true, quantityOnHand: true, reorderLevel: true, costPrice: true, warehouse: { select: { id: true, name: true } } } }),
+    prisma.purchaseOrder.findMany({ where: { propertyId, status: { in: ['SUBMITTED', 'APPROVED', 'PARTIALLY_RECEIVED'] } }, select: { id: true, expectedDate: true, items: { select: { stockItemId: true, quantity: true, receivedQty: true } } } }),
+  ]);
+  const now = new Date();
+  const openCount = alerts.filter((alert) => alert.status === 'OPEN').length;
+  const critical = alerts.filter((alert) => alert.type === 'NEGATIVE_STOCK');
+  const reorder = alerts.filter((alert) => alert.type === 'REORDER_LEVEL');
+  const valueAtRisk = items.filter((item) => Number(item.quantityOnHand) <= 0 || (item.reorderLevel !== null && Number(item.quantityOnHand) <= Number(item.reorderLevel))).reduce((sum, item) => sum + Math.max(Number(item.quantityOnHand), 0) * Number(item.costPrice || 0), 0);
+  const unconfigured = items.filter((item) => item.reorderLevel === null).length;
+  const overdueOrders = openOrders.filter((order) => order.expectedDate && new Date(order.expectedDate) < now);
+  const onOrderItemIds = new Set(openOrders.flatMap((order) => order.items.filter((item) => Number(item.quantity) > Number(item.receivedQty)).map((item) => item.stockItemId).filter(Boolean)));
+  const covered = new Set(alerts.map((alert) => alert.stockItemId)).size;
+  const warehouseStats = Object.values(items.reduce<Record<string, { name: string; total: number; critical: number; reorder: number }>>((result, item) => { const key = item.warehouse.id; const row = result[key] || { name: item.warehouse.name, total: 0, critical: 0, reorder: 0 }; row.total += 1; if (Number(item.quantityOnHand) <= 0) row.critical += 1; else if (item.reorderLevel !== null && Number(item.quantityOnHand) <= Number(item.reorderLevel)) row.reorder += 1; result[key] = row; return result; }, {})).sort((a, b) => (b.critical + b.reorder) - (a.critical + a.reorder));
+  const kpis: KPI[] = [
+    { label: 'Open exceptions', value: String(openCount), detail: `${alerts.length - openCount} acknowledged`, icon: ShieldAlert, tone: openCount ? 'rose' : 'emerald' },
+    { label: 'Stockouts', value: String(critical.length), detail: 'Negative or zero on-hand', icon: AlertCircle, tone: critical.length ? 'rose' : 'emerald' },
+    { label: 'At reorder point', value: String(reorder.length), detail: 'Needs replenishment review', icon: PackagePlus, tone: reorder.length ? 'amber' : 'emerald' },
+    { label: 'Value at risk', value: money(valueAtRisk), detail: 'On-hand cost across exceptions', icon: Boxes, tone: 'violet' },
+    { label: 'PO coverage', value: covered ? `${Math.round([...new Set(alerts.map((alert) => alert.stockItemId))].filter((id) => onOrderItemIds.has(id)).length / covered * 100)}%` : '—', detail: `${overdueOrders.length} open orders overdue`, icon: Truck, tone: overdueOrders.length ? 'amber' : 'cyan' },
+  ];
 
-  const openCount = alerts.filter((a) => a.status === 'OPEN').length;
-
-  return (
-    <div className="min-h-full">
-      {/* Hero header */}
-      <div className="bg-gradient-to-r from-[#0b1120] to-[#0f2619] px-8 py-7">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-white tracking-tight">Inventory Alerts</h1>
-            <p className="text-slate-400 text-sm mt-1">
-              Monitor reorder levels and negative stock warnings.
-            </p>
-          </div>
-          {openCount > 0 && (
-            <span className="inline-flex items-center gap-2 bg-red-500/20 border border-red-500/30 text-red-300 text-sm font-semibold px-4 py-2 rounded-xl backdrop-blur-sm">
-              <AlertCircle className="h-4 w-4" />
-              {openCount} Open
-            </span>
-          )}
-        </div>
-      </div>
-
-      <div className="px-6 py-7 max-w-4xl mx-auto space-y-4">
-        {alerts.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 text-center bg-white rounded-2xl border border-dashed border-slate-200 shadow-sm">
-            <div className="h-16 w-16 rounded-full bg-emerald-50 flex items-center justify-center mb-4">
-              <Bell className="h-8 w-8 text-emerald-500" />
-            </div>
-            <p className="text-sm font-semibold text-slate-700">No active alerts</p>
-            <p className="text-sm text-slate-400 mt-1">Your inventory levels are looking healthy.</p>
-          </div>
-        ) : (
-          alerts.map((alert) => {
-            const isNegative = alert.type === 'NEGATIVE_STOCK';
-            return (
-              <div
-                key={alert.id}
-                className={`bg-white rounded-2xl border shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 p-5 border-l-4 transition-shadow hover:shadow-md ${
-                  isNegative ? 'border-l-red-500 border-red-100' : 'border-l-amber-500 border-amber-100'
-                }`}
-              >
-                <div className="flex items-start gap-4 flex-1">
-                  <div
-                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
-                      isNegative ? 'bg-red-50' : 'bg-amber-50'
-                    }`}
-                  >
-                    {isNegative ? (
-                      <AlertCircle className="h-5 w-5 text-red-500" />
-                    ) : (
-                      <AlertTriangle className="h-5 w-5 text-amber-600" />
-                    )}
-                  </div>
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap mb-1">
-                      <Link href={`/inventory/stock-items/${alert.stockItemId}`} className="font-semibold text-slate-900 hover:text-indigo-700">{alert.stockItem.name}</Link>
-                      <span className="ml-2 text-xs text-indigo-600 capitalize">{(alert.stockItem.stockType || 'CONSUMABLE').replace('_', ' ').toLowerCase()}</span>
-                      <span
-                        className={`px-2 py-0.5 text-[10px] font-bold uppercase rounded-md border ${
-                          alert.status === 'OPEN'
-                            ? 'bg-slate-100 text-slate-600 border-slate-200'
-                            : 'bg-blue-50 text-blue-700 border-blue-200'
-                        }`}
-                      >
-                        {alert.status}
-                      </span>
-                    </div>
-                    <p className="text-sm text-slate-600">{alert.message}</p>
-                    <div className="flex items-center gap-4 mt-2 text-xs text-slate-400">
-                      <span>Warehouse: <span className="text-slate-600 font-medium">{alert.stockItem.warehouse?.name || 'Unknown'}</span></span>
-                      <span>
-                        {new Date(alert.createdAt).toLocaleString('en-GB', {
-                          day: '2-digit',
-                          month: 'short',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-                <AlertClientActions alertId={alert.id} initialStatus={alert.status} />
-              </div>
-            );
-          })
-        )}
-      </div>
-    </div>
-  );
+  return <div className="min-h-full bg-[#08111f] text-slate-100">
+    <section className="border-b border-white/[0.07] bg-[radial-gradient(circle_at_top_right,_rgba(244,63,94,0.14),_transparent_34%),linear-gradient(135deg,#0b1728,#08111f)] px-5 py-8 sm:px-8"><div className="mx-auto max-w-[1500px]"><div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between"><div><div className="mb-3 flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.2em] text-rose-300"><ShieldAlert className="h-4 w-4" /> Inventory exception control</div><h1 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">Alerts</h1><p className="mt-3 max-w-3xl text-sm leading-6 text-slate-400">Prioritise stockouts and replenishment decisions by warehouse, exposure, and purchase coverage before availability is affected.</p></div><div className="flex flex-wrap gap-2"><Link href="/inventory/stock-items" className="inline-flex items-center gap-2 rounded-xl border border-cyan-400/30 bg-cyan-400/15 px-4 py-2.5 text-sm font-semibold text-cyan-200 hover:bg-cyan-400/25"><Boxes className="h-4 w-4" /> Stock register</Link><Link href="/inventory/purchase-orders/new" className="inline-flex items-center gap-2 rounded-xl border border-emerald-400/30 bg-emerald-400/15 px-4 py-2.5 text-sm font-semibold text-emerald-200 hover:bg-emerald-400/25"><PackagePlus className="h-4 w-4" /> Replenish</Link></div></div><div className="mt-7 flex flex-wrap gap-x-5 gap-y-2 text-xs text-slate-500"><span className="inline-flex items-center gap-2"><RefreshCw className="h-3.5 w-3.5 text-emerald-400" />Live threshold snapshot</span><span>{items.length} active stock items evaluated</span><span>Synced {dateLabel(now)}</span></div></div></section>
+    <main className="mx-auto max-w-[1500px] space-y-6 px-5 py-6 sm:px-8">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">{kpis.map(({ label, value, detail, icon: Icon, tone: color }) => <div key={label} className="rounded-2xl border border-white/[0.08] bg-[#111c2e] p-5"><div className="flex items-start justify-between"><p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">{label}</p><div className={`rounded-xl p-2 ${toneClasses(color)}`}><Icon className="h-4 w-4" /></div></div><p className="mt-5 text-2xl font-semibold tracking-tight text-white">{value}</p><p className="mt-1 text-xs text-slate-500">{detail}</p></div>)}</div>
+      <div className="grid gap-6 xl:grid-cols-[1.1fr_.9fr]"><section className="rounded-2xl border border-white/[0.08] bg-[#111c2e] p-5"><div className="flex items-center justify-between"><div><p className="text-sm font-semibold text-white">Warehouse pressure</p><p className="mt-1 text-xs text-slate-500">Exception concentration by operating location</p></div><ClipboardCheck className="h-4 w-4 text-slate-500" /></div><div className="mt-6 space-y-4">{warehouseStats.slice(0, 6).map((warehouse) => { const count = warehouse.critical + warehouse.reorder; return <div key={warehouse.name}><div className="mb-2 flex items-center justify-between gap-3"><Link href={`/inventory/stock-items?warehouse=${encodeURIComponent(warehouse.name)}`} className="truncate text-sm text-slate-300 hover:text-cyan-200">{warehouse.name}</Link><span className="text-xs text-slate-500"><strong className="text-rose-300">{warehouse.critical}</strong> stockout · <strong className="text-amber-300">{warehouse.reorder}</strong> reorder</span></div><div className="h-2 overflow-hidden rounded-full bg-white/[0.07]"><div className="h-full rounded-full bg-gradient-to-r from-rose-400 to-amber-400" style={{ width: `${Math.max(count / Math.max(...warehouseStats.map((item) => item.critical + item.reorder), 1) * 100, count ? 3 : 0)}%` }} /></div></div>})}{!warehouseStats.length && <p className="py-8 text-sm text-slate-500">No warehouse records found.</p>}</div></section><section className="rounded-2xl border border-white/[0.08] bg-[#111c2e] p-5"><div className="flex items-center justify-between"><div><p className="text-sm font-semibold text-white">Planning posture</p><p className="mt-1 text-xs text-slate-500">Coverage and master-data quality</p></div><Bell className="h-4 w-4 text-slate-500" /></div><div className="mt-5 space-y-3"><div className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-4"><div className="flex items-center justify-between text-xs"><span className="text-slate-400">Items with reorder policy</span><span className="font-semibold text-white">{items.length ? Math.round((items.length - unconfigured) / items.length * 100) : 0}%</span></div><div className="mt-3 h-2 rounded-full bg-white/[0.07]"><div className="h-full rounded-full bg-emerald-400" style={{ width: `${items.length ? (items.length - unconfigured) / items.length * 100 : 0}%` }} /></div><p className="mt-2 text-[11px] text-slate-600">{unconfigured} active items have no reorder level.</p></div><Link href="/inventory/purchase-orders" className="flex items-center justify-between rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-3 text-sm text-slate-300 hover:bg-white/[0.05]"><span className="flex items-center gap-3"><Truck className="h-4 w-4 text-cyan-300" />Open replenishment commitments</span><ArrowRight className="h-4 w-4 text-slate-600" /></Link><Link href="/inventory/reconciliation" className="flex items-center justify-between rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-3 text-sm text-slate-300 hover:bg-white/[0.05]"><span className="flex items-center gap-3"><ClipboardCheck className="h-4 w-4 text-violet-300" />Investigate stock variances</span><ArrowRight className="h-4 w-4 text-slate-600" /></Link></div></section></div>
+      <section className="overflow-hidden rounded-2xl border border-white/[0.08] bg-[#111c2e]"><div className="border-b border-white/[0.07] px-5 py-5"><div className="flex items-end justify-between gap-3"><div><p className="text-sm font-semibold text-white">Exception register</p><p className="mt-1 text-xs text-slate-500">Acknowledge, resolve, or open the affected stock item for corrective action.</p></div><span className="text-xs text-slate-600">{alerts.length} active records</span></div></div>{alerts.length === 0 ? <div className="flex flex-col items-center justify-center px-6 py-20 text-center"><div className="rounded-2xl bg-emerald-400/10 p-4 text-emerald-300"><CheckCircle2 className="h-8 w-8" /></div><p className="mt-4 text-sm font-semibold text-slate-300">No active inventory alerts</p><p className="mt-1 text-sm text-slate-500">All active items are above their configured thresholds.</p></div> : <div className="overflow-x-auto"><table className="w-full min-w-[1120px] text-sm"><thead><tr className="border-b border-white/[0.07] text-left text-[10px] uppercase tracking-[0.14em] text-slate-600">{['Item', 'Exception', 'Position', 'Warehouse', 'Detected', 'Status', 'Action'].map((heading) => <th key={heading} className={`px-5 py-3 font-semibold ${['Position', 'Detected', 'Action'].includes(heading) ? 'text-right' : ''}`}>{heading}</th>)}</tr></thead><tbody className="divide-y divide-white/[0.06]">{alerts.map((alert) => { const isCritical = alert.type === 'NEGATIVE_STOCK'; const item = alert.stockItem; const quantity = Number(item.quantityOnHand); const reorderLevel = item.reorderLevel === null ? null : Number(item.reorderLevel); return <tr key={alert.id} className="group hover:bg-white/[0.025]"><td className="px-5 py-4"><div className="flex items-center gap-3"><div className={`rounded-xl p-2 ${isCritical ? 'bg-rose-400/10 text-rose-300' : 'bg-amber-400/10 text-amber-300'}`}>{isCritical ? <AlertCircle className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}</div><div><Link href={`/inventory/stock-items/${alert.stockItemId}`} className="font-semibold text-slate-200 hover:text-cyan-200">{item.name}</Link><p className="mt-1 text-[11px] text-slate-600">{item.stockType.replaceAll('_', ' ')} · {item.baseUnit}</p></div></div></td><td className="px-5 py-4"><span className={`inline-flex rounded-lg border px-2.5 py-1 text-xs font-semibold ${isCritical ? 'border-rose-400/20 bg-rose-400/10 text-rose-300' : 'border-amber-400/20 bg-amber-400/10 text-amber-300'}`}>{typeLabel(alert.type)}</span><p className="mt-2 max-w-xs text-xs text-slate-500">{alert.message}</p></td><td className="px-5 py-4 text-right"><span className={`font-semibold ${isCritical ? 'text-rose-300' : 'text-amber-200'}`}>{quantity.toLocaleString()}</span><p className="mt-1 text-[11px] text-slate-600">{reorderLevel === null ? 'No threshold' : `Reorder ${reorderLevel.toLocaleString()}`}</p></td><td className="px-5 py-4 text-slate-400">{item.warehouse?.name || 'Unknown'}</td><td className="px-5 py-4 text-right text-xs text-slate-500">{dateLabel(new Date(alert.createdAt))}</td><td className="px-5 py-4"><span className={`rounded-full border px-2 py-1 text-[10px] font-semibold ${alert.status === 'OPEN' ? 'border-rose-400/20 bg-rose-400/10 text-rose-300' : 'border-cyan-400/20 bg-cyan-400/10 text-cyan-300'}`}>{alert.status}</span><p className="mt-1 text-[11px] text-slate-600">{severity(alert.type)}</p></td><td className="px-5 py-4 text-right"><div className="flex justify-end gap-2"><AlertClientActions alertId={alert.id} initialStatus={alert.status} /><Link href={`/inventory/stock-items/${alert.stockItemId}`} className="inline-flex items-center gap-1 rounded-lg p-2 text-xs font-semibold text-cyan-300 opacity-0 transition group-hover:opacity-100 hover:bg-cyan-400/10">Open item <ArrowRight className="h-3.5 w-3.5" /></Link></div></td></tr>; })}</tbody></table></div>}</section>
+    </main>
+  </div>;
 }

@@ -1,152 +1,61 @@
 import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import Link from 'next/link';
-import { Truck, Calendar, FileText, ArrowRight, CheckCircle2, Clock3, AlertTriangle, PackageCheck } from 'lucide-react';
+import { redirect } from 'next/navigation';
+import type { LucideIcon } from 'lucide-react';
+import {
+  AlertTriangle, ArrowRight, CalendarClock, CheckCircle2, ClipboardCheck,
+  FileText, PackageCheck, Receipt, Search, Truck,
+} from 'lucide-react';
 
-const STATUS_META: Record<string, { label: string; classes: string }> = {
-  DRAFT:     { label: 'Draft',     classes: 'bg-amber-50 text-amber-700 border-amber-200' },
-  SUBMITTED: { label: 'Submitted', classes: 'bg-blue-50 text-blue-700 border-blue-200' },
-  APPROVED:  { label: 'Approved', classes: 'bg-purple-50 text-purple-700 border-purple-200' },
-  POSTED:    { label: 'Posted',    classes: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-  REJECTED:  { label: 'Rejected',  classes: 'bg-red-50 text-red-700 border-red-200' },
-  CANCELLED: { label: 'Cancelled', classes: 'bg-slate-100 text-slate-600 border-slate-200' },
+const STATUS_META: Record<string, { label: string; tone: 'slate' | 'cyan' | 'violet' | 'emerald' | 'amber' | 'rose' }> = {
+  DRAFT: { label: 'Draft', tone: 'amber' }, SUBMITTED: { label: 'Submitted', tone: 'cyan' },
+  APPROVED: { label: 'Approved', tone: 'violet' }, POSTED: { label: 'Posted', tone: 'emerald' },
+  REJECTED: { label: 'Rejected', tone: 'rose' }, CANCELLED: { label: 'Cancelled', tone: 'slate' },
 };
+const toneClasses = (tone: string) => tone === 'cyan' ? 'border-cyan-400/20 bg-cyan-400/10 text-cyan-300' : tone === 'violet' ? 'border-violet-400/20 bg-violet-400/10 text-violet-300' : tone === 'emerald' ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300' : tone === 'rose' ? 'border-rose-400/20 bg-rose-400/10 text-rose-300' : tone === 'amber' ? 'border-amber-400/20 bg-amber-400/10 text-amber-300' : 'border-white/10 bg-white/[0.04] text-slate-500';
+const money = (value: number, currency = 'NGN') => new Intl.NumberFormat('en-NG', { style: 'currency', currency, maximumFractionDigits: 0 }).format(value);
+const dateLabel = (value: Date) => value.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+
+export const dynamic = 'force-dynamic';
 
 export default async function GRNsPage() {
   const session = await auth();
-  const propertyId = session?.user?.propertyId;
-  if (!propertyId) return <div>No property selected</div>;
-
-  const grns = await prisma.goodsReceivedNote.findMany({
-    where: { propertyId },
-    include: {
-      purchaseOrder: { select: { poNumber: true, expectedDate: true } },
-      _count: { select: { items: true } },
-      items: { select: { receivedQty: true, unitCost: true } },
-    },
-    orderBy: { createdAt: 'desc' },
-  });
+  if (!session?.user?.propertyId) redirect('/login');
+  const propertyId = session.user.propertyId;
+  const [grns, recentTransactions] = await Promise.all([
+    prisma.goodsReceivedNote.findMany({
+      where: { propertyId },
+      include: { purchaseOrder: { select: { id: true, poNumber: true, expectedDate: true, supplier: { select: { name: true } } } }, _count: { select: { items: true } }, items: { select: { receivedQty: true, unitCost: true } } },
+      orderBy: { createdAt: 'desc' },
+    }),
+    prisma.stockTransaction.count({ where: { propertyId, source: 'RECEIPT', timestamp: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) } } }),
+  ]);
+  const valueOf = (grn: typeof grns[number]) => grn.items.reduce((sum, item) => sum + Number(item.receivedQty) * Number(item.unitCost), 0);
+  const totalValue = grns.reduce((sum, grn) => sum + valueOf(grn), 0);
   const posted = grns.filter((grn) => grn.status === 'POSTED');
-  const awaiting = grns.filter((grn) => ['SUBMITTED', 'APPROVED'].includes(grn.status));
+  const awaiting = grns.filter((grn) => ['DRAFT', 'SUBMITTED', 'APPROVED'].includes(grn.status));
   const rejected = grns.filter((grn) => grn.status === 'REJECTED');
-  const totalValue = grns.reduce((sum, grn) => sum + grn.items.reduce((lineTotal, item) => lineTotal + Number(item.receivedQty) * Number(item.unitCost), 0), 0);
+  const linked = grns.filter((grn) => grn.purchaseOrderId);
+  const lateReceipts = grns.filter((grn) => grn.purchaseOrder?.expectedDate && new Date(grn.receivedDate) > new Date(grn.purchaseOrder.expectedDate));
+  const postedValue = posted.reduce((sum, grn) => sum + valueOf(grn), 0);
+  const queueValue = awaiting.reduce((sum, grn) => sum + valueOf(grn), 0);
+  const recentBuckets = Array.from({ length: 14 }, (_, index) => { const day = new Date(); day.setHours(0, 0, 0, 0); day.setDate(day.getDate() - (13 - index)); const next = new Date(day); next.setDate(next.getDate() + 1); const rows = grns.filter((grn) => new Date(grn.receivedDate) >= day && new Date(grn.receivedDate) < next); return { label: day.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }), count: rows.length, value: rows.reduce((sum, grn) => sum + valueOf(grn), 0) }; });
+  const maxRecent = Math.max(...recentBuckets.map((bucket) => bucket.value), 1);
+  const kpis: { label: string; value: string; sub: string; icon: LucideIcon; tone: 'emerald' | 'cyan' | 'rose' | 'violet' | 'amber' }[] = [
+    { label: 'Receipt value', value: money(totalValue), sub: `${grns.length} GRNs recorded`, icon: Receipt, tone: 'cyan' },
+    { label: 'Awaiting control', value: String(awaiting.length), sub: `${money(queueValue)} not posted`, icon: ClipboardCheck, tone: awaiting.length ? 'amber' : 'emerald' },
+    { label: 'Posted to stock', value: money(postedValue), sub: `${posted.length} posted receipts`, icon: PackageCheck, tone: 'emerald' },
+    { label: 'Delivery exceptions', value: String(lateReceipts.length + rejected.length), sub: `${lateReceipts.length} late · ${rejected.length} rejected`, icon: AlertTriangle, tone: lateReceipts.length + rejected.length ? 'rose' : 'emerald' },
+    { label: 'Receipt movements', value: String(recentTransactions), sub: 'Inventory receipts · 30d', icon: Truck, tone: 'violet' },
+  ];
 
-  return (
-    <div className="min-h-full">
-      {/* Hero header */}
-      <div className="relative overflow-hidden bg-gradient-to-r from-[#0b1120] via-[#16253a] to-[#0b1120] px-6 py-8 sm:px-8">
-        <div className="pointer-events-none absolute -right-20 -top-24 h-72 w-72 rounded-full bg-blue-500/15 blur-3xl" />
-        <div className="relative mx-auto max-w-[1440px]"><p className="mb-2 text-xs font-bold uppercase tracking-[0.18em] text-blue-300">Procurement control</p><h1 className="text-2xl font-bold tracking-tight text-white">Goods receiving</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">Validate deliveries against approved purchase orders and keep posted inventory value traceable from dock to stock.</p><div className="mt-7 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{[['Total receipts', grns.length, 'GRNs in this property'], ['Awaiting action', awaiting.length, 'Submitted or approved'], ['Posted to stock', posted.length, 'Inventory confirmed'], ['Received value', `₦${totalValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, 'Value across all receipts']].map(([label, value, detail]) => <div key={String(label)} className="rounded-xl border border-white/10 bg-white/10 p-4"><p className="text-xs font-semibold uppercase tracking-wider text-slate-400">{label}</p><p className="mt-2 text-2xl font-black text-white">{value}</p><p className="mt-1 text-xs text-blue-200">{detail}</p></div>)}</div></div>
-      </div>
-
-      <div className="px-6 py-7 max-w-screen-xl mx-auto">
-        <div className="mb-5 grid gap-4 sm:grid-cols-3"><div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><div className="flex items-center gap-3"><span className="rounded-xl bg-amber-50 p-2 text-amber-600"><Clock3 className="h-5 w-5" /></span><div><p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Receiving queue</p><p className="mt-1 text-xl font-black text-slate-900">{awaiting.length}</p></div></div><p className="mt-3 text-xs text-slate-500">Receipts awaiting the next control action.</p></div><div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><div className="flex items-center gap-3"><span className="rounded-xl bg-emerald-50 p-2 text-emerald-600"><PackageCheck className="h-5 w-5" /></span><div><p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Posted value</p><p className="mt-1 text-xl font-black text-slate-900">₦{grns.filter((grn) => grn.status === 'POSTED').reduce((sum, grn) => sum + grn.items.reduce((lineTotal, item) => lineTotal + Number(item.receivedQty) * Number(item.unitCost), 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p></div></div><p className="mt-3 text-xs text-slate-500">Receipts already posted into inventory.</p></div><div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><div className="flex items-center gap-3"><span className="rounded-xl bg-rose-50 p-2 text-rose-600"><AlertTriangle className="h-5 w-5" /></span><div><p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Exceptions</p><p className="mt-1 text-xl font-black text-slate-900">{rejected.length}</p></div></div><p className="mt-3 text-xs text-slate-500">Rejected receipts requiring supplier follow-up.</p></div></div>
-        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="flex items-center gap-2 px-6 py-4 border-b border-slate-100 bg-slate-50/60">
-            <Truck className="h-4 w-4 text-slate-500" />
-            <span className="text-sm font-semibold text-slate-700">Receiving register</span>
-            <span className="ml-1 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-slate-200 text-slate-600 text-xs font-bold">
-              {grns.length}
-            </span>
-          </div>
-
-          {grns.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-20 text-center px-6">
-              <div className="h-16 w-16 rounded-full bg-slate-100 flex items-center justify-center mb-4">
-                <Truck className="h-8 w-8 text-slate-400" />
-              </div>
-              <p className="text-sm font-semibold text-slate-600">No GRNs yet</p>
-              <p className="text-sm text-slate-400 mt-1 max-w-sm mx-auto">
-                Goods Receipt Notes are created when items are received from approved Purchase Orders.
-              </p>
-              <Link
-                href="/inventory/purchase-orders"
-                className="mt-5 inline-flex items-center gap-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-4 py-2 rounded-xl text-sm font-medium shadow-sm transition-colors"
-              >
-                View Purchase Orders <ArrowRight className="h-4 w-4" />
-              </Link>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-slate-50/80 border-b border-slate-100">
-                    {['GRN Reference', 'Status', 'Linked PO', 'Received Date', 'Items', 'Value'].map(
-                      (h, i) => (
-                        <th
-                          key={i}
-                          className={`px-6 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wider whitespace-nowrap ${
-                            i >= 4 ? 'text-right' : 'text-left'
-                          }`}
-                        >
-                          {h}
-                        </th>
-                      )
-                    )}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {grns.map((grn) => {
-                    const totalValue = grn.items.reduce(
-                      (sum, item) => sum + Number(item.receivedQty) * Number(item.unitCost),
-                      0
-                    );
-                    const meta = STATUS_META[grn.status] ?? STATUS_META.DRAFT;
-                    return (
-                      <tr key={grn.id} className="hover:bg-slate-50/70 transition-colors">
-                        <td className="px-6 py-4">
-                          <Link
-                            href={`/inventory/grns/${grn.id}`}
-                            className="font-mono font-bold text-blue-700 hover:text-blue-900 text-xs"
-                          >
-                            {grn.grnNumber}
-                          </Link>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold border ${meta.classes}`}>
-                            {meta.label}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4">
-                          {grn.purchaseOrder ? (
-                            <Link
-                              href={`/inventory/purchase-orders/${grn.purchaseOrderId}`}
-                              className="inline-flex items-center gap-1.5 text-slate-700 hover:text-slate-900 font-medium"
-                            >
-                              <FileText className="h-3.5 w-3.5 text-slate-400" />
-                              {grn.purchaseOrder.poNumber}
-                            </Link>
-                          ) : (
-                            <span className="text-slate-400 italic text-xs">None</span>
-                          )}
-                        </td>
-                        <td className="px-6 py-4 text-slate-600">
-                          <div className="flex items-center gap-1.5">
-                            <Calendar className="h-3.5 w-3.5 text-slate-400" />
-                            {new Date(grn.receivedDate).toLocaleDateString('en-GB', {
-                              day: '2-digit',
-                              month: 'short',
-                              year: 'numeric',
-                            })}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 text-right">
-                          <span className="inline-flex items-center justify-center h-6 w-6 rounded-full bg-slate-100 text-slate-700 text-xs font-bold">
-                            {grn._count.items}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 text-right font-semibold text-slate-800">
-                          ₦{totalValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
+  return <div className="min-h-full bg-[#08111f] text-slate-100">
+    <section className="border-b border-white/[0.07] bg-[radial-gradient(circle_at_top_right,_rgba(34,211,238,0.14),_transparent_36%),linear-gradient(135deg,#0b1728,#08111f)] px-5 py-8 sm:px-8"><div className="mx-auto max-w-[1500px]"><div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between"><div><div className="mb-3 flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.2em] text-cyan-300"><Truck className="h-4 w-4" /> Receiving control room</div><h1 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">Goods received</h1><p className="mt-3 max-w-2xl text-sm leading-6 text-slate-400">A controlled receiving view from delivery note to approved receipt, stock posting, and supplier follow-up.</p></div><div className="flex flex-wrap gap-2"><Link href="/inventory/purchase-orders" className="inline-flex items-center gap-2 rounded-xl border border-cyan-400/30 bg-cyan-400/10 px-4 py-2.5 text-sm font-semibold text-cyan-200 hover:bg-cyan-400/20"><FileText className="h-4 w-4" /> Purchase orders</Link><Link href="/inventory/alerts" className="inline-flex items-center gap-2 rounded-xl border border-emerald-400/30 bg-emerald-400/15 px-4 py-2.5 text-sm font-semibold text-emerald-200 hover:bg-emerald-400/25"><CheckCircle2 className="h-4 w-4" /> Stock alerts</Link></div></div><div className="mt-7 flex flex-wrap gap-x-5 gap-y-2 text-xs text-slate-500"><span className="inline-flex items-center gap-2"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />Live receiving register</span><span>{linked.length} of {grns.length} receipts linked to purchase orders</span><span>Inventory posting is completed only after approval</span></div></div></section>
+    <main className="mx-auto max-w-[1500px] space-y-6 px-5 py-6 sm:px-8">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">{kpis.map(({ label, value, sub, icon: Icon, tone }) => <div key={label} className="rounded-2xl border border-white/[0.08] bg-[#111c2e] p-5"><div className="flex items-start justify-between"><p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">{label}</p><div className={`rounded-xl p-2 ${tone === 'emerald' ? 'bg-emerald-400/10 text-emerald-300' : tone === 'cyan' ? 'bg-cyan-400/10 text-cyan-300' : tone === 'rose' ? 'bg-rose-400/10 text-rose-300' : tone === 'violet' ? 'bg-violet-400/10 text-violet-300' : 'bg-amber-400/10 text-amber-300'}`}><Icon className="h-4 w-4" /></div></div><p className="mt-5 text-2xl font-semibold tracking-tight text-white">{value}</p><p className="mt-1 text-xs text-slate-500">{sub}</p></div>)}</div>
+      <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]"><section className="rounded-2xl border border-white/[0.08] bg-[#111c2e] p-5"><div className="flex items-center justify-between"><div><p className="text-sm font-semibold text-white">Receiving velocity</p><p className="mt-1 text-xs text-slate-500">Recorded receipt value across the last 14 receiving days</p></div><CalendarClock className="h-4 w-4 text-slate-500" /></div><div className="mt-6 flex h-40 items-end gap-2">{recentBuckets.map((bucket) => <div key={bucket.label} className="group flex min-w-0 flex-1 flex-col items-center gap-2"><div className="flex h-32 w-full items-end"><div title={`${bucket.label}: ${money(bucket.value)}`} className="w-full rounded-t bg-cyan-400/75 transition group-hover:bg-cyan-300" style={{ height: `${Math.max(bucket.value / maxRecent * 100, bucket.value ? 4 : 0)}%` }} /></div><span className="truncate text-[10px] text-slate-600">{bucket.label}</span></div>)}</div><div className="mt-4 text-xs text-slate-500">Source: recorded GRN received dates and line values.</div></section><section className="rounded-2xl border border-white/[0.08] bg-[#111c2e] p-5"><div className="flex items-center justify-between"><div><p className="text-sm font-semibold text-white">Receiving posture</p><p className="mt-1 text-xs text-slate-500">Where receipts sit in the control lifecycle</p></div><PackageCheck className="h-4 w-4 text-emerald-300" /></div><div className="mt-5 space-y-3">{[['Awaiting action', awaiting.length], ['Posted to stock', posted.length], ['Rejected / follow-up', rejected.length], ['Late against PO date', lateReceipts.length]].map(([label, count]) => <Link href="/inventory/grns" key={String(label)} className="flex items-center justify-between rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-3 hover:bg-white/[0.05]"><span className="text-sm text-slate-300">{label}</span><span className={`text-sm font-bold ${Number(count) ? 'text-amber-300' : 'text-slate-500'}`}>{count}</span></Link>)}</div></section></div>
+      <section className="overflow-hidden rounded-2xl border border-white/[0.08] bg-[#111c2e]"><div className="border-b border-white/[0.07] px-5 py-5"><div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between"><div><p className="text-sm font-semibold text-white">Receiving register</p><p className="mt-1 text-xs text-slate-500">Review delivery references, PO linkage, receipt value, and posting status.</p></div><div className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-slate-500"><Search className="h-3.5 w-3.5" />All live receipts</div></div></div>{grns.length === 0 ? <div className="flex flex-col items-center justify-center px-6 py-20 text-center"><div className="rounded-2xl bg-cyan-400/10 p-4 text-cyan-300"><Truck className="h-8 w-8" /></div><p className="mt-4 text-sm font-semibold text-slate-300">No goods receipts recorded</p><p className="mt-1 text-sm text-slate-500">Receipts are created from approved purchase orders.</p><Link href="/inventory/purchase-orders" className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-cyan-300">Open purchase orders <ArrowRight className="h-4 w-4" /></Link></div> : <div className="overflow-x-auto"><table className="w-full min-w-[1100px] text-sm"><thead><tr className="border-b border-white/[0.07] text-left text-[10px] uppercase tracking-[0.14em] text-slate-600">{['Receipt', 'Supplier / PO', 'Status', 'Received', 'Lines', 'Value', 'Control', ''].map((heading) => <th key={heading} className={`px-5 py-3 font-semibold ${['Received', 'Lines', 'Value', 'Control', ''].includes(heading) ? 'text-right' : ''}`}>{heading}</th>)}</tr></thead><tbody className="divide-y divide-white/[0.06]">{grns.map((grn) => { const meta = STATUS_META[grn.status] || STATUS_META.DRAFT; const value = valueOf(grn); const late = grn.purchaseOrder?.expectedDate && new Date(grn.receivedDate) > new Date(grn.purchaseOrder.expectedDate); return <tr key={grn.id} className="group hover:bg-white/[0.025]"><td className="px-5 py-4"><Link href={`/inventory/grns/${grn.id}`} className="font-mono text-xs font-bold text-cyan-200 hover:text-white">{grn.grnNumber}</Link><p className="mt-1 text-[11px] text-slate-600">{grn.deliveryNoteRef || 'No delivery note reference'}</p></td><td className="px-5 py-4"><p className="font-medium text-slate-300">{grn.purchaseOrder?.supplier?.name || 'Direct receipt'}</p>{grn.purchaseOrder ? <Link href={`/inventory/purchase-orders/${grn.purchaseOrder.id}`} className="mt-1 inline-flex items-center gap-1 text-xs text-slate-600 hover:text-cyan-300"><FileText className="h-3 w-3" />{grn.purchaseOrder.poNumber}</Link> : <p className="mt-1 text-xs text-slate-600">No linked PO</p>}</td><td className="px-5 py-4"><span className={`inline-flex rounded-lg border px-2.5 py-1 text-xs font-semibold ${toneClasses(meta.tone)}`}>{meta.label}</span></td><td className="px-5 py-4 text-right text-xs text-slate-400">{dateLabel(new Date(grn.receivedDate))}</td><td className="px-5 py-4 text-right text-xs text-slate-400">{grn._count.items}</td><td className="px-5 py-4 text-right font-semibold text-slate-200">{money(value)}</td><td className="px-5 py-4 text-right">{late ? <span className="inline-flex items-center gap-1 text-xs font-semibold text-rose-300"><AlertTriangle className="h-3.5 w-3.5" />Late receipt</span> : grn.status === 'POSTED' ? <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-300"><CheckCircle2 className="h-3.5 w-3.5" />In stock ledger</span> : <span className="inline-flex items-center gap-1 text-xs text-slate-500"><CalendarClock className="h-3.5 w-3.5" />Awaiting control</span>}</td><td className="px-5 py-4"><Link href={`/inventory/grns/${grn.id}`} className="flex justify-end"><span className="rounded-lg p-2 text-slate-500 opacity-0 group-hover:opacity-100 hover:bg-cyan-400/10 hover:text-cyan-200"><ArrowRight className="h-4 w-4" /></span></Link></td></tr>; })}</tbody></table></div>}</section>
+    </main>
+  </div>;
 }

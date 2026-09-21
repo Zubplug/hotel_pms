@@ -1,153 +1,71 @@
 import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
-import { Plus, FileText, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
+import type { LucideIcon } from 'lucide-react';
+import {
+  AlertTriangle, ArrowRight, CalendarClock, CheckCircle2,
+  ClipboardCheck, FileText, PackageCheck, Plus, Receipt, Search, ShoppingCart,
+  Users,
+} from 'lucide-react';
 
-const STATUS_META: Record<string, { label: string; classes: string }> = {
-  DRAFT:              { label: 'Draft',               classes: 'bg-slate-100 text-slate-600 border-slate-200' },
-  SUBMITTED:          { label: 'Submitted',           classes: 'bg-blue-50 text-blue-700 border-blue-200' },
-  APPROVED:           { label: 'Approved',            classes: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-  PARTIALLY_RECEIVED: { label: 'Partially Received',  classes: 'bg-amber-50 text-amber-700 border-amber-200' },
-  RECEIVED:           { label: 'Received',            classes: 'bg-teal-50 text-teal-700 border-teal-200' },
-  REJECTED:           { label: 'Rejected',            classes: 'bg-red-50 text-red-700 border-red-200' },
-  CANCELLED:          { label: 'Cancelled',           classes: 'bg-slate-100 text-slate-500 border-slate-200' },
+const STATUS_META: Record<string, { label: string; tone: 'slate' | 'cyan' | 'emerald' | 'amber' | 'rose' | 'violet' }> = {
+  DRAFT: { label: 'Draft', tone: 'slate' }, SUBMITTED: { label: 'Submitted', tone: 'cyan' },
+  APPROVED: { label: 'Approved', tone: 'emerald' }, PARTIALLY_RECEIVED: { label: 'Partially received', tone: 'amber' },
+  RECEIVED: { label: 'Received', tone: 'violet' }, REJECTED: { label: 'Rejected', tone: 'rose' },
+  CANCELLED: { label: 'Cancelled', tone: 'slate' }, CLOSED: { label: 'Closed', tone: 'slate' },
 };
+const OPEN_STATUSES = ['SUBMITTED', 'APPROVED', 'PARTIALLY_RECEIVED'];
+const money = (value: number, currency = 'NGN') => new Intl.NumberFormat('en-NG', { style: 'currency', currency, maximumFractionDigits: 0 }).format(value);
+const dateLabel = (value: Date) => value.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+const toneClasses = (tone: string) => tone === 'cyan' ? 'border-cyan-400/20 bg-cyan-400/10 text-cyan-300' : tone === 'emerald' ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300' : tone === 'amber' ? 'border-amber-400/20 bg-amber-400/10 text-amber-300' : tone === 'rose' ? 'border-rose-400/20 bg-rose-400/10 text-rose-300' : tone === 'violet' ? 'border-violet-400/20 bg-violet-400/10 text-violet-300' : 'border-white/10 bg-white/[0.04] text-slate-500';
 
-export default async function PurchaseOrdersPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
+export const dynamic = 'force-dynamic';
+
+export default async function PurchaseOrdersPage({ searchParams }: { searchParams: Promise<{ status?: string; supplierId?: string }> }) {
   const session = await auth();
-  const propertyId = session?.user?.propertyId;
-  if (!propertyId) return <div>No property selected</div>;
-
-  const requestedStatus = (await searchParams).status;
-  const status = requestedStatus && ['DRAFT', 'SUBMITTED', 'APPROVED', 'PARTIALLY_RECEIVED', 'RECEIVED', 'REJECTED', 'CANCELLED'].includes(requestedStatus)
-    ? requestedStatus
-    : undefined;
+  if (!session?.user?.propertyId) redirect('/login');
+  const propertyId = session.user.propertyId;
+  const params = await searchParams;
+  const requestedStatus = params.status;
+  const supplierId = params.supplierId;
+  const validStatuses = Object.keys(STATUS_META);
+  const status = requestedStatus && validStatuses.includes(requestedStatus) ? requestedStatus : undefined;
 
   const pos = await prisma.purchaseOrder.findMany({
-    where: { propertyId, ...(status ? { status: status as any } : {}) },
-    include: { supplier: true, items: { select: { stockItemId: true } }, _count: { select: { items: true } } },
+    where: { propertyId, ...(status ? { status: status as any } : {}), ...(supplierId ? { supplierId } : {}) },
+    include: { supplier: { select: { name: true } }, items: { select: { quantity: true, receivedQty: true, unitPrice: true } }, _count: { select: { items: true, grns: true } } },
     orderBy: { createdAt: 'desc' },
-  }) as any[];
+  });
+  const now = new Date();
+  const openPOs = pos.filter((po) => OPEN_STATUSES.includes(po.status));
+  const submitted = pos.filter((po) => po.status === 'SUBMITTED');
+  const overdue = openPOs.filter((po) => po.expectedDate && new Date(po.expectedDate) < now);
+  const committedValue = openPOs.reduce((sum, po) => sum + Number(po.totalAmount || 0), 0);
+  const receivedValue = pos.reduce((sum, po) => sum + po.items.reduce((lineSum, item) => lineSum + Number(item.receivedQty || 0) * Number(item.unitPrice || 0), 0), 0);
+  const supplierStats = Object.values(pos.reduce<Record<string, { name: string; orders: number; value: number }>>((result, po) => { const row = result[po.supplier.name] || { name: po.supplier.name, orders: 0, value: 0 }; row.orders += 1; row.value += Number(po.totalAmount || 0); result[po.supplier.name] = row; return result; }, {})).sort((a, b) => b.value - a.value);
+  const expectedBuckets = Array.from({ length: 4 }, (_, index) => { const start = new Date(now); start.setHours(0, 0, 0, 0); start.setDate(start.getDate() + index * 7); const end = new Date(start); end.setDate(end.getDate() + 7); return { label: index === 0 ? 'This week' : `Next ${index} week${index === 1 ? '' : 's'}`, count: openPOs.filter((po) => po.expectedDate && new Date(po.expectedDate) >= start && new Date(po.expectedDate) < end).length, value: openPOs.filter((po) => po.expectedDate && new Date(po.expectedDate) >= start && new Date(po.expectedDate) < end).reduce((sum, po) => sum + Number(po.totalAmount || 0), 0) }; });
+  const maxBucket = Math.max(...expectedBuckets.map((bucket) => bucket.value), 1);
 
-  const stockItemIds = Array.from(new Set(pos.flatMap((po) => po.items.map((item: any) => item.stockItemId).filter(Boolean))));
-  const stockItems = await prisma.stockItem.findMany({ where: { id: { in: stockItemIds } }, select: { id: true, stockType: true } });
-  const stockTypeById = new Map(stockItems.map((item) => [item.id, item.stockType]));
+  const kpis: { label: string; value: string; sub: string; icon: LucideIcon; tone: 'emerald' | 'cyan' | 'rose' | 'violet' | 'amber' }[] = [
+    { label: 'Open commitment', value: money(committedValue), sub: `${openPOs.length} active orders`, icon: ShoppingCart, tone: 'cyan' },
+    { label: 'Awaiting approval', value: String(submitted.length), sub: submitted.length ? 'Requires procurement action' : 'No approval backlog', icon: ClipboardCheck, tone: submitted.length ? 'amber' : 'emerald' },
+    { label: 'Delivery risk', value: String(overdue.length), sub: 'Open orders past expected date', icon: AlertTriangle, tone: overdue.length ? 'rose' : 'emerald' },
+    { label: 'Received value', value: money(receivedValue), sub: 'Value matched to PO lines', icon: PackageCheck, tone: 'violet' },
+    { label: 'Supplier base', value: String(supplierStats.length), sub: 'Suppliers in this register', icon: Users, tone: 'emerald' },
+  ];
 
   return (
-    <div className="min-h-full">
-      {/* Hero header */}
-      <div className="bg-gradient-to-r from-[#0b1120] to-[#0f2619] px-8 py-7">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-white tracking-tight">Purchase Orders</h1>
-            <p className="text-slate-400 text-sm mt-1">{status === 'SUBMITTED' ? 'Review purchase orders waiting for stage-1 approval.' : 'Manage purchase orders and track supplier deliveries.'}</p>
-          </div>
-          <Link
-            href="/inventory/purchase-orders/new"
-            className="inline-flex items-center gap-2 bg-white text-slate-800 border border-white/20 hover:bg-white/90 px-4 py-2 rounded-lg text-sm font-semibold shadow-sm self-start sm:self-auto"
-          >
-            <Plus className="h-4 w-4" />
-            New Purchase Order
-          </Link>
-        </div>
-      </div>
+    <div className="min-h-full bg-[#08111f] text-slate-100">
+      <section className="border-b border-white/[0.07] bg-[radial-gradient(circle_at_top_right,_rgba(16,185,129,0.14),_transparent_36%),linear-gradient(135deg,#0b1728,#08111f)] px-5 py-8 sm:px-8"><div className="mx-auto max-w-[1500px]"><div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between"><div><div className="mb-3 flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.2em] text-emerald-400"><ShoppingCart className="h-4 w-4" /> Procurement control room</div><h1 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">Purchase orders</h1><p className="mt-3 max-w-2xl text-sm leading-6 text-slate-400">Control supplier commitments from request and approval through expected delivery, receiving, and stock ledger completion.</p></div><div className="flex flex-wrap gap-2"><Link href="/inventory/purchase-orders/new" className="inline-flex items-center gap-2 rounded-xl border border-emerald-400/30 bg-emerald-400/15 px-4 py-2.5 text-sm font-semibold text-emerald-200 hover:bg-emerald-400/25"><Plus className="h-4 w-4" /> New purchase order</Link><Link href="/inventory/grns" className="inline-flex items-center gap-2 rounded-xl border border-cyan-400/30 bg-cyan-400/10 px-4 py-2.5 text-sm font-semibold text-cyan-200 hover:bg-cyan-400/20"><Receipt className="h-4 w-4" /> Receiving register</Link></div></div><div className="mt-7 flex flex-wrap gap-x-5 gap-y-2 text-xs text-slate-500"><span className="inline-flex items-center gap-2"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />Live property procurement register</span><span>{pos.length} orders in current view</span><span>Open commitment excludes cancelled and rejected orders</span></div></div></section>
 
-      <div className="px-6 py-7 max-w-screen-xl mx-auto">
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="flex items-center gap-2 px-6 py-4 border-b border-slate-100 bg-slate-50/60">
-            <FileText className="h-4 w-4 text-slate-500" />
-            <span className="text-sm font-semibold text-slate-700">{status === 'SUBMITTED' ? 'Submitted for Approval' : 'All Purchase Orders'}</span>
-            <span className="ml-1 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-slate-200 text-slate-600 text-xs font-bold">
-              {pos.length}
-            </span>
-          </div>
+      <main className="mx-auto max-w-[1500px] space-y-6 px-5 py-6 sm:px-8">
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">{kpis.map(({ label, value, sub, icon: Icon, tone }) => <div key={label} className="rounded-2xl border border-white/[0.08] bg-[#111c2e] p-5"><div className="flex items-start justify-between"><p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">{label}</p><div className={`rounded-xl p-2 ${tone === 'emerald' ? 'bg-emerald-400/10 text-emerald-300' : tone === 'cyan' ? 'bg-cyan-400/10 text-cyan-300' : tone === 'rose' ? 'bg-rose-400/10 text-rose-300' : tone === 'violet' ? 'bg-violet-400/10 text-violet-300' : 'bg-amber-400/10 text-amber-300'}`}><Icon className="h-4 w-4" /></div></div><p className="mt-5 text-2xl font-semibold tracking-tight text-white">{value}</p><p className="mt-1 text-xs text-slate-500">{sub}</p></div>)}</div>
 
-          <div className="flex flex-wrap items-center gap-2 px-6 py-3 border-b border-slate-100">
-            <Link href="/inventory/purchase-orders" className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${!status ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>All</Link>
-            <Link href="/inventory/purchase-orders?status=SUBMITTED" className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${status === 'SUBMITTED' ? 'bg-amber-500 text-white' : 'bg-amber-50 text-amber-700 hover:bg-amber-100'}`}>Pending Approval</Link>
-            <Link href="/inventory/purchase-orders?status=APPROVED" className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${status === 'APPROVED' ? 'bg-emerald-500 text-white' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'}`}>Approved</Link>
-          </div>
+        <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]"><section className="rounded-2xl border border-white/[0.08] bg-[#111c2e] p-5"><div className="flex items-center justify-between"><div><p className="text-sm font-semibold text-white">Delivery horizon</p><p className="mt-1 text-xs text-slate-500">Open commitment by expected receiving window</p></div><CalendarClock className="h-4 w-4 text-slate-500" /></div><div className="mt-6 space-y-5">{expectedBuckets.map((bucket) => <div key={bucket.label}><div className="mb-2 flex items-center justify-between"><span className="text-sm text-slate-300">{bucket.label}</span><span className="text-xs text-slate-500">{bucket.count} orders · <strong className="text-slate-200">{money(bucket.value)}</strong></span></div><div className="h-2 overflow-hidden rounded-full bg-white/[0.07]"><div className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-cyan-400" style={{ width: `${Math.max(bucket.value / maxBucket * 100, bucket.value ? 2 : 0)}%` }} /></div></div>)}{openPOs.length === 0 && <p className="py-6 text-sm text-slate-500">No open purchase commitments.</p>}</div></section><section className="rounded-2xl border border-white/[0.08] bg-[#111c2e] p-5"><div className="flex items-center justify-between"><div><p className="text-sm font-semibold text-white">Supplier exposure</p><p className="mt-1 text-xs text-slate-500">Committed value by supplier</p></div><Link href="/inventory/suppliers" className="text-xs font-semibold text-emerald-300">Supplier register</Link></div><div className="mt-5 space-y-3">{supplierStats.slice(0, 5).map((supplier) => <div key={supplier.name} className="flex items-center justify-between rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-3"><div className="min-w-0"><p className="truncate text-sm text-slate-300">{supplier.name}</p><p className="text-xs text-slate-600">{supplier.orders} order{supplier.orders === 1 ? '' : 's'}</p></div><span className="text-sm font-semibold text-white">{money(supplier.value)}</span></div>)}{supplierStats.length === 0 && <p className="py-6 text-sm text-slate-500">No supplier commitments recorded.</p>}</div></section></div>
 
-          {pos.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-20 text-center px-6">
-              <div className="h-16 w-16 rounded-full bg-slate-100 flex items-center justify-center mb-4">
-                <FileText className="h-8 w-8 text-slate-400" />
-              </div>
-              <p className="text-sm font-semibold text-slate-600">No purchase orders</p>
-              <p className="text-sm text-slate-400 mt-1">Create a purchase order to start replenishing stock.</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-slate-50/80 border-b border-slate-100">
-                    {['PO Number', 'Supplier', 'Status', 'Total Amount', 'Items', 'Expected', 'Created', ''].map(
-                      (h, i) => (
-                        <th
-                          key={i}
-                          className={`px-6 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wider whitespace-nowrap ${
-                            i >= 3 ? 'text-right' : 'text-left'
-                          }`}
-                        >
-                          {h}
-                        </th>
-                      )
-                    )}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {pos.map((po) => {
-                    const meta = STATUS_META[po.status] ?? STATUS_META.DRAFT;
-                    return (
-                      <tr key={po.id} className="hover:bg-slate-50/70 transition-colors group">
-                        <td className="px-6 py-4">
-                          <Link
-                            href={`/inventory/purchase-orders/${po.id}`}
-                            className="font-mono font-bold text-blue-700 hover:text-blue-900 text-xs"
-                          >
-                            {po.poNumber}
-                          </Link>
-                        </td>
-                        <td className="px-6 py-4 font-medium text-slate-800">{po.supplier.name}</td>
-                        <td className="px-6 py-4">
-                          <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold border ${meta.classes}`}>
-                            {meta.label}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 text-right font-semibold text-slate-800">
-                          ₦{po.totalAmount?.toNumber().toLocaleString(undefined, { minimumFractionDigits: 2 }) ?? '0.00'}
-                        </td>
-                        <td className="px-6 py-4 text-right">
-                          <span className="inline-flex items-center justify-center h-6 w-6 rounded-full bg-slate-100 text-slate-600 text-xs font-bold">
-                            {po._count?.items ?? 0}
-                          </span>
-                          {(Array.from(new Set(po.items.map((item: any) => stockTypeById.get(item.stockItemId) || 'CONSUMABLE'))) as string[]).map((type) => (
-                            <span key={type} className="ml-1 inline-flex rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold text-indigo-700 capitalize">{type.replace('_', ' ').toLowerCase()}</span>
-                          ))}
-                        </td>
-                        <td className="px-6 py-4 text-right text-slate-500 whitespace-nowrap">
-                          {po.expectedDate ? new Date(po.expectedDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
-                        </td>
-                        <td className="px-6 py-4 text-right text-slate-500 whitespace-nowrap">
-                          {new Date(po.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
-                        </td>
-                        <td className="px-6 py-4 text-right">
-                          <Link
-                            href={`/inventory/purchase-orders/${po.id}`}
-                            className="inline-flex items-center gap-1 opacity-0 group-hover:opacity-100 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-100 transition-all"
-                          >
-                            View <ArrowRight className="h-3 w-3" />
-                          </Link>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      </div>
+        <section className="overflow-hidden rounded-2xl border border-white/[0.08] bg-[#111c2e]"><div className="border-b border-white/[0.07] px-5 py-5"><div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between"><div><p className="text-sm font-semibold text-white">Order register</p><p className="mt-1 text-xs text-slate-500">Review approval state, supplier commitment, delivery timing, and receipt progress.</p></div><div className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-slate-500"><Search className="h-3.5 w-3.5" />Filter by workflow state</div></div><div className="mt-5 flex flex-wrap gap-2"><Link href="/inventory/purchase-orders" className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${!status ? 'border-cyan-400/30 bg-cyan-400/15 text-cyan-200' : 'border-white/[0.07] text-slate-500 hover:bg-white/[0.05]'}`}>All · {pos.length}</Link>{['SUBMITTED', 'APPROVED', 'PARTIALLY_RECEIVED', 'RECEIVED'].map((filter) => <Link key={filter} href={`/inventory/purchase-orders?status=${filter}`} className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${status === filter ? 'border-cyan-400/30 bg-cyan-400/15 text-cyan-200' : 'border-white/[0.07] text-slate-500 hover:bg-white/[0.05]'}`}>{STATUS_META[filter].label}</Link>)}</div></div>{pos.length === 0 ? <div className="flex flex-col items-center justify-center px-6 py-20 text-center"><div className="rounded-2xl bg-cyan-400/10 p-4 text-cyan-300"><FileText className="h-8 w-8" /></div><p className="mt-4 text-sm font-semibold text-slate-300">No purchase orders in this view</p><p className="mt-1 text-sm text-slate-500">Create a purchase order to start a controlled procurement cycle.</p></div> : <div className="overflow-x-auto"><table className="w-full min-w-[1100px] text-sm"><thead><tr className="border-b border-white/[0.07] text-left text-[10px] uppercase tracking-[0.14em] text-slate-600">{['Order', 'Supplier', 'Status', 'Commitment', 'Receipt progress', 'Expected', 'Created', ''].map((heading) => <th key={heading} className={`px-5 py-3 font-semibold ${['Commitment', 'Receipt progress', 'Expected', 'Created', ''].includes(heading) ? 'text-right' : ''}`}>{heading}</th>)}</tr></thead><tbody className="divide-y divide-white/[0.06]">{pos.map((po) => { const meta = STATUS_META[po.status] || STATUS_META.DRAFT; const ordered = po.items.reduce((sum, item) => sum + Number(item.quantity || 0), 0); const received = po.items.reduce((sum, item) => sum + Number(item.receivedQty || 0), 0); const progress = ordered > 0 ? Math.min(received / ordered * 100, 100) : 0; const isOverdue = OPEN_STATUSES.includes(po.status) && po.expectedDate && new Date(po.expectedDate) < now; return <tr key={po.id} className="group hover:bg-white/[0.025]"><td className="px-5 py-4"><Link href={`/inventory/purchase-orders/${po.id}`} className="font-mono text-xs font-bold text-cyan-200 hover:text-white">{po.poNumber}</Link><p className="mt-1 text-[11px] text-slate-600">{po._count.items} line items · {po._count.grns} GRN{po._count.grns === 1 ? '' : 's'}</p></td><td className="px-5 py-4 font-medium text-slate-300">{po.supplier.name}</td><td className="px-5 py-4"><span className={`inline-flex rounded-lg border px-2.5 py-1 text-xs font-semibold ${toneClasses(meta.tone)}`}>{meta.label}</span></td><td className="px-5 py-4 text-right font-semibold text-slate-200">{money(Number(po.totalAmount || 0))}<p className="mt-1 text-[11px] text-slate-600">{po.currency}</p></td><td className="px-5 py-4 text-right"><span className="text-xs text-slate-400">{received.toLocaleString()} / {ordered.toLocaleString()}</span><div className="ml-auto mt-2 h-1.5 w-24 overflow-hidden rounded-full bg-white/[0.07]"><div className="h-full rounded-full bg-emerald-400" style={{ width: `${progress}%` }} /></div></td><td className={`px-5 py-4 text-right text-xs ${isOverdue ? 'font-semibold text-rose-300' : 'text-slate-400'}`}>{po.expectedDate ? `${isOverdue ? 'Overdue · ' : ''}${dateLabel(new Date(po.expectedDate))}` : 'Not set'}</td><td className="px-5 py-4 text-right text-xs text-slate-500">{dateLabel(new Date(po.createdAt))}</td><td className="px-5 py-4"><Link href={`/inventory/purchase-orders/${po.id}`} className="flex justify-end"><span className="rounded-lg p-2 text-slate-500 opacity-0 group-hover:opacity-100 hover:bg-cyan-400/10 hover:text-cyan-200"><ArrowRight className="h-4 w-4" /></span></Link></td></tr>; })}</tbody></table></div>}</section>
+      </main>
     </div>
   );
 }

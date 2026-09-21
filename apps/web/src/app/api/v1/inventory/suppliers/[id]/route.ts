@@ -51,17 +51,17 @@ export async function PATCH(req: Request, props: { params: Promise<{ id: string 
     }
 
     const body = await req.json();
-    const { name, contactPerson, email, phone, address, taxId } = body;
+    const { name, contactName, email, phone, address, taxIdentifier } = body;
 
     const supplier = await prisma.supplier.update({
       where: { id: params.id, propertyId: ctx.propertyIds[0] },
       data: {
         ...(name && { name }),
-        ...(contactPerson !== undefined && { contactPerson }),
+        ...(contactName !== undefined && { contactName }),
         ...(email !== undefined && { email }),
         ...(phone !== undefined && { phone }),
         ...(address !== undefined && { address }),
-        ...(taxId !== undefined && { taxId }),
+        ...(taxIdentifier !== undefined && { taxIdentifier }),
       },
     });
 

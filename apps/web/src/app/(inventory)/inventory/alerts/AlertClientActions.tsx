@@ -38,7 +38,7 @@ export default function AlertClientActions({ alertId, initialStatus }: { alertId
         <button 
           onClick={() => handleAction('acknowledge')} 
           disabled={loading}
-          className="px-3 py-1.5 text-xs font-medium text-slate-700 bg-slate-50 hover:bg-slate-200 hover:text-slate-900 rounded-md transition-colors disabled:opacity-50"
+          className="rounded-lg border border-cyan-400/20 bg-cyan-400/10 px-3 py-1.5 text-xs font-semibold text-cyan-200 transition-colors hover:bg-cyan-400/20 disabled:opacity-50"
         >
           Acknowledge
         </button>
@@ -46,7 +46,7 @@ export default function AlertClientActions({ alertId, initialStatus }: { alertId
       <button 
         onClick={() => handleAction('resolve')} 
         disabled={loading}
-        className="px-3 py-1.5 text-xs font-medium text-slate-900 bg-indigo-600 hover:bg-indigo-700 rounded-md transition-colors disabled:opacity-50"
+        className="rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-slate-950 transition-colors hover:bg-emerald-400 disabled:opacity-50"
       >
         Resolve
       </button>

@@ -2,155 +2,61 @@ import { auth } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import prisma from '@hotel-pms/db';
 import Link from 'next/link';
-import { ArrowLeftRight, Plus, ArrowRight, Send } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
+import {
+  AlertTriangle, ArrowLeftRight, ArrowRight, CheckCircle2, ClipboardCheck,
+  Clock3, Plus, Search, Send, Truck, Warehouse,
+} from 'lucide-react';
+
+const STATUS_META: Record<string, { label: string; tone: 'slate' | 'cyan' | 'emerald' | 'amber' | 'rose' | 'violet' }> = {
+  DRAFT: { label: 'Draft', tone: 'slate' }, SUBMITTED: { label: 'Submitted', tone: 'cyan' },
+  PENDING_APPROVAL: { label: 'Pending approval', tone: 'amber' }, APPROVED: { label: 'Approved', tone: 'emerald' },
+  REJECTED: { label: 'Rejected', tone: 'rose' }, ISSUED: { label: 'In transit', tone: 'violet' },
+  RECEIVED: { label: 'Received', tone: 'cyan' }, COMPLETED: { label: 'Completed', tone: 'emerald' }, CANCELLED: { label: 'Cancelled', tone: 'slate' },
+};
+const toneClasses = (tone: string) => tone === 'cyan' ? 'border-cyan-400/20 bg-cyan-400/10 text-cyan-300' : tone === 'emerald' ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300' : tone === 'amber' ? 'border-amber-400/20 bg-amber-400/10 text-amber-300' : tone === 'rose' ? 'border-rose-400/20 bg-rose-400/10 text-rose-300' : tone === 'violet' ? 'border-violet-400/20 bg-violet-400/10 text-violet-300' : 'border-white/10 bg-white/[0.04] text-slate-500';
+const money = (value: number) => new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', maximumFractionDigits: 0 }).format(value);
+const dateLabel = (value: Date) => value.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 
 export const dynamic = 'force-dynamic';
-
-const STATUS_META: Record<string, { label: string; classes: string }> = {
-  DRAFT:            { label: 'Draft',            classes: 'bg-slate-100 text-slate-600 border-slate-200' },
-  PENDING_APPROVAL: { label: 'Pending Approval', classes: 'bg-blue-50 text-blue-700 border-blue-200' },
-  APPROVED:         { label: 'Approved',         classes: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-  POSTED:           { label: 'Posted',           classes: 'bg-teal-50 text-teal-700 border-teal-200' },
-  CANCELLED:        { label: 'Cancelled',        classes: 'bg-red-50 text-red-700 border-red-200' },
-};
 
 export default async function TransfersPage({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
   const session = await auth();
   if (!session?.user) redirect('/login');
-
   const { propertyId, role, staffId } = session.user as any;
+  if (!propertyId) redirect('/login');
   const view = (await searchParams).view;
-
   const isOutletHead = String(role).toUpperCase() === 'OUTLET_HEAD';
-  const outletHeadFilter = isOutletHead && staffId
-    ? { posOutlet: { staffAccess: { some: { staffId } } } }
-    : undefined;
-  const outletRequestFilter = view === 'outlet-requests'
-    ? { posOutlet: { isNot: null } }
-    : undefined;
-  const toWarehouseFilter = outletHeadFilter || outletRequestFilter
-    ? { toWarehouse: { ...(outletHeadFilter || {}), ...(outletRequestFilter || {}) } }
-    : {};
+  const outletHeadFilter = isOutletHead && staffId ? { posOutlet: { staffAccess: { some: { staffId } } } } : undefined;
+  const outletRequestFilter = view === 'outlet-requests' ? { posOutlet: { isNot: null } } : undefined;
+  const toWarehouseFilter = outletHeadFilter || outletRequestFilter ? { toWarehouse: { ...(outletHeadFilter || {}), ...(outletRequestFilter || {}) } } : {};
   const statusFilter = view === 'outlet-requests' ? { status: 'PENDING_APPROVAL' as const } : {};
-
   const transfers = await prisma.stockTransfer.findMany({
     where: { propertyId, ...toWarehouseFilter, ...statusFilter },
-    include: {
-      fromWarehouse: { select: { name: true } },
-      toWarehouse: { select: { name: true, posOutlet: { select: { id: true, name: true } } } },
-      _count: { select: { items: true } },
-    },
-    orderBy: { createdAt: 'desc' },
-    take: 100,
+    include: { fromWarehouse: { select: { name: true } }, toWarehouse: { select: { name: true, posOutlet: { select: { name: true } } } }, items: { select: { quantity: true, stockItem: { select: { costPrice: true } } } }, _count: { select: { items: true } } },
+    orderBy: { createdAt: 'desc' }, take: 100,
   });
+  const valueOf = (transfer: typeof transfers[number]) => transfer.items.reduce((sum, item) => sum + Number(item.quantity) * Number(item.stockItem.costPrice), 0);
+  const pending = transfers.filter((transfer) => transfer.status === 'PENDING_APPROVAL');
+  const inTransit = transfers.filter((transfer) => transfer.status === 'ISSUED');
+  const completed = transfers.filter((transfer) => ['RECEIVED', 'COMPLETED'].includes(transfer.status));
+  const rejected = transfers.filter((transfer) => transfer.status === 'REJECTED');
+  const pendingValue = pending.reduce((sum, transfer) => sum + valueOf(transfer), 0);
+  const transitValue = inTransit.reduce((sum, transfer) => sum + valueOf(transfer), 0);
+  const movedValue = completed.reduce((sum, transfer) => sum + valueOf(transfer), 0);
+  const aged = pending.filter((transfer) => Date.now() - new Date(transfer.createdAt).getTime() > 48 * 60 * 60 * 1000);
+  const routeStats = Object.values(transfers.reduce<Record<string, { label: string; count: number; value: number }>>((result, transfer) => { const label = `${transfer.fromWarehouse.name} → ${transfer.toWarehouse.posOutlet ? `Outlet: ${transfer.toWarehouse.posOutlet.name}` : transfer.toWarehouse.name}`; const row = result[label] || { label, count: 0, value: 0 }; row.count += 1; row.value += valueOf(transfer); result[label] = row; return result; }, {})).sort((a, b) => b.value - a.value);
+  const kpis: { label: string; value: string; sub: string; icon: LucideIcon; tone: 'emerald' | 'cyan' | 'rose' | 'violet' | 'amber' }[] = [
+    { label: 'Pending approval', value: String(pending.length), sub: money(pendingValue), icon: ClipboardCheck, tone: pending.length ? 'amber' : 'emerald' },
+    { label: 'In transit', value: String(inTransit.length), sub: money(transitValue), icon: Truck, tone: inTransit.length ? 'violet' : 'emerald' },
+    { label: 'Completed movement', value: String(completed.length), sub: money(movedValue), icon: CheckCircle2, tone: 'emerald' },
+    { label: 'Approval aging', value: String(aged.length), sub: 'Pending over 48 hours', icon: Clock3, tone: aged.length ? 'rose' : 'emerald' },
+    { label: 'Transfer exceptions', value: String(rejected.length), sub: 'Rejected requests', icon: AlertTriangle, tone: rejected.length ? 'rose' : 'emerald' },
+  ];
 
-  return (
-    <div className="min-h-full">
-      {/* Hero header */}
-      <div className="bg-gradient-to-r from-[#0b1120] to-[#0f2619] px-8 py-7">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-white tracking-tight">Stock Transfers</h1>
-            <p className="text-slate-400 text-sm mt-1">{view === 'outlet-requests' ? 'Review stock requests submitted by outlet heads.' : 'Move stock between warehouses and track transfer approvals.'}</p>
-          </div>
-          <Link
-            href="/inventory/transfers/new"
-            className="inline-flex items-center gap-2 bg-white text-slate-800 border border-white/20 hover:bg-white/90 px-4 py-2 rounded-lg text-sm font-semibold shadow-sm self-start sm:self-auto"
-          >
-            <Plus className="h-4 w-4" />
-            New Transfer
-          </Link>
-          <Link
-            href="/inventory/transfers/new?issue=outlet"
-            className="inline-flex items-center gap-2 bg-emerald-500 text-white hover:bg-emerald-600 px-4 py-2 rounded-lg text-sm font-semibold shadow-sm self-start sm:self-auto"
-          >
-            <Send className="h-4 w-4" />
-            Issue to Outlet
-          </Link>
-          <Link
-            href={view === 'outlet-requests' ? '/inventory/transfers' : '/inventory/transfers?view=outlet-requests'}
-            className="inline-flex items-center gap-2 bg-white/10 text-white hover:bg-white/20 border border-white/20 px-4 py-2 rounded-lg text-sm font-semibold self-start sm:self-auto"
-          >
-            {view === 'outlet-requests' ? 'All Transfers' : 'Outlet Requests'}
-          </Link>
-        </div>
-      </div>
-
-      <div className="px-6 py-7 max-w-screen-xl mx-auto">
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="flex items-center gap-2 px-6 py-4 border-b border-slate-100 bg-slate-50/60">
-            <ArrowLeftRight className="h-4 w-4 text-slate-500" />
-            <span className="text-sm font-semibold text-slate-700">{view === 'outlet-requests' ? 'Outlet Requests Pending Approval' : 'All Transfers'}</span>
-            <span className="ml-1 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-slate-200 text-slate-600 text-xs font-bold">
-              {transfers.length}
-            </span>
-          </div>
-
-          {transfers.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-20 text-center px-6">
-              <div className="h-16 w-16 rounded-full bg-slate-100 flex items-center justify-center mb-4">
-                <ArrowLeftRight className="h-8 w-8 text-slate-400" />
-              </div>
-              <p className="text-sm font-semibold text-slate-600">No transfers yet</p>
-              <p className="text-sm text-slate-400 mt-1">Create your first stock transfer to move items between warehouses.</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-slate-50/80 border-b border-slate-100">
-                    {['Reference', 'From', 'To', 'Items', 'Status', 'Date', ''].map((h, i) => (
-                      <th
-                        key={i}
-                        className={`px-6 py-3 font-semibold text-slate-500 text-xs uppercase tracking-wider whitespace-nowrap ${
-                          i >= 3 ? 'text-right' : 'text-left'
-                        }`}
-                      >
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {transfers.map((t) => {
-                    const meta = STATUS_META[t.status] ?? STATUS_META.DRAFT;
-                    return (
-                      <tr key={t.id} className="hover:bg-slate-50/70 transition-colors group">
-                        <td className="px-6 py-4 font-mono text-xs font-bold text-slate-800">{t.transferRef}</td>
-                        <td className="px-6 py-4 text-slate-700">{t.fromWarehouse.name}</td>
-                        <td className="px-6 py-4 text-slate-700">
-                          {t.toWarehouse.posOutlet ? <><span className="font-semibold text-emerald-700">Outlet:</span> {t.toWarehouse.posOutlet.name}</> : t.toWarehouse.name}
-                        </td>
-                        <td className="px-6 py-4 text-right">
-                          <span className="inline-flex items-center justify-center h-6 w-6 rounded-full bg-slate-100 text-slate-600 text-xs font-bold">
-                            {t._count.items}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 text-right">
-                          <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold border ${meta.classes}`}>
-                            {meta.label}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 text-right text-slate-500 whitespace-nowrap">
-                          {new Date(t.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
-                        </td>
-                        <td className="px-6 py-4 text-right">
-                          <Link
-                            href={`/inventory/transfers/${t.id}`}
-                            className="inline-flex items-center gap-1 opacity-0 group-hover:opacity-100 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100 transition-all"
-                          >
-                            View <ArrowRight className="h-3 w-3" />
-                          </Link>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
+  return <div className="min-h-full bg-[#08111f] text-slate-100"><section className="border-b border-white/[0.07] bg-[radial-gradient(circle_at_top_right,_rgba(139,92,246,0.14),_transparent_36%),linear-gradient(135deg,#0b1728,#08111f)] px-5 py-8 sm:px-8"><div className="mx-auto max-w-[1500px]"><div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between"><div><div className="mb-3 flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.2em] text-violet-300"><ArrowLeftRight className="h-4 w-4" /> Stock movement control room</div><h1 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">Transfers</h1><p className="mt-3 max-w-2xl text-sm leading-6 text-slate-400">Track requested, approved, in-transit, received, and completed movements between warehouses and operating outlets.</p></div><div className="flex flex-wrap gap-2"><Link href="/inventory/transfers/new" className="inline-flex items-center gap-2 rounded-xl border border-violet-400/30 bg-violet-400/15 px-4 py-2.5 text-sm font-semibold text-violet-200 hover:bg-violet-400/25"><Plus className="h-4 w-4" /> New transfer</Link><Link href="/inventory/transfers/new?issue=outlet" className="inline-flex items-center gap-2 rounded-xl border border-emerald-400/30 bg-emerald-400/15 px-4 py-2.5 text-sm font-semibold text-emerald-200 hover:bg-emerald-400/25"><Send className="h-4 w-4" /> Issue to outlet</Link><Link href={view === 'outlet-requests' ? '/inventory/transfers' : '/inventory/transfers?view=outlet-requests'} className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm font-semibold text-slate-300 hover:bg-white/[0.08]">{view === 'outlet-requests' ? 'All transfers' : 'Outlet requests'}</Link></div></div><div className="mt-7 flex flex-wrap gap-x-5 gap-y-2 text-xs text-slate-500"><span className="inline-flex items-center gap-2"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />Live transfer register</span><span>Movement value is based on current stock-item cost</span><span>Approval and custody states remain auditable</span></div></div></section>
+    <main className="mx-auto max-w-[1500px] space-y-6 px-5 py-6 sm:px-8"><div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">{kpis.map(({ label, value, sub, icon: Icon, tone }) => <div key={label} className="rounded-2xl border border-white/[0.08] bg-[#111c2e] p-5"><div className="flex items-start justify-between"><p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">{label}</p><div className={`rounded-xl p-2 ${tone === 'emerald' ? 'bg-emerald-400/10 text-emerald-300' : tone === 'cyan' ? 'bg-cyan-400/10 text-cyan-300' : tone === 'rose' ? 'bg-rose-400/10 text-rose-300' : tone === 'violet' ? 'bg-violet-400/10 text-violet-300' : 'bg-amber-400/10 text-amber-300'}`}><Icon className="h-4 w-4" /></div></div><p className="mt-5 text-2xl font-semibold text-white">{value}</p><p className="mt-1 text-xs text-slate-500">{sub}</p></div>)}</div>
+      <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]"><section className="rounded-2xl border border-white/[0.08] bg-[#111c2e] p-5"><div className="flex items-center justify-between"><div><p className="text-sm font-semibold text-white">Movement routes</p><p className="mt-1 text-xs text-slate-500">Where transfer activity and value are concentrated</p></div><Warehouse className="h-4 w-4 text-slate-500" /></div><div className="mt-5 space-y-4">{routeStats.slice(0, 6).map((route) => <div key={route.label}><div className="mb-2 flex items-center justify-between gap-3"><span className="truncate text-sm text-slate-300">{route.label}</span><span className="text-xs text-slate-500">{route.count} · <strong className="text-slate-200">{money(route.value)}</strong></span></div><div className="h-2 overflow-hidden rounded-full bg-white/[0.07]"><div className="h-full rounded-full bg-gradient-to-r from-violet-400 to-cyan-400" style={{ width: `${Math.max(route.value / Math.max(...routeStats.map((item) => item.value), 1) * 100, route.value ? 2 : 0)}%` }} /></div></div>)}{routeStats.length === 0 && <p className="py-8 text-sm text-slate-500">No transfer activity in this view.</p>}</div></section><section className="rounded-2xl border border-white/[0.08] bg-[#111c2e] p-5"><div><p className="text-sm font-semibold text-white">Custody posture</p><p className="mt-1 text-xs text-slate-500">The movement lifecycle at a glance</p></div><div className="mt-5 space-y-3">{[['Pending approval', pending.length], ['In transit', inTransit.length], ['Received / completed', completed.length], ['Rejected', rejected.length]].map(([label, count]) => <Link href="/inventory/transfers" key={String(label)} className="flex items-center justify-between rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-3 hover:bg-white/[0.05]"><span className="text-sm text-slate-300">{label}</span><span className={`text-sm font-bold ${Number(count) ? 'text-amber-300' : 'text-slate-500'}`}>{count}</span></Link>)}</div><div className="mt-5 rounded-xl border border-violet-400/10 bg-violet-400/[0.04] p-4"><p className="text-xs font-semibold text-violet-200">Stock custody principle</p><p className="mt-1 text-xs leading-5 text-slate-500">Approval, dispatch, and receipt should remain visible so source stock, destination stock, and in-transit exposure can be reconciled.</p></div></section></div>
+      <section className="overflow-hidden rounded-2xl border border-white/[0.08] bg-[#111c2e]"><div className="border-b border-white/[0.07] px-5 py-5"><div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between"><div><p className="text-sm font-semibold text-white">Transfer register</p><p className="mt-1 text-xs text-slate-500">Review route, line count, transfer value, custody state, and aging.</p></div><div className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-slate-500"><Search className="h-3.5 w-3.5" />{view === 'outlet-requests' ? 'Outlet requests only' : 'All visible transfers'}</div></div></div>{transfers.length === 0 ? <div className="flex flex-col items-center justify-center px-6 py-20 text-center"><div className="rounded-2xl bg-violet-400/10 p-4 text-violet-300"><ArrowLeftRight className="h-8 w-8" /></div><p className="mt-4 text-sm font-semibold text-slate-300">No transfers in this view</p><p className="mt-1 text-sm text-slate-500">Create a transfer request to move stock between controlled locations.</p></div> : <div className="overflow-x-auto"><table className="w-full min-w-[1150px] text-sm"><thead><tr className="border-b border-white/[0.07] text-left text-[10px] uppercase tracking-[0.14em] text-slate-600">{['Reference', 'From', 'To', 'Lines', 'Transfer value', 'Status', 'Created', 'Control', ''].map((heading) => <th key={heading} className={`px-5 py-3 font-semibold ${['Lines', 'Transfer value', 'Status', 'Created', 'Control', ''].includes(heading) ? 'text-right' : ''}`}>{heading}</th>)}</tr></thead><tbody className="divide-y divide-white/[0.06]">{transfers.map((transfer) => { const meta = STATUS_META[transfer.status] || STATUS_META.DRAFT; const value = valueOf(transfer); const ageHours = (Date.now() - new Date(transfer.createdAt).getTime()) / 3600000; const agedTransfer = transfer.status === 'PENDING_APPROVAL' && ageHours > 48; return <tr key={transfer.id} className="group hover:bg-white/[0.025]"><td className="px-5 py-4"><Link href={`/inventory/transfers/${transfer.id}`} className="font-mono text-xs font-bold text-violet-200 hover:text-white">{transfer.transferRef}</Link><p className="mt-1 text-[11px] text-slate-600">{transfer.notes || 'No transfer note'}</p></td><td className="px-5 py-4 text-slate-300">{transfer.fromWarehouse.name}</td><td className="px-5 py-4 text-slate-300">{transfer.toWarehouse.posOutlet ? <><span className="text-emerald-300">Outlet:</span> {transfer.toWarehouse.posOutlet.name}</> : transfer.toWarehouse.name}</td><td className="px-5 py-4 text-right text-xs text-slate-400">{transfer._count.items}</td><td className="px-5 py-4 text-right font-semibold text-slate-200">{money(value)}</td><td className="px-5 py-4 text-right"><span className={`inline-flex rounded-lg border px-2.5 py-1 text-xs font-semibold ${toneClasses(meta.tone)}`}>{meta.label}</span></td><td className="px-5 py-4 text-right text-xs text-slate-500">{dateLabel(new Date(transfer.createdAt))}</td><td className="px-5 py-4 text-right">{agedTransfer ? <span className="inline-flex items-center gap-1 text-xs font-semibold text-rose-300"><Clock3 className="h-3.5 w-3.5" />Over 48h</span> : transfer.status === 'ISSUED' ? <span className="inline-flex items-center gap-1 text-xs font-semibold text-violet-300"><Truck className="h-3.5 w-3.5" />In transit</span> : transfer.status === 'COMPLETED' || transfer.status === 'RECEIVED' ? <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-300"><CheckCircle2 className="h-3.5 w-3.5" />Reconciled</span> : <span className="text-xs text-slate-600">—</span>}</td><td className="px-5 py-4"><Link href={`/inventory/transfers/${transfer.id}`} className="flex justify-end"><span className="rounded-lg p-2 text-slate-500 opacity-0 group-hover:opacity-100 hover:bg-violet-400/10 hover:text-violet-200"><ArrowRight className="h-4 w-4" /></span></Link></td></tr>; })}</tbody></table></div>}</section>
+    </main></div>;
 }
