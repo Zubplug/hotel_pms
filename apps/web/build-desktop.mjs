@@ -17,6 +17,13 @@ const dirsToHide = [
 // hidden for static export, temporarily point their wrappers at its private
 // build-time location so TypeScript can still resolve them.
 const buildTimeImportBridges = [
+  // Accountant shell pages reuse the live cash-management workflows. During
+  // static export the route groups are temporarily renamed, so bridge these
+  // wrappers to the temporary build-time paths as well.
+  path.join(process.cwd(), 'src/app/(dashboard)/accountant/cash-bank/deposits/page.tsx'),
+  path.join(process.cwd(), 'src/app/(dashboard)/accountant/cash-bank/expenses/page.tsx'),
+  path.join(process.cwd(), 'src/app/(dashboard)/accountant/cash-bank/handovers/page.tsx'),
+  path.join(process.cwd(), 'src/app/(dashboard)/accountant/expenses/page.tsx'),
   path.join(process.cwd(), 'src/app/(cash-management)/cashier/menu/page.tsx'),
   path.join(process.cwd(), 'src/app/(cash-management)/cashier/price-approvals/page.tsx'),
   path.join(process.cwd(), 'src/app/night-audit/handovers/page.tsx'),
