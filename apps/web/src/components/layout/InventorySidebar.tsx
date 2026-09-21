@@ -24,13 +24,11 @@ import {
 } from 'lucide-react';
 import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
 import { useLogout } from '@/hooks/useLogout';
-import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
@@ -67,7 +65,6 @@ export function InventorySidebar({ onNavigate }: InventorySidebarProps) {
   const pathname = usePathname();
   const { data: session } = useLodgeCoreSession();
   const logout = useLogout();
-  const router = useRouter();
   const rawRole = String(session?.user?.role || '').toUpperCase();
   const role = rawRole === 'STOCK_KEEPER' ? 'STOCK_MANAGER' : rawRole;
   const userInitials = getInitials(session?.user?.name, session?.user?.email);
@@ -133,10 +130,6 @@ export function InventorySidebar({ onNavigate }: InventorySidebarProps) {
             <ChevronDown className="h-3.5 w-3.5 text-slate-500 shrink-0 group-hover:text-slate-300 transition-colors" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56" sideOffset={8}>
-            <DropdownMenuItem onClick={() => router.push('/profile')}>
-              My Profile
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
             <DropdownMenuItem
               className="text-red-600 focus:text-red-600 focus:bg-red-50 cursor-pointer"
               onClick={() => logout()}

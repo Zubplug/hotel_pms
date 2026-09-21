@@ -5,24 +5,26 @@ import '../providers/notifications_provider.dart';
 import '../models/notification_data.dart';
 
 // ─── Design Tokens ─────────────────────────────────────────────────────────────
-const _bg            = Color(0xFF08090E);
-const _surface       = Color(0xFF111318);
+const _bg = Color(0xFF08090E);
+const _surface = Color(0xFF111318);
 const _surfaceUnread = Color(0xFF14181F);
-const _border        = Color(0xFF252A35);
-const _gold          = Color(0xFFD4AF37);
-const _textPrimary   = Color(0xFFF0F4FF);
+const _border = Color(0xFF252A35);
+const _gold = Color(0xFFD4AF37);
+const _textPrimary = Color(0xFFF0F4FF);
 const _textSecondary = Color(0xFF8B92A5);
-const _textMuted     = Color(0xFF4E5566);
-const _red           = Color(0xFFEF4444);
-const _orange        = Color(0xFFF97316);
-const _blue          = Color(0xFF3B82F6);
-const _green         = Color(0xFF22C55E);
+const _textMuted = Color(0xFF4E5566);
+const _red = Color(0xFFEF4444);
+const _orange = Color(0xFFF97316);
+const _blue = Color(0xFF3B82F6);
+const _green = Color(0xFF22C55E);
+const _goldBright = Color(0xFFF4D477);
 
 class NotificationsScreen extends ConsumerStatefulWidget {
   const NotificationsScreen({super.key});
 
   @override
-  ConsumerState<NotificationsScreen> createState() => _NotificationsScreenState();
+  ConsumerState<NotificationsScreen> createState() =>
+      _NotificationsScreenState();
 }
 
 class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
@@ -53,38 +55,47 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   // ── Category → accent colour ─────────────────────────────────────────────────
   Color _categoryColor(String? category) {
     switch (category?.toLowerCase()) {
-      case 'finance':    return _green;
-      case 'operations': return _blue;
-      case 'critical':   return _red;
-      case 'approvals':  return _orange;
-      default:           return _textMuted;
+      case 'finance':
+        return _green;
+      case 'operations':
+        return _blue;
+      case 'critical':
+        return _red;
+      case 'approvals':
+        return _orange;
+      default:
+        return _textMuted;
     }
   }
 
   // ── Priority → left-stripe colour ────────────────────────────────────────────
   Color _priorityStripe(NotificationData n) {
-    if (n.isCritical)           return _red;
-    if (n.priority == 'High')   return _orange;
-    if (!n.isRead)              return _gold;
+    if (n.isCritical) return _red;
+    if (n.priority == 'High') return _orange;
+    if (!n.isRead) return _gold;
     return Colors.transparent;
   }
 
   // ── Category icon ─────────────────────────────────────────────────────────────
   IconData _categoryIcon(String? category) {
     switch (category?.toLowerCase()) {
-      case 'finance':    return Icons.account_balance_wallet_rounded;
-      case 'operations': return Icons.hotel_rounded;
-      case 'critical':   return Icons.warning_amber_rounded;
-      case 'approvals':  return Icons.approval_rounded;
-      default:           return Icons.notifications_rounded;
+      case 'finance':
+        return Icons.account_balance_wallet_rounded;
+      case 'operations':
+        return Icons.hotel_rounded;
+      case 'critical':
+        return Icons.warning_amber_rounded;
+      case 'approvals':
+        return Icons.approval_rounded;
+      default:
+        return Icons.notifications_rounded;
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final state    = ref.watch(notificationsProvider);
+    final state = ref.watch(notificationsProvider);
     final notifier = ref.read(notificationsProvider.notifier);
-
 
     return Scaffold(
       backgroundColor: _bg,
@@ -107,9 +118,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
             const SizedBox(height: 4),
 
             // ── List ─────────────────────────────────────────────────────────
-            Expanded(
-              child: _buildList(state, notifier),
-            ),
+            Expanded(child: _buildList(state, notifier)),
           ],
         ),
       ),
@@ -130,22 +139,36 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
           children: [
             const Icon(Icons.wifi_off_rounded, color: _textMuted, size: 48),
             const SizedBox(height: 16),
-            const Text('Could not load notifications',
-                style: TextStyle(color: _textPrimary, fontSize: 15, fontWeight: FontWeight.w600)),
+            const Text(
+              'Could not load notifications',
+              style: TextStyle(
+                color: _textPrimary,
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
             const SizedBox(height: 6),
-            Text(state.error!,
-                style: const TextStyle(color: _textSecondary, fontSize: 12),
-                textAlign: TextAlign.center),
+            Text(
+              state.error!,
+              style: const TextStyle(color: _textSecondary, fontSize: 12),
+              textAlign: TextAlign.center,
+            ),
             const SizedBox(height: 20),
             GestureDetector(
               onTap: () => notifier.loadNotifications(isRefresh: true),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                decoration: BoxDecoration(
-                  color: _gold, borderRadius: BorderRadius.circular(8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 10,
                 ),
-                child: const Text('Retry',
-                    style: TextStyle(color: _bg, fontWeight: FontWeight.bold)),
+                decoration: BoxDecoration(
+                  color: _gold,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Text(
+                  'Retry',
+                  style: TextStyle(color: _bg, fontWeight: FontWeight.bold),
+                ),
               ),
             ),
           ],
@@ -166,14 +189,26 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                 shape: BoxShape.circle,
                 border: Border.all(color: _border),
               ),
-              child: const Icon(Icons.notifications_off_rounded, color: _textMuted, size: 36),
+              child: const Icon(
+                Icons.notifications_off_rounded,
+                color: _textMuted,
+                size: 36,
+              ),
             ),
             const SizedBox(height: 16),
-            const Text('All caught up!',
-                style: TextStyle(color: _textPrimary, fontSize: 16, fontWeight: FontWeight.w700)),
+            const Text(
+              'All caught up!',
+              style: TextStyle(
+                color: _textPrimary,
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
             const SizedBox(height: 6),
-            const Text('No notifications in this category',
-                style: TextStyle(color: _textSecondary, fontSize: 13)),
+            const Text(
+              'No notifications in this category',
+              style: TextStyle(color: _textSecondary, fontSize: 13),
+            ),
           ],
         ),
       );
@@ -199,7 +234,8 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
           final n = state.notifications[i];
 
           // ── Date group header ───────────────────────────────────────────
-          final showHeader = i == 0 ||
+          final showHeader =
+              i == 0 ||
               !_sameDay(
                 DateTime.parse(n.createdAt),
                 DateTime.parse(state.notifications[i - 1].createdAt),
@@ -242,76 +278,157 @@ class _Header extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
       decoration: BoxDecoration(
-        color: _bg,
-        border: Border(bottom: BorderSide(color: _border.withValues(alpha: 0.6), width: 0.5)),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF121722), _bg],
+        ),
+        border: Border(
+          bottom: BorderSide(
+            color: _border.withValues(alpha: 0.55),
+            width: 0.5,
+          ),
+        ),
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
+      child: Column(
         children: [
-          Expanded(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                GestureDetector(
-                  onTap: () => Navigator.of(context).pop(),
-                  child: const Padding(
-                    padding: EdgeInsets.only(right: 12),
-                    child: Icon(Icons.arrow_back_ios_new_rounded, color: _textPrimary, size: 20),
-                  ),
-                ),
-                const Text(
-                  'NOTIFICATIONS',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 1.5,
-                    color: _textPrimary,
-                  ),
-                ),
-                if (unreadCount > 0) ...[
-                  const SizedBox(width: 10),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: _red,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text(
-                      '$unreadCount',
-                      style: const TextStyle(
-                        fontSize: 11,
+          Row(
+            children: [
+              _HeaderIcon(
+                icon: Icons.arrow_back_ios_new_rounded,
+                onTap: () => Navigator.of(context).pop(),
+              ),
+              const SizedBox(width: 14),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'INBOX',
+                      style: TextStyle(
+                        fontSize: 10,
                         fontWeight: FontWeight.w800,
-                        color: Colors.white,
+                        letterSpacing: 2,
+                        color: _gold,
                       ),
                     ),
+                    SizedBox(height: 3),
+                    Text(
+                      'Notifications',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w700,
+                        color: _textPrimary,
+                        letterSpacing: -0.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (onMarkAll != null)
+                _HeaderIcon(
+                  icon: Icons.done_all_rounded,
+                  onTap: onMarkAll!,
+                  tooltip: 'Mark all as read',
+                ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(16, 14, 14, 14),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.045),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: _gold.withValues(alpha: 0.14),
+                    shape: BoxShape.circle,
                   ),
-                ],
+                  child: const Icon(
+                    Icons.auto_awesome_rounded,
+                    color: _goldBright,
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        unreadCount == 0
+                            ? 'You’re all caught up'
+                            : '$unreadCount ${unreadCount == 1 ? 'update' : 'updates'} need your attention',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: _textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        unreadCount == 0
+                            ? 'Nothing new from your properties'
+                            : 'Stay ahead of your operations',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: _textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (unreadCount > 0)
+                  Text(
+                    '$unreadCount',
+                    style: const TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                      color: _goldBright,
+                    ),
+                  ),
               ],
             ),
           ),
-          if (onMarkAll != null)
-            GestureDetector(
-              onTap: onMarkAll,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: _gold.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: _gold.withValues(alpha: 0.3)),
-                ),
-                child: const Text(
-                  'Mark all read',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: _gold,
-                  ),
-                ),
-              ),
-            ),
         ],
+      ),
+    );
+  }
+}
+
+class _HeaderIcon extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+  final String? tooltip;
+
+  const _HeaderIcon({required this.icon, required this.onTap, this.tooltip});
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip ?? 'Go back',
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Ink(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.06),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+          ),
+          child: Icon(icon, color: _textPrimary, size: 18),
+        ),
       ),
     );
   }
@@ -321,7 +438,13 @@ class _Header extends StatelessWidget {
 class _CategoryFilter extends StatelessWidget {
   final String selected;
   final ValueChanged<String> onSelect;
-  static const _categories = ['All', 'Finance', 'Operations', 'Critical', 'Approvals'];
+  static const _categories = [
+    'All',
+    'Finance',
+    'Operations',
+    'Critical',
+    'Approvals',
+  ];
 
   const _CategoryFilter({required this.selected, required this.onSelect});
 
@@ -329,7 +452,7 @@ class _CategoryFilter extends StatelessWidget {
   Widget build(BuildContext context) {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
       child: Row(
         children: _categories.map((c) {
           final isSelected = c == selected;
@@ -338,23 +461,46 @@ class _CategoryFilter extends StatelessWidget {
             child: GestureDetector(
               onTap: () => onSelect(c),
               child: AnimatedContainer(
-                duration: const Duration(milliseconds: 180),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                duration: const Duration(milliseconds: 220),
+                curve: Curves.easeOutCubic,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 15,
+                  vertical: 9,
+                ),
                 decoration: BoxDecoration(
-                  color: isSelected ? _gold.withValues(alpha: 0.12) : _surface,
+                  color: isSelected ? _gold : _surface,
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
-                    color: isSelected ? _gold : _border,
-                    width: isSelected ? 1.5 : 1,
+                    color: isSelected ? _gold : _border.withValues(alpha: 0.8),
                   ),
+                  boxShadow: isSelected
+                      ? [
+                          BoxShadow(
+                            color: _gold.withValues(alpha: 0.16),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                        ]
+                      : null,
                 ),
-                child: Text(
-                  c,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                    color: isSelected ? _gold : _textSecondary,
-                  ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (isSelected) ...[
+                      const Icon(Icons.check_rounded, size: 14, color: _bg),
+                      const SizedBox(width: 5),
+                    ],
+                    Text(
+                      c,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: isSelected
+                            ? FontWeight.w800
+                            : FontWeight.w600,
+                        color: isSelected ? _bg : _textSecondary,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -374,13 +520,26 @@ class _DateHeader extends StatelessWidget {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final day = DateTime(dt.year, dt.month, dt.day);
-    if (day == today)                           return 'Today';
+    if (day == today) return 'Today';
     if (day == today.subtract(const Duration(days: 1))) return 'Yesterday';
     return '${dt.day} ${_month(dt.month)} ${dt.year}';
   }
 
-  String _month(int m) =>
-      ['', 'Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m];
+  String _month(int m) => [
+    '',
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ][m];
 
   @override
   Widget build(BuildContext context) {
@@ -392,8 +551,10 @@ class _DateHeader extends StatelessWidget {
           Text(
             _label(dt),
             style: const TextStyle(
-              fontSize: 11, fontWeight: FontWeight.w700,
-              letterSpacing: 1.2, color: _textMuted,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.2,
+              color: _textMuted,
             ),
           ),
           const SizedBox(width: 10),
@@ -424,9 +585,9 @@ class _NotificationCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isUnread   = !notification.isRead;
+    final isUnread = !notification.isRead;
     final isCritical = notification.isCritical;
-    final n          = notification;
+    final n = notification;
 
     // Card glow/border colour
     Color borderColor;
@@ -443,10 +604,16 @@ class _NotificationCard extends StatelessWidget {
       child: Container(
         decoration: BoxDecoration(
           color: isUnread ? _surfaceUnread : _surface,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(18),
           border: Border.all(color: borderColor),
           boxShadow: isCritical && isUnread
-              ? [BoxShadow(color: _red.withValues(alpha: 0.08), blurRadius: 12, spreadRadius: 1)]
+              ? [
+                  BoxShadow(
+                    color: _red.withValues(alpha: 0.08),
+                    blurRadius: 12,
+                    spreadRadius: 1,
+                  ),
+                ]
               : null,
         ),
         clipBehavior: Clip.antiAlias,
@@ -455,49 +622,75 @@ class _NotificationCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               // ── Left stripe ──────────────────────────────────────────────
-              Container(
-                width: 4,
-                color: stripeColor,
-              ),
+              Container(width: isUnread ? 4 : 2, color: stripeColor),
 
               // ── Body ─────────────────────────────────────────────────────
               Expanded(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
+                  padding: const EdgeInsets.fromLTRB(14, 15, 14, 14),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Top row: subject + priority badge
+                      // Top row: category icon, subject + priority badge
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Expanded(
-                            child: Text(
-                              n.subject ?? 'Notification',
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: isUnread ? FontWeight.w700 : FontWeight.w600,
-                                color: isUnread ? _textPrimary : _textSecondary,
-                                height: 1.3,
+                          Container(
+                            width: 34,
+                            height: 34,
+                            decoration: BoxDecoration(
+                              color: categoryColor.withValues(
+                                alpha: isUnread ? 0.14 : 0.08,
                               ),
+                              borderRadius: BorderRadius.circular(11),
+                            ),
+                            child: Icon(
+                              categoryIcon,
+                              size: 17,
+                              color: categoryColor.withValues(
+                                alpha: isUnread ? 1 : 0.7,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 11),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  n.category?.toUpperCase() ?? 'UPDATE',
+                                  style: TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: 1.1,
+                                    color: categoryColor,
+                                  ),
+                                ),
+                                const SizedBox(height: 3),
+                                Text(
+                                  n.subject ?? 'Notification',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: isUnread
+                                        ? FontWeight.w700
+                                        : FontWeight.w600,
+                                    color: isUnread
+                                        ? _textPrimary
+                                        : _textSecondary,
+                                    height: 1.25,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                           const SizedBox(width: 8),
                           if (isCritical)
                             _PriorityBadge(label: 'CRITICAL', color: _red)
                           else if (n.priority == 'High')
-                            _PriorityBadge(label: 'HIGH', color: _orange)
-                          else if (isUnread)
-                            Container(
-                              width: 7, height: 7,
-                              margin: const EdgeInsets.only(top: 4),
-                              decoration: const BoxDecoration(
-                                color: _gold, shape: BoxShape.circle,
-                              ),
-                            ),
+                            _PriorityBadge(label: 'HIGH', color: _orange),
                         ],
                       ),
-                      const SizedBox(height: 7),
+                      const SizedBox(height: 12),
 
                       // Body text — supports multi-line (notification engine uses \n)
                       Text(
@@ -513,49 +706,52 @@ class _NotificationCard extends StatelessWidget {
                       // Bottom row: icon + category + time + mark read
                       Row(
                         children: [
-                          Icon(categoryIcon, size: 13, color: categoryColor),
-                          const SizedBox(width: 5),
-                          if (n.category != null)
+                          if (isUnread) ...[
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: categoryColor.withValues(alpha: 0.1),
-                                borderRadius: BorderRadius.circular(6),
-                                border: Border.all(color: categoryColor.withValues(alpha: 0.25)),
-                              ),
-                              child: Text(
-                                n.category!.toUpperCase(),
-                                style: TextStyle(
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.w700,
-                                  color: categoryColor,
-                                  letterSpacing: 0.5,
-                                ),
+                              width: 6,
+                              height: 6,
+                              decoration: const BoxDecoration(
+                                color: _gold,
+                                shape: BoxShape.circle,
                               ),
                             ),
+                            const SizedBox(width: 6),
+                            const Text(
+                              'UNREAD',
+                              style: TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 0.8,
+                                color: _gold,
+                              ),
+                            ),
+                          ],
                           const Spacer(),
                           Text(
                             _formatTime(n.createdAt),
-                            style: const TextStyle(fontSize: 11, color: _textMuted),
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: _textMuted,
+                            ),
                           ),
                           if (onMarkRead != null) ...[
                             const SizedBox(width: 10),
                             GestureDetector(
                               onTap: onMarkRead,
                               child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: _gold.withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(color: _gold.withValues(alpha: 0.3)),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 9,
+                                  vertical: 5,
                                 ),
-                                child: const Text(
-                                  'Mark read',
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w700,
-                                    color: _gold,
-                                  ),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.05),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: _border),
+                                ),
+                                child: const Icon(
+                                  Icons.done_rounded,
+                                  size: 14,
+                                  color: _gold,
                                 ),
                               ),
                             ),
