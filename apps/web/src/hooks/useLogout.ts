@@ -30,6 +30,11 @@ export function useLogout() {
     } catch (error) {
       console.warn('[Desktop Logout] Error during logout', error);
     } finally {
+      // Clear cross-account property selection
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('selectedPropertyId');
+      }
+
       // 2. Clear Web session (NextAuth) and redirect to login
       if (isDesktopMode) {
         router.push('/desktop');
