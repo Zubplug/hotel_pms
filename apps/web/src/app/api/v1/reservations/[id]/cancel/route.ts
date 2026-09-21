@@ -7,6 +7,7 @@ import { hasPermission } from '@/lib/rbac';
 import { isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
 import { NotificationEngine } from '@/lib/notification-engine';
 import { requireOrganizationContext } from "@/lib/organization-access";
+import { queueCancellationRefunds } from '@/lib/finance/queue-cancellation-refund';
 
 export async function POST(
   req: NextRequest,
@@ -80,7 +81,12 @@ export async function POST(
 
       const updatedRes = await tx.reservation.update({
         where: { id },
-        data: { status: 'CANCELLED', cancellationReason: reason }
+        data: {
+          status: 'CANCELLED',
+          cancellationReason: reason,
+          cancelledAt: new Date(),
+          cancelledBy: session.user.id,
+        }
       });
 
       for (const reservationRoom of existingReservation.reservationRooms) {
@@ -119,77 +125,16 @@ export async function POST(
         },
       });
 
-      const refundRequests = [];
-      for (const folio of existingReservation.folios) {
-        for (const payment of folio.payments) {
-          if (payment.status !== 'COMPLETED') continue;
-          const refundedAmount = payment.refunds
-            .filter((refund: any) => refund.status !== 'FAILED')
-            .reduce((sum: number, refund: any) => sum + Number(refund.amount), 0);
-          const pending = await tx.refundRequest.aggregate({
-            where: { paymentId: payment.id, status: { in: ['PENDING_APPROVAL', 'APPROVED', 'PROCESSING'] as any } },
-            _sum: { requestedAmount: true },
-          });
-          const paymentPenalty = totalPaid > 0 ? cancellationPenalty * Number(payment.amount) / totalPaid : 0;
-          const amount = Number(payment.amount) - refundedAmount - Number(pending._sum.requestedAmount || 0) - paymentPenalty;
-          if (amount <= 0) continue;
-
-          const idempotencyKey = `reservation_cancel_refund_${id}_${payment.id}`;
-          const existingRequest = await tx.refundRequest.findUnique({ where: { idempotencyKey } });
-          if (existingRequest) {
-            refundRequests.push(existingRequest);
-            continue;
-          }
-
-          const workflowRules = await tx.refundApprovalRule.findMany({ where: { propertyId: { in: ctx.propertyIds as string[] }, isActive: true }, orderBy: { stepOrder: 'asc' } });
-          const matchingRules = workflowRules.filter((rule: any) => (rule.minAmount == null || amount >= Number(rule.minAmount)) && (rule.maxAmount == null || amount <= Number(rule.maxAmount)));
-          const firstRule = matchingRules[0];
-          const fallbackRoleName = amount > 250000 ? 'FINANCE_MANAGER' : amount > 50000 ? 'MANAGER' : 'FRONT_DESK_MANAGER';
-          const role = firstRule?.roleId
-            ? await tx.role.findUnique({ where: { id: firstRule.roleId } })
-            : await tx.role.findFirst({ where: { organizationId, name: fallbackRoleName } });
-          const candidate = firstRule?.approverId
-            ? { userId: firstRule.approverId }
-            : role
-              ? await tx.userRole.findFirst({ where: { roleId: role.id, userId: { not: session.user.id }, OR: [{ propertyId }, { propertyId: null }] }, select: { userId: true } })
-              : null;
-
-          const request = await tx.refundRequest.create({
-            data: {
-              organizationId,
-              propertyId: (typeof reqPropertyId !== "undefined" ? reqPropertyId : ctx.propertyIds[0]),
-              reservationId: id,
-              folioId: folio.id,
-              paymentId: payment.id,
-              guestId: existingReservation.primaryGuestId,
-              requestedAmount: amount,
-              currency: payment.currency,
-              requestedMethod: 'ORIGINAL_PAYMENT',
-              category: 'RESERVATION_CANCELLED',
-              reason: `Reservation cancelled: ${reason}${cancellationPenalty > 0 ? `; policy penalty applied: ${paymentPenalty.toFixed(2)}` : ''}`,
-              requestedById: session.user.id,
-              currentApproverId: candidate?.userId,
-              approvalRoleId: role?.id,
-              currentApprovalStep: firstRule?.stepOrder || 1,
-              idempotencyKey,
-              expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-            },
-          });
-          await tx.approvalRequest.create({
-            data: { propertyId: (typeof reqPropertyId !== "undefined" ? reqPropertyId : ctx.propertyIds[0]),
-              type: 'REFUND',
-              status: 'PENDING',
-              requestedBy: session.user.id,
-              amount,
-              currency: payment.currency,
-              reason: request.reason,
-              details: { refundRequestId: request.id, category: request.category, requestedAmount: amount, requestedMethod: 'ORIGINAL_PAYMENT', approverRoleId: role?.id, approverId: candidate?.userId, stepOrder: firstRule?.stepOrder || 1 },
-              expiresAt: request.expiresAt,
-            },
-          });
-          refundRequests.push(request);
-        }
-      }
+      const refundRequests = await queueCancellationRefunds({
+        tx,
+        reservation: { ...existingReservation, folios: existingReservation.folios },
+        propertyId: existingReservation.propertyId,
+        organizationId,
+        requestedById: session.user.id,
+        cancellationPenalty,
+        totalPaid,
+        reason: `${reason}${cancellationPenalty > 0 ? `; cancellation policy penalty applied: ${cancellationPenalty.toFixed(2)}` : ''}`,
+      });
 
       return { updatedRes, updatedResRoom, organizationId, refundRequests };
     });

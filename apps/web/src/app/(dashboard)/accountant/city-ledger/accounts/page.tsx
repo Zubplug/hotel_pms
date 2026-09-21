@@ -11,8 +11,8 @@ export const revalidate = 0;
 const money = (value: number, currency: string) => new Intl.NumberFormat('en-NG', { style: 'currency', currency, maximumFractionDigits: 0 }).format(value);
 const classify = (value: number, type: string) => {
   const isLiability = type === 'REFUND_PAYABLE';
-  if (value > .01) return isLiability ? ['CREDIT', 'Owed by property', 'text-emerald-300'] : ['DEBIT', 'Owed to property', 'text-rose-300'];
-  if (value < -.01) return isLiability ? ['DEBIT', 'Owed to property', 'text-rose-300'] : ['CREDIT', 'Owed to account', 'text-emerald-300'];
+  if (value > .01) return isLiability ? ['DEBIT', 'Liability reversal / due from guest', 'text-rose-300'] : ['DEBIT', 'Owed to property', 'text-rose-300'];
+  if (value < -.01) return isLiability ? ['CREDIT', 'Owed to guest', 'text-emerald-300'] : ['CREDIT', 'Owed to account', 'text-emerald-300'];
   return ['SETTLED', 'Zero balance', 'text-slate-500'];
 };
 

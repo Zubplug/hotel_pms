@@ -32,13 +32,13 @@ export function CityLedgerDetailClient({ account, openInvoices, recentEntries, t
   const currency = account.currency || 'NGN';
   const balance = Number(account.balance);
   const formatCurrency = (amount: number | string) => new Intl.NumberFormat('en-NG', { style: 'currency', currency, maximumFractionDigits: 0 }).format(Number(amount));
-  const formatBalance = (amount: number) => isRefundPayable ? amount > .01 ? `${formatCurrency(amount)} CR` : amount < -.01 ? `${formatCurrency(Math.abs(amount))} DR` : formatCurrency(0) : amount > .01 ? `${formatCurrency(amount)} DR` : amount < -.01 ? `${formatCurrency(Math.abs(amount))} CR` : formatCurrency(0);
+  const formatBalance = (amount: number) => amount > .01 ? `${formatCurrency(amount)} DR` : amount < -.01 ? `${formatCurrency(Math.abs(amount))} CR` : formatCurrency(0);
   const overdueInvoices = useMemo(() => openInvoices.filter(invoice => new Date(invoice.dueDate).getTime() < asAt), [openInvoices, asAt]);
   const overdueAmount = overdueInvoices.reduce((sum, invoice) => sum + Number(invoice.outstandingAmount), 0);
   const currentAmount = Math.max(0, totalOutstanding - overdueAmount);
   const targetInvoice = targetInvoiceId ? openInvoices.find(invoice => invoice.id === targetInvoiceId) || null : null;
-  const debitExposure = isRefundPayable ? Math.max(-balance, 0) : Math.max(balance, 0);
-  const creditExposure = isRefundPayable ? Math.max(balance, 0) : Math.max(-balance, 0);
+  const debitExposure = isRefundPayable ? Math.max(balance, 0) : Math.max(balance, 0);
+  const creditExposure = isRefundPayable ? Math.max(-balance, 0) : Math.max(-balance, 0);
 
   const handlePayment = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();

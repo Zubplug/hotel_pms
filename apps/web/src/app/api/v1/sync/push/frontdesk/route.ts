@@ -17,6 +17,7 @@ import { FolioPaymentAccountingService } from "@/lib/services/folio-payment-acco
 import { CityLedgerAccountingService } from "@/lib/services/city-ledger-accounting-service";
 import { GeneralLedgerService } from "@/lib/services/general-ledger-service";
 import { GLMappingService } from "@/lib/services/gl-mapping-service";
+import { queueCancellationRefunds as queueCancellationRefundsProfessional } from "@/lib/finance/queue-cancellation-refund";
 
 const parseLocalDateString = (dateString: string | Date | undefined): Date | undefined => {
   if (!dateString) return undefined;
@@ -2368,7 +2369,12 @@ export async function POST(req: NextRequest) {
             if (res.status !== "CANCELLED") {
               await tx.reservation.update({
                 where: { id: aggregateId },
-                data: { status: "CANCELLED" },
+                data: {
+                  status: "CANCELLED",
+                  cancelledAt: new Date(),
+                  cancelledBy: isUuid(event.operatorId) ? event.operatorId : null,
+                  cancellationReason: payload.reason || "Offline reservation cancellation",
+                },
               });
 
               // Mark active reservation rooms as cancelled
@@ -2400,14 +2406,14 @@ export async function POST(req: NextRequest) {
                 }
               }
             }
-            await queueCancellationRefunds(
+            await queueCancellationRefundsProfessional({
               tx,
-              res,
+              reservation: res,
               propertyId,
-              property.organizationId,
-              isUuid(event.operatorId) ? event.operatorId : device.id,
-              payload.reason || "Offline reservation cancellation",
-            );
+              organizationId: property.organizationId,
+              requestedById: isUuid(event.operatorId) ? event.operatorId : device.id,
+              reason: payload.reason || "Offline reservation cancellation",
+            });
           } else if (aggregateType === "RESERVATION" && eventType === "REASSIGN_ROOM") {
             const { newRoomId, oldRoomId, newRoomNumber } = payload;
             if (!newRoomId)
