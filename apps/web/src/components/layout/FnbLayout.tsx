@@ -201,7 +201,7 @@ export function FnbLayout({ children }: { children: React.ReactNode }) {
   );
 
   return (
-    <div className="flex h-screen bg-slate-50 font-sans overflow-hidden">
+    <div className="flex h-screen bg-[#07111f] text-slate-100 font-sans overflow-hidden">
       {/* Mobile overlay */}
       {sidebarOpen && (
         <div
@@ -231,12 +231,12 @@ export function FnbLayout({ children }: { children: React.ReactNode }) {
       <main className="flex-1 flex flex-col h-screen overflow-hidden min-w-0">
         {/* Top header - Conditionally hidden for single property to improve UI */}
         {hasMultipleProperties ? (
-          <header className="h-14 shrink-0 border-b border-slate-200 bg-white flex items-center px-4 justify-between sticky top-0 z-30 shadow-sm">
+          <header className="h-14 shrink-0 border-b border-white/[0.08] bg-[#0b1628] flex items-center px-4 justify-between sticky top-0 z-30 shadow-sm shadow-black/20">
             <div className="flex items-center gap-3">
               <Button
                 variant="ghost"
                 size="icon"
-                className="lg:hidden h-8 w-8"
+                className="lg:hidden h-8 w-8 border-white/10 text-slate-300 hover:bg-white/10 hover:text-white"
                 onClick={() => setSidebarOpen(true)}
               >
                 <Menu className="h-4 w-4" />
@@ -247,12 +247,12 @@ export function FnbLayout({ children }: { children: React.ReactNode }) {
             </div>
           </header>
         ) : (
-          <div className="lg:hidden h-14 shrink-0 flex items-center px-4 sticky top-0 z-30">
+          <div className="lg:hidden h-14 shrink-0 flex items-center px-4 sticky top-0 z-30 bg-[#07111f]">
             {/* Mobile menu button when header is hidden */}
             <Button
               variant="outline"
               size="icon"
-              className="h-8 w-8 bg-white/80 backdrop-blur-sm"
+              className="h-8 w-8 border-white/10 bg-[#101b2f] text-slate-300 backdrop-blur-sm hover:bg-white/10 hover:text-white"
               onClick={() => setSidebarOpen(true)}
             >
               <Menu className="h-4 w-4" />
@@ -265,8 +265,8 @@ export function FnbLayout({ children }: { children: React.ReactNode }) {
         )}
 
         {/* Page content */}
-        <div className="flex-1 overflow-y-auto bg-slate-50">
-          <div className="p-6 max-w-7xl mx-auto">
+        <div className="flex-1 overflow-y-auto bg-[#07111f]">
+          <div className="p-6 max-w-7xl mx-auto min-h-full">
             {children}
           </div>
         </div>
