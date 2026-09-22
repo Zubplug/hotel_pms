@@ -2662,7 +2662,13 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                     entry.InvoiceId = el.TryGetProperty("invoiceId", out var invoiceId) && invoiceId.ValueKind != System.Text.Json.JsonValueKind.Null ? invoiceId.GetString() : null;
                     entry.PosTransactionId = el.TryGetProperty("posTransactionId", out var posId) && posId.ValueKind != System.Text.Json.JsonValueKind.Null ? posId.GetString() : null;
                     entry.Status = el.TryGetProperty("status", out var st) && st.ValueKind != System.Text.Json.JsonValueKind.Null ? st.GetString() : "OPEN";
-                    entry.Description = el.TryGetProperty("description", out var desc) && desc.ValueKind != System.Text.Json.JsonValueKind.Null ? desc.GetString() : null;
+                    entry.Description = el.TryGetProperty("description", out var desc) && desc.ValueKind != System.Text.Json.JsonValueKind.Null
+                        ? desc.GetString()
+                        : el.TryGetProperty("reference", out var reference) && reference.ValueKind != System.Text.Json.JsonValueKind.Null
+                            ? reference.GetString()
+                            : el.TryGetProperty("reason", out var reason) && reason.ValueKind != System.Text.Json.JsonValueKind.Null
+                                ? reason.GetString()
+                                : null;
                     entry.OperatorId = el.TryGetProperty("createdBy", out var opId) && opId.ValueKind != System.Text.Json.JsonValueKind.Null ? opId.GetString() : null; // Cloud uses createdBy
                     entry.IdempotencyKey = el.TryGetProperty("idempotencyKey", out var idem) && idem.ValueKind != System.Text.Json.JsonValueKind.Null ? idem.GetString() : null;
                     if (el.TryGetProperty("businessDate", out var bd) && bd.ValueKind != System.Text.Json.JsonValueKind.Null) entry.BusinessDate = bd.GetDateTime();

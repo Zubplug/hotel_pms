@@ -430,14 +430,23 @@ export async function GET(req: NextRequest) {
     laundryOrders.forEach(s => allEntities.push({ type: 'LaundryOrder', updatedAt: s.updatedAt, data: s }));
     allGuests.forEach(s => allEntities.push({ type: 'Guest', updatedAt: s.updatedAt, data: s }));
 
-    // ---- Fetch Guest Credits (Not Paginated with cursor) ----------------
+    // ---- Fetch city-ledger invoices, payments, and guest credits ---------
+    // These records are intentionally outside the cursor-paginated entity
+    // stream. Front Desk needs the complete local city-ledger subledger to
+    // settle walk-outs/corporate invoices offline and calculate outstanding
+    // balances from allocations. Restricting this to REFUND_OWED caused the
+    // offline City Ledger tab to appear empty even though online invoices
+    // already existed.
     const cityLedgerEntries = await prisma.cityLedgerEntry.findMany({
-      where: { propertyId, type: 'REFUND_OWED', status: 'OPEN' },
+      where: {
+        propertyId,
+        type: { in: ['TRANSFER_IN', 'PAYMENT', 'REFUND_OWED'] },
+      },
       orderBy: { createdAt: 'asc' },
     });
     
     const cityLedgerAllocations = await prisma.cityLedgerAllocation.findMany({
-      where: { payment: { propertyId, type: 'REFUND_OWED', status: 'OPEN' } },
+      where: { payment: { propertyId, type: { in: ['PAYMENT', 'REFUND_OWED'] } } },
       orderBy: { createdAt: 'asc' },
     });
 

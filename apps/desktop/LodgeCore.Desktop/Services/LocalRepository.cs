@@ -6548,7 +6548,7 @@ public class LocalRepository
             var paid = allocations.Where(a => a.InvoiceId == entry.InvoiceId).Sum(a => a.Amount);
             var corporate = corporates.FirstOrDefault(c => c.CityLedgerAccountId == entry.AccountId);
             return new {
-                entryId = entry.Id, accountId = entry.AccountId, invoiceId = entry.InvoiceId, invoiceNumber = entry.Id,
+                entryId = entry.Id, accountId = entry.AccountId, invoiceId = entry.InvoiceId, invoiceNumber = entry.Description ?? entry.Id,
                 accountType = corporate == null ? "SKIPPER" : "CORPORATE", accountName = corporate?.Name ?? "Skipper / Walkout",
                 guestName = entry.GuestId != null && guests.TryGetValue(entry.GuestId, out var name) ? name : null,
                 amount = entry.Amount, paidAmount = paid, outstandingAmount = Math.Max(0, entry.Amount - paid),
