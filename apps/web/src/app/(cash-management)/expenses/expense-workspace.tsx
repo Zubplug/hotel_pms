@@ -31,6 +31,14 @@ export function ExpenseWorkspace({ propertyId, expenses, categories, costCenters
   const paidExpenses = expenses.filter(expense => expense.status === 'PAID');
   const pendingAmount = pendingExpenses.reduce((sum, expense) => sum + expense.amount, 0);
   const paidAmount = paidExpenses.reduce((sum, expense) => sum + expense.amount, 0);
+  const categoryTotals = expenses.reduce<Record<string, number>>((totals, expense) => {
+    totals[expense.category] = (totals[expense.category] || 0) + expense.amount;
+    return totals;
+  }, {});
+  const topCategories = Object.entries(categoryTotals).sort(([, amountA], [, amountB]) => amountB - amountA).slice(0, 4);
+  const categoryMax = Math.max(...topCategories.map(([, amount]) => amount), 1);
+  const averageExpense = expenses.length ? expenses.reduce((sum, expense) => sum + expense.amount, 0) / expenses.length : 0;
+  const approvalRate = expenses.length ? Math.round(((approvedExpenses.length + paidExpenses.length) / expenses.length) * 100) : 0;
   const visibleExpenses = expenses.filter(expense => {
     const haystack = `${expense.expenseReference} ${expense.payee} ${expense.description} ${expense.category}`.toLowerCase();
     return (statusFilter === 'ALL' || expense.status === statusFilter) && (!search.trim() || haystack.includes(search.trim().toLowerCase()));
@@ -68,6 +76,13 @@ export function ExpenseWorkspace({ propertyId, expenses, categories, costCenters
         { label: 'Paid expenses', value: paidExpenses.length, detail: `₦${paidAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })} disbursed`, icon: CircleDollarSign, tone: 'bg-emerald-400/10 text-emerald-300' },
         { label: 'Total register', value: expenses.length, detail: 'Controlled expense records', icon: ListChecks, tone: 'bg-indigo-400/10 text-indigo-300' },
       ].map((card) => { const Icon = card.icon; return <div key={card.label} className="rounded-2xl border border-white/10 bg-white/[.045] p-5 shadow-sm"><div className="flex items-start justify-between"><div><p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">{card.label}</p><p className="mt-2 text-2xl font-black text-white">{card.value}</p><p className="mt-1 text-xs text-slate-500">{card.detail}</p></div><span className={`flex h-10 w-10 items-center justify-center rounded-xl ${card.tone}`}><Icon className="h-5 w-5" /></span></div></div>; })}
+    </div>
+    <div className="mb-6 grid gap-5 lg:grid-cols-[1.15fr_0.85fr]">
+      <section className="rounded-2xl border border-white/10 bg-white/[.045] p-6 shadow-sm">
+        <div className="flex items-start justify-between"><div><div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.15em] text-indigo-300"><BarChart3 className="h-4 w-4" />Disbursement intelligence</div><h2 className="mt-1 text-lg font-semibold text-white">Where safe cash is going</h2><p className="mt-1 text-sm text-slate-400">Live expense value by configured category.</p></div><CircleDollarSign className="h-5 w-5 text-emerald-300" /></div>
+        {topCategories.length === 0 ? <div className="flex h-32 items-center justify-center text-sm text-slate-500">No expense activity recorded.</div> : <div className="mt-6 space-y-4">{topCategories.map(([category, amount], index) => <div key={category}><div className="mb-2 flex items-center justify-between gap-3 text-sm"><span className="truncate font-medium text-slate-300">{category}</span><span className="font-semibold text-slate-200">₦{amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div><div className="h-2 overflow-hidden rounded-full bg-white/[.08]"><div className={`h-full rounded-full ${index === 0 ? 'bg-indigo-400' : index === 1 ? 'bg-cyan-400' : index === 2 ? 'bg-amber-400' : 'bg-slate-400'}`} style={{ width: `${Math.min((amount / categoryMax) * 100, 100)}%` }} /></div></div>)}</div>}
+      </section>
+      <section className="rounded-2xl border border-white/10 bg-[#101b2f] p-6 text-white shadow-sm"><div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.15em] text-emerald-300"><ShieldCheck className="h-4 w-4" />Control posture</div><h2 className="mt-2 text-lg font-semibold">Approval and payout health</h2><div className="mt-5 space-y-3"><div className="flex items-center justify-between rounded-xl bg-white/[.06] px-4 py-3"><span className="text-sm text-slate-300">Average expense</span><span className="font-bold text-white">₦{averageExpense.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div><div className="flex items-center justify-between rounded-xl bg-white/[.06] px-4 py-3"><span className="text-sm text-slate-300">Approved or paid</span><span className="font-bold text-emerald-300">{approvalRate}%</span></div><div className="flex items-center justify-between rounded-xl bg-white/[.06] px-4 py-3"><span className="text-sm text-slate-300">Cash awaiting decision</span><span className="font-bold text-amber-300">₦{pendingAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div></div></section>
     </div>
     {message && <div className={`mb-4 rounded-xl border px-4 py-3 text-sm ${feedback === 'success' ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300' : 'border-rose-400/20 bg-rose-400/10 text-rose-300'}`}>{message}</div>}
 

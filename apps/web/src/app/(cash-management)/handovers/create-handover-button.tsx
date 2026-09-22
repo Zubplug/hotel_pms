@@ -76,30 +76,30 @@ export function CreateHandoverButton({
       </Button>
 
       <Dialog open={open} onOpenChange={(v) => (state !== 'loading' ? setOpen(v) : undefined)}>
-        <DialogContent className="rounded-2xl border-slate-200 sm:max-w-lg">
+        <DialogContent className="rounded-2xl border-white/10 bg-[#101b2f] text-slate-100 sm:max-w-lg">
           {(state === 'idle' || state === 'loading') && (
             <>
               <DialogHeader>
-                <DialogTitle className="flex items-center gap-2 text-lg"><ArrowLeftRight className="h-5 w-5 text-indigo-600" />Create payment handover</DialogTitle>
-                <DialogDescription>
+                <DialogTitle className="flex items-center gap-2 text-lg text-white"><ArrowLeftRight className="h-5 w-5 text-indigo-300" />Create payment handover</DialogTitle>
+                <DialogDescription className="text-slate-400">
                   This places {totalSessions} approved shift{totalSessions !== 1 ? 's' : ''} into custody transfer. The receiving cashier must confirm physical receipt.
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-2">
-                <div className="rounded-xl border border-indigo-100 bg-indigo-50/60 p-4"><p className="text-xs font-semibold uppercase tracking-wider text-indigo-700">Transfer summary</p><p className="mt-1 text-sm font-semibold text-slate-800">{totalSessions} approved shift{totalSessions !== 1 ? 's' : ''} · ready for custody transfer</p><p className="mt-1 text-xs text-slate-500">The receiving cashier must confirm physical receipt before this custody step is complete.</p></div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600">Safe reference <span className="font-normal normal-case text-slate-400">(optional)</span><Input
+                <div className="rounded-xl border border-indigo-400/20 bg-indigo-400/10 p-4"><p className="text-xs font-semibold uppercase tracking-wider text-indigo-300">Transfer summary</p><p className="mt-1 text-sm font-semibold text-white">{totalSessions} approved shift{totalSessions !== 1 ? 's' : ''} · ready for custody transfer</p><p className="mt-1 text-xs text-slate-400">The receiving cashier must confirm physical receipt before this custody step is complete.</p></div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300">Safe reference <span className="font-normal normal-case text-slate-500">(optional)</span><Input
                   value={safeReference}
                   onChange={(e) => setSafeReference(e.target.value)}
                   placeholder="Enter a safe bag, seal, or internal reference"
                   disabled={state === 'loading'}
-                  className="mt-1.5 rounded-xl"
+                  className="mt-1.5 rounded-xl border-white/10 bg-white/[.05] text-white placeholder:text-slate-500"
                 /></label>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600">Custody notes <span className="font-normal normal-case text-slate-400">(optional)</span><Textarea
+                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300">Custody notes <span className="font-normal normal-case text-slate-500">(optional)</span><Textarea
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   placeholder="Add any handover observations or seal details"
                   disabled={state === 'loading'}
-                  className="mt-1.5 rounded-xl"
+                  className="mt-1.5 rounded-xl border-white/10 bg-white/[.05] text-white placeholder:text-slate-500"
                 /></label>
               </div>
               <DialogFooter>
@@ -123,11 +123,11 @@ export function CreateHandoverButton({
           {state === 'success' && (
             <>
               <DialogHeader>
-                <DialogTitle className="flex items-center gap-2">
-                  <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+                <DialogTitle className="flex items-center gap-2 text-white">
+                  <CheckCircle2 className="h-5 w-5 text-emerald-300" />
                   Handover Created
                 </DialogTitle>
-                <DialogDescription>
+                <DialogDescription className="text-slate-400">
                   The selected shifts are now pending receipt confirmation from the receiving cashier.
                 </DialogDescription>
               </DialogHeader>
@@ -147,8 +147,8 @@ export function CreateHandoverButton({
           {state === 'error' && (
             <>
               <DialogHeader>
-                <DialogTitle>Unable to Create Handover</DialogTitle>
-                <DialogDescription>{error}</DialogDescription>
+                <DialogTitle className="text-white">Unable to Create Handover</DialogTitle>
+                <DialogDescription className="text-slate-400">{error}</DialogDescription>
               </DialogHeader>
               <DialogFooter>
                 <Button onClick={() => setState('idle')}>Try Again</Button>

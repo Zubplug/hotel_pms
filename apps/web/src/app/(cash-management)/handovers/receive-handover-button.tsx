@@ -73,13 +73,13 @@ export function ReceiveHandoverButton({
         open={dialog !== null}
         onOpenChange={(open) => !open && !isReceiving && setDialog(null)}
       >
-        <DialogContent className="rounded-2xl border-slate-200 sm:max-w-lg">
+        <DialogContent className="rounded-2xl border-white/10 bg-[#101b2f] text-slate-100 sm:max-w-lg">
           {dialog === 'confirm' && (
             <>
               <DialogHeader>
-                <DialogTitle className="flex items-center gap-2 text-lg"><PackageCheck className="h-5 w-5 text-emerald-600" />Confirm physical receipt</DialogTitle>
-                <DialogDescription>This confirms that you received the physical cash and listed payment receipts. This action is recorded in the custody audit trail and cannot be undone.</DialogDescription>
-                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"><p className="font-semibold">Before confirming</p><p className="mt-1 text-xs leading-5 text-amber-800">Count the physical cash, verify the handover reference, and confirm the supporting receipts are present.</p></div>
+                <DialogTitle className="flex items-center gap-2 text-lg text-white"><PackageCheck className="h-5 w-5 text-emerald-300" />Confirm physical receipt</DialogTitle>
+                <DialogDescription className="text-slate-400">This confirms that you received the physical cash and listed payment receipts. This action is recorded in the custody audit trail and cannot be undone.</DialogDescription>
+                <div className="rounded-xl border border-amber-400/20 bg-amber-400/10 p-4 text-sm text-amber-200"><p className="font-semibold">Before confirming</p><p className="mt-1 text-xs leading-5 text-amber-200/80">Count the physical cash, verify the handover reference, and confirm the supporting receipts are present.</p></div>
               </DialogHeader>
               <DialogFooter>
                 <Button
@@ -102,11 +102,11 @@ export function ReceiveHandoverButton({
           {dialog === 'success' && (
             <>
               <DialogHeader>
-                <DialogTitle className="flex items-center gap-2">
-                  <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+                <DialogTitle className="flex items-center gap-2 text-white">
+                  <CheckCircle2 className="h-5 w-5 text-emerald-300" />
                   Payment Handover Received Successfully
                 </DialogTitle>
-                <DialogDescription>
+                <DialogDescription className="text-slate-400">
                   The cash is now in General Cashier custody and a pending bank deposit was created automatically.
                 </DialogDescription>
               </DialogHeader>
@@ -126,8 +126,8 @@ export function ReceiveHandoverButton({
           {dialog === 'error' && (
             <>
               <DialogHeader>
-                <DialogTitle>Unable to Receive Handover</DialogTitle>
-                <DialogDescription>{errorMessage}</DialogDescription>
+                <DialogTitle className="text-white">Unable to Receive Handover</DialogTitle>
+                <DialogDescription className="text-slate-400">{errorMessage}</DialogDescription>
               </DialogHeader>
               <DialogFooter>
                 <Button onClick={() => setDialog(null)}>Close</Button>

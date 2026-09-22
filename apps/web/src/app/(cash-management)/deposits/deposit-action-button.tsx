@@ -126,20 +126,20 @@ export function DepositActionButton({
           {dialog === 'submit' && (
             <>
               <DialogHeader>
-                <DialogTitle className="flex items-center gap-2 text-lg"><Upload className="h-5 w-5 text-indigo-600" />Submit deposit to bank</DialogTitle>
-                <DialogDescription>
+                <DialogTitle className="flex items-center gap-2 text-lg text-white"><Upload className="h-5 w-5 text-indigo-300" />Submit deposit to bank</DialogTitle>
+                <DialogDescription className="text-slate-400">
                   Confirm that the physical cash has been deposited. Enter the bank receipt or reference number if available.
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-2">
-                <div className="rounded-xl border border-indigo-100 bg-indigo-50/60 p-4 text-xs leading-5 text-indigo-900">Confirm the receiving bank account and record the bank evidence before submitting this deposit.</div>
+                <div className="rounded-xl border border-indigo-400/20 bg-indigo-400/10 p-4 text-xs leading-5 text-indigo-200">Confirm the receiving bank account and record the bank evidence before submitting this deposit.</div>
                 <div className="space-y-3">
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600">Receiving bank account<select value={bankAccountId} onChange={(e) => setBankAccountId(e.target.value)} className="mt-1.5 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm">
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300">Receiving bank account<select value={bankAccountId} onChange={(e) => setBankAccountId(e.target.value)} className="mt-1.5 h-11 w-full rounded-xl border border-white/10 bg-[#0b1628] px-3 text-sm text-white">
                     <option value="">Select configured bank account</option>
                     {bankAccounts.map((account) => <option key={account.id} value={account.id}>{account.name}{account.accountNumber ? ` · ${account.accountNumber}` : ''}</option>)}
                   </select></label>
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600">Bank reference<Input value={bankReference} onChange={(e) => setBankReference(e.target.value)} placeholder="Bank reference or receipt number" className="mt-1.5 rounded-xl" /></label>
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600">Receipt evidence <span className="font-normal normal-case text-slate-400">(optional)</span><Input value={bankReceiptUrl} onChange={(e) => setBankReceiptUrl(e.target.value)} placeholder="Secure receipt URL" className="mt-1.5 rounded-xl" /></label>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300">Bank reference<Input value={bankReference} onChange={(e) => setBankReference(e.target.value)} placeholder="Bank reference or receipt number" className="mt-1.5 rounded-xl border-white/10 bg-white/[.05] text-white placeholder:text-slate-500" /></label>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300">Receipt evidence <span className="font-normal normal-case text-slate-500">(optional)</span><Input value={bankReceiptUrl} onChange={(e) => setBankReceiptUrl(e.target.value)} placeholder="Secure receipt URL" className="mt-1.5 rounded-xl border-white/10 bg-white/[.05] text-white placeholder:text-slate-500" /></label>
                 </div>
               </div>
               <DialogFooter>
