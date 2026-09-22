@@ -127,7 +127,11 @@ class AuditorDashboardScreen extends ConsumerWidget {
           ),
           const SizedBox(width: 8),
           GestureDetector(
-            onTap: () => _showComingSoonPopup(context),
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const ProfileScreen()),
+              );
+            },
             child: const CircleAvatar(
               radius: 16,
               backgroundColor: surfaceNavy,

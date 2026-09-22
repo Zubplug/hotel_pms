@@ -371,7 +371,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
         const SizedBox(width: 2),
         // Avatar with user initials
         GestureDetector(
-          onTap: () => _showComingSoonPopup(context),
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const ProfileScreen()),
+            );
+          },
           child: Container(
             width: 36,
             height: 36,
