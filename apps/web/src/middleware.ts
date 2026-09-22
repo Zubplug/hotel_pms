@@ -166,6 +166,19 @@ export default auth((req) => {
     return Response.redirect(loginUrl);
   }
 
+  // Night Auditors must stay inside the Night Audit shell for City Ledger
+  // work. Redirect legacy Accountant links before the dashboard layout mounts
+  // to avoid a visible Accountant-shell flash.
+  const role = String((req.auth?.user as any)?.role || '').toUpperCase();
+  if (role === 'NIGHT_AUDITOR' && (
+    nextUrl.pathname === '/accountant/city-ledger' || nextUrl.pathname.startsWith('/accountant/city-ledger/') ||
+    nextUrl.pathname === '/accountant/guest-credits' || nextUrl.pathname.startsWith('/accountant/guest-credits/')
+  )) {
+    const target = new URL(`/night-audit${nextUrl.pathname.slice('/accountant'.length)}`, nextUrl);
+    target.search = nextUrl.search;
+    return Response.redirect(target);
+  }
+
   const moduleAccess = hasModuleAccess(req, nextUrl.pathname);
   if (!moduleAccess.allowed) {
     return Response.redirect(new URL(moduleAccess.redirectTo || '/hub', nextUrl));

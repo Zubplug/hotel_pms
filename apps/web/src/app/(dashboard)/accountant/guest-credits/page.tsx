@@ -12,9 +12,10 @@ export const revalidate = 0;
 const money = (amount: number, currency: string) => new Intl.NumberFormat('en-NG', { style: 'currency', currency, maximumFractionDigits: 0 }).format(amount);
 const date = (value: Date) => new Intl.DateTimeFormat('en-NG', { dateStyle: 'medium' }).format(value);
 
-export default async function GuestCreditsPage() {
+export default async function GuestCreditsPage({ allowNightAudit = false }: { allowNightAudit?: boolean } = {}) {
   const session = await auth();
   if (!session?.user) redirect('/login?callbackUrl=%2Faccountant%2Fguest-credits');
+  if (session.user.role === 'NIGHT_AUDITOR' && !allowNightAudit) redirect('/night-audit/guest-credits');
   const propertyId = session.user.propertyId;
   if (!propertyId) return <EmptyState title="No property assigned" />;
   const [property, entries] = await Promise.all([

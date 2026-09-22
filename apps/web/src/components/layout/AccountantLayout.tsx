@@ -73,7 +73,11 @@ export function AccountantLayout({ children }: { children: React.ReactNode }) {
     if (status === 'unauthenticated') {
       router.replace('/login');
     }
-  }, [status, router]);
+    const isNightAuditLedgerPath = pathname === '/accountant/city-ledger' || pathname.startsWith('/accountant/city-ledger/') || pathname === '/accountant/guest-credits' || pathname.startsWith('/accountant/guest-credits/');
+    if (status === 'authenticated' && session?.user && String((session.user as any).role || '').toUpperCase() === 'NIGHT_AUDITOR' && isNightAuditLedgerPath) {
+      router.replace(`/night-audit${pathname.slice('/accountant'.length)}`);
+    }
+  }, [status, session, pathname, router]);
 
   const userFullName = session?.user?.name?.trim() || 'Staff member';
   const userInitials = userFullName
@@ -95,6 +99,7 @@ export function AccountantLayout({ children }: { children: React.ReactNode }) {
   }
 
   if (status === 'unauthenticated' || !session?.user) return null;
+  if (String((session.user as any).role || '').toUpperCase() === 'NIGHT_AUDITOR' && (pathname === '/accountant/city-ledger' || pathname.startsWith('/accountant/city-ledger/') || pathname === '/accountant/guest-credits' || pathname.startsWith('/accountant/guest-credits/'))) return null;
 
   const Sidebar = ({ onNavigate }: { onNavigate?: () => void }) => (
     <div className="flex h-full flex-col bg-[#0b1120]">
@@ -118,7 +123,10 @@ export function AccountantLayout({ children }: { children: React.ReactNode }) {
               {section.name}
             </div>
             <div className="space-y-1">
-              {section.children.map((item) => {
+                {section.children.filter((item) => {
+                  const isNightAuditor = String((session.user as any).role || '').toUpperCase() === 'NIGHT_AUDITOR';
+                  return !(isNightAuditor && (item.href === '/accountant/city-ledger' || item.href === '/accountant/guest-credits'));
+                }).map((item) => {
                 const isActive = pathname === item.href || (item.href !== '/accountant' && pathname?.startsWith(item.href));
                 return (
                   <Link

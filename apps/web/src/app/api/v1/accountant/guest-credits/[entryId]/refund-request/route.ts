@@ -12,7 +12,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ ent
   try {
     const session = await auth();
     if (!session?.user?.id) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
-    if (!(session.user as any).capabilities?.includes('ACCESS_REFUNDS')) return errorResponse('FORBIDDEN', 'Refund permission is required.', 403);
+    const user = session.user as any;
+    const role = String(user.role || '').toUpperCase();
+    const capabilities = Array.isArray(user.capabilities) ? user.capabilities : [];
+    const canRequestRefund = user.isSuperAdmin || role === 'NIGHT_AUDITOR' || capabilities.includes('ACCESS_REFUNDS');
+    if (!canRequestRefund) return errorResponse('FORBIDDEN', 'Refund request permission is required.', 403);
     const { entryId } = await params;
     const body = await req.json().catch(() => ({}));
     const amount = Number(body.amount);
