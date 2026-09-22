@@ -44,7 +44,8 @@ export function A4ReportWrapper({
       <style jsx global>{`
         @page {
           size: A4 portrait;
-          margin: 0;
+          /* Real margins so content on pages 2+ isn't flush to the paper edge */
+          margin: 15mm 12mm;
         }
 
         @media print {
@@ -52,40 +53,63 @@ export function A4ReportWrapper({
           body {
             width: 210mm;
             min-width: 210mm;
+            height: auto !important;
             margin: 0 !important;
             padding: 0 !important;
             background: #fff !important;
+            overflow: visible !important;
           }
 
-          .night-audit-print-root,
-          .night-audit-a4-sheet {
+          /* Hide screen chrome */
+          .night-audit-screen-only {
+            display: none !important;
+          }
+
+          .night-audit-print-root {
             width: 210mm !important;
             min-width: 210mm !important;
             max-width: 210mm !important;
+            height: auto !important;
+            min-height: 0 !important;
+            max-height: none !important;
             margin: 0 !important;
             padding: 0 !important;
             overflow: visible !important;
           }
 
+          /* The sheet must NEVER clip — this was the primary cutoff bug */
           .night-audit-a4-sheet {
+            width: 100% !important;
             height: auto !important;
-            min-height: 297mm;
+            min-height: 0 !important;
             max-height: none !important;
-            break-after: page;
-            page-break-after: always;
+            overflow: visible !important;
+            box-shadow: none !important;
+            border-radius: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
           }
 
           .night-audit-a4-content {
             box-sizing: border-box;
-            width: 210mm;
+            width: 100%;
             height: auto !important;
-            min-height: 297mm;
+            min-height: 0 !important;
             max-height: none !important;
             overflow: visible !important;
+            padding: 0 !important; /* @page margin handles spacing */
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
           }
 
+          /* Header & footer: never split across a page break */
+          .night-audit-report-header,
+          .night-audit-report-footer {
+            break-inside: avoid;
+            page-break-inside: avoid;
+          }
+
+          /* Tables: repeat header on every page, rows don't split */
           .night-audit-a4-content table {
             page-break-inside: auto;
           }
@@ -104,6 +128,7 @@ export function A4ReportWrapper({
           }
         }
       `}</style>
+
       <div className="night-audit-print-root relative min-h-screen overflow-x-auto py-10 print:overflow-visible print:bg-white print:py-0">
       {/* Dark premium background (hidden during print) */}
       <div className="fixed inset-0 pointer-events-none -z-10 print:hidden" style={{ background: 'linear-gradient(160deg, #060b18 0%, #080e1f 60%, #0a0c22 100%)' }} />
@@ -131,8 +156,8 @@ export function A4ReportWrapper({
         </div>
       </div>
 
-      {/* A4 Paper Container */}
-      <div className="night-audit-a4-sheet mx-auto w-[210mm] overflow-hidden rounded-xl bg-white shadow-[0_30px_100px_-15px_rgba(0,0,0,0.8)] ring-1 ring-white/20 print:rounded-none print:shadow-none print:ring-0">
+      {/* A4 Paper Container — overflow must NOT be hidden; content must flow freely to page 2+ */}
+      <div className="night-audit-a4-sheet mx-auto w-[210mm] overflow-visible rounded-xl bg-white shadow-[0_30px_100px_-15px_rgba(0,0,0,0.8)] ring-1 ring-white/20 print:rounded-none print:shadow-none print:ring-0">
         
         {/* Report Content Wrapper */}
         <div className="night-audit-a4-content relative p-10 font-sans text-[11px] leading-relaxed text-slate-900">
@@ -141,7 +166,7 @@ export function A4ReportWrapper({
           <div className="absolute inset-0 pointer-events-none opacity-[0.02] print:hidden" style={{ backgroundImage: 'radial-gradient(#000 1px, transparent 1px)', backgroundSize: '20px 20px' }}></div>
           
           {/* Header */}
-          <div className="border-b-[3px] border-slate-900 pb-5 mb-6 flex justify-between items-start gap-4">
+          <div className="night-audit-report-header border-b-[3px] border-slate-900 pb-5 mb-6 flex justify-between items-start gap-4">
             
             {/* Left: Property Info (Letterhead style) */}
             <div className="flex-1">
@@ -187,12 +212,12 @@ export function A4ReportWrapper({
           </div>
 
           {/* Body */}
-          <div className="min-h-[500px]">
+          <div>
             {children}
           </div>
 
           {/* Footer */}
-          <div className="border-t border-slate-200 mt-12 pt-4 flex justify-between items-center text-[9px] text-slate-400">
+          <div className="night-audit-report-footer border-t border-slate-200 mt-12 pt-4 flex justify-between items-center text-[9px] text-slate-400">
             <p>
               * This report represents transactions recorded against the specified business date. 
               Variances may occur if transactions are backdated after generation.
