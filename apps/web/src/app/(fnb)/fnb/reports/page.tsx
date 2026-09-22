@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import {
-  BarChart3, RefreshCw, Loader2, Store, Box, Calendar, Calculator, Printer, CheckCircle2, AlertTriangle, WalletCards, ClipboardCheck, Scale, ChevronDown
+  BarChart3, RefreshCw, Loader2, Store, Box, Calendar, Calculator, Printer, CheckCircle2, AlertTriangle, WalletCards, ClipboardCheck, Scale, ChevronDown, ArrowUpRight, Clock3, CircleDollarSign, Percent, PackageCheck
 } from 'lucide-react';
 import { useProperty } from '@/components/PropertyProvider';
 import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
@@ -126,6 +126,12 @@ export default function FnbReportsPage() {
       .finally(() => setLoading(false));
   }, [session, propertyId, dateRange, selectedOutlet, selectedWarehouse, refreshToken]);
 
+  useEffect(() => {
+    if (!propertyId || !dateRange.start || !dateRange.end) return;
+    const interval = window.setInterval(() => setRefreshToken(v => v + 1), 60_000);
+    return () => window.clearInterval(interval);
+  }, [propertyId, dateRange.start, dateRange.end, selectedOutlet, selectedWarehouse]);
+
   const handlePrint = (mode: 'dss' | 'inventory') => {
     setShowPrintMenu(false);
     setPrintMode(mode);
@@ -151,6 +157,28 @@ export default function FnbReportsPage() {
   const selectedWarehouseName = selectedWarehouse ? warehouses.find(w => w.id === selectedWarehouse)?.name : 'All Warehouses';
   const displayDate = dateRange.start === dateRange.end ? dateRange.start : `${dateRange.start} to ${dateRange.end}`;
   const propertyName = (session?.user as any)?.organizationName || 'Hotel Property';
+  const paymentTotal = data?.tenderBreakdown?.reduce((acc: number, tender: any) => acc + Number(tender.amount || 0), 0) || 0;
+  const leadingTender = [...(data?.tenderBreakdown || [])].sort((a: any, b: any) => Number(b.amount || 0) - Number(a.amount || 0))[0];
+  const stockVarianceCount = data?.inventoryMovement?.filter((row: any) => Number(row.variance || 0) !== 0).length || 0;
+  const cogsVariancePct = data?.summary?.netRevenue > 0 ? (Math.abs(Number(data.profitability.cogsVariance || 0)) / Number(data.summary.netRevenue)) * 100 : 0;
+
+  const shiftDate = (days: number) => {
+    const date = new Date();
+    date.setDate(date.getDate() + days);
+    return date.toISOString().slice(0, 10);
+  };
+
+  const setReportPreset = (preset: 'today' | 'yesterday' | 'week' | 'month') => {
+    const today = shiftDate(0);
+    if (preset === 'today') return setDateRange({ start: today, end: today });
+    if (preset === 'yesterday') {
+      const yesterday = shiftDate(-1);
+      return setDateRange({ start: yesterday, end: yesterday });
+    }
+    const start = new Date();
+    start.setDate(start.getDate() - (preset === 'week' ? 6 : 29));
+    setDateRange({ start: start.toISOString().slice(0, 10), end: today });
+  };
 
   return (
     <>
@@ -380,7 +408,7 @@ export default function FnbReportsPage() {
       {/* ── SCREEN-ONLY VIEW: BEAUTIFUL INTERACTIVE DASHBOARD    ── */}
       {/* ────────────────────────────────────────────────────────── */}
 
-      <div className="screen-only min-h-full bg-[#fbf8f6] px-4 pb-16 pt-6 sm:px-6 sm:pt-8 md:px-8">
+      <div className="screen-only fnb-dark-surface min-h-full bg-[#07111f] px-4 pb-16 pt-6 sm:px-6 sm:pt-8 md:px-8">
         <div className="mx-auto max-w-[1540px] space-y-6">
           {/* ── UI Header ── */}
           <header className="relative z-30 overflow-visible rounded-[28px] bg-[#2b1710] px-6 py-7 text-white shadow-[0_18px_50px_rgba(70,35,20,0.16)] sm:px-8 lg:flex lg:items-end lg:justify-between lg:gap-8">
@@ -403,6 +431,18 @@ export default function FnbReportsPage() {
 
             {/* Filters */}
             <div className="relative flex flex-wrap items-center gap-2 rounded-2xl border border-white/10 bg-white/10 p-2 backdrop-blur-sm">
+              <div className="flex items-center gap-1 rounded-xl border border-white/10 bg-black/10 p-1">
+                {(['today', 'yesterday', 'week', 'month'] as const).map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => setReportPreset(preset)}
+                    className="rounded-lg px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-300 transition hover:bg-white/10 hover:text-white"
+                  >
+                    {preset === 'week' ? '7 days' : preset === 'month' ? '30 days' : preset}
+                  </button>
+                ))}
+              </div>
               <div className="flex items-center gap-2 rounded-xl bg-white px-3">
                 <Calendar className="h-4 w-4 text-[#a95524]" />
                 <input aria-label="Report start date" type="date" value={dateRange.start} onChange={e => setDateRange({...dateRange, start: e.target.value})} className="h-9 bg-transparent text-sm font-semibold text-[#3b2116] outline-none" />
@@ -423,6 +463,10 @@ export default function FnbReportsPage() {
                   {warehouses.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
                 </select>
               </div>
+              <span className="hidden items-center gap-1.5 px-1 text-[10px] font-semibold uppercase tracking-wider text-emerald-300 xl:inline-flex" title="Reports refresh automatically every 60 seconds">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.9)]" />
+                Live
+              </span>
               <button
                 onClick={() => setRefreshToken(v => v + 1)}
                 aria-label="Refresh report"
@@ -479,6 +523,10 @@ export default function FnbReportsPage() {
                       <span className="mx-1.5 text-slate-300">·</span>
                       {data.summary.totalVoids > 0 ? `${money(data.summary.totalVoids)} voided` : 'No voids'}
                     </p>
+                    <div className="mt-4 flex flex-wrap items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                      <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 px-2.5 py-1"><Clock3 className="h-3 w-3 text-indigo-500" /> Auto refresh 60s</span>
+                      <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 px-2.5 py-1"><ArrowUpRight className="h-3 w-3 text-emerald-500" /> {paymentTotal > 0 ? 'Settlement activity present' : 'Awaiting settlement activity'}</span>
+                    </div>
                   </div>
                   <span className={`inline-flex items-center gap-2 self-start rounded-full border px-4 py-2 text-xs font-bold ${
                     data.summary.netRevenue > 0
@@ -518,6 +566,16 @@ export default function FnbReportsPage() {
                       <p className="mt-2 text-sm font-bold text-[#2b1710]">{data.summary.totalVoids > 0 ? 'Review void activity' : 'No void escalation'}</p>
                       <p className="mt-1 text-[11px] text-[#8d7568]">{money(data.summary.totalVoids)} void value recorded</p>
                     </div>
+                    <div className="rounded-2xl bg-[#fbf8f6] p-4">
+                      <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-[#9a7764]">Settlement signal</p>
+                      <p className="mt-2 text-sm font-bold text-[#2b1710]">{leadingTender ? leadingTender.method.replace(/_/g, ' ') : 'No tender data'}</p>
+                      <p className="mt-1 text-[11px] text-[#8d7568]">{leadingTender ? `${money(leadingTender.amount)} leading tender` : 'No captured payments in scope'}</p>
+                    </div>
+                    <div className="rounded-2xl bg-[#fbf8f6] p-4">
+                      <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-[#9a7764]">Stock integrity</p>
+                      <p className="mt-2 text-sm font-bold text-[#2b1710]">{stockVarianceCount ? `${stockVarianceCount} variance${stockVarianceCount === 1 ? '' : 's'}` : 'Ledger balanced'}</p>
+                      <p className="mt-1 text-[11px] text-[#8d7568]">{selectedWarehouse ? selectedWarehouseName : 'Select a warehouse to prove stock'}</p>
+                    </div>
                   </div>
                 </div>
                 <div className="rounded-[22px] border border-[#ead7ca] bg-[#2b1710] p-5 text-white shadow-sm sm:p-6">
@@ -543,6 +601,41 @@ export default function FnbReportsPage() {
                 <StatCard label="Spend per Cover" value={money(data.statistics.spendPerCover)} detail="Per Guest" accent="bg-white text-slate-900 border-slate-200 shadow-sm" />
                 <StatCard label="Net F&B Revenue" value={money(data.summary.netRevenue)} detail="Excl. Taxes & Voids" accent="bg-[#fbf1eb] text-[#3b2116] border-[#ead7ca] shadow-sm" />
                 <StatCard label="Gross Margin" value={pct(data.profitability.grossMarginPct)} detail={`Actual COGS: ${money(data.profitability.actualCogs)}`} accent="bg-[#f5efe8] text-[#3b2116] border-[#e2d4c8] shadow-sm" />
+              </section>
+
+              <section className="grid gap-4 lg:grid-cols-3">
+                <div className="rounded-[22px] border border-[#ead7ca] bg-white p-5 shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <div><p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#b85f29]">Revenue engine</p><h3 className="mt-1 text-sm font-bold text-[#2b1710]">Class contribution</h3></div>
+                    <CircleDollarSign className="h-5 w-5 text-[#c96f32]" />
+                  </div>
+                  <div className="mt-5 space-y-3">
+                    {[['Food', data.summary.foodGross, '#b85f29'], ['Beverage', data.summary.bevGross, '#d98245'], ['Other', data.summary.otherGross, '#e5b27f']].map(([label, value, color]) => {
+                      const share = Number(data.summary.grossRevenue || 0) > 0 ? Number(value || 0) / Number(data.summary.grossRevenue) * 100 : 0;
+                      return <div key={String(label)}><div className="mb-1.5 flex justify-between text-xs"><span className="font-semibold text-slate-700">{label}</span><span className="font-bold text-slate-900">{share.toFixed(1)}%</span></div><div className="h-2 rounded-full bg-slate-100"><div className="h-2 rounded-full" style={{ width: `${Math.min(100, share)}%`, backgroundColor: String(color) }} /></div></div>;
+                    })}
+                  </div>
+                </div>
+                <div className="rounded-[22px] border border-[#ead7ca] bg-white p-5 shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <div><p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#b85f29]">Margin guardrail</p><h3 className="mt-1 text-sm font-bold text-[#2b1710]">Actual vs recipe cost</h3></div>
+                    <Percent className="h-5 w-5 text-[#c96f32]" />
+                  </div>
+                  <div className="mt-5 flex items-end justify-between"><div><p className="text-2xl font-black text-slate-900">{pct(data.profitability.actualCostPct)}</p><p className="mt-1 text-[11px] text-slate-500">Actual cost of net</p></div><div className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${data.profitability.cogsVariance > 0 ? 'bg-rose-50 text-rose-700' : 'bg-emerald-50 text-emerald-700'}`}>{data.profitability.cogsVariance > 0 ? '+' : ''}{money(data.profitability.cogsVariance)}</div></div>
+                  <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-[#c96f32]" style={{ width: `${Math.min(100, Number(data.profitability.actualCostPct || 0))}%` }} /></div>
+                  <p className="mt-3 text-[11px] text-slate-500">{cogsVariancePct > 0 ? `${cogsVariancePct.toFixed(1)}% of net revenue is outside the recipe cost baseline.` : 'No COGS variance recorded in the selected scope.'}</p>
+                </div>
+                <div className="rounded-[22px] border border-[#ead7ca] bg-white p-5 shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <div><p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#b85f29]">Control readiness</p><h3 className="mt-1 text-sm font-bold text-[#2b1710]">Closeout signals</h3></div>
+                    <PackageCheck className="h-5 w-5 text-[#c96f32]" />
+                  </div>
+                  <div className="mt-4 space-y-2.5 text-xs">
+                    <div className="flex items-center justify-between"><span className="text-slate-500">Captured tenders</span><span className="font-bold text-slate-900">{money(paymentTotal)}</span></div>
+                    <div className="flex items-center justify-between"><span className="text-slate-500">Void exposure</span><span className={`font-bold ${data.summary.totalVoids > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>{money(data.summary.totalVoids)}</span></div>
+                    <div className="flex items-center justify-between"><span className="text-slate-500">Stock exceptions</span><span className={`font-bold ${stockVarianceCount ? 'text-rose-600' : 'text-emerald-600'}`}>{stockVarianceCount}</span></div>
+                  </div>
+                </div>
               </section>
 
               <section className="rounded-[22px] border border-[#ead7ca] bg-white p-5 shadow-sm sm:p-6">

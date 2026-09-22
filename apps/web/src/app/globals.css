@@ -118,6 +118,44 @@
 .fnb-dark-surface .hover\:bg-white:hover,
 .fnb-dark-surface .hover\:bg-\[\#fffaf6\]:hover { background-color: rgba(255, 255, 255, 0.08) !important; }
 
+/* Reports and legacy F&B views use a few literal warm-light utility classes.
+   Keep their accent colors, but make the entire reporting canvas and its
+   tables/cards belong to the same dark operations workspace. */
+.fnb-dark-surface .bg-\[\#fbf8f6\] { background-color: #07111f !important; }
+.fnb-dark-surface .bg-\[\#fbf1eb\] { background-color: rgba(249, 115, 22, 0.14) !important; }
+.fnb-dark-surface .bg-\[\#f5efe8\] { background-color: rgba(255, 255, 255, 0.055) !important; }
+.fnb-dark-surface .bg-\[\#f3e8df\] { background-color: rgba(148, 163, 184, 0.16) !important; }
+.fnb-dark-surface .bg-slate-50,
+.fnb-dark-surface .bg-slate-50\/30,
+.fnb-dark-surface .bg-slate-50\/50 { background-color: rgba(255, 255, 255, 0.035) !important; }
+.fnb-dark-surface .border,
+.fnb-dark-surface .border-slate-100,
+.fnb-dark-surface .border-slate-200,
+.fnb-dark-surface .border-\[\#ead7ca\],
+.fnb-dark-surface .border-\[\#e2d4c8\] { border-color: rgba(255, 255, 255, 0.10) !important; }
+.fnb-dark-surface .divide-slate-100 > :not([hidden]) ~ :not([hidden]) { border-color: rgba(255, 255, 255, 0.08) !important; }
+.fnb-dark-surface .text-slate-950,
+.fnb-dark-surface .text-slate-900,
+.fnb-dark-surface .text-slate-800 { color: #f8fafc !important; }
+.fnb-dark-surface .text-slate-700,
+.fnb-dark-surface .text-slate-600 { color: #cbd5e1 !important; }
+.fnb-dark-surface .text-\[\#2b1710\],
+.fnb-dark-surface .text-\[\#3b2116\],
+.fnb-dark-surface .text-\[\#4a3024\] { color: #f8fafc !important; }
+.fnb-dark-surface .text-\[\#8d7568\],
+.fnb-dark-surface .text-\[\#9a7764\] { color: #94a3b8 !important; }
+.fnb-dark-surface .text-\[\#8e4927\] { color: #fdba74 !important; }
+.fnb-dark-surface .text-indigo-900 { color: #c7d2fe !important; }
+.fnb-dark-surface .bg-indigo-50\/50 { background-color: rgba(99, 102, 241, 0.12) !important; }
+.fnb-dark-surface .text-indigo-700 { color: #a5b4fc !important; }
+.fnb-dark-surface .text-rose-600 { color: #fda4af !important; }
+.fnb-dark-surface .bg-rose-50 { background-color: rgba(244, 63, 94, 0.14) !important; }
+.fnb-dark-surface .text-emerald-700 { color: #6ee7b7 !important; }
+.fnb-dark-surface .bg-emerald-50 { background-color: rgba(16, 185, 129, 0.14) !important; }
+.fnb-dark-surface .bg-amber-50 { background-color: rgba(245, 158, 11, 0.14) !important; }
+.fnb-dark-surface .text-amber-700 { color: #fcd34d !important; }
+.fnb-dark-surface .hover\:bg-slate-50\/50:hover { background-color: rgba(255, 255, 255, 0.06) !important; }
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
