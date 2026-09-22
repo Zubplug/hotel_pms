@@ -6,7 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import {
   Hotel, Menu, MoonStar, Clock, FileText, LogOut, ChevronDown,
-  Server, ShieldCheck, BedDouble, Scale, Wallet, Banknote,
+  ShieldCheck, BedDouble, Scale, Wallet, Banknote,
   X, ChevronRight, Radio, Zap, Utensils
 } from 'lucide-react';
 import {
@@ -28,7 +28,6 @@ const NIGHT_AUDIT_NAV = [
   { name: 'Guest Credits',           href: '/night-audit/guest-credits',     icon: Wallet,      group: 'Controls'  },
   { name: 'AP Ledger',               href: '/night-audit/ap-ledger',         icon: Banknote,    group: 'Controls'  },
   { name: 'Audit Reports',           href: '/night-audit/reports',           icon: FileText,    group: 'Insights'  },
-  { name: 'System & Sync',           href: '/night-audit/system',            icon: Server,      group: 'Insights'  },
 ];
 
 const GROUPS = ['Workspace', 'Controls', 'Insights'] as const;
