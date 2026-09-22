@@ -128,12 +128,14 @@ export function A4ReportWrapper({
   );
 
   const ReportFooter = () => (
-    <div className="border-t border-slate-200 mt-6 print:mt-0 pt-3 flex justify-between items-center text-[9px] text-slate-400 bg-white">
-      <p>
-        * This report represents transactions recorded against the specified business date.{' '}
+    <div className="border-t-2 border-slate-300 mt-6 print:mt-0 pt-2 flex justify-between items-end text-[8px] text-slate-500 bg-white">
+      <div className="max-w-[75%] leading-relaxed">
+        * This report represents transactions recorded against the specified business date. 
         Variances may occur if transactions are backdated after generation.
-      </p>
-      <p>LodgeCore PMS &copy; {new Date().getFullYear()}</p>
+      </div>
+      <div className="text-right font-semibold text-slate-600 pb-0.5">
+        LodgeCore PMS &copy; {new Date().getFullYear()}
+      </div>
     </div>
   );
 
@@ -143,7 +145,7 @@ export function A4ReportWrapper({
       <style jsx global>{`
         @page {
           size: A4 portrait;
-          margin: 0;
+          margin: 15mm 10mm 25mm 10mm; /* top right bottom left */
         }
 
         @media print {
@@ -180,10 +182,8 @@ export function A4ReportWrapper({
           /* Show the flat print layer */
           .na-print-layer {
             display: block !important;
-            width: 210mm;
+            width: 100%;
             box-sizing: border-box;
-            padding: 10mm;
-            padding-bottom: 25mm; /* Space for the fixed footer */
             font-family: ui-sans-serif, system-ui, sans-serif;
             font-size: 11px;
             line-height: 1.6;
@@ -228,10 +228,10 @@ export function A4ReportWrapper({
           /* Footer: Fixed to the bottom of every printed page */
           .na-print-footer {
             position: fixed;
-            bottom: 0;
+            bottom: -20mm; /* Inside the 25mm bottom margin */
             left: 0;
             width: 100%;
-            padding: 0 10mm 10mm 10mm;
+            height: 20mm;
             box-sizing: border-box;
             background: white;
             z-index: 10;
