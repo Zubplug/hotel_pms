@@ -37,7 +37,14 @@ const buildTimeImportBridges = [
   path.join(process.cwd(), 'src/app/(dashboard)/general-manager/night-audit/reports/print/in-house-guests/page.tsx'),
   path.join(process.cwd(), 'src/app/(dashboard)/general-manager/night-audit/reports/print/managers-flash/page.tsx'),
   path.join(process.cwd(), 'src/app/(dashboard)/general-manager/night-audit/reports/print/trial-balance/page.tsx'),
-  path.join(process.cwd(), 'src/app/(dashboard)/general-manager/night-audit/rooms/page.tsx')
+  path.join(process.cwd(), 'src/app/(dashboard)/general-manager/night-audit/rooms/page.tsx'),
+  path.join(process.cwd(), 'src/app/night-audit/city-ledger/[id]/page.tsx'),
+  path.join(process.cwd(), 'src/app/night-audit/city-ledger/accounts/page.tsx'),
+  path.join(process.cwd(), 'src/app/night-audit/city-ledger/credits/page.tsx'),
+  path.join(process.cwd(), 'src/app/night-audit/city-ledger/invoices/page.tsx'),
+  path.join(process.cwd(), 'src/app/night-audit/city-ledger/page.tsx'),
+  path.join(process.cwd(), 'src/app/night-audit/city-ledger/payments/page.tsx'),
+  path.join(process.cwd(), 'src/app/night-audit/guest-credits/page.tsx')
 ];
 const originalBridgeContents = new Map();
 
@@ -58,6 +65,7 @@ try {
     bridgedContents = bridgedContents.replaceAll("@/app/(cash-management)/", "@/app/_cash-management/");
     bridgedContents = bridgedContents.replaceAll("@/app/(fnb)/", "@/app/_fnb/");
     bridgedContents = bridgedContents.replaceAll("@/app/night-audit/", "@/app/_night-audit/");
+    bridgedContents = bridgedContents.replaceAll("@/app/(dashboard)/", "@/app/_dashboard/");
     
     let buildFile = file;
     buildFile = buildFile.replace(`${path.sep}app${path.sep}(cash-management)${path.sep}`, `${path.sep}app${path.sep}_cash-management${path.sep}`);
