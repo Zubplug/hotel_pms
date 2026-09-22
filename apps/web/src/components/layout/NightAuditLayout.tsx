@@ -24,6 +24,7 @@ const NIGHT_AUDIT_NAV = [
   { name: 'Room & Guest Control',    href: '/night-audit/rooms',             icon: BedDouble,   group: 'Controls'  },
   { name: 'F&B Activity',            href: '/night-audit/fnb',               icon: Utensils,    group: 'Controls'  },
   { name: 'AR Ledger',               href: '/night-audit/ar-ledger',         icon: Wallet,      group: 'Controls'  },
+  { name: 'City Ledger',             href: '/night-audit/city-ledger',       icon: Wallet,      group: 'Controls'  },
   { name: 'AP Ledger',               href: '/night-audit/ap-ledger',         icon: Banknote,    group: 'Controls'  },
   { name: 'Audit Reports',           href: '/night-audit/reports',           icon: FileText,    group: 'Insights'  },
   { name: 'System & Sync',           href: '/night-audit/system',            icon: Server,      group: 'Insights'  },

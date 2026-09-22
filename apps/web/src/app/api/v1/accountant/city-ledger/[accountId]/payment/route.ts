@@ -37,7 +37,7 @@ export async function POST(
 
     // Permission enforcement
     const userRole = session.user.role || 'UNKNOWN';
-    const isAccountant = ['ACCOUNTANT', 'MANAGER', 'HOTEL_MANAGER', 'FINANCE_MANAGER', 'ADMIN', 'SUPER_ADMIN'].includes(userRole);
+    const isAccountant = ['ACCOUNTANT', 'NIGHT_AUDITOR', 'MANAGER', 'HOTEL_MANAGER', 'FINANCE_MANAGER', 'ADMIN', 'SUPER_ADMIN'].includes(userRole);
     const canCollect = isAccountant || await hasPermission(session.user.id, 'receivables', 'collect', account.propertyId);
     
     if (!canCollect) {

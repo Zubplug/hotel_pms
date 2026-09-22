@@ -7,10 +7,11 @@ import { CityLedgerDetailClient } from './client';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-export default async function CityLedgerDetailPage(props: { params: Promise<{ id: string }> }) {
+export default async function CityLedgerDetailPage(props: { params: Promise<{ id: string }>; allowNightAudit?: boolean }) {
   const params = await props.params;
   const session = await auth();
   if (!session?.user) redirect('/login');
+  if (session.user.role === 'NIGHT_AUDITOR' && !props.allowNightAudit) redirect(`/night-audit/city-ledger/${params.id}`);
   
   const ctx = await requireOrganizationContext(session.user.id);
 

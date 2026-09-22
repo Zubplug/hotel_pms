@@ -27,9 +27,10 @@ const money = (value: number, currency: string, compact = false) => new Intl.Num
 const age = (dueDate: Date, now: number) => Math.max(0, Math.floor((now - dueDate.getTime()) / 86_400_000));
 const agingKey = (days: number): AgingKey => days <= 30 ? 'CURRENT' : days <= 60 ? '31_60' : days <= 90 ? '61_90' : 'OVER_90';
 
-export default async function CityLedgerPage() {
+export default async function CityLedgerPage({ allowNightAudit = false }: { allowNightAudit?: boolean } = {}) {
   const session = await auth();
   if (!session?.user) redirect('/login?callbackUrl=%2Faccountant%2Fcity-ledger');
+  if (session.user.role === 'NIGHT_AUDITOR' && !allowNightAudit) redirect('/night-audit/city-ledger');
   const propertyId = session.user.propertyId;
   if (!propertyId) return <EmptyState title="No property assigned" message="Your user account is not assigned to a property." />;
 

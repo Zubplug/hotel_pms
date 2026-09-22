@@ -22,7 +22,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ acc
     if (!account || !ctx.propertyIds.includes(account.propertyId)) return errorResponse('FORBIDDEN', 'City ledger account is not accessible', 403);
     if (account.type !== 'CORPORATE') return errorResponse('INVALID_STATE', 'Only corporate accounts can hold unapplied receipts.', 409);
     const role = session.user.role || 'UNKNOWN';
-    const allowed = ['ACCOUNTANT', 'MANAGER', 'HOTEL_MANAGER', 'FINANCE_MANAGER', 'ADMIN', 'SUPER_ADMIN'].includes(role) || await hasPermission(session.user.id, 'receivables', 'collect', account.propertyId);
+    const allowed = ['ACCOUNTANT', 'NIGHT_AUDITOR', 'MANAGER', 'HOTEL_MANAGER', 'FINANCE_MANAGER', 'ADMIN', 'SUPER_ADMIN'].includes(role) || await hasPermission(session.user.id, 'receivables', 'collect', account.propertyId);
     if (!allowed) return errorResponse('FORBIDDEN', 'Insufficient permissions to allocate receivables cash.', 403);
 
     const result = await prisma.$transaction(async tx => {

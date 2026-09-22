@@ -7,7 +7,7 @@ import { GeneralLedgerService } from '@/lib/services/general-ledger-service';
 import { getPropertyBusinessDate } from '@/lib/date-utils';
 import prisma from '@hotel-pms/db';
 
-const ACCOUNTANT_ROLES = ['ACCOUNTANT', 'MANAGER', 'HOTEL_MANAGER', 'FINANCE_MANAGER', 'ADMIN', 'SUPER_ADMIN'];
+const ACCOUNTANT_ROLES = ['ACCOUNTANT', 'NIGHT_AUDITOR', 'MANAGER', 'HOTEL_MANAGER', 'FINANCE_MANAGER', 'ADMIN', 'SUPER_ADMIN'];
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ accountId: string; paymentId: string }> }) {
   try {
