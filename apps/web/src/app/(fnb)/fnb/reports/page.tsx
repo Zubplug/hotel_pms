@@ -164,6 +164,10 @@ export default function FnbReportsPage() {
   const waiterShiftSummary = data?.waiterShiftSummary || [];
   const waiterNetSales = waiterShiftSummary.reduce((sum: number, waiter: any) => sum + Number(waiter.netSales || 0), 0);
   const waiterOpenChecks = waiterShiftSummary.reduce((sum: number, waiter: any) => sum + Number(waiter.openChecks || 0), 0);
+  const waiterPaymentMethods = Array.from(new Set(waiterShiftSummary.flatMap((waiter: any) => (waiter.tenders || []).map((tender: any) => tender.method)))).sort() as string[];
+
+  const printDateTime = (value: string | null | undefined) => value ? new Date(value).toLocaleString() : 'Open';
+  const waiterTenderAmount = (waiter: any, method: string) => Number(waiter.tenders?.find((tender: any) => tender.method === method)?.amount || 0);
 
   const shiftDate = (days: number) => {
     const date = new Date();
@@ -427,10 +431,10 @@ export default function FnbReportsPage() {
             <PrintMetric label="Open checks" value={String(waiterOpenChecks)} />
             <PrintMetric label="Total tips" value={money(waiterShiftSummary.reduce((sum: number, waiter: any) => sum + Number(waiter.tips || 0), 0))} />
           </div>
-          <table className="w-full text-[10px]">
+          <table className="w-full text-[9px]">
             <thead>
               <tr className="border-b-2 border-slate-900">
-                {['Waiter', 'Outlet', 'Shifts', 'Checks', 'Closed', 'Open', 'Covers', 'Net Sales', 'Avg Check', 'Tips', 'Voids', 'Shift Status'].map((heading) => (
+                {['Waiter', 'Outlet', 'Shifts', 'Checks', 'Closed', 'Open', 'Covers', 'Gross', 'Allowances', 'Net Sales', 'Guest Charge', 'Avg Check', ...waiterPaymentMethods.map((method) => method.replace(/_/g, ' ')), 'Tips', 'Voids', 'Shift Status'].map((heading) => (
                   <th key={heading} className="py-2 text-left font-bold text-slate-900 uppercase tracking-wider">{heading}</th>
                 ))}
               </tr>
@@ -445,16 +449,45 @@ export default function FnbReportsPage() {
                   <td className="py-2 text-slate-700">{waiter.closedChecks}</td>
                   <td className="py-2 text-slate-700">{waiter.openChecks}</td>
                   <td className="py-2 text-slate-700">{waiter.covers}</td>
+                  <td className="py-2 text-slate-700">{money(waiter.grossSales)}</td>
+                  <td className="py-2 text-slate-700">{money(waiter.discounts)}</td>
                   <td className="py-2 font-bold text-slate-900">{money(waiter.netSales)}</td>
+                  <td className="py-2 text-slate-700">{money(waiter.guestCharge)}</td>
                   <td className="py-2 text-slate-700">{money(waiter.averageCheck)}</td>
+                  {waiterPaymentMethods.map((method) => <td key={method} className="py-2 text-slate-700">{money(waiterTenderAmount(waiter, method))}</td>)}
                   <td className="py-2 text-slate-700">{money(waiter.tips)}</td>
                   <td className="py-2 text-slate-700">{waiter.voids}</td>
                   <td className="py-2 text-slate-700">{waiter.shiftStatuses?.join(', ') || '—'}</td>
                 </tr>
               ))}
-              {!waiterShiftSummary.length && <tr><td colSpan={12} className="py-8 text-center text-slate-500">No waiter-assigned POS activity in this scope.</td></tr>}
+              {!waiterShiftSummary.length && <tr><td colSpan={15 + waiterPaymentMethods.length} className="py-8 text-center text-slate-500">No waiter-assigned POS activity in this scope.</td></tr>}
             </tbody>
           </table>
+          <div className="mt-8 page-break-before">
+            <h2 className="mb-3 border-b border-slate-300 pb-2 text-sm font-bold uppercase tracking-wider text-slate-900">Shift and payment detail by waiter</h2>
+            <div className="grid grid-cols-2 gap-4">
+              {waiterShiftSummary.map((waiter: any) => (
+                <div key={`detail-${waiter.staffId || 'unassigned'}`} className="avoid-break rounded-lg border border-slate-300 p-4">
+                  <div className="flex items-start justify-between gap-3 border-b border-slate-200 pb-3">
+                    <div><h3 className="font-bold text-slate-900">{waiter.name}</h3><p className="mt-0.5 text-[10px] text-slate-500">{waiter.position || 'Waiter'} · {waiter.outletNames?.join(', ') || 'No outlet recorded'}</p></div>
+                    <span className="text-right text-[10px] font-bold text-slate-700">{money(waiter.netSales)}<br /><span className="font-normal text-slate-500">net sales</span></span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 py-3 text-[10px]">
+                    <div><p className="text-slate-500">Gross</p><p className="font-bold text-slate-900">{money(waiter.grossSales)}</p></div>
+                    <div><p className="text-slate-500">Guest charge</p><p className="font-bold text-slate-900">{money(waiter.guestCharge)}</p></div>
+                    <div><p className="text-slate-500">Tips</p><p className="font-bold text-slate-900">{money(waiter.tips)}</p></div>
+                  </div>
+                  <p className="mb-1 text-[9px] font-bold uppercase tracking-wider text-slate-500">Payments</p>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 border-b border-slate-200 pb-3 text-[10px]">
+                    {waiterPaymentMethods.map((method) => <div key={`detail-${waiter.staffId}-${method}`} className="flex justify-between gap-2"><span className="text-slate-600">{method.replace(/_/g, ' ')}</span><span className="font-bold text-slate-900">{money(waiterTenderAmount(waiter, method))}</span></div>)}
+                    {!waiterPaymentMethods.length && <span className="text-slate-500">No captured payments</span>}
+                  </div>
+                  <p className="mb-1 mt-3 text-[9px] font-bold uppercase tracking-wider text-slate-500">Linked POS shifts</p>
+                  {(waiter.shiftDetails || []).length ? <table className="w-full text-[9px]"><thead><tr className="border-b border-slate-200"><th className="py-1 text-left text-slate-500">Opened</th><th className="py-1 text-left text-slate-500">Closed</th><th className="py-1 text-left text-slate-500">Status</th></tr></thead><tbody>{waiter.shiftDetails.map((shift: any) => <tr key={shift.id}><td className="py-1 text-slate-700">{printDateTime(shift.openedAt)}</td><td className="py-1 text-slate-700">{printDateTime(shift.closedAt)}</td><td className="py-1 font-semibold text-slate-900">{shift.controlStatus || shift.status}</td></tr>)}</tbody></table> : <p className="text-[10px] text-slate-500">No linked POS session recorded.</p>}
+                </div>
+              ))}
+            </div>
+          </div>
           <p className="mt-6 text-[10px] text-slate-500">Source: live POS orders, POS sessions, and POS payment records. Open checks and voids remain visible for manager follow-up.</p>
         </div>
       )}

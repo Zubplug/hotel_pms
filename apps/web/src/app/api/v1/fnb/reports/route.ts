@@ -111,6 +111,7 @@ export async function GET(req: NextRequest) {
       outletNames: Set<string>;
       sessionIds: Set<string>;
       sessionStatuses: Set<string>;
+      sessions: Array<{ id: string; status: string; controlStatus: string; openedAt: Date; closedAt: Date | null }>;
       tenders: Record<string, number>;
     };
 
@@ -135,6 +136,7 @@ export async function GET(req: NextRequest) {
         outletNames: new Set<string>(),
         sessionIds: new Set<string>(),
         sessionStatuses: new Set<string>(),
+        sessions: [],
         tenders: {},
       };
 
@@ -151,9 +153,19 @@ export async function GET(req: NextRequest) {
       current.tips += Number(order.tipAmount || 0);
       current.voids += order.voids?.length || 0;
       if (order.outlet?.name) current.outletNames.add(order.outlet.name);
-      if (order.session?.id) {
-        current.sessionIds.add(order.session.id);
-        current.sessionStatuses.add(order.session.controlStatus || order.session.status);
+      const orderSession = order.session;
+      if (orderSession?.id) {
+        current.sessionIds.add(orderSession.id);
+        current.sessionStatuses.add(orderSession.controlStatus || orderSession.status);
+        if (!current.sessions.some((session) => session.id === orderSession.id)) {
+          current.sessions.push({
+            id: orderSession.id,
+            status: orderSession.status,
+            controlStatus: orderSession.controlStatus || orderSession.status,
+            openedAt: orderSession.openedAt,
+            closedAt: orderSession.closedAt,
+          });
+        }
       }
       for (const payment of order.payments || []) {
         current.tenders[payment.method] = (current.tenders[payment.method] || 0) + Number(payment.amount || 0);
@@ -182,6 +194,7 @@ export async function GET(req: NextRequest) {
         outletNames: Array.from(waiter.outletNames),
         shiftCount: waiter.sessionIds.size,
         shiftStatuses: Array.from(waiter.sessionStatuses),
+        shiftDetails: waiter.sessions,
         tenders: Object.entries(waiter.tenders).map(([method, amount]) => ({ method, amount })),
       }))
       .sort((a, b) => b.netSales - a.netSales);
