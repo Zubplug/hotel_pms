@@ -210,7 +210,7 @@ export function A4ReportWrapper({
            * spans, producing duplicate footer rows. Let it render once only,
            * at the natural end of the table.
            */
-          .na-print-layer tfoot {
+          .na-print-layer tfoot:not(.print-layout-tfoot) {
             display: table-row-group;
           }
 
@@ -225,16 +225,16 @@ export function A4ReportWrapper({
             page-break-inside: avoid;
           }
 
-          /* Footer: Fixed to the bottom of every printed page */
+          /* Footer: Use layout table repeating footer instead of fixed */
           .na-print-footer {
-            position: fixed;
-            bottom: -20mm; /* Inside the 25mm bottom margin */
-            left: 0;
             width: 100%;
-            height: 20mm;
-            box-sizing: border-box;
-            background: white;
-            z-index: 10;
+            padding-top: 10mm;
+            padding-bottom: 5mm;
+          }
+
+          /* The layout table's tfoot repeats on every page */
+          .print-layout-tfoot {
+            display: table-footer-group !important;
           }
         }
       `}</style>
@@ -299,10 +299,25 @@ export function A4ReportWrapper({
           <ReportHeader />
         </div>
         <ReportMeta />
-        <div>{children}</div>
-        <div className="na-print-footer">
-          <ReportFooter />
-        </div>
+        
+        <table className="w-full">
+          <tbody>
+            <tr>
+              <td className="p-0 align-top">
+                {children}
+              </td>
+            </tr>
+          </tbody>
+          <tfoot className="print-layout-tfoot">
+            <tr>
+              <td className="p-0">
+                <div className="na-print-footer">
+                  <ReportFooter />
+                </div>
+              </td>
+            </tr>
+          </tfoot>
+        </table>
       </div>
     </>
   );
