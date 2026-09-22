@@ -27,7 +27,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (!reservation) return errorResponse('NOT_FOUND', 'Reservation not found', 404);
     await assertPropertyAccess(session.user.id, reservation.propertyId);
     const userRole = String((session.user as any).role || 'STAFF').toUpperCase();
-    const isNightAuditor = userRole === 'NIGHT_AUDITOR' || userRole === 'MANAGER' || userRole === 'ADMIN' || userRole === 'SUPER_ADMIN';
+    const isNightAuditor = userRole === 'NIGHT_AUDITOR' || userRole === 'GENERAL_CASHIER' || userRole === 'MANAGER' || userRole === 'ADMIN' || userRole === 'SUPER_ADMIN';
     const canUpdate = await hasPermission(session.user.id, 'reservation', 'update', reservation.propertyId);
     if (!canUpdate && !isNightAuditor) return errorResponse('FORBIDDEN', 'Insufficient permissions to mark no-show', 403);
     if (await isNightAuditTransactionLocked(reservation.propertyId)) {

@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
     if (!session?.user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
 
     const userRole = (session.user as any).role;
-    if (!['NIGHT_AUDITOR', 'MANAGER', 'HOTEL_MANAGER', 'SUPER_ADMIN'].includes(userRole)) {
+    if (!['NIGHT_AUDITOR', 'GENERAL_CASHIER', 'MANAGER', 'HOTEL_MANAGER', 'SUPER_ADMIN'].includes(userRole)) {
       return errorResponse('FORBIDDEN', 'Insufficient permissions', 403);
     }
 

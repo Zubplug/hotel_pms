@@ -45,7 +45,7 @@ export async function POST(
       return errorResponse('NIGHT_AUDIT_IN_PROGRESS', 'Check-out is temporarily paused while Night Audit is posting.', 409);
     }
     const userRole = String((session.user as any).role || 'STAFF').toUpperCase();
-    const isNightAuditor = userRole === 'NIGHT_AUDITOR' || userRole === 'MANAGER' || userRole === 'ADMIN' || userRole === 'SUPER_ADMIN';
+    const isNightAuditor = userRole === 'NIGHT_AUDITOR' || userRole === 'GENERAL_CASHIER' || userRole === 'MANAGER' || userRole === 'ADMIN' || userRole === 'SUPER_ADMIN';
     const canCheckOut = await hasPermission(session.user.id, 'reservation', 'update', reservation.propertyId);
     const canPostCityLedger = await hasPermission(session.user.id, 'LEDGER', 'CREATE', reservation.propertyId);
     if (!canCheckOut && !canPostCityLedger && !isNightAuditor) return errorResponse('FORBIDDEN', 'Insufficient permissions to transfer the guest credit to City Ledger', 403);

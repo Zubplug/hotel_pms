@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
     if (!session?.user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
 
     const userRole = (session.user as any).role;
-    const ALLOWED_ROLES = ['NIGHT_AUDITOR', 'MANAGER', 'HOTEL_MANAGER', 'ADMIN', 'SUPER_ADMIN'];
+    const ALLOWED_ROLES = ['NIGHT_AUDITOR', 'GENERAL_CASHIER', 'MANAGER', 'HOTEL_MANAGER', 'ADMIN', 'SUPER_ADMIN'];
     if (!ALLOWED_ROLES.includes(userRole)) {
       return errorResponse('FORBIDDEN', 'Insufficient permissions to verify transactions', 403);
     }

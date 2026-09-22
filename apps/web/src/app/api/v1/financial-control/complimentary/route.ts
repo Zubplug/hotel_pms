@@ -52,7 +52,7 @@ export async function PATCH(req: NextRequest) {
 
     const ctx = await requireOrganizationContext(user.id);
     if (!ctx.propertyIds.includes(propertyId)) return errorResponse('FORBIDDEN', 'Forbidden', 403);
-    if (!['NIGHT_AUDITOR', 'MANAGER', 'ADMIN', 'SUPER_ADMIN'].includes(user.role) && !user.isSuperAdmin) return errorResponse('FORBIDDEN', 'Night Auditor access required', 403);
+    if (!['NIGHT_AUDITOR', 'GENERAL_CASHIER', 'MANAGER', 'ADMIN', 'SUPER_ADMIN'].includes(user.role) && !user.isSuperAdmin) return errorResponse('FORBIDDEN', 'Night Auditor access required', 403);
     if (!['VERIFIED', 'UNRESOLVED', 'REVERSED'].includes(status)) return errorResponse('BAD_REQUEST', 'Invalid complimentary status', 400);
     const property = await prisma.property.findUnique({ where: { id: propertyId }, select: { organizationId: true } });
     const auditor = await prisma.staff.findFirst({ where: { userId: user.id, organizationId: property?.organizationId, isActive: true }, select: { id: true } });

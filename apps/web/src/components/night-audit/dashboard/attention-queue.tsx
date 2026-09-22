@@ -68,7 +68,7 @@ export function AttentionQueue({ data, onResolveItem }: { data: NightAuditData; 
       items.push({ id: getStableQueueId('bypass', item), label: 'Check-In Bypass', description: `Reservation: ${String((item.reservation as Record<string, unknown> | undefined)?.confirmationNumber ?? '')}`, type: 'blocker', actionType: 'CHECKIN_BYPASS', payload: { ...item, propertyId: data.property.id } as Record<string, unknown> });
     });
     (data.cash.cashHandovers || []).forEach((item: Record<string, unknown>) => {
-      items.push({ id: getStableQueueId('handover', item), label: 'Pending Cash Handover', description: `${String((item.drawerName as string | undefined) ?? 'Drawer')} · General Cashier action`, type: 'warning', actionType: 'CASH_HANDOVER_NOTICE', payload: { ...item, propertyId: data.property.id } as Record<string, unknown> });
+      items.push({ id: getStableQueueId('handover', item), label: 'Pending Cash Handover', description: `${String((item.drawerName as string | undefined) ?? 'Drawer')} · General Cashier action`, type: 'warning', actionType: 'CASH_HANDOVER', payload: { ...item, propertyId: data.property.id } as Record<string, unknown> });
     });
     (data.cash.unverifiedTransactions || []).forEach((item: Record<string, unknown>) => {
       items.push({ id: getStableQueueId('trans', item), label: 'Unverified Transaction', description: `${String((item.method as string | undefined) === 'BANK_TRANSFER' ? 'Transfer' : 'POS')} — ${String(item.amount ?? '')}`, type: 'blocker', actionType: 'TRANSACTION_VERIFICATION', payload: { unverifiedTransactions: [item], propertyId: data.property.id } as Record<string, unknown> });
@@ -150,8 +150,6 @@ export function AttentionQueue({ data, onResolveItem }: { data: NightAuditData; 
           <div className="divide-y divide-white/[0.04]">
             {displayQueue.map((item) => {
               const meta = typeMeta[item.type];
-              const isReadOnly = item.actionType === 'CASH_HANDOVER_NOTICE';
-
               return (
                 <div
                   key={item.id}
@@ -175,7 +173,7 @@ export function AttentionQueue({ data, onResolveItem }: { data: NightAuditData; 
                   </div>
 
                   {/* Action */}
-                  {onResolveItem && !isReadOnly ? (
+                  {onResolveItem ? (
                     <button
                       onClick={() => onResolveItem(item.actionType, item.payload)}
                       className="group/btn inline-flex shrink-0 items-center gap-1 rounded-xl border border-white/[0.08] bg-white/[0.04] px-3 py-1.5 text-[11px] font-bold text-indigo-300 transition-all hover:border-indigo-400/40 hover:bg-indigo-400/10"
@@ -183,10 +181,6 @@ export function AttentionQueue({ data, onResolveItem }: { data: NightAuditData; 
                       Resolve
                       <ChevronRight className="h-3.5 w-3.5 transition-transform group-hover/btn:translate-x-0.5" />
                     </button>
-                  ) : isReadOnly ? (
-                    <span className="shrink-0 rounded-xl border border-white/[0.05] bg-white/[0.02] px-3 py-1.5 text-[11px] font-medium text-slate-600">
-                      Read only
-                    </span>
                   ) : null}
                 </div>
               );

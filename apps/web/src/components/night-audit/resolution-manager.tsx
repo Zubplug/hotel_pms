@@ -22,6 +22,7 @@ export type ResolutionAction =
   | { type: 'DISCOUNT_APPROVAL'; item: any }
   | { type: 'COMPLIMENTARY_VERIFICATION'; item: any }
   | { type: 'CHECKIN_BYPASS'; item: any }
+  | { type: 'CASH_HANDOVER'; item: any }
   | null;
 
 interface Props {
@@ -52,8 +53,61 @@ export function ResolutionManager({ action, onClose, onSuccess }: Props) {
         {action.type === 'DISCOUNT_APPROVAL' && <DiscountApprovalResolution item={action.item} onSuccess={onSuccess} onClose={onClose} />}
         {action.type === 'COMPLIMENTARY_VERIFICATION' && <ComplimentaryVerificationResolution propertyId={action.item.propertyId} records={action.item.records} onOpenChange={(open) => !open && onClose()} open={true} onSuccess={onSuccess} />}
         {action.type === 'CHECKIN_BYPASS' && <CheckinBypassResolution item={action.item} onSuccess={onSuccess} onClose={onClose} />}
+        {action.type === 'CASH_HANDOVER' && <CashHandoverResolution item={action.item} onSuccess={onSuccess} onClose={onClose} />}
       </DialogContent>
     </Dialog>
+  );
+}
+
+function CashHandoverResolution({ item, onSuccess, onClose }: { item: any; onSuccess: () => void; onClose: () => void }) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const receive = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await fetch(`/api/v1/financial-control/handovers/${item.id}/receive`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notes: 'Received from Night Audit wizard' }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.error?.message || body.error || 'Unable to receive handover');
+      toast.success('Cash handover received into General Cashier custody');
+      onSuccess();
+    } catch (err: any) {
+      setError(err.message || 'Unable to receive handover');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <>
+      <DialogHeader>
+        <DialogTitle className="text-white">Receive cash handover</DialogTitle>
+        <DialogDescription className="text-slate-400">
+          Confirm physical receipt of this approved handover. The custody transfer and GL posting will be recorded atomically.
+        </DialogDescription>
+      </DialogHeader>
+      <div className="space-y-3 py-4 text-sm text-slate-300">
+        <div className="rounded-xl border border-amber-400/20 bg-amber-400/[0.06] p-4">
+          <p className="font-semibold text-amber-200">{item.drawerName || item.location || 'Cash drawer'}</p>
+          <p className="mt-1 text-xs text-slate-400">Reference: {item.handoverReference || item.id}</p>
+          {item.amount !== undefined && <p className="mt-2 text-lg font-bold text-white">{Number(item.amount).toLocaleString('en-NG', { style: 'currency', currency: 'NGN' })}</p>}
+        </div>
+        {error && <p className="rounded-lg border border-rose-400/20 bg-rose-400/10 p-3 text-sm text-rose-300">{error}</p>}
+        <p className="text-xs leading-5 text-slate-500">Count the physical cash and verify the handover reference before confirming. This action cannot be undone from the wizard.</p>
+      </div>
+      <DialogFooter>
+        <Button variant="ghost" onClick={onClose} disabled={loading} className="text-slate-300 hover:text-white">Cancel</Button>
+        <Button onClick={receive} disabled={loading} className="bg-amber-500 text-slate-950 hover:bg-amber-400">
+          {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
+          {loading ? 'Receiving…' : 'Confirm receipt'}
+        </Button>
+      </DialogFooter>
+    </>
   );
 }
 

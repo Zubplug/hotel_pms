@@ -20,7 +20,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (!current) return errorResponse('NOT_FOUND', 'Session not found', 404);
     if (await isNightAuditTransactionLocked(current.propertyId, current.businessDate)) return errorResponse('NIGHT_AUDIT_IN_PROGRESS', 'Cashier shift changes are temporarily paused while Night Audit is posting.', 409);
     if (current.status !== 'OPEN') return errorResponse('BAD_REQUEST', `Cannot close session in status ${current.status}`, 400);
-    const privilegedPositions = new Set(['MANAGER', 'HOTEL_MANAGER', 'FINANCE_MANAGER', 'ADMIN', 'SUPER_ADMIN', 'CEO', 'NIGHT_AUDITOR']);
+    const privilegedPositions = new Set(['MANAGER', 'HOTEL_MANAGER', 'FINANCE_MANAGER', 'ADMIN', 'SUPER_ADMIN', 'CEO', 'NIGHT_AUDITOR', 'GENERAL_CASHIER']);
     const isPrivileged = privilegedPositions.has(String(staff.position || '').toUpperCase());
     if (current.staffId !== staff.id && !isPrivileged) return errorResponse('FORBIDDEN', 'You can only close your own session unless you are a manager/auditor', 403);
     if (['APPROVED', 'APPROVED_WITH_VARIANCE', 'HANDOVER_PENDING', 'HANDED_OVER', 'DEPOSITED', 'RECONCILED'].includes(String(current.controlStatus))) {
