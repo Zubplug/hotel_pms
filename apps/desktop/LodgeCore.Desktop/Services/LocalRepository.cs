@@ -6031,13 +6031,16 @@ public class LocalRepository
 
     public async Task<LodgeCore.Desktop.Data.Entities.LocalPosSession?> GetActiveServerBankAsync(string staffId, string propertyId, string outletId)
     {
-        return await _dbContext.PosSessions
-            .FirstOrDefaultAsync(s => s.PropertyId == propertyId
+        var sessions = await _dbContext.PosSessions
+            .Where(s => s.PropertyId == propertyId
                 && (s.PrimaryOperatorId == staffId || s.StaffId == staffId || s.UserId == staffId)
-                && (string.IsNullOrEmpty(outletId) || s.OutletId == outletId)
-                && s.Status == "OPEN"
-                && (string.IsNullOrEmpty(s.ControlStatus) || s.ControlStatus == "OPEN")
-                && s.BankType == "SERVER");
+                && (string.IsNullOrEmpty(outletId) || s.OutletId == outletId))
+            .OrderByDescending(s => s.OpenedAt)
+            .ToListAsync();
+
+        return sessions.FirstOrDefault(s => IsOpenPosSession(s)
+            && (string.IsNullOrWhiteSpace(s.BankType)
+                || string.Equals(s.BankType, "SERVER", StringComparison.OrdinalIgnoreCase)));
     }
 
     /// <summary>
@@ -6047,20 +6050,32 @@ public class LocalRepository
     /// </summary>
     public async Task<LodgeCore.Desktop.Data.Entities.LocalPosSession?> GetActiveCentralBankAsync(string propertyId, string outletId)
     {
-        return await _dbContext.PosSessions
-            .Where(s => s.PropertyId == propertyId
-                && s.OutletId == outletId
-                && s.Status == "OPEN"
-                && s.BankType == "CENTRAL"
-                && s.BankingModel == "CENTRAL_CASHIER")
+        var sessions = await _dbContext.PosSessions
+            .Where(s => s.PropertyId == propertyId && s.OutletId == outletId)
             .OrderByDescending(s => s.OpenedAt)
-            .FirstOrDefaultAsync();
+            .ToListAsync();
+
+        return sessions.FirstOrDefault(s => IsOpenPosSession(s)
+            && (string.IsNullOrWhiteSpace(s.BankType)
+                || string.Equals(s.BankType, "CENTRAL", StringComparison.OrdinalIgnoreCase))
+            && (string.IsNullOrWhiteSpace(s.BankingModel)
+                || string.Equals(s.BankingModel, "CENTRAL_CASHIER", StringComparison.OrdinalIgnoreCase)));
     }
 
     public async Task<LodgeCore.Desktop.Data.Entities.LocalPosSession?> GetActiveSessionForDeviceAsync(string deviceId)
     {
-        return await _dbContext.PosSessions
-            .FirstOrDefaultAsync(s => s.DeviceId == deviceId && s.Status == "OPEN");
+        var sessions = await _dbContext.PosSessions
+            .Where(s => s.DeviceId == deviceId)
+            .OrderByDescending(s => s.OpenedAt)
+            .ToListAsync();
+        return sessions.FirstOrDefault(IsOpenPosSession);
+    }
+
+    private static bool IsOpenPosSession(LodgeCore.Desktop.Data.Entities.LocalPosSession session)
+    {
+        return string.Equals(session.Status, "OPEN", StringComparison.OrdinalIgnoreCase)
+            && (string.IsNullOrWhiteSpace(session.ControlStatus)
+                || string.Equals(session.ControlStatus, "OPEN", StringComparison.OrdinalIgnoreCase));
     }
 
     public async Task<string> EnsureActiveServerBankAsync(string staffId, string propertyId, string outletId, string deviceId, string bankingModel = "SERVER_BANKING", string bankType = "SERVER")
