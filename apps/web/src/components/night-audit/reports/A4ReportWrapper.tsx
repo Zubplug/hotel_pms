@@ -125,32 +125,41 @@ export function A4ReportWrapper({
       <style jsx global>{`
         @page {
           size: A4 portrait;
-          /*
-           * Must be 0 — any non-zero value gives the browser room to render
-           * its default URL / date / page-number header+footer text.
-           * The print layer's own padding (10mm) handles breathing room.
-           */
           margin: 0;
         }
 
         @media print {
+          /*
+           * Belt-and-braces: reset every ancestor that could constrain height.
+           * The NightAuditLayout root has h-screen overflow-hidden which caps
+           * the entire render to one viewport height — this overrides it.
+           */
+          html, body,
+          body > *,
+          #__next,
+          #__next > *,
+          main {
+            height: auto !important;
+            min-height: 0 !important;
+            max-height: none !important;
+            overflow: visible !important;
+          }
+
           html, body {
             width: 210mm !important;
-            height: auto !important;
             margin: 0 !important;
             padding: 0 !important;
             background: #fff !important;
-            overflow: visible !important;
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
           }
 
-          /* Hide everything except the dedicated flat print layer */
+          /* Hide the screen preview layer */
           .na-screen-layer {
             display: none !important;
           }
 
-          /* The flat print layer becomes visible */
+          /* Show the flat print layer */
           .na-print-layer {
             display: block !important;
             width: 210mm;
@@ -192,6 +201,7 @@ export function A4ReportWrapper({
           }
         }
       `}</style>
+
 
       {/* ── Screen layer (hidden when printing) ────────────────────────────── */}
       <div className="na-screen-layer relative min-h-screen overflow-x-auto py-10" >

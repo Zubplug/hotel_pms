@@ -258,7 +258,7 @@ export function NightAuditLayout({ children }: { children: React.ReactNode }) {
 
   /* ─── Page shell ────────────────────────────────────────────────────────── */
   return (
-    <div className="flex h-screen overflow-hidden font-sans" style={{ background: '#060b18' }}>
+    <div className="flex h-screen overflow-hidden font-sans print:block print:h-auto print:overflow-visible print:bg-white" style={{ background: '#060b18' }}>
 
       {/* Mobile overlay */}
       {sidebarOpen && (
@@ -286,7 +286,7 @@ export function NightAuditLayout({ children }: { children: React.ReactNode }) {
       </aside>
 
       {/* Main content */}
-      <div className="flex min-w-0 flex-1 flex-col lg:pl-[260px] print:pl-0">
+      <div className="flex min-w-0 flex-1 flex-col lg:pl-[260px] print:pl-0 print:block print:w-full print:h-auto">
 
         {/* Top bar */}
         <header
@@ -312,8 +312,8 @@ export function NightAuditLayout({ children }: { children: React.ReactNode }) {
         </header>
 
         {/* Page content */}
-        <main className="flex-1 overflow-y-auto print:overflow-visible" style={{ background: '#060b18' }}>
-          <div className="mx-auto max-w-screen-2xl print:max-w-none print:mx-0">
+        <main className="flex-1 overflow-y-auto print:overflow-visible print:h-auto print:flex-none" style={{ background: '#060b18' }}>
+          <div className="mx-auto max-w-screen-2xl print:max-w-none print:mx-0 print:w-full">
             {children}
           </div>
         </main>
