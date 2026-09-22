@@ -11,28 +11,19 @@ import { RefundDialog } from './RefundDialog';
 import { FrontDeskAddPaymentDialog } from '../frontdesk/FrontDeskAddPaymentDialog';
 import { FrontDeskRefundDialog } from '../frontdesk/FrontDeskRefundDialog';
 import { FrontDeskQuickCheckoutDialog } from '../frontdesk/FrontDeskQuickCheckoutDialog';
-import { FrontDeskApplyCreditDialog } from '../frontdesk/FrontDeskApplyCreditDialog';
 import { CheckOutDialog } from './CheckOutDialog';
 import { FrontDeskDiscountModal } from '../frontdesk/FrontDeskDiscountModal';
 import { usePathname } from 'next/navigation';
-import { useSession } from 'next-auth/react';
 import { HardwareBridge } from '@/lib/desktop/HardwareBridge';
-import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { formatRoomNumber } from '@/lib/format-room';
 
 export function FolioSection({ reservation, readOnly = false }: { reservation: any; readOnly?: boolean }) {
   const pathname = usePathname();
   const isFrontDesk = pathname.startsWith('/frontdesk');
   const [isAddPaymentOpen, setIsAddPaymentOpen] = useState(false);
-  const [isAddDepositOpen, setIsAddDepositOpen] = useState(false);
   const [refundPaymentId, setRefundPaymentId] = useState<string | null>(null);
   const [isCheckOutOpen, setIsCheckOutOpen] = useState(false);
-  const [isApplyCreditOpen, setIsApplyCreditOpen] = useState(false);
   
-  const { data: session } = useSession();
-  const permissions = (session?.user as any)?.capabilities || (session?.user as any)?.permissions || [];
-  const canApplyGuestCredit = permissions.includes('FOLIO_APPLY_GUEST_CREDIT') || 
-                              ['MANAGER', 'ADMIN', 'SUPER_ADMIN', 'ACCOUNTANT'].includes(String((session?.user as any)?.role).toUpperCase());
   
   // Discount state
   const [discountTarget, setDiscountTarget] = useState<{ id: string, total: number } | null>(null);
@@ -59,9 +50,22 @@ export function FolioSection({ reservation, readOnly = false }: { reservation: a
   const totalCharges = Number(folio.totalCharges || 0);
   const totalPayments = Number(folio.totalPayments || 0);
   const outstandingBalance = Math.max(0, Number(folio.balance || 0));
-  const availableCredit = Number(folio.availableCredit || 0);
+  const folioAvailableCredit = Number(folio.availableCredit || 0);
+  // Desktop stores payments in the folio payments collection while some
+  // cloud responses also mirror them in items[]. Keep one visible row per
+  // payment so offline and online reservation details agree.
   const ledgerItems = [
-    ...(folio.items || []),
+    ...(folio.items || []).filter((item: any) => item.type !== 'PAYMENT'),
+    ...(folio.payments || []).map((payment: any) => ({
+      id: 'payment-' + payment.id,
+      amount: Number(payment.amount || 0) * -1,
+      type: 'PAYMENT',
+      description: payment.description || (payment.method === 'GUEST_CREDIT' ? 'Applied guest credit' : `${payment.method || 'Folio'} payment`),
+      createdAt: payment.createdAt,
+      status: payment.status,
+      method: payment.method,
+      reference: payment.reference,
+    })),
     ...(folio.credits || []).map((credit: any) => ({
       id: 'credit-' + credit.id,
       amount: Number(credit.amount || 0) * -1,
@@ -217,31 +221,21 @@ export function FolioSection({ reservation, readOnly = false }: { reservation: a
           {!readOnly && <div className="flex w-full flex-wrap items-center gap-2 lg:w-auto lg:justify-end">
             {!isClosed && folio.type !== 'CITY_LEDGER' && (
               <>
-                <Button
-                  size="sm"
-                  className="whitespace-nowrap bg-white text-slate-900 hover:bg-slate-100 shrink-0"
-                  onClick={() => setIsAddPaymentOpen(true)}
-                >
-                  <PlusCircle className="w-4 h-4 mr-2" /> Add Payment
-                </Button>
-                {isFrontDesk && (
+                {isFrontDesk ? (
                   <Button
                     size="sm"
-                    variant="outline"
-                    className="whitespace-nowrap shrink-0 border-white/40 bg-white/10 text-white hover:bg-white/20 hover:text-white"
-                    onClick={() => setIsAddDepositOpen(true)}
+                    className="whitespace-nowrap bg-white text-slate-900 hover:bg-slate-100 shrink-0"
+                    onClick={() => setIsAddPaymentOpen(true)}
                   >
-                    <Wallet className="w-4 h-4 mr-2" /> Add Deposit/Credit
+                    <Wallet className="w-4 h-4 mr-2" /> Receive Payment
                   </Button>
-                )}
-                {isFrontDesk && availableCredit > 0 && canApplyGuestCredit && (
+                ) : (
                   <Button
                     size="sm"
-                    variant="outline"
-                    className="whitespace-nowrap shrink-0 border-white/40 bg-white/10 text-white hover:bg-white/20 hover:text-white"
-                    onClick={() => setIsApplyCreditOpen(true)}
+                    className="whitespace-nowrap bg-white text-slate-900 hover:bg-slate-100 shrink-0"
+                    onClick={() => setIsAddPaymentOpen(true)}
                   >
-                    <Wallet className="w-4 h-4 mr-2" /> Apply Guest Credit
+                    <PlusCircle className="w-4 h-4 mr-2" /> Add Payment
                   </Button>
                 )}
               </>
@@ -282,7 +276,7 @@ export function FolioSection({ reservation, readOnly = false }: { reservation: a
               </div>
               <div className="rounded-xl border border-blue-100 bg-blue-50/60 p-4">
                 <div className="flex items-center gap-2 text-blue-700"><CornerDownRight className="h-4 w-4" /><p className="text-xs font-bold uppercase tracking-wider">Credit available</p></div>
-                <p className="mt-2 text-xl font-bold tabular-nums text-blue-700">{formatCurrency(availableCredit)}</p>
+                <p className="mt-2 text-xl font-bold tabular-nums text-blue-700">{formatCurrency(folioAvailableCredit)}</p>
               </div>
             </div>
           </div>
@@ -359,7 +353,8 @@ export function FolioSection({ reservation, readOnly = false }: { reservation: a
         <FrontDeskAddPaymentDialog 
           open={isAddPaymentOpen} 
           onOpenChange={setIsAddPaymentOpen} 
-          folio={folio} 
+          folio={folio}
+          mode={isFrontDesk ? 'deposit' : 'payment'}
           onPaymentSuccess={() => window.location.reload()}
         />
       ) : (
@@ -367,15 +362,6 @@ export function FolioSection({ reservation, readOnly = false }: { reservation: a
           open={isAddPaymentOpen} 
           onOpenChange={setIsAddPaymentOpen} 
           folio={folio} 
-        />
-      )}
-      {isFrontDesk && (
-        <FrontDeskAddPaymentDialog
-          open={isAddDepositOpen}
-          onOpenChange={setIsAddDepositOpen}
-          folio={folio}
-          mode="deposit"
-          onPaymentSuccess={() => window.location.reload()}
         />
       )}
       
@@ -413,15 +399,6 @@ export function FolioSection({ reservation, readOnly = false }: { reservation: a
           folio={folio}
         />
       )}
-      {isFrontDesk && (
-        <FrontDeskApplyCreditDialog
-          open={isApplyCreditOpen}
-          onOpenChange={setIsApplyCreditOpen}
-          folio={folio}
-          guestId={reservation.primaryGuestId}
-        />
-      )}
-      
       {discountTarget && (
         <FrontDeskDiscountModal
           isOpen={!!discountTarget}

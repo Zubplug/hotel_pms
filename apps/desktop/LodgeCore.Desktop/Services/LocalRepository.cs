@@ -6668,8 +6668,24 @@ public class LocalRepository
             };
             UpdateFolioTransactionsJson(folio, "items", folioItem);
 
+            // Keep a payment record as well as the item mirror. The offline
+            // reservation detail page uses payments for receipt/balance
+            // rendering, while the cloud sync event remains the accounting
+            // source of truth.
+            UpdateFolioTransactionsJson(folio, "payments", new
+            {
+                id = Guid.NewGuid().ToString(),
+                amount,
+                method = "GUEST_CREDIT",
+                type = "PAYMENT",
+                status = "COMPLETED",
+                createdAt = DateTime.UtcNow
+            });
+
             // Update folio balance
             folio.TotalPayments += amount;
+            folio.IsDirty = true;
+            folio.LocalSequence++;
             folio.Version += 1;
             _dbContext.Folios.Update(folio);
 

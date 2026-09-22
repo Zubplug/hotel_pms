@@ -154,7 +154,7 @@ export function FrontDeskAddPaymentDialog({ open, onOpenChange, folio, initialAm
                 <Banknote className="w-5 h-5" />
               </div>
               <div>
-                <DialogTitle className="text-xl">{isDeposit ? 'Add Deposit / Credit' : 'Receive Payment'}</DialogTitle>
+                <DialogTitle className="text-xl">Receive Payment</DialogTitle>
                 <DialogDescription className="text-slate-500 mt-1">
                   Process transaction for Folio <span className="font-mono text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded">#{folio?.id?.slice(0,8)?.toUpperCase()}</span>
                 </DialogDescription>
@@ -185,7 +185,7 @@ export function FrontDeskAddPaymentDialog({ open, onOpenChange, folio, initialAm
               
               {/* Payment Method Selector Grid */}
               <div className="space-y-3">
-                <Label className="text-sm font-bold text-slate-700">{isDeposit ? 'Deposit Method' : 'Payment Method'}</Label>
+                <Label className="text-sm font-bold text-slate-700">Payment Method</Label>
                 <div className="grid grid-cols-2 gap-3">
                     {paymentMethods.filter((m) => !isDeposit || m.id !== 'PAYMENT_GATEWAY').map((m) => {
                     const isSelected = method === m.id;
@@ -216,7 +216,7 @@ export function FrontDeskAddPaymentDialog({ open, onOpenChange, folio, initialAm
 
               {/* Amount Input */}
               <div className="space-y-3 bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-                <Label className="text-sm font-bold text-slate-700">{isDeposit ? 'Deposit Amount' : 'Amount Received'} ({folio?.currency})</Label>
+                <Label className="text-sm font-bold text-slate-700">Amount Received ({folio?.currency})</Label>
                 <div className="relative">
                   <div className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-slate-400">
                     {folio?.currency}

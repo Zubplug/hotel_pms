@@ -16,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { DatePicker } from '@/components/ui/date-picker';
-import { Loader2, Plus, ArrowRight, UserPlus, Calendar, Search, X, CheckCircle2, Phone, Mail, Tag } from 'lucide-react';
+import { Loader2, Plus, ArrowRight, UserPlus, Calendar, Search, X, CheckCircle2, Phone, Mail, Tag, Wallet } from 'lucide-react';
 import { useProperty } from '@/components/PropertyProvider';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 
@@ -175,6 +175,26 @@ export function FrontDeskReservationForm({ isWalkIn = false, prefillGuestId }: F
     }
   }, [prefillGuestId, prefillGuestRes, selectedGuest, form]);
 
+  // A reservation started from Guest Credits must carry the currently
+  // available credit into its new folio. The provider reads the local cache
+  // when offline and the synchronized snapshot when online.
+  const { data: prefillCreditRes } = useQuery({
+    queryKey: ['guest-credit-prefill', propertyId, prefillGuestId],
+    queryFn: () => provider.guestCredits.list(propertyId),
+    enabled: !!prefillGuestId && !!propertyId,
+    staleTime: 0,
+    refetchOnMount: 'always',
+  });
+  const prefilledCredit = useMemo(() => {
+    const response: any = prefillCreditRes;
+    const credits = Array.isArray(response)
+      ? response
+      : (response?.data ?? response?.credits ?? []);
+    return Array.isArray(credits)
+      ? credits.find((credit: any) => credit.guestId === prefillGuestId) ?? null
+      : null;
+  }, [prefillCreditRes, prefillGuestId]);
+
   
   // Custom simple debounce for search
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -267,11 +287,58 @@ export function FrontDeskReservationForm({ isWalkIn = false, prefillGuestId }: F
         compSettlementType: hasComplimentary ? values.compSettlementType : undefined,
       };
 
-      const res = await provider.reservations.create(payload);
+      // Re-read immediately before creation so another terminal's allocation
+      // is reflected before we decide whether to attach the credit.
+      let guestCreditToApply: any = prefilledCredit;
+      if (prefillGuestId) {
+        const latestCreditResponse: any = await provider.guestCredits.list(propertyId);
+        const latestCredits = Array.isArray(latestCreditResponse)
+          ? latestCreditResponse
+          : (latestCreditResponse?.data ?? latestCreditResponse?.credits ?? []);
+        guestCreditToApply = Array.isArray(latestCredits)
+          ? latestCredits.find((credit: any) => credit.guestId === prefillGuestId) ?? null
+          : null;
+      }
+
+      const res: any = await provider.reservations.create(payload);
+
+      // Guest Credit flow: create a normal reservation for the existing guest,
+      // then apply the available liability to that reservation's folio. This
+      // works offline because both reservation creation and credit application
+      // use the local SQLite repository and outbox.
+      if (prefillGuestId && Number(guestCreditToApply?.availableAmount ?? 0) > 0) {
+        const reservationId = res?.data?.newReservation?.id
+          || res?.data?.id
+          || res?.newReservation?.id
+          || res?.id;
+        if (!reservationId) {
+          throw new Error('Reservation was created but its ID could not be determined for guest-credit application.');
+        }
+
+        const reservationResponse: any = await provider.reservations.get(reservationId);
+        const reservation = reservationResponse?.data?.newReservation
+          || reservationResponse?.data
+          || reservationResponse?.reservation
+          || reservationResponse;
+        const folios = reservation?.folios || (reservation?.folio ? [reservation.folio] : []);
+        const folio = Array.isArray(folios) ? folios.find((item: any) => item?.id) : null;
+        if (!folio?.id) {
+          throw new Error('Reservation was created but its folio could not be found for guest-credit application.');
+        }
+
+        await provider.guestCredits.apply({
+          folioId: folio.id,
+          guestId: prefillGuestId,
+          amount: Number(guestCreditToApply.availableAmount),
+        });
+      }
+
       return { data: res }; // Wrap to match expected return type in onSuccess
     },
     onSuccess: (data) => {
-      toast.success(isWalkIn ? 'Walk-In Created!' : 'Reservation created successfully');
+      toast.success(prefillGuestId
+        ? 'Reservation created and guest credit applied to the folio'
+        : (isWalkIn ? 'Walk-In Created!' : 'Reservation created successfully'));
       queryClient.invalidateQueries({ queryKey: ['reservations'] });
       queryClient.invalidateQueries({ queryKey: ['frontdesk', 'dashboard'] });
       
@@ -379,7 +446,21 @@ export function FrontDeskReservationForm({ isWalkIn = false, prefillGuestId }: F
                             </div>
                             <div className="min-w-0">
                               <p className="truncate font-bold text-slate-800">{selectedGuest ? `${selectedGuest.firstName} ${selectedGuest.lastName}` : 'Selected guest'}</p>
-                              <p className="truncate text-xs text-slate-500">{selectedGuest?.phone || selectedGuest?.email || 'Guest selected'}</p>
+                              <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-slate-500">
+                                {selectedGuest?.phone && <span><Phone className="mr-1 inline h-3 w-3" />{selectedGuest.phone}</span>}
+                                {selectedGuest?.email && <span><Mail className="mr-1 inline h-3 w-3" />{selectedGuest.email}</span>}
+                                {!selectedGuest?.phone && !selectedGuest?.email && <span>Guest selected</span>}
+                              </div>
+                              {prefillGuestId && prefilledCredit && (
+                                <p className="mt-1 text-xs font-semibold text-emerald-700">
+                                  <Wallet className="mr-1 inline h-3 w-3" />
+                                  Available credit: {new Intl.NumberFormat('en-NG', {
+                                    style: 'currency',
+                                    currency: prefilledCredit.currency || 'NGN',
+                                    maximumFractionDigits: 0,
+                                  }).format(Number(prefilledCredit.availableAmount || 0))}
+                                </p>
+                              )}
                             </div>
                             <CheckCircle2 className="h-5 w-5 shrink-0 text-blue-600" />
                           </div>

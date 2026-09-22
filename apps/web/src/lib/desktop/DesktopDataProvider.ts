@@ -3,6 +3,25 @@ import { invokeDesktop } from './IpcBridge';
 
 const syncOperations = new Map<string, any>();
 
+/**
+ * Refresh cloud state before a guest-credit read/write whenever the desktop
+ * has connectivity. ForceSync waits for the pull/push cycle to complete, so a
+ * credit consumed or settled on another terminal is reflected locally before
+ * the front desk can apply it. When genuinely offline, the local snapshot is
+ * intentionally used and the application remains in the outbox.
+ */
+const refreshGuestCreditSnapshot = async () => {
+  if (typeof navigator === 'undefined' || !navigator.onLine) return;
+  try {
+    await invokeDesktop('system.forceSync');
+  } catch (error) {
+    // Connectivity can be intermittent even when the browser reports online.
+    // Never block the offline workflow: the local snapshot and outbox remain
+    // authoritative until the next successful sync.
+    console.warn('[Guest Credits] Sync unavailable; using local snapshot.', error);
+  }
+};
+
 const normalizeRoomLookupReservation = (raw: any) => {
   if (!raw) return null;
   const rooms = raw.reservationRooms || raw.rooms || [];
@@ -100,6 +119,12 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
       return invokeDesktop('guests.list');
     },
     search: async (query: string) => {
+      // The Guest Credits flow passes the canonical guest UUID. Pull once
+      // before that lookup when online so a profile added/updated elsewhere is
+      // available locally; offline lookups continue against the cached DB.
+      if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(query.trim())) {
+        await refreshGuestCreditSnapshot();
+      }
       return invokeDesktop('guests.search', { query });
     }
   },
@@ -288,9 +313,11 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
 
   guestCredits: {
     list: async (_propertyId: string) => {
+      await refreshGuestCreditSnapshot();
       return invokeDesktop('guestCredits.list');
     },
     apply: async (data: { folioId: string; creditEntryId?: string; guestId: string; amount: number; businessDate?: string }) => {
+      await refreshGuestCreditSnapshot();
       return invokeDesktop('guestCredits.apply', { payload: JSON.stringify(data) });
     }
   },

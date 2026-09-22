@@ -1022,6 +1022,9 @@ public class OfflinePMSInterop
                 confirmationNumber = r.Id.Length >= 8 ? r.Id.Substring(0, 8).ToUpper() : r.Id.ToUpper(),
                 status = r.Status,
                 propertyId = r.PropertyId,
+                primaryGuestId = r.Guest?.Id,
+                roomNumber = r.RoomNumber,
+                currency = r.Currency ?? "NGN",
                 corporateAccountId = r.CorporateAccountId,
                 corporateAccount = r.CorporateAccount == null ? null : new {
                     id = r.CorporateAccount.Id,

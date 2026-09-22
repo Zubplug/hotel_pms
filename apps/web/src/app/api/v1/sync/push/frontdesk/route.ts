@@ -1559,6 +1559,149 @@ export async function POST(req: NextRequest) {
                 authoritativeBusinessDate
               );
             }
+          } else if (aggregateType === "CITY_LEDGER" && eventType === "GUEST_CREDIT_APPLICATION") {
+            const amount = Number(payload.amount);
+            const guestId = payload.guestId;
+            const creditEntryId = payload.creditEntryId || aggregateId;
+            const folioId = payload.folioId;
+            const allocationId = payload.allocationId;
+
+            if (!Number.isFinite(amount) || amount <= 0) {
+              throw new Error("Guest credit application amount must be positive");
+            }
+            if (!isUuid(guestId) || !isUuid(creditEntryId) || !isUuid(folioId)) {
+              throw new Error("Guest credit application requires valid guest, credit, and folio IDs");
+            }
+
+            const folio = await tx.folio.findUnique({
+              where: { id: folioId, propertyId },
+              include: { reservation: { select: { id: true, primaryGuestId: true } } },
+            });
+            if (!folio || !folio.reservation) throw new Error("Folio not found or has no reservation");
+            if (folio.status !== "OPEN") throw new Error("Cannot apply credit to a closed folio");
+            if (folio.reservation.primaryGuestId !== guestId) {
+              throw new Error("Guest credit does not belong to the folio guest");
+            }
+            if (payload.currency && payload.currency !== folio.currency) {
+              throw new Error("Currency mismatch. Expected " + folio.currency);
+            }
+
+            const lockedEntries = await tx.$queryRawUnsafe<any[]>(
+              'SELECT id, amount, currency, status, "accountId", "guestId" FROM "CityLedgerEntry" WHERE id = $1::uuid AND "propertyId" = $2::uuid AND "type" = $3 AND "status" = $4 FOR UPDATE',
+              creditEntryId,
+              propertyId,
+              "REFUND_OWED",
+              "OPEN",
+            );
+            const entry = lockedEntries[0];
+            if (!entry || entry.guestId !== guestId) {
+              throw new Error("GUEST_CREDIT_NOT_AVAILABLE");
+            }
+
+            const allocationTotals = await tx.cityLedgerAllocation.aggregate({
+              where: { paymentId: creditEntryId },
+              _sum: { amount: true },
+            });
+            const available = Number(entry.amount) - Number(allocationTotals._sum.amount || 0);
+            if (amount > available + 0.01) {
+              throw new Error("INSUFFICIENT_CREDIT");
+            }
+
+            const allocationData: any = {
+              paymentId: creditEntryId,
+              folioId,
+              amount,
+              currency: folio.currency || entry.currency || "NGN",
+              createdBy: staffOperatorId,
+            };
+            if (isUuid(allocationId)) allocationData.id = allocationId;
+
+            const allocation = await tx.cityLedgerAllocation.create({ data: allocationData });
+            const remaining = available - amount;
+
+            await tx.cityLedgerAccount.update({
+              where: { id: entry.accountId },
+              data: { balance: { decrement: amount } },
+            });
+            if (remaining <= 0.01) {
+              await tx.cityLedgerEntry.update({ where: { id: creditEntryId }, data: { status: "SETTLED" } });
+            }
+
+            const applicationDate = parseLocalDateString(payload.businessDate) || postingBusinessDate;
+            await tx.folioItem.create({
+              data: {
+                folioId,
+                businessDate: applicationDate,
+                type: "PAYMENT",
+                source: "CITY_LEDGER",
+                description: payload.description || "Applied guest credit (offline sync)",
+                quantity: 1,
+                unitAmount: -amount,
+                amount: -amount,
+                currency: folio.currency || "NGN",
+                baseAmount: -amount,
+                postedBy: staffOperatorId,
+                deviceId: device.id,
+                operationId: idempotencyKey,
+                reservationId: folio.reservationId,
+                guestId,
+              },
+            });
+            await tx.folio.update({
+              where: { id: folioId },
+              data: {
+                balance: { decrement: amount },
+                totalPayments: { increment: amount },
+                version: { increment: 1 },
+              },
+            });
+
+            const propertyForJournal = await tx.property.findUnique({
+              where: { id: propertyId },
+              select: { organizationId: true },
+            });
+            await GeneralLedgerService.postJournal(
+              {
+                userId: staffOperatorId,
+                propertyIds: [propertyId],
+                organizationId: propertyForJournal?.organizationId || property.organizationId,
+                role: "SYSTEM",
+                permissions: [],
+                outletIds: [],
+              },
+              {
+                propertyId,
+                entryDate: applicationDate,
+                reference: "GUEST-CREDIT-APPLICATION-" + idempotencyKey,
+                description: "Apply guest credit to folio (offline sync)",
+                sourceModule: "AR",
+                lines: [
+                  { accountId: await GLMappingService.getGuestRefundsPayableAccount(propertyId), debit: amount, credit: 0, description: "Release guest refund payable", sourceType: "GUEST_CREDIT_APPLICATION", sourceId: folioId },
+                  { accountId: await GLMappingService.getGuestLedgerAccount(propertyId), debit: 0, credit: amount, description: "Apply guest credit to folio", sourceType: "GUEST_CREDIT_APPLICATION", sourceId: folioId },
+                ],
+              },
+              tx,
+            );
+
+            await tx.financialAuditLog.create({
+              data: {
+                operationId: idempotencyKey,
+                propertyId,
+                reservationId: folio.reservationId,
+                folioId,
+                guestId,
+                amount,
+                currency: folio.currency || "NGN",
+                operatorId: staffOperatorId,
+                deviceId: device.id,
+                businessDate: applicationDate,
+                operationType: "GUEST_CREDIT_APPLICATION",
+                reason: payload.description || "Applied guest credit (offline sync)",
+                approvalStatus: "NOT_REQUIRED",
+                idempotencyKey: "audit:" + idempotencyKey,
+                metadata: { source: "OFFLINE_GUEST_CREDIT_APPLICATION", creditEntryId, allocationId: allocation.id },
+              },
+            });
           } else if (aggregateType === "FOLIO" && eventType === "FOLIO_DISCOUNT_APPLIED") {
             const existingDiscount = await tx.folioItem.findFirst({
               where: { posTransactionId: idempotencyKey },

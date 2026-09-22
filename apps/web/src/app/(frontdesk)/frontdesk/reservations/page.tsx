@@ -230,16 +230,12 @@ export default function FrontDeskReservationsPage() {
                   <div className="mt-auto pt-4 border-t border-slate-100">
                     <Button
                       onClick={() => router.push(`/frontdesk/reservations/walk-in?guestId=${encodeURIComponent(credit.guestId)}`)}
-                      disabled={!isOnline}
-                      title={!isOnline ? 'Internet required to create new reservation' : ''}
                       className="w-full rounded-xl h-10 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm disabled:opacity-50"
                     >
                       <UserPlus className="w-4 h-4 mr-2" />
-                      Walk-In / New Reservation
+                      Create New Reservation
                     </Button>
-                    {!isOnline && (
-                      <p className="text-xs text-amber-600 mt-1 text-center">Online required to create reservation</p>
-                    )}
+                    {!isOnline && <p className="text-xs text-amber-600 mt-1 text-center">Offline: reservation and credit application will sync later</p>}
                   </div>
                 </div>
               ))}

@@ -79,7 +79,14 @@ export function FrontDeskReservationDetail({ reservation, darkMode = false }: Fr
     queryFn: async () => {
       if (!guest?.id || !reservation.propertyId) return { availableCredit: 0 };
       const res = await provider.guestCredits.list(reservation.propertyId);
-      const guestCredit = res?.credits?.find((c: any) => c.guestId === guest.id);
+      const rows = Array.isArray(res)
+        ? res
+        : Array.isArray(res?.data)
+          ? res.data
+          : Array.isArray(res?.credits)
+            ? res.credits
+            : [];
+      const guestCredit = rows.find((c: any) => c.guestId === guest.id);
       return { availableCredit: guestCredit?.availableAmount || 0 };
     },
     enabled: !!guest?.id && !!reservation.propertyId,
@@ -180,7 +187,7 @@ export function FrontDeskReservationDetail({ reservation, darkMode = false }: Fr
       {isEditDialogOpen && <FrontDeskEditReservationDialog reservation={reservation} open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen} />}
       {isReassignDialogOpen && <FrontDeskReassignRoomDialog reservation={reservation} open={isReassignDialogOpen} onOpenChange={setIsReassignDialogOpen} />}
       {isCancelDialogOpen && <FrontDeskCancelReservationDialog reservation={reservation} open={isCancelDialogOpen} onOpenChange={setIsCancelDialogOpen} />}
-      {isAddPaymentOpen && folio && <FrontDeskAddPaymentDialog folio={folio} open={isAddPaymentOpen} onOpenChange={setIsAddPaymentOpen} />}
+      {isAddPaymentOpen && folio && <FrontDeskAddPaymentDialog folio={folio} mode="deposit" open={isAddPaymentOpen} onOpenChange={setIsAddPaymentOpen} />}
       {isExtendStayOpen && <FrontDeskExtendStayDialog reservation={reservation} open={isExtendStayOpen} onOpenChange={setIsExtendStayOpen} />}
       {isReceiptOpen && latestPayment && (
         <FrontDeskReceiptDialog paymentId={latestPayment.id} open={isReceiptOpen} onOpenChange={setIsReceiptOpen}
@@ -251,14 +258,7 @@ export function FrontDeskReservationDetail({ reservation, darkMode = false }: Fr
                     <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-blue-400">Available credit</p>
                     <p className="font-bold text-white text-sm">{formatCurrency(availableCredit, folio?.currency)}</p>
                   </div>
-                  <button
-                    onClick={() => {
-                      document.querySelector<HTMLButtonElement>('button:has(svg.lucide-wallet)')?.click();
-                    }}
-                    className="text-[10px] font-bold uppercase tracking-[0.1em] text-blue-400 hover:text-blue-300 bg-blue-400/10 hover:bg-blue-400/20 px-3 py-1.5 rounded-lg transition-colors"
-                  >
-                    View / Apply
-                  </button>
+                  <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-blue-400">Available for new stay</span>
                 </div>
               )}
             </div>
@@ -349,7 +349,7 @@ export function FrontDeskReservationDetail({ reservation, darkMode = false }: Fr
               {canCheckIn && <button onClick={() => setIsCheckInDialogOpen(true)} className="flex w-full items-center justify-center gap-2 rounded-2xl py-4 text-base font-bold text-white" style={{ background: 'linear-gradient(135deg,#059669,#10b981)' }}><LogIn className="h-5 w-5" /> Check In</button>}
               {canCheckOut && <button onClick={() => setIsQuickCheckoutOpen(true)} className="flex w-full items-center justify-center gap-2 rounded-2xl py-4 text-base font-bold text-white" style={{ background: 'linear-gradient(135deg,#6366f1,#8b5cf6)' }}><LogOut className="h-5 w-5" /> Check Out</button>}
               <div className="grid grid-cols-2 gap-2">
-                {canAddPayment && <button onClick={() => setIsAddPaymentOpen(true)} className={`flex h-12 items-center justify-center gap-2 rounded-xl border border-white/[0.07] bg-white/[0.04] text-sm font-semibold text-slate-300 transition-all hover:bg-white/[0.07] ${!canExtendStay ? 'col-span-2' : ''}`}><CreditCard className="h-4 w-4" /> Add Payment</button>}
+                {canAddPayment && <button onClick={() => setIsAddPaymentOpen(true)} className={`flex h-12 items-center justify-center gap-2 rounded-xl border border-white/[0.07] bg-white/[0.04] text-sm font-semibold text-slate-300 transition-all hover:bg-white/[0.07] ${!canExtendStay ? 'col-span-2' : ''}`}><CreditCard className="h-4 w-4" /> Receive Payment</button>}
                 {canExtendStay && <button onClick={() => setIsExtendStayOpen(true)} className={`flex h-12 items-center justify-center gap-2 rounded-xl border border-white/[0.07] bg-white/[0.04] text-sm font-semibold text-slate-300 transition-all hover:bg-white/[0.07] ${!canAddPayment ? 'col-span-2' : ''}`}><CalendarClock className="h-4 w-4" /> Extend Stay</button>}
                 {latestPayment && <button onClick={handlePrintReceipt} disabled={isPrinting} className={`${canAddPayment || canExtendStay ? 'col-span-2' : ''} flex h-12 items-center justify-center gap-2 rounded-xl border border-white/[0.07] bg-white/[0.04] text-sm font-semibold text-slate-300 disabled:opacity-50`}>{isPrinting ? <><Loader2 className="h-4 w-4 animate-spin" /> Printing…</> : <><Receipt className="h-4 w-4" /> Print Receipt</>}</button>}
                 {canManageReservation && (
@@ -434,16 +434,7 @@ export function FrontDeskReservationDetail({ reservation, darkMode = false }: Fr
                   <p className="text-xs font-bold uppercase tracking-wider text-blue-600 mb-0.5">Available credit</p>
                   <p className="font-bold text-slate-800">{formatCurrency(availableCredit, folio?.currency)}</p>
                 </div>
-                <button
-                  onClick={() => {
-                    const btn = Array.from(document.querySelectorAll('button')).find(b => b.textContent?.includes('Apply Guest Credit'));
-                    if (btn) btn.click();
-                    else document.querySelector('.lucide-receipt')?.scrollIntoView({ behavior: 'smooth' });
-                  }}
-                  className="text-xs font-bold text-blue-700 hover:text-blue-800 bg-blue-100 hover:bg-blue-200 px-3 py-1.5 rounded-lg transition-colors"
-                >
-                  View / Apply
-                </button>
+                <span className="text-xs font-bold text-blue-700">Available for new stay</span>
               </div>
             )}
           </Card>
@@ -529,7 +520,7 @@ export function FrontDeskReservationDetail({ reservation, darkMode = false }: Fr
             {canCheckIn && <Button onClick={() => setIsCheckInDialogOpen(true)} className="w-full h-14 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-lg shadow-sm"><LogIn className="w-5 h-5 mr-2" /> Check In</Button>}
             {canCheckOut && <Button onClick={() => setIsQuickCheckoutOpen(true)} className="w-full h-14 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-lg shadow-sm"><LogOut className="w-5 h-5 mr-2" /> Check Out</Button>}
             <div className="grid grid-cols-2 gap-3">
-              {canAddPayment && <Button variant="outline" className="h-12 rounded-xl font-semibold border-slate-200" onClick={() => setIsAddPaymentOpen(true)}><CreditCard className="w-4 h-4 mr-2" /> Add Payment</Button>}
+              {canAddPayment && <Button variant="outline" className="h-12 rounded-xl font-semibold border-slate-200" onClick={() => setIsAddPaymentOpen(true)}><CreditCard className="w-4 h-4 mr-2" /> Receive Payment</Button>}
               {canExtendStay && <Button variant="outline" className="h-12 rounded-xl font-semibold border-slate-200" onClick={() => setIsExtendStayOpen(true)}><CalendarClock className="w-4 h-4 mr-2" /> Extend Stay</Button>}
               {latestPayment && <Button variant="outline" disabled={isPrinting} className={`${canAddPayment || canExtendStay ? 'col-span-2' : ''} h-12 rounded-xl font-semibold border-slate-200`} onClick={handlePrintReceipt}>{isPrinting ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Printing...</> : <><Receipt className="w-4 h-4 mr-2" /> Print Receipt</>}</Button>}
               {canManageReservation && (
