@@ -145,7 +145,7 @@ export function A4ReportWrapper({
       <style jsx global>{`
         @page {
           size: A4 portrait;
-          margin: 15mm 10mm 25mm 10mm; /* top right bottom left */
+          margin: 15mm 10mm 12mm 10mm; /* top right bottom left */
         }
 
         @media print {
@@ -245,7 +245,7 @@ export function A4ReportWrapper({
             width: 100%;
             background: white;
             z-index: 50;
-            padding-top: 5mm;
+            padding-top: 2mm;
           }
         }
       `}</style>
@@ -319,11 +319,11 @@ export function A4ReportWrapper({
               </td>
             </tr>
           </tbody>
-          {/* This tfoot is INVISIBLE. It exists solely to reserve 25mm of space at the bottom of every page so the fixed footer doesn't overlap the table content. */}
+          {/* This tfoot is INVISIBLE. It exists solely to reserve 15mm of space at the bottom of every page so the fixed footer doesn't overlap the table content. */}
           <tfoot className="print-layout-tfoot-spacer">
             <tr>
               <td className="p-0 border-none">
-                <div style={{ height: '25mm' }}></div>
+                <div style={{ height: '15mm' }}></div>
               </td>
             </tr>
           </tfoot>
