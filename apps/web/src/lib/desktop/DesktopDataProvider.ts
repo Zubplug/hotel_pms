@@ -552,6 +552,9 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
     updateBatchStatus: async (batchId: string, status: string) => {
       return invokeDesktop('pos.updateBatchStatus', { batchId, status });
     },
+    getInHouseGuests: async (query: string) => {
+      return invokeDesktop('pos.getInHouseGuests', { query });
+    },
   },
   approvals: {
     requestItemModification: async (payload: any) => {

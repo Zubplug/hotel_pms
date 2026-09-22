@@ -11,7 +11,7 @@ import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { format } from 'date-fns';
 import { formatRoomNumber } from '@/lib/format-room';
 import { GuestCreditRefundDialog } from '@/components/accountant/GuestCreditRefundDialog';
-import { toast } from 'sonner';
+import { FrontDeskCityLedgerPaymentDialog } from '@/components/frontdesk/FrontDeskCityLedgerPaymentDialog';
 
 interface Reservation {
   id: string;
@@ -94,25 +94,6 @@ export default function FrontDeskReservationsPage() {
     refetchInterval: isOnline ? 30000 : false,
   });
 
-  const settleCityLedger = async (entry: any) => {
-    const method = (window.prompt('Settlement method: CASH, BANK_TRANSFER, POS, CARD, CHEQUE, or OTHER', 'BANK_TRANSFER') || '').trim().toUpperCase();
-    if (!method) return;
-    const requestedAmount = window.prompt(
-      entry.accountType === 'CORPORATE'
-        ? 'Corporate payment amount (applies FIFO across this corporate account\'s open invoices):'
-        : 'Walkout invoice settlement amount:',
-      String(Number(entry.outstandingAmount)),
-    );
-    const amount = Number(requestedAmount);
-    if (!Number.isFinite(amount) || amount <= 0) return;
-    const reference = (window.prompt('Payment reference / receipt number') || '').trim();
-    if (!reference) return;
-    try {
-      const result = await provider.cityLedger.settle({ entryId: entry.entryId, accountId: entry.accountId, invoiceId: entry.accountType === 'CORPORATE' ? undefined : entry.invoiceId, accountType: entry.accountType, amount, method, reference });
-      toast.success((result as any)?.pendingSync || !isOnline ? 'City ledger settlement queued offline' : 'City ledger settlement posted');
-      await refetchCityLedger();
-    } catch (error) { toast.error(error instanceof Error ? error.message : 'Unable to settle city ledger invoice'); }
-  };
 
   const rawData = data as any;
   const reservations: Reservation[] = Array.isArray(rawData) ? rawData : (rawData?.data ?? []);
@@ -223,7 +204,7 @@ export default function FrontDeskReservationsPage() {
               groups[`walkout:${entry.entryId}`] = entry;
               return groups;
             }
-            const key = `corporate:${entry.accountId}`;
+            const key = `corporate:${entry.accountId}:${entry.entryKind === 'CORPORATE_ADVANCE' ? 'advance' : 'ledger'}`;
             const current = groups[key];
             groups[key] = current ? {
               ...current,
@@ -235,7 +216,7 @@ export default function FrontDeskReservationsPage() {
             } : { ...entry, invoiceNumber: 'Account balance' };
             return groups;
           }, {}));
-          return entries.length === 0 ? <div className="text-center p-12 bg-slate-50 rounded-3xl border border-slate-100"><Landmark className="w-12 h-12 text-slate-300 mx-auto mb-3" /><h3 className="text-lg font-bold text-slate-900">No open city-ledger balances</h3><p className="text-slate-500">Skipper/walkout invoices and corporate account balances will appear here after checkout.</p></div> : <div className="overflow-x-auto rounded-3xl border border-slate-200 bg-white shadow-sm"><table className="w-full text-sm"><thead className="border-b bg-slate-50 text-left text-xs uppercase tracking-wider text-slate-500"><tr><th className="px-5 py-4">Ledger</th><th className="px-5 py-4">Guest / organisation</th><th className="px-5 py-4">Reference</th><th className="px-5 py-4 text-right">Outstanding</th><th className="px-5 py-4">Action</th></tr></thead><tbody className="divide-y">{entries.map((entry: any) => <tr key={entry.accountType === 'CORPORATE' ? `corporate:${entry.accountId}` : entry.entryId}><td className="px-5 py-4"><span className={`rounded-full px-2.5 py-1 text-xs font-bold ${entry.accountType === 'CORPORATE' ? 'bg-blue-100 text-blue-700' : 'bg-rose-100 text-rose-700'}`}>{entry.accountType === 'CORPORATE' ? 'Corporate account' : 'Skipper / Walkout'}</span><div className="mt-2 text-xs text-slate-500">{entry.accountName}</div></td><td className="px-5 py-4 font-medium text-slate-800">{entry.accountType === 'CORPORATE' ? entry.accountName : (entry.guestName || '—')}</td><td className="px-5 py-4 font-mono text-xs text-slate-500">{entry.invoiceNumber || entry.entryId.slice(0, 8)}</td><td className="px-5 py-4 text-right font-extrabold text-slate-900">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: entry.currency || 'NGN', maximumFractionDigits: 0 }).format(Number(entry.outstandingAmount))}</td><td className="px-5 py-4"><Button size="sm" onClick={() => settleCityLedger(entry)} disabled={entry.status === 'PENDING_SETTLEMENT' || (entry.accountType !== 'CORPORATE' && !entry.invoiceId)} className={entry.accountType === 'CORPORATE' ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-indigo-600 text-white hover:bg-indigo-700'}>{entry.status === 'PENDING_SETTLEMENT' ? 'Queued for sync' : entry.accountType === 'CORPORATE' ? 'Post corporate payment' : 'Settle walkout invoice'}</Button></td></tr>)}</tbody></table></div>;
+          return entries.length === 0 ? <div className="text-center p-12 bg-slate-50 rounded-3xl border border-slate-100"><Landmark className="w-12 h-12 text-slate-300 mx-auto mb-3" /><h3 className="text-lg font-bold text-slate-900">No open city-ledger balances</h3><p className="text-slate-500">Skipper/walkout invoices, corporate balances, and unapplied corporate advances will appear here after checkout.</p></div> : <div className="overflow-x-auto rounded-3xl border border-slate-200 bg-white shadow-sm"><table className="w-full text-sm"><thead className="border-b bg-slate-50 text-left text-xs uppercase tracking-wider text-slate-500"><tr><th className="px-5 py-4">Ledger</th><th className="px-5 py-4">Guest / organisation</th><th className="px-5 py-4">Reference</th><th className="px-5 py-4 text-right">Outstanding</th><th className="px-5 py-4">Action</th></tr></thead><tbody className="divide-y">{entries.map((entry: any) => <tr key={entry.accountType === 'CORPORATE' ? `corporate:${entry.accountId}:${entry.entryKind}` : entry.entryId}><td className="px-5 py-4"><span className={`rounded-full px-2.5 py-1 text-xs font-bold ${entry.accountType === 'CORPORATE' ? 'bg-blue-100 text-blue-700' : 'bg-rose-100 text-rose-700'}`}>{entry.entryKind === 'CORPORATE_ADVANCE' ? 'Corporate advance' : entry.accountType === 'CORPORATE' ? 'Corporate account' : 'Skipper / Walkout'}</span><div className="mt-2 text-xs text-slate-500">{entry.accountName}</div></td><td className="px-5 py-4 font-medium text-slate-800">{entry.accountType === 'CORPORATE' ? entry.accountName : (entry.guestName || '—')}</td><td className="px-5 py-4 font-mono text-xs text-slate-500">{entry.invoiceNumber || entry.entryId.slice(0, 8)}</td><td className="px-5 py-4 text-right font-extrabold text-slate-900">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: entry.currency || 'NGN', maximumFractionDigits: 0 }).format(Number(entry.outstandingAmount))}</td><td className="px-5 py-4">{entry.entryKind === 'CORPORATE_ADVANCE' ? <GuestCreditRefundDialog entryId={entry.entryId} guestName={entry.accountName} amount={Number(entry.outstandingAmount)} currency={entry.currency || 'NGN'} propertyId={propertyId} accountType="CORPORATE_ADVANCE" /> : <FrontDeskCityLedgerPaymentDialog entry={entry} onComplete={refetchCityLedger} />}</td></tr>)}</tbody></table></div>;
         })()
       ) : activeFilter === 'GUEST_CREDITS' ? (
         /* ── Guest Credits Panel ───────────────────────────────────────── */

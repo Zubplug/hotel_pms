@@ -12,10 +12,8 @@ interface PosSidebarProps {
   viewMode: 'menu' | 'tables';
   setViewMode: (mode: 'menu' | 'tables') => void;
   onOpenMyOrders: () => void;
-  bankingModel?: string;
   onOpenMySales: () => void;
   onOpenShiftBank: () => void;
-
   onOpenKitchen: () => void;
   onOpenPrinterSettings: () => void;
   onOpenSyncCenter: () => void;
@@ -31,10 +29,8 @@ export function PosSidebar({
   viewMode,
   setViewMode,
   onOpenMyOrders,
-  bankingModel = 'CENTRAL_CASHIER',
   onOpenMySales,
   onOpenShiftBank,
-
   onOpenKitchen,
   onOpenPrinterSettings,
   onOpenSyncCenter,
@@ -153,9 +149,7 @@ export function PosSidebar({
       {/* ── Manage Nav ───────────────────────────────────── */}
       <div className="flex flex-col gap-0.5 px-2">
         {!collapsed && <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest px-1 mb-1">Manage</p>}
-        {String(bankingModel).toUpperCase() === 'CENTRAL_CASHIER' && (
-          <NavItem icon={Receipt} label="All Orders" onClick={onOpenMyOrders} />
-        )}
+        <NavItem icon={Receipt} label="All Orders" onClick={onOpenMyOrders} />
         <NavItem icon={TrendingUp} label="My Sales"     onClick={onOpenMySales} />
         <NavItem icon={Wallet}     label="Shift Bank"   onClick={onOpenShiftBank} />
 
@@ -167,6 +161,7 @@ export function PosSidebar({
           <NavItem icon={RefreshCw}  label="Sync Center"  onClick={onOpenSyncCenter} />
         )}
       </div>
+
 
       {/* ── Spacer ───────────────────────────────────────── */}
       <div className="flex-1" />

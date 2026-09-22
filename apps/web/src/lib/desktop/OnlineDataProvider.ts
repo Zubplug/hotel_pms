@@ -503,7 +503,12 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
         body: JSON.stringify({ status }),
       });
     },
+    getInHouseGuests: async (query: string) => {
+      // Online mode: query the checked-in reservations endpoint
+      return apiFetchResult(`/api/v1/reservations/in-house?search=${encodeURIComponent(query)}`);
+    },
   },
+
   approvals: {
     requestItemModification: async (payload: any) => {
       // Stub for online REST API

@@ -970,6 +970,10 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                     if (existing != null)
                     {
                         // Update mutable fields — never overwrite Id
+                        // Keep the local cache explicitly bound to the terminal
+                        // property; a reused/stale cache must not retain the
+                        // previous property's staff scope.
+                        existing.PropertyId = propertyId;
                         existing.FirstName = staffEl.TryGetProperty("firstName", out var fn) && fn.ValueKind != System.Text.Json.JsonValueKind.Null ? fn.GetString() ?? existing.FirstName : existing.FirstName;
                         existing.LastName = staffEl.TryGetProperty("lastName", out var ln) && ln.ValueKind != System.Text.Json.JsonValueKind.Null ? ln.GetString() ?? existing.LastName : existing.LastName;
                         existing.Role = staffEl.TryGetProperty("role", out var role) && role.ValueKind != System.Text.Json.JsonValueKind.Null ? role.GetString() ?? existing.Role : existing.Role;

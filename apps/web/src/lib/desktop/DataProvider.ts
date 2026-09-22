@@ -150,6 +150,8 @@ export interface LodgeCoreDataProvider {
     voidWholeOrder(orderId: string, reason: string, isBarOrder: boolean, supervisorPin?: string): Promise<{ data: any, error: string | null }>;
     getProductionBatches(outletId: string, station: string): Promise<{ data: any[], error: string | null }>;
     updateBatchStatus(batchId: string, status: string): Promise<{ data: any, error: string | null }>;
+    /** Search in-house (CHECKED_IN) guests by name or room number for room charge settlement. */
+    getInHouseGuests(query: string): Promise<{ data: any[], error: string | null }>;
   };
   approvals: {
     requestItemModification(payload: any): Promise<{ success: boolean, requiresApproval?: boolean, error?: string, order?: any }>;

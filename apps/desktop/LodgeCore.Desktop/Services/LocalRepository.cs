@@ -38,6 +38,82 @@ public class LocalRepository
             throw new InvalidOperationException("This POS shift is closed or pending approval. Open a new approved shift before posting transactions.");
     }
 
+    /// <summary>
+    /// Validates that a folio can receive a POS room charge:
+    /// - Folio must exist and belong to the correct property
+    /// - Folio must be OPEN (not closed or voided)
+    /// - Linked reservation must be CHECKED_IN
+    /// Called inside PayOrderAsync before any DB mutation to enforce the guard.
+    /// </summary>
+    private async Task AssertFolioValidForPosChargeAsync(string folioId, string propertyId)
+    {
+        var folio = await _dbContext.Folios.FindAsync(folioId);
+        if (folio == null)
+            throw new InvalidOperationException("Guest folio not found. Please search for the guest again.");
+
+        if (!string.Equals(folio.PropertyId, propertyId, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("The selected folio does not belong to this property.");
+
+        if (string.Equals(folio.Status, "CLOSED", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(folio.Status, "VOID", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("The guest folio is closed and cannot accept new charges.");
+
+        if (!string.IsNullOrEmpty(folio.ReservationId))
+        {
+            var reservation = await _dbContext.Reservations.FindAsync(folio.ReservationId);
+            if (reservation == null)
+                throw new InvalidOperationException("The reservation linked to this folio was not found.");
+            if (!string.Equals(reservation.Status, "CHECKED_IN", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException(
+                    $"Guest is no longer checked in (status: {reservation.Status}). Cannot post room charge.");
+        }
+    }
+
+    /// <summary>
+    /// Returns all CHECKED_IN guests for the property, optionally filtered by guest name
+    /// or room number. Used by the POS cashier to search for a guest at settlement time.
+    /// </summary>
+    public async Task<List<object>> GetInHouseGuestsAsync(string propertyId, string? query = null)
+    {
+        var reservations = await _dbContext.Reservations
+            .Include(r => r.Guest)
+            .Include(r => r.Folio)
+            .Include(r => r.Rooms).ThenInclude(rr => rr.Room)
+            .Where(r => r.PropertyId == propertyId && r.Status == "CHECKED_IN")
+            .OrderBy(r => r.Guest != null ? r.Guest.LastName : "")
+            .ToListAsync();
+
+        if (!string.IsNullOrWhiteSpace(query))
+        {
+            var q = query.Trim().ToLowerInvariant();
+            reservations = reservations.Where(r =>
+                (r.Guest != null &&
+                    ($"{r.Guest.FirstName} {r.Guest.LastName}").ToLowerInvariant().Contains(q)) ||
+                r.Rooms.Any(rr => rr.Room != null &&
+                    rr.Room.Number.ToLowerInvariant().Contains(q))
+            ).ToList();
+        }
+
+        return reservations.Select(r =>
+        {
+            var room = r.Rooms.FirstOrDefault()?.Room;
+            return (object)new
+            {
+                reservationId = r.Id,
+                folioId = r.Folio?.Id,
+                folioBalance = r.Folio?.OutstandingBalance ?? 0m,
+                currency = r.Folio?.Currency ?? "NGN",
+                guestName = r.Guest != null
+                    ? $"{r.Guest.FirstName} {r.Guest.LastName}".Trim()
+                    : "Unknown Guest",
+                roomNumber = room?.Number ?? "–",
+                checkIn = r.CheckInDate,
+                checkOut = r.CheckOutDate,
+                isVip = r.Guest?.IsVip ?? false
+            };
+        }).ToList();
+    }
+
     public async Task<LocalReservation> CreateReservationAsync(LocalReservation reservation, string userId, string deviceId)
     {
         await AssertNightAuditAllowsAsync(reservation.PropertyId);
@@ -810,7 +886,7 @@ public class LocalRepository
         return true;
     }
 
-    public async Task<bool> RecordChargeAsync(string folioId, decimal amount, string description, string userId, string deviceId, string? idempotencyKey = null, bool requireFrontdeskSession = true)
+    public async Task<bool> RecordChargeAsync(string folioId, decimal amount, string description, string userId, string deviceId, string? idempotencyKey = null, bool requireFrontdeskSession = true, string? posTransactionId = null)
     {
         var folio = await _dbContext.Folios.FindAsync(folioId);
         if (folio == null) return false;
@@ -893,6 +969,7 @@ public class LocalRepository
                 businessDate = frontdeskSession?.BusinessDate,
                 originalBusinessDate = frontdeskSession?.BusinessDate,
                 idempotencyKey,
+                posTransactionId,        // links cloud FolioItem → source PosPayment (audit)
                 creditApplicationAmount,
                 creditApplicationKey = creditApplicationAmount > 0 ? $"CREDIT_APPLICATION:{idempotencyKey ?? newItem.id}" : null,
                 frontdeskSessionId = frontdeskSession?.Id,
@@ -2330,15 +2407,23 @@ public class LocalRepository
         return await _dbContext.RefundRequests.Where(request => request.PropertyId == propertyId).OrderByDescending(request => request.CreatedAt).Take(100).ToListAsync();
     }
 
-    public async Task<LocalRefundRequest> QueueGuestCreditRefundRequestAsync(string entryId, string guestId, string propertyId, decimal amount, string currency, string reason, string requestedMethod, string? bankAccountName, string? bankAccountNumber, string? bankName, string userId, string deviceId)
+    public async Task<LocalRefundRequest> QueueGuestCreditRefundRequestAsync(string entryId, string guestId, string propertyId, decimal amount, string currency, string reason, string requestedMethod, string? bankAccountName, string? bankAccountNumber, string? bankName, string userId, string deviceId, string accountType = "GUEST_CREDIT")
     {
-        if (string.IsNullOrWhiteSpace(entryId) || string.IsNullOrWhiteSpace(guestId)) throw new InvalidOperationException("Guest credit and guest are required.");
+        var isCorporateAdvance = string.Equals(accountType, "CORPORATE", StringComparison.OrdinalIgnoreCase);
+        if (string.IsNullOrWhiteSpace(entryId)) throw new InvalidOperationException("A city-ledger entry is required.");
+        if (!isCorporateAdvance && string.IsNullOrWhiteSpace(guestId)) throw new InvalidOperationException("Guest credit and guest are required.");
         if (amount <= 0) throw new InvalidOperationException("Refund amount must be positive.");
         if (string.Equals(requestedMethod, "ORIGINAL_PAYMENT", StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("Standalone guest credit has no original payment; choose bank transfer or cash.");
+        var entry = await _dbContext.CityLedgerEntries.FirstOrDefaultAsync(e => e.Id == entryId && e.PropertyId == propertyId);
+        if (entry == null) throw new InvalidOperationException("City-ledger entry not found.");
+        if (isCorporateAdvance && !string.Equals(entry.Type, "PAYMENT", StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("Corporate advance refund requires a corporate payment entry.");
+        if (!isCorporateAdvance && !string.Equals(entry.Type, "REFUND_OWED", StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("Guest refund requires a guest credit entry.");
+        var allocated = await _dbContext.CityLedgerAllocations.Where(a => a.CreditEntryId == entryId).SumAsync(a => (decimal?)a.Amount) ?? 0m;
+        if (amount > entry.Amount - allocated + 0.01m) throw new InvalidOperationException("Refund exceeds the available city-ledger credit.");
         var idempotencyKey = Guid.NewGuid().ToString();
-        var request = new LocalRefundRequest { PropertyId = propertyId, CityLedgerEntryId = entryId, GuestId = guestId, RequestedAmount = amount, Currency = currency, RequestedMethod = requestedMethod, BankAccountName = requestedMethod.Equals("BANK_TRANSFER", StringComparison.OrdinalIgnoreCase) ? bankAccountName : null, BankAccountNumber = requestedMethod.Equals("BANK_TRANSFER", StringComparison.OrdinalIgnoreCase) ? bankAccountNumber : null, BankName = requestedMethod.Equals("BANK_TRANSFER", StringComparison.OrdinalIgnoreCase) ? bankName : null, Category = "FOLIO_CREDIT_BALANCE", Reason = reason, IdempotencyKey = idempotencyKey, IsDirty = true };
+        var request = new LocalRefundRequest { PropertyId = propertyId, CityLedgerEntryId = entryId, GuestId = guestId, RequestedAmount = amount, Currency = currency, RequestedMethod = requestedMethod, BankAccountName = requestedMethod.Equals("BANK_TRANSFER", StringComparison.OrdinalIgnoreCase) ? bankAccountName : null, BankAccountNumber = requestedMethod.Equals("BANK_TRANSFER", StringComparison.OrdinalIgnoreCase) ? bankAccountNumber : null, BankName = requestedMethod.Equals("BANK_TRANSFER", StringComparison.OrdinalIgnoreCase) ? bankName : null, Category = isCorporateAdvance ? "CORPORATE_ADVANCE_BALANCE" : "FOLIO_CREDIT_BALANCE", Reason = reason, IdempotencyKey = idempotencyKey, IsDirty = true };
         _dbContext.RefundRequests.Add(request);
-        _dbContext.OutboxEvents.Add(new LocalOutboxEvent { IdempotencyKey = idempotencyKey, PropertyId = propertyId, DeviceId = deviceId, OperatorId = userId, AggregateType = "CITY_LEDGER", AggregateId = entryId, EventType = "GUEST_CREDIT_REFUND_REQUESTED", PayloadJson = JsonSerializer.Serialize(new { cityLedgerEntryId = entryId, guestId, propertyId, amount, currency, reason, requestedMethod, bankAccountName, bankAccountNumber, bankName, idempotencyKey, timestamp = DateTime.UtcNow }) });
+        _dbContext.OutboxEvents.Add(new LocalOutboxEvent { IdempotencyKey = idempotencyKey, PropertyId = propertyId, DeviceId = deviceId, OperatorId = userId, AggregateType = "CITY_LEDGER", AggregateId = entryId, EventType = "GUEST_CREDIT_REFUND_REQUESTED", PayloadJson = JsonSerializer.Serialize(new { cityLedgerEntryId = entryId, guestId = string.IsNullOrWhiteSpace(guestId) ? null : guestId, accountType = isCorporateAdvance ? "CORPORATE" : "GUEST_CREDIT", propertyId, amount, currency, reason, requestedMethod, bankAccountName, bankAccountNumber, bankName, idempotencyKey, timestamp = DateTime.UtcNow }) });
         await _dbContext.SaveChangesAsync();
         return request;
     }
@@ -3003,17 +3088,10 @@ public class LocalRepository
         }
 
         
-        if (!string.IsNullOrEmpty(order.FolioId))
-        {
-            await RecordChargeAsync(
-                order.FolioId,
-                order.Total,
-                $"POS Order #{order.OrderNumber}",
-                userId,
-                deviceId,
-                $"POS_ORDER:{order.Id}:FOLIO_CHARGE",
-                requireFrontdeskSession: false);
-        }
+        // NOTE: Folio charges for ROOM_CHARGE payments are posted atomically inside
+        // PayOrderAsync at settlement time — NOT here at order creation. This ensures
+        // the charge always reflects the final order total (after FireItems) and is
+        // never orphaned if the cashier abandons payment.
         
         await _dbContext.SaveChangesAsync();
         return order;
@@ -3830,8 +3908,20 @@ public class LocalRepository
 
     public async Task<List<object>> GetActiveOrdersAsync(string sessionId, string filter = "my_orders", string? staffId = null)
     {
-        var session = await _dbContext.PosSessions.FirstOrDefaultAsync(s => s.Id == sessionId);
+        var session = !string.IsNullOrWhiteSpace(sessionId)
+            ? await _dbContext.PosSessions.FirstOrDefaultAsync(s => s.Id == sessionId)
+            : null;
         var outletId = session?.OutletId;
+
+        // When there is no session yet (e.g. waiter has authenticated but not
+        // yet opened a shift), resolve the outlet from the provisioned terminal
+        // so the query always returns the correct outlet's orders rather than
+        // silently returning zero rows.
+        if (string.IsNullOrWhiteSpace(outletId))
+        {
+            var terminal = await _dbContext.PosTerminals.FirstOrDefaultAsync();
+            outletId = terminal?.OutletId;
+        }
 
         // Build this predicate in separate steps. SQLite's EF provider can
         // attempt to evaluate the captured ternary/array expressions as query
@@ -3843,8 +3933,10 @@ public class LocalRepository
 
         if (!string.IsNullOrWhiteSpace(outletId))
             query = query.Where(o => o.OutletId == outletId);
-        else
+        else if (!string.IsNullOrWhiteSpace(sessionId))
+            // Last-resort: scope by session so we never return the entire DB
             query = query.Where(o => o.SessionId == sessionId);
+        // else: no terminal outlet and no session — return nothing safely
 
         query = query.Where(o => o.Status != "CLOSED"
             && o.Status != "COMPLETED"
@@ -4245,7 +4337,7 @@ public class LocalRepository
         return await _dbContext.Staff.FirstOrDefaultAsync(s => s.Id == staffId);
     }
 
-    public async Task<LocalPosPayment> PayOrderAsync(string orderId, string method, decimal amount, string currency, string checkId, string userId, string deviceId, string? authorizerId = null)
+    public async Task<LocalPosPayment> PayOrderAsync(string orderId, string method, decimal amount, string currency, string checkId, string userId, string deviceId, string? authorizerId = null, string? folioId = null, string? reservationId = null)
     {
         var order = await _dbContext.PosOrders
             .Include(o => o.Items)
@@ -4276,6 +4368,36 @@ public class LocalRepository
         };
 
         _dbContext.PosPayments.Add(payment);
+
+        // ── ROOM CHARGE: atomically post the charge to the guest folio ────────────────
+        if (string.Equals(method, "ROOM_CHARGE", StringComparison.OrdinalIgnoreCase))
+        {
+            if (string.IsNullOrEmpty(folioId))
+                throw new InvalidOperationException(
+                    "A guest folio must be selected before posting a room charge.");
+
+            // Validate folio — do NOT trust client-supplied data blindly
+            await AssertFolioValidForPosChargeAsync(folioId, order.PropertyId);
+
+            // Stamp the folio/reservation link on the order (same DB transaction)
+            order.FolioId = folioId;
+            if (!string.IsNullOrEmpty(reservationId))
+                order.ReservationId = reservationId;
+
+            // Idempotency key prevents a duplicate folio charge if the device retries
+            var idempotencyKey = $"POS_PAY:{payment.Id}:FOLIO_CHARGE";
+
+            await RecordChargeAsync(
+                folioId,
+                amount,
+                $"POS Charge – Order #{order.OrderNumber}",
+                userId,
+                deviceId,
+                idempotencyKey,
+                requireFrontdeskSession: false,
+                posTransactionId: payment.Id);  // audit link: cloud FolioItem → PosPayment
+        }
+        // ─────────────────────────────────────────────────────────────────────────────
 
         AppendSyncEvent("POS_PAYMENT", payment.Id, "PAYMENT_RECORDED", payment, deviceId, order.OutletId, order.SessionId, userId);
 
@@ -6538,7 +6660,7 @@ public class LocalRepository
     public async Task<List<object>> GetFrontDeskCityLedgerAsync(string propertyId)
     {
         var entries = await _dbContext.CityLedgerEntries
-            .Where(e => e.PropertyId == propertyId && e.Type == "TRANSFER_IN" && (e.Status == "OPEN" || e.Status == "PENDING_SETTLEMENT"))
+            .Where(e => e.PropertyId == propertyId && ((e.Type == "TRANSFER_IN" && (e.Status == "OPEN" || e.Status == "PENDING_SETTLEMENT")) || (e.Type == "PAYMENT" && e.Status == "OPEN")))
             .OrderByDescending(e => e.CreatedAt)
             .ToListAsync();
         var allocations = await _dbContext.CityLedgerAllocations.Where(a => a.PropertyId == propertyId).ToListAsync();
@@ -6547,14 +6669,16 @@ public class LocalRepository
         return entries.Select(entry => {
             var paid = allocations.Where(a => a.InvoiceId == entry.InvoiceId).Sum(a => a.Amount);
             var corporate = corporates.FirstOrDefault(c => c.CityLedgerAccountId == entry.AccountId);
+            if (entry.Type == "PAYMENT" && corporate == null) return null;
+            var advancePaid = entry.Type == "PAYMENT" ? allocations.Where(a => a.CreditEntryId == entry.Id).Sum(a => a.Amount) : paid;
             return new {
                 entryId = entry.Id, accountId = entry.AccountId, invoiceId = entry.InvoiceId, invoiceNumber = entry.Description ?? entry.Id,
-                accountType = corporate == null ? "SKIPPER" : "CORPORATE", accountName = corporate?.Name ?? "Skipper / Walkout",
+                accountType = corporate == null ? "SKIPPER" : "CORPORATE", entryKind = entry.Type == "PAYMENT" ? "CORPORATE_ADVANCE" : "CITY_LEDGER_INVOICE", accountName = corporate?.Name ?? "Skipper / Walkout",
                 guestName = entry.GuestId != null && guests.TryGetValue(entry.GuestId, out var name) ? name : null,
-                amount = entry.Amount, paidAmount = paid, outstandingAmount = Math.Max(0, entry.Amount - paid),
+                amount = entry.Amount, paidAmount = advancePaid, outstandingAmount = Math.Max(0, entry.Amount - advancePaid),
                 currency = entry.Currency, status = entry.Status, reference = entry.Description, createdAt = entry.CreatedAt,
             };
-        }).Where(row => row.outstandingAmount > 0.01m || row.status == "PENDING_SETTLEMENT").Cast<object>().ToList();
+        }).Where(row => row != null && (row.outstandingAmount > 0.01m || row.status == "PENDING_SETTLEMENT")).Cast<object>().ToList();
     }
 
     public async Task<object> QueueCityLedgerPaymentAsync(string entryId, string accountId, string? invoiceId, string accountType, decimal amount, string method, string reference, string userId, string deviceId, DateTime businessDate)

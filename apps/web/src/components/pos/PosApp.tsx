@@ -618,12 +618,27 @@ export default function PosApp() {
   // ─────────────────────────────────────────────────────────────────
   // CHARGE — process payment on existing order
   // ─────────────────────────────────────────────────────────────────
-  const handleCharge = async (method: string, reference?: string) => {
+  const handleCharge = async (method: string, reference?: string, roomChargeData?: { folioId: string; reservationId: string; supervisorPin: string }) => {
     if (!operatorToken) { toast.error('No operator authenticated'); return; }
     if (!currentOrderId) { toast.error('No active order to charge'); return; }
     setIsProcessing(true);
     try {
-      const paymentData = { method, amount: total, currency: 'NGN', checkId: activeCheckId, reference };
+      const paymentData: Record<string, any> = {
+        method,
+        amount: total,
+        currency: 'NGN',
+        checkId: activeCheckId,
+        reference,
+      };
+
+      // For ROOM_CHARGE, include the folio/reservation and supervisor PIN
+      // so the backend can validate + post the charge atomically.
+      if (method === 'ROOM_CHARGE' && roomChargeData) {
+        paymentData.folioId = roomChargeData.folioId;
+        paymentData.reservationId = roomChargeData.reservationId;
+        paymentData.supervisorPin = roomChargeData.supervisorPin;
+      }
+
       const res = await provider.pos.payOrder(currentOrderId, paymentData, operatorToken);
       if (!res.error) {
         // Auto print receipt if on desktop
@@ -650,7 +665,9 @@ export default function PosApp() {
         setSuccessDialog({
           isOpen: true,
           title: 'Payment Successful!',
-          message: `Payment of ${formatCurrency(total)} via ${method} has been processed successfully.`
+          message: method === 'ROOM_CHARGE'
+            ? `${formatCurrency(total)} posted to Room Charge successfully.`
+            : `Payment of ${formatCurrency(total)} via ${method} has been processed successfully.`
         });
         setTableRefreshTrigger(Date.now());
       } else {
@@ -662,6 +679,7 @@ export default function PosApp() {
       setIsProcessing(false);
     }
   };
+
 
   // Print a customer-facing order receipt before payment. This is a preview
   // of the amount due and must not create a payment or change order status.
@@ -819,7 +837,7 @@ export default function PosApp() {
           viewMode={viewMode}
           setViewMode={setViewMode}
           onOpenMyOrders={() => setShowActiveOrders(true)}
-          bankingModel={bankingModel}
+
           onOpenMySales={() => setShowMySales(true)}
           onOpenShiftBank={() => setShowShiftBank(true)}
           onOpenKitchen={() => setShowKitchenModal(true)}
@@ -1457,8 +1475,9 @@ export default function PosApp() {
         onOrderSelect={handleOrderResume}
         onViewHistory={() => setShowMyOrders(true)}
         refreshKey={tableRefreshTrigger}
-        allowAllOpen
+        allowAllOpen={String(bankingModel).toUpperCase() !== 'SERVER_BANKING'}
       />
+
       
       {successDialog && (
         <ActionSuccessModal

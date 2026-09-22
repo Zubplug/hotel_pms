@@ -523,7 +523,7 @@ public class OfflinePMSInterop
             var ctx = await GetSecureContextAsync();
             if (!string.IsNullOrWhiteSpace(payload["cityLedgerEntryId"]?.ToString()))
             {
-                var request = await _repo.QueueGuestCreditRefundRequestAsync(payload["cityLedgerEntryId"]?.ToString() ?? "", payload["guestId"]?.ToString() ?? "", payload["propertyId"]?.ToString() ?? "", payload["amount"]?.GetValue<decimal>() ?? 0, payload["currency"]?.ToString() ?? "NGN", payload["reason"]?.ToString() ?? "", payload["refundMethod"]?.ToString() ?? "BANK_TRANSFER", payload["bankAccountName"]?.ToString(), payload["bankAccountNumber"]?.ToString(), payload["bankName"]?.ToString(), ctx.UserId, ctx.DeviceId);
+                var request = await _repo.QueueGuestCreditRefundRequestAsync(payload["cityLedgerEntryId"]?.ToString() ?? "", payload["guestId"]?.ToString() ?? "", payload["propertyId"]?.ToString() ?? "", payload["amount"]?.GetValue<decimal>() ?? 0, payload["currency"]?.ToString() ?? "NGN", payload["reason"]?.ToString() ?? "", payload["refundMethod"]?.ToString() ?? "BANK_TRANSFER", payload["bankAccountName"]?.ToString(), payload["bankAccountNumber"]?.ToString(), payload["bankName"]?.ToString(), ctx.UserId, ctx.DeviceId, payload["accountType"]?.ToString() ?? "GUEST_CREDIT");
                 return JsonSerializer.Serialize(new { success = true, data = request, pendingSync = true }, _jsonOptions);
             }
             throw new InvalidOperationException("Refund requests must be submitted from the Guest Credits tab.");
@@ -1707,6 +1707,25 @@ public class OfflinePMSInterop
         }
     }
 
+    /// <summary>
+    /// Returns in-house (CHECKED_IN) guests for the property, filtered by
+    /// name or room number. Used by the POS cashier's guest-search panel
+    /// when selecting a room charge recipient.
+    /// </summary>
+    public async Task<string> GetInHouseGuestsAsync(string query)
+    {
+        try
+        {
+            var ctx = await _sessionManager.GetActiveContextAsync();
+            var data = await _repo.GetInHouseGuestsAsync(ctx.PropertyId, query);
+            return JsonSerializer.Serialize(new { success = true, data }, _jsonOptions);
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
+        }
+    }
+
     public async Task<string> GetPosProductsAsync(string propertyId, string outletId = "")
     {
         try
@@ -1878,12 +1897,19 @@ public class OfflinePMSInterop
         }
     }
 
-    public async Task<string> GetActiveOrdersAsync(string filter)
+    public async Task<string> GetActiveOrdersAsync(string filter, string? callerSessionId = null)
     {
         try
         {
             var posCtx = await _sessionManager.GetActiveContextAsync();
-            var res = await _repo.GetActiveOrdersAsync(posCtx.SessionId, filter, posCtx.StaffId);
+            // Prefer the session ID the React layer already knows about (e.g.
+            // from localStorage after a shift start) over the one persisted in
+            // the operator context, which may still be empty string if the
+            // AttachSession IPC hasn't fired yet in the current desktop session.
+            var effectiveSessionId = !string.IsNullOrWhiteSpace(callerSessionId)
+                ? callerSessionId
+                : posCtx.SessionId;
+            var res = await _repo.GetActiveOrdersAsync(effectiveSessionId, filter, posCtx.StaffId);
             return JsonSerializer.Serialize(new { success = true, data = res }, _jsonOptions);
         }
         catch (Exception ex)
@@ -1964,14 +1990,50 @@ public class OfflinePMSInterop
             string currency = paymentData.ContainsKey("currency") ? paymentData["currency"]?.ToString() ?? fallbackCurrency : fallbackCurrency;
             string? checkId = paymentData.ContainsKey("checkId") ? paymentData["checkId"]?.ToString() : null;
             string? supervisorPin = paymentData.ContainsKey("supervisorPin") ? paymentData["supervisorPin"]?.ToString() : null;
+
+            // Folio / reservation passed from the POS checkout state for ROOM_CHARGE
+            string? folioId = paymentData.ContainsKey("folioId") ? paymentData["folioId"]?.ToString() : null;
+            string? reservationId = paymentData.ContainsKey("reservationId") ? paymentData["reservationId"]?.ToString() : null;
+
+            // ── ROOM_CHARGE: supervisor PIN is MANDATORY ──────────────────────────────
+            // Validate the PIN BEFORE any database mutation. A failure here means
+            // zero changes to payments, folio, or outbox.
             string? authorizerId = null;
-            if (!string.IsNullOrWhiteSpace(supervisorPin))
+            if (string.Equals(method, "ROOM_CHARGE", StringComparison.OrdinalIgnoreCase))
             {
+                if (string.IsNullOrWhiteSpace(supervisorPin))
+                    return JsonSerializer.Serialize(new
+                    {
+                        success = false,
+                        error = "A supervisor PIN is required to post a room charge."
+                    }, _jsonOptions);
+
+                if (string.IsNullOrEmpty(folioId))
+                    return JsonSerializer.Serialize(new
+                    {
+                        success = false,
+                        error = "A guest folio must be selected before posting a room charge."
+                    }, _jsonOptions);
+
+                var authorizer = await _repo.ValidateSupervisorPinAsync(supervisorPin, posCtx.PropertyId);
+                if (authorizer == null)
+                    return JsonSerializer.Serialize(new
+                    {
+                        success = false,
+                        error = "Invalid supervisor PIN. Room charge was not posted."
+                    }, _jsonOptions);
+
+                authorizerId = authorizer.Id;
+            }
+            else if (!string.IsNullOrWhiteSpace(supervisorPin))
+            {
+                // Non-ROOM_CHARGE payments may carry a supervisorPin for stock override
                 var authorizer = await _repo.ValidateSupervisorPinAsync(supervisorPin, posCtx.PropertyId);
                 if (authorizer == null) throw new UnauthorizedAccessException("Invalid manager PIN");
                 authorizerId = authorizer.Id;
             }
-            
+            // ─────────────────────────────────────────────────────────────────────────
+
             // AUTHORIZATION CHECK
             if (string.IsNullOrEmpty(posCtx.SessionId))
             {
@@ -1985,7 +2047,13 @@ public class OfflinePMSInterop
                 }
             }
 
-            var res = await _repo.PayOrderAsync(orderId, method, amount, currency, checkId ?? "", posCtx.StaffId, posCtx.DeviceId, authorizerId);
+            var res = await _repo.PayOrderAsync(
+                orderId, method, amount, currency,
+                checkId ?? "", posCtx.StaffId, posCtx.DeviceId,
+                authorizerId,
+                folioId: folioId,
+                reservationId: reservationId);
+
             return JsonSerializer.Serialize(new { success = true, data = res }, _jsonOptions);
         }
         catch (Exception ex)

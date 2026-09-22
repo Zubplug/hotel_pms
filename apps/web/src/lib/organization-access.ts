@@ -31,10 +31,27 @@ export async function requireOrganizationContext(userId: string): Promise<Tenant
     propertyIds = orgProps.map((p: any) => p.id);
   } else {
     const userRoles = await prisma.userRole.findMany({
-      where: { userId, propertyId: { not: null } },
+      where: {
+        userId,
+        propertyId: { not: null },
+        role: { organizationId: membership.organizationId },
+        property: { organizationId: membership.organizationId },
+      },
       select: { propertyId: true },
     });
     propertyIds = userRoles.map((r: any) => r.propertyId as string);
+
+    const staff = await prisma.staff.findFirst({
+      where: { userId, organizationId: membership.organizationId },
+      select: { propertyAccess: true },
+    });
+    if (staff?.propertyAccess?.length) {
+      const staffProperties = await prisma.property.findMany({
+        where: { organizationId: membership.organizationId, id: { in: staff.propertyAccess } },
+        select: { id: true },
+      });
+      propertyIds = Array.from(new Set([...propertyIds, ...staffProperties.map(property => property.id)]));
+    }
   }
 
   // 3. Resolve Outlet Scope

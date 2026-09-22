@@ -18,6 +18,9 @@ export async function GET(req: NextRequest) {
     if (!propertyId) {
       return NextResponse.json({ error: 'Property ID required' }, { status: 400 });
     }
+    if (!ctx.propertyIds.includes(propertyId)) {
+      return NextResponse.json({ error: 'Property access required' }, { status: 403 });
+    }
 
     let staff;
 
@@ -31,12 +34,12 @@ export async function GET(req: NextRequest) {
       // Outlet-scoped: only return staff explicitly assigned to this outlet.
       // Prisma to-one includes don't support `where`, so we filter in JS.
       const outletAccess = await prisma.staffPosOutletAccess.findMany({
-        where: { outletId },
+        where: { outletId, outlet: { propertyId } },
         include: { staff: true }
       });
       staff = outletAccess
         .map(a => a.staff)
-        .filter(s => s && s.isActive && allowedPositions.includes(s.position))
+        .filter(s => s && s.isActive && s.propertyAccess.includes(propertyId) && s.organizationId === ctx.organizationId && allowedPositions.includes(s.position))
         .map(s => ({
           id: s!.id,
           firstName: s!.firstName,
@@ -50,6 +53,7 @@ export async function GET(req: NextRequest) {
       staff = await prisma.staff.findMany({
         where: {
           propertyAccess: { has: propertyId },
+          organizationId: ctx.organizationId,
           isActive: true,
           position: { in: allowedPositions },
         },

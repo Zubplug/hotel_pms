@@ -589,8 +589,10 @@ public partial class MainPage : ContentPage
                     break;
                 case "pos.getActiveOrders":
                     responseData = await pmsInterop.GetActiveOrdersAsync(
-                        parameters?["filter"]?.ToString() ?? "");
+                        parameters?["filter"]?.ToString() ?? "",
+                        parameters?["sessionId"]?.ToString());
                     break;
+
                 case "pos.getOrder":
                     responseData = await pmsInterop.GetOrderAsync(parameters?["orderId"]?.ToString() ?? "");
                     break;
@@ -793,6 +795,12 @@ public partial class MainPage : ContentPage
                         parameters?["propertyId"]?.ToString() ?? "",
                         parameters?["deviceId"]?.ToString() ?? "");
                     break;
+
+                case "pos.getInHouseGuests":
+                    responseData = await pmsInterop.GetInHouseGuestsAsync(
+                        parameters?["query"]?.ToString() ?? "");
+                    break;
+
 
                 // ── Printer Management ────────────────────────────────────────
                 case "hardware.getPrinters":

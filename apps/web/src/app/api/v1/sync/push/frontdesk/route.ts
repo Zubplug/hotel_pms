@@ -1563,14 +1563,16 @@ export async function POST(req: NextRequest) {
             const amount = Number(payload.amount);
             const creditEntryId = payload.cityLedgerEntryId || aggregateId;
             const guestId = payload.guestId;
+            const accountType = String(payload.accountType || "GUEST_CREDIT").toUpperCase();
+            const isCorporateAdvance = accountType === "CORPORATE";
             const requestedMethod = String(payload.requestedMethod || "BANK_TRANSFER").toUpperCase();
             const reason = String(payload.reason || "Guest requested refund of available folio credit").trim();
             const bankAccountName = String(payload.bankAccountName || "").trim();
             const bankAccountNumber = String(payload.bankAccountNumber || "").replace(/\s+/g, "");
             const bankName = String(payload.bankName || "").trim();
 
-            if (!Number.isFinite(amount) || amount <= 0 || !isUuid(creditEntryId) || !isUuid(guestId)) {
-              throw new Error("Guest credit refund requires valid entry, guest, and amount");
+            if (!Number.isFinite(amount) || amount <= 0 || !isUuid(creditEntryId) || (!isCorporateAdvance && !isUuid(guestId))) {
+              throw new Error("Refund requires valid entry and amount");
             }
             if (!["CASH", "BANK_TRANSFER"].includes(requestedMethod)) {
               throw new Error("Standalone guest credits can only be refunded by cash or bank transfer");
@@ -1589,11 +1591,13 @@ export async function POST(req: NextRequest) {
               propertyId,
             );
             const entry = entryRows[0];
-            if (!entry || entry.type !== "REFUND_OWED" || entry.status !== "OPEN" || entry.guestId !== guestId) {
+            const validGuestCredit = entry?.type === "REFUND_OWED" && entry.status === "OPEN" && entry.guestId === guestId;
+            const validCorporateAdvance = entry?.type === "PAYMENT" && entry.status === "OPEN" && !entry.guestId;
+            if (!entry || (isCorporateAdvance ? !validCorporateAdvance : !validGuestCredit)) {
               throw new Error("GUEST_CREDIT_NOT_AVAILABLE");
             }
             const account = await tx.cityLedgerAccount.findUnique({ where: { id: entry.accountId }, select: { type: true } });
-            if (!account || account.type !== "REFUND_PAYABLE") throw new Error("INVALID_CREDIT_ACCOUNT");
+            if (!account || account.type !== (isCorporateAdvance ? "CORPORATE" : "REFUND_PAYABLE")) throw new Error("INVALID_CREDIT_ACCOUNT");
 
             const allocations = await tx.cityLedgerAllocation.aggregate({ where: { paymentId: creditEntryId }, _sum: { amount: true } });
             const pending = await tx.refundRequest.aggregate({
@@ -1616,7 +1620,7 @@ export async function POST(req: NextRequest) {
                 propertyId,
                 reservationId: entry.reservationId || null,
                 folioId: entry.folioId || null,
-                guestId,
+                guestId: isCorporateAdvance ? null : guestId,
                 cityLedgerEntryId: creditEntryId,
                 requestedAmount: amount,
                 currency: entry.currency,
@@ -1624,9 +1628,9 @@ export async function POST(req: NextRequest) {
                 bankAccountName: requestedMethod === "BANK_TRANSFER" ? bankAccountName : null,
                 bankAccountNumberEncrypted: requestedMethod === "BANK_TRANSFER" ? encrypt(bankAccountNumber) : null,
                 bankName: requestedMethod === "BANK_TRANSFER" ? bankName : null,
-                category: "FOLIO_CREDIT_BALANCE",
+                category: isCorporateAdvance ? "CORPORATE_ADVANCE_BALANCE" : "FOLIO_CREDIT_BALANCE",
                 reason,
-                supportingNotes: `Offline guest credit entry: ${creditEntryId}`,
+                supportingNotes: `Offline ${isCorporateAdvance ? "corporate advance" : "guest credit"} entry: ${creditEntryId}`,
                 requestedById: actorId,
                 currentApproverId: accountant?.userId || null,
                 approvalRoleId: accountantRole?.id || null,

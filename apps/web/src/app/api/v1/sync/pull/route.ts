@@ -127,7 +127,9 @@ export async function GET(req: NextRequest) {
     // then merge, sort by updatedAt, and slice the overall list to `limit`.
 
     const staffList = await prisma.staff.findMany({
-      where: buildWhere({ propertyAccess: { has: propertyId }, isActive: true, deletedAt: null }),
+      where: since
+        ? { propertyAccess: { has: propertyId }, organizationId: property.organizationId, isActive: true, deletedAt: null, updatedAt: { gt: since, lte: watermark } }
+        : { propertyAccess: { has: propertyId }, organizationId: property.organizationId, isActive: true, deletedAt: null, updatedAt: { lte: watermark } },
       take: limit,
       orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
     });
@@ -639,7 +641,7 @@ export async function GET(req: NextRequest) {
         
         if (staff.userId) {
           const userRoles = await prisma.userRole.findMany({
-            where: { userId: staff.userId, OR: [{ propertyId }, { propertyId: null }] },
+            where: { userId: staff.userId, role: { organizationId: property.organizationId }, OR: [{ propertyId }, { propertyId: null }] },
             include: { role: { include: { permissions: { include: { permission: true } } } } }
           });
 
@@ -655,7 +657,7 @@ export async function GET(req: NextRequest) {
 
         // Fetch which outlets this staff member can operate in
         const outletAccess = await prisma.staffPosOutletAccess.findMany({
-          where: { staffId: staff.id },
+          where: { staffId: staff.id, outlet: { propertyId } },
           select: { outletId: true },
         });
         const allowedOutletIds = outletAccess.map((a: any) => a.outletId);

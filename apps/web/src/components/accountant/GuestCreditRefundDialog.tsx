@@ -10,13 +10,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 
-export function GuestCreditRefundDialog({ entryId, guestName, amount, currency, guestId, propertyId }: { entryId: string; guestName: string; amount: number; currency: string; guestId?: string; propertyId?: string }) {
+export function GuestCreditRefundDialog({ entryId, guestName, amount, currency, guestId, propertyId, accountType = 'GUEST_CREDIT' }: { entryId: string; guestName: string; amount: number; currency: string; guestId?: string; propertyId?: string; accountType?: 'GUEST_CREDIT' | 'CORPORATE_ADVANCE' }) {
   const router = useRouter();
   const { provider, isOnline } = useLodgeCoreProvider();
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState(String(amount));
-  const [method, setMethod] = useState(guestId ? 'BANK_TRANSFER' : 'ORIGINAL_PAYMENT');
-  const [reason, setReason] = useState('Guest requested refund of available folio credit');
+  const isCorporateAdvance = accountType === 'CORPORATE_ADVANCE';
+  const [method, setMethod] = useState(isCorporateAdvance || guestId ? 'BANK_TRANSFER' : 'ORIGINAL_PAYMENT');
+  const [reason, setReason] = useState(isCorporateAdvance ? 'Corporate requested refund of unapplied advance' : 'Guest requested refund of available folio credit');
   const [bankName, setBankName] = useState('');
   const [bankAccountName, setBankAccountName] = useState('');
   const [bankAccountNumber, setBankAccountNumber] = useState('');
@@ -29,8 +30,8 @@ export function GuestCreditRefundDialog({ entryId, guestName, amount, currency, 
       if (method === 'BANK_TRANSFER' && (!bankName.trim() || !bankAccountName.trim() || !/^\d{6,20}$/.test(bankAccountNumber.replace(/\s+/g, '')))) {
         throw new Error('Enter a valid bank name, account name, and 6–20 digit account number.');
       }
-      const payload = { cityLedgerEntryId: entryId, guestId, propertyId, amount: Number(value), currency, refundMethod: method, reason, bankName, bankAccountName, bankAccountNumber, idempotencyKey: crypto.randomUUID() };
-      const result = guestId && propertyId
+      const payload = { cityLedgerEntryId: entryId, guestId, propertyId, accountType: isCorporateAdvance ? 'CORPORATE' : undefined, amount: Number(value), currency, refundMethod: method, reason, bankName, bankAccountName, bankAccountNumber, idempotencyKey: crypto.randomUUID() };
+      const result = propertyId
         ? await provider.refunds.request(payload)
         : await (async () => { const response = await fetch(`/api/v1/accountant/guest-credits/${entryId}/refund-request`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); const body = await response.json(); if (!response.ok) throw new Error(body.error?.message || body.error || 'Unable to submit refund request'); return body; })();
       toast.success((result as any)?.pendingSync || !isOnline ? 'Refund request queued offline and will sync for approval' : 'Refund request submitted for approval');
@@ -54,7 +55,7 @@ export function GuestCreditRefundDialog({ entryId, guestName, amount, currency, 
             <div>
               <DialogTitle className="text-xl font-bold text-slate-900">Request guest-credit refund</DialogTitle>
               <DialogDescription className="mt-1 text-sm leading-5 text-slate-500">
-                Submit a refund request for {guestName}. The Accountant and Manager must approve it before settlement.
+                Submit a refund request for {isCorporateAdvance ? 'the corporate advance account' : guestName}. The Accountant and Manager must approve it before settlement.
               </DialogDescription>
             </div>
           </div>

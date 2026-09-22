@@ -58,13 +58,19 @@ export async function getUserPropertyIds(
   }
 
   const staff = await prisma.staff.findFirst({
-    where: { userId },
+    where: { userId, ...(organizationId ? { organizationId } : {}) },
     select: { propertyAccess: true },
   });
-  const directPropertyIds = user.roles.filter(role => role.propertyId).map(role => role.propertyId as string);
-  const organizationIds = Array.from(new Set(user.roles.filter(role => !role.propertyId).map(role => role.role.organizationId)));
+  const scopedRoles = organizationId
+    ? user.roles.filter(role => role.role.organizationId === organizationId)
+    : user.roles;
+  const directPropertyIds = scopedRoles.filter(role => role.propertyId).map(role => role.propertyId as string);
+  const organizationIds = Array.from(new Set(scopedRoles.filter(role => !role.propertyId).map(role => role.role.organizationId)));
   const organizationPropertyIds = organizationIds.length
     ? (await prisma.property.findMany({ where: { organizationId: { in: organizationIds } }, select: { id: true } })).map(property => property.id)
     : [];
-  return Array.from(new Set([...(staff?.propertyAccess ?? []), ...directPropertyIds, ...organizationPropertyIds]));
+  const staffPropertyIds = staff?.propertyAccess?.length
+    ? (await prisma.property.findMany({ where: { id: { in: staff.propertyAccess }, ...(organizationId ? { organizationId } : {}) }, select: { id: true } })).map(property => property.id)
+    : [];
+  return Array.from(new Set([...staffPropertyIds, ...directPropertyIds, ...organizationPropertyIds]));
 }

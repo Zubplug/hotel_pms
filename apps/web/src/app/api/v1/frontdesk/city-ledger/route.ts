@@ -16,13 +16,21 @@ export async function GET(req: NextRequest) {
   const ctx = await requireOrganizationContext(session.user.id);
   if (!ctx.propertyIds.includes(propertyId)) return errorResponse('FORBIDDEN', 'Property access required', 403);
   const entries = await prisma.cityLedgerEntry.findMany({
-    where: { propertyId, type: 'TRANSFER_IN', status: 'OPEN' },
+    where: {
+      propertyId,
+      OR: [
+        { type: 'TRANSFER_IN', status: 'OPEN' },
+        { type: 'PAYMENT', status: 'OPEN', account: { type: 'CORPORATE' } },
+      ],
+    },
     include: { account: true, invoice: true, allocations: true, guest: { select: { firstName: true, lastName: true } } },
     orderBy: { createdAt: 'desc' },
   });
   return successResponse(entries.map(entry => {
-    const paid = entry.allocations.filter(allocation => allocation.invoiceId === entry.invoiceId).reduce((sum, allocation) => sum + Number(allocation.amount), 0);
-    return { entryId: entry.id, accountId: entry.accountId, invoiceId: entry.invoiceId, invoiceNumber: entry.invoice?.invoiceNumber || entry.reference, accountType: entry.account.type, accountName: entry.account.name, guestName: entry.guest ? `${entry.guest.firstName} ${entry.guest.lastName}` : null, amount: Number(entry.amount), paidAmount: paid, outstandingAmount: Math.max(0, Number(entry.amount) - paid), currency: entry.currency, status: entry.status, reference: entry.reason, createdAt: entry.createdAt };
+    const paid = entry.type === 'PAYMENT'
+      ? entry.allocations.reduce((sum, allocation) => sum + Number(allocation.amount), 0)
+      : entry.allocations.filter(allocation => allocation.invoiceId === entry.invoiceId).reduce((sum, allocation) => sum + Number(allocation.amount), 0);
+    return { entryId: entry.id, accountId: entry.accountId, invoiceId: entry.invoiceId, invoiceNumber: entry.type === 'PAYMENT' ? 'Corporate advance' : (entry.invoice?.invoiceNumber || entry.reference), entryKind: entry.type === 'PAYMENT' ? 'CORPORATE_ADVANCE' : 'CITY_LEDGER_INVOICE', accountType: entry.account.type, accountName: entry.account.name, guestName: entry.guest ? `${entry.guest.firstName} ${entry.guest.lastName}` : null, amount: Number(entry.amount), paidAmount: paid, outstandingAmount: Math.max(0, Number(entry.amount) - paid), currency: entry.currency, status: entry.status, reference: entry.reason, createdAt: entry.createdAt };
   }).filter(entry => entry.outstandingAmount > 0.01));
 }
 
@@ -45,7 +53,7 @@ export async function POST(req: NextRequest) {
   if (!['CASH', 'BANK_TRANSFER', 'POS', 'CARD', 'CHEQUE', 'OTHER'].includes(method)) return errorResponse('BAD_REQUEST', 'Invalid settlement method', 400);
   const ctx = await requireOrganizationContext(session.user.id);
   const entry = await prisma.cityLedgerEntry.findUnique({ where: { id: entryId }, include: { account: true, invoice: true, allocations: true } });
-  if (!entry || !ctx.propertyIds.includes(entry.propertyId) || entry.type !== 'TRANSFER_IN') return errorResponse('NOT_FOUND', 'Open city ledger entry not found', 404);
+  if (!entry || !ctx.propertyIds.includes(entry.propertyId) || entry.type !== 'TRANSFER_IN' || entry.status !== 'OPEN') return errorResponse('NOT_FOUND', 'Open city ledger entry not found', 404);
   if (!accountId || accountId !== entry.accountId || !['CORPORATE', 'SKIPPER'].includes(accountType)) return errorResponse('BAD_REQUEST', 'A valid city ledger account and account type are required', 400);
   if (entry.account.type !== accountType) return errorResponse('CONFLICT', 'City ledger account type does not match the settlement', 409);
   if (accountType === 'SKIPPER') {
