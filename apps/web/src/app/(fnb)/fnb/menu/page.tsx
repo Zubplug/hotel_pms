@@ -6,5 +6,5 @@ export const metadata: Metadata = {
 };
 
 export default function FnbMenuPage() {
-  return <FnbMenuClient />;
+  return <div className="fnb-dark-surface min-h-full"><FnbMenuClient /></div>;
 }

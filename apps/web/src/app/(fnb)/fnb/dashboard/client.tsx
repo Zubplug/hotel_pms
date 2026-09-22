@@ -150,6 +150,14 @@ export default function FnbAnalyticsClient() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session, propertyId, range]);
 
+  useEffect(() => {
+    if (!session?.user || !propertyId) return;
+    const interval = window.setInterval(() => void load(), 60_000);
+    return () => window.clearInterval(interval);
+    // The selected range and property are captured by the primary loader effect.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session, propertyId, range]);
+
   const summary = data?.summary || {};
   const hourlyRevenue = data?.hourlyRevenue || [];
   const categoryRevenue = data?.categoryRevenue || [];

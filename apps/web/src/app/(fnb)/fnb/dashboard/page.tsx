@@ -4,5 +4,5 @@ import FnbAnalyticsClient from './client';
 export const metadata = { title: 'F&B Dashboard' };
 
 export default function FnbGeneralDashboardPage() {
-  return <FnbAnalyticsClient />;
+  return <div className="fnb-dark-surface min-h-full"><FnbAnalyticsClient /></div>;
 }

@@ -6,5 +6,5 @@ export const metadata: Metadata = {
 };
 
 export default function FnbOrdersPage() {
-  return <FnbOrdersClient />;
+  return <div className="fnb-dark-surface min-h-full"><FnbOrdersClient /></div>;
 }

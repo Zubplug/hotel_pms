@@ -90,6 +90,34 @@
 .cashier-dark-surface .bg-\[\#f7f9fc\] { background-color: #07111f !important; }
 .cashier-dark-surface > .min-h-full.bg-\[\#f7f9fc\] { background-color: #07111f !important; }
 
+/* F&B manager workspaces retain the orange hospitality accent while using the
+   same high-contrast live control-room surface as the rest of the PMS. */
+.fnb-dark-surface { background: #07111f !important; color: #e2e8f0; }
+.fnb-dark-surface .bg-\[\#fbf8f6\] { background-color: #07111f !important; }
+.fnb-dark-surface .bg-white { background-color: #101b2f !important; }
+.fnb-dark-surface .bg-\[\#fff7ed\] { background-color: rgba(249, 115, 22, 0.13) !important; }
+.fnb-dark-surface .bg-\[\#f7eee9\],
+.fnb-dark-surface .bg-\[\#f4ebe6\] { background-color: rgba(255, 255, 255, 0.055) !important; }
+.fnb-dark-surface .border-\[\#eadfd8\],
+.fnb-dark-surface .border-\[\#ddcec5\],
+.fnb-dark-surface .border-\[\#f1e7e1\],
+.fnb-dark-surface .border-\[\#f5eee9\] { border-color: rgba(255, 255, 255, 0.10) !important; }
+.fnb-dark-surface .divide-\[\#f1e7e1\] > :not([hidden]) ~ :not([hidden]),
+.fnb-dark-surface .divide-\[\#f5eee9\] > :not([hidden]) ~ :not([hidden]) { border-color: rgba(255, 255, 255, 0.08) !important; }
+.fnb-dark-surface .text-\[\#24130d\] { color: #f8fafc !important; }
+.fnb-dark-surface .text-\[\#4f392f\],
+.fnb-dark-surface .text-\[\#735c51\],
+.fnb-dark-surface .text-\[\#806b60\] { color: #e2e8f0 !important; }
+.fnb-dark-surface .text-\[\#876f63\],
+.fnb-dark-surface .text-\[\#927b70\],
+.fnb-dark-surface .text-\[\#947d72\],
+.fnb-dark-surface .text-\[\#b19c91\] { color: #94a3b8 !important; }
+.fnb-dark-surface input,
+.fnb-dark-surface textarea,
+.fnb-dark-surface select { background-color: #0b1628; border-color: rgba(255, 255, 255, 0.12); color: #f8fafc; }
+.fnb-dark-surface .hover\:bg-white:hover,
+.fnb-dark-surface .hover\:bg-\[\#fffaf6\]:hover { background-color: rgba(255, 255, 255, 0.08) !important; }
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {

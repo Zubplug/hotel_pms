@@ -6,5 +6,5 @@ export const metadata: Metadata = {
 };
 
 export default function FnbInventoryPage() {
-  return <FnbInventoryClient />;
+  return <div className="fnb-dark-surface min-h-full"><FnbInventoryClient /></div>;
 }
