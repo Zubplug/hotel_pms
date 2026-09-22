@@ -66,12 +66,12 @@ export default function TrialBalanceReportPage() {
             <colgroup>
               <col style={{ width: '9%' }} />
               <col style={{ width: '21%' }} />
-              <col style={{ width: '16%' }} />
-              <col style={{ width: '13%' }} />
-              <col style={{ width: '13%' }} />
+              <col style={{ width: '14%' }} />
+              <col style={{ width: '12%' }} />
+              <col style={{ width: '12%' }} />
               <col style={{ width: '14%' }} />
               <col style={{ width: '7%' }} />
-              <col style={{ width: '7%' }} />
+              <col style={{ width: '11%' }} />
             </colgroup>
             <thead>
               <tr className="border-b-2 border-slate-800">
@@ -82,7 +82,7 @@ export default function TrialBalanceReportPage() {
                 <th className="py-1.5 px-2 print:px-1 print:py-1 font-bold uppercase text-slate-700 text-right break-words">Credit</th>
                 <th className="py-1.5 px-2 print:px-1 print:py-1 font-bold uppercase text-slate-700 text-right break-words">Net Balance</th>
                 <th className="py-1.5 px-1 print:px-0.5 print:py-1 font-bold uppercase text-slate-700 text-center break-words">Trans Count</th>
-                <th className="py-1.5 px-2 print:px-1 print:py-1 font-bold uppercase text-slate-700 break-words">Source</th>
+                <th className="py-1.5 px-2 print:px-1 print:py-1 font-bold uppercase text-slate-700 whitespace-nowrap">Source</th>
               </tr>
             </thead>
             <tbody>
@@ -95,7 +95,7 @@ export default function TrialBalanceReportPage() {
                   <td className="py-1.5 px-2 print:px-1 print:py-1 text-right whitespace-nowrap">{formatCurrency(acc.credit || 0, currencyCode)}</td>
                   <td className="py-1.5 px-2 print:px-1 print:py-1 text-right font-medium whitespace-nowrap">{formatCurrency(acc.netBalance || 0, currencyCode)}</td>
                   <td className="py-1.5 px-1 print:px-0.5 print:py-1 text-center text-slate-600 whitespace-nowrap">{acc.transactionCount}</td>
-                  <td className="py-1.5 px-2 print:px-1 print:py-1 text-slate-600 break-words">{acc.source}</td>
+                  <td className="py-1.5 px-2 print:px-1 print:py-1 text-slate-600 whitespace-nowrap">{acc.source}</td>
                 </tr>
               ))}
             </tbody>

@@ -68,7 +68,9 @@ export function A4ReportWrapper({
           }
 
           .night-audit-a4-sheet {
+            height: auto !important;
             min-height: 297mm;
+            max-height: none !important;
             break-after: page;
             page-break-after: always;
           }
@@ -76,10 +78,29 @@ export function A4ReportWrapper({
           .night-audit-a4-content {
             box-sizing: border-box;
             width: 210mm;
+            height: auto !important;
             min-height: 297mm;
+            max-height: none !important;
             overflow: visible !important;
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
+          }
+
+          .night-audit-a4-content table {
+            page-break-inside: auto;
+          }
+
+          .night-audit-a4-content thead {
+            display: table-header-group;
+          }
+
+          .night-audit-a4-content tfoot {
+            display: table-footer-group;
+          }
+
+          .night-audit-a4-content tr {
+            break-inside: avoid;
+            page-break-inside: avoid;
           }
         }
       `}</style>
