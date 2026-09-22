@@ -128,7 +128,7 @@ export function A4ReportWrapper({
   );
 
   const ReportFooter = () => (
-    <div className="border-t-2 border-slate-300 mt-6 print:mt-0 pt-2 flex justify-between items-end text-[8px] text-slate-500 bg-white">
+    <div className="w-full border-t-2 border-slate-300 mt-6 print:mt-0 pt-2 flex justify-between items-end text-[8px] text-slate-500 bg-white">
       <div className="max-w-[75%] leading-relaxed">
         * This report represents transactions recorded against the specified business date. 
         Variances may occur if transactions are backdated after generation.
@@ -214,9 +214,16 @@ export function A4ReportWrapper({
             display: table-row-group;
           }
 
-          .na-print-layer tr {
+          .na-print-layer tr:not(.print-layout-row) {
             break-inside: avoid;
             page-break-inside: avoid;
+          }
+
+          /* The layout table MUST break, otherwise Chrome pushes the entire report to page 2 */
+          .print-layout-table,
+          .print-layout-row {
+            break-inside: auto !important;
+            page-break-inside: auto !important;
           }
 
           /* Header blocks never split across pages */
@@ -300,9 +307,9 @@ export function A4ReportWrapper({
         </div>
         <ReportMeta />
         
-        <table className="w-full">
+        <table className="w-full print-layout-table">
           <tbody>
-            <tr>
+            <tr className="print-layout-row">
               <td className="p-0 align-top">
                 {children}
               </td>
