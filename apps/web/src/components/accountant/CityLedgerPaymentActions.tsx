@@ -13,7 +13,7 @@ type Invoice = { id: string; invoiceNumber: string; outstandingAmount: number; c
 type Account = { id: string; name: string; type: string };
 type Allocation = { id: string; amount: number; invoice?: { invoiceNumber: string } | null };
 
-export function CityLedgerPaymentActions({ accountId, paymentId, amount, currency, invoices, accounts, allocations, status, onComplete }: { accountId: string; paymentId: string; amount: number; currency: string; invoices: Invoice[]; accounts: Account[]; allocations: Allocation[]; status: string; onComplete?: () => void }) {
+export function CityLedgerPaymentActions({ accountId, paymentId, amount, currency, invoices, accounts, allocations, status, accountType, canManagerCorrect, onComplete }: { accountId: string; paymentId: string; amount: number; currency: string; invoices: Invoice[]; accounts: Account[]; allocations: Allocation[]; status: string; accountType: string; canManagerCorrect: boolean; onComplete?: () => void }) {
   const [action, setAction] = useState<'allocate' | 'transfer' | 'reverse' | 'unapply' | null>(null);
   const [invoiceId, setInvoiceId] = useState('');
   const [targetAccountId, setTargetAccountId] = useState('');
@@ -23,6 +23,7 @@ export function CityLedgerPaymentActions({ accountId, paymentId, amount, currenc
   const [busy, setBusy] = useState(false);
   const available = Math.max(0, amount - allocations.reduce((sum, allocation) => sum + Number(allocation.amount), 0));
   const canManage = status !== 'REVERSED';
+  const isCorporate = accountType === 'CORPORATE';
 
   const submit = async () => {
     if (!action) return;
@@ -44,10 +45,10 @@ export function CityLedgerPaymentActions({ accountId, paymentId, amount, currenc
 
   return <>
     <div className="flex flex-wrap justify-end gap-2">
-      {canManage && available > 0.01 && <Button size="sm" variant="outline" className="border-cyan-300/20 bg-transparent text-cyan-300" onClick={() => { setAction('allocate'); setValue(String(Math.min(available, invoices[0]?.outstandingAmount || available))); }}>{'Allocate'}</Button>}
-      {canManage && allocations.length > 0 && <Button size="sm" variant="outline" className="border-amber-300/20 bg-transparent text-amber-300" onClick={() => { setSelectedAllocation(allocations[0]); setAction('unapply'); }}><Unlink className="mr-1 h-3.5 w-3.5" />Unapply</Button>}
-      {canManage && allocations.length === 0 && <Button size="sm" variant="outline" className="border-violet-300/20 bg-transparent text-violet-300" onClick={() => setAction('transfer')}><ArrowRightLeft className="mr-1 h-3.5 w-3.5" />Transfer</Button>}
-      {canManage && <Button size="sm" variant="outline" className="border-rose-300/20 bg-transparent text-rose-300" onClick={() => setAction('reverse')}><RotateCcw className="mr-1 h-3.5 w-3.5" />Reverse</Button>}
+      {isCorporate && canManage && available > 0.01 && <Button size="sm" variant="outline" className="border-cyan-300/20 bg-transparent text-cyan-300" onClick={() => { setAction('allocate'); setValue(String(Math.min(available, invoices[0]?.outstandingAmount || available))); }}>{'Allocate'}</Button>}
+      {isCorporate && canManage && allocations.length > 0 && <Button size="sm" variant="outline" className="border-amber-300/20 bg-transparent text-amber-300" onClick={() => { setSelectedAllocation(allocations[0]); setAction('unapply'); }}><Unlink className="mr-1 h-3.5 w-3.5" />Unapply</Button>}
+      {isCorporate && canManage && canManagerCorrect && allocations.length === 0 && <Button size="sm" variant="outline" className="border-violet-300/20 bg-transparent text-violet-300" onClick={() => setAction('transfer')}><ArrowRightLeft className="mr-1 h-3.5 w-3.5" />Transfer</Button>}
+      {isCorporate && canManage && canManagerCorrect && <Button size="sm" variant="outline" className="border-rose-300/20 bg-transparent text-rose-300" onClick={() => setAction('reverse')}><RotateCcw className="mr-1 h-3.5 w-3.5" />Reverse</Button>}
     </div>
     <Dialog open={Boolean(action)} onOpenChange={open => !open && !busy && setAction(null)}><DialogContent className="border-white/10 bg-[#0b1628] text-slate-100"><DialogHeader><DialogTitle className="text-white">{action === 'allocate' ? 'Allocate unapplied payment' : action === 'transfer' ? 'Transfer payment' : action === 'unapply' ? 'Unapply payment' : 'Reverse payment'}</DialogTitle><DialogDescription className="text-slate-400">{action === 'reverse' ? 'This restores the AR balance, reverses invoice allocations, and posts a balanced GL reversal.' : action === 'transfer' ? 'Move an unapplied receipt to the correct city-ledger account. The 1140 AR control balance remains unchanged.' : action === 'unapply' ? 'The invoice balance will be restored and the payment returned to unapplied status.' : `Available to apply: ${available.toLocaleString()} ${currency}`}</DialogDescription></DialogHeader>
       <div className="space-y-4 py-3">
