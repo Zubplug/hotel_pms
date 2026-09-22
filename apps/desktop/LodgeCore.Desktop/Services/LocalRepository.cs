@@ -4972,7 +4972,7 @@ public class LocalRepository
 
         return pendingSessions.Select(session => {
             var stl = settlements.FirstOrDefault(s => s.SessionId == session.Id);
-            return new {
+            return (object)new {
                 Session = session,
                 Settlement = stl
             };
@@ -6547,7 +6547,7 @@ public class LocalRepository
         return entries.Select(entry => {
             var paid = allocations.Where(a => a.InvoiceId == entry.InvoiceId).Sum(a => a.Amount);
             var corporate = corporates.FirstOrDefault(c => c.CityLedgerAccountId == entry.AccountId);
-            return (object)new {
+            return new {
                 entryId = entry.Id, accountId = entry.AccountId, invoiceId = entry.InvoiceId, invoiceNumber = entry.Id,
                 accountType = corporate == null ? "SKIPPER" : "CORPORATE", accountName = corporate?.Name ?? "Skipper / Walkout",
                 guestName = entry.GuestId != null && guests.TryGetValue(entry.GuestId, out var name) ? name : null,
