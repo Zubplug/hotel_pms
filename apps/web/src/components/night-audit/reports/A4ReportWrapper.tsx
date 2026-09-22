@@ -44,8 +44,13 @@ export function A4ReportWrapper({
       <style jsx global>{`
         @page {
           size: A4 portrait;
-          /* Real margins so content on pages 2+ isn't flush to the paper edge */
-          margin: 15mm 12mm;
+          /*
+           * MUST stay 0 — any non-zero margin gives the browser space to
+           * render its default header/footer text (URL, date, page numbers).
+           * The content's own p-10 padding provides the breathing room on
+           * every page including page 2+.
+           */
+          margin: 0;
         }
 
         @media print {
@@ -77,7 +82,10 @@ export function A4ReportWrapper({
             overflow: visible !important;
           }
 
-          /* The sheet must NEVER clip — this was the primary cutoff bug */
+          /*
+           * The sheet must NEVER clip — overflow:hidden is the #1 cause of
+           * page-2 content being cut off before the print engine sees it.
+           */
           .night-audit-a4-sheet {
             width: 100% !important;
             height: auto !important;
@@ -90,6 +98,11 @@ export function A4ReportWrapper({
             padding: 0 !important;
           }
 
+          /*
+           * DO NOT override padding here — the Tailwind p-10 class (~10.5mm)
+           * is intentionally kept so page 2+ content has top/bottom breathing
+           * room without relying on @page margins (which show browser chrome).
+           */
           .night-audit-a4-content {
             box-sizing: border-box;
             width: 100%;
@@ -97,7 +110,6 @@ export function A4ReportWrapper({
             min-height: 0 !important;
             max-height: none !important;
             overflow: visible !important;
-            padding: 0 !important; /* @page margin handles spacing */
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
           }
@@ -128,6 +140,7 @@ export function A4ReportWrapper({
           }
         }
       `}</style>
+
 
       <div className="night-audit-print-root relative min-h-screen overflow-x-auto py-10 print:overflow-visible print:bg-white print:py-0">
       {/* Dark premium background (hidden during print) */}
