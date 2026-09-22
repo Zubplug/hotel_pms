@@ -31,6 +31,14 @@ export async function GET(req: NextRequest) {
       include: { staff: true }
     });
 
+    // POS sessions are separate cashier shifts and must be reported alongside
+    // Front Desk sessions for the same business date.
+    const posSessions = await prisma.posSession.findMany({
+      where: { propertyId, businessDate },
+      include: { primaryOperator: true, outlet: true, payments: true },
+      orderBy: { openedAt: 'asc' },
+    });
+
     const cashiers = await Promise.all(sessions.map(async (session) => {
       const openingFloat = Number(session.openingFloat || 0);
       const expectedCash = Number(session.systemExpectedCash || 0);
@@ -57,12 +65,13 @@ export async function GET(req: NextRequest) {
         _sum: { amount: true }
       });
 
-      let cashSales = 0, cardSales = 0, bankTransfer = 0, other = 0;
+      let cashSales = 0, cardSales = 0, bankTransfer = 0, posPayment = 0, other = 0;
       paymentsAggr.forEach(p => {
         const amt = Number(p._sum.amount || 0);
         if (p.method === 'CASH') cashSales += amt;
         else if (p.method === 'CARD') cardSales += amt;
         else if (p.method === 'BANK_TRANSFER') bankTransfer += amt;
+        else if (p.method === 'POS') posPayment += amt;
         else other += amt;
       });
 
@@ -94,6 +103,7 @@ export async function GET(req: NextRequest) {
         cashSales,
         cardSales,
         bankTransfer,
+        posPayment,
         other,
         cashRefunds,
         paidOuts: 0,
@@ -105,6 +115,43 @@ export async function GET(req: NextRequest) {
       };
     }));
 
+    const posCashiers = posSessions.map((session) => {
+      const totals = { cashSales: 0, cardSales: 0, bankTransfer: 0, posPayment: 0, other: 0 };
+      for (const payment of session.payments) {
+        if (!['CONFIRMED', 'PAID'].includes(payment.status)) continue;
+        const amount = Number(payment.amount || 0);
+        if (payment.method === 'CASH') totals.cashSales += amount;
+        else if (payment.method === 'CARD' || payment.method === 'CARD_OFFLINE') totals.cardSales += amount;
+        else if (payment.method === 'BANK_TRANSFER') totals.bankTransfer += amount;
+        else if (payment.method === 'POS') totals.posPayment += amount;
+        else totals.other += amount;
+      }
+      const openingFloat = Number(session.openingCash || 0);
+      const cashRefunds = Number(session.cashRefunds || 0);
+      const paidOuts = Number(session.cashOut || 0);
+      const cashIn = Number(session.cashIn || 0);
+      const cashDrops = 0;
+      const expectedCash = openingFloat + totals.cashSales + cashIn - cashRefunds - paidOuts;
+      const actualCash = session.actualCash == null ? 0 : Number(session.actualCash);
+      const variance = session.actualCash == null ? 0 : actualCash - expectedCash;
+
+      return {
+        cashierName: `${session.primaryOperator?.firstName || 'POS'} ${session.primaryOperator?.lastName || ''}`.trim(),
+        shiftReference: `POS-${session.id.slice(-8).toUpperCase()}`,
+        status: session.status,
+        openingFloat,
+        ...totals,
+        cashRefunds,
+        paidOuts,
+        cashDrops,
+        expectedCash,
+        actualCash,
+        variance,
+        supervisorApproval: variance === 0 ? 'APPROVED' : 'PENDING',
+        outletName: session.outlet?.name || 'POS',
+      };
+    });
+
     return successResponse({
       propertyName: property?.name || 'Property',
       propertyEmail: property?.email || '',
@@ -113,7 +160,7 @@ export async function GET(req: NextRequest) {
       propertyCurrency: property?.baseCurrency || 'NGN',
       businessDate: businessDateStr,
       auditStatus: nightAudit?.status || 'CLOSED',
-      cashiers
+      cashiers: [...cashiers, ...posCashiers]
     });
 
   } catch (err: any) {

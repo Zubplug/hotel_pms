@@ -79,6 +79,7 @@ export default function ExceptionsReportPage() {
               <th className="py-1 px-1 w-32">Guest</th>
               <th className="py-1 px-1">Reason</th>
               <th className="py-1 px-1 w-24">Operator</th>
+              <th className="py-1 px-1 w-24">Acknowledged By</th>
               <th className="py-1 px-1 w-24 text-right">Amount</th>
             </tr>
           </thead>
@@ -90,11 +91,12 @@ export default function ExceptionsReportPage() {
                 <td className="py-1 px-1 truncate">{ex.guestName}</td>
                 <td className="py-1 px-1 truncate">{ex.reason}</td>
                 <td className="py-1 px-1 truncate">{ex.operator}</td>
+                <td className="py-1 px-1 truncate">{ex.acknowledgedBy || '—'}</td>
                 <td className="py-1 px-1 text-right font-medium">{formatCurrency(Math.abs(ex.amount), currencyCode)}</td>
               </tr>
             ))}
             <tr className="bg-rose-50 font-semibold border-y border-rose-300 text-rose-900">
-              <td colSpan={5} className="py-1.5 px-1 text-right uppercase tracking-wider text-[8px]">Total {title}</td>
+              <td colSpan={6} className="py-1.5 px-1 text-right uppercase tracking-wider text-[8px]">Total {title}</td>
               <td className="py-1.5 px-1 text-right">{formatCurrency(totals[totalKey], currencyCode)}</td>
             </tr>
           </tbody>

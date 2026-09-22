@@ -97,7 +97,7 @@ export default function CashierSummaryReportPage() {
             return (
               <TableSection 
                 key={index} 
-                title={`Cashier: ${cashier.cashierName || 'Unknown'}`}
+                title={`${cashier.outletName ? `POS · ${cashier.outletName} · ` : 'Cashier: '}${cashier.cashierName || 'Unknown'}`}
                 shift={cashier.shiftReference}
                 status={cashier.status}
               >
@@ -109,6 +109,7 @@ export default function CashierSummaryReportPage() {
                         <TableRow label="Cash Sales" value={formatCurrency(cashier.cashSales, currencyCode)} />
                         <TableRow label="Card Sales" value={formatCurrency(cashier.cardSales, currencyCode)} />
                         <TableRow label="Bank Transfer" value={formatCurrency(cashier.bankTransfer, currencyCode)} />
+                        <TableRow label="POS Payment" value={formatCurrency(cashier.posPayment, currencyCode)} />
                         <TableRow label="Other Methods" value={formatCurrency(cashier.other, currencyCode)} />
                         <tr><td colSpan={2} className="py-1"></td></tr>
                         <TableRow label="Cash Refunds" value={`(${formatCurrency(cashier.cashRefunds, currencyCode)})`} />
