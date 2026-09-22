@@ -2659,6 +2659,7 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                     entry.ReservationId = el.TryGetProperty("reservationId", out var resId) && resId.ValueKind != System.Text.Json.JsonValueKind.Null ? resId.GetString() : null;
                     entry.GuestId = el.TryGetProperty("guestId", out var gId) && gId.ValueKind != System.Text.Json.JsonValueKind.Null ? gId.GetString() : null;
                     entry.FolioId = el.TryGetProperty("folioId", out var fId) && fId.ValueKind != System.Text.Json.JsonValueKind.Null ? fId.GetString() : null;
+                    entry.InvoiceId = el.TryGetProperty("invoiceId", out var invoiceId) && invoiceId.ValueKind != System.Text.Json.JsonValueKind.Null ? invoiceId.GetString() : null;
                     entry.PosTransactionId = el.TryGetProperty("posTransactionId", out var posId) && posId.ValueKind != System.Text.Json.JsonValueKind.Null ? posId.GetString() : null;
                     entry.Status = el.TryGetProperty("status", out var st) && st.ValueKind != System.Text.Json.JsonValueKind.Null ? st.GetString() : "OPEN";
                     entry.Description = el.TryGetProperty("description", out var desc) && desc.ValueKind != System.Text.Json.JsonValueKind.Null ? desc.GetString() : null;
@@ -2696,6 +2697,7 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                     alloc.PropertyId = propertyId;
                     alloc.CreditEntryId = el.TryGetProperty("paymentId", out var pId) && pId.ValueKind != System.Text.Json.JsonValueKind.Null ? pId.GetString() ?? "" : ""; // Cloud uses paymentId
                     alloc.FolioId = el.TryGetProperty("folioId", out var fId) && fId.ValueKind != System.Text.Json.JsonValueKind.Null ? fId.GetString() ?? "" : "";
+                    alloc.InvoiceId = el.TryGetProperty("invoiceId", out var invoiceId) && invoiceId.ValueKind != System.Text.Json.JsonValueKind.Null ? invoiceId.GetString() : null;
                     alloc.Amount = ReadDecimal(el, "amount");
                     alloc.Currency = el.TryGetProperty("currency", out var curr) && curr.ValueKind != System.Text.Json.JsonValueKind.Null ? curr.GetString() ?? "NGN" : "NGN";
                     alloc.AppliedBy = el.TryGetProperty("createdBy", out var cb) && cb.ValueKind != System.Text.Json.JsonValueKind.Null ? cb.GetString() ?? "" : "";
@@ -2786,13 +2788,18 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                 Id = item.GetProperty("id").GetString() ?? string.Empty,
                 PropertyId = item.GetProperty("propertyId").GetString() ?? identity.PropertyId,
                 ReservationId = item.TryGetProperty("reservationId", out var reservationId) && reservationId.ValueKind != System.Text.Json.JsonValueKind.Null ? reservationId.GetString() ?? string.Empty : string.Empty,
-                FolioId = item.GetProperty("folioId").GetString() ?? string.Empty,
-                PaymentId = item.GetProperty("paymentId").GetString() ?? string.Empty,
+                FolioId = item.TryGetProperty("folioId", out var folioId) && folioId.ValueKind != System.Text.Json.JsonValueKind.Null ? folioId.GetString() ?? string.Empty : string.Empty,
+                PaymentId = item.TryGetProperty("paymentId", out var paymentId) && paymentId.ValueKind != System.Text.Json.JsonValueKind.Null ? paymentId.GetString() ?? string.Empty : string.Empty,
+                CityLedgerEntryId = item.TryGetProperty("cityLedgerEntryId", out var entryId) && entryId.ValueKind != System.Text.Json.JsonValueKind.Null ? entryId.GetString() ?? string.Empty : string.Empty,
+                GuestId = item.TryGetProperty("guestId", out var guestId) && guestId.ValueKind != System.Text.Json.JsonValueKind.Null ? guestId.GetString() ?? string.Empty : string.Empty,
                 RequestedAmount = requestedAmount,
                 ApprovedAmount = approvedAmountValue,
                 Currency = item.GetProperty("currency").GetString() ?? "NGN",
                 RequestedMethod = item.TryGetProperty("requestedMethod", out var requestedMethod) ? requestedMethod.GetString() ?? "ORIGINAL_PAYMENT" : "ORIGINAL_PAYMENT",
                 ApprovedMethod = item.TryGetProperty("approvedMethod", out var approvedMethod) && approvedMethod.ValueKind != System.Text.Json.JsonValueKind.Null ? approvedMethod.GetString() : null,
+                BankAccountName = item.TryGetProperty("bankAccountName", out var bankAccountName) && bankAccountName.ValueKind != System.Text.Json.JsonValueKind.Null ? bankAccountName.GetString() : null,
+                BankAccountNumber = item.TryGetProperty("bankAccountNumber", out var bankAccountNumber) && bankAccountNumber.ValueKind != System.Text.Json.JsonValueKind.Null ? bankAccountNumber.GetString() : null,
+                BankName = item.TryGetProperty("bankName", out var bankName) && bankName.ValueKind != System.Text.Json.JsonValueKind.Null ? bankName.GetString() : null,
                 Category = item.GetProperty("category").GetString() ?? string.Empty,
                 Reason = item.GetProperty("reason").GetString() ?? string.Empty,
                 Status = item.GetProperty("status").GetString() ?? "PENDING_APPROVAL",

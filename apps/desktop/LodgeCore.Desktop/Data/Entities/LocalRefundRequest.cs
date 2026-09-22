@@ -7,12 +7,17 @@ public class LocalRefundRequest
     public string ReservationId { get; set; } = string.Empty;
     public string FolioId { get; set; } = string.Empty;
     public string PaymentId { get; set; } = string.Empty;
+    public string CityLedgerEntryId { get; set; } = string.Empty;
+    public string GuestId { get; set; } = string.Empty;
     public string IdempotencyKey { get; set; } = Guid.NewGuid().ToString();
     public decimal RequestedAmount { get; set; }
     public decimal? ApprovedAmount { get; set; }
     public string Currency { get; set; } = "NGN";
     public string RequestedMethod { get; set; } = "ORIGINAL_PAYMENT";
     public string? ApprovedMethod { get; set; }
+    public string? BankAccountName { get; set; }
+    public string? BankAccountNumber { get; set; }
+    public string? BankName { get; set; }
     public string Category { get; set; } = string.Empty;
     public string Reason { get; set; } = string.Empty;
     public string Status { get; set; } = "PENDING_APPROVAL";

@@ -5,10 +5,11 @@
  */
 export async function applyRefundToFolio(
   tx: any,
-  request: { id: string; category: string; folioId: string; amount?: unknown; supportingNotes?: string | null },
+  request: { id: string; category: string; folioId: string | null; amount?: unknown; supportingNotes?: string | null },
   amount: number,
   actorId: string,
 ) {
+  if (!request.folioId) throw new Error('FOLIO_NOT_FOUND');
   let reversedCharges = 0;
 
   if (request.category === 'REDUCED_STAY') {

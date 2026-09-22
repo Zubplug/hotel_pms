@@ -159,6 +159,10 @@ export interface LodgeCoreDataProvider {
   corporateAccounts: {
     list(propertyId: string): Promise<any>;
   };
+  cityLedger: {
+    list(propertyId: string): Promise<any>;
+    settle(data: { entryId: string; accountId: string; invoiceId?: string; accountType: string; amount: number; method: string; reference: string }): Promise<any>;
+  };
   laundry: {
     getItems(propertyId: string): Promise<{ data: any[], error: string | null }>;
     getOrders(propertyId: string, status?: string): Promise<{ data: any[], error: string | null }>;

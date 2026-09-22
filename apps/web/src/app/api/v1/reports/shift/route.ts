@@ -175,7 +175,7 @@ export async function GET(req: NextRequest) {
       aggregation[p.method].net += amount;
     }
     for (const r of refunds) {
-      const method = r.method || r.payment.method;
+      const method = r.method || r.payment?.method || 'OTHER';
       if (!aggregation[method]) aggregation[method] = { count: 0, refundCount: 0, payments: 0, refunds: 0, net: 0 };
       aggregation[method].refundCount += 1;
       const amount = Number(r.amount);

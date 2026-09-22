@@ -1160,10 +1160,10 @@ model Payment {
 
 model Refund {
   id         String   @id @default(uuid()) @db.Uuid
-  paymentId  String   @db.Uuid
-  payment    Payment  @relation(fields: [paymentId], references: [id])
-  folioId    String   @db.Uuid
-  folio      Folio    @relation(fields: [folioId], references: [id])
+  paymentId  String?  @db.Uuid
+  payment    Payment? @relation(fields: [paymentId], references: [id])
+  folioId    String?  @db.Uuid
+  folio      Folio?   @relation(fields: [folioId], references: [id])
   propertyId String   @db.Uuid
   property   Property @relation(fields: [propertyId], references: [id])
 
@@ -1203,16 +1203,16 @@ model RefundRequest {
   organizationId String  @db.Uuid
   propertyId     String  @db.Uuid
   reservationId  String? @db.Uuid
-  folioId        String  @db.Uuid
-  paymentId      String  @db.Uuid
+  folioId        String? @db.Uuid
+  paymentId      String? @db.Uuid
   guestId        String? @db.Uuid
   cityLedgerEntryId String? @db.Uuid
 
   organization Organization @relation(fields: [organizationId], references: [id])
   property     Property     @relation(fields: [propertyId], references: [id])
   reservation  Reservation? @relation(fields: [reservationId], references: [id])
-  folio        Folio        @relation(fields: [folioId], references: [id])
-  payment      Payment      @relation(fields: [paymentId], references: [id])
+  folio        Folio?       @relation(fields: [folioId], references: [id])
+  payment      Payment?     @relation(fields: [paymentId], references: [id])
   cityLedgerEntry CityLedgerEntry? @relation(fields: [cityLedgerEntryId], references: [id])
 
   requestedAmount            Decimal             @db.Decimal(18, 4)

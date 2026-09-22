@@ -4,12 +4,14 @@ import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Search, User, LogIn, ArrowRight, Clock, ArrowLeft, CheckCircle2, UserPlus, CreditCard, Wallet } from 'lucide-react';
+import { Search, User, LogIn, ArrowRight, Clock, ArrowLeft, CheckCircle2, UserPlus, CreditCard, Wallet, Landmark } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useProperty } from '@/components/PropertyProvider';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { format } from 'date-fns';
 import { formatRoomNumber } from '@/lib/format-room';
+import { GuestCreditRefundDialog } from '@/components/accountant/GuestCreditRefundDialog';
+import { toast } from 'sonner';
 
 interface Reservation {
   id: string;
@@ -84,6 +86,33 @@ export default function FrontDeskReservationsPage() {
     enabled: activeFilter === 'GUEST_CREDITS',
     refetchInterval: 30_000,
   });
+
+  const { data: cityLedgerData, isLoading: cityLedgerLoading, refetch: refetchCityLedger } = useQuery({
+    queryKey: ['frontdesk', 'cityLedger', propertyId],
+    queryFn: () => provider.cityLedger.list(propertyId),
+    enabled: activeFilter === 'CITY_LEDGER',
+    refetchInterval: isOnline ? 30000 : false,
+  });
+
+  const settleCityLedger = async (entry: any) => {
+    const method = (window.prompt('Settlement method: CASH, BANK_TRANSFER, POS, CARD, CHEQUE, or OTHER', 'BANK_TRANSFER') || '').trim().toUpperCase();
+    if (!method) return;
+    const requestedAmount = window.prompt(
+      entry.accountType === 'CORPORATE'
+        ? 'Corporate payment amount (applies FIFO across this corporate account\'s open invoices):'
+        : 'Walkout invoice settlement amount:',
+      String(Number(entry.outstandingAmount)),
+    );
+    const amount = Number(requestedAmount);
+    if (!Number.isFinite(amount) || amount <= 0) return;
+    const reference = (window.prompt('Payment reference / receipt number') || '').trim();
+    if (!reference) return;
+    try {
+      const result = await provider.cityLedger.settle({ entryId: entry.entryId, accountId: entry.accountId, invoiceId: entry.accountType === 'CORPORATE' ? undefined : entry.invoiceId, accountType: entry.accountType, amount, method, reference });
+      toast.success((result as any)?.pendingSync || !isOnline ? 'City ledger settlement queued offline' : 'City ledger settlement posted');
+      await refetchCityLedger();
+    } catch (error) { toast.error(error instanceof Error ? error.message : 'Unable to settle city ledger invoice'); }
+  };
 
   const rawData = data as any;
   const reservations: Reservation[] = Array.isArray(rawData) ? rawData : (rawData?.data ?? []);
@@ -163,6 +192,7 @@ export default function FrontDeskReservationsPage() {
             { id: 'DEPARTURES', label: 'Departures' },
             { id: 'UNPAID', label: 'Unpaid Balance', icon: CreditCard },
             { id: 'GUEST_CREDITS', label: 'Guest Credits', icon: Wallet },
+            { id: 'CITY_LEDGER', label: 'City Ledger', icon: Landmark },
           ].map(filter => (
             <button
               key={filter.id}
@@ -185,6 +215,11 @@ export default function FrontDeskReservationsPage() {
         <div className="flex justify-center p-12">
           <div className="w-10 h-10 border-4 border-slate-200 border-t-blue-600 rounded-full animate-spin"></div>
         </div>
+      ) : activeFilter === 'CITY_LEDGER' ? (
+        cityLedgerLoading ? <div className="flex justify-center p-12"><div className="w-10 h-10 border-4 border-slate-200 border-t-indigo-600 rounded-full animate-spin" /></div> : (() => {
+          const entries: any[] = Array.isArray(cityLedgerData) ? cityLedgerData : ((cityLedgerData as any)?.data ?? []);
+          return entries.length === 0 ? <div className="text-center p-12 bg-slate-50 rounded-3xl border border-slate-100"><Landmark className="w-12 h-12 text-slate-300 mx-auto mb-3" /><h3 className="text-lg font-bold text-slate-900">No open city-ledger invoices</h3><p className="text-slate-500">Skipper, walkout, and corporate invoices will appear here after checkout.</p></div> : <div className="overflow-x-auto rounded-3xl border border-slate-200 bg-white shadow-sm"><table className="w-full text-sm"><thead className="border-b bg-slate-50 text-left text-xs uppercase tracking-wider text-slate-500"><tr><th className="px-5 py-4">Ledger</th><th className="px-5 py-4">Guest / account</th><th className="px-5 py-4">Invoice</th><th className="px-5 py-4 text-right">Outstanding</th><th className="px-5 py-4">Action</th></tr></thead><tbody className="divide-y">{entries.map(entry => <tr key={entry.entryId}><td className="px-5 py-4"><span className={`rounded-full px-2.5 py-1 text-xs font-bold ${entry.accountType === 'CORPORATE' ? 'bg-blue-100 text-blue-700' : 'bg-rose-100 text-rose-700'}`}>{entry.accountType === 'CORPORATE' ? 'Corporate' : 'Skipper / Walkout'}</span><div className="mt-2 text-xs text-slate-500">{entry.accountName}</div></td><td className="px-5 py-4 font-medium text-slate-800">{entry.guestName || entry.accountName || '—'}</td><td className="px-5 py-4 font-mono text-xs text-slate-500">{entry.invoiceNumber || entry.entryId.slice(0, 8)}</td><td className="px-5 py-4 text-right font-extrabold text-slate-900">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: entry.currency || 'NGN', maximumFractionDigits: 0 }).format(Number(entry.outstandingAmount))}</td><td className="px-5 py-4"><Button size="sm" onClick={() => settleCityLedger(entry)} disabled={entry.status === 'PENDING_SETTLEMENT' || (entry.accountType !== 'CORPORATE' && !entry.invoiceId)} className="bg-indigo-600 text-white hover:bg-indigo-700">{entry.status === 'PENDING_SETTLEMENT' ? 'Queued for sync' : entry.accountType === 'CORPORATE' ? 'Post corporate payment' : 'Settle walkout invoice'}</Button></td></tr>)}</tbody></table></div>;
+        })()
       ) : activeFilter === 'GUEST_CREDITS' ? (
         /* ── Guest Credits Panel ───────────────────────────────────────── */
         creditsLoading ? (
@@ -228,6 +263,18 @@ export default function FrontDeskReservationsPage() {
                   </p>
 
                   <div className="mt-auto pt-4 border-t border-slate-100">
+                    {(credit.creditEntryIds?.[0] || credit.creditEntryId) && (
+                      <div className="mb-2 flex justify-end">
+                        <GuestCreditRefundDialog
+                          entryId={credit.creditEntryIds?.[0] || credit.creditEntryId}
+                          guestId={credit.guestId}
+                          propertyId={propertyId}
+                          guestName={credit.guestName}
+                          amount={Number(credit.availableAmount || 0)}
+                          currency={credit.currency || 'NGN'}
+                        />
+                      </div>
+                    )}
                     <Button
                       onClick={() => router.push(`/frontdesk/reservations/walk-in?guestId=${encodeURIComponent(credit.guestId)}`)}
                       className="w-full rounded-xl h-10 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm disabled:opacity-50"

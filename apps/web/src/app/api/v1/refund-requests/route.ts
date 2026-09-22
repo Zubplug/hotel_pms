@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
 import { resolveUser } from '@/lib/resolve-user';
+import { decrypt } from '@/lib/encryption';
 
 export async function GET(req: NextRequest) {
   const user = await resolveUser(req);
@@ -19,5 +20,9 @@ export async function GET(req: NextRequest) {
     select: { id: true, status: true, details: true }
   });
   const approvalByRequest = new Map(approvals.map(approval => [String((approval.details as { refundRequestId?: string } | null)?.refundRequestId || ''), approval]));
-  return NextResponse.json({ data: requests.map(({ bankAccountNumberEncrypted: _encrypted, ...request }) => ({ ...request, approval: approvalByRequest.get(request.id) || null })) });
+  return NextResponse.json({ data: requests.map(({ bankAccountNumberEncrypted, ...request }) => ({
+    ...request,
+    bankAccountNumber: bankAccountNumberEncrypted ? (() => { try { return decrypt(bankAccountNumberEncrypted); } catch { return null; } })() : null,
+    approval: approvalByRequest.get(request.id) || null,
+  })) });
 }

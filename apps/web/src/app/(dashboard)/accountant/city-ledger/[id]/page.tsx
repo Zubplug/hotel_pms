@@ -36,6 +36,14 @@ export default async function CityLedgerDetailPage(props: { params: Promise<{ id
     redirect('/accountant/city-ledger');
   }
 
+  const paymentReferences = account.entries.filter(entry => entry.type === 'PAYMENT' && entry.reference).map(entry => entry.reference as string);
+  const paymentAudit = paymentReferences.length ? await prisma.payment.findMany({
+    where: { propertyId: account.propertyId, collectionSource: 'RECEIVABLES', reference: { in: paymentReferences } },
+    select: { reference: true, receiptNumber: true, receivedBy: true, createdAt: true, frontdeskSession: { select: { shiftReference: true, staff: { select: { firstName: true, lastName: true } } } } },
+  }) : [];
+  const auditByReference = new Map(paymentAudit.flatMap(payment => [payment.reference, payment.receiptNumber].filter(Boolean).map(reference => [reference as string, { settledBy: payment.frontdeskSession?.staff ? `${payment.frontdeskSession.staff.firstName} ${payment.frontdeskSession.staff.lastName}`.trim() : payment.receivedBy, shiftReference: payment.frontdeskSession?.shiftReference || null, settledAt: payment.createdAt }] as const)));
+  const auditedEntries = account.entries.map(entry => ({ ...entry, audit: entry.type === 'PAYMENT' && entry.reference ? auditByReference.get(entry.reference) || null : null }));
+
   // Calculate some summaries
   const totalOutstanding = account.invoices.reduce((sum, inv) => sum + Number(inv.outstandingAmount), 0);
   const asAt = new Date().getTime();
@@ -46,7 +54,7 @@ export default async function CityLedgerDetailPage(props: { params: Promise<{ id
         <CityLedgerDetailClient 
           account={account as any} 
           openInvoices={account.invoices as any} 
-          recentEntries={account.entries as any} 
+          recentEntries={auditedEntries as any}
           totalOutstanding={totalOutstanding}
           asAt={asAt}
         />

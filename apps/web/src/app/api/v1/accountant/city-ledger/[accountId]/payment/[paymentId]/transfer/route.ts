@@ -1,11 +1,10 @@
 import { NextRequest } from 'next/server';
 import { auth } from '@/lib/auth';
 import { requireOrganizationContext } from '@/lib/organization-access';
-import { hasPermission } from '@/lib/rbac';
 import { errorResponse, successResponse } from '@/lib/api-response';
 import prisma from '@hotel-pms/db';
 
-const ACCOUNTANT_ROLES = ['ACCOUNTANT', 'NIGHT_AUDITOR', 'MANAGER', 'HOTEL_MANAGER', 'FINANCE_MANAGER', 'ADMIN', 'SUPER_ADMIN'];
+const MANAGER_APPROVAL_ROLES = ['MANAGER', 'HOTEL_MANAGER', 'FINANCE_MANAGER', 'ADMIN', 'SUPER_ADMIN'];
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ accountId: string; paymentId: string }> }) {
   try {
@@ -25,8 +24,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ acc
     ]);
     if (!source || !target || source.propertyId !== target.propertyId || !ctx.propertyIds.includes(source.propertyId)) return errorResponse('FORBIDDEN', 'Both city-ledger accounts must belong to the same accessible property.', 403);
     const role = session.user.role || 'UNKNOWN';
-    const allowed = ACCOUNTANT_ROLES.includes(role) || await hasPermission(session.user.id, 'receivables', 'collect', source.propertyId);
-    if (!allowed) return errorResponse('FORBIDDEN', 'Insufficient permissions to transfer receivables cash.', 403);
+    const allowed = MANAGER_APPROVAL_ROLES.includes(String(role).toUpperCase());
+    if (!allowed) return errorResponse('FORBIDDEN', 'Manager approval is required to transfer receivables cash.', 403);
 
     const result = await prisma.$transaction(async tx => {
       await tx.$queryRaw`SELECT id FROM "CityLedgerAccount" WHERE id IN (${accountId}::uuid, ${targetAccountId}::uuid) FOR UPDATE`;

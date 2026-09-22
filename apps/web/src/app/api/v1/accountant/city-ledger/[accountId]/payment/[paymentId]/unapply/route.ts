@@ -1,12 +1,13 @@
 import { NextRequest } from 'next/server';
 import { auth } from '@/lib/auth';
 import { requireOrganizationContext } from '@/lib/organization-access';
-import { hasPermission } from '@/lib/rbac';
 import { errorResponse, successResponse } from '@/lib/api-response';
 import { GLMappingService } from '@/lib/services/gl-mapping-service';
 import { GeneralLedgerService } from '@/lib/services/general-ledger-service';
 import { getPropertyBusinessDate } from '@/lib/date-utils';
 import prisma from '@hotel-pms/db';
+
+const ACCOUNTANT_ROLES = ['ACCOUNTANT', 'NIGHT_AUDITOR', 'MANAGER', 'HOTEL_MANAGER', 'FINANCE_MANAGER', 'ADMIN', 'SUPER_ADMIN'];
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ accountId: string; paymentId: string }> }) {
   try {
@@ -15,13 +16,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ acc
     const { accountId, paymentId } = await params;
     const body = await req.json();
     const allocationId = String(body.allocationId || '');
-    if (!allocationId) return errorResponse('BAD_REQUEST', 'Allocation id is required', 400);
+    const reason = String(body.reason || '').trim();
+    if (!allocationId || reason.length < 3) return errorResponse('BAD_REQUEST', 'Allocation id and a clear audit reason are required', 400);
     const ctx = await requireOrganizationContext(session.user.id);
     const account = await prisma.cityLedgerAccount.findUnique({ where: { id: accountId }, include: { property: true } });
     if (!account || !ctx.propertyIds.includes(account.propertyId)) return errorResponse('FORBIDDEN', 'City ledger account is not accessible', 403);
     if (account.type !== 'CORPORATE') return errorResponse('INVALID_STATE', 'Only corporate receipts can be returned to unapplied advance status.', 409);
     const role = session.user.role || 'UNKNOWN';
-    const allowed = ['ACCOUNTANT', 'NIGHT_AUDITOR', 'MANAGER', 'HOTEL_MANAGER', 'FINANCE_MANAGER', 'ADMIN', 'SUPER_ADMIN'].includes(role) || await hasPermission(session.user.id, 'receivables', 'collect', account.propertyId);
+    const allowed = ACCOUNTANT_ROLES.includes(String(role).toUpperCase());
     if (!allowed) return errorResponse('FORBIDDEN', 'Insufficient permissions to unapply receivables cash.', 403);
 
     const result = await prisma.$transaction(async tx => {
@@ -49,7 +51,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ acc
         ],
       }, tx);
       await tx.cityLedgerEntry.update({ where: { id: paymentId }, data: { status: 'OPEN', reason: 'Payment unapplied; awaiting allocation' } });
-      await tx.auditLog.create({ data: { organizationId: account.property.organizationId, propertyId: account.propertyId, userId: session.user.id, userEmail: session.user.email, userRole: role, action: 'AR_PAYMENT_UNAPPLIED', resource: 'CityLedgerEntry', resourceId: paymentId, newValue: { invoiceId: invoice.id, allocationId, amount }, ipAddress: req.headers.get('x-forwarded-for') || '127.0.0.1', userAgent: req.headers.get('user-agent') || 'Unknown', requestId: req.headers.get('x-request-id') || crypto.randomUUID() } });
+      await tx.auditLog.create({ data: { organizationId: account.property.organizationId, propertyId: account.propertyId, userId: session.user.id, userEmail: session.user.email, userRole: role, action: 'AR_PAYMENT_UNAPPLIED', resource: 'CityLedgerEntry', resourceId: paymentId, newValue: { invoiceId: invoice.id, allocationId, amount, reason }, ipAddress: req.headers.get('x-forwarded-for') || '127.0.0.1', userAgent: req.headers.get('user-agent') || 'Unknown', requestId: req.headers.get('x-request-id') || crypto.randomUUID() } });
       return { invoiceId: invoice.id, amount };
     });
     return successResponse({ unapplied: result });

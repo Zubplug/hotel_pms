@@ -7,9 +7,7 @@ import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
 import { PlusCircle, Wallet, ArrowRightLeft, CornerDownRight, Printer, Receipt, TrendingUp, Percent } from 'lucide-react';
 import { AddPaymentDialog } from './AddPaymentDialog';
-import { RefundDialog } from './RefundDialog';
 import { FrontDeskAddPaymentDialog } from '../frontdesk/FrontDeskAddPaymentDialog';
-import { FrontDeskRefundDialog } from '../frontdesk/FrontDeskRefundDialog';
 import { FrontDeskQuickCheckoutDialog } from '../frontdesk/FrontDeskQuickCheckoutDialog';
 import { CheckOutDialog } from './CheckOutDialog';
 import { FrontDeskDiscountModal } from '../frontdesk/FrontDeskDiscountModal';
@@ -21,7 +19,6 @@ export function FolioSection({ reservation, readOnly = false }: { reservation: a
   const pathname = usePathname();
   const isFrontDesk = pathname.startsWith('/frontdesk');
   const [isAddPaymentOpen, setIsAddPaymentOpen] = useState(false);
-  const [refundPaymentId, setRefundPaymentId] = useState<string | null>(null);
   const [isCheckOutOpen, setIsCheckOutOpen] = useState(false);
   
   
@@ -180,16 +177,6 @@ export function FolioSection({ reservation, readOnly = false }: { reservation: a
             }}
           >
             <Printer className="mr-1 h-3 w-3" /> Reprint receipt
-          </Button>
-        )}
-        {linkedPayment.status === 'COMPLETED' && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 px-2 text-xs text-amber-700 hover:bg-amber-50 hover:text-amber-800"
-            onClick={() => setRefundPaymentId(linkedPayment.id)}
-          >
-            <CornerDownRight className="mr-1 h-3 w-3" /> Refund payment
           </Button>
         )}
       </div>
@@ -365,25 +352,6 @@ export function FolioSection({ reservation, readOnly = false }: { reservation: a
         />
       )}
       
-      {refundPaymentId && (
-        pathname.startsWith('/frontdesk') ? (
-          <FrontDeskRefundDialog
-            open={!!refundPaymentId}
-            onOpenChange={(open) => !open && setRefundPaymentId(null)}
-            paymentId={refundPaymentId}
-            folio={folio}
-            reservation={reservation}
-          />
-        ) : (
-          <RefundDialog
-            open={!!refundPaymentId}
-            onOpenChange={(open) => !open && setRefundPaymentId(null)}
-            paymentId={refundPaymentId}
-            folio={folio}
-            reservation={reservation}
-          />
-        )
-      )}
       {pathname.startsWith('/frontdesk') ? (
         <FrontDeskQuickCheckoutDialog
           open={isCheckOutOpen}

@@ -147,7 +147,7 @@ export function FrontDeskLayout({ children }: { children: React.ReactNode }) {
             </div>
           )}
           <Link href="/frontdesk/refunds" className="hidden md:inline-flex rounded-lg px-3 py-2 text-sm font-semibold text-muted-foreground hover:bg-muted hover:text-foreground">
-            Refund Status
+            Refunds
           </Link>
           <Link href="/frontdesk/cashier" className="hidden md:inline-flex rounded-lg px-3 py-2 text-sm font-semibold text-muted-foreground hover:bg-muted hover:text-foreground">
             Cashier Shift

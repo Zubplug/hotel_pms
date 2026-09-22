@@ -17,6 +17,7 @@ public class LocalCityLedgerEntry
     public string? ReservationId { get; set; }
     public string? GuestId { get; set; }
     public string? FolioId { get; set; }
+    public string? InvoiceId { get; set; }
     public string? PosTransactionId { get; set; }
     
     public string? Status { get; set; } = "OPEN";

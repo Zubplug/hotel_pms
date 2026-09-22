@@ -326,6 +326,8 @@ public class LocalDbContext : DbContext
             CREATE INDEX IF NOT EXISTS IX_CityLedgerAllocations_FolioId ON CityLedgerAllocations(FolioId);
         ";
         await Database.ExecuteSqlRawAsync(sql);
+        try { await Database.ExecuteSqlRawAsync("ALTER TABLE CityLedgerEntries ADD COLUMN InvoiceId TEXT NULL"); } catch (Microsoft.Data.Sqlite.SqliteException ex) when (ex.SqliteErrorCode == 1 && ex.Message.Contains("duplicate column", StringComparison.OrdinalIgnoreCase)) { }
+        try { await Database.ExecuteSqlRawAsync("ALTER TABLE CityLedgerAllocations ADD COLUMN InvoiceId TEXT NULL"); } catch (Microsoft.Data.Sqlite.SqliteException ex) when (ex.SqliteErrorCode == 1 && ex.Message.Contains("duplicate column", StringComparison.OrdinalIgnoreCase)) { }
     }
 
     /// <summary>

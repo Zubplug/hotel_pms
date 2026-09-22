@@ -67,8 +67,8 @@ export async function GET(req: NextRequest) {
       refunds: refundsData.map(r => ({
         id: r.id,
         timestamp: r.createdAt,
-        folioId: r.folio.folioNumber || r.folio.id.slice(0, 8),
-        guestName: formatGuestName(r.folio.guest),
+        folioId: r.folio?.folioNumber || r.folio?.id.slice(0, 8) || 'Standalone refund',
+        guestName: r.folio ? formatGuestName(r.folio.guest) : 'Guest credit',
         amount: Number(r.amount),
         reason: r.reason,
         operator: 'System/Unknown' // Since refunds model doesn't directly link to user names easily here, we could join User but omitting for simplicity

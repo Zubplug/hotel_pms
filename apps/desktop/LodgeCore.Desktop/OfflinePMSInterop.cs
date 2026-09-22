@@ -521,13 +521,35 @@ public class OfflinePMSInterop
         {
             var payload = JsonNode.Parse(payloadJson)?.AsObject() ?? throw new Exception("Invalid refund request");
             var ctx = await GetSecureContextAsync();
-            var request = await _repo.QueueRefundRequestAsync(payload["paymentId"]?.ToString() ?? "", payload["propertyId"]?.ToString() ?? "", payload["reservationId"]?.ToString() ?? "", payload["folioId"]?.ToString() ?? "", payload["amount"]?.GetValue<decimal>() ?? 0, payload["currency"]?.ToString() ?? "NGN", payload["category"]?.ToString() ?? "MANUAL_ADJUSTMENT", payload["reducedStayNights"]?.GetValue<int>() ?? 0, payload["reason"]?.ToString() ?? "", payload["refundMethod"]?.ToString() ?? "ORIGINAL_PAYMENT", payload["bankAccountName"]?.ToString(), payload["bankAccountNumber"]?.ToString(), payload["bankName"]?.ToString(), payload["bankCode"]?.ToString(), ctx.UserId, ctx.DeviceId);
-            return JsonSerializer.Serialize(new { success = true, data = request }, _jsonOptions);
+            if (!string.IsNullOrWhiteSpace(payload["cityLedgerEntryId"]?.ToString()))
+            {
+                var request = await _repo.QueueGuestCreditRefundRequestAsync(payload["cityLedgerEntryId"]?.ToString() ?? "", payload["guestId"]?.ToString() ?? "", payload["propertyId"]?.ToString() ?? "", payload["amount"]?.GetValue<decimal>() ?? 0, payload["currency"]?.ToString() ?? "NGN", payload["reason"]?.ToString() ?? "", payload["refundMethod"]?.ToString() ?? "BANK_TRANSFER", payload["bankAccountName"]?.ToString(), payload["bankAccountNumber"]?.ToString(), payload["bankName"]?.ToString(), ctx.UserId, ctx.DeviceId);
+                return JsonSerializer.Serialize(new { success = true, data = request, pendingSync = true }, _jsonOptions);
+            }
+            throw new InvalidOperationException("Refund requests must be submitted from the Guest Credits tab.");
         }
         catch (Exception ex)
         {
             return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
+    }
+
+    public async Task<string> GetFrontDeskCityLedgerAsync(string propertyId)
+    {
+        try { return JsonSerializer.Serialize(new { success = true, data = await _repo.GetFrontDeskCityLedgerAsync(propertyId) }, _jsonOptions); }
+        catch (Exception ex) { return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions); }
+    }
+
+    public async Task<string> SettleCityLedgerAsync(string payloadJson)
+    {
+        try
+        {
+            var payload = JsonNode.Parse(payloadJson)?.AsObject() ?? throw new InvalidOperationException("Invalid city ledger settlement");
+            var ctx = await GetSecureContextAsync();
+            var result = await _repo.QueueCityLedgerPaymentAsync(payload["entryId"]?.ToString() ?? "", payload["accountId"]?.ToString() ?? "", payload["invoiceId"]?.ToString(), payload["accountType"]?.ToString() ?? "", payload["amount"]?.GetValue<decimal>() ?? 0, payload["method"]?.ToString() ?? "BANK_TRANSFER", payload["reference"]?.ToString() ?? "", ctx.UserId, ctx.DeviceId, DateTime.UtcNow.Date);
+            return JsonSerializer.Serialize(result, _jsonOptions);
+        }
+        catch (Exception ex) { return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions); }
     }
 
     public async Task<string> GetSyncEventsAsync()

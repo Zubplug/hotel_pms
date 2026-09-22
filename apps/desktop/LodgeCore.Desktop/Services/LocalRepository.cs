@@ -2280,6 +2280,11 @@ public class LocalRepository
             Status TEXT NOT NULL, CurrentApprovalStep INTEGER NOT NULL DEFAULT 1,
             CreatedAt TEXT NOT NULL, UpdatedAt TEXT NOT NULL, IsDirty INTEGER NOT NULL DEFAULT 0
         );");
+        try { await _dbContext.Database.ExecuteSqlRawAsync("ALTER TABLE RefundRequests ADD COLUMN CityLedgerEntryId TEXT NOT NULL DEFAULT ''"); } catch (Microsoft.Data.Sqlite.SqliteException ex) when (ex.SqliteErrorCode == 1 && ex.Message.Contains("duplicate column", StringComparison.OrdinalIgnoreCase)) { }
+        try { await _dbContext.Database.ExecuteSqlRawAsync("ALTER TABLE RefundRequests ADD COLUMN GuestId TEXT NOT NULL DEFAULT ''"); } catch (Microsoft.Data.Sqlite.SqliteException ex) when (ex.SqliteErrorCode == 1 && ex.Message.Contains("duplicate column", StringComparison.OrdinalIgnoreCase)) { }
+        try { await _dbContext.Database.ExecuteSqlRawAsync("ALTER TABLE RefundRequests ADD COLUMN BankAccountName TEXT NULL"); } catch (Microsoft.Data.Sqlite.SqliteException ex) when (ex.SqliteErrorCode == 1 && ex.Message.Contains("duplicate column", StringComparison.OrdinalIgnoreCase)) { }
+        try { await _dbContext.Database.ExecuteSqlRawAsync("ALTER TABLE RefundRequests ADD COLUMN BankAccountNumber TEXT NULL"); } catch (Microsoft.Data.Sqlite.SqliteException ex) when (ex.SqliteErrorCode == 1 && ex.Message.Contains("duplicate column", StringComparison.OrdinalIgnoreCase)) { }
+        try { await _dbContext.Database.ExecuteSqlRawAsync("ALTER TABLE RefundRequests ADD COLUMN BankName TEXT NULL"); } catch (Microsoft.Data.Sqlite.SqliteException ex) when (ex.SqliteErrorCode == 1 && ex.Message.Contains("duplicate column", StringComparison.OrdinalIgnoreCase)) { }
         await _dbContext.Database.ExecuteSqlRawAsync(@"CREATE TABLE IF NOT EXISTS FrontdeskSessions (
             Id TEXT NOT NULL PRIMARY KEY, PropertyId TEXT NOT NULL, StaffId TEXT NOT NULL,
             CashAccountId TEXT NOT NULL, ShiftReference TEXT NOT NULL UNIQUE, BusinessDate TEXT NOT NULL,
@@ -2325,18 +2330,15 @@ public class LocalRepository
         return await _dbContext.RefundRequests.Where(request => request.PropertyId == propertyId).OrderByDescending(request => request.CreatedAt).Take(100).ToListAsync();
     }
 
-    public async Task<LocalRefundRequest> QueueRefundRequestAsync(string paymentId, string propertyId, string reservationId, string folioId, decimal amount, string currency, string category, int reducedStayNights, string reason, string requestedMethod, string? bankAccountName, string? bankAccountNumber, string? bankName, string? bankCode, string userId, string deviceId)
+    public async Task<LocalRefundRequest> QueueGuestCreditRefundRequestAsync(string entryId, string guestId, string propertyId, decimal amount, string currency, string reason, string requestedMethod, string? bankAccountName, string? bankAccountNumber, string? bankName, string userId, string deviceId)
     {
-        var refundSession = string.Equals(requestedMethod, "CASH", StringComparison.OrdinalIgnoreCase)
-            ? await GetActiveFrontdeskSessionAsync(propertyId, userId)
-            : null;
-        if (string.Equals(requestedMethod, "CASH", StringComparison.OrdinalIgnoreCase) && refundSession == null)
-            throw new InvalidOperationException("Open your front desk cashier session before requesting a cash refund.");
-
+        if (string.IsNullOrWhiteSpace(entryId) || string.IsNullOrWhiteSpace(guestId)) throw new InvalidOperationException("Guest credit and guest are required.");
+        if (amount <= 0) throw new InvalidOperationException("Refund amount must be positive.");
+        if (string.Equals(requestedMethod, "ORIGINAL_PAYMENT", StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("Standalone guest credit has no original payment; choose bank transfer or cash.");
         var idempotencyKey = Guid.NewGuid().ToString();
-        var request = new LocalRefundRequest { Id = Guid.NewGuid().ToString(), IdempotencyKey = idempotencyKey, PropertyId = propertyId, ReservationId = reservationId, FolioId = folioId, PaymentId = paymentId, RequestedAmount = amount, Currency = currency, RequestedMethod = requestedMethod, Category = category, Reason = reason, IsDirty = true };
+        var request = new LocalRefundRequest { PropertyId = propertyId, CityLedgerEntryId = entryId, GuestId = guestId, RequestedAmount = amount, Currency = currency, RequestedMethod = requestedMethod, BankAccountName = requestedMethod.Equals("BANK_TRANSFER", StringComparison.OrdinalIgnoreCase) ? bankAccountName : null, BankAccountNumber = requestedMethod.Equals("BANK_TRANSFER", StringComparison.OrdinalIgnoreCase) ? bankAccountNumber : null, BankName = requestedMethod.Equals("BANK_TRANSFER", StringComparison.OrdinalIgnoreCase) ? bankName : null, Category = "FOLIO_CREDIT_BALANCE", Reason = reason, IdempotencyKey = idempotencyKey, IsDirty = true };
         _dbContext.RefundRequests.Add(request);
-        _dbContext.OutboxEvents.Add(new LocalOutboxEvent { IdempotencyKey = idempotencyKey, PropertyId = propertyId, DeviceId = deviceId, OperatorId = userId, AggregateType = "PAYMENT", AggregateId = paymentId, EventType = "REFUND_REQUESTED", PayloadJson = JsonSerializer.Serialize(new { PaymentId = paymentId, PropertyId = propertyId, ReservationId = reservationId, FolioId = folioId, Amount = amount, Currency = currency, Category = category, ReducedStayNights = reducedStayNights, Reason = reason, RequestedMethod = requestedMethod, BankAccountName = bankAccountName, BankAccountNumber = bankAccountNumber, BankName = bankName, BankCode = bankCode, IdempotencyKey = idempotencyKey, frontdeskSessionId = refundSession?.Id }) });
+        _dbContext.OutboxEvents.Add(new LocalOutboxEvent { IdempotencyKey = idempotencyKey, PropertyId = propertyId, DeviceId = deviceId, OperatorId = userId, AggregateType = "CITY_LEDGER", AggregateId = entryId, EventType = "GUEST_CREDIT_REFUND_REQUESTED", PayloadJson = JsonSerializer.Serialize(new { cityLedgerEntryId = entryId, guestId, propertyId, amount, currency, reason, requestedMethod, bankAccountName, bankAccountNumber, bankName, idempotencyKey, timestamp = DateTime.UtcNow }) });
         await _dbContext.SaveChangesAsync();
         return request;
     }
@@ -2358,6 +2360,9 @@ public class LocalRepository
             existing.Currency = incoming.Currency;
             existing.RequestedMethod = incoming.RequestedMethod;
             existing.ApprovedMethod = incoming.ApprovedMethod;
+            existing.BankAccountName = incoming.BankAccountName;
+            existing.BankAccountNumber = incoming.BankAccountNumber;
+            existing.BankName = incoming.BankName;
             existing.Category = incoming.Category;
             existing.Reason = incoming.Reason;
             existing.Status = incoming.Status;
@@ -4967,7 +4972,7 @@ public class LocalRepository
 
         return pendingSessions.Select(session => {
             var stl = settlements.FirstOrDefault(s => s.SessionId == session.Id);
-            return (object)new {
+            return new {
                 Session = session,
                 Settlement = stl
             };
@@ -6528,6 +6533,56 @@ public class LocalRepository
         }
 
         return summaries;
+    }
+
+    public async Task<List<object>> GetFrontDeskCityLedgerAsync(string propertyId)
+    {
+        var entries = await _dbContext.CityLedgerEntries
+            .Where(e => e.PropertyId == propertyId && e.Type == "TRANSFER_IN" && (e.Status == "OPEN" || e.Status == "PENDING_SETTLEMENT"))
+            .OrderByDescending(e => e.CreatedAt)
+            .ToListAsync();
+        var allocations = await _dbContext.CityLedgerAllocations.Where(a => a.PropertyId == propertyId).ToListAsync();
+        var corporates = await _dbContext.CorporateAccounts.Where(a => a.PropertyId == propertyId).ToListAsync();
+        var guests = await _dbContext.Guests.ToDictionaryAsync(g => g.Id, g => $"{g.FirstName} {g.LastName}".Trim());
+        return entries.Select(entry => {
+            var paid = allocations.Where(a => a.InvoiceId == entry.InvoiceId).Sum(a => a.Amount);
+            var corporate = corporates.FirstOrDefault(c => c.CityLedgerAccountId == entry.AccountId);
+            return (object)new {
+                entryId = entry.Id, accountId = entry.AccountId, invoiceId = entry.InvoiceId, invoiceNumber = entry.Id,
+                accountType = corporate == null ? "SKIPPER" : "CORPORATE", accountName = corporate?.Name ?? "Skipper / Walkout",
+                guestName = entry.GuestId != null && guests.TryGetValue(entry.GuestId, out var name) ? name : null,
+                amount = entry.Amount, paidAmount = paid, outstandingAmount = Math.Max(0, entry.Amount - paid),
+                currency = entry.Currency, status = entry.Status, reference = entry.Description, createdAt = entry.CreatedAt,
+            };
+        }).Where(row => row.outstandingAmount > 0.01m || row.status == "PENDING_SETTLEMENT").Cast<object>().ToList();
+    }
+
+    public async Task<object> QueueCityLedgerPaymentAsync(string entryId, string accountId, string? invoiceId, string accountType, decimal amount, string method, string reference, string userId, string deviceId, DateTime businessDate)
+    {
+        var entry = await _dbContext.CityLedgerEntries.FirstOrDefaultAsync(e => e.Id == entryId && e.Type == "TRANSFER_IN");
+        if (entry == null) throw new InvalidOperationException("City ledger invoice not found.");
+        if (!string.Equals(entry.AccountId, accountId, StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("City ledger account mismatch.");
+        var isCorporate = string.Equals(accountType, "CORPORATE", StringComparison.OrdinalIgnoreCase);
+        var selectedInvoiceId = string.IsNullOrWhiteSpace(invoiceId) ? entry.InvoiceId : invoiceId;
+        if (!isCorporate && string.IsNullOrWhiteSpace(selectedInvoiceId)) throw new InvalidOperationException("This walkout entry has no invoice reference.");
+        if (amount <= 0) throw new InvalidOperationException("Settlement amount must be positive.");
+        if (!isCorporate)
+        {
+            var allocated = await _dbContext.CityLedgerAllocations.Where(a => a.InvoiceId == selectedInvoiceId).SumAsync(a => (decimal?)a.Amount) ?? 0m;
+            if (amount > entry.Amount - allocated + 0.01m) throw new InvalidOperationException("Settlement exceeds the outstanding invoice balance.");
+        }
+        var frontdeskSession = await GetActiveFrontdeskSessionAsync(entry.PropertyId, userId);
+        if (frontdeskSession == null) throw new InvalidOperationException("An open Front Desk shift is required before posting a city ledger payment.");
+        var operationId = Guid.NewGuid().ToString();
+        entry.Status = "PENDING_SETTLEMENT";
+        _dbContext.OutboxEvents.Add(new LocalOutboxEvent {
+            Id = Guid.NewGuid().ToString(), IdempotencyKey = operationId, PropertyId = entry.PropertyId, DeviceId = deviceId, OperatorId = userId,
+            AggregateType = "CITY_LEDGER", AggregateId = entry.Id, EventType = "CITY_LEDGER_PAYMENT",
+            PayloadJson = JsonSerializer.Serialize(new { accountId = entry.AccountId, invoiceId = isCorporate ? null : selectedInvoiceId, accountType = isCorporate ? "CORPORATE" : "SKIPPER", frontdeskSessionId = frontdeskSession.Id, shiftReference = frontdeskSession.ShiftReference, amount, method, reference, businessDate, entryId, timestamp = DateTime.UtcNow }),
+            Status = "PENDING", CreatedAt = DateTime.UtcNow
+        });
+        await _dbContext.SaveChangesAsync();
+        return new { success = true, pendingSync = true, operationId };
     }
 
     /// <summary>

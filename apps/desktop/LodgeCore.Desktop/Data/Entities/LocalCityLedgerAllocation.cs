@@ -24,6 +24,7 @@ public class LocalCityLedgerAllocation
 
     /// <summary>Id of the folio this credit is being applied to.</summary>
     public string FolioId { get; set; } = string.Empty;
+    public string? InvoiceId { get; set; }
 
     /// <summary>Id of the guest who owns the credit entry.</summary>
     public string GuestId { get; set; } = string.Empty;

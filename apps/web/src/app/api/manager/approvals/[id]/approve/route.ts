@@ -95,7 +95,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
       if (approval.type === 'REFUND') {
         if (approval.status !== 'PENDING') throw new Error('CONFLICT');
-          const details = (approval.details || {}) as { refundRequestId?: string; approverId?: string; approverRoleId?: string; posRefund?: boolean; orderId?: string; amount?: number; method?: string };
+          const details = (approval.details || {}) as { refundRequestId?: string; approverId?: string; approverRoleId?: string; posRefund?: boolean; orderId?: string; amount?: number; method?: string; stage?: string; accountantApprovedBy?: string };
         if (details.approverId && details.approverId !== user.id) {
           throw new Error('ASSIGNED_APPROVER_REQUIRED');
         }
@@ -132,12 +132,29 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         if (!refundRequest || refundRequest.status !== 'PENDING_APPROVAL') throw new Error('CONFLICT');
         if (refundRequest.requestedById === user.id) throw new Error('SELF_APPROVAL');
 
-        const committed = await tx.refund.aggregate({ where: { paymentId: refundRequest.paymentId, status: { not: 'FAILED' } }, _sum: { amount: true } });
+        // Standalone guest-credit refunds require a mandatory accountant
+        // review before the manager receives the second approval task.
+        if (details.stage === 'ACCOUNTANT_REVIEW') {
+          if (!['ACCOUNTANT', 'FINANCE_MANAGER', 'ADMIN', 'SUPER_ADMIN'].includes(String(user.role).toUpperCase()) && !user.isSuperAdmin) throw new Error('ACCOUNTANT_APPROVAL_REQUIRED');
+          const property = await tx.property.findUnique({ where: { id: refundRequest.propertyId }, select: { organizationId: true } });
+          const managerRole = await tx.role.findFirst({ where: { organizationId: property?.organizationId || '', name: { in: ['MANAGER', 'GENERAL_MANAGER', 'HOTEL_MANAGER'] } } });
+          const manager = managerRole ? await tx.userRole.findFirst({ where: { roleId: managerRole.id, userId: { not: refundRequest.requestedById }, OR: [{ propertyId: refundRequest.propertyId }, { propertyId: null }] }, select: { userId: true } }) : null;
+          await tx.refundRequest.update({ where: { id: refundRequest.id }, data: { currentApprovalStep: 2, currentApproverId: manager?.userId || null, approvalRoleId: managerRole?.id || null } });
+          await tx.refundApproval.create({ data: { refundRequestId: refundRequest.id, approverId: user.id, decision: 'APPROVED', stepOrder: 1 } });
+          await tx.approvalRequest.update({ where: { id: approval.id }, data: { status: 'APPROVED', reviewedBy: user.id, reviewedAt: new Date(), details: { ...details, stage: 'MANAGER_REVIEW', accountantApprovedBy: user.id, accountantApprovedAt: new Date().toISOString() } } });
+          await tx.approvalRequest.create({ data: { propertyId: refundRequest.propertyId, type: 'REFUND', status: 'PENDING', requestedBy: refundRequest.requestedById, amount: refundRequest.requestedAmount, currency: refundRequest.currency, reason: refundRequest.reason, expiresAt: refundRequest.expiresAt, details: { refundRequestId: refundRequest.id, cityLedgerEntryId: refundRequest.cityLedgerEntryId, category: refundRequest.category, requestedAmount: Number(refundRequest.requestedAmount), requestedMethod: refundRequest.requestedMethod, approverId: manager?.userId, approverRoleId: managerRole?.id, stepOrder: 2, stage: 'MANAGER_REVIEW', accountantApprovedBy: user.id } } });
+          return { status: 'PENDING_APPROVAL', refundRequestId: refundRequest.id, nextApprovalStep: 2 };
+        }
+        if (details.stage === 'MANAGER_REVIEW' && ['ACCOUNTANT', 'FINANCE_MANAGER'].includes(String(user.role).toUpperCase())) throw new Error('MANAGER_APPROVAL_REQUIRED');
+        const standaloneGuestCredit = Boolean(refundRequest.cityLedgerEntryId && !refundRequest.paymentId);
+        if (standaloneGuestCredit && refundRequest.requestedMethod === 'ORIGINAL_PAYMENT') throw new Error('ORIGINAL_PAYMENT_UNAVAILABLE');
+
+        const committed = refundRequest.paymentId ? await tx.refund.aggregate({ where: { paymentId: refundRequest.paymentId, status: { not: 'FAILED' } }, _sum: { amount: true } }) : { _sum: { amount: 0 } };
         const pending = await tx.refundRequest.aggregate({
-          where: { paymentId: refundRequest.paymentId, id: { not: refundRequest.id }, status: { in: ['PENDING_APPROVAL', 'APPROVED', 'PROCESSING'] } },
+          where: { ...(refundRequest.paymentId ? { paymentId: refundRequest.paymentId } : { cityLedgerEntryId: refundRequest.cityLedgerEntryId || undefined }), id: { not: refundRequest.id }, status: { in: ['PENDING_APPROVAL', 'APPROVED', 'PROCESSING'] } },
           _sum: { requestedAmount: true }
         });
-        if (Number(committed._sum.amount || 0) + Number(pending._sum.requestedAmount || 0) + Number(refundRequest.requestedAmount) > Number(refundRequest.payment.amount)) {
+        if (!standaloneGuestCredit && Number(committed._sum.amount || 0) + Number(pending._sum.requestedAmount || 0) + Number(refundRequest.requestedAmount) > Number(refundRequest.payment?.amount || 0)) {
           throw new Error('REFUND_LIMIT_EXCEEDED');
         }
         if (refundRequest.category === 'RESERVATION_CANCELLED' && refundRequest.reservation?.status !== 'CANCELLED') {
@@ -444,11 +461,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           idempotencyKey: `refund-request:${current.id}`
         } });
         if (completed) {
-          await applyRefundToFolio(tx, current, result.amount, user.id);
-          await tx.folioItem.create({ data: { folioId: result.folioId, businessDate, type: 'REFUND', source: 'MANUAL', description: `Refund request ${current.id}`, quantity: 1, unitAmount: result.amount, amount: result.amount, currency: result.currency, baseAmount: result.amount, postedBy: user.id } });
-          if (current.cityLedgerEntryId) await CityLedgerAccountingService.settleGuestRefund(tx, { propertyId: result.propertyId, organizationId: property?.organizationId || '', staffId: user.id, cityLedgerEntryId: current.cityLedgerEntryId, refundRequestId: current.id, amount: result.amount, method: result.method === 'ORIGINAL_PAYMENT' ? current.payment.method : result.method, businessDate });
-          const totalRefunded = result.committedRefunded + result.amount;
-          await tx.payment.update({ where: { id: result.paymentId }, data: { status: totalRefunded >= Number(current.payment.amount) ? 'REFUNDED' : 'PARTIALLY_REFUNDED' } });
+          if (current.folioId) {
+            await applyRefundToFolio(tx, current, result.amount, user.id);
+            await tx.folioItem.create({ data: { folioId: current.folioId, businessDate, type: 'REFUND', source: 'MANUAL', description: `Refund request ${current.id}`, quantity: 1, unitAmount: result.amount, amount: result.amount, currency: result.currency, baseAmount: result.amount, postedBy: user.id } });
+          }
+          if (current.cityLedgerEntryId) await CityLedgerAccountingService.settleGuestRefund(tx, { propertyId: result.propertyId, organizationId: property?.organizationId || '', staffId: user.id, cityLedgerEntryId: current.cityLedgerEntryId, refundRequestId: current.id, amount: result.amount, method: result.method === 'ORIGINAL_PAYMENT' && current.payment ? current.payment.method : result.method, businessDate });
+          if (result.paymentId && current.payment) {
+            const totalRefunded = result.committedRefunded + result.amount;
+            await tx.payment.update({ where: { id: result.paymentId }, data: { status: totalRefunded >= Number(current.payment.amount) ? 'REFUNDED' : 'PARTIALLY_REFUNDED' } });
+          }
         }
         await tx.refundRequest.update({ where: { id: current.id }, data: { status: completed ? 'COMPLETED' : gatewayResult.status === 'FAILED' ? 'FAILED' : 'PROCESSING' } });
         await tx.auditLog.create({ data: {

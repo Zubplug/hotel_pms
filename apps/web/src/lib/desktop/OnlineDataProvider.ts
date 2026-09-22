@@ -89,7 +89,8 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
       return apiFetch(`/api/v1/refund-requests?propertyId=${encodeURIComponent(propertyId)}`);
     },
     async request(data: any) {
-      return apiFetch(`/api/v1/payments/${data.paymentId}/refund`, { method: 'POST', body: JSON.stringify(data) });
+      if (!data.cityLedgerEntryId) throw new Error('Refund requests must be submitted from the Guest Credits tab.');
+      return apiFetch(`/api/v1/accountant/guest-credits/${data.cityLedgerEntryId}/refund-request`, { method: 'POST', body: JSON.stringify(data) });
     }
   },
   guests: {
@@ -104,6 +105,10 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
     async list(propertyId: string) {
       return apiFetch(`/api/v1/corporate-accounts?propertyId=${propertyId}`);
     }
+  },
+  cityLedger: {
+    async list(propertyId: string) { return apiFetch(`/api/v1/frontdesk/city-ledger?propertyId=${encodeURIComponent(propertyId)}`); },
+    async settle(data: any) { return apiFetch(`/api/v1/frontdesk/city-ledger/settle`, { method: 'POST', body: JSON.stringify(data) }); },
   },
   roomTypes: {
     async list(propertyId: string) {

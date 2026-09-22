@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authenticateSyncRequest } from "@/lib/sync-auth";
-import prisma from "@hotel-pms/db";
+import prisma, { PaymentMethod } from "@hotel-pms/db";
 import { createHash, randomUUID } from "crypto";
 import { compare } from "bcryptjs";
 import { NotificationEngine } from "@/lib/notification-engine";
@@ -1559,6 +1559,95 @@ export async function POST(req: NextRequest) {
                 authoritativeBusinessDate
               );
             }
+          } else if (aggregateType === "CITY_LEDGER" && eventType === "GUEST_CREDIT_REFUND_REQUESTED") {
+            const amount = Number(payload.amount);
+            const creditEntryId = payload.cityLedgerEntryId || aggregateId;
+            const guestId = payload.guestId;
+            const requestedMethod = String(payload.requestedMethod || "BANK_TRANSFER").toUpperCase();
+            const reason = String(payload.reason || "Guest requested refund of available folio credit").trim();
+            const bankAccountName = String(payload.bankAccountName || "").trim();
+            const bankAccountNumber = String(payload.bankAccountNumber || "").replace(/\s+/g, "");
+            const bankName = String(payload.bankName || "").trim();
+
+            if (!Number.isFinite(amount) || amount <= 0 || !isUuid(creditEntryId) || !isUuid(guestId)) {
+              throw new Error("Guest credit refund requires valid entry, guest, and amount");
+            }
+            if (!["CASH", "BANK_TRANSFER"].includes(requestedMethod)) {
+              throw new Error("Standalone guest credits can only be refunded by cash or bank transfer");
+            }
+            if (!reason) throw new Error("Guest credit refund reason is required");
+            if (requestedMethod === "BANK_TRANSFER" && (!bankAccountName || !/^\d{6,20}$/.test(bankAccountNumber) || !bankName)) {
+              throw new Error("Bank name, account name, and a valid account number are required");
+            }
+
+            const existingRequest = await tx.refundRequest.findUnique({ where: { idempotencyKey } });
+            if (existingRequest) return;
+
+            const entryRows = await tx.$queryRawUnsafe<any[]>(
+              'SELECT id, amount, currency, status, "propertyId", "guestId", "accountId", "reservationId", "folioId", type FROM "CityLedgerEntry" WHERE id = $1::uuid AND "propertyId" = $2::uuid FOR UPDATE',
+              creditEntryId,
+              propertyId,
+            );
+            const entry = entryRows[0];
+            if (!entry || entry.type !== "REFUND_OWED" || entry.status !== "OPEN" || entry.guestId !== guestId) {
+              throw new Error("GUEST_CREDIT_NOT_AVAILABLE");
+            }
+            const account = await tx.cityLedgerAccount.findUnique({ where: { id: entry.accountId }, select: { type: true } });
+            if (!account || account.type !== "REFUND_PAYABLE") throw new Error("INVALID_CREDIT_ACCOUNT");
+
+            const allocations = await tx.cityLedgerAllocation.aggregate({ where: { paymentId: creditEntryId }, _sum: { amount: true } });
+            const pending = await tx.refundRequest.aggregate({
+              where: { cityLedgerEntryId: creditEntryId, status: { in: ["PENDING_APPROVAL", "APPROVED", "PROCESSING"] } },
+              _sum: { requestedAmount: true },
+            });
+            const available = Number(entry.amount) - Number(allocations._sum.amount || 0);
+            if (Number(pending._sum.requestedAmount || 0) + amount > available + 0.01) throw new Error("CREDIT_LIMIT_EXCEEDED");
+
+            const propertyRecord = await tx.property.findUnique({ where: { id: propertyId }, select: { organizationId: true } });
+            if (!propertyRecord) throw new Error("PROPERTY_NOT_FOUND");
+            const accountantRole = await tx.role.findFirst({ where: { organizationId: propertyRecord.organizationId, name: { in: ["ACCOUNTANT", "FINANCE_MANAGER"] } } });
+            const accountant = accountantRole ? await tx.userRole.findFirst({
+              where: { roleId: accountantRole.id, userId: { not: actorId }, OR: [{ propertyId }, { propertyId: null }] },
+              select: { userId: true },
+            }) : null;
+            const request = await tx.refundRequest.create({
+              data: {
+                organizationId: propertyRecord.organizationId,
+                propertyId,
+                reservationId: entry.reservationId || null,
+                folioId: entry.folioId || null,
+                guestId,
+                cityLedgerEntryId: creditEntryId,
+                requestedAmount: amount,
+                currency: entry.currency,
+                requestedMethod,
+                bankAccountName: requestedMethod === "BANK_TRANSFER" ? bankAccountName : null,
+                bankAccountNumberEncrypted: requestedMethod === "BANK_TRANSFER" ? encrypt(bankAccountNumber) : null,
+                bankName: requestedMethod === "BANK_TRANSFER" ? bankName : null,
+                category: "FOLIO_CREDIT_BALANCE",
+                reason,
+                supportingNotes: `Offline guest credit entry: ${creditEntryId}`,
+                requestedById: actorId,
+                currentApproverId: accountant?.userId || null,
+                approvalRoleId: accountantRole?.id || null,
+                currentApprovalStep: 1,
+                idempotencyKey,
+                expiresAt: new Date(Date.now() + 7 * 86400000),
+              },
+            });
+            await tx.approvalRequest.create({
+              data: {
+                propertyId,
+                type: "REFUND",
+                status: "PENDING",
+                requestedBy: actorId,
+                amount,
+                currency: entry.currency,
+                reason,
+                details: { refundRequestId: request.id, cityLedgerEntryId: creditEntryId, category: request.category, requestedAmount: amount, requestedMethod, approverId: accountant?.userId, approverRoleId: accountantRole?.id, stepOrder: 1, stage: "ACCOUNTANT_REVIEW", source: "OFFLINE_FRONTDESK" },
+                expiresAt: request.expiresAt,
+              },
+            });
           } else if (aggregateType === "CITY_LEDGER" && eventType === "GUEST_CREDIT_APPLICATION") {
             const amount = Number(payload.amount);
             const guestId = payload.guestId;
@@ -2121,6 +2210,61 @@ export async function POST(req: NextRequest) {
                 actorId
               );
             }
+          } else if (aggregateType === "CITY_LEDGER" && eventType === "CITY_LEDGER_PAYMENT") {
+            const amount = Number(payload.amount);
+            const accountId = payload.accountId;
+            const invoiceId = payload.invoiceId || null;
+            const accountType = String(payload.accountType || "").toUpperCase();
+            const frontdeskSessionId = payload.frontdeskSessionId;
+            const method = String(payload.method || "BANK_TRANSFER").toUpperCase();
+            const reference = String(payload.reference || "").trim();
+            if (!Number.isFinite(amount) || amount <= 0 || !isUuid(accountId) || !isUuid(frontdeskSessionId) || !reference) throw new Error("City ledger payment requires account, shift, amount, and reference");
+            if (!["CASH", "BANK_TRANSFER", "POS", "CARD", "CHEQUE", "OTHER"].includes(method)) throw new Error("Invalid city ledger payment method");
+            const account = await tx.cityLedgerAccount.findUnique({ where: { id: accountId } });
+            if (!account || account.propertyId !== propertyId || !["CORPORATE", "SKIPPER"].includes(account.type) || (accountType && account.type !== accountType)) throw new Error("CITY_LEDGER_ACCOUNT_NOT_AVAILABLE");
+            const frontdeskSession = await tx.frontdeskSession.findUnique({ where: { id: frontdeskSessionId }, select: { propertyId: true, staffId: true, businessDate: true } });
+            if (!frontdeskSession || frontdeskSession.propertyId !== propertyId) throw new Error("FRONTDESK_SHIFT_NOT_FOUND");
+            if (account.type !== "CORPORATE" && !invoiceId) throw new Error("WALKOUT_INVOICE_REQUIRED");
+            if (invoiceId && !isUuid(invoiceId)) throw new Error("INVALID_INVOICE");
+            const invoice = invoiceId ? await tx.cityLedgerInvoice.findUnique({ where: { id: invoiceId } }) : null;
+            if (invoiceId && (!invoice || invoice.accountId !== accountId || invoice.status === "PAID" || invoice.status === "VOID")) throw new Error("CITY_LEDGER_INVOICE_NOT_AVAILABLE");
+            if (invoice && amount > Number(invoice.outstandingAmount) + 0.01) throw new Error("PAYMENT_EXCEEDS_INVOICE_BALANCE");
+            const invoices = invoice
+              ? [invoice]
+              : await tx.cityLedgerInvoice.findMany({ where: { accountId, status: { in: ["OPEN", "PARTIALLY_PAID"] } }, orderBy: [{ dueDate: "asc" }, { createdAt: "asc" }] });
+            if (!invoice && account.type !== "CORPORATE") throw new Error("WALKOUT_INVOICE_REQUIRED");
+            const existingPayment = await tx.cityLedgerEntry.findFirst({ where: { reference, accountId, type: "PAYMENT" } });
+            if (existingPayment) return;
+            let masterFolio = await tx.folio.findFirst({ where: { propertyId, type: "CITY_LEDGER", corporateAccountId: null, reservationId: null, status: "OPEN" } });
+            if (!masterFolio) masterFolio = await tx.folio.create({ data: { propertyId, type: "CITY_LEDGER", status: "OPEN", currency: account.currency, folioNumber: `AR-${propertyId.slice(0, 8).toUpperCase()}-${Date.now().toString().slice(-6)}` } });
+            const payment = await tx.payment.create({ data: { folioId: masterFolio.id, propertyId, frontdeskSessionId, method: method as PaymentMethod, collectionSource: "RECEIVABLES", amount, currency: account.currency, baseAmount: amount, status: "COMPLETED", businessDate: frontdeskSession.businessDate, idempotencyKey, reference, receivedBy: frontdeskSession.staffId, notes: invoice ? `Front Desk city ledger settlement for ${invoice.invoiceNumber || invoiceId}` : "Front Desk corporate city ledger payment" } });
+            await tx.folio.update({ where: { id: masterFolio.id }, data: { totalPayments: { increment: amount }, balance: { decrement: amount } } });
+            let remaining = amount;
+            let appliedAmount = 0;
+            for (const openInvoice of invoices) {
+              if (remaining <= 0.01) break;
+              const applied = Math.min(remaining, Number(openInvoice.outstandingAmount));
+              const invoiceRemaining = Number(openInvoice.outstandingAmount) - applied;
+              await tx.cityLedgerInvoice.update({ where: { id: openInvoice.id }, data: { paidAmount: { increment: applied }, outstandingAmount: invoiceRemaining, status: invoiceRemaining <= 0.01 ? "PAID" : "PARTIALLY_PAID" } });
+              remaining -= applied;
+              appliedAmount += applied;
+            }
+            const paymentEntry = await tx.cityLedgerEntry.create({ data: { accountId, propertyId, amount, currency: account.currency, type: "PAYMENT", status: remaining <= 0.01 ? "SETTLED" : "OPEN", reference, reason: invoice ? `Settlement for invoice ${invoice.invoiceNumber || invoiceId}` : appliedAmount > 0.01 ? "Bulk corporate city ledger payment" : "Unapplied corporate advance", createdBy: actorId } });
+            // Re-read the affected invoices so allocation rows mirror the exact FIFO applications.
+            let allocationRemaining = amount;
+            for (const openInvoice of invoices) {
+              if (allocationRemaining <= 0.01) break;
+              const applied = Math.min(allocationRemaining, Number(openInvoice.outstandingAmount));
+              await tx.cityLedgerAllocation.create({ data: { paymentId: paymentEntry.id, invoiceId: openInvoice.id, amount: applied, currency: openInvoice.currency, createdBy: actorId } });
+              if (Number(openInvoice.outstandingAmount) - applied <= 0.01) await tx.cityLedgerEntry.updateMany({ where: { invoiceId: openInvoice.id, type: "TRANSFER_IN", status: "OPEN" }, data: { status: "SETTLED" } });
+              allocationRemaining -= applied;
+            }
+            if (appliedAmount > 0.01) await tx.cityLedgerAccount.update({ where: { id: accountId }, data: { balance: { decrement: appliedAmount } } });
+            const propertyRecord = await tx.property.findUnique({ where: { id: propertyId }, select: { organizationId: true, businessDate: true, timezone: true } });
+            const businessDate = propertyRecord?.businessDate || postingBusinessDate;
+            const lines = [{ accountId: await GLMappingService.getAssetAccountForMethod(propertyId, method), debit: amount, credit: 0, description: `Receivable collection by ${method}`, sourceType: "CITY_LEDGER_PAYMENT", sourceId: payment.id }, ...(appliedAmount > 0.01 ? [{ accountId: await GLMappingService.getCityLedgerAccount(propertyId), debit: 0, credit: appliedAmount, description: "Reduce city ledger receivable", sourceType: "CITY_LEDGER_PAYMENT", sourceId: payment.id }] : [])];
+            if (remaining > 0.01 && account.type === "CORPORATE") lines.push({ accountId: await GLMappingService.getCorporateAdvancesAccount(propertyId), debit: 0, credit: remaining, description: "Unapplied corporate advance", sourceType: "CITY_LEDGER_PAYMENT", sourceId: payment.id });
+            await GeneralLedgerService.postJournal({ userId: actorId, propertyIds: [propertyId], organizationId: propertyRecord?.organizationId || property.organizationId, role: "SYSTEM", permissions: [], outletIds: [] }, { propertyId, entryDate: businessDate, reference: `CITY-LEDGER-PAYMENT-${idempotencyKey}`, description: invoice ? `Settle city ledger invoice ${invoice.invoiceNumber || invoiceId}` : "Corporate city ledger payment", sourceModule: "AR", lines }, tx);
           } else if (aggregateType === "FOLIO" && eventType === "CITY_LEDGER_SETTLEMENT") {
             const amount = Number(payload.amount ?? payload.Amount);
             const accountId = payload.accountId || payload.AccountId;

@@ -12,7 +12,6 @@ import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { HardwareBridge } from '@/lib/desktop/HardwareBridge';
-import { FrontDeskRefundDialog } from './FrontDeskRefundDialog';
 import { ManagerOverrideModal } from '../pos/ManagerOverrideModal';
 
 interface FrontDeskQuickCheckoutDialogProps {
@@ -30,7 +29,6 @@ export function FrontDeskQuickCheckoutDialog({ open, onOpenChange, propertyId, i
   const [errorMsg, setErrorMsg] = useState('');
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [reservation, setReservation] = useState<any>(null);
-  const [refundPaymentId, setRefundPaymentId] = useState<string | null>(null);
   const [showManagerOverride, setShowManagerOverride] = useState(false);
 
   // Reset state when opened and hydrate list/detail reservations before confirmation.
@@ -40,7 +38,6 @@ export function FrontDeskQuickCheckoutDialog({ open, onOpenChange, propertyId, i
     let cancelled = false;
     const loadReservation = async () => {
       setErrorMsg('');
-      setRefundPaymentId(null);
       if (!initialReservation) {
         setReservation(null);
         setStep('IDLE');
@@ -231,20 +228,6 @@ export function FrontDeskQuickCheckoutDialog({ open, onOpenChange, propertyId, i
   const isUnpaid = balance > 0.01;
   const hasGuestCredit = balance < -0.01;
   const isFolioSettled = !isUnpaid && !hasGuestCredit;
-  const creditRefundSource = (reservation?.folios || [])
-    .map((folio: any) => ({
-      folio,
-      payment: (folio?.payments || []).find((candidate: any) => {
-        if (candidate?.status !== 'COMPLETED') return false;
-        const refunded = (candidate.refunds || [])
-          .filter((refund: any) => refund?.status !== 'FAILED')
-          .reduce((total: number, refund: any) => total + Number(refund?.amount || 0), 0);
-        return Number(candidate.amount || 0) - refunded > 0.01;
-      })
-    }))
-    .find((source: any) => source.payment);
-  const creditRefundPayment = creditRefundSource?.payment;
-  
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', maximumFractionDigits: 0 }).format(amount);
   };
@@ -426,16 +409,6 @@ export function FrontDeskQuickCheckoutDialog({ open, onOpenChange, propertyId, i
         </div>
       </DialogContent>
     </Dialog>
-      {refundPaymentId && reservation?.folios?.[0] && (
-      <FrontDeskRefundDialog
-        open
-        onOpenChange={(isOpen) => { if (!isOpen) setRefundPaymentId(null); }}
-        paymentId={refundPaymentId}
-        folio={creditRefundSource?.folio}
-        reservation={reservation}
-        initialCategory="FOLIO_CREDIT_BALANCE"
-      />
-      )}
       <ManagerOverrideModal
         isOpen={showManagerOverride}
         actionName="City Ledger Checkout Override"

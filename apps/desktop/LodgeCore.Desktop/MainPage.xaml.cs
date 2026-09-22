@@ -209,6 +209,12 @@ public partial class MainPage : ContentPage
                     responseData = await pmsInterop.GetCorporateAccountsAsync(
                         parameters?["propertyId"]?.ToString() ?? "");
                     break;
+                case "cityLedger.list":
+                    responseData = await pmsInterop.GetFrontDeskCityLedgerAsync(parameters?["propertyId"]?.ToString() ?? "");
+                    break;
+                case "cityLedger.settle":
+                    responseData = await pmsInterop.SettleCityLedgerAsync(parameters?.ToJsonString() ?? "{}");
+                    break;
                 case "hardware.readCard":
                     responseData = await hardwareInterop.ReadCardAsync();
                     break;

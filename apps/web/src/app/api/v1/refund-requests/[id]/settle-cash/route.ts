@@ -24,7 +24,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       if (request.approvedMethod !== 'CASH' || request.status !== 'APPROVED') throw new Error('CONFLICT');
 
       const amount = Number(request.approvedAmount || request.requestedAmount);
-      await applyRefundToFolio(tx, request, amount, user.id);
+      if (request.folioId) await applyRefundToFolio(tx, request, amount, user.id);
 
       const property = await tx.property.findUnique({ where: { id: request.propertyId }, select: { organizationId: true, businessDate: true } });
       const businessDate = property?.businessDate || new Date();
@@ -66,9 +66,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           }
         });
       }
-      await tx.folioItem.create({ data: { folioId: request.folioId, businessDate, type: 'REFUND', source: 'MANUAL', description: `Cash refund request ${request.id}`, quantity: 1, unitAmount: amount, amount, currency: request.currency, baseAmount: amount, postedBy: user.id } });
-      const totalRefunded = await tx.refund.aggregate({ where: { paymentId: request.paymentId, status: { not: 'FAILED' } }, _sum: { amount: true } });
-      await tx.payment.update({ where: { id: request.paymentId }, data: { status: Number(totalRefunded._sum.amount || 0) >= Number(request.payment.amount) ? 'REFUNDED' : 'PARTIALLY_REFUNDED' } });
+      if (request.folioId) await tx.folioItem.create({ data: { folioId: request.folioId, businessDate, type: 'REFUND', source: 'MANUAL', description: `Cash refund request ${request.id}`, quantity: 1, unitAmount: amount, amount, currency: request.currency, baseAmount: amount, postedBy: user.id } });
+      if (request.paymentId) {
+        const totalRefunded = await tx.refund.aggregate({ where: { paymentId: request.paymentId, status: { not: 'FAILED' } }, _sum: { amount: true } });
+        await tx.payment.update({ where: { id: request.paymentId }, data: { status: Number(totalRefunded._sum.amount || 0) >= Number(request.payment?.amount || 0) ? 'REFUNDED' : 'PARTIALLY_REFUNDED' } });
+      }
       await tx.refundRequest.update({ where: { id: request.id }, data: { status: 'COMPLETED' } });
       await tx.auditLog.create({ data: { organizationId: property?.organizationId || '', propertyId: request.propertyId, userId: user.id, action: 'SETTLE_CASH_REFUND', resource: 'RefundRequest', resourceId: request.id, newValue: { amount, refundId: refund.id }, ipAddress: req.headers.get('x-forwarded-for') || '', userAgent: req.headers.get('user-agent') || '', requestId: crypto.randomUUID() } });
       return refund;

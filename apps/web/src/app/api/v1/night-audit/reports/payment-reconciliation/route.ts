@@ -101,8 +101,8 @@ export async function GET(req: NextRequest) {
         methodMap[method].transactions.push({
           id: r.id,
           type: 'REFUND',
-          folioId: r.folio.folioNumber || r.folio.id.slice(0, 8),
-          guestName: r.folio.guest ? `${r.folio.guest.firstName} ${r.folio.guest.lastName}` : 'Walk-in',
+          folioId: r.folio?.folioNumber || r.folio?.id.slice(0, 8) || 'Standalone refund',
+          guestName: r.folio?.guest ? `${r.folio.guest.firstName} ${r.folio.guest.lastName}` : 'Guest credit',
           reference: r.providerRefundId || 'N/A',
           amount: -amt,
           timestamp: r.createdAt

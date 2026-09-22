@@ -14,8 +14,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ ent
     if (!session?.user?.id) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
     const user = session.user as any;
     const role = String(user.role || '').toUpperCase();
-    const capabilities = Array.isArray(user.capabilities) ? user.capabilities : [];
-    const canRequestRefund = user.isSuperAdmin || role === 'NIGHT_AUDITOR' || capabilities.includes('ACCESS_REFUNDS');
+    const canRequestRefund = ['FRONT_DESK', 'FRONT_DESK_MANAGER', 'RECEPTIONIST'].includes(role);
     if (!canRequestRefund) return errorResponse('FORBIDDEN', 'Refund request permission is required.', 403);
     const { entryId } = await params;
     const body = await req.json().catch(() => ({}));
@@ -26,17 +25,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ ent
     const bankAccountName = String(body.bankAccountName || '').trim();
     const bankAccountNumber = String(body.bankAccountNumber || '').replace(/\s+/g, '');
     const bankName = String(body.bankName || '').trim();
-    const bankCode = String(body.bankCode || '').trim();
     if (!Number.isFinite(amount) || amount <= 0 || !reason || !['CASH', 'BANK_TRANSFER', 'ORIGINAL_PAYMENT'].includes(requestedMethod)) return errorResponse('BAD_REQUEST', 'Amount, reason, and a valid refund method are required.', 400);
     if (requestedMethod === 'BANK_TRANSFER' && (!bankAccountName || !/^\d{6,20}$/.test(bankAccountNumber) || !bankName)) return errorResponse('BAD_REQUEST', 'Bank name, account name, and a valid account number are required.', 400);
 
     const ctx = await requireOrganizationContext(session.user.id);
     const result = await prisma.$transaction(async tx => {
       const entry = await tx.cityLedgerEntry.findUnique({ where: { id: entryId }, include: { account: true, folio: { include: { property: true } }, reservation: true, allocations: true } });
-      if (!entry || entry.type !== 'REFUND_OWED' || !entry.folio || !entry.guestId || !ctx.propertyIds.includes(entry.propertyId)) throw new Error('NOT_FOUND');
+      if (!entry || entry.type !== 'REFUND_OWED' || !entry.guestId || !ctx.propertyIds.includes(entry.propertyId)) throw new Error('NOT_FOUND');
       if (entry.account.type !== 'REFUND_PAYABLE') throw new Error('INVALID_CREDIT_ACCOUNT');
-      const payment = await tx.payment.findFirst({ where: { folioId: entry.folioId!, status: 'COMPLETED' }, orderBy: { createdAt: 'asc' } });
-      if (!payment) throw new Error('PAYMENT_NOT_FOUND');
+      const property = await tx.property.findUnique({ where: { id: entry.propertyId }, select: { organizationId: true } });
+      const payment = entry.folioId ? await tx.payment.findFirst({ where: { folioId: entry.folioId, status: 'COMPLETED' }, orderBy: { createdAt: 'asc' } }) : null;
+      if (!payment && requestedMethod === 'ORIGINAL_PAYMENT') throw new Error('PAYMENT_NOT_FOUND');
       const allocated = entry.allocations.reduce((sum, allocation) => sum + Number(allocation.amount), 0);
       const available = Number(entry.amount) - allocated;
       const pending = await tx.refundRequest.aggregate({ where: { cityLedgerEntryId: entry.id, status: { in: ACTIVE as any } }, _sum: { requestedAmount: true } });
@@ -45,12 +44,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ ent
       if (existing) return existing;
       const rules = await tx.refundApprovalRule.findMany({ where: { propertyId: entry.propertyId, isActive: true }, orderBy: { stepOrder: 'asc' } });
       const matchingRules = rules.filter(rule => (rule.minAmount == null || amount >= Number(rule.minAmount)) && (rule.maxAmount == null || amount <= Number(rule.maxAmount)));
-      const firstRule = matchingRules[0];
+      const isStandalone = !entry.folioId || !payment;
+      const accountantRole = isStandalone ? await tx.role.findFirst({ where: { organizationId: property?.organizationId || '', name: { in: ['ACCOUNTANT', 'FINANCE_MANAGER'] } } }) : null;
+      const managerRole = isStandalone ? await tx.role.findFirst({ where: { organizationId: property?.organizationId || '', name: { in: ['MANAGER', 'GENERAL_MANAGER', 'HOTEL_MANAGER'] } } }) : null;
+      const firstRule = isStandalone ? null : matchingRules[0];
+      const firstRole = accountantRole || (firstRule?.roleId ? await tx.role.findUnique({ where: { id: firstRule.roleId } }) : null);
+      const firstApprover = accountantRole ? await tx.userRole.findFirst({ where: { roleId: accountantRole.id, userId: { not: session.user.id }, OR: [{ propertyId: entry.propertyId }, { propertyId: null }] }, select: { userId: true } }) : null;
       const fallbackRoleName = amount > 250000 ? 'FINANCE_MANAGER' : amount > 50000 ? 'MANAGER' : 'FRONT_DESK_MANAGER';
-      const role = firstRule?.roleId ? await tx.role.findUnique({ where: { id: firstRule.roleId } }) : await tx.role.findFirst({ where: { organizationId: entry.folio!.property.organizationId, name: fallbackRoleName } });
-      const candidate = firstRule?.approverId ? { userId: firstRule.approverId } : role ? await tx.userRole.findFirst({ where: { roleId: role.id, userId: { not: session.user.id }, OR: [{ propertyId: entry.propertyId }, { propertyId: null }] }, select: { userId: true } }) : null;
-      const request = await tx.refundRequest.create({ data: { organizationId: entry.folio.property.organizationId, propertyId: entry.propertyId, reservationId: entry.reservationId, folioId: entry.folioId!, paymentId: payment.id, guestId: entry.guestId, cityLedgerEntryId: entry.id, requestedAmount: amount, currency: entry.currency, requestedMethod, bankAccountName: requestedMethod === 'BANK_TRANSFER' ? bankAccountName : null, bankAccountNumberEncrypted: requestedMethod === 'BANK_TRANSFER' ? encrypt(bankAccountNumber) : null, bankAccountLast4: requestedMethod === 'BANK_TRANSFER' ? bankAccountNumber.slice(-4) : null, bankName: requestedMethod === 'BANK_TRANSFER' ? bankName : null, bankCode: requestedMethod === 'BANK_TRANSFER' ? bankCode || null : null, category: 'FOLIO_CREDIT_BALANCE', reason, supportingNotes: `Guest credit entry: ${entry.id}`, requestedById: session.user.id, currentApproverId: candidate?.userId, approvalRoleId: role?.id, currentApprovalStep: firstRule?.stepOrder || 1, idempotencyKey, expiresAt: new Date(Date.now() + 7 * 86400000) } });
-      await tx.approvalRequest.create({ data: { propertyId: entry.propertyId, type: 'REFUND', status: 'PENDING', requestedBy: session.user.id, amount, currency: entry.currency, reason, details: { refundRequestId: request.id, cityLedgerEntryId: entry.id, category: request.category, requestedAmount: amount, requestedMethod, approverId: candidate?.userId, approverRoleId: role?.id, stepOrder: firstRule?.stepOrder || 1 }, expiresAt: request.expiresAt } });
+      const role = firstRole || await tx.role.findFirst({ where: { organizationId: property?.organizationId || '', name: fallbackRoleName } });
+      const candidate = firstApprover || (firstRule?.approverId ? { userId: firstRule.approverId } : role ? await tx.userRole.findFirst({ where: { roleId: role.id, userId: { not: session.user.id }, OR: [{ propertyId: entry.propertyId }, { propertyId: null }] }, select: { userId: true } }) : null);
+      const request = await tx.refundRequest.create({ data: { organizationId: property?.organizationId || '', propertyId: entry.propertyId, reservationId: entry.reservationId, folioId: entry.folioId, ...(payment?.id ? { paymentId: payment.id } : {}), guestId: entry.guestId, cityLedgerEntryId: entry.id, requestedAmount: amount, currency: entry.currency, requestedMethod, bankAccountName: requestedMethod === 'BANK_TRANSFER' ? bankAccountName : null, bankAccountNumberEncrypted: requestedMethod === 'BANK_TRANSFER' ? encrypt(bankAccountNumber) : null, bankName: requestedMethod === 'BANK_TRANSFER' ? bankName : null, category: 'FOLIO_CREDIT_BALANCE', reason, supportingNotes: `Guest credit entry: ${entry.id}`, requestedById: session.user.id, currentApproverId: candidate?.userId, approvalRoleId: role?.id, currentApprovalStep: isStandalone ? 1 : (firstRule?.stepOrder || 1), idempotencyKey, expiresAt: new Date(Date.now() + 7 * 86400000) } });
+      await tx.approvalRequest.create({ data: { propertyId: entry.propertyId, type: 'REFUND', status: 'PENDING', requestedBy: session.user.id, amount, currency: entry.currency, reason, details: { refundRequestId: request.id, cityLedgerEntryId: entry.id, category: request.category, requestedAmount: amount, requestedMethod, approverId: candidate?.userId, approverRoleId: role?.id, stepOrder: isStandalone ? 1 : (firstRule?.stepOrder || 1), stage: isStandalone ? 'ACCOUNTANT_REVIEW' : 'STANDARD_REVIEW' }, expiresAt: request.expiresAt } });
       return request;
     });
     return successResponse({ status: result.status, refundRequest: result }, 202);

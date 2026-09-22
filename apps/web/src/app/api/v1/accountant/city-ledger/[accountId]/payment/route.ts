@@ -9,6 +9,7 @@ import { getPropertyBusinessDate } from '@/lib/date-utils';
 import prisma, { PaymentMethod } from '@hotel-pms/db';
 
 const ALLOWED_METHODS = ['CASH', 'BANK_TRANSFER', 'POS', 'CARD', 'CARD_OFFLINE', 'PAYMENT_GATEWAY', 'MOBILE_PAYMENT', 'CHEQUE', 'OTHER'];
+const FRONT_DESK_ROLES = ['FRONT_DESK', 'FRONT_DESK_MANAGER', 'RECEPTIONIST'];
 
 export async function POST(
   req: NextRequest,
@@ -24,6 +25,7 @@ export async function POST(
     const reference = String(body.reference || '').trim();
     const method = body.method;
     const invoiceId = body.invoiceId; // optional
+    const frontdeskSessionId = body.frontdeskSessionId ? String(body.frontdeskSessionId) : undefined;
     const idempotencyKey = body.idempotencyKey;
 
     if (!idempotencyKey) return errorResponse('BAD_REQUEST', 'idempotencyKey is required', 400);
@@ -33,16 +35,21 @@ export async function POST(
     const ctx = await requireOrganizationContext(session.user.id);
     const account = await prisma.cityLedgerAccount.findUnique({ where: { id: accountId }, include: { property: true } });
     if (!account || !ctx.propertyIds.includes(account.propertyId)) return errorResponse('FORBIDDEN', 'City ledger account is not accessible', 403);
+    if (frontdeskSessionId) {
+      const frontdeskSession = await prisma.frontdeskSession.findUnique({ where: { id: frontdeskSessionId }, select: { propertyId: true, staffId: true, status: true, controlStatus: true } });
+      if (!frontdeskSession || frontdeskSession.propertyId !== account.propertyId || frontdeskSession.staffId !== session.user.id || frontdeskSession.status !== 'OPEN' || frontdeskSession.controlStatus !== 'OPEN') return errorResponse('INVALID_STATE', 'Front Desk shift is not open for this payment', 409);
+    }
     if (account.status !== 'ACTIVE') return errorResponse('INVALID_STATE', 'City ledger account is not active', 409);
 
     // Permission enforcement
     const userRole = session.user.role || 'UNKNOWN';
     const isAccountant = ['ACCOUNTANT', 'NIGHT_AUDITOR', 'MANAGER', 'HOTEL_MANAGER', 'FINANCE_MANAGER', 'ADMIN', 'SUPER_ADMIN'].includes(userRole);
-    const canCollect = isAccountant || await hasPermission(session.user.id, 'receivables', 'collect', account.propertyId);
+    const canCollect = Boolean(frontdeskSessionId && FRONT_DESK_ROLES.includes(String(userRole).toUpperCase())) || isAccountant || await hasPermission(session.user.id, 'receivables', 'collect', account.propertyId);
     
     if (!canCollect) {
       return errorResponse('FORBIDDEN', 'Insufficient permissions to post receivables collections.', 403);
     }
+    if (!frontdeskSessionId) return errorResponse('FORBIDDEN', 'City-ledger settlement must be posted from an open Front Desk shift.', 403);
 
     // Resolve the posting accounts before changing any subledger state. A
     // missing or inactive mapping must block the entire settlement.
@@ -120,6 +127,7 @@ export async function POST(
           propertyId: account.propertyId,
           method: method as PaymentMethod,
           collectionSource: 'RECEIVABLES',
+          frontdeskSessionId,
           amount,
           currency: account.currency,
           baseAmount: amount,
