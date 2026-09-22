@@ -57,6 +57,18 @@ export async function GET(req: NextRequest) {
         status: { notIn: ['CANCELLED', 'VOIDED'] }
       },
       include: {
+        serverStaff: {
+          select: { id: true, firstName: true, lastName: true, employeeId: true, position: true },
+        },
+        outlet: { select: { name: true } },
+        session: {
+          select: { id: true, status: true, controlStatus: true, openedAt: true, closedAt: true },
+        },
+        payments: {
+          where: { status: { notIn: ['FAILED', 'REFUNDED', 'VOIDED'] } },
+          select: { method: true, amount: true },
+        },
+        voids: { select: { id: true } },
         items: {
           include: {
             product: {
@@ -76,6 +88,103 @@ export async function GET(req: NextRequest) {
         }
       }
     });
+
+    // Waiter-level shift summary. The report intentionally derives this from
+    // the same posted POS orders used by the DSS, so totals reconcile to the
+    // selected property/outlet/date scope without introducing a second source
+    // of truth or synthetic shift data.
+    type WaiterShiftAccumulator = {
+      staffId: string | null;
+      name: string;
+      employeeId: string | null;
+      position: string | null;
+      totalChecks: number;
+      closedChecks: number;
+      openChecks: number;
+      covers: number;
+      grossSales: number;
+      discounts: number;
+      netSales: number;
+      guestCharge: number;
+      tips: number;
+      voids: number;
+      outletNames: Set<string>;
+      sessionIds: Set<string>;
+      sessionStatuses: Set<string>;
+      tenders: Record<string, number>;
+    };
+
+    const waiterMap = new Map<string, WaiterShiftAccumulator>();
+    for (const order of orders) {
+      const key = order.serverStaffId || 'unassigned';
+      const current = waiterMap.get(key) || {
+        staffId: order.serverStaff?.id || null,
+        name: order.serverStaff ? `${order.serverStaff.firstName} ${order.serverStaff.lastName}`.trim() : 'Unassigned waiter',
+        employeeId: order.serverStaff?.employeeId || null,
+        position: order.serverStaff?.position || null,
+        totalChecks: 0,
+        closedChecks: 0,
+        openChecks: 0,
+        covers: 0,
+        grossSales: 0,
+        discounts: 0,
+        netSales: 0,
+        guestCharge: 0,
+        tips: 0,
+        voids: 0,
+        outletNames: new Set<string>(),
+        sessionIds: new Set<string>(),
+        sessionStatuses: new Set<string>(),
+        tenders: {},
+      };
+
+      const gross = Number(order.subtotal || 0);
+      const discount = Number(order.discount || 0);
+      current.totalChecks += 1;
+      current.closedChecks += order.status === 'CLOSED' ? 1 : 0;
+      current.openChecks += order.status === 'CLOSED' ? 0 : 1;
+      current.covers += Number(order.guestCount || 1);
+      current.grossSales += gross;
+      current.discounts += discount;
+      current.netSales += Math.max(0, gross - discount);
+      current.guestCharge += Number(order.total || 0);
+      current.tips += Number(order.tipAmount || 0);
+      current.voids += order.voids?.length || 0;
+      if (order.outlet?.name) current.outletNames.add(order.outlet.name);
+      if (order.session?.id) {
+        current.sessionIds.add(order.session.id);
+        current.sessionStatuses.add(order.session.controlStatus || order.session.status);
+      }
+      for (const payment of order.payments || []) {
+        current.tenders[payment.method] = (current.tenders[payment.method] || 0) + Number(payment.amount || 0);
+      }
+      waiterMap.set(key, current);
+    }
+
+    const waiterShiftSummary = Array.from(waiterMap.values())
+      .map((waiter) => ({
+        staffId: waiter.staffId,
+        name: waiter.name,
+        employeeId: waiter.employeeId,
+        position: waiter.position,
+        totalChecks: waiter.totalChecks,
+        closedChecks: waiter.closedChecks,
+        openChecks: waiter.openChecks,
+        covers: waiter.covers,
+        grossSales: waiter.grossSales,
+        discounts: waiter.discounts,
+        netSales: waiter.netSales,
+        guestCharge: waiter.guestCharge,
+        averageCheck: waiter.closedChecks > 0 ? waiter.netSales / waiter.closedChecks : 0,
+        spendPerCover: waiter.covers > 0 ? waiter.netSales / waiter.covers : 0,
+        tips: waiter.tips,
+        voids: waiter.voids,
+        outletNames: Array.from(waiter.outletNames),
+        shiftCount: waiter.sessionIds.size,
+        shiftStatuses: Array.from(waiter.sessionStatuses),
+        tenders: Object.entries(waiter.tenders).map(([method, amount]) => ({ method, amount })),
+      }))
+      .sort((a, b) => b.netSales - a.netSales);
 
     // 2. Fetch Payments for the period
     const paymentsAgg = await prisma.posPayment.groupBy({
@@ -313,6 +422,7 @@ export async function GET(req: NextRequest) {
           cogsVariance: actualCogs - theoreticalCogs
         },
         tenderBreakdown: paymentsAgg.map(p => ({ method: p.method, amount: Number(p._sum.amount || 0) })),
+        waiterShiftSummary,
         inventoryMovement: stockMovement
       }
     }, 200);

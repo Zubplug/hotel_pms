@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import {
-  BarChart3, RefreshCw, Loader2, Store, Box, Calendar, Calculator, Printer, CheckCircle2, AlertTriangle, WalletCards, ClipboardCheck, Scale, ChevronDown, ArrowUpRight, Clock3, CircleDollarSign, Percent, PackageCheck
+  BarChart3, RefreshCw, Loader2, Store, Box, Calendar, Calculator, Printer, CheckCircle2, AlertTriangle, WalletCards, ClipboardCheck, Scale, ChevronDown, ArrowUpRight, Clock3, CircleDollarSign, Percent, PackageCheck, UsersRound, UserRound
 } from 'lucide-react';
 import { useProperty } from '@/components/PropertyProvider';
 import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
@@ -71,7 +71,7 @@ export default function FnbReportsPage() {
   const [refreshToken, setRefreshToken] = useState(0);
 
   // Print Mode State
-  const [printMode, setPrintMode] = useState<'dss' | 'inventory' | null>(null);
+  const [printMode, setPrintMode] = useState<'dss' | 'inventory' | 'waiter' | null>(null);
   const [showPrintMenu, setShowPrintMenu] = useState(false);
 
   useEffect(() => {
@@ -132,7 +132,7 @@ export default function FnbReportsPage() {
     return () => window.clearInterval(interval);
   }, [propertyId, dateRange.start, dateRange.end, selectedOutlet, selectedWarehouse]);
 
-  const handlePrint = (mode: 'dss' | 'inventory') => {
+  const handlePrint = (mode: 'dss' | 'inventory' | 'waiter') => {
     setShowPrintMenu(false);
     setPrintMode(mode);
     setTimeout(() => {
@@ -161,6 +161,9 @@ export default function FnbReportsPage() {
   const leadingTender = [...(data?.tenderBreakdown || [])].sort((a: any, b: any) => Number(b.amount || 0) - Number(a.amount || 0))[0];
   const stockVarianceCount = data?.inventoryMovement?.filter((row: any) => Number(row.variance || 0) !== 0).length || 0;
   const cogsVariancePct = data?.summary?.netRevenue > 0 ? (Math.abs(Number(data.profitability.cogsVariance || 0)) / Number(data.summary.netRevenue)) * 100 : 0;
+  const waiterShiftSummary = data?.waiterShiftSummary || [];
+  const waiterNetSales = waiterShiftSummary.reduce((sum: number, waiter: any) => sum + Number(waiter.netSales || 0), 0);
+  const waiterOpenChecks = waiterShiftSummary.reduce((sum: number, waiter: any) => sum + Number(waiter.openChecks || 0), 0);
 
   const shiftDate = (days: number) => {
     const date = new Date();
@@ -404,6 +407,58 @@ export default function FnbReportsPage() {
         </div>
       )}
 
+      {printMode === 'waiter' && data && (
+        <div className="print-only text-slate-900">
+          <style dangerouslySetInnerHTML={{__html: `@media print { @page { size: A4 landscape; margin: 0; } }`}} />
+          <div className="flex justify-between items-end border-b-2 border-slate-900 pb-4 mb-6">
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight text-slate-900">WAITER POS SHIFT SUMMARY</h1>
+              <p className="text-xs font-semibold text-slate-500 mt-1 uppercase tracking-widest">{propertyName}</p>
+            </div>
+            <div className="text-right text-[11px] text-slate-600 space-y-0.5">
+              <p><span className="font-semibold text-slate-900">Date Range:</span> {displayDate}</p>
+              <p><span className="font-semibold text-slate-900">Outlet:</span> {selectedOutletName}</p>
+              <p><span className="font-semibold text-slate-900">Printed:</span> {new Date().toLocaleString()}</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-4 gap-4 mb-7">
+            <PrintMetric label="Waiters in scope" value={String(waiterShiftSummary.length)} />
+            <PrintMetric label="Waiter-owned net sales" value={money(waiterNetSales)} />
+            <PrintMetric label="Open checks" value={String(waiterOpenChecks)} />
+            <PrintMetric label="Total tips" value={money(waiterShiftSummary.reduce((sum: number, waiter: any) => sum + Number(waiter.tips || 0), 0))} />
+          </div>
+          <table className="w-full text-[10px]">
+            <thead>
+              <tr className="border-b-2 border-slate-900">
+                {['Waiter', 'Outlet', 'Shifts', 'Checks', 'Closed', 'Open', 'Covers', 'Net Sales', 'Avg Check', 'Tips', 'Voids', 'Shift Status'].map((heading) => (
+                  <th key={heading} className="py-2 text-left font-bold text-slate-900 uppercase tracking-wider">{heading}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-200">
+              {waiterShiftSummary.map((waiter: any) => (
+                <tr key={waiter.staffId || 'unassigned'}>
+                  <td className="py-2 font-bold text-slate-900">{waiter.name}</td>
+                  <td className="py-2 text-slate-700">{waiter.outletNames?.join(', ') || '—'}</td>
+                  <td className="py-2 text-slate-700">{waiter.shiftCount || 0}</td>
+                  <td className="py-2 text-slate-700">{waiter.totalChecks}</td>
+                  <td className="py-2 text-slate-700">{waiter.closedChecks}</td>
+                  <td className="py-2 text-slate-700">{waiter.openChecks}</td>
+                  <td className="py-2 text-slate-700">{waiter.covers}</td>
+                  <td className="py-2 font-bold text-slate-900">{money(waiter.netSales)}</td>
+                  <td className="py-2 text-slate-700">{money(waiter.averageCheck)}</td>
+                  <td className="py-2 text-slate-700">{money(waiter.tips)}</td>
+                  <td className="py-2 text-slate-700">{waiter.voids}</td>
+                  <td className="py-2 text-slate-700">{waiter.shiftStatuses?.join(', ') || '—'}</td>
+                </tr>
+              ))}
+              {!waiterShiftSummary.length && <tr><td colSpan={12} className="py-8 text-center text-slate-500">No waiter-assigned POS activity in this scope.</td></tr>}
+            </tbody>
+          </table>
+          <p className="mt-6 text-[10px] text-slate-500">Source: live POS orders, POS sessions, and POS payment records. Open checks and voids remain visible for manager follow-up.</p>
+        </div>
+      )}
+
       {/* ────────────────────────────────────────────────────────── */}
       {/* ── SCREEN-ONLY VIEW: BEAUTIFUL INTERACTIVE DASHBOARD    ── */}
       {/* ────────────────────────────────────────────────────────── */}
@@ -495,6 +550,10 @@ export default function FnbReportsPage() {
                       <button onClick={() => handlePrint('inventory')} className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm font-medium text-[#3b2116] hover:bg-[#fbf1eb]">
                         <Scale className="h-4 w-4 text-[#b85f29]" />
                         Stock Reconciliation Ledger
+                      </button>
+                      <button onClick={() => handlePrint('waiter')} className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm font-medium text-[#3b2116] hover:bg-[#fbf1eb]">
+                        <UsersRound className="h-4 w-4 text-[#b85f29]" />
+                        Waiter POS Shift Summary
                       </button>
                     </div>
                   </>
@@ -636,6 +695,60 @@ export default function FnbReportsPage() {
                     <div className="flex items-center justify-between"><span className="text-slate-500">Stock exceptions</span><span className={`font-bold ${stockVarianceCount ? 'text-rose-600' : 'text-emerald-600'}`}>{stockVarianceCount}</span></div>
                   </div>
                 </div>
+              </section>
+
+              <section className="overflow-hidden rounded-[22px] border border-[#ead7ca] bg-white shadow-sm">
+                <div className="flex flex-col justify-between gap-3 border-b border-[#ead7ca] px-5 py-5 sm:flex-row sm:items-center sm:px-6">
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#b85f29]">POS shift control</p>
+                    <h2 className="mt-1 flex items-center gap-2 text-lg font-bold tracking-tight text-[#2b1710]"><UsersRound className="h-5 w-5 text-[#c96f32]" /> Waiter staff summary</h2>
+                    <p className="mt-1 text-[11px] text-[#8d7568]">Sales ownership, shift status, settlement mix, and open checks for the selected report scope.</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2 text-[10px] font-bold uppercase tracking-wider">
+                    <span className="rounded-full border border-[#ead7ca] bg-[#fbf1eb] px-3 py-1.5 text-[#8e4927]">{waiterShiftSummary.length} staff in scope</span>
+                    <span className={`rounded-full border px-3 py-1.5 ${waiterOpenChecks ? 'border-amber-200 bg-amber-50 text-amber-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}>{waiterOpenChecks} open checks</span>
+                  </div>
+                </div>
+                {waiterShiftSummary.length ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[980px]">
+                      <thead>
+                        <tr className="border-b bg-slate-50/50">
+                          {['Waiter / outlet', 'Shift control', 'Checks / covers', 'Net sales', 'Avg check', 'Settlement mix', 'Tips', 'Control'].map((heading) => (
+                            <th key={heading} className="px-5 py-3 text-left text-[9px] font-bold uppercase tracking-[0.16em] text-slate-500">{heading}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {waiterShiftSummary.map((waiter: any) => {
+                          const isUnassigned = !waiter.staffId;
+                          const open = Number(waiter.openChecks || 0) > 0;
+                          const topTender = [...(waiter.tenders || [])].sort((a: any, b: any) => Number(b.amount || 0) - Number(a.amount || 0))[0];
+                          return (
+                            <tr key={waiter.staffId || 'unassigned'} className="transition-colors hover:bg-slate-50/50">
+                              <td className="px-5 py-4">
+                                <div className="flex items-center gap-3">
+                                  <span className={`flex h-9 w-9 items-center justify-center rounded-xl ${isUnassigned ? 'bg-amber-50 text-amber-700' : 'bg-indigo-50 text-indigo-700'}`}><UserRound className="h-4 w-4" /></span>
+                                  <div><p className="text-sm font-bold text-slate-900">{waiter.name}</p><p className="mt-0.5 text-[10px] text-slate-500">{waiter.outletNames?.join(', ') || 'No outlet recorded'}{waiter.employeeId ? ` · ${waiter.employeeId}` : ''}</p></div>
+                                </div>
+                              </td>
+                              <td className="px-5 py-4"><div className="flex items-center gap-2"><span className={`h-2 w-2 rounded-full ${open ? 'bg-amber-400' : 'bg-emerald-400'}`} /><div><p className="text-xs font-bold text-slate-900">{waiter.shiftCount || 0} shift{waiter.shiftCount === 1 ? '' : 's'}</p><p className="mt-0.5 text-[10px] text-slate-500">{waiter.shiftStatuses?.join(', ') || 'No session status'}</p></div></div></td>
+                              <td className="px-5 py-4"><p className="text-sm font-bold tabular-nums text-slate-900">{waiter.closedChecks} / {waiter.totalChecks}</p><p className="mt-0.5 text-[10px] text-slate-500">{waiter.covers} covers · {waiter.openChecks} open</p></td>
+                              <td className="px-5 py-4"><p className="text-sm font-bold tabular-nums text-slate-900">{money(waiter.netSales)}</p><p className="mt-0.5 text-[10px] text-slate-500">{money(waiter.discounts)} allowances</p></td>
+                              <td className="px-5 py-4 text-sm font-bold tabular-nums text-slate-900">{money(waiter.averageCheck)}</td>
+                              <td className="px-5 py-4"><p className="text-xs font-bold uppercase text-slate-700">{topTender ? topTender.method.replace(/_/g, ' ') : '—'}</p><p className="mt-0.5 text-[10px] text-slate-500">{topTender ? money(topTender.amount) : 'No captured tender'}</p></td>
+                              <td className="px-5 py-4 text-sm font-bold tabular-nums text-emerald-600">{money(waiter.tips)}</td>
+                              <td className="px-5 py-4"><span className={`inline-flex rounded-full border px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider ${waiter.voids > 0 ? 'border-rose-200 bg-rose-50 text-rose-700' : open ? 'border-amber-200 bg-amber-50 text-amber-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}>{waiter.voids > 0 ? `${waiter.voids} void${waiter.voids === 1 ? '' : 's'}` : open ? 'Open checks' : 'Clear'}</span></td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center gap-2 px-5 py-12 text-center"><UsersRound className="h-7 w-7 text-slate-400" /><p className="text-sm font-semibold text-slate-600">No waiter-assigned POS activity in this scope.</p><p className="text-xs text-slate-500">Orders without a server assignment will appear as an unassigned control once posted.</p></div>
+                )}
+                {waiterShiftSummary.length > 0 && <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[#ead7ca] bg-slate-50/30 px-5 py-3 text-[10px] font-semibold uppercase tracking-wider text-slate-500"><span>Waiter-owned net sales reconcile to {money(waiterNetSales)}</span><span>Source: live POS orders and payment records</span></div>}
               </section>
 
               <section className="rounded-[22px] border border-[#ead7ca] bg-white p-5 shadow-sm sm:p-6">
