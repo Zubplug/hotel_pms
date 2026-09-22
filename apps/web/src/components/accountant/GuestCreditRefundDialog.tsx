@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { Banknote, Loader2, Wallet } from 'lucide-react';
+import { Banknote, CheckCircle2, Loader2, ShieldCheck, Wallet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -40,5 +40,73 @@ export function GuestCreditRefundDialog({ entryId, guestName, amount, currency, 
     finally { setBusy(false); }
   }
 
-  return <Dialog open={open} onOpenChange={setOpen}><DialogTrigger render={<Button size="sm" className="bg-emerald-600 text-white hover:bg-emerald-500" />}><Banknote className="mr-1.5 h-3.5 w-3.5" />Request refund</DialogTrigger><DialogContent className="border-white/10 bg-[#0b1628] text-slate-100 sm:max-w-lg"><form onSubmit={submit}><DialogHeader><div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-400/10 text-emerald-300"><Wallet className="h-5 w-5" /></div><DialogTitle className="text-white">Refund guest credit</DialogTitle><DialogDescription className="text-slate-400">Submit {currency} {amount.toLocaleString()} for {guestName}. An Accountant and then a Manager must approve before money leaves the hotel.</DialogDescription></DialogHeader><div className="space-y-4 py-5"><div className="grid gap-2"><Label>Refund amount ({currency})</Label><Input type="number" min="0.01" max={amount} step="0.01" value={value} onChange={event => setValue(event.target.value)} required className="border-white/10 bg-white/[.05] text-white" /></div><div className="grid gap-2"><Label>Settlement method</Label><select value={method} onChange={event => setMethod(event.target.value)} className="h-10 rounded-md border border-white/10 bg-slate-950 px-3 text-sm text-white"><option value="BANK_TRANSFER">Bank transfer</option><option value="CASH">Cash office</option>{!guestId && <option value="ORIGINAL_PAYMENT">Original payment method</option>}</select></div>{method === 'BANK_TRANSFER' && <div className="grid gap-3 rounded-xl border border-white/10 bg-white/[.03] p-3"><Input placeholder="Bank name" value={bankName} onChange={event => setBankName(event.target.value)} required className="border-white/10 bg-slate-950 text-white" /><Input placeholder="Account name" value={bankAccountName} onChange={event => setBankAccountName(event.target.value)} required className="border-white/10 bg-slate-950 text-white" /><Input placeholder="Account number" value={bankAccountNumber} onChange={event => setBankAccountNumber(event.target.value)} required className="border-white/10 bg-slate-950 text-white" /></div>}<div className="grid gap-2"><Label>Reason</Label><Input value={reason} onChange={event => setReason(event.target.value)} required className="border-white/10 bg-white/[.05] text-white" /></div><p className="text-xs leading-5 text-slate-500">Settlement posts Dr Guest Refunds Payable and credits the selected cash or bank account.</p></div><DialogFooter><Button type="button" variant="outline" onClick={() => setOpen(false)} className="border-white/10 bg-transparent text-slate-300">Cancel</Button><Button type="submit" disabled={busy} className="bg-emerald-600 text-white hover:bg-emerald-500">{busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Submit for approval</Button></DialogFooter></form></DialogContent></Dialog>;
+  return <Dialog open={open} onOpenChange={setOpen}>
+    <DialogTrigger render={<Button size="sm" className="rounded-xl bg-emerald-600 text-white shadow-sm hover:bg-emerald-700" />}>
+      <Banknote className="mr-1.5 h-3.5 w-3.5" />Request refund
+    </DialogTrigger>
+    <DialogContent className="max-h-[90vh] overflow-y-auto rounded-3xl border border-slate-200 bg-slate-50 p-0 text-slate-900 shadow-2xl sm:max-w-lg">
+      <form onSubmit={submit}>
+        <DialogHeader className="border-b border-slate-200 bg-white px-6 pb-5 pt-6">
+          <div className="flex items-start gap-3">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700">
+              <Wallet className="h-5 w-5" />
+            </div>
+            <div>
+              <DialogTitle className="text-xl font-bold text-slate-900">Request guest-credit refund</DialogTitle>
+              <DialogDescription className="mt-1 text-sm leading-5 text-slate-500">
+                Submit a refund request for {guestName}. The Accountant and Manager must approve it before settlement.
+              </DialogDescription>
+            </div>
+          </div>
+          <div className="mt-5 flex items-center justify-between rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wide text-emerald-700">Available guest credit</p>
+              <p className="mt-1 text-sm font-semibold text-slate-700">{guestName}</p>
+            </div>
+            <p className="text-lg font-extrabold text-emerald-700">{currency} {amount.toLocaleString()}</p>
+          </div>
+        </DialogHeader>
+
+        <div className="space-y-5 px-6 py-5">
+          <div className="grid gap-2">
+            <Label className="font-semibold text-slate-700">Refund amount ({currency})</Label>
+            <Input type="number" min="0.01" max={amount} step="0.01" value={value} onChange={event => setValue(event.target.value)} required className="h-11 border-slate-200 bg-white text-slate-900 shadow-sm focus:border-emerald-500 focus:ring-emerald-500/20" />
+          </div>
+
+          <div className="grid gap-2">
+            <Label className="font-semibold text-slate-700">Refund method</Label>
+            <select value={method} onChange={event => setMethod(event.target.value)} className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 shadow-sm outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10">
+              <option value="BANK_TRANSFER">Bank transfer</option>
+              <option value="CASH">Cash office</option>
+              {!guestId && <option value="ORIGINAL_PAYMENT">Original payment method</option>}
+            </select>
+          </div>
+
+          {method === 'BANK_TRANSFER' && <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="flex items-center gap-2 text-sm font-bold text-slate-800"><Banknote className="h-4 w-4 text-emerald-600" />Bank details</div>
+            <p className="text-xs text-slate-500">These details will be visible to the Accountant and Manager during approval.</p>
+            <Input aria-label="Bank name" placeholder="Bank name" value={bankName} onChange={event => setBankName(event.target.value)} required className="h-11 border-slate-200 bg-slate-50 text-slate-900" />
+            <Input aria-label="Account name" placeholder="Account name" value={bankAccountName} onChange={event => setBankAccountName(event.target.value)} required className="h-11 border-slate-200 bg-slate-50 text-slate-900" />
+            <Input aria-label="Account number" placeholder="Account number" inputMode="numeric" value={bankAccountNumber} onChange={event => setBankAccountNumber(event.target.value)} required className="h-11 border-slate-200 bg-slate-50 text-slate-900" />
+          </div>}
+
+          <div className="grid gap-2">
+            <Label className="font-semibold text-slate-700">Reason for refund</Label>
+            <Input value={reason} onChange={event => setReason(event.target.value)} required className="h-11 border-slate-200 bg-white text-slate-900 shadow-sm focus:border-emerald-500 focus:ring-emerald-500/20" />
+          </div>
+
+          <div className="flex gap-3 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+            <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-blue-600" />
+            <div><p className="font-bold">Two-step approval</p><p className="mt-0.5 text-xs leading-5 text-blue-700">The request is queued for the Accountant first, then the Manager. No money is paid from this screen.</p></div>
+          </div>
+          <p className="flex items-center gap-1.5 text-xs text-slate-500"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />The guest-credit balance remains auditable until the refund is finally settled.</p>
+        </div>
+
+        <DialogFooter className="border-t border-slate-200 bg-white px-6 py-4">
+          <Button type="button" variant="outline" onClick={() => setOpen(false)} className="rounded-xl border-slate-200 bg-white text-slate-700 hover:bg-slate-50">Cancel</Button>
+          <Button type="submit" disabled={busy} className="rounded-xl bg-emerald-600 font-bold text-white shadow-sm hover:bg-emerald-700">{busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Submit for approval</Button>
+        </DialogFooter>
+      </form>
+    </DialogContent>
+  </Dialog>;
 }
