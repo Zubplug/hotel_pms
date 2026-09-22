@@ -2,6 +2,34 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
+/* General Cashier workspaces use the same dark control-room surface as their
+   shell. Keep the existing semantic status colours, but prevent legacy white
+   cards and form controls from creating a light/dark split. */
+.cashier-dark-surface {
+  background: #07111f;
+  color: #e2e8f0;
+}
+
+.cashier-dark-surface .bg-white { background-color: #101b2f !important; }
+.cashier-dark-surface .bg-slate-50,
+.cashier-dark-surface .bg-slate-50\/50,
+.cashier-dark-surface .bg-slate-50\/60,
+.cashier-dark-surface .bg-slate-50\/70,
+.cashier-dark-surface .bg-slate-50\/80 { background-color: rgba(255, 255, 255, 0.035) !important; }
+.cashier-dark-surface .border-slate-100,
+.cashier-dark-surface .border-slate-200 { border-color: rgba(255, 255, 255, 0.10) !important; }
+.cashier-dark-surface .divide-slate-100 > :not([hidden]) ~ :not([hidden]) { border-color: rgba(255, 255, 255, 0.08) !important; }
+.cashier-dark-surface .text-slate-950,
+.cashier-dark-surface .text-slate-900 { color: #f8fafc !important; }
+.cashier-dark-surface .text-slate-800,
+.cashier-dark-surface .text-slate-700 { color: #e2e8f0 !important; }
+.cashier-dark-surface .text-slate-600 { color: #cbd5e1 !important; }
+.cashier-dark-surface .text-slate-500 { color: #94a3b8 !important; }
+.cashier-dark-surface .text-slate-400 { color: #64748b !important; }
+.cashier-dark-surface input,
+.cashier-dark-surface textarea,
+.cashier-dark-surface [role='combobox'] { background-color: #0b1628; border-color: rgba(255, 255, 255, 0.12); color: #f8fafc; }
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {

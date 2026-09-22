@@ -42,7 +42,7 @@ export default async function CityLedgerPage({ allowNightAudit = false }: { allo
     prisma.cityLedgerInvoice.findMany({ where: { propertyId, status: { in: ['OPEN', 'PARTIALLY_PAID'] } }, include: { account: { select: { id: true, name: true, type: true, currency: true } } }, orderBy: [{ dueDate: 'asc' }, { issueDate: 'asc' }] }),
     prisma.cityLedgerEntry.findMany({ where: { propertyId, type: 'PAYMENT' }, include: { account: { select: { name: true, currency: true } }, allocations: { select: { amount: true } } }, orderBy: { createdAt: 'desc' } }),
     prisma.chartOfAccount.findFirst({ where: { propertyId, code: '1140', isActive: true }, select: { id: true, code: true, name: true } }),
-    prisma.folio.findMany({ where: { propertyId, balance: { lt: 0 }, status: { not: 'VOID' } }, select: { id: true, folioNumber: true, balance: true, currency: true, guest: { select: { firstName: true, lastName: true } } }, orderBy: { balance: 'asc' }, take: 10 }),
+    prisma.folio.findMany({ where: { propertyId, balance: { lt: 0 }, status: { not: 'VOID' }, type: { not: 'CITY_LEDGER' } }, select: { id: true, folioNumber: true, balance: true, currency: true, guest: { select: { firstName: true, lastName: true } } }, orderBy: { balance: 'asc' }, take: 10 }),
     prisma.corporateAccount.findMany({ where: { propertyId, isActive: true }, select: { id: true, name: true, code: true, cityLedgerAccountId: true } }),
     prisma.cityLedgerEntry.findMany({ where: { propertyId, type: 'REFUND_OWED', status: 'OPEN' }, include: { allocations: { select: { amount: true } } } }),
   ]);

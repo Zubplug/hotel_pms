@@ -451,7 +451,8 @@ export async function getAccountsPayable(propertyId: string) {
     where: { 
       propertyId,
       balance: { lt: 0 },
-      status: { not: 'VOID' }
+      status: { not: 'VOID' },
+      type: { not: 'CITY_LEDGER' }
     },
     include: {
       guest: true,

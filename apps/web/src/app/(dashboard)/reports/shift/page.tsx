@@ -320,7 +320,7 @@ export default function ShiftReportPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="cashier-dark-surface min-h-screen bg-[#07111f]">
       {/* ─── Hero Header ─── */}
       <div className="relative overflow-hidden bg-gradient-to-r from-[#0b1120] via-[#101d34] to-[#0b1120] px-6 py-8 print:hidden sm:px-8">
         <div className="pointer-events-none absolute -right-20 -top-28 h-72 w-72 rounded-full bg-indigo-500/20 blur-3xl" />

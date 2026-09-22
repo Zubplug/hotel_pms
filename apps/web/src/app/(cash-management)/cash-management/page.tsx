@@ -391,7 +391,7 @@ export default async function GeneralCashierDashboardPage() {
   ];
 
   return (
-    <div className="min-h-full">
+    <div className="cashier-dark-surface min-h-full">
       {/* Executive header */}
       <div className="relative overflow-hidden bg-[#0b1120] px-6 py-9 sm:px-8">
         <div className="pointer-events-none absolute -right-16 -top-28 h-72 w-72 rounded-full bg-indigo-500/20 blur-3xl" />

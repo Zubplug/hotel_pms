@@ -18,7 +18,7 @@ export default async function CityLedgerCreditsPage() {
   const [property, accounts, folios, paymentEntries] = await Promise.all([
     prisma.property.findUnique({ where: { id: propertyId }, select: { name: true, baseCurrency: true } }),
     prisma.cityLedgerAccount.findMany({ where: { propertyId, OR: [{ balance: { lt: 0 }, type: { not: 'REFUND_PAYABLE' } }, { type: 'REFUND_PAYABLE' }] }, orderBy: { balance: 'asc' } }),
-    prisma.folio.findMany({ where: { propertyId, balance: { lt: 0 }, status: { not: 'VOID' } }, select: { id: true, folioNumber: true, balance: true, currency: true, guest: { select: { firstName: true, lastName: true } } }, orderBy: { balance: 'asc' } }),
+    prisma.folio.findMany({ where: { propertyId, balance: { lt: 0 }, status: { not: 'VOID' }, type: { not: 'CITY_LEDGER' } }, select: { id: true, folioNumber: true, balance: true, currency: true, guest: { select: { firstName: true, lastName: true } } }, orderBy: { balance: 'asc' } }),
     prisma.cityLedgerEntry.findMany({ where: { propertyId, type: 'PAYMENT', status: { not: 'REVERSED' }, account: { type: 'CORPORATE' } }, include: { account: { select: { id: true, name: true, type: true, currency: true } }, allocations: { select: { amount: true } } }, orderBy: { createdAt: 'desc' } }),
   ]);
   const unappliedPayments = paymentEntries.map(payment => ({ payment, amount: Math.max(0, Number(payment.amount) - payment.allocations.reduce((sum, allocation) => sum + Number(allocation.amount), 0)) })).filter(item => item.amount > 0.01);
