@@ -232,16 +232,20 @@ export function A4ReportWrapper({
             page-break-inside: avoid;
           }
 
-          /* Footer: Use layout table repeating footer instead of fixed */
-          .na-print-footer {
-            width: 100%;
-            padding-top: 10mm;
-            padding-bottom: 5mm;
+          /* The invisible spacer repeats on every page to reserve 25mm of space */
+          .print-layout-tfoot-spacer {
+            display: table-footer-group !important;
           }
 
-          /* The layout table's tfoot repeats on every page */
-          .print-layout-tfoot {
-            display: table-footer-group !important;
+          /* The actual footer is fixed at the absolute bottom of the printable area */
+          .na-print-footer-fixed {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            background: white;
+            z-index: 50;
+            padding-top: 5mm;
           }
         }
       `}</style>
@@ -315,16 +319,20 @@ export function A4ReportWrapper({
               </td>
             </tr>
           </tbody>
-          <tfoot className="print-layout-tfoot">
+          {/* This tfoot is INVISIBLE. It exists solely to reserve 25mm of space at the bottom of every page so the fixed footer doesn't overlap the table content. */}
+          <tfoot className="print-layout-tfoot-spacer">
             <tr>
-              <td className="p-0">
-                <div className="na-print-footer">
-                  <ReportFooter />
-                </div>
+              <td className="p-0 border-none">
+                <div style={{ height: '25mm' }}></div>
               </td>
             </tr>
           </tfoot>
         </table>
+
+        {/* The ACTUAL footer is fixed to the bottom of the page */}
+        <div className="na-print-footer-fixed">
+          <ReportFooter />
+        </div>
       </div>
     </>
   );
