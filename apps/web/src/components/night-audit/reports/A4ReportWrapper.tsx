@@ -40,7 +40,50 @@ export function A4ReportWrapper({
   };
 
   return (
-    <div className="min-h-screen py-10 print:bg-white print:py-0 overflow-x-auto relative">
+    <>
+      <style jsx global>{`
+        @page {
+          size: A4 portrait;
+          margin: 0;
+        }
+
+        @media print {
+          html,
+          body {
+            width: 210mm;
+            min-width: 210mm;
+            margin: 0 !important;
+            padding: 0 !important;
+            background: #fff !important;
+          }
+
+          .night-audit-print-root,
+          .night-audit-a4-sheet {
+            width: 210mm !important;
+            min-width: 210mm !important;
+            max-width: 210mm !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            overflow: visible !important;
+          }
+
+          .night-audit-a4-sheet {
+            min-height: 297mm;
+            break-after: page;
+            page-break-after: always;
+          }
+
+          .night-audit-a4-content {
+            box-sizing: border-box;
+            width: 210mm;
+            min-height: 297mm;
+            overflow: visible !important;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+        }
+      `}</style>
+      <div className="night-audit-print-root relative min-h-screen overflow-x-auto py-10 print:overflow-visible print:bg-white print:py-0">
       {/* Dark premium background (hidden during print) */}
       <div className="fixed inset-0 pointer-events-none -z-10 print:hidden" style={{ background: 'linear-gradient(160deg, #060b18 0%, #080e1f 60%, #0a0c22 100%)' }} />
       {/* Floating Action Bar (Hidden in Print) */}
@@ -68,10 +111,10 @@ export function A4ReportWrapper({
       </div>
 
       {/* A4 Paper Container */}
-      <div className="mx-auto w-[210mm] overflow-hidden rounded-xl bg-white shadow-[0_30px_100px_-15px_rgba(0,0,0,0.8)] ring-1 ring-white/20 print:rounded-none print:shadow-none print:ring-0">
+      <div className="night-audit-a4-sheet mx-auto w-[210mm] overflow-hidden rounded-xl bg-white shadow-[0_30px_100px_-15px_rgba(0,0,0,0.8)] ring-1 ring-white/20 print:rounded-none print:shadow-none print:ring-0">
         
         {/* Report Content Wrapper */}
-        <div className="p-10 text-slate-900 font-sans text-[11px] leading-relaxed relative">
+        <div className="night-audit-a4-content relative p-10 font-sans text-[11px] leading-relaxed text-slate-900">
           
           {/* Subtle print watermark pattern (visible only on screen to look like paper) */}
           <div className="absolute inset-0 pointer-events-none opacity-[0.02] print:hidden" style={{ backgroundImage: 'radial-gradient(#000 1px, transparent 1px)', backgroundSize: '20px 20px' }}></div>
@@ -138,6 +181,7 @@ export function A4ReportWrapper({
 
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 }
