@@ -34,7 +34,25 @@ export function A4ReportWrapper({
   const { data: session } = useSession();
   const auditorName = session?.user?.name || session?.user?.email || 'System';
 
-  const handlePrint = () => window.print();
+  const handlePrint = () => {
+    const screenEl = document.querySelector('.na-screen-layer') as HTMLElement | null;
+    const printEl  = document.querySelector('.na-print-layer')  as HTMLElement | null;
+
+    const show = () => {
+      if (screenEl) screenEl.style.display = 'none';
+      if (printEl)  printEl.style.display  = 'block';
+    };
+    const restore = () => {
+      if (screenEl) screenEl.style.removeProperty('display');
+      if (printEl)  printEl.style.display  = 'none';
+    };
+
+    show();
+    window.onafterprint = restore;
+    window.print();
+    // Fallback restore (Safari doesn't always fire onafterprint)
+    setTimeout(restore, 1000);
+  };
 
   const formattedDate = new Date(businessDate).toLocaleDateString('en-GB', {
     day: '2-digit',
@@ -110,7 +128,7 @@ export function A4ReportWrapper({
   );
 
   const ReportFooter = () => (
-    <div className="border-t border-slate-200 mt-12 pt-4 flex justify-between items-center text-[9px] text-slate-400">
+    <div className="border-t border-slate-200 mt-6 pt-3 flex justify-between items-center text-[9px] text-slate-400">
       <p>
         * This report represents transactions recorded against the specified business date.{' '}
         Variances may occur if transactions are backdated after generation.
@@ -180,12 +198,19 @@ export function A4ReportWrapper({
             width: 100%;
           }
 
+          /* thead repeats at the top of every page the table spans */
           .na-print-layer thead {
             display: table-header-group;
           }
 
+          /*
+           * tfoot must NOT use table-footer-group — that causes the browser
+           * to repeat the totals row at the bottom of EVERY page the table
+           * spans, producing duplicate footer rows. Let it render once only,
+           * at the natural end of the table.
+           */
           .na-print-layer tfoot {
-            display: table-footer-group;
+            display: table-row-group;
           }
 
           .na-print-layer tr {
@@ -193,11 +218,17 @@ export function A4ReportWrapper({
             page-break-inside: avoid;
           }
 
-          /* Header/footer blocks never split across pages */
-          .na-print-header,
-          .na-print-footer {
+          /* Footer: try to stay with preceding content (break-before:avoid)
+             but don't force the whole block to a new page (no break-inside). */
+          .na-print-header {
             break-inside: avoid;
             page-break-inside: avoid;
+          }
+
+          .na-print-footer {
+            break-before: avoid;
+            page-break-before: avoid;
+            margin-top: 16px !important;
           }
         }
       `}</style>
