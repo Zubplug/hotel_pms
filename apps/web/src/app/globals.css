@@ -87,6 +87,8 @@
 .cashier-dark-surface .hover\:bg-slate-50:hover,
 .cashier-dark-surface .hover\:bg-slate-50\/70:hover { background-color: rgba(255, 255, 255, 0.055) !important; }
 .cashier-dark-surface .hover\:bg-white:hover { background-color: rgba(255, 255, 255, 0.08) !important; }
+.cashier-dark-surface .bg-\[\#f7f9fc\] { background-color: #07111f !important; }
+.cashier-dark-surface > .min-h-full.bg-\[\#f7f9fc\] { background-color: #07111f !important; }
 
 @custom-variant dark (&:is(.dark *));
 

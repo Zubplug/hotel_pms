@@ -6,5 +6,5 @@ export const metadata: Metadata = {
 };
 
 export default function RoomAnalysisPage() {
-  return <RoomAnalysisClient />;
+  return <div className="cashier-dark-surface min-h-full bg-[#07111f]"><RoomAnalysisClient /></div>;
 }

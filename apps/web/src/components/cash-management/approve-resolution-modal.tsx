@@ -63,10 +63,10 @@ export function ApproveResolutionModal({ exception, isOpen, onClose, onSuccess }
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="rounded-2xl border-slate-200 sm:max-w-2xl">
+      <DialogContent className="rounded-2xl border-white/10 bg-[#101b2f] text-slate-100 sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-lg"><FileCheck2 className="h-5 w-5 text-indigo-600" />Review resolution request</DialogTitle>
-          <DialogDescription>
+          <DialogTitle className="flex items-center gap-2 text-lg text-white"><FileCheck2 className="h-5 w-5 text-indigo-300" />Review resolution request</DialogTitle>
+          <DialogDescription className="text-slate-400">
             Validate the transaction context and the cashier’s evidence before closing this audit exception.
           </DialogDescription>
         </DialogHeader>
@@ -76,44 +76,44 @@ export function ApproveResolutionModal({ exception, isOpen, onClose, onSuccess }
           {/* Transaction Context */}
           <div className="space-y-3">
             <h4 className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">Transaction details</h4>
-            <div className="grid grid-cols-2 gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm sm:grid-cols-4">
-              <div><span className="block text-xs text-slate-500">Amount</span><span className="mt-1 block font-bold text-slate-900">{formatCurrency(amount, currency)}</span></div>
-              <div><span className="block text-xs text-slate-500">Source</span><span className="mt-1 block font-semibold">{source}</span></div>
-              <div><span className="block text-xs text-slate-500">Method</span><span className="mt-1 block font-semibold">{tx?.method || '—'}</span></div>
-              <div><span className="block text-xs text-slate-500">Reference</span><span className="mt-1 block truncate font-semibold" title={tx?.reference || ''}>{tx?.reference || '—'}</span></div>
+            <div className="grid grid-cols-2 gap-3 rounded-xl border border-white/10 bg-white/[.035] p-4 text-sm sm:grid-cols-4">
+              <div><span className="block text-xs text-slate-500">Amount</span><span className="mt-1 block font-bold text-white">{formatCurrency(amount, currency)}</span></div>
+              <div><span className="block text-xs text-slate-500">Source</span><span className="mt-1 block font-semibold text-slate-200">{source}</span></div>
+              <div><span className="block text-xs text-slate-500">Method</span><span className="mt-1 block font-semibold text-slate-200">{tx?.method || '—'}</span></div>
+              <div><span className="block text-xs text-slate-500">Reference</span><span className="mt-1 block truncate font-semibold text-slate-200" title={tx?.reference || ''}>{tx?.reference || '—'}</span></div>
             </div>
           </div>
 
           {/* Question Context */}
           <div className="space-y-3">
             <h4 className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">Night audit flag</h4>
-            <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm"><div className="flex gap-3"><AlertTriangle className="h-5 w-5 shrink-0 text-rose-600" /><div><span className="block font-semibold text-rose-800">Reason for questioning</span><span className="mt-1 block leading-5 text-rose-900">{exception.questionReason}</span></div></div>
+            <div className="rounded-xl border border-rose-400/20 bg-rose-400/10 p-4 text-sm"><div className="flex gap-3"><AlertTriangle className="h-5 w-5 shrink-0 text-rose-300" /><div><span className="block font-semibold text-rose-300">Reason for questioning</span><span className="mt-1 block leading-5 text-rose-100">{exception.questionReason}</span></div></div>
             </div>
           </div>
 
           {/* Resolution Context */}
           <div className="space-y-3">
             <h4 className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">Proposed resolution</h4>
-            <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4 text-sm">
+            <div className="rounded-xl border border-indigo-400/20 bg-indigo-400/10 p-4 text-sm">
               <div className="mb-2">
-                <span className="block font-medium text-indigo-700">Proposed action</span>
-                <span className="font-semibold capitalize text-indigo-950">{exception.proposedResolution?.replace(/_/g, ' ')}</span>
+                <span className="block font-medium text-indigo-300">Proposed action</span>
+                <span className="font-semibold capitalize text-indigo-100">{exception.proposedResolution?.replace(/_/g, ' ')}</span>
               </div>
               <div>
-                <span className="block font-medium text-indigo-700">Cashier notes</span>
-                <span className="text-indigo-950">{exception.resolutionNotes || 'No additional notes provided.'}</span>
+                <span className="block font-medium text-indigo-300">Cashier notes</span>
+                <span className="text-indigo-100">{exception.resolutionNotes || 'No additional notes provided.'}</span>
               </div>
             </div>
           </div>
 
           {/* Rejection Input */}
           <div className="space-y-2">
-            <label className="text-sm font-semibold text-slate-800">Rejection reason <span className="font-normal text-slate-400">(required when rejecting)</span></label>
+            <label className="text-sm font-semibold text-slate-200">Rejection reason <span className="font-normal text-slate-500">(required when rejecting)</span></label>
             <Textarea 
               value={rejectionNotes} 
               onChange={(e) => setRejectionNotes(e.target.value)}
               placeholder="Explain why this resolution is not acceptable..."
-              className="h-24 resize-none rounded-xl border-slate-200"
+              className="h-24 resize-none rounded-xl border-white/10 bg-white/[.05] text-white placeholder:text-slate-500"
             />
           </div>
 

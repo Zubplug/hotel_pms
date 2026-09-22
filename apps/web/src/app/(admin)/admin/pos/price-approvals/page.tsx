@@ -44,7 +44,7 @@ export default function PriceApprovalsPage() {
   };
 
   return (
-    <main className="min-h-full bg-slate-50/70">
+    <main className="cashier-dark-surface min-h-full bg-[#07111f]">
       <header className="relative overflow-hidden bg-gradient-to-r from-[#0b1120] via-[#17233b] to-[#0b1120] px-6 py-8 sm:px-8">
         <div className="pointer-events-none absolute -right-16 -top-24 h-72 w-72 rounded-full bg-orange-500/15 blur-3xl" />
         <div className="relative mx-auto max-w-[1440px]">
@@ -53,7 +53,7 @@ export default function PriceApprovalsPage() {
         </div>
       </header>
       <div className="mx-auto max-w-[1440px] space-y-6 px-5 py-7 sm:px-8">
-        {message && <div className="flex items-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-800"><AlertCircle className="h-4 w-4" />{message}</div>}
+        {message && <div className="flex items-center gap-2 rounded-xl border border-indigo-400/20 bg-indigo-400/10 px-4 py-3 text-sm text-indigo-200"><AlertCircle className="h-4 w-4" />{message}</div>}
         <div className="grid gap-5 lg:grid-cols-[1.2fr_0.8fr]">
           <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><div className="flex items-start justify-between"><div><div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.15em] text-orange-600"><ShieldCheck className="h-4 w-4" />Approval funnel</div><h2 className="mt-1 text-lg font-semibold text-slate-900">Control stages</h2><p className="mt-1 text-sm text-slate-500">Each request moves through the stage assigned to the current reviewer.</p></div><FileCheck2 className="h-5 w-5 text-orange-500" /></div><div className="mt-6 grid gap-3 sm:grid-cols-3">{Object.entries(stages).map(([stage, label], index) => { const count = pending.filter((request) => request.details?.stage === stage).length; return <div key={stage} className="rounded-xl border border-slate-200 bg-slate-50 p-4"><div className="flex items-center justify-between"><span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-900 text-xs font-bold text-white">{index + 1}</span><span className="text-xl font-black text-slate-900">{count}</span></div><p className="mt-3 text-xs font-semibold text-slate-700">{label}</p><p className="mt-1 text-xs text-slate-400">{count ? 'Requests waiting' : 'Queue clear'}</p></div>; })}</div></section>
           <section className="rounded-2xl border border-slate-200 bg-slate-950 p-6 text-white shadow-sm"><div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.15em] text-orange-300"><PackageSearch className="h-4 w-4" />Reviewer guidance</div><h2 className="mt-2 text-lg font-semibold">What to verify</h2><div className="mt-5 space-y-3 text-sm text-slate-300"><div className="flex gap-3"><DollarSign className="mt-0.5 h-4 w-4 text-emerald-300" /><span>Confirm the requested price is commercially justified.</span></div><div className="flex gap-3"><Utensils className="mt-0.5 h-4 w-4 text-orange-300" /><span>Confirm the F&amp;B item and change type are correct.</span></div><div className="flex gap-3"><ShieldCheck className="mt-0.5 h-4 w-4 text-indigo-300" /><span>Approve only the stage assigned to your role.</span></div></div></section>
