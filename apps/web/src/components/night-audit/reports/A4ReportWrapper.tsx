@@ -128,7 +128,7 @@ export function A4ReportWrapper({
   );
 
   const ReportFooter = () => (
-    <div className="border-t border-slate-200 mt-6 pt-3 flex justify-between items-center text-[9px] text-slate-400">
+    <div className="border-t border-slate-200 mt-6 print:mt-0 pt-3 flex justify-between items-center text-[9px] text-slate-400 bg-white">
       <p>
         * This report represents transactions recorded against the specified business date.{' '}
         Variances may occur if transactions are backdated after generation.
@@ -183,6 +183,7 @@ export function A4ReportWrapper({
             width: 210mm;
             box-sizing: border-box;
             padding: 10mm;
+            padding-bottom: 25mm; /* Space for the fixed footer */
             font-family: ui-sans-serif, system-ui, sans-serif;
             font-size: 11px;
             line-height: 1.6;
@@ -218,17 +219,22 @@ export function A4ReportWrapper({
             page-break-inside: avoid;
           }
 
-          /* Footer: try to stay with preceding content (break-before:avoid)
-             but don't force the whole block to a new page (no break-inside). */
+          /* Header blocks never split across pages */
           .na-print-header {
             break-inside: avoid;
             page-break-inside: avoid;
           }
 
+          /* Footer: Fixed to the bottom of every printed page */
           .na-print-footer {
-            break-before: avoid;
-            page-break-before: avoid;
-            margin-top: 16px !important;
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            padding: 0 10mm 10mm 10mm;
+            box-sizing: border-box;
+            background: white;
+            z-index: 10;
           }
         }
       `}</style>
