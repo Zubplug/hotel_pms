@@ -279,6 +279,9 @@ export default function ShiftReportPage() {
   const declaredShifts = shifts.filter((shift: any) => shift.declaredCash != null);
   const expectedCashExposure = unreconciledShifts.reduce((sum: number, shift: any) => sum + Number(shift.expectedCash || 0), 0);
   const varianceExposure = declaredShifts.reduce((sum: number, shift: any) => sum + Number(shift.variance || 0), 0);
+  const balancedShifts = declaredShifts.filter((shift: any) => Math.abs(Number(shift.variance || 0)) < 0.01).length;
+  const returnedShifts = shifts.filter((shift: any) => getShiftStatus(shift) === 'RETURNED').length;
+  const closeReadiness = liveShifts.length === 0 && reviewableShifts.length === 0 && returnedShifts === 0 ? 'READY' : 'ACTION_REQUIRED';
   const operatorOptions = Array.from(new Map(shifts.filter((shift: any) => shift.operator?.id).map((shift: any) => [shift.operator.id, shift.operator])).values());
   const sortedShifts = [...shifts].sort((a: any, b: any) => {
     const priority = (shift: any) => {
@@ -338,6 +341,12 @@ export default function ShiftReportPage() {
       </div>
 
       <div className="mx-auto max-w-[1400px] space-y-6 px-5 py-7 sm:px-8">
+        {!isDetailView && !pageLoading && !pageError && (
+          <section className="overflow-hidden rounded-2xl border border-slate-800 bg-[#0d172b] text-white shadow-[0_18px_50px_rgba(8,17,31,.18)] print:hidden">
+            <div className="flex flex-col gap-3 border-b border-white/[.08] px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6"><div><div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[.16em] text-indigo-300"><ShieldCheck className="h-4 w-4" />General cashier decision board</div><h2 className="mt-1 text-lg font-semibold">Shift close readiness</h2><p className="mt-1 text-xs text-slate-400">A live control view of open custody, review exposure, and declared cash integrity.</p></div><span className={`inline-flex w-fit items-center rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-wider ${closeReadiness === 'READY' ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300' : 'border-amber-400/20 bg-amber-400/10 text-amber-300'}`}>{closeReadiness === 'READY' ? 'Ready for close' : 'Action required'}</span></div>
+            <div className="grid gap-px bg-white/[.08] sm:grid-cols-4"><div className="bg-[#0d172b] p-5"><p className="text-xs uppercase tracking-wider text-slate-500">Live tills</p><p className="mt-3 text-2xl font-black">{liveShifts.length}</p><p className="mt-1 text-xs text-slate-400">still open or closing</p></div><div className="bg-[#0d172b] p-5"><p className="text-xs uppercase tracking-wider text-slate-500">Review queue</p><p className="mt-3 text-2xl font-black">{reviewableShifts.length}</p><p className="mt-1 text-xs text-slate-400">submitted or returned</p></div><div className="bg-[#0d172b] p-5"><p className="text-xs uppercase tracking-wider text-slate-500">Cash exposure</p><p className="mt-3 text-2xl font-black">{fmt(expectedCashExposure)}</p><p className="mt-1 text-xs text-slate-400">unreconciled expected cash</p></div><div className="bg-[#0d172b] p-5"><p className="text-xs uppercase tracking-wider text-slate-500">Integrity</p><p className={`mt-3 text-2xl font-black ${varianceExposure < 0 ? 'text-rose-300' : varianceExposure > 0 ? 'text-amber-300' : 'text-emerald-300'}`}>{fmt(varianceExposure)}</p><p className="mt-1 text-xs text-slate-400">{balancedShifts} balanced declaration{balancedShifts === 1 ? '' : 's'}</p></div></div>
+          </section>
+        )}
         {!isDetailView && !pageLoading && !pageError && (
           <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm print:hidden sm:p-5">
             <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">

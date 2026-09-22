@@ -282,6 +282,7 @@ export default async function GeneralCashierDashboardPage() {
   const reviewExceptions = queueItems.filter((item) => item.status === 'RETURNED').length;
   const controlIssues = pendingDrops + pendingHandoverCount + depositExceptionCount + reviewExceptions;
   const controlPulse = controlIssues === 0 ? 'Clear' : controlIssues < 4 ? 'Monitor' : 'Action needed';
+  const closeReadiness = pendingDrops === 0 && pendingHandoverCount === 0 && depositExceptionCount === 0 && reviewExceptions === 0 ? 'READY' : 'IN_PROGRESS';
 
   const businessDateLabel = businessDate.toLocaleDateString('en-GB', {
     weekday: 'long',
@@ -532,6 +533,18 @@ export default async function GeneralCashierDashboardPage() {
                 </div>
               </div>
             ))}
+          </div>
+        </section>
+
+        <section className="overflow-hidden rounded-2xl border border-slate-800 bg-[#0d172b] text-white shadow-[0_18px_50px_rgba(8,17,31,.18)]">
+          <div className="flex flex-col gap-3 border-b border-white/[.08] px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+            <div><div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[.16em] text-indigo-300"><ShieldCheck className="h-4 w-4" />Cashier close readiness</div><h2 className="mt-1 text-lg font-semibold">Three controls before the day can close</h2><p className="mt-1 text-xs text-slate-400">Live custody and reconciliation signals from tills, handovers, and bank batches.</p></div>
+            <span className={`inline-flex w-fit items-center rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-wider ${closeReadiness === 'READY' ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300' : 'border-amber-400/20 bg-amber-400/10 text-amber-300'}`}>{closeReadiness === 'READY' ? 'Ready for close' : 'Controls in progress'}</span>
+          </div>
+          <div className="grid gap-px bg-white/[.08] sm:grid-cols-3">
+            <Link href="/reports/shift" className="bg-[#0d172b] p-5 transition hover:bg-white/[.05]"><div className="flex items-center justify-between"><span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Till reconciliation</span><ClipboardCheck className="h-4 w-4 text-indigo-300" /></div><p className="mt-3 text-2xl font-black">{queueItems.length}</p><p className="mt-1 text-xs text-slate-400">shift{queueItems.length === 1 ? '' : 's'} awaiting cashier review</p><span className="mt-4 inline-flex items-center gap-1 text-xs font-semibold text-indigo-300">Open review queue <ArrowRight className="h-3.5 w-3.5" /></span></Link>
+            <Link href="/handovers" className="bg-[#0d172b] p-5 transition hover:bg-white/[.05]"><div className="flex items-center justify-between"><span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Cash custody</span><Banknote className="h-4 w-4 text-amber-300" /></div><p className="mt-3 text-2xl font-black">{formatCurrency(pendingHandoverAmount, currency)}</p><p className="mt-1 text-xs text-slate-400">{pendingHandoverCount} handover{pendingHandoverCount === 1 ? '' : 's'} awaiting receipt</p><span className="mt-4 inline-flex items-center gap-1 text-xs font-semibold text-amber-300">Receive custody <ArrowRight className="h-3.5 w-3.5" /></span></Link>
+            <Link href="/deposits" className="bg-[#0d172b] p-5 transition hover:bg-white/[.05]"><div className="flex items-center justify-between"><span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Bank pipeline</span><Landmark className="h-4 w-4 text-emerald-300" /></div><p className="mt-3 text-2xl font-black">{formatCurrency(depositPipelineAmount, currency)}</p><p className="mt-1 text-xs text-slate-400">{depositExceptionCount} deposit exception{depositExceptionCount === 1 ? '' : 's'}</p><span className="mt-4 inline-flex items-center gap-1 text-xs font-semibold text-emerald-300">Review deposits <ArrowRight className="h-3.5 w-3.5" /></span></Link>
           </div>
         </section>
 
