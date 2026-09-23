@@ -102,8 +102,13 @@ public class OfflinePMSInterop
         {
             if (SyncEngine.Instance != null)
             {
-                SyncEngine.Instance.TriggerManualSync();
-                return JsonSerializer.Serialize(new { success = true }, _jsonOptions);
+                // Guest Credits and other offline reads must not query the
+                // freshly-installed SQLite database until the requested pull
+                // has completed. TriggerManualSync is fire-and-forget; use the
+                // awaitable API so the desktop provider receives a hydrated
+                // local snapshot before it renders the tab.
+                var completed = await SyncEngine.Instance.ForceSyncAsync();
+                return JsonSerializer.Serialize(new { success = completed }, _jsonOptions);
             }
             return JsonSerializer.Serialize(new { success = false, error = "SyncEngine not running" }, _jsonOptions);
         }
