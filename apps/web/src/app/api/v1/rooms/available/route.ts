@@ -42,6 +42,9 @@ export async function GET(req: NextRequest) {
         status: { in: ['AVAILABLE', 'CLEAN', 'INSPECTED', 'RESERVED'] },
         reservationRooms: {
           none: {
+            reservation: {
+              status: { in: ['CONFIRMED', 'CHECKED_IN'] },
+            },
             status: { notIn: ['CANCELLED', 'NO_SHOW'] },
             AND: [
               { checkIn: { lt: checkOutDate } },

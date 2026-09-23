@@ -572,6 +572,8 @@ public class LocalRepository
         var roomConflict = await _dbContext.ReservationRooms.AnyAsync(rr =>
             rr.RoomId == roomId
             && rr.ReservationId != reservationId
+            && rr.Reservation != null
+            && (rr.Reservation.Status == "CONFIRMED" || rr.Reservation.Status == "CHECKED_IN")
             && rr.Status != "CANCELLED"
             && rr.Status != "NO_SHOW"
             && rr.CheckInDate < availabilityEnd
@@ -657,6 +659,8 @@ public class LocalRepository
 
         var overlapping = await _dbContext.Set<LocalReservationRoom>()
             .Where(rr => rr.RoomId == room.Id
+                && rr.Reservation != null
+                && (rr.Reservation.Status == "CONFIRMED" || rr.Reservation.Status == "CHECKED_IN")
                 && rr.Status != "CANCELLED"
                 && rr.Status != "NO_SHOW"
                 && rr.CheckInDate < checkOut
@@ -708,12 +712,15 @@ public class LocalRepository
         var assignedRoomId = res.Rooms.FirstOrDefault()?.RoomId;
         if (!string.IsNullOrEmpty(assignedRoomId))
         {
-            var conflict = await _dbContext.Reservations
-                .Where(r => r.Id != reservationId
-                         && r.Rooms.Any(reservationRoom => reservationRoom.RoomId == assignedRoomId)
-                         && r.Status != "CANCELLED"
-                         && r.CheckInDate < newCheckOut
-                         && r.CheckOutDate > res.CheckOutDate)
+            var conflict = await _dbContext.ReservationRooms
+                .Where(rr => rr.ReservationId != reservationId
+                         && rr.RoomId == assignedRoomId
+                         && rr.Reservation != null
+                         && (rr.Reservation.Status == "CONFIRMED" || rr.Reservation.Status == "CHECKED_IN")
+                         && rr.Status != "CANCELLED"
+                         && rr.Status != "NO_SHOW"
+                         && rr.CheckInDate < newCheckOut
+                         && rr.CheckOutDate > res.CheckOutDate)
                 .AnyAsync();
 
             if (conflict)
@@ -3021,6 +3028,9 @@ public class LocalRepository
             .Where(rr => rr.RoomId != null
                 && rr.Reservation != null
                 && rr.Reservation.PropertyId == propertyId
+                // ReservationRoom rows are retained after checkout for audit
+                // history. Only live reservations can block a new booking.
+                && (rr.Reservation.Status == "CONFIRMED" || rr.Reservation.Status == "CHECKED_IN")
                 && rr.Status != "CANCELLED"
                 && rr.Status != "NO_SHOW"
                 && rr.CheckInDate < checkOut
