@@ -201,6 +201,36 @@ public class Rfv2016LockProvider : ILockProvider
                     string startStr = checkInDate.ToString("yyyyMMddHHmm");
                     string endStr = checkOutDate.ToString("yyyyMMddHHmm");
 
+                    // --- PRE-READ AND ERASE LOGIC ---
+                    _logger.LogInformation("Checking if card has existing data before encoding...");
+                    IntPtr readPtr = Rfv2016LockSdkNative.R_Card(1);
+                    string? readResult = Marshal.PtrToStringAnsi(readPtr);
+
+                    bool needsErase = false;
+                    if (!string.IsNullOrEmpty(readResult))
+                    {
+                        // If it's a numeric error code (like NO_CARD_INFO) or "WOFF" (already cancelled), we don't need to erase
+                        if (!int.TryParse(readResult, out int _) && !readResult.StartsWith("WOFF"))
+                        {
+                            needsErase = true;
+                        }
+                    }
+
+                    if (needsErase)
+                    {
+                        _logger.LogInformation("Card contains existing data. Running explicit Woff_Card (erase) before encoding...");
+                        int eraseRes = Rfv2016LockSdkNative.Woff_Card();
+                        if (eraseRes != (int)Rfv2016LockSdkNative.RfvError.SUCCESS)
+                        {
+                            _logger.LogWarning("Woff_Card returned non-success code {Code} during pre-encoding cleanup. Proceeding anyway...", eraseRes);
+                        }
+                    }
+                    else
+                    {
+                        _logger.LogInformation("Card appears blank or already cancelled. Skipping explicit erase.");
+                    }
+                    // ---------------------------------
+
                     // nCode = "1" (new guest card)
                     // jLift = "0" (no elevator by default, or configurable if needed)
                     int res = Rfv2016LockSdkNative.W_Card(lockCode, startStr, endStr, "API", "1", "0");
