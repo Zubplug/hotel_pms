@@ -37,8 +37,9 @@ export async function GET(req: NextRequest) {
         propertyId,
         isActive: true,
         ...(roomTypeId ? { roomTypeId } : {}),
-        // Reservations may only be assigned to rooms explicitly marked available.
-        status: 'AVAILABLE',
+        // RESERVED is date-scoped. A room reserved for a future stay remains
+        // sellable today; reservationRooms below enforces the actual overlap.
+        status: { in: ['AVAILABLE', 'CLEAN', 'INSPECTED', 'RESERVED'] },
         reservationRooms: {
           none: {
             status: { notIn: ['CANCELLED', 'NO_SHOW'] },

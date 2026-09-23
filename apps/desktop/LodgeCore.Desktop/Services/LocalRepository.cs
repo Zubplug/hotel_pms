@@ -628,9 +628,17 @@ public class LocalRepository
         var room = await _dbContext.Rooms.FirstOrDefaultAsync(r => r.Number == roomNumber || r.Code == roomNumber);
         if (room == null) return false;
 
-        var overlapping = await _dbContext.Reservations
-            .Where(r => r.Rooms.Any(reservationRoom => reservationRoom.RoomId == room.Id) && r.Status != "CANCELLED")
-            .Where(r => r.CheckInDate < checkOut && r.CheckOutDate > checkIn)
+        // RESERVED is date-scoped: a room reserved for a future stay can still
+        // be sold today. Physical/housekeeping restrictions remain absolute.
+        var sellableStatuses = new[] { "AVAILABLE", "CLEAN", "INSPECTED", "RESERVED" };
+        if (!sellableStatuses.Contains(room.Status, StringComparer.OrdinalIgnoreCase)) return false;
+
+        var overlapping = await _dbContext.Set<LocalReservationRoom>()
+            .Where(rr => rr.RoomId == room.Id
+                && rr.Status != "CANCELLED"
+                && rr.Status != "NO_SHOW"
+                && rr.CheckInDate < checkOut
+                && rr.CheckOutDate > checkIn)
             .AnyAsync();
 
         return !overlapping;
@@ -2965,9 +2973,12 @@ public class LocalRepository
 
     public async Task<List<LocalRoom>> GetAvailableRoomsAsync(string propertyId, string roomTypeId, DateTime checkIn, DateTime checkOut)
     {
+        // RESERVED is not a permanent room lock. Its reservation is checked
+        // against the requested dates below, so a room reserved for tomorrow
+        // remains sellable for today.
+        var sellableStatuses = new[] { "AVAILABLE", "CLEAN", "INSPECTED", "RESERVED" };
         var allRoomsQuery = _dbContext.Rooms
-            .Where(r => r.PropertyId == propertyId
-                     && (r.Status == "AVAILABLE" || r.Status == "CLEAN" || r.Status == "INSPECTED"));
+            .Where(r => r.PropertyId == propertyId && sellableStatuses.Contains(r.Status));
 
         if (!string.IsNullOrEmpty(roomTypeId))
         {
@@ -2976,17 +2987,17 @@ public class LocalRepository
 
         var allRooms = await allRoomsQuery.ToListAsync();
 
-        // Get IDs of rooms already booked in the overlap window via the join table
-        var conflictingReservationIds = await _dbContext.Reservations
-            .Where(r => r.PropertyId == propertyId
-                && (r.Status == "CONFIRMED" || r.Status == "CHECKED_IN")
-                && r.CheckInDate < checkOut
-                && r.CheckOutDate > checkIn)
-            .Select(r => r.Id)
-            .ToListAsync();
-
+        // Use reservation-room dates, not the parent reservation dates. This is
+        // important for multi-room reservations and keeps future bookings from
+        // blocking a room outside their actual stay window.
         var conflictingRoomIds = await _dbContext.Set<LocalReservationRoom>()
-            .Where(rr => conflictingReservationIds.Contains(rr.ReservationId) && rr.RoomId != null)
+            .Where(rr => rr.RoomId != null
+                && rr.Reservation != null
+                && rr.Reservation.PropertyId == propertyId
+                && rr.Status != "CANCELLED"
+                && rr.Status != "NO_SHOW"
+                && rr.CheckInDate < checkOut
+                && rr.CheckOutDate > checkIn)
             .Select(rr => rr.RoomId)
             .ToListAsync();
 
