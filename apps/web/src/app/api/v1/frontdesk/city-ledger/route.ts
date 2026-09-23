@@ -53,7 +53,10 @@ export async function POST(req: NextRequest) {
   if (!['CASH', 'BANK_TRANSFER', 'POS', 'CARD', 'CHEQUE', 'OTHER'].includes(method)) return errorResponse('BAD_REQUEST', 'Invalid settlement method', 400);
   const ctx = await requireOrganizationContext(session.user.id);
   const entry = await prisma.cityLedgerEntry.findUnique({ where: { id: entryId }, include: { account: true, invoice: true, allocations: true } });
-  if (!entry || !ctx.propertyIds.includes(entry.propertyId) || entry.type !== 'TRANSFER_IN' || entry.status !== 'OPEN') return errorResponse('NOT_FOUND', 'Open city ledger entry not found', 404);
+  const isCorporateAdvance = entry?.type === 'PAYMENT' && entry.account.type === 'CORPORATE';
+  if (!entry || !ctx.propertyIds.includes(entry.propertyId) || entry.status !== 'OPEN' || (entry.type !== 'TRANSFER_IN' && !isCorporateAdvance)) {
+    return errorResponse('NOT_FOUND', 'Open city ledger entry not found', 404);
+  }
   if (!accountId || accountId !== entry.accountId || !['CORPORATE', 'SKIPPER'].includes(accountType)) return errorResponse('BAD_REQUEST', 'A valid city ledger account and account type are required', 400);
   if (entry.account.type !== accountType) return errorResponse('CONFLICT', 'City ledger account type does not match the settlement', 409);
   if (accountType === 'SKIPPER') {

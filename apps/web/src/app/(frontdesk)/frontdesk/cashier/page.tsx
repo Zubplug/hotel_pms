@@ -43,6 +43,7 @@ export default function FrontdeskCashierPage() {
   const [showCloseSuccess, setShowCloseSuccess] = useState(false);
   const [showHandoverSuccess, setShowHandoverSuccess] = useState(false);
   const effectiveControlStatus = current?.controlStatus || (current?.status === 'CLOSED' ? 'SUBMITTED' : current?.status || '');
+  const canSubmitShift = effectiveControlStatus === 'OPEN' || effectiveControlStatus === 'RETURNED';
 
   const load = async () => {
     if (!propertyId) return;
@@ -234,7 +235,7 @@ export default function FrontdeskCashierPage() {
             </div>
           </div>
         )}
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end"><div><label className="text-sm font-medium">Physical cash counted</label><Input value={declaredCash} onChange={event => setDeclaredCash(event.target.value)} placeholder="0.00" type="number" /></div><Button disabled={busy || !declaredCash || current.status !== 'OPEN' || summary.exceptions.failedSync > 0} onClick={() => setShowCloseConfirm(true)}><LockKeyhole className="mr-2 h-4 w-4" />{summary.cash.expected === 0 && declaredCash === '0' ? 'Submit Cashless Shift' : 'Close and submit shift'}</Button></div></CardContent></Card>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end"><div><label className="text-sm font-medium">Physical cash counted</label><Input value={declaredCash} onChange={event => setDeclaredCash(event.target.value)} placeholder="0.00" type="number" /></div><Button disabled={busy || !declaredCash || !canSubmitShift || summary.exceptions.failedSync > 0} onClick={() => setShowCloseConfirm(true)}><LockKeyhole className="mr-2 h-4 w-4" />{effectiveControlStatus === 'RETURNED' ? 'Correct and resubmit shift' : summary.cash.expected === 0 && declaredCash === '0' ? 'Submit Cashless Shift' : 'Close and submit shift'}</Button></div></CardContent></Card>
 
         <Card><CardHeader><CardTitle>Recent session activity</CardTitle></CardHeader><CardContent><div className="divide-y rounded-md border">{summary.rows.slice(0, 8).map((row, index) => <div key={`${row.date}-${index}`} className="flex items-center justify-between gap-4 px-4 py-3 text-sm"><div><p className="font-medium">{row.description || row.kind}</p><p className="text-xs text-muted-foreground">{dateTime(row.date)} · {row.method || '—'}</p></div><span className="font-semibold">{money(row.amount)}</span></div>)}{summary.rows.length === 0 && <p className="p-6 text-center text-sm text-muted-foreground">No session activity recorded yet.</p>}</div></CardContent></Card>
       </>}

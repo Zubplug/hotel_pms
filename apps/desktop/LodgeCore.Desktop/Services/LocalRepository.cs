@@ -1427,7 +1427,12 @@ public class LocalRepository
         var session = await _dbContext.FrontdeskSessions.FirstOrDefaultAsync(item => item.Id == sessionId && item.StaffId == staffId);
         if (session == null) throw new InvalidOperationException("Front desk session not found.");
         await AssertNightAuditAllowsAsync(session.PropertyId, session.BusinessDate);
-        if (session.Status != "OPEN" && session.Status != "RETURNED") throw new InvalidOperationException($"Session is already {session.Status}.");
+        // A returned shift remains operationally CLOSED on the server and is
+        // reopened for declaration through controlStatus=RETURNED. Accept
+        // either local projection so offline resubmission matches the cloud
+        // RETURNED -> SUBMITTED transition.
+        if (session.Status != "OPEN" && session.Status != "RETURNED" && session.ControlStatus != "RETURNED")
+            throw new InvalidOperationException($"Session is already {session.Status}.");
             var movements = await _dbContext.PosCashMovements.Where(item => item.FrontdeskSessionId == session.Id || (item.FrontdeskSessionId == null && item.PropertyId == session.PropertyId && item.CreatedAt >= session.OpenedAt && item.CreatedAt <= DateTime.UtcNow)).ToListAsync();
         var expected = session.OpeningFloat + movements.Where(item => item.Type is "PAYMENT" or "CASH_TRANSFER_IN").Sum(item => item.Amount) - movements.Where(item => item.Type is "REFUND" or "PAID_OUT" or "CASH_DROP" or "CASH_TRANSFER_OUT").Sum(item => item.Amount);
         session.Status = "CLOSED"; session.ControlStatus = "SUBMITTED"; session.VarianceStatus = Math.Abs(declaredCash - expected) > 0.01m ? "OPEN" : null;
@@ -6783,10 +6788,13 @@ public class LocalRepository
 
     public async Task<object> QueueCityLedgerPaymentAsync(string entryId, string accountId, string? invoiceId, string accountType, decimal amount, string method, string reference, string userId, string deviceId, DateTime businessDate)
     {
-        var entry = await _dbContext.CityLedgerEntries.FirstOrDefaultAsync(e => e.Id == entryId && e.Type == "TRANSFER_IN");
+        var entry = await _dbContext.CityLedgerEntries.FirstOrDefaultAsync(e => e.Id == entryId);
         if (entry == null) throw new InvalidOperationException("City ledger invoice not found.");
         if (!string.Equals(entry.AccountId, accountId, StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("City ledger account mismatch.");
         var isCorporate = string.Equals(accountType, "CORPORATE", StringComparison.OrdinalIgnoreCase);
+        var isCorporateAdvance = isCorporate && string.Equals(entry.Type, "PAYMENT", StringComparison.OrdinalIgnoreCase);
+        if (!string.Equals(entry.Type, "TRANSFER_IN", StringComparison.OrdinalIgnoreCase) && !isCorporateAdvance)
+            throw new InvalidOperationException("Only open city ledger invoices or corporate advances can receive a payment.");
         var selectedInvoiceId = string.IsNullOrWhiteSpace(invoiceId) ? entry.InvoiceId : invoiceId;
         if (!isCorporate && string.IsNullOrWhiteSpace(selectedInvoiceId)) throw new InvalidOperationException("This walkout entry has no invoice reference.");
         if (amount <= 0) throw new InvalidOperationException("Settlement amount must be positive.");
@@ -6798,7 +6806,7 @@ public class LocalRepository
         var frontdeskSession = await GetActiveFrontdeskSessionAsync(entry.PropertyId, userId);
         if (frontdeskSession == null) throw new InvalidOperationException("An open Front Desk shift is required before posting a city ledger payment.");
         var operationId = Guid.NewGuid().ToString();
-        entry.Status = "PENDING_SETTLEMENT";
+        if (!isCorporateAdvance) entry.Status = "PENDING_SETTLEMENT";
         _dbContext.OutboxEvents.Add(new LocalOutboxEvent {
             Id = Guid.NewGuid().ToString(), IdempotencyKey = operationId, PropertyId = entry.PropertyId, DeviceId = deviceId, OperatorId = userId,
             AggregateType = "CITY_LEDGER", AggregateId = entry.Id, EventType = "CITY_LEDGER_PAYMENT",
