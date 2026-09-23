@@ -1045,6 +1045,10 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                         rt = new LodgeCore.Desktop.Data.Entities.LocalRoomType { Id = id, PropertyId = propertyId, CreatedAt = DateTime.UtcNow };
                         dbContext.RoomTypes.Add(rt);
                     }
+                    // Room-type identity is property-scoped in the offline
+                    // cache. Refresh it on every pull so a reused local DB
+                    // cannot hide valid types from the active property.
+                    rt.PropertyId = propertyId;
                     rt.Name = el.TryGetProperty("name", out var n) && n.ValueKind != System.Text.Json.JsonValueKind.Null ? n.GetString() ?? "" : "";
                     rt.Code = el.TryGetProperty("code", out var cd) && cd.ValueKind != System.Text.Json.JsonValueKind.Null ? cd.GetString() ?? "" : "";
                     rt.Description = el.TryGetProperty("description", out var d) && d.ValueKind != System.Text.Json.JsonValueKind.Null ? d.GetString() : null;
@@ -1177,6 +1181,10 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                         room = new LodgeCore.Desktop.Data.Entities.LocalRoom { Id = id, PropertyId = propertyId, CreatedAt = DateTime.UtcNow };
                         dbContext.Rooms.Add(room);
                     }
+                    // Existing rows may have been created before provisioning
+                    // or by a previous property snapshot. Keep the local
+                    // property scope aligned with the current pull.
+                    room.PropertyId = propertyId;
                     room.Number = el.TryGetProperty("number", out var num) && num.ValueKind != System.Text.Json.JsonValueKind.Null ? num.GetString() ?? "" : "";
                     room.Code = el.TryGetProperty("code", out var cd) && cd.ValueKind != System.Text.Json.JsonValueKind.Null ? cd.GetString() ?? room.Number : room.Number;
                     room.DisplayName = el.TryGetProperty("displayName", out var dn) && dn.ValueKind != System.Text.Json.JsonValueKind.Null ? dn.GetString() : null;
@@ -1186,7 +1194,7 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                     room.FloorName = el.TryGetProperty("floor", out var flr) && flr.ValueKind != System.Text.Json.JsonValueKind.Null && flr.TryGetProperty("name", out var fnm) && fnm.ValueKind != System.Text.Json.JsonValueKind.Null ? fnm.GetString() : null;
                     room.FloorNumber = el.TryGetProperty("floor", out var flr2) && flr2.ValueKind != System.Text.Json.JsonValueKind.Null && flr2.TryGetProperty("number", out var fnum) ? fnum.GetInt32() : (int?)null;
                     var incomingRoomStatus = el.TryGetProperty("status", out var st) && st.ValueKind != System.Text.Json.JsonValueKind.Null
-                        ? st.GetString() ?? ""
+                        ? (st.GetString() ?? "").Trim().ToUpperInvariant()
                         : "";
                     var hasCheckedInReservation = await dbContext.Reservations
                         .AnyAsync(reservation => reservation.Status == "CHECKED_IN"

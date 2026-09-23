@@ -3012,7 +3012,9 @@ public class LocalRepository
         // remains sellable for today.
         var sellableStatuses = new[] { "AVAILABLE", "CLEAN", "INSPECTED", "RESERVED" };
         var allRoomsQuery = _dbContext.Rooms
-            .Where(r => r.PropertyId == propertyId && sellableStatuses.Contains(r.Status));
+            .Where(r => r.PropertyId == propertyId
+                && r.IsActive
+                && sellableStatuses.Contains(r.Status));
 
         if (!string.IsNullOrEmpty(roomTypeId))
         {
