@@ -557,6 +557,28 @@ public class LocalRepository
         var room = await _dbContext.Rooms.FindAsync(roomId);
         if (room == null) throw new InvalidOperationException("Target room not found locally.");
 
+        var currentRoom = res.Rooms.FirstOrDefault();
+        var availabilityStart = res.Status == "CHECKED_IN"
+            ? new[] { currentRoom?.CheckInDate.Date ?? res.CheckInDate.Date, DateTime.UtcNow.Date.AddDays(1) }.Max()
+            : currentRoom?.CheckInDate.Date ?? res.CheckInDate.Date;
+        var availabilityEnd = currentRoom?.CheckOutDate.Date ?? res.CheckOutDate.Date;
+        if (availabilityEnd <= availabilityStart)
+            throw new InvalidOperationException("The reservation has no remaining stay to reassign.");
+
+        var sellableStatuses = new[] { "AVAILABLE", "CLEAN", "INSPECTED", "RESERVED" };
+        if (!sellableStatuses.Contains(room.Status ?? string.Empty, StringComparer.OrdinalIgnoreCase))
+            throw new InvalidOperationException("The selected room is not sellable in its current status.");
+
+        var roomConflict = await _dbContext.ReservationRooms.AnyAsync(rr =>
+            rr.RoomId == roomId
+            && rr.ReservationId != reservationId
+            && rr.Status != "CANCELLED"
+            && rr.Status != "NO_SHOW"
+            && rr.CheckInDate < availabilityEnd
+            && rr.CheckOutDate > availabilityStart);
+        if (roomConflict)
+            throw new InvalidOperationException("The selected room is not available for the remaining stay.");
+
         var oldRoomId = res.RoomId;
         var oldRoomTypeId = res.RoomTypeId;
         var oldRoomType = string.IsNullOrWhiteSpace(oldRoomTypeId) ? null : await _dbContext.RoomTypes.FindAsync(oldRoomTypeId);

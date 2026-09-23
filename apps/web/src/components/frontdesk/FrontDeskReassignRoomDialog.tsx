@@ -34,7 +34,16 @@ export function FrontDeskReassignRoomDialog({ reservation, open, onOpenChange }:
   const folio = reservation.folio || reservation.folios?.[0];
   const availableFolioCredit = Math.max(0, -Number(folio?.balance || 0));
   
-  const checkIn = resRoom?.checkIn ? new Date(resRoom.checkIn).toISOString().split('T')[0] : '';
+  // A checked-in guest is moving for the remaining stay. Using the original
+  // check-in date makes an old reservation overlap itself and can hide rooms
+  // that are available now.
+  const availabilityStart = reservation.status === 'CHECKED_IN'
+    ? new Date(Math.max(
+        new Date(resRoom?.checkIn || 0).setHours(0, 0, 0, 0),
+        new Date().setHours(0, 0, 0, 0) + 86400000,
+      ))
+    : (resRoom?.checkIn ? new Date(resRoom.checkIn) : null);
+  const checkIn = availabilityStart ? availabilityStart.toISOString().split('T')[0] : '';
   const checkOut = resRoom?.checkOut ? new Date(resRoom.checkOut).toISOString().split('T')[0] : '';
 
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
@@ -48,7 +57,11 @@ export function FrontDeskReassignRoomDialog({ reservation, open, onOpenChange }:
     queryFn: async () => {
       const res = await provider.rooms.getAvailable(reservation.propertyId, '', checkIn, checkOut);
       if (!res.success) throw new Error(res.error?.message || res.error || 'Failed to fetch rooms');
-      return (res.data || []).filter((room: any) => room.status === 'AVAILABLE');
+      // The desktop repository and online API already apply the complete
+      // sellable-status and date-overlap rules. Do not narrow the result to
+      // the literal AVAILABLE status here: CLEAN, INSPECTED and date-scoped
+      // RESERVED rooms are valid reassignment targets too.
+      return res.data || [];
     },
     enabled: open && !!checkIn && !!checkOut,
   });
