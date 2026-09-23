@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
     const { propertyId, name, identifier, outletId, adminEmail, adminPassword } = await req.json();
 
     // Check permissions
-    let hasPermission = session.user.role === 'SUPER_ADMIN' || session.user.role === 'HOTEL_MANAGER';
+    let hasPermission = ['SUPER_ADMIN', 'HOTEL_MANAGER', 'DIRECTOR'].includes(String(session.user.role || '').toUpperCase());
     
     // Admin override check
     if (!hasPermission) {
@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
         ? 'SUPER_ADMIN' 
         : adminUser.roles[0]?.role?.name;
 
-      if (primaryRole !== 'SUPER_ADMIN' && primaryRole !== 'HOTEL_MANAGER') {
+      if (!['SUPER_ADMIN', 'HOTEL_MANAGER', 'DIRECTOR'].includes(String(primaryRole || '').toUpperCase())) {
         return NextResponse.json({ error: 'The provided account does not have sufficient permissions.' }, { status: 403 });
       }
       

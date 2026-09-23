@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const session = await auth();
-    if (!session?.user || (session.user.role !== 'SUPER_ADMIN' && session.user.role !== 'HOTEL_MANAGER')) {
+    if (!session?.user || !['SUPER_ADMIN', 'HOTEL_MANAGER', 'DIRECTOR'].includes(String(session.user.role || '').toUpperCase())) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
     const ctx = await requireOrganizationContext((session.user as any).id || (session as any).user.id);

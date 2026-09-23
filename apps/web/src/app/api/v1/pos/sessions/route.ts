@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
       staffId = session.user.staffId || null;
       propertyId = (session.user as any).propertyId;
       loggedInUserId = session.user.id;
-      isManager = session.user.role === 'SUPER_ADMIN' || session.user.role === 'HOTEL_MANAGER';
+      isManager = ['SUPER_ADMIN', 'HOTEL_MANAGER', 'DIRECTOR'].includes(String(session.user.role || '').toUpperCase());
       if (!staffId && !isManager) return NextResponse.json({ error: 'Forbidden: No staff profile linked' }, { status: 403 });
     }
 

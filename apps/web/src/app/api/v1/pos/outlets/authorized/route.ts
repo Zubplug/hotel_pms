@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
 
     // 1. Get the authenticated Staff Identity
     const staffId = session.user.staffId;
-    if (!staffId && session.user.role !== 'SUPER_ADMIN' && session.user.role !== 'HOTEL_MANAGER') {
+    if (!staffId && !['SUPER_ADMIN', 'HOTEL_MANAGER', 'DIRECTOR'].includes(String(session.user.role || '').toUpperCase())) {
       return NextResponse.json({ error: 'Forbidden: No staff profile linked' }, { status: 403 });
     }
 
@@ -52,7 +52,7 @@ export async function GET(req: NextRequest) {
     let authorizedOutlets = [];
     
     // Super Admins and Hotel Managers can access all outlets for the property
-    if (session.user.role === 'SUPER_ADMIN' || session.user.role === 'HOTEL_MANAGER') {
+    if (['SUPER_ADMIN', 'HOTEL_MANAGER', 'DIRECTOR'].includes(String(session.user.role || '').toUpperCase())) {
       authorizedOutlets = await prisma.posOutlet.findMany({
         where: { propertyId: { in: ctx.propertyIds as string[] }, isActive: true }
       });

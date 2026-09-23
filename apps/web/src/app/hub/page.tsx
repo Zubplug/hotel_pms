@@ -34,7 +34,7 @@ function getDirectLandingUrl(
   // Super admins and management roles → Management Dashboard
   if (
     isSuperAdmin ||
-    ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER'].includes(role)
+    ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'DIRECTOR'].includes(role)
   ) {
     return '/general-manager';
   }

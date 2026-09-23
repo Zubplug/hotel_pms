@@ -59,28 +59,28 @@ type NavItem = {
 };
 
 const ALL_NAV: NavItem[] = [
-  { section: 'Portfolio', name: 'Overview', href: '/general-manager', icon: LayoutDashboard, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER'] },
-  { section: 'Portfolio', name: 'Properties', href: '/properties', icon: Hotel, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER'] },
-  { section: 'Portfolio', name: 'Rooms', href: '/rooms', icon: BedDouble, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'RECEPTIONIST'] },
-  { section: 'Portfolio', name: 'Room Types', href: '/room-types', icon: Layers, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER'] },
+  { section: 'Portfolio', name: 'Overview', href: '/general-manager', icon: LayoutDashboard, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'DIRECTOR'] },
+  { section: 'Portfolio', name: 'Properties', href: '/properties', icon: Hotel, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'DIRECTOR'] },
+  { section: 'Portfolio', name: 'Rooms', href: '/rooms', icon: BedDouble, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'DIRECTOR', 'RECEPTIONIST'] },
+  { section: 'Portfolio', name: 'Room Types', href: '/room-types', icon: Layers, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'DIRECTOR'] },
   { section: 'Operations', name: 'Reservations', href: '/reservations', icon: CalendarDays },
   { section: 'Operations', name: 'Housekeeping', href: '/housekeeping', icon: Brush },
-  { section: 'Operations', name: 'Laundry', href: '/general-manager/laundry', icon: Shirt, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER'] },
+  { section: 'Operations', name: 'Laundry', href: '/general-manager/laundry', icon: Shirt, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'DIRECTOR'] },
   { section: 'Operations', name: 'Maintenance', href: '/maintenance', icon: Wrench },
-  { section: 'Operations', name: 'Night Audit', href: '/general-manager/night-audit', icon: MoonStar, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER'] },
+  { section: 'Operations', name: 'Night Audit', href: '/general-manager/night-audit', icon: MoonStar, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'DIRECTOR'] },
   { section: 'Operations', name: 'Night Audit', href: '/night-audit', icon: MoonStar, restrictedTo: ['NIGHT_AUDITOR'] },
   { section: 'Finance & Reports', name: 'Reports', href: '/reports', icon: FileText },
-  { section: 'Finance & Reports', name: 'Cash Management', href: '/general-manager/cash-management', icon: HandCoins, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER'] },
+  { section: 'Finance & Reports', name: 'Cash Management', href: '/general-manager/cash-management', icon: HandCoins, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'DIRECTOR'] },
   { section: 'Finance & Reports', name: 'Cash Management', href: '/cash-management', icon: HandCoins, restrictedTo: ['ACCOUNTANT', 'GENERAL_CASHIER', 'NIGHT_AUDITOR'] },
-  { section: 'Finance & Reports', name: 'Approvals', href: '/general-manager/approvals', icon: ClipboardCheck, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER'] },
-  { section: 'Finance & Reports', name: 'Sync Center', href: '/sync-center', icon: RefreshCw, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER'] },
+  { section: 'Finance & Reports', name: 'Approvals', href: '/general-manager/approvals', icon: ClipboardCheck, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'DIRECTOR'] },
+  { section: 'Finance & Reports', name: 'Sync Center', href: '/sync-center', icon: RefreshCw, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'DIRECTOR'] },
 
-  { section: 'Administration', name: 'F&B Management', href: '/general-manager/fnb', icon: Utensils, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER'] },
+  { section: 'Administration', name: 'F&B Management', href: '/general-manager/fnb', icon: Utensils, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'DIRECTOR'] },
   { section: 'Administration', name: 'F&B Management', href: '/fnb/dashboard', icon: Utensils, restrictedTo: ['FNB_MANAGER', 'EVENT_MANAGER', 'RESTAURANT_MANAGER', 'BANQUET_MANAGER'] },
 
-  { section: 'Administration', name: 'People & Access', href: '/settings/team', icon: Users, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER'] },
-  { section: 'Administration', name: 'Amenities', href: '/amenities', icon: Star, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER'] },
-  { section: 'Administration', name: 'Settings', href: '/settings', icon: Settings, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER'] },
+  { section: 'Administration', name: 'People & Access', href: '/settings/team', icon: Users, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'DIRECTOR'] },
+  { section: 'Administration', name: 'Amenities', href: '/amenities', icon: Star, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'DIRECTOR'] },
+  { section: 'Administration', name: 'Settings', href: '/settings', icon: Settings, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'DIRECTOR'] },
 ];
 
 export function DashboardLayout({ children }: { children: React.ReactNode }) {

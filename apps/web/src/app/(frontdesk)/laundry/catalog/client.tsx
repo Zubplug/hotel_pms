@@ -22,7 +22,7 @@ export function LaundryCatalogClient({ managementMode = false }: { managementMod
 
   const role = (session?.user as any)?.role || 'STAFF';
   const isSuperAdmin = (session?.user as any)?.isSuperAdmin;
-  const canManageCatalog = managementMode || isSuperAdmin || ['CEO', 'MANAGER', 'GENERAL_MANAGER', 'SUPER_ADMIN'].includes(role);
+  const canManageCatalog = managementMode || isSuperAdmin || ['CEO', 'MANAGER', 'GENERAL_MANAGER', 'DIRECTOR', 'SUPER_ADMIN'].includes(role);
 
   const fetchItems = async () => {
     if (!propertyId) return;

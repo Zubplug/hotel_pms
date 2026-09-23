@@ -11,7 +11,7 @@ export async function PUT(
     const { id } = await params;
     const session = await auth();
     
-    if (!session?.user || (session.user.role !== 'SUPER_ADMIN' && session.user.role !== 'HOTEL_MANAGER')) {
+    if (!session?.user || !['SUPER_ADMIN', 'HOTEL_MANAGER', 'DIRECTOR'].includes(String(session.user.role || '').toUpperCase())) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -79,7 +79,7 @@ export async function DELETE(
     const { id } = await params;
     const session = await auth();
     
-    if (!session?.user || (session.user.role !== 'SUPER_ADMIN' && session.user.role !== 'HOTEL_MANAGER')) {
+    if (!session?.user || !['SUPER_ADMIN', 'HOTEL_MANAGER', 'DIRECTOR'].includes(String(session.user.role || '').toUpperCase())) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 

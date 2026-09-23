@@ -37,7 +37,7 @@ const { auth } = NextAuth({
 // Routes that do NOT require authentication via NextAuth cookies
 const PUBLIC_PATHS = ['/login', '/api/auth', '/api/v1/hardware', '/api/manager', '/api/mobile', '/api/desktop-update', '/api/v1/pos', '/api/v1/sync', '/desktop'];
 
-const MANAGEMENT_ROLES = ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'ADMIN', 'ACCOUNTANT'];
+const MANAGEMENT_ROLES = ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'ADMIN', 'ACCOUNTANT', 'DIRECTOR'];
 const POS_ROLES = ['WAITER', 'WAITRESS', 'CASHIER', 'POS', 'POS_OPERATOR'];
 const FRONT_DESK_ROLES = ['RECEPTIONIST', 'FRONT_DESK'];
 const INVENTORY_ROLES = ['STOCK_MANAGER', 'STOCK_KEEPER', 'PROCUREMENT_MANAGER', 'OUTLET_HEAD'];

@@ -77,7 +77,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         ? await prisma.staff.findFirst({ where: { userId: actor.user.id }, select: { id: true, position: true } })
         : null;
     if (!actorStaff) return NextResponse.json({ error: 'Staff record not found' }, { status: 401 });
-    const privilegedPositions = new Set(['MANAGER', 'HOTEL_MANAGER', 'FINANCE_MANAGER', 'ADMIN', 'SUPER_ADMIN', 'CEO', 'NIGHT_AUDITOR']);
+    const privilegedPositions = new Set(['MANAGER', 'HOTEL_MANAGER', 'FINANCE_MANAGER', 'ADMIN', 'SUPER_ADMIN', 'CEO', 'DIRECTOR', 'NIGHT_AUDITOR']);
     const isPrivileged = privilegedPositions.has(String(actorStaff.position || '').toUpperCase());
     const sessionOwnerId = current.primaryOperatorId || current.openedBy;
     if (actorStaff.id !== sessionOwnerId && !isPrivileged) {
@@ -97,7 +97,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (authorizerId && authorizerId === operatorId) return NextResponse.json({ error: 'The operator cannot authorize their own variance' }, { status: 403 });
     if (authorizerId) {
       const authorizer = await prisma.staff.findUnique({ where: { id: authorizerId }, select: { propertyAccess: true, position: true, isActive: true } });
-      if (!authorizer?.isActive || !authorizer.propertyAccess.includes(current.propertyId) || !['GENERAL_CASHIER', 'FINANCE_MANAGER', 'MANAGER', 'HOTEL_MANAGER', 'CEO', 'SUPER_ADMIN', 'NIGHT_AUDITOR'].includes(authorizer.position)) {
+      if (!authorizer?.isActive || !authorizer.propertyAccess.includes(current.propertyId) || !['GENERAL_CASHIER', 'FINANCE_MANAGER', 'MANAGER', 'HOTEL_MANAGER', 'CEO', 'SUPER_ADMIN', 'DIRECTOR', 'NIGHT_AUDITOR'].includes(authorizer.position)) {
         return NextResponse.json({ error: 'Invalid variance authorizer or insufficient authority' }, { status: 403 });
       }
     }
