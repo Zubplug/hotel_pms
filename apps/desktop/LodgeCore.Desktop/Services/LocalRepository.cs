@@ -566,7 +566,7 @@ public class LocalRepository
             throw new InvalidOperationException("The reservation has no remaining stay to reassign.");
 
         var sellableStatuses = new[] { "AVAILABLE", "CLEAN", "INSPECTED", "RESERVED" };
-        if (!sellableStatuses.Contains(room.Status ?? string.Empty, StringComparer.OrdinalIgnoreCase))
+        if (!sellableStatuses.Contains((room.Status ?? string.Empty).Trim(), StringComparer.OrdinalIgnoreCase))
             throw new InvalidOperationException("The selected room is not sellable in its current status.");
 
         var roomConflict = await _dbContext.ReservationRooms.AnyAsync(rr =>
@@ -655,7 +655,7 @@ public class LocalRepository
         // RESERVED is date-scoped: a room reserved for a future stay can still
         // be sold today. Physical/housekeeping restrictions remain absolute.
         var sellableStatuses = new[] { "AVAILABLE", "CLEAN", "INSPECTED", "RESERVED" };
-        if (!sellableStatuses.Contains(room.Status, StringComparer.OrdinalIgnoreCase)) return false;
+        if (!sellableStatuses.Contains((room.Status ?? string.Empty).Trim(), StringComparer.OrdinalIgnoreCase)) return false;
 
         var overlapping = await _dbContext.Set<LocalReservationRoom>()
             .Where(rr => rr.RoomId == room.Id
@@ -3011,17 +3011,17 @@ public class LocalRepository
         // against the requested dates below, so a room reserved for tomorrow
         // remains sellable for today.
         var sellableStatuses = new[] { "AVAILABLE", "CLEAN", "INSPECTED", "RESERVED" };
-        var allRoomsQuery = _dbContext.Rooms
-            .Where(r => r.PropertyId == propertyId
-                && r.IsActive
-                && sellableStatuses.Contains(r.Status));
-
-        if (!string.IsNullOrEmpty(roomTypeId))
-        {
-            allRoomsQuery = allRoomsQuery.Where(r => r.RoomTypeId == roomTypeId);
-        }
-
-        var allRooms = await allRoomsQuery.ToListAsync();
+        // Normalize values after reading the local snapshot. SQLite string
+        // comparisons are exact here, while synced data can legitimately
+        // contain casing/whitespace differences from older payloads.
+        var allRooms = (await _dbContext.Rooms
+            .Where(r => r.PropertyId == propertyId)
+            .ToListAsync())
+            .Where(r => sellableStatuses.Contains(
+                (r.Status ?? string.Empty).Trim().ToUpperInvariant()))
+            .Where(r => string.IsNullOrWhiteSpace(roomTypeId)
+                || string.Equals(r.RoomTypeId?.Trim(), roomTypeId.Trim(), StringComparison.OrdinalIgnoreCase))
+            .ToList();
 
         // Use reservation-room dates, not the parent reservation dates. This is
         // important for multi-room reservations and keeps future bookings from
