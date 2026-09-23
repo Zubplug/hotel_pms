@@ -285,7 +285,12 @@ public class OfflinePMSInterop
                 // prior POS shift. The switch screen must explicitly open or
                 // attach the shift after current state has been synchronized.
                 await _sessionManager.EstablishOperatorContextAsync(staff.Id);
-                SyncEngine.Instance?.TriggerManualSync();
+                // When online, complete synchronization before checking local
+                // shifts so a reinstall cannot create a duplicate of a shift
+                // that already exists on the server. Offline login continues
+                // immediately using the local database.
+                if (SyncEngine.Instance != null)
+                    await SyncEngine.Instance.ForceSyncAsync();
             }
 
             var property = await _repo.GetPropertyAsync(propertyId);

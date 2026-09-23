@@ -10,6 +10,7 @@ namespace LodgeCore.Desktop.Services;
 /// </summary>
 public class LocalRepository
 {
+    private static readonly SemaphoreSlim PosShiftOpenLock = new(1, 1);
     private readonly LocalDbContext _dbContext;
 
     public LocalRepository(LocalDbContext dbContext)
@@ -3869,6 +3870,9 @@ public class LocalRepository
 
     public async Task<LocalPosSession> OpenPosSessionAsync(string propertyId, string outletId, string bankType, string bankingModel, decimal openingBalance, string userId, string deviceId)
     {
+        await PosShiftOpenLock.WaitAsync();
+        try
+        {
         await AssertNightAuditAllowsAsync(propertyId);
         var pendingStatus = await GetPendingPosShiftStatusAsync(propertyId, outletId, bankType, userId);
         if (!string.IsNullOrWhiteSpace(pendingStatus))
@@ -3911,6 +3915,11 @@ public class LocalRepository
 
         await _dbContext.SaveChangesAsync();
         return session;
+        }
+        finally
+        {
+            PosShiftOpenLock.Release();
+        }
     }
 
     public async Task<string?> GetPendingPosShiftStatusAsync(string propertyId, string outletId, string bankType, string userId)
@@ -6088,10 +6097,14 @@ public class LocalRepository
 
     public async Task<LodgeCore.Desktop.Data.Entities.LocalPosSession?> GetActiveServerBankAsync(string staffId, string propertyId, string outletId)
     {
+        var property = await _dbContext.Properties.FindAsync(propertyId);
+        var businessDate = property?.BusinessDate.Date ?? DateTime.UtcNow.Date;
         var sessions = await _dbContext.PosSessions
             .Where(s => s.PropertyId == propertyId
                 && (s.PrimaryOperatorId == staffId || s.StaffId == staffId || s.UserId == staffId)
-                && (string.IsNullOrEmpty(outletId) || s.OutletId == outletId))
+                && (string.IsNullOrEmpty(outletId) || s.OutletId == outletId)
+                && s.BusinessDate >= businessDate
+                && s.BusinessDate < businessDate.AddDays(1))
             .OrderByDescending(s => s.OpenedAt)
             .ToListAsync();
 
@@ -6107,8 +6120,12 @@ public class LocalRepository
     /// </summary>
     public async Task<LodgeCore.Desktop.Data.Entities.LocalPosSession?> GetActiveCentralBankAsync(string propertyId, string outletId)
     {
+        var property = await _dbContext.Properties.FindAsync(propertyId);
+        var businessDate = property?.BusinessDate.Date ?? DateTime.UtcNow.Date;
         var sessions = await _dbContext.PosSessions
-            .Where(s => s.PropertyId == propertyId && s.OutletId == outletId)
+            .Where(s => s.PropertyId == propertyId && s.OutletId == outletId
+                && s.BusinessDate >= businessDate
+                && s.BusinessDate < businessDate.AddDays(1))
             .OrderByDescending(s => s.OpenedAt)
             .ToListAsync();
 
@@ -6922,14 +6939,15 @@ public class LocalRepository
             // A previous-stay guest credit is already represented by the city
             // ledger entry/allocation. Only advance deposits need a local
             // FolioCredit mirror; otherwise the same money appears twice.
+            var mirrorIdempotencyKey = allocations.FirstOrDefault()?.OfflineOperationId ?? Guid.NewGuid().ToString();
             if (mirrorAsFolioCredit)
             {
                 UpdateFolioTransactionsJson(folio, "credits", new
                 {
                     id = Guid.NewGuid().ToString(), amount, remainingAmount = amount,
                     method = "GUEST_CREDIT", reference = "", notes = "Applied guest credit (offline)",
-                    type = "ADVANCE_DEPOSIT", status = "PENDING_SYNC", idempotencyKey,
-                    frontdeskSessionId = frontdeskSession?.Id, createdAt = DateTime.UtcNow
+                    type = "ADVANCE_DEPOSIT", status = "PENDING_SYNC", idempotencyKey = mirrorIdempotencyKey,
+                    createdAt = DateTime.UtcNow
                 });
             }
 
@@ -6940,7 +6958,7 @@ public class LocalRepository
                 method = "GUEST_CREDIT",
                 type = "PAYMENT",
                 status = "COMPLETED",
-                idempotencyKey = $"dep_pay_{idempotencyKey}",
+                idempotencyKey = $"dep_pay_{mirrorIdempotencyKey}",
                 createdAt = DateTime.UtcNow
             });
 

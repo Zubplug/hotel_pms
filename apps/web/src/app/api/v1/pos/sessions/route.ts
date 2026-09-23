@@ -82,6 +82,11 @@ export async function POST(req: NextRequest) {
     }
     const bankingModel = (property?.settings as any)?.pos?.bankingModel || 'CENTRAL_CASHIER';
     const bankType = bankingModel === 'SERVER_BANKING' ? 'SERVER' : 'CENTRAL';
+    const businessDate = property.businessDate || getPropertyBusinessDate(property.timezone);
+    const businessDateStart = new Date(businessDate);
+    businessDateStart.setUTCHours(0, 0, 0, 0);
+    const businessDateEnd = new Date(businessDateStart);
+    businessDateEnd.setUTCDate(businessDateEnd.getUTCDate() + 1);
 
     // General Cashier is a separate receiving/review role. A central POS
     // bank is opened by a POS cashier (or authorized manager), while every
@@ -99,6 +104,10 @@ export async function POST(req: NextRequest) {
 
     // 6. Transaction to check for existing OPEN session and create new
     const result = await prisma.$transaction(async (tx: any) => {
+      // Serialize shift-open attempts for this property/outlet/operator. This
+      // protects the check-then-create path when a reinstalled terminal and a
+      // second terminal request a shift at the same time.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`${propertyId}:${outlet.id}:${staffId || 'CENTRAL'}:${bankType}:${businessDate.toISOString().slice(0, 10)}`}, 0))`;
       const pendingReview = await tx.posSession.findFirst({
         where: {
           propertyId,
@@ -120,7 +129,15 @@ export async function POST(req: NextRequest) {
 
       if (bankingModel === 'SERVER_BANKING') {
         const existingBank = await tx.posSession.findFirst({
-          where: { propertyId, outletId, primaryOperatorId: staffId, status: 'OPEN', controlStatus: 'OPEN', bankType: 'SERVER' }
+          where: {
+            propertyId,
+            outletId,
+            primaryOperatorId: staffId,
+            businessDate: { gte: businessDateStart, lt: businessDateEnd },
+            status: 'OPEN',
+            OR: [{ controlStatus: 'OPEN' }, { controlStatus: null }],
+            bankType: 'SERVER'
+          }
         });
         if (existingBank) return existingBank; // Idempotent logic per Waiter
       } else {
@@ -128,8 +145,9 @@ export async function POST(req: NextRequest) {
           where: {
             propertyId,
             outletId: outlet.id,
+            businessDate: { gte: businessDateStart, lt: businessDateEnd },
             status: 'OPEN',
-            controlStatus: 'OPEN',
+            OR: [{ controlStatus: 'OPEN' }, { controlStatus: null }],
             bankType: 'CENTRAL',
             bankingModel: 'CENTRAL_CASHIER'
           },
@@ -148,7 +166,7 @@ export async function POST(req: NextRequest) {
         data: { propertyId,
           outletId: outlet.id,
           deviceId: device.id, // Satisfy DB NOT NULL constraint; servers can still roam
-          businessDate: property.businessDate || getPropertyBusinessDate(property.timezone),
+          businessDate,
           openingCash: openingCash || 0,
           expectedCash: openingCash || 0,
           openedBy: loggedInUserId,

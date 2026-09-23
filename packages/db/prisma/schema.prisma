@@ -3881,6 +3881,21 @@ model PosProcessedEvent {
   @@map("pos_processed_events")
 }
 
+// Maps a locally-created offline shift ID to the canonical server shift when
+// a reinstall or concurrent terminal opened against an already-open shift.
+// This keeps later offline orders attached to the existing financial shift.
+model PosSessionAlias {
+  localSessionId    String   @id @db.Uuid
+  canonicalSessionId String  @db.Uuid
+  propertyId        String   @db.Uuid
+  terminalId        String?  @db.Uuid
+  operatorId        String?  @db.Uuid
+  createdAt         DateTime @default(now()) @db.Timestamptz
+
+  @@index([canonicalSessionId])
+  @@index([propertyId, operatorId])
+}
+
 // -----------------------------------------------------------------------------
 // APPROVALS
 // -----------------------------------------------------------------------------

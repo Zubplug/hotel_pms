@@ -157,6 +157,18 @@ export async function POST(req: NextRequest) {
              throw e;
           }
 
+          // A terminal may have created a local shift while another terminal
+          // already owned the active server shift. Resolve the local ID before
+          // validating or materializing later offline orders.
+          const incomingSessionId = payload.SessionId || payload.sessionId || payload.PosSessionId || payload.posSessionId || event.sessionId;
+          if (incomingSessionId && event.eventType !== 'POS_SESSION_STARTED') {
+            const alias = await tx.posSessionAlias.findUnique({ where: { localSessionId: incomingSessionId } });
+            if (alias) {
+              payload.SessionId = alias.canonicalSessionId;
+              event.sessionId = alias.canonicalSessionId;
+            }
+          }
+
           // Offline transactions are accepted only while their server-side
           // POS shift is still OPEN. A terminal may have gone offline before
           // an auditor submitted the shift, so local state is not authoritative.
@@ -267,6 +279,47 @@ export async function POST(req: NextRequest) {
           if (event.eventType === 'POS_SESSION_STARTED') {
              const existingSession = await tx.posSession.findUnique({ where: { id: event.aggregateId }});
              if (!existingSession) {
+                 const sessionBusinessDate = new Date(payload.BusinessDate || payload.businessDate || payload.OpenedAt || event.occurredAt);
+                 const sessionBankType = payload.BankType || payload.bankType || 'SERVER';
+                 const sessionBankingModel = payload.BankingModel || payload.bankingModel || 'SERVER_BANKING';
+                 const sessionPropertyId = payload.PropertyId || payload.propertyId || terminal.propertyId;
+                 const sessionOutletId = payload.OutletId || payload.outletId || terminal.outletId;
+                 const existingOpenSession = await tx.posSession.findFirst({
+                   where: sessionBankType === 'SERVER'
+                     ? {
+                         propertyId: sessionPropertyId,
+                         outletId: sessionOutletId,
+                         primaryOperatorId: isUuid(payload.PrimaryOperatorId) ? payload.PrimaryOperatorId : operatorId,
+                         businessDate: sessionBusinessDate,
+                         bankType: 'SERVER',
+                         status: 'OPEN',
+                         OR: [{ controlStatus: 'OPEN' }, { controlStatus: null }],
+                       }
+                     : {
+                         propertyId: sessionPropertyId,
+                         outletId: sessionOutletId,
+                         businessDate: sessionBusinessDate,
+                         bankType: 'CENTRAL',
+                         bankingModel: 'CENTRAL_CASHIER',
+                         status: 'OPEN',
+                         OR: [{ controlStatus: 'OPEN' }, { controlStatus: null }],
+                       },
+                   orderBy: { openedAt: 'asc' },
+                 });
+
+                 if (existingOpenSession) {
+                   await tx.posSessionAlias.upsert({
+                     where: { localSessionId: event.aggregateId },
+                     create: {
+                       localSessionId: event.aggregateId,
+                       canonicalSessionId: existingOpenSession.id,
+                       propertyId: sessionPropertyId,
+                       terminalId: terminal.id,
+                       operatorId,
+                     },
+                     update: { canonicalSessionId: existingOpenSession.id, terminalId: terminal.id, operatorId },
+                   });
+                 } else {
                  // The desktop sends its local identifier string (e.g. dev_xxx) as DeviceId.
                  // PosSession.deviceId is a UUID FK — resolve it to the real PosDevice.id.
                  const rawDeviceId = payload.DeviceId || event.deviceId;
@@ -306,15 +359,18 @@ export async function POST(req: NextRequest) {
                          openedAt: new Date(payload.OpenedAt || event.occurredAt)
                      }
                  });
+                 }
              }
              
              // Also create the Operator Session.
              // terminalId must be the PosTerminal UUID from the authenticated terminal context.
-             const existingOpSession = await tx.posOperatorSession.findUnique({ where: { id: event.aggregateId }});
+             const sessionAlias = await tx.posSessionAlias.findUnique({ where: { localSessionId: event.aggregateId } });
+             const operatorSessionId = sessionAlias?.canonicalSessionId || event.aggregateId;
+             const existingOpSession = await tx.posOperatorSession.findUnique({ where: { id: operatorSessionId }});
              if (!existingOpSession) {
                  await tx.posOperatorSession.create({
                      data: {
-                         id: event.aggregateId,
+                         id: operatorSessionId,
                          terminalId: terminal.id, // Use the authenticated terminal UUID, not raw event.deviceId
                          outletId: terminal.outletId,
                          operatorId,
