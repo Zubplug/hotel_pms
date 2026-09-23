@@ -2665,7 +2665,23 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                     entry.FolioId = el.TryGetProperty("folioId", out var fId) && fId.ValueKind != System.Text.Json.JsonValueKind.Null ? fId.GetString() : null;
                     entry.InvoiceId = el.TryGetProperty("invoiceId", out var invoiceId) && invoiceId.ValueKind != System.Text.Json.JsonValueKind.Null ? invoiceId.GetString() : null;
                     entry.PosTransactionId = el.TryGetProperty("posTransactionId", out var posId) && posId.ValueKind != System.Text.Json.JsonValueKind.Null ? posId.GetString() : null;
-                    entry.Status = el.TryGetProperty("status", out var st) && st.ValueKind != System.Text.Json.JsonValueKind.Null ? st.GetString() : "OPEN";
+                    // Guard: if this entry has already been settled locally by an offline
+                    // guest-credit application whose outbox event is still PENDING, do NOT
+                    // let the server's stale "OPEN" status overwrite our local truth.
+                    // Once the server processes the GUEST_CREDIT_APPLICATION event it will
+                    // return "SETTLED" and we will write that here on the next pull.
+                    var serverStatus = el.TryGetProperty("status", out var st) && st.ValueKind != System.Text.Json.JsonValueKind.Null ? st.GetString() : "OPEN";
+                    var isLocallySettledByPendingEvent = entry.Status == "SETTLED"
+                        && serverStatus != "SETTLED"
+                        && dbContext.OutboxEvents.Any(ev =>
+                            ev.AggregateId == id &&
+                            ev.EventType == "GUEST_CREDIT_APPLICATION" &&
+                            (ev.Status == "PENDING" || ev.Status == "PROCESSING" || ev.Status == "FAILED"));
+                    if (!isLocallySettledByPendingEvent)
+                    {
+                        entry.Status = serverStatus;
+                    }
+
                     entry.Description = el.TryGetProperty("description", out var desc) && desc.ValueKind != System.Text.Json.JsonValueKind.Null
                         ? desc.GetString()
                         : el.TryGetProperty("reference", out var reference) && reference.ValueKind != System.Text.Json.JsonValueKind.Null

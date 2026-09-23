@@ -7,6 +7,7 @@ import { PaystackProvider } from '@/lib/payment-providers/paystack';
 import { applyRefundToFolio } from '@/lib/refunds/settle-refund';
 import { CityLedgerAccountingService } from '@/lib/services/city-ledger-accounting-service';
 import { InventoryService } from '@/lib/inventory/InventoryService';
+import { applyAvailableFolioCredit } from '@/lib/finance/apply-folio-credit';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -276,6 +277,47 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
               metadata: { source: 'DESKTOP_APPROVAL' }
             }
           });
+
+          if (approval.type === 'ADVANCE_DEPOSIT') {
+            await tx.payment.create({
+              data: {
+                folioId: folio.id,
+                propertyId: approval.propertyId,
+                reservationId: credit.reservationId,
+                method: (details.method || 'CASH') as any,
+                amount,
+                currency: approval.currency || folio.currency,
+                baseAmount: amount,
+                status: 'COMPLETED',
+                businessDate: credit.businessDate,
+                idempotencyKey: `dep_pay_${idempotencyKey}`,
+                receivedBy: approval.requestedBy,
+                terminalId: details.deviceId || null,
+                reference: details.reference || null,
+              },
+            });
+
+            await tx.folio.update({
+              where: { id: folio.id },
+              data: { totalPayments: { increment: amount } },
+            });
+
+            if (Number(folio.balance) > 0) {
+              await applyAvailableFolioCredit(tx, {
+                folioId: folio.id,
+                propertyId: approval.propertyId,
+                reservationId: credit.reservationId,
+                amount: Math.min(Number(folio.balance), amount),
+                currency: approval.currency || folio.currency || 'NGN',
+                source: 'SYSTEM_AUTO_APPLY_APPROVED_DEPOSIT',
+                description: 'Auto-applied approved advance deposit',
+                appliedBy: user.id,
+                deviceId: details.deviceId || null,
+                operationKey: `APPROVED_DEPOSIT_${idempotencyKey}`,
+                businessDate: credit.businessDate,
+              });
+            }
+          }
         }
         const updated = await tx.approvalRequest.update({
           where: { id: approval.id },

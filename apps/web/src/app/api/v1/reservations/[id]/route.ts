@@ -101,6 +101,20 @@ export async function GET(
 
     if (!reservation) return errorResponse('NOT_FOUND', 'Reservation not found', 404);
 
+    // Guest credit is a guest-level receivable, not only a FolioCredit voucher.
+    // Include the unused portion of open refund entries so credits created by a
+    // previous stay remain visible on the guest's current reservation.
+    const guestCreditEntries = reservation.primaryGuestId
+      ? await prisma.cityLedgerEntry.findMany({
+          where: { guestId: reservation.primaryGuestId, type: 'REFUND_OWED', status: 'OPEN' },
+          include: { allocations: { select: { amount: true } } },
+        })
+      : [];
+    const guestCreditAvailable = guestCreditEntries.reduce((sum, entry) => {
+      const allocated = entry.allocations.reduce((entrySum, allocation) => entrySum + Number(allocation.amount), 0);
+      return sum + Math.max(0, Number(entry.amount) - allocated);
+    }, 0);
+
     // Corporate reservations share one account-level CITY_LEDGER folio. It is
     // not linked by reservationId, so load it explicitly for this reservation.
     const sharedCorporateFolio = reservation.corporateAccountId
@@ -148,9 +162,16 @@ export async function GET(
       : reservation.folios;
     const folios = loadedFolios.map((folio) => ({
       ...folio,
-      availableCredit: folio.credits.reduce((sum, credit) => sum + Number(credit.remainingAmount), 0),
+      // Use the stored DB balance — it is maintained transactionally and is always
+      // authoritative. Computing it as totalCharges - totalPayments - creditApplications
+      // was fragile: advance deposits increment both totalPayments (cash received)
+      // AND creditApplications (credit applied), causing double-subtraction.
+      balance: Number(folio.balance),
+      availableCredit: folio.credits.reduce((sum, credit) => sum + Number(credit.remainingAmount), 0) + guestCreditAvailable,
       appliedCreditAmount: folio.creditApplications.reduce((sum, application) => sum + Number(application.amount), 0),
-      balance: Number(folio.totalCharges) - Number(folio.totalPayments) - folio.creditApplications.reduce((sum, application) => sum + Number(application.amount), 0),
+      // Total of ALL advance deposits / credits ever received (regardless of status).
+      // Used by FolioSection to show correct "Payments received" even when credits are EXHAUSTED.
+      totalCreditsReceived: folio.credits.reduce((sum, credit) => sum + Number(credit.amount), 0),
     }));
     const corporateRates = new Map(
       (reservation.corporateAccount?.ratePlan?.rates || []).map((rate) => [rate.roomTypeId, rate]),

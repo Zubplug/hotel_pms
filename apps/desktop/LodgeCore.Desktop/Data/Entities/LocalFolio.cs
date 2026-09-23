@@ -40,6 +40,35 @@ public class LocalFolio
         }
     }
 
+    // Advance deposits are already included in TotalPayments. Only non-cash
+    // folio credits (for example downgrade/credit adjustments) need an
+    // additional balance reduction when they are applied.
+    public decimal AppliedCreditAdjustmentAmount
+    {
+        get
+        {
+            try
+            {
+                using var document = JsonDocument.Parse(TransactionsJson ?? "{}");
+                if (!document.RootElement.TryGetProperty("credits", out var credits) || credits.ValueKind != JsonValueKind.Array)
+                    return 0m;
+
+                return credits.EnumerateArray().Sum(credit =>
+                {
+                    var type = credit.TryGetProperty("type", out var typeValue) ? typeValue.GetString() : null;
+                    if (string.Equals(type, "ADVANCE_DEPOSIT", StringComparison.OrdinalIgnoreCase)) return 0m;
+                    var amount = ReadDecimal(credit, "amount");
+                    var remaining = credit.TryGetProperty("remainingAmount", out _) ? ReadDecimal(credit, "remainingAmount") : amount;
+                    return Math.Max(0m, amount - remaining);
+                });
+            }
+            catch
+            {
+                return 0m;
+            }
+        }
+    }
+
     private static decimal ReadDecimal(JsonElement element, string propertyName)
     {
         if (!element.TryGetProperty(propertyName, out var value)) return 0m;
@@ -47,7 +76,7 @@ public class LocalFolio
         return value.ValueKind == JsonValueKind.String && decimal.TryParse(value.GetString(), out var text) ? text : 0m;
     }
 
-    public decimal NetBalance => TotalCharges - TotalPayments - AppliedCreditAmount;
+    public decimal NetBalance => TotalCharges - TotalPayments - AppliedCreditAdjustmentAmount;
     public decimal OutstandingBalance => Math.Max(0m, NetBalance);
     public string? Currency { get; set; }
 

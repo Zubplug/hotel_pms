@@ -45,29 +45,60 @@ export function FolioSection({ reservation, readOnly = false }: { reservation: a
   const isClosed = folio.status === 'CLOSED';
 
   const totalCharges = Number(folio.totalCharges || 0);
+  // totalPayments is the persisted source of truth for money received. Advance
+  // deposits are included when they are recorded locally and when they sync;
+  // adding credit amounts here would count every deposit twice.
   const totalPayments = Number(folio.totalPayments || 0);
   const outstandingBalance = Math.max(0, Number(folio.balance || 0));
   const folioAvailableCredit = Number(folio.availableCredit || 0);
+
+
+  // Build a set of payment IDs that are the raw "backing" record for an advance
+  // deposit credit. These are created simultaneously with the FolioCredit record
+  // and should NOT appear as a separate ledger row — the credit row already
+  // represents the same money. We match by same idempotencyKey suffix convention
+  // (server uses `dep_pay_${key}`) or by same amount + within 10s of the credit.
+  const advanceDepositPaymentIds = new Set<string>();
+  (folio.credits || []).forEach((credit: any) => {
+    const creditTime = new Date(credit.createdAt || 0).getTime();
+    (folio.payments || []).forEach((payment: any) => {
+      const exactDepositLink = credit.idempotencyKey
+        && payment.idempotencyKey === `dep_pay_${credit.idempotencyKey}`;
+      const paymentTime = new Date(payment.createdAt || 0).getTime();
+      const sameAmount = Math.abs(Number(payment.amount)) === Math.abs(Number(credit.amount));
+      const withinWindow = Math.abs(paymentTime - creditTime) < 10000; // 10 seconds
+      if (exactDepositLink || (sameAmount && withinWindow && !credit.idempotencyKey && !payment.idempotencyKey)) {
+        advanceDepositPaymentIds.add(payment.id);
+      }
+    });
+  });
+
   // Desktop stores payments in the folio payments collection while some
   // cloud responses also mirror them in items[]. Keep one visible row per
   // payment so offline and online reservation details agree.
+  // Exclude PAYMENT-type items that duplicate a credit row (e.g. offline items
+  // written alongside the credit in TransactionsJson).
   const ledgerItems = [
-    ...(folio.items || []).filter((item: any) => item.type !== 'PAYMENT'),
-    ...(folio.payments || []).map((payment: any) => ({
-      id: 'payment-' + payment.id,
-      amount: Number(payment.amount || 0) * -1,
-      type: 'PAYMENT',
-      description: payment.description || (payment.method === 'GUEST_CREDIT' ? 'Applied guest credit' : `${payment.method || 'Folio'} payment`),
-      createdAt: payment.createdAt,
-      status: payment.status,
-      method: payment.method,
-      reference: payment.reference,
-    })),
+    ...(folio.items || []).filter((item: any) => item.type !== 'PAYMENT' || item.source === 'CITY_LEDGER'),
+    ...(folio.payments || [])
+      .filter((payment: any) => !advanceDepositPaymentIds.has(payment.id))
+      .map((payment: any) => ({
+        id: 'payment-' + payment.id,
+        amount: Number(payment.amount || 0) * -1,
+        type: 'PAYMENT',
+        description: payment.description || (payment.method === 'GUEST_CREDIT' ? 'Applied guest credit' : `${payment.method || 'Folio'} payment`),
+        createdAt: payment.createdAt,
+        status: payment.status,
+        method: payment.method,
+        reference: payment.reference,
+      })),
     ...(folio.credits || []).map((credit: any) => ({
       id: 'credit-' + credit.id,
       amount: Number(credit.amount || 0) * -1,
       type: credit.type || 'ADVANCE_DEPOSIT',
-      description: credit.description || (credit.type === 'CREDIT_ADJUSTMENT' ? 'Folio credit' : 'Advance deposit') + (credit.method ? ' (' + credit.method + ')' : '') + (credit.reference ? ' — ' + credit.reference : ''),
+      description: (credit.type === 'CREDIT_ADJUSTMENT' ? 'Folio credit' : 'Advance deposit')
+        + (credit.method ? ' (' + credit.method + ')' : '')
+        + (credit.reference ? ' — ' + credit.reference : ''),
       createdAt: credit.createdAt,
       creditStatus: credit.status,
       creditRemainingAmount: credit.remainingAmount,

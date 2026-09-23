@@ -459,6 +459,10 @@ public class OfflinePMSInterop
         {
             var session = await _authManager.GetSessionAsync();
             var propertyId = session?.PropertyId ?? string.Empty;
+            // Repair any pre-existing entries that were left OPEN despite being
+            // fully allocated (caused by the missing SETTLED-status assignment
+            // in older builds of ApplyGuestCreditAsync).
+            await _repo.ReconcileGuestCreditStatusesAsync();
             var credits = await _repo.GetGuestCreditsAsync(propertyId);
             return JsonSerializer.Serialize(new { success = true, data = credits }, _jsonOptions);
         }
@@ -467,6 +471,7 @@ public class OfflinePMSInterop
             return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
+
 
     /// <summary>
     /// Atomically applies a guest credit to a folio offline and queues an outbox
@@ -1011,6 +1016,7 @@ public class OfflinePMSInterop
             var payments = folioJson.ValueKind == System.Text.Json.JsonValueKind.Object && folioJson.TryGetProperty("payments", out var payProp) && payProp.ValueKind == System.Text.Json.JsonValueKind.Array
                 ? payProp.EnumerateArray().Select(p => new {
                     id = p.TryGetProperty("id", out var pid) ? pid.GetString() : null,
+                    idempotencyKey = p.TryGetProperty("idempotencyKey", out var pKey) ? pKey.GetString() : null,
                     amount = p.TryGetProperty("amount", out var pAmt) ? 
                         (pAmt.ValueKind == System.Text.Json.JsonValueKind.String && decimal.TryParse(pAmt.GetString(), out var pd) ? pd : 
                         (pAmt.ValueKind == System.Text.Json.JsonValueKind.Number ? pAmt.GetDecimal() : 0)) : 0m,
@@ -1023,6 +1029,7 @@ public class OfflinePMSInterop
             var credits = folioJson.ValueKind == System.Text.Json.JsonValueKind.Object && folioJson.TryGetProperty("credits", out var creditProp) && creditProp.ValueKind == System.Text.Json.JsonValueKind.Array
                 ? creditProp.EnumerateArray().Select(c => new {
                     id = c.TryGetProperty("id", out var cid) ? cid.GetString() : null,
+                    idempotencyKey = c.TryGetProperty("idempotencyKey", out var cKey) ? cKey.GetString() : null,
                     amount = c.TryGetProperty("amount", out var cAmt)
                         ? (cAmt.ValueKind == System.Text.Json.JsonValueKind.String && decimal.TryParse(cAmt.GetString(), out var cd) ? cd : cAmt.ValueKind == System.Text.Json.JsonValueKind.Number ? cAmt.GetDecimal() : 0m)
                         : 0m,

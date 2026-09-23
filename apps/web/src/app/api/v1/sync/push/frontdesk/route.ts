@@ -1727,14 +1727,13 @@ export async function POST(req: NextRequest) {
                 businessDate: applicationDate,
                 type: "PAYMENT",
                 source: "CITY_LEDGER",
-                description: payload.description || "Applied guest credit (offline sync)",
+                description: payload.description || "Applied guest credit",
                 quantity: 1,
                 unitAmount: -amount,
                 amount: -amount,
-                currency: folio.currency || "NGN",
+                currency: folio.currency || entry.currency || "NGN",
                 baseAmount: -amount,
                 postedBy: staffOperatorId,
-                deviceId: device.id,
                 operationId: idempotencyKey,
                 reservationId: folio.reservationId,
                 guestId,
@@ -2074,6 +2073,13 @@ export async function POST(req: NextRequest) {
                 });
               }
             }
+
+            // Increment totalPayments so the Payments counter in the folio
+            // summary reflects the true money received via advance deposit.
+            await tx.folio.update({
+              where: { id: aggregateId },
+              data: { totalPayments: { increment: amount } },
+            });
 
             if (Number(folio.balance) > 0) {
               const debitAmount = Math.min(Number(folio.balance), amount);

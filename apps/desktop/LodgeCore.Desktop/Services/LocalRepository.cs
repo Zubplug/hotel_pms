@@ -338,7 +338,7 @@ public class LocalRepository
 
     public async Task<LocalReservation?> GetReservationAsync(string id)
     {
-        return await _dbContext.Reservations
+        var reservation = await _dbContext.Reservations
             .Include(r => r.Guest)
             .Include(r => r.CorporateAccount).ThenInclude(c => c.CorporateFolio)
             .Include(r => r.Folio)
@@ -346,6 +346,31 @@ public class LocalRepository
             .Include(r => r.LockOperations)
             .Include(r => r.Rooms).ThenInclude(rr => rr.Room)
             .FirstOrDefaultAsync(r => r.Id == id);
+
+        if (reservation?.Guest != null && reservation.Folio != null)
+        {
+            reservation.Folio.AvailableCredit += await GetUnusedGuestCreditAsync(reservation.Guest.Id);
+        }
+
+        return reservation;
+    }
+
+    private async Task<decimal> GetUnusedGuestCreditAsync(string guestId)
+    {
+        var entries = await _dbContext.CityLedgerEntries
+            .Where(entry => entry.GuestId == guestId && entry.Type == "REFUND_OWED" && entry.Status == "OPEN")
+            .ToListAsync();
+
+        decimal available = 0m;
+        foreach (var entry in entries)
+        {
+            var allocated = await _dbContext.CityLedgerAllocations
+                .Where(allocation => allocation.CreditEntryId == entry.Id)
+                .SumAsync(allocation => (decimal?)allocation.Amount) ?? 0m;
+            available += Math.Max(0m, entry.Amount - allocated);
+        }
+
+        return available;
     }
     
     public async Task<bool> AssignRoomAsync(string reservationId, string roomId, string roomNumber, string userId, string deviceId)
@@ -980,6 +1005,22 @@ public class LocalRepository
         });
 
         await _dbContext.SaveChangesAsync();
+
+        // Night audit charges can also consume unused guest credit from a
+        // previous stay after same-folio deposits have been applied.
+        var guestCreditToApply = amount - creditApplicationAmount;
+        if (guestCreditToApply > 0.01m && !string.IsNullOrWhiteSpace(reservation?.GuestId))
+        {
+            await ApplyGuestCreditAsync(
+                folioId,
+                null,
+                reservation.GuestId!,
+                guestCreditToApply,
+                userId,
+                deviceId,
+                frontdeskSession?.BusinessDate ?? DateTime.UtcNow.Date,
+                mirrorAsFolioCredit: false);
+        }
         return true;
     }
 
@@ -1544,7 +1585,13 @@ public class LocalRepository
         if (property != null && amount >= property.DepositApprovalThreshold && property.OfflineHighValueDepositPolicy == "BLOCK")
             throw new InvalidOperationException($"High-value deposits of {amount:N2} are blocked while offline. Connect to the server for manager approval.");
 
-        if (!requiresApproval) folio.AvailableCredit += amount;
+        if (!requiresApproval)
+        {
+            folio.AvailableCredit += amount;
+            // Treat advance deposit as money received so the Payments counter
+            // in the UI reflects true cash collected, not just direct payments.
+            folio.TotalPayments += amount;
+        }
         folio.UpdatedAt = DateTime.UtcNow;
         folio.IsDirty = true;
         folio.LocalSequence++;
@@ -1773,7 +1820,10 @@ public class LocalRepository
             decimal totalDeposits = res.Folio?.TotalPayments ?? 0m;
             decimal totalCharges = res.Folio?.TotalCharges ?? 0m;
             decimal advanceDeposit = res.Folio?.AvailableCredit ?? 0m;
-            decimal availableCredit = advanceDeposit + (totalDeposits - totalCharges);
+            // TotalPayments includes advance deposits as well as direct
+            // payments. Do not add the same deposit twice; use the larger of
+            // the explicit unspent credit and the net collected amount.
+            decimal availableCredit = Math.Max(advanceDeposit, totalDeposits - totalCharges);
 
             if (availableCredit < expectedCost)
             {
@@ -2316,9 +2366,16 @@ public class LocalRepository
 
     public async Task<LocalFolio?> GetFolioAsync(string folioId)
     {
-        return await _dbContext.Folios
+        var folio = await _dbContext.Folios
             .Include(f => f.Reservation)
             .FirstOrDefaultAsync(f => f.Id == folioId);
+
+        if (folio?.Reservation?.GuestId != null)
+        {
+            folio.AvailableCredit += await GetUnusedGuestCreditAsync(folio.Reservation.GuestId);
+        }
+
+        return folio;
     }
 
     public async Task<LocalReservation?> GetReservationByRoomNumberAsync(string roomNumber)
@@ -6742,7 +6799,8 @@ public class LocalRepository
         decimal amount,
         string appliedBy,
         string deviceId,
-        DateTime businessDate)
+        DateTime businessDate,
+        bool mirrorAsFolioCredit = true)
     {
         await using var tx = await _dbContext.Database.BeginTransactionAsync();
         try
@@ -6844,28 +6902,37 @@ public class LocalRepository
                 return (false, $"Insufficient credit. Requested: {amount:F2}, but only {(amount - remainingToApply):F2} was available.");
             }
 
-            // ── 4. Post PAYMENT folio item ────────────────────────────────────
-            var folioItem = new
+            // ── 4. Mark fully-consumed entries as SETTLED locally ─────────────
+            // This ensures GetGuestCreditsAsync does not re-show the credit as
+            // available when the outbox event is still PENDING (not yet synced).
+            // The server will independently set SETTLED when it processes the
+            // GUEST_CREDIT_APPLICATION outbox event; this is the local mirror.
+            foreach (var entry in entries)
             {
-                id = Guid.NewGuid().ToString(),
-                folioId = folioId,
-                type = "PAYMENT",
-                source = "CITY_LEDGER",
-                description = "Applied guest credit (offline)",
-                quantity = 1,
-                unitAmount = -amount,
-                amount = -amount,
-                currency = folio.Currency ?? "NGN",
-                businessDate = businessDate.ToString("yyyy-MM-dd"),
-                postedBy = appliedBy,
-                createdAt = DateTime.UtcNow
-            };
-            UpdateFolioTransactionsJson(folio, "items", folioItem);
+                var totalAllocated = await _dbContext.CityLedgerAllocations
+                    .Where(a => a.CreditEntryId == entry.Id)
+                    .SumAsync(a => a.Amount);
+                if (totalAllocated >= entry.Amount - 0.01m)
+                {
+                    entry.Status = "SETTLED";
+                    _dbContext.CityLedgerEntries.Update(entry);
+                }
+            }
 
-            // Keep a payment record as well as the item mirror. The offline
-            // reservation detail page uses payments for receipt/balance
-            // rendering, while the cloud sync event remains the accounting
-            // source of truth.
+            // A previous-stay guest credit is already represented by the city
+            // ledger entry/allocation. Only advance deposits need a local
+            // FolioCredit mirror; otherwise the same money appears twice.
+            if (mirrorAsFolioCredit)
+            {
+                UpdateFolioTransactionsJson(folio, "credits", new
+                {
+                    id = Guid.NewGuid().ToString(), amount, remainingAmount = amount,
+                    method = "GUEST_CREDIT", reference = "", notes = "Applied guest credit (offline)",
+                    type = "ADVANCE_DEPOSIT", status = "PENDING_SYNC", idempotencyKey,
+                    frontdeskSessionId = frontdeskSession?.Id, createdAt = DateTime.UtcNow
+                });
+            }
+
             UpdateFolioTransactionsJson(folio, "payments", new
             {
                 id = Guid.NewGuid().ToString(),
@@ -6873,11 +6940,23 @@ public class LocalRepository
                 method = "GUEST_CREDIT",
                 type = "PAYMENT",
                 status = "COMPLETED",
+                idempotencyKey = $"dep_pay_{idempotencyKey}",
                 createdAt = DateTime.UtcNow
             });
 
             // Update folio balance
             folio.TotalPayments += amount;
+            if (mirrorAsFolioCredit)
+            {
+                folio.AvailableCredit += amount;
+                if (folio.NetBalance > 0m)
+                {
+                    var debitAmount = Math.Min(folio.NetBalance, amount);
+                    ApplyCreditToTransactionsJson(folio, debitAmount);
+                    folio.AvailableCredit -= debitAmount;
+                }
+            }
+
             folio.IsDirty = true;
             folio.LocalSequence++;
             folio.Version += 1;
@@ -6911,6 +6990,52 @@ public class LocalRepository
         allocation.ConflictReason = "INSUFFICIENT_CREDIT";
         allocation.ServerMessage = serverMessage;
         await _dbContext.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// One-time startup reconciliation: scans all local REFUND_OWED entries that
+    /// are still OPEN and marks any that are fully covered by existing local
+    /// allocations as SETTLED.
+    ///
+    /// This repairs guest-credit records that were left OPEN by older app versions
+    /// before the ApplyGuestCreditAsync SETTLED-status fix was deployed (e.g.
+    /// Michael Margret's 60,000 credit showing as available after it was already
+    /// applied to a folio yesterday).
+    ///
+    /// Safe to call every startup — it is a no-op when nothing needs correcting.
+    /// </summary>
+    public async Task ReconcileGuestCreditStatusesAsync()
+    {
+        var openEntries = await _dbContext.CityLedgerEntries
+            .Where(e => e.Type == "REFUND_OWED" && (e.Status == "OPEN" || e.Status == null))
+            .ToListAsync();
+
+        if (!openEntries.Any()) return;
+
+        var entryIds = openEntries.Select(e => e.Id).ToList();
+        var allocationSums = await _dbContext.CityLedgerAllocations
+            .Where(a => entryIds.Contains(a.CreditEntryId))
+            .GroupBy(a => a.CreditEntryId)
+            .Select(g => new { EntryId = g.Key, Total = g.Sum(a => a.Amount) })
+            .ToListAsync();
+
+        var sumByEntry = allocationSums.ToDictionary(x => x.EntryId, x => x.Total);
+
+        var changed = 0;
+        foreach (var entry in openEntries)
+        {
+            if (sumByEntry.TryGetValue(entry.Id, out var allocated) && allocated >= entry.Amount - 0.01m)
+            {
+                entry.Status = "SETTLED";
+                _dbContext.CityLedgerEntries.Update(entry);
+                changed++;
+            }
+        }
+
+        if (changed > 0)
+        {
+            await _dbContext.SaveChangesAsync();
+        }
     }
 
     #endregion

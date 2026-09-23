@@ -3,6 +3,7 @@ import { getPropertyBusinessDate, getNextBusinessDate } from '@/lib/date-utils';
 import crypto from 'crypto';
 import { NotificationEngine } from '@/lib/notification-engine';
 import { applyAvailableFolioCredit } from '@/lib/finance/apply-folio-credit';
+import { applyAvailableGuestLedgerCredit } from '@/lib/finance/apply-guest-ledger-credit';
 import { postNightAuditJournal, buildNightAuditBalanceProof } from './night-audit-accounting';
 
 const BATCH_SIZE = 50;
@@ -520,7 +521,7 @@ export async function executeNightAudit(
               });
 
                 // Automatically apply any available guest credit to this room charge
-                await applyAvailableFolioCredit(tx, {
+                const sameFolioCreditApplied = await applyAvailableFolioCredit(tx, {
                   folioId: mainFolio.id,
                   propertyId,
                   guestId: reservation.primaryGuestId,
@@ -532,6 +533,19 @@ export async function executeNightAudit(
                   appliedBy: actorId!,
                   operationKey: roomChargeKey,
                   businessDate: businessDate
+                });
+                await applyAvailableGuestLedgerCredit(tx, {
+                  folioId: mainFolio.id,
+                  propertyId,
+                  organizationId: property.organizationId,
+                  guestId: reservation.primaryGuestId,
+                  reservationId: reservation.id,
+                  amount: Math.max(0, effectiveRate - sameFolioCreditApplied),
+                  currency: chargeCurrency,
+                  appliedBy: actorId!,
+                  operationKey: roomChargeKey,
+                  businessDate,
+                  description: `Applied previous-stay guest credit to room charge - ${businessDate.toISOString().split('T')[0]}`,
                 });
               
               totalRoomChargesPosted++;
