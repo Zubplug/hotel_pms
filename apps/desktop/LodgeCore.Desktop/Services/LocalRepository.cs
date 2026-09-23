@@ -365,9 +365,13 @@ public class LocalRepository
         decimal available = 0m;
         foreach (var entry in entries)
         {
-            var allocated = await _dbContext.CityLedgerAllocations
+            // SQLite cannot translate SUM over EF-mapped decimal columns.
+            // Materialize the values and aggregate in managed code instead.
+            var allocated = (await _dbContext.CityLedgerAllocations
                 .Where(allocation => allocation.CreditEntryId == entry.Id)
-                .SumAsync(allocation => (decimal?)allocation.Amount) ?? 0m;
+                .Select(allocation => allocation.Amount)
+                .ToListAsync())
+                .Sum();
             available += Math.Max(0m, entry.Amount - allocated);
         }
 
@@ -2518,7 +2522,11 @@ public class LocalRepository
         if (entry == null) throw new InvalidOperationException("City-ledger entry not found.");
         if (isCorporateAdvance && !string.Equals(entry.Type, "PAYMENT", StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("Corporate advance refund requires a corporate payment entry.");
         if (!isCorporateAdvance && !string.Equals(entry.Type, "REFUND_OWED", StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("Guest refund requires a guest credit entry.");
-        var allocated = await _dbContext.CityLedgerAllocations.Where(a => a.CreditEntryId == entryId).SumAsync(a => (decimal?)a.Amount) ?? 0m;
+        var allocated = (await _dbContext.CityLedgerAllocations
+            .Where(a => a.CreditEntryId == entryId)
+            .Select(a => a.Amount)
+            .ToListAsync())
+            .Sum();
         if (amount > entry.Amount - allocated + 0.01m) throw new InvalidOperationException("Refund exceeds the available city-ledger credit.");
         var idempotencyKey = Guid.NewGuid().ToString();
         var request = new LocalRefundRequest { PropertyId = propertyId, CityLedgerEntryId = entryId, GuestId = guestId, RequestedAmount = amount, Currency = currency, RequestedMethod = requestedMethod, BankAccountName = requestedMethod.Equals("BANK_TRANSFER", StringComparison.OrdinalIgnoreCase) ? bankAccountName : null, BankAccountNumber = requestedMethod.Equals("BANK_TRANSFER", StringComparison.OrdinalIgnoreCase) ? bankAccountNumber : null, BankName = requestedMethod.Equals("BANK_TRANSFER", StringComparison.OrdinalIgnoreCase) ? bankName : null, Category = isCorporateAdvance ? "CORPORATE_ADVANCE_BALANCE" : "FOLIO_CREDIT_BALANCE", Reason = reason, IdempotencyKey = idempotencyKey, IsDirty = true };
@@ -6834,7 +6842,11 @@ public class LocalRepository
         if (amount <= 0) throw new InvalidOperationException("Settlement amount must be positive.");
         if (!isCorporate)
         {
-            var allocated = await _dbContext.CityLedgerAllocations.Where(a => a.InvoiceId == selectedInvoiceId).SumAsync(a => (decimal?)a.Amount) ?? 0m;
+            var allocated = (await _dbContext.CityLedgerAllocations
+                .Where(a => a.InvoiceId == selectedInvoiceId)
+                .Select(a => a.Amount)
+                .ToListAsync())
+                .Sum();
             if (amount > entry.Amount - allocated + 0.01m) throw new InvalidOperationException("Settlement exceeds the outstanding invoice balance.");
         }
         var frontdeskSession = await GetActiveFrontdeskSessionAsync(entry.PropertyId, userId);
@@ -6906,9 +6918,11 @@ public class LocalRepository
             {
                 if (remainingToApply <= 0) break;
 
-                var existingAllocations = await _dbContext.CityLedgerAllocations
+                var existingAllocations = (await _dbContext.CityLedgerAllocations
                     .Where(a => a.CreditEntryId == entry.Id)
-                    .SumAsync(a => a.Amount);
+                    .Select(a => a.Amount)
+                    .ToListAsync())
+                    .Sum();
 
                 var available = entry.Amount - existingAllocations;
                 if (available <= 0.01m) continue;
@@ -6979,9 +6993,11 @@ public class LocalRepository
             // GUEST_CREDIT_APPLICATION outbox event; this is the local mirror.
             foreach (var entry in entries)
             {
-                var totalAllocated = await _dbContext.CityLedgerAllocations
+                var totalAllocated = (await _dbContext.CityLedgerAllocations
                     .Where(a => a.CreditEntryId == entry.Id)
-                    .SumAsync(a => a.Amount);
+                    .Select(a => a.Amount)
+                    .ToListAsync())
+                    .Sum();
                 if (totalAllocated >= entry.Amount - 0.01m)
                 {
                     entry.Status = "SETTLED";
@@ -7084,11 +7100,16 @@ public class LocalRepository
         if (!openEntries.Any()) return;
 
         var entryIds = openEntries.Select(e => e.Id).ToList();
-        var allocationSums = await _dbContext.CityLedgerAllocations
+        // Do not use SQL GROUP BY/SUM here: SQLite's provider cannot aggregate
+        // EF-mapped decimal values. The list is already limited to local credit
+        // entries, so grouping in managed code is both portable and equivalent.
+        var allocationSums = (await _dbContext.CityLedgerAllocations
             .Where(a => entryIds.Contains(a.CreditEntryId))
+            .Select(a => new { a.CreditEntryId, a.Amount })
+            .ToListAsync())
             .GroupBy(a => a.CreditEntryId)
             .Select(g => new { EntryId = g.Key, Total = g.Sum(a => a.Amount) })
-            .ToListAsync();
+            .ToList();
 
         var sumByEntry = allocationSums.ToDictionary(x => x.EntryId, x => x.Total);
 
