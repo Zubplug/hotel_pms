@@ -291,6 +291,50 @@ export default function PosApp() {
     fetchData();
   }, [propertyId, provider, session]);
 
+  // Desktop starts the catalog before operator authentication so the shell can
+  // render, but that first request has no outlet ID and therefore returns the
+  // property-wide catalog. Once the operator/session identifies its outlet,
+  // reload the catalog scoped to that outlet. Without this refresh, the All
+  // tab combines identical kitchen/bar menu copies from multiple outlets.
+  const authenticatedOutletId = sessionContext?.outlet?.id || sessionContext?.outletId || '';
+  useEffect(() => {
+    if (!propertyId || !authenticatedOutletId) return;
+    let cancelled = false;
+
+    const reloadOutletCatalog = async () => {
+      try {
+        const [prodRes, catRes] = await Promise.all([
+          provider.pos.getProducts(propertyId, authenticatedOutletId),
+          provider.pos.getCategories(propertyId, authenticatedOutletId),
+        ]);
+        if (cancelled) return;
+
+        if (prodRes.data) {
+          setProducts((prodRes.data || []).map((product: any) => ({
+            ...product,
+            id: product.id ?? product.Id,
+            name: product.name ?? product.Name ?? 'Unnamed product',
+            categoryId: product.categoryId ?? product.CategoryId ?? '',
+            price: Number(product.price ?? product.Price ?? 0),
+            taxRate: Number(product.taxRate ?? product.TaxRate ?? 0),
+          })));
+        }
+        if (catRes.data) {
+          setCategories((catRes.data || []).map((category: any) => ({
+            ...category,
+            id: category.id ?? category.Id,
+            name: category.name ?? category.Name ?? 'Uncategorised',
+          })));
+        }
+      } catch (error) {
+        console.warn('Failed to reload POS catalog for the authenticated outlet', error);
+      }
+    };
+
+    reloadOutletCatalog();
+    return () => { cancelled = true; };
+  }, [propertyId, provider, authenticatedOutletId]);
+
   // Redirect if no operator logged in (not cash drawer)
   useEffect(() => {
     if (sessionStatus === 'authenticated') {

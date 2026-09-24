@@ -102,7 +102,11 @@ public class LocalRepository
             {
                 reservationId = r.Id,
                 folioId = r.Folio?.Id,
-                folioBalance = r.Folio?.OutstandingBalance ?? 0m,
+                // Keep the signed folio position for POS display:
+                // positive = amount due (debit), negative = guest credit.
+                folioBalance = r.Folio?.NetBalance ?? 0m,
+                outstandingBalance = r.Folio?.OutstandingBalance ?? 0m,
+                availableCredit = r.Folio?.AvailableCredit ?? 0m,
                 currency = r.Folio?.Currency ?? "NGN",
                 guestName = r.Guest != null
                     ? $"{r.Guest.FirstName} {r.Guest.LastName}".Trim()

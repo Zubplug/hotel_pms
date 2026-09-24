@@ -12,6 +12,8 @@ interface InHouseGuest {
   reservationId: string;
   folioId: string;
   folioBalance: number;
+  outstandingBalance?: number;
+  availableCredit?: number;
   currency: string;
   guestName: string;
   roomNumber: string;
@@ -19,6 +21,11 @@ interface InHouseGuest {
   checkOut: string;
   isVip: boolean;
 }
+
+const displayRoomNumber = (roomNumber: string | null | undefined) => {
+  const value = String(roomNumber || '').trim();
+  return value.includes('.') ? value.split('.').pop() || value : value;
+};
 
 interface ChargeModalProps {
   isOpen: boolean;
@@ -154,6 +161,15 @@ export function ChargeModal({
     });
   };
 
+  const formatFolioPosition = (guest: Pick<InHouseGuest, 'folioBalance' | 'availableCredit'>) => {
+    const balance = Number(guest.folioBalance || 0);
+    const availableCredit = Number(guest.availableCredit || 0);
+    if (balance > 0.01) return { label: 'Due', color: 'text-rose-600', amount: balance };
+    if (availableCredit > 0.01) return { label: 'Credit', color: 'text-emerald-600', amount: availableCredit };
+    if (balance < -0.01) return { label: 'Credit', color: 'text-emerald-600', amount: Math.abs(balance) };
+    return { label: 'Settled', color: 'text-slate-500', amount: 0 };
+  };
+
   // ── Header label ───────────────────────────────────────────────────
   const headerLabel =
     view === 'compSelection' ? 'Complimentary Settlement'
@@ -262,18 +278,18 @@ export function ChargeModal({
                   >
                     {/* Room number badge */}
                     <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-indigo-100 group-hover:bg-indigo-200 flex items-center justify-center transition-colors">
-                      <span className="text-xs font-black text-indigo-700">{g.roomNumber}</span>
+                      <span className="text-xs font-black text-indigo-700">{displayRoomNumber(g.roomNumber)}</span>
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-bold text-slate-800 truncate flex items-center gap-1">
                         {g.guestName}
                         {g.isVip && <span className="text-[10px] font-black text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full">VIP</span>}
                       </p>
-                      <p className="text-xs text-slate-500">Room {g.roomNumber}</p>
+                      <p className="text-xs text-slate-500">Room {displayRoomNumber(g.roomNumber)}</p>
                     </div>
                     <div className="text-right flex-shrink-0">
-                      <p className="text-xs font-bold text-slate-700">{formatCurrency(g.folioBalance)}</p>
-                      <p className="text-[10px] text-slate-400">balance</p>
+                      <p className={`text-xs font-bold ${formatFolioPosition(g).color}`}>{formatCurrency(formatFolioPosition(g).amount, g.currency)}</p>
+                      <p className={`text-[10px] ${formatFolioPosition(g).color}`}>{formatFolioPosition(g).label}</p>
                     </div>
                   </button>
                 ))}
@@ -291,18 +307,18 @@ export function ChargeModal({
                 <p className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest mb-2">Charging to Folio</p>
                 <div className="flex items-center gap-3">
                   <div className="w-12 h-12 rounded-xl bg-indigo-600 flex items-center justify-center flex-shrink-0">
-                    <span className="text-sm font-black text-white">{selectedGuest.roomNumber}</span>
+                    <span className="text-sm font-black text-white">{displayRoomNumber(selectedGuest.roomNumber)}</span>
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-black text-slate-800 truncate flex items-center gap-1">
                       {selectedGuest.guestName}
                       {selectedGuest.isVip && <span className="text-[10px] font-black text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full">VIP</span>}
                     </p>
-                    <p className="text-sm text-slate-500">Room {selectedGuest.roomNumber}</p>
+                    <p className="text-sm text-slate-500">Room {displayRoomNumber(selectedGuest.roomNumber)}</p>
                   </div>
                   <div className="text-right flex-shrink-0">
-                    <p className="text-xs font-bold text-slate-600">{formatCurrency(selectedGuest.folioBalance)}</p>
-                    <p className="text-[10px] text-slate-400">current balance</p>
+                    <p className={`text-xs font-bold ${formatFolioPosition(selectedGuest).color}`}>{formatCurrency(formatFolioPosition(selectedGuest).amount, selectedGuest.currency)}</p>
+                    <p className={`text-[10px] ${formatFolioPosition(selectedGuest).color}`}>{formatFolioPosition(selectedGuest).label}</p>
                   </div>
                 </div>
                 <div className="mt-3 pt-3 border-t border-indigo-200 flex justify-between text-xs">
@@ -311,7 +327,18 @@ export function ChargeModal({
                 </div>
                 <div className="mt-1 flex justify-between text-xs">
                   <span className="text-slate-500">New folio balance</span>
-                  <span className="font-bold text-slate-700">{formatCurrency(selectedGuest.folioBalance + total)}</span>
+                  {(() => {
+                    const currentDue = Math.max(0, Number(selectedGuest.folioBalance || 0));
+                    const currentCredit = Math.max(0, Number(selectedGuest.availableCredit || 0), Number(selectedGuest.folioBalance || 0) < 0 ? Math.abs(Number(selectedGuest.folioBalance)) : 0);
+                    const projectedDue = Math.max(0, currentDue + total - currentCredit);
+                    const projectedCredit = Math.max(0, currentCredit - currentDue - total);
+                    const position = projectedDue > 0.01
+                      ? { label: 'Due', color: 'text-rose-600', amount: projectedDue }
+                      : projectedCredit > 0.01
+                        ? { label: 'Credit', color: 'text-emerald-600', amount: projectedCredit }
+                        : { label: 'Settled', color: 'text-slate-500', amount: 0 };
+                    return <span className={`font-bold ${position.color}`}>{formatCurrency(position.amount, selectedGuest.currency)} {position.label}</span>;
+                  })()}
                 </div>
               </div>
 
@@ -463,4 +490,3 @@ function MethodButton({
     </button>
   );
 }
-
