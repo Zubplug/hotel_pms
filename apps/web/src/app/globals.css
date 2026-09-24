@@ -160,7 +160,44 @@
    screens and shared dialogs still use light utility classes explicitly. Keep
    their semantic accents, but retone their structural surfaces here so the
    whole desk feels like one product, including offline/local-only views. */
-.frontdesk-dark-surface { color: #e2e8f0; }
+.frontdesk-dark-surface {
+  color: #e2e8f0;
+  background-color: #080c18;
+  --background: #080c18;
+  --foreground: #e2e8f0;
+  --card: #101b2f;
+  --card-foreground: #f8fafc;
+  --popover: #0d1424;
+  --popover-foreground: #e2e8f0;
+  --muted: #111d31;
+  --muted-foreground: #94a3b8;
+  --accent: #16233b;
+  --accent-foreground: #f8fafc;
+  --secondary: #16233b;
+  --secondary-foreground: #e2e8f0;
+  --border: rgba(255, 255, 255, 0.12);
+  --input: rgba(255, 255, 255, 0.12);
+  --ring: #818cf8;
+}
+.frontdesk-dark-surface [data-slot='dialog-overlay'] { background-color: rgba(2, 6, 23, 0.78) !important; }
+.frontdesk-dark-surface [data-slot='dialog-content'],
+.frontdesk-dark-surface [data-slot='popover-content'],
+.frontdesk-dark-surface [data-slot='dropdown-menu-content'],
+.frontdesk-dark-surface [data-slot='select-content'],
+.frontdesk-dark-surface [data-slot='command'] {
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  background-color: #0d1424 !important;
+  color: #e2e8f0 !important;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45) !important;
+}
+.frontdesk-dark-surface [data-slot='dialog-footer'] {
+  border-color: rgba(255, 255, 255, 0.10) !important;
+  background-color: #0b1628 !important;
+}
+.frontdesk-dark-surface [data-slot='dialog-title'],
+.frontdesk-dark-surface [data-slot='popover-title'] { color: #f8fafc !important; }
+.frontdesk-dark-surface [data-slot='dialog-description'],
+.frontdesk-dark-surface [data-slot='popover-description'] { color: #94a3b8 !important; }
 .frontdesk-dark-surface .bg-white,
 .frontdesk-dark-surface .bg-white\/80,
 .frontdesk-dark-surface .bg-white\/90 { background-color: #101b2f !important; }
@@ -169,16 +206,36 @@
 .frontdesk-dark-surface .bg-slate-50\/50,
 .frontdesk-dark-surface .bg-slate-50\/60,
 .frontdesk-dark-surface .bg-slate-50\/70,
+.frontdesk-dark-surface .bg-slate-50\/80,
+.frontdesk-dark-surface .bg-slate-50\/90,
 .frontdesk-dark-surface .bg-gray-50,
 .frontdesk-dark-surface .bg-gray-100,
-.frontdesk-dark-surface .bg-slate-100 { background-color: rgba(255, 255, 255, 0.045) !important; }
+.frontdesk-dark-surface .bg-gray-300,
+.frontdesk-dark-surface .bg-slate-100,
+.frontdesk-dark-surface .bg-slate-100\/50,
+.frontdesk-dark-surface .bg-slate-100\/80,
+.frontdesk-dark-surface .bg-slate-300,
+.frontdesk-dark-surface .bg-slate-400 { background-color: rgba(255, 255, 255, 0.045) !important; }
+.frontdesk-dark-surface .bg-white\/60,
+.frontdesk-dark-surface .bg-white\/70,
+.frontdesk-dark-surface .bg-white\/80,
+.frontdesk-dark-surface .bg-white\/90 { background-color: rgba(255, 255, 255, 0.055) !important; }
 .frontdesk-dark-surface .bg-slate-200,
 .frontdesk-dark-surface .bg-gray-200 { background-color: rgba(148, 163, 184, 0.16) !important; }
 .frontdesk-dark-surface .border-slate-100,
 .frontdesk-dark-surface .border-slate-200,
 .frontdesk-dark-surface .border-slate-300,
 .frontdesk-dark-surface .border-gray-100,
-.frontdesk-dark-surface .border-gray-200 { border-color: rgba(255, 255, 255, 0.10) !important; }
+.frontdesk-dark-surface .border-gray-200,
+.frontdesk-dark-surface .border-emerald-100,
+.frontdesk-dark-surface .border-emerald-200,
+.frontdesk-dark-surface .border-indigo-100,
+.frontdesk-dark-surface .border-blue-100,
+.frontdesk-dark-surface .border-blue-200,
+.frontdesk-dark-surface .border-amber-200,
+.frontdesk-dark-surface .border-red-200,
+.frontdesk-dark-surface .border-rose-200,
+.frontdesk-dark-surface .border-gray-300 { border-color: rgba(255, 255, 255, 0.10) !important; }
 .frontdesk-dark-surface .divide-slate-100 > :not([hidden]) ~ :not([hidden]),
 .frontdesk-dark-surface .divide-slate-200 > :not([hidden]) ~ :not([hidden]) { border-color: rgba(255, 255, 255, 0.08) !important; }
 .frontdesk-dark-surface .text-slate-950,
@@ -191,6 +248,7 @@
 .frontdesk-dark-surface .text-slate-500,
 .frontdesk-dark-surface .text-gray-500,
 .frontdesk-dark-surface .text-gray-400 { color: #94a3b8 !important; }
+.frontdesk-dark-surface .text-slate-400 { color: #a8b4c7 !important; }
 .frontdesk-dark-surface .text-muted-foreground,
 .frontdesk-dark-surface .text-foreground { color: #e2e8f0 !important; }
 .frontdesk-dark-surface .text-indigo-600,
@@ -201,7 +259,8 @@
 .frontdesk-dark-surface .text-amber-500 { color: #fcd34d !important; }
 .frontdesk-dark-surface .text-red-600,
 .frontdesk-dark-surface .text-red-500,
-.frontdesk-dark-surface .text-rose-600 { color: #fda4af !important; }
+.frontdesk-dark-surface .text-rose-600,
+.frontdesk-dark-surface .text-rose-500 { color: #fda4af !important; }
 .frontdesk-dark-surface .text-blue-600,
 .frontdesk-dark-surface .text-cyan-600 { color: #7dd3fc !important; }
 .frontdesk-dark-surface input,
@@ -210,6 +269,17 @@
 .frontdesk-dark-surface [role='combobox'] { background-color: #0b1628; border-color: rgba(255, 255, 255, 0.12); color: #f8fafc; }
 .frontdesk-dark-surface input::placeholder,
 .frontdesk-dark-surface textarea::placeholder { color: #64748b; }
+.frontdesk-dark-surface option,
+.frontdesk-dark-surface optgroup { background-color: #0d1424; color: #e2e8f0; }
+.frontdesk-dark-surface table { color: #cbd5e1; }
+.frontdesk-dark-surface thead { background-color: rgba(255, 255, 255, 0.055); color: #a8b4c7; }
+.frontdesk-dark-surface thead th { color: #a8b4c7; }
+.frontdesk-dark-surface tbody { border-color: rgba(255, 255, 255, 0.08); }
+.frontdesk-dark-surface tbody tr:hover { background-color: rgba(255, 255, 255, 0.055); }
+.frontdesk-dark-surface [data-slot='select-item']:hover,
+.frontdesk-dark-surface [data-slot='select-item'][data-highlighted],
+.frontdesk-dark-surface [data-slot='dropdown-menu-item']:hover,
+.frontdesk-dark-surface [data-slot='dropdown-menu-item'][data-highlighted] { background-color: #16233b !important; color: #f8fafc !important; }
 .frontdesk-dark-surface .hover\:bg-white:hover { background-color: rgba(255, 255, 255, 0.08) !important; }
 .frontdesk-dark-surface .hover\:bg-slate-50:hover,
 .frontdesk-dark-surface .hover\:bg-slate-100:hover,
@@ -238,32 +308,53 @@
 /* Keep status colors meaningful while making their surfaces dark enough for
    the control-room canvas. */
 .frontdesk-dark-surface .bg-emerald-50,
-.frontdesk-dark-surface .bg-emerald-100 { background-color: rgba(16, 185, 129, 0.14) !important; }
+.frontdesk-dark-surface .bg-emerald-100,
+.frontdesk-dark-surface .bg-emerald-200,
+.frontdesk-dark-surface .bg-emerald-50\/50,
+.frontdesk-dark-surface .bg-green-50,
+.frontdesk-dark-surface .bg-green-100 { background-color: rgba(16, 185, 129, 0.14) !important; }
 .frontdesk-dark-surface .bg-indigo-50,
 .frontdesk-dark-surface .bg-indigo-100,
 .frontdesk-dark-surface .bg-blue-50,
-.frontdesk-dark-surface .bg-blue-100 { background-color: rgba(99, 102, 241, 0.14) !important; }
+.frontdesk-dark-surface .bg-blue-100,
+.frontdesk-dark-surface .bg-blue-200,
+.frontdesk-dark-surface .bg-blue-50\/50,
+.frontdesk-dark-surface .bg-indigo-50\/70 { background-color: rgba(99, 102, 241, 0.14) !important; }
 .frontdesk-dark-surface .bg-amber-50,
-.frontdesk-dark-surface .bg-amber-100 { background-color: rgba(245, 158, 11, 0.14) !important; }
+.frontdesk-dark-surface .bg-amber-100,
+.frontdesk-dark-surface .bg-amber-200,
+.frontdesk-dark-surface .bg-amber-50\/60,
+.frontdesk-dark-surface .bg-amber-200\/50 { background-color: rgba(245, 158, 11, 0.14) !important; }
 .frontdesk-dark-surface .bg-red-50,
 .frontdesk-dark-surface .bg-red-100,
-.frontdesk-dark-surface .bg-rose-50 { background-color: rgba(244, 63, 94, 0.14) !important; }
+.frontdesk-dark-surface .bg-red-200,
+.frontdesk-dark-surface .bg-red-50\/50,
+.frontdesk-dark-surface .bg-rose-50,
+.frontdesk-dark-surface .bg-rose-50\/50,
+.frontdesk-dark-surface .bg-rose-100 { background-color: rgba(244, 63, 94, 0.14) !important; }
 .frontdesk-dark-surface .text-emerald-950,
 .frontdesk-dark-surface .text-emerald-900,
 .frontdesk-dark-surface .text-emerald-800,
-.frontdesk-dark-surface .text-emerald-700 { color: #6ee7b7 !important; }
+.frontdesk-dark-surface .text-emerald-700,
+.frontdesk-dark-surface .text-green-950,
+.frontdesk-dark-surface .text-green-900,
+.frontdesk-dark-surface .text-green-800,
+.frontdesk-dark-surface .text-green-700 { color: #6ee7b7 !important; }
 .frontdesk-dark-surface .text-indigo-950,
 .frontdesk-dark-surface .text-indigo-900,
 .frontdesk-dark-surface .text-indigo-800,
 .frontdesk-dark-surface .text-indigo-700,
 .frontdesk-dark-surface .text-blue-800,
-.frontdesk-dark-surface .text-blue-700 { color: #a5b4fc !important; }
+.frontdesk-dark-surface .text-blue-700,
+.frontdesk-dark-surface .text-blue-950,
+.frontdesk-dark-surface .text-blue-900 { color: #a5b4fc !important; }
 .frontdesk-dark-surface .text-amber-950,
 .frontdesk-dark-surface .text-amber-900,
 .frontdesk-dark-surface .text-amber-800,
 .frontdesk-dark-surface .text-amber-700 { color: #fcd34d !important; }
 .frontdesk-dark-surface .text-red-800,
 .frontdesk-dark-surface .text-red-700,
+.frontdesk-dark-surface .text-red-950,
 .frontdesk-dark-surface .text-rose-700 { color: #fda4af !important; }
 
 @custom-variant dark (&:is(.dark *));
