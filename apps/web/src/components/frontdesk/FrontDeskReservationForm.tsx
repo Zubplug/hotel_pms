@@ -1082,7 +1082,7 @@ export function FrontDeskReservationForm({ isWalkIn = false, prefillGuestId }: F
                           sublabel: rt.baseRate > 0 ? `₦${Number(rt.baseRate).toLocaleString()} / night` : 'Rate not set',
                           icon: <BedDouble className="h-4 w-4" />,
                           badge: rt.currency || 'NGN',
-                          badgeColor: 'bg-indigo-500/30 text-indigo-200',
+                          badgeColor: 'bg-indigo-100 text-indigo-700',
                         }))}
                       />
                     </FormControl>
@@ -1117,8 +1117,8 @@ export function FrontDeskReservationForm({ isWalkIn = false, prefillGuestId }: F
                             sublabel: room.floor ? `Floor ${room.floor}` : undefined,
                             badge: room.status === 'CLEAN' ? 'READY' : room.status,
                             badgeColor: room.status === 'CLEAN'
-                              ? 'bg-emerald-500/25 text-emerald-300'
-                              : 'bg-amber-500/25 text-amber-300',
+                              ? 'bg-emerald-100 text-emerald-700'
+                              : 'bg-amber-100 text-amber-700',
                             icon: <BedDouble className="h-4 w-4" />,
                           }))}
                         />
