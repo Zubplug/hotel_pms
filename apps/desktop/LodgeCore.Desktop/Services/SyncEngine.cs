@@ -3260,6 +3260,7 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
         using var document = JsonDocument.Parse(body);
         if (!document.RootElement.TryGetProperty("resolutions", out var resolutions)) return;
 
+        bool anyResolved = false;
         foreach (var resolution in resolutions.EnumerateArray())
         {
             var eventId = resolution.GetProperty("eventId").GetString();
@@ -3271,8 +3272,15 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
             evt.SyncedAt = DateTime.UtcNow;
             evt.LastError = $"Resolved on server: {resolution.GetProperty("resolution").GetString() ?? "MANAGER_REVIEW"}";
             ClearIsDirtyIfSafe(dbContext, evt);
+            anyResolved = true;
         }
+
+        // Persist the RESOLVED status to local SQLite so the event does not
+        // re-appear as CONFLICT on the next sync cycle.
+        if (anyResolved)
+            await dbContext.SaveChangesAsync(stoppingToken);
     }
+
 
     private async Task MarkFrontDeskEventsRetryableAsync(
         LocalDbContext dbContext,
