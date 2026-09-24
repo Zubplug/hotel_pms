@@ -1486,11 +1486,46 @@ export async function POST(req: NextRequest) {
             });
 
             if (!existingEntry) {
+              // The desktop can be operating on stale/recovered local data. Never
+              // trust its proposed credit amount: the server folio balance is the
+              // financial source of truth. Lock the folio so two checkout syncs
+              // cannot both route the same credit.
+              const lockedFolios = await tx.$queryRaw<any[]>`
+                SELECT id, "propertyId", "reservationId", "currency", "balance", "totalCharges", "status"
+                FROM "Folio"
+                WHERE id = ${aggregateId}::uuid AND "propertyId" = ${propertyId}::uuid
+                FOR UPDATE
+              `;
+              const lockedFolio = lockedFolios[0];
+              if (!lockedFolio) throw new Error("Folio not found");
+
               const folio = await tx.folio.findUnique({
                 where: { id: aggregateId, propertyId },
                 include: { reservation: true }
               });
               if (!folio) throw new Error("Folio not found");
+
+              const authoritativeBalance = Number(lockedFolio.balance);
+              const availableCredit = Math.max(0, -authoritativeBalance);
+              if (availableCredit <= 0.01) {
+                throw new Error(
+                  `GUEST_CREDIT_TRANSFER_REJECTED: folio has no credit (authoritative balance ${authoritativeBalance})`
+                );
+              }
+              if (Math.abs(amount - availableCredit) > 0.01) {
+                throw new Error(
+                  `GUEST_CREDIT_TRANSFER_REJECTED: requested ${amount} exceeds or differs from authoritative credit ${availableCredit}`
+                );
+              }
+              if (
+                folio.reservation?.primaryGuestId &&
+                folio.reservation.primaryGuestId !== payload.guestId
+              ) {
+                throw new Error("GUEST_CREDIT_TRANSFER_REJECTED: guest does not match reservation");
+              }
+              if (payload.currency && payload.currency !== folio.currency) {
+                throw new Error("GUEST_CREDIT_TRANSFER_REJECTED: currency does not match folio");
+              }
 
               // Lock property to ensure race-safe ledger provisioning
               const propRes = await tx.$queryRaw<any[]>`SELECT id, "organizationId" FROM "Property" WHERE id = ${propertyId}::uuid FOR UPDATE`;
@@ -4359,6 +4394,20 @@ export async function POST(req: NextRequest) {
           // A concurrent terminal consumed the credit. Return a conflict so
           // the desktop marks its optimistic local allocation CONFLICTED and
           // reverses the local payment mirror.
+          results.push({
+            id,
+            status: "CONFLICT",
+            idempotencyKey,
+            error: err.message,
+          });
+        } else if (
+          aggregateType === "FOLIO" &&
+          eventType === "GUEST_CREDIT_TRANSFER" &&
+          typeof err.message === "string" &&
+          err.message.startsWith("GUEST_CREDIT_TRANSFER_REJECTED:")
+        ) {
+          // The edge event was based on stale local folio state. Preserve it as a
+          // conflict for operator review; never manufacture a guest credit.
           results.push({
             id,
             status: "CONFLICT",
