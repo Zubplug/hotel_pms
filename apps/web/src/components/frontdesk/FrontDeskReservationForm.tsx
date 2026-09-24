@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -12,14 +12,14 @@ import { formatRoomNumber } from '@/lib/format-room';
 
 import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+// shadcn Select removed — using PremiumDropdown instead
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { DatePicker } from '@/components/ui/date-picker';
 import {
   Loader2, Plus, ArrowRight, UserPlus, Calendar, Search, X,
   CheckCircle2, Phone, Mail, Tag, Wallet, Users, BedDouble,
-  Building2, ChevronDown, Sparkles, Info, AlertCircle
+  Building2, ChevronDown, Sparkles, Info, AlertCircle, Check
 } from 'lucide-react';
 import { useProperty } from '@/components/PropertyProvider';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
@@ -128,6 +128,157 @@ function SectionHeader({ step, title, hint, icon }: { step: number; title: strin
         </div>
         {hint && <p className="mt-0.5 text-xs text-slate-400">{hint}</p>}
       </div>
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   PremiumDropdown — reusable custom select with rich open panel
+───────────────────────────────────────────────────────────────────────────── */
+type PDOption = {
+  value: string;
+  label: string;
+  sublabel?: string;
+  badge?: string;
+  badgeColor?: string; // tailwind classes
+  icon?: React.ReactNode;
+  disabled?: boolean;
+};
+
+function PremiumDropdown({
+  value,
+  onChange,
+  options,
+  placeholder = 'Select…',
+  disabled = false,
+  dark = false,
+  emptyMessage = 'No options available',
+  loading = false,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  options: PDOption[];
+  placeholder?: string;
+  disabled?: boolean;
+  dark?: boolean;
+  emptyMessage?: string;
+  loading?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const selected = options.find(o => o.value === value);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const triggerBase = dark
+    ? 'border-slate-700 bg-slate-800/70 text-white hover:bg-slate-800'
+    : 'border-slate-200 bg-slate-50 text-slate-900 hover:border-slate-300 hover:bg-white';
+  const triggerOpen = dark
+    ? 'border-indigo-400 bg-slate-800 ring-2 ring-indigo-400/20'
+    : 'border-indigo-400 bg-white ring-4 ring-indigo-100 shadow-md';
+  const placeholderColor = dark ? 'text-slate-500' : 'text-slate-400';
+
+  return (
+    <div ref={ref} className="relative">
+      {/* Trigger button */}
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => !disabled && setOpen(p => !p)}
+        className={[
+          'flex h-12 w-full items-center justify-between gap-3 rounded-xl border px-4 text-left text-sm font-medium transition-all duration-200',
+          open ? triggerOpen : triggerBase,
+          disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer',
+        ].join(' ')}
+      >
+        {loading ? (
+          <span className={`flex items-center gap-2 ${dark ? 'text-slate-400' : 'text-slate-400'}`}>
+            <Loader2 className="h-4 w-4 animate-spin" /> Loading…
+          </span>
+        ) : selected ? (
+          <span className="flex min-w-0 items-center gap-2.5">
+            {selected.icon && (
+              <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${
+                dark ? 'bg-white/10 text-indigo-300' : 'bg-indigo-50 text-indigo-600'
+              }`}>{selected.icon}</span>
+            )}
+            <span className="min-w-0">
+              <span className={`block truncate font-semibold ${dark ? 'text-white' : 'text-slate-900'}`}>{selected.label}</span>
+              {selected.sublabel && (
+                <span className={`block truncate text-xs ${dark ? 'text-slate-400' : 'text-slate-500'}`}>{selected.sublabel}</span>
+              )}
+            </span>
+            {selected.badge && (
+              <span className={`ml-1 shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+                selected.badgeColor ?? 'bg-indigo-100 text-indigo-700'
+              }`}>{selected.badge}</span>
+            )}
+          </span>
+        ) : (
+          <span className={`text-sm font-normal ${placeholderColor}`}>{placeholder}</span>
+        )}
+        <ChevronDown className={`h-4 w-4 shrink-0 transition-transform duration-200 ${
+          dark ? 'text-slate-500' : 'text-slate-400'
+        } ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {/* Panel */}
+      {open && (
+        <div
+          className="absolute left-0 right-0 top-[calc(100%+6px)] z-[60] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_20px_60px_rgba(15,23,42,0.16)] ring-1 ring-black/5"
+          style={{ animation: 'pdDropIn 0.16s cubic-bezier(0.16,1,0.3,1) both' }}
+        >
+          <style>{`@keyframes pdDropIn{from{opacity:0;transform:translateY(-8px) scale(.97)}to{opacity:1;transform:translateY(0) scale(1)}}`}</style>
+
+          <div className="max-h-64 overflow-y-auto p-1.5">
+            {options.length === 0 ? (
+              <p className="px-4 py-8 text-center text-sm text-slate-400">{emptyMessage}</p>
+            ) : options.map(opt => {
+              const isSel = opt.value === value;
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  disabled={opt.disabled}
+                  onClick={() => { if (!opt.disabled) { onChange(opt.value); setOpen(false); } }}
+                  className={[
+                    'group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-all duration-100',
+                    isSel ? 'bg-indigo-50' : 'hover:bg-slate-50',
+                    opt.disabled ? 'cursor-not-allowed opacity-40' : 'cursor-pointer',
+                  ].join(' ')}
+                >
+                  {opt.icon && (
+                    <span className={[
+                      'flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-colors',
+                      isSel ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500 group-hover:bg-indigo-100 group-hover:text-indigo-600',
+                    ].join(' ')}>{opt.icon}</span>
+                  )}
+                  <span className="min-w-0 flex-1">
+                    <span className={`block truncate text-sm font-semibold ${isSel ? 'text-indigo-900' : 'text-slate-800'}`}>
+                      {opt.label}
+                    </span>
+                    {opt.sublabel && (
+                      <span className="block truncate text-xs text-slate-500">{opt.sublabel}</span>
+                    )}
+                  </span>
+                  {opt.badge && (
+                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+                      opt.badgeColor ?? 'bg-slate-100 text-slate-600'
+                    }`}>{opt.badge}</span>
+                  )}
+                  {isSel && <Check className="h-4 w-4 shrink-0 text-indigo-600" />}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -618,23 +769,25 @@ export function FrontDeskReservationForm({ isWalkIn = false, prefillGuestId }: F
               <div className="p-6">
                 <FormField control={form.control} name="corporateAccountId" render={({ field }) => (
                   <FormItem>
-                    <Select onValueChange={field.onChange} value={field.value || 'none'} disabled={loadingCorporateAccounts}>
-                      <FormControl>
-                        <SelectTrigger className="h-12 rounded-xl border-slate-200 bg-slate-50 text-sm focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100">
-                          <SelectValue placeholder="No corporate account">
-                            {field.value && field.value !== 'none'
-                              ? corporateAccounts?.find((ca: any) => ca.id === field.value)?.name || 'Unknown Account'
-                              : 'No corporate account — standard rate'}
-                          </SelectValue>
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="none">No corporate account — standard rate</SelectItem>
-                        {corporateAccounts?.map((ca: any) => (
-                          <SelectItem key={ca.id} value={ca.id}>{ca.name} ({ca.code})</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <FormControl>
+                      <PremiumDropdown
+                        value={field.value || 'none'}
+                        onChange={field.onChange}
+                        loading={loadingCorporateAccounts}
+                        placeholder="No corporate account — standard rate"
+                        options={[
+                          { value: 'none', label: 'No corporate account', sublabel: 'Standard room rate applies', icon: <Building2 className="h-4 w-4" /> },
+                          ...corporateAccounts.map((ca: any) => ({
+                            value: ca.id,
+                            label: ca.name,
+                            sublabel: `Code: ${ca.code}`,
+                            badge: 'Corp',
+                            badgeColor: 'bg-blue-100 text-blue-700',
+                            icon: <Building2 className="h-4 w-4" />,
+                          })),
+                        ]}
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )} />
@@ -648,20 +801,19 @@ export function FrontDeskReservationForm({ isWalkIn = false, prefillGuestId }: F
                 <FormField control={form.control} name="adjustmentType" render={({ field }) => (
                   <FormItem>
                     <FormLabel className="text-xs font-bold uppercase tracking-wider text-slate-500">Type</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger className="h-12 rounded-xl border-slate-200 bg-slate-50 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100">
-                          <SelectValue placeholder="No adjustment" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="NONE">None — standard pricing</SelectItem>
-                        <SelectItem value="DISCOUNT_PERCENTAGE">Discount — Percentage (%)</SelectItem>
-                        <SelectItem value="DISCOUNT_FIXED">Discount — Fixed Amount</SelectItem>
-                        <SelectItem value="COMP_FULL">Fully Complimentary</SelectItem>
-                        <SelectItem value="COMP_PARTIAL">Partially Complimentary</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <FormControl>
+                      <PremiumDropdown
+                        value={field.value}
+                        onChange={field.onChange}
+                        options={[
+                          { value: 'NONE', label: 'None', sublabel: 'Standard pricing applies', icon: <Tag className="h-4 w-4" />, badge: 'Default', badgeColor: 'bg-slate-100 text-slate-500' },
+                          { value: 'DISCOUNT_PERCENTAGE', label: 'Discount — Percentage', sublabel: 'Reduce rate by a % per night', icon: <Tag className="h-4 w-4" />, badge: '%', badgeColor: 'bg-amber-100 text-amber-700' },
+                          { value: 'DISCOUNT_FIXED', label: 'Discount — Fixed Amount', sublabel: 'Reduce rate by a fixed ₦ amount', icon: <Tag className="h-4 w-4" />, badge: '₦', badgeColor: 'bg-amber-100 text-amber-700' },
+                          { value: 'COMP_FULL', label: 'Fully Complimentary', sublabel: 'Entire stay at zero charge', icon: <Sparkles className="h-4 w-4" />, badge: 'COMP', badgeColor: 'bg-purple-100 text-purple-700' },
+                          { value: 'COMP_PARTIAL', label: 'Partially Complimentary', sublabel: 'Fixed amount waived per night', icon: <Sparkles className="h-4 w-4" />, badge: 'COMP', badgeColor: 'bg-purple-100 text-purple-700' },
+                        ]}
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )} />
@@ -707,17 +859,16 @@ export function FrontDeskReservationForm({ isWalkIn = false, prefillGuestId }: F
                         <FormField control={form.control} name="compBeneficiaryType" render={({ field }) => (
                           <FormItem>
                             <FormLabel className="text-xs font-bold uppercase tracking-wider text-slate-500">Beneficiary Type</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value}>
-                              <FormControl>
-                                <SelectTrigger className="h-12 rounded-xl border-slate-200 bg-white">
-                                  <SelectValue placeholder="Select type…" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                <SelectItem value="GUEST">External Guest</SelectItem>
-                                <SelectItem value="STAFF">Staff Member</SelectItem>
-                              </SelectContent>
-                            </Select>
+                            <FormControl>
+                              <PremiumDropdown
+                                value={field.value ?? ''}
+                                onChange={field.onChange}
+                                options={[
+                                  { value: 'GUEST', label: 'External Guest', sublabel: 'Outside-hotel guest receiving complimentary stay', icon: <UserPlus className="h-4 w-4" />, badge: 'Guest', badgeColor: 'bg-emerald-100 text-emerald-700' },
+                                  { value: 'STAFF', label: 'Staff Member', sublabel: 'Hotel employee — requires staff ID and settlement', icon: <Users className="h-4 w-4" />, badge: 'Staff', badgeColor: 'bg-blue-100 text-blue-700' },
+                                ]}
+                              />
+                            </FormControl>
                             <FormMessage />
                           </FormItem>
                         )} />
@@ -727,31 +878,39 @@ export function FrontDeskReservationForm({ isWalkIn = false, prefillGuestId }: F
                             <FormField control={form.control} name="compBeneficiaryStaffId" render={({ field }) => (
                               <FormItem>
                                 <FormLabel className="text-xs font-bold uppercase tracking-wider text-slate-500">Beneficiary Staff Member</FormLabel>
-                                <Select onValueChange={field.onChange} value={field.value}>
-                                  <FormControl>
-                                    <SelectTrigger className="h-12 rounded-xl border-slate-200 bg-white"><SelectValue placeholder="Select staff…" /></SelectTrigger>
-                                  </FormControl>
-                                  <SelectContent className="max-h-60">
-                                    {managers.map((m: any) => (
-                                      <SelectItem key={m.id} value={m.id}>{m.firstName} {m.lastName} <span className="ml-1 text-xs text-slate-400">({m.role || m.position})</span></SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
+                                <FormControl>
+                                  <PremiumDropdown
+                                    value={field.value ?? ''}
+                                    onChange={field.onChange}
+                                    placeholder="Select staff member…"
+                                    emptyMessage="No active staff found"
+                                    options={managers.map((m: any) => ({
+                                      value: m.id,
+                                      label: `${m.firstName} ${m.lastName}`,
+                                      sublabel: m.role || m.position || 'Staff',
+                                      badge: (m.role || m.position || '').toUpperCase().slice(0, 8),
+                                      badgeColor: 'bg-slate-100 text-slate-600',
+                                      icon: <span className="flex h-full w-full items-center justify-center text-xs font-bold">{m.firstName?.[0]}{m.lastName?.[0]}</span>,
+                                    }))}
+                                  />
+                                </FormControl>
                                 <FormMessage />
                               </FormItem>
                             )} />
                             <FormField control={form.control} name="compSettlementType" render={({ field }) => (
                               <FormItem>
                                 <FormLabel className="text-xs font-bold uppercase tracking-wider text-slate-500">Settlement</FormLabel>
-                                <Select onValueChange={field.onChange} value={field.value}>
-                                  <FormControl>
-                                    <SelectTrigger className="h-12 rounded-xl border-slate-200 bg-white"><SelectValue placeholder="Select settlement…" /></SelectTrigger>
-                                  </FormControl>
-                                  <SelectContent>
-                                    <SelectItem value="PAY_NOW">Pay Now (if partial)</SelectItem>
-                                    <SelectItem value="STAFF_PAY_LATER">Staff Receivables — Pay Later</SelectItem>
-                                  </SelectContent>
-                                </Select>
+                                <FormControl>
+                                  <PremiumDropdown
+                                    value={field.value ?? ''}
+                                    onChange={field.onChange}
+                                    placeholder="Select settlement…"
+                                    options={[
+                                      { value: 'PAY_NOW', label: 'Pay Now', sublabel: 'Collect outstanding balance immediately', icon: <Wallet className="h-4 w-4" />, badge: 'Immediate', badgeColor: 'bg-emerald-100 text-emerald-700' },
+                                      { value: 'STAFF_PAY_LATER', label: 'Staff Receivables', sublabel: 'Logged as staff debt — settled via payroll', icon: <Users className="h-4 w-4" />, badge: 'Deferred', badgeColor: 'bg-amber-100 text-amber-700' },
+                                    ]}
+                                  />
+                                </FormControl>
                                 <FormMessage />
                               </FormItem>
                             )} />
@@ -773,17 +932,22 @@ export function FrontDeskReservationForm({ isWalkIn = false, prefillGuestId }: F
                     <FormField control={form.control} name="acknowledgedByStaffId" render={({ field }) => (
                       <FormItem>
                         <FormLabel className="text-xs font-bold uppercase tracking-wider text-slate-500">Acknowledged By</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
-                          <FormControl>
-                            <SelectTrigger className="h-12 rounded-xl border-slate-200 bg-white"><SelectValue placeholder="Select acknowledging staff…" /></SelectTrigger>
-                          </FormControl>
-                          <SelectContent className="max-h-60">
-                            {managers.length === 0 && <SelectItem value="none" disabled>No staff found</SelectItem>}
-                            {managers.map((m: any) => (
-                              <SelectItem key={m.id} value={m.id}>{m.firstName} {m.lastName} <span className="ml-1 text-xs text-slate-400">({m.role || m.position})</span></SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <FormControl>
+                          <PremiumDropdown
+                            value={field.value ?? ''}
+                            onChange={field.onChange}
+                            placeholder="Select acknowledging staff…"
+                            emptyMessage="No active staff found"
+                            options={managers.map((m: any) => ({
+                              value: m.id,
+                              label: `${m.firstName} ${m.lastName}`,
+                              sublabel: m.role || m.position || 'Staff',
+                              badge: (m.role || m.position || '').toUpperCase().slice(0, 8),
+                              badgeColor: 'bg-indigo-100 text-indigo-700',
+                              icon: <span className="flex h-full w-full items-center justify-center text-xs font-bold text-indigo-700">{m.firstName?.[0]}{m.lastName?.[0]}</span>,
+                            }))}
+                          />
+                        </FormControl>
                         <FormMessage />
                       </FormItem>
                     )} />
@@ -864,63 +1028,65 @@ export function FrontDeskReservationForm({ isWalkIn = false, prefillGuestId }: F
                 <FormField control={form.control} name="roomTypeId" render={({ field }) => (
                   <FormItem>
                     <FormLabel className="text-[10px] font-bold uppercase tracking-[.16em] text-slate-500">Room Type</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger disabled={loadingRoomTypes} className="h-12 rounded-xl border-slate-700 bg-slate-800/70 text-white">
-                          <SelectValue placeholder="Select room type…">
-                            {roomTypes?.find((rt: any) => rt.id === field.value)?.name || 'Select room type…'}
-                          </SelectValue>
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent className="bg-slate-800 border-slate-700 text-white">
-                        {roomTypes?.map((rt: any) => (
-                          <SelectItem key={rt.id} value={rt.id} className="focus:bg-slate-700 focus:text-white">
-                            <div>
-                              <span className="font-semibold">{rt.name}</span>
-                              {rt.baseRate > 0 && <span className="ml-2 text-xs text-slate-400">₦{Number(rt.baseRate).toLocaleString()}/night</span>}
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <FormControl>
+                      <PremiumDropdown
+                        value={field.value}
+                        onChange={field.onChange}
+                        dark
+                        loading={loadingRoomTypes}
+                        placeholder="Select room type…"
+                        emptyMessage="No room types configured"
+                        options={roomTypes.map((rt: any) => ({
+                          value: rt.id,
+                          label: rt.name,
+                          sublabel: rt.baseRate > 0 ? `₦${Number(rt.baseRate).toLocaleString()} / night` : 'Rate not set',
+                          icon: <BedDouble className="h-4 w-4" />,
+                          badge: rt.currency || 'NGN',
+                          badgeColor: 'bg-indigo-500/30 text-indigo-200',
+                        }))}
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )} />
 
                 {/* Room number */}
-                <FormField control={form.control} name="roomId" render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-[10px] font-bold uppercase tracking-[.16em] text-slate-500">Assign Room</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value} disabled={!roomTypeId || !checkIn || !checkOut || loadingAvailableRooms}>
+                <FormField control={form.control} name="roomId" render={({ field }) => {
+                  const isDisabled = !roomTypeId || !checkIn || !checkOut || loadingAvailableRooms;
+                  const noRooms = !isDisabled && availableRooms.length === 0;
+                  const placeholder = !checkIn || !checkOut || !roomTypeId
+                    ? 'Complete dates & room type first'
+                    : loadingAvailableRooms ? 'Searching availability…'
+                    : noRooms ? 'No rooms available for these dates'
+                    : 'Select an available room';
+                  return (
+                    <FormItem>
+                      <FormLabel className="text-[10px] font-bold uppercase tracking-[.16em] text-slate-500">Assign Room</FormLabel>
                       <FormControl>
-                        <SelectTrigger className="h-12 rounded-xl border-slate-700 bg-slate-800/70 text-white">
-                          <SelectValue placeholder={
-                            (!checkIn || !checkOut || !roomTypeId) ? 'Complete dates & room type first'
-                              : loadingAvailableRooms ? 'Searching availability…'
-                                : availableRooms.length === 0 ? 'No rooms available'
-                                  : 'Select a ready room'
-                          }>
-                            {availableRooms?.find((r: any) => r.id === field.value)?.number
-                              ? `Room ${formatRoomNumber(availableRooms.find((r: any) => r.id === field.value).number)}`
-                              : field.value ? 'Selected room' : undefined}
-                          </SelectValue>
-                        </SelectTrigger>
+                        <PremiumDropdown
+                          value={field.value}
+                          onChange={field.onChange}
+                          dark
+                          disabled={isDisabled || noRooms}
+                          loading={loadingAvailableRooms}
+                          placeholder={placeholder}
+                          emptyMessage="No available rooms for selected dates"
+                          options={availableRooms.map((room: any) => ({
+                            value: room.id,
+                            label: `Room ${formatRoomNumber(room.number)}`,
+                            sublabel: room.floor ? `Floor ${room.floor}` : undefined,
+                            badge: room.status === 'CLEAN' ? 'READY' : room.status,
+                            badgeColor: room.status === 'CLEAN'
+                              ? 'bg-emerald-500/25 text-emerald-300'
+                              : 'bg-amber-500/25 text-amber-300',
+                            icon: <BedDouble className="h-4 w-4" />,
+                          }))}
+                        />
                       </FormControl>
-                      <SelectContent className="bg-slate-800 border-slate-700 text-white max-h-60">
-                        {availableRooms?.length === 0 && <SelectItem value="none" disabled className="text-red-400">No rooms available for these dates</SelectItem>}
-                        {availableRooms?.map((room: any) => (
-                          <SelectItem key={room.id} value={room.id} className="focus:bg-slate-700 focus:text-white">
-                            <div className="flex items-center justify-between gap-4 w-full">
-                              <span>Room {formatRoomNumber(room.number)}</span>
-                              {room.status === 'CLEAN' && <span className="text-[10px] font-bold text-emerald-400">READY</span>}
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )} />
+                      <FormMessage />
+                    </FormItem>
+                  );
+                }} />
 
               </div>
             </div>
