@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useProperty } from '@/components/PropertyProvider';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { Button } from '@/components/ui/button';
@@ -8,7 +8,7 @@ import { AmountInput } from '@/components/ui/amount-input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { AlertTriangle, ArrowRightLeft, Banknote, CheckCircle2, ChevronDown, FileText, Loader2, LockKeyhole, PlayCircle, Printer, ShieldCheck, WalletCards } from 'lucide-react';
+import { AlertTriangle, ArrowRightLeft, Banknote, Check, CheckCircle2, ChevronDown, FileText, Loader2, LockKeyhole, PlayCircle, Printer, ShieldCheck, WalletCards } from 'lucide-react';
 import { useLogout } from '@/hooks/useLogout';
 
 type FrontdeskSession = { id: string; shiftReference: string; status: string; controlStatus?: string; openingFloat: number; systemExpectedCash: number; cashAccount?: { id: string; name: string } };
@@ -264,7 +264,7 @@ export default function FrontdeskCashierPage() {
     </div>
     {message && <div className="rounded-2xl border border-indigo-200 bg-white px-5 py-4 text-sm font-medium text-indigo-800 shadow-sm">{message}</div>}
 
-    {!current ? <Card className="overflow-hidden rounded-[30px] border-0 bg-white shadow-[0_24px_70px_rgba(15,23,42,.10)]"><div className="grid lg:grid-cols-[.85fr_1.15fr]"><div className="relative overflow-hidden bg-[#0b1730] px-6 py-8 text-white sm:px-8 sm:py-10"><div className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-indigo-500/20 blur-3xl" /><div className="relative"><span className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl border border-indigo-300/20 bg-indigo-400/15 text-indigo-200"><PlayCircle className="h-6 w-6" /></span><p className="text-[10px] font-bold uppercase tracking-[.22em] text-indigo-300">New shift setup</p><h2 className="mt-3 text-3xl font-semibold tracking-tight">Ready for today&apos;s collections?</h2><p className="mt-3 max-w-sm text-sm leading-6 text-slate-300">Choose the Front Desk till assigned to you. Opening floats are disabled for this workflow and always start at ₦0.00.</p><div className="mt-8 space-y-3 text-xs text-slate-400"><div className="flex items-center gap-2"><span className="flex h-6 w-6 items-center justify-center rounded-lg bg-emerald-400/15 text-emerald-300">✓</span>Offline transactions remain queued safely</div><div className="flex items-center gap-2"><span className="flex h-6 w-6 items-center justify-center rounded-lg bg-emerald-400/15 text-emerald-300">✓</span>Every payment is tied to this till</div></div></div></div><div className="flex flex-col justify-center px-6 py-8 sm:px-10 sm:py-10"><div className="mb-7"><p className="text-[10px] font-bold uppercase tracking-[.2em] text-indigo-600">Till assignment</p><h3 className="mt-2 text-xl font-semibold tracking-tight text-slate-900">Select your cashier till</h3><p className="mt-1 text-sm text-slate-500">Only an available till can be opened for this shift.</p></div><label className="text-xs font-bold uppercase tracking-wider text-slate-500">Cashier till</label><div className="relative mt-2"><select value={accountId} onChange={event => setAccountId(event.target.value)} className="h-14 w-full appearance-none rounded-2xl border border-slate-200 bg-slate-50 px-4 pr-12 text-sm font-semibold text-slate-800 shadow-inner outline-none transition focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-500/10"><option value="">Choose an available till…</option>{accounts.map(account => <option key={account.id} value={account.id}>{account.name} · {account.type}</option>)}</select><ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" /></div>{accountId && <div className="mt-3 flex items-center gap-3 rounded-2xl border border-indigo-100 bg-indigo-50/70 px-4 py-3"><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-600 text-white"><Banknote className="h-4 w-4" /></span><div><p className="text-xs font-bold text-indigo-950">{accounts.find(account => account.id === accountId)?.name || 'Selected till'}</p><p className="mt-0.5 text-[11px] text-indigo-700/70">Opening float: ₦0.00 · Ready to open</p></div></div>}<Button className="mt-7 h-14 w-full rounded-2xl bg-indigo-600 text-base font-semibold shadow-xl shadow-indigo-600/20 hover:bg-indigo-500" disabled={busy || !accountId} onClick={openSession}><PlayCircle className="mr-2 h-5 w-5" />Open Front Desk shift</Button></div></div></Card> : <>
+    {!current ? <Card className="overflow-hidden rounded-[30px] border-0 bg-white shadow-[0_24px_70px_rgba(15,23,42,.10)]"><div className="grid lg:grid-cols-[.85fr_1.15fr]"><div className="relative overflow-hidden bg-[#0b1730] px-6 py-8 text-white sm:px-8 sm:py-10"><div className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-indigo-500/20 blur-3xl" /><div className="relative"><span className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl border border-indigo-300/20 bg-indigo-400/15 text-indigo-200"><PlayCircle className="h-6 w-6" /></span><p className="text-[10px] font-bold uppercase tracking-[.22em] text-indigo-300">New shift setup</p><h2 className="mt-3 text-3xl font-semibold tracking-tight">Ready for today&apos;s collections?</h2><p className="mt-3 max-w-sm text-sm leading-6 text-slate-300">Choose the Front Desk till assigned to you. Opening floats are disabled for this workflow and always start at ₦0.00.</p><div className="mt-8 space-y-3 text-xs text-slate-400"><div className="flex items-center gap-2"><span className="flex h-6 w-6 items-center justify-center rounded-lg bg-emerald-400/15 text-emerald-300">✓</span>Offline transactions remain queued safely</div><div className="flex items-center gap-2"><span className="flex h-6 w-6 items-center justify-center rounded-lg bg-emerald-400/15 text-emerald-300">✓</span>Every payment is tied to this till</div></div></div></div><div className="flex flex-col justify-center px-6 py-8 sm:px-10 sm:py-10"><div className="mb-7"><p className="text-[10px] font-bold uppercase tracking-[.2em] text-indigo-600">Till assignment</p><h3 className="mt-2 text-xl font-semibold tracking-tight text-slate-900">Select your cashier till</h3><p className="mt-1 text-sm text-slate-500">Only an available till can be opened for this shift.</p></div><label className="text-xs font-bold uppercase tracking-wider text-slate-500">Cashier till</label><div className="mt-2"><TillDropdown accounts={accounts} value={accountId} onChange={setAccountId} /></div>{accountId && <div className="mt-3 flex items-center gap-3 rounded-2xl border border-indigo-100 bg-indigo-50/70 px-4 py-3"><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-600 text-white"><Banknote className="h-4 w-4" /></span><div><p className="text-xs font-bold text-indigo-950">{accounts.find(account => account.id === accountId)?.name || 'Selected till'}</p><p className="mt-0.5 text-[11px] text-indigo-700/70">Opening float: ₦0.00 · Ready to open</p></div></div>}<Button className="mt-7 h-14 w-full rounded-2xl bg-indigo-600 text-base font-semibold shadow-xl shadow-indigo-600/20 hover:bg-indigo-500" disabled={busy || !accountId} onClick={openSession}><PlayCircle className="mr-2 h-5 w-5" />Open Front Desk shift</Button></div></div></Card> : <>
       <Card className="overflow-hidden rounded-[28px] border-0 bg-[#0b1730] text-white shadow-[0_18px_50px_rgba(15,23,42,.18)]"><CardContent className="relative flex flex-col justify-between gap-6 p-6 sm:p-8 md:flex-row md:items-center"><div className="pointer-events-none absolute right-0 top-0 h-full w-1/3 bg-gradient-to-l from-indigo-500/10 to-transparent" /><div className="relative"><div className="mb-3 flex flex-wrap items-center gap-2 text-emerald-300"><ShieldCheck className="h-5 w-5" /><span className="text-[10px] font-bold uppercase tracking-[.2em]">Shift control status</span><Badge className="border border-emerald-300/20 bg-emerald-400/15 text-emerald-200">{effectiveControlStatus.replaceAll('_', ' ')}</Badge></div><h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">{summary?.session.shiftReference || current.shiftReference}</h2><p className="mt-2 text-sm text-slate-300">{summary?.session.staffName || 'Assigned receptionist'} <span className="text-slate-600">·</span> {summary?.session.till || current.cashAccount?.name || 'Assigned till'}</p></div><div className="relative flex flex-wrap items-center justify-end gap-3 rounded-2xl border border-white/10 bg-white/[.04] px-5 py-4"><div className="md:text-right"><p className="text-[10px] font-bold uppercase tracking-[.18em] text-slate-500">Opened</p><p className="mt-1 font-medium text-slate-100">{dateTime(summary?.session.openedAt)}</p></div><Button onClick={() => setShowShiftReport(true)} disabled={!summary} className="border border-indigo-300/20 bg-indigo-500/15 text-indigo-100 shadow-none hover:bg-indigo-500/25"><Printer className="mr-2 h-4 w-4" />Shift Report</Button></div></CardContent></Card>
 
       {summary && <>
@@ -303,6 +303,119 @@ export default function FrontdeskCashierPage() {
     <Dialog open={showHandoverSuccess} onOpenChange={setShowHandoverSuccess}><DialogContent><DialogHeader><DialogTitle className="flex items-center gap-2"><CheckCircle2 className="h-5 w-5 text-emerald-600" />Handover initiated</DialogTitle><DialogDescription>Your approved shift is now waiting for the General Cashier to receive the physical cash.</DialogDescription></DialogHeader><div className="rounded-lg border bg-emerald-50 p-4 text-sm text-emerald-900"><div className="flex justify-between"><span>Shift reference</span><span className="font-semibold">{current?.shiftReference}</span></div><div className="mt-1 flex justify-between"><span>Next status</span><span className="font-semibold">HANDOVER PENDING</span></div></div><DialogFooter><Button onClick={() => logout()}>Log out and start next shift</Button></DialogFooter></DialogContent></Dialog>
     </div>
   </div>;
+}
+
+function TillDropdown({ accounts, value, onChange }: { accounts: CashAccount[]; value: string; onChange: (id: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const selected = accounts.find(a => a.id === value);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const typeLabel = (type: string) => {
+    const map: Record<string, string> = { CASH: 'Cash till', BANK: 'Bank account', SAFE: 'Safe', OTHER: 'Other' };
+    return map[type?.toUpperCase()] ?? type;
+  };
+
+  const typeColor = (type: string) => {
+    const map: Record<string, string> = {
+      CASH: 'bg-emerald-100 text-emerald-700',
+      BANK: 'bg-blue-100 text-blue-700',
+      SAFE: 'bg-amber-100 text-amber-700',
+    };
+    return map[type?.toUpperCase()] ?? 'bg-slate-100 text-slate-600';
+  };
+
+  return (
+    <div ref={ref} className="relative">
+      {/* Trigger */}
+      <button
+        type="button"
+        onClick={() => setOpen(prev => !prev)}
+        className={[
+          'flex h-14 w-full items-center justify-between gap-3 rounded-2xl border px-4 text-left text-sm font-semibold transition-all duration-200',
+          open
+            ? 'border-indigo-500 bg-white ring-4 ring-indigo-500/10 shadow-md'
+            : 'border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-white shadow-inner',
+        ].join(' ')}
+      >
+        {selected ? (
+          <span className="flex min-w-0 items-center gap-3">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-white">
+              <Banknote className="h-4 w-4" />
+            </span>
+            <span className="min-w-0">
+              <span className="block truncate text-slate-900">{selected.name}</span>
+              <span className={`mt-0.5 inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${typeColor(selected.type)}`}>
+                {typeLabel(selected.type)}
+              </span>
+            </span>
+          </span>
+        ) : (
+          <span className="text-slate-400 font-normal">Choose an available till…</span>
+        )}
+        <ChevronDown
+          className={`h-5 w-5 shrink-0 text-slate-400 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
+        />
+      </button>
+
+      {/* Dropdown panel */}
+      {open && (
+        <div
+          className="absolute left-0 right-0 top-[calc(100%+8px)] z-50 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_20px_60px_rgba(15,23,42,0.14)] ring-1 ring-black/5"
+          style={{ animation: 'tillDropIn 0.18s cubic-bezier(0.16,1,0.3,1)' }}
+        >
+          <style>{`@keyframes tillDropIn { from { opacity:0; transform:translateY(-6px) scale(.98); } to { opacity:1; transform:translateY(0) scale(1); } }`}</style>
+          <div className="max-h-72 overflow-y-auto p-2">
+            {accounts.length === 0 && (
+              <p className="px-4 py-8 text-center text-sm text-slate-400">No tills available.</p>
+            )}
+            {accounts.map(account => {
+              const isSelected = account.id === value;
+              return (
+                <button
+                  key={account.id}
+                  type="button"
+                  onClick={() => { onChange(account.id); setOpen(false); }}
+                  className={[
+                    'group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-all duration-150',
+                    isSelected
+                      ? 'bg-indigo-50 text-indigo-900'
+                      : 'hover:bg-slate-50 text-slate-800',
+                  ].join(' ')}
+                >
+                  <span
+                    className={[
+                      'flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-colors',
+                      isSelected ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500 group-hover:bg-indigo-100 group-hover:text-indigo-600',
+                    ].join(' ')}
+                  >
+                    <Banknote className="h-4 w-4" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold">{account.name}</span>
+                    <span className={`mt-0.5 inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${typeColor(account.type)}`}>
+                      {typeLabel(account.type)}
+                    </span>
+                  </span>
+                  {isSelected && <Check className="h-4 w-4 shrink-0 text-indigo-600" />}
+                </button>
+              );
+            })}
+          </div>
+          <div className="border-t border-slate-100 bg-slate-50/60 px-4 py-2.5">
+            <p className="text-[11px] text-slate-400">Opening float is always ₦0.00 for Front Desk shifts</p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function Metric({ title, value, detail, icon, valueClass = '' }: { title: string; value: string; detail: string; icon: ReactNode; valueClass?: string }) {
