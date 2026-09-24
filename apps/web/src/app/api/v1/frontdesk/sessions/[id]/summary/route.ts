@@ -26,6 +26,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
                   select: {
                     id: true,
                     confirmationNumber: true,
+                    primaryGuest: { select: { firstName: true, lastName: true } },
                     reservationRooms: { include: { room: { select: { number: true, displayName: true } } } },
                   },
                 },
