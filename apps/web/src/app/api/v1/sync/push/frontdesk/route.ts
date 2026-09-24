@@ -1538,7 +1538,7 @@ export async function POST(req: NextRequest) {
               await tx.folioItem.create({
                 data: {
                   folioId: aggregateId,
-                  businessDate: payload.businessDate || authoritativeBusinessDate,
+                  businessDate: parseLocalDateString(payload.businessDate) || authoritativeBusinessDate,
                   type: "CHARGE",
                   source: "CITY_LEDGER",
                   description: "City Ledger credit at offline checkout",
