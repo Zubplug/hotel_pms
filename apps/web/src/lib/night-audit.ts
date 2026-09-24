@@ -355,8 +355,21 @@ export async function executeNightAudit(
                     source: 'ROOM_CHARGE',
                     businessDate,
                     nightAuditRunId: auditRun.id,
-                  },
+                },
             });
+
+            // A previous recovery may have created the room charge before the
+            // credit-allocation step completed. Reconciliation must therefore
+            // also run for an existing charge, while remaining bounded to the
+            // net amount of this room charge.
+            let roomChargeAmountForCredit = 0;
+            if (existingCharge) {
+              const concession = await tx.folioItem.aggregate({
+                where: { operationId: `${roomChargeKey}:CONCESSION`, voidedAt: null },
+                _sum: { amount: true },
+              });
+              roomChargeAmountForCredit = Math.max(0, Number(existingCharge.amount) + Number(concession._sum.amount || 0));
+            }
 
             if (!existingCharge) {
               let originalRate = activeRoom
@@ -467,6 +480,7 @@ export async function executeNightAudit(
               }
               
               const effectiveRate = Math.max(0, originalRate - discountDeduction);
+              roomChargeAmountForCredit = effectiveRate;
               const auditDateLabel = businessDate.toISOString().split('T')[0];
 
               // Keep gross room revenue and the guest concession as separate
@@ -539,40 +553,44 @@ export async function executeNightAudit(
                 }
               });
 
-                // Automatically apply any available guest credit to this room charge
-                const sameFolioCreditApplied = await applyAvailableFolioCredit(tx, {
-                  folioId: mainFolio.id,
-                  propertyId,
-                  guestId: reservation.primaryGuestId,
-                  reservationId: reservation.id,
-                  amount: effectiveRate,
-                  currency: chargeCurrency,
-                  source: 'NIGHT_AUDIT_ROOM_CHARGE',
-                  description: `Applied guest credit to room charge - ${businessDate.toISOString().split('T')[0]}`,
-                  appliedBy: actorId!,
-                  operationKey: roomChargeKey,
-                  businessDate: businessDate
-                });
-                await applyAvailableGuestLedgerCredit(tx, {
-                  folioId: mainFolio.id,
-                  propertyId,
-                  organizationId: property.organizationId,
-                  guestId: reservation.primaryGuestId,
-                  reservationId: reservation.id,
-                  amount: Math.max(0, effectiveRate - sameFolioCreditApplied),
-                  currency: chargeCurrency,
-                  appliedBy: actorId!,
-                  operationKey: roomChargeKey,
-                  businessDate,
-                  description: `Applied previous-stay guest credit to room charge - ${businessDate.toISOString().split('T')[0]}`,
-                });
-              
               totalRoomChargesPosted++;
             } else {
               // Recovery runs are idempotent: the failed attempt may already
               // have created this charge. Do not increment the metric again;
               // roomChargesPosted represents unique charge items, not retry
               // attempts.
+            }
+
+            if (!isCorporateCharge && roomChargeAmountForCredit > 0.01 && reservation.primaryGuestId) {
+              // Apply the property's normal folio credit first, then consume
+              // any previous-stay credit held in the City Ledger. This also
+              // repairs charges created by an earlier recovery attempt.
+              const sameFolioCreditApplied = await applyAvailableFolioCredit(tx, {
+                folioId: mainFolio.id,
+                propertyId,
+                guestId: reservation.primaryGuestId,
+                reservationId: reservation.id,
+                amount: roomChargeAmountForCredit,
+                currency: activeRoom?.currency || property.supportedCurrencies[0] || 'NGN',
+                source: 'NIGHT_AUDIT_ROOM_CHARGE',
+                description: `Applied guest credit to room charge - ${businessDate.toISOString().split('T')[0]}`,
+                appliedBy: actorId!,
+                operationKey: roomChargeKey,
+                businessDate,
+              });
+              await applyAvailableGuestLedgerCredit(tx, {
+                folioId: mainFolio.id,
+                propertyId,
+                organizationId: property.organizationId,
+                guestId: reservation.primaryGuestId,
+                reservationId: reservation.id,
+                amount: Math.max(0, roomChargeAmountForCredit - sameFolioCreditApplied),
+                currency: activeRoom?.currency || property.supportedCurrencies[0] || 'NGN',
+                appliedBy: actorId!,
+                operationKey: roomChargeKey,
+                businessDate,
+                description: `Applied previous-stay guest credit to room charge - ${businessDate.toISOString().split('T')[0]}`,
+              });
             }
           }
 

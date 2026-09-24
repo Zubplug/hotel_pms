@@ -41,7 +41,6 @@ import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
 import { AppSwitcher } from '@/components/layout/AppSwitcher';
 import { HardwareBridge } from '@/lib/desktop/HardwareBridge';
 import { toast } from 'sonner';
-import { ReceptionistShiftStartReport } from '@/components/frontdesk/ReceptionistShiftStartReport';
 import { FrontDeskMasterCardModal } from '@/components/frontdesk/FrontDeskMasterCardModal';
 
 export function FrontDeskLayout({ children }: { children: React.ReactNode }) {
@@ -51,7 +50,6 @@ export function FrontDeskLayout({ children }: { children: React.ReactNode }) {
   const logout = useLogout();
   const router = useRouter();
   const [time, setTime] = useState<Date | null>(null);
-  const [showShiftStartReport, setShowShiftStartReport] = useState(false);
   const [showMasterCardModal, setShowMasterCardModal] = useState(false);
 
   const isDesktop = process.env.NEXT_PUBLIC_IS_DESKTOP === 'true';
@@ -111,7 +109,6 @@ export function FrontDeskLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex flex-col min-h-screen bg-slate-50/50">
-      {res?.data && propertyId && <ReceptionistShiftStartReport open={showShiftStartReport} onOpenChange={setShowShiftStartReport} dashboardData={res.data} propertyId={propertyId} />}
       <FrontDeskMasterCardModal isOpen={showMasterCardModal} onClose={() => setShowMasterCardModal(false)} />
       {/* Top App Bar */}
       <header className="sticky top-0 z-40 w-full flex items-center h-16 px-4 md:px-6 bg-background/95 backdrop-blur border-b shadow-sm">
@@ -152,9 +149,6 @@ export function FrontDeskLayout({ children }: { children: React.ReactNode }) {
           <Link href="/frontdesk/cashier" className="hidden md:inline-flex rounded-lg px-3 py-2 text-sm font-semibold text-muted-foreground hover:bg-muted hover:text-foreground">
             Cashier Shift
           </Link>
-          <Button variant="ghost" onClick={() => setShowShiftStartReport(true)} className="hidden md:inline-flex rounded-lg px-3 py-2 text-sm font-semibold text-muted-foreground hover:bg-muted hover:text-foreground">
-            <Printer className="mr-2 h-4 w-4" /> Shift Report
-          </Button>
           <Link href="/frontdesk/housekeeping" className="hidden md:inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-muted-foreground hover:bg-muted hover:text-foreground">
             <Brush className="h-4 w-4" />
             Housekeeping
