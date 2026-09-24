@@ -119,13 +119,16 @@ export function FrontDeskQuickCheckoutDialog({ open, onOpenChange, propertyId, i
       const room = reservation.reservationRooms?.[0]?.room || {};
       const guest = reservation.primaryGuest || reservation.guest || {};
       const transactions = (folio.transactions || []).map((t: any) => ({ date: t.date || t.createdAt || new Date().toISOString(), description: t.description || t.type || 'Transaction', reference: t.reference || t.id || null, debitAmount: Number(t.debitAmount ?? t.debit ?? t.charge ?? 0), creditAmount: Number(t.creditAmount ?? t.credit ?? t.payment ?? 0), runningBalance: Number(t.runningBalance ?? 0) }));
-      const res = await HardwareBridge.printGuestFolio({ guestName: `${guest.firstName || 'Guest'} ${guest.lastName || ''}`.trim(), roomNumber: room.number || room.code || 'Unassigned', folioNumber: folio.id || reservation.id, arrivalDate: reservation.checkIn || new Date().toISOString(), departureDate: reservation.checkOut || new Date().toISOString(), transactions, totalCharges: Number(folio.totalCharges || 0), totalPayments: Number(folio.totalPayments || 0), balanceDue: Number(folio.netBalance ?? folio.balance ?? 0), currency: folio.currency || 'NGN', propertyName: reservation.property?.name || 'LodgeCore', propertyAddress: reservation.property?.address, printedAt: new Date().toISOString() });
+      const res = await HardwareBridge.printGuestFolio({ guestName: `${guest.firstName || 'Guest'} ${guest.lastName || ''}`.trim(), roomNumber: room.number || room.code || 'Unassigned', folioNumber: folio.id || reservation.id, arrivalDate: reservation.checkIn || new Date().toISOString(), departureDate: reservation.checkOut || new Date().toISOString(), transactions, totalCharges: Number(folio.totalCharges || 0), totalPayments: Number(folio.totalPayments || 0), balanceDue: Number(folio.balance || 0), currency: folio.currency || 'NGN', propertyName: reservation.property?.name || 'LodgeCore', propertyAddress: reservation.property?.address, printedAt: new Date().toISOString() });
       const parsed = typeof res === 'string' ? JSON.parse(res) : res;
       setPrintStatus(parsed?.success ? 'SUCCESS' : 'FAILED');
     } catch { setPrintStatus('FAILED'); }
   };
 
-  const balance = (reservation?.folios || []).reduce((total: number, folio: any) => total + Number(folio?.netBalance ?? folio?.balance ?? 0), 0);
+  // Folio.balance is the authoritative checkout balance. netBalance is a
+  // legacy desktop-derived value and can represent an exhausted advance
+  // deposit as a negative credit even when the persisted folio is settled.
+  const balance = (reservation?.folios || []).reduce((total: number, folio: any) => total + Number(folio?.balance ?? 0), 0);
   const isUnpaid = balance > 0.01;
   const hasGuestCredit = balance < -0.01;
 
