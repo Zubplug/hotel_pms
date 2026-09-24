@@ -22,7 +22,7 @@ public static class MauiProgram
         {
             var loggerFactory = sp.GetRequiredService<ILoggerFactory>();
             // Retrieve configured provider, defaulting to the Deluns encoder.
-            var providerType = Microsoft.Maui.Storage.Preferences.Default.Get("LockProviderType", "rfv2016");
+            var providerType = Microsoft.Maui.Storage.Preferences.Default.Get("LockProviderType", "deluns");
             
             return providerType.ToLowerInvariant() switch
             {
