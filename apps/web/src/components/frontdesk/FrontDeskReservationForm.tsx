@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -133,14 +134,14 @@ function SectionHeader({ step, title, hint, icon }: { step: number; title: strin
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
-   PremiumDropdown — reusable custom select with rich open panel
+   PremiumDropdown — portal-based custom select (bypasses overflow:hidden)
 ───────────────────────────────────────────────────────────────────────────── */
 type PDOption = {
   value: string;
   label: string;
   sublabel?: string;
   badge?: string;
-  badgeColor?: string; // tailwind classes
+  badgeColor?: string;
   icon?: React.ReactNode;
   disabled?: boolean;
 };
@@ -165,16 +166,54 @@ function PremiumDropdown({
   loading?: boolean;
 }) {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const [panelStyle, setPanelStyle] = useState<React.CSSProperties>({});
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const selected = options.find(o => o.value === value);
 
+  // Position the portal panel beneath the trigger button
+  const reposition = useCallback(() => {
+    if (!triggerRef.current) return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const panelHeight = Math.min(280, options.length * 56 + 24);
+    const openAbove = spaceBelow < panelHeight + 8 && rect.top > panelHeight + 8;
+    setPanelStyle({
+      position: 'fixed',
+      left: rect.left,
+      width: rect.width,
+      ...(openAbove
+        ? { bottom: window.innerHeight - rect.top + 6 }
+        : { top: rect.bottom + 6 }),
+      zIndex: 9999,
+    });
+  }, [options.length]);
+
+  // Reposition on open and on scroll/resize while open
   useEffect(() => {
+    if (!open) return;
+    reposition();
+    window.addEventListener('scroll', reposition, true);
+    window.addEventListener('resize', reposition);
+    return () => {
+      window.removeEventListener('scroll', reposition, true);
+      window.removeEventListener('resize', reposition);
+    };
+  }, [open, reposition]);
+
+  // Close on outside click
+  useEffect(() => {
+    if (!open) return;
     const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      if (
+        triggerRef.current && !triggerRef.current.contains(target) &&
+        panelRef.current && !panelRef.current.contains(target)
+      ) setOpen(false);
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, []);
+  }, [open]);
 
   const triggerBase = dark
     ? 'border-slate-700 bg-slate-800/70 text-white hover:bg-slate-800'
@@ -184,13 +223,65 @@ function PremiumDropdown({
     : 'border-indigo-400 bg-white ring-4 ring-indigo-100 shadow-md';
   const placeholderColor = dark ? 'text-slate-500' : 'text-slate-400';
 
+  const panel = open && typeof window !== 'undefined' && (
+    <div
+      ref={panelRef}
+      style={{ ...panelStyle, animation: 'pdDropIn 0.16s cubic-bezier(0.16,1,0.3,1) both' }}
+      className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_20px_60px_rgba(15,23,42,0.22)] ring-1 ring-black/5"
+    >
+      <style>{`@keyframes pdDropIn{from{opacity:0;transform:translateY(-6px) scale(.97)}to{opacity:1;transform:translateY(0) scale(1)}}`}</style>
+      <div className="max-h-64 overflow-y-auto p-1.5">
+        {options.length === 0 ? (
+          <p className="px-4 py-8 text-center text-sm text-slate-400">{emptyMessage}</p>
+        ) : options.map(opt => {
+          const isSel = opt.value === value;
+          return (
+            <button
+              key={opt.value}
+              type="button"
+              disabled={opt.disabled}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => { if (!opt.disabled) { onChange(opt.value); setOpen(false); } }}
+              className={[
+                'group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-all duration-100',
+                isSel ? 'bg-indigo-50' : 'hover:bg-slate-50',
+                opt.disabled ? 'cursor-not-allowed opacity-40' : 'cursor-pointer',
+              ].join(' ')}
+            >
+              {opt.icon && (
+                <span className={[
+                  'flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-colors',
+                  isSel ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500 group-hover:bg-indigo-100 group-hover:text-indigo-600',
+                ].join(' ')}>{opt.icon}</span>
+              )}
+              <span className="min-w-0 flex-1">
+                <span className={`block truncate text-sm font-semibold ${isSel ? 'text-indigo-900' : 'text-slate-800'}`}>
+                  {opt.label}
+                </span>
+                {opt.sublabel && (
+                  <span className="block truncate text-xs text-slate-500">{opt.sublabel}</span>
+                )}
+              </span>
+              {opt.badge && (
+                <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+                  opt.badgeColor ?? 'bg-slate-100 text-slate-600'
+                }`}>{opt.badge}</span>
+              )}
+              {isSel && <Check className="h-4 w-4 shrink-0 text-indigo-600" />}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+
   return (
-    <div ref={ref} className="relative">
-      {/* Trigger button */}
+    <>
       <button
+        ref={triggerRef}
         type="button"
         disabled={disabled}
-        onClick={() => !disabled && setOpen(p => !p)}
+        onClick={() => { if (!disabled) { setOpen(p => !p); } }}
         className={[
           'flex h-12 w-full items-center justify-between gap-3 rounded-xl border px-4 text-left text-sm font-medium transition-all duration-200',
           open ? triggerOpen : triggerBase,
@@ -198,7 +289,7 @@ function PremiumDropdown({
         ].join(' ')}
       >
         {loading ? (
-          <span className={`flex items-center gap-2 ${dark ? 'text-slate-400' : 'text-slate-400'}`}>
+          <span className="flex items-center gap-2 text-slate-400">
             <Loader2 className="h-4 w-4 animate-spin" /> Loading…
           </span>
         ) : selected ? (
@@ -227,59 +318,8 @@ function PremiumDropdown({
           dark ? 'text-slate-500' : 'text-slate-400'
         } ${open ? 'rotate-180' : ''}`} />
       </button>
-
-      {/* Panel */}
-      {open && (
-        <div
-          className="absolute left-0 right-0 top-[calc(100%+6px)] z-[60] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_20px_60px_rgba(15,23,42,0.16)] ring-1 ring-black/5"
-          style={{ animation: 'pdDropIn 0.16s cubic-bezier(0.16,1,0.3,1) both' }}
-        >
-          <style>{`@keyframes pdDropIn{from{opacity:0;transform:translateY(-8px) scale(.97)}to{opacity:1;transform:translateY(0) scale(1)}}`}</style>
-
-          <div className="max-h-64 overflow-y-auto p-1.5">
-            {options.length === 0 ? (
-              <p className="px-4 py-8 text-center text-sm text-slate-400">{emptyMessage}</p>
-            ) : options.map(opt => {
-              const isSel = opt.value === value;
-              return (
-                <button
-                  key={opt.value}
-                  type="button"
-                  disabled={opt.disabled}
-                  onClick={() => { if (!opt.disabled) { onChange(opt.value); setOpen(false); } }}
-                  className={[
-                    'group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-all duration-100',
-                    isSel ? 'bg-indigo-50' : 'hover:bg-slate-50',
-                    opt.disabled ? 'cursor-not-allowed opacity-40' : 'cursor-pointer',
-                  ].join(' ')}
-                >
-                  {opt.icon && (
-                    <span className={[
-                      'flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-colors',
-                      isSel ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500 group-hover:bg-indigo-100 group-hover:text-indigo-600',
-                    ].join(' ')}>{opt.icon}</span>
-                  )}
-                  <span className="min-w-0 flex-1">
-                    <span className={`block truncate text-sm font-semibold ${isSel ? 'text-indigo-900' : 'text-slate-800'}`}>
-                      {opt.label}
-                    </span>
-                    {opt.sublabel && (
-                      <span className="block truncate text-xs text-slate-500">{opt.sublabel}</span>
-                    )}
-                  </span>
-                  {opt.badge && (
-                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
-                      opt.badgeColor ?? 'bg-slate-100 text-slate-600'
-                    }`}>{opt.badge}</span>
-                  )}
-                  {isSel && <Check className="h-4 w-4 shrink-0 text-indigo-600" />}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-    </div>
+      {panel && createPortal(panel, document.body)}
+    </>
   );
 }
 
