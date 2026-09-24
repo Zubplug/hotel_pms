@@ -520,7 +520,7 @@ export default function ReceptionistDashboardPage() {
             { label: 'Cashier Shift',  icon: TrendingUp, action: () => router.push('/frontdesk/cashier'),      color: 'text-emerald-400' },
             { label: 'Room Status',    icon: Key,         action: () => router.push('/frontdesk/rooms'),        color: 'text-indigo-400' },
             { label: 'Housekeeping',   icon: Briefcase,   action: () => router.push('/frontdesk/housekeeping'), color: 'text-amber-400' },
-            { label: 'Maintenance',    icon: Ban,         action: () => router.push('/frontdesk/maintenance'),  color: 'text-rose-400' },
+            { label: 'Re-Encode Card', icon: KeySquare,   action: () => setReencodeCardOpen(true),             color: 'text-rose-400' },
             { label: 'Quick Checkout', icon: KeySquare,   action: () => setQuickCheckoutOpen(true),            color: 'text-violet-400' },
           ].map(({ label, icon: Icon, action, color }) => (
             <button
@@ -534,24 +534,6 @@ export default function ReceptionistDashboardPage() {
             </button>
           ))}
         </div>
-      </div>
-
-      {/* ── Floating Action Buttons ──────────────────────────────────────── */}
-      <div className="fixed bottom-8 right-6 z-50">
-        <button
-          onClick={() => setReencodeCardOpen(true)}
-          className="h-14 px-6 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white flex items-center gap-3 shadow-[0_0_30px_-5px_rgba(99,102,241,0.5)] hover:shadow-[0_0_40px_-5px_rgba(99,102,241,0.7)] transition-all hover:-translate-y-0.5 border border-indigo-500 font-bold text-sm"
-        >
-          <KeySquare className="w-5 h-5" />
-          Re-Encode Card
-        </button>
-        <button
-          onClick={() => setQuickCheckoutOpen(true)}
-          className="h-14 px-5 rounded-2xl bg-[#0d1424] hover:bg-[#121c35] text-white flex items-center gap-3 shadow-[0_0_30px_-5px_rgba(0,0,0,0.6)] hover:shadow-[0_0_40px_-5px_rgba(0,0,0,0.7)] transition-all hover:-translate-y-0.5 border border-white/10 hover:border-white/20 font-bold text-sm"
-        >
-          <Key className="w-5 h-5 text-slate-400" />
-          Quick Checkout
-        </button>
       </div>
 
       {/* ── Dialogs ──────────────────────────────────────────────────────── */}

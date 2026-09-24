@@ -3,12 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
-import {
-  Dialog,
-  DialogContent,
-} from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Loader2, CheckCircle2, AlertCircle, Key, ArrowRight, Wallet, User, LogIn } from 'lucide-react';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Loader2, CheckCircle2, AlertCircle, Key, ArrowRight, Wallet, LogIn, X, Printer } from 'lucide-react';
 import { format } from 'date-fns';
 import { HardwareBridge } from '@/lib/desktop/HardwareBridge';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
@@ -36,150 +32,99 @@ export function FrontDeskCheckInDialog({ open, onOpenChange, reservationId, prop
   const [isDepositOverride, setIsDepositOverride] = useState(false);
   const [showManagerOverride, setShowManagerOverride] = useState(false);
   const [isCollectDepositOpen, setIsCollectDepositOpen] = useState(false);
+  const [printStatus, setPrintStatus] = useState<'IDLE' | 'PRINTING' | 'SUCCESS' | 'FAILED'>('IDLE');
+  const [overrideCreds, setOverrideCreds] = useState<{ acknowledgedByStaffId?: string, reason?: string } | null>(null);
 
-  // Fetch full reservation data since the dashboard only passed an ID
   const { data: resData, isLoading: isFetching } = useQuery({
     queryKey: ['reservation', reservationId],
     queryFn: async () => {
       if (!reservationId) return null;
-      const data = await provider.reservations.get(reservationId);
-      return data;
+      return await provider.reservations.get(reservationId);
     },
     enabled: !!reservationId && open,
   });
 
   const reservation = resData?.data;
 
-  // Reset state when opened
   useEffect(() => {
     if (open) {
-      setPhase('IDLE');
-      setOperationId(null);
-      setErrorMsg(null);
-      setExistingCardData(null);
-      setIsDepositOverride(false);
-      setShowManagerOverride(false);
-      setIsCollectDepositOpen(false);
+      setPhase('IDLE'); setOperationId(null); setErrorMsg(null); setExistingCardData(null);
+      setIsDepositOverride(false); setShowManagerOverride(false); setIsCollectDepositOpen(false);
+      setPrintStatus('IDLE');
     }
   }, [open, reservationId]);
 
-  const [overrideCreds, setOverrideCreds] = useState<{ acknowledgedByStaffId?: string, reason?: string } | null>(null);
-
-  // Polling Effect for Reading
   useEffect(() => {
     if (phase !== 'READING' || !operationId) return;
-
     const interval = setInterval(async () => {
       try {
         const data = await provider.hardware.poll(operationId);
         const op = data.data.operation;
-        const status = op.status;
-
-        if (status === 'SUCCESS' || status === 'COMPLETED') {
+        if (op.status === 'SUCCESS' || op.status === 'COMPLETED') {
           const cardData = op.command?.responseData;
           if (cardData && cardData.checkOut && new Date(cardData.checkOut) > new Date()) {
-            setExistingCardData(cardData);
-            setPhase('OVERWRITE_CONFIRM');
+            setExistingCardData(cardData); setPhase('OVERWRITE_CONFIRM');
           } else {
             executeCheckInEncoding();
           }
-        } else if (status === 'FAILED' || status === 'ERROR') {
-          setPhase('FAILED');
-          setErrorMsg(op.errorMessage || 'Hardware agent failed to read the card.');
+        } else if (op.status === 'FAILED' || op.status === 'ERROR') {
+          setPhase('FAILED'); setErrorMsg(op.errorMessage || 'Hardware agent failed to read the card.');
         }
-      } catch (err) {
-        console.error(err);
-      }
+      } catch (err) { console.error(err); }
     }, 1500);
-
     return () => clearInterval(interval);
   }, [phase, operationId, overrideCreds]);
 
-  // Polling Effect for Encoding
   useEffect(() => {
     if (phase !== 'ENCODING' || !operationId) return;
-
     const interval = setInterval(async () => {
       try {
         const data = await provider.hardware.poll(operationId);
         const status = data.data.operation.status;
-
         if (status === 'SUCCESS' || status === 'COMPLETED') {
           setPhase('SUCCESS');
           queryClient.invalidateQueries({ queryKey: ['frontdesk', 'dashboard', propertyId] });
           queryClient.invalidateQueries({ queryKey: ['reservations'] });
           triggerPrint();
         } else if (status === 'FAILED' || status === 'ERROR') {
-          setPhase('FAILED');
-          setErrorMsg(data.data.operation.errorMessage || 'Hardware agent failed to encode the card.');
+          setPhase('FAILED'); setErrorMsg(data.data.operation.errorMessage || 'Hardware agent failed to encode the card.');
         }
-      } catch (err) {
-        console.error(err);
-      }
+      } catch (err) { console.error(err); }
     }, 1500);
-
     return () => clearInterval(interval);
   }, [phase, operationId, queryClient, propertyId]);
 
   const handleStartCheckIn = async () => {
     try {
-      setPhase('READING');
-      setErrorMsg(null);
-
+      setPhase('READING'); setErrorMsg(null);
       const data = await provider.keycards.read();
-
-      if (!data || data.error) {
-        setPhase('FAILED');
-        setErrorMsg(data?.error?.message || 'Failed to initiate read card');
-        return;
-      }
-
+      if (!data || data.error) { setPhase('FAILED'); setErrorMsg(data?.error?.message || 'Failed to initiate read card'); return; }
       setOperationId(data.data.operation.id);
-    } catch (err: unknown) {
-      setPhase('FAILED');
-      setErrorMsg(err instanceof Error ? err.message : 'Network error occurred');
-    }
+    } catch (err: any) { setPhase('FAILED'); setErrorMsg(err.message || 'Network error occurred'); }
   };
 
   const executeCheckInEncoding = async () => {
     try {
-      setPhase('ENCODING');
-      setErrorMsg(null);
-      setOperationId(null); 
-
+      setPhase('ENCODING'); setErrorMsg(null); setOperationId(null); 
       const data = await provider.reservations.checkIn(reservationId!, "System", "Device1", { 
         overrideDeposit: isDepositOverride,
         acknowledgedByStaffId: overrideCreds?.acknowledgedByStaffId,
         reason: overrideCreds?.reason
       });
-
-      if (!data || data.error) {
-        setPhase('FAILED');
-        setErrorMsg(data?.error?.message || 'Failed to initiate check-in');
-        return;
-      }
-
+      if (!data || data.error) { setPhase('FAILED'); setErrorMsg(data?.error?.message || 'Failed to initiate check-in'); return; }
       if (data.data?.operation?.id) {
         setOperationId(data.data.operation.id);
       } else {
-        // Fallback if no hardware operation was returned (e.g. bypass or software-only checkin)
         setPhase('SUCCESS');
         queryClient.invalidateQueries({ queryKey: ['frontdesk', 'dashboard', propertyId] });
         triggerPrint();
       }
-    } catch (err: unknown) {
-      setPhase('FAILED');
-      setErrorMsg(err instanceof Error ? err.message : 'Network error occurred');
-    }
+    } catch (err: any) { setPhase('FAILED'); setErrorMsg(err.message || 'Network error occurred'); }
   };
 
-  const handleOverrideAuthorized = (acknowledgedByStaffId: string, reason: string) => {
-    setShowManagerOverride(false);
-    setIsDepositOverride(true);
-    setOverrideCreds({ acknowledgedByStaffId, reason });
+  const handleOverrideAuthorized = (staffId: string, reason: string) => {
+    setShowManagerOverride(false); setIsDepositOverride(true); setOverrideCreds({ acknowledgedByStaffId: staffId, reason });
   };
-
-  const [printStatus, setPrintStatus] = useState<'IDLE' | 'PRINTING' | 'SUCCESS' | 'FAILED'>('IDLE');
 
   const triggerPrint = async () => {
     if (!HardwareBridge.isAvailable()) return;
@@ -188,18 +133,11 @@ export function FrontDeskCheckInDialog({ open, onOpenChange, reservationId, prop
       const res = await HardwareBridge.printRegistrationCard({
         reservationId: reservationId!,
         guestName: `${reservation?.primaryGuest?.firstName} ${reservation?.primaryGuest?.lastName}`,
-        checkInVersion: Date.now(), // Use time as simple idempotency version for this session
-        details: {}
+        checkInVersion: Date.now(), details: {}
       });
       const parsed = typeof res === 'string' ? JSON.parse(res) : res;
-      if (parsed?.success) {
-        setPrintStatus('SUCCESS');
-      } else {
-        setPrintStatus('FAILED');
-      }
-    } catch (e) {
-      setPrintStatus('FAILED');
-    }
+      setPrintStatus(parsed?.success ? 'SUCCESS' : 'FAILED');
+    } catch { setPrintStatus('FAILED'); }
   };
 
   const resRoom = reservation?.reservationRooms?.[0];
@@ -208,38 +146,18 @@ export function FrontDeskCheckInDialog({ open, onOpenChange, reservationId, prop
   const corporateAccount = reservation?.corporateAccount;
   const isCorporateDepositWaived = corporateAccount?.depositPolicy === 'WAIVED';
   
-  const snapshotTotal = reservation?.ratePlanSnapshot?.total;
-  let expectedCost = Number(snapshotTotal ?? 0);
-  // Offline reservations created before a rate snapshot was saved may not have
-  // `total`. Match the desktop repository's fallback calculation so a normal
-  // reservation with no credit is still blocked and can use the override.
-  if (snapshotTotal == null && resRoom) {
-    const baseRate = Number(
-      reservation?.ratePlanSnapshot?.baseRate
-      ?? resRoom?.rateAmount
-      ?? room?.roomType?.baseRate
-      ?? 0
-    );
+  let expectedCost = Number(reservation?.ratePlanSnapshot?.total ?? 0);
+  if (reservation?.ratePlanSnapshot?.total == null && resRoom) {
+    const baseRate = Number(reservation?.ratePlanSnapshot?.baseRate ?? resRoom?.rateAmount ?? room?.roomType?.baseRate ?? 0);
     const checkIn = reservation?.checkIn || resRoom?.checkIn;
     const checkOut = reservation?.checkOut || resRoom?.checkOut;
-    const nights = checkIn && checkOut
-      ? Math.max(1, Math.ceil((new Date(checkOut).getTime() - new Date(checkIn).getTime()) / 86400000))
-      : 1;
+    const nights = checkIn && checkOut ? Math.max(1, Math.ceil((new Date(checkOut).getTime() - new Date(checkIn).getTime()) / 86400000)) : 1;
     expectedCost = baseRate * nights;
   }
   if (expectedCost > 0 && resRoom) {
-    if (resRoom.discountType === 'FIXED_AMOUNT') {
-      expectedCost -= Number(resRoom.discountAmount || 0);
-    } else if (resRoom.discountType === 'PERCENTAGE') {
-      expectedCost -= expectedCost * (Number(resRoom.discountPercent || 0) / 100);
-    } else if (resRoom.discountType === 'COMPLIMENTARY') {
-      const compAmount = Number(resRoom.discountAmount || 0);
-      if (compAmount > 0) {
-        expectedCost -= compAmount;
-      } else {
-        expectedCost = 0;
-      }
-    }
+    if (resRoom.discountType === 'FIXED_AMOUNT') expectedCost -= Number(resRoom.discountAmount || 0);
+    else if (resRoom.discountType === 'PERCENTAGE') expectedCost -= expectedCost * (Number(resRoom.discountPercent || 0) / 100);
+    else if (resRoom.discountType === 'COMPLIMENTARY') expectedCost = Math.max(0, expectedCost - Number(resRoom.discountAmount || 0));
     if (expectedCost < 0) expectedCost = 0;
   }
   const folio = reservation?.folios?.[0];
@@ -250,224 +168,250 @@ export function FrontDeskCheckInDialog({ open, onOpenChange, reservationId, prop
   const isDepositSufficient = availableCredit >= expectedCost;
   
   const isReady = reservation?.status === 'CONFIRMED' && room && (isCorporateDepositWaived || isDepositSufficient || isDepositOverride);
+  
+  const guestName = `${guest?.firstName || ''} ${guest?.lastName || ''}`.trim();
+  const initials = guestName.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase() || 'G';
+  const roomNum = room?.number ? formatRoomNumber(room.number) : 'Unassigned';
 
   return (
     <Dialog open={open && !!reservationId} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px] p-0 overflow-hidden rounded-3xl border-0 shadow-2xl flex flex-col max-h-[90vh]">
+      <DialogContent className="sm:max-w-[540px] p-0 overflow-hidden rounded-3xl border border-white/10 shadow-[0_0_80px_-20px_rgba(0,0,0,0.8)] bg-[#0a0f1c] text-slate-200 flex flex-col max-h-[90vh]">
         
-        {/* Header */}
-        <div className="bg-slate-900 px-8 py-6 text-white shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-white/10 rounded-xl">
-              <LogIn className="w-6 h-6 text-blue-400" />
-            </div>
-            <div>
-              <h2 className="text-xl font-bold">Check-In Guest</h2>
-              <p className="text-slate-400 text-sm font-medium">Issue keycard and authorize stay</p>
-            </div>
-          </div>
+        {/* Ambient */}
+        <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-3xl">
+          <div className="absolute -top-20 -right-20 w-60 h-60 bg-blue-600/8 rounded-full blur-3xl" />
+          <div className="absolute -bottom-20 -left-20 w-60 h-60 bg-emerald-600/6 rounded-full blur-3xl" />
+          <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-white/15 to-transparent" />
         </div>
 
-        <div className="p-8 bg-slate-50 min-h-[300px] flex flex-col justify-center overflow-y-auto flex-1">
+        {/* Header */}
+        <div className="relative z-10 flex items-center justify-between px-7 pt-7 pb-5 border-b border-white/8 shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-blue-500/15 border border-blue-500/25 flex items-center justify-center">
+              <LogIn className="w-5 h-5 text-blue-400" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-white leading-tight">Check-In Guest</h2>
+              <p className="text-slate-500 text-xs font-medium mt-0.5">Issue keycard and authorize stay</p>
+            </div>
+          </div>
+          {phase !== 'ENCODING' && phase !== 'READING' && (
+            <button onClick={() => onOpenChange(false)} className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center transition-colors">
+              <X className="w-4 h-4 text-slate-400" />
+            </button>
+          )}
+        </div>
+
+        {/* Body */}
+        <div className="relative z-10 flex-1 overflow-y-auto p-6 flex flex-col justify-center min-h-[300px]">
           
           {isFetching ? (
-            <div className="flex flex-col items-center justify-center py-8">
-              <Loader2 className="w-10 h-10 text-blue-600 animate-spin mb-4" />
-              <p className="text-slate-500 font-medium">Fetching reservation details...</p>
+            <div className="flex flex-col items-center text-center gap-5 py-8 animate-in fade-in duration-300">
+              <Loader2 className="w-10 h-10 text-blue-400 animate-spin" />
+              <p className="text-slate-400 text-sm">Fetching reservation details…</p>
             </div>
           ) : !reservation ? (
-            <div className="text-center py-8">
-              <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-3" />
-              <p className="text-red-700 font-bold">Reservation not found.</p>
-              <Button className="mt-4" onClick={() => onOpenChange(false)}>Close</Button>
+            <div className="flex flex-col items-center text-center py-8">
+              <div className="w-20 h-20 bg-red-500/10 border border-red-500/20 rounded-full flex items-center justify-center mb-5">
+                <AlertCircle className="h-10 w-10 text-red-400" />
+              </div>
+              <p className="text-red-300 font-bold mb-6">Reservation not found.</p>
+              <button onClick={() => onOpenChange(false)} className="h-12 px-8 rounded-xl font-bold text-sm text-white bg-white/10 border border-white/10">Close</button>
             </div>
           ) : (
             <>
               {phase === 'IDLE' && (
-                <div className="animate-in fade-in zoom-in-95 duration-500">
-                  <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm mb-6">
+                <div className="animate-in fade-in zoom-in-95 duration-300 space-y-5">
+                  {/* Info Card */}
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
                     <div className="flex justify-between items-start mb-4">
                       <div>
-                        <h3 className="text-lg font-bold text-slate-900">
-                          {guest?.firstName} {guest?.lastName}
-                        </h3>
-                        <p className="text-slate-500 text-sm font-medium">Folio #{reservation.confirmationNumber}</p>
+                        <h3 className="text-lg font-bold text-white">{guestName}</h3>
+                        <p className="text-slate-400 text-xs font-medium mt-0.5">Folio #{reservation.confirmationNumber}</p>
                       </div>
-                      <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center text-slate-600 font-bold">
-                        {guest?.firstName?.[0]}{guest?.lastName?.[0]}
+                      <div className="w-10 h-10 rounded-full bg-blue-500/20 text-blue-300 flex items-center justify-center font-bold text-sm">
+                        {initials}
                       </div>
                     </div>
                     
-                      <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-100">
+                    <div className="grid grid-cols-2 gap-4 pt-4 border-t border-white/8">
                       <div>
-                        <p className="text-sm font-bold text-slate-400 uppercase">Room</p>
-                        <p className="font-bold text-slate-800">{room?.number ? formatRoomNumber(room.number) : 'Unassigned'}</p>
+                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Room</p>
+                        <p className="font-bold text-slate-300">{roomNum}</p>
                       </div>
                       <div>
-                        <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Check-Out</p>
-                        <p className="font-bold text-slate-800">
-                          {reservation.checkOut ? format(new Date(reservation.checkOut), 'MMM d') : 'N/A'}
-                        </p>
+                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Check-Out</p>
+                        <p className="font-bold text-slate-300">{reservation.checkOut ? format(new Date(reservation.checkOut), 'MMM d') : 'N/A'}</p>
                       </div>
-                      </div>
-                      {corporateAccount && (
-                        <div className="mt-4 rounded-xl border border-indigo-200 bg-indigo-50 p-3 text-sm">
-                          <p className="font-bold text-indigo-900">Corporate: {corporateAccount.name}</p>
-                          <p className="text-indigo-700">
-                            Deposit policy: {isCorporateDepositWaived ? 'Waived' : 'Required'}
-                          </p>
-                        </div>
-                      )}
                     </div>
+                    
+                    {corporateAccount && (
+                      <div className="mt-4 rounded-xl border border-blue-500/20 bg-blue-500/10 p-3 text-xs flex flex-col gap-1">
+                        <p className="font-bold text-blue-300">Corporate: {corporateAccount.name}</p>
+                        <p className="text-blue-400/80">Deposit Policy: {isCorporateDepositWaived ? 'Waived' : 'Required'}</p>
+                      </div>
+                    )}
+                  </div>
 
                   {!isReady ? (
-                    <div className="bg-amber-50 text-amber-800 p-4 rounded-xl text-sm border border-amber-200 mb-6 flex flex-col gap-3">
+                    <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-5 flex flex-col gap-4">
                       {!room ? (
-                        <div className="flex items-start gap-2 font-bold">
-                          <AlertCircle className="w-5 h-5 shrink-0" />
-                          <p>Guest is not ready for check-in. Please ensure they have a room assigned.</p>
+                        <div className="flex items-start gap-3">
+                          <AlertCircle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+                          <p className="text-amber-300 text-sm font-medium leading-relaxed">Guest is not ready for check-in. Please ensure they have a room assigned.</p>
                         </div>
                       ) : (
                         <>
-                          <div className="flex items-start gap-2 font-bold">
-                            <Wallet className="w-5 h-5 shrink-0" />
-                            <p>{corporateAccount ? 'Corporate Deposit Required for Check-In' : 'Advance Deposit Required for Check-In'}</p>
+                          <div className="flex items-start gap-3">
+                            <Wallet className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+                            <div className="flex-1">
+                              <p className="font-bold text-amber-300 text-sm">{corporateAccount ? 'Corporate Deposit Required' : 'Advance Deposit Required'}</p>
+                              
+                              <div className="mt-3 space-y-1.5 text-xs">
+                                <div className="flex justify-between text-amber-300/70">
+                                  <span>Expected Stay Cost</span>
+                                  <span className="font-medium text-amber-300/90">{formatCurrency(expectedCost)}</span>
+                                </div>
+                                <div className="flex justify-between text-amber-300/70">
+                                  <span>Available Credit</span>
+                                  <span className={cn("font-medium", availableCredit > 0 ? "text-blue-400" : "text-amber-300/90")}>{formatCurrency(availableCredit)}</span>
+                                </div>
+                                <div className="flex justify-between font-bold text-red-400 pt-1 border-t border-amber-500/20">
+                                  <span>Shortfall</span>
+                                  <span>{formatCurrency(Math.max(0, expectedCost - availableCredit))}</span>
+                                </div>
+                              </div>
+                            </div>
                           </div>
-                          <div className="pl-7 space-y-1">
-                            <p>Expected Stay Cost: <strong>{formatCurrency(expectedCost)}</strong></p>
-                            <p>Available Credit: <strong className={availableCredit > 0 ? "text-blue-600" : ""}>{formatCurrency(availableCredit)}</strong></p>
-                            <p className="text-red-600 font-bold">Shortfall: {formatCurrency(Math.max(0, expectedCost - availableCredit))}</p>
-                          </div>
-                          <div className="flex gap-2 pl-7 mt-2">
-                            <Button 
-                              onClick={() => setIsCollectDepositOpen(true)}
-                              className="bg-amber-600 hover:bg-amber-700 font-bold text-white shadow-sm"
-                            >
+                          <div className="flex gap-2 pt-2">
+                            <button onClick={() => setIsCollectDepositOpen(true)} className="flex-[3] h-10 rounded-xl font-bold text-xs text-amber-950 bg-amber-500 hover:bg-amber-400 transition-colors">
                               Collect Deposit
-                            </Button>
+                            </button>
                             {!corporateAccount && (
-                              <Button
-                                variant="outline"
-                                onClick={() => setShowManagerOverride(true)}
-                                className="font-bold border-amber-300 text-amber-700 hover:bg-amber-100"
-                              >
-                                Bypass Check-In
-                              </Button>
+                              <button onClick={() => setShowManagerOverride(true)} className="flex-[2] h-10 rounded-xl font-bold text-xs text-amber-300 hover:text-amber-200 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 transition-colors">
+                                Bypass
+                              </button>
                             )}
                           </div>
                         </>
                       )}
                     </div>
                   ) : (
-                    <div className="text-center">
-                      <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4 shadow-inner">
-                        <Key className="h-8 w-8 text-blue-600 animate-pulse" />
+                    <div className="flex flex-col items-center text-center gap-5 mt-2">
+                      <div className="relative">
+                        <div className="absolute -inset-4 bg-blue-500/10 rounded-full animate-ping opacity-50" />
+                        <div className="relative w-20 h-20 bg-blue-500/10 border border-blue-500/20 rounded-full flex items-center justify-center shadow-[0_0_30px_-8px_rgba(59,130,246,0.4)]">
+                          <Key className="h-8 w-8 text-blue-400" />
+                        </div>
                       </div>
-                      <h3 className="text-lg font-bold text-slate-900 mb-2">Place Blank Card</h3>
-                      <p className="text-slate-500 mb-6 max-w-[280px] mx-auto text-sm">
-                        Place a blank keycard on the encoder, then click below to encode and check-in.
-                      </p>
-                      <Button onClick={handleStartCheckIn} className="w-full h-14 rounded-2xl bg-blue-600 hover:bg-blue-700 text-lg font-bold shadow-lg shadow-blue-200">
-                        Encode Keycard <ArrowRight className="w-5 h-5 ml-2" />
-                      </Button>
+                      <div className="max-w-[260px]">
+                        <h3 className="text-base font-bold text-white mb-1.5">Place Blank Card</h3>
+                        <p className="text-xs text-slate-400 leading-relaxed">Place a blank keycard on the encoder, then click below to encode and check-in.</p>
+                      </div>
+                      <button onClick={handleStartCheckIn} className="w-full h-12 rounded-xl font-bold text-sm text-white bg-blue-600 hover:bg-blue-500 shadow-[0_0_20px_-5px_rgba(59,130,246,0.5)] transition-all flex items-center justify-center gap-2">
+                        Encode Keycard <ArrowRight className="w-4 h-4" />
+                      </button>
                     </div>
                   )}
                 </div>
               )}
 
               {(phase === 'READING' || phase === 'ENCODING') && (
-                <div className="text-center space-y-6 animate-in fade-in duration-300">
-                  <div className="relative w-24 h-24 mx-auto">
-                    <div className="absolute inset-0 bg-blue-100 rounded-full animate-ping opacity-75"></div>
-                    <div className="relative w-full h-full bg-white rounded-full border-4 border-blue-500 flex items-center justify-center shadow-lg">
-                      <Loader2 className="h-8 w-8 text-blue-600 animate-spin" />
+                <div className="flex flex-col items-center text-center gap-6 animate-in fade-in duration-300">
+                  <div className="relative w-24 h-24">
+                    <div className="absolute inset-0 bg-blue-500/15 rounded-full animate-ping" />
+                    <div className="relative w-full h-full bg-blue-500/10 border border-blue-500/20 rounded-full flex items-center justify-center shadow-[0_0_30px_-8px_rgba(59,130,246,0.4)]">
+                      <Loader2 className="h-10 w-10 text-blue-400 animate-spin" />
                     </div>
                   </div>
                   <div>
-                    <h3 className="text-xl font-bold text-slate-900">
-                      {phase === 'READING' && 'Reading Keycard...'}
-                      {phase === 'ENCODING' && 'Encoding Keycard...'}
+                    <h3 className="text-xl font-bold text-white mb-2">
+                      {phase === 'READING' && 'Reading Keycard…'}
+                      {phase === 'ENCODING' && 'Encoding Keycard…'}
                     </h3>
-                    <p className="text-slate-500 mt-2 font-medium">Please do not remove the card</p>
+                    <p className="text-sm text-slate-400 font-medium">Please do not remove the card</p>
                   </div>
                 </div>
               )}
 
               {phase === 'OVERWRITE_CONFIRM' && (
-                <div className="text-center animate-in slide-in-from-bottom-4 duration-500">
-                  <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4 shadow-inner">
-                    <AlertCircle className="h-8 w-8 text-amber-600" />
+                <div className="flex flex-col items-center text-center gap-5 animate-in slide-in-from-bottom-4 duration-300">
+                  <div className="w-16 h-16 bg-amber-500/10 border border-amber-500/20 rounded-full flex items-center justify-center mb-2">
+                    <AlertCircle className="h-8 w-8 text-amber-400" />
                   </div>
-                  <h3 className="text-lg font-bold text-slate-900 mb-2">Active Card Detected</h3>
-                  <div className="bg-amber-50 text-amber-900 p-4 rounded-xl text-sm mb-6 text-left border border-amber-200">
-                    <p className="font-bold mb-1">This card is currently active:</p>
-                    <ul className="list-disc pl-4 space-y-1 font-medium">
-                      <li>Room: {existingCardData?.roomNo}</li>
-                      <li>Expires: {format(new Date(existingCardData?.checkOut), 'PPP p')}</li>
-                    </ul>
+                  <div>
+                    <h3 className="text-lg font-bold text-white mb-3">Active Card Detected</h3>
+                    <div className="bg-amber-500/10 border border-amber-500/20 p-4 rounded-xl text-left text-sm mb-6">
+                      <p className="font-bold text-amber-300 mb-2">This card is currently active:</p>
+                      <ul className="space-y-1.5 text-amber-400/80">
+                        <li>• Room {existingCardData?.roomNo}</li>
+                        <li>• Expires {format(new Date(existingCardData?.checkOut), 'PPP p')}</li>
+                      </ul>
+                    </div>
                   </div>
-                  <div className="flex gap-3">
-                    <Button variant="outline" className="flex-1 h-12 rounded-xl border-slate-200 font-bold" onClick={() => setPhase('IDLE')}>
+                  <div className="flex gap-3 w-full">
+                    <button onClick={() => setPhase('IDLE')} className="flex-1 h-12 rounded-xl font-bold text-sm text-slate-400 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 transition-all">
                       Cancel
-                    </Button>
-                    <Button variant="default" className="flex-1 h-12 rounded-xl bg-amber-600 hover:bg-amber-700 font-bold shadow-sm" onClick={() => executeCheckInEncoding()}>
+                    </button>
+                    <button onClick={() => executeCheckInEncoding()} className="flex-1 h-12 rounded-xl font-bold text-sm text-amber-950 bg-amber-500 hover:bg-amber-400 shadow-[0_0_20px_-5px_rgba(245,158,11,0.4)] transition-all">
                       Overwrite Card
-                    </Button>
+                    </button>
                   </div>
                 </div>
               )}
 
               {phase === 'SUCCESS' && (
-                <div className="text-center animate-in zoom-in duration-500">
-                  <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-5 shadow-inner">
-                    <CheckCircle2 className="h-10 w-10 text-emerald-600" />
+                <div className="flex flex-col items-center text-center gap-6 animate-in zoom-in-95 duration-300">
+                  <div className="relative w-24 h-24">
+                    <div className="absolute inset-0 bg-emerald-500/10 rounded-full" />
+                    <div className="relative w-full h-full bg-emerald-500/10 border border-emerald-500/20 rounded-full flex items-center justify-center shadow-[0_0_30px_-5px_rgba(16,185,129,0.3)]">
+                      <CheckCircle2 className="h-10 w-10 text-emerald-400" />
+                    </div>
                   </div>
-                  <h3 className="text-2xl font-bold text-slate-900 mb-2">Check-In Complete</h3>
-                  <p className="text-slate-500 mb-4 max-w-[280px] mx-auto">
-                    {guest?.firstName} has been checked in and the keycard is ready.
-                  </p>
+                  <div>
+                    <h3 className="text-2xl font-black text-white mb-2">Check-In Complete</h3>
+                    <p className="text-slate-400 text-sm max-w-[260px] leading-relaxed">{guestName} has been checked in and the keycard is ready.</p>
+                  </div>
 
-                  {/* Print Status Area */}
-                  <div className="mb-8 p-4 bg-slate-50 border border-slate-100 rounded-xl max-w-[320px] mx-auto flex flex-col items-center gap-2">
-                    <p className="text-sm font-medium text-slate-600">
-                      {printStatus === 'PRINTING' && 'Printing Registration Card...'}
-                      {printStatus === 'SUCCESS' && 'Registration Card Printed'}
-                      {printStatus === 'FAILED' && 'Printer Unavailable'}
-                      {printStatus === 'IDLE' && 'Skipped Printing'}
-                    </p>
+                  <div className="w-full p-3 rounded-xl bg-white/[0.04] border border-white/8 flex items-center justify-between text-sm">
+                    <div className="flex items-center gap-2 text-slate-400">
+                      <Printer className="w-4 h-4" />
+                      <span className="font-medium">
+                        {printStatus === 'PRINTING' && 'Printing Registration Card…'}
+                        {printStatus === 'SUCCESS' && 'Registration Card Printed'}
+                        {printStatus === 'FAILED' && 'Printer Unavailable'}
+                        {printStatus === 'IDLE' && 'Print Skipped'}
+                      </span>
+                    </div>
                     {printStatus === 'FAILED' && (
-                      <Button variant="outline" size="sm" onClick={triggerPrint} className="h-8 text-xs rounded-full">
-                        Retry Print
-                      </Button>
+                      <button onClick={triggerPrint} className="text-xs font-bold text-blue-400 hover:text-blue-300 transition-colors">Retry</button>
                     )}
                   </div>
 
-                  <div className="flex gap-3">
-                    <Button onClick={() => router.push(`/frontdesk/reservations/${reservation.id}`)} variant="outline" className="flex-1 h-14 rounded-2xl font-bold border-slate-200">
+                  <div className="flex gap-3 w-full">
+                    <button onClick={() => router.push(`/frontdesk/reservations/${reservation.id}`)} className="flex-[2] h-12 rounded-xl font-bold text-sm text-slate-300 bg-white/5 hover:bg-white/10 border border-white/10 transition-all">
                       View Folio
-                    </Button>
-                    <Button onClick={() => onOpenChange(false)} className="flex-1 h-14 rounded-2xl bg-slate-900 hover:bg-slate-800 font-bold">
+                    </button>
+                    <button onClick={() => onOpenChange(false)} className="flex-[3] h-12 rounded-xl font-bold text-sm text-white bg-blue-600 hover:bg-blue-500 transition-all">
                       Done
-                    </Button>
+                    </button>
                   </div>
                 </div>
               )}
 
               {phase === 'FAILED' && (
-                <div className="text-center animate-in slide-in-from-bottom-4 duration-500">
-                  <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-5 shadow-inner">
-                    <AlertCircle className="h-10 w-10 text-red-600" />
+                <div className="flex flex-col items-center text-center gap-5 animate-in slide-in-from-bottom-4 duration-300">
+                  <div className="w-20 h-20 bg-red-500/10 border border-red-500/20 rounded-full flex items-center justify-center">
+                    <AlertCircle className="h-9 w-9 text-red-400" />
                   </div>
-                  <h3 className="text-xl font-bold text-slate-900 mb-3">Check-In Failed</h3>
-                  <div className="bg-red-50 text-red-800 p-4 rounded-xl text-sm font-medium mb-8 text-left border border-red-100 break-words">
-                    {errorMsg}
+                  <div className="max-w-[300px]">
+                    <h3 className="text-xl font-bold text-white mb-3">Check-In Failed</h3>
+                    <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 text-sm text-red-300 text-left break-words leading-relaxed">{errorMsg}</div>
                   </div>
-                  <Button onClick={() => setPhase('IDLE')} variant="outline" className="w-full h-12 rounded-xl border-slate-200 font-bold mb-3">
-                    Try Again
-                  </Button>
-                  <Button onClick={() => onOpenChange(false)} variant="ghost" className="w-full text-slate-500 font-medium">
-                    Cancel
-                  </Button>
+                  <div className="flex gap-3 w-full">
+                    <button onClick={() => onOpenChange(false)} className="flex-1 h-12 rounded-xl font-bold text-sm text-slate-400 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 transition-all">Cancel</button>
+                    <button onClick={() => setPhase('IDLE')} className="flex-1 h-12 rounded-xl font-bold text-sm text-white bg-blue-600 hover:bg-blue-500 border border-blue-500 transition-all">Try Again</button>
+                  </div>
                 </div>
               )}
             </>
@@ -495,7 +439,6 @@ export function FrontDeskCheckInDialog({ open, onOpenChange, reservationId, prop
         onAuthorized={handleOverrideAuthorized} 
         onClose={() => setShowManagerOverride(false)} 
       />
-
     </Dialog>
   );
 }

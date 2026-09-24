@@ -102,7 +102,7 @@ function hasModuleAccess(req: any, pathname: string): { allowed: boolean; redire
       ? { allowed: true } : { allowed: false, redirectTo: '/hub' };
   }
   if (pathname === '/reservations' || pathname.startsWith('/reservations/')) {
-    return can('ACCESS_FRONT_DESK', [...FRONT_DESK_ROLES, ...MANAGEMENT_ROLES])
+    return can('ACCESS_FRONT_DESK', [...FRONT_DESK_ROLES, ...MANAGEMENT_ROLES, 'GENERAL_CASHIER'])
       ? { allowed: true } : { allowed: false, redirectTo: '/hub' };
   }
   if (pathname === '/sync-center' || pathname.startsWith('/sync-center/')) {
