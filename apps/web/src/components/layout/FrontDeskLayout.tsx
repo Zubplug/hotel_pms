@@ -62,6 +62,11 @@ export function FrontDeskLayout({ children }: { children: React.ReactNode }) {
     return () => clearInterval(interval);
   }, []);
 
+  useEffect(() => {
+    document.body.classList.add('frontdesk-dark-surface');
+    return () => document.body.classList.remove('frontdesk-dark-surface');
+  }, []);
+
   const { data: res } = useQuery({
     queryKey: ['frontdesk', 'dashboard', propertyId],
     queryFn: async () => {
@@ -111,7 +116,7 @@ export function FrontDeskLayout({ children }: { children: React.ReactNode }) {
   ];
 
   return (
-    <div className="flex flex-col min-h-screen bg-[#080c18]">
+    <div className="frontdesk-dark-surface flex min-h-screen flex-col bg-[#080c18]">
       <FrontDeskMasterCardModal isOpen={showMasterCardModal} onClose={() => setShowMasterCardModal(false)} />
 
       {/* ── Top App Bar ──────────────────────────────────────────────────── */}
@@ -322,7 +327,7 @@ export function FrontDeskLayout({ children }: { children: React.ReactNode }) {
       )}
 
       {/* Content */}
-      <main className="flex-1 overflow-x-hidden bg-[#080c18]">
+      <main className="frontdesk-dark-surface flex-1 overflow-x-hidden bg-[#080c18]">
         {children}
       </main>
     </div>

@@ -156,6 +156,83 @@
 .fnb-dark-surface .text-amber-700 { color: #fcd34d !important; }
 .fnb-dark-surface .hover\:bg-slate-50\/50:hover { background-color: rgba(255, 255, 255, 0.06) !important; }
 
+/* Front Desk is a dark operational workspace. A number of older front-desk
+   screens and shared dialogs still use light utility classes explicitly. Keep
+   their semantic accents, but retone their structural surfaces here so the
+   whole desk feels like one product, including offline/local-only views. */
+.frontdesk-dark-surface { color: #e2e8f0; }
+.frontdesk-dark-surface .bg-white,
+.frontdesk-dark-surface .bg-white\/80,
+.frontdesk-dark-surface .bg-white\/90 { background-color: #101b2f !important; }
+.frontdesk-dark-surface .bg-slate-50,
+.frontdesk-dark-surface .bg-slate-50\/30,
+.frontdesk-dark-surface .bg-slate-50\/50,
+.frontdesk-dark-surface .bg-slate-50\/60,
+.frontdesk-dark-surface .bg-slate-50\/70,
+.frontdesk-dark-surface .bg-gray-50,
+.frontdesk-dark-surface .bg-gray-100,
+.frontdesk-dark-surface .bg-slate-100 { background-color: rgba(255, 255, 255, 0.045) !important; }
+.frontdesk-dark-surface .bg-slate-200,
+.frontdesk-dark-surface .bg-gray-200 { background-color: rgba(148, 163, 184, 0.16) !important; }
+.frontdesk-dark-surface .border-slate-100,
+.frontdesk-dark-surface .border-slate-200,
+.frontdesk-dark-surface .border-slate-300,
+.frontdesk-dark-surface .border-gray-100,
+.frontdesk-dark-surface .border-gray-200 { border-color: rgba(255, 255, 255, 0.10) !important; }
+.frontdesk-dark-surface .divide-slate-100 > :not([hidden]) ~ :not([hidden]),
+.frontdesk-dark-surface .divide-slate-200 > :not([hidden]) ~ :not([hidden]) { border-color: rgba(255, 255, 255, 0.08) !important; }
+.frontdesk-dark-surface .text-slate-950,
+.frontdesk-dark-surface .text-slate-900,
+.frontdesk-dark-surface .text-slate-800,
+.frontdesk-dark-surface .text-gray-900 { color: #f8fafc !important; }
+.frontdesk-dark-surface .text-slate-700,
+.frontdesk-dark-surface .text-slate-600,
+.frontdesk-dark-surface .text-gray-700 { color: #cbd5e1 !important; }
+.frontdesk-dark-surface .text-slate-500,
+.frontdesk-dark-surface .text-gray-500,
+.frontdesk-dark-surface .text-gray-400 { color: #94a3b8 !important; }
+.frontdesk-dark-surface input,
+.frontdesk-dark-surface textarea,
+.frontdesk-dark-surface select,
+.frontdesk-dark-surface [role='combobox'] { background-color: #0b1628; border-color: rgba(255, 255, 255, 0.12); color: #f8fafc; }
+.frontdesk-dark-surface input::placeholder,
+.frontdesk-dark-surface textarea::placeholder { color: #64748b; }
+.frontdesk-dark-surface .hover\:bg-white:hover { background-color: rgba(255, 255, 255, 0.08) !important; }
+.frontdesk-dark-surface .hover\:bg-slate-50:hover,
+.frontdesk-dark-surface .hover\:bg-slate-100:hover,
+.frontdesk-dark-surface .hover\:bg-gray-50:hover { background-color: rgba(255, 255, 255, 0.08) !important; }
+
+/* Keep status colors meaningful while making their surfaces dark enough for
+   the control-room canvas. */
+.frontdesk-dark-surface .bg-emerald-50,
+.frontdesk-dark-surface .bg-emerald-100 { background-color: rgba(16, 185, 129, 0.14) !important; }
+.frontdesk-dark-surface .bg-indigo-50,
+.frontdesk-dark-surface .bg-indigo-100,
+.frontdesk-dark-surface .bg-blue-50,
+.frontdesk-dark-surface .bg-blue-100 { background-color: rgba(99, 102, 241, 0.14) !important; }
+.frontdesk-dark-surface .bg-amber-50,
+.frontdesk-dark-surface .bg-amber-100 { background-color: rgba(245, 158, 11, 0.14) !important; }
+.frontdesk-dark-surface .bg-red-50,
+.frontdesk-dark-surface .bg-red-100,
+.frontdesk-dark-surface .bg-rose-50 { background-color: rgba(244, 63, 94, 0.14) !important; }
+.frontdesk-dark-surface .text-emerald-950,
+.frontdesk-dark-surface .text-emerald-900,
+.frontdesk-dark-surface .text-emerald-800,
+.frontdesk-dark-surface .text-emerald-700 { color: #6ee7b7 !important; }
+.frontdesk-dark-surface .text-indigo-950,
+.frontdesk-dark-surface .text-indigo-900,
+.frontdesk-dark-surface .text-indigo-800,
+.frontdesk-dark-surface .text-indigo-700,
+.frontdesk-dark-surface .text-blue-800,
+.frontdesk-dark-surface .text-blue-700 { color: #a5b4fc !important; }
+.frontdesk-dark-surface .text-amber-950,
+.frontdesk-dark-surface .text-amber-900,
+.frontdesk-dark-surface .text-amber-800,
+.frontdesk-dark-surface .text-amber-700 { color: #fcd34d !important; }
+.frontdesk-dark-surface .text-red-800,
+.frontdesk-dark-surface .text-red-700,
+.frontdesk-dark-surface .text-rose-700 { color: #fda4af !important; }
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
