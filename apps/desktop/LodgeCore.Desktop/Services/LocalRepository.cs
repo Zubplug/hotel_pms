@@ -1160,6 +1160,7 @@ public class LocalRepository
 
         var staff = await _dbContext.Staff.FirstOrDefaultAsync(item => item.Id == session.StaffId);
         var account = await _dbContext.CashAccounts.FirstOrDefaultAsync(item => item.Id == session.CashAccountId);
+        var property = await _dbContext.Properties.FirstOrDefaultAsync(item => item.Id == session.PropertyId);
         var movements = await _dbContext.PosCashMovements
             .Where(item => item.FrontdeskSessionId == sessionId || (item.FrontdeskSessionId == null && item.PropertyId == session.PropertyId && item.CreatedAt >= session.OpenedAt && item.CreatedAt <= (session.ClosedAt ?? DateTime.UtcNow)))
             .OrderByDescending(item => item.CreatedAt)
@@ -1291,6 +1292,12 @@ public class LocalRepository
         var expectedCash = session.OpeningFloat + cashPayments + cashIn - cashDrops - paidOuts - transfersOut - cashRefunds;
         return new
         {
+            property = property == null ? null : new
+            {
+                name = property.Name,
+                city = property.City,
+                baseCurrency = property.Currency,
+            },
             session = new { session.Id, session.ShiftReference, session.PropertyId, session.BusinessDate, session.Status, session.OpeningFloat, expectedCash, session.DeclaredCash, session.Variance, session.OpenedAt, session.ClosedAt, staffName = staff == null ? "Unknown cashier" : $"{staff.FirstName} {staff.LastName}".Trim(), till = account?.Name ?? "Assigned till" },
             payments = new { count = paymentCount, cash = cashPayments, card = cardPayments, bankTransfer = bankTransfers, other = otherPayments, total = totalPayments },
             charges = new { count = chargeCount, room = roomCharges, laundry = laundryCharges, other = otherCharges, total = totalCharges },

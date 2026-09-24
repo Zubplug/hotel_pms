@@ -42,6 +42,34 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     if (!current) return errorResponse('NOT_FOUND', 'Front Desk session not found', 404);
     if (!((await requireOrganizationContext(session.user.id)).propertyIds).includes(current.propertyId)) return errorResponse('FORBIDDEN', 'No access to this property', 403);
 
+    const property = await prisma.property.findUnique({
+      where: { id: current.propertyId },
+      select: { name: true, address: true, city: true, state: true, phone: true, email: true, baseCurrency: true, businessDate: true },
+    });
+    const windowEnd = current.closedAt ?? new Date();
+    const folioItems = await prisma.folioItem.findMany({
+      where: {
+        folio: { propertyId: current.propertyId },
+        postedBy: current.staffId,
+        createdAt: { gte: current.openedAt, lte: windowEnd },
+        voidedAt: null,
+      },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        folio: {
+          include: {
+            reservation: {
+              select: {
+                confirmationNumber: true,
+                primaryGuest: { select: { firstName: true, lastName: true } },
+                reservationRooms: { include: { room: { select: { number: true, displayName: true } } } },
+              },
+            },
+          },
+        },
+      },
+    });
+
     const payments = current.payments.filter(payment => ['COMPLETED', 'PARTIALLY_REFUNDED'].includes(payment.status));
     const cash = payments.filter(payment => payment.method === 'CASH').reduce((sum, payment) => sum + number(payment.amount), 0);
     const card = payments.filter(payment => ['CARD', 'CARD_OFFLINE', 'POS'].includes(payment.method)).reduce((sum, payment) => sum + number(payment.amount), 0);
@@ -54,11 +82,28 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     const paidOuts = movementTotal(['PAID_OUT']);
     const transfersOut = movementTotal(['CASH_TRANSFER_OUT']);
     const expected = number(current.openingFloat) + cash + cashIn - cashDrops - paidOuts - transfersOut - refunds;
-    const rows = [...payments.map(payment => ({ date: payment.createdAt, kind: 'PAYMENT', amount: number(payment.amount), method: payment.method, description: payment.notes || `Folio payment ${payment.folio.folioNumber}` })), ...current.cashMovements.map(movement => ({ date: movement.createdAt, kind: 'CASH_MOVEMENT', amount: number(movement.amount), method: 'CASH', description: movement.notes || movement.reasonCode, type: movement.type }))].sort((left, right) => new Date(right.date).getTime() - new Date(left.date).getTime());
+    const paymentRows = payments.map(payment => {
+      const reservation = payment.folio.reservation;
+      const guest = reservation?.primaryGuest ? `${reservation.primaryGuest.firstName} ${reservation.primaryGuest.lastName}`.trim() : payment.folio.guest ? `${payment.folio.guest.firstName} ${payment.folio.guest.lastName}`.trim() : '—';
+      const room = reservation?.reservationRooms?.map(item => item.room?.displayName || item.room?.number).filter(Boolean).join(', ') || '—';
+      return { date: payment.createdAt, kind: 'PAYMENT', amount: number(payment.amount), method: payment.method, description: payment.notes || `Payment for ${guest}`, reference: payment.reference || payment.receiptNumber || payment.id, guest, room, confirmationNumber: reservation?.confirmationNumber || '—' };
+    });
+    const chargeRows = folioItems.map(item => {
+      const reservation = item.folio.reservation;
+      const guest = reservation?.primaryGuest ? `${reservation.primaryGuest.firstName} ${reservation.primaryGuest.lastName}`.trim() : '—';
+      const room = reservation?.reservationRooms?.map(entry => entry.room?.displayName || entry.room?.number).filter(Boolean).join(', ') || '—';
+      return { date: item.createdAt, kind: 'CHARGE', amount: Math.abs(number(item.amount)), method: item.source, description: item.description, reference: item.operationId || item.id, guest, room, confirmationNumber: reservation?.confirmationNumber || '—', type: item.type, source: item.source };
+    });
+    const movementRows = current.cashMovements.map(movement => ({ date: movement.createdAt, kind: 'CASH_MOVEMENT', amount: number(movement.amount), method: 'CASH', description: movement.notes || movement.reasonCode, reference: movement.operationId || movement.id, type: movement.type, guest: '—', room: '—', confirmationNumber: '—' }));
+    const rows = [...paymentRows, ...chargeRows, ...movementRows].sort((left, right) => new Date(right.date).getTime() - new Date(left.date).getTime());
+    const room = folioItems.filter(item => item.source === 'ROOM_CHARGE').reduce((sum, item) => sum + Math.max(0, number(item.amount)), 0);
+    const laundry = folioItems.filter(item => String(item.source).includes('LAUNDRY')).reduce((sum, item) => sum + Math.max(0, number(item.amount)), 0);
+    const otherCharges = folioItems.filter(item => item.source !== 'ROOM_CHARGE' && !String(item.source).includes('LAUNDRY') && item.type !== 'PAYMENT').reduce((sum, item) => sum + Math.max(0, number(item.amount)), 0);
     return successResponse({
-      session: { shiftReference: current.shiftReference, status: current.status, staffName: `${current.staff.firstName} ${current.staff.lastName}`.trim(), till: current.cashAccount.name, openingFloat: number(current.openingFloat), expectedCash: expected, declaredCash: current.declaredCash == null ? null : number(current.declaredCash), variance: current.variance == null ? (current.declaredCash == null ? null : number(current.declaredCash) - expected) : number(current.variance), openedAt: current.openedAt, closedAt: current.closedAt },
+      property,
+      session: { shiftReference: current.shiftReference, status: current.status, staffName: `${current.staff.firstName} ${current.staff.lastName}`.trim(), till: current.cashAccount.name, businessDate: current.businessDate, openingFloat: number(current.openingFloat), expectedCash: expected, declaredCash: current.declaredCash == null ? null : number(current.declaredCash), variance: current.variance == null ? (current.declaredCash == null ? null : number(current.declaredCash) - expected) : number(current.variance), openedAt: current.openedAt, closedAt: current.closedAt },
       payments: { count: payments.length, cash, card, bankTransfer, other, total: cash + card + bankTransfer + other },
-      charges: { count: 0, room: 0, laundry: 0, other: 0, total: 0 },
+      charges: { count: folioItems.length, room, laundry, other: otherCharges, total: room + laundry + otherCharges },
       cash: { openingFloat: number(current.openingFloat), cashIn, cashDrops, paidOuts, transfersOut, refunds, expected, declared: current.declaredCash == null ? null : number(current.declaredCash), variance: current.variance == null ? (current.declaredCash == null ? null : number(current.declaredCash) - expected) : number(current.variance) },
       exceptions: { pendingSync: 0, failedSync: 0, reconciliation: current.exceptions.length },
       rows,
