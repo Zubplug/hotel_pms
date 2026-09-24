@@ -348,11 +348,6 @@ public class LocalRepository
             .Include(r => r.Rooms).ThenInclude(rr => rr.Room)
             .FirstOrDefaultAsync(r => r.Id == id);
 
-        if (reservation?.Guest != null && reservation.Folio != null)
-        {
-            reservation.Folio.AvailableCredit += await GetUnusedGuestCreditAsync(reservation.Guest.Id);
-        }
-
         return reservation;
     }
 
@@ -368,7 +363,7 @@ public class LocalRepository
             // SQLite cannot translate SUM over EF-mapped decimal columns.
             // Materialize the values and aggregate in managed code instead.
             var allocated = (await _dbContext.CityLedgerAllocations
-                .Where(allocation => allocation.CreditEntryId == entry.Id)
+                .Where(allocation => allocation.CreditEntryId == entry.Id && allocation.SyncStatus != "CONFLICTED")
                 .Select(allocation => allocation.Amount)
                 .ToListAsync())
                 .Sum();
@@ -1003,6 +998,7 @@ public class LocalRepository
             amount = amount,
             description = description,
             type = "CHARGE",
+            source = "ROOM_CHARGE",
             idempotencyKey = idempotencyKey,
             frontdeskSessionId = frontdeskSession?.Id,
             createdAt = DateTime.UtcNow
@@ -1059,11 +1055,18 @@ public class LocalRepository
         var guestCreditToApply = amount - creditApplicationAmount;
         if (guestCreditToApply > 0.01m && !string.IsNullOrWhiteSpace(reservation?.GuestId))
         {
+            // Apply whatever previous-stay credit is available. A partial
+            // credit must still reduce the charge (for example, 30,000 of a
+            // 40,000 room charge).
+            var availableGuestCredit = await GetUnusedGuestCreditAsync(reservation.GuestId!);
+            var amountToApply = Math.Min(guestCreditToApply, availableGuestCredit);
+            if (amountToApply <= 0.01m) return true;
+
             await ApplyGuestCreditAsync(
                 folioId,
                 null,
                 reservation.GuestId!,
-                guestCreditToApply,
+                amountToApply,
                 userId,
                 deviceId,
                 frontdeskSession?.BusinessDate ?? DateTime.UtcNow.Date,
@@ -2511,11 +2514,6 @@ public class LocalRepository
         var folio = await _dbContext.Folios
             .Include(f => f.Reservation)
             .FirstOrDefaultAsync(f => f.Id == folioId);
-
-        if (folio?.Reservation?.GuestId != null)
-        {
-            folio.AvailableCredit += await GetUnusedGuestCreditAsync(folio.Reservation.GuestId);
-        }
 
         return folio;
     }
@@ -6862,7 +6860,7 @@ public class LocalRepository
 
         // Fetch all local allocations for these entries
         var allocations = await _dbContext.CityLedgerAllocations
-            .Where(a => entryIds.Contains(a.CreditEntryId))
+            .Where(a => entryIds.Contains(a.CreditEntryId) && a.SyncStatus != "CONFLICTED")
             .ToListAsync();
 
         var allocationsByEntry = allocations
@@ -6988,7 +6986,7 @@ public class LocalRepository
         string appliedBy,
         string deviceId,
         DateTime businessDate,
-        bool mirrorAsFolioCredit = true)
+        bool mirrorAsFolioCredit = false)
     {
         await using var tx = await _dbContext.Database.BeginTransactionAsync();
         try
@@ -6999,7 +6997,7 @@ public class LocalRepository
 
             if (!string.IsNullOrEmpty(creditEntryId))
             {
-                query = query.Where(e => e.Id == creditEntryId);
+                query = query.Where(e => e.Id == creditEntryId && e.Type == "REFUND_OWED");
             }
             else
             {
@@ -7025,13 +7023,16 @@ public class LocalRepository
                 if (remainingToApply <= 0) break;
 
                 var existingAllocations = (await _dbContext.CityLedgerAllocations
-                    .Where(a => a.CreditEntryId == entry.Id)
+                    .Where(a => a.CreditEntryId == entry.Id && a.SyncStatus != "CONFLICTED")
                     .Select(a => a.Amount)
                     .ToListAsync())
                     .Sum();
 
                 var available = entry.Amount - existingAllocations;
                 if (available <= 0.01m) continue;
+
+                if (!string.Equals(entry.Currency, folio.Currency ?? "NGN", StringComparison.OrdinalIgnoreCase))
+                    return (false, "Credit currency does not match folio currency.");
 
                 var applyNow = Math.Min(available, remainingToApply);
                 var offlineOperationId = Guid.NewGuid().ToString();
@@ -7091,6 +7092,20 @@ public class LocalRepository
                 };
                 _dbContext.OutboxEvents.Add(outboxEvent);
 
+                // Keep each allocation as a separate local payment so a
+                // rejected allocation can be reversed without reversing
+                // other successful allocations from the same request.
+                UpdateFolioTransactionsJson(folio, "payments", new
+                {
+                    id = Guid.NewGuid().ToString(),
+                    amount = applyNow,
+                    method = "GUEST_CREDIT",
+                    type = "PAYMENT",
+                    status = "COMPLETED",
+                    idempotencyKey = $"dep_pay_{offlineOperationId}",
+                    createdAt = DateTime.UtcNow
+                });
+
                 remainingToApply -= applyNow;
             }
 
@@ -7107,7 +7122,7 @@ public class LocalRepository
             foreach (var entry in entries)
             {
                 var totalAllocated = (await _dbContext.CityLedgerAllocations
-                    .Where(a => a.CreditEntryId == entry.Id)
+                    .Where(a => a.CreditEntryId == entry.Id && a.SyncStatus != "CONFLICTED")
                     .Select(a => a.Amount)
                     .ToListAsync())
                     .Sum();
@@ -7132,17 +7147,6 @@ public class LocalRepository
                     createdAt = DateTime.UtcNow
                 });
             }
-
-            UpdateFolioTransactionsJson(folio, "payments", new
-            {
-                id = Guid.NewGuid().ToString(),
-                amount,
-                method = "GUEST_CREDIT",
-                type = "PAYMENT",
-                status = "COMPLETED",
-                idempotencyKey = $"dep_pay_{mirrorIdempotencyKey}",
-                createdAt = DateTime.UtcNow
-            });
 
             // Update folio balance
             folio.TotalPayments += amount;
@@ -7189,7 +7193,54 @@ public class LocalRepository
         allocation.SyncStatus = "CONFLICTED";
         allocation.ConflictReason = "INSUFFICIENT_CREDIT";
         allocation.ServerMessage = serverMessage;
+
+        // The local mirror was optimistic. Remove only this allocation's
+        // payment and make the credit available again locally; successful
+        // allocations from the same request remain untouched.
+        var folio = await _dbContext.Folios.FirstOrDefaultAsync(f => f.Id == allocation.FolioId);
+        if (folio != null)
+        {
+            folio.TotalPayments = Math.Max(0m, folio.TotalPayments - allocation.Amount);
+            RemoveFolioPaymentFromTransactionsJson(folio, $"dep_pay_{offlineOperationId}");
+            folio.IsDirty = true;
+        }
+
+        var entry = await _dbContext.CityLedgerEntries.FirstOrDefaultAsync(e => e.Id == allocation.CreditEntryId);
+        if (entry != null && entry.Status == "SETTLED")
+        {
+            var activeAllocated = (await _dbContext.CityLedgerAllocations
+                .Where(a => a.CreditEntryId == entry.Id && a.SyncStatus != "CONFLICTED")
+                .Select(a => a.Amount)
+                .ToListAsync()).Sum();
+            if (activeAllocated < entry.Amount - 0.01m) entry.Status = "OPEN";
+        }
+
         await _dbContext.SaveChangesAsync();
+    }
+
+    private void RemoveFolioPaymentFromTransactionsJson(LocalFolio folio, string idempotencyKey)
+    {
+        if (string.IsNullOrWhiteSpace(folio.TransactionsJson)) return;
+        try
+        {
+            var root = System.Text.Json.Nodes.JsonNode.Parse(folio.TransactionsJson) as System.Text.Json.Nodes.JsonObject;
+            if (root?["payments"] is not System.Text.Json.Nodes.JsonArray payments) return;
+
+            for (var i = payments.Count - 1; i >= 0; i--)
+            {
+                if (payments[i] is not System.Text.Json.Nodes.JsonObject payment) continue;
+                if (payment["idempotencyKey"]?.GetValue<string>() != idempotencyKey) continue;
+                payments.RemoveAt(i);
+                break;
+            }
+
+            folio.TransactionsJson = root!.ToJsonString();
+        }
+        catch
+        {
+            // The accounting total is still corrected; malformed legacy JSON
+            // must not prevent the conflict from being surfaced.
+        }
     }
 
     public async Task MarkCreditAllocationRetryingAsync(string offlineOperationId, string serverMessage)

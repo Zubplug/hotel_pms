@@ -92,6 +92,12 @@ export async function POST(
       for (const entry of entries) {
         if (remainingToApply <= 0) break;
 
+        const entryCurrency = String(entry.currency || 'NGN').toUpperCase();
+        const folioCurrency = String(folio.currency || 'NGN').toUpperCase();
+        if (entryCurrency !== folioCurrency) {
+          throw new Error(`Currency mismatch. Credit=${entryCurrency}, folio=${folioCurrency}`);
+        }
+
         // Available = entry.amount - SUM(existing allocations)
         const allocations = await tx.cityLedgerAllocation.findMany({
           where: { paymentId: entry.id }

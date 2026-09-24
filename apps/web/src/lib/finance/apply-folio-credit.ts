@@ -28,6 +28,21 @@ export async function applyAvailableFolioCredit(
 
   for (const credit of credits) {
     if (appliedTotal >= options.amount) break;
+
+    const applicationKey = `CREDIT_APPLICATION:${options.operationKey}:${credit.id}`;
+    const existingApplication = await tx.folioCreditApplication.findUnique({
+      where: { idempotencyKey: applicationKey },
+      select: { amount: true },
+    });
+    if (existingApplication) {
+      appliedTotal += Number(existingApplication.amount);
+      continue;
+    }
+
+    if (String(credit.currency || 'NGN').toUpperCase() !== String(options.currency || 'NGN').toUpperCase()) {
+      throw new Error(`Currency mismatch. Credit=${credit.currency}, folio=${options.currency}`);
+    }
+
     const applied = Math.min(options.amount - appliedTotal, Number(credit.remainingAmount));
     if (applied <= 0) continue;
 
@@ -40,7 +55,6 @@ export async function applyAvailableFolioCredit(
     });
     if (updatedCredit.count !== 1) continue;
 
-    const applicationKey = `CREDIT_APPLICATION:${options.operationKey}:${credit.id}`;
     const application = await tx.folioCreditApplication.create({
       data: {
         creditId: credit.id,

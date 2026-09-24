@@ -504,7 +504,8 @@ public class OfflinePMSInterop
 
             var (success, error) = await _repo.ApplyGuestCreditAsync(
                 folioId, creditEntryId, guestId, amount,
-                ctx.UserId, ctx.DeviceId, businessDate);
+                ctx.UserId, ctx.DeviceId, businessDate,
+                mirrorAsFolioCredit: false);
 
             if (!success)
                 return JsonSerializer.Serialize(new { success = false, error }, _jsonOptions);

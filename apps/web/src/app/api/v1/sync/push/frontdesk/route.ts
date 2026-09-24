@@ -1706,6 +1706,12 @@ export async function POST(req: NextRequest) {
             if (!entry || entry.guestId !== guestId) {
               throw new Error("GUEST_CREDIT_NOT_AVAILABLE");
             }
+            const requestedCurrency = String(payload.currency || folio.currency || "NGN").toUpperCase();
+            const entryCurrency = String(entry.currency || "NGN").toUpperCase();
+            const folioCurrency = String(folio.currency || "NGN").toUpperCase();
+            if (requestedCurrency !== entryCurrency || requestedCurrency !== folioCurrency) {
+              throw new Error(`Currency mismatch. Credit=${entryCurrency}, folio=${folioCurrency}`);
+            }
 
             const allocationTotals = await tx.cityLedgerAllocation.aggregate({
               where: { paymentId: creditEntryId },
@@ -4344,6 +4350,20 @@ export async function POST(req: NextRequest) {
               error: "Failed to record conflict state.",
             });
           }
+        } else if (
+          aggregateType === "CITY_LEDGER" &&
+          eventType === "GUEST_CREDIT_APPLICATION" &&
+          ["INSUFFICIENT_CREDIT", "GUEST_CREDIT_NOT_AVAILABLE"].includes(err.message)
+        ) {
+          // A concurrent terminal consumed the credit. Return a conflict so
+          // the desktop marks its optimistic local allocation CONFLICTED and
+          // reverses the local payment mirror.
+          results.push({
+            id,
+            status: "CONFLICT",
+            idempotencyKey,
+            error: err.message,
+          });
         } else {
           console.error(`Error processing event ${id}:`, err);
           results.push({

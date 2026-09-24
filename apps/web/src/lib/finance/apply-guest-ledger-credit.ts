@@ -34,6 +34,23 @@ export async function applyAvailableGuestLedgerCredit(
 
   for (const entry of entries) {
     if (remainingToApply <= 0.01) break;
+
+    if (String(entry.currency || 'NGN').toUpperCase() !== String(options.currency || 'NGN').toUpperCase()) {
+      throw new Error(`Currency mismatch. Credit=${entry.currency}, folio=${options.currency}`);
+    }
+
+    const applicationKey = `NIGHT_AUDIT_GUEST_CREDIT:${options.operationKey}:${entry.id}`;
+    const existingApplication = await tx.folioItem.findFirst({
+      where: { folioId: options.folioId, operationId: applicationKey, voidedAt: null },
+      select: { amount: true },
+    });
+    if (existingApplication) {
+      const alreadyApplied = Math.abs(Number(existingApplication.amount));
+      appliedTotal += alreadyApplied;
+      remainingToApply -= alreadyApplied;
+      continue;
+    }
+
     const allocated = entry.allocations.reduce((sum: number, allocation: any) => sum + Number(allocation.amount), 0);
     const available = Number(entry.amount) - allocated;
     if (available <= 0.01) continue;
@@ -54,7 +71,6 @@ export async function applyAvailableGuestLedgerCredit(
       await tx.cityLedgerEntry.update({ where: { id: entry.id }, data: { status: 'SETTLED' } });
     }
 
-    const applicationKey = `NIGHT_AUDIT_GUEST_CREDIT:${options.operationKey}:${entry.id}`;
     await tx.folioItem.create({
       data: {
         folioId: options.folioId,
