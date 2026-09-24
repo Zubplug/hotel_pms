@@ -10,7 +10,7 @@ import { HardwareBridge } from '@/lib/desktop/HardwareBridge';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { formatRoomNumber } from '@/lib/format-room';
 import { FrontDeskAddPaymentDialog } from './FrontDeskAddPaymentDialog';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, cn } from '@/lib/utils';
 import { BypassCheckInModal } from './BypassCheckInModal';
 
 interface FrontDeskCheckInDialogProps {
