@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Search, User, LogIn, ArrowRight, Clock, ArrowLeft, CheckCircle2, UserPlus, CreditCard, Wallet, Landmark } from 'lucide-react';
+import { Search, User, LogIn, ArrowRight, Clock, ArrowLeft, CheckCircle2, UserPlus, CreditCard, Wallet, Landmark, CalendarCheck, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useProperty } from '@/components/PropertyProvider';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
@@ -113,24 +113,30 @@ export default function FrontDeskReservationsPage() {
     return true;
   });
 
+  const arrivalsCount = reservations.filter(res => res.status === 'CONFIRMED').length;
+  const inHouseCount = reservations.filter(res => res.status === 'CHECKED_IN').length;
+  const unpaidCount = reservations.filter(res => Number(res.folio?.balance || 0) > 0).length;
+
   return (
-    <div className="p-8 max-w-7xl mx-auto min-h-screen pb-24">
+    <div className="min-h-screen bg-[radial-gradient(ellipse_at_top_right,rgba(79,70,229,0.08),transparent_55%),linear-gradient(180deg,#f0f4fa_0%,#e8eef7_100%)] pb-24">
       
-      {/* Header Actions */}
-      <div className="flex justify-between items-start mb-8 animate-in slide-in-from-top-4 duration-500">
-        <div>
-          <Button 
-            variant="outline" 
-            onClick={() => router.push('/frontdesk')} 
-            className="rounded-full h-10 px-4 shadow-sm border-slate-200 text-slate-600 hover:text-slate-900 mb-6"
-          >
-            <ArrowLeft className="mr-2 h-4 w-4" /> Back to Dashboard
-          </Button>
-          <h1 className="text-3xl font-extrabold tracking-tight text-slate-900">Guest Search</h1>
-          <p className="text-slate-500 mt-1 font-medium">Find guests and manage their reservations instantly.</p>
-        </div>
-        
-        <div className="flex gap-3">
+      {/* Premium command header */}
+      <div className="relative overflow-hidden bg-[#09152d] px-5 py-8 text-white sm:px-8 lg:px-10">
+        <div className="pointer-events-none absolute -right-24 -top-32 h-80 w-80 rounded-full bg-indigo-500/20 blur-[80px]" />
+        <div className="pointer-events-none absolute bottom-[-130px] left-1/3 h-64 w-64 rounded-full bg-cyan-400/10 blur-[70px]" />
+        <div className="relative mx-auto max-w-[1440px]">
+          <div className="mb-7 flex items-center gap-3">
+            <button onClick={() => router.push('/frontdesk')} className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-slate-300 transition-colors hover:bg-white/10 hover:text-white" aria-label="Back to front desk"><ArrowLeft className="h-4 w-4" /></button>
+            <span className="text-xs font-semibold text-slate-500">Front Desk</span><span className="text-slate-700">/</span><span className="text-xs font-semibold text-indigo-300">Reservations</span>
+            <span className="ml-auto hidden items-center gap-2 text-[10px] font-bold uppercase tracking-[.18em] text-emerald-300 sm:flex"><span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" /> Live search</span>
+          </div>
+          <div className="flex flex-col gap-7 xl:flex-row xl:items-end xl:justify-between">
+            <div>
+              <div className="mb-3 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[.24em] text-indigo-300"><span className="flex h-7 w-7 items-center justify-center rounded-lg border border-indigo-300/20 bg-indigo-400/15"><Sparkles className="h-3.5 w-3.5" /></span> Guest relationship desk</div>
+              <h1 className="text-3xl font-semibold tracking-[-0.045em] sm:text-4xl">Reservation command center</h1>
+              <p className="mt-2 text-sm text-slate-400">Find, filter, and move every guest stay forward from one calm workspace.</p>
+            </div>
+            <div className="flex gap-3">
           <Button 
             onClick={() => router.push('/frontdesk/reservations/walk-in')} 
             disabled={!isOnline}
@@ -148,11 +154,19 @@ export default function FrontDeskReservationsPage() {
           >
             New Reservation
           </Button>
+            </div>
+          </div>
+          <div className="mt-8 grid max-w-3xl grid-cols-3 gap-2 sm:gap-3">
+            <HeaderMetric icon={CalendarCheck} label="Confirmed" value={arrivalsCount} />
+            <HeaderMetric icon={LogIn} label="In-house" value={inHouseCount} />
+            <HeaderMetric icon={CreditCard} label="Needs payment" value={unpaidCount} tone={unpaidCount > 0 ? 'amber' : 'emerald'} />
+          </div>
         </div>
       </div>
 
       {/* Search Bar & Workstation Filters */}
-      <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-200 mb-8 animate-in fade-in duration-700 delay-100">
+      <div className="mx-auto max-w-[1440px] px-4 pt-8 sm:px-6 lg:px-8">
+      <div className="rounded-[28px] border border-white/70 bg-white/90 p-5 shadow-[0_16px_50px_rgba(15,23,42,0.08)] backdrop-blur sm:p-6 animate-in fade-in duration-700 delay-100">
         <div className="relative mb-6">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-6 w-6 text-slate-400" />
           <input
@@ -190,8 +204,10 @@ export default function FrontDeskReservationsPage() {
           ))}
         </div>
       </div>
+      </div>
 
       {/* Results Grid */}
+      <div className="mx-auto max-w-[1440px] px-4 sm:px-6 lg:px-8">
       {isLoading ? (
         <div className="flex justify-center p-12">
           <div className="w-10 h-10 border-4 border-slate-200 border-t-blue-600 rounded-full animate-spin"></div>
@@ -398,8 +414,14 @@ export default function FrontDeskReservationsPage() {
           })}
         </div>
       )}
+      </div>
     </div>
   );
+}
+
+function HeaderMetric({ icon: Icon, label, value, tone = 'indigo' }: { icon: React.ElementType; label: string; value: number; tone?: 'indigo' | 'amber' | 'emerald' }) {
+  const colors = tone === 'amber' ? 'text-amber-200 bg-amber-400/10 border-amber-300/15' : tone === 'emerald' ? 'text-emerald-200 bg-emerald-400/10 border-emerald-300/15' : 'text-indigo-200 bg-indigo-400/10 border-indigo-300/15';
+  return <div className="flex items-center gap-2.5 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5"><span className={`flex h-7 w-7 items-center justify-center rounded-lg border ${colors}`}><Icon className="h-3.5 w-3.5" /></span><span className="min-w-0"><span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">{label}</span><span className="text-lg font-black text-white">{value}</span></span></div>;
 }
 
 function isArrivalOverdue(reservation: any) {

@@ -65,16 +65,18 @@ export function LaundryDashboardClient({ managementMode = false }: { managementM
   };
 
   return (
-    <div className="min-h-[calc(100vh-4rem)] p-4 md:p-8 bg-slate-50/50 pb-20">
+    <div className="min-h-[calc(100vh-4rem)] bg-[radial-gradient(ellipse_at_top_right,rgba(6,182,212,0.08),transparent_55%),linear-gradient(180deg,#f0f4fa_0%,#e8eef7_100%)] pb-20">
       <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
         
         {/* Header Section */}
-        <div className="flex flex-col xl:flex-row justify-between items-start xl:items-end gap-6 w-full">
+        <div className="relative overflow-hidden rounded-b-[30px] bg-[#091b2b] px-5 py-8 text-white shadow-[0_20px_60px_-28px_rgba(8,145,178,0.45)] md:px-8">
+          <div className="pointer-events-none absolute -right-24 -top-32 h-80 w-80 rounded-full bg-cyan-500/15 blur-[80px]" />
+        <div className="relative flex flex-col xl:flex-row justify-between items-start xl:items-end gap-6 w-full">
           <div className="flex-1 min-w-0 pr-4">
-            <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight text-slate-900 truncate">
+            <div className="mb-3 text-[10px] font-bold uppercase tracking-[.24em] text-cyan-300">Guest services · textile operations</div><h1 className="text-3xl md:text-4xl font-semibold tracking-[-.045em] truncate">
               Laundry Operations
             </h1>
-            <p className="text-slate-500 mt-2 font-medium text-lg min-h-[28px]">
+            <p className="text-slate-400 mt-2 font-medium text-sm min-h-[28px]">
               <ClientOnlyDate date={new Date()} format="date" locale="en-GB" options={{ weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }} />
             </p>
           </div>
@@ -92,15 +94,16 @@ export function LaundryDashboardClient({ managementMode = false }: { managementM
               <span className="font-bold text-sm">Catalog</span>
             </Button>
 
-            {!managementMode && <Button onClick={() => router.push('/frontdesk')} variant="outline" className="h-20 md:h-24 md:w-36 rounded-2xl bg-white/80 hover:bg-white text-slate-700 border-white/50 shadow hover:shadow-md hover:-translate-y-1 transition-all flex flex-col gap-2 group">
+            {!managementMode && <Button onClick={() => router.push('/frontdesk')} variant="outline" className="h-20 md:h-24 md:w-36 rounded-2xl bg-white/10 hover:bg-white/15 text-white border-white/15 shadow hover:shadow-md hover:-translate-y-1 transition-all flex flex-col gap-2 group">
               <ArrowLeft className="w-6 h-6 md:w-7 md:h-7 text-slate-400 group-hover:-translate-x-1 transition-transform" />
               <span className="font-bold text-sm">Front Desk</span>
             </Button>}
           </div>
         </div>
+        </div>
 
         {/* KPI Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 px-4 md:px-0">
           <div className="bg-gradient-to-br from-amber-50 to-amber-100/50 p-6 rounded-2xl border border-amber-100 shadow-sm flex flex-col">
             <div className="flex items-center justify-between mb-4">
               <span className="text-amber-800 font-semibold text-sm uppercase tracking-wider">Pending</span>

@@ -253,21 +253,17 @@ export default function HousekeepingDashboard() {
   };
 
   return (
-    <div className="min-h-[calc(100vh-4rem)] p-4 md:p-8 bg-slate-50/50 pb-20">
-      <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+    <div className="min-h-[calc(100vh-4rem)] bg-[radial-gradient(ellipse_at_top_right,rgba(16,185,129,0.07),transparent_55%),linear-gradient(180deg,#f0f4fa_0%,#e8eef7_100%)] pb-20">
+      <div className="mx-auto max-w-7xl space-y-8 px-4 animate-in fade-in slide-in-from-bottom-4 duration-700 md:px-8">
 
         {/* ── Header ── */}
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+        <div className="relative overflow-hidden rounded-b-[30px] bg-[#091b2b] px-5 py-8 text-white shadow-[0_20px_60px_-28px_rgba(15,118,110,0.45)] md:px-8">
+          <div className="pointer-events-none absolute -right-24 -top-32 h-80 w-80 rounded-full bg-emerald-500/15 blur-[80px]" />
+          <div className="relative flex flex-col gap-7 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <div className="flex items-center gap-2 mb-1">
-              <div className="bg-emerald-100 p-2 rounded-xl">
-                <BedDouble className="w-5 h-5 text-emerald-700" />
-              </div>
-              <h1 className="text-3xl font-extrabold tracking-tight text-slate-900">Housekeeping</h1>
-            </div>
-            <p className="text-slate-500 font-medium ml-1">
-              Room cleaning, inspection &amp; release control
-            </p>
+            <div className="mb-3 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[.24em] text-emerald-300"><span className="flex h-7 w-7 items-center justify-center rounded-lg border border-emerald-300/20 bg-emerald-400/15"><Sparkles className="h-3.5 w-3.5" /></span> Rooms &amp; service control</div>
+            <h1 className="text-3xl font-semibold tracking-[-0.045em] sm:text-4xl">Housekeeping command desk</h1>
+            <p className="mt-2 text-sm text-slate-400">Turn cleaning progress into rooms the front desk can confidently sell.</p>
           </div>
 
           <div className="flex items-center gap-3">
@@ -288,6 +284,8 @@ export default function HousekeepingDashboard() {
             </span>
 
           </div>
+          </div>
+          <div className="relative mt-7 grid max-w-2xl grid-cols-3 gap-2 sm:gap-3"><div className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5"><p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">In cleaning</p><p className="text-xl font-black text-white">{kpis.queue}</p></div><div className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5"><p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Ready to sell</p><p className="text-xl font-black text-emerald-300">{kpis.inspected}</p></div><div className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5"><p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Exceptions</p><p className="text-xl font-black text-amber-300">{kpis.maintenance}</p></div></div>
         </div>
 
         {/* ── Error Banner ── */}

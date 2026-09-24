@@ -267,24 +267,19 @@ export default function MaintenancePage() {
   }
 
   return (
-    <div className="min-h-[calc(100vh-4rem)] p-4 md:p-8 bg-slate-50/50 pb-20">
+    <div className="min-h-[calc(100vh-4rem)] bg-[radial-gradient(ellipse_at_top_right,rgba(249,115,22,0.08),transparent_55%),linear-gradient(180deg,#f0f4fa_0%,#e8eef7_100%)] pb-20">
       <Dialog open={showNewTicket} onOpenChange={setShowNewTicket}>
-      <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+      <div className="mx-auto max-w-7xl space-y-8 px-4 animate-in fade-in slide-in-from-bottom-4 duration-700 md:px-8">
 
         {/* ── Header ── */}
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <div className="bg-orange-100 p-2 rounded-xl">
-                <Wrench className="w-5 h-5 text-orange-700" />
-              </div>
-              <h1 className="text-3xl font-extrabold tracking-tight text-slate-900">Maintenance</h1>
+        <div className="relative overflow-hidden rounded-b-[30px] bg-[#24180f] px-5 py-8 text-white shadow-[0_20px_60px_-28px_rgba(234,88,12,0.45)] md:px-8">
+          <div className="pointer-events-none absolute -right-24 -top-32 h-80 w-80 rounded-full bg-orange-500/15 blur-[80px]" />
+          <div className="relative flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+            <div>
+              <div className="mb-3 text-[10px] font-bold uppercase tracking-[.24em] text-orange-300">Property care · service control</div>
+              <h1 className="text-3xl font-semibold tracking-[-.045em] sm:text-4xl">Maintenance command desk</h1>
+              <p className="mt-2 text-slate-400 font-medium text-sm">Property issues, repair tickets &amp; room restrictions</p>
             </div>
-            <p className="text-slate-500 font-medium ml-1">
-              Property issues, repair tickets &amp; room restrictions
-            </p>
-          </div>
-
           <div className="flex items-center gap-3">
             {/* connectivity badge */}
             <span
@@ -308,6 +303,7 @@ export default function MaintenancePage() {
               <Plus className="mr-2 h-4 w-4" />
               New Ticket
             </DialogTrigger>}
+          </div>
           </div>
         </div>
 

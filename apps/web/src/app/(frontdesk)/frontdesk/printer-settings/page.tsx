@@ -509,10 +509,11 @@ export default function PrinterSettingsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-[#0a0a0a]">
+    <div className="min-h-screen bg-[radial-gradient(ellipse_at_top_right,rgba(99,102,241,0.10),transparent_55%),linear-gradient(180deg,#f0f4fa_0%,#e8eef7_100%)]">
       {/* Header */}
-      <div className="bg-white dark:bg-[#111] border-b border-gray-100 dark:border-[#1f1f1f] px-6 py-5">
-        <div className="max-w-4xl mx-auto flex items-center justify-between">
+      <div className="relative overflow-hidden bg-[#09152d] px-5 py-8 text-white sm:px-8 lg:px-10">
+        <div className="pointer-events-none absolute -right-24 -top-32 h-80 w-80 rounded-full bg-indigo-500/20 blur-[80px]" />
+        <div className="relative mx-auto flex max-w-[1440px] items-end justify-between gap-6">
           <div className="flex items-center gap-4">
             <Link
               href="/frontdesk"
@@ -520,12 +521,12 @@ export default function PrinterSettingsPage() {
             >
               <ArrowLeft className="w-5 h-5" />
             </Link>
-            <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-violet-600 rounded-xl flex items-center justify-center">
+            <div className="w-12 h-12 bg-indigo-400/15 border border-indigo-300/20 rounded-2xl flex items-center justify-center">
               <Printer className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-gray-900 dark:text-white">Printer Setup</h1>
-              <p className="text-sm text-gray-400">Configure thermal receipt and kitchen printers for this terminal</p>
+              <p className="mb-1 text-[10px] font-bold uppercase tracking-[.24em] text-indigo-300">Front desk hardware</p><h1 className="text-3xl font-semibold tracking-[-.045em]">Printer control center</h1>
+              <p className="mt-2 text-sm text-slate-400">Configure thermal receipt and front-desk printers for this terminal.</p>
             </div>
           </div>
           <button
@@ -538,11 +539,11 @@ export default function PrinterSettingsPage() {
         </div>
       </div>
 
-      <div className="max-w-4xl mx-auto px-6 py-8 space-y-6">
+      <div className="mx-auto max-w-[1440px] px-4 py-8 space-y-6 sm:px-6 lg:px-8">
         {/* Info banner */}
-        <div className="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800/40 rounded-xl p-4 flex gap-3">
+        <div className="rounded-[24px] border border-indigo-200/70 bg-white/80 p-5 shadow-sm flex gap-3">
           <div className="w-5 h-5 text-indigo-500 mt-0.5 shrink-0">ℹ️</div>
-          <div className="text-sm text-indigo-700 dark:text-indigo-300">
+          <div className="text-sm text-indigo-700">
             <strong>Supported Printers:</strong> We support both Network and Direct (USB/Serial) POS printers. For network printers, ensure it's on the same local network. For USB, select your device from the discovered list. 
           </div>
         </div>
