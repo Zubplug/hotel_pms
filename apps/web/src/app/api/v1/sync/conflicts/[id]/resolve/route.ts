@@ -3,6 +3,9 @@ import prisma from '@hotel-pms/db';
 import { auth } from '@/lib/auth';
 import crypto from 'crypto';
 import { isNightAuditCutoverActive } from '@/lib/night-audit-guard';
+import { GLMappingService } from '@/lib/services/gl-mapping-service';
+import { GeneralLedgerService } from '@/lib/services/general-ledger-service';
+import type { PaymentMethod } from '@hotel-pms/db';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -205,7 +208,134 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
              } else {
                  await tx.reservation.update({ where: { id: r.id }, data: { version: { increment: 1 } } });
              }
-          } 
+          }
+          else if (conflict.aggregateType === 'CITY_LEDGER') {
+             if (edgeEvent.eventType === 'CITY_LEDGER_PAYMENT') {
+               const amount = Number(payload.amount);
+               const accountId = String(payload.accountId || '');
+               const invoiceId: string | null = payload.invoiceId || null;
+               const accountType = String(payload.accountType || '').toUpperCase();
+               const frontdeskSessionId = String(payload.frontdeskSessionId || '');
+               const method = String(payload.method || 'BANK_TRANSFER').toUpperCase();
+               const reference = String(payload.reference || '').trim();
+               const isUuid = (v: unknown): v is string =>
+                 typeof v === 'string' &&
+                 /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v);
+
+               if (!Number.isFinite(amount) || amount <= 0 || !isUuid(accountId) || !isUuid(frontdeskSessionId) || !reference)
+                 throw new Error('DOMAIN_ERROR: City ledger payment requires account, shift, amount, and reference');
+               if (!['CASH', 'BANK_TRANSFER', 'POS', 'CARD', 'CHEQUE', 'OTHER'].includes(method))
+                 throw new Error('DOMAIN_ERROR: Invalid city ledger payment method');
+
+               const account = await tx.cityLedgerAccount.findUnique({ where: { id: accountId } });
+               if (!account || account.propertyId !== conflict.propertyId || !['CORPORATE', 'SKIPPER'].includes(account.type) || (accountType && account.type !== accountType))
+                 throw new Error('DOMAIN_ERROR: CITY_LEDGER_ACCOUNT_NOT_AVAILABLE');
+
+               const frontdeskSession = await tx.frontdeskSession.findUnique({ where: { id: frontdeskSessionId }, select: { propertyId: true, staffId: true, businessDate: true } });
+               if (!frontdeskSession || frontdeskSession.propertyId !== conflict.propertyId)
+                 throw new Error('DOMAIN_ERROR: FRONTDESK_SHIFT_NOT_FOUND');
+
+               if (account.type !== 'CORPORATE' && !invoiceId)
+                 throw new Error('DOMAIN_ERROR: WALKOUT_INVOICE_REQUIRED');
+               if (invoiceId && !isUuid(invoiceId))
+                 throw new Error('DOMAIN_ERROR: INVALID_INVOICE');
+
+               const invoice = invoiceId ? await tx.cityLedgerInvoice.findUnique({ where: { id: invoiceId } }) : null;
+               if (invoiceId && (!invoice || invoice.accountId !== accountId || invoice.status === 'PAID' || invoice.status === 'VOID'))
+                 throw new Error('DOMAIN_ERROR: CITY_LEDGER_INVOICE_NOT_AVAILABLE');
+               if (invoice && amount > Number(invoice.outstandingAmount) + 0.01)
+                 throw new Error('DOMAIN_ERROR: PAYMENT_EXCEEDS_INVOICE_BALANCE');
+
+               // Idempotency guard — if a payment entry with this reference already exists, skip silently.
+               const existingPayment = await tx.cityLedgerEntry.findFirst({ where: { reference, accountId, type: 'PAYMENT' } });
+               if (!existingPayment) {
+                 const invoices = invoice
+                   ? [invoice]
+                   : await tx.cityLedgerInvoice.findMany({ where: { accountId, status: { in: ['OPEN', 'PARTIALLY_PAID'] } }, orderBy: [{ dueDate: 'asc' }, { createdAt: 'asc' }] });
+
+                 if (!invoice && account.type !== 'CORPORATE')
+                   throw new Error('DOMAIN_ERROR: WALKOUT_INVOICE_REQUIRED');
+
+                 let masterFolio = await tx.folio.findFirst({ where: { propertyId: conflict.propertyId, type: 'CITY_LEDGER', corporateAccountId: null, reservationId: null, status: 'OPEN' } });
+                 if (!masterFolio)
+                   masterFolio = await tx.folio.create({ data: { propertyId: conflict.propertyId, type: 'CITY_LEDGER', status: 'OPEN', currency: account.currency, folioNumber: `AR-${conflict.propertyId.slice(0, 8).toUpperCase()}-${Date.now().toString().slice(-6)}` } });
+
+                 const payment = await tx.payment.create({
+                   data: {
+                     folioId: masterFolio.id,
+                     propertyId: conflict.propertyId,
+                     frontdeskSessionId,
+                     method: method as PaymentMethod,
+                     collectionSource: 'RECEIVABLES',
+                     amount,
+                     currency: account.currency,
+                     baseAmount: amount,
+                     status: 'COMPLETED',
+                     businessDate: frontdeskSession.businessDate,
+                     idempotencyKey: edgeEvent.idempotencyKey,
+                     reference,
+                     receivedBy: frontdeskSession.staffId,
+                     notes: invoice ? `City ledger settlement for ${invoice.invoiceNumber || invoiceId}` : 'Front Desk corporate city ledger payment (conflict force)',
+                   }
+                 });
+                 await tx.folio.update({ where: { id: masterFolio.id }, data: { totalPayments: { increment: amount }, balance: { decrement: amount } } });
+
+                 let remaining = amount;
+                 let appliedAmount = 0;
+                 for (const openInvoice of invoices) {
+                   if (remaining <= 0.01) break;
+                   const applied = Math.min(remaining, Number(openInvoice.outstandingAmount));
+                   const invoiceRemaining = Number(openInvoice.outstandingAmount) - applied;
+                   await tx.cityLedgerInvoice.update({ where: { id: openInvoice.id }, data: { paidAmount: { increment: applied }, outstandingAmount: invoiceRemaining, status: invoiceRemaining <= 0.01 ? 'PAID' : 'PARTIALLY_PAID' } });
+                   remaining -= applied;
+                   appliedAmount += applied;
+                 }
+
+                 const paymentEntry = await tx.cityLedgerEntry.create({
+                   data: {
+                     accountId,
+                     propertyId: conflict.propertyId,
+                     amount,
+                     currency: account.currency,
+                     type: 'PAYMENT',
+                     status: remaining <= 0.01 ? 'SETTLED' : 'OPEN',
+                     reference,
+                     reason: invoice ? `Settlement for invoice ${invoice.invoiceNumber || invoiceId}` : appliedAmount > 0.01 ? 'Bulk corporate city ledger payment (conflict force)' : 'Unapplied corporate advance (conflict force)',
+                     createdBy: session.user?.id || 'SYSTEM',
+                   }
+                 });
+
+                 let allocationRemaining = amount;
+                 for (const openInvoice of invoices) {
+                   if (allocationRemaining <= 0.01) break;
+                   const applied = Math.min(allocationRemaining, Number(openInvoice.outstandingAmount));
+                   await tx.cityLedgerAllocation.create({ data: { paymentId: paymentEntry.id, invoiceId: openInvoice.id, amount: applied, currency: openInvoice.currency, createdBy: session.user?.id || 'SYSTEM' } });
+                   if (Number(openInvoice.outstandingAmount) - applied <= 0.01)
+                     await tx.cityLedgerEntry.updateMany({ where: { invoiceId: openInvoice.id, type: 'TRANSFER_IN', status: 'OPEN' }, data: { status: 'SETTLED' } });
+                   allocationRemaining -= applied;
+                 }
+
+                 if (appliedAmount > 0.01)
+                   await tx.cityLedgerAccount.update({ where: { id: accountId }, data: { balance: { decrement: appliedAmount } } });
+
+                 const propertyRecord = await tx.property.findUnique({ where: { id: conflict.propertyId }, select: { organizationId: true, businessDate: true } });
+                 const businessDate = propertyRecord?.businessDate || frontdeskSession.businessDate;
+                 const glLines: { accountId: string; debit: number; credit: number; description: string; sourceType: string; sourceId: string }[] = [
+                   { accountId: await GLMappingService.getAssetAccountForMethod(conflict.propertyId, method), debit: amount, credit: 0, description: `Receivable collection by ${method}`, sourceType: 'CITY_LEDGER_PAYMENT', sourceId: payment.id },
+                   ...(appliedAmount > 0.01 ? [{ accountId: await GLMappingService.getCityLedgerAccount(conflict.propertyId), debit: 0, credit: appliedAmount, description: 'Reduce city ledger receivable', sourceType: 'CITY_LEDGER_PAYMENT', sourceId: payment.id }] : []),
+                 ];
+                 if (remaining > 0.01 && account.type === 'CORPORATE')
+                   glLines.push({ accountId: await GLMappingService.getCorporateAdvancesAccount(conflict.propertyId), debit: 0, credit: remaining, description: 'Unapplied corporate advance', sourceType: 'CITY_LEDGER_PAYMENT', sourceId: payment.id });
+
+                 await GeneralLedgerService.postJournal(
+                   { userId: session.user?.id || 'SYSTEM', propertyIds: [conflict.propertyId], organizationId: propertyRecord?.organizationId || '', role: 'SYSTEM', permissions: [], outletIds: [] },
+                   { propertyId: conflict.propertyId, entryDate: businessDate, reference: `CITY-LEDGER-PAYMENT-${edgeEvent.idempotencyKey}`, description: invoice ? `Settle city ledger invoice ${invoice.invoiceNumber || invoiceId}` : 'Corporate city ledger payment (conflict force)', sourceModule: 'AR', lines: glLines },
+                   tx,
+                 );
+               }
+               currentVersion = 1; // CITY_LEDGER entries are not versioned
+             }
+          }
           else if (conflict.aggregateType === 'FOLIO') {
              const f = await tx.folio.findUnique({ where: { id: conflict.aggregateId } });
              if (!f) throw new Error('Aggregate not found');
