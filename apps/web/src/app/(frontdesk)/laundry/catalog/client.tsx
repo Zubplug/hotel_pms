@@ -10,6 +10,7 @@ import { useRouter } from 'next/navigation';
 import { formatCurrency } from '@/lib/utils';
 import { useSession } from 'next-auth/react';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
+import { goBack } from '@/lib/frontdesk-navigation';
 
 export function LaundryCatalogClient({ managementMode = false }: { managementMode?: boolean }) {
   const { propertyId } = useProperty();
@@ -72,7 +73,7 @@ export function LaundryCatalogClient({ managementMode = false }: { managementMod
         
         <div className="flex justify-between items-center bg-white p-6 rounded-3xl border border-slate-200/60 shadow-xl shadow-slate-200/40">
           <div>
-            <Button onClick={() => router.push(managementMode ? '/general-manager/laundry' : '/laundry')} variant="ghost" size="sm" className="rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 px-4 h-8 flex items-center gap-2 mb-2">
+            <Button onClick={() => goBack(router, managementMode ? '/general-manager/laundry' : '/laundry')} variant="ghost" size="sm" className="rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 px-4 h-8 flex items-center gap-2 mb-2">
               <ArrowLeft className="w-4 h-4" /> Back to Dashboard
             </Button>
             <h1 className="text-3xl font-extrabold text-slate-900 flex items-center gap-3">

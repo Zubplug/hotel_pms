@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { Printer, Plus, Trash2, Wifi, WifiOff, CheckCircle, XCircle, Loader2, ChevronRight, Settings2, ArrowLeft } from 'lucide-react';
 import { invokeDesktop } from '@/lib/desktop/IpcBridge';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
+import { useRouter } from 'next/navigation';
+import { goBack } from '@/lib/frontdesk-navigation';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 interface PrinterConfig {
@@ -451,6 +453,7 @@ function PrinterForm({
 
 // ─── Main Page ──────────────────────────────────────────────────────────────
 export default function PrinterSettingsPage() {
+  const router = useRouter();
   const { isDesktopMode } = useLodgeCoreProvider();
   const [printers, setPrinters] = useState<PrinterConfig[]>([]);
   const [loading, setLoading] = useState(true);
@@ -517,6 +520,7 @@ export default function PrinterSettingsPage() {
           <div className="flex items-center gap-4">
             <Link
               href="/frontdesk"
+              onClick={(event) => { event.preventDefault(); goBack(router, '/frontdesk'); }}
               className="w-10 h-10 bg-gray-50 hover:bg-gray-100 dark:bg-[#1a1a1a] dark:hover:bg-[#252525] text-gray-500 dark:text-gray-400 rounded-xl flex items-center justify-center transition-colors"
             >
               <ArrowLeft className="w-5 h-5" />

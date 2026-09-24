@@ -8,6 +8,7 @@ import { ArrowLeft, CheckCircle2, Shirt, Loader2, Search, User, Phone, Mail } fr
 import { formatCurrency } from '@/lib/utils';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { formatRoomNumber } from '@/lib/format-room';
+import { goBack } from '@/lib/frontdesk-navigation';
 
 export default function NewLaundryOrderPage() {
   const { propertyId } = useProperty();
@@ -199,7 +200,7 @@ export default function NewLaundryOrderPage() {
         
         <div className="flex justify-between items-center bg-white p-6 rounded-3xl border border-slate-200/60 shadow-xl shadow-slate-200/40">
           <div>
-            <Button onClick={() => router.push('/laundry')} variant="ghost" size="sm" className="rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 px-4 h-8 flex items-center gap-2 mb-2">
+            <Button onClick={() => goBack(router, '/laundry')} variant="ghost" size="sm" className="rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 px-4 h-8 flex items-center gap-2 mb-2">
               <ArrowLeft className="w-4 h-4" /> Back to Dashboard
             </Button>
             <h1 className="text-3xl font-extrabold text-slate-900 flex items-center gap-3">

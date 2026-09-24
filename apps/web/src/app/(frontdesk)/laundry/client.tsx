@@ -9,6 +9,7 @@ import { useRouter } from 'next/navigation';
 import { cn, formatCurrency } from '@/lib/utils';
 import { ClientOnlyDate } from '@/components/ClientOnlyDate';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
+import { goBack } from '@/lib/frontdesk-navigation';
 
 export function LaundryDashboardClient({ managementMode = false }: { managementMode?: boolean }) {
   const { propertyId } = useProperty();
@@ -94,7 +95,7 @@ export function LaundryDashboardClient({ managementMode = false }: { managementM
               <span className="font-bold text-sm">Catalog</span>
             </Button>
 
-            {!managementMode && <Button onClick={() => router.push('/frontdesk')} variant="outline" className="h-20 md:h-24 md:w-36 rounded-2xl bg-white/10 hover:bg-white/15 text-white border-white/15 shadow hover:shadow-md hover:-translate-y-1 transition-all flex flex-col gap-2 group">
+            {!managementMode && <Button onClick={() => goBack(router, '/frontdesk')} variant="outline" className="h-20 md:h-24 md:w-36 rounded-2xl bg-white/10 hover:bg-white/15 text-white border-white/15 shadow hover:shadow-md hover:-translate-y-1 transition-all flex flex-col gap-2 group">
               <ArrowLeft className="w-6 h-6 md:w-7 md:h-7 text-slate-400 group-hover:-translate-x-1 transition-transform" />
               <span className="font-bold text-sm">Front Desk</span>
             </Button>}

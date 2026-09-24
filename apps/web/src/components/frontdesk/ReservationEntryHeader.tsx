@@ -3,6 +3,7 @@
 import React from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, CalendarPlus, Check, Clock3, ShieldCheck, Sparkles, UserRound, Wifi } from 'lucide-react';
+import { goBack } from '@/lib/frontdesk-navigation';
 
 interface ReservationEntryHeaderProps {
   isWalkIn: boolean;
@@ -25,7 +26,7 @@ export function ReservationEntryHeader({ isWalkIn, isReturningGuest = false }: R
       <div className="relative mx-auto max-w-[1440px]">
         <div className="mb-7 flex items-center gap-3">
           <button
-            onClick={() => router.push('/frontdesk')}
+            onClick={() => goBack(router, '/frontdesk/reservations')}
             className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-slate-300 transition-colors hover:bg-white/10 hover:text-white"
             aria-label="Back to front desk"
           >

@@ -229,10 +229,13 @@
 .frontdesk-dark-surface .border-gray-200,
 .frontdesk-dark-surface .border-emerald-100,
 .frontdesk-dark-surface .border-emerald-200,
+.frontdesk-dark-surface .border-emerald-50,
 .frontdesk-dark-surface .border-indigo-100,
 .frontdesk-dark-surface .border-blue-100,
 .frontdesk-dark-surface .border-blue-200,
+.frontdesk-dark-surface .border-amber-100,
 .frontdesk-dark-surface .border-amber-200,
+.frontdesk-dark-surface .border-red-100,
 .frontdesk-dark-surface .border-red-200,
 .frontdesk-dark-surface .border-rose-200,
 .frontdesk-dark-surface .border-gray-300 { border-color: rgba(255, 255, 255, 0.10) !important; }
@@ -280,6 +283,8 @@
 .frontdesk-dark-surface [data-slot='select-item'][data-highlighted],
 .frontdesk-dark-surface [data-slot='dropdown-menu-item']:hover,
 .frontdesk-dark-surface [data-slot='dropdown-menu-item'][data-highlighted] { background-color: #16233b !important; color: #f8fafc !important; }
+.frontdesk-dark-surface .bg-amber-500.text-amber-950,
+.frontdesk-dark-surface .bg-amber-500 .text-amber-950 { color: #1f2937 !important; }
 .frontdesk-dark-surface .hover\:bg-white:hover { background-color: rgba(255, 255, 255, 0.08) !important; }
 .frontdesk-dark-surface .hover\:bg-slate-50:hover,
 .frontdesk-dark-surface .hover\:bg-slate-100:hover,
@@ -311,6 +316,8 @@
 .frontdesk-dark-surface .bg-emerald-100,
 .frontdesk-dark-surface .bg-emerald-200,
 .frontdesk-dark-surface .bg-emerald-50\/50,
+.frontdesk-dark-surface .bg-emerald-50\/60,
+.frontdesk-dark-surface .bg-emerald-200\/50,
 .frontdesk-dark-surface .bg-green-50,
 .frontdesk-dark-surface .bg-green-100 { background-color: rgba(16, 185, 129, 0.14) !important; }
 .frontdesk-dark-surface .bg-indigo-50,
@@ -319,6 +326,7 @@
 .frontdesk-dark-surface .bg-blue-100,
 .frontdesk-dark-surface .bg-blue-200,
 .frontdesk-dark-surface .bg-blue-50\/50,
+.frontdesk-dark-surface .bg-blue-50\/60,
 .frontdesk-dark-surface .bg-indigo-50\/70 { background-color: rgba(99, 102, 241, 0.14) !important; }
 .frontdesk-dark-surface .bg-amber-50,
 .frontdesk-dark-surface .bg-amber-100,
@@ -339,7 +347,8 @@
 .frontdesk-dark-surface .text-green-950,
 .frontdesk-dark-surface .text-green-900,
 .frontdesk-dark-surface .text-green-800,
-.frontdesk-dark-surface .text-green-700 { color: #6ee7b7 !important; }
+.frontdesk-dark-surface .text-green-700,
+.frontdesk-dark-surface .text-green-600 { color: #6ee7b7 !important; }
 .frontdesk-dark-surface .text-indigo-950,
 .frontdesk-dark-surface .text-indigo-900,
 .frontdesk-dark-surface .text-indigo-800,
@@ -354,8 +363,10 @@
 .frontdesk-dark-surface .text-amber-700 { color: #fcd34d !important; }
 .frontdesk-dark-surface .text-red-800,
 .frontdesk-dark-surface .text-red-700,
+.frontdesk-dark-surface .text-red-900,
 .frontdesk-dark-surface .text-red-950,
-.frontdesk-dark-surface .text-rose-700 { color: #fda4af !important; }
+.frontdesk-dark-surface .text-rose-700,
+.frontdesk-dark-surface .text-rose-900 { color: #fda4af !important; }
 
 @custom-variant dark (&:is(.dark *));
 

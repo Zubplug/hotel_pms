@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
+import { goBack } from '@/lib/frontdesk-navigation';
 import { useProperty } from '@/components/PropertyProvider';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { ArrowLeft, Search, Key, Sparkles, Wind, AlertTriangle, ShieldCheck, DoorOpen, BedDouble } from 'lucide-react';
@@ -90,7 +91,7 @@ export default function FrontDeskRoomsPage() {
       <div className="relative overflow-hidden bg-[#09152d] px-5 py-8 text-white sm:px-8 lg:px-10">
         <div className="pointer-events-none absolute -right-24 -top-32 h-80 w-80 rounded-full bg-cyan-500/15 blur-[80px]" />
         <div className="relative mx-auto max-w-[1440px]">
-          <div className="mb-7 flex items-center gap-3"><button onClick={() => router.push('/frontdesk')} className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-slate-300 hover:bg-white/10 hover:text-white" aria-label="Back to front desk"><ArrowLeft className="h-4 w-4" /></button><span className="text-xs font-semibold text-slate-500">Front Desk</span><span className="text-slate-700">/</span><span className="text-xs font-semibold text-cyan-300">Room board</span><span className="ml-auto hidden items-center gap-2 text-[10px] font-bold uppercase tracking-[.18em] text-emerald-300 sm:flex"><span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" /> Live inventory</span></div>
+          <div className="mb-7 flex items-center gap-3"><button onClick={() => goBack(router, '/frontdesk')} className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-slate-300 hover:bg-white/10 hover:text-white" aria-label="Back to previous screen"><ArrowLeft className="h-4 w-4" /></button><span className="text-xs font-semibold text-slate-500">Front Desk</span><span className="text-slate-700">/</span><span className="text-xs font-semibold text-cyan-300">Room board</span><span className="ml-auto hidden items-center gap-2 text-[10px] font-bold uppercase tracking-[.18em] text-emerald-300 sm:flex"><span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" /> Live inventory</span></div>
           <div className="flex flex-col gap-7 lg:flex-row lg:items-end lg:justify-between">
             <div><div className="mb-3 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[.24em] text-cyan-300"><span className="flex h-7 w-7 items-center justify-center rounded-lg border border-cyan-300/20 bg-cyan-400/15"><DoorOpen className="h-3.5 w-3.5" /></span> Rooms & availability</div><h1 className="text-3xl font-semibold tracking-[-0.045em] sm:text-4xl">Property room board</h1><p className="mt-2 text-sm text-slate-400">See what is sellable, occupied, or waiting for service at a glance.</p></div>
             <div className="grid grid-cols-4 gap-2 sm:gap-3"><RoomMetric icon={BedDouble} label="Total" value={roomMetrics.total} /><RoomMetric icon={Key} label="Ready" value={roomMetrics.available} tone="emerald" /><RoomMetric icon={DoorOpen} label="In-house" value={roomMetrics.occupied} tone="indigo" /><RoomMetric icon={Wind} label="Service" value={roomMetrics.service} tone="amber" /></div>
