@@ -496,7 +496,8 @@ export async function POST(req: NextRequest) {
             aggregateType === "GUEST" ||
             aggregateType === "ROOM" ||
             aggregateType === "LAUNDRY_ORDER" ||
-            aggregateType === "RESERVATION_ROOM"
+            aggregateType === "RESERVATION_ROOM" ||
+            aggregateType === "CITY_LEDGER" // append-only; idempotency guarded inside handler
           ) {
             updatedCount = 1; // No version field on cloud for these yet
           }
