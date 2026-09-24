@@ -19,6 +19,10 @@ export function FinancialReview({ data, onResolve }: FinancialReviewProps) {
   const { pendingNightAuditPostings = [], unverifiedComplimentary, pendingDiscounts, pendingCheckInBypasses } = data.financial;
   const propertyId = data.property.id;
   const currency = data.property.baseCurrency || 'NGN';
+  const estimatedRoomCharges = pendingNightAuditPostings.reduce(
+    (acc: number, posting: any) => acc + Number(posting.netAmount ?? posting.amount ?? posting.grossAmount ?? 0),
+    0,
+  );
 
   const unverifiedCompl = unverifiedComplimentary?.filter((c: any) => c.status === 'PENDING_NIGHT_AUDIT') || [];
 
@@ -55,14 +59,14 @@ export function FinancialReview({ data, onResolve }: FinancialReviewProps) {
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-500">Estimated Total</p>
                 <p className="mt-1 text-2xl font-bold tabular-nums text-white">
-                  {formatMoney(pendingNightAuditPostings.reduce((acc: number, val: any) => acc + Number(val.amount || 0), 0), currency)}
+                  {formatMoney(estimatedRoomCharges, currency)}
                 </p>
               </div>
               <button
-                onClick={() => onResolve('FOLIO_PREVIEW', { type: 'POST_CHARGES', items: pendingNightAuditPostings })}
+                onClick={() => onResolve('ROOM_CHARGES_PREVIEW', { items: pendingNightAuditPostings, currency })}
                 className="group flex items-center gap-2 rounded-xl border border-amber-400/30 bg-amber-400/10 px-5 py-2.5 text-xs font-bold text-amber-300 transition-all hover:bg-amber-400/20"
               >
-                Review & Post
+                Review Charges
                 <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
               </button>
             </div>

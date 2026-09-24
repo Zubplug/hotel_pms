@@ -426,6 +426,7 @@ export async function getFinancialAudit(ctx: TenantContext, propertyId: string) 
       grossAmount: gross,
       discountAmount: discount,
       netAmount: Math.max(0, gross - discount),
+      amount: Math.max(0, gross - discount),
       discountType: discount > 0 ? room.discountType : null,
       discountReason: discount > 0 ? room.discountReason : null,
     }];

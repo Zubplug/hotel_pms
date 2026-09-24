@@ -17,6 +17,7 @@ export type ResolutionAction =
   | { type: 'POS_SESSION'; item: any }
   | { type: 'FRONTDESK_SHIFT'; item: any }
   | { type: 'FOLIO_PREVIEW'; item: any }
+  | { type: 'ROOM_CHARGES_PREVIEW'; item: any }
   | { type: 'SYNC_CONFLICT'; item: any }
   | { type: 'TRANSACTION_VERIFICATION'; item: any }
   | { type: 'DISCOUNT_APPROVAL'; item: any }
@@ -37,10 +38,10 @@ export function ResolutionManager({ action, onClose, onSuccess }: Props) {
   return (
     <Dialog open={!!action} onOpenChange={(open) => !open && onClose()}>
       <DialogContent 
-        className={action?.type === 'FOLIO_PREVIEW' 
+        className={action?.type === 'FOLIO_PREVIEW' || action?.type === 'ROOM_CHARGES_PREVIEW'
           ? "sm:max-w-4xl max-h-[90vh] overflow-y-auto p-0 border-0 bg-transparent shadow-none" 
           : "sm:max-w-[500px] border-white/[0.08] shadow-[0_40px_120px_rgba(0,0,0,0.8)]"}
-        style={action?.type !== 'FOLIO_PREVIEW' ? { background: '#07090f', color: 'white' } : undefined}
+        style={action?.type !== 'FOLIO_PREVIEW' && action?.type !== 'ROOM_CHARGES_PREVIEW' ? { background: '#07090f', color: 'white' } : undefined}
       >
         {action.type === 'ARRIVALS' && <ArrivalResolution item={action.item} onSuccess={onSuccess} onClose={onClose} />}
         {action.type === 'DEPARTURES' && <DepartureResolution item={action.item} onSuccess={onSuccess} onClose={onClose} />}
@@ -48,6 +49,7 @@ export function ResolutionManager({ action, onClose, onSuccess }: Props) {
         {action.type === 'POS_SESSION' && <PosSessionResolution item={action.item} onSuccess={onSuccess} onClose={onClose} />}
         {action.type === 'FRONTDESK_SHIFT' && <FrontdeskShiftResolution item={action.item} onSuccess={onSuccess} onClose={onClose} />}
         {action.type === 'FOLIO_PREVIEW' && <FolioPreview item={action.item} onClose={onClose} />}
+        {action.type === 'ROOM_CHARGES_PREVIEW' && <RoomChargesPreview item={action.item} onClose={onClose} />}
         {action.type === 'SYNC_CONFLICT' && <FinancialSyncResolution item={action.item} onSuccess={onSuccess} onClose={onClose} />}
         {action.type === 'TRANSACTION_VERIFICATION' && <TransactionVerificationResolution propertyId={action.item.propertyId} transactions={action.item.unverifiedTransactions} onOpenChange={(open) => !open && onClose()} onSuccess={onSuccess} open={true} />}
         {action.type === 'DISCOUNT_APPROVAL' && <DiscountApprovalResolution item={action.item} onSuccess={onSuccess} onClose={onClose} />}
@@ -939,6 +941,64 @@ function FolioPreview({ item, onClose }: { item: any; onClose: () => void }) {
       <div className="max-h-[90vh] overflow-y-auto p-6">
         <FolioDetailView folioId={item.id} onBack={onClose} readOnly={true} darkMode />
       </div>
+    </div>
+  );
+}
+
+function RoomChargesPreview({ item, onClose }: { item: any; onClose: () => void }) {
+  const items = Array.isArray(item.items) ? item.items : [];
+  const currency = item.currency || 'NGN';
+  const money = (amount: number) => new Intl.NumberFormat('en-NG', {
+    style: 'currency',
+    currency,
+    maximumFractionDigits: 0,
+  }).format(amount);
+  const gross = items.reduce((sum: number, charge: any) => sum + Number(charge.grossAmount ?? charge.amount ?? 0), 0);
+  const discount = items.reduce((sum: number, charge: any) => sum + Number(charge.discountAmount || 0), 0);
+  const net = items.reduce((sum: number, charge: any) => sum + Number(charge.netAmount ?? Number(charge.amount || 0) - Number(charge.discountAmount || 0)), 0);
+
+  return (
+    <div className="rounded-2xl border border-white/[0.08] bg-[#07090f] p-6 text-white shadow-[0_40px_120px_rgba(0,0,0,0.8)]">
+      <DialogHeader>
+        <DialogTitle className="text-white">Review room charges</DialogTitle>
+        <DialogDescription className="text-slate-400">
+          Confirm these nightly charges before continuing. They are posted only when you confirm and execute the Night Audit.
+        </DialogDescription>
+      </DialogHeader>
+
+      <div className="grid grid-cols-3 gap-3 py-5">
+        <div className="rounded-xl border border-white/[0.08] bg-white/[0.03] p-3">
+          <p className="text-[10px] uppercase tracking-wider text-slate-500">Gross</p>
+          <p className="mt-1 font-bold tabular-nums">{money(gross)}</p>
+        </div>
+        <div className="rounded-xl border border-white/[0.08] bg-white/[0.03] p-3">
+          <p className="text-[10px] uppercase tracking-wider text-slate-500">Discounts</p>
+          <p className="mt-1 font-bold tabular-nums text-amber-300">{money(discount)}</p>
+        </div>
+        <div className="rounded-xl border border-emerald-400/20 bg-emerald-400/[0.06] p-3">
+          <p className="text-[10px] uppercase tracking-wider text-emerald-300/70">Net to post</p>
+          <p className="mt-1 font-bold tabular-nums text-emerald-300">{money(net)}</p>
+        </div>
+      </div>
+
+      <div className="max-h-[45vh] overflow-y-auto rounded-xl border border-white/[0.08]">
+        {items.map((charge: any) => (
+          <div key={charge.operationId || charge.id} className="grid grid-cols-[1fr_auto] gap-4 border-b border-white/[0.06] p-4 last:border-b-0">
+            <div className="min-w-0">
+              <p className="truncate font-semibold text-white">Room {charge.roomNumber || '—'} · {charge.guestName || 'Guest'}</p>
+              <p className="mt-1 text-xs text-slate-500">Confirmation: {charge.confirmationNumber || 'Unavailable'}{charge.roomType ? ` · ${charge.roomType}` : ''}</p>
+            </div>
+            <div className="text-right text-sm tabular-nums">
+              <p className="font-semibold text-white">{money(Number(charge.netAmount ?? charge.amount ?? charge.grossAmount ?? 0))}</p>
+              {Number(charge.discountAmount || 0) > 0 && <p className="text-xs text-amber-300">Discount {money(Number(charge.discountAmount))}</p>}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <DialogFooter className="mt-5">
+        <Button variant="ghost" onClick={onClose} className="text-slate-300 hover:text-white">Back to audit</Button>
+      </DialogFooter>
     </div>
   );
 }
