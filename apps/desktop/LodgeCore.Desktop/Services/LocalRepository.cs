@@ -2082,12 +2082,18 @@ public class LocalRepository
         if (res == null || res.Status != "CHECKED_IN") return false;
         await AssertNightAuditAllowsAsync(res.PropertyId);
 
+        var property = await _dbContext.Properties.FindAsync(res.PropertyId);
+        var operationalDate = property?.BusinessDate.Date ?? DateTime.UtcNow.Date;
+
         // Day-use stays are no longer CHECKED_IN when Night Audit runs, so
         // post their room charge at checkout. The idempotency key keeps this
         // from duplicating a charge already posted by an audit/recovery flow.
-        if (res.Folio != null && res.CheckInDate.Date == res.CheckOutDate.Date)
+        // Early checkout on the arrival date is operationally a day-use stay,
+        // even when the original reservation was scheduled to check out later.
+        if (res.Folio != null &&
+            (res.CheckInDate.Date == res.CheckOutDate.Date || res.CheckInDate.Date == operationalDate))
         {
-            var dayUseKey = $"ROOM_CHARGE_{res.Id}_{res.CheckInDate:yyyy-MM-dd}:DAY_USE";
+            var dayUseKey = $"ROOM_CHARGE_{res.Id}_{operationalDate:yyyy-MM-dd}:DAY_USE";
             if (!CheckFolioIdempotency(res.Folio, dayUseKey))
             {
                 decimal dayUseAmount = 0m;
@@ -2113,7 +2119,7 @@ public class LocalRepository
                     await RecordChargeAsync(
                         res.Folio.Id,
                         dayUseAmount,
-                        $"Day-use room charge for {res.CheckInDate:yyyy-MM-dd}",
+                        $"Day-use room charge for {operationalDate:yyyy-MM-dd}",
                         userId,
                         deviceId,
                         dayUseKey,
@@ -2260,7 +2266,7 @@ public class LocalRepository
                         reservationId = res.Id,
                         folioId = res.Folio.Id,
                         propertyId = res.PropertyId,
-                        businessDate = frontdeskSession?.BusinessDate ?? DateTime.UtcNow.Date,
+                        businessDate = frontdeskSession?.BusinessDate ?? operationalDate,
                         offlineOperationId = idempotencyKey
                     })
                 });
@@ -2268,10 +2274,10 @@ public class LocalRepository
         }
 
         res.Status = "CHECKED_OUT";
-        res.CheckOutDate = DateTime.UtcNow.Date;
+        res.CheckOutDate = operationalDate;
         foreach (var rr in res.Rooms)
         {
-            rr.CheckOutDate = DateTime.UtcNow.Date;
+            rr.CheckOutDate = operationalDate;
         }
         res.UpdatedAt = DateTime.UtcNow;
         res.IsDirty = true;

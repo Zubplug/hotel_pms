@@ -9,6 +9,7 @@ import { getReducedStayEstimate } from "@/lib/refunds/reduced-stay";
 import { calculateNoShowAssessment } from "@/lib/refunds/no-show";
 import { calculateFolioTotals } from "@/lib/finance/folio-totals";
 import { applyAvailableFolioCredit } from "@/lib/finance/apply-folio-credit";
+import { applyAvailableGuestLedgerCredit } from "@/lib/finance/apply-guest-ledger-credit";
 import { isNightAuditCutoverActive } from "@/lib/night-audit-guard";
 import { getPropertyBusinessDate } from "@/lib/date-utils";
 import { InventoryService } from "@/lib/inventory/InventoryService";
@@ -1196,7 +1197,16 @@ export async function POST(req: NextRequest) {
             // happen inside the transaction before changing reservation/room state.
             const reservation = await tx.reservation.findUnique({
               where: { id: aggregateId },
-              select: { confirmationNumber: true, corporateAccountId: true, primaryGuestId: true },
+              select: {
+                confirmationNumber: true,
+                corporateAccountId: true,
+                primaryGuestId: true,
+                checkIn: true,
+                reservationRooms: {
+                  where: { status: "ACTIVE" },
+                  select: { id: true, rateAmount: true, currency: true },
+                },
+              },
             });
             if (!reservation) throw new Error(`Reservation ${aggregateId} not found`);
             let folios = await tx.folio.findMany({
@@ -1210,6 +1220,90 @@ export async function POST(req: NextRequest) {
               });
               // Corporate guests use the company's shared folio only.
               folios = shared;
+            }
+
+            // Older desktop builds could submit CHECK_OUT without the day-use
+            // ROOM_CHARGE event. Repair that gap at the authoritative boundary
+            // before evaluating payment or closing the reservation.
+            if (!reservation.corporateAccountId && folios.length > 0) {
+              const sameDayCheckout =
+                reservation.checkIn.toISOString().slice(0, 10) ===
+                postingBusinessDate.toISOString().slice(0, 10);
+              const targetFolio = folios[0];
+              const dayUseOperationId = `ROOM_CHARGE_${aggregateId}_${postingBusinessDate.toISOString().slice(0, 10)}:DAY_USE`;
+              const existingDayUseCharge = await tx.folioItem.findFirst({
+                where: { folioId: targetFolio.id, operationId: dayUseOperationId, voidedAt: null },
+                select: { id: true },
+              });
+
+              if (sameDayCheckout && !existingDayUseCharge) {
+                const dayUseAmount = reservation.reservationRooms.reduce(
+                  (sum: number, room: any) => sum + Number(room.rateAmount || 0),
+                  0,
+                );
+                if (dayUseAmount > 0.01) {
+                  await tx.folioItem.create({
+                    data: {
+                      folioId: targetFolio.id,
+                      reservationId: aggregateId,
+                      guestId: reservation.primaryGuestId,
+                      businessDate: postingBusinessDate,
+                      type: "CHARGE",
+                      source: "ROOM_CHARGE",
+                      revenueCategory: "ROOM",
+                      description: `Day-use room charge for ${postingBusinessDate.toISOString().slice(0, 10)}`,
+                      quantity: 1,
+                      unitAmount: dayUseAmount,
+                      amount: dayUseAmount,
+                      currency: targetFolio.currency || "NGN",
+                      baseAmount: dayUseAmount,
+                      postedBy: actorId,
+                      operationId: dayUseOperationId,
+                      deviceId: device.id,
+                      isLatePosting: true,
+                    },
+                  });
+                  await tx.folio.update({
+                    where: { id: targetFolio.id },
+                    data: {
+                      totalCharges: { increment: dayUseAmount },
+                      balance: { increment: dayUseAmount },
+                      version: { increment: 1 },
+                    },
+                  });
+
+                  const sameFolioApplied = await applyAvailableFolioCredit(tx, {
+                    folioId: targetFolio.id,
+                    propertyId,
+                    guestId: reservation.primaryGuestId,
+                    reservationId: aggregateId,
+                    amount: dayUseAmount,
+                    currency: targetFolio.currency || "NGN",
+                    source: "CHECKOUT_GUEST_CREDIT",
+                    description: `Applied guest credit at checkout for reservation ${reservation.confirmationNumber}`,
+                    appliedBy: actorId,
+                    operationKey: `CHECKOUT_GUEST_CREDIT:${aggregateId}:${targetFolio.id}`,
+                    businessDate: postingBusinessDate,
+                  });
+                  await applyAvailableGuestLedgerCredit(tx, {
+                    folioId: targetFolio.id,
+                    propertyId,
+                    organizationId: property.organizationId,
+                    guestId: reservation.primaryGuestId,
+                    reservationId: aggregateId,
+                    amount: Math.max(0, dayUseAmount - sameFolioApplied),
+                    currency: targetFolio.currency || "NGN",
+                    appliedBy: actorId,
+                    operationKey: `CHECKOUT_GUEST_CREDIT:${aggregateId}:${targetFolio.id}`,
+                    businessDate: postingBusinessDate,
+                    description: `Applied previous-stay guest credit at checkout for reservation ${reservation.confirmationNumber}`,
+                  });
+                  folios = await tx.folio.findMany({
+                    where: { reservationId: aggregateId, propertyId },
+                    select: { id: true, balance: true, version: true, currency: true },
+                  });
+                }
+              }
             }
             const checkoutFolios = reservation.corporateAccountId
               ? await Promise.all(folios.map(async (folio: any) => {

@@ -82,7 +82,16 @@ export async function POST(
       // no longer be CHECKED_IN when Night Audit selects overnight guests.
       // The deterministic operation key prevents a duplicate if another
       // workflow already posted the room charge for this business date.
-      const sameDayStay = reservation.checkIn.toISOString().slice(0, 10) === reservation.checkOut.toISOString().slice(0, 10);
+      const dayUseProperty = await tx.property.findUnique({
+        where: { id: reservation.propertyId },
+        select: { businessDate: true, timezone: true },
+      });
+      if (!dayUseProperty) throw new Error('PROPERTY_NOT_FOUND');
+      const operationalDate = dayUseProperty.businessDate || getPropertyBusinessDate(dayUseProperty.timezone);
+      // A guest can check out early on the arrival date even when the original
+      // reservation was scheduled for tomorrow. Day-use is determined by the
+      // actual operational checkout date, not the scheduled reservation date.
+      const sameDayStay = reservation.checkIn.toISOString().slice(0, 10) === operationalDate.toISOString().slice(0, 10);
       if (sameDayStay && folios.length > 0) {
         const auditKeyPrefix = `ROOM_CHARGE_${reservation.id}_`;
         const chargeAlreadyPosted = await tx.folioItem.findFirst({
@@ -107,7 +116,7 @@ export async function POST(
                 type: 'CHARGE',
                 source: 'ROOM_CHARGE',
                 revenueCategory: 'ROOM',
-                description: `Day-use room charge for ${reservation.checkIn.toISOString().slice(0, 10)}`,
+                description: `Day-use room charge for ${operationalDate.toISOString().slice(0, 10)}`,
                 quantity: 1,
                 unitAmount: amount,
                 amount,
