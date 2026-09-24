@@ -202,6 +202,20 @@
 .frontdesk-dark-surface .hover\:bg-slate-100:hover,
 .frontdesk-dark-surface .hover\:bg-gray-50:hover { background-color: rgba(255, 255, 255, 0.08) !important; }
 
+/* Literal gradient canvases used by newer pages need the same treatment as
+   utility-class backgrounds. Attribute matching keeps this compatibility
+   layer small without rewriting every route shell. */
+.frontdesk-dark-surface[class*="linear-gradient(180deg,#f0f4fa"],
+.frontdesk-dark-surface [class*="linear-gradient(180deg,#f0f4fa"],
+.frontdesk-dark-surface[class*="linear-gradient(180deg,#e8eef7"],
+.frontdesk-dark-surface [class*="linear-gradient(180deg,#e8eef7"] {
+  background-image: radial-gradient(ellipse at top right, rgba(99, 102, 241, 0.10), transparent 55%), linear-gradient(180deg, #080c18 0%, #0b1220 100%) !important;
+}
+.frontdesk-dark-surface .bg-gradient-to-br,
+.frontdesk-dark-surface .bg-gradient-to-r {
+  background-image: linear-gradient(135deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.025)) !important;
+}
+
 /* Keep status colors meaningful while making their surfaces dark enough for
    the control-room canvas. */
 .frontdesk-dark-surface .bg-emerald-50,
