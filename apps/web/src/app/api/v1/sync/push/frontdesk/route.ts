@@ -1509,7 +1509,7 @@ export async function POST(req: NextRequest) {
               const availableCredit = Math.max(0, -authoritativeBalance);
               if (availableCredit <= 0.01) {
                 throw new Error(
-                  `GUEST_CREDIT_TRANSFER_REJECTED: folio has no credit (authoritative balance ${authoritativeBalance})`
+                  `GUEST_CREDIT_TRANSFER_IGNORED: folio has no credit (authoritative balance ${authoritativeBalance})`
                 );
               }
               if (Math.abs(amount - availableCredit) > 0.01) {
@@ -4400,6 +4400,16 @@ export async function POST(req: NextRequest) {
             idempotencyKey,
             error: err.message,
           });
+        } else if (
+          aggregateType === "FOLIO" &&
+          eventType === "GUEST_CREDIT_TRANSFER" &&
+          typeof err.message === "string" &&
+          err.message.startsWith("GUEST_CREDIT_TRANSFER_IGNORED:")
+        ) {
+          // A stale desktop checkout can submit a transfer after the cloud folio
+          // has already settled. This is a safe no-op, not a financial conflict:
+          // there is no credit to allocate and no balance to reconcile.
+          results.push({ id, status: "SYNCED", idempotencyKey });
         } else if (
           aggregateType === "FOLIO" &&
           eventType === "GUEST_CREDIT_TRANSFER" &&

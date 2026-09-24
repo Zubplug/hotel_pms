@@ -2890,6 +2890,21 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
             evt.NextAttemptAt = DateTime.UtcNow;
         }
 
+        // A previous server version classified stale offline checkout credit
+        // transfers as conflicts. Recheck those events against the authoritative
+        // folio: the current server will acknowledge a zero-balance transfer as a
+        // safe no-op, while a real negative-balance mismatch remains a conflict.
+        foreach (var evt in allPending.Where(e =>
+            e.Status == "CONFLICT" &&
+            e.AggregateType == "FOLIO" &&
+            e.EventType == "GUEST_CREDIT_TRANSFER" &&
+            e.LastError?.Contains("GUEST_CREDIT_TRANSFER_REJECTED: folio has no credit", StringComparison.OrdinalIgnoreCase) == true))
+        {
+            evt.Status = "FAILED";
+            evt.LastError = "Rechecking stale guest-credit transfer against the authoritative folio.";
+            evt.NextAttemptAt = DateTime.UtcNow;
+        }
+
         foreach (var evt in allPending.Where(e =>
             e.Status == "FAILED" &&
             e.AggregateType == "CITY_LEDGER" &&
