@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   AlertTriangle,
   ArrowDownToLine,
@@ -76,6 +77,7 @@ function Panel({ title, subtitle, children }: { title: string; subtitle: string;
 }
 
 export function RoomAnalysisClient() {
+  const router = useRouter();
   const { propertyId } = useProperty();
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
   const [rooms, setRooms] = useState<Room[]>([]);
@@ -168,7 +170,10 @@ export function RoomAnalysisClient() {
               <span className="text-xs font-semibold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-full">Debit: {money(debitBalance)}</span>
             </div>
             <button 
-              onClick={() => window.open(`/reservations/${activeRes.id}`, '_blank')}
+              onClick={() => {
+                setShowRooms(false);
+                router.push(`/reservations/${activeRes.id}`);
+              }}
               className="w-full flex items-center justify-center gap-2 rounded-lg bg-slate-900 hover:bg-slate-800 py-2 text-xs font-bold text-white transition-colors"
             >
               Resolve Debit & Checkout
