@@ -293,7 +293,7 @@ export async function POST(req: NextRequest) {
                          businessDate: sessionBusinessDate,
                          bankType: 'SERVER',
                          status: 'OPEN',
-                         OR: [{ controlStatus: 'OPEN' }, { controlStatus: null }],
+                         controlStatus: 'OPEN',
                        }
                      : {
                          propertyId: sessionPropertyId,
@@ -302,7 +302,7 @@ export async function POST(req: NextRequest) {
                          bankType: 'CENTRAL',
                          bankingModel: 'CENTRAL_CASHIER',
                          status: 'OPEN',
-                         OR: [{ controlStatus: 'OPEN' }, { controlStatus: null }],
+                         controlStatus: 'OPEN',
                        },
                    orderBy: { openedAt: 'asc' },
                  });

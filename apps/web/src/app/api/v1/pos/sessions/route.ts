@@ -117,7 +117,7 @@ export async function POST(req: NextRequest) {
             : { bankType: 'CENTRAL', bankingModel: 'CENTRAL_CASHIER' }),
           OR: [
             { controlStatus: { in: ['SUBMITTED', 'UNDER_REVIEW', 'RETURNED', 'HANDOVER_PENDING'] } },
-            { status: { in: ['RECONCILIATION_REQUIRED', 'CLOSING'] }, controlStatus: null },
+            { status: { in: ['RECONCILIATION_REQUIRED', 'CLOSING'] }, controlStatus: 'OPEN' },
           ],
         },
         orderBy: { openedAt: 'desc' },
@@ -135,7 +135,7 @@ export async function POST(req: NextRequest) {
             primaryOperatorId: staffId,
             businessDate: { gte: businessDateStart, lt: businessDateEnd },
             status: 'OPEN',
-            OR: [{ controlStatus: 'OPEN' }, { controlStatus: null }],
+            controlStatus: 'OPEN',
             bankType: 'SERVER'
           }
         });
@@ -147,7 +147,7 @@ export async function POST(req: NextRequest) {
             outletId: outlet.id,
             businessDate: { gte: businessDateStart, lt: businessDateEnd },
             status: 'OPEN',
-            OR: [{ controlStatus: 'OPEN' }, { controlStatus: null }],
+            controlStatus: 'OPEN',
             bankType: 'CENTRAL',
             bankingModel: 'CENTRAL_CASHIER'
           },
