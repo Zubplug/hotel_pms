@@ -28,6 +28,7 @@ import {
   YAxis,
 } from 'recharts';
 import { useProperty } from '@/components/PropertyProvider';
+import { CheckOutDialog } from '@/components/reservations/CheckOutDialog';
 
 type Room = {
   id: string;
@@ -86,6 +87,7 @@ export function RoomAnalysisClient() {
   const [showRooms, setShowRooms] = useState(false);
   const [roomSearch, setRoomSearch] = useState('');
   const [roomStatusFilter, setRoomStatusFilter] = useState('ALL');
+  const [checkoutContext, setCheckoutContext] = useState<{reservation: any, folio: any} | null>(null);
 
   useEffect(() => {
     if (!propertyId) return;
@@ -171,8 +173,7 @@ export function RoomAnalysisClient() {
             </div>
             <button 
               onClick={() => {
-                setShowRooms(false);
-                router.push(`/reservations/${activeRes.id}`);
+                setCheckoutContext({ reservation: activeRes, folio: { balance: debitBalance } });
               }}
               className="w-full flex items-center justify-center gap-2 rounded-lg bg-slate-900 hover:bg-slate-800 py-2 text-xs font-bold text-white transition-colors"
             >
@@ -182,5 +183,18 @@ export function RoomAnalysisClient() {
         )}
         
         </div>; })}</div>{!visibleRooms.length ? <div className="py-16 text-center text-sm text-slate-500">No rooms match the selected search and status.</div> : null}</div><div className="flex justify-end border-t border-slate-200 bg-slate-50 px-6 py-4"><button onClick={() => setShowRooms(false)} className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-100">Close directory</button></div></div></div> : null}
+      
+      {checkoutContext && (
+        <CheckOutDialog
+          open={true}
+          onOpenChange={(open) => {
+            if (!open) {
+              setCheckoutContext(null);
+            }
+          }}
+          reservation={checkoutContext.reservation}
+          folio={checkoutContext.folio}
+        />
+      )}
     </div>;
 }
