@@ -4,18 +4,17 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useProperty } from '@/components/PropertyProvider';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { AmountInput } from '@/components/ui/amount-input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { AlertTriangle, ArrowRightLeft, Banknote, CheckCircle2, FileText, Loader2, LockKeyhole, PlayCircle, Printer, ShieldCheck, WalletCards } from 'lucide-react';
+import { AlertTriangle, ArrowRightLeft, Banknote, CheckCircle2, ChevronDown, FileText, Loader2, LockKeyhole, PlayCircle, Printer, ShieldCheck, WalletCards } from 'lucide-react';
 import { useLogout } from '@/hooks/useLogout';
 
 type FrontdeskSession = { id: string; shiftReference: string; status: string; controlStatus?: string; openingFloat: number; systemExpectedCash: number; cashAccount?: { id: string; name: string } };
 type CashAccount = { id: string; name: string; type: string; balance: number };
 type ShiftSummary = {
-  session: { shiftReference: string; status: string; staffName: string; till: string; openingFloat: number; expectedCash: number; declaredCash?: number | null; variance?: number | null; openedAt: string; closedAt?: string | null };
+  session: { shiftReference: string; status: string; staffName: string; till: string; businessDate?: string; openingFloat: number; expectedCash: number; declaredCash?: number | null; variance?: number | null; openedAt: string; closedAt?: string | null };
   payments: { count: number; cash: number; card: number; bankTransfer: number; other: number; total: number };
   charges: { count: number; room: number; laundry: number; other: number; total: number };
   cash: { openingFloat: number; cashIn: number; cashDrops: number; paidOuts: number; transfersOut: number; refunds: number; expected: number; declared?: number | null; variance?: number | null };
@@ -34,7 +33,6 @@ export default function FrontdeskCashierPage() {
   const [current, setCurrent] = useState<FrontdeskSession | null>(null);
   const [summary, setSummary] = useState<ShiftSummary | null>(null);
   const [accountId, setAccountId] = useState('');
-  const [openingFloat, setOpeningFloat] = useState('0');
   const [declaredCash, setDeclaredCash] = useState('');
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -43,6 +41,10 @@ export default function FrontdeskCashierPage() {
   const [showOpenSuccess, setShowOpenSuccess] = useState(false);
   const [showCloseSuccess, setShowCloseSuccess] = useState(false);
   const [showHandoverSuccess, setShowHandoverSuccess] = useState(false);
+  const [dailyReport, setDailyReport] = useState<any | null>(null);
+  const [showDailyReport, setShowDailyReport] = useState(false);
+  const [showShiftReport, setShowShiftReport] = useState(false);
+  const [reportLoading, setReportLoading] = useState(false);
   const effectiveControlStatus = current?.controlStatus || (current?.status === 'CLOSED' ? 'SUBMITTED' : current?.status || '');
   const canSubmitShift = effectiveControlStatus === 'OPEN' || effectiveControlStatus === 'RETURNED';
 
@@ -115,8 +117,8 @@ export default function FrontdeskCashierPage() {
 
   const openSession = () => run(async () => {
     const result = await (isDesktopMode
-      ? provider.frontdesk.openSession({ propertyId, cashAccountId: accountId, openingFloat: Number(openingFloat) })
-      : fetch('/api/v1/frontdesk/sessions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ propertyId, cashAccountId: accountId, openingFloat: Number(openingFloat) }) }).then(response => response.json()));
+      ? provider.frontdesk.openSession({ propertyId, cashAccountId: accountId, openingFloat: 0 })
+      : fetch('/api/v1/frontdesk/sessions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ propertyId, cashAccountId: accountId, openingFloat: 0 }) }).then(response => response.json()));
     if (result && typeof result === 'object' && 'error' in result && result.error) {
       throw new Error(typeof result.error === 'string' ? result.error : JSON.stringify(result.error));
     }
@@ -140,38 +142,55 @@ export default function FrontdeskCashierPage() {
     return true;
   });
 
-  const printReport = () => {
-    if (!summary || !provider.hardware.printShiftReport) return;
-    return run(() => provider.hardware.printShiftReport!({
-      staffName: summary.session.staffName,
-      ordersCount: 0,
-      grossSales: summary.charges.total,
-      netSales: summary.charges.total,
-      cashSales: summary.payments.cash,
-      cardSales: summary.payments.card,
-      roomCharges: summary.charges.room,
-      totalDiscounts: 0,
-      currency: 'NGN',
-      printedAt: new Date().toISOString(),
-      shiftReference: summary.session.shiftReference,
-      till: summary.session.till,
-      expectedCash: summary.cash.expected,
-      declaredCash: summary.cash.declared,
-      variance: summary.cash.variance,
-      bankTransferSales: summary.payments.bankTransfer,
-      otherPayments: summary.payments.other,
-      laundryCharges: summary.charges.laundry,
-      otherCharges: summary.charges.other,
-      cashIn: summary.cash.cashIn,
-      cashDrops: summary.cash.cashDrops,
-      paidOuts: summary.cash.paidOuts,
-      transfersOut: summary.cash.transfersOut,
-      cashRefunds: summary.cash.refunds,
-      paymentsCount: summary.payments.count,
-      chargesCount: summary.charges.count,
-      pendingSync: summary.exceptions.pendingSync,
-      failedSync: summary.exceptions.failedSync,
-    }));
+  const loadDailyReport = async () => {
+    if (!propertyId || !isDesktopMode || !provider.frontdesk.getReport) return;
+    setReportLoading(true);
+    try {
+      const date = summary?.session?.businessDate || new Date().toISOString().slice(0, 10);
+      const response = await provider.frontdesk.getReport(propertyId, date, date);
+      if (response?.error) throw new Error(typeof response.error === 'string' ? response.error : JSON.stringify(response.error));
+      setDailyReport(response.data || response);
+      setShowDailyReport(true);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Unable to load the end-of-day report.');
+    } finally {
+      setReportLoading(false);
+    }
+  };
+
+  const printDailyReport = async () => {
+    if (!dailyReport || !provider.hardware.printShiftReport) return;
+    setBusy(true);
+    try {
+      const checkIns = dailyReport.checkIns || [];
+      const paymentSummary = dailyReport.paymentSummary || [];
+      const rows = dailyReport.rows || [];
+      const payments = rows.filter((row: any) => row.kind === 'PAYMENT');
+      const charges = rows.filter((row: any) => row.kind === 'FOLIO_ITEM' && row.type !== 'PAYMENT');
+      const paymentAmount = (method: string) => paymentSummary.find((item: any) => String(item.method).toUpperCase() === method)?.amount || 0;
+      const gross = checkIns.reduce((sum: number, item: any) => sum + Number(item.grossAmount || 0), 0);
+      const discounts = checkIns.reduce((sum: number, item: any) => sum + Number(item.discountAmount || 0), 0);
+      const result = await provider.hardware.printShiftReport!({
+        reportTitle: 'FRONT DESK END-OF-DAY REPORT', staffName: 'Front Desk', ordersCount: 0,
+        grossSales: gross, netSales: Math.max(0, gross - discounts), cashSales: paymentAmount('CASH'),
+        cardSales: paymentAmount('CARD') + paymentAmount('POS'),
+        roomCharges: charges.filter((row: any) => row.type === 'ROOM_CHARGE' || row.description?.toString().includes('Room Charge')).reduce((sum: number, row: any) => sum + Number(row.amount || 0), 0),
+        totalDiscounts: discounts, currency: 'NGN', printedAt: new Date().toISOString(),
+        shiftReference: `EOD-${summary?.session?.businessDate || new Date().toISOString().slice(0, 10)}`, till: 'All Front Desk Tills',
+        bankTransferSales: paymentAmount('BANK_TRANSFER') + paymentAmount('TRANSFER'),
+        otherPayments: payments.reduce((sum: number, row: any) => sum + Number(row.amount || 0), 0) - paymentAmount('CASH') - paymentAmount('CARD') - paymentAmount('POS') - paymentAmount('BANK_TRANSFER') - paymentAmount('TRANSFER'),
+        paymentsCount: payments.length, chargesCount: charges.length, checkInLines: checkIns, paymentSummary,
+      });
+      if (result?.error || result?.success === false) throw new Error(result.error || 'Printer could not print the report.');
+      setMessage('End-of-day report sent to the Front Desk receipt printer.');
+    } catch (error) { setMessage(error instanceof Error ? error.message : 'Unable to print the end-of-day report.'); }
+    finally { setBusy(false); }
+  };
+
+  const printCurrentShiftA4 = () => {
+    if (!summary) return;
+    setShowShiftReport(false);
+    setTimeout(() => window.print(), 120);
   };
 
   const varianceTone = useMemo(() => {
@@ -179,9 +198,41 @@ export default function FrontdeskCashierPage() {
     return variance === 0 ? 'text-emerald-700' : variance > 0 ? 'text-blue-700' : 'text-red-700';
   }, [summary]);
 
-  if (loading) return <div className="flex justify-center p-16"><Loader2 className="animate-spin" /></div>;
+  if (loading) return <div className="flex min-h-[70vh] items-center justify-center bg-[#f5f8fc]"><div className="flex flex-col items-center gap-3 text-slate-500"><span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-600/10 text-indigo-600"><Loader2 className="h-6 w-6 animate-spin" /></span><span className="text-sm font-medium">Preparing your cashier workspace…</span></div></div>;
 
-  return <div className="mx-auto max-w-[800px] space-y-6 pb-10">
+  return <div className="frontdesk-cashier-shell min-h-full bg-[radial-gradient(circle_at_top_right,_rgba(79,70,229,0.10),_transparent_28%),linear-gradient(180deg,#f6f9fd_0%,#eef3f9_100%)] px-4 py-5 text-slate-900 sm:px-6 lg:px-8 lg:py-8">
+    <div className="mx-auto max-w-[1440px] space-y-6 pb-12">
+    {dailyReport && <div id="frontdesk-a4-report" className="hidden bg-white text-slate-900 print:block">
+      <div className="border-b-2 border-slate-900 pb-5"><p className="text-xs font-bold uppercase tracking-[.22em] text-indigo-700">LodgeCore Front Desk</p><h1 className="mt-2 text-3xl font-bold">End-of-Day Collection Report</h1><p className="mt-2 text-sm text-slate-500">Business date: {summary?.session?.businessDate || new Date().toISOString().slice(0, 10)} · Prepared by Front Desk</p></div>
+      <div className="mt-6 grid grid-cols-3 gap-3"><div className="rounded-lg border p-4"><p className="text-xs uppercase text-slate-500">Check-ins</p><p className="mt-2 text-xl font-bold">{dailyReport.checkIns?.length || 0}</p></div><div className="rounded-lg border p-4"><p className="text-xs uppercase text-slate-500">Gross room charges</p><p className="mt-2 text-xl font-bold">{money((dailyReport.checkIns || []).reduce((sum: number, item: any) => sum + Number(item.grossAmount || 0), 0))}</p></div><div className="rounded-lg border p-4"><p className="text-xs uppercase text-slate-500">Discounts</p><p className="mt-2 text-xl font-bold">-{money((dailyReport.checkIns || []).reduce((sum: number, item: any) => sum + Number(item.discountAmount || 0), 0))}</p></div></div>
+      <h2 className="mt-8 border-b pb-2 text-lg font-bold">Today&apos;s Check-ins and Room Charges</h2><table className="mt-3 w-full border-collapse text-sm"><thead><tr className="border-b-2 border-slate-800 text-left"><th className="py-2">Room</th><th className="py-2">Guest</th><th className="py-2">Confirmation</th><th className="py-2 text-right">Gross</th><th className="py-2 text-right">Discount</th><th className="py-2 text-right">Net</th></tr></thead><tbody>{(dailyReport.checkIns || []).map((item: any) => <tr key={`print-${item.confirmationNumber}-${item.roomNumber}`} className="border-b"><td className="py-2">{item.roomNumber}</td><td className="py-2">{item.guestName}</td><td className="py-2">{item.confirmationNumber || '—'}</td><td className="py-2 text-right">{money(item.grossAmount)}</td><td className="py-2 text-right">{item.discountAmount ? `-${money(item.discountAmount)}` : '—'}</td><td className="py-2 text-right font-semibold">{money(item.netAmount)}</td></tr>)}</tbody></table>
+      <div className="mt-8 grid grid-cols-2 gap-8"><div><h2 className="border-b pb-2 text-lg font-bold">Payment Type Summary</h2><div className="mt-3 space-y-2">{(dailyReport.paymentSummary || []).map((item: any) => <SummaryRow key={`print-payment-${item.method}`} label={`${item.method} (${item.count})`} value={money(item.amount)} />)}</div></div><div><h2 className="border-b pb-2 text-lg font-bold">Report Control</h2><div className="mt-3 space-y-2"><SummaryRow label="Sessions" value={String(dailyReport.totals?.sessions || 0)} /><SummaryRow label="Report rows" value={String(dailyReport.rows?.length || 0)} /><SummaryRow label="Net movement" value={money(dailyReport.totals?.net || 0)} strong /></div></div></div>
+      <div className="mt-14 grid grid-cols-3 gap-8 text-xs text-slate-500"><div className="border-t pt-2">Front Desk signature</div><div className="border-t pt-2">Auditor signature</div><div className="border-t pt-2">General Cashier signature</div></div><p className="mt-10 text-center text-[10px] text-slate-400">Generated from the terminal&apos;s offline transaction ledger · {new Date().toLocaleString()}</p>
+    </div>}
+    {summary && <div id="frontdesk-shift-a4-report" className="hidden bg-white text-slate-900 print:block"><div className="border-b-2 border-slate-900 pb-5"><p className="text-xs font-bold uppercase tracking-[.22em] text-indigo-700">LodgeCore Front Desk</p><h1 className="mt-2 text-3xl font-bold">Cashier Shift Report</h1><p className="mt-2 text-sm text-slate-500">{summary.session.shiftReference} · {summary.session.businessDate || 'Current business date'}</p></div><div className="mt-6 grid grid-cols-3 gap-3"><div className="rounded-lg border p-4"><p className="text-xs uppercase text-slate-500">Cashier</p><p className="mt-2 font-bold">{summary.session.staffName}</p></div><div className="rounded-lg border p-4"><p className="text-xs uppercase text-slate-500">Till</p><p className="mt-2 font-bold">{summary.session.till}</p></div><div className="rounded-lg border p-4"><p className="text-xs uppercase text-slate-500">Status</p><p className="mt-2 font-bold">{effectiveControlStatus.replaceAll('_', ' ')}</p></div></div><div className="mt-8 grid grid-cols-2 gap-8"><div><h2 className="border-b pb-2 text-lg font-bold">Collections</h2><div className="mt-3 space-y-2"><SummaryRow label="Cash" value={money(summary.payments.cash)} /><SummaryRow label="Card / POS" value={money(summary.payments.card)} /><SummaryRow label="Bank transfer" value={money(summary.payments.bankTransfer)} /><SummaryRow label="Other" value={money(summary.payments.other)} /><SummaryRow label="Total payments" value={money(summary.payments.total)} strong /></div></div><div><h2 className="border-b pb-2 text-lg font-bold">Charges</h2><div className="mt-3 space-y-2"><SummaryRow label="Room charges" value={money(summary.charges.room)} /><SummaryRow label="Laundry" value={money(summary.charges.laundry)} /><SummaryRow label="Other" value={money(summary.charges.other)} /><SummaryRow label="Total charges" value={money(summary.charges.total)} strong /></div></div></div><h2 className="mt-8 border-b pb-2 text-lg font-bold">Cash Reconciliation</h2><div className="mt-3 grid grid-cols-2 gap-x-12 gap-y-2"><SummaryRow label="Opening float" value={money(summary.cash.openingFloat)} /><SummaryRow label="Cash received" value={money(summary.payments.cash)} /><SummaryRow label="Cash in" value={money(summary.cash.cashIn)} /><SummaryRow label="Drops / paid out / refunds" value={money(summary.cash.refunds + summary.cash.cashDrops + summary.cash.paidOuts + summary.cash.transfersOut)} /><SummaryRow label="Expected cash" value={money(summary.cash.expected)} strong /><SummaryRow label="Declared cash" value={summary.cash.declared == null ? 'Not declared' : money(summary.cash.declared)} /><SummaryRow label="Variance" value={summary.cash.variance == null ? 'Not declared' : money(summary.cash.variance)} strong /></div><h2 className="mt-8 border-b pb-2 text-lg font-bold">Recent Activity</h2><table className="mt-3 w-full border-collapse text-sm"><thead><tr className="border-b-2 border-slate-800 text-left"><th className="py-2">Date</th><th className="py-2">Description</th><th className="py-2">Method</th><th className="py-2 text-right">Amount</th></tr></thead><tbody>{summary.rows.map((row, index) => <tr key={`shift-print-${row.date}-${index}`} className="border-b"><td className="py-2">{dateTime(row.date)}</td><td className="py-2">{row.description || row.kind}</td><td className="py-2">{row.method || '—'}</td><td className="py-2 text-right">{money(row.amount)}</td></tr>)}</tbody></table><div className="mt-14 grid grid-cols-2 gap-10 text-xs text-slate-500"><div className="border-t pt-2">Cashier signature</div><div className="border-t pt-2">Auditor / Manager signature</div></div><p className="mt-10 text-center text-[10px] text-slate-400">Generated from the terminal&apos;s offline shift ledger · {new Date().toLocaleString()}</p></div>}
+    <style jsx global>{`@media print { @page { size: A4; margin: 12mm; } body * { visibility: hidden !important; } #frontdesk-shift-a4-report, #frontdesk-shift-a4-report * { visibility: visible !important; } #frontdesk-shift-a4-report { display: block !important; position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; min-height: 270mm; padding: 0 !important; background: #fff !important; } }`}</style>
+    <Dialog open={showShiftReport} onOpenChange={setShowShiftReport}>
+      <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto">
+        <DialogHeader><DialogTitle>Cashier Shift Report</DialogTitle><DialogDescription>This report covers only the current Front Desk cashier shift and is formatted for normal A4 printing.</DialogDescription></DialogHeader>
+        {summary && <div className="space-y-5 text-sm">
+          <div className="grid gap-3 sm:grid-cols-3"><div className="rounded-lg border p-3"><p className="text-xs text-muted-foreground">Cashier</p><p className="mt-1 font-semibold">{summary.session.staffName}</p></div><div className="rounded-lg border p-3"><p className="text-xs text-muted-foreground">Till</p><p className="mt-1 font-semibold">{summary.session.till}</p></div><div className="rounded-lg border p-3"><p className="text-xs text-muted-foreground">Shift</p><p className="mt-1 font-semibold">{summary.session.shiftReference}</p></div></div>
+          <div className="grid gap-5 md:grid-cols-2"><div><h3 className="mb-2 font-semibold">Collections</h3><div className="space-y-2 rounded-lg border p-3"><SummaryRow label="Cash" value={money(summary.payments.cash)} /><SummaryRow label="Card / POS" value={money(summary.payments.card)} /><SummaryRow label="Bank transfer" value={money(summary.payments.bankTransfer)} /><SummaryRow label="Other" value={money(summary.payments.other)} /><SummaryRow label="Total payments" value={money(summary.payments.total)} strong /></div></div><div><h3 className="mb-2 font-semibold">Charges</h3><div className="space-y-2 rounded-lg border p-3"><SummaryRow label="Room charges" value={money(summary.charges.room)} /><SummaryRow label="Laundry" value={money(summary.charges.laundry)} /><SummaryRow label="Other" value={money(summary.charges.other)} /><SummaryRow label="Total charges" value={money(summary.charges.total)} strong /></div></div></div>
+          <div><h3 className="mb-2 font-semibold">Cash reconciliation</h3><div className="grid gap-x-8 gap-y-2 rounded-lg border p-3 sm:grid-cols-2"><SummaryRow label="Expected cash" value={money(summary.cash.expected)} strong /><SummaryRow label="Declared cash" value={summary.cash.declared == null ? 'Not declared' : money(summary.cash.declared)} /><SummaryRow label="Variance" value={summary.cash.variance == null ? 'Not declared' : money(summary.cash.variance)} strong /><SummaryRow label="Pending sync" value={String(summary.exceptions.pendingSync)} /></div></div>
+        </div>}
+        <DialogFooter><Button variant="outline" onClick={() => setShowShiftReport(false)}>Close</Button><Button onClick={printCurrentShiftA4} disabled={!summary}><Printer className="mr-2 h-4 w-4" />Print A4 Shift Report</Button></DialogFooter>
+      </DialogContent>
+    </Dialog>
+    <Dialog open={showDailyReport} onOpenChange={setShowDailyReport}>
+      <DialogContent className="max-h-[90vh] max-w-5xl overflow-y-auto">
+        <DialogHeader><DialogTitle>Front Desk End-of-Day Report</DialogTitle><DialogDescription>Offline report for today&apos;s check-ins, room charges, discounts, and collection methods. Review it before printing for the auditor.</DialogDescription></DialogHeader>
+        {dailyReport && <div className="space-y-5 text-sm">
+          <div className="grid gap-3 sm:grid-cols-3"><div className="rounded-lg border p-3"><p className="text-xs text-muted-foreground">Check-ins</p><p className="mt-1 text-xl font-bold">{dailyReport.checkIns?.length || 0}</p></div><div className="rounded-lg border p-3"><p className="text-xs text-muted-foreground">Gross room charges</p><p className="mt-1 text-xl font-bold">{money((dailyReport.checkIns || []).reduce((sum: number, item: any) => sum + Number(item.grossAmount || 0), 0))}</p></div><div className="rounded-lg border p-3"><p className="text-xs text-muted-foreground">Discounts</p><p className="mt-1 text-xl font-bold text-amber-700">-{money((dailyReport.checkIns || []).reduce((sum: number, item: any) => sum + Number(item.discountAmount || 0), 0))}</p></div></div>
+          <div className="overflow-x-auto rounded-lg border"><table className="w-full min-w-[700px] text-left"><thead className="bg-muted/50 text-xs uppercase text-muted-foreground"><tr><th className="px-3 py-2">Room</th><th className="px-3 py-2">Guest</th><th className="px-3 py-2">Confirmation</th><th className="px-3 py-2 text-right">Gross</th><th className="px-3 py-2 text-right">Discount</th><th className="px-3 py-2 text-right">Net</th></tr></thead><tbody className="divide-y">{(dailyReport.checkIns || []).map((item: any) => <tr key={`${item.confirmationNumber}-${item.roomNumber}`}><td className="px-3 py-2 font-semibold">{item.roomNumber}</td><td className="px-3 py-2">{item.guestName}</td><td className="px-3 py-2 text-muted-foreground">{item.confirmationNumber || '—'}</td><td className="px-3 py-2 text-right">{money(item.grossAmount)}</td><td className="px-3 py-2 text-right text-amber-700">{item.discountAmount ? `-${money(item.discountAmount)}` : '—'}</td><td className="px-3 py-2 text-right font-semibold">{money(item.netAmount)}</td></tr>)}</tbody></table>{!dailyReport.checkIns?.length && <p className="p-6 text-center text-muted-foreground">No check-ins were recorded for today.</p>}</div>
+          <div className="grid gap-5 md:grid-cols-2"><div><h3 className="mb-2 font-semibold">Payment type summary</h3><div className="space-y-2 rounded-lg border p-3">{(dailyReport.paymentSummary || []).map((item: any) => <SummaryRow key={item.method} label={`${item.method} (${item.count})`} value={money(item.amount)} />)}{!dailyReport.paymentSummary?.length && <p className="text-muted-foreground">No payments recorded.</p>}</div></div><div><h3 className="mb-2 font-semibold">Report totals</h3><div className="space-y-2 rounded-lg border p-3"><SummaryRow label="Total rows" value={String(dailyReport.rows?.length || 0)} /><SummaryRow label="Sessions" value={String(dailyReport.totals?.sessions || 0)} /><SummaryRow label="Net movement" value={money(dailyReport.totals?.net || 0)} strong /></div></div></div>
+        </div>}
+        <DialogFooter><Button variant="outline" onClick={() => setShowDailyReport(false)}>Close</Button><Button onClick={printDailyReport} disabled={busy || !dailyReport}><Printer className="mr-2 h-4 w-4" />Print for Auditor</Button></DialogFooter>
+      </DialogContent>
+    </Dialog>
     <Dialog open={showCloseConfirm} onOpenChange={setShowCloseConfirm}>
       <DialogContent>
         <DialogHeader><DialogTitle>Confirm shift submission</DialogTitle><DialogDescription>Are you sure you want to close and submit this Front Desk shift? The till will be locked and the report will be sent for cashier or manager review.</DialogDescription></DialogHeader>
@@ -199,18 +250,22 @@ export default function FrontdeskCashierPage() {
     <Dialog open={showOpenSuccess} onOpenChange={setShowOpenSuccess}>
       <DialogContent>
         <DialogHeader><DialogTitle className="flex items-center gap-2"><CheckCircle2 className="h-5 w-5 text-emerald-600" />Front Desk shift opened</DialogTitle><DialogDescription>The till is ready for Front Desk transactions.</DialogDescription></DialogHeader>
-        <div className="rounded-lg border bg-emerald-50 p-4 text-sm text-emerald-900"><div className="flex justify-between"><span>Till</span><span className="font-semibold">{accounts.find(account => account.id === accountId)?.name || 'Selected till'}</span></div><div className="mt-1 flex justify-between"><span>Opening float</span><span className="font-semibold">{money(Number(openingFloat) || 0)}</span></div><div className="mt-1 flex justify-between"><span>Control status</span><span className="font-semibold">OPEN</span></div></div>
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900"><div className="flex justify-between"><span>Till</span><span className="font-semibold">{accounts.find(account => account.id === accountId)?.name || 'Selected till'}</span></div><div className="mt-1 flex justify-between"><span>Opening float</span><span className="font-semibold">₦0.00</span></div><div className="mt-1 flex justify-between"><span>Control status</span><span className="font-semibold">OPEN</span></div></div>
         <DialogFooter><Button onClick={() => setShowOpenSuccess(false)}>Continue</Button></DialogFooter>
       </DialogContent>
     </Dialog>
-    <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
-      <div><h1 className="text-3xl font-bold tracking-tight">Front Desk Cashier</h1><p className="mt-1 text-muted-foreground">Review every transaction, reconcile the till, and close the shift with a signed audit trail.</p></div>
-      {summary && <Button variant="outline" onClick={printReport} disabled={!isDesktopMode || busy}><Printer className="mr-2 h-4 w-4" />Print End-of-Shift Report</Button>}
+    <div className="relative overflow-hidden rounded-[28px] bg-[#0b1730] px-6 py-7 text-white shadow-[0_24px_60px_rgba(15,23,42,0.18)] sm:px-8 sm:py-8">
+      <div className="pointer-events-none absolute -right-20 -top-28 h-72 w-72 rounded-full bg-indigo-500/20 blur-3xl" /><div className="pointer-events-none absolute bottom-[-120px] left-1/3 h-60 w-60 rounded-full bg-blue-400/10 blur-3xl" />
+        <div className="relative flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
+        <div><div className="mb-3 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[.24em] text-indigo-300"><span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,.8)]" />Front Desk Operations <span className="text-white/20">/</span> Cashier Control</div><h1 className="text-3xl font-semibold tracking-[-.04em] sm:text-4xl">Cashier shift workspace</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">Control today&apos;s till, review every collection, and close the shift with a traceable handover.</p></div>
+        <div className="flex flex-wrap gap-2"><Button onClick={loadDailyReport} disabled={!isDesktopMode || busy || reportLoading} className="border border-white/15 bg-white/10 text-white shadow-none hover:bg-white/15"><FileText className="mr-2 h-4 w-4" />{reportLoading ? 'Loading report…' : 'End-of-Day Report'}</Button></div>
+      </div>
+      <div className="relative mt-7 flex flex-wrap items-center gap-x-6 gap-y-2 border-t border-white/10 pt-4 text-xs text-slate-400"><span className="inline-flex items-center gap-2"><ShieldCheck className="h-3.5 w-3.5 text-emerald-300" />Signed accountability trail</span><span className="inline-flex items-center gap-2"><LockKeyhole className="h-3.5 w-3.5 text-indigo-300" />Till control enabled</span><span className="inline-flex items-center gap-2"><Banknote className="h-3.5 w-3.5 text-amber-300" />Offline-ready collections</span></div>
     </div>
-    {message && <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">{message}</div>}
+    {message && <div className="rounded-2xl border border-indigo-200 bg-white px-5 py-4 text-sm font-medium text-indigo-800 shadow-sm">{message}</div>}
 
-    {!current ? <Card><CardHeader><CardTitle className="flex items-center gap-2"><PlayCircle className="h-5 w-5 text-blue-600" />Open Front Desk Shift</CardTitle></CardHeader><CardContent className="grid gap-4 sm:grid-cols-3"><div><label className="text-sm font-medium">Till</label><select value={accountId} onChange={event => setAccountId(event.target.value)} className="mt-1 h-10 w-full rounded-md border bg-background px-3 text-sm"><option value="">Select a till</option>{accounts.map(account => <option key={account.id} value={account.id}>{account.name} · {account.type}</option>)}</select></div><div><label className="text-sm font-medium">Opening float</label><AmountInput value={openingFloat} onValueChange={setOpeningFloat} /></div><div className="flex items-end"><Button disabled={busy || !accountId} onClick={openSession}><PlayCircle className="mr-2 h-4 w-4" />Open Shift</Button></div></CardContent></Card> : <>
-      <Card className="border-slate-200 bg-slate-950 text-white"><CardContent className="flex flex-col justify-between gap-5 p-6 md:flex-row md:items-center"><div><div className="mb-2 flex items-center gap-2 text-emerald-300"><ShieldCheck className="h-5 w-5" /><span className="text-xs font-semibold uppercase tracking-widest">Shift control status</span><Badge className="bg-emerald-500/20 text-emerald-200">{effectiveControlStatus.replaceAll('_', ' ')}</Badge></div><h2 className="text-2xl font-bold">{summary?.session.shiftReference || current.shiftReference}</h2><p className="mt-1 text-sm text-slate-300">{summary?.session.staffName || 'Assigned receptionist'} · {summary?.session.till || current.cashAccount?.name || 'Assigned till'}</p></div><div className="text-left md:text-right"><p className="text-xs uppercase tracking-wider text-slate-400">Opened</p><p className="font-medium">{dateTime(summary?.session.openedAt)}</p></div></CardContent></Card>
+    {!current ? <Card className="overflow-hidden rounded-[30px] border-0 bg-white shadow-[0_24px_70px_rgba(15,23,42,.10)]"><div className="grid lg:grid-cols-[.85fr_1.15fr]"><div className="relative overflow-hidden bg-[#0b1730] px-6 py-8 text-white sm:px-8 sm:py-10"><div className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-indigo-500/20 blur-3xl" /><div className="relative"><span className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl border border-indigo-300/20 bg-indigo-400/15 text-indigo-200"><PlayCircle className="h-6 w-6" /></span><p className="text-[10px] font-bold uppercase tracking-[.22em] text-indigo-300">New shift setup</p><h2 className="mt-3 text-3xl font-semibold tracking-tight">Ready for today&apos;s collections?</h2><p className="mt-3 max-w-sm text-sm leading-6 text-slate-300">Choose the Front Desk till assigned to you. Opening floats are disabled for this workflow and always start at ₦0.00.</p><div className="mt-8 space-y-3 text-xs text-slate-400"><div className="flex items-center gap-2"><span className="flex h-6 w-6 items-center justify-center rounded-lg bg-emerald-400/15 text-emerald-300">✓</span>Offline transactions remain queued safely</div><div className="flex items-center gap-2"><span className="flex h-6 w-6 items-center justify-center rounded-lg bg-emerald-400/15 text-emerald-300">✓</span>Every payment is tied to this till</div></div></div></div><div className="flex flex-col justify-center px-6 py-8 sm:px-10 sm:py-10"><div className="mb-7"><p className="text-[10px] font-bold uppercase tracking-[.2em] text-indigo-600">Till assignment</p><h3 className="mt-2 text-xl font-semibold tracking-tight text-slate-900">Select your cashier till</h3><p className="mt-1 text-sm text-slate-500">Only an available till can be opened for this shift.</p></div><label className="text-xs font-bold uppercase tracking-wider text-slate-500">Cashier till</label><div className="relative mt-2"><select value={accountId} onChange={event => setAccountId(event.target.value)} className="h-14 w-full appearance-none rounded-2xl border border-slate-200 bg-slate-50 px-4 pr-12 text-sm font-semibold text-slate-800 shadow-inner outline-none transition focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-500/10"><option value="">Choose an available till…</option>{accounts.map(account => <option key={account.id} value={account.id}>{account.name} · {account.type}</option>)}</select><ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" /></div>{accountId && <div className="mt-3 flex items-center gap-3 rounded-2xl border border-indigo-100 bg-indigo-50/70 px-4 py-3"><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-600 text-white"><Banknote className="h-4 w-4" /></span><div><p className="text-xs font-bold text-indigo-950">{accounts.find(account => account.id === accountId)?.name || 'Selected till'}</p><p className="mt-0.5 text-[11px] text-indigo-700/70">Opening float: ₦0.00 · Ready to open</p></div></div>}<Button className="mt-7 h-14 w-full rounded-2xl bg-indigo-600 text-base font-semibold shadow-xl shadow-indigo-600/20 hover:bg-indigo-500" disabled={busy || !accountId} onClick={openSession}><PlayCircle className="mr-2 h-5 w-5" />Open Front Desk shift</Button></div></div></Card> : <>
+      <Card className="overflow-hidden rounded-[28px] border-0 bg-[#0b1730] text-white shadow-[0_18px_50px_rgba(15,23,42,.18)]"><CardContent className="relative flex flex-col justify-between gap-6 p-6 sm:p-8 md:flex-row md:items-center"><div className="pointer-events-none absolute right-0 top-0 h-full w-1/3 bg-gradient-to-l from-indigo-500/10 to-transparent" /><div className="relative"><div className="mb-3 flex flex-wrap items-center gap-2 text-emerald-300"><ShieldCheck className="h-5 w-5" /><span className="text-[10px] font-bold uppercase tracking-[.2em]">Shift control status</span><Badge className="border border-emerald-300/20 bg-emerald-400/15 text-emerald-200">{effectiveControlStatus.replaceAll('_', ' ')}</Badge></div><h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">{summary?.session.shiftReference || current.shiftReference}</h2><p className="mt-2 text-sm text-slate-300">{summary?.session.staffName || 'Assigned receptionist'} <span className="text-slate-600">·</span> {summary?.session.till || current.cashAccount?.name || 'Assigned till'}</p></div><div className="relative flex flex-wrap items-center justify-end gap-3 rounded-2xl border border-white/10 bg-white/[.04] px-5 py-4"><div className="md:text-right"><p className="text-[10px] font-bold uppercase tracking-[.18em] text-slate-500">Opened</p><p className="mt-1 font-medium text-slate-100">{dateTime(summary?.session.openedAt)}</p></div><Button onClick={() => setShowShiftReport(true)} disabled={!summary} className="border border-indigo-300/20 bg-indigo-500/15 text-indigo-100 shadow-none hover:bg-indigo-500/25"><Printer className="mr-2 h-4 w-4" />Shift Report</Button></div></CardContent></Card>
 
       {summary && <>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -221,24 +276,24 @@ export default function FrontdeskCashierPage() {
         </div>
 
         <div className="grid gap-6 lg:grid-cols-2">
-          <Card><CardHeader><CardTitle>Payment breakdown</CardTitle></CardHeader><CardContent className="space-y-3">{[['Cash', summary.payments.cash], ['Card / POS', summary.payments.card], ['Bank transfer', summary.payments.bankTransfer], ['Other', summary.payments.other]].map(([label, value]) => <SummaryRow key={String(label)} label={String(label)} value={money(value)} />)}</CardContent></Card>
-          <Card><CardHeader><CardTitle>Charge breakdown</CardTitle></CardHeader><CardContent className="space-y-3">{[['Room charges', summary.charges.room], ['Laundry', summary.charges.laundry], ['Other Front Desk', summary.charges.other]].map(([label, value]) => <SummaryRow key={String(label)} label={String(label)} value={money(value)} />)}<div className="border-t pt-3"><SummaryRow label="Total charges" value={money(summary.charges.total)} strong /></div></CardContent></Card>
+          <Card className="rounded-[24px] border-0 bg-white shadow-[0_14px_40px_rgba(15,23,42,.06)]"><CardHeader className="border-b border-slate-100 px-6 py-5"><CardTitle className="flex items-center gap-3 text-base"><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600"><WalletCards className="h-4 w-4" /></span>Payment breakdown</CardTitle></CardHeader><CardContent className="space-y-4 px-6 py-5">{[['Cash', summary.payments.cash], ['Card / POS', summary.payments.card], ['Bank transfer', summary.payments.bankTransfer], ['Other', summary.payments.other]].map(([label, value]) => <SummaryRow key={String(label)} label={String(label)} value={money(value)} />)}<div className="rounded-xl bg-emerald-50 px-4 py-3"><SummaryRow label="Total collected" value={money(summary.payments.total)} strong valueClass="text-emerald-700" /></div></CardContent></Card>
+          <Card className="rounded-[24px] border-0 bg-white shadow-[0_14px_40px_rgba(15,23,42,.06)]"><CardHeader className="border-b border-slate-100 px-6 py-5"><CardTitle className="flex items-center gap-3 text-base"><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-600"><FileText className="h-4 w-4" /></span>Charge breakdown</CardTitle></CardHeader><CardContent className="space-y-4 px-6 py-5">{[['Room charges', summary.charges.room], ['Laundry', summary.charges.laundry], ['Other Front Desk', summary.charges.other]].map(([label, value]) => <SummaryRow key={String(label)} label={String(label)} value={money(value)} />)}<div className="rounded-xl bg-indigo-50 px-4 py-3"><SummaryRow label="Total charges" value={money(summary.charges.total)} strong valueClass="text-indigo-700" /></div></CardContent></Card>
         </div>
 
-        <Card><CardHeader><CardTitle>Cash reconciliation</CardTitle></CardHeader><CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"><SummaryRow label="Opening float" value={money(summary.cash.openingFloat)} /><SummaryRow label="Cash received" value={money(summary.payments.cash)} /><SummaryRow label="Cash in" value={money(summary.cash.cashIn)} /><SummaryRow label="Refunds / drops / paid out" value={money(summary.cash.refunds + summary.cash.cashDrops + summary.cash.paidOuts + summary.cash.transfersOut)} /><SummaryRow label="Expected cash" value={money(summary.cash.expected)} strong /><SummaryRow label="Declared cash" value={summary.cash.declared == null ? 'Not declared' : money(summary.cash.declared)} /><SummaryRow label="Variance" value={summary.cash.variance == null ? '—' : money(summary.cash.variance)} strong valueClass={varianceTone} /></CardContent></Card>
+        <Card className="rounded-[24px] border-0 bg-white shadow-[0_14px_40px_rgba(15,23,42,.06)]"><CardHeader className="flex flex-row items-center justify-between border-b border-slate-100 px-6 py-5"><CardTitle className="flex items-center gap-3 text-base"><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-500/10 text-amber-600"><Banknote className="h-4 w-4" /></span>Cash reconciliation</CardTitle><span className="rounded-full bg-slate-100 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">Till proof</span></CardHeader><CardContent className="grid gap-x-8 gap-y-5 px-6 py-6 sm:grid-cols-2 lg:grid-cols-4"><SummaryRow label="Opening float" value={money(summary.cash.openingFloat)} /><SummaryRow label="Cash received" value={money(summary.payments.cash)} /><SummaryRow label="Cash in" value={money(summary.cash.cashIn)} /><SummaryRow label="Refunds / drops / paid out" value={money(summary.cash.refunds + summary.cash.cashDrops + summary.cash.paidOuts + summary.cash.transfersOut)} /><SummaryRow label="Expected cash" value={money(summary.cash.expected)} strong /><SummaryRow label="Declared cash" value={summary.cash.declared == null ? 'Not declared' : money(summary.cash.declared)} /><SummaryRow label="Variance" value={summary.cash.variance == null ? '—' : money(summary.cash.variance)} strong valueClass={varianceTone} /></CardContent></Card>
 
-        <Card><CardHeader className="flex flex-row items-center justify-between"><CardTitle>Close and submit shift</CardTitle><Badge variant={summary.exceptions.failedSync ? 'destructive' : 'secondary'}>{summary.exceptions.failedSync ? `${summary.exceptions.failedSync} failed sync` : 'No sync failures'}</Badge></CardHeader><CardContent className="space-y-4"><p className="text-sm text-muted-foreground">Count the physical till, enter the exact amount, then close the session. The system will lock Front Desk transactions and send the report for management review.</p>{summary.exceptions.failedSync > 0 && <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">Resolve failed synchronization events before submitting this shift.</p>}
+        <Card className="rounded-[24px] border-0 bg-white shadow-[0_14px_40px_rgba(15,23,42,.06)]"><CardHeader className="flex flex-row items-center justify-between border-b border-slate-100 px-6 py-5"><CardTitle className="flex items-center gap-3 text-base"><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-900 text-white"><LockKeyhole className="h-4 w-4" /></span>Close and submit shift</CardTitle><Badge variant={summary.exceptions.failedSync ? 'destructive' : 'secondary'}>{summary.exceptions.failedSync ? `${summary.exceptions.failedSync} failed sync` : 'No sync failures'}</Badge></CardHeader><CardContent className="space-y-5 px-6 py-6"><p className="max-w-2xl text-sm leading-6 text-slate-500">Count the physical till, enter the exact amount, then close the session. The system will lock Front Desk transactions and send the report for management review.</p>{summary.exceptions.failedSync > 0 && <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">Resolve failed synchronization events before submitting this shift.</p>}
         {summary.cash.expected === 0 && (
-          <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 rounded-xl flex items-center gap-2">
+          <div className="flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-emerald-800">
             <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
             <div className="text-sm">
               <span className="font-semibold">Cashless Shift Detected:</span> No expected cash to drop.
             </div>
           </div>
         )}
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end"><div><label className="text-sm font-medium">Physical cash counted</label><AmountInput value={declaredCash} onValueChange={setDeclaredCash} placeholder="0.00" /></div><Button disabled={busy || !declaredCash || !canSubmitShift || summary.exceptions.failedSync > 0} onClick={() => setShowCloseConfirm(true)}><LockKeyhole className="mr-2 h-4 w-4" />{effectiveControlStatus === 'RETURNED' ? 'Correct and resubmit shift' : summary.cash.expected === 0 && declaredCash === '0' ? 'Submit Cashless Shift' : 'Close and submit shift'}</Button></div></CardContent></Card>
+        <div className="flex flex-col gap-3 rounded-2xl bg-slate-50 p-4 sm:flex-row sm:items-end sm:justify-between"><div><label className="text-xs font-bold uppercase tracking-wider text-slate-500">Physical cash counted</label><AmountInput value={declaredCash} onValueChange={setDeclaredCash} placeholder="0.00" className="mt-2 h-12 bg-white" /></div><Button className="h-12 rounded-xl bg-slate-900 px-6 font-semibold shadow-lg shadow-slate-900/15 hover:bg-slate-800" disabled={busy || !declaredCash || !canSubmitShift || summary.exceptions.failedSync > 0} onClick={() => setShowCloseConfirm(true)}><LockKeyhole className="mr-2 h-4 w-4" />{effectiveControlStatus === 'RETURNED' ? 'Correct and resubmit shift' : summary.cash.expected === 0 && declaredCash === '0' ? 'Submit Cashless Shift' : 'Close and submit shift'}</Button></div></CardContent></Card>
 
-        <Card><CardHeader><CardTitle>Recent session activity</CardTitle></CardHeader><CardContent><div className="divide-y rounded-md border">{summary.rows.slice(0, 8).map((row, index) => <div key={`${row.date}-${index}`} className="flex items-center justify-between gap-4 px-4 py-3 text-sm"><div><p className="font-medium">{row.description || row.kind}</p><p className="text-xs text-muted-foreground">{dateTime(row.date)} · {row.method || '—'}</p></div><span className="font-semibold">{money(row.amount)}</span></div>)}{summary.rows.length === 0 && <p className="p-6 text-center text-sm text-muted-foreground">No session activity recorded yet.</p>}</div></CardContent></Card>
+        <Card className="rounded-[24px] border-0 bg-white shadow-[0_14px_40px_rgba(15,23,42,.06)]"><CardHeader className="border-b border-slate-100 px-6 py-5"><CardTitle className="text-base">Recent session activity</CardTitle></CardHeader><CardContent className="px-6 py-2"><div className="divide-y divide-slate-100">{summary.rows.slice(0, 8).map((row, index) => <div key={`${row.date}-${index}`} className="flex items-center justify-between gap-4 py-4 text-sm"><div className="flex min-w-0 items-center gap-3"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-500"><FileText className="h-3.5 w-3.5" /></span><div className="min-w-0"><p className="truncate font-medium text-slate-800">{row.description || row.kind}</p><p className="text-xs text-slate-400">{dateTime(row.date)} · {row.method || '—'}</p></div></div><span className="font-semibold text-slate-700">{money(row.amount)}</span></div>)}{summary.rows.length === 0 && <p className="p-6 text-center text-sm text-slate-500">No session activity recorded yet.</p>}</div></CardContent></Card>
       </>}
     </>}
 
@@ -246,11 +301,12 @@ export default function FrontdeskCashierPage() {
 
     {current?.status === 'CLOSED' && (effectiveControlStatus === 'APPROVED' || effectiveControlStatus === 'APPROVED_WITH_VARIANCE') && <Card className="border-indigo-200 bg-indigo-50"><CardHeader><CardTitle className="text-indigo-900">Initiate Cash Handover</CardTitle></CardHeader><CardContent><p className="text-sm text-indigo-700">Your shift has been approved by management. Please initiate the handover process to formally transfer the physical cash to the General Cashier.</p><div className="mt-4 flex justify-end"><Button className="bg-indigo-600 hover:bg-indigo-700 text-white" disabled={busy} onClick={initiateHandover}><ArrowRightLeft className="mr-2 h-4 w-4" />Initiate Handover</Button></div></CardContent></Card>}
     <Dialog open={showHandoverSuccess} onOpenChange={setShowHandoverSuccess}><DialogContent><DialogHeader><DialogTitle className="flex items-center gap-2"><CheckCircle2 className="h-5 w-5 text-emerald-600" />Handover initiated</DialogTitle><DialogDescription>Your approved shift is now waiting for the General Cashier to receive the physical cash.</DialogDescription></DialogHeader><div className="rounded-lg border bg-emerald-50 p-4 text-sm text-emerald-900"><div className="flex justify-between"><span>Shift reference</span><span className="font-semibold">{current?.shiftReference}</span></div><div className="mt-1 flex justify-between"><span>Next status</span><span className="font-semibold">HANDOVER PENDING</span></div></div><DialogFooter><Button onClick={() => logout()}>Log out and start next shift</Button></DialogFooter></DialogContent></Dialog>
+    </div>
   </div>;
 }
 
 function Metric({ title, value, detail, icon, valueClass = '' }: { title: string; value: string; detail: string; icon: ReactNode; valueClass?: string }) {
-  return <Card><CardContent className="p-5"><div className="flex items-center justify-between text-muted-foreground"><span className="text-xs font-semibold uppercase tracking-wider">{title}</span>{icon}</div><p className={`mt-3 text-2xl font-bold ${valueClass}`}>{value}</p><p className="mt-1 text-xs text-muted-foreground">{detail}</p></CardContent></Card>;
+  return <Card className="rounded-[24px] border-0 bg-white shadow-[0_14px_40px_rgba(15,23,42,.06)]"><CardContent className="relative overflow-hidden p-5"><div className="absolute right-0 top-0 h-20 w-20 rounded-full bg-indigo-500/5 blur-2xl" /><div className="relative flex items-center justify-between text-slate-400"><span className="text-[10px] font-bold uppercase tracking-[.16em]">{title}</span><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-600">{icon}</span></div><p className={`relative mt-4 text-2xl font-bold tracking-tight ${valueClass || 'text-slate-900'}`}>{value}</p><p className="relative mt-1 text-xs text-slate-500">{detail}</p></CardContent></Card>;
 }
 
 function SummaryRow({ label, value, strong = false, valueClass = '' }: { label: string; value: string; strong?: boolean; valueClass?: string }) {

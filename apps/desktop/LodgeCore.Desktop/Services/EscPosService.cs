@@ -314,9 +314,12 @@ public class EscPosService
             return (false, "No active RECEIPT printer configured.");
 
         var profile = new PrinterProfile { PaperWidth = printer.PaperWidth, HotelName = printer.HotelName, HotelAddress = printer.HotelAddress };
+        byte[] BuildReport(string? copyLabel)
+        {
         var builder = new EscPosBuilder(profile);
 
-        builder.PrintHeader(report.ShiftReference == null ? "SHIFT SALES REPORT" : "FRONT DESK SHIFT REPORT");
+        var title = report.ReportTitle ?? (report.ShiftReference == null ? "SHIFT SALES REPORT" : "FRONT DESK SHIFT REPORT");
+        builder.PrintHeader(string.IsNullOrWhiteSpace(copyLabel) ? title : $"{title} - {copyLabel}");
         builder.AddRow("Staff:", report.StaffName);
         builder.AddRow("Date:", report.PrintedAt.ToString("dd/MM/yyyy HH:mm"));
         if (!string.IsNullOrWhiteSpace(report.ShiftReference)) builder.AddRow("Shift:", report.ShiftReference);
@@ -365,11 +368,45 @@ public class EscPosService
             builder.AddLine("Cashier signature: __________________");
             builder.AddLine("Manager signature: __________________");
         }
+
+        if (report.CheckInLines is { Count: > 0 })
+        {
+            builder.AddDivider('-');
+            builder.AddCommand(EscPosBuilder.AlignCenter);
+            builder.AddLine("TODAY'S CHECK-INS");
+            builder.AddCommand(EscPosBuilder.AlignLeft);
+            foreach (var line in report.CheckInLines)
+            {
+                builder.AddLine($"Room {line.RoomNumber}  {line.GuestName}");
+                if (!string.IsNullOrWhiteSpace(line.ConfirmationNumber)) builder.AddLine($"Ref: {line.ConfirmationNumber}");
+                builder.AddRow("Gross", $"{line.Currency} {line.GrossAmount:N2}");
+                builder.AddRow("Discount", $"-{line.Currency} {line.DiscountAmount:N2}");
+                builder.AddRow("Net", $"{line.Currency} {line.NetAmount:N2}");
+            }
+        }
+
+        if (report.PaymentSummary is { Count: > 0 })
+        {
+            builder.AddDivider('-');
+            builder.AddCommand(EscPosBuilder.AlignCenter);
+            builder.AddLine("PAYMENT TYPE SUMMARY");
+            builder.AddCommand(EscPosBuilder.AlignLeft);
+            foreach (var payment in report.PaymentSummary)
+                builder.AddRow($"{payment.Method} ({payment.Count})", $"{cur} {payment.Amount:N2}");
+        }
         
         AddPrintFooter(builder, "Confidential shift accountability report", report.PrintedAt);
         builder.AddCommand(EscPosBuilder.CutPartial);
 
-        return await SendToPrinterAsync(printer, builder.Build());
+        return builder.Build();
+        }
+
+        var firstCopy = await SendToPrinterAsync(printer, BuildReport(report.ReportTitle == "FRONT DESK END-OF-DAY REPORT" ? "FRONT DESK COPY" : null));
+        if (!firstCopy.success || report.ReportTitle != "FRONT DESK END-OF-DAY REPORT") return firstCopy;
+
+        var auditorCopy = await SendToPrinterAsync(printer, BuildReport("AUDITOR COPY"));
+        if (!auditorCopy.success) return auditorCopy;
+        return await SendToPrinterAsync(printer, BuildReport("GENERAL CASHIER COPY"));
     }
 
     public async Task<(bool success, string? error)> PrintReceiptAsync(ReceiptData receipt, string? outletId = null)

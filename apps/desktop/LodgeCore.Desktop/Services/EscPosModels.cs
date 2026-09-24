@@ -151,7 +151,26 @@ public record ShiftReportData(
     int PaymentsCount = 0,
     int ChargesCount = 0,
     int PendingSync = 0,
-    int FailedSync = 0
+    int FailedSync = 0,
+    string? ReportTitle = null,
+    List<ShiftReportLine>? CheckInLines = null,
+    List<ShiftReportPaymentSummary>? PaymentSummary = null
+);
+
+public record ShiftReportLine(
+    string RoomNumber,
+    string GuestName,
+    decimal GrossAmount,
+    decimal DiscountAmount,
+    decimal NetAmount,
+    string Currency,
+    string? ConfirmationNumber = null
+);
+
+public record ShiftReportPaymentSummary(
+    string Method,
+    decimal Amount,
+    int Count
 );
 
 public record RegistrationCardData(

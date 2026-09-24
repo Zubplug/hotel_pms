@@ -1303,6 +1303,11 @@ public class LocalRepository
 
     public async Task<object> GetFrontdeskReconciliationReportAsync(string propertyId, DateTime startDate, DateTime endDate)
     {
+        // Date-only requests must include the full closing day, not just
+        // midnight. This is especially important for the offline end-of-day
+        // report, where the web client sends the same date for both bounds.
+        startDate = startDate.Date;
+        endDate = endDate.Date.AddDays(1).AddTicks(-1);
         var sessions = await _dbContext.FrontdeskSessions
             .Where(session => session.PropertyId == propertyId && session.BusinessDate >= startDate.Date && session.BusinessDate <= endDate.Date)
             .OrderByDescending(session => session.BusinessDate)
@@ -1387,11 +1392,93 @@ public class LocalRepository
                         ["rooms"] = rooms,
                     });
                 }
+
+                if (document.RootElement.TryGetProperty("payments", out var payments) && payments.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var payment in payments.EnumerateArray())
+                    {
+                        var createdAt = payment.TryGetProperty("createdAt", out var createdAtElement) && DateTime.TryParse(createdAtElement.GetString(), out var parsedCreatedAt) ? parsedCreatedAt : folio.UpdatedAt;
+                        if (createdAt < startDate || createdAt > endDate) continue;
+                        var amount = ReadDecimal(payment, "amount");
+                        rows.Add(new Dictionary<string, object?>
+                        {
+                            ["id"] = payment.TryGetProperty("id", out var paymentId) ? paymentId.GetString() : Guid.NewGuid().ToString(),
+                            ["kind"] = "PAYMENT",
+                            ["date"] = createdAt,
+                            ["direction"] = "INFLOW",
+                            ["amount"] = Math.Abs(amount),
+                            ["currency"] = folio.Currency ?? "NGN",
+                            ["method"] = payment.TryGetProperty("method", out var method) ? method.GetString() ?? "OTHER" : "OTHER",
+                            ["type"] = "PAYMENT",
+                            ["description"] = "Folio payment",
+                            ["reference"] = payment.TryGetProperty("idempotencyKey", out var key) ? key.GetString() : null,
+                            ["shiftReference"] = "",
+                            ["folioNumber"] = folio.Id,
+                            ["confirmationNumber"] = reservation?.ConfirmationNumber,
+                            ["guest"] = guestName,
+                            ["rooms"] = rooms,
+                        });
+                    }
+                }
             }
             catch (JsonException)
             {
             }
         }
+
+        var checkInLines = folios
+            .Where(folio => folio.Reservation != null && folio.Reservation.CheckInDate.Date >= startDate.Date && folio.Reservation.CheckInDate.Date <= endDate.Date)
+            .GroupBy(folio => folio.Reservation!.Id)
+            .Select(group =>
+            {
+                var folio = group.First();
+                var reservation = folio.Reservation!;
+                decimal gross = 0m;
+                decimal discounts = 0m;
+                foreach (var candidate in group)
+                {
+                    if (string.IsNullOrWhiteSpace(candidate.TransactionsJson)) continue;
+                    try
+                    {
+                        using var document = JsonDocument.Parse(candidate.TransactionsJson);
+                        if (!document.RootElement.TryGetProperty("items", out var items) || items.ValueKind != JsonValueKind.Array) continue;
+                        foreach (var item in items.EnumerateArray())
+                        {
+                            var createdAt = item.TryGetProperty("createdAt", out var createdAtElement) && DateTime.TryParse(createdAtElement.GetString(), out var parsedCreatedAt) ? parsedCreatedAt : candidate.UpdatedAt;
+                            if (createdAt.Date < startDate.Date || createdAt.Date > endDate.Date) continue;
+                            var amount = ReadDecimal(item, "amount");
+                            var source = item.TryGetProperty("source", out var sourceElement) ? sourceElement.GetString() : null;
+                            var type = item.TryGetProperty("type", out var typeElement) ? typeElement.GetString() : null;
+                            if (!string.Equals(source, "ROOM_CHARGE", StringComparison.OrdinalIgnoreCase) && !string.Equals(type, "ROOM_CHARGE", StringComparison.OrdinalIgnoreCase) && !string.Equals(type, "DISCOUNT", StringComparison.OrdinalIgnoreCase) && !string.Equals(type, "COMPLIMENTARY", StringComparison.OrdinalIgnoreCase)) continue;
+                            if (amount >= 0) gross += amount;
+                            else discounts += Math.Abs(amount);
+                        }
+                    }
+                    catch (JsonException) { }
+                }
+                var room = reservation.Rooms.FirstOrDefault()?.Room;
+                var roomNumber = room?.DisplayName ?? room?.Number ?? reservation.RoomNumber ?? "—";
+                var guestName = reservation.Guest == null ? "Guest" : $"{reservation.Guest.FirstName} {reservation.Guest.LastName}".Trim();
+                return new
+                {
+                    roomNumber,
+                    guestName,
+                    grossAmount = gross,
+                    discountAmount = discounts,
+                    netAmount = Math.Max(0m, gross - discounts),
+                    currency = folio.Currency ?? "NGN",
+                    confirmationNumber = reservation.ConfirmationNumber,
+                };
+            })
+            .OrderBy(line => line.roomNumber)
+            .ToList();
+
+        var paymentSummary = rows
+            .Where(row => string.Equals(row["kind"]?.ToString(), "PAYMENT", StringComparison.OrdinalIgnoreCase))
+            .GroupBy(row => string.IsNullOrWhiteSpace(row["method"]?.ToString()) ? "OTHER" : row["method"]!.ToString()!.ToUpperInvariant())
+            .Select(group => new { method = group.Key, amount = group.Sum(row => row["amount"] is decimal value ? value : Convert.ToDecimal(row["amount"] ?? 0)), count = group.Count() })
+            .OrderBy(item => item.method)
+            .ToList();
 
         var inflows = movements.Where(movement => movement.Type is "OPENING_FLOAT" or "PAYMENT" or "CASH_TRANSFER_IN").Sum(movement => movement.Amount);
         var outflows = movements.Where(movement => movement.Type is not ("OPENING_FLOAT" or "PAYMENT" or "CASH_TRANSFER_IN")).Sum(movement => movement.Amount);
@@ -1414,6 +1501,8 @@ public class LocalRepository
                 cashAccount = accounts.TryGetValue(session.CashAccountId, out var account) ? new { account.Id, account.Name, account.Type } : null,
             }),
             rows = rows.OrderByDescending(row => row["date"]).ToList(),
+            checkIns = checkInLines,
+            paymentSummary,
             totals = new { inflows, outflows, net = inflows - outflows, sessions = sessions.Count },
         };
     }
