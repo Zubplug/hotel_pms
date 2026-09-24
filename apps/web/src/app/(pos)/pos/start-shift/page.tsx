@@ -178,9 +178,10 @@ export default function StartShiftPage() {
             <div className="relative max-w-[200px] mx-auto">
               <span className="absolute left-4 top-3 text-slate-400 font-semibold">₦</span>
               <Input 
-                type="number"
+                type="text"
+                inputMode="decimal"
                 value={openingCash}
-                onChange={e => setOpeningCash(e.target.value)}
+                onChange={e => setOpeningCash(e.target.value.replace(/,/g, '').replace(/[^0-9.]/g, '').replace(/\B(?=(\d{3})+(?!\d))/g, ','))}
                 placeholder="0.00"
                 className="h-14 pl-8 bg-white/5 border-white/10 text-white text-center text-xl font-bold rounded-2xl focus:ring-indigo-500"
                 autoFocus

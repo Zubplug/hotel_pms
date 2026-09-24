@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useProperty } from '@/components/PropertyProvider';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { AmountInput } from '@/components/ui/amount-input';
 import { ArrowLeft, CheckCircle2, Pencil, Plus, Shirt, X, XCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { formatCurrency } from '@/lib/utils';
@@ -88,7 +89,7 @@ export function LaundryCatalogClient({ managementMode = false }: { managementMod
             </div>
             <div className="w-32 space-y-2">
               <label className="block text-sm font-bold text-slate-700">Base Price</label>
-              <Input required type="number" min="0" step="0.01" value={newItemPrice} onChange={e => setNewItemPrice(e.target.value)} placeholder="0.00" className="h-12 rounded-xl bg-slate-50 border-slate-200" />
+              <AmountInput required min="0" value={newItemPrice} onValueChange={setNewItemPrice} placeholder="0.00" className="h-12 rounded-xl bg-slate-50 border-slate-200" />
             </div>
             <Button type="submit" className="h-12 px-6 rounded-xl bg-cyan-600 hover:bg-cyan-700 text-white font-bold shadow-md">
               {editingItem ? <Pencil className="w-5 h-5 mr-2" /> : <Plus className="w-5 h-5 mr-2" />} {editingItem ? 'Save changes' : 'Add catalog item'}

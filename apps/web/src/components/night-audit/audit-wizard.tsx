@@ -34,6 +34,7 @@ interface AuditWizardProps {
 export function AuditWizard({ open, onOpenChange, data, onExecute, executing, onRefresh }: AuditWizardProps) {
   const [step, setStep] = useState(0);
   const [resolutionAction, setResolutionAction] = useState<ResolutionAction>(null);
+  const [confirmExecution, setConfirmExecution] = useState(false);
 
   const businessDate = data.businessDate ? new Date(data.businessDate) : new Date();
   const blockers = data.summary?.blockers || 0;
@@ -54,6 +55,12 @@ export function AuditWizard({ open, onOpenChange, data, onExecute, executing, on
   ].filter(Boolean) as string[];
   const isLastStep = step === STEPS.length - 1;
   const progress = ((step + 1) / STEPS.length) * 100;
+  const proposedCharges = data.financial?.pendingNightAuditPostings || [];
+  const currency = data.property.baseCurrency || 'NGN';
+  const formatMoney = (value: number) => new Intl.NumberFormat('en-NG', { style: 'currency', currency, maximumFractionDigits: 2 }).format(value);
+  const proposedGross = proposedCharges.reduce((sum: number, item: any) => sum + Number(item.grossAmount || item.amount || 0), 0);
+  const proposedDiscount = proposedCharges.reduce((sum: number, item: any) => sum + Number(item.discountAmount || 0), 0);
+  const proposedNet = proposedCharges.reduce((sum: number, item: any) => sum + Number(item.netAmount ?? (Number(item.amount || 0) - Number(item.discountAmount || 0))), 0);
 
   const handleResolve = (actionType: string, item: any) => {
     setResolutionAction({ type: actionType as any, item });
@@ -78,11 +85,11 @@ export function AuditWizard({ open, onOpenChange, data, onExecute, executing, on
           >
             <ShieldCheck className="h-11 w-11 text-indigo-300" />
           </div>
-          <h3 className="text-3xl font-bold tracking-tight text-white">Ready to Close Business Day</h3>
+          <h3 className="text-3xl font-bold tracking-tight text-white">{confirmExecution ? 'Confirm Room Charges Before Posting' : 'Ready to Close Business Day'}</h3>
           <p className="mt-3 max-w-md text-sm leading-relaxed text-slate-500">
-            You are about to close the business date for{' '}
-            <span className="font-semibold text-indigo-300">{format(businessDate, 'dd MMM yyyy')}</span>.
-            This will post room charges and roll the system date forward.
+            {confirmExecution
+              ? 'Review the complete proposal below. No room charge has been posted yet.'
+              : <>You are about to close the business date for <span className="font-semibold text-indigo-300">{format(businessDate, 'dd MMM yyyy')}</span>. This will post room charges and roll the system date forward.</>}
           </p>
 
           {blockers > 0 ? (
@@ -100,17 +107,34 @@ export function AuditWizard({ open, onOpenChange, data, onExecute, executing, on
                 )}
               </div>
             </div>
+          ) : confirmExecution ? (
+            <div className="mt-8 w-full max-w-5xl text-left">
+              <div className="mb-4 grid gap-3 sm:grid-cols-3">
+                <div className="rounded-xl border border-white/[.08] bg-white/[.03] p-4"><p className="text-[10px] uppercase tracking-wider text-slate-500">Gross room charges</p><p className="mt-1 text-xl font-bold text-white">{formatMoney(proposedGross)}</p></div>
+                <div className="rounded-xl border border-amber-400/20 bg-amber-400/[.06] p-4"><p className="text-[10px] uppercase tracking-wider text-amber-300/70">Discounts / concessions</p><p className="mt-1 text-xl font-bold text-amber-200">-{formatMoney(proposedDiscount)}</p></div>
+                <div className="rounded-xl border border-emerald-400/20 bg-emerald-400/[.06] p-4"><p className="text-[10px] uppercase tracking-wider text-emerald-300/70">Net to post</p><p className="mt-1 text-xl font-bold text-emerald-200">{formatMoney(proposedNet)}</p></div>
+              </div>
+              <div className="max-h-[36vh] overflow-auto rounded-xl border border-white/[.08]">
+                <table className="w-full min-w-[760px] text-left text-xs">
+                  <thead className="sticky top-0 bg-[#10182b] text-[10px] uppercase tracking-wider text-slate-500"><tr><th className="px-4 py-3">Room / guest</th><th className="px-4 py-3">Confirmation</th><th className="px-4 py-3 text-right">Gross</th><th className="px-4 py-3 text-right">Discount</th><th className="px-4 py-3 text-right">Net</th></tr></thead>
+                  <tbody className="divide-y divide-white/[.06]">{proposedCharges.map((item: any) => <tr key={item.operationId || item.id}><td className="px-4 py-3 text-slate-200"><span className="font-semibold">Room {item.roomNumber}</span><span className="ml-2 text-slate-500">{item.guestName}</span></td><td className="px-4 py-3 text-slate-500">{item.confirmationNumber || '—'}</td><td className="px-4 py-3 text-right text-slate-300">{formatMoney(Number(item.grossAmount || item.amount || 0))}</td><td className="px-4 py-3 text-right text-amber-300">{Number(item.discountAmount || 0) ? `-${formatMoney(Number(item.discountAmount))}` : '—'}{item.discountReason ? <span className="block text-[10px] text-slate-600">{item.discountReason}</span> : null}</td><td className="px-4 py-3 text-right font-semibold text-emerald-300">{formatMoney(Number(item.netAmount ?? item.amount ?? 0))}</td></tr>)}</tbody>
+                </table>
+                {!proposedCharges.length && <p className="p-8 text-center text-sm text-slate-500">No new room charges are proposed. The audit will still complete its other close controls.</p>}
+              </div>
+              <div className="mt-5 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end"><button onClick={() => setConfirmExecution(false)} disabled={executing} className="rounded-xl border border-white/10 px-5 py-3 text-sm font-semibold text-slate-300 hover:bg-white/[.05]">Back to review</button><button onClick={onExecute} disabled={executing} className="rounded-xl bg-emerald-500 px-6 py-3 text-sm font-bold text-slate-950 hover:bg-emerald-400 disabled:opacity-60">{executing ? 'Posting and closing…' : 'Confirm and Execute Night Audit'}</button></div>
+              <p className="mt-3 text-center text-[11px] text-slate-600">By confirming, you approve the listed gross charges, discounts, and net folio postings.</p>
+            </div>
           ) : (
             <div className="mt-8 w-full max-w-sm">
               <button
-                onClick={onExecute}
+                onClick={() => setConfirmExecution(true)}
                 disabled={executing}
                 className="relative flex w-full items-center justify-center gap-2.5 overflow-hidden rounded-2xl px-8 py-4 text-base font-bold text-white transition-all hover:opacity-90 disabled:opacity-60"
                 style={{ background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 50%, #6366f1 100%)', boxShadow: '0 0 32px rgba(99,102,241,0.35)' }}
               >
                 <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-white/10 via-transparent to-transparent" />
                 <Zap className="h-5 w-5" />
-                {executing ? 'Executing Audit…' : 'Execute Night Audit'}
+                Review Charges & Continue
               </button>
               <p className="mt-3 text-[11px] text-slate-600">This action is logged against your auditor session and cannot be undone.</p>
             </div>

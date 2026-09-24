@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { AmountInput } from '@/components/ui/amount-input';
 import { Label } from '@/components/ui/label';
 
 const schema = z.object({
@@ -26,7 +27,7 @@ type FormData = z.infer<typeof schema>;
 export function RegisterAssetForm({ propertyId, categories }: { propertyId: string; categories: { id: string; name: string }[] }) {
   const [open, setOpen] = useState(false);
   const router = useRouter();
-  const { register, handleSubmit, formState: { errors, isSubmitting }, reset } = useForm<FormData>({
+  const { register, handleSubmit, formState: { errors, isSubmitting }, reset, watch, setValue } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: { purchasePrice: 0, salvageValue: 0, usefulLifeYears: 5 }
   });
@@ -99,12 +100,12 @@ export function RegisterAssetForm({ propertyId, categories }: { propertyId: stri
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Purchase Price (₦)</Label>
-              <Input type="number" step="0.01" {...register('purchasePrice')} className="bg-slate-950 border-white/10 text-white" />
+              <AmountInput value={watch('purchasePrice')} onValueChange={value => setValue('purchasePrice', Number(value || 0))} className="bg-slate-950 border-white/10 text-white" />
               {errors.purchasePrice && <p className="text-red-400 text-xs">{errors.purchasePrice.message}</p>}
             </div>
             <div className="space-y-2">
               <Label>Salvage Value (₦)</Label>
-              <Input type="number" step="0.01" {...register('salvageValue')} className="bg-slate-950 border-white/10 text-white" />
+              <AmountInput value={watch('salvageValue')} onValueChange={value => setValue('salvageValue', Number(value || 0))} className="bg-slate-950 border-white/10 text-white" />
               {errors.salvageValue && <p className="text-red-400 text-xs">{errors.salvageValue.message}</p>}
             </div>
           </div>

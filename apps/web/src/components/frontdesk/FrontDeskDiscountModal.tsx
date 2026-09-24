@@ -16,6 +16,18 @@ type FrontDeskDiscountModalProps = {
   onSuccess: () => void;
 };
 
+function formatAmountInput(value: string) {
+  const normalized = value.replace(/[^0-9.]/g, '');
+  const [whole = '', ...fractionParts] = normalized.split('.');
+  const fraction = fractionParts.join('').slice(0, 2);
+  const formattedWhole = whole.replace(/^0+(?=\d)/, '').replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return fractionParts.length > 0 ? `${formattedWhole || '0'}.${fraction}` : formattedWhole;
+}
+
+function numericAmount(value: string) {
+  return Number(value.replace(/,/g, ''));
+}
+
 export function FrontDeskDiscountModal({ isOpen, targetType, targetId, targetTotal, onClose, onSuccess }: FrontDeskDiscountModalProps) {
   const { provider } = useLodgeCoreProvider();
   const { propertyId } = useProperty();
@@ -23,6 +35,7 @@ export function FrontDeskDiscountModal({ isOpen, targetType, targetId, targetTot
   const [value, setValue] = useState('');
   const [reason, setReason] = useState('');
   const [acknowledgedByStaffId, setAcknowledgedByStaffId] = useState('');
+  const [confirmedHighValue, setConfirmedHighValue] = useState(false);
   
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -41,7 +54,8 @@ export function FrontDeskDiscountModal({ isOpen, targetType, targetId, targetTot
   if (!isOpen || !mounted) return null;
 
   const handleSubmit = async () => {
-    if (!value || isNaN(Number(value)) || Number(value) <= 0) {
+    const numValue = type === 'amount' ? numericAmount(value) : Number(value);
+    if (!value || !Number.isFinite(numValue) || numValue <= 0) {
       setError('Please enter a valid discount value.');
       return;
     }
@@ -53,7 +67,11 @@ export function FrontDeskDiscountModal({ isOpen, targetType, targetId, targetTot
       setError('Please select the staff member who acknowledged this discount.');
       return;
     }
-    const numValue = Number(value);
+    const isHighValueFixedDiscount = type === 'amount' && Boolean(targetTotal) && numValue >= Number(targetTotal) * 0.5;
+    if (isHighValueFixedDiscount && !confirmedHighValue) {
+      setError('This discount is at least 50% of the room total. Confirm the amount before submitting.');
+      return;
+    }
     const amount = type === 'amount' ? numValue : 0;
     const percentage = type === 'percent' ? numValue : 0;
 
@@ -109,7 +127,7 @@ export function FrontDeskDiscountModal({ isOpen, targetType, targetId, targetTot
                 className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-all ${
                   type === 'percent' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'
                 }`}
-                onClick={() => setType('percent')}
+                onClick={() => { setType('percent'); setConfirmedHighValue(false); }}
               >
                 <Percent className="w-4 h-4" /> Percentage
               </button>
@@ -117,7 +135,7 @@ export function FrontDeskDiscountModal({ isOpen, targetType, targetId, targetTot
                 className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-all ${
                   type === 'amount' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'
                 }`}
-                onClick={() => setType('amount')}
+                onClick={() => { setType('amount'); setConfirmedHighValue(false); }}
               >
                 <Hash className="w-4 h-4" /> Fixed Amount
               </button>
@@ -135,13 +153,25 @@ export function FrontDeskDiscountModal({ isOpen, targetType, targetId, targetTot
                   type="number"
                   min="0"
                   step={type === 'percent' ? "1" : "0.01"}
-                  value={value}
-                  onChange={(e) => setValue(e.target.value)}
+                  value={type === 'amount' ? formatAmountInput(value) : value}
+                  onChange={(e) => { setValue(type === 'amount' ? formatAmountInput(e.target.value) : e.target.value); setConfirmedHighValue(false); }}
                   className="block w-full pl-10 pr-4 py-3 rounded-xl border-slate-200 bg-slate-50 text-lg font-semibold text-slate-900 focus:border-blue-500 focus:ring-blue-500 transition-colors"
                   placeholder="0.00"
                 />
               </div>
             </div>
+
+            {type === 'amount' && targetTotal && Number(value) >= Number(targetTotal) * 0.5 && (
+              <label className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                <input
+                  type="checkbox"
+                  checked={confirmedHighValue}
+                  onChange={(event) => setConfirmedHighValue(event.target.checked)}
+                  className="mt-0.5 h-4 w-4 accent-amber-600"
+                />
+                <span>I confirm this discount is at least 50% of the room total and the amount is correct.</span>
+              </label>
+            )}
 
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">

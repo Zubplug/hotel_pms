@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { AmountInput } from '@/components/ui/amount-input';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Banknote, CheckCircle2, Loader2, Upload } from 'lucide-react';
@@ -70,7 +71,7 @@ export function SubmitAvailableCashButton({ propertyId, availableAmount }: { pro
           <DialogHeader><DialogTitle className="flex items-center gap-2 text-lg"><Banknote className="h-5 w-5 text-emerald-600" />Submit cash to bank</DialogTitle><DialogDescription>Submit any amount currently available to the General Cashier. This creates one finance-tracked bank deposit.</DialogDescription></DialogHeader>
           <div className="space-y-4 py-2">
             <div className="flex items-center justify-between rounded-xl border border-emerald-100 bg-emerald-50 p-4"><div><p className="text-xs font-semibold uppercase tracking-wider text-emerald-700">Available cashier funds</p><p className="mt-1 text-xl font-black text-slate-950">₦{availableAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p></div><Banknote className="h-6 w-6 text-emerald-600" /></div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600">Amount to submit<Input type="number" min="0.01" max={availableAmount} step="0.01" value={amount} onChange={(event) => setAmount(event.target.value)} className="mt-1.5 rounded-xl text-base" /></label>
+            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600">Amount to submit<AmountInput min="0.01" max={availableAmount} value={amount} onValueChange={setAmount} className="mt-1.5 rounded-xl text-base" /></label>
             <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600">Receiving bank account<select value={bankAccountId} onChange={(event) => setBankAccountId(event.target.value)} className="mt-1.5 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm"><option value="">Select configured bank account</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.name} · {account.bankName || 'Bank'}{account.accountNumber ? ` · ${account.accountNumber}` : ''}</option>)}</select></label>
             <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600">Bank reference <span className="font-normal normal-case text-slate-400">(optional)</span><Input value={bankReference} onChange={(event) => setBankReference(event.target.value)} placeholder="Receipt or transfer reference" className="mt-1.5 rounded-xl" /></label>
             <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600">Notes <span className="font-normal normal-case text-slate-400">(optional)</span><Textarea value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Add context for the finance team" className="mt-1.5 rounded-xl" /></label>

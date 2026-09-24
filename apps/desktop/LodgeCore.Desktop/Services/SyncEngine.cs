@@ -2872,6 +2872,33 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
             .Where(e => e.Status == "PENDING" || e.Status == "FAILED" || e.Status == "RETRY_EXHAUSTED" || e.Status == "CONFLICT")
             .ToListAsync(stoppingToken);
 
+        // These CITY_LEDGER operations are append-only and older clients
+        // emitted every event with aggregateVersion=1. They could be recorded
+        // as false OCC conflicts by older cloud schemas. Once the cloud
+        // handler has the append-only fix, safely retry them. The cloud
+        // idempotency checks make a previously accepted operation a no-op.
+        foreach (var evt in allPending.Where(e =>
+            e.Status == "CONFLICT" &&
+            e.AggregateType == "CITY_LEDGER" &&
+            (e.EventType == "CITY_LEDGER_PAYMENT" || e.EventType == "GUEST_CREDIT_APPLICATION") &&
+            (e.LastError?.Contains("Optimistic Concurrency", StringComparison.OrdinalIgnoreCase) == true ||
+             e.LastError?.Contains("Concurrency conflict", StringComparison.OrdinalIgnoreCase) == true ||
+             e.LastError?.Contains("HTTP 409", StringComparison.OrdinalIgnoreCase) == true)))
+        {
+            evt.Status = "FAILED";
+            evt.LastError = "Retrying city-ledger operation after append-only concurrency fix.";
+            evt.NextAttemptAt = DateTime.UtcNow;
+        }
+
+        foreach (var evt in allPending.Where(e =>
+            e.Status == "FAILED" &&
+            e.AggregateType == "CITY_LEDGER" &&
+            e.EventType == "GUEST_CREDIT_APPLICATION" &&
+            e.LastError?.Contains("append-only concurrency fix", StringComparison.OrdinalIgnoreCase) == true))
+        {
+            await ResetGuestCreditAllocationForRetryAsync(evt.IdempotencyKey, stoppingToken);
+        }
+
         _logger.LogInformation("[PUSH-FD] Queue inspection found {PendingCount} pending/failed/conflict event(s).", allPending.Count);
         if (!allPending.Any()) return;
         
@@ -3185,6 +3212,27 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
             // next sync cycle can re-attempt the allocation marking.
             _logger.LogError(ex,
                 "[SYNC-CREDIT] Failed to mark CityLedgerAllocation CONFLICTED for OperationId={OperationId}.",
+                idempotencyKey);
+        }
+    }
+
+    private async Task ResetGuestCreditAllocationForRetryAsync(
+        string idempotencyKey,
+        CancellationToken stoppingToken)
+    {
+        if (string.IsNullOrWhiteSpace(idempotencyKey)) return;
+        try
+        {
+            using var scope = _serviceProvider.CreateScope();
+            var repo = scope.ServiceProvider.GetRequiredService<LocalRepository>();
+            await repo.MarkCreditAllocationRetryingAsync(
+                idempotencyKey,
+                "Retrying after false optimistic-concurrency conflict.");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "[SYNC-CREDIT] Failed to reset allocation for retry. OfflineOperationId={OperationId}.",
                 idempotencyKey);
         }
     }

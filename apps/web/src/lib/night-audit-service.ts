@@ -380,6 +380,57 @@ export async function getFinancialAudit(ctx: TenantContext, propertyId: string) 
     };
   }).filter((approval) => approval.roomStatus === 'READY');
 
+  // Build the exact room-charge proposal shown to the auditor before posting.
+  // Keep this aligned with executeNightAudit's eligibility and concession rules.
+  const previewReservations = await prisma.reservation.findMany({
+    where: {
+      propertyId,
+      status: 'CHECKED_IN',
+      reservationRooms: { some: { status: 'ACTIVE', checkIn: { lte: businessDate }, checkOut: { gt: businessDate } } },
+    },
+    include: {
+      primaryGuest: { select: { firstName: true, lastName: true } },
+      reservationRooms: { where: { status: 'ACTIVE' }, include: { room: { include: { roomType: true } } }, orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }] },
+      folios: { where: { type: { in: ['MAIN', 'ROOM', 'CITY_LEDGER'] }, status: 'OPEN' }, select: { id: true } },
+      ratePlan: true,
+    },
+  });
+  const previewApprovalIds = previewReservations.flatMap((reservation: any) => reservation.reservationRooms.map((room: any) => room.discountApprovalId).filter(Boolean));
+  const previewApprovals = previewApprovalIds.length
+    ? await prisma.approvalRequest.findMany({ where: { id: { in: previewApprovalIds.map((id: string) => id.startsWith('PENDING:') ? id.slice(8) : id) } }, select: { id: true, status: true } })
+    : [];
+  const previewApprovalStatus = new Map(previewApprovals.map((approval) => [approval.id, approval.status]));
+  const previewChargeKeys = previewReservations.map((reservation: any) => `ROOM_CHARGE_${reservation.id}_${businessDate.toISOString().slice(0, 10)}`);
+  const existingPreviewCharges = previewChargeKeys.length
+    ? await prisma.folioItem.findMany({ where: { operationId: { in: previewChargeKeys } }, select: { operationId: true } })
+    : [];
+  const existingPreviewKeys = new Set(existingPreviewCharges.map((item) => item.operationId));
+  const pendingNightAuditPostings = previewReservations.flatMap((reservation: any) => {
+    const room = reservation.reservationRooms[0];
+    const operationId = `ROOM_CHARGE_${reservation.id}_${businessDate.toISOString().slice(0, 10)}`;
+    if (!room || !reservation.folios[0] || existingPreviewKeys.has(operationId)) return [];
+    const gross = Number(room.rateAmount || reservation.ratePlan?.baseRate || 0);
+    const approvalId = room.discountApprovalId ? (room.discountApprovalId.startsWith('PENDING:') ? room.discountApprovalId.slice(8) : room.discountApprovalId) : null;
+    const approvalApproved = approvalId ? previewApprovalStatus.get(approvalId) === 'APPROVED' : false;
+    let discount = 0;
+    if (approvalApproved && room.discountType === 'FIXED_AMOUNT') discount = Math.min(gross, Number(room.discountAmount || 0));
+    if (approvalApproved && room.discountType === 'PERCENTAGE') discount = Math.min(gross, gross * Number(room.discountPercent || 0) / 100);
+    return [{
+      id: reservation.id,
+      operationId,
+      roomNumber: room.room?.number || '—',
+      roomType: room.room?.roomType?.name || null,
+      guestName: `${reservation.primaryGuest?.firstName || ''} ${reservation.primaryGuest?.lastName || ''}`.trim() || 'Guest',
+      confirmationNumber: reservation.confirmationNumber,
+      currency: room.currency || property.baseCurrency || 'NGN',
+      grossAmount: gross,
+      discountAmount: discount,
+      netAmount: Math.max(0, gross - discount),
+      discountType: discount > 0 ? room.discountType : null,
+      discountReason: discount > 0 ? room.discountReason : null,
+    }];
+  });
+
   // Fetch unverified Complimentary transactions for the business date
   // These are hard blockers for the Night Audit.
   const unverifiedComplimentary = await prisma.complimentaryRecord.findMany({
@@ -462,7 +513,7 @@ export async function getFinancialAudit(ctx: TenantContext, propertyId: string) 
     }
   });
 
-  return { openFolios, highBalances, rateVariances, pendingDiscounts: enrichedPendingDiscounts, unverifiedComplimentary: enrichedComplimentary, pendingCheckInBypasses };
+  return { openFolios, highBalances, rateVariances, pendingDiscounts: enrichedPendingDiscounts, pendingNightAuditPostings, unverifiedComplimentary: enrichedComplimentary, pendingCheckInBypasses };
 }
 
 export async function getCashReconciliation(ctx: TenantContext, propertyId: string) {

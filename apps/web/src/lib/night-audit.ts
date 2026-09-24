@@ -230,6 +230,15 @@ export async function executeNightAudit(
     return run;
   });
 
+  const postingExceptions: Array<{
+    reservationId: string;
+    confirmationNumber: string;
+    guestName: string;
+    roomNumber: string | null;
+    stage: 'ROOM_CHARGE' | 'HOUSEKEEPING';
+    message: string;
+  }> = [];
+
   try {
     // Resolve a valid UUID actor for DB fields that require one (postedBy, appliedBy).
     // When the audit is triggered by a logged-in user userId is already a UUID;
@@ -249,8 +258,18 @@ export async function executeNightAudit(
     where: {
       propertyId,
       status: 'CHECKED_IN',
+      // Only charge rooms occupied on the audit business date. A stale
+      // CHECKED_IN status must not make a departed reservation eligible.
+      reservationRooms: {
+        some: {
+          status: 'ACTIVE',
+          checkIn: { lte: businessDate },
+          checkOut: { gt: businessDate },
+        },
+      },
     },
     include: {
+      primaryGuest: true,
       priorities: true,
       reservationRooms: {
         where: { status: 'ACTIVE' },
@@ -267,7 +286,6 @@ export async function executeNightAudit(
     let totalTasksSkipped = 0;
     let totalRoomChargesPosted = 0;
     let errors = 0;
-
     let lastHeartbeat = Date.now();
     for (let i = 0; i < eligibleReservations.length; i += BATCH_SIZE) {
       const batch = eligibleReservations.slice(i, i + BATCH_SIZE);
@@ -316,10 +334,11 @@ export async function executeNightAudit(
               ? sharedCorporateFolio
               : reservation.folios[0];
             if (!mainFolio) {
-              if (reservation.corporateAccountId) {
-                throw new Error(`Shared corporate CITY_LEDGER folio missing for reservation ${reservation.id}`);
-              }
-              return;
+              throw new Error(
+                reservation.corporateAccountId
+                  ? `Shared corporate CITY_LEDGER folio missing for reservation ${reservation.id}`
+                  : `Open room folio missing for reservation ${reservation.id}`,
+              );
             }
             const roomChargeKey = `ROOM_CHARGE_${reservation.id}_${businessDate.toISOString().split('T')[0]}`;
             
@@ -551,9 +570,9 @@ export async function executeNightAudit(
               totalRoomChargesPosted++;
             } else {
               // Recovery runs are idempotent: the failed attempt may already
-              // have created this charge. Count it as processed without
-              // creating a duplicate folio line.
-              totalRoomChargesPosted++;
+              // have created this charge. Do not increment the metric again;
+              // roomChargesPosted represents unique charge items, not retry
+              // attempts.
             }
           }
 
@@ -609,11 +628,31 @@ export async function executeNightAudit(
           } catch (e) {
             console.error(`[Night Audit] Housekeeping task failed for reservation ${reservation.id}; room charge retained:`, e);
             errors++;
+            postingExceptions.push({
+              reservationId: reservation.id,
+              confirmationNumber: reservation.confirmationNumber,
+              guestName: reservation.primaryGuest
+                ? `${reservation.primaryGuest.firstName} ${reservation.primaryGuest.lastName}`.trim()
+                : 'Unknown Guest',
+              roomNumber: currentAssignments[0]?.room?.number || null,
+              stage: 'HOUSEKEEPING',
+              message: e instanceof Error ? e.message : String(e),
+            });
           }
         });
       } catch (e) {
         console.error(`[Night Audit] Failed to process stayover for reservation ${reservation.id}:`, e);
         errors++;
+        postingExceptions.push({
+          reservationId: reservation.id,
+          confirmationNumber: reservation.confirmationNumber,
+          guestName: reservation.primaryGuest
+            ? `${reservation.primaryGuest.firstName} ${reservation.primaryGuest.lastName}`.trim()
+            : 'Unknown Guest',
+          roomNumber: reservation.reservationRooms?.[0]?.room?.number || null,
+          stage: 'ROOM_CHARGE',
+          message: e instanceof Error ? e.message : String(e),
+        });
       }
     }));
     }
@@ -761,8 +800,24 @@ export async function executeNightAudit(
   const revpar = roomCount ? totalRoomRevenue / roomCount : 0;
   const journalBusinessDate = new Date(businessDate.getTime());
 
+  const roomChargeExceptions = postingExceptions.filter((exception) => exception.stage === 'ROOM_CHARGE');
+  if (roomChargeExceptions.length > 0) {
+    throw new Error(
+      `BLOCKER:Night Audit could not post ${roomChargeExceptions.length} room charge(s). Resolve the listed reservation errors and retry the audit.`,
+    );
+  }
+
   const [completedAudit, finalErrors] = await prisma.$transaction(async (tx) => {
     let txErrors = errors;
+    const uniqueRoomChargeCount = await tx.folioItem.count({
+      where: {
+        folio: { propertyId },
+        nightAuditRunId: auditRun.id,
+        source: 'ROOM_CHARGE',
+        type: 'CHARGE',
+        voidedAt: null,
+      },
+    });
     const journalPosting = await postNightAuditJournal(tx, {
       propertyId,
       businessDate: journalBusinessDate,
@@ -842,7 +897,7 @@ export async function executeNightAudit(
     };
     const closeControlSummary = {
       errors: txErrors,
-      roomChargesPosted: totalRoomChargesPosted,
+      roomChargesPosted: uniqueRoomChargeCount,
       tasksCreated: totalTasksCreated,
       tasksSkipped: totalTasksSkipped,
       occupancy,
@@ -879,8 +934,9 @@ export async function executeNightAudit(
         completedAt: new Date(),
         tasksCreated: { increment: totalTasksCreated },
         tasksSkipped: { increment: totalTasksSkipped },
-        roomChargesPosted: { increment: totalRoomChargesPosted },
+        roomChargesPosted: uniqueRoomChargeCount,
         errors: { increment: txErrors },
+        exceptions: postingExceptions.length > 0 ? postingExceptions : undefined,
         totalRoomRevenue,
         totalRevenue: totalRevenueValue,
         occupancy,
@@ -1050,7 +1106,13 @@ export async function executeNightAudit(
   } catch (error) {
     await prisma.nightAudit.update({
       where: { id: auditRun.id },
-      data: { status: 'FAILED', completedAt: null, notes: error instanceof Error ? error.message : String(error) }
+      data: {
+        status: 'FAILED',
+        completedAt: null,
+        errors: postingExceptions.length > 0 ? postingExceptions.length : 1,
+        exceptions: postingExceptions.length > 0 ? postingExceptions : undefined,
+        notes: error instanceof Error ? error.message : String(error),
+      }
     }).catch((updateError) => console.error('[Night Audit] Failed to mark run FAILED:', updateError));
     await prisma.property.update({
       where: { id: propertyId },

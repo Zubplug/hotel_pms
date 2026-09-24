@@ -5,6 +5,7 @@ import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogClose } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { AmountInput } from '@/components/ui/amount-input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { Loader2, Wallet, CheckCircle2, AlertCircle, AlertTriangle, WifiOff } from 'lucide-react';
@@ -201,20 +202,17 @@ export function FrontDeskApplyCreditDialog({
                 {/* Amount input */}
                 <div className="space-y-3 bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
                   <Label className="text-sm font-bold text-slate-700">Amount to apply ({currency})</Label>
-                  <div className="relative">
-                    <div className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-slate-400">
-                      {currency}
-                    </div>
-                    <Input
-                      type="number"
-                      step="1"
+                  <div>
+                    <AmountInput
+                      decimals={2}
+                      currency={currency === 'NGN' ? '₦' : currency}
                       min={1}
                       max={availableAmount}
                       value={amount}
-                      onChange={(e) => setAmount(e.target.value)}
+                      onValueChange={setAmount}
                       disabled={isSubmitting || availableAmount <= 0}
                       required
-                      className="h-14 pl-14 text-xl font-bold bg-slate-50 border-slate-200 rounded-xl focus-visible:ring-blue-500"
+                      className="h-14 text-xl font-bold bg-slate-50 border-slate-200 rounded-xl focus-visible:ring-blue-500"
                     />
                   </div>
                 </div>

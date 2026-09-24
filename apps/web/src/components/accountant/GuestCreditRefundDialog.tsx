@@ -7,6 +7,7 @@ import { Banknote, CheckCircle2, Loader2, ShieldCheck, Wallet } from 'lucide-rea
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { AmountInput } from '@/components/ui/amount-input';
 import { Label } from '@/components/ui/label';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 
@@ -71,7 +72,7 @@ export function GuestCreditRefundDialog({ entryId, guestName, amount, currency, 
         <div className="space-y-5 px-6 py-5">
           <div className="grid gap-2">
             <Label className="font-semibold text-slate-700">Refund amount ({currency})</Label>
-            <Input type="number" min="0.01" max={amount} step="0.01" value={value} onChange={event => setValue(event.target.value)} required className="h-11 border-slate-200 bg-white text-slate-900 shadow-sm focus:border-emerald-500 focus:ring-emerald-500/20" />
+            <AmountInput min="0.01" max={amount} value={value} onValueChange={setValue} required className="h-11 border-slate-200 bg-white text-slate-900 shadow-sm focus:border-emerald-500 focus:ring-emerald-500/20" />
           </div>
 
           <div className="grid gap-2">

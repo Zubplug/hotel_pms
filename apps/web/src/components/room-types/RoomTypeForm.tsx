@@ -6,6 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { createRoomTypeSchema, CreateRoomTypeInput } from '@hotel-pms/types';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
+import { AmountInput } from '@/components/ui/amount-input';
 import { Button } from '@/components/ui/button';
 import { useProperty } from '@/components/PropertyProvider';
 import { useRouter } from 'next/navigation';
@@ -104,7 +105,7 @@ export function RoomTypeForm({ initialData }: RoomTypeFormProps) {
               <FormItem>
                 <FormLabel>Base Rate (per night)</FormLabel>
                 <FormControl>
-                  <Input type="number" {...field} onChange={e => field.onChange(parseFloat(e.target.value))} />
+                  <AmountInput value={field.value} onValueChange={value => field.onChange(value ? parseFloat(value) : 0)} />
                 </FormControl>
                 <FormMessage />
               </FormItem>

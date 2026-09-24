@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { AmountInput } from '@/components/ui/amount-input';
 import { Textarea } from '@/components/ui/textarea';
 import {
   Dialog,
@@ -164,12 +165,10 @@ export function DepositActionButton({
               </DialogHeader>
               <div className="space-y-4 py-2">
                 <div className="rounded-xl border border-amber-400/20 bg-amber-400/10 p-4 text-xs leading-5 text-amber-200">Enter the amount confirmed by the bank. Any difference will remain visible as an exception until it is explained.</div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300">Bank-confirmed amount<Input
-                  type="number"
+                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300">Bank-confirmed amount<AmountInput
                   min="0"
-                  step="0.01"
                   value={confirmedAmount}
-                  onChange={(e) => setConfirmedAmount(e.target.value)}
+                  onValueChange={setConfirmedAmount}
                   placeholder="0.00"
                   className="mt-1.5 rounded-xl border-white/10 bg-white/[.05] text-white placeholder:text-slate-500"
                 /></label>

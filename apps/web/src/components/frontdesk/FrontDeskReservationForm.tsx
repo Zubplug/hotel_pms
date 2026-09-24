@@ -82,6 +82,12 @@ const formSchema = z.object({
   path: ['compBeneficiaryType'],
 });
 
+function formatAmountInput(value: number | string) {
+  const numeric = typeof value === 'number' ? value : Number(String(value).replace(/,/g, ''));
+  if (!Number.isFinite(numeric)) return '';
+  return new Intl.NumberFormat('en-NG', { maximumFractionDigits: 2 }).format(numeric);
+}
+
 interface FrontDeskReservationFormProps {
   isWalkIn?: boolean;
   /** When set (from Guest Credits flow), auto-selects this guest on mount. */
@@ -802,13 +808,23 @@ export function FrontDeskReservationForm({ isWalkIn = false, prefillGuestId }: F
                                 {adjustmentType === 'DISCOUNT_PERCENTAGE' ? 'Percentage (%)' : 'Amount / Night'}
                               </FormLabel>
                               <FormControl>
-                                <Input
-                                  type="number"
-                                  min="0"
-                                  max={adjustmentType === 'DISCOUNT_PERCENTAGE' ? 100 : undefined}
-                                  className="h-12 rounded-xl bg-slate-900 border-slate-700 text-white"
-                                  {...field}
-                                />
+                                <div className="relative">
+                                  {(adjustmentType === 'DISCOUNT_FIXED' || adjustmentType === 'COMP_PARTIAL') && (
+                                    <span className="pointer-events-none absolute inset-y-0 left-4 flex items-center text-slate-400">₦</span>
+                                  )}
+                                  <Input
+                                    type={adjustmentType === 'DISCOUNT_FIXED' || adjustmentType === 'COMP_PARTIAL' ? 'text' : 'number'}
+                                    inputMode={adjustmentType === 'DISCOUNT_FIXED' || adjustmentType === 'COMP_PARTIAL' ? 'decimal' : 'numeric'}
+                                    min="0"
+                                    max={adjustmentType === 'DISCOUNT_PERCENTAGE' ? 100 : undefined}
+                                    className={`h-12 rounded-xl bg-slate-900 border-slate-700 text-white ${(adjustmentType === 'DISCOUNT_FIXED' || adjustmentType === 'COMP_PARTIAL') ? 'pl-9' : ''}`}
+                                    value={adjustmentType === 'DISCOUNT_FIXED' || adjustmentType === 'COMP_PARTIAL' ? formatAmountInput(field.value || 0) : field.value}
+                                    onChange={(event) => {
+                                      const raw = event.target.value.replace(/[^0-9.]/g, '');
+                                      field.onChange(adjustmentType === 'DISCOUNT_FIXED' || adjustmentType === 'COMP_PARTIAL' ? (raw ? Number(raw) : 0) : event.target.value);
+                                    }}
+                                  />
+                                </div>
                               </FormControl>
                               <FormMessage />
                             </FormItem>

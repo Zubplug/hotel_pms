@@ -298,6 +298,22 @@ export async function POST(req: NextRequest) {
         const payload = JSON.parse(payloadJson || "{}");
         let resultStatus = "SYNCED";
         let aggregateId = rawAggregateId;
+        // Only FOLIO and RESERVATION are version-checked aggregates in this
+        // endpoint. Other event types are append-only or have no cloud version
+        // field; older clients commonly submitted the default version=1 for
+        // each event. Keep the incoming version for diagnostics while using a
+        // stable per-event version for HotelEvent persistence so events on the
+        // same non-versioned aggregate cannot become false OCC conflicts.
+        const hotelEventAggregateVersion =
+          aggregateType !== "FOLIO" && aggregateType !== "RESERVATION"
+            ? (() => {
+                let hash = 0;
+                for (const char of String(idempotencyKey || id)) {
+                  hash = (hash * 31 + char.charCodeAt(0)) | 0;
+                }
+                return Math.max(1, hash === -2147483648 ? 2147483647 : Math.abs(hash));
+              })()
+            : aggregateVersion;
         if (
           aggregateType === "FOLIO" &&
           eventType === "POST_PAYMENT" &&
@@ -4040,7 +4056,7 @@ export async function POST(req: NextRequest) {
               operatorId: actorId,
               aggregateType,
               aggregateId,
-              aggregateVersion,
+              aggregateVersion: hotelEventAggregateVersion,
               eventType,
               occurredAt: new Date(occurredAt || Date.now()),
               sequence,

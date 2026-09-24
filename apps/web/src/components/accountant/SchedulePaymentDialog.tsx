@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { AmountInput } from '@/components/ui/amount-input';
 import { Label } from '@/components/ui/label';
 
 export function SchedulePaymentDialog({ invoiceId, amount, currency = 'NGN' }: { invoiceId: string; amount: number; currency?: string }) {
@@ -49,7 +50,7 @@ export function SchedulePaymentDialog({ invoiceId, amount, currency = 'NGN' }: {
         <form onSubmit={handleSchedule} className="space-y-4 mt-4">
           <div className="space-y-2">
             <Label>Amount to Pay ({currency})</Label>
-            <Input type="number" readOnly value={amount} className="bg-slate-950 border-white/10 text-white opacity-70" />
+            <AmountInput readOnly value={amount} onValueChange={() => undefined} className="bg-slate-950 border-white/10 text-white opacity-70" />
           </div>
           <div className="space-y-2">
             <Label>Payment Date</Label>

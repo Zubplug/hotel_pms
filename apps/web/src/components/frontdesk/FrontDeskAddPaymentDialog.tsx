@@ -6,6 +6,7 @@ import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogClose } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { AmountInput } from '@/components/ui/amount-input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
@@ -217,19 +218,16 @@ export function FrontDeskAddPaymentDialog({ open, onOpenChange, folio, initialAm
               {/* Amount Input */}
               <div className="space-y-3 bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
                 <Label className="text-sm font-bold text-slate-700">Amount Received ({folio?.currency})</Label>
-                <div className="relative">
-                  <div className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-slate-400">
-                    {folio?.currency}
-                  </div>
-                  <Input 
-                    type="number" 
-                    step="0.01" 
+                <div>
+                  <AmountInput
+                    decimals={2}
+                    currency={folio?.currency === 'NGN' ? '₦' : folio?.currency}
                     max={isDeposit ? undefined : folio?.balance}
-                    value={amount} 
-                    onChange={(e) => setAmount(e.target.value)} 
+                    value={amount}
+                    onValueChange={setAmount}
                     disabled={isSubmitting}
                     required
-                    className="h-14 pl-14 text-xl font-bold bg-slate-50 border-slate-200 rounded-xl focus-visible:ring-emerald-500"
+                    className="h-14 text-xl font-bold bg-slate-50 border-slate-200 rounded-xl focus-visible:ring-emerald-500"
                   />
                 </div>
               </div>

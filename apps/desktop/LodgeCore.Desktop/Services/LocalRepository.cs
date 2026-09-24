@@ -476,7 +476,9 @@ public class LocalRepository
         
         if (reservation.Status != "CONFIRMED") throw new InvalidOperationException("Late arrival can only be recorded for confirmed reservations.");
         reservation.LateArrivalExpected = true; reservation.LateArrivalNotes = notes; reservation.LateArrivalAt = DateTime.UtcNow; reservation.LateArrivalBy = userId; reservation.IsDirty = true; reservation.LocalSequence++;
-        _dbContext.OutboxEvents.Add(new LocalOutboxEvent { PropertyId = reservation.PropertyId, DeviceId = deviceId, OperatorId = userId, AggregateType = "RESERVATION", AggregateId = reservation.Id, EventType = "LATE_ARRIVAL", Sequence = reservation.LocalSequence, PayloadJson = JsonSerializer.Serialize(new { reservationId = reservation.Id, notes, lateArrivalExpected = true }) });
+        int eventVersion = reservation.Version;
+        reservation.Version++;
+        _dbContext.OutboxEvents.Add(new LocalOutboxEvent { PropertyId = reservation.PropertyId, DeviceId = deviceId, OperatorId = userId, AggregateType = "RESERVATION", AggregateId = reservation.Id, AggregateVersion = eventVersion, EventType = "LATE_ARRIVAL", Sequence = reservation.LocalSequence, PayloadJson = JsonSerializer.Serialize(new { reservationId = reservation.Id, notes, lateArrivalExpected = true }) });
         await _dbContext.SaveChangesAsync();
         return reservation;
     }
@@ -516,7 +518,9 @@ public class LocalRepository
             : 0m;
 
         reservation.Status = "NO_SHOW"; reservation.NoShowAt = DateTime.UtcNow; reservation.NoShowBy = userId; reservation.NoShowAssessedAt = DateTime.UtcNow; reservation.NoShowChargeAmount = noShowCharge; reservation.NoShowRefundableAmount = refundableAmount; reservation.IsDirty = true; reservation.LocalSequence++;
-        _dbContext.OutboxEvents.Add(new LocalOutboxEvent { PropertyId = reservation.PropertyId, DeviceId = deviceId, OperatorId = userId, AggregateType = "RESERVATION", AggregateId = reservation.Id, EventType = "NO_SHOW", Sequence = reservation.LocalSequence, PayloadJson = JsonSerializer.Serialize(new { reservationId = reservation.Id }) });
+        int eventVersion = reservation.Version;
+        reservation.Version++;
+        _dbContext.OutboxEvents.Add(new LocalOutboxEvent { PropertyId = reservation.PropertyId, DeviceId = deviceId, OperatorId = userId, AggregateType = "RESERVATION", AggregateId = reservation.Id, AggregateVersion = eventVersion, EventType = "NO_SHOW", Sequence = reservation.LocalSequence, PayloadJson = JsonSerializer.Serialize(new { reservationId = reservation.Id }) });
         await _dbContext.SaveChangesAsync();
         return new { reservation = reservation, assessment = new { totalNights, bookedValue, noShowCharge, refundableAmount }, refundRequired = refundableAmount > 0 };
     }
@@ -531,6 +535,8 @@ public class LocalRepository
         var property = await _dbContext.Properties.FindAsync(res.PropertyId);
         if (property?.NoShowAllowReinstatement == false) throw new InvalidOperationException("Reinstatement is disabled by property policy.");
         res.Status = "CONFIRMED"; res.ReinstatedAt = DateTime.UtcNow; res.ReinstatedBy = userId; res.ReinstatementReason = reason; res.IsDirty = true; res.LocalSequence++;
+        int eventVersion = res.Version;
+        res.Version++;
         var businessDate = property?.BusinessDate.Date ?? DateTime.UtcNow.Date;
         foreach (var reservationRoom in await _dbContext.ReservationRooms.Where(rr => rr.ReservationId == reservationId && rr.Status == "NO_SHOW").ToListAsync())
         {
@@ -541,7 +547,7 @@ public class LocalRepository
                 if (room != null) room.Status = "RESERVED";
             }
         }
-        _dbContext.OutboxEvents.Add(new LocalOutboxEvent { PropertyId = res.PropertyId, DeviceId = deviceId, OperatorId = userId, AggregateType = "RESERVATION", AggregateId = res.Id, EventType = "REINSTATE", Sequence = res.LocalSequence, PayloadJson = JsonSerializer.Serialize(new { reservationId = res.Id, reason }) });
+        _dbContext.OutboxEvents.Add(new LocalOutboxEvent { PropertyId = res.PropertyId, DeviceId = deviceId, OperatorId = userId, AggregateType = "RESERVATION", AggregateId = res.Id, AggregateVersion = eventVersion, EventType = "REINSTATE", Sequence = res.LocalSequence, PayloadJson = JsonSerializer.Serialize(new { reservationId = res.Id, reason }) });
         await _dbContext.SaveChangesAsync();
         return res;
     }
@@ -3485,6 +3491,7 @@ public class LocalRepository
         var reason = root.TryGetProperty("reason", out var rsn) ? rsn.GetString() : "";
         string propertyId = "";
         string aggregateId = "";
+        var aggregateVersion = 1;
         LocalReservationRoom? reservationRoom = null;
         if (targetType == "POS_ORDER" && root.TryGetProperty("orderId", out var orderIdProp)) {
             var order = await _dbContext.PosOrders.FirstOrDefaultAsync(o => o.Id == orderIdProp.GetString());
@@ -3507,6 +3514,7 @@ public class LocalRepository
             if (folio == null) throw new Exception("Folio not found");
             propertyId = folio.PropertyId;
             aggregateId = folio.Id;
+            aggregateVersion = folio.Version;
         }
 
         if (string.IsNullOrEmpty(propertyId)) throw new Exception("Property context not found");
@@ -3570,7 +3578,7 @@ public class LocalRepository
             OperatorId = userId,
             AggregateType = targetType == "FOLIO_ITEM" ? "FOLIO" : targetType,
             AggregateId = aggregateId,
-            AggregateVersion = 1,
+            AggregateVersion = aggregateVersion,
             EventType = "DISCOUNT_REQUESTED",
             Sequence = 1,
             PayloadJson = JsonSerializer.Serialize(new {
@@ -3612,11 +3620,13 @@ public class LocalRepository
         string propertyId = "";
         LocalPosOrder? posOrder = null;
         LocalReservationRoom? resRoom = null;
+        var aggregateVersion = 1;
 
         if (targetType == "POS_ORDER" && root.TryGetProperty("orderId", out var orderIdProp)) {
             posOrder = await _dbContext.PosOrders.Include(o => o.Items).FirstOrDefaultAsync(o => o.Id == orderIdProp.GetString());
             if (posOrder == null) throw new Exception("Order not found");
             propertyId = posOrder.PropertyId;
+            aggregateVersion = posOrder.Version;
         } else if (targetType == "RESERVATION_ROOM" && root.TryGetProperty("reservationRoomId", out var rrIdProp)) {
             resRoom = await _dbContext.ReservationRooms
                 .Include(r => r.Reservation)
@@ -3677,7 +3687,7 @@ public class LocalRepository
             OperatorId = userId,
             AggregateType = targetType,
             AggregateId = targetType == "POS_ORDER" ? posOrder!.Id : resRoom!.Id,
-            AggregateVersion = 1,
+            AggregateVersion = aggregateVersion,
             EventType = targetType == "POS_ORDER" ? "POS_COMPLIMENTARY_REQUESTED" : "COMPLIMENTARY_REQUESTED",
             Sequence = 1,
             PayloadJson = JsonSerializer.Serialize(new {
@@ -6852,10 +6862,17 @@ public class LocalRepository
         var frontdeskSession = await GetActiveFrontdeskSessionAsync(entry.PropertyId, userId);
         if (frontdeskSession == null) throw new InvalidOperationException("An open Front Desk shift is required before posting a city ledger payment.");
         var operationId = Guid.NewGuid().ToString();
+        // A ledger entry can receive more than one offline payment over its
+        // lifetime.  Do not leave the outbox event at LocalOutboxEvent's
+        // default version (1), otherwise the cloud event stream sees every
+        // payment as the same stale mutation.
+        var aggregateVersion = Math.Max(1, entry.Version);
+        entry.Version = aggregateVersion + 1;
         if (!isCorporateAdvance) entry.Status = "PENDING_SETTLEMENT";
         _dbContext.OutboxEvents.Add(new LocalOutboxEvent {
             Id = Guid.NewGuid().ToString(), IdempotencyKey = operationId, PropertyId = entry.PropertyId, DeviceId = deviceId, OperatorId = userId,
             AggregateType = "CITY_LEDGER", AggregateId = entry.Id, EventType = "CITY_LEDGER_PAYMENT",
+            AggregateVersion = aggregateVersion,
             PayloadJson = JsonSerializer.Serialize(new { accountId = entry.AccountId, invoiceId = isCorporate ? null : selectedInvoiceId, accountType = isCorporate ? "CORPORATE" : "SKIPPER", frontdeskSessionId = frontdeskSession.Id, shiftReference = frontdeskSession.ShiftReference, amount, method, reference, businessDate, entryId, timestamp = DateTime.UtcNow }),
             Status = "PENDING", CreatedAt = DateTime.UtcNow
         });
@@ -6946,6 +6963,12 @@ public class LocalRepository
                     CreatedAt = DateTime.UtcNow,
                     SyncStatus = "PENDING"
                 };
+
+                // A credit entry can be applied to more than one folio over
+                // time.  Use a monotonic version for each queued application
+                // instead of LocalOutboxEvent's default version (1).
+                var aggregateVersion = Math.Max(1, entry.Version);
+                entry.Version = aggregateVersion + 1;
                 
                 _dbContext.CityLedgerAllocations.Add(allocation);
                 allocations.Add(allocation);
@@ -6957,6 +6980,7 @@ public class LocalRepository
                     IdempotencyKey = offlineOperationId,
                     AggregateType = "CITY_LEDGER",
                     AggregateId = entry.Id,
+                    AggregateVersion = aggregateVersion,
                     EventType = "GUEST_CREDIT_APPLICATION",
                     PayloadJson = System.Text.Json.JsonSerializer.Serialize(new
                     {
@@ -7075,6 +7099,19 @@ public class LocalRepository
 
         allocation.SyncStatus = "CONFLICTED";
         allocation.ConflictReason = "INSUFFICIENT_CREDIT";
+        allocation.ServerMessage = serverMessage;
+        await _dbContext.SaveChangesAsync();
+    }
+
+    public async Task MarkCreditAllocationRetryingAsync(string offlineOperationId, string serverMessage)
+    {
+        var allocation = await _dbContext.CityLedgerAllocations
+            .FirstOrDefaultAsync(a => a.OfflineOperationId == offlineOperationId);
+
+        if (allocation == null) return;
+
+        allocation.SyncStatus = "PENDING";
+        allocation.ConflictReason = null;
         allocation.ServerMessage = serverMessage;
         await _dbContext.SaveChangesAsync();
     }

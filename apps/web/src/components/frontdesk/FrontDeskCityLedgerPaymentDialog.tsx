@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { AmountInput } from '@/components/ui/amount-input';
 import { Label } from '@/components/ui/label';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 
@@ -62,7 +63,7 @@ export function FrontDeskCityLedgerPaymentDialog({ entry, onComplete }: { entry:
           </div>
         </DialogHeader>
         <div className="space-y-5 px-6 py-5">
-          <div className="grid gap-2"><Label className="font-semibold text-slate-700">Payment amount ({entry.currency || 'NGN'})</Label><Input type="number" min="0.01" max={entry.outstandingAmount} step="0.01" value={amount} onChange={event => setAmount(event.target.value)} required className="h-11 border-slate-200 bg-white text-slate-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500/20" /></div>
+          <div className="grid gap-2"><Label className="font-semibold text-slate-700">Payment amount ({entry.currency || 'NGN'})</Label><AmountInput min="0.01" max={entry.outstandingAmount} value={amount} onValueChange={setAmount} required className="h-11 border-slate-200 bg-white text-slate-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500/20" /></div>
           <div className="grid gap-2"><Label className="font-semibold text-slate-700">Payment method</Label><select value={method} onChange={event => setMethod(event.target.value)} className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 shadow-sm outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10"><option value="BANK_TRANSFER">Bank transfer</option><option value="CASH">Cash office</option><option value="POS">POS</option><option value="CARD">Card</option><option value="CHEQUE">Cheque</option><option value="OTHER">Other</option></select></div>
           <div className="grid gap-2"><Label className="font-semibold text-slate-700">Receipt / payment reference</Label><Input value={reference} onChange={event => setReference(event.target.value)} placeholder="Enter receipt or transfer reference" required className="h-11 border-slate-200 bg-white text-slate-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500/20" /></div>
           <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-800">This payment is recorded against the active Front Desk shift. {isCorporate ? 'Corporate payments are automatically allocated to the oldest open invoices first.' : 'This payment settles only the selected invoice.'}</div>

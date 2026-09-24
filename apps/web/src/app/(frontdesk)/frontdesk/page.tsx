@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { AmountInput } from '@/components/ui/amount-input';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useProperty } from '@/components/PropertyProvider';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
@@ -156,7 +157,7 @@ export default function ReceptionistDashboardPage() {
           {shiftError && <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">{shiftError}</div>}
           <div className="space-y-4">
             <div><label className="text-sm font-medium">Cashier till</label><select value={cashAccountId} onChange={event => setCashAccountId(event.target.value)} className="mt-1 h-10 w-full rounded-md border bg-background px-3 text-sm"><option value="">Select a till</option>{cashAccounts.map(account => <option key={account.id} value={account.id}>{account.name} · {account.type}</option>)}</select></div>
-            <div><label className="text-sm font-medium">Opening float</label><Input type="number" min="0" step="0.01" value={openingFloat} onChange={event => setOpeningFloat(event.target.value)} placeholder="0.00" /></div>
+            <div><label className="text-sm font-medium">Opening float</label><AmountInput min="0" value={openingFloat} onValueChange={setOpeningFloat} placeholder="0.00" /></div>
           </div>
           <DialogFooter><Button variant="outline" onClick={() => setShowStartShift(false)}>Later</Button><Button onClick={startShift} disabled={startingShift || !cashAccountId}>{startingShift ? 'Starting shift…' : 'Start cashier shift'}</Button></DialogFooter>
         </DialogContent>
