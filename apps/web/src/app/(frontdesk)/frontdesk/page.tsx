@@ -33,12 +33,9 @@ import {
   Briefcase,
   ArrowRight,
   Info,
-  Shirt,
   KeySquare,
   ChevronRight,
   Wifi,
-  WifiOff,
-  Sparkles,
   TrendingUp,
   DoorOpen,
   BedDouble,
@@ -133,6 +130,65 @@ function ActionBtn({ icon: Icon, label, sub, onClick, color }: {
         <p className="font-bold text-sm leading-tight">{label}</p>
         {sub && <p className="text-[11px] opacity-60 mt-0.5">{sub}</p>}
       </div>
+    </button>
+  );
+}
+
+function ProgressRing({ value, label }: { value: number; label: string }) {
+  const safeValue = Math.max(0, Math.min(100, value));
+  const radius = 37;
+  const circumference = 2 * Math.PI * radius;
+  const dashOffset = circumference - (safeValue / 100) * circumference;
+
+  return (
+    <div className="relative flex h-[112px] w-[112px] items-center justify-center shrink-0">
+      <svg className="absolute inset-0 h-full w-full -rotate-90" viewBox="0 0 92 92" aria-hidden="true">
+        <circle cx="46" cy="46" r={radius} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="7" />
+        <circle
+          cx="46"
+          cy="46"
+          r={radius}
+          fill="none"
+          stroke="url(#occupancy-gradient)"
+          strokeWidth="7"
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          strokeDashoffset={dashOffset}
+        />
+        <defs>
+          <linearGradient id="occupancy-gradient" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor="#818cf8" />
+            <stop offset="100%" stopColor="#c084fc" />
+          </linearGradient>
+        </defs>
+      </svg>
+      <div className="relative text-center">
+        <p className="text-2xl font-black tracking-tight text-white">{Math.round(safeValue)}%</p>
+        <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-slate-500">{label}</p>
+      </div>
+    </div>
+  );
+}
+
+function PulseItem({ icon: Icon, label, value, tone = 'indigo', onClick }: {
+  icon: React.ElementType; label: string; value: string; tone?: 'indigo' | 'amber' | 'emerald' | 'rose'; onClick?: () => void;
+}) {
+  const tones = {
+    indigo: 'text-indigo-300 bg-indigo-500/10 border-indigo-500/15',
+    amber: 'text-amber-300 bg-amber-500/10 border-amber-500/15',
+    emerald: 'text-emerald-300 bg-emerald-500/10 border-emerald-500/15',
+    rose: 'text-rose-300 bg-rose-500/10 border-rose-500/15',
+  };
+  return (
+    <button onClick={onClick} className="group flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition-colors hover:bg-white/[0.045]">
+      <span className={cn('flex h-9 w-9 items-center justify-center rounded-xl border', tones[tone])}>
+        <Icon className="h-4 w-4" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-xs font-semibold text-slate-400">{label}</span>
+        <span className="mt-0.5 block text-sm font-bold text-white">{value}</span>
+      </span>
+      <ArrowRight className="h-4 w-4 text-slate-700 transition-all group-hover:translate-x-0.5 group-hover:text-slate-400" />
     </button>
   );
 }
@@ -343,6 +399,10 @@ export default function ReceptionistDashboardPage() {
   );
 
   const activeList = activeTab === 'arrivals' ? filteredArrivals : filteredDepartures;
+  const occupancyRate = kpis.roomsTotal > 0 ? (kpis.inHouse / kpis.roomsTotal) * 100 : 0;
+  const readyRate = kpis.roomsTotal > 0 ? (kpis.roomsAvailable / kpis.roomsTotal) * 100 : 0;
+  const unsettledArrivals = arrivals.filter((item: any) => item.balance !== null && Number(item.balance) > 0).length;
+  const roomsNeedingAttention = Math.max(0, Number(kpis.roomsTotal || 0) - Number(kpis.roomsAvailable || 0) - Number(kpis.inHouse || 0));
 
   return (
     <div className="min-h-screen bg-[#080c18] text-slate-200">
@@ -397,40 +457,41 @@ export default function ReceptionistDashboardPage() {
           </div>
         )}
 
-        {/* ── Header row ────────────────────────────────────────────────── */}
-        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <Sparkles className="w-4 h-4 text-indigo-400" />
-              <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-indigo-400">{greeting}</span>
+        {/* ── Command hero ──────────────────────────────────────────────── */}
+        <section className="relative overflow-hidden rounded-[28px] border border-white/10 bg-gradient-to-br from-[#172348] via-[#10182d] to-[#0c1221] p-6 md:p-8 shadow-[0_24px_80px_-36px_rgba(99,102,241,0.55)]">
+          <div className="pointer-events-none absolute -right-24 -top-32 h-80 w-80 rounded-full bg-indigo-500/15 blur-[70px]" />
+          <div className="pointer-events-none absolute bottom-[-140px] left-1/3 h-72 w-72 rounded-full bg-violet-500/10 blur-[80px]" />
+          <div className="relative flex flex-col gap-8 xl:flex-row xl:items-center xl:justify-between">
+            <div className="flex items-center gap-5">
+              <ProgressRing value={occupancyRate} label="occupied" />
+              <div>
+                <div className="mb-2 flex items-center gap-2">
+                  <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.8)]" />
+                  <span className="text-[10px] font-black uppercase tracking-[0.22em] text-emerald-300">Live operations</span>
+                </div>
+                <h1 className="text-3xl font-black tracking-tight text-white md:text-4xl">{greeting}, {firstName}</h1>
+                <p className="mt-2 text-sm font-medium text-slate-400"><ClientOnlyDate date={bDate} format="date" locale="en-GB" options={{ weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }} /></p>
+              </div>
             </div>
-            <h1 className="text-3xl md:text-4xl font-black text-white tracking-tight">
-              {firstName} <span className="text-slate-500 font-light">·</span> Front Desk
-            </h1>
-            <p className="mt-1.5 text-slate-400 font-medium">
-              <ClientOnlyDate date={bDate} format="date" locale="en-GB" options={{ weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }} />
-            </p>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:w-[560px]">
+              <ActionBtn icon={UserPlus} label="Walk-In" sub="Instant stay" onClick={() => router.push('/frontdesk/reservations/walk-in')} color="bg-emerald-500/10 border-emerald-500/20 text-emerald-300 hover:bg-emerald-500/15 hover:border-emerald-500/40" />
+              <ActionBtn icon={CalendarPlus} label="New booking" sub="Reservation" onClick={() => router.push('/frontdesk/reservations/new')} color="bg-indigo-500/10 border-indigo-500/20 text-indigo-300 hover:bg-indigo-500/15 hover:border-indigo-500/40" />
+              <ActionBtn icon={Search} label="Find guest" sub="Search desk" onClick={() => router.push('/frontdesk/reservations')} color="bg-white/5 border-white/10 text-slate-300 hover:bg-white/8 hover:border-white/20" />
+              <ActionBtn icon={CreditCard} label="Read key" sub="Card tools" onClick={() => setReadCardOpen(true)} color="bg-violet-500/10 border-violet-500/20 text-violet-300 hover:bg-violet-500/15 hover:border-violet-500/40" />
+            </div>
           </div>
-
-          {/* ── Command Center ──────────────────────────────────────────── */}
-          <div className="grid grid-cols-3 sm:grid-cols-5 gap-3 shrink-0">
-            <ActionBtn icon={UserPlus}    label="Walk-In"    sub="Instant"        onClick={() => router.push('/frontdesk/reservations/walk-in')} color="bg-emerald-500/10 border-emerald-500/20 text-emerald-300 hover:bg-emerald-500/15 hover:border-emerald-500/40" />
-            <ActionBtn icon={CalendarPlus} label="New Rsv"  sub="Reservation"    onClick={() => router.push('/frontdesk/reservations/new')} color="bg-indigo-500/10 border-indigo-500/20 text-indigo-300 hover:bg-indigo-500/15 hover:border-indigo-500/40" />
-            <ActionBtn icon={Search}      label="Search"    sub="Find guest"      onClick={() => router.push('/frontdesk/reservations')} color="bg-white/5 border-white/10 text-slate-300 hover:bg-white/8 hover:border-white/20" />
-            <ActionBtn icon={CreditCard}  label="Read Card" sub="Guest key"       onClick={() => setReadCardOpen(true)} color="bg-violet-500/10 border-violet-500/20 text-violet-300 hover:bg-violet-500/15 hover:border-violet-500/40" />
-            <ActionBtn icon={Shirt}       label="Laundry"   sub="Service"         onClick={() => router.push('/laundry')} color="bg-cyan-500/10 border-cyan-500/20 text-cyan-300 hover:bg-cyan-500/15 hover:border-cyan-500/40" />
-          </div>
-        </div>
+        </section>
 
         {/* ── KPI Stats ─────────────────────────────────────────────────── */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <StatCard label="Arrivals Today"  value={kpis.arrivals}       icon={LogIn}     accent="bg-indigo-500/10 border-indigo-500/20 text-indigo-300"  glowColor="bg-indigo-500" />
           <StatCard label="Departures"      value={kpis.departures}     icon={LogOut}    accent="bg-amber-500/10 border-amber-500/20 text-amber-300"    glowColor="bg-amber-500" />
           <StatCard label="In-House Guests" value={kpis.inHouse}        icon={Users}     accent="bg-emerald-500/10 border-emerald-500/20 text-emerald-300" glowColor="bg-emerald-500" />
           <StatCard label="Rooms Available" value={kpis.roomsAvailable} icon={BedDouble} accent="bg-slate-500/10 border-slate-500/20 text-slate-300"      glowColor="bg-slate-400" sub={`of ${kpis.roomsTotal} sellable`} />
         </div>
 
-        {/* ── Main panel: arrivals / departures ─────────────────────────── */}
+        {/* ── Main workspace ────────────────────────────────────────────── */}
+        <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_330px]">
         <div className="rounded-3xl border border-white/8 bg-white/[0.025] backdrop-blur-xl overflow-hidden">
           {/* Tabs + Search */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 px-6 pt-5 pb-4 border-b border-white/8">
@@ -512,6 +573,50 @@ export default function ReceptionistDashboardPage() {
               ))
             )}
           </div>
+        </div>
+
+        <aside className="space-y-5">
+          <div className="rounded-3xl border border-white/8 bg-white/[0.025] p-5 backdrop-blur-xl">
+            <div className="mb-4 flex items-start justify-between">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-300">Property pulse</p>
+                <h2 className="mt-1 text-lg font-bold text-white">Today at a glance</h2>
+              </div>
+              <Wifi className="h-4 w-4 text-emerald-400" />
+            </div>
+            <div className="space-y-1">
+              <PulseItem icon={LogIn} label="Guests arriving" value={`${arrivals.length} scheduled today`} onClick={() => setActiveTab('arrivals')} />
+              <PulseItem icon={LogOut} label="Guests departing" value={`${departures.length} due out`} tone="amber" onClick={() => setActiveTab('departures')} />
+              <PulseItem icon={CheckCircle2} label="Rooms ready" value={`${kpis.roomsAvailable} of ${kpis.roomsTotal} sellable`} tone="emerald" onClick={() => router.push('/frontdesk/rooms')} />
+              <PulseItem icon={AlertCircle} label="Needs attention" value={`${roomsNeedingAttention + unsettledArrivals} open items`} tone={roomsNeedingAttention + unsettledArrivals > 0 ? 'rose' : 'emerald'} onClick={() => router.push('/frontdesk/housekeeping')} />
+            </div>
+          </div>
+
+          <div className="rounded-3xl border border-white/8 bg-gradient-to-br from-white/[0.06] to-white/[0.02] p-5">
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Room readiness</p>
+                <p className="mt-1 text-2xl font-black text-white">{Math.round(readyRate)}%</p>
+              </div>
+              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-300">
+                <BedDouble className="h-5 w-5" />
+              </div>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-white/10">
+              <div className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-300 transition-all" style={{ width: `${Math.min(100, readyRate)}%` }} />
+            </div>
+            <div className="mt-3 flex items-center justify-between text-[11px] font-semibold text-slate-500">
+              <span>{kpis.roomsAvailable} ready to sell</span>
+              <span>{Math.max(0, Number(kpis.roomsTotal || 0) - Number(kpis.roomsAvailable || 0))} in use / service</span>
+            </div>
+          </div>
+
+          <button onClick={() => router.push('/frontdesk/cashier')} className="group flex w-full items-center gap-3 rounded-3xl border border-indigo-400/15 bg-indigo-500/10 p-5 text-left transition-all hover:border-indigo-400/30 hover:bg-indigo-500/15">
+            <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-indigo-400/15 text-indigo-200"><TrendingUp className="h-5 w-5" /></span>
+            <span className="flex-1"><span className="block text-sm font-bold text-white">Keep the desk moving</span><span className="mt-1 block text-xs text-indigo-200/60">Review your cashier shift</span></span>
+            <ArrowRight className="h-4 w-4 text-indigo-300 transition-transform group-hover:translate-x-1" />
+          </button>
+        </aside>
         </div>
 
         {/* ── Bottom quick links strip ───────────────────────────────────── */}
