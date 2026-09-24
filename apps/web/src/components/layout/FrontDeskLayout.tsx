@@ -13,6 +13,7 @@ import {
   AlertCircle,
   Brush,
   Wrench,
+  Shirt,
   Printer,
   RefreshCw,
   Wifi,
@@ -104,6 +105,7 @@ export function FrontDeskLayout({ children }: { children: React.ReactNode }) {
   const navLinks = [
     { href: '/frontdesk/refunds', label: 'Refunds' },
     { href: '/frontdesk/cashier', label: 'Cashier Shift' },
+    { href: '/laundry', label: 'Laundry', icon: Shirt },
     { href: '/frontdesk/housekeeping', label: 'Housekeeping', icon: Brush },
     { href: '/frontdesk/maintenance', label: 'Maintenance', icon: Wrench },
   ];
