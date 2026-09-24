@@ -191,6 +191,19 @@
 .frontdesk-dark-surface .text-slate-500,
 .frontdesk-dark-surface .text-gray-500,
 .frontdesk-dark-surface .text-gray-400 { color: #94a3b8 !important; }
+.frontdesk-dark-surface .text-muted-foreground,
+.frontdesk-dark-surface .text-foreground { color: #e2e8f0 !important; }
+.frontdesk-dark-surface .text-indigo-600,
+.frontdesk-dark-surface .text-indigo-500 { color: #a5b4fc !important; }
+.frontdesk-dark-surface .text-emerald-600,
+.frontdesk-dark-surface .text-emerald-500 { color: #6ee7b7 !important; }
+.frontdesk-dark-surface .text-amber-600,
+.frontdesk-dark-surface .text-amber-500 { color: #fcd34d !important; }
+.frontdesk-dark-surface .text-red-600,
+.frontdesk-dark-surface .text-red-500,
+.frontdesk-dark-surface .text-rose-600 { color: #fda4af !important; }
+.frontdesk-dark-surface .text-blue-600,
+.frontdesk-dark-surface .text-cyan-600 { color: #7dd3fc !important; }
 .frontdesk-dark-surface input,
 .frontdesk-dark-surface textarea,
 .frontdesk-dark-surface select,
@@ -210,6 +223,12 @@
 .frontdesk-dark-surface[class*="linear-gradient(180deg,#e8eef7"],
 .frontdesk-dark-surface [class*="linear-gradient(180deg,#e8eef7"] {
   background-image: radial-gradient(ellipse at top right, rgba(99, 102, 241, 0.10), transparent 55%), linear-gradient(180deg, #080c18 0%, #0b1220 100%) !important;
+}
+.frontdesk-dark-surface [class*="#f5f8fc"],
+.frontdesk-dark-surface [class*="#f6f9fd"],
+.frontdesk-dark-surface [class*="#eef3f9"] {
+  background-color: #080c18 !important;
+  background-image: none !important;
 }
 .frontdesk-dark-surface .bg-gradient-to-br,
 .frontdesk-dark-surface .bg-gradient-to-r {
