@@ -76,6 +76,18 @@ export async function GET(req: NextRequest) {
           roomType: { select: { name: true, code: true } },
           building: { select: { name: true } },
           floor: { select: { name: true, number: true } },
+          reservationRooms: {
+            where: { reservation: { status: 'CHECKED_IN' } },
+            include: {
+              reservation: {
+                include: {
+                  folios: {
+                    select: { balance: true }
+                  }
+                }
+              }
+            }
+          }
         },
       }),
     ]);

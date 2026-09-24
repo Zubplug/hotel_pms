@@ -15,7 +15,7 @@ export function CheckOutDialog({ open, onOpenChange, reservation, folio }: { ope
   
   const { data: session } = useSession();
   const userRole = String((session?.user as any)?.role || 'STAFF').toUpperCase();
-  const canCheckoutSkipper = ['MANAGER', 'ACCOUNTANT', 'NIGHT_AUDITOR', 'ADMIN', 'SUPER_ADMIN'].includes(userRole);
+  const canCheckoutSkipper = ['MANAGER', 'ACCOUNTANT', 'NIGHT_AUDITOR', 'ADMIN', 'SUPER_ADMIN', 'GENERAL_CASHIER'].includes(userRole);
 
   const queryClient = useQueryClient();
 

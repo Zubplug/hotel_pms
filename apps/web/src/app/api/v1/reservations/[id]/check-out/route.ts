@@ -11,6 +11,9 @@ import { NotificationEngine } from '@/lib/notification-engine';
 import { requireOrganizationContext } from "@/lib/organization-access";
 import { upsertCheckoutHousekeepingTask } from '@/lib/housekeeping-task';
 import { routeFoliosToCityLedger } from '@/lib/finance/route-folio-to-city-ledger';
+import { applyAvailableFolioCredit } from '@/lib/finance/apply-folio-credit';
+import { applyAvailableGuestLedgerCredit } from '@/lib/finance/apply-guest-ledger-credit';
+import { getPropertyBusinessDate } from '@/lib/date-utils';
 
 export async function POST(
   req: NextRequest,
@@ -128,6 +131,59 @@ export async function POST(
         }
       }
 
+      // Before treating a guest's folio as debt, consume both kinds of
+      // available credit: normal folio credit and previous-stay credit held
+      // in the City Ledger. This is especially important for recovered room
+      // charges, which may have been posted after the original audit attempt.
+      if (!reservation.corporateAccountId && reservation.primaryGuestId) {
+        const propertyMeta = await tx.property.findUnique({
+          where: { id: reservation.propertyId },
+          select: { organizationId: true, businessDate: true, timezone: true },
+        });
+        if (!propertyMeta) throw new Error('PROPERTY_NOT_FOUND');
+        const checkoutBusinessDate = propertyMeta.businessDate || getPropertyBusinessDate(propertyMeta.timezone);
+
+        for (const folio of folios) {
+          const outstanding = Number(folio.balance);
+          if (outstanding <= 0.01) continue;
+
+          const sameFolioCreditApplied = await applyAvailableFolioCredit(tx, {
+            folioId: folio.id,
+            propertyId: reservation.propertyId,
+            guestId: reservation.primaryGuestId,
+            reservationId: reservation.id,
+            amount: outstanding,
+            currency: folio.currency || 'NGN',
+            source: 'CHECKOUT_GUEST_CREDIT',
+            description: `Applied guest credit at checkout for reservation ${reservation.confirmationNumber}`,
+            appliedBy: session.user.id,
+            operationKey: `CHECKOUT_GUEST_CREDIT:${reservation.id}:${folio.id}`,
+            businessDate: checkoutBusinessDate,
+          });
+          const cityLedgerCreditApplied = await applyAvailableGuestLedgerCredit(tx, {
+            folioId: folio.id,
+            propertyId: reservation.propertyId,
+            organizationId: propertyMeta.organizationId,
+            guestId: reservation.primaryGuestId,
+            reservationId: reservation.id,
+            amount: Math.max(0, outstanding - sameFolioCreditApplied),
+            currency: folio.currency || 'NGN',
+            appliedBy: session.user.id,
+            operationKey: `CHECKOUT_GUEST_CREDIT:${reservation.id}:${folio.id}`,
+            businessDate: checkoutBusinessDate,
+            description: `Applied previous-stay guest credit at checkout for reservation ${reservation.confirmationNumber}`,
+          });
+
+          const totalApplied = sameFolioCreditApplied + cityLedgerCreditApplied;
+          if (totalApplied > 0.01) {
+            folio.balance = outstanding - totalApplied;
+            // City Ledger applications increment the folio version; ordinary
+            // folio-credit applications only change the balance.
+            if (cityLedgerCreditApplied > 0.01) folio.version += 1;
+          }
+        }
+      }
+
       const checkoutFolios = reservation.corporateAccountId
         ? await Promise.all(folios.map(async (folio: any) => {
             const items = await tx.folioItem.findMany({
@@ -143,7 +199,7 @@ export async function POST(
       let targetAccountId: string | undefined;
 
       if (!reservation.corporateAccountId && totalBalance > 0 && forceSkipper) {
-        if (!canPostCityLedger && !['MANAGER', 'ACCOUNTANT', 'NIGHT_AUDITOR', 'ADMIN', 'SUPER_ADMIN'].includes(userRole)) {
+        if (!canPostCityLedger && !['MANAGER', 'ACCOUNTANT', 'NIGHT_AUDITOR', 'ADMIN', 'SUPER_ADMIN', 'GENERAL_CASHIER'].includes(userRole)) {
           throw new Error('FORBIDDEN_SKIPPER_CHECKOUT');
         }
         const skipperAccount = await tx.cityLedgerAccount.findFirst({
@@ -332,7 +388,7 @@ export async function POST(
       return errorResponse('PAYMENT_REQUIRED', 'Guest has a credit balance. Please process a refund before check-out.', 402);
     }
     if (message === 'FORBIDDEN_SKIPPER_CHECKOUT') {
-      return errorResponse('FORBIDDEN', 'Only Managers and Accountants can check out guests as Skippers.', 403);
+      return errorResponse('FORBIDDEN', 'Only Managers, General Cashiers, and Accountants can check out guests as Skippers.', 403);
     }
     if (message === 'NO_SKIPPER_ACCOUNT') {
       return errorResponse('BAD_REQUEST', 'No active City Ledger account found for Skippers. Please create one first.', 400);
