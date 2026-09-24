@@ -47,21 +47,25 @@ import { cn } from '@/lib/utils';
 
 // ─── Colour palette token helpers ──────────────────────────────────────────
 const STATUS_CLASSES: Record<string, string> = {
-  AVAILABLE:  'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20',
-  CLEAN:      'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20',
-  DIRTY:      'bg-amber-500/15 text-amber-400 border border-amber-500/20',
-  OUT_OF_ORDER: 'bg-red-500/15 text-red-400 border border-red-500/20',
+  AVAILABLE:   'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20',
+  CLEAN:       'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20',
+  DIRTY:       'bg-amber-500/15 text-amber-400 border border-amber-500/20',
+  OUT_OF_ORDER:'bg-red-500/15 text-red-400 border border-red-500/20',
   MAINTENANCE: 'bg-red-500/15 text-red-400 border border-red-500/20',
-  OCCUPIED:   'bg-indigo-500/15 text-indigo-400 border border-indigo-500/20',
+  OCCUPIED:    'bg-indigo-500/15 text-indigo-400 border border-indigo-500/20',
+  RESERVED:    'bg-violet-500/15 text-violet-400 border border-violet-500/20',
+  BLOCKED:     'bg-slate-500/15 text-slate-400 border border-slate-500/20',
 };
 
 const STATUS_LABEL: Record<string, string> = {
-  AVAILABLE: 'Ready',
-  CLEAN: 'Ready',
-  DIRTY: 'Housekeeping',
+  AVAILABLE:    'Ready',
+  CLEAN:        'Ready',
+  DIRTY:        'Housekeeping',
   OUT_OF_ORDER: 'Out of Order',
-  MAINTENANCE: 'Maintenance',
-  OCCUPIED: 'Occupied',
+  MAINTENANCE:  'Maintenance',
+  OCCUPIED:     'Occupied',
+  RESERVED:     'Reserved',
+  BLOCKED:      'Blocked',
 };
 
 // Animated counter hook
@@ -83,22 +87,25 @@ function useCountUp(target: number, duration = 800) {
 
 // ─── Sub-components ─────────────────────────────────────────────────────────
 
-function StatCard({ label, value, icon: Icon, accent, sub }: {
-  label: string; value: number; icon: React.ElementType; accent: string; sub?: string;
+function StatCard({ label, value, icon: Icon, accent, glowColor, sub }: {
+  label: string; value: number; icon: React.ElementType; accent: string; glowColor: string; sub?: string;
 }) {
   const displayed = useCountUp(value);
   return (
-    <div className={cn('relative overflow-hidden rounded-2xl p-5 border flex flex-col gap-4 group', accent)}>
-      <div className="absolute -top-6 -right-6 w-28 h-28 rounded-full opacity-10 bg-current pointer-events-none transition-transform group-hover:scale-110" />
-      <div className="flex items-center justify-between">
-        <span className="text-[11px] font-bold uppercase tracking-[0.18em] opacity-60">{label}</span>
-        <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-current/10">
+    <div className={cn('relative overflow-hidden rounded-2xl p-6 border flex flex-col gap-5 group cursor-default transition-all duration-300 hover:-translate-y-0.5', accent)}>
+      {/* Corner glow */}
+      <div className={cn('absolute -top-8 -right-8 w-32 h-32 rounded-full blur-2xl opacity-20 group-hover:opacity-30 transition-opacity pointer-events-none', glowColor)} />
+      {/* Top row */}
+      <div className="flex items-center justify-between relative z-10">
+        <span className="text-[10px] font-black uppercase tracking-[0.22em] opacity-50">{label}</span>
+        <div className={cn('w-9 h-9 rounded-xl flex items-center justify-center border', accent.includes('indigo') ? 'bg-indigo-500/10 border-indigo-500/20' : accent.includes('amber') ? 'bg-amber-500/10 border-amber-500/20' : accent.includes('emerald') ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-slate-500/10 border-slate-500/20')}>
           <Icon className="w-4.5 h-4.5" />
         </div>
       </div>
-      <div>
-        <span className="text-4xl font-black tracking-tight">{displayed}</span>
-        {sub && <p className="mt-1 text-[11px] opacity-60 font-medium">{sub}</p>}
+      {/* Value */}
+      <div className="relative z-10">
+        <span className="text-5xl font-black tracking-tight leading-none">{displayed}</span>
+        {sub && <p className="mt-2 text-[11px] opacity-50 font-semibold">{sub}</p>}
       </div>
     </div>
   );
@@ -209,10 +216,15 @@ function GuestRow({ name, room, balance, availableCredit, roomStatus, status, ch
           >
             {isPaid ? (isArrival ? 'Check In' : 'Check Out') : 'View Folio'}
           </button>
+        ) : status === 'CHECKED_OUT' ? (
+          <span className="text-[11px] font-semibold text-slate-600 px-3 py-1.5 rounded-xl bg-white/5 border border-white/5">Departed</span>
         ) : (
-          <span className="text-[11px] font-semibold text-slate-600 px-3 py-1.5 rounded-xl bg-white/5 border border-white/5">
-            {status === 'CHECKED_OUT' ? 'Departed' : 'Inactive'}
-          </span>
+          <button
+            onClick={onViewFolio}
+            className="h-9 px-4 rounded-xl text-xs font-bold border border-white/10 bg-white/5 text-slate-400 hover:bg-white/10 hover:text-slate-200 transition-all duration-200"
+          >
+            Manage
+          </button>
         )}
       </div>
     </div>
@@ -412,10 +424,10 @@ export default function ReceptionistDashboardPage() {
 
         {/* ── KPI Stats ─────────────────────────────────────────────────── */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard label="Arrivals Today"  value={kpis.arrivals}       icon={LogIn}      accent="bg-indigo-500/10 border-indigo-500/20 text-indigo-300" />
-          <StatCard label="Departures"      value={kpis.departures}     icon={LogOut}     accent="bg-amber-500/10 border-amber-500/20 text-amber-300" />
-          <StatCard label="In-House Guests" value={kpis.inHouse}        icon={Users}      accent="bg-emerald-500/10 border-emerald-500/20 text-emerald-300" />
-          <StatCard label="Rooms Available" value={kpis.roomsAvailable} icon={BedDouble}  accent="bg-slate-500/10 border-slate-500/20 text-slate-300" sub={`of ${kpis.roomsTotal} sellable`} />
+          <StatCard label="Arrivals Today"  value={kpis.arrivals}       icon={LogIn}     accent="bg-indigo-500/10 border-indigo-500/20 text-indigo-300"  glowColor="bg-indigo-500" />
+          <StatCard label="Departures"      value={kpis.departures}     icon={LogOut}    accent="bg-amber-500/10 border-amber-500/20 text-amber-300"    glowColor="bg-amber-500" />
+          <StatCard label="In-House Guests" value={kpis.inHouse}        icon={Users}     accent="bg-emerald-500/10 border-emerald-500/20 text-emerald-300" glowColor="bg-emerald-500" />
+          <StatCard label="Rooms Available" value={kpis.roomsAvailable} icon={BedDouble} accent="bg-slate-500/10 border-slate-500/20 text-slate-300"      glowColor="bg-slate-400" sub={`of ${kpis.roomsTotal} sellable`} />
         </div>
 
         {/* ── Main panel: arrivals / departures ─────────────────────────── */}
@@ -503,16 +515,17 @@ export default function ReceptionistDashboardPage() {
         </div>
 
         {/* ── Bottom quick links strip ───────────────────────────────────── */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           {[
-            { label: 'Cashier Shift', icon: TrendingUp, href: '/frontdesk/cashier', color: 'text-emerald-400' },
-            { label: 'Room Status', icon: Key, href: '/frontdesk/rooms', color: 'text-indigo-400' },
-            { label: 'Housekeeping', icon: Briefcase, href: '/frontdesk/housekeeping', color: 'text-amber-400' },
-            { label: 'Maintenance', icon: Ban, href: '/frontdesk/maintenance', color: 'text-rose-400' },
-          ].map(({ label, icon: Icon, href, color }) => (
+            { label: 'Cashier Shift',  icon: TrendingUp, action: () => router.push('/frontdesk/cashier'),      color: 'text-emerald-400' },
+            { label: 'Room Status',    icon: Key,         action: () => router.push('/frontdesk/rooms'),        color: 'text-indigo-400' },
+            { label: 'Housekeeping',   icon: Briefcase,   action: () => router.push('/frontdesk/housekeeping'), color: 'text-amber-400' },
+            { label: 'Maintenance',    icon: Ban,         action: () => router.push('/frontdesk/maintenance'),  color: 'text-rose-400' },
+            { label: 'Quick Checkout', icon: KeySquare,   action: () => setQuickCheckoutOpen(true),            color: 'text-violet-400' },
+          ].map(({ label, icon: Icon, action, color }) => (
             <button
-              key={href}
-              onClick={() => router.push(href)}
+              key={label}
+              onClick={action}
               className="flex items-center gap-3 px-5 py-4 rounded-2xl bg-white/[0.03] border border-white/8 hover:bg-white/[0.06] hover:border-white/15 transition-all group"
             >
               <Icon className={cn('w-5 h-5 shrink-0', color)} />
@@ -524,10 +537,10 @@ export default function ReceptionistDashboardPage() {
       </div>
 
       {/* ── Floating Action Buttons ──────────────────────────────────────── */}
-      <div className="fixed bottom-8 right-6 z-50 flex flex-col gap-3 items-end">
+      <div className="fixed bottom-8 right-6 z-50">
         <button
           onClick={() => setReencodeCardOpen(true)}
-          className="h-14 px-5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white flex items-center gap-3 shadow-[0_0_30px_-5px_rgba(99,102,241,0.5)] hover:shadow-[0_0_40px_-5px_rgba(99,102,241,0.7)] transition-all hover:-translate-y-0.5 border border-indigo-500 font-bold text-sm"
+          className="h-14 px-6 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white flex items-center gap-3 shadow-[0_0_30px_-5px_rgba(99,102,241,0.5)] hover:shadow-[0_0_40px_-5px_rgba(99,102,241,0.7)] transition-all hover:-translate-y-0.5 border border-indigo-500 font-bold text-sm"
         >
           <KeySquare className="w-5 h-5" />
           Re-Encode Card
