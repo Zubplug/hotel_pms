@@ -22,7 +22,7 @@ public static class MauiProgram
         {
             var loggerFactory = sp.GetRequiredService<ILoggerFactory>();
             // Retrieve configured provider, defaulting to the Deluns encoder.
-            var providerType = Microsoft.Maui.Storage.Preferences.Default.Get("LockProviderType", "rfv2016");
+            var providerType = Microsoft.Maui.Storage.Preferences.Default.Get("LockProviderType", "deluns");
             
             return providerType.ToLowerInvariant() switch
             {
@@ -36,7 +36,7 @@ public static class MauiProgram
                     Microsoft.Maui.Storage.Preferences.Default.Get("XeederConnectTimeoutMs", 3000),
                     Microsoft.Maui.Storage.Preferences.Default.Get("XeederCommandTimeoutMs", 5000)
                 ),
-                _        => new Rfv2016LockProvider(loggerFactory.CreateLogger<Rfv2016LockProvider>())
+                _        => new DelunsLockProvider(loggerFactory.CreateLogger<DelunsLockProvider>())
             };
         });
         builder.Services.AddSingleton<HardwareInterop>();
