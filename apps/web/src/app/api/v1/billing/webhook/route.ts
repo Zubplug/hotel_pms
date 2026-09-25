@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import prisma, { Prisma } from '@hotel-pms/db';
+import prisma from '@hotel-pms/db';
+import type { Prisma } from '@hotel-pms/db';
 
 const stripeKey = process.env.STRIPE_SECRET_KEY;
 const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -104,7 +105,7 @@ export async function POST(req: Request) {
       try {
         await tx.billingEvent.create({ data: { stripeEventId: event.id, type: event.type, payload: event as unknown as Prisma.InputJsonValue, organizationId } });
       } catch (error) {
-        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') { duplicate = true; return; }
+        if ((error as { code?: string })?.code === 'P2002') { duplicate = true; return; }
         throw error;
       }
       if (event.type.startsWith('customer.subscription.')) await handleSubscriptionChange(tx, object as Stripe.Subscription);

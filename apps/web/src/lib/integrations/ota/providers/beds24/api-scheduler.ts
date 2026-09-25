@@ -1,4 +1,4 @@
-import prisma from '../../../../../packages/db';
+import prisma from '@hotel-pms/db';
 import { Beds24TokenManager } from './token-manager';
 import crypto from 'crypto';
 
