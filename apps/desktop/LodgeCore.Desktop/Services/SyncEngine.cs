@@ -3074,14 +3074,14 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                                 }
                                 else if (evt.EventType == "GUEST_CREDIT_REFUND_REQUESTED")
                                 {
-                                    using var scope = _serviceProvider.CreateScope();
-                                    var repo = scope.ServiceProvider.GetRequiredService<LocalRepository>();
+                                    using var innerScope = _serviceProvider.CreateScope();
+                                    var repo = innerScope.ServiceProvider.GetRequiredService<LocalRepository>();
                                     await repo.MarkRefundRequestRejectedAsync(evt.IdempotencyKey, res.Error ?? "Cloud rejected refund request.");
                                 }
                                 else if (evt.EventType == "CITY_LEDGER_PAYMENT")
                                 {
-                                    using var scope = _serviceProvider.CreateScope();
-                                    var repo = scope.ServiceProvider.GetRequiredService<LocalRepository>();
+                                    using var innerScope = _serviceProvider.CreateScope();
+                                    var repo = innerScope.ServiceProvider.GetRequiredService<LocalRepository>();
                                     await repo.ReopenCityLedgerPaymentAsync(evt.IdempotencyKey);
                                 }
                             }
