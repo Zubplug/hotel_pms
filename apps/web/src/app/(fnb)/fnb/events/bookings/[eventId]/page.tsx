@@ -22,6 +22,10 @@ export default async function EventBookingDetailPage({ params }: { params: Promi
     },
   });
   if (!event) notFound();
+  const generateBEOAction = async () => {
+    'use server';
+    await generateBEO(event.id, userId);
+  };
 
   return (
     <div className="space-y-6 p-6">
@@ -32,7 +36,7 @@ export default async function EventBookingDetailPage({ params }: { params: Promi
           <p className="mt-1 text-muted-foreground">{event.status} · {event.contactName} · {event.expectedGuests} guests</p>
         </div>
         {event.status !== 'CANCELLED' && (
-          <form action={generateBEO.bind(null, event.id, userId)}>
+          <form action={generateBEOAction}>
             <Button type="submit">Generate BEO</Button>
           </form>
         )}
