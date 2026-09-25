@@ -315,6 +315,12 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
     }
   },
 
+  nightAudit: {
+    postRoomCharges: async (propertyId: string, businessDate?: string) => {
+      return invokeDesktop('nightAudit.postRoomCharges', { propertyId, businessDate });
+    },
+  },
+
   guestCredits: {
     list: async (_propertyId: string) => {
       await refreshGuestCreditSnapshot();

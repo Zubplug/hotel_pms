@@ -1,6 +1,8 @@
 import prisma from "@hotel-pms/db";
 import { randomUUID } from "crypto";
 import { FolioItemSource, PaymentMethod } from "@hotel-pms/db";
+import { applyAvailableFolioCredit } from "@/lib/finance/apply-folio-credit";
+import { applyAvailableGuestLedgerCredit } from "@/lib/finance/apply-guest-ledger-credit";
 
 export class PaymentService {
   /**
@@ -49,6 +51,19 @@ export class PaymentService {
 
         if (!folio) throw new Error('Folio not found');
         if (folio.status === 'CLOSED') throw new Error('Folio is closed');
+
+        if (folio.corporateAccountId) {
+          const corporateAccount = await tx.corporateAccount.findUnique({
+            where: { id: folio.corporateAccountId },
+            select: { propertyId: true, isActive: true, creditLimit: true, exemptFromHighBalance: true },
+          });
+          if (!corporateAccount || corporateAccount.propertyId !== propertyId || !corporateAccount.isActive) {
+            throw new Error('Corporate account is inactive or unavailable for this property');
+          }
+          if (Number(corporateAccount.creditLimit) > 0 && !corporateAccount.exemptFromHighBalance && Number(folio.balance) + params.amount > Number(corporateAccount.creditLimit)) {
+            throw new Error('CREDIT_LIMIT_EXCEEDED: POS charge exceeds the corporate account credit limit');
+          }
+        }
         
         // Validation: Guest in-house (Reservation status CHECKED_IN)
         if (folio.reservation && folio.reservation.status !== 'CHECKED_IN') {
@@ -70,9 +85,61 @@ export class PaymentService {
             baseAmount: params.amount,
             posTransactionId: order.id,
             postedBy: params.cashierId,
-            operationId: `folio_chg_${operationId}`
+            operationId: `folio_chg_${operationId}`,
+            reservationId: order.reservationId || folio.reservationId,
+            guestId: folio.guestId,
           }
         });
+
+        await tx.folio.update({
+          where: { id: folio.id },
+          data: {
+            totalCharges: { increment: params.amount },
+            balance: { increment: params.amount },
+          },
+        });
+
+        // Apply credit in the same order as Night Audit and offline Front
+        // Desk: current-folio credit first, then previous-stay City Ledger
+        // credit. The allocation helpers are idempotent and write the payment,
+        // ledger allocation, audit trail, and GL entry in this transaction.
+        const property = await tx.property.findUnique({
+          where: { id: propertyId },
+          select: { organizationId: true, businessDate: true, timezone: true },
+        });
+        const guestId = folio.guestId;
+        const reservationId = folio.reservationId || order.reservationId;
+        const currency = folio.currency || 'NGN';
+        const businessDate = property?.businessDate || new Date();
+        const sameFolioApplied = await applyAvailableFolioCredit(tx, {
+          folioId: folio.id,
+          propertyId,
+          guestId,
+          reservationId,
+          amount: params.amount,
+          currency,
+          source: 'POS',
+          description: `Applied folio credit to POS charge - Order #${order.orderNumber}`,
+          appliedBy: params.cashierId,
+          operationKey: `POS_CREDIT:${operationId}`,
+          businessDate,
+        });
+
+        if (property?.organizationId && guestId && reservationId) {
+          await applyAvailableGuestLedgerCredit(tx, {
+            folioId: folio.id,
+            propertyId,
+            organizationId: property.organizationId,
+            guestId,
+            reservationId,
+            amount: Math.max(0, params.amount - sameFolioApplied),
+            currency,
+            appliedBy: params.cashierId,
+            operationKey: `POS_CREDIT:${operationId}`,
+            businessDate,
+            description: `Applied previous-stay guest credit to POS charge - Order #${order.orderNumber}`,
+          });
+        }
       }
 
       // 4. Create Payment Ledger Record (PosPayment acts as the ledger)

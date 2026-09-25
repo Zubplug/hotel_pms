@@ -12,6 +12,13 @@ export async function GET(req: NextRequest) {
     const propertyId  = req.nextUrl.searchParams.get('propertyId');
     const cursorParam = req.nextUrl.searchParams.get('cursor');
     const sinceParam  = req.nextUrl.searchParams.get('since');
+    const reconcileSessionIds = Array.from(new Set(
+      (req.nextUrl.searchParams.get('reconcilePosSessionIds') || '')
+        .split(',')
+        .map(id => id.trim())
+        .filter(id => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id))
+        .filter(Boolean)
+    )).slice(0, 100);
     const limitParam  = req.nextUrl.searchParams.get('limit') || '500';
     
     // Support both ?since= (legacy) and ?cursor=
@@ -311,16 +318,16 @@ export async function GET(req: NextRequest) {
     // ── POS Transactions (Sessions, Orders, KOTs, Payments) ──
     const buildPosSessionWhere = (baseWhere: any) => {
       if (!since) {
-        const twoDaysAgo = new Date(watermark);
-        twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
+        // A POS session is a financial-control record, not disposable UI
+        // cache data. The desktop may retain an old SUBMITTED projection while
+        // Finance approves it days later. Returning only OPEN/recently-closed
+        // sessions makes that approval impossible to recover after a cursor
+        // reset or terminal reinstall, leaving the operator locked forever.
+        // Include every session in the initial snapshot; global pagination
+        // below still bounds each response and advances safely by timestamp.
         return { 
             ...baseWhere, 
-            updatedAt: { lte: watermark },
-            OR: [
-              { status: 'OPEN' },
-              { status: 'RECONCILIATION_REQUIRED' },
-              { closedAt: { gte: twoDaysAgo } }
-            ]
+            updatedAt: { lte: watermark }
         };
       }
       return {
@@ -335,6 +342,26 @@ export async function GET(req: NextRequest) {
       take: limit,
       orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
     });
+
+    // A terminal can have advanced its cursor before receiving Finance's
+    // decision (or can have been offline for longer than the normal history
+    // window). Re-send the exact local blocking aggregates so the desktop can
+    // reconcile them without resetting its entire sync cursor.
+    const recoveryPosSessions = reconcileSessionIds.length
+      ? await prisma.posSession.findMany({
+          where: {
+            id: { in: reconcileSessionIds },
+            outlet: { propertyId },
+          },
+          include: { cashMovements: true },
+        })
+      : [];
+    const recoveryPosSessionIds = new Set(recoveryPosSessions.map(session => session.id));
+    const posSessionById = new Map<string, any>();
+    [...posSessions, ...recoveryPosSessions].forEach(session => posSessionById.set(session.id, session));
+    const reconciledPosSessions = Array.from(posSessionById.values()).sort((a, b) =>
+      a.updatedAt.getTime() - b.updatedAt.getTime() || a.id.localeCompare(b.id)
+    );
 
     const buildPosOrderWhere = (baseWhere: any) => {
       if (!since) {
@@ -424,7 +451,7 @@ export async function GET(req: NextRequest) {
     posProducts.forEach(s => allEntities.push({ type: 'PosProduct', updatedAt: s.updatedAt, data: s }));
     posFloorPlans.forEach(s => allEntities.push({ type: 'PosFloorPlan', updatedAt: s.updatedAt, data: s }));
     posTables.forEach(s => allEntities.push({ type: 'PosTable', updatedAt: s.updatedAt, data: s }));
-    posSessions.forEach(s => allEntities.push({ type: 'PosSession', updatedAt: s.updatedAt, data: s }));
+    reconciledPosSessions.forEach(s => allEntities.push({ type: 'PosSession', updatedAt: s.updatedAt, data: s }));
     posOrders.forEach(s => allEntities.push({ type: 'PosOrder', updatedAt: s.updatedAt, data: s }));
     housekeepingTasks.forEach(s => allEntities.push({ type: 'HousekeepingTask', updatedAt: s.updatedAt, data: s }));
     maintenanceTickets.forEach(s => allEntities.push({ type: 'MaintenanceTicket', updatedAt: s.updatedAt, data: s }));
@@ -458,16 +485,25 @@ export async function GET(req: NextRequest) {
     let hasMore = false;
     let nextCursor = watermark.toISOString();
 
-    if (allEntities.length > limit) {
+    // Recovery records are point lookups for stale local state. They must not
+    // move the incremental cursor backwards or cause the same page to repeat.
+    const pageableEntities = since
+      ? allEntities.filter(entity => !(entity.type === 'PosSession' && recoveryPosSessionIds.has(entity.data.id)))
+      : allEntities;
+
+    if (pageableEntities.length > limit) {
       // Find the safe cutoff timestamp
-      const cutoffEntity = allEntities[limit - 1];
+      const cutoffEntity = pageableEntities[limit - 1];
       const cutoffTime = cutoffEntity.updatedAt.getTime();
       
       // To prevent skipping records with identical timestamps, we must include ALL records 
       // up to the exact cutoffTime, even if it slightly exceeds the limit.
-      const safeEntities = allEntities.filter(e => e.updatedAt.getTime() <= cutoffTime);
+      const safeEntities = allEntities.filter(e =>
+        (e.type === 'PosSession' && recoveryPosSessionIds.has(e.data.id)) ||
+        e.updatedAt.getTime() <= cutoffTime
+      );
       
-      if (safeEntities.length < allEntities.length) {
+      if (pageableEntities.some(e => e.updatedAt.getTime() > cutoffTime)) {
         hasMore = true;
       }
       

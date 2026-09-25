@@ -51,7 +51,7 @@ export async function GET(req: NextRequest) {
         folio: { propertyId }, 
         businessDate, 
         type: 'CHARGE',
-        source: { notIn: ['ROOM_CHARGE', 'POS'] }
+        source: { notIn: ['ROOM_CHARGE', 'DAY_USE_ROOM_CHARGE', 'POS'] }
       },
       _sum: { amount: true }
     });

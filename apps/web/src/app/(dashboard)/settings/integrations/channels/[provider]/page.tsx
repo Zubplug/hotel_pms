@@ -17,8 +17,9 @@ export const metadata: Metadata = {
   title: 'Channel Configuration | LodgeCore',
 };
 
-export default async function ChannelProviderPage({ params }: { params: { provider: string } }) {
-  const providerSlug = params.provider.toUpperCase();
+export default async function ChannelProviderPage({ params }: { params: Promise<{ provider: string }> }) {
+  const resolvedParams = await params;
+  const providerSlug = resolvedParams.provider.toUpperCase();
   const session = await auth();
   if (!session?.user) redirect('/login');
   const ctx = await requireOrganizationContext(session.user.id);
@@ -57,10 +58,10 @@ export default async function ChannelProviderPage({ params }: { params: { provid
         </Button>
         <div>
           <h2 className="text-2xl font-bold tracking-tight capitalize">
-            {params.provider.toLowerCase()} Configuration
+            {resolvedParams.provider.toLowerCase()} Configuration
           </h2>
           <p className="text-muted-foreground">
-            Map LodgeCore rooms and rates to {params.provider} external identifiers.
+            Map LodgeCore rooms and rates to {resolvedParams.provider} external identifiers.
           </p>
         </div>
       </div>

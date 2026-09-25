@@ -1011,6 +1011,7 @@ model SupervisorOverride {
 
 enum FolioItemSource {
   ROOM_CHARGE
+  DAY_USE_ROOM_CHARGE
   ROOM_UPGRADE
   ROOM_DOWNGRADE_CREDIT
   MANUAL

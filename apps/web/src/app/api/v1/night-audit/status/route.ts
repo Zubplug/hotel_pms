@@ -228,7 +228,7 @@ export async function GET(req: NextRequest) {
             folio: { propertyId },
             nightAuditRunId: { in: trendAuditIds },
             type: 'CHARGE',
-            source: 'ROOM_CHARGE',
+            source: { in: ['ROOM_CHARGE', 'DAY_USE_ROOM_CHARGE'] },
             voidedAt: null,
           },
           _sum: { amount: true },

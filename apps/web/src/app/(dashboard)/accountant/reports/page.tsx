@@ -13,7 +13,8 @@ export const revalidate = 0;
 
 const money = (value: number, currency: string) => new Intl.NumberFormat('en-NG', { style: 'currency', currency, maximumFractionDigits: 0 }).format(value);
 
-export default async function ReportsPage({ searchParams }: { searchParams?: { businessDate?: string; startDate?: string; endDate?: string } }) {
+export default async function ReportsPage({ searchParams }: { searchParams?: Promise<{ businessDate?: string; startDate?: string; endDate?: string }> }) {
+  const resolvedSearchParams = await searchParams;
   const session = await auth();
   if (!session?.user) redirect('/login?callbackUrl=%2Faccountant%2Freports');
 
@@ -22,7 +23,7 @@ export default async function ReportsPage({ searchParams }: { searchParams?: { b
   if (!propertyId) return <EmptyState title="No property assigned" />;
 
   const property = await prisma.property.findUnique({ where: { id: propertyId }, select: { name: true, baseCurrency: true, businessDate: true } });
-  const businessDate = searchParams?.businessDate ? new Date(searchParams.businessDate) : property?.businessDate || new Date();
+  const businessDate = resolvedSearchParams?.businessDate ? new Date(resolvedSearchParams.businessDate) : property?.businessDate || new Date();
   const [postedLines, cashierSettlement, arAging, inventoryValuation] = await Promise.all([
     prisma.journalEntryLine.findMany({ where: { entry: { propertyId, status: 'POSTED' } }, select: { debit: true, credit: true, account: { select: { category: true } } } }),
     DailyAccountingService.getCashierSettlement(propertyId, businessDate),
@@ -31,8 +32,8 @@ export default async function ReportsPage({ searchParams }: { searchParams?: { b
   ]);
 
   const currency = property?.baseCurrency || 'NGN';
-  const startDate = searchParams?.startDate || new Date(Date.UTC(businessDate.getUTCFullYear(), businessDate.getUTCMonth(), 1)).toISOString().slice(0, 10);
-  const endDate = searchParams?.endDate || businessDate.toISOString().slice(0, 10);
+  const startDate = resolvedSearchParams?.startDate || new Date(Date.UTC(businessDate.getUTCFullYear(), businessDate.getUTCMonth(), 1)).toISOString().slice(0, 10);
+  const endDate = resolvedSearchParams?.endDate || businessDate.toISOString().slice(0, 10);
   const totalDebit = postedLines.reduce((sum, line) => sum + Number(line.debit), 0);
   const totalCredit = postedLines.reduce((sum, line) => sum + Number(line.credit), 0);
   const difference = Number((totalDebit - totalCredit).toFixed(2));

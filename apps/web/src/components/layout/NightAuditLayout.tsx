@@ -25,6 +25,7 @@ const NIGHT_AUDIT_NAV = [
   { name: 'F&B Activity',            href: '/night-audit/fnb',               icon: Utensils,    group: 'Controls'  },
   { name: 'AR Ledger',               href: '/night-audit/ar-ledger',         icon: Wallet,      group: 'Controls'  },
   { name: 'City Ledger',             href: '/night-audit/city-ledger',       icon: Wallet,      group: 'Controls'  },
+  { name: 'Corporate Management',    href: '/night-audit/corporate',         icon: Wallet,      group: 'Controls', roles: ['NIGHT_AUDITOR', 'ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'DIRECTOR', 'CEO', 'SUPER_ADMIN']  },
   { name: 'Guest Credits',           href: '/night-audit/guest-credits',     icon: Wallet,      group: 'Controls'  },
   { name: 'AP Ledger',               href: '/night-audit/ap-ledger',         icon: Banknote,    group: 'Controls'  },
   { name: 'Audit Reports',           href: '/night-audit/reports',           icon: FileText,    group: 'Insights'  },
@@ -139,7 +140,7 @@ export function NightAuditLayout({ children }: { children: React.ReactNode }) {
       {/* ── Navigation ── */}
       <nav className="relative min-h-0 flex-1 flex-col gap-5 overflow-y-auto overscroll-contain px-3 py-5 pb-12 flex [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {GROUPS.map((group) => {
-          const items = NIGHT_AUDIT_NAV.filter(i => i.group === group);
+          const items = NIGHT_AUDIT_NAV.filter(i => i.group === group && (!(i as any).roles || (i as any).roles.includes(role)));
           if (!items.length) return null;
           return (
             <div key={group}>

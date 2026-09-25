@@ -40,6 +40,7 @@ const ACCOUNTANT_NAV = [
       { name: 'Revenue Accounting', href: '/accountant/revenue' },
       { name: 'Accounts Receivable', href: '/accountant/receivables' },
       { name: 'City Ledger', href: '/accountant/city-ledger' },
+      { name: 'Corporate Management', href: '/accountant/corporate' },
       { name: 'Guest Credits', href: '/accountant/guest-credits' },
       { name: 'Refund Control', href: '/accountant/refunds' },
       { name: 'Accounts Payable', href: '/accountant/payables' },

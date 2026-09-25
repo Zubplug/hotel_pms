@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
         folio: { propertyId, reservationId: { not: null } },
         businessDate,
         type: 'CHARGE',
-        source: { not: 'ROOM_CHARGE' }
+        source: { notIn: ['ROOM_CHARGE', 'DAY_USE_ROOM_CHARGE'] }
       },
       include: {
         folio: {

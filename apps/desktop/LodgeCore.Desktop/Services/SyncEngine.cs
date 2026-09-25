@@ -793,9 +793,21 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
             var lastPullStr = Preferences.Get($"LastPull_{identity.PropertyId}", "");
             var isIncremental = !string.IsNullOrEmpty(lastPullStr);
             var cursorParam = isIncremental ? $"&cursor={Uri.EscapeDataString(lastPullStr)}" : "";
+            var blockingSessionIds = await dbContext.PosSessions
+                .Where(s => s.PropertyId == propertyId &&
+                    (s.ControlStatus == "SUBMITTED" || s.ControlStatus == "UNDER_REVIEW" ||
+                     s.ControlStatus == "RETURNED" || s.ControlStatus == "HANDOVER_PENDING" ||
+                     (string.IsNullOrEmpty(s.ControlStatus) &&
+                      (s.Status == "RECONCILIATION_REQUIRED" || s.Status == "CLOSING"))))
+                .Select(s => s.Id)
+                .Take(100)
+                .ToListAsync(stoppingToken);
+            var reconcileSessionParam = blockingSessionIds.Count > 0
+                ? $"&reconcilePosSessionIds={Uri.EscapeDataString(string.Join(',', blockingSessionIds))}"
+                : "";
 
             var response = await _httpClient.GetAsync(
-                $"sync/pull?propertyId={Uri.EscapeDataString(identity.PropertyId)}{cursorParam}&limit=500",
+                $"sync/pull?propertyId={Uri.EscapeDataString(identity.PropertyId)}{cursorParam}{reconcileSessionParam}&limit=500",
                 stoppingToken);
 
             if (!response.IsSuccessStatusCode)
@@ -2115,9 +2127,16 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                     // authoritative control-state transition. If it is newer
                     // than the local projection, apply it so an old SUBMITTED
                     // snapshot cannot block the next waiter login forever.
+                    // A controlled server decision must be able to repair a
+                    // stale local SUBMITTED projection. Comparing timestamps
+                    // here is unsafe because local clocks and offline event
+                    // timestamps can be ahead of the cloud record. The cloud
+                    // control state is authoritative once it has left OPEN.
+                    var localIsBlocking = posSession != null &&
+                        posSession.ControlStatus is "SUBMITTED" or "UNDER_REVIEW" or "RETURNED" or "HANDOVER_PENDING";
                     var canApplyAuthoritativeFinal = incomingIsAuthoritativeFinal
                         && posSession != null
-                        && incomingUpdatedAt > posSession.UpdatedAt;
+                        && (incomingUpdatedAt > posSession.UpdatedAt || localIsBlocking);
                     if (posSession != null && !canApplyAuthoritativeFinal
                         && (posSession.UpdatedAt >= incomingUpdatedAt || hasPendingLocalEvent)) continue;
 
@@ -3053,6 +3072,18 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                                         res.Error ?? "Cloud rejected: credit already applied or insufficient.",
                                         stoppingToken);
                                 }
+                                else if (evt.EventType == "GUEST_CREDIT_REFUND_REQUESTED")
+                                {
+                                    using var scope = _serviceProvider.CreateScope();
+                                    var repo = scope.ServiceProvider.GetRequiredService<LocalRepository>();
+                                    await repo.MarkRefundRequestRejectedAsync(evt.IdempotencyKey, res.Error ?? "Cloud rejected refund request.");
+                                }
+                                else if (evt.EventType == "CITY_LEDGER_PAYMENT")
+                                {
+                                    using var scope = _serviceProvider.CreateScope();
+                                    var repo = scope.ServiceProvider.GetRequiredService<LocalRepository>();
+                                    await repo.ReopenCityLedgerPaymentAsync(evt.IdempotencyKey);
+                                }
                             }
                             else if (res.Status == "FAILED")
                             {
@@ -3128,6 +3159,14 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                         evt.Status = "DEAD_LETTER";
                         evt.LastError = $"HTTP {statusCode}: Malformed or invalid event payload. {FormatPushError(errorBody)}";
                         evt.NextAttemptAt = null;
+                        if (evt.EventType == "GUEST_CREDIT_REFUND_REQUESTED")
+                        {
+                            await MarkRefundRequestRejectedAsync(evt.IdempotencyKey, evt.LastError, stoppingToken);
+                        }
+                        else if (evt.EventType == "CITY_LEDGER_PAYMENT")
+                        {
+                            await ReopenCityLedgerPaymentAsync(evt.IdempotencyKey, stoppingToken);
+                        }
                     }
                     else if (statusCode == 409)
                     {
@@ -3143,6 +3182,14 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                                 evt.IdempotencyKey,
                                 $"HTTP 409: {FormatPushError(errorBody)}",
                                 stoppingToken);
+                        }
+                        else if (evt.EventType == "GUEST_CREDIT_REFUND_REQUESTED")
+                        {
+                            await MarkRefundRequestRejectedAsync(evt.IdempotencyKey, $"HTTP 409: {FormatPushError(errorBody)}", stoppingToken);
+                        }
+                        else if (evt.EventType == "CITY_LEDGER_PAYMENT")
+                        {
+                            await ReopenCityLedgerPaymentAsync(evt.IdempotencyKey, stoppingToken);
                         }
                     }
                     else 
@@ -3229,6 +3276,22 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                 "[SYNC-CREDIT] Failed to mark CityLedgerAllocation CONFLICTED for OperationId={OperationId}.",
                 idempotencyKey);
         }
+    }
+
+    private async Task MarkRefundRequestRejectedAsync(string idempotencyKey, string message, CancellationToken stoppingToken)
+    {
+        if (string.IsNullOrWhiteSpace(idempotencyKey)) return;
+        using var scope = _serviceProvider.CreateScope();
+        var repo = scope.ServiceProvider.GetRequiredService<LocalRepository>();
+        await repo.MarkRefundRequestRejectedAsync(idempotencyKey, message);
+    }
+
+    private async Task ReopenCityLedgerPaymentAsync(string idempotencyKey, CancellationToken stoppingToken)
+    {
+        if (string.IsNullOrWhiteSpace(idempotencyKey)) return;
+        using var scope = _serviceProvider.CreateScope();
+        var repo = scope.ServiceProvider.GetRequiredService<LocalRepository>();
+        await repo.ReopenCityLedgerPaymentAsync(idempotencyKey);
     }
 
     private async Task ResetGuestCreditAllocationForRetryAsync(

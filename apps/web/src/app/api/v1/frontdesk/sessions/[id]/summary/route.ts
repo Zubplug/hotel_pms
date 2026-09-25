@@ -97,9 +97,9 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     });
     const movementRows = current.cashMovements.map(movement => ({ date: movement.createdAt, kind: 'CASH_MOVEMENT', amount: number(movement.amount), method: 'CASH', description: movement.notes || movement.reasonCode, reference: movement.operationId || movement.id, type: movement.type, guest: '—', room: '—', confirmationNumber: '—' }));
     const rows = [...paymentRows, ...chargeRows, ...movementRows].sort((left, right) => new Date(right.date).getTime() - new Date(left.date).getTime());
-    const room = folioItems.filter(item => item.source === 'ROOM_CHARGE').reduce((sum, item) => sum + Math.max(0, number(item.amount)), 0);
+    const room = folioItems.filter(item => item.source === 'ROOM_CHARGE' || item.source === 'DAY_USE_ROOM_CHARGE').reduce((sum, item) => sum + Math.max(0, number(item.amount)), 0);
     const laundry = folioItems.filter(item => String(item.source).includes('LAUNDRY')).reduce((sum, item) => sum + Math.max(0, number(item.amount)), 0);
-    const otherCharges = folioItems.filter(item => item.source !== 'ROOM_CHARGE' && !String(item.source).includes('LAUNDRY') && item.type !== 'PAYMENT').reduce((sum, item) => sum + Math.max(0, number(item.amount)), 0);
+    const otherCharges = folioItems.filter(item => item.source !== 'ROOM_CHARGE' && item.source !== 'DAY_USE_ROOM_CHARGE' && !String(item.source).includes('LAUNDRY') && item.type !== 'PAYMENT').reduce((sum, item) => sum + Math.max(0, number(item.amount)), 0);
     return successResponse({
       property,
       session: { shiftReference: current.shiftReference, status: current.status, staffName: `${current.staff.firstName} ${current.staff.lastName}`.trim(), till: current.cashAccount.name, businessDate: current.businessDate, openingFloat: number(current.openingFloat), expectedCash: expected, declaredCash: current.declaredCash == null ? null : number(current.declaredCash), variance: current.variance == null ? (current.declaredCash == null ? null : number(current.declaredCash) - expected) : number(current.variance), openedAt: current.openedAt, closedAt: current.closedAt },

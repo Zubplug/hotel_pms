@@ -12,8 +12,9 @@ export const metadata: Metadata = {
   title: 'Event Bookings | LodgeCore',
 };
 
-export default async function EventBookingsPage({ searchParams }: { searchParams: { view?: string } }) {
-  const isTimeline = searchParams.view === 'timeline';
+export default async function EventBookingsPage({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
+  const resolvedSearchParams = await searchParams;
+  const isTimeline = resolvedSearchParams.view === 'timeline';
   
   const events = await prisma.event.findMany({
     orderBy: { startDate: 'asc' },

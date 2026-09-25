@@ -773,9 +773,28 @@ public class OfflinePMSInterop
     {
         try
         {
-            var ctx = await GetSecureContextAsync();
+            // Accommodation charges are controlled by Night Audit. Front Desk
+            // may post POS/laundry services through their dedicated workflows,
+            // and same-day checkout posts its own explicit day-use charge.
+            var ctx = await GetSecureContextAsync("night_audit:execute");
             var success = await _repo.RecordChargeAsync(folioId, amount, description, ctx.UserId, ctx.DeviceId, idempotencyKey);
             return JsonSerializer.Serialize(new { success }, _jsonOptions);
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
+        }
+    }
+
+    public async Task<string> PostNightAuditRoomChargesAsync(string propertyId, string? businessDate = null)
+    {
+        try
+        {
+            var ctx = await GetSecureContextAsync("night_audit:execute");
+            DateTime? auditDate = null;
+            if (!string.IsNullOrWhiteSpace(businessDate) && DateTime.TryParse(businessDate, out var parsed)) auditDate = parsed.Date;
+            var result = await _repo.PostNightAuditRoomChargesAsync(propertyId, ctx.UserId, ctx.DeviceId, auditDate);
+            return JsonSerializer.Serialize(new { success = true, data = result }, _jsonOptions);
         }
         catch (Exception ex)
         {

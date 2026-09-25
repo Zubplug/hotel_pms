@@ -136,6 +136,12 @@ export async function POST(req: NextRequest) {
         where: { id: corporateAccountId },
         include: { ratePlan: true }
       });
+      if (!corporateAccount || corporateAccount.propertyId !== propertyId) {
+        return errorResponse('BAD_REQUEST', 'Corporate account is not valid for this property', 400);
+      }
+      if (!corporateAccount.isActive) {
+        return errorResponse('CONFLICT', 'This corporate account is inactive and cannot be used for new reservations', 409);
+      }
       if (corporateAccount?.ratePlan) {
         ratePlanId = corporateAccount.ratePlan.id;
         const rate = await prisma.rate.findFirst({

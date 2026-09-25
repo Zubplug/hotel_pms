@@ -8,6 +8,7 @@ import { hasPermission } from '@/lib/rbac';
 import { findActiveFrontdeskSession } from '@/lib/frontdesk/active-session';
 import { isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
 import { getPropertyBusinessDate } from '@/lib/date-utils';
+import { applyAvailableGuestLedgerCredit } from '@/lib/finance/apply-guest-ledger-credit';
 import { GeneralLedgerService } from '@/lib/services/general-ledger-service';
 import { GLMappingService } from '@/lib/services/gl-mapping-service';
 const TRANSITIONS: Record<string, string[]> = {
@@ -31,7 +32,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       include: { reservation: { include: { folios: { where: { type: 'ROOM', status: 'OPEN' } } } } }
     });
     if (!order) return errorResponse('NOT_FOUND', 'Laundry order not found', 404);
-    const property = await prisma.property.findUnique({ where: { id: order.propertyId }, select: { businessDate: true, timezone: true } });
+    const property = await prisma.property.findUnique({ where: { id: order.propertyId }, select: { organizationId: true, businessDate: true, timezone: true } });
     if (await isNightAuditTransactionLocked(order.propertyId)) {
       return errorResponse('NIGHT_AUDIT_IN_PROGRESS', 'Night audit cutover is in progress. Laundry billing resumes after the new business date is active.', 409);
     }
@@ -129,6 +130,18 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         } else {
             throw new Error('Invalid customer type for billing');
         }
+        if (activeFolio.corporateAccountId) {
+          const corporateAccount = await tx.corporateAccount.findUnique({
+            where: { id: activeFolio.corporateAccountId },
+            select: { propertyId: true, isActive: true, creditLimit: true, exemptFromHighBalance: true },
+          });
+          if (!corporateAccount || corporateAccount.propertyId !== order.propertyId || !corporateAccount.isActive) {
+            throw new Error('Corporate account is inactive or unavailable for this property');
+          }
+          if (Number(corporateAccount.creditLimit) > 0 && !corporateAccount.exemptFromHighBalance && Number(activeFolio.balance) + Number(order.totalAmount) > Number(corporateAccount.creditLimit)) {
+            throw new Error('CREDIT_LIMIT_EXCEEDED: Laundry charge exceeds the corporate account credit limit');
+          }
+        }
         const folioItem = await tx.folioItem.create({
             data: {
                 folioId: activeFolio.id,
@@ -142,8 +155,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
                 currency: order.currency,
                 baseAmount: order.totalAmount,
                 postedBy: session.user.id,
-                deviceId
-            }
+                deviceId,
+                reservationId: order.reservationId || activeFolio.reservationId,
+                guestId: activeFolio.guestId,
+              }
         });
         updateData.folioItemId = folioItem.id;
 
@@ -233,10 +248,30 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
           });
           creditApplied += applied;
         }
+        let cityLedgerCreditApplied = 0;
+        const reservationId = activeFolio.reservationId || order.reservationId;
+        if (property?.organizationId && activeFolio.guestId && reservationId) {
+          cityLedgerCreditApplied = await applyAvailableGuestLedgerCredit(tx, {
+            folioId: activeFolio.id,
+            propertyId: order.propertyId,
+            organizationId: property.organizationId,
+            guestId: activeFolio.guestId,
+            reservationId,
+            amount: Math.max(0, Number(order.totalAmount) - creditApplied),
+            currency: order.currency,
+            appliedBy: session.user.id,
+            operationKey: `LAUNDRY_CREDIT:${order.id}`,
+            businessDate: property?.businessDate || getPropertyBusinessDate(property?.timezone),
+            description: `Applied previous-stay guest credit to Laundry Service - ${order.serviceType}`,
+          });
+        }
+
         await tx.folio.update({
           where: { id: activeFolio.id },
           data: {
             totalCharges: { increment: order.totalAmount },
+            // Same-folio credit was applied by the local loop above; the
+            // City Ledger helper already decremented the balance itself.
             balance: { increment: Number(order.totalAmount) - creditApplied },
             version: { increment: 1 }
           }

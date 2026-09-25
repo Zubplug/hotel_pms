@@ -130,11 +130,22 @@ export async function POST(
         let totalDebt = 0;
         
         const dbFolios = await tx.folio.findMany({
-          where: { reservationId },
-          include: { charges: true, payments: true }
+          where: reservation.corporateAccount
+            ? { corporateAccountId: reservation.corporateAccount.id, propertyId, type: 'CITY_LEDGER', status: 'OPEN' }
+            : { reservationId },
+          include: {
+            charges: true,
+            payments: true,
+            credits: { where: { status: { in: ['AVAILABLE', 'PARTIALLY_APPLIED'] }, remainingAmount: { gt: 0 } } },
+          }
         });
         
         for (const f of dbFolios) {
+          if (reservation.corporateAccount) {
+            totalCredit += f.credits.reduce((sum: number, credit: any) => sum + Number(credit.remainingAmount), 0);
+            totalDebt += Math.max(0, Number(f.balance || 0));
+            continue;
+          }
           const fCharges = f.charges.reduce((sum: number, c: any) => sum + Number(c.amount), 0);
           const fPayments = f.payments.reduce((sum: number, p: any) => sum + Number(p.amount), 0);
           const fBalance = fCharges - fPayments;
@@ -195,6 +206,17 @@ export async function POST(
       }
       // ----------------------------
 
+      if (reservation.corporateAccount && Number(reservation.corporateAccount.creditLimit) > 0 && !reservation.corporateAccount.exemptFromHighBalance) {
+        const corporateFolio = await tx.folio.findFirst({
+          where: { corporateAccountId: reservation.corporateAccount.id, propertyId, type: 'CITY_LEDGER', status: 'OPEN' },
+          select: { balance: true },
+        });
+        const expectedCost = Number((reservation.ratePlanSnapshot as any)?.total || 0);
+        if (Number(corporateFolio?.balance || 0) + expectedCost > Number(reservation.corporateAccount.creditLimit)) {
+          throw new Error('CREDIT_LIMIT_EXCEEDED: The projected reservation charges exceed the corporate account credit limit.');
+        }
+      }
+
 
       // Ensure a DoorLock entity exists for this room to satisfy the lockId constraint
       let doorLock = await tx.doorLock.findFirst({ where: { roomId: resRoom.room!.id } });
@@ -225,6 +247,7 @@ export async function POST(
             initiatedByRole: (session.user as any).role || 'STAFF'
           }
         }
+
       });
 
       // Calculate current time in Nigeria (UTC+1)

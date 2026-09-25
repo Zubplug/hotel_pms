@@ -33,6 +33,7 @@ export async function POST(
       select: { 
         id: true, status: true, propertyId: true, corporateAccountId: true, primaryGuestId: true, confirmationNumber: true, checkIn: true, checkOut: true, 
         primaryGuest: { select: { firstName: true, lastName: true, phone: true } },
+        corporateAccount: { select: { id: true, name: true, creditLimit: true, exemptFromHighBalance: true, cityLedgerAccountId: true } },
         reservationRooms: { include: { room: true } } 
       },
     });
@@ -97,7 +98,7 @@ export async function POST(
         const chargeAlreadyPosted = await tx.folioItem.findFirst({
           where: {
             folioId: { in: folios.map((folio: { id: string }) => folio.id) },
-            source: 'ROOM_CHARGE',
+            source: { in: ['ROOM_CHARGE', 'DAY_USE_ROOM_CHARGE'] },
             operationId: { startsWith: auditKeyPrefix },
           },
           select: { id: true },
@@ -114,7 +115,7 @@ export async function POST(
                 folioId: targetFolio.id,
                 businessDate: reservation.checkIn,
                 type: 'CHARGE',
-                source: 'ROOM_CHARGE',
+                source: 'DAY_USE_ROOM_CHARGE',
                 revenueCategory: 'ROOM',
                 description: `Day-use room charge for ${operationalDate.toISOString().slice(0, 10)}`,
                 quantity: 1,
@@ -203,6 +204,10 @@ export async function POST(
           }))
         : folios;
       const totalBalance = checkoutFolios.reduce((sum: number, folio: any) => sum + Number(folio.balance), 0);
+
+      if (reservation.corporateAccount && Number(reservation.corporateAccount.creditLimit) > 0 && !reservation.corporateAccount.exemptFromHighBalance && totalBalance > Number(reservation.corporateAccount.creditLimit)) {
+        throw new Error('CREDIT_LIMIT_EXCEEDED: Corporate checkout balance exceeds the account credit limit. Manager authorization is required.');
+      }
 
       let routeToSkipper = false;
       let targetAccountId: string | undefined;

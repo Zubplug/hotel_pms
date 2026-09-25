@@ -489,6 +489,9 @@ export async function executeNightAudit(
               // Guest Complimentary (contra-revenue) is debited for the
               // approved concession. The folio balance remains net.
               const grossRoomCharge = discountDeduction > 0 ? originalRate : effectiveRate;
+              if (isCorporateCharge && reservation.corporateAccount && reservation.corporateAccount.creditLimit > 0 && !reservation.corporateAccount.exemptFromHighBalance && Number(mainFolio.balance) + grossRoomCharge > Number(reservation.corporateAccount.creditLimit)) {
+                throw new Error(`CREDIT_LIMIT_EXCEEDED: Night Audit room charge exceeds corporate account credit limit for reservation ${reservation.id}`);
+              }
               await tx.folioItem.create({
                 data: {
                   folioId: mainFolio.id,
@@ -722,7 +725,7 @@ export async function executeNightAudit(
       // ROOM_CHARGE is the source of truth for accommodation revenue. This
       // protects older/imported room charges whose revenueCategory was left at
       // the schema default of OTHER.
-      if (group.source === 'ROOM_CHARGE' || group.revenueCategory === 'ROOM') roomRevenueVal += amt;
+      if (group.source === 'ROOM_CHARGE' || group.source === 'DAY_USE_ROOM_CHARGE' || group.revenueCategory === 'ROOM') roomRevenueVal += amt;
       else if (group.source === 'POS' || group.revenueCategory === 'FNB') fnbRevenueVal += amt;
       else if (group.revenueCategory === 'OTHER') otherRevenueVal += amt;
       else if (group.revenueCategory === 'TAX') taxesVal += amt;

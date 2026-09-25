@@ -37,12 +37,12 @@ export async function GET(req: NextRequest) {
     items.forEach(item => {
       // Basic department mapping
       let department = 'Other';
-      if (item.source === 'ROOM_CHARGE') department = 'Front Desk';
+      if (item.source === 'ROOM_CHARGE' || item.source === 'DAY_USE_ROOM_CHARGE') department = 'Front Desk';
       else if (item.source === 'POS') department = 'POS';
       else if (item.source === 'LAUNDRY') department = 'Laundry';
 
       const code = item.source;
-      const desc = code === 'ROOM_CHARGE' ? 'Room Night' : item.description || code;
+      const desc = code === 'ROOM_CHARGE' ? 'Room Night' : code === 'DAY_USE_ROOM_CHARGE' ? 'Same-day room charge' : item.description || code;
 
       if (!deptMap[department]) deptMap[department] = {};
       if (!deptMap[department][code]) {

@@ -69,7 +69,7 @@ export async function GET(req: NextRequest) {
     for (const item of items) {
       const amount = Number(item.amount || 0);
       if (item.type === 'CHARGE') {
-        if (item.source === 'ROOM_CHARGE' || item.revenueCategory === 'ROOM') roomRevenue += amount;
+        if (item.source === 'ROOM_CHARGE' || item.source === 'DAY_USE_ROOM_CHARGE' || item.revenueCategory === 'ROOM') roomRevenue += amount;
         else if (item.source === 'POS' || item.source === 'RESTAURANT' || item.source === 'BAR' || item.revenueCategory === 'FNB') fnbRevenue += amount;
         else if (item.revenueCategory === 'TAX') taxes += amount;
         else otherRevenue += amount;

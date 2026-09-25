@@ -130,6 +130,15 @@ public class LocalRepository
             reservation.ConfirmationNumber = "RES-" + DateTime.UtcNow.Ticks.ToString().Substring(10) + "-" + new Random().Next(100, 999);
         }
 
+        if (!string.IsNullOrWhiteSpace(reservation.CorporateAccountId))
+        {
+            var corporateAccount = await _dbContext.CorporateAccounts.FirstOrDefaultAsync(c => c.Id == reservation.CorporateAccountId);
+            if (corporateAccount == null || corporateAccount.PropertyId != reservation.PropertyId)
+                throw new InvalidOperationException("Corporate account not found for this property.");
+            if (!corporateAccount.IsActive)
+                throw new InvalidOperationException("This corporate account is inactive and cannot be used for new reservations.");
+        }
+
         // Calculate Pricing if RoomType is provided
         decimal baseRate = 0;
         string currency = "NGN";
@@ -145,6 +154,10 @@ public class LocalRepository
                 if (!string.IsNullOrEmpty(reservation.CorporateAccountId))
                 {
                     var ca = await _dbContext.CorporateAccounts.FirstOrDefaultAsync(c => c.Id == reservation.CorporateAccountId);
+                    if (ca == null || ca.PropertyId != reservation.PropertyId)
+                        throw new InvalidOperationException("Corporate account not found for this property.");
+                    if (!ca.IsActive)
+                        throw new InvalidOperationException("This corporate account is inactive and cannot be used for new reservations.");
                     if (ca != null && !string.IsNullOrEmpty(ca.RatePlanId))
                     {
                         ratePlanId = ca.RatePlanId;
@@ -376,6 +389,48 @@ public class LocalRepository
 
         return available;
     }
+
+    private async Task<LocalFolio?> GetCorporateFolioAsync(LocalReservation reservation)
+    {
+        if (string.IsNullOrWhiteSpace(reservation.CorporateAccountId)) return null;
+        return await _dbContext.Folios.FirstOrDefaultAsync(f =>
+            f.PropertyId == reservation.PropertyId &&
+            f.CorporateAccountId == reservation.CorporateAccountId &&
+            f.Type == "CITY_LEDGER" &&
+            f.Status == "OPEN");
+    }
+
+    /// <summary>
+    /// Shared corporate folios contain charges for many reservations. Calculate
+    /// only the current reservation's un-settled activity instead of treating
+    /// the whole corporate account balance as this guest's balance.
+    /// </summary>
+    private static decimal GetReservationCorporateBalance(LocalFolio folio, string reservationId)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(folio.TransactionsJson ?? "{}");
+            if (!document.RootElement.TryGetProperty("items", out var items) || items.ValueKind != JsonValueKind.Array)
+                return 0m;
+
+            decimal balance = 0m;
+            foreach (var item in items.EnumerateArray())
+            {
+                var itemReservationId = item.TryGetProperty("reservationId", out var reservationValue)
+                    ? reservationValue.GetString()
+                    : null;
+                if (!string.Equals(itemReservationId, reservationId, StringComparison.OrdinalIgnoreCase)) continue;
+                if (!item.TryGetProperty("amount", out var amountValue)) continue;
+                if (amountValue.ValueKind == JsonValueKind.Number && amountValue.TryGetDecimal(out var amount)) balance += amount;
+                else if (amountValue.ValueKind == JsonValueKind.String && decimal.TryParse(amountValue.GetString(), out var parsed)) balance += parsed;
+            }
+            return Math.Max(0m, balance);
+        }
+        catch
+        {
+            return 0m;
+        }
+    }
     
     public async Task<bool> AssignRoomAsync(string reservationId, string roomId, string roomNumber, string userId, string deviceId)
     {
@@ -567,11 +622,14 @@ public class LocalRepository
         if (room == null) throw new InvalidOperationException("Target room not found locally.");
 
         var currentRoom = res.Rooms.FirstOrDefault();
-        var availabilityStart = res.Status == "CHECKED_IN"
-            ? new[] { currentRoom?.CheckInDate.Date ?? res.CheckInDate.Date, DateTime.UtcNow.Date.AddDays(1) }.Max()
-            : currentRoom?.CheckInDate.Date ?? res.CheckInDate.Date;
+        var isSameDayStay = res.CheckInDate.Date == res.CheckOutDate.Date;
+        var availabilityStart = isSameDayStay
+            ? res.CheckInDate.Date
+            : res.Status == "CHECKED_IN"
+                ? new[] { currentRoom?.CheckInDate.Date ?? res.CheckInDate.Date, DateTime.UtcNow.Date.AddDays(1) }.Max()
+                : currentRoom?.CheckInDate.Date ?? res.CheckInDate.Date;
         var availabilityEnd = currentRoom?.CheckOutDate.Date ?? res.CheckOutDate.Date;
-        if (availabilityEnd <= availabilityStart)
+        if (availabilityEnd <= availabilityStart && !isSameDayStay)
             throw new InvalidOperationException("The reservation has no remaining stay to reassign.");
 
         var sellableStatuses = new[] { "AVAILABLE", "CLEAN", "INSPECTED", "RESERVED" };
@@ -591,17 +649,7 @@ public class LocalRepository
             throw new InvalidOperationException("The selected room is not available for the remaining stay.");
 
         var oldRoomId = res.RoomId;
-        var oldRoomTypeId = res.RoomTypeId;
-        var oldRoomType = string.IsNullOrWhiteSpace(oldRoomTypeId) ? null : await _dbContext.RoomTypes.FindAsync(oldRoomTypeId);
         var effectiveRoomTypeId = roomTypeId ?? room.RoomTypeId;
-        var newRoomType = string.IsNullOrWhiteSpace(effectiveRoomTypeId) ? null : await _dbContext.RoomTypes.FindAsync(effectiveRoomTypeId);
-        var pricingStart = res.Status == "CHECKED_IN"
-            ? res.CheckInDate.Date > DateTime.UtcNow.Date ? res.CheckInDate.Date : DateTime.UtcNow.Date.AddDays(1)
-            : res.CheckInDate.Date;
-        var nights = Math.Max(0, (int)(res.CheckOutDate.Date - pricingStart).TotalDays);
-        var rateDifference = oldRoomType != null && newRoomType != null
-            ? (newRoomType.BasePrice - oldRoomType.BasePrice) * nights
-            : 0;
 
         res.RoomId = roomId;
         res.RoomNumber = room.Number;
@@ -633,26 +681,10 @@ public class LocalRepository
 
         await _dbContext.SaveChangesAsync();
 
-        if (rateDifference > 0 && res.Folio != null)
-        {
-            await RecordChargeAsync(
-                res.Folio.Id,
-                rateDifference,
-                $"Room upgrade - {nights} night{(nights == 1 ? "" : "s")}",
-                userId,
-                deviceId,
-                $"ROOM_UPGRADE:{reservationId}:{roomId}:{res.CheckOutDate:yyyy-MM-dd}");
-        }
-        else if (rateDifference < 0 && res.Folio != null)
-        {
-            await RecordCreditAsync(
-                res.Folio.Id,
-                Math.Abs(rateDifference),
-                $"Room downgrade credit - {nights} night{(nights == 1 ? "" : "s")}",
-                userId,
-                deviceId,
-                $"ROOM_DOWNGRADE:{reservationId}:{roomId}:{res.CheckOutDate:yyyy-MM-dd}");
-        }
+        // Do not post upgrade/downgrade money immediately. Night Audit prices
+        // the remaining eligible night(s) from the reassigned room type. This
+        // prevents Front Desk from creating accommodation revenue outside the
+        // audit and prevents an upgrade charge being duplicated at audit.
         return true;
     }
 
@@ -958,10 +990,11 @@ public class LocalRepository
         return true;
     }
 
-    public async Task<bool> RecordChargeAsync(string folioId, decimal amount, string description, string userId, string deviceId, string? idempotencyKey = null, bool requireFrontdeskSession = true, string? posTransactionId = null)
+    public async Task<bool> RecordChargeAsync(string folioId, decimal amount, string description, string userId, string deviceId, string? idempotencyKey = null, bool requireFrontdeskSession = true, string? posTransactionId = null, string source = "ROOM_CHARGE", string? reservationId = null)
     {
         var folio = await _dbContext.Folios.FindAsync(folioId);
         if (folio == null) return false;
+        source = string.IsNullOrWhiteSpace(source) ? "ROOM_CHARGE" : source.Trim().ToUpperInvariant();
         await AssertNightAuditAllowsAsync(folio.PropertyId);
 
         if (!string.IsNullOrEmpty(idempotencyKey) && CheckFolioIdempotency(folio, idempotencyKey))
@@ -975,11 +1008,21 @@ public class LocalRepository
 
         var reservation = await _dbContext.Reservations
             .Include(r => r.CorporateAccount)
-            .FirstOrDefaultAsync(r => r.Id == folio.ReservationId);
+            .FirstOrDefaultAsync(r => r.Id == (reservationId ?? folio.ReservationId));
+        var corporateAccount = string.IsNullOrWhiteSpace(folio.CorporateAccountId)
+            ? null
+            : await _dbContext.CorporateAccounts.FirstOrDefaultAsync(c => c.Id == folio.CorporateAccountId);
 
-        if (reservation?.CorporateAccount != null && reservation.CorporateAccount.CreditLimit > 0 && !reservation.CorporateAccount.ExemptFromHighBalance)
+        if (!string.IsNullOrWhiteSpace(folio.CorporateAccountId) &&
+            (corporateAccount == null || corporateAccount.PropertyId != folio.PropertyId))
+            throw new InvalidOperationException("Corporate account is not valid for this property.");
+        if (corporateAccount != null && !corporateAccount.IsActive)
+            throw new InvalidOperationException("This corporate account is inactive and cannot accept new charges.");
+
+        var chargeCorporateAccount = corporateAccount ?? reservation?.CorporateAccount;
+        if (chargeCorporateAccount != null && chargeCorporateAccount.CreditLimit > 0 && !chargeCorporateAccount.ExemptFromHighBalance)
         {
-            if (folio.NetBalance + amount > reservation.CorporateAccount.CreditLimit)
+            if (folio.NetBalance + amount > chargeCorporateAccount.CreditLimit)
             {
                 throw new InvalidOperationException("CREDIT_LIMIT_EXCEEDED: Adding this charge exceeds the corporate account's credit limit.");
             }
@@ -1002,7 +1045,8 @@ public class LocalRepository
             amount = amount,
             description = description,
             type = "CHARGE",
-            source = "ROOM_CHARGE",
+            source,
+            reservationId = reservation?.Id ?? folio.ReservationId,
             idempotencyKey = idempotencyKey,
             frontdeskSessionId = frontdeskSession?.Id,
             createdAt = DateTime.UtcNow
@@ -1031,7 +1075,7 @@ public class LocalRepository
             AggregateType = "FOLIO",
             AggregateId = folioId,
             AggregateVersion = eventVersion,
-            EventType = "ROOM_CHARGE",
+            EventType = source == "ROOM_CHARGE" ? "ROOM_CHARGE" : "POST_CHARGE",
             Sequence = folio.LocalSequence,
             IdempotencyKey = idempotencyKey ?? Guid.NewGuid().ToString(),
             PayloadJson = JsonSerializer.Serialize(new
@@ -1043,11 +1087,12 @@ public class LocalRepository
                 originalBusinessDate = frontdeskSession?.BusinessDate,
                 idempotencyKey,
                 posTransactionId,        // links cloud FolioItem → source PosPayment (audit)
+                source,
                 creditApplicationAmount,
                 creditApplicationKey = creditApplicationAmount > 0 ? $"CREDIT_APPLICATION:{idempotencyKey ?? newItem.id}" : null,
                 frontdeskSessionId = frontdeskSession?.Id,
                 frontdeskTransaction = requireFrontdeskSession,
-                reservationId = folio.ReservationId,
+                reservationId = reservation?.Id ?? folio.ReservationId,
                 guestId = reservation?.GuestId
             })
         });
@@ -1057,7 +1102,7 @@ public class LocalRepository
         // Night audit charges can also consume unused guest credit from a
         // previous stay after same-folio deposits have been applied.
         var guestCreditToApply = amount - creditApplicationAmount;
-        if (guestCreditToApply > 0.01m && !string.IsNullOrWhiteSpace(reservation?.GuestId))
+        if (guestCreditToApply > 0.01m && string.IsNullOrWhiteSpace(folio.CorporateAccountId) && !string.IsNullOrWhiteSpace(reservation?.GuestId))
         {
             // Apply whatever previous-stay credit is available. A partial
             // credit must still reduce the charge (for example, 30,000 of a
@@ -1077,6 +1122,78 @@ public class LocalRepository
                 mirrorAsFolioCredit: false);
         }
         return true;
+    }
+
+    /// <summary>
+    /// Offline Night Audit room-posting entry point. Corporate reservations
+    /// are charged to their shared CITY_LEDGER folio, while individual guests
+    /// use their reservation folio. Every posting is idempotent by reservation
+    /// and business date; Front Desk cannot call this without the dedicated
+    /// night_audit:execute permission enforced by OfflinePMSInterop.
+    /// </summary>
+    public async Task<object> PostNightAuditRoomChargesAsync(string propertyId, string userId, string deviceId, DateTime? auditDate = null)
+    {
+        await AssertNightAuditAllowsAsync(propertyId, auditDate);
+        var property = await _dbContext.Properties.FindAsync(propertyId);
+        if (property == null) throw new InvalidOperationException("Property is not available offline.");
+        var businessDate = (auditDate ?? property.BusinessDate).Date;
+
+        var reservations = await _dbContext.Reservations
+            .Include(r => r.Rooms)
+            .Include(r => r.CorporateAccount)
+            .Where(r => r.PropertyId == propertyId && r.Status == "CHECKED_IN" && r.CheckInDate.Date <= businessDate && r.CheckOutDate.Date > businessDate)
+            .ToListAsync();
+
+        var posted = 0;
+        var skipped = 0;
+        var total = 0m;
+        var errors = new List<object>();
+
+        foreach (var reservation in reservations)
+        {
+            try
+            {
+                var assignment = reservation.Rooms.FirstOrDefault(room => room.Status == "ACTIVE") ?? reservation.Rooms.FirstOrDefault();
+                if (assignment == null) { skipped++; continue; }
+
+                var folio = reservation.CorporateAccountId != null
+                    ? await GetCorporateFolioAsync(reservation)
+                    : await _dbContext.Folios.FirstOrDefaultAsync(f => f.ReservationId == reservation.Id && f.Status == "OPEN");
+                if (folio == null) throw new InvalidOperationException("Open folio is missing.");
+
+                var roomType = await _dbContext.RoomTypes.FirstOrDefaultAsync(type => type.Id == assignment.RoomTypeId);
+                var rate = roomType?.BasePrice ?? 0m;
+                var ratePlanId = reservation.CorporateAccount?.RatePlanId ?? reservation.RatePlanId;
+                if (!string.IsNullOrWhiteSpace(ratePlanId))
+                {
+                    var configuredRate = await _dbContext.Rates.FirstOrDefaultAsync(item => item.RatePlanId == ratePlanId && item.RoomTypeId == assignment.RoomTypeId);
+                    if (configuredRate != null) rate = configuredRate.Amount;
+                }
+                if (rate <= 0m) { skipped++; continue; }
+
+                var operationKey = $"ROOM_CHARGE_{reservation.Id}_{businessDate:yyyy-MM-dd}";
+                if (CheckFolioIdempotency(folio, operationKey)) { skipped++; continue; }
+
+                await RecordChargeAsync(
+                    folio.Id,
+                    rate,
+                    $"Room Charge for {businessDate:yyyy-MM-dd}",
+                    userId,
+                    deviceId,
+                    operationKey,
+                    requireFrontdeskSession: false,
+                    source: "ROOM_CHARGE",
+                    reservationId: reservation.Id);
+                posted++;
+                total += rate;
+            }
+            catch (Exception ex)
+            {
+                errors.Add(new { reservationId = reservation.Id, confirmationNumber = reservation.ConfirmationNumber, error = ex.Message });
+            }
+        }
+
+        return new { success = errors.Count == 0, businessDate, eligible = reservations.Count, posted, skipped, total, errors };
     }
 
     public async Task<bool> RecordCreditAsync(string folioId, decimal amount, string description, string userId, string deviceId, string? idempotencyKey = null)
@@ -1927,6 +2044,14 @@ public class LocalRepository
             .FirstOrDefaultAsync(r => r.Id == reservationId);
         if (res == null || (res.Status != "PENDING" && res.Status != "CONFIRMED")) return false;
         await AssertNightAuditAllowsAsync(res.PropertyId);
+
+        // Corporate reservations use one shared CITY_LEDGER folio and do not
+        // have a reservationId on that folio. Resolve it explicitly for all
+        // offline check-in and financial guards.
+        if (res.CorporateAccountId != null && res.Folio == null)
+            res.Folio = await GetCorporateFolioAsync(res);
+        if (res.CorporateAccountId != null && res.Folio == null)
+            throw new InvalidOperationException("Corporate shared CITY_LEDGER folio is missing.");
         
         bool waiveDeposit = (res.CorporateAccount != null && res.CorporateAccount.DepositPolicy == "WAIVED");
         if (!waiveDeposit)
@@ -2048,7 +2173,7 @@ public class LocalRepository
             }
         }
 
-        if (res.Folio != null && res.Folio.NetBalance > 0.01m)
+        if (res.CorporateAccountId == null && res.Folio != null && res.Folio.NetBalance > 0.01m)
             throw new InvalidOperationException("Cannot check in with an outstanding balance. Settle the folio first.");
 
         res.Status = "CHECKED_IN";
@@ -2089,6 +2214,11 @@ public class LocalRepository
         if (res == null || res.Status != "CHECKED_IN") return false;
         await AssertNightAuditAllowsAsync(res.PropertyId);
 
+        if (res.CorporateAccountId != null && res.Folio == null)
+            res.Folio = await GetCorporateFolioAsync(res);
+        if (res.CorporateAccountId != null && res.Folio == null)
+            throw new InvalidOperationException("Corporate shared CITY_LEDGER folio is missing.");
+
         var property = await _dbContext.Properties.FindAsync(res.PropertyId);
         var operationalDate = property?.BusinessDate.Date ?? DateTime.UtcNow.Date;
 
@@ -2104,7 +2234,20 @@ public class LocalRepository
             if (!CheckFolioIdempotency(res.Folio, dayUseKey))
             {
                 decimal dayUseAmount = 0m;
-                if (!string.IsNullOrWhiteSpace(res.RatePlanSnapshotJson))
+                var currentRoomType = string.IsNullOrWhiteSpace(res.RoomTypeId)
+                    ? null
+                    : await _dbContext.RoomTypes.FirstOrDefaultAsync(rt => rt.Id == res.RoomTypeId);
+                if (currentRoomType != null)
+                {
+                    dayUseAmount = currentRoomType.BasePrice;
+                    if (!string.IsNullOrWhiteSpace(res.RatePlanId))
+                    {
+                        var currentRate = await _dbContext.Rates.FirstOrDefaultAsync(rate => rate.RatePlanId == res.RatePlanId && rate.RoomTypeId == res.RoomTypeId);
+                        if (currentRate != null) dayUseAmount = currentRate.Amount;
+                    }
+                }
+
+                if (dayUseAmount <= 0m && !string.IsNullOrWhiteSpace(res.RatePlanSnapshotJson))
                 {
                     try
                     {
@@ -2113,12 +2256,6 @@ public class LocalRepository
                             dayUseAmount = parsedTotal;
                     }
                     catch { }
-                }
-
-                if (dayUseAmount <= 0m && res.Rooms.Any())
-                {
-                    var roomType = await _dbContext.RoomTypes.FirstOrDefaultAsync(rt => rt.Id == res.Rooms.First().RoomTypeId);
-                    dayUseAmount = roomType?.BasePrice ?? 0m;
                 }
 
                 if (dayUseAmount > 0m)
@@ -2130,14 +2267,20 @@ public class LocalRepository
                         userId,
                         deviceId,
                         dayUseKey,
-                        requireFrontdeskSession: false);
+                        requireFrontdeskSession: false,
+                        source: "DAY_USE_ROOM_CHARGE",
+                        reservationId: res.Id);
                 }
             }
         }
 
         var frontdeskSession = await GetActiveFrontdeskSessionAsync(res.PropertyId, userId);
 
-        if (res.CorporateAccountId != null && res.CorporateAccount != null && res.Folio != null && res.Folio.NetBalance > 0.01m)
+        var corporateReservationBalance = res.CorporateAccountId != null && res.Folio != null
+            ? GetReservationCorporateBalance(res.Folio, res.Id)
+            : 0m;
+
+        if (res.CorporateAccountId != null && res.CorporateAccount != null && res.Folio != null && corporateReservationBalance > 0.01m)
         {
             if (string.IsNullOrEmpty(res.CorporateAccount.CityLedgerAccountId))
             {
@@ -2146,19 +2289,19 @@ public class LocalRepository
             
             if (res.CorporateAccount.CreditLimit > 0 && !res.CorporateAccount.ExemptFromHighBalance)
             {
-                if (res.Folio.NetBalance > res.CorporateAccount.CreditLimit)
+                if (corporateReservationBalance > res.CorporateAccount.CreditLimit)
                 {
                     if (string.IsNullOrEmpty(managerId) || string.IsNullOrEmpty(managerPin))
                     {
                         throw new InvalidOperationException("CREDIT_LIMIT_EXCEEDED: Checking out this reservation will exceed the corporate account's credit limit. Manager authorization required.");
                     }
                     var authorizer = await AuthorizeManagerOverrideAsync(managerId, managerPin, res.PropertyId);
-                    LogOverrideAudit(res.PropertyId, userId, authorizer.Id, "CHECK_OUT_CREDIT_LIMIT_OVERRIDE", "Reservation", res.Id, $"Overriding city ledger checkout. Folio balance {res.Folio.NetBalance:N2} exceeds limit {res.CorporateAccount.CreditLimit:N2}. Reason: {reason}");
+                    LogOverrideAudit(res.PropertyId, userId, authorizer.Id, "CHECK_OUT_CREDIT_LIMIT_OVERRIDE", "Reservation", res.Id, $"Overriding city ledger checkout. Reservation balance {corporateReservationBalance:N2} exceeds limit {res.CorporateAccount.CreditLimit:N2}. Reason: {reason}");
                 }
             }
 
             var idempotencyKey = Guid.NewGuid().ToString();
-            decimal settleAmount = res.Folio.NetBalance;
+            decimal settleAmount = corporateReservationBalance;
             
             res.Folio.TotalPayments += settleAmount;
             res.Folio.UpdatedAt = DateTime.UtcNow;
@@ -2172,6 +2315,7 @@ public class LocalRepository
                 amount = -settleAmount,
                 description = $"Transfer to Corporate Receivable: {res.CorporateAccount.Name}",
                 type = "CITY_LEDGER_TRANSFER",
+                reservationId = res.Id,
                 idempotencyKey = idempotencyKey,
                 frontdeskSessionId = frontdeskSession?.Id,
                 createdAt = DateTime.UtcNow
@@ -2224,12 +2368,20 @@ public class LocalRepository
             });
         }
 
-        if (res.Folio != null && res.Folio.NetBalance > 0.01m)
+        if (res.CorporateAccountId != null && corporateReservationBalance > 0.01m)
         {
-            throw new InvalidOperationException($"Cannot check out with an outstanding balance of {res.Folio.NetBalance:N2}. Settle the folio first.");
+            // The corporate branch above must have routed this reservation's
+            // balance. A shared folio may still have other reservations open.
+            corporateReservationBalance = GetReservationCorporateBalance(res.Folio!, res.Id);
+        }
+        if ((res.CorporateAccountId == null && res.Folio != null && res.Folio.NetBalance > 0.01m) ||
+            (res.CorporateAccountId != null && corporateReservationBalance > 0.01m))
+        {
+            var balance = res.CorporateAccountId != null ? corporateReservationBalance : res.Folio!.NetBalance;
+            throw new InvalidOperationException($"Cannot check out with an outstanding balance of {balance:N2}. Settle the folio first.");
         }
 
-        if (res.Folio != null && res.Folio.NetBalance < -0.01m)
+        if (res.CorporateAccountId == null && res.Folio != null && res.Folio.NetBalance < -0.01m)
         {
             var creditAmount = Math.Abs(res.Folio.NetBalance);
             var idempotencyKey = $"checkout_cr_routing_{res.Id}_{DateTime.UtcNow.Ticks}";
@@ -2627,9 +2779,12 @@ public class LocalRepository
         if (string.IsNullOrWhiteSpace(entryId)) throw new InvalidOperationException("A city-ledger entry is required.");
         if (!isCorporateAdvance && string.IsNullOrWhiteSpace(guestId)) throw new InvalidOperationException("Guest credit and guest are required.");
         if (amount <= 0) throw new InvalidOperationException("Refund amount must be positive.");
-        if (string.Equals(requestedMethod, "ORIGINAL_PAYMENT", StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("Standalone guest credit has no original payment; choose bank transfer or cash.");
+        if (string.IsNullOrWhiteSpace(reason) || reason.Trim().Length < 5) throw new InvalidOperationException("A refund reason of at least 5 characters is required.");
+        if (!string.Equals(requestedMethod, "CASH", StringComparison.OrdinalIgnoreCase) && !string.Equals(requestedMethod, "BANK_TRANSFER", StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("Choose bank transfer or cash for a standalone credit refund.");
+        if (string.Equals(requestedMethod, "BANK_TRANSFER", StringComparison.OrdinalIgnoreCase) && (string.IsNullOrWhiteSpace(bankAccountName) || string.IsNullOrWhiteSpace(bankName) || string.IsNullOrWhiteSpace(bankAccountNumber) || !System.Text.RegularExpressions.Regex.IsMatch(bankAccountNumber, "^\\d{6,20}$"))) throw new InvalidOperationException("Bank name, account name, and a valid account number are required.");
         var entry = await _dbContext.CityLedgerEntries.FirstOrDefaultAsync(e => e.Id == entryId && e.PropertyId == propertyId);
         if (entry == null) throw new InvalidOperationException("City-ledger entry not found.");
+        if (!string.Equals(entry.Status, "OPEN", StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("This credit is no longer available for refund.");
         if (isCorporateAdvance && !string.Equals(entry.Type, "PAYMENT", StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("Corporate advance refund requires a corporate payment entry.");
         if (!isCorporateAdvance && !string.Equals(entry.Type, "REFUND_OWED", StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("Guest refund requires a guest credit entry.");
         var allocated = (await _dbContext.CityLedgerAllocations
@@ -2751,6 +2906,27 @@ public class LocalRepository
             await transaction.RollbackAsync();
             throw new Exception($"Failed to process guest page: {ex.Message}");
         }
+    }
+
+    public async Task MarkRefundRequestRejectedAsync(string idempotencyKey, string serverMessage)
+    {
+        var request = await _dbContext.RefundRequests.FirstOrDefaultAsync(item => item.IdempotencyKey == idempotencyKey);
+        if (request == null) return;
+        request.Status = "REJECTED";
+        request.IsDirty = false;
+        request.UpdatedAt = DateTime.UtcNow;
+        request.Reason = $"{request.Reason} [Sync rejected: {serverMessage}]";
+        await _dbContext.SaveChangesAsync();
+    }
+
+    public async Task ReopenCityLedgerPaymentAsync(string idempotencyKey)
+    {
+        var evt = await _dbContext.OutboxEvents.FirstOrDefaultAsync(item => item.IdempotencyKey == idempotencyKey && item.EventType == "CITY_LEDGER_PAYMENT");
+        if (evt == null) return;
+        var entry = await _dbContext.CityLedgerEntries.FirstOrDefaultAsync(item => item.Id == evt.AggregateId);
+        if (entry == null || !string.Equals(entry.Status, "PENDING_SETTLEMENT", StringComparison.OrdinalIgnoreCase)) return;
+        entry.Status = "OPEN";
+        await _dbContext.SaveChangesAsync();
     }
 
     public async Task<bool> UpdateGuestAsync(string guestId, string firstName, string lastName, string? email, string? phone, string operatorId, string deviceId)
@@ -4116,6 +4292,11 @@ public class LocalRepository
                 || s.ControlStatus == "HANDOVER_PENDING"
                 || (string.IsNullOrEmpty(s.ControlStatus)
                     && (s.Status == "RECONCILIATION_REQUIRED" || s.Status == "CLOSING")))
+            // Defensive repair for partially-applied historical sync payloads:
+            // approval metadata is terminal even if an older controlStatus was
+            // left behind locally.
+            .Where(s => s.ApprovalDecision == null
+                || (s.ApprovalDecision != "APPROVED" && s.ApprovalDecision != "APPROVED_WITH_VARIANCE"))
             .OrderByDescending(s => s.UpdatedAt)
             .FirstOrDefaultAsync();
 
@@ -4625,15 +4806,17 @@ public class LocalRepository
             // Idempotency key prevents a duplicate folio charge if the device retries
             var idempotencyKey = $"POS_PAY:{payment.Id}:FOLIO_CHARGE";
 
-            await RecordChargeAsync(
-                folioId,
-                amount,
+                await RecordChargeAsync(
+                    folioId,
+                    amount,
                 $"POS Charge – Order #{order.OrderNumber}",
                 userId,
                 deviceId,
-                idempotencyKey,
-                requireFrontdeskSession: false,
-                posTransactionId: payment.Id);  // audit link: cloud FolioItem → PosPayment
+                    idempotencyKey,
+                    requireFrontdeskSession: false,
+                    posTransactionId: payment.Id,
+                    source: "POS",
+                    reservationId: order.ReservationId);  // audit link: cloud FolioItem → PosPayment
         }
         // ─────────────────────────────────────────────────────────────────────────────
 
@@ -6757,10 +6940,20 @@ public class LocalRepository
         var idempotencyKey = $"{order.Id}_DELIVERY_FOLIO_CHARGE";
         
         // Find reservation folio
-        var folio = await _dbContext.Folios.FirstOrDefaultAsync(f => f.ReservationId == order.ReservationId);
         var reservation = await _dbContext.Reservations.FirstOrDefaultAsync(r => r.Id == order.ReservationId);
+        var folio = reservation?.CorporateAccountId != null
+            ? await _dbContext.Folios.FirstOrDefaultAsync(f => f.CorporateAccountId == reservation.CorporateAccountId && f.Type == "CITY_LEDGER" && f.Status == "OPEN")
+            : await _dbContext.Folios.FirstOrDefaultAsync(f => f.ReservationId == order.ReservationId);
         if (folio != null && order.TotalAmount > 0)
         {
+            if (folio.CorporateAccountId != null)
+            {
+                var corporateAccount = await _dbContext.CorporateAccounts.FirstOrDefaultAsync(account => account.Id == folio.CorporateAccountId);
+                if (corporateAccount == null || !corporateAccount.IsActive)
+                    throw new InvalidOperationException("This corporate account is inactive and cannot accept laundry charges.");
+                if (corporateAccount.CreditLimit > 0 && !corporateAccount.ExemptFromHighBalance && folio.NetBalance + order.TotalAmount > corporateAccount.CreditLimit)
+                    throw new InvalidOperationException("CREDIT_LIMIT_EXCEEDED: Laundry charge exceeds the corporate account credit limit.");
+            }
             if (!CheckFolioIdempotency(folio, idempotencyKey))
             {
                 folio.TotalCharges += order.TotalAmount;
@@ -6779,6 +6972,8 @@ public class LocalRepository
                     amount = order.TotalAmount,
                     description = $"Laundry Service - {order.ServiceType}",
                     type = "CHARGE",
+                    source = "LAUNDRY",
+                    reservationId = reservation?.Id ?? folio.ReservationId,
                     idempotencyKey = idempotencyKey,
                     createdAt = DateTime.UtcNow
                 };
@@ -6806,7 +7001,7 @@ public class LocalRepository
                     AggregateType = "FOLIO",
                     AggregateId = folio.Id,
                     AggregateVersion = folioEventVersion,
-                    EventType = "ROOM_CHARGE",
+                    EventType = "POST_CHARGE",
                     Sequence = folio.LocalSequence,
                     IdempotencyKey = idempotencyKey,
                     PayloadJson = JsonSerializer.Serialize(new { 
@@ -6816,10 +7011,11 @@ public class LocalRepository
                         businessDate = frontdeskSession.BusinessDate,
                         originalBusinessDate = frontdeskSession.BusinessDate,
                         idempotencyKey = idempotencyKey,
+                        source = "LAUNDRY",
                         creditApplicationAmount,
                         creditApplicationKey = creditApplicationAmount > 0 ? $"CREDIT_APPLICATION:{idempotencyKey}" : null,
                         frontdeskSessionId = frontdeskSession.Id,
-                        reservationId = folio.ReservationId,
+                        reservationId = reservation?.Id ?? folio.ReservationId,
                         guestId = reservation?.GuestId
                     })
                 });
@@ -6841,6 +7037,27 @@ public class LocalRepository
         });
         
         await _dbContext.SaveChangesAsync();
+
+        // A delivered laundry charge can consume previous-stay guest credit
+        // after any same-folio credit has been applied above. Keep this as a
+        // separate allocation event so the cloud can validate it atomically.
+        if (folio != null && reservation?.GuestId != null && order.TotalAmount > 0)
+        {
+            var availableGuestCredit = await GetUnusedGuestCreditAsync(reservation.GuestId);
+            var amountToApply = Math.Min(order.TotalAmount, availableGuestCredit);
+            if (amountToApply > 0.01m)
+            {
+                await ApplyGuestCreditAsync(
+                    folio.Id,
+                    null,
+                    reservation.GuestId,
+                    amountToApply,
+                    userId,
+                    deviceId,
+                    frontdeskSession.BusinessDate,
+                    mirrorAsFolioCredit: false);
+            }
+        }
     }
 
     /// <summary>
@@ -6946,7 +7163,13 @@ public class LocalRepository
     {
         var entry = await _dbContext.CityLedgerEntries.FirstOrDefaultAsync(e => e.Id == entryId);
         if (entry == null) throw new InvalidOperationException("City ledger invoice not found.");
+        if (!string.Equals(entry.Status, "OPEN", StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("This city ledger balance is no longer open.");
         if (!string.Equals(entry.AccountId, accountId, StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("City ledger account mismatch.");
+        accountType = accountType.Trim().ToUpperInvariant();
+        method = method.Trim().ToUpperInvariant();
+        if (accountType is not ("CORPORATE" or "SKIPPER")) throw new InvalidOperationException("Invalid city ledger account type.");
+        if (method is not ("CASH" or "BANK_TRANSFER" or "POS" or "CARD" or "CHEQUE" or "OTHER")) throw new InvalidOperationException("Invalid city ledger payment method.");
+        if (string.IsNullOrWhiteSpace(reference)) throw new InvalidOperationException("A payment reference is required.");
         var isCorporate = string.Equals(accountType, "CORPORATE", StringComparison.OrdinalIgnoreCase);
         var isCorporateAdvance = isCorporate && string.Equals(entry.Type, "PAYMENT", StringComparison.OrdinalIgnoreCase);
         if (!string.Equals(entry.Type, "TRANSFER_IN", StringComparison.OrdinalIgnoreCase) && !isCorporateAdvance)
@@ -6963,8 +7186,18 @@ public class LocalRepository
                 .Sum();
             if (amount > entry.Amount - allocated + 0.01m) throw new InvalidOperationException("Settlement exceeds the outstanding invoice balance.");
         }
+        if (isCorporateAdvance)
+        {
+            var allocated = (await _dbContext.CityLedgerAllocations
+                .Where(a => a.CreditEntryId == entryId)
+                .Select(a => a.Amount)
+                .ToListAsync()).Sum();
+            if (amount > entry.Amount - allocated + 0.01m) throw new InvalidOperationException("Settlement exceeds the available corporate credit.");
+        }
         var frontdeskSession = await GetActiveFrontdeskSessionAsync(entry.PropertyId, userId);
         if (frontdeskSession == null) throw new InvalidOperationException("An open Front Desk shift is required before posting a city ledger payment.");
+        var property = await _dbContext.Properties.FindAsync(entry.PropertyId);
+        businessDate = property?.BusinessDate.Date ?? businessDate.Date;
         var operationId = Guid.NewGuid().ToString();
         // A ledger entry can receive more than one offline payment over its
         // lifetime.  Do not leave the outbox event at LocalOutboxEvent's

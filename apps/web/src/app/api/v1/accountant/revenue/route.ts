@@ -51,7 +51,7 @@ function resolveAccountCode(
       || [...accounts.keys()][0];
   }
 
-  if (item.source === 'ROOM_CHARGE' || item.source === 'ROOM_UPGRADE' || item.source === 'ROOM_DOWNGRADE_CREDIT' || item.revenueCategory === 'ROOM') {
+  if (item.source === 'ROOM_CHARGE' || item.source === 'DAY_USE_ROOM_CHARGE' || item.source === 'ROOM_UPGRADE' || item.source === 'ROOM_DOWNGRADE_CREDIT' || item.revenueCategory === 'ROOM') {
     return activeCode('4050') || findByName('room revenue', 'rooms revenue') || activeCode('4400') || [...accounts.keys()][0];
   }
 

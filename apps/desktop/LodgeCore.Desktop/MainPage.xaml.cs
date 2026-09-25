@@ -457,6 +457,11 @@ public partial class MainPage : ContentPage
                         parameters?["charge"]?["description"]?.ToString() ?? "",
                         parameters?["charge"]?["idempotencyKey"]?.ToString() ?? parameters?["idempotencyKey"]?.ToString());
                     break;
+                case "nightAudit.postRoomCharges":
+                    responseData = await pmsInterop.PostNightAuditRoomChargesAsync(
+                        parameters?["propertyId"]?.ToString() ?? "",
+                        parameters?["businessDate"]?.ToString());
+                    break;
                 case "frontdesk.session.get":
                     responseData = await pmsInterop.GetFrontdeskSessionAsync(parameters?["propertyId"]?.ToString() ?? "");
                     break;

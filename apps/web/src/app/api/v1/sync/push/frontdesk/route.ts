@@ -901,6 +901,12 @@ export async function POST(req: NextRequest) {
                 where: { id: corporateAccountId },
                 include: { ratePlan: true },
               });
+              if (!corporateAccount || corporateAccount.propertyId !== propertyId) {
+                throw new Error("Corporate account is not valid for this property");
+              }
+              if (!corporateAccount.isActive) {
+                throw new Error("This corporate account is inactive and cannot be used for new reservations");
+              }
               if (corporateAccount?.ratePlan) {
                 finalRatePlanId = corporateAccount.ratePlan.id;
                 const rate = await tx.rate.findFirst({
@@ -1249,7 +1255,7 @@ export async function POST(req: NextRequest) {
                       guestId: reservation.primaryGuestId,
                       businessDate: postingBusinessDate,
                       type: "CHARGE",
-                      source: "ROOM_CHARGE",
+                      source: "DAY_USE_ROOM_CHARGE",
                       revenueCategory: "ROOM",
                       description: `Day-use room charge for ${postingBusinessDate.toISOString().slice(0, 10)}`,
                       quantity: 1,
@@ -1415,6 +1421,26 @@ export async function POST(req: NextRequest) {
             eventType === "ROOM_CHARGE" ||
             eventType === "POST_CHARGE"
           ) {
+            if (eventType === "ROOM_CHARGE") {
+              // ROOM_CHARGE is the controlled nightly accommodation posting.
+              // It may only arrive from an authorized Night Audit operator;
+              // Front Desk, POS, and laundry use POST_CHARGE with their own
+              // source and can never impersonate nightly room revenue.
+              const poster = await tx.staff.findUnique({
+                where: { id: actorId },
+                select: { isActive: true, position: true },
+              });
+              const auditPositions = new Set([
+                "NIGHT_AUDITOR",
+                "HOTEL_MANAGER",
+                "MANAGER",
+                "ADMIN",
+                "SUPER_ADMIN",
+              ]);
+              if (!poster?.isActive || !auditPositions.has(String(poster.position).toUpperCase())) {
+                throw new Error("ROOM_CHARGE_REQUIRES_NIGHT_AUDIT_AUTHORITY");
+              }
+            }
             const existingCharge = await tx.folioItem.findFirst({
               where: { posTransactionId: idempotencyKey },
             });
@@ -1824,6 +1850,21 @@ export async function POST(req: NextRequest) {
             if (payload.currency && payload.currency !== folio.currency) {
               throw new Error("Currency mismatch. Expected " + folio.currency);
             }
+
+            const existingAllocation = isUuid(allocationId)
+              ? await tx.cityLedgerAllocation.findUnique({ where: { id: allocationId }, select: { id: true, folioId: true, paymentId: true } })
+              : null;
+            if (existingAllocation) {
+              if (existingAllocation.folioId !== folioId || existingAllocation.paymentId !== creditEntryId) {
+                throw new Error("Credit allocation id is already linked to another transaction");
+              }
+              return;
+            }
+            const existingApplication = await tx.folioItem.findFirst({
+              where: { folioId, operationId: idempotencyKey, type: "PAYMENT", source: "CITY_LEDGER" },
+              select: { id: true },
+            });
+            if (existingApplication) return;
 
             const lockedEntries = await tx.$queryRawUnsafe<any[]>(
               'SELECT id, amount, currency, status, "accountId", "guestId" FROM "CityLedgerEntry" WHERE id = $1::uuid AND "propertyId" = $2::uuid AND "type" = $3 AND "status" = $4 FOR UPDATE',
@@ -2442,15 +2483,18 @@ export async function POST(req: NextRequest) {
             });
             if (!folio) throw new Error("Folio not found or unauthorized");
 
+            const invoiceNumber = String(payload.invoiceNumber || `AR-${payload.confirmationNumber || aggregateId}-${String(aggregateId).slice(0, 8).toUpperCase()}`);
             const existing = await tx.cityLedgerEntry.findFirst({
-              where: { folioId: aggregateId, type: "TRANSFER_IN", amount },
+              // Corporate reservations share one folio. Amount-only matching
+              // would suppress a legitimate second checkout with the same
+              // balance; the immutable invoice/reference is the idempotency key.
+              where: { folioId: aggregateId, type: "TRANSFER_IN", reference: invoiceNumber },
             });
             if (!existing) {
               const issueDate = new Date();
               issueDate.setUTCHours(0, 0, 0, 0);
               const dueDate = new Date(issueDate);
               dueDate.setUTCDate(dueDate.getUTCDate() + 30);
-              const invoiceNumber = String(payload.invoiceNumber || `AR-${payload.confirmationNumber || aggregateId}-${String(aggregateId).slice(0, 8).toUpperCase()}`);
               const invoice = await tx.cityLedgerInvoice.upsert({
                 where: { propertyId_invoiceNumber: { propertyId, invoiceNumber } },
                 create: {
@@ -2904,7 +2948,11 @@ export async function POST(req: NextRequest) {
                 "New room is already assigned to another active reservation",
               );
 
-            // Deactivate all current active room assignments for this reservation
+            // Deactivate all current active room assignments for this reservation.
+            // Room reassignment is operational state only. It must not create a
+            // folio charge or credit here: Night Audit prices the active room
+            // for each unposted business date, which prevents double posting
+            // and preserves already-posted nights at their original rate.
             await tx.reservationRoom.updateMany({
               where: { reservationId: aggregateId, status: "ACTIVE" },
               data: { status: "INACTIVE" },
@@ -2912,32 +2960,11 @@ export async function POST(req: NextRequest) {
 
             // Create new assignment
             const activeRoom = res.reservationRooms[0];
-            const oldRate = Number(activeRoom?.rateAmount || 0);
-            const newRate = Number(
-              (
-                await tx.roomType.findUnique({
-                  where: { id: newRoom.roomTypeId },
-                  select: { baseRate: true },
-                })
-              )?.baseRate || oldRate,
-            );
-            const pricingStart = new Date(activeRoom?.checkIn || res.checkIn);
-            if (res.status === "CHECKED_IN") {
-              const tomorrow = new Date();
-              tomorrow.setUTCHours(0, 0, 0, 0);
-              tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
-              if (tomorrow > pricingStart)
-                pricingStart.setTime(tomorrow.getTime());
-            }
-            const nights = Math.max(
-              0,
-              Math.ceil(
-                (new Date(activeRoom?.checkOut || res.checkOut).getTime() -
-                  pricingStart.getTime()) /
-                  86400000,
-              ),
-            );
-            const upgradeAmount = Math.max(0, newRate - oldRate) * nights;
+            const newRoomType = await tx.roomType.findUnique({
+              where: { id: newRoom.roomTypeId },
+              select: { baseRate: true },
+            });
+            const newRate = Number(newRoomType?.baseRate || activeRoom?.rateAmount || 0);
             await tx.reservationRoom.create({
               data: {
                 reservationId: aggregateId,
@@ -2959,62 +2986,10 @@ export async function POST(req: NextRequest) {
               },
             });
 
-            await tx.reservation.update({
-              where: { id: aggregateId },
-              data: {
-                ratePlanSnapshot: {
-                  ...((res.ratePlanSnapshot as any) || {}),
-                  baseRate: newRate,
-                  total:
-                    Number((res.ratePlanSnapshot as any)?.total || 0) +
-                    (newRate - oldRate) * nights,
-                },
-              },
-            });
-
-            // NOTE: The upgrade rate difference (newRate - oldRate) is NOT charged
-            // immediately. The Night Audit posts room charges based on the current
-            // reservationRoom.rateAmount, so the new rate will be picked up
-            // automatically on the next audit run. Charging here would cause
-            // double-billing when the Night Audit also runs.
-
-            const downgradeCredit = Math.max(0, oldRate - newRate) * nights;
-            if (downgradeCredit > 0 && res.folios[0]) {
-              const creditKey = `ROOM_DOWNGRADE:${aggregateId}:${newRoomId}:${new Date(activeRoom?.checkOut || res.checkOut).toISOString().slice(0, 10)}`;
-              const existingCredit = await tx.folioItem.findFirst({
-                where: {
-                  folioId: res.folios[0].id,
-                  posTransactionId: creditKey,
-                },
-              });
-              if (!existingCredit) {
-                await tx.folioItem.create({
-                  data: {
-                    folioId: res.folios[0].id,
-                    businessDate: postingBusinessDate,
-                    type: "PAYMENT",
-                    source: "ROOM_DOWNGRADE_CREDIT",
-                    description: `Room downgrade credit - ${nights} night${nights === 1 ? "" : "s"}`,
-                    quantity: 1,
-                    unitAmount: -downgradeCredit,
-                    amount: -downgradeCredit,
-                    currency: res.currency,
-                    baseAmount: downgradeCredit,
-                    postedBy: actorId,
-                    posTransactionId: creditKey,
-                  },
-                });
-                await tx.folio.update({
-                  where: { id: res.folios[0].id },
-                  data: {
-                    totalPayments: { increment: downgradeCredit },
-                    balance: { decrement: downgradeCredit },
-                  },
-                });
-              }
-            }
-
-            // Room assignment is tracked via reservationRoom; no field on reservation to update here
+            // Do not update the reservation snapshot or post a downgrade credit.
+            // Both would alter financial history before the auditor has reviewed
+            // the business date. The active ReservationRoom rate is the input
+            // used by the next Night Audit run.
 
             // Release old room if it was this reservation's room
             if (oldRoomId && oldRoomId !== newRoomId) {
@@ -4488,6 +4463,19 @@ export async function POST(req: NextRequest) {
           // A concurrent terminal consumed the credit. Return a conflict so
           // the desktop marks its optimistic local allocation CONFLICTED and
           // reverses the local payment mirror.
+          results.push({
+            id,
+            status: "CONFLICT",
+            idempotencyKey,
+            error: err.message,
+          });
+        } else if (
+          aggregateType === "CITY_LEDGER" &&
+          eventType === "GUEST_CREDIT_REFUND_REQUESTED"
+        ) {
+          // Refund requests are approval workflows, not retryable financial
+          // mutations. A rejected request must be surfaced to Front Desk and
+          // must not remain indefinitely in local PENDING_APPROVAL state.
           results.push({
             id,
             status: "CONFLICT",

@@ -87,6 +87,12 @@ export const SharedReservationService = {
         where: { id: corporateAccountId },
         include: { ratePlan: true }
       });
+      if (!corporateAccount || corporateAccount.propertyId !== propertyId) {
+        throw new Error('Corporate account not found for this property');
+      }
+      if (!corporateAccount.isActive) {
+        throw new Error('This corporate account is inactive and cannot be used for new reservations');
+      }
       if (corporateAccount?.ratePlan) {
         finalRatePlanId = corporateAccount.ratePlan.id;
         const rate = await (externalTx || prisma).rate.findFirst({

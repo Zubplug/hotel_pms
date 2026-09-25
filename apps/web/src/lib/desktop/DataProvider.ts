@@ -38,6 +38,9 @@ export interface LodgeCoreDataProvider {
   dashboard: {
     get(propertyId: string): Promise<any>;
   };
+  nightAudit?: {
+    postRoomCharges(propertyId: string, businessDate?: string): Promise<any>;
+  };
   refunds: {
     list(propertyId: string): Promise<any>;
     request(data: any): Promise<any>;

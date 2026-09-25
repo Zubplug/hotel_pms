@@ -1,9 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
+import crypto from 'crypto';
 import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
-import { createAuditLog } from '@/lib/audit';
 import { requireOrganizationContext } from '@/lib/organization-access';
+import { hasPermission } from '@/lib/permissions';
 
 export async function GET(req: NextRequest) {
   try {
@@ -14,13 +15,37 @@ export async function GET(req: NextRequest) {
     const { searchParams } = req.nextUrl;
     const propertyId = searchParams.get('propertyId');
     
-    if (propertyId && !propertyIds.includes(propertyId)) {
+    const visiblePropertyIds = propertyId
+      ? [propertyId]
+      : (await Promise.all(propertyIds.map(async id => (
+          await hasPermission(session.user.id, id, 'corporate_account:view') ? id : null
+        )))).filter((id): id is string => Boolean(id));
+
+    if (propertyId) {
+      if (!propertyIds.includes(propertyId)) {
         return errorResponse('FORBIDDEN', 'Forbidden property access', 403);
+      }
+      if (!visiblePropertyIds.includes(propertyId)) {
+        return errorResponse('FORBIDDEN', 'Missing required permission: corporate_account:view', 403);
+      }
+    } else if (visiblePropertyIds.length === 0) {
+      return errorResponse('FORBIDDEN', 'Missing required permission: corporate_account:view', 403);
     }
-    
-    const where: any = propertyId 
-      ? { propertyId, isActive: true } 
-      : { propertyId: { in: propertyIds }, isActive: true };
+
+    const status = searchParams.get('status');
+    const depositPolicy = searchParams.get('depositPolicy');
+    const credit = searchParams.get('credit');
+    const search = searchParams.get('search')?.trim();
+    const where: any = {
+      propertyId: { in: visiblePropertyIds },
+      ...(status === 'active' ? { isActive: true } : status === 'inactive' ? { isActive: false } : {}),
+      ...(depositPolicy ? { depositPolicy } : {}),
+      ...(credit === 'with_limit' ? { creditLimit: { gt: 0 } } : credit === 'no_limit' ? { creditLimit: { lte: 0 } } : {}),
+      ...(search ? { OR: [
+        { name: { contains: search, mode: 'insensitive' } },
+        { code: { contains: search, mode: 'insensitive' } },
+      ] } : {}),
+    };
 
     const accounts = await prisma.corporateAccount.findMany({ 
         where, 
@@ -46,40 +71,65 @@ export async function POST(req: NextRequest) {
         return errorResponse('FORBIDDEN', 'Forbidden property access', 403);
     }
 
-    const account = await prisma.corporateAccount.create({ 
-        data: {
+    const canCreate = await hasPermission(session.user.id, body.propertyId, 'corporate_account:create');
+    if (!canCreate) {
+        return errorResponse('FORBIDDEN', 'Missing required permission: corporate_account:create', 403);
+    }
+
+    const name = typeof body.name === 'string' ? body.name.trim() : '';
+    const code = typeof body.code === 'string' ? body.code.trim().toUpperCase() : '';
+    const creditLimit = Number(body.creditLimit ?? 0);
+    const depositPolicy = body.depositPolicy ?? 'WAIVED';
+    if (!name || !code || !Number.isFinite(creditLimit) || creditLimit < 0 || !['WAIVED', 'STANDARD'].includes(depositPolicy)) {
+      return errorResponse('BAD_REQUEST', 'Invalid corporate account details', 400);
+    }
+
+    const result = await prisma.$transaction(async tx => {
+      let cityLedgerAccountId = body.cityLedgerAccountId as string | undefined;
+      if (cityLedgerAccountId) {
+        const ledger = await tx.cityLedgerAccount.findFirst({
+          where: { id: cityLedgerAccountId, propertyId: body.propertyId, organizationId, type: 'CORPORATE', status: 'ACTIVE' },
+          select: { id: true },
+        });
+        if (!ledger) throw Object.assign(new Error('Invalid City Ledger account'), { code: 'INVALID_LEDGER' });
+      } else {
+        const ledger = await tx.cityLedgerAccount.findFirst({
+          where: { propertyId: body.propertyId, organizationId, type: 'CORPORATE', name },
+          select: { id: true },
+        });
+        cityLedgerAccountId = ledger?.id ?? (await tx.cityLedgerAccount.create({
+          data: { organizationId, propertyId: body.propertyId, name, type: 'CORPORATE', status: 'ACTIVE', currency: body.currency || 'NGN' },
+          select: { id: true },
+        })).id;
+      }
+
+      const account = await tx.corporateAccount.create({ data: {
             organizationId,
             propertyId: body.propertyId,
-            name: body.name,
-            code: body.code,
-            contactPerson: body.contactPerson,
-            contactEmail: body.contactEmail,
-            contactPhone: body.contactPhone,
-            creditLimit: body.creditLimit || 0,
-            exemptFromHighBalance: body.exemptFromHighBalance || false,
-            // Corporate reservations are billed to the city ledger and do not
-            // require an individual guest deposit.
-            depositPolicy: "WAIVED",
-            ratePlanId: body.ratePlanId,
-            cityLedgerAccountId: body.cityLedgerAccountId
-        } 
-    });
-
-    await createAuditLog({
-      organizationId, 
-      propertyId: body.propertyId, 
-      userId: session.user.id,
-      action: 'CREATE', 
-      resource: 'corporate_account', 
-      resourceId: account.id, 
-      newValue: account,
+            name, code,
+            contactPerson: typeof body.contactPerson === 'string' ? body.contactPerson.trim() || null : null,
+            contactEmail: typeof body.contactEmail === 'string' ? body.contactEmail.trim() || null : null,
+            contactPhone: typeof body.contactPhone === 'string' ? body.contactPhone.trim() || null : null,
+            creditLimit,
+            exemptFromHighBalance: Boolean(body.exemptFromHighBalance),
+            depositPolicy,
+            ratePlanId: body.ratePlanId || null,
+            cityLedgerAccountId,
+          } });
+      await tx.auditLog.create({ data: {
+        organizationId, propertyId: body.propertyId, userId: session.user.id,
+        action: 'CREATE', resource: 'corporate_account', resourceId: account.id,
+        newValue: JSON.parse(JSON.stringify(account)), requestId: crypto.randomUUID(),
+      } });
+      return account;
     });
     
-    return successResponse(account, 201);
+    return successResponse(result, 201);
   } catch (err: any) {
     if (err.code === 'P2002') {
         return errorResponse('CONFLICT', 'A corporate account with this code already exists for this property.', 409);
     }
+    if (err.code === 'INVALID_LEDGER') return errorResponse('BAD_REQUEST', err.message, 400);
     return errorResponse('INTERNAL_ERROR', 'An unexpected error occurred', 500);
   }
 }

@@ -71,6 +71,7 @@ const ALL_NAV: NavItem[] = [
   { section: 'Operations', name: 'Night Audit', href: '/night-audit', icon: MoonStar, restrictedTo: ['NIGHT_AUDITOR'] },
   { section: 'Finance & Reports', name: 'Reports', href: '/reports', icon: FileText },
   { section: 'Finance & Reports', name: 'Cash Management', href: '/general-manager/cash-management', icon: HandCoins, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'DIRECTOR'] },
+  { section: 'Finance & Reports', name: 'Corporate Management', href: '/general-manager/corporate', icon: Building2, restrictedTo: ['ADMIN', 'CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'DIRECTOR'] },
   { section: 'Finance & Reports', name: 'Cash Management', href: '/cash-management', icon: HandCoins, restrictedTo: ['ACCOUNTANT', 'GENERAL_CASHIER', 'NIGHT_AUDITOR'] },
   { section: 'Finance & Reports', name: 'Approvals', href: '/general-manager/approvals', icon: ClipboardCheck, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'DIRECTOR'] },
   { section: 'Finance & Reports', name: 'Sync Center', href: '/sync-center', icon: RefreshCw, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'DIRECTOR'] },

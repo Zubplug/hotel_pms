@@ -78,7 +78,7 @@ export async function calculateDailyRevenue(propertyId: string, businessDate: Da
     const sign = item.type === 'CHARGE' ? 1 : -1;
     const value = amt * sign;
 
-    if (['ROOM_CHARGE', 'ROOM_UPGRADE', 'ROOM_DOWNGRADE_CREDIT'].includes(item.source)) {
+    if (['ROOM_CHARGE', 'DAY_USE_ROOM_CHARGE', 'ROOM_UPGRADE', 'ROOM_DOWNGRADE_CREDIT'].includes(item.source)) {
       roomRevenue += value;
     } else if (item.source === 'BAR') {
       barRevenue += value;
@@ -129,7 +129,7 @@ export async function calculateDailyRevenue(propertyId: string, businessDate: Da
         include: {
           items: {
             where: {
-              source: 'ROOM_CHARGE',
+              source: { in: ['ROOM_CHARGE', 'DAY_USE_ROOM_CHARGE'] },
               businessDate: {
                 gte: startOfDay(businessDate),
                 lte: endOfDay(businessDate)
