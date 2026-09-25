@@ -1,243 +1,47 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, react-hooks/set-state-in-effect */
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { AlertTriangle, ArrowUpRight, Ban, Building2, CheckCircle2, ChevronRight, CircleDollarSign, CreditCard, ExternalLink, FileText, Loader2, Pencil, Plus, RefreshCw, Search, ShieldCheck, TrendingUp, Users, WalletCards } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Building2, Search, Plus, ExternalLink, Pencil, Ban } from 'lucide-react';
 import { CorporateAccountDialog } from './CorporateAccountDialog';
 import { toast } from 'sonner';
 
-interface CorporateAccountManagementProps {
-  propertyId: string;
-  canCreate: boolean;
-  canEdit: boolean;
-  canChangeFinancials: boolean;
-  canChangeDepositPolicy: boolean;
-  canDeactivate: boolean;
-  canViewCityLedger: boolean;
+interface Props { propertyId: string; canCreate: boolean; canEdit: boolean; canChangeFinancials: boolean; canChangeDepositPolicy: boolean; canDeactivate: boolean; canViewCityLedger: boolean; }
+const money = (value: number, currency = 'NGN') => new Intl.NumberFormat('en-NG', { style: 'currency', currency, maximumFractionDigits: 0 }).format(value);
+const shortMoney = (value: number) => value >= 1_000_000 ? `₦${(value / 1_000_000).toFixed(1)}m` : value >= 1_000 ? `₦${Math.round(value / 1_000)}k` : `₦${Math.round(value)}`;
+const tooltipStyle = { borderRadius: 14, border: '1px solid #dbe4f0', boxShadow: '0 12px 32px rgba(15,23,42,.1)' };
+
+function Metric({ label, value, detail, icon: Icon, tone = 'blue' }: { label: string; value: string | number; detail: string; icon: React.ElementType; tone?: string }) {
+  const toneClass = tone === 'rose' ? 'bg-rose-50 text-rose-600' : tone === 'violet' ? 'bg-violet-50 text-violet-600' : tone === 'emerald' ? 'bg-emerald-50 text-emerald-600' : tone === 'amber' ? 'bg-amber-50 text-amber-600' : 'bg-blue-50 text-blue-600';
+  return <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm"><div className="flex items-start justify-between"><div><p className="text-xs font-semibold uppercase tracking-[.13em] text-slate-500">{label}</p><p className="mt-2 text-2xl font-bold tracking-tight text-slate-950">{value}</p></div><div className={`rounded-xl p-2.5 ${toneClass}`}><Icon className="h-5 w-5" /></div></div><p className="mt-3 text-xs text-slate-500">{detail}</p></div>;
 }
 
-export function CorporateAccountManagement({ 
-  propertyId, 
-  canCreate, 
-  canEdit, 
-  canChangeFinancials,
-  canChangeDepositPolicy,
-  canDeactivate,
-  canViewCityLedger,
-}: CorporateAccountManagementProps) {
-  const [search, setSearch] = useState('');
-  const [status, setStatus] = useState('');
-  const [depositPolicy, setDepositPolicy] = useState('');
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [selectedAccount, setSelectedAccount] = useState<any>(null);
-  const [response, setResponse] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState(false);
-
-  const endpoint = propertyId ? `/api/v1/corporate-accounts?propertyId=${propertyId}&status=${status}${depositPolicy ? `&depositPolicy=${depositPolicy}` : ''}${search ? `&search=${encodeURIComponent(search)}` : ''}` : null;
-  const loadAccounts = async () => {
-    if (!endpoint) return;
-    setIsLoading(true);
-    try {
-      const res = await fetch(endpoint);
-      if (!res.ok) throw new Error('Unable to load corporate accounts');
-      setResponse(await res.json());
-    } catch (error: any) {
-      toast.error(error.message);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-  useEffect(() => { void loadAccounts(); }, [endpoint]);
-
-  const accounts = response?.data || [];
-
-  const filteredAccounts = accounts;
-
-  const totalCreditExposure = accounts.reduce((sum: number, acc: any) => sum + Number(acc.creditLimit || 0), 0);
-  const totalOutstanding = accounts.reduce((sum: number, acc: any) => sum + Number(acc.cityLedgerAccount?.balance || 0), 0);
-
-  const handleCreate = () => {
-    setSelectedAccount(null);
-    setDialogOpen(true);
-  };
-
-  const handleEdit = (account: any) => {
-    setSelectedAccount(account);
-    setDialogOpen(true);
-  };
-
-  const handleDeactivate = async (id: string) => {
-    const reason = window.prompt('Reason for deactivation (required):');
-    if (!reason || reason.trim().length < 5) return toast.error('A deactivation reason is required.');
-    try {
-      const res = await fetch(`/api/v1/corporate-accounts/${id}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reason: reason.trim() }),
-      });
-      if (!res.ok) throw new Error('Failed to deactivate');
-      toast.success('Account deactivated');
-      void loadAccounts();
-    } catch (e: any) {
-      toast.error(e.message);
-    }
-  };
-
-  const formatCurrency = (val: number, currency: string = 'NGN') => 
-    new Intl.NumberFormat('en-NG', { style: 'currency', currency }).format(val);
-
-  return (
-    <div className="space-y-6">
-      <div className="grid gap-4 md:grid-cols-4">
-        <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-6">
-          <div className="text-sm text-slate-400">Total Accounts</div>
-          <div className="mt-2 text-3xl font-bold">{accounts.length}</div>
-        </div>
-        <div className="flex gap-2">
-          <select className="rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm" value={status} onChange={e => setStatus(e.target.value)}>
-            <option value="active">Active accounts</option><option value="inactive">Inactive accounts</option><option value="">All statuses</option>
-          </select>
-          <select className="rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm" value={depositPolicy} onChange={e => setDepositPolicy(e.target.value)}>
-            <option value="">All deposit policies</option><option value="WAIVED">Waived</option><option value="STANDARD">Standard</option>
-          </select>
-        </div>
-        <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-6">
-          <div className="text-sm text-slate-400">Active Accounts</div>
-          <div className="mt-2 text-3xl font-bold">{accounts.filter((a: any) => a.isActive).length}</div>
-        </div>
-        <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-6">
-          <div className="text-sm text-slate-400">Total Credit Exposure</div>
-          <div className="mt-2 text-3xl font-bold text-blue-400">{formatCurrency(totalCreditExposure)}</div>
-        </div>
-        <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-6">
-          <div className="text-sm text-slate-400">Total Outstanding</div>
-          <div className="mt-2 text-3xl font-bold text-rose-400">{formatCurrency(totalOutstanding)}</div>
-        </div>
+export function CorporateAccountManagement({ propertyId, canCreate, canEdit, canChangeFinancials, canChangeDepositPolicy, canDeactivate, canViewCityLedger }: Props) {
+  const [data, setData] = useState<any>(null); const [loading, setLoading] = useState(true); const [query, setQuery] = useState(''); const [status, setStatus] = useState('active');
+  const [dialogOpen, setDialogOpen] = useState(false); const [selected, setSelected] = useState<any>(null);
+  const load = useCallback(async () => { setLoading(true); try { const res = await fetch(`/api/v1/corporate-accounts/analytics?propertyId=${propertyId}`, { cache: 'no-store' }); const json = await res.json(); if (!res.ok) throw new Error(json.error?.message || 'Unable to load corporate dashboard'); setData(json.data); } catch (error: any) { toast.error(error.message); } finally { setLoading(false); } }, [propertyId]);
+  useEffect(() => { void load(); }, [load]);
+  const accounts = useMemo(() => (data?.accounts || []).filter((account: any) => (!query || `${account.name} ${account.code}`.toLowerCase().includes(query.toLowerCase())) && (status === 'all' || (status === 'active' ? account.isActive : !account.isActive))), [data, query, status]);
+  const openAccount = (account?: any) => { setSelected(account || null); setDialogOpen(true); };
+  const deactivate = async (id: string) => { const reason = window.prompt('Reason for deactivation (required):'); if (!reason || reason.trim().length < 5) return toast.error('A deactivation reason is required.'); const res = await fetch(`/api/v1/corporate-accounts/${id}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reason: reason.trim() }) }); if (!res.ok) return toast.error('Unable to deactivate account'); toast.success('Corporate account deactivated'); void load(); };
+  if (loading && !data) return <div className="flex min-h-[520px] items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-indigo-600" /></div>;
+  const overview = data?.overview || {};
+  return <div className="min-h-full bg-[#f7f9fc] px-4 py-6 text-slate-900 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-[1600px] space-y-6">
+      <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end"><div><div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[.18em] text-indigo-600"><Building2 className="h-4 w-4" /> Revenue & relationship control</div><h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-950">Corporate management</h1><p className="mt-1 max-w-2xl text-sm text-slate-500">A live command center for contracted business, credit exposure, negotiated rates and direct-bill receivables.</p></div><div className="flex items-center gap-2"><span className="hidden text-xs text-slate-500 sm:inline">Live from PMS ledger</span><Button variant="outline" size="sm" onClick={() => void load()}><RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />Refresh</Button>{canCreate && <Button size="sm" onClick={() => openAccount()}><Plus className="mr-2 h-4 w-4" />New account</Button>}</div></div>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5"><Metric label="Active accounts" value={overview.activeAccounts ?? 0} detail={`${overview.totalAccounts ?? 0} total corporate records`} icon={Building2} /><Metric label="Outstanding AR" value={shortMoney(overview.outstanding || 0)} detail={`${money(overview.overdue || 0)} past due`} icon={WalletCards} tone="rose" /><Metric label="Credit exposure" value={shortMoney(overview.creditExposure || 0)} detail="Approved account limits" icon={CreditCard} tone="violet" /><Metric label="Corporate bookings" value={overview.bookings ?? 0} detail="All non-cancelled stays" icon={Users} tone="emerald" /><Metric label="Open invoices" value={overview.invoices ?? 0} detail="Direct-bill receivables" icon={FileText} tone="amber" /></div>
+      <div className="grid gap-6 xl:grid-cols-[1.65fr_1fr]">
+        <section className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm"><div className="flex items-start justify-between"><div><h2 className="font-semibold text-slate-950">Corporate production</h2><p className="mt-1 text-xs text-slate-500">Bookings and allocated revenue by check-in month</p></div><TrendingUp className="h-5 w-5 text-emerald-500" /></div><div className="mt-5 h-[260px] w-full"><ResponsiveContainer width="100%" height="100%"><AreaChart data={data?.trend || []} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}><defs><linearGradient id="corpRevenue" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#6366f1" stopOpacity={.3} /><stop offset="100%" stopColor="#6366f1" stopOpacity={.02} /></linearGradient></defs><CartesianGrid stroke="#e8edf5" vertical={false} /><XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 11 }} /><YAxis yAxisId="revenue" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 11 }} tickFormatter={shortMoney} /><YAxis yAxisId="bookings" orientation="right" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 11 }} /><Tooltip contentStyle={tooltipStyle} formatter={(value: any, name: any) => [name === 'Revenue' ? money(Number(value)) : value, name]} /><Area yAxisId="revenue" type="monotone" dataKey="revenue" name="Revenue" stroke="#6366f1" strokeWidth={2.5} fill="url(#corpRevenue)" /><Area yAxisId="bookings" type="monotone" dataKey="bookings" name="Bookings" stroke="#10b981" strokeWidth={2.5} fill="none" /></AreaChart></ResponsiveContainer></div></section>
+        <section className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm"><div className="flex items-start justify-between"><div><h2 className="font-semibold text-slate-950">AR aging posture</h2><p className="mt-1 text-xs text-slate-500">Open corporate invoices by due date</p></div><CircleDollarSign className="h-5 w-5 text-amber-500" /></div><div className="mt-4 h-[270px]"><ResponsiveContainer width="100%" height="100%"><BarChart data={data?.aging || []} layout="vertical" margin={{ top: 4, right: 10, left: 0, bottom: 0 }}><CartesianGrid stroke="#eef2f7" horizontal={false} /><XAxis type="number" hide /><YAxis type="category" dataKey="bucket" width={76} tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => String(v).replace('days1to30', '1–30').replace('days31to60', '31–60').replace('days61to90', '61–90').replace('over90', '90+').replace('current', 'Current')} /><Tooltip contentStyle={tooltipStyle} formatter={(value: any) => [money(Number(value)), 'Outstanding']} /><Bar dataKey="amount" radius={[0, 6, 6, 0]}>{(data?.aging || []).map((_: any, index: number) => <Cell key={index} fill={index >= 3 ? '#f97316' : '#6366f1'} />)}</Bar></BarChart></ResponsiveContainer></div></section>
       </div>
-
-      <div className="flex items-center justify-between">
-        <div className="relative w-72">
-          <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-          <Input 
-            placeholder="Search company or code..." 
-            className="pl-9"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
-        </div>
-        {canCreate && (
-          <Button onClick={handleCreate}>
-            <Plus className="mr-2 h-4 w-4" />
-            New Account
-          </Button>
-        )}
+      <div className="grid gap-6 xl:grid-cols-[1.35fr_.65fr]">
+        <section className="rounded-2xl border border-slate-200/80 bg-white shadow-sm"><div className="flex flex-col gap-3 border-b border-slate-100 p-5 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="font-semibold text-slate-950">Account portfolio</h2><p className="mt-1 text-xs text-slate-500">Credit health, direct billing and negotiated rate coverage</p></div><div className="flex gap-2"><div className="relative"><Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" /><Input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search accounts" className="h-9 w-48 pl-9" /></div><select value={status} onChange={e => setStatus(e.target.value)} className="h-9 rounded-md border border-slate-200 bg-white px-2 text-xs"><option value="active">Active</option><option value="all">All statuses</option><option value="inactive">Inactive</option></select></div></div><div className="overflow-x-auto"><table className="w-full min-w-[760px] text-sm"><thead className="bg-slate-50 text-left text-[11px] uppercase tracking-wider text-slate-500"><tr><th className="px-5 py-3">Account</th><th className="px-3 py-3 text-right">Bookings</th><th className="px-3 py-3 text-right">Outstanding</th><th className="px-3 py-3">Credit posture</th><th className="px-3 py-3">Rate plan</th><th className="px-5 py-3 text-right"> </th></tr></thead><tbody className="divide-y divide-slate-100">{accounts.map((account: any) => <tr key={account.id} className="transition hover:bg-slate-50"><td className="px-5 py-4"><div className="flex items-center gap-3"><div className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-50 text-xs font-bold text-indigo-700">{account.name.slice(0, 2).toUpperCase()}</div><div><p className="font-semibold text-slate-900">{account.name}</p><p className="text-xs text-slate-500">{account.code} · {account.contactPerson || 'No contact assigned'}</p></div></div></td><td className="px-3 py-4 text-right tabular-nums text-slate-600">{account.bookings}</td><td className="px-3 py-4 text-right font-semibold tabular-nums text-slate-900">{money(account.balance, account.currency)}</td><td className="px-3 py-4">{account.creditLimit > 0 ? <div className="w-32"><div className="mb-1 flex justify-between text-[10px] text-slate-500"><span>{account.utilization ?? 0}% used</span><span>{shortMoney(account.creditLimit)}</span></div><div className="h-1.5 rounded-full bg-slate-100"><div className={`h-1.5 rounded-full ${account.utilization >= 100 ? 'bg-rose-500' : account.utilization >= 80 ? 'bg-amber-500' : 'bg-emerald-500'}`} style={{ width: `${Math.min(account.utilization || 0, 100)}%` }} /></div></div> : <span className="text-xs text-slate-500">No limit configured</span>}</td><td className="px-3 py-4">{account.ratePlan ? <span className="rounded-full bg-indigo-50 px-2 py-1 text-xs font-medium text-indigo-700">{account.ratePlan.code}</span> : <span className="text-xs text-amber-600">Not configured</span>}</td><td className="px-5 py-4 text-right"><Button variant="ghost" size="sm" onClick={() => openAccount(account)} title={canEdit ? 'Edit account' : 'View account'}>{canEdit ? <Pencil className="h-4 w-4" /> : <Search className="h-4 w-4" />}</Button>{canViewCityLedger && account.cityLedgerAccountId && <Button variant="ghost" size="sm" asChild><a href={`/accountant/city-ledger/${account.cityLedgerAccountId}`} target="_blank" rel="noreferrer"><ExternalLink className="h-4 w-4" /></a></Button>}{canDeactivate && account.isActive && <Button variant="ghost" size="sm" onClick={() => void deactivate(account.id)}><Ban className="h-4 w-4 text-rose-500" /></Button>}</td></tr>)}{accounts.length === 0 && <tr><td colSpan={6} className="px-5 py-12 text-center text-sm text-slate-500">No accounts match the current filters.</td></tr>}</tbody></table></div></section>
+        <div className="space-y-6"><section className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm"><div className="flex items-start justify-between"><div><h2 className="font-semibold text-slate-950">Management signals</h2><p className="mt-1 text-xs text-slate-500">Live exceptions needing attention</p></div><ShieldCheck className="h-5 w-5 text-indigo-500" /></div><div className="mt-4 space-y-3">{(data?.attention || []).map((item: any, index: number) => <button key={`${item.title}-${index}`} onClick={() => item.accountId && openAccount((data.accounts || []).find((a: any) => a.id === item.accountId))} className="flex w-full items-start gap-3 rounded-xl border border-slate-100 p-3 text-left transition hover:border-indigo-200 hover:bg-indigo-50/40"><div className={`mt-0.5 rounded-lg p-1.5 ${item.severity === 'critical' ? 'bg-rose-50 text-rose-600' : item.severity === 'warning' ? 'bg-amber-50 text-amber-600' : 'bg-blue-50 text-blue-600'}`}>{item.severity === 'info' ? <FileText className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}</div><div className="min-w-0 flex-1"><p className="text-xs font-semibold text-slate-900">{item.title}</p><p className="mt-1 text-[11px] leading-4 text-slate-500">{item.detail}</p></div><ChevronRight className="mt-1 h-4 w-4 shrink-0 text-slate-400" /></button>)}{(!data?.attention || data.attention.length === 0) && <div className="rounded-xl bg-emerald-50 p-4 text-sm text-emerald-800"><CheckCircle2 className="mb-2 h-5 w-5" />Portfolio controls are healthy. No live exceptions detected.</div>}</div></section><section className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm"><div className="flex items-center justify-between"><div><h2 className="font-semibold text-slate-950">Collection queue</h2><p className="mt-1 text-xs text-slate-500">Oldest open corporate invoices</p></div><ArrowUpRight className="h-5 w-5 text-slate-400" /></div><div className="mt-4 space-y-3">{(data?.recentActivity || []).slice(0, 4).map((item: any) => <div key={item.id} className="flex items-center justify-between gap-3"><div className="min-w-0"><p className="truncate text-xs font-semibold text-slate-800">{item.accountName}</p><p className="text-[11px] text-slate-500">{item.invoiceNumber} · due {new Date(item.dueDate).toLocaleDateString('en-NG')}</p></div><span className="text-xs font-semibold tabular-nums text-slate-900">{money(item.amount, item.currency)}</span></div>)}{(!data?.recentActivity || data.recentActivity.length === 0) && <p className="text-sm text-slate-500">No open corporate invoices.</p>}</div></section></div>
       </div>
-
-      <div className="rounded-xl border border-slate-800 bg-slate-900/20 overflow-hidden">
-        <Table>
-          <TableHeader className="bg-slate-900/50">
-            <TableRow>
-              <TableHead>Corporate</TableHead>
-              <TableHead>Contact</TableHead>
-              <TableHead className="text-right">Credit Limit</TableHead>
-              <TableHead className="text-right">Outstanding AR</TableHead>
-              <TableHead className="text-right">Available Credit</TableHead>
-              <TableHead>Deposit Policy</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading ? (
-              <TableRow>
-                <TableCell colSpan={8} className="text-center py-8 text-slate-400">Loading...</TableCell>
-              </TableRow>
-            ) : filteredAccounts.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={8} className="text-center py-8 text-slate-400">No corporate accounts found.</TableCell>
-              </TableRow>
-            ) : filteredAccounts.map((account: any) => {
-              const balance = Number(account.cityLedgerAccount?.balance || 0);
-              const limit = Number(account.creditLimit || 0);
-              const available = Math.max(0, limit - balance);
-              
-              return (
-                <TableRow key={account.id}>
-                  <TableCell>
-                    <div className="font-medium text-slate-200">{account.name}</div>
-                    <div className="text-xs text-slate-500">{account.code}</div>
-                    {account.cityLedgerAccountId && <div className="text-[10px] text-slate-600">Ledger: {account.cityLedgerAccountId}</div>}
-                  </TableCell>
-                  <TableCell>
-                    <div className="text-sm">{account.contactPerson || '-'}</div>
-                    <div className="text-xs text-slate-500">{account.contactEmail}</div>
-                  </TableCell>
-                  <TableCell className="text-right text-slate-300 font-medium">
-                    {formatCurrency(limit)}
-                  </TableCell>
-                  <TableCell className="text-right text-rose-400">
-                    {formatCurrency(balance)}
-                  </TableCell>
-                  <TableCell className="text-right text-emerald-400">
-                    {formatCurrency(available)}
-                  </TableCell>
-                  <TableCell>
-                    <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
-                      account.depositPolicy === 'WAIVED' ? 'bg-blue-500/10 text-blue-400' : 'bg-slate-800 text-slate-300'
-                    }`}>
-                      {account.depositPolicy}
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    {account.isActive ? (
-                      <span className="inline-flex items-center rounded-full bg-emerald-500/10 px-2 py-1 text-xs font-medium text-emerald-400">
-                        Active
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center rounded-full bg-rose-500/10 px-2 py-1 text-xs font-medium text-rose-400">
-                        Inactive
-                      </span>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-right space-x-2">
-                    <Button variant="ghost" size="sm" onClick={() => handleEdit(account)}>
-                      {canEdit ? <Pencil className="h-4 w-4 text-slate-400 hover:text-white" /> : <Search className="h-4 w-4 text-slate-400 hover:text-white" />}
-                    </Button>
-                    
-                    {canViewCityLedger && account.cityLedgerAccountId && (
-                      <Button variant="ghost" size="sm" asChild title="View City Ledger">
-                        {/* We use a relative link assuming the parent component might provide context, but typically we route to a shared AR view or specific shell AR view */}
-                        <a href={`/accountant/city-ledger/${account.cityLedgerAccountId}`} target="_blank" rel="noreferrer">
-                          <ExternalLink className="h-4 w-4 text-slate-400 hover:text-blue-400" />
-                        </a>
-                      </Button>
-                    )}
-
-                    {canDeactivate && account.isActive && (
-                      <Button variant="ghost" size="sm" onClick={() => handleDeactivate(account.id)} title="Deactivate">
-                        <Ban className="h-4 w-4 text-slate-400 hover:text-rose-400" />
-                      </Button>
-                    )}
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
-      </div>
-
-      <CorporateAccountDialog 
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
-        onSaved={() => void loadAccounts()}
-        account={selectedAccount}
-        propertyId={propertyId}
-        canEdit={canEdit}
-        canChangeFinancials={canChangeFinancials}
-        canChangeDepositPolicy={canChangeDepositPolicy}
-      />
     </div>
-  );
+    <CorporateAccountDialog open={dialogOpen} onOpenChange={setDialogOpen} onSaved={() => void load()} account={selected} propertyId={propertyId} canEdit={canEdit} canChangeFinancials={canChangeFinancials} canChangeDepositPolicy={canChangeDepositPolicy} />
+  </div>;
 }

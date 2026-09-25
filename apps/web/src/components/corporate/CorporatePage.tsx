@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import React from 'react';
 import { auth } from '@/lib/auth';
 import { hasPermission } from '@/lib/permissions';
@@ -27,8 +28,7 @@ export async function CorporatePage() {
   const canViewCityLedger = await hasPermission(userId, propertyId, 'corporate_account:view_city_ledger');
 
   return (
-    <div className="p-6">
-      <h1 className="mb-6 text-2xl font-bold text-slate-100">Corporate Management</h1>
+    <div>
       <CorporateAccountManagement 
         propertyId={propertyId} 
         canCreate={canCreate}
