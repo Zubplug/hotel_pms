@@ -256,7 +256,7 @@ export function CorporateAccountDialog({
     }
   });
 
-  const ratePlansKey = `/api/v1/rate-plans?propertyId=${propertyId}`;
+  const ratePlansKey = `/api/v1/rate-plans?propertyId=${propertyId}&type=CORPORATE`;
   const { data: ratePlansData } = useSWR(
     open ? ratePlansKey : null,
     (url: string) => fetch(url).then(res => res.json())

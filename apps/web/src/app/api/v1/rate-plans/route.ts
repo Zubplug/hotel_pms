@@ -13,6 +13,7 @@ export async function GET(req: NextRequest) {
     const { propertyIds } = await requireOrganizationContext((session.user as any).id);
     const { searchParams } = req.nextUrl;
     const propertyId = searchParams.get('propertyId') || propertyIds[0];
+    const type = searchParams.get('type');
 
     if (!propertyId) {
       return errorResponse('BAD_REQUEST', 'Property ID required', 400);
@@ -22,11 +23,16 @@ export async function GET(req: NextRequest) {
         return errorResponse('FORBIDDEN', 'Forbidden property access', 403);
     }
 
+    const whereClause: any = {
+      propertyId,
+      isActive: true,
+    };
+    if (type) {
+      whereClause.type = type;
+    }
+
     const ratePlans = await prisma.ratePlan.findMany({
-      where: {
-        propertyId,
-        isActive: true,
-      },
+      where: whereClause,
       select: {
         id: true,
         name: true,
