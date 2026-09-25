@@ -11,11 +11,12 @@ import { requireHQAdmin } from '@/lib/auth/hq';
 export default async function TenantControlPage({
   params
 }: {
-  params: { organizationId: string }
+  params: Promise<{ organizationId: string }>
 }) {
   await requireHQAdmin();
+  const { organizationId } = await params;
   const org = await prisma.organization.findUnique({
-    where: { id: params.organizationId },
+    where: { id: organizationId },
     include: {
       properties: true,
       memberships: { include: { user: { select: { id: true, email: true, roles: { include: { role: true } } } } } },
