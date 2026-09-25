@@ -28,19 +28,33 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         return errorResponse('FORBIDDEN', 'Missing required permission: corporate_account:edit', 403);
     }
     
-    const allowedProfileFields = ['name', 'code', 'contactPerson', 'contactEmail', 'contactPhone', 'ratePlanId'];
+    const [openSharedFolios, checkedInGuests] = await Promise.all([
+      prisma.folio.count({ where: { corporateAccountId: id, status: 'OPEN', type: 'CITY_LEDGER' } }),
+      prisma.reservation.count({ where: { corporateAccountId: id, status: 'CHECKED_IN' } }),
+    ]);
+    const ratePlanLocked = openSharedFolios > 0 || checkedInGuests > 0;
+    if ('name' in body && String(body.name).trim() !== account.name) {
+      return errorResponse('CONFLICT', 'Corporate name is immutable after creation', 409);
+    }
+    if ('code' in body && String(body.code).trim().toUpperCase() !== account.code) {
+      return errorResponse('CONFLICT', 'Corporate code is immutable after creation', 409);
+    }
+    if ('ratePlanId' in body) {
+      const requestedRatePlanId = body.ratePlanId === 'none' || !body.ratePlanId ? null : String(body.ratePlanId);
+      if (ratePlanLocked && requestedRatePlanId !== account.ratePlanId) {
+        return errorResponse('CONFLICT', 'Negotiated rate plan is locked while the account has an open shared folio or checked-in guest', 409);
+      }
+    }
+
+    const allowedProfileFields = ['contactPerson', 'contactEmail', 'contactPhone', 'ratePlanId'];
     const allowedFinancialFields = ['creditLimit', 'depositPolicy', 'exemptFromHighBalance'];
-    const unknownFields = Object.keys(body).filter(key => ![...allowedProfileFields, ...allowedFinancialFields, 'reason'].includes(key));
+    const immutableIdentityFields = ['name', 'code'];
+    const unknownFields = Object.keys(body).filter(key => ![...allowedProfileFields, ...allowedFinancialFields, ...immutableIdentityFields, 'reason'].includes(key));
     if (unknownFields.length) return errorResponse('BAD_REQUEST', `Unsupported field: ${unknownFields[0]}`, 400);
 
     const data: Record<string, unknown> = {};
     for (const field of allowedProfileFields) {
       if (field in body) data[field] = typeof body[field] === 'string' ? body[field].trim() || null : body[field];
-    }
-    if ('name' in data && !data.name) return errorResponse('BAD_REQUEST', 'Company name is required', 400);
-    if ('code' in data) {
-      if (!data.code) return errorResponse('BAD_REQUEST', 'Corporate code is required', 400);
-      data.code = String(data.code).toUpperCase();
     }
 
     const financialChange = ('creditLimit' in body && Number(body.creditLimit) !== Number(account.creditLimit))

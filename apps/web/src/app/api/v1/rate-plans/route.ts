@@ -5,6 +5,20 @@ import { successResponse, errorResponse } from '@/lib/api-response';
 import { requireOrganizationContext } from '@/lib/organization-access';
 import { hasPermission } from '@/lib/permissions';
 
+function rateCodeToken(value: string) {
+  return value.toUpperCase().replace(/[^A-Z0-9]+/g, '').slice(0, 8) || 'CORP';
+}
+
+async function generateRateCode(propertyId: string, name: string) {
+  const prefix = rateCodeToken(name);
+  for (let index = 1; index <= 99; index += 1) {
+    const candidate = `CORP-${prefix}-${String(index).padStart(2, '0')}`;
+    const existing = await prisma.ratePlan.findFirst({ where: { propertyId, code: candidate }, select: { id: true } });
+    if (!existing) return candidate;
+  }
+  return `CORP-${rateCodeToken(name)}-${Date.now().toString(36).toUpperCase()}`;
+}
+
 export async function GET(req: NextRequest) {
   try {
     const session = await auth();
@@ -95,9 +109,8 @@ export async function POST(req: NextRequest) {
     }
 
     if (!name || typeof name !== 'string') return errorResponse('BAD_REQUEST', 'Name is required', 400);
-    if (!code || typeof code !== 'string') return errorResponse('BAD_REQUEST', 'Code is required', 400);
-    
-    code = code.trim().toUpperCase();
+    code = typeof code === 'string' ? code.trim().toUpperCase() : '';
+    if (!code) code = await generateRateCode(propertyId, name);
     
     if (!Array.isArray(rates) || rates.length === 0) {
       return errorResponse('BAD_REQUEST', 'At least one room type rate must be provided', 400);

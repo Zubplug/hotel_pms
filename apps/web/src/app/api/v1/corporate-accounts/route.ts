@@ -6,6 +6,24 @@ import { successResponse, errorResponse } from '@/lib/api-response';
 import { requireOrganizationContext } from '@/lib/organization-access';
 import { hasPermission } from '@/lib/permissions';
 
+function codeToken(value: string) {
+  return value.toUpperCase().replace(/[^A-Z0-9]+/g, '').slice(0, 8) || 'CORP';
+}
+
+async function generateCorporateCode(tx: any, propertyId: string, name: string) {
+  const prefix = codeToken(name);
+  for (let index = 1; index <= 99; index += 1) {
+    const suffix = String(index).padStart(2, '0');
+    const candidate = `${prefix.slice(0, 10 - suffix.length)}${suffix}`;
+    const existing = await tx.corporateAccount.findFirst({
+      where: { propertyId, code: candidate },
+      select: { id: true },
+    });
+    if (!existing) return candidate;
+  }
+  return `CORP${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
+}
+
 export async function GET(req: NextRequest) {
   try {
     const session = await auth();
@@ -77,14 +95,15 @@ export async function POST(req: NextRequest) {
     }
 
     const name = typeof body.name === 'string' ? body.name.trim() : '';
-    const code = typeof body.code === 'string' ? body.code.trim().toUpperCase() : '';
+    const requestedCode = typeof body.code === 'string' ? body.code.trim().toUpperCase() : '';
     const creditLimit = Number(body.creditLimit ?? 0);
     const depositPolicy = body.depositPolicy ?? 'WAIVED';
-    if (!name || !code || !Number.isFinite(creditLimit) || creditLimit < 0 || !['WAIVED', 'STANDARD'].includes(depositPolicy)) {
+    if (!name || !Number.isFinite(creditLimit) || creditLimit < 0 || !['WAIVED', 'STANDARD'].includes(depositPolicy)) {
       return errorResponse('BAD_REQUEST', 'Invalid corporate account details', 400);
     }
 
     const result = await prisma.$transaction(async tx => {
+      const code = requestedCode || await generateCorporateCode(tx, body.propertyId, name);
       let cityLedgerAccountId = body.cityLedgerAccountId as string | undefined;
       if (cityLedgerAccountId) {
         const ledger = await tx.cityLedgerAccount.findFirst({

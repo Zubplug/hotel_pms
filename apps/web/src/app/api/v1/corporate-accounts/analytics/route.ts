@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
 
     const now = new Date();
     const trendStart = new Date(now.getFullYear(), now.getMonth() - 11, 1);
-    const [accounts, reservations, folioTotals, trendReservations, trendRevenueItems, invoices] = await Promise.all([
+    const [accounts, reservations, folioTotals, openSharedFolios, checkedInGuests, trendReservations, trendRevenueItems, invoices] = await Promise.all([
       prisma.corporateAccount.findMany({
         where: { propertyId },
         include: { cityLedgerAccount: { select: { id: true, balance: true, currency: true } }, ratePlan: { select: { id: true, name: true, code: true, isActive: true } } },
@@ -34,6 +34,16 @@ export async function GET(req: NextRequest) {
         by: ['corporateAccountId'],
         where: { propertyId, corporateAccountId: { not: null }, status: { not: 'VOID' } },
         _sum: { totalCharges: true, totalPayments: true, balance: true },
+      }),
+      prisma.folio.groupBy({
+        by: ['corporateAccountId'],
+        where: { propertyId, corporateAccountId: { not: null }, status: 'OPEN', type: 'CITY_LEDGER' },
+        _count: { _all: true },
+      }),
+      prisma.reservation.groupBy({
+        by: ['corporateAccountId'],
+        where: { propertyId, corporateAccountId: { not: null }, status: 'CHECKED_IN' },
+        _count: { _all: true },
       }),
       prisma.reservation.findMany({
         where: { propertyId, corporateAccountId: { not: null }, checkIn: { gte: trendStart }, status: { notIn: ['CANCELLED', 'NO_SHOW'] } },
@@ -54,6 +64,8 @@ export async function GET(req: NextRequest) {
     const accountByLedger = new Map(accounts.filter(a => a.cityLedgerAccountId).map(a => [a.cityLedgerAccountId!, a]));
     const reservationCounts = new Map(reservations.map(r => [r.corporateAccountId!, r._count._all]));
     const folioByAccount = new Map(folioTotals.map(row => [row.corporateAccountId!, row._sum]));
+    const openSharedFolioCounts = new Map(openSharedFolios.map(row => [row.corporateAccountId!, row._count._all]));
+    const checkedInGuestCounts = new Map(checkedInGuests.map(row => [row.corporateAccountId!, row._count._all]));
     const corporateInvoices = invoices.filter(invoice => accountByLedger.has(invoice.accountId));
     const ageBuckets = { current: 0, days1to30: 0, days31to60: 0, days61to90: 0, over90: 0 };
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -90,6 +102,8 @@ export async function GET(req: NextRequest) {
       const advanceCredit = Math.max(0, -ledgerBalance);
       const folio = folioByAccount.get(account.id);
       const bookings = reservationCounts.get(account.id) || 0;
+      const openSharedFolioCount = openSharedFolioCounts.get(account.id) || 0;
+      const checkedInGuestCount = checkedInGuestCounts.get(account.id) || 0;
       const creditLimit = Number(account.creditLimit || 0);
       const utilization = creditLimit > 0 ? Math.round((receivable / creditLimit) * 100) : null;
       return {
@@ -98,8 +112,10 @@ export async function GET(req: NextRequest) {
         creditLimit, balance: ledgerBalance, receivable, advanceCredit,
         availableCredit: Math.max(0, creditLimit - receivable + advanceCredit), utilization,
         depositPolicy: account.depositPolicy, exemptFromHighBalance: account.exemptFromHighBalance,
-        ratePlan: account.ratePlan, cityLedgerAccountId: account.cityLedgerAccountId, currency: account.cityLedgerAccount?.currency || 'NGN',
+        ratePlanId: account.ratePlanId, ratePlan: account.ratePlan, cityLedgerAccountId: account.cityLedgerAccountId, currency: account.cityLedgerAccount?.currency || 'NGN',
         bookings, charges: Number(folio?.totalCharges || 0), payments: Number(folio?.totalPayments || 0),
+        ratePlanLocked: openSharedFolioCount > 0 || checkedInGuestCount > 0,
+        openSharedFolios: openSharedFolioCount, checkedInGuests: checkedInGuestCount,
       };
     });
     const outstanding = rows.reduce((sum, row) => sum + row.receivable, 0);

@@ -70,7 +70,6 @@ function QuickRateDialog({ open, onOpenChange, onSaved, propertyId }: QuickRateD
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: data.name,
-          code: data.code,
           currency: data.currency,
           rates: submittedRates,
           propertyId,
@@ -111,20 +110,23 @@ function QuickRateDialog({ open, onOpenChange, onSaved, propertyId }: QuickRateD
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="!max-h-[calc(100vh-2rem)] !w-[calc(100vw-2rem)] !max-w-[1180px] overflow-hidden rounded-2xl border-white/10 bg-[#0a0f1c] p-0 text-slate-100 shadow-[0_30px_100px_rgba(0,0,0,.65)]">
+      <DialogContent className="!max-h-[calc(100vh-2rem)] !w-[calc(100vw-2rem)] !max-w-[1180px] flex flex-col overflow-hidden rounded-2xl border-white/10 bg-[#0a0f1c] p-0 text-slate-100 shadow-[0_30px_100px_rgba(0,0,0,.65)]">
         <DialogHeader className="border-b border-white/[.08] bg-gradient-to-r from-indigo-950/80 to-[#0f172a] px-6 py-5">
           <div className="flex items-center gap-3"><div className="rounded-xl bg-indigo-500/15 p-2.5 text-indigo-300"><Tag className="h-5 w-5" /></div><div><DialogTitle className="text-lg text-white">Create negotiated rate</DialogTitle><DialogDescription className="mt-1 text-xs text-slate-400">Build a rate card for this property and assign it to a corporate account.</DialogDescription></div></div>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="flex-1 space-y-5 overflow-y-auto px-6 py-5 lg:px-10">
+        <form onSubmit={handleSubmit(onSubmit)} className="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 py-5 lg:px-10">
           <div className="grid gap-4 rounded-xl border border-white/[.07] bg-white/[.02] p-4 sm:grid-cols-[1.35fr_1fr]">
             <div className="space-y-2">
               <Label className="text-xs font-medium text-slate-300">Rate name *</Label>
               <Input className={dialogInput} {...register('name', { required: true })} placeholder="e.g. Apple negotiated rate" />
             </div>
             <div className="space-y-2">
-              <Label className="text-xs font-medium text-slate-300">Rate code *</Label>
-              <Input className={dialogInput} {...register('code', { required: true })} placeholder="e.g. APP-CORP" />
+              <Label className="text-xs font-medium text-slate-300">Rate code</Label>
+              <div className="flex h-10 items-center justify-between rounded-md border border-dashed border-indigo-400/25 bg-indigo-400/[.06] px-3 text-sm text-indigo-200">
+                <span className="font-mono">AUTO-GENERATED</span>
+                <span className="text-[10px] uppercase tracking-[.12em] text-indigo-300/70">Assigned on save</span>
+              </div>
             </div>
           </div>
           
@@ -205,7 +207,7 @@ function QuickRateDialog({ open, onOpenChange, onSaved, propertyId }: QuickRateD
             </div>
           </div>
 
-          <DialogFooter className="sticky bottom-0 mt-4 border-t border-white/[.08] bg-[#0a0f1c] py-3">
+          <DialogFooter className="sticky bottom-0 z-10 mt-4 border-t border-white/[.08] bg-[#0a0f1c] py-3">
             <Button type="button" variant="outline" className="border-white/10 bg-white/[.04] text-slate-200 hover:bg-white/[.08]" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
@@ -298,6 +300,7 @@ export function CorporateAccountDialog({
   const depositPolicy = watch('depositPolicy');
   const exemptFromHighBalance = watch('exemptFromHighBalance');
   const ratePlanId = watch('ratePlanId');
+  const ratePlanLocked = Boolean(isEditing && account?.ratePlanLocked);
 
   const onSubmit = async (data: any) => {
     try {
@@ -370,15 +373,22 @@ export function CorporateAccountDialog({
             <div className="grid gap-4 rounded-xl border border-white/[.07] bg-white/[.02] p-4 sm:grid-cols-3">
               <div className="space-y-2 sm:col-span-2">
                 <Label className="text-xs font-medium text-slate-300">Company name *</Label>
-                <Input className={dialogInput} {...register('name', { required: 'Company name is required' })} disabled={formDisabled} placeholder="e.g. Worldwide Commercial Venture Ltd" />
+                <Input className={dialogInput} {...register('name', { required: 'Company name is required' })} disabled={formDisabled || isEditing} placeholder="e.g. Worldwide Commercial Venture Ltd" />
                 {errors.name && <p className="text-[11px] text-rose-300">{String(errors.name.message)}</p>}
               </div>
               <div className="space-y-2">
-                <Label className="text-xs font-medium text-slate-300">Corporate code *</Label>
-                <Input className={`${dialogInput} font-mono uppercase`} {...register('code', { required: 'Corporate code is required' })} disabled={formDisabled} placeholder="e.g. WCV-LTD" />
-                {errors.code && <p className="text-[11px] text-rose-300">{String(errors.code.message)}</p>}
+                <Label className="text-xs font-medium text-slate-300">Corporate code</Label>
+                {isEditing ? (
+                  <Input className={`${dialogInput} font-mono uppercase`} value={account.code} readOnly disabled={formDisabled} />
+                ) : (
+                  <div className="flex h-10 items-center justify-between rounded-md border border-dashed border-emerald-400/25 bg-emerald-400/[.06] px-3 text-sm text-emerald-200">
+                    <span className="font-mono">AUTO-GENERATED</span>
+                    <span className="text-[10px] uppercase tracking-[.12em] text-emerald-300/70">Assigned on save</span>
+                  </div>
+                )}
               </div>
             </div>
+            {isEditing && <p className="text-[11px] text-slate-500">Company name and corporate code are locked after creation to preserve ledger and audit continuity.</p>}
 
             <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[.16em] text-indigo-300"><Phone className="h-4 w-4" />Primary contact</div>
             <div className="grid gap-4 rounded-xl border border-white/[.07] bg-white/[.02] p-4 sm:grid-cols-3">
@@ -402,7 +412,7 @@ export function CorporateAccountDialog({
                 <Label className="text-xs font-medium text-slate-300">Corporate rate plan</Label>
                 <div className="flex gap-2">
                   <Select 
-                    disabled={formDisabled} 
+                    disabled={formDisabled || ratePlanLocked}
                     value={ratePlanId} 
                     onValueChange={v => setValue('ratePlanId', v || 'none')}
                   >
@@ -416,9 +426,13 @@ export function CorporateAccountDialog({
                       ))}
                     </SelectContent>
                   </Select>
-                  {canEdit && canManageRates && <Button type="button" variant="outline" className="border-indigo-400/30 bg-indigo-500/10 text-indigo-300 hover:bg-indigo-500/20" size="icon" onClick={() => setQuickRateOpen(true)} title="Create custom rate"><Plus className="h-4 w-4" /></Button>}
+                  {canEdit && canManageRates && !ratePlanLocked && <Button type="button" variant="outline" className="border-indigo-400/30 bg-indigo-500/10 text-indigo-300 hover:bg-indigo-500/20" size="icon" onClick={() => setQuickRateOpen(true)} title="Create custom rate"><Plus className="h-4 w-4" /></Button>}
                 </div>
-                <p className="text-[11px] text-slate-500">The negotiated rate will be applied when reservations are linked to this account.</p>
+                {ratePlanLocked ? (
+                  <p className="text-[11px] text-amber-200/80">Locked while this account has {account?.openSharedFolios ? `${account.openSharedFolios} open shared folio${account.openSharedFolios === 1 ? '' : 's'}` : 'an open shared folio'}{account?.checkedInGuests ? ` or ${account.checkedInGuests} checked-in guest${account.checkedInGuests === 1 ? '' : 's'}` : ''}. This protects in-progress billing.</p>
+                ) : (
+                  <p className="text-[11px] text-slate-500">The negotiated rate will be applied when reservations are linked to this account.</p>
+                )}
               </div>
             </div>
 
@@ -485,7 +499,7 @@ export function CorporateAccountDialog({
                 Financial controls
               </h4>
               
-              <div className="grid gap-4 sm:grid-cols-3">
+              <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label className="flex items-center gap-1.5 text-xs font-medium text-slate-300"><CreditCard className="h-3.5 w-3.5 text-slate-500" />Credit limit</Label>
                   <Input 
@@ -503,7 +517,7 @@ export function CorporateAccountDialog({
                     value={depositPolicy} 
                     onValueChange={v => setValue('depositPolicy', v as any)}
                   >
-                    <SelectTrigger className={dialogSelect}>
+                    <SelectTrigger className={`h-11 min-w-[240px] w-full ${dialogSelect}`}>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent className="border-white/10 bg-[#111827] text-slate-100">
