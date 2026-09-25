@@ -86,20 +86,24 @@ export async function GET(req: NextRequest) {
 
     const rows = accounts.map(account => {
       const ledgerBalance = Number(account.cityLedgerAccount?.balance || 0);
+      const receivable = Math.max(0, ledgerBalance);
+      const advanceCredit = Math.max(0, -ledgerBalance);
       const folio = folioByAccount.get(account.id);
       const bookings = reservationCounts.get(account.id) || 0;
       const creditLimit = Number(account.creditLimit || 0);
-      const utilization = creditLimit > 0 ? Math.round((ledgerBalance / creditLimit) * 100) : null;
+      const utilization = creditLimit > 0 ? Math.round((receivable / creditLimit) * 100) : null;
       return {
         id: account.id, name: account.name, code: account.code, isActive: account.isActive,
         contactPerson: account.contactPerson, contactEmail: account.contactEmail, contactPhone: account.contactPhone,
-        creditLimit, balance: ledgerBalance, availableCredit: Math.max(0, creditLimit - ledgerBalance), utilization,
+        creditLimit, balance: ledgerBalance, receivable, advanceCredit,
+        availableCredit: Math.max(0, creditLimit - receivable + advanceCredit), utilization,
         depositPolicy: account.depositPolicy, exemptFromHighBalance: account.exemptFromHighBalance,
         ratePlan: account.ratePlan, cityLedgerAccountId: account.cityLedgerAccountId, currency: account.cityLedgerAccount?.currency || 'NGN',
         bookings, charges: Number(folio?.totalCharges || 0), payments: Number(folio?.totalPayments || 0),
       };
     });
-    const outstanding = rows.reduce((sum, row) => sum + Math.max(0, row.balance), 0);
+    const outstanding = rows.reduce((sum, row) => sum + row.receivable, 0);
+    const advanceCredit = rows.reduce((sum, row) => sum + row.advanceCredit, 0);
     const creditExposure = rows.reduce((sum, row) => sum + row.creditLimit, 0);
     const overdue = ageBuckets.days1to30 + ageBuckets.days31to60 + ageBuckets.days61to90 + ageBuckets.over90;
     const attention = [
@@ -114,7 +118,7 @@ export async function GET(req: NextRequest) {
 
     return successResponse({
       generatedAt: now.toISOString(), period: { start: trendStart.toISOString(), end: now.toISOString() },
-      overview: { totalAccounts: rows.length, activeAccounts: rows.filter(row => row.isActive).length, creditExposure, outstanding, overdue, bookings: rows.reduce((sum, row) => sum + row.bookings, 0), invoices: corporateInvoices.length },
+      overview: { totalAccounts: rows.length, activeAccounts: rows.filter(row => row.isActive).length, creditExposure, outstanding, advanceCredit, overdue, bookings: rows.reduce((sum, row) => sum + row.bookings, 0), invoices: corporateInvoices.length },
       accounts: rows.sort((a, b) => b.balance - a.balance),
       trend: Array.from(monthMap.values()),
       aging: Object.entries(ageBuckets).map(([bucket, amount]) => ({ bucket, amount })),
