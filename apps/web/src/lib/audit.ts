@@ -44,6 +44,7 @@ export interface AuditLogParams {
   ipAddress?: string;
   userAgent?: string;
   requestId?: string;
+  impersonatorUserId?: string;
 }
 
 export async function createAuditLog(params: AuditLogParams): Promise<void> {
@@ -63,6 +64,7 @@ export async function createAuditLog(params: AuditLogParams): Promise<void> {
         ipAddress: params.ipAddress,
         userAgent: params.userAgent,
         requestId: params.requestId ?? crypto.randomUUID(),
+        impersonatorUserId: params.impersonatorUserId,
       },
     });
 

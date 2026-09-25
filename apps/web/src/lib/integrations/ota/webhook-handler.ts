@@ -5,6 +5,7 @@ import { ChannelProvider } from './types';
 import { QueuePublisher } from './queue';
 import { OTALogger } from './logger';
 import { PayloadSanitizer } from './payload-sanitizer';
+import { hasEntitlement } from '@/lib/auth/entitlement';
 
 /**
  * Resolve the webhook secret for a specific ChannelConnection.
@@ -55,9 +56,11 @@ export async function handleOtaWebhook(req: NextRequest, providerId: string) {
     }
 
     // Channex embeds the property ID at booking.property_id or property_id
+    // Beds24 embeds it at propId
     const externalPropertyId =
       jsonPayload?.booking?.property_id ??
       jsonPayload?.property_id ??
+      jsonPayload?.propId ??
       null;
 
     if (!externalPropertyId) {
@@ -81,6 +84,11 @@ export async function handleOtaWebhook(req: NextRequest, providerId: string) {
         message: 'No CONNECTED ChannelConnection found for this property',
       });
       return new Response('No active connection found for property', { status: 404 });
+    }
+
+    if (provider === 'BEDS24' && !(await hasEntitlement(connection.organizationId, 'ADDON_BEDS24'))) {
+      OTALogger.warn('OTA_WEBHOOK_ENTITLEMENT_REQUIRED', { connectionId: connection.id, organizationId: connection.organizationId });
+      return new Response('Beds24 entitlement is not active', { status: 402 });
     }
 
     // ── Step 3: Verify signature using the connection-specific secret

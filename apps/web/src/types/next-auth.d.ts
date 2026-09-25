@@ -5,7 +5,7 @@ declare module 'next-auth' {
     user: {
       id: string;
       staffId?: string | null;
-      isSuperAdmin: boolean;
+      isLodgeCoreAdmin: boolean;
       propertyId?: string | null;
       organizationId?: string | null;
       capabilities?: string[];
@@ -16,7 +16,7 @@ declare module 'next-auth' {
 
   interface User extends DefaultUser {
     staffId?: string | null;
-    isSuperAdmin: boolean;
+    isLodgeCoreAdmin: boolean;
     propertyId?: string | null;
     organizationId?: string | null;
     capabilities?: string[];

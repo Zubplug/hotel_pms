@@ -1,12 +1,14 @@
 import { ChannelManagerAdapter } from './ChannelManagerAdapter';
 import { ChannelProvider } from './types';
 import { ChannexAdapter } from './providers/channex';
+import { Beds24Adapter } from './providers/beds24';
 
 // Registry of available provider adapters
 const adapters = new Map<string, ChannelManagerAdapter>();
 
 // Auto-register default adapters
 adapters.set('CHANNEX', new ChannexAdapter());
+adapters.set('BEDS24', new Beds24Adapter());
 
 export const ProviderFactory = {
   

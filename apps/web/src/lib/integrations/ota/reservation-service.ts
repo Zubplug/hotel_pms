@@ -33,7 +33,10 @@ export const OTAReservationService = {
     parsed: ParsedReservation,
   ) {
     // ── Dry-run gate ────────────────────────────────────────────────────────
-    if (process.env.OTA_RESERVATION_IMPORT !== 'true') {
+    // Live processing is the safe default.  A dry run must be an explicit
+    // operational setting; otherwise a production deployment silently
+    // acknowledges webhooks without importing reservations.
+    if (process.env.OTA_RESERVATION_IMPORT === 'false') {
       return { success: true, dryRun: true };
     }
 
@@ -137,7 +140,7 @@ export const OTAReservationService = {
         if (parsed.externalStatus === 'CANCELLED' && existingChannelRes.externalStatus !== 'CANCELLED') {
           await SharedReservationService.cancelReservation(
             existingChannelRes.lodgecoreReservationId,
-            { createdBy: actorId, organizationId, userAgent: 'OTA_CHANNEX', tx },
+            { createdBy: actorId, organizationId, userAgent: `OTA_${parsed.provider}`, tx },
           );
         } else if (parsed.externalStatus === 'MODIFIED' || parsed.externalStatus === 'CONFIRMED') {
           await SharedReservationService.modifyReservation(
@@ -152,7 +155,7 @@ export const OTAReservationService = {
               status:              parsed.externalStatus === 'CONFIRMED' ? 'CONFIRMED' : undefined,
               createdBy:           actorId,
               organizationId,
-              userAgent:           'OTA_CHANNEX',
+              userAgent:           `OTA_${parsed.provider}`,
               tx,
             },
           );
@@ -203,7 +206,7 @@ export const OTAReservationService = {
         createdBy:           actorId,
         userEmail:           'system@lodgecore.internal',
         userRole:            'SYSTEM_OTA',
-        userAgent:           'OTA_CHANNEX',
+        userAgent:           `OTA_${parsed.provider}`,
         tx,
       });
 

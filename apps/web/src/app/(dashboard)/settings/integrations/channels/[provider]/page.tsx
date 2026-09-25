@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { auth } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import { requireOrganizationContext } from '@/lib/organization-access';
+import { hasEntitlement } from '@/lib/auth/entitlement';
 import prisma from '@hotel-pms/db';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -12,6 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { ChannelSetupForm } from './channel-setup-form';
+import { ManualRateMapping, ManualRoomMapping, SyncRoomsButton, SyncRatesButton } from './sync-buttons';
 
 export const metadata: Metadata = {
   title: 'Channel Configuration | LodgeCore',
@@ -24,6 +26,11 @@ export default async function ChannelProviderPage({ params }: { params: Promise<
   if (!session?.user) redirect('/login');
   const ctx = await requireOrganizationContext(session.user.id);
   const propertyId = ctx.propertyIds[0];
+
+  let isEntitled = true;
+  if (providerSlug === 'BEDS24') {
+    isEntitled = await hasEntitlement(ctx.organizationId, 'ADDON_BEDS24');
+  }
 
   let connection;
   try {
@@ -44,9 +51,9 @@ export default async function ChannelProviderPage({ params }: { params: Promise<
     connection = null;
   }
 
-  // If no connection, we could show a setup wizard. For now, we will show a mock UI or 404.
-  // We'll render the UI framework for the mappings.
   const isConnected = !!connection;
+  const localRoomTypes = await prisma.roomType.findMany({ where: { propertyId, isActive: true }, select: { id: true, name: true } });
+  const localRatePlans = await prisma.ratePlan.findMany({ where: { propertyId, isActive: true }, select: { id: true, name: true } });
 
   return (
     <div className="space-y-6">
@@ -66,7 +73,24 @@ export default async function ChannelProviderPage({ params }: { params: Promise<
         </div>
       </div>
 
-      {!isConnected ? (
+      {!isEntitled ? (
+        <Card className="border-orange-200 dark:border-orange-900 bg-orange-50 dark:bg-orange-950/20">
+          <CardHeader>
+            <CardTitle className="text-orange-800 dark:text-orange-400">Premium Add-on Required</CardTitle>
+            <CardDescription className="text-orange-700/80 dark:text-orange-400/80">
+              Your organization does not have an active subscription for the Beds24 Channel Manager integration.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-orange-800 dark:text-orange-300">
+              Beds24 is a Tier-1 PMS add-on. Subscribe to unlock real-time two-way synchronization for rates, availability, and reservations across 60+ OTAs.
+            </p>
+            <Button asChild className="bg-orange-600 hover:bg-orange-700 text-white">
+              <Link href="/settings/billing">Upgrade Subscription</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      ) : !isConnected ? (
         <ChannelSetupForm provider={providerSlug} />
       ) : (
         <Tabs defaultValue="rooms" className="w-full">
@@ -84,7 +108,7 @@ export default async function ChannelProviderPage({ params }: { params: Promise<
                   <CardTitle>Room Type Mapping</CardTitle>
                   <CardDescription>Link external OTA room codes to internal LodgeCore room types.</CardDescription>
                 </div>
-                <Button variant="outline" size="sm">Fetch Remote Rooms</Button>
+                <SyncRoomsButton providerSlug={providerSlug} />
               </CardHeader>
               <CardContent>
                 <Table>
@@ -114,7 +138,7 @@ export default async function ChannelProviderPage({ params }: { params: Promise<
                             </Badge>
                           </TableCell>
                           <TableCell className="text-right">
-                            <Button variant="ghost" size="sm">Edit</Button>
+                            <ManualRoomMapping mappingId={map.id} value={map.lodgecoreRoomTypeId} options={localRoomTypes} />
                           </TableCell>
                         </TableRow>
                       ))
@@ -132,7 +156,7 @@ export default async function ChannelProviderPage({ params }: { params: Promise<
                   <CardTitle>Rate Plan Mapping</CardTitle>
                   <CardDescription>Link external OTA rate plans to internal LodgeCore rate plans.</CardDescription>
                 </div>
-                <Button variant="outline" size="sm">Fetch Remote Rates</Button>
+                <SyncRatesButton providerSlug={providerSlug} />
               </CardHeader>
               <CardContent>
                  <Table>
@@ -162,7 +186,7 @@ export default async function ChannelProviderPage({ params }: { params: Promise<
                             </Badge>
                           </TableCell>
                           <TableCell className="text-right">
-                            <Button variant="ghost" size="sm">Edit</Button>
+                            <ManualRateMapping mappingId={map.id} value={map.lodgecoreRatePlanId} options={localRatePlans} />
                           </TableCell>
                         </TableRow>
                       ))

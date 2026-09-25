@@ -5,6 +5,7 @@ import { OTAReservationService } from '@/lib/integrations/ota/reservation-servic
 import { OTALogger } from '@/lib/integrations/ota/logger';
 import { errorResponse, successResponse } from '@/lib/api-response';
 import { Receiver } from '@upstash/qstash';
+import { hasEntitlement } from '@/lib/auth/entitlement';
 
 async function verifyQStashSignature(req: NextRequest, rawBody: string) {
     if (process.env.NODE_ENV === 'development' && process.env.IGNORE_QSTASH_SIGNATURE === 'true') {
@@ -57,9 +58,37 @@ export async function POST(req: NextRequest) {
     if (!event) return errorResponse('NOT_FOUND', 'Outbox event not found', 404);
 
     if (event.eventType === 'OTA_RESERVATION_RECEIVED') {
-      const parsedRes = event.payload as unknown as ParsedReservation;
+      let parsedRes = event.payload as unknown as ParsedReservation;
+
+      // Entitlement Check for BEDS24
+      if (parsedRes.provider === 'BEDS24') {
+        const entitled = await hasEntitlement(event.organizationId, 'ADDON_BEDS24');
+        if (!entitled) {
+          await prisma.outboxEvent.update({
+            where: { id: event.id },
+            data: { status: 'FAILED', lastError: 'Payment Required: Organization does not have an active entitlement for BEDS24' },
+          });
+          return successResponse({ message: 'Event held because the Beds24 entitlement is inactive' });
+        }
+      }
 
       try {
+        // Deep fetch for shallow webhooks (like Beds24)
+        if (parsedRes.isShallow) {
+          const adapter = await import('@/lib/integrations/ota/ProviderFactory').then(m => m.ProviderFactory.getAdapter(parsedRes.provider));
+          const connection = await prisma.channelConnection.findUnique({ where: { id: parsedRes.channelConnectionId } });
+          if (!connection) throw new Error('ChannelConnection not found for deep fetch');
+          
+          parsedRes = await (adapter as any).fetchFullReservation(
+            connection.credentialsRef,
+            connection.externalPropertyId,
+            parsedRes.externalReservationId
+          );
+          
+          // Re-attach connection ID
+          parsedRes.channelConnectionId = connection.id;
+        }
+
         const result = await OTAReservationService.processReservation(
           event.organizationId,
           event.propertyId,
@@ -100,7 +129,7 @@ export async function POST(req: NextRequest) {
         await prisma.outboxEvent.update({
           where: { id: event.id },
           data: {
-            status: attempts >= 5 ? 'FAILED' : 'PENDING',
+            status: attempts >= 5 ? 'DEAD_LETTER' : 'PENDING',
             attemptCount: attempts,
             lastError: err.message || 'Transient error',
             nextAttemptAt: attempts < 5 ? new Date(Date.now() + backoffMs) : null

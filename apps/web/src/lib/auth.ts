@@ -83,7 +83,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         let propertyId = propertyIds.length > 0 ? propertyIds[0] : null;
 
         // Industry standard: Super Admin bypasses normal role checks and gets all capabilities
-        if (user.isSuperAdmin) {
+        if (user.isLodgeCoreAdmin) {
           const allPermissions = await prisma.permission.findMany({ select: { name: true } });
           capabilities = Array.from(new Set([...capabilities, ...allPermissions.map(p => p.name)]));
           primaryRole = 'SUPER_ADMIN';
@@ -111,7 +111,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           email: user.email,
           name: staff ? `${staff.firstName} ${staff.lastName}`.trim() : null,
           staffId: user.staffId,
-          isSuperAdmin: user.isSuperAdmin,
+          isLodgeCoreAdmin: user.isLodgeCoreAdmin,
           role: primaryRole,
           capabilities,
           sessionVersion: user.sessionVersion || 1,
@@ -128,7 +128,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.id = user.id;
         token.name = user.name;
         token.staffId = user.staffId;
-        token.isSuperAdmin = user.isSuperAdmin;
+        token.isLodgeCoreAdmin = (user as any).isLodgeCoreAdmin;
         token.role = (user as any).role;
         token.capabilities = (user as any).capabilities;
         token.sessionVersion = (user as any).sessionVersion;
@@ -156,7 +156,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         session.user.id = token.id as string;
         session.user.name = token.name as string | null;
         session.user.staffId = token.staffId as string;
-        session.user.isSuperAdmin = token.isSuperAdmin as boolean;
+        session.user.isLodgeCoreAdmin = token.isLodgeCoreAdmin as boolean;
         session.user.role = token.role as string;
         session.user.capabilities = token.capabilities as string[];
         session.user.sessionVersion = token.sessionVersion as number;

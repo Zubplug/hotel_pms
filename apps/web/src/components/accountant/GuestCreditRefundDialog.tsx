@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { AmountInput } from '@/components/ui/amount-input';
 import { Label } from '@/components/ui/label';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
+import { generateUUID } from '@/lib/utils';
 
 export function GuestCreditRefundDialog({ entryId, guestName, amount, currency, guestId, propertyId, accountType = 'GUEST_CREDIT' }: { entryId: string; guestName: string; amount: number; currency: string; guestId?: string; propertyId?: string; accountType?: 'GUEST_CREDIT' | 'CORPORATE_ADVANCE' }) {
   const router = useRouter();
@@ -31,7 +32,7 @@ export function GuestCreditRefundDialog({ entryId, guestName, amount, currency, 
       if (method === 'BANK_TRANSFER' && (!bankName.trim() || !bankAccountName.trim() || !/^\d{6,20}$/.test(bankAccountNumber.replace(/\s+/g, '')))) {
         throw new Error('Enter a valid bank name, account name, and 6–20 digit account number.');
       }
-      const payload = { cityLedgerEntryId: entryId, guestId, propertyId, accountType: isCorporateAdvance ? 'CORPORATE' : undefined, amount: Number(value), currency, refundMethod: method, reason, bankName, bankAccountName, bankAccountNumber, idempotencyKey: crypto.randomUUID() };
+      const payload = { cityLedgerEntryId: entryId, guestId, propertyId, accountType: isCorporateAdvance ? 'CORPORATE' : undefined, amount: Number(value), currency, refundMethod: method, reason, bankName, bankAccountName, bankAccountNumber, idempotencyKey: generateUUID() };
       const result = propertyId
         ? await provider.refunds.request(payload)
         : await (async () => { const response = await fetch(`/api/v1/accountant/guest-credits/${entryId}/refund-request`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); const body = await response.json(); if (!response.ok) throw new Error(body.error?.message || body.error || 'Unable to submit refund request'); return body; })();

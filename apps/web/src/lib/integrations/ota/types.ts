@@ -1,4 +1,4 @@
-export type ChannelProvider = 'CHANNEX' | 'BOOKING_COM' | 'EXPEDIA';
+export type ChannelProvider = 'CHANNEX' | 'BOOKING_COM' | 'EXPEDIA' | 'BEDS24';
 
 export interface RemoteRoom {
   externalId: string;
@@ -57,6 +57,7 @@ export interface ParsedReservation {
   provider: ChannelProvider;
   externalStatus: 'CONFIRMED' | 'MODIFIED' | 'CANCELLED';
   
+  isShallow?: boolean; // Indicates the payload needs full retrieval via fetchFullReservation
   channelConnectionId?: string; // Resolved internally
   
   checkIn: Date;
@@ -97,6 +98,15 @@ export interface RateSnapshot {
   externalRatePlanId: string;
   amount: number;
   currency: string;
+  minStay?: number;
+  maxStay?: number;
+}
+
+export interface RatePlanSnapshot {
+  externalRoomTypeId: string;
+  externalRatePlanId: string;
+  name: string;
+  currency?: string;
   minStay?: number;
   maxStay?: number;
 }

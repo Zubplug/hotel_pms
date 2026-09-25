@@ -39,6 +39,12 @@ model Organization {
   channelConnections ChannelConnection[]
   channelSyncEvents  ChannelSyncEvent[]
 
+  billingCustomer    BillingCustomer?
+  subscriptions      Subscription[]
+  entitlements       Entitlement[]
+  billingInvoices    BillingInvoice[]
+
+
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
 }
@@ -1955,7 +1961,7 @@ model User {
   staffId      String? @db.Uuid
   email        String  @unique
   passwordHash String
-  isSuperAdmin Boolean @default(false)
+  isLodgeCoreAdmin Boolean @default(false)
 
   lastLoginAt DateTime? @db.Timestamptz
   lastLoginIp String?
@@ -2339,6 +2345,8 @@ model AuditLog {
   userId    String? @db.Uuid
   userEmail String?
   userRole  String?
+  
+  impersonatorUserId String? @db.Uuid
 
   action     String
   resource   String
@@ -5485,6 +5493,13 @@ model OutboxEvent {
 // OTA / CHANNEL MANAGER INTEGRATION
 // -----------------------------------------------------------------------------
 
+enum ChannelProvider {
+  BEDS24
+  CHANNEX
+  BOOKING_COM
+  EXPEDIA
+}
+
 model ChannelConnection {
   id             String       @id @default(uuid()) @db.Uuid
   organizationId String       @db.Uuid
@@ -5492,7 +5507,7 @@ model ChannelConnection {
   propertyId     String       @db.Uuid
   property       Property     @relation(fields: [propertyId], references: [id])
 
-  provider           String // 'CHANNEX', 'BOOKING_COM'
+  provider           ChannelProvider
   status             String // 'CONNECTED', 'DEGRADED', 'ERROR', 'DISCONNECTED', 'SYNCING'
   externalPropertyId String
   credentialsRef     String // Encrypted string or vault reference
@@ -5519,7 +5534,7 @@ model ChannelRoomMapping {
   channelConnectionId String            @db.Uuid
   channelConnection   ChannelConnection @relation(fields: [channelConnectionId], references: [id])
 
-  lodgecoreRoomTypeId String @db.Uuid
+  lodgecoreRoomTypeId String? @db.Uuid
   externalRoomTypeId  String
 
   isActive Boolean @default(true)
@@ -5528,7 +5543,6 @@ model ChannelRoomMapping {
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
 
-  @@unique([channelConnectionId, lodgecoreRoomTypeId])
   @@unique([channelConnectionId, externalRoomTypeId])
 }
 
@@ -5537,7 +5551,7 @@ model ChannelRatePlanMapping {
   channelConnectionId String            @db.Uuid
   channelConnection   ChannelConnection @relation(fields: [channelConnectionId], references: [id])
 
-  lodgecoreRatePlanId String @db.Uuid
+  lodgecoreRatePlanId String? @db.Uuid
   externalRatePlanId  String
 
   isActive Boolean @default(true)
@@ -5546,7 +5560,6 @@ model ChannelRatePlanMapping {
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
 
-  @@unique([channelConnectionId, lodgecoreRatePlanId])
   @@unique([channelConnectionId, externalRatePlanId])
 }
 
@@ -5556,7 +5569,7 @@ model ChannelReservation {
   channelConnection   ChannelConnection @relation(fields: [channelConnectionId], references: [id])
 
   externalReservationId String
-  provider              String
+  provider              ChannelProvider
 
   lodgecoreReservationId String? @db.Uuid // Nullable if import failed
   externalStatus         String // e.g. 'CONFIRMED', 'CANCELLED', 'MODIFIED'
@@ -5576,7 +5589,7 @@ model ChannelSyncEvent {
   organization   Organization @relation(fields: [organizationId], references: [id])
   propertyId     String       @db.Uuid
   property       Property     @relation(fields: [propertyId], references: [id])
-  provider       String
+  provider       ChannelProvider
 
   direction String // 'INBOUND' | 'OUTBOUND'
   eventType String // 'RESERVATION', 'AVAILABILITY', 'RATE', 'ROOM_MAPPING'
@@ -5591,4 +5604,141 @@ model ChannelSyncEvent {
 
   error     String?
   createdAt DateTime @default(now()) @db.Timestamptz
+}
+
+// -----------------------------------------------------------------------------
+// SAAS CONTROL PLANE & BILLING
+// -----------------------------------------------------------------------------
+
+model BillingProduct {
+  id              String   @id @default(uuid()) @db.Uuid
+  code            String   @unique
+  name            String
+  type            String   // 'BASE', 'ADDON'
+  stripeProductId String?
+  active          Boolean  @default(true)
+  
+  prices          BillingPrice[]
+  entitlements    Entitlement[]
+
+  createdAt       DateTime @default(now()) @db.Timestamptz
+  updatedAt       DateTime @updatedAt @db.Timestamptz
+}
+
+model BillingPrice {
+  id            String   @id @default(uuid()) @db.Uuid
+  productId     String   @db.Uuid
+  product       BillingProduct @relation(fields: [productId], references: [id])
+  
+  stripePriceId String   @unique
+  amount        Int
+  currency      String
+  interval      String   // 'month', 'year'
+  
+  subscriptionItems SubscriptionItem[]
+
+  createdAt     DateTime @default(now()) @db.Timestamptz
+  updatedAt     DateTime @updatedAt @db.Timestamptz
+}
+
+model BillingCustomer {
+  id               String       @id @default(uuid()) @db.Uuid
+  organizationId   String       @unique @db.Uuid
+  organization     Organization @relation(fields: [organizationId], references: [id])
+  stripeCustomerId String       @unique
+
+  createdAt        DateTime @default(now()) @db.Timestamptz
+  updatedAt        DateTime @updatedAt @db.Timestamptz
+}
+
+model Subscription {
+  id                   String       @id @default(uuid()) @db.Uuid
+  organizationId       String       @db.Uuid
+  organization         Organization @relation(fields: [organizationId], references: [id])
+  
+  stripeSubscriptionId String       @unique
+  status               String       // 'TRIALING', 'ACTIVE', 'PAST_DUE', 'PAUSED', 'CANCELED', 'INCOMPLETE'
+  
+  currentPeriodStart   DateTime     @db.Timestamptz
+  currentPeriodEnd     DateTime     @db.Timestamptz
+  cancelAtPeriodEnd    Boolean      @default(false)
+  canceledAt           DateTime?    @db.Timestamptz
+  trialEndsAt          DateTime?    @db.Timestamptz
+
+  items                SubscriptionItem[]
+
+  createdAt            DateTime @default(now()) @db.Timestamptz
+  updatedAt            DateTime @updatedAt @db.Timestamptz
+
+  @@index([organizationId, status])
+}
+
+model SubscriptionItem {
+  id             String       @id @default(uuid()) @db.Uuid
+  subscriptionId String       @db.Uuid
+  subscription   Subscription @relation(fields: [subscriptionId], references: [id])
+  
+  priceId        String       @db.Uuid
+  price          BillingPrice @relation(fields: [priceId], references: [id])
+
+  createdAt      DateTime @default(now()) @db.Timestamptz
+  updatedAt      DateTime @updatedAt @db.Timestamptz
+
+  @@unique([subscriptionId, priceId])
+}
+
+model Entitlement {
+  id               String         @id @default(uuid()) @db.Uuid
+  organizationId   String         @db.Uuid
+  organization     Organization   @relation(fields: [organizationId], references: [id])
+  
+  productCode      String
+  product          BillingProduct @relation(fields: [productCode], references: [code])
+  
+  status           String         // 'ACTIVE', 'SUSPENDED'
+  
+  activatedAt      DateTime       @default(now()) @db.Timestamptz
+  suspendedAt      DateTime?      @db.Timestamptz
+  expiresAt        DateTime?      @db.Timestamptz
+  suspensionReason String?
+
+  createdAt        DateTime @default(now()) @db.Timestamptz
+  updatedAt        DateTime @updatedAt @db.Timestamptz
+
+  @@unique([organizationId, productCode])
+  @@index([organizationId, status])
+}
+
+model BillingEvent {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String?      @db.Uuid // Optional because some stripe events might not have customer mapped yet
+  stripeEventId  String       @unique
+  type           String
+  payload        Json
+
+  createdAt      DateTime @default(now()) @db.Timestamptz
+}
+
+model BillingInvoice {
+  id               String       @id @default(uuid()) @db.Uuid
+  organizationId   String       @db.Uuid
+  organization     Organization @relation(fields: [organizationId], references: [id])
+  stripeInvoiceId  String       @unique
+  stripeCustomerId String
+  stripeSubscriptionId String?
+  status           String
+  currency         String
+  subtotal         Int
+  total            Int
+  amountPaid       Int
+  amountDue        Int
+  periodStart      DateTime?    @db.Timestamptz
+  periodEnd        DateTime?    @db.Timestamptz
+  hostedInvoiceUrl String?
+  invoicePdf       String?
+  payload          Json
+  createdAt        DateTime     @default(now()) @db.Timestamptz
+  updatedAt        DateTime     @updatedAt @db.Timestamptz
+
+  @@index([organizationId, createdAt])
 }

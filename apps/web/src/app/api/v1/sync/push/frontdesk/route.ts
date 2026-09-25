@@ -19,6 +19,7 @@ import { CityLedgerAccountingService } from "@/lib/services/city-ledger-accounti
 import { GeneralLedgerService } from "@/lib/services/general-ledger-service";
 import { GLMappingService } from "@/lib/services/gl-mapping-service";
 import { queueCancellationRefunds as queueCancellationRefundsProfessional } from "@/lib/finance/queue-cancellation-refund";
+import { QueuePublisher } from "@/lib/integrations/ota/queue";
 
 const parseLocalDateString = (dateString: string | Date | undefined): Date | undefined => {
   if (!dateString) return undefined;
@@ -216,6 +217,66 @@ async function queueCancellationRefunds(
   }
 }
 
+async function queueBeds24InventorySync(tx: any, args: { propertyId: string; organizationId: string; eventId: string; eventType: string; }) {
+  const inventoryEvents = new Set([
+    "CREATE", "WALK_IN", "CHECK_IN", "CHECK_OUT", "CANCEL", "NO_SHOW",
+    "REINSTATE", "REASSIGN_ROOM", "EXTEND_STAY", "ROOM_STATUS_UPDATE",
+  ]);
+  if (!inventoryEvents.has(args.eventType)) return [] as string[];
+
+  const connections = await tx.channelConnection.findMany({
+    where: { propertyId: args.propertyId, provider: "BEDS24", status: "CONNECTED" },
+    include: { roomMappings: { where: { isActive: true, lodgecoreRoomTypeId: { not: null } } } },
+  });
+  const eventIds: string[] = [];
+  const start = new Date();
+  start.setUTCHours(0, 0, 0, 0);
+  const end = new Date(start);
+  end.setUTCDate(end.getUTCDate() + 30);
+
+  for (const connection of connections) {
+    const inventory: any[] = [];
+    for (const mapping of connection.roomMappings) {
+      const roomTypeId = mapping.lodgecoreRoomTypeId;
+      if (!roomTypeId) continue;
+      const totalRooms = await tx.room.count({ where: { propertyId: args.propertyId, roomTypeId, isActive: true } });
+      for (let cursor = new Date(start); cursor < end; cursor.setUTCDate(cursor.getUTCDate() + 1)) {
+        const nextDate = new Date(cursor);
+        nextDate.setUTCDate(nextDate.getUTCDate() + 1);
+        const booked = await tx.reservationRoom.count({
+          where: {
+            roomTypeId,
+            status: "ACTIVE",
+            checkIn: { lt: nextDate },
+            checkOut: { gt: cursor },
+            reservation: { propertyId: args.propertyId, status: { in: ["CONFIRMED", "CHECKED_IN"] } },
+          },
+        });
+        inventory.push({
+          date: cursor.toISOString(),
+          externalRoomTypeId: mapping.externalRoomTypeId,
+          availableRooms: Math.max(0, totalRooms - booked),
+        });
+      }
+    }
+    if (!inventory.length) continue;
+    const syncEvent = await tx.channelSyncEvent.create({
+      data: {
+        organizationId: args.organizationId,
+        propertyId: args.propertyId,
+        provider: "BEDS24",
+        direction: "OUTBOUND",
+        eventType: "AVAILABILITY",
+        entityId: args.eventId,
+        payload: { inventory, changeOrigin: "LOCAL", sourceEventId: args.eventId },
+        status: "PENDING",
+      },
+    });
+    eventIds.push(syncEvent.id);
+  }
+  return eventIds;
+}
+
 export async function POST(req: NextRequest) {
   const requestId = randomUUID();
   try {
@@ -279,6 +340,8 @@ export async function POST(req: NextRequest) {
     );
 
     const results = [];
+    const otaSyncEventIds: string[] = [];
+    const otaInventoryQueued = new Set<string>();
 
     // Process outbox events sequentially
     for (const event of events) {
@@ -4174,6 +4237,20 @@ export async function POST(req: NextRequest) {
               payload,
             },
           });
+
+          const affectsInventory = new Set([
+            "CREATE", "WALK_IN", "CHECK_IN", "CHECK_OUT", "CANCEL", "NO_SHOW",
+            "REINSTATE", "REASSIGN_ROOM", "EXTEND_STAY", "ROOM_STATUS_UPDATE",
+          ]).has(eventType);
+          if (affectsInventory && !otaInventoryQueued.has(propertyId)) {
+            otaInventoryQueued.add(propertyId);
+            otaSyncEventIds.push(...await queueBeds24InventorySync(tx, {
+              propertyId,
+              organizationId: property.organizationId,
+              eventId: id,
+              eventType,
+            }));
+          }
         });
 
         results.push({ id, status: resultStatus, idempotencyKey });
@@ -4516,6 +4593,10 @@ export async function POST(req: NextRequest) {
           });
         }
       }
+    }
+
+    for (const syncEventId of otaSyncEventIds) {
+      await QueuePublisher.scheduleOtaSync(syncEventId);
     }
 
     return NextResponse.json(
