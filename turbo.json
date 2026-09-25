@@ -1,6 +1,18 @@
 {
   "$schema": "https://turbo.build/schema.json",
-  "globalEnv": ["DATABASE_URL", "DIRECT_URL", "NEXTAUTH_URL", "AUTH_SECRET"],
+  "globalEnv": [
+    "DATABASE_URL",
+    "DIRECT_URL",
+    "NEXTAUTH_URL",
+    "AUTH_SECRET",
+    "NEXTAUTH_SECRET",
+    "CRON_SECRET",
+    "FIREBASE_SERVICE_ACCOUNT_KEY",
+    "CHANNEX_ENABLED",
+    "OTA_RESERVATION_IMPORT",
+    "OTA_AVAILABILITY_PUSH",
+    "OTA_RATE_PUSH"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],

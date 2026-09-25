@@ -26,7 +26,7 @@ export default async function TenantControlPage({
 
   if (!org) notFound();
 
-  const users = org.memberships.map(m => m.user);
+  const users = org.memberships.map((m: any) => m.user);
 
   // Handle server action for impersonation inline for simplicity
   async function handleImpersonate(formData: FormData) {
@@ -86,7 +86,7 @@ export default async function TenantControlPage({
                 <p className="text-zinc-500">No active subscriptions.</p>
               ) : (
                 <ul className="space-y-4">
-                  {org.subscriptions.map(sub => (
+                  {org.subscriptions.map((sub: any) => (
                     <li key={sub.id} className="p-4 border rounded-lg flex justify-between items-center bg-zinc-50 dark:bg-zinc-900/50">
                       <div>
                         <div className="font-medium">Stripe: {sub.stripeSubscriptionId.slice(0, 12)}...</div>
@@ -111,7 +111,7 @@ export default async function TenantControlPage({
                 <p className="text-zinc-500">No active entitlements.</p>
               ) : (
                 <ul className="space-y-3">
-                  {org.entitlements.map(ent => (
+                  {org.entitlements.map((ent: any) => (
                     <li key={ent.id} className="flex justify-between items-center py-2 border-b last:border-0">
                       <div className="font-medium">{ent.product.name} ({ent.productCode})</div>
                       <Badge variant={ent.status === 'ACTIVE' ? 'default' : 'destructive'}>{ent.status}</Badge>
