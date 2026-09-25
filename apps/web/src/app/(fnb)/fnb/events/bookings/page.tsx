@@ -7,16 +7,27 @@ import { prisma } from '@hotel-pms/db';
 
 import Link from 'next/link';
 import { EventTimeline } from '@/components/events/EventTimeline';
+import { auth } from '@/lib/auth';
 
 export const metadata: Metadata = {
   title: 'Event Bookings | LodgeCore',
 };
 
-export default async function EventBookingsPage({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
+export default async function EventBookingsPage({ searchParams }: { searchParams: Promise<{ view?: string; hallId?: string; q?: string; status?: string }> }) {
   const resolvedSearchParams = await searchParams;
   const isTimeline = resolvedSearchParams.view === 'timeline';
+  const session = await auth();
+  const propertyId = session?.user?.propertyId;
+  if (!propertyId) throw new Error('No property is assigned to this account.');
   
+  const query = resolvedSearchParams.q?.trim() || '';
+  const status = resolvedSearchParams.status;
   const events = await prisma.event.findMany({
+    where: {
+      propertyId,
+      ...(status && status !== 'ALL' ? { status: status as any } : {}),
+      ...(query ? { OR: [{ name: { contains: query, mode: 'insensitive' } }, { contactName: { contains: query, mode: 'insensitive' } }] } : {}),
+    },
     orderBy: { startDate: 'asc' },
     include: {
       bookings: { include: { hall: true } }
@@ -24,13 +35,15 @@ export default async function EventBookingsPage({ searchParams }: { searchParams
     take: 50,
   });
 
-  const halls = await prisma.hall.findMany({ orderBy: { name: 'asc' } });
+  const selectedHallId = resolvedSearchParams.hallId;
+  const halls = await prisma.hall.findMany({ where: { propertyId, ...(selectedHallId ? { id: selectedHallId } : {}) }, orderBy: { name: 'asc' } });
   
   // For timeline, fetch today's bookings explicitly
   const today = new Date();
   today.setHours(0,0,0,0);
   const todaysBookings = await prisma.eventBooking.findMany({
     where: {
+      hall: { propertyId, ...(selectedHallId ? { id: selectedHallId } : {}) },
       startTime: {
         gte: today,
         lt: new Date(today.getTime() + 24 * 60 * 60 * 1000)
@@ -53,10 +66,15 @@ export default async function EventBookingsPage({ searchParams }: { searchParams
             <Button variant="outline" asChild><Link href="/fnb/events/bookings?view=timeline"><Calendar className="mr-2 h-4 w-4" /> Timeline View</Link></Button>
           )}
           <div className="flex gap-2 w-full sm:w-auto">
-            <div className="relative flex-1 sm:flex-none">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input type="search" placeholder="Search bookings..." className="pl-8" />
-            </div>
+            <form className="flex gap-2" method="get">
+              <input type="hidden" name="view" value={isTimeline ? 'timeline' : ''} />
+              <div className="relative flex-1 sm:flex-none">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input name="q" defaultValue={query} type="search" placeholder="Search bookings..." className="pl-8" />
+              </div>
+              <select name="status" defaultValue={status || 'ALL'} className="h-9 rounded-md border bg-background px-2 text-sm"><option value="ALL">All statuses</option><option value="TENTATIVE">Tentative</option><option value="CONFIRMED">Confirmed</option><option value="IN_SERVICE">In service</option><option value="COMPLETED">Completed</option><option value="CANCELLED">Cancelled</option></select>
+              <Button type="submit" variant="outline">Apply</Button>
+            </form>
             <Button asChild>
               <Link href="/fnb/events/bookings/create">
                 <Plus className="mr-2 h-4 w-4" /> New Booking
@@ -78,7 +96,6 @@ export default async function EventBookingsPage({ searchParams }: { searchParams
               <CardTitle>All Bookings</CardTitle>
               <CardDescription>List of all tentative and confirmed events.</CardDescription>
             </div>
-            <Button variant="outline" size="sm"><ListFilter className="mr-2 h-4 w-4" /> Filter</Button>
           </CardHeader>
           <CardContent>
             <div className="border rounded-md overflow-hidden">
@@ -117,7 +134,7 @@ export default async function EventBookingsPage({ searchParams }: { searchParams
                           </span>
                         </td>
                         <td className="px-4 py-3 text-right">
-                          <Button variant="ghost" size="sm">Manage</Button>
+                          <Button variant="ghost" size="sm" asChild><Link href={`/fnb/events/bookings/${event.id}`}>Manage</Link></Button>
                         </td>
                       </tr>
                     ))

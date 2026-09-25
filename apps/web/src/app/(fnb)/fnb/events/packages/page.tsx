@@ -1,15 +1,18 @@
 import { Metadata } from 'next';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Plus, Package } from 'lucide-react';
+import { Package } from 'lucide-react';
 import { prisma } from '@hotel-pms/db';
+import { requireEventContext } from '@/lib/events/access';
+import { PackageForm } from '@/components/events/CatalogControls';
 
 export const metadata: Metadata = {
   title: 'Banquet Packages | LodgeCore',
 };
 
 export default async function BanquetPackagesPage() {
+  const { propertyId } = await requireEventContext();
   const packages = await prisma.banquetPackage.findMany({
+    where: { propertyId },
     orderBy: { name: 'asc' },
     include: { items: true }
   });
@@ -21,7 +24,7 @@ export default async function BanquetPackagesPage() {
           <h1 className="text-3xl font-bold tracking-tight">Packages & Equipment</h1>
           <p className="text-muted-foreground mt-1">Manage banquet packages, equipment rentals, and POS linkages.</p>
         </div>
-        <Button><Plus className="mr-2 h-4 w-4" /> New Package</Button>
+        <PackageForm />
       </div>
 
       {packages.length === 0 ? (
@@ -31,7 +34,7 @@ export default async function BanquetPackagesPage() {
             <CardDescription>Create your first event or catering package.</CardDescription>
           </CardHeader>
           <CardContent>
-            <Button><Plus className="mr-2 h-4 w-4" /> Create Package</Button>
+            <PackageForm />
           </CardContent>
         </Card>
       ) : (
@@ -54,7 +57,7 @@ export default async function BanquetPackagesPage() {
                 <div className="text-sm text-muted-foreground mb-6">
                   {pkg.items.length} items included
                 </div>
-                <Button variant="outline" className="w-full">Edit Package</Button>
+                <PackageForm pkg={{ id: pkg.id, name: pkg.name, description: pkg.description, basePrice: pkg.basePrice.toString(), isHallOnly: pkg.isHallOnly }} />
               </CardContent>
             </Card>
           ))}

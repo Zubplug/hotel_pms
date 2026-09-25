@@ -1,14 +1,24 @@
 import { Metadata } from 'next';
 import { prisma } from '@hotel-pms/db';
 import { FullPackageWizard } from '@/components/events/FullPackageWizard';
-
+import { auth } from '@/lib/auth';
 export const metadata: Metadata = {
   title: 'Create Banquet Event | LodgeCore',
 };
 
 export default async function CreateFullPackagePage() {
-  const halls = await prisma.hall.findMany({ orderBy: { name: 'asc' } });
-  const packages = await prisma.banquetPackage.findMany({ orderBy: { name: 'asc' } });
+  const session = await auth();
+  const propertyId = session?.user?.propertyId;
+  if (!propertyId) throw new Error('No property is assigned to this account.');
+
+  const halls = await prisma.hall.findMany({
+    where: { propertyId, isActive: true },
+    orderBy: { name: 'asc' },
+  });
+  const packages = await prisma.banquetPackage.findMany({
+    where: { propertyId, isActive: true },
+    orderBy: { name: 'asc' },
+  });
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">

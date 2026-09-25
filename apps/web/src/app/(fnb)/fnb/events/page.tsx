@@ -4,38 +4,42 @@ import { Button } from '@/components/ui/button';
 import { CalendarDays, Users, LayoutList, CheckCircle2, TrendingUp, Clock, AlertCircle, Plus } from 'lucide-react';
 import { prisma } from '@hotel-pms/db';
 import Link from 'next/link';
+import { requireEventContext } from '@/lib/events/access';
 
 export const metadata: Metadata = {
   title: 'Events Dashboard | LodgeCore',
 };
 
 export default async function FnbEventsDashboard() {
+  const { propertyId } = await requireEventContext();
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
   // Fetch quick metrics
   const activeEventsCount = await prisma.event.count({
     where: {
+      propertyId,
       status: { in: ['CONFIRMED', 'IN_SERVICE'] },
       startDate: { gte: today }
     }
   });
 
   const pendingLeads = await prisma.eventLead.count({
-    where: { status: 'NEW' }
+    where: { propertyId, status: 'NEW' }
   });
 
   const pipelineCount = await prisma.eventLead.count({
-    where: { status: { in: ['PROPOSAL_SENT', 'CONVERTED'] } }
+    where: { propertyId, status: { in: ['PROPOSAL_SENT', 'CONVERTED'] } }
   });
 
   const pendingBEOs = await prisma.banquetEventOrder.count({
-    where: { status: 'DRAFT' }
+    where: { status: 'DRAFT', event: { propertyId } }
   });
 
   // Today's Operational Run-sheet
   const todaysBookings = await prisma.eventBooking.findMany({
     where: {
+      hall: { propertyId },
       startTime: {
         gte: today,
         lt: new Date(today.getTime() + 24 * 60 * 60 * 1000)

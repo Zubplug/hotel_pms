@@ -47,6 +47,7 @@ model Organization {
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
+
 }
 
 model Property {
@@ -4543,11 +4544,8 @@ model Hall {
   amenities    String[]
   isActive     Boolean  @default(true)
 
-  // Pricing configuration for different lease lengths
-  hourlyRate  Decimal? @db.Decimal(18, 4)
-  dailyRate   Decimal? @db.Decimal(18, 4)
-  monthlyRate Decimal? @db.Decimal(18, 4)
-  yearlyRate  Decimal? @db.Decimal(18, 4)
+  // Pricing configuration
+  rate Decimal? @db.Decimal(18, 4)
 
   bookings EventBooking[]
   leases   LeaseContract[]
@@ -4770,6 +4768,8 @@ model BanquetEventOrder {
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@unique([eventId, version])
 }
 
 model EventChangeOrder {

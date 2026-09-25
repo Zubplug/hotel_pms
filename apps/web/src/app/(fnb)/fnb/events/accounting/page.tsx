@@ -2,30 +2,33 @@ import { Metadata } from 'next';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { ExportReportButton, ViewInvoiceButton } from '@/components/events/AccountingButtons';
 import { prisma } from '@hotel-pms/db';
+import { requireEventContext } from '@/lib/events/access';
 
 export const metadata: Metadata = {
   title: 'Event Accounting | LodgeCore',
 };
 
 export default async function EventAccountingPage() {
+  const { propertyId } = await requireEventContext();
   const invoices = await prisma.eventInvoice.findMany({
+    where: { event: { propertyId } },
     orderBy: { createdAt: 'desc' },
     include: { event: true },
     take: 50
   });
 
   const allUnpaid = await prisma.eventInvoice.findMany({
-    where: { status: 'ISSUED' },
+    where: { status: 'ISSUED', event: { propertyId } },
     select: { totalAmount: true, paidAmount: true }
   });
   
   const allAr = await prisma.eventInvoice.findMany({
-    where: { status: 'ISSUED', cityLedgerAccountId: { not: null } },
+    where: { status: 'ISSUED', event: { propertyId }, cityLedgerAccountId: { not: null } },
     select: { totalAmount: true, paidAmount: true }
   });
 
   const allPartial = await prisma.eventInvoice.findMany({
-    where: { status: 'PARTIAL' },
+    where: { status: 'PARTIAL', event: { propertyId } },
     select: { paidAmount: true }
   });
 
@@ -40,7 +43,7 @@ export default async function EventAccountingPage() {
           <h1 className="text-3xl font-bold tracking-tight">Event Accounting</h1>
           <p className="text-muted-foreground mt-1">Manage event invoices, deposits, AR, and GL integration.</p>
         </div>
-        <ExportReportButton />
+        <ExportReportButton invoices={invoices.map(inv => ({ event: inv.event?.name || 'Event', status: inv.status, total: Number(inv.totalAmount), paid: Number(inv.paidAmount), currency: inv.currency }))} />
       </div>
 
       <div className="grid gap-6 md:grid-cols-3">

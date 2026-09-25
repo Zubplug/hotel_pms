@@ -1,12 +1,15 @@
 'use server';
 
 import { prisma } from '@hotel-pms/db';
+import { requireEventContext } from './access';
 
 /**
  * Triggers the billing cycle for active Lease Contracts.
  * This function would typically be called via a chron job (e.g., Night Audit or a monthly worker).
  */
 export async function processLeaseBilling(propertyId: string) {
+  const context = await requireEventContext();
+  if (context.propertyId !== propertyId) throw new Error('Property access denied.');
   return await prisma.$transaction(async (tx) => {
     const today = new Date();
     
@@ -35,6 +38,12 @@ export async function processLeaseBilling(propertyId: string) {
 
     for (const schedule of dueSchedules) {
       // 1. Create the Event Invoice
+      const existingInvoice = schedule.invoiceId ? await tx.eventInvoice.findUnique({ where: { id: schedule.invoiceId } }) : null;
+      if (existingInvoice) {
+        generatedInvoices.push(existingInvoice);
+        continue;
+      }
+
       const invoice = await tx.eventInvoice.create({
         data: {
           status: 'ISSUED', 

@@ -3,13 +3,16 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { KanbanBoard } from '@/components/events/KanbanBoard';
 import { AddLeadDialog } from '@/components/events/AddLeadDialog';
 import { prisma } from '@hotel-pms/db';
+import { requireEventContext } from '@/lib/events/access';
 
 export const metadata: Metadata = {
   title: 'Event CRM | LodgeCore',
 };
 
 export default async function EventCrmPage() {
+  const { propertyId } = await requireEventContext();
   const leads = await prisma.eventLead.findMany({
+    where: { propertyId },
     orderBy: { createdAt: 'desc' }
   });
 

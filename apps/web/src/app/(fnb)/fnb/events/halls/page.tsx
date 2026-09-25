@@ -1,15 +1,21 @@
 import { Metadata } from 'next';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Plus, Settings2, CheckCircle2 } from 'lucide-react';
+import { CheckCircle2 } from 'lucide-react';
 import { prisma } from '@hotel-pms/db';
+import { auth } from '@/lib/auth';
+import { HallForm, HallScheduleLink } from '@/components/events/CatalogControls';
 
 export const metadata: Metadata = {
   title: 'Halls Management | LodgeCore',
 };
 
 export default async function HallsPage() {
+  const session = await auth();
+  const propertyId = session?.user?.propertyId;
+  if (!propertyId) throw new Error('No property is assigned to this account.');
+
   const halls = await prisma.hall.findMany({
+    where: { propertyId },
     orderBy: { name: 'asc' }
   });
 
@@ -21,8 +27,7 @@ export default async function HallsPage() {
           <p className="text-muted-foreground mt-1">Manage physical event spaces, capacities, and base lease pricing.</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline"><Settings2 className="mr-2 h-4 w-4" /> Configure Rates</Button>
-          <Button><Plus className="mr-2 h-4 w-4" /> Add Hall</Button>
+          <HallForm />
         </div>
       </div>
 
@@ -33,7 +38,7 @@ export default async function HallsPage() {
             <CardDescription>Get started by adding your first event space or banquet hall.</CardDescription>
           </CardHeader>
           <CardContent>
-            <Button><Plus className="mr-2 h-4 w-4" /> Add Hall</Button>
+            <HallForm />
           </CardContent>
         </Card>
       ) : (
@@ -59,8 +64,8 @@ export default async function HallsPage() {
                   </div>
                 </div>
                 <div className="mt-6 flex gap-2">
-                  <Button variant="outline" size="sm" className="w-full">Edit</Button>
-                  <Button variant="secondary" size="sm" className="w-full">View Schedule</Button>
+                  <HallForm hall={{ id: hall.id, name: hall.name, code: hall.code, capacity: hall.capacity, rate: hall.rate?.toString() || null }} />
+                  <HallScheduleLink hallId={hall.id} />
                 </div>
               </CardContent>
             </Card>

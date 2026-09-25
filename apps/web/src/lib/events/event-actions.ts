@@ -2,16 +2,18 @@
 
 import { prisma } from '@hotel-pms/db';
 import { revalidatePath } from 'next/cache';
+import { requireEventContext } from './access';
 
 /**
  * Creates a new Banquet Event Order (BEO) for a given event.
  * BEOs serve as the operational source of truth and are versioned.
  */
-export async function generateBEO(eventId: string, createdById: string) {
+export async function generateBEO(eventId: string, _createdById?: string) {
+  const { propertyId } = await requireEventContext();
   return await prisma.$transaction(async (tx) => {
     // 1. Fetch Event with all relevant relationships
     const event = await tx.event.findUnique({
-      where: { id: eventId },
+      where: { id: eventId, propertyId },
       include: {
         bookings: { include: { hall: true } },
         banquetPackage: { include: { items: true } }
@@ -61,7 +63,7 @@ export async function generateBEO(eventId: string, createdById: string) {
         version: newVersion,
         status: 'DRAFT',
         snapshotData: JSON.parse(JSON.stringify(snapshotData)), // Ensure serializable
-        approvedBy: createdById, // Assuming createdBy maps to approvedBy for simplicity if we don't have createdBy
+        approvedBy: null,
       }
     });
 
@@ -73,12 +75,17 @@ export async function generateBEO(eventId: string, createdById: string) {
 /**
  * Creates a Change Order against an existing approved BEO.
  */
-export async function createChangeOrder(eventId: string, requestedById: string, description: string) {
+export async function createChangeOrder(eventId: string, _requestedById: string | undefined, description: string) {
+  const { propertyId, userId } = await requireEventContext();
+  const event = await prisma.event.findFirst({ where: { id: eventId, propertyId }, select: { id: true } });
+  if (!event) throw new Error('Event not found.');
+  const cleanDescription = description.trim();
+  if (!cleanDescription) throw new Error('Change order description is required.');
   const changeOrder = await prisma.eventChangeOrder.create({
     data: {
       eventId: eventId,
-      requestedBy: requestedById,
-      description,
+      requestedBy: userId,
+      description: cleanDescription,
       status: 'PENDING'
     }
   });

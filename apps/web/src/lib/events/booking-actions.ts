@@ -1,9 +1,11 @@
 'use server';
 
 import { prisma } from '@hotel-pms/db';
+import { Prisma } from '@prisma/client';
 import { revalidatePath } from 'next/cache';
 import { toZonedTime, fromZonedTime } from 'date-fns-tz';
 import { addDays, getDay } from 'date-fns';
+import { requireEventContext } from './access';
 
 export type BookingConflictResult = {
   hasConflict: boolean;
@@ -19,6 +21,16 @@ export async function checkHallAvailability(
   teardownBufferMinutes: number = 0,
   excludeBookingId?: string
 ): Promise<BookingConflictResult> {
+  const { propertyId } = await requireEventContext();
+  if (!(startTime instanceof Date) || Number.isNaN(startTime.getTime()) || !(endTime instanceof Date) || Number.isNaN(endTime.getTime()) || endTime <= startTime) {
+    return { hasConflict: true, message: 'Invalid booking time range.' };
+  }
+  if (!Number.isInteger(setupBufferMinutes) || setupBufferMinutes < 0 || !Number.isInteger(teardownBufferMinutes) || teardownBufferMinutes < 0) {
+    return { hasConflict: true, message: 'Invalid booking buffers.' };
+  }
+  const hall = await prisma.hall.findFirst({ where: { id: hallId, propertyId, isActive: true }, select: { id: true } });
+  if (!hall) return { hasConflict: true, message: 'Hall not found or unavailable.' };
+
   const newEffectiveStart = new Date(startTime.getTime() - setupBufferMinutes * 60000);
   const newEffectiveEnd = new Date(endTime.getTime() + teardownBufferMinutes * 60000);
   
@@ -28,9 +40,9 @@ export async function checkHallAvailability(
   const potentialConflicts = await prisma.eventBooking.findMany({
     where: {
       hallId,
-      id: { not: excludeBookingId },
-      startTime: { gte: searchWindowStart },
-      endTime: { lte: searchWindowEnd },
+    ...(excludeBookingId ? { id: { not: excludeBookingId } } : {}),
+      startTime: { lt: searchWindowEnd },
+      endTime: { gt: searchWindowStart },
     },
     include: {
       event: { select: { name: true, status: true } }
@@ -56,16 +68,24 @@ export async function checkHallAvailability(
 }
 
 export async function getHalls() {
-  return await prisma.hall.findMany({ orderBy: { name: 'asc' } });
+  const { propertyId } = await requireEventContext();
+  return await prisma.hall.findMany({
+    where: { propertyId, isActive: true },
+    orderBy: { name: 'asc' },
+  });
 }
 
 export async function getPackages() {
-  return await prisma.banquetPackage.findMany({ orderBy: { name: 'asc' } });
+  const { propertyId } = await requireEventContext();
+  return await prisma.banquetPackage.findMany({ where: { propertyId, isActive: true }, orderBy: { name: 'asc' } });
 }
 
-export async function getEquipment() {
+export async function getEquipment(propertyId?: string) {
+  const context = await requireEventContext();
+  const scopedPropertyId = propertyId || context.propertyId;
+  if (scopedPropertyId !== context.propertyId) throw new Error('Equipment property mismatch.');
   return await prisma.eventEquipment.findMany({ 
-    where: { isActive: true },
+    where: { isActive: true, propertyId: scopedPropertyId },
     orderBy: { name: 'asc' } 
   });
 }
@@ -89,15 +109,31 @@ export async function createFullEventBooking(data: {
     until: string;
   };
 }) {
+  const { propertyId } = await requireEventContext();
+
+  const contactName = data.contactName.trim();
+  const expectedGuests = Number(data.expectedGuests);
+  const setupBufferMinutes = Number(data.setupBufferMinutes);
+  const teardownBufferMinutes = Number(data.teardownBufferMinutes);
+  if (!contactName) throw new Error('Contact name is required.');
+  if (!Number.isInteger(expectedGuests) || expectedGuests < 1) throw new Error('Expected guests must be at least 1.');
+  if (!(data.startTime instanceof Date) || Number.isNaN(data.startTime.getTime())) throw new Error('A valid start time is required.');
+  if (!(data.endTime instanceof Date) || Number.isNaN(data.endTime.getTime()) || data.endTime <= data.startTime) throw new Error('End time must be after start time.');
+  if (!Number.isInteger(setupBufferMinutes) || setupBufferMinutes < 0 || !Number.isInteger(teardownBufferMinutes) || teardownBufferMinutes < 0) throw new Error('Buffers must be valid non-negative whole minutes.');
+  if (data.recurrenceRule && !['NONE', 'DAILY', 'WEEKLY'].includes(data.recurrenceRule.frequency)) throw new Error('Invalid recurrence frequency.');
+
   return await prisma.$transaction(async (tx) => {
     if (data.bookingType !== 'HALL_ONLY' && data.bookingType !== 'FULL_PACKAGE') {
       throw new Error("Invalid booking type specified.");
     }
     // 1. Verify Hall
-    const hall = await tx.hall.findUnique({ where: { id: data.hallId }, include: { property: true } });
+    const hall = await tx.hall.findFirst({
+      where: { id: data.hallId, propertyId, isActive: true },
+      include: { property: true },
+    });
     if (!hall) throw new Error("Hall not found");
-    if (data.expectedGuests > hall.capacity) {
-      throw new Error(`Expected guests (${data.expectedGuests}) exceeds hall capacity (${hall.capacity}).`);
+    if (expectedGuests > hall.capacity) {
+      throw new Error(`Expected guests (${expectedGuests}) exceeds hall capacity (${hall.capacity}).`);
     }
 
     // 2. Generate Occurrences preserving local property time
@@ -111,6 +147,7 @@ export async function createFullEventBooking(data: {
     if (data.recurrenceRule && data.recurrenceRule.frequency !== 'NONE') {
       const propertyTimezone = hall.property.timezone;
       const untilDate = new Date(data.recurrenceRule.until);
+      if (Number.isNaN(untilDate.getTime()) || untilDate < baseStart) throw new Error('Recurrence end date must be valid and not before the booking.');
       untilDate.setHours(23, 59, 59, 999);
       
       // Convert the initial start time to the property's local time context
@@ -145,14 +182,14 @@ export async function createFullEventBooking(data: {
 
     // 3. Strict Conflict Checking (All-or-Nothing)
     for (const occ of occurrences) {
-      const newEffectiveStart = new Date(occ.startTime.getTime() - data.setupBufferMinutes * 60000);
-      const newEffectiveEnd = new Date(occ.endTime.getTime() + data.teardownBufferMinutes * 60000);
+      const newEffectiveStart = new Date(occ.startTime.getTime() - setupBufferMinutes * 60000);
+      const newEffectiveEnd = new Date(occ.endTime.getTime() + teardownBufferMinutes * 60000);
       
       const potentialConflicts = await tx.eventBooking.findMany({
         where: {
           hallId: data.hallId,
-          startTime: { gte: new Date(newEffectiveStart.getTime() - 24 * 60 * 60 * 1000) },
-          endTime: { lte: new Date(newEffectiveEnd.getTime() + 24 * 60 * 60 * 1000) },
+          startTime: { lt: new Date(newEffectiveEnd.getTime() + 24 * 60 * 60 * 1000) },
+          endTime: { gt: new Date(newEffectiveStart.getTime() - 24 * 60 * 60 * 1000) },
           status: { not: 'CANCELLED' }
         }
       });
@@ -168,7 +205,8 @@ export async function createFullEventBooking(data: {
       // Check Equipment inventory
       if (data.equipmentRequests && data.equipmentRequests.length > 0) {
         for (const eqReq of data.equipmentRequests) {
-          const equipment = await tx.eventEquipment.findUnique({ where: { id: eqReq.equipmentId }});
+          if (!Number.isInteger(eqReq.quantity) || eqReq.quantity < 1) throw new Error('Equipment quantities must be positive whole numbers.');
+          const equipment = await tx.eventEquipment.findFirst({ where: { id: eqReq.equipmentId, propertyId, isActive: true }});
           if (!equipment) throw new Error("Equipment not found.");
           
           const conflictingEqBookings = await tx.eventEquipmentBooking.findMany({
@@ -208,7 +246,7 @@ export async function createFullEventBooking(data: {
         name: `Event for ${data.contactName}`,
         contactName: data.contactName,
         contactPhone: data.contactPhone,
-        expectedGuests: data.expectedGuests,
+        expectedGuests,
         startDate: occurrences[0].startTime,
         endDate: finalEndDate,
         status: 'TENTATIVE',
@@ -223,8 +261,8 @@ export async function createFullEventBooking(data: {
       hallId: data.hallId,
       startTime: occ.startTime,
       endTime: occ.endTime,
-      setupBufferMinutes: data.setupBufferMinutes,
-      teardownBufferMinutes: data.teardownBufferMinutes,
+      setupBufferMinutes,
+      teardownBufferMinutes,
       status: 'ACTIVE'
     }));
 
@@ -255,6 +293,11 @@ export async function createFullEventBooking(data: {
 
     // 7. Attach Package
     if (data.packageIds && data.packageIds.length > 0 && data.bookingType === 'FULL_PACKAGE') {
+      const packageRecord = await tx.banquetPackage.findFirst({
+        where: { id: data.packageIds[0], propertyId, isActive: true },
+        select: { id: true },
+      });
+      if (!packageRecord) throw new Error('Banquet package not found or unavailable.');
       await tx.event.update({
         where: { id: event.id },
         data: { banquetPackageId: data.packageIds[0] }
@@ -263,5 +306,5 @@ export async function createFullEventBooking(data: {
 
     revalidatePath('/fnb/events/bookings');
     return event;
-  });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }

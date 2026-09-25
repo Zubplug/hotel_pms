@@ -2,19 +2,22 @@
 
 import { prisma } from '@hotel-pms/db';
 import { revalidatePath } from 'next/cache';
+import { requireEventContext } from './access';
 
 export async function createEventLead(data: { contactName: string; companyName: string; eventType: string; expectedGuests: number }) {
-  const property = await prisma.property.findFirst();
-  if (!property) throw new Error("No active property found in the system.");
-  const targetPropertyId = property.id;
+  const { propertyId } = await requireEventContext();
+  const contactName = data.contactName.trim();
+  const expectedGuests = Number(data.expectedGuests);
+  if (!contactName) throw new Error('Contact name is required.');
+  if (!Number.isInteger(expectedGuests) || expectedGuests < 0) throw new Error('Expected guests must be a valid non-negative number.');
 
   await prisma.eventLead.create({
     data: {
-      propertyId: targetPropertyId,
-      contactName: data.contactName,
-      companyName: data.companyName,
-      eventType: data.eventType,
-      expectedGuests: data.expectedGuests,
+      propertyId,
+      contactName,
+      companyName: data.companyName?.trim() || undefined,
+      eventType: data.eventType?.trim() || undefined,
+      expectedGuests,
       status: 'NEW',
     }
   });
