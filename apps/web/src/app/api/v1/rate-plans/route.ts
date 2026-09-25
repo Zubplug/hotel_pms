@@ -31,13 +31,34 @@ export async function GET(req: NextRequest) {
       whereClause.type = type;
     }
 
+    const includeRates = searchParams.get('includeRates') === 'true';
+
+    const selectObj: any = {
+      id: true,
+      name: true,
+      code: true,
+    };
+
+    if (includeRates) {
+      selectObj.rates = {
+        select: {
+          id: true,
+          amount: true,
+          currency: true,
+          roomType: {
+            select: {
+              id: true,
+              name: true,
+              baseRate: true,
+            }
+          }
+        }
+      };
+    }
+
     const ratePlans = await prisma.ratePlan.findMany({
       where: whereClause,
-      select: {
-        id: true,
-        name: true,
-        code: true,
-      },
+      select: selectObj,
       orderBy: { name: 'asc' },
     });
 

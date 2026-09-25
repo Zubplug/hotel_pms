@@ -256,7 +256,7 @@ export function CorporateAccountDialog({
     }
   });
 
-  const ratePlansKey = `/api/v1/rate-plans?propertyId=${propertyId}&type=CORPORATE`;
+  const ratePlansKey = `/api/v1/rate-plans?propertyId=${propertyId}&type=CORPORATE&includeRates=true`;
   const { data: ratePlansData } = useSWR(
     open ? ratePlansKey : null,
     (url: string) => fetch(url).then(res => res.json())
@@ -421,6 +421,63 @@ export function CorporateAccountDialog({
                 </div>
               </div>
             </div>
+
+            {ratePlanId && ratePlanId !== 'none' && (
+              (() => {
+                const selectedPlan = ratePlans.find((p: any) => p.id === ratePlanId);
+                if (!selectedPlan || !selectedPlan.rates || selectedPlan.rates.length === 0) return null;
+                
+                return (
+                  <div className="rounded-lg border border-slate-700 bg-slate-900/30 overflow-hidden mt-4">
+                    <div className="bg-slate-800/80 px-4 py-2 text-sm font-medium text-slate-200 border-b border-slate-700">
+                      Included Room Types
+                    </div>
+                    <table className="w-full text-xs text-left">
+                      <thead className="bg-slate-900/50 text-slate-400">
+                        <tr>
+                          <th className="px-4 py-2 font-medium">Room Type</th>
+                          <th className="px-4 py-2 font-medium text-right">Base Rate</th>
+                          <th className="px-4 py-2 font-medium text-right">Corporate Rate</th>
+                          <th className="px-4 py-2 font-medium text-right">Variance</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-800/50">
+                        {selectedPlan.rates.map((rate: any) => {
+                          const baseRate = Number(rate.roomType?.baseRate || 0);
+                          const corpAmount = Number(rate.amount);
+                          const variance = baseRate - corpAmount;
+                          const isDiscount = variance > 0;
+                          const pct = baseRate > 0 ? ((Math.abs(variance) / baseRate) * 100).toFixed(1) : '0.0';
+                          
+                          return (
+                            <tr key={rate.id} className="hover:bg-slate-800/20">
+                              <td className="px-4 py-2 font-medium text-slate-300">
+                                {rate.roomType?.name || 'Unknown'}
+                              </td>
+                              <td className="px-4 py-2 text-right text-slate-500 tabular-nums">
+                                {baseRate.toLocaleString()}
+                              </td>
+                              <td className="px-4 py-2 text-right text-slate-300 font-medium tabular-nums">
+                                {corpAmount.toLocaleString()}
+                              </td>
+                              <td className="px-4 py-2 text-right whitespace-nowrap">
+                                {variance === 0 ? (
+                                  <span className="text-slate-500">Match base</span>
+                                ) : (
+                                  <span className={isDiscount ? "text-emerald-400" : "text-amber-400"}>
+                                    {isDiscount ? '↓' : '↑'} {variance.toLocaleString()} ({pct}%)
+                                  </span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              })()
+            )}
 
             <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-4 space-y-4">
               <h4 className="flex items-center text-sm font-semibold text-slate-200">
