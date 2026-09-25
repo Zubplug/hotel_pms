@@ -27,7 +27,7 @@ export async function hasPermission(userId: string, propertyId: string, required
   if (membership && ['ADMIN', 'SUPER_ADMIN'].includes(membership.role)) {
      // System Admins have 'corporate_account:view', 'corporate_account:create', 'corporate_account:edit', 'corporate_account:view_city_ledger' 
      // but not change_credit_limit or change_deposit_policy (unless explicitly authorized, which we manage via explicit role assignments).
-     if (['corporate_account:view', 'corporate_account:create', 'corporate_account:edit', 'corporate_account:view_city_ledger'].includes(requiredPermission)) {
+     if (['corporate_account:view', 'corporate_account:create', 'corporate_account:edit', 'corporate_account:view_city_ledger', 'rate_plan:create', 'rate_plan:edit'].includes(requiredPermission)) {
         return true;
      }
      
