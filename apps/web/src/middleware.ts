@@ -15,6 +15,7 @@ const { auth } = NextAuth({
       if (user) {
         token.id = user.id;
         token.staffId = (user as any).staffId;
+        token.isLodgeCoreAdmin = (user as any).isLodgeCoreAdmin;
         token.isSuperAdmin = (user as any).isSuperAdmin;
         token.role = (user as any).role;
         token.capabilities = (user as any).capabilities;
@@ -25,6 +26,7 @@ const { auth } = NextAuth({
       if (token && session.user) {
         session.user.id = token.id as string;
         (session.user as any).staffId = token.staffId as string;
+        (session.user as any).isLodgeCoreAdmin = token.isLodgeCoreAdmin as boolean;
         (session.user as any).isSuperAdmin = token.isSuperAdmin as boolean;
         (session.user as any).role = token.role;
         (session.user as any).capabilities = token.capabilities as string[];
@@ -46,7 +48,7 @@ const FNB_ROLES = ['FNB_MANAGER', 'RESTAURANT_MANAGER', 'BANQUET_MANAGER', 'EVEN
 function hasModuleAccess(req: any, pathname: string): { allowed: boolean; redirectTo?: string } {
   const user = req.auth?.user as any;
   if (!user) return { allowed: false, redirectTo: '/login' };
-  if (user.isSuperAdmin) return { allowed: true };
+  if (user.isLodgeCoreAdmin) return { allowed: true };
 
   const role = String(user.role || '').toUpperCase();
   const capabilities = Array.isArray(user.capabilities) ? user.capabilities : [];
@@ -148,6 +150,9 @@ export default auth((req) => {
     //   Single-cap staff            → their one workspace
     //   Multi-cap staff             → hub tile picker
     if (nextUrl.pathname === '/login' && isLoggedIn) {
+      if ((req.auth?.user as any)?.isLodgeCoreAdmin) {
+        return Response.redirect(new URL('/hq', nextUrl));
+      }
       return Response.redirect(new URL('/hub', nextUrl));
     }
     return;

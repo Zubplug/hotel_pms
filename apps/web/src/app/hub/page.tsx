@@ -29,11 +29,12 @@ export const dynamic = 'force-dynamic';
 function getDirectLandingUrl(
   role: string,
   capabilities: string[],
-  isSuperAdmin: boolean
+  isLodgeCoreAdmin: boolean
 ): string | null {
+  if (isLodgeCoreAdmin) return '/hq';
+
   // Super admins and management roles → Management Dashboard
   if (
-    isSuperAdmin ||
     ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'DIRECTOR'].includes(role)
   ) {
     return '/general-manager';
@@ -93,11 +94,11 @@ export default async function HubPage() {
     redirect('/login');
   }
 
-  const { id: userId, email, role, capabilities = [], propertyId, isSuperAdmin } = session.user as any;
+  const { id: userId, email, role, capabilities = [], propertyId, isLodgeCoreAdmin } = session.user as any;
   const userName = session.user.name || email?.split('@')[0] || 'User';
 
   // Smart role-based redirect — single-purpose roles skip the hub entirely
-  const directUrl = getDirectLandingUrl(role, capabilities, isSuperAdmin);
+  const directUrl = getDirectLandingUrl(role, capabilities, isLodgeCoreAdmin);
   if (directUrl) {
     redirect(directUrl);
   }
