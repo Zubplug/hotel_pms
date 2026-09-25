@@ -97,7 +97,10 @@ export async function POST(req: NextRequest) {
     const name = typeof body.name === 'string' ? body.name.trim() : '';
     const requestedCode = typeof body.code === 'string' ? body.code.trim().toUpperCase() : '';
     const creditLimit = Number(body.creditLimit ?? 0);
-    const depositPolicy = body.depositPolicy ?? 'WAIVED';
+    // Corporate accounts are direct-billed by default. Keep creation safe from
+    // accidentally applying guest deposit rules; an existing account's policy
+    // can still be changed through the audited edit workflow.
+    const depositPolicy = 'WAIVED';
     if (!name || !Number.isFinite(creditLimit) || creditLimit < 0 || !['WAIVED', 'STANDARD'].includes(depositPolicy)) {
       return errorResponse('BAD_REQUEST', 'Invalid corporate account details', 400);
     }

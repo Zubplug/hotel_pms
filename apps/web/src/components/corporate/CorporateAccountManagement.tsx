@@ -7,6 +7,7 @@ import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, ResponsiveContaine
 import { AlertTriangle, ArrowUpRight, Ban, Building2, CheckCircle2, ChevronRight, CircleDollarSign, CreditCard, FileText, Loader2, Pencil, Plus, RefreshCw, Search, ShieldCheck, TrendingUp, Users, WalletCards } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { CorporateAccountDialog } from './CorporateAccountDialog';
 import { toast } from 'sonner';
 
@@ -24,11 +25,13 @@ export function CorporateAccountManagement({ propertyId, canCreate, canEdit, can
   const [data, setData] = useState<any>(null); const [loading, setLoading] = useState(true); const [query, setQuery] = useState(''); const [status, setStatus] = useState('active');
   const [activeTab, setActiveTab] = useState<'overview' | 'credit'>('overview');
   const [dialogOpen, setDialogOpen] = useState(false); const [selected, setSelected] = useState<any>(null);
+  const [deactivationTarget, setDeactivationTarget] = useState<string | null>(null); const [deactivationReason, setDeactivationReason] = useState('');
   const load = useCallback(async () => { setLoading(true); try { const res = await fetch(`/api/v1/corporate-accounts/analytics?propertyId=${propertyId}`, { cache: 'no-store' }); const json = await res.json(); if (!res.ok) throw new Error(json.error?.message || 'Unable to load corporate dashboard'); setData(json.data); } catch (error: any) { toast.error(error.message); } finally { setLoading(false); } }, [propertyId]);
   useEffect(() => { void load(); }, [load]);
   const accounts = useMemo(() => (data?.accounts || []).filter((account: any) => (!query || `${account.name} ${account.code}`.toLowerCase().includes(query.toLowerCase())) && (status === 'all' || (status === 'active' ? account.isActive : !account.isActive)) && (activeTab === 'overview' || account.creditLimit > 0 || account.advanceCredit > 0)), [data, query, status, activeTab]);
   const openAccount = (account?: any) => { setSelected(account || null); setDialogOpen(true); };
-  const deactivate = async (id: string) => { const reason = window.prompt('Reason for deactivation (required):'); if (!reason || reason.trim().length < 5) return toast.error('A deactivation reason is required.'); const res = await fetch(`/api/v1/corporate-accounts/${id}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reason: reason.trim() }) }); if (!res.ok) return toast.error('Unable to deactivate account'); toast.success('Corporate account deactivated'); void load(); };
+  const deactivate = (id: string) => { setDeactivationTarget(id); setDeactivationReason(''); };
+  const confirmDeactivation = async () => { if (deactivationReason.trim().length < 5) return toast.error('Please enter at least 5 characters explaining the deactivation.'); const res = await fetch(`/api/v1/corporate-accounts/${deactivationTarget}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reason: deactivationReason.trim() }) }); if (!res.ok) return toast.error('Unable to deactivate account'); setDeactivationTarget(null); toast.success('Corporate account deactivated'); void load(); };
   if (loading && !data) return <div className="flex min-h-[520px] items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-indigo-600" /></div>;
   const overview = data?.overview || {};
   const creditAccounts = (data?.accounts || []).filter((account: any) => account.creditLimit > 0 || account.advanceCredit > 0);
@@ -49,6 +52,23 @@ export function CorporateAccountManagement({ propertyId, canCreate, canEdit, can
         <div className="space-y-6"><section className="rounded-2xl border border-slate-800 bg-[#101827] p-5 shadow-xl shadow-black/10"><div className="flex items-start justify-between"><div><h2 className="font-semibold text-slate-100">Management signals</h2><p className="mt-1 text-xs text-slate-500">Live exceptions needing attention</p></div><ShieldCheck className="h-5 w-5 text-indigo-400" /></div><div className="mt-4 space-y-3">{(data?.attention || []).map((item: any, index: number) => <button key={`${item.title}-${index}`} onClick={() => item.accountId && openAccount((data.accounts || []).find((a: any) => a.id === item.accountId))} className="flex w-full items-start gap-3 rounded-xl border border-slate-800 p-3 text-left transition hover:border-indigo-500/50 hover:bg-slate-900/70"><div className={`mt-0.5 rounded-lg p-1.5 ${item.severity === 'critical' ? 'bg-rose-500/15 text-rose-400' : item.severity === 'warning' ? 'bg-amber-500/15 text-amber-400' : 'bg-blue-500/15 text-blue-400'}`}>{item.severity === 'info' ? <FileText className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}</div><div className="min-w-0 flex-1"><p className="text-xs font-semibold text-slate-100">{item.title}</p><p className="mt-1 text-[11px] leading-4 text-slate-500">{item.detail}</p></div><ChevronRight className="mt-1 h-4 w-4 shrink-0 text-slate-600" /></button>)}{(!data?.attention || data.attention.length === 0) && <div className="rounded-xl bg-emerald-500/10 p-4 text-sm text-emerald-300"><CheckCircle2 className="mb-2 h-5 w-5" />Portfolio controls are healthy. No live exceptions detected.</div>}</div></section><section className="rounded-2xl border border-slate-800 bg-[#101827] p-5 shadow-xl shadow-black/10"><div className="flex items-center justify-between"><div><h2 className="font-semibold text-slate-100">Collection queue</h2><p className="mt-1 text-xs text-slate-500">Oldest open corporate invoices</p></div><ArrowUpRight className="h-5 w-5 text-slate-500" /></div><div className="mt-4 space-y-3">{(data?.recentActivity || []).slice(0, 4).map((item: any) => <div key={item.id} className="flex items-center justify-between gap-3"><div className="min-w-0"><p className="truncate text-xs font-semibold text-slate-200">{item.accountName}</p><p className="text-[11px] text-slate-500">{item.invoiceNumber} · due {new Date(item.dueDate).toLocaleDateString('en-NG')}</p></div><span className="text-xs font-semibold tabular-nums text-slate-200">{money(item.amount, item.currency)}</span></div>)}{(!data?.recentActivity || data.recentActivity.length === 0) && <p className="text-sm text-slate-500">No open corporate invoices.</p>}</div></section></div>
       </div>
     </div>
+    <Dialog open={Boolean(deactivationTarget)} onOpenChange={open => !open && setDeactivationTarget(null)}>
+      <DialogContent className="max-w-lg border-white/10 bg-[#0a0f1c] text-slate-100">
+        <DialogHeader>
+          <DialogTitle>Deactivate corporate account</DialogTitle>
+          <DialogDescription className="text-slate-400">Deactivation stops the account from being used for new activity. The record and audit history remain available.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-2 py-2">
+          <label htmlFor="deactivation-reason" className="text-xs font-medium text-slate-300">Reason for deactivation *</label>
+          <Input id="deactivation-reason" autoFocus value={deactivationReason} onChange={event => setDeactivationReason(event.target.value)} className="border-white/10 bg-white/[.045] text-slate-100 placeholder:text-slate-600" placeholder="e.g. Contract ended or account replaced" />
+          <p className="text-[11px] text-slate-500">Minimum 5 characters. This reason is stored in the audit trail.</p>
+        </div>
+        <DialogFooter>
+          <Button type="button" variant="outline" className="border-white/10 bg-white/[.04] text-slate-200" onClick={() => setDeactivationTarget(null)}>Cancel</Button>
+          <Button type="button" variant="destructive" onClick={() => void confirmDeactivation()}>Deactivate account</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
     <CorporateAccountDialog open={dialogOpen} onOpenChange={setDialogOpen} onSaved={() => void load()} account={selected} propertyId={propertyId} canEdit={canEdit} canChangeFinancials={canChangeFinancials} canChangeDepositPolicy={canChangeDepositPolicy} />
   </div>;
 }

@@ -247,6 +247,9 @@ export function CorporateAccountDialog({
   const isEditing = !!account;
   const { mutate } = useSWRConfig();
   const [quickRateOpen, setQuickRateOpen] = useState(false);
+  const [financialReasonOpen, setFinancialReasonOpen] = useState(false);
+  const [financialReason, setFinancialReason] = useState('');
+  const [pendingFormData, setPendingFormData] = useState<any>(null);
 
   const { register, handleSubmit, reset, setValue, watch, formState: { errors, isSubmitting } } = useForm({
     defaultValues: {
@@ -302,7 +305,7 @@ export function CorporateAccountDialog({
   const ratePlanId = watch('ratePlanId');
   const ratePlanLocked = Boolean(isEditing && account?.ratePlanLocked);
 
-  const onSubmit = async (data: any) => {
+  const saveAccount = async (data: any, reason?: string) => {
     try {
       const url = isEditing 
         ? `/api/v1/corporate-accounts/${account.id}` 
@@ -310,7 +313,7 @@ export function CorporateAccountDialog({
       
       const payload = {
         ...data,
-        propertyId,
+        ...(isEditing ? {} : { propertyId }),
         creditLimit: Number(data.creditLimit),
         ratePlanId: data.ratePlanId === 'none' ? null : data.ratePlanId
       };
@@ -319,8 +322,12 @@ export function CorporateAccountDialog({
         data.depositPolicy !== account.depositPolicy ||
         Boolean(data.exemptFromHighBalance) !== Boolean(account.exemptFromHighBalance)
       )) {
-        const reason = window.prompt('Reason for changing financial controls (required):');
-        if (!reason || reason.trim().length < 5) throw new Error('A financial-control change reason is required');
+        if (!reason) {
+          setPendingFormData(data);
+          setFinancialReason('');
+          setFinancialReasonOpen(true);
+          return;
+        }
         (payload as any).reason = reason.trim();
       }
 
@@ -343,6 +350,17 @@ export function CorporateAccountDialog({
     }
   };
 
+  const onSubmit = async (data: any) => saveAccount(data);
+
+  const submitFinancialReason = async () => {
+    if (financialReason.trim().length < 5) {
+      toast.error('Please enter at least 5 characters explaining this financial-control change.');
+      return;
+    }
+    setFinancialReasonOpen(false);
+    if (pendingFormData) await saveAccount(pendingFormData, financialReason.trim());
+  };
+
   const formDisabled = !canEdit;
   const financialsDisabled = !canChangeFinancials;
   const depositPolicyDisabled = !canChangeDepositPolicy;
@@ -355,6 +373,23 @@ export function CorporateAccountDialog({
 
   return (
     <>
+      <Dialog open={financialReasonOpen} onOpenChange={setFinancialReasonOpen}>
+        <DialogContent className="max-w-lg border-white/10 bg-[#0a0f1c] text-slate-100">
+          <DialogHeader>
+            <DialogTitle>Confirm financial-control change</DialogTitle>
+            <DialogDescription className="text-slate-400">This change affects future City Ledger exposure and will be recorded in the audit trail.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            <Label htmlFor="financial-change-reason" className="text-xs font-medium text-slate-300">Reason for change *</Label>
+            <Input id="financial-change-reason" autoFocus className={dialogInput} value={financialReason} onChange={event => setFinancialReason(event.target.value)} placeholder="e.g. Approved credit terms updated by management" />
+            <p className="text-[11px] text-slate-500">Minimum 5 characters. This explanation is stored with the financial audit record.</p>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" className="border-white/10 bg-white/[.04] text-slate-200" onClick={() => setFinancialReasonOpen(false)}>Cancel</Button>
+            <Button type="button" className="bg-indigo-600 text-white hover:bg-indigo-500" onClick={() => void submitFinancialReason()}>Confirm and save</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <QuickRateDialog 
         open={quickRateOpen} 
         onOpenChange={setQuickRateOpen} 
@@ -513,8 +548,8 @@ export function CorporateAccountDialog({
                 <div className="space-y-2">
                   <Label className="flex items-center gap-1.5 text-xs font-medium text-slate-300"><Landmark className="h-3.5 w-3.5 text-slate-500" />Deposit policy</Label>
                   <Select 
-                    disabled={formDisabled || depositPolicyDisabled} 
-                    value={depositPolicy} 
+                    disabled={formDisabled || depositPolicyDisabled || !isEditing}
+                    value={isEditing ? depositPolicy : 'WAIVED'} 
                     onValueChange={v => setValue('depositPolicy', v as any)}
                   >
                     <SelectTrigger className={`h-11 min-w-[240px] w-full ${dialogSelect}`}>
@@ -525,6 +560,7 @@ export function CorporateAccountDialog({
                       <SelectItem value="STANDARD">Standard (Guest pays)</SelectItem>
                     </SelectContent>
                   </Select>
+                  {!isEditing && <p className="text-[11px] text-emerald-300/80">Corporate accounts automatically use Waived (Billed to AR) at creation.</p>}
                 </div>
               </div>
 
