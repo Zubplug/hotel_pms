@@ -248,10 +248,10 @@ export function FrontDeskLayout({ children }: { children: React.ReactNode }) {
                 <p className="text-xs text-slate-500 ml-6">ESC/POS Thermal Printer</p>
 
                 <button
-                  onClick={() => router.push('/frontdesk/printer-settings')}
+                  onClick={() => router.push('/frontdesk/hardware-settings')}
                   className="w-full mt-1 h-9 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-semibold text-slate-300 transition-colors"
                 >
-                  Configure Printers
+                  Configure Hardware
                 </button>
 
                 {cloudHardware?.message && !isDesktopApp && (

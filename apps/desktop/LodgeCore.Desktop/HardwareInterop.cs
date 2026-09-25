@@ -499,4 +499,45 @@ public class HardwareInterop
             return Fail("Hardware fault: " + ex.Message);
         }
     }
+
+    public Task<string> GetLockProviderTypeAsync()
+    {
+        var configuredProvider = Microsoft.Maui.Storage.Preferences.Default.Get("LockProviderType", "deluns");
+        var activeProviderType = _lockProvider.GetType().Name.ToLowerInvariant();
+        string activeProvider = "deluns";
+        if (activeProviderType.Contains("rfv2016")) activeProvider = "rfv2016";
+        else if (activeProviderType.Contains("hslock")) activeProvider = "hslock";
+        else if (activeProviderType.Contains("xeeder")) activeProvider = "xeeder";
+
+        return Task.FromResult(JsonSerializer.Serialize(new { 
+            configuredProvider = configuredProvider, 
+            activeProvider = activeProvider, 
+            restartRequired = configuredProvider.ToLowerInvariant() != activeProvider
+        }, _jsonOptions));
+    }
+
+    public Task<string> SetLockProviderTypeAsync(string provider)
+    {
+        var validProviders = new[] { "deluns", "rfv2016", "hslock", "xeeder" };
+        var normalized = (provider ?? "").ToLowerInvariant().Trim();
+
+        if (!validProviders.Contains(normalized))
+        {
+            return Task.FromResult(Fail($"Unsupported provider: {provider}"));
+        }
+
+        Microsoft.Maui.Storage.Preferences.Default.Set("LockProviderType", normalized);
+
+        var activeProviderType = _lockProvider.GetType().Name.ToLowerInvariant();
+        string activeProvider = "deluns";
+        if (activeProviderType.Contains("rfv2016")) activeProvider = "rfv2016";
+        else if (activeProviderType.Contains("hslock")) activeProvider = "hslock";
+        else if (activeProviderType.Contains("xeeder")) activeProvider = "xeeder";
+
+        return Task.FromResult(JsonSerializer.Serialize(new { 
+            configuredProvider = normalized, 
+            activeProvider = activeProvider, 
+            restartRequired = normalized != activeProvider
+        }, _jsonOptions));
+    }
 }

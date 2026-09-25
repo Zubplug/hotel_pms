@@ -31,6 +31,8 @@ export interface LodgeCoreDataProvider {
   };
   hardware: {
     poll(operationId: string): Promise<any>;
+    getLockProvider?(): Promise<any>;
+    setLockProvider?(provider: string): Promise<any>;
     printShiftReport?(data: any): Promise<any>;
     printLaundryTicket?(data: any): Promise<any>;
     printLaundryDocuments?(data: any): Promise<any>;

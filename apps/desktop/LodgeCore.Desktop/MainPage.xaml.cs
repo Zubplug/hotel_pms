@@ -234,6 +234,12 @@ public partial class MainPage : ContentPage
                 case "hardware.cancelCard":
                     responseData = await hardwareInterop.CancelCardAsync();
                     break;
+                case "hardware.getLockProvider":
+                    responseData = await hardwareInterop.GetLockProviderTypeAsync();
+                    break;
+                case "hardware.setLockProvider":
+                    responseData = await hardwareInterop.SetLockProviderTypeAsync(parameters?["provider"]?.ToString() ?? "");
+                    break;
                 case "hardware.openCashDrawer":
                     responseData = await pmsInterop.OpenCashDrawerAsync();
                     break;

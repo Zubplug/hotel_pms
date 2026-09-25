@@ -95,6 +95,8 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
     list: () => invokeDesktop('properties.list')
   },
   hardware: {
+    getLockProvider: async () => invokeDesktop('hardware.getLockProvider'),
+    setLockProvider: async (provider: string) => invokeDesktop('hardware.setLockProvider', { provider }),
     poll: async (operationId) => {
       const status = operationId.includes('FAILED') ? 'FAILED' : 'SUCCESS';
       const responseData = syncOperations.get(operationId);

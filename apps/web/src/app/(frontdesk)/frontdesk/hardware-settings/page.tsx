@@ -452,17 +452,19 @@ function PrinterForm({
 }
 
 // ─── Main Page ──────────────────────────────────────────────────────────────
-export default function PrinterSettingsPage() {
+export default function HardwareSettingsPage() {
   const router = useRouter();
   const { isDesktopMode } = useLodgeCoreProvider();
   const [printers, setPrinters] = useState<PrinterConfig[]>([]);
+  const [lockStatus, setLockStatus] = useState<{ configuredProvider: string; activeProvider: string; restartRequired: boolean } | null>(null);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editPrinter, setEditPrinter] = useState<Partial<PrinterConfig> | null>(null);
   const [saving, setSaving] = useState(false);
+  const [savingLock, setSavingLock] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
-  const loadPrinters = async () => {
+  const loadHardware = async () => {
     if (!isDesktopMode) { setLoading(false); return; }
     try {
       const res = await invokeDesktop('hardware.getPrinters');
@@ -470,17 +472,32 @@ export default function PrinterSettingsPage() {
         const allPrinters: PrinterConfig[] = res.data ?? [];
         setPrinters(allPrinters.filter(p => p.printerRole === 'FRONTDESK' || p.printerRole === 'RECEIPT'));
       }
+      const lockRes = await invokeDesktop('hardware.getLockProvider');
+      if (lockRes) {
+        setLockStatus(typeof lockRes === 'string' ? JSON.parse(lockRes) : lockRes);
+      }
     } catch { /* ignore */ }
     setLoading(false);
   };
 
-  useEffect(() => { loadPrinters(); }, [isDesktopMode]);
+  useEffect(() => { loadHardware(); }, [isDesktopMode]);
+
+  const handleLockChange = async (provider: string) => {
+    setSavingLock(true);
+    try {
+      const res = await invokeDesktop('hardware.setLockProvider', { provider });
+      if (res) {
+        setLockStatus(typeof res === 'string' ? JSON.parse(res) : res);
+      }
+    } catch { /* ignore */ }
+    setSavingLock(false);
+  };
 
   const handleSave = async (form: Omit<PrinterConfig, 'id'> & { id?: string }) => {
     setSaving(true);
     try {
       const res = await invokeDesktop('hardware.savePrinter', { config: JSON.stringify(form) });
-      if (res?.success) { setShowForm(false); setEditPrinter(null); await loadPrinters(); }
+      if (res?.success) { setShowForm(false); setEditPrinter(null); await loadHardware(); }
     } catch { /* ignore */ }
     setSaving(false);
   };
@@ -489,7 +506,7 @@ export default function PrinterSettingsPage() {
     setDeleteId(id);
     try {
       await invokeDesktop('hardware.deletePrinter', { id });
-      await loadPrinters();
+      await loadHardware();
     } catch { /* ignore */ }
     setDeleteId(null);
   };
@@ -504,7 +521,7 @@ export default function PrinterSettingsPage() {
           </div>
           <h2 className="text-xl font-bold text-gray-900 dark:text-white">Desktop App Only</h2>
           <p className="text-gray-500 text-sm">
-            Printer configuration is only available in the Windows Desktop App. Printers connect directly to the local network from the terminal hardware.
+            Hardware configuration is only available in the Windows Desktop App. Hardware devices connect directly to the local machine.
           </p>
         </div>
       </div>
@@ -529,8 +546,8 @@ export default function PrinterSettingsPage() {
               <Printer className="w-5 h-5 text-white" />
             </div>
             <div>
-              <p className="mb-1 text-[10px] font-bold uppercase tracking-[.24em] text-indigo-300">Front desk hardware</p><h1 className="text-3xl font-semibold tracking-[-.045em]">Printer control center</h1>
-              <p className="mt-2 text-sm text-slate-400">Configure thermal receipt and front-desk printers for this terminal.</p>
+              <p className="mb-1 text-[10px] font-bold uppercase tracking-[.24em] text-indigo-300">Front desk hardware</p><h1 className="text-3xl font-semibold tracking-[-.045em]">Hardware settings</h1>
+              <p className="mt-2 text-sm text-slate-400">Configure thermal printers and keycard lock systems for this terminal.</p>
             </div>
           </div>
           <button
@@ -550,6 +567,64 @@ export default function PrinterSettingsPage() {
           <div className="text-sm text-indigo-700">
             <strong>Supported Printers:</strong> We support both Network and Direct (USB/Serial) POS printers. For network printers, ensure it's on the same local network. For USB, select your device from the discovered list. 
           </div>
+        </div>
+
+        {/* Lock System Settings */}
+        {lockStatus && (
+          <div className="bg-white dark:bg-[#1a1a1a] border border-gray-100 dark:border-[#2a2a2a] rounded-2xl p-6 shadow-sm">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+              <Settings2 className="w-5 h-5 text-indigo-500" />
+              Keycard Encoder / Lock System
+            </h2>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Select Lock Provider</label>
+                <div className="flex items-center gap-3">
+                  <select
+                    disabled={savingLock}
+                    value={lockStatus.configuredProvider}
+                    onChange={(e) => handleLockChange(e.target.value)}
+                    className="w-full sm:w-64 px-3 py-2.5 bg-gray-50 dark:bg-[#141414] border border-gray-200 dark:border-[#2a2a2a] rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
+                  >
+                    <option value="deluns">Deluns</option>
+                    <option value="rfv2016">RFV2016</option>
+                    <option value="hslock">HsLock</option>
+                    <option value="xeeder">Xeeder</option>
+                  </select>
+                  {savingLock && <Loader2 className="w-4 h-4 animate-spin text-indigo-500" />}
+                </div>
+              </div>
+
+              <div className="flex flex-col bg-gray-50 dark:bg-black/20 p-4 rounded-xl border border-gray-100 dark:border-[#2a2a2a] min-w-[280px]">
+                <div className="text-sm flex justify-between w-full">
+                  <span className="text-gray-500">Configured:</span>
+                  <span className="font-semibold text-gray-900 dark:text-white capitalize">{lockStatus.configuredProvider}</span>
+                </div>
+                <div className="text-sm flex justify-between w-full mt-2">
+                  <span className="text-gray-500">Active:</span>
+                  <span className="font-semibold text-gray-900 dark:text-white capitalize">{lockStatus.activeProvider}</span>
+                </div>
+                {lockStatus.restartRequired ? (
+                  <div className="text-xs font-medium mt-4 px-3 py-2 rounded-lg bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border border-amber-200 dark:border-amber-800/50 flex items-center gap-1.5">
+                    <span className="text-lg">⚠️</span>
+                    Restart LodgeCore Desktop to apply the new lock system.
+                  </div>
+                ) : (
+                  <div className="text-xs font-medium mt-4 px-3 py-2 rounded-lg bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/50 flex items-center gap-1.5">
+                    <CheckCircle className="w-4 h-4" />
+                    Provider is active
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="flex items-center justify-between mt-8 mb-2">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+            <Printer className="w-5 h-5 text-indigo-500" />
+            Configured Printers
+          </h2>
         </div>
 
         {/* Printer grid */}
