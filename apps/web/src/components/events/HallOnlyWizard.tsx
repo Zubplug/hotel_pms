@@ -1,20 +1,19 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { CheckCircle2, ChevronRight, User, CalendarDays, Box, FileText } from 'lucide-react';
+import { User, CalendarDays, Box, FileText } from 'lucide-react';
 import { createFullEventBooking } from '@/lib/events/booking-actions';
+import { BookingWizardShell } from './BookingWizardShell';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 
 const steps = [
-  { id: 1, title: 'Client Info', icon: User },
-  { id: 2, title: 'Schedule & Hall', icon: CalendarDays },
-  { id: 3, title: 'Equipment', icon: Box },
-  { id: 4, title: 'Summary', icon: FileText }
+  { id: 1, title: 'Client', description: 'Who is hosting the booking', icon: User },
+  { id: 2, title: 'Schedule', description: 'Hall, date and buffers', icon: CalendarDays },
+  { id: 3, title: 'Equipment', description: 'Reserve available inventory', icon: Box },
+  { id: 4, title: 'Review', description: 'Confirm before creating', icon: FileText }
 ];
 
 export function HallOnlyWizard({ initialHalls, equipmentList, onCreated }: { initialHalls: any[], equipmentList: any[], onCreated?: () => void }) {
@@ -39,6 +38,11 @@ export function HallOnlyWizard({ initialHalls, equipmentList, onCreated }: { ini
   });
 
   const currentStep = steps[currentStepIndex].id;
+  const canContinue = currentStep === 1
+    ? Boolean(formData.contactName.trim() && Number(formData.expectedGuests) > 0)
+    : currentStep === 2
+      ? Boolean(formData.hallId && formData.startTime && formData.endTime && new Date(formData.endTime) > new Date(formData.startTime) && (formData.repeatFrequency === 'NONE' || (formData.repeatUntil && (formData.repeatFrequency !== 'WEEKLY' || formData.repeatDaysOfWeek.length > 0))))
+      : true;
 
   const handleNext = () => setCurrentStepIndex(prev => Math.min(prev + 1, steps.length - 1));
   const handleBack = () => setCurrentStepIndex(prev => Math.max(prev - 1, 0));
@@ -113,33 +117,13 @@ export function HallOnlyWizard({ initialHalls, equipmentList, onCreated }: { ini
   };
 
   return (
-    <div className="w-full">
-      <div className="flex items-center justify-between mb-8">
-        {steps.map((step, index) => {
-          const Icon = step.icon;
-          const isActive = currentStepIndex === index;
-          const isCompleted = currentStepIndex > index;
-          
-          return (
-            <div key={step.id} className="flex flex-col items-center relative z-10 flex-1">
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center border-2 bg-white transition-colors
-                ${isActive ? 'border-primary text-primary' : isCompleted ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-slate-200 text-slate-400'}`}>
-                {isCompleted ? <CheckCircle2 className="w-5 h-5" /> : <Icon className="w-5 h-5" />}
-              </div>
-              <span className={`text-xs font-medium mt-2 ${isActive || isCompleted ? 'text-slate-900' : 'text-slate-400'}`}>
-                {step.title}
-              </span>
-            </div>
-          );
-        })}
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>{steps[currentStepIndex].title}</CardTitle>
-          <CardDescription>Enter the details for this booking phase.</CardDescription>
-        </CardHeader>
-        <CardContent className="min-h-[300px]">
+    <BookingWizardShell steps={steps} currentStepIndex={currentStepIndex} isSubmitting={isSubmitting} canContinue={canContinue} onBack={handleBack} onNext={handleNext} onSubmit={handleSubmit} summary={[
+      { label: 'Client', value: formData.contactName || 'Not added' },
+      { label: 'Guests', value: formData.expectedGuests || 'Not set' },
+      { label: 'Hall', value: initialHalls.find(h => h.id === formData.hallId)?.name || 'Not selected' },
+      { label: 'Equipment', value: `${Object.values(formData.equipmentRequests).filter(quantity => quantity > 0).length} item types` },
+      { label: 'Start', value: formData.startTime ? new Date(formData.startTime).toLocaleString() : 'Not set' },
+    ]}>
           
           {currentStep === 1 && (
             <div className="space-y-4 max-w-md">
@@ -306,20 +290,6 @@ export function HallOnlyWizard({ initialHalls, equipmentList, onCreated }: { ini
               )}
             </div>
           )}
-        </CardContent>
-        <CardFooter className="flex justify-between border-t p-4">
-          <Button variant="outline" onClick={handleBack} disabled={currentStepIndex === 0 || isSubmitting}>
-            Back
-          </Button>
-          {currentStepIndex < steps.length - 1 ? (
-            <Button onClick={handleNext}>Next Step <ChevronRight className="w-4 h-4 ml-2" /></Button>
-          ) : (
-            <Button onClick={handleSubmit} disabled={isSubmitting}>
-              {isSubmitting ? 'Processing...' : 'Confirm & Schedule'}
-            </Button>
-          )}
-        </CardFooter>
-      </Card>
-    </div>
+    </BookingWizardShell>
   );
 }
