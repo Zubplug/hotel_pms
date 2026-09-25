@@ -4,8 +4,6 @@ import { hasPermission } from '@/lib/permissions';
 import { CorporateAccountManagement } from '@/components/corporate/CorporateAccountManagement';
 import { redirect } from 'next/navigation';
 
-export const dynamic = 'force-dynamic';
-
 export async function CorporatePage() {
   const session = await auth();
   if (!session?.user) redirect('/login');
