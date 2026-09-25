@@ -10,8 +10,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2 } from 'lucide-react';
 import { generateUUID } from '@/lib/utils';
+import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 
-export function AddPaymentDialog({ open, onOpenChange, folio, collectionSource = 'FRONT_DESK' }: { open: boolean, onOpenChange: (open: boolean) => void, folio: any, collectionSource?: string }) {
+export function AddPaymentDialog({ open, onOpenChange, folio, collectionSource = 'FRONT_DESK', eventInvoiceId }: { open: boolean, onOpenChange: (open: boolean) => void, folio: any, collectionSource?: string, eventInvoiceId?: string }) {
   const [method, setMethod] = useState<string>('CASH');
   const [amount, setAmount] = useState<string>(folio?.balance > 0 ? folio.balance.toString() : '');
   const [notes, setNotes] = useState('');
@@ -21,6 +22,7 @@ export function AddPaymentDialog({ open, onOpenChange, folio, collectionSource =
   const [successPaymentId, setSuccessPaymentId] = useState<string | null>(null);
   
   const queryClient = useQueryClient();
+  const { provider, isDesktopMode } = useLodgeCoreProvider();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,28 +44,31 @@ export function AddPaymentDialog({ open, onOpenChange, folio, collectionSource =
       
       const payload = isGateway ? {
         folioId: folio.id,
+        ...(eventInvoiceId ? { eventInvoiceId } : {}),
         amount: numAmount,
         currency: folio.currency,
         ...(auditOverrideReason.trim() ? { nightAuditOverrideReason: auditOverrideReason.trim() } : {})
       } : {
-        folioId: folio.id,
         amount: numAmount,
         currency: folio.currency,
         method,
         notes,
         idempotencyKey: generateUUID()
         ,collectionSource,
+        ...(eventInvoiceId ? { eventInvoiceId } : {}),
         ...(auditOverrideReason.trim() ? { nightAuditOverrideReason: auditOverrideReason.trim() } : {})
       };
 
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error?.message || data.error || 'Failed to process payment');
+      const data = isGateway
+        ? await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }).then(async (response) => {
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error?.message || result.error || 'Failed to process payment');
+            return result;
+          })
+        : await provider.folios.addPayment(folio.id, payload);
+      if (data === false || data?.success === false || data?.error) {
+        throw new Error(data?.error?.message || data?.error || 'Failed to process payment');
+      }
 
       if (isGateway && data.data?.authorizationUrl) {
         // Redirect to Paystack checkout
@@ -73,7 +78,7 @@ export function AddPaymentDialog({ open, onOpenChange, folio, collectionSource =
 
       // Success for manual payment
       await queryClient.invalidateQueries({ queryKey: ['reservation', folio.reservationId] });
-      setSuccessPaymentId(data.data.payment.id);
+      setSuccessPaymentId(data?.data?.payment?.id || data?.payment?.id || 'pending-sync');
       // We do not close the dialog automatically.
     } catch (err: any) {
       const message = err.message || 'Failed to process payment';
@@ -110,7 +115,7 @@ export function AddPaymentDialog({ open, onOpenChange, folio, collectionSource =
                 <SelectItem value="POS">POS Terminal</SelectItem>
                 <SelectItem value="BANK_TRANSFER">Bank Transfer</SelectItem>
                 <SelectItem value="CARD">Manual Card</SelectItem>
-                <SelectItem value="PAYMENT_GATEWAY">Online Payment (Paystack)</SelectItem>
+                {!isDesktopMode && <SelectItem value="PAYMENT_GATEWAY">Online Payment (Paystack)</SelectItem>}
               </SelectContent>
             </Select>
           </div>

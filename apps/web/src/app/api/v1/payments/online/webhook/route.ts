@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
 import { PaystackProvider } from '@/lib/payment-providers/paystack';
+import crypto from 'node:crypto';
 
 export async function POST(req: NextRequest) {
   try {
@@ -82,6 +83,16 @@ async function handleChargeSuccess(req: NextRequest, event: any, provider: Payst
 
       if (!folio) throw new Error('Folio not found');
 
+      const eventInvoice = payment.eventInvoiceId
+        ? await tx.eventInvoice.findUnique({ where: { id: payment.eventInvoiceId } })
+        : null;
+      if (payment.eventInvoiceId && (!eventInvoice || eventInvoice.folioId !== folio.id)) {
+        throw new Error('Event invoice is not linked to the payment folio');
+      }
+      if (eventInvoice && ['DRAFT', 'VOID'].includes(eventInvoice.status)) {
+        throw new Error('Event invoice is not available for payment');
+      }
+
       const currentBalance = Number(folio.balance);
 
       // Race condition check: Did they already settle it manually?
@@ -119,6 +130,18 @@ async function handleChargeSuccess(req: NextRequest, event: any, provider: Payst
         return; // Exit transaction block early
       }
 
+      if (eventInvoice && Number(eventInvoice.totalAmount) - Number(eventInvoice.paidAmount) + 0.01 < verifyData.amount) {
+        await tx.payment.update({
+          where: { id: payment.id },
+          data: {
+            status: 'REVIEW_REQUIRED',
+            providerTransactionId: verifyData.providerTransactionId,
+            notes: 'Payment succeeded but the linked event invoice balance was already lower than the payment amount.'
+          }
+        });
+        return;
+      }
+
       // Safe to apply the payment
       const updatedFolio = await tx.folio.update({
         where: { id: folio.id, version: folio.version },
@@ -154,6 +177,17 @@ async function handleChargeSuccess(req: NextRequest, event: any, provider: Payst
           providerTransactionId: verifyData.providerTransactionId
         }
       });
+
+      if (eventInvoice) {
+        const paidAmount = Number(eventInvoice.paidAmount) + verifyData.amount;
+        await tx.eventInvoice.update({
+          where: { id: eventInvoice.id },
+          data: {
+            paidAmount,
+            status: paidAmount + 0.01 >= Number(eventInvoice.totalAmount) ? 'PAID' : 'PARTIAL',
+          },
+        });
+      }
 
       // Audit Log
       await tx.auditLog.create({

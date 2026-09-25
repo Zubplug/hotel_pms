@@ -84,6 +84,9 @@ export interface LodgeCoreDataProvider {
     addPayment(folioId: string, payment: any): Promise<any>;
     addDeposit(folioId: string, deposit: any): Promise<any>;
   };
+  eventInvoices: {
+    list(propertyId: string, search?: string): Promise<any>;
+  };
   guestCredits: {
     /** Returns guests with available credit for this property. */
     list(propertyId: string): Promise<any>;

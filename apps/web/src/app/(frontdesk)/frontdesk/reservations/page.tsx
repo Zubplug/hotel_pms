@@ -5,7 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { goBack } from '@/lib/frontdesk-navigation';
-import { Search, User, LogIn, ArrowRight, Clock, ArrowLeft, CheckCircle2, UserPlus, CreditCard, Wallet, Landmark, CalendarCheck, Sparkles } from 'lucide-react';
+import { Search, User, LogIn, ArrowRight, Clock, ArrowLeft, CheckCircle2, UserPlus, CreditCard, Wallet, Landmark, CalendarCheck, Sparkles, ReceiptText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useProperty } from '@/components/PropertyProvider';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
@@ -92,6 +92,13 @@ export default function FrontDeskReservationsPage() {
     queryKey: ['frontdesk', 'cityLedger', propertyId],
     queryFn: () => provider.cityLedger.list(propertyId),
     enabled: activeFilter === 'CITY_LEDGER',
+    refetchInterval: isOnline ? 30000 : false,
+  });
+
+  const { data: eventInvoicesData, isLoading: eventInvoicesLoading } = useQuery({
+    queryKey: ['frontdesk', 'eventInvoices', propertyId, debouncedSearch],
+    queryFn: () => provider.eventInvoices.list(propertyId, debouncedSearch),
+    enabled: activeFilter === 'EVENT_INVOICES',
     refetchInterval: isOnline ? 30000 : false,
   });
 
@@ -189,6 +196,7 @@ export default function FrontDeskReservationsPage() {
             { id: 'UNPAID', label: 'Unpaid Balance', icon: CreditCard },
             { id: 'GUEST_CREDITS', label: 'Guest Credits', icon: Wallet },
             { id: 'CITY_LEDGER', label: 'City Ledger', icon: Landmark },
+            { id: 'EVENT_INVOICES', label: 'Event Invoices', icon: ReceiptText },
           ].map(filter => (
             <button
               key={filter.id}
@@ -213,6 +221,15 @@ export default function FrontDeskReservationsPage() {
         <div className="flex justify-center p-12">
           <div className="w-10 h-10 border-4 border-slate-200 border-t-blue-600 rounded-full animate-spin"></div>
         </div>
+      ) : activeFilter === 'EVENT_INVOICES' ? (
+        eventInvoicesLoading ? <div className="flex justify-center p-12"><div className="w-10 h-10 border-4 border-slate-200 border-t-indigo-600 rounded-full animate-spin" /></div> : (() => {
+          const rawInvoices: any[] = Array.isArray(eventInvoicesData) ? eventInvoicesData : ((eventInvoicesData as any)?.data ?? []);
+          return rawInvoices.length === 0 ? (
+            <div className="text-center p-12 bg-slate-50 rounded-3xl border border-slate-100"><ReceiptText className="w-12 h-12 text-slate-300 mx-auto mb-3" /><h3 className="text-lg font-bold text-slate-900">No event invoices</h3><p className="text-slate-500">Issued event invoices for this property will appear here.</p></div>
+          ) : (
+            <div className="overflow-x-auto rounded-3xl border border-slate-200 bg-white shadow-sm"><table className="w-full text-sm"><thead className="border-b bg-slate-50 text-left text-xs uppercase tracking-wider text-slate-500"><tr><th className="px-5 py-4">Client</th><th className="px-5 py-4">Event</th><th className="px-5 py-4">Status</th><th className="px-5 py-4 text-right">Outstanding</th><th className="px-5 py-4">Action</th></tr></thead><tbody className="divide-y">{rawInvoices.map((invoice: any) => { const outstanding = Math.max(0, Number(invoice.totalAmount || 0) - Number(invoice.paidAmount || 0)); const folioId = invoice.folioId || invoice.folio?.id; const clientName = invoice.clientName || (invoice.event?.guest ? `${invoice.event.guest.firstName || ''} ${invoice.event.guest.lastName || ''}`.trim() : invoice.event?.corporateAccount?.name || invoice.event?.contactName || '—'); return <tr key={invoice.id}><td className="px-5 py-4 font-semibold text-slate-800">{clientName}</td><td className="px-5 py-4 text-slate-700">{invoice.eventName || invoice.event?.name || 'Event'}</td><td className="px-5 py-4"><span className={`rounded-full px-2.5 py-1 text-xs font-bold ${invoice.status === 'PAID' ? 'bg-emerald-100 text-emerald-700' : invoice.status === 'PARTIAL' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}`}>{invoice.status}</span></td><td className="px-5 py-4 text-right font-extrabold text-slate-900">{invoice.currency || 'NGN'} {outstanding.toLocaleString()}</td><td className="px-5 py-4">{folioId && outstanding > 0 ? <Link href={`/frontdesk/folios/${folioId}?eventInvoiceId=${encodeURIComponent(invoice.id)}`} className="inline-flex items-center gap-2 rounded-full bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-700"><CreditCard className="h-3.5 w-3.5" /> Receive payment</Link> : <span className="text-xs text-slate-400">{outstanding <= 0 ? 'Settled' : 'Folio unavailable'}</span>}</td></tr>; })}</tbody></table></div>
+          );
+        })()
       ) : activeFilter === 'CITY_LEDGER' ? (
         cityLedgerLoading ? <div className="flex justify-center p-12"><div className="w-10 h-10 border-4 border-slate-200 border-t-indigo-600 rounded-full animate-spin" /></div> : (() => {
           const rawEntries: any[] = Array.isArray(cityLedgerData) ? cityLedgerData : ((cityLedgerData as any)?.data ?? []);

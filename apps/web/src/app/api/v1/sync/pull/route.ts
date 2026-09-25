@@ -667,6 +667,19 @@ export async function GET(req: NextRequest) {
     sharedCorporateFolios.forEach(addFolio);
     foliosChangedSinceCursor.forEach(addFolio);
     const folios = Array.from(folioById.values());
+
+    // Issued event invoices are first-class front-desk receivables. Keep the
+    // offline tab searchable without exposing draft/void invoices to cashiers.
+    const eventInvoices = await prisma.eventInvoice.findMany({
+      where: since
+        ? { event: { propertyId }, updatedAt: { gt: since, lte: watermark }, status: { notIn: ['DRAFT', 'VOID'] } }
+        : { event: { propertyId }, status: { notIn: ['DRAFT', 'VOID'] }, updatedAt: { lte: watermark } },
+      include: {
+        event: { include: { guest: true, corporateAccount: true } },
+      },
+      take: limit,
+      orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
+    });
     
     // Resolve permissions for staff
     const staffWithPermissions = await Promise.all(
@@ -755,6 +768,7 @@ export async function GET(req: NextRequest) {
       reservations: plainReservations,
       guests:     Array.from(guestMap.values()),
       folios,
+      eventInvoices,
       posOutlets: finalOutlets,
       posCategories: finalCategories,
       posProducts: finalProducts,

@@ -1760,7 +1760,7 @@ public class LocalRepository
         return session;
     }
 
-    public async Task<bool> RecordPaymentAsync(string folioId, decimal amount, string method, string userId, string deviceId, string? idempotencyKey = null)
+    public async Task<bool> RecordPaymentAsync(string folioId, decimal amount, string method, string userId, string deviceId, string? idempotencyKey = null, string? eventInvoiceId = null)
     {
         var folio = await _dbContext.Folios.FindAsync(folioId);
         if (folio == null) return false;
@@ -1793,6 +1793,7 @@ public class LocalRepository
             type = "PAYMENT",
             status = "COMPLETED",
             idempotencyKey = idempotencyKey,
+            eventInvoiceId = eventInvoiceId,
             frontdeskSessionId = frontdeskSession.Id,
             createdAt = DateTime.UtcNow
         };
@@ -1834,7 +1835,7 @@ public class LocalRepository
             EventType = "POST_PAYMENT",
             Sequence = folio.LocalSequence,
             IdempotencyKey = idempotencyKey ?? Guid.NewGuid().ToString(),
-            PayloadJson = JsonSerializer.Serialize(new { amount, method, reservationId = folio.ReservationId, currency = folio.Currency ?? "NGN", businessDate = frontdeskSession?.BusinessDate, originalBusinessDate = frontdeskSession?.BusinessDate, idempotencyKey, frontdeskSessionId = frontdeskSession?.Id })
+            PayloadJson = JsonSerializer.Serialize(new { amount, method, reservationId = folio.ReservationId, currency = folio.Currency ?? "NGN", businessDate = frontdeskSession?.BusinessDate, originalBusinessDate = frontdeskSession?.BusinessDate, idempotencyKey, eventInvoiceId, frontdeskSessionId = frontdeskSession?.Id })
         });
 
         await _dbContext.SaveChangesAsync();
@@ -2685,6 +2686,17 @@ public class LocalRepository
             .FirstOrDefaultAsync(f => f.Id == folioId);
 
         return folio;
+    }
+
+    public async Task<List<LocalEventInvoice>> GetEventInvoicesAsync(string propertyId, string? search = null)
+    {
+        var query = _dbContext.EventInvoices.Where(invoice => invoice.PropertyId == propertyId && (invoice.Status == "UNPAID" || invoice.Status == "PARTIAL"));
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim().ToLower();
+            query = query.Where(invoice => invoice.EventName.ToLower().Contains(term) || invoice.ClientName.ToLower().Contains(term) || invoice.Id.ToLower().Contains(term));
+        }
+        return await query.OrderByDescending(invoice => invoice.UpdatedAt).Take(100).ToListAsync();
     }
 
     public async Task<LocalReservation?> GetReservationByRoomNumberAsync(string roomNumber)

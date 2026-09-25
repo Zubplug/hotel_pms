@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import { ArrowLeft, CreditCard, Loader2, Printer, LockKeyhole, WalletCards, ReceiptText } from 'lucide-react';
 import { AddPaymentDialog } from '@/components/reservations/AddPaymentDialog';
+import { FrontDeskAddPaymentDialog } from '@/components/frontdesk/FrontDeskAddPaymentDialog';
+import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 
 interface FolioDetailViewProps {
   folioId: string;
@@ -10,20 +12,24 @@ interface FolioDetailViewProps {
   readOnly?: boolean;
   /** Set to true when rendered inside the Night Audit module */
   darkMode?: boolean;
+  eventInvoiceId?: string;
 }
 
-export function FolioDetailView({ folioId, onBack, readOnly = false, darkMode = false }: FolioDetailViewProps) {
+export function FolioDetailView({ folioId, onBack, readOnly = false, darkMode = false, eventInvoiceId }: FolioDetailViewProps) {
   const [folio, setFolio] = useState<any>(null);
   const [error, setError] = useState('');
   const [paymentOpen, setPaymentOpen] = useState(false);
+  const { provider, isDesktopMode } = useLodgeCoreProvider();
 
   useEffect(() => {
-    void fetch(`/api/v1/folios/${folioId}`).then(async (response) => {
-      const body = await response.json();
-      if (!response.ok) throw new Error(body.error || 'Unable to load folio');
-      setFolio(body.data);
-    }).catch((reason) => setError(reason instanceof Error ? reason.message : 'Unable to load folio'));
-  }, [folioId, paymentOpen]);
+    let cancelled = false;
+    void provider.folios.get(folioId).then((result: any) => {
+      if (!cancelled) setFolio(result?.data || result);
+    }).catch((reason) => {
+      if (!cancelled) setError(reason instanceof Error ? reason.message : 'Unable to load folio');
+    });
+    return () => { cancelled = true; };
+  }, [folioId, paymentOpen, provider]);
 
   /* ── Error state ── */
   if (error) {
@@ -198,9 +204,17 @@ export function FolioDetailView({ folioId, onBack, readOnly = false, darkMode = 
           </div>
         </section>
 
-        {!readOnly && (
+        {!readOnly && isDesktopMode && (
+          <FrontDeskAddPaymentDialog open={paymentOpen} onOpenChange={setPaymentOpen}
+            folio={folio}
+            eventInvoiceId={eventInvoiceId}
+            mode="payment"
+          />
+        )}
+        {!readOnly && !isDesktopMode && (
           <AddPaymentDialog open={paymentOpen} onOpenChange={setPaymentOpen}
             folio={{ id: folio.id, balance: folio.balance, currency: folio.currency, reservationId: folio.reservation?.id }}
+            eventInvoiceId={eventInvoiceId}
             collectionSource="RECEIVABLES"
           />
         )}
@@ -303,9 +317,17 @@ export function FolioDetailView({ folioId, onBack, readOnly = false, darkMode = 
           )}
         </div>
       </section>
-      {!readOnly && (
+      {!readOnly && isDesktopMode && (
+        <FrontDeskAddPaymentDialog open={paymentOpen} onOpenChange={setPaymentOpen}
+          folio={folio}
+          eventInvoiceId={eventInvoiceId}
+          mode="payment"
+        />
+      )}
+      {!readOnly && !isDesktopMode && (
         <AddPaymentDialog open={paymentOpen} onOpenChange={setPaymentOpen}
           folio={{ id: folio.id, balance: folio.balance, currency: folio.currency, reservationId: folio.reservation?.id }}
+          eventInvoiceId={eventInvoiceId}
           collectionSource="RECEIVABLES"
         />
       )}

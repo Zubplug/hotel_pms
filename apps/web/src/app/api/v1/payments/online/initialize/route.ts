@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
     const session = await auth();
     if (!session?.user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
     const body = await req.json();
-    const { folioId, amount, currency, terminalId, frontdeskSessionId, nightAuditOverrideReason } = body;
+    const { folioId, amount, currency, terminalId, frontdeskSessionId, nightAuditOverrideReason, eventInvoiceId } = body;
     if (!folioId || !amount || !currency) {
       return errorResponse('BAD_REQUEST', 'Missing required fields', 400);
     }
@@ -52,6 +52,20 @@ export async function POST(req: NextRequest) {
     if (numericAmount > currentBalance) {
       return errorResponse('BAD_REQUEST', 'Payment amount exceeds outstanding balance.', 400);
     }
+    const eventInvoice = eventInvoiceId
+      ? await prisma.eventInvoice.findFirst({
+          where: { id: eventInvoiceId, folioId, event: { propertyId: folio.propertyId } },
+        })
+      : null;
+    if (eventInvoiceId && !eventInvoice) {
+      return errorResponse('BAD_REQUEST', 'Event invoice is not linked to this folio or property.', 400);
+    }
+    if (eventInvoice && ['DRAFT', 'VOID'].includes(eventInvoice.status)) {
+      return errorResponse('BAD_REQUEST', 'Only an issued event invoice can receive payment.', 400);
+    }
+    if (eventInvoice && numericAmount > Number(eventInvoice.totalAmount) - Number(eventInvoice.paidAmount) + 0.01) {
+      return errorResponse('BAD_REQUEST', 'Payment amount exceeds the selected event invoice balance.', 400);
+    }
     // Generate unique reference
     const providerRef = `PAY-${folioId.substring(0,8)}-${crypto.randomBytes(6).toString('hex').toUpperCase()}`;
     const callbackUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/payments/callback`;
@@ -64,6 +78,7 @@ export async function POST(req: NextRequest) {
         data: {
           folioId: folio.id,
           reservationId: folio.reservationId,
+          eventInvoiceId: eventInvoice?.id,
           propertyId: folio.propertyId,
           method: 'PAYMENT_GATEWAY',
           provider: 'PAYSTACK',

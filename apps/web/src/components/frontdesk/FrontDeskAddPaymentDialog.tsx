@@ -14,7 +14,7 @@ import { Loader2, CreditCard, Banknote, Landmark, Receipt, CheckCircle2, Chevron
 import { cn, generateUUID } from '@/lib/utils';
 import { HardwareBridge } from '@/lib/desktop/HardwareBridge';
 
-export function FrontDeskAddPaymentDialog({ open, onOpenChange, folio, initialAmount, onPaymentSuccess, mode = 'payment' }: { open: boolean, onOpenChange: (open: boolean) => void, folio: any, initialAmount?: number, onPaymentSuccess?: () => void, mode?: 'payment' | 'deposit' }) {
+export function FrontDeskAddPaymentDialog({ open, onOpenChange, folio, initialAmount, onPaymentSuccess, mode = 'payment', eventInvoiceId }: { open: boolean, onOpenChange: (open: boolean) => void, folio: any, initialAmount?: number, onPaymentSuccess?: () => void, mode?: 'payment' | 'deposit', eventInvoiceId?: string }) {
   const isDeposit = mode === 'deposit';
   const [method, setMethod] = useState<string>('CASH');
   const [amount, setAmount] = useState<string>(initialAmount?.toString() || (!isDeposit && folio?.balance > 0 ? folio.balance.toString() : ''));
@@ -26,7 +26,7 @@ export function FrontDeskAddPaymentDialog({ open, onOpenChange, folio, initialAm
   const [printStatus, setPrintStatus] = useState<'IDLE' | 'PRINTING' | 'SUCCESS' | 'FAILED'>('IDLE');
   
   const queryClient = useQueryClient();
-  const { provider } = useLodgeCoreProvider();
+  const { provider, isDesktopMode } = useLodgeCoreProvider();
 
   useEffect(() => {
     if (open) setAmount(initialAmount?.toString() || (!isDeposit && folio?.balance > 0 ? folio.balance.toString() : ''));
@@ -112,14 +112,15 @@ export function FrontDeskAddPaymentDialog({ open, onOpenChange, folio, initialAm
           method,
           notes,
           idempotencyKey: generateUUID(),
+          ...(eventInvoiceId ? { eventInvoiceId } : {}),
           ...(auditOverrideReason.trim() ? { nightAuditOverrideReason: auditOverrideReason.trim() } : {})
         };
 
         const res = isDeposit
           ? await provider.folios.addDeposit(folio.id, { ...payload, reference: notes })
           : await provider.folios.addPayment(folio.id, payload);
-        if (!res.success) {
-           throw new Error(res.error?.message || res.error || 'Failed to record payment');
+        if (res === false || res?.success === false) {
+           throw new Error(res?.error?.message || res?.error || 'Failed to record payment');
         }
         paymentId = res.data?.payment?.id || 'pending-sync';
       }
@@ -188,7 +189,7 @@ export function FrontDeskAddPaymentDialog({ open, onOpenChange, folio, initialAm
               <div className="space-y-3">
                 <Label className="text-sm font-bold text-slate-700">Payment Method</Label>
                 <div className="grid grid-cols-2 gap-3">
-                    {paymentMethods.filter((m) => !isDeposit || m.id !== 'PAYMENT_GATEWAY').map((m) => {
+                    {paymentMethods.filter((m) => (!isDeposit || m.id !== 'PAYMENT_GATEWAY') && (!isDesktopMode || m.id !== 'PAYMENT_GATEWAY')).map((m) => {
                     const isSelected = method === m.id;
                     const Icon = m.icon;
                     return (

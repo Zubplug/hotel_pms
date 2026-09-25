@@ -602,6 +602,7 @@ model Guest {
   laundryOrders   LaundryOrder[]
   CityLedgerEntry CityLedgerEntry[]
   folioItems      FolioItem[]
+  events          Event[]
 
   @@index([propertyId])
   @@index([propertyId, email])
@@ -662,6 +663,7 @@ model CorporateAccount {
 
   reservations Reservation[]
   folios       Folio[]
+  events       Event[]
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
@@ -1091,6 +1093,8 @@ model FolioItem {
   nightAudit           NightAudit? @relation(fields: [nightAuditRunId], references: [id])
 
   createdAt DateTime @default(now()) @db.Timestamptz
+
+  @@unique([folioId, operationId])
 }
 
 enum PaymentMethod {
@@ -1112,6 +1116,8 @@ model Payment {
   id                 String            @id @default(uuid()) @db.Uuid
   folioId            String            @db.Uuid
   folio              Folio             @relation(fields: [folioId], references: [id])
+  eventInvoiceId     String?           @db.Uuid
+  eventInvoice       EventInvoice?     @relation(fields: [eventInvoiceId], references: [id])
   reservationId      String?           @db.Uuid
   reservation        Reservation?      @relation(fields: [reservationId], references: [id])
   frontdeskSessionId String?           @db.Uuid
@@ -2348,7 +2354,7 @@ model AuditLog {
   userId    String? @db.Uuid
   userEmail String?
   userRole  String?
-  
+
   impersonatorUserId String? @db.Uuid
 
   action     String
@@ -4658,6 +4664,12 @@ model Event {
   contactPhone String?
   contactEmail String?
 
+  guestId            String? @db.Uuid
+  guest              Guest?  @relation(fields: [guestId], references: [id])
+  corporateAccountId String? @db.Uuid
+  corporateAccount   CorporateAccount? @relation(fields: [corporateAccountId], references: [id])
+
+
   status          EventStatus          @default(INQUIRY)
   financialStatus EventFinancialStatus @default(QUOTE)
 
@@ -4793,11 +4805,14 @@ model EventInvoice {
   eventId String? @db.Uuid
   event   Event?  @relation(fields: [eventId], references: [id])
 
-  totalAmount Decimal @db.Decimal(18, 4)
-  paidAmount  Decimal @db.Decimal(18, 4)
-  currency    String  @default("NGN")
+  subTotal      Decimal @default(0) @db.Decimal(18, 4)
+  totalDiscount Decimal @default(0) @db.Decimal(18, 4)
+  totalTax      Decimal @default(0) @db.Decimal(18, 4)
+  totalAmount   Decimal @db.Decimal(18, 4)
+  paidAmount    Decimal @db.Decimal(18, 4)
+  currency      String  @default("NGN")
 
-  status String @default("UNPAID") // UNPAID, PARTIAL, PAID, VOID
+  status String @default("UNPAID") // DRAFT, UNPAID, PARTIAL, PAID, VOID
 
   // Link to existing financial infrastructure
   folioId String? @db.Uuid
@@ -4807,6 +4822,7 @@ model EventInvoice {
   cityLedgerAccount   CityLedgerAccount? @relation(fields: [cityLedgerAccountId], references: [id])
 
   items EventInvoiceItem[]
+  payments Payment[]
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
@@ -4820,7 +4836,14 @@ model EventInvoiceItem {
   description String
   quantity    Int     @default(1)
   unitPrice   Decimal @db.Decimal(18, 4)
-  totalPrice  Decimal @db.Decimal(18, 4)
+
+  grossAmount    Decimal @default(0) @db.Decimal(18, 4)
+  discountAmount Decimal @default(0) @db.Decimal(18, 4)
+  taxAmount      Decimal @default(0) @db.Decimal(18, 4)
+  totalPrice     Decimal @db.Decimal(18, 4)
+
+  taxId      String? @db.Uuid
+  discountId String? @db.Uuid
 }
 
 // =============================================================================
@@ -5619,7 +5642,7 @@ model BillingProduct {
   type            String   // 'BASE', 'ADDON'
   stripeProductId String?
   active          Boolean  @default(true)
-  
+
   prices          BillingPrice[]
   entitlements    Entitlement[]
 
@@ -5631,12 +5654,12 @@ model BillingPrice {
   id            String   @id @default(uuid()) @db.Uuid
   productId     String   @db.Uuid
   product       BillingProduct @relation(fields: [productId], references: [id])
-  
+
   stripePriceId String   @unique
   amount        Int
   currency      String
   interval      String   // 'month', 'year'
-  
+
   subscriptionItems SubscriptionItem[]
 
   createdAt     DateTime @default(now()) @db.Timestamptz
@@ -5657,10 +5680,10 @@ model Subscription {
   id                   String       @id @default(uuid()) @db.Uuid
   organizationId       String       @db.Uuid
   organization         Organization @relation(fields: [organizationId], references: [id])
-  
+
   stripeSubscriptionId String       @unique
   status               String       // 'TRIALING', 'ACTIVE', 'PAST_DUE', 'PAUSED', 'CANCELED', 'INCOMPLETE'
-  
+
   currentPeriodStart   DateTime     @db.Timestamptz
   currentPeriodEnd     DateTime     @db.Timestamptz
   cancelAtPeriodEnd    Boolean      @default(false)
@@ -5679,7 +5702,7 @@ model SubscriptionItem {
   id             String       @id @default(uuid()) @db.Uuid
   subscriptionId String       @db.Uuid
   subscription   Subscription @relation(fields: [subscriptionId], references: [id])
-  
+
   priceId        String       @db.Uuid
   price          BillingPrice @relation(fields: [priceId], references: [id])
 
@@ -5693,12 +5716,12 @@ model Entitlement {
   id               String         @id @default(uuid()) @db.Uuid
   organizationId   String         @db.Uuid
   organization     Organization   @relation(fields: [organizationId], references: [id])
-  
+
   productCode      String
   product          BillingProduct @relation(fields: [productCode], references: [code])
-  
+
   status           String         // 'ACTIVE', 'SUSPENDED'
-  
+
   activatedAt      DateTime       @default(now()) @db.Timestamptz
   suspendedAt      DateTime?      @db.Timestamptz
   expiresAt        DateTime?      @db.Timestamptz

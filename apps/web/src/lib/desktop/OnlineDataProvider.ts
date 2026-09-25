@@ -225,12 +225,19 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
       });
     },
     addPayment: async (folioId, payment) => {
-      return apiFetch(`/api/v1/folios/${folioId}/payments`, {
+      return apiFetch('/api/v1/payments', {
         method: 'POST',
-        body: JSON.stringify(payment)
+        body: JSON.stringify({ ...payment, folioId })
       });
     },
     addDeposit: async () => ({ success: false, error: 'Advance deposits are available on the desktop front desk.' })
+  },
+  eventInvoices: {
+    async list(propertyId: string, search = '') {
+      const query = new URLSearchParams({ propertyId });
+      if (search) query.set('search', search);
+      return apiFetch(`/api/v1/frontdesk/event-invoices?${query.toString()}`);
+    },
   },
   guestCredits: {
     list: async (propertyId: string) => {

@@ -17,6 +17,18 @@ export default async function CreateHallOnlyPage() {
     orderBy: { name: 'asc' },
   });
   const equipment = await getEquipment(propertyId);
+  const [guests, corporateAccounts] = await Promise.all([
+    prisma.guest.findMany({ where: { propertyId, deletedAt: null }, select: { id: true, firstName: true, lastName: true, email: true }, orderBy: { firstName: 'asc' }, take: 200 }),
+    prisma.corporateAccount.findMany({ where: { propertyId, isActive: true }, select: { id: true, name: true, code: true }, orderBy: { name: 'asc' }, take: 200 }),
+  ]);
+  const tax = await prisma.tax.findFirst({
+    where: {
+      propertyId,
+      isActive: true,
+      OR: [{ code: 'VAT' }, { name: { contains: 'VAT', mode: 'insensitive' } }],
+    },
+    orderBy: { createdAt: 'asc' },
+  });
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
@@ -24,7 +36,13 @@ export default async function CreateHallOnlyPage() {
         <h1 className="text-3xl font-bold tracking-tight">New Space Rental</h1>
         <p className="text-muted-foreground mt-1">Book halls and equipment.</p>
       </div>
-      <HallOnlyWizard initialHalls={halls} equipmentList={equipment} />
+      <HallOnlyWizard
+        initialHalls={halls}
+        equipmentList={equipment}
+        guests={guests}
+        corporateAccounts={corporateAccounts}
+        taxRate={tax?.type === 'PERCENTAGE' ? Number(tax.rate) / 100 : 0}
+      />
     </div>
   );
 }

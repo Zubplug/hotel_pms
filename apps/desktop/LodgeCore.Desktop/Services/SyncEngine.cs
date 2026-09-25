@@ -1663,6 +1663,52 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                 }
             }
 
+            // Issued event invoices used by the offline front-desk receivables tab.
+            if (root.TryGetProperty("eventInvoices", out var eventInvoicesArray))
+            {
+                var incomingEventInvoiceIds = new HashSet<string>();
+                foreach (var el in eventInvoicesArray.EnumerateArray())
+                {
+                    var id = el.GetProperty("id").GetString();
+                    if (string.IsNullOrEmpty(id)) continue;
+                    incomingEventInvoiceIds.Add(id);
+
+                    var invoice = dbContext.EventInvoices.Local.FirstOrDefault(x => x.Id == id)
+                        ?? await dbContext.EventInvoices.FirstOrDefaultAsync(x => x.Id == id, stoppingToken);
+                    if (invoice == null)
+                    {
+                        invoice = new LodgeCore.Desktop.Data.Entities.LocalEventInvoice { Id = id, PropertyId = propertyId };
+                        dbContext.EventInvoices.Add(invoice);
+                    }
+
+                    invoice.PropertyId = propertyId;
+                    invoice.EventId = el.TryGetProperty("eventId", out var eventId) && eventId.ValueKind != System.Text.Json.JsonValueKind.Null ? eventId.GetString() : null;
+                    invoice.FolioId = el.TryGetProperty("folioId", out var folioId) && folioId.ValueKind != System.Text.Json.JsonValueKind.Null ? folioId.GetString() : null;
+                    invoice.EventName = el.TryGetProperty("event", out var event) && event.TryGetProperty("name", out var eventName) ? eventName.GetString() ?? "Event" : "Event";
+                    var guestName = "";
+                    if (event.ValueKind == System.Text.Json.JsonValueKind.Object && event.TryGetProperty("guest", out var guest) && guest.ValueKind == System.Text.Json.JsonValueKind.Object)
+                    {
+                        guestName = $"{guest.TryGetProperty("firstName", out var first) ? first.GetString() : ""} {guest.TryGetProperty("lastName", out var last) ? last.GetString() : ""}".Trim();
+                    }
+                    if (string.IsNullOrWhiteSpace(guestName) && event.ValueKind == System.Text.Json.JsonValueKind.Object && event.TryGetProperty("corporateAccount", out var corporate) && corporate.ValueKind == System.Text.Json.JsonValueKind.Object && corporate.TryGetProperty("name", out var corporateName))
+                        guestName = corporateName.GetString() ?? "";
+                    if (string.IsNullOrWhiteSpace(guestName) && event.ValueKind == System.Text.Json.JsonValueKind.Object && event.TryGetProperty("contactName", out var contactName))
+                        guestName = contactName.GetString() ?? "";
+                    invoice.ClientName = guestName;
+                    invoice.Status = el.TryGetProperty("status", out var status) ? status.GetString() ?? "UNPAID" : "UNPAID";
+                    invoice.TotalAmount = ReadDecimal(el, "totalAmount");
+                    invoice.PaidAmount = ReadDecimal(el, "paidAmount");
+                    invoice.Currency = el.TryGetProperty("currency", out var currency) ? currency.GetString() ?? "NGN" : "NGN";
+                    invoice.UpdatedAt = DateTime.UtcNow;
+                }
+
+                if (!isIncremental)
+                {
+                    var staleInvoices = await dbContext.EventInvoices.Where(x => x.PropertyId == propertyId && !incomingEventInvoiceIds.Contains(x.Id)).ToListAsync(stoppingToken);
+                    if (staleInvoices.Any()) dbContext.EventInvoices.RemoveRange(staleInvoices);
+                }
+            }
+
             // 6. POS Outlets
             if (root.TryGetProperty("posOutlets", out var posOutletsArray))
             {

@@ -48,6 +48,19 @@ public class OfflinePMSInterop
         }
     }
 
+    public async Task<string> GetEventInvoicesAsync(string propertyId, string? search = null)
+    {
+        try
+        {
+            var invoices = await _repo.GetEventInvoicesAsync(propertyId, search);
+            return JsonSerializer.Serialize(new { success = true, data = invoices }, _jsonOptions);
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
+        }
+    }
+
     public async Task<string> ProvisionTerminalAsync(string email, string password, string propertyId, string outletId, string terminalName, string terminalType)
     {
         try
@@ -801,12 +814,12 @@ public class OfflinePMSInterop
             return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
         }
     }
-    public async Task<string> RecordPaymentAsync(string folioId, decimal amount, string method, string? idempotencyKey = null)
+    public async Task<string> RecordPaymentAsync(string folioId, decimal amount, string method, string? idempotencyKey = null, string? eventInvoiceId = null)
     {
         try
         {
             var ctx = await GetSecureContextAsync();
-            var success = await _repo.RecordPaymentAsync(folioId, amount, method, ctx.UserId, ctx.DeviceId, idempotencyKey);
+            var success = await _repo.RecordPaymentAsync(folioId, amount, method, ctx.UserId, ctx.DeviceId, idempotencyKey, eventInvoiceId);
             var paymentId = "off-" + Guid.NewGuid().ToString();
             return JsonSerializer.Serialize(new { 
                 success, 

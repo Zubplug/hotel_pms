@@ -109,6 +109,7 @@ public static class MauiProgram
             db.ApplyCorporateFolioSchemaAsync().GetAwaiter().GetResult();
             db.ApplySettlementSchemaAsync().GetAwaiter().GetResult();   // fixes shift-submit DbUpdateException
             db.ApplyGuestCreditAllocationSchemaAsync().GetAwaiter().GetResult(); // offline credit allocation table
+            db.ApplyEventInvoiceSchemaAsync().GetAwaiter().GetResult();
         }
 
         return app;

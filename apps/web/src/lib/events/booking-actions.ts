@@ -1,5 +1,6 @@
 'use server';
 
+import crypto from 'node:crypto';
 import { prisma } from '@hotel-pms/db';
 import { revalidatePath } from 'next/cache';
 import { toZonedTime, fromZonedTime } from 'date-fns-tz';
@@ -32,7 +33,7 @@ export async function checkHallAvailability(
 
   const newEffectiveStart = new Date(startTime.getTime() - setupBufferMinutes * 60000);
   const newEffectiveEnd = new Date(endTime.getTime() + teardownBufferMinutes * 60000);
-  
+
   const searchWindowStart = new Date(newEffectiveStart.getTime() - 24 * 60 * 60 * 1000);
   const searchWindowEnd = new Date(newEffectiveEnd.getTime() + 24 * 60 * 60 * 1000);
 
@@ -50,7 +51,7 @@ export async function checkHallAvailability(
 
   for (const booking of potentialConflicts) {
     if (booking.event?.status === 'CANCELLED') continue;
-    
+
     const existingEffectiveStart = new Date(booking.startTime.getTime() - booking.setupBufferMinutes * 60000);
     const existingEffectiveEnd = new Date(booking.endTime.getTime() + booking.teardownBufferMinutes * 60000);
 
@@ -83,13 +84,46 @@ export async function getEquipment(propertyId?: string) {
   const context = await requireEventContext();
   const scopedPropertyId = propertyId || context.propertyId;
   if (scopedPropertyId !== context.propertyId) throw new Error('Equipment property mismatch.');
-  return await prisma.eventEquipment.findMany({ 
+  return await prisma.eventEquipment.findMany({
     where: { isActive: true, propertyId: scopedPropertyId },
-    orderBy: { name: 'asc' } 
+    orderBy: { name: 'asc' }
   });
 }
 
-export async function createFullEventBooking(data: {
+
+function codeToken(value: string) {
+  return value.toUpperCase().replace(/[^A-Z0-9]+/g, '').slice(0, 8) || 'CORP';
+}
+
+async function generateCorporateCode(tx: any, propertyId: string, name: string) {
+  const prefix = codeToken(name);
+  for (let index = 1; index <= 99; index += 1) {
+    const suffix = String(index).padStart(2, '0');
+    const candidate = `${prefix.slice(0, 10 - suffix.length)}${suffix}`;
+    const existing = await tx.corporateAccount.findFirst({
+      where: { propertyId, code: candidate },
+      select: { id: true },
+    });
+    if (!existing) return candidate;
+  }
+  return `CORP${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
+}
+
+export type ClientBookingData = {
+  clientType: 'INDIVIDUAL' | 'CORPORATE';
+  isExisting: boolean;
+  clientId?: string;
+  clientDetails?: {
+    firstName?: string;
+    lastName?: string;
+    phone?: string;
+    email?: string;
+    companyName?: string;
+    contactPerson?: string;
+    contactEmail?: string;
+    contactPhone?: string;
+    address?: string;
+  };
   contactName: string;
   contactPhone: string;
   expectedGuests: number;
@@ -102,12 +136,13 @@ export async function createFullEventBooking(data: {
   bookingType: 'HALL_ONLY' | 'FULL_PACKAGE';
   equipmentRequests?: { equipmentId: string; quantity: number }[];
   dietaryNotes?: any;
-  recurrenceRule?: {
-    frequency: string;
-    daysOfWeek?: number[];
-    until: string;
-  };
-}) {
+  recurrenceRule?: { frequency: string; daysOfWeek?: number[]; until: string; };
+  // Financial
+  hallRate?: number; // Deprecated client hint; never trusted
+  discountAmount: number;
+};
+
+export async function createFullEventBooking(data: ClientBookingData) {
   const { propertyId } = await requireEventContext();
 
   const contactName = data.contactName.trim();
@@ -122,6 +157,11 @@ export async function createFullEventBooking(data: {
   if (data.recurrenceRule && !['NONE', 'DAILY', 'WEEKLY'].includes(data.recurrenceRule.frequency)) throw new Error('Invalid recurrence frequency.');
 
   return await prisma.$transaction(async (tx) => {
+    // A. Fetch Property/Organization
+    const property = await tx.property.findUnique({ where: { id: propertyId } });
+    if (!property) throw new Error("Property not found");
+    const organizationId = property.organizationId;
+
     if (data.bookingType !== 'HALL_ONLY' && data.bookingType !== 'FULL_PACKAGE') {
       throw new Error("Invalid booking type specified.");
     }
@@ -135,7 +175,91 @@ export async function createFullEventBooking(data: {
       throw new Error(`Expected guests (${expectedGuests}) exceeds hall capacity (${hall.capacity}).`);
     }
 
-    // 2. Generate Occurrences preserving local property time
+    // 2. Client Resolution
+    let guestId: string | null = null;
+    let corporateAccountId: string | null = null;
+    let folioId: string | null = null;
+    let cityLedgerAccountId: string | null = null;
+
+    if (data.clientType === 'INDIVIDUAL') {
+      if (data.isExisting && data.clientId) {
+        const guest = await tx.guest.findFirst({ where: { id: data.clientId, propertyId, deletedAt: null }});
+        if (!guest) throw new Error("Guest not found");
+        guestId = guest.id;
+      } else {
+        if (!data.clientDetails?.firstName || !data.clientDetails?.lastName) throw new Error("First and last name required for new individual");
+        const guest = await tx.guest.create({
+          data: {
+            organizationId,
+            propertyId,
+            firstName: data.clientDetails.firstName,
+            lastName: data.clientDetails.lastName,
+            email: data.clientDetails.email,
+            phone: data.clientDetails.phone,
+          }
+        });
+        guestId = guest.id;
+      }
+
+      // Ensure Folio exists for this individual
+      // Instead of relying on a generic master folio, we create one for this specific event's billing
+      const existingFolio = await tx.folio.findFirst({
+        where: { propertyId, guestId, type: 'MASTER', status: 'OPEN' },
+        orderBy: { createdAt: 'asc' },
+      });
+      const folio = existingFolio || await tx.folio.create({
+        data: { propertyId, guestId, type: 'MASTER', status: 'OPEN', currency: 'NGN', folioNumber: `FOL-${crypto.randomBytes(4).toString('hex').toUpperCase()}` }
+      });
+      folioId = folio.id;
+
+    } else if (data.clientType === 'CORPORATE') {
+      if (data.isExisting && data.clientId) {
+        const corp = await tx.corporateAccount.findFirst({ where: { id: data.clientId, propertyId }, include: { cityLedgerAccount: true } });
+        if (!corp) throw new Error("Corporate account not found");
+        corporateAccountId = corp.id;
+        cityLedgerAccountId = corp.cityLedgerAccountId || null;
+        if (!cityLedgerAccountId) throw new Error('Corporate account has no linked city ledger account.');
+      } else {
+        if (!data.clientDetails?.companyName) throw new Error("Company name required for new corporate account");
+        const code = await generateCorporateCode(tx, propertyId, data.clientDetails.companyName);
+
+        // Create CityLedger
+        const ledger = await tx.cityLedgerAccount.create({
+          data: {
+            organizationId,
+            propertyId,
+            name: data.clientDetails.companyName,
+            type: 'CORPORATE',
+            status: 'ACTIVE',
+            currency: 'NGN'
+          }
+        });
+        cityLedgerAccountId = ledger.id;
+
+        // Create Corp Account
+        const corp = await tx.corporateAccount.create({
+          data: {
+            organizationId,
+            propertyId,
+            name: data.clientDetails.companyName,
+            code,
+            contactPerson: data.clientDetails.contactPerson,
+            contactEmail: data.clientDetails.contactEmail,
+            contactPhone: data.clientDetails.contactPhone,
+            depositPolicy: 'WAIVED',
+            cityLedgerAccountId: ledger.id
+          }
+        });
+        corporateAccountId = corp.id;
+      }
+    } else {
+      throw new Error("Invalid client type");
+    }
+
+    if (!guestId && !corporateAccountId) throw new Error("No client resolved.");
+    if (guestId && corporateAccountId) throw new Error("Cannot have both guest and corporate account.");
+
+    // 3. Generate Occurrences preserving local property time
     const occurrences: { startTime: Date, endTime: Date }[] = [];
     const baseStart = data.startTime;
     const baseEnd = data.endTime;
@@ -148,27 +272,22 @@ export async function createFullEventBooking(data: {
       const untilDate = new Date(data.recurrenceRule.until);
       if (Number.isNaN(untilDate.getTime()) || untilDate < baseStart) throw new Error('Recurrence end date must be valid and not before the booking.');
       untilDate.setHours(23, 59, 59, 999);
-      
-      // Convert the initial start time to the property's local time context
+
       let currentLocalStart = toZonedTime(baseStart, propertyTimezone);
-      
-      // We start adding from the next day
       currentLocalStart = addDays(currentLocalStart, 1);
 
       while (fromZonedTime(currentLocalStart, propertyTimezone) <= untilDate) {
         let add = false;
-        
+
         if (data.recurrenceRule.frequency === 'DAILY') {
           add = true;
         } else if (data.recurrenceRule.frequency === 'WEEKLY') {
-          // getDay() on the ZonedTime object safely returns the local day of the week
           if (data.recurrenceRule.daysOfWeek?.includes(getDay(currentLocalStart))) {
             add = true;
           }
         }
 
         if (add) {
-          // Convert the local time back to a valid UTC Date
           const nextUtcStart = fromZonedTime(currentLocalStart, propertyTimezone);
           occurrences.push({
             startTime: nextUtcStart,
@@ -179,11 +298,11 @@ export async function createFullEventBooking(data: {
       }
     }
 
-    // 3. Strict Conflict Checking (All-or-Nothing)
+    // 4. Strict Conflict Checking (All-or-Nothing)
     for (const occ of occurrences) {
       const newEffectiveStart = new Date(occ.startTime.getTime() - setupBufferMinutes * 60000);
       const newEffectiveEnd = new Date(occ.endTime.getTime() + teardownBufferMinutes * 60000);
-      
+
       const potentialConflicts = await tx.eventBooking.findMany({
         where: {
           hallId: data.hallId,
@@ -207,7 +326,7 @@ export async function createFullEventBooking(data: {
           if (!Number.isInteger(eqReq.quantity) || eqReq.quantity < 1) throw new Error('Equipment quantities must be positive whole numbers.');
           const equipment = await tx.eventEquipment.findFirst({ where: { id: eqReq.equipmentId, propertyId, isActive: true }});
           if (!equipment) throw new Error("Equipment not found.");
-          
+
           const conflictingEqBookings = await tx.eventEquipmentBooking.findMany({
             where: {
               equipmentId: eqReq.equipmentId,
@@ -219,7 +338,7 @@ export async function createFullEventBooking(data: {
             },
             include: { eventBooking: true }
           });
-          
+
           const overlapSum = conflictingEqBookings.reduce((sum, b) => {
             const bStart = new Date(b.eventBooking.startTime.getTime() - b.eventBooking.setupBufferMinutes * 60000);
             const bEnd = new Date(b.eventBooking.endTime.getTime() + b.eventBooking.teardownBufferMinutes * 60000);
@@ -238,7 +357,37 @@ export async function createFullEventBooking(data: {
 
     const finalEndDate = occurrences[occurrences.length - 1].endTime;
 
-    // 4. Create the Base Event
+    const packageRecord = data.bookingType === 'FULL_PACKAGE' && data.packageIds?.[0]
+      ? await tx.banquetPackage.findFirst({ where: { id: data.packageIds[0], propertyId, isActive: true } })
+      : null;
+    if (data.bookingType === 'FULL_PACKAGE' && !packageRecord) throw new Error('Banquet package not found or unavailable.');
+
+    const equipmentIds = [...new Set((data.equipmentRequests || []).map((request) => request.equipmentId))];
+    const equipmentRecords = equipmentIds.length
+      ? await tx.eventEquipment.findMany({ where: { id: { in: equipmentIds }, propertyId, isActive: true } })
+      : [];
+    if (equipmentRecords.length !== equipmentIds.length) throw new Error('One or more equipment items are unavailable.');
+
+    // Server-side financial snapshot. The client only supplies a requested discount.
+    const occurrencesCount = occurrences.length;
+    const hallGross = hall.rate.toNumber() * occurrencesCount;
+    const packageGross = packageRecord ? packageRecord.basePrice.toNumber() * occurrencesCount : 0;
+    const equipmentGross = (data.equipmentRequests || []).reduce((sum, request) => {
+      const equipment = equipmentRecords.find((item) => item.id === request.equipmentId);
+      return sum + (equipment?.rentalPrice.toNumber() || 0) * request.quantity * occurrencesCount;
+    }, 0);
+    const grossTotal = hallGross + packageGross + equipmentGross;
+    const requestedDiscount = Number(data.discountAmount || 0);
+    if (!Number.isFinite(requestedDiscount) || requestedDiscount < 0) throw new Error('Discount must be a valid non-negative amount.');
+    const discount = Math.min(requestedDiscount, grossTotal);
+    const tax = await tx.tax.findFirst({ where: { propertyId, isActive: true, OR: [{ code: 'VAT' }, { name: { contains: 'VAT', mode: 'insensitive' } }] }, orderBy: { createdAt: 'asc' } });
+    const taxableSubtotal = Math.max(0, grossTotal - discount);
+    const taxRate = tax?.type === 'PERCENTAGE' ? tax.rate.toNumber() / 100 : 0;
+    const taxAmt = tax?.type === 'FLAT' ? Math.max(0, tax.rate.toNumber()) : taxableSubtotal * taxRate;
+    const subTotal = taxableSubtotal;
+    const netTotal = subTotal + taxAmt;
+
+    // 5. Create the Base Event
     const event = await tx.event.create({
       data: {
         propertyId: hall.propertyId,
@@ -251,10 +400,12 @@ export async function createFullEventBooking(data: {
         status: 'TENTATIVE',
         recurrenceRule: data.recurrenceRule ? data.recurrenceRule : undefined,
         notes: data.dietaryNotes ? JSON.stringify(data.dietaryNotes) : undefined,
+        guestId,
+        corporateAccountId
       }
     });
 
-    // 5. Create All Bookings
+    // 6. Create All Bookings
     const bookingRecords = occurrences.map(occ => ({
       eventId: event.id,
       hallId: data.hallId,
@@ -273,7 +424,7 @@ export async function createFullEventBooking(data: {
       where: { eventId: event.id }
     });
 
-    // 6. Create Equipment Bookings
+    // 7. Create Equipment Bookings
     if (data.equipmentRequests && data.equipmentRequests.length > 0) {
       const eqRecords: any[] = [];
       for (const cb of createdBookings) {
@@ -290,18 +441,43 @@ export async function createFullEventBooking(data: {
       }
     }
 
-    // 7. Attach Package
-    if (data.packageIds && data.packageIds.length > 0 && data.bookingType === 'FULL_PACKAGE') {
-      const packageRecord = await tx.banquetPackage.findFirst({
-        where: { id: data.packageIds[0], propertyId, isActive: true },
-        select: { id: true },
-      });
-      if (!packageRecord) throw new Error('Banquet package not found or unavailable.');
+    // 8. Attach Package
+    if (packageRecord) {
       await tx.event.update({
         where: { id: event.id },
-        data: { banquetPackageId: data.packageIds[0] }
+        data: { banquetPackageId: packageRecord.id }
       });
     }
+
+    // 9. Create EventInvoice (Financial Snapshot)
+    const invoice = await tx.eventInvoice.create({
+      data: {
+        eventId: event.id,
+        subTotal: subTotal,
+        totalDiscount: discount,
+        totalTax: taxAmt,
+        totalAmount: netTotal,
+        paidAmount: 0,
+        status: 'DRAFT',
+        folioId,
+        cityLedgerAccountId
+      }
+    });
+
+    // 10. Create immutable line snapshots. Discount and tax are allocated pro-rata.
+    const lines = [
+      { description: `Hall Rental: ${hall.name}`, quantity: occurrencesCount, unitPrice: hall.rate.toNumber(), gross: hallGross },
+      ...(packageRecord ? [{ description: `Banquet Package: ${packageRecord.name}`, quantity: occurrencesCount, unitPrice: packageRecord.basePrice.toNumber(), gross: packageGross }] : []),
+      ...(data.equipmentRequests || []).map((request) => {
+        const equipment = equipmentRecords.find((item) => item.id === request.equipmentId)!;
+        return { description: `Equipment: ${equipment.name}`, quantity: request.quantity * occurrencesCount, unitPrice: equipment.rentalPrice.toNumber(), gross: equipment.rentalPrice.toNumber() * request.quantity * occurrencesCount };
+      }),
+    ];
+    await tx.eventInvoiceItem.createMany({ data: lines.map((line) => {
+      const lineDiscount = grossTotal ? discount * (line.gross / grossTotal) : 0;
+      const lineTax = grossTotal ? taxAmt * ((line.gross - lineDiscount) / taxableSubtotal || 0) : 0;
+      return { invoiceId: invoice.id, description: line.description, quantity: line.quantity, unitPrice: line.unitPrice, grossAmount: line.gross, discountAmount: lineDiscount, taxAmount: lineTax, totalPrice: line.gross - lineDiscount + lineTax, taxId: tax?.id };
+    }) });
 
     revalidatePath('/fnb/events/bookings');
     return event;

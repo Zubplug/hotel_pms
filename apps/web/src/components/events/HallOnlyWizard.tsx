@@ -16,13 +16,22 @@ const steps = [
   { id: 4, title: 'Review', description: 'Confirm before creating', icon: FileText }
 ];
 
-export function HallOnlyWizard({ initialHalls, equipmentList, onCreated }: { initialHalls: any[], equipmentList: any[], onCreated?: () => void }) {
+export function HallOnlyWizard({ initialHalls, equipmentList, guests, corporateAccounts, taxRate = 0, onCreated }: { initialHalls: any[], equipmentList: any[], guests: any[], corporateAccounts: any[], taxRate?: number, onCreated?: () => void }) {
   const router = useRouter();
-  
+
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [formData, setFormData] = useState({
+    clientType: 'INDIVIDUAL' as 'INDIVIDUAL' | 'CORPORATE',
+    isExisting: false,
+    clientId: '',
+    firstName: '',
+    lastName: '',
+    phone: '',
+    email: '',
+    companyName: '',
+    contactPerson: '',
     contactName: '',
     contactPhone: '',
     expectedGuests: '',
@@ -34,21 +43,26 @@ export function HallOnlyWizard({ initialHalls, equipmentList, onCreated }: { ini
     repeatFrequency: 'NONE',
     repeatDaysOfWeek: [] as number[],
     repeatUntil: '',
-    equipmentRequests: {} as Record<string, number>
+    equipmentRequests: {} as Record<string, number>,
+    discountAmount: 0
   });
 
   const currentStep = steps[currentStepIndex].id;
   const canContinue = currentStep === 1
-    ? Boolean(formData.contactName.trim() && Number(formData.expectedGuests) > 0)
+    ? Boolean(formData.contactName.trim() && Number(formData.expectedGuests) > 0 && (!formData.isExisting || formData.clientId) && (formData.isExisting || (formData.clientType === 'INDIVIDUAL' ? formData.firstName.trim() && formData.lastName.trim() : formData.companyName.trim())))
     : currentStep === 2
       ? Boolean(formData.hallId && formData.startTime && formData.endTime && new Date(formData.endTime) > new Date(formData.startTime) && (formData.repeatFrequency === 'NONE' || (formData.repeatUntil && (formData.repeatFrequency !== 'WEEKLY' || formData.repeatDaysOfWeek.length > 0))))
       : true;
 
   const handleNext = () => setCurrentStepIndex(prev => Math.min(prev + 1, steps.length - 1));
   const handleBack = () => setCurrentStepIndex(prev => Math.max(prev - 1, 0));
-  
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    setFormData({ ...formData, [e.target.name]: e.target.type === 'checkbox' ? (e.target as HTMLInputElement).checked : e.target.value });
+  };
+
+  const handleCheckboxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFormData({ ...formData, [e.target.name]: e.target.checked });
   };
 
   const toggleDayOfWeek = (day: number) => {
@@ -71,10 +85,10 @@ export function HallOnlyWizard({ initialHalls, equipmentList, onCreated }: { ini
   const handleSubmit = async () => {
     try {
       setIsSubmitting(true);
-      
+
       if (!formData.hallId) throw new Error("Please select a hall.");
       if (!formData.startTime || !formData.endTime) throw new Error("Please set start and end times.");
-      
+
       let recurrenceRule = undefined;
       if (formData.repeatFrequency !== 'NONE') {
         if (!formData.repeatUntil) throw new Error("Please select an end date for the recurrence.");
@@ -92,9 +106,24 @@ export function HallOnlyWizard({ initialHalls, equipmentList, onCreated }: { ini
         .filter(([_, qty]) => qty > 0)
         .map(([id, qty]) => ({ equipmentId: id, quantity: qty }));
 
+      const hallRate = Number(initialHalls.find(h => h.id === formData.hallId)?.rate || 0);
+
       await createFullEventBooking({
+        clientType: formData.clientType,
+        isExisting: formData.isExisting,
+        clientId: formData.clientId || undefined,
+        clientDetails: {
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          email: formData.email,
+          phone: formData.phone,
+          companyName: formData.companyName,
+          contactPerson: formData.contactPerson,
+          contactEmail: formData.email,
+          contactPhone: formData.phone,
+        },
         contactName: formData.contactName,
-        contactPhone: formData.contactPhone,
+        contactPhone: formData.contactPhone || formData.phone,
         expectedGuests: Number(formData.expectedGuests || 0),
         hallId: formData.hallId,
         startTime: new Date(formData.startTime),
@@ -104,7 +133,9 @@ export function HallOnlyWizard({ initialHalls, equipmentList, onCreated }: { ini
         packageIds: [],
         bookingType: 'HALL_ONLY',
         equipmentRequests: eqReqs,
-        recurrenceRule
+        recurrenceRule,
+        hallRate: hallRate,
+        discountAmount: Number(formData.discountAmount || 0)
       });
 
       toast.success("Hall Booking successfully created!");
@@ -116,6 +147,13 @@ export function HallOnlyWizard({ initialHalls, equipmentList, onCreated }: { ini
     }
   };
 
+  const selectedHall = initialHalls.find(h => h.id === formData.hallId);
+  const hallGross = selectedHall ? Number(selectedHall.rate || 0) : 0;
+  const discount = Number(formData.discountAmount || 0);
+  const subTotal = Math.max(0, hallGross - discount);
+  const taxAmt = subTotal * taxRate;
+  const netTotal = subTotal + taxAmt;
+
   return (
     <BookingWizardShell steps={steps} currentStepIndex={currentStepIndex} isSubmitting={isSubmitting} canContinue={canContinue} onBack={handleBack} onNext={handleNext} onSubmit={handleSubmit} summary={[
       { label: 'Client', value: formData.contactName || 'Not added' },
@@ -124,20 +162,94 @@ export function HallOnlyWizard({ initialHalls, equipmentList, onCreated }: { ini
       { label: 'Equipment', value: `${Object.values(formData.equipmentRequests).filter(quantity => quantity > 0).length} item types` },
       { label: 'Start', value: formData.startTime ? new Date(formData.startTime).toLocaleString() : 'Not set' },
     ]}>
-          
+
           {currentStep === 1 && (
             <div className="space-y-4 max-w-md">
               <div className="space-y-2">
-                <Label htmlFor="contactName">Primary Contact Name</Label>
-                <Input id="contactName" name="contactName" value={formData.contactName} onChange={handleChange} placeholder="John Doe" />
+                 <Label htmlFor="clientType">Booking Client Type</Label>
+                 <select
+                   id="clientType"
+                   name="clientType"
+                   value={formData.clientType}
+                   onChange={handleChange}
+                   className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                 >
+                   <option value="INDIVIDUAL">Individual</option>
+                   <option value="CORPORATE">Corporate</option>
+                 </select>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="contactPhone">Phone Number</Label>
-                <Input id="contactPhone" name="contactPhone" value={formData.contactPhone} onChange={handleChange} placeholder="+1 234 567 890" />
+
+              <div className="flex items-center space-x-2">
+                <input type="checkbox" id="isExisting" name="isExisting" checked={formData.isExisting} onChange={handleCheckboxChange} />
+                <Label htmlFor="isExisting">Existing Client?</Label>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="expectedGuests">Expected Guests</Label>
-                <Input id="expectedGuests" name="expectedGuests" type="number" value={formData.expectedGuests} onChange={handleChange} placeholder="150" />
+
+              {formData.isExisting ? (
+                 <div className="space-y-2">
+                    <Label htmlFor="clientId">Existing {formData.clientType === 'INDIVIDUAL' ? 'guest' : 'corporate account'}</Label>
+                    <select id="clientId" name="clientId" value={formData.clientId} onChange={handleChange} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+                      <option value="">-- Select --</option>
+                      {(formData.clientType === 'INDIVIDUAL' ? guests : corporateAccounts).map((client: any) => <option key={client.id} value={client.id}>{formData.clientType === 'INDIVIDUAL' ? `${client.firstName} ${client.lastName}${client.email ? ` (${client.email})` : ''}` : `${client.name} (${client.code})`}</option>)}
+                    </select>
+                 </div>
+              ) : (
+                formData.clientType === 'INDIVIDUAL' ? (
+                  <>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="firstName">First Name</Label>
+                        <Input id="firstName" name="firstName" value={formData.firstName} onChange={handleChange} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="lastName">Last Name</Label>
+                        <Input id="lastName" name="lastName" value={formData.lastName} onChange={handleChange} />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="email">Email</Label>
+                      <Input id="email" name="email" value={formData.email} onChange={handleChange} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="phone">Phone</Label>
+                      <Input id="phone" name="phone" value={formData.phone} onChange={handleChange} />
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="companyName">Company Name</Label>
+                      <Input id="companyName" name="companyName" value={formData.companyName} onChange={handleChange} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="contactPerson">Contact Person</Label>
+                      <Input id="contactPerson" name="contactPerson" value={formData.contactPerson} onChange={handleChange} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="email">Email</Label>
+                      <Input id="email" name="email" value={formData.email} onChange={handleChange} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="phone">Phone</Label>
+                      <Input id="phone" name="phone" value={formData.phone} onChange={handleChange} />
+                    </div>
+                  </>
+                )
+              )}
+
+              <div className="pt-4 border-t border-slate-200 space-y-4">
+                <h4 className="text-sm font-semibold">Event Contact</h4>
+                <div className="space-y-2">
+                  <Label htmlFor="contactName">Primary Event Contact Name</Label>
+                  <Input id="contactName" name="contactName" value={formData.contactName} onChange={handleChange} placeholder="John Doe" />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="contactPhone">Primary Event Contact Phone</Label>
+                  <Input id="contactPhone" name="contactPhone" value={formData.contactPhone} onChange={handleChange} placeholder="+1 234 567 890" />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="expectedGuests">Expected Guests</Label>
+                  <Input id="expectedGuests" name="expectedGuests" type="number" value={formData.expectedGuests} onChange={handleChange} placeholder="150" />
+                </div>
               </div>
             </div>
           )}
@@ -146,16 +258,16 @@ export function HallOnlyWizard({ initialHalls, equipmentList, onCreated }: { ini
             <div className="space-y-4 max-w-md">
               <div className="space-y-2">
                 <Label htmlFor="hallId">Select Hall</Label>
-                <select 
-                  id="hallId" 
-                  name="hallId" 
-                  value={formData.hallId} 
+                <select
+                  id="hallId"
+                  name="hallId"
+                  value={formData.hallId}
                   onChange={handleChange}
                   className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 >
                   <option value="">-- Select a Hall --</option>
                   {initialHalls.map(h => (
-                    <option key={h.id} value={h.id}>{h.name} (Cap: {h.capacity})</option>
+                    <option key={h.id} value={h.id}>{h.name} (Cap: {h.capacity}) - NGN {Number(h.rate || 0).toLocaleString()}</option>
                   ))}
                 </select>
               </div>
@@ -182,10 +294,10 @@ export function HallOnlyWizard({ initialHalls, equipmentList, onCreated }: { ini
               <div className="pt-4 border-t space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="repeatFrequency">Repeat Booking?</Label>
-                  <select 
-                    id="repeatFrequency" 
-                    name="repeatFrequency" 
-                    value={formData.repeatFrequency} 
+                  <select
+                    id="repeatFrequency"
+                    name="repeatFrequency"
+                    value={formData.repeatFrequency}
                     onChange={handleChange}
                     className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                   >
@@ -209,8 +321,8 @@ export function HallOnlyWizard({ initialHalls, equipmentList, onCreated }: { ini
                           onClick={() => toggleDayOfWeek(day.val)}
                           type="button"
                           className={`w-10 h-10 rounded-full text-xs font-medium border flex items-center justify-center transition-colors ${
-                            formData.repeatDaysOfWeek.includes(day.val) 
-                              ? 'bg-primary text-primary-foreground border-primary' 
+                            formData.repeatDaysOfWeek.includes(day.val)
+                              ? 'bg-primary text-primary-foreground border-primary'
                               : 'bg-background hover:bg-muted'
                           }`}
                         >
@@ -267,17 +379,49 @@ export function HallOnlyWizard({ initialHalls, equipmentList, onCreated }: { ini
               <div className="grid grid-cols-2 gap-4 text-sm bg-slate-50 p-4 rounded-lg border">
                 <div><span className="text-muted-foreground">Client: </span> {formData.contactName || 'N/A'}</div>
                 <div><span className="text-muted-foreground">Guests: </span> {formData.expectedGuests || 0}</div>
-                <div><span className="text-muted-foreground">Hall: </span> {initialHalls.find(h => h.id === formData.hallId)?.name || 'N/A'}</div>
+                <div><span className="text-muted-foreground">Hall: </span> {selectedHall?.name || 'N/A'}</div>
                 <div><span className="text-muted-foreground">Type: </span> Hall Only</div>
                 <div><span className="text-muted-foreground">Start: </span> {formData.startTime ? new Date(formData.startTime).toLocaleString() : 'N/A'}</div>
                 <div><span className="text-muted-foreground">End: </span> {formData.endTime ? new Date(formData.endTime).toLocaleString() : 'N/A'}</div>
                 {formData.repeatFrequency !== 'NONE' && (
                   <div className="col-span-2">
-                    <span className="text-muted-foreground">Recurrence: </span> 
+                    <span className="text-muted-foreground">Recurrence: </span>
                     {formData.repeatFrequency} until {formData.repeatUntil}
                   </div>
                 )}
               </div>
+
+              <div className="space-y-4 mt-6 max-w-md">
+                 <h4 className="font-semibold">Financial Breakdown</h4>
+                 <div className="space-y-2">
+                    <Label htmlFor="discountAmount">Discount Amount (NGN)</Label>
+                    <Input id="discountAmount" name="discountAmount" type="number" value={formData.discountAmount} onChange={handleChange} />
+                 </div>
+
+                 <div className="bg-slate-100 p-4 rounded-md space-y-2 text-sm border">
+                    <div className="flex justify-between">
+                       <span>Gross Rate:</span>
+                       <span className="font-medium">NGN {hallGross.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between text-red-600">
+                       <span>Discount:</span>
+                       <span>- NGN {discount.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between border-t border-slate-300 pt-2">
+                       <span>Sub Total:</span>
+                       <span className="font-medium">NGN {subTotal.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between text-slate-600">
+                       <span>Tax:</span>
+                       <span>+ NGN {taxAmt.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between border-t border-slate-300 pt-2 font-bold text-base">
+                       <span>Net Total:</span>
+                       <span>NGN {netTotal.toLocaleString()}</span>
+                    </div>
+                 </div>
+              </div>
+
               {Object.keys(formData.equipmentRequests).length > 0 && (
                 <div className="text-sm bg-slate-50 p-4 rounded-lg border mt-2">
                   <h4 className="font-semibold mb-2">Requested Equipment:</h4>

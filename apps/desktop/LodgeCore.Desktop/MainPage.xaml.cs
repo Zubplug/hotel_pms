@@ -440,12 +440,18 @@ public partial class MainPage : ContentPage
                 case "folios.get":
                     responseData = await pmsInterop.GetFolioAsync(parameters?["id"]?.ToString() ?? "");
                     break;
+                case "eventInvoices.list":
+                    responseData = await pmsInterop.GetEventInvoicesAsync(
+                        parameters?["propertyId"]?.ToString() ?? "",
+                        parameters?["search"]?.ToString());
+                    break;
                 case "folios.addPayment":
                     responseData = await pmsInterop.RecordPaymentAsync(
                         parameters?["folioId"]?.ToString() ?? "",
                         parameters?["payment"]?["amount"]?.GetValue<decimal>() ?? 0,
                         parameters?["payment"]?["method"]?.ToString() ?? "",
-                        parameters?["payment"]?["idempotencyKey"]?.ToString() ?? parameters?["idempotencyKey"]?.ToString());
+                        parameters?["payment"]?["idempotencyKey"]?.ToString() ?? parameters?["idempotencyKey"]?.ToString(),
+                        parameters?["payment"]?["eventInvoiceId"]?.ToString());
                     break;
                 case "folios.addDeposit":
                     responseData = await pmsInterop.RecordAdvanceDepositAsync(

@@ -2363,6 +2363,12 @@ export async function POST(req: NextRequest) {
               where: { id: aggregateId, propertyId },
             });
             if (!folio) throw new Error("Folio not found or unauthorized");
+            const eventInvoiceId = payload.eventInvoiceId || null;
+            const eventInvoice = eventInvoiceId
+              ? await tx.eventInvoice.findFirst({ where: { id: eventInvoiceId, folioId: aggregateId, event: { propertyId } } })
+              : null;
+            if (eventInvoiceId && !eventInvoice) throw new Error("Event invoice not found or not linked to this folio");
+            if (eventInvoice && ["DRAFT", "VOID"].includes(eventInvoice.status)) throw new Error("Only an issued event invoice can receive payment");
 
             // Idempotency: if a FolioItem already exists with this event's idempotencyKey, skip
             const existing = await tx.folioItem.findFirst({
@@ -2371,6 +2377,8 @@ export async function POST(req: NextRequest) {
             if (!existing) {
               if (amount > Number(folio.balance) + 0.01)
                 throw new Error("Payment amount exceeds outstanding balance");
+              if (eventInvoice && amount > Number(eventInvoice.totalAmount) - Number(eventInvoice.paidAmount) + 0.01)
+                throw new Error("Payment amount exceeds event invoice balance");
               await tx.folioItem.create({
                 data: {
                   folioId: aggregateId,
@@ -2413,6 +2421,7 @@ export async function POST(req: NextRequest) {
                   folioId: aggregateId,
                   propertyId,
                   reservationId: folio.reservationId,
+                  eventInvoiceId: eventInvoice?.id,
                   method: methodStr as any,
                   amount: amount,
                   currency: payload.currency || "NGN",
@@ -2464,6 +2473,14 @@ export async function POST(req: NextRequest) {
                   balance: { decrement: amount },
                 },
               });
+
+              if (eventInvoice) {
+                const paidAmount = Number(eventInvoice.paidAmount) + amount;
+                await tx.eventInvoice.update({
+                  where: { id: eventInvoice.id },
+                  data: { paidAmount, status: paidAmount + 0.01 >= Number(eventInvoice.totalAmount) ? "PAID" : "PARTIAL" },
+                });
+              }
 
               // Safely construct double-entry GL inside the exact same sync transaction boundary
               // The service is shared with the online /api/v1/payments route.

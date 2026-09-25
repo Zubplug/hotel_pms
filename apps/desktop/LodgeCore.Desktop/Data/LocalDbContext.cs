@@ -16,6 +16,7 @@ public class LocalDbContext : DbContext
     public DbSet<LocalCityLedgerEntry> CityLedgerEntries { get; set; } = null!;
     public DbSet<LocalCityLedgerAllocation> CityLedgerAllocations { get; set; } = null!;
     public DbSet<LocalFolio> Folios { get; set; } = null!;
+    public DbSet<LocalEventInvoice> EventInvoices { get; set; } = null!;
     public DbSet<LocalSyncEvent> SyncEvents { get; set; } = null!;
     public DbSet<LocalOutboxEvent> OutboxEvents { get; set; } = null!;
     public DbSet<LocalHousekeepingTask> HousekeepingTasks { get; set; } = null!;
@@ -328,6 +329,27 @@ public class LocalDbContext : DbContext
         await Database.ExecuteSqlRawAsync(sql);
         try { await Database.ExecuteSqlRawAsync("ALTER TABLE CityLedgerEntries ADD COLUMN InvoiceId TEXT NULL"); } catch (Microsoft.Data.Sqlite.SqliteException ex) when (ex.SqliteErrorCode == 1 && ex.Message.Contains("duplicate column", StringComparison.OrdinalIgnoreCase)) { }
         try { await Database.ExecuteSqlRawAsync("ALTER TABLE CityLedgerAllocations ADD COLUMN InvoiceId TEXT NULL"); } catch (Microsoft.Data.Sqlite.SqliteException ex) when (ex.SqliteErrorCode == 1 && ex.Message.Contains("duplicate column", StringComparison.OrdinalIgnoreCase)) { }
+    }
+
+    public async Task ApplyEventInvoiceSchemaAsync()
+    {
+        await Database.ExecuteSqlRawAsync(@"
+            CREATE TABLE IF NOT EXISTS EventInvoices (
+                Id TEXT NOT NULL PRIMARY KEY,
+                PropertyId TEXT NOT NULL,
+                EventId TEXT NULL,
+                FolioId TEXT NULL,
+                EventName TEXT NOT NULL DEFAULT '',
+                ClientName TEXT NOT NULL DEFAULT '',
+                Status TEXT NOT NULL DEFAULT 'UNPAID',
+                TotalAmount TEXT NOT NULL DEFAULT '0',
+                PaidAmount TEXT NOT NULL DEFAULT '0',
+                Currency TEXT NOT NULL DEFAULT 'NGN',
+                UpdatedAt TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS IX_EventInvoices_PropertyId ON EventInvoices(PropertyId);
+            CREATE INDEX IF NOT EXISTS IX_EventInvoices_FolioId ON EventInvoices(FolioId);
+        ");
     }
 
     /// <summary>

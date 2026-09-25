@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
     const session = await auth();
     if (!session?.user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
     const body = await req.json();
-    const { folioId, amount, currency, method, idempotencyKey, notes, providerTransactionId, terminalId, reference, authorizationCode, frontdeskSessionId, collectionSource = 'FRONT_DESK', nightAuditOverrideReason } = body;
+    const { folioId, amount, currency, method, idempotencyKey, notes, providerTransactionId, terminalId, reference, authorizationCode, frontdeskSessionId, collectionSource = 'FRONT_DESK', nightAuditOverrideReason, eventInvoiceId } = body;
     const isReceivablesCollection = collectionSource === 'RECEIVABLES';
     if (!['FRONT_DESK', 'RECEIVABLES', 'OTHER'].includes(collectionSource)) return errorResponse('BAD_REQUEST', 'Invalid collection source', 400);
     if (!folioId || !amount || !currency || !method || !idempotencyKey) {
@@ -77,9 +77,17 @@ export async function POST(req: NextRequest) {
     if (currency !== folio.currency) {
       return errorResponse('BAD_REQUEST', `Currency mismatch. Expected ${folio.currency}`, 400);
     }
+    const eventInvoice = eventInvoiceId
+      ? await prisma.eventInvoice.findFirst({ where: { id: eventInvoiceId, folioId, event: { propertyId } } })
+      : null;
+    if (eventInvoiceId && !eventInvoice) return errorResponse('BAD_REQUEST', 'Event invoice is not linked to this folio or property.', 400);
+    if (eventInvoice && ['DRAFT', 'VOID'].includes(eventInvoice.status)) return errorResponse('BAD_REQUEST', 'Only an issued event invoice can receive payment.', 400);
     const currentBalance = Number(folio.balance);
     if (numericAmount > currentBalance) {
       return errorResponse('BAD_REQUEST', 'Payment amount exceeds outstanding balance. Overpayments are not currently permitted.', 400);
+    }
+    if (eventInvoice && numericAmount > Number(eventInvoice.totalAmount) - Number(eventInvoice.paidAmount) + 0.01) {
+      return errorResponse('BAD_REQUEST', 'Payment amount exceeds the selected event invoice balance.', 400);
     }
 
     // Pre-resolve GL accounts outside the transaction to avoid slow async in tx if possible
@@ -135,6 +143,7 @@ export async function POST(req: NextRequest) {
         data: {
           folioId: folio.id,
           reservationId: folio.reservationId,
+          eventInvoiceId: eventInvoice?.id,
           propertyId: folio.propertyId,
           method: method as any,
           collectionSource,
@@ -188,6 +197,14 @@ export async function POST(req: NextRequest) {
         folio.property.organizationId,
         session.user.id
       );
+
+      if (eventInvoice) {
+        const paidAmount = Number(eventInvoice.paidAmount) + numericAmount;
+        await tx.eventInvoice.update({
+          where: { id: eventInvoice.id },
+          data: { paidAmount, status: paidAmount + 0.01 >= Number(eventInvoice.totalAmount) ? 'PAID' : 'PARTIAL' },
+        });
+      }
 
       // D. Write Atomic Audit Log
       await tx.auditLog.create({
