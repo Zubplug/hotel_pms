@@ -112,6 +112,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           name: staff ? `${staff.firstName} ${staff.lastName}`.trim() : null,
           staffId: user.staffId,
           isLodgeCoreAdmin: user.isLodgeCoreAdmin,
+          isSuperAdmin: user.isLodgeCoreAdmin || user.isSuperAdmin,
           role: primaryRole,
           capabilities,
           sessionVersion: user.sessionVersion || 1,

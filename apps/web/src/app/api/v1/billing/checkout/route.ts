@@ -4,7 +4,7 @@ import prisma, { Prisma } from '@hotel-pms/db';
 import { auth } from '@/lib/auth';
 
 const stripeKey = process.env.STRIPE_SECRET_KEY;
-const stripe = stripeKey ? new Stripe(stripeKey, { apiVersion: '2023-10-16' }) : null;
+const stripe = stripeKey ? new Stripe(stripeKey, { apiVersion: '2026-08-26.dahlia' }) : null;
 
 function safeReturnUrl(value: unknown, fallback: string) {
   if (typeof value !== 'string' || !value) return fallback;

@@ -17,6 +17,7 @@ export interface ChannelManagerAdapter {
   testConnection(credentialsRef: string): Promise<boolean>;
   fetchRemoteRooms(credentialsRef: string): Promise<RemoteRoom[]>;
   fetchRemoteRatePlans(credentialsRef: string): Promise<RemoteRatePlan[]>;
+  getProperties?(credentialsRef: string, accountId: string): Promise<Array<{ id: string; name: string }>>;
   
   // Inbound Webhooks
   verifyWebhookSignature(req: NextRequest, rawBody: string, secret?: string): Promise<boolean>;

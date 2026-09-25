@@ -5,7 +5,7 @@ import type { Prisma } from '@hotel-pms/db';
 
 const stripeKey = process.env.STRIPE_SECRET_KEY;
 const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
-const stripe = stripeKey ? new Stripe(stripeKey, { apiVersion: '2023-10-16' }) : null;
+const stripe = stripeKey ? new Stripe(stripeKey, { apiVersion: '2026-08-26.dahlia' }) : null;
 
 function statusFor(subscription: Stripe.Subscription) {
   if (subscription.pause_collection) return 'PAUSED';
@@ -60,8 +60,9 @@ async function handleSubscriptionChange(tx: Prisma.TransactionClient, subscripti
   const customer = await tx.billingCustomer.findUnique({ where: { stripeCustomerId: customerId } });
   if (!customer) throw new Error(`Unknown Stripe customer ${customerId}`);
   const status = statusFor(subscription);
-  const currentPeriodStart = new Date(subscription.current_period_start * 1000);
-  const currentPeriodEnd = new Date(subscription.current_period_end * 1000);
+  const stripeSubscription = subscription as Stripe.Subscription & { current_period_start?: number; current_period_end?: number };
+  const currentPeriodStart = new Date(((stripeSubscription.current_period_start ?? (subscription.items.data[0] as any)?.current_period_start ?? subscription.billing_cycle_anchor) as number) * 1000);
+  const currentPeriodEnd = new Date(((stripeSubscription.current_period_end ?? (subscription.items.data[0] as any)?.current_period_end ?? subscription.billing_cycle_anchor) as number) * 1000);
   const saved = await tx.subscription.upsert({
     where: { stripeSubscriptionId: subscription.id },
     create: { organizationId: customer.organizationId, stripeSubscriptionId: subscription.id, status, currentPeriodStart, currentPeriodEnd, cancelAtPeriodEnd: subscription.cancel_at_period_end, canceledAt: subscription.canceled_at ? new Date(subscription.canceled_at * 1000) : null, trialEndsAt: subscription.trial_end ? new Date(subscription.trial_end * 1000) : null },
@@ -82,7 +83,7 @@ async function handleInvoice(tx: Prisma.TransactionClient, invoice: Stripe.Invoi
   if (!organizationId) throw new Error(`Unknown Stripe customer ${invoice.customer}`);
   await tx.billingInvoice.upsert({
     where: { stripeInvoiceId: invoice.id },
-    create: { organizationId, stripeInvoiceId: invoice.id, stripeCustomerId: String(invoice.customer), stripeSubscriptionId: typeof invoice.subscription === 'string' ? invoice.subscription : invoice.subscription?.id ?? null, status: invoice.status ?? 'unknown', currency: invoice.currency, subtotal: invoice.subtotal ?? 0, total: invoice.total ?? 0, amountPaid: invoice.amount_paid ?? 0, amountDue: invoice.amount_due ?? 0, periodStart: invoice.period_start ? new Date(invoice.period_start * 1000) : null, periodEnd: invoice.period_end ? new Date(invoice.period_end * 1000) : null, hostedInvoiceUrl: invoice.hosted_invoice_url, invoicePdf: invoice.invoice_pdf, payload: invoice as unknown as Prisma.InputJsonValue },
+      create: { organizationId, stripeInvoiceId: invoice.id, stripeCustomerId: String(invoice.customer), stripeSubscriptionId: typeof (invoice as any).subscription === 'string' ? (invoice as any).subscription : (invoice as any).subscription?.id ?? null, status: invoice.status ?? 'unknown', currency: invoice.currency, subtotal: invoice.subtotal ?? 0, total: invoice.total ?? 0, amountPaid: invoice.amount_paid ?? 0, amountDue: invoice.amount_due ?? 0, periodStart: invoice.period_start ? new Date(invoice.period_start * 1000) : null, periodEnd: invoice.period_end ? new Date(invoice.period_end * 1000) : null, hostedInvoiceUrl: invoice.hosted_invoice_url, invoicePdf: invoice.invoice_pdf, payload: invoice as unknown as Prisma.InputJsonValue },
     update: { status: invoice.status ?? 'unknown', subtotal: invoice.subtotal ?? 0, total: invoice.total ?? 0, amountPaid: invoice.amount_paid ?? 0, amountDue: invoice.amount_due ?? 0, periodStart: invoice.period_start ? new Date(invoice.period_start * 1000) : null, periodEnd: invoice.period_end ? new Date(invoice.period_end * 1000) : null, hostedInvoiceUrl: invoice.hosted_invoice_url, invoicePdf: invoice.invoice_pdf, payload: invoice as unknown as Prisma.InputJsonValue },
   });
 }

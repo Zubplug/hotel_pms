@@ -15,7 +15,7 @@ export async function createBillingProduct(formData: FormData) {
   if (!/^[A-Z][A-Z0-9_]{2,63}$/.test(code) || !name || !['BASE', 'ADDON'].includes(type)) throw new Error('Invalid billing product');
   const stripeKey = process.env.STRIPE_SECRET_KEY;
   if (!stripeKey) throw new Error('Stripe is not configured');
-  const stripeProduct = await new Stripe(stripeKey, { apiVersion: '2023-10-16' }).products.create({ name, metadata: { code, type } });
+  const stripeProduct = await new Stripe(stripeKey, { apiVersion: '2026-08-26.dahlia' }).products.create({ name, metadata: { code, type } });
   await prisma.billingProduct.create({ data: { code, name, type, stripeProductId: stripeProduct.id } });
   revalidatePath('/hq/products');
 }
@@ -32,7 +32,7 @@ export async function createBillingPrice(formData: FormData) {
   if (!product.stripeProductId) throw new Error('Stripe product is not configured');
   const stripeKey = process.env.STRIPE_SECRET_KEY;
   if (!stripeKey) throw new Error('Stripe is not configured');
-  const stripePrice = await new Stripe(stripeKey, { apiVersion: '2023-10-16' }).prices.create({ product: product.stripeProductId, unit_amount: amount, currency, recurring: { interval } });
+  const stripePrice = await new Stripe(stripeKey, { apiVersion: '2026-08-26.dahlia' }).prices.create({ product: product.stripeProductId, unit_amount: amount, currency, recurring: { interval } });
   await prisma.billingPrice.create({ data: { productId, stripePriceId: stripePrice.id, amount, currency, interval } });
   revalidatePath('/hq/products');
 }

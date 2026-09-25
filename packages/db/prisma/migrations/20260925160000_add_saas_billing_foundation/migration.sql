@@ -8,6 +8,9 @@ BEGIN
   END IF;
 END $$;
 
+ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "isSuperAdmin" BOOLEAN NOT NULL DEFAULT false;
+UPDATE "User" SET "isSuperAdmin" = "isLodgeCoreAdmin" WHERE "isLodgeCoreAdmin" = true AND "isSuperAdmin" = false;
+
 CREATE TABLE IF NOT EXISTS "BillingProduct" (
   "id" UUID NOT NULL DEFAULT gen_random_uuid(),
   "code" TEXT NOT NULL,

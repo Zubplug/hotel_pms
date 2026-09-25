@@ -3,6 +3,7 @@ import prisma from '@hotel-pms/db';
 import { ProviderFactory } from '@/lib/integrations/ota/ProviderFactory';
 import { Receiver } from '@upstash/qstash';
 import { hasEntitlement } from '@/lib/auth/entitlement';
+import type { SyncResult } from '@/lib/integrations/ota/types';
 
 async function verifyQStashSignature(req: NextRequest, rawBody: string) {
   if (process.env.NODE_ENV === 'development' && process.env.IGNORE_QSTASH_SIGNATURE === 'true') return true;
@@ -88,7 +89,7 @@ export async function POST(req: NextRequest) {
     }
 
     const adapter = ProviderFactory.getAdapter(syncEvent.provider);
-    let syncResult = { success: false, error: 'Unknown eventType' };
+    let syncResult: SyncResult = { success: false, error: 'Unknown eventType' };
 
     // 4. Dispatch to Adapter based on EventType
     if (syncEvent.eventType === 'AVAILABILITY') {
@@ -100,7 +101,7 @@ export async function POST(req: NextRequest) {
           inventory
         );
       } else {
-        syncResult = { success: true }; 
+        syncResult = { success: true, error: undefined }; 
       }
     } else if (syncEvent.eventType === 'RATE') {
       const rates = payload.rates || [];
@@ -111,7 +112,7 @@ export async function POST(req: NextRequest) {
           rates
         );
       } else {
-        syncResult = { success: true };
+        syncResult = { success: true, error: undefined };
       }
     } else if (syncEvent.eventType === 'RESTRICTIONS') {
       if (!adapter.pushRestrictions) throw new Error(`Provider ${syncEvent.provider} does not support restrictions`);

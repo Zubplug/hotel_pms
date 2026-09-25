@@ -18,11 +18,11 @@ export default async function TenantControlPage({
     where: { id: params.organizationId },
     include: {
       properties: true,
-      memberships: { include: { user: { select: { id: true, email: true, name: true, roles: { include: { role: true } } } } } },
+      memberships: { include: { user: { select: { id: true, email: true, roles: { include: { role: true } } } } } },
       subscriptions: { include: { items: { include: { price: { include: { product: true } } } } } },
       entitlements: { include: { product: true } }
     }
-  });
+  }) as any;
 
   if (!org) notFound();
 
@@ -133,7 +133,7 @@ export default async function TenantControlPage({
                 {users.map((user: any) => (
                   <div key={user.id} className="flex justify-between items-center py-2 border-b last:border-0">
                     <div>
-                      <div className="font-medium text-sm">{user.name || 'Unknown'}</div>
+                        <div className="font-medium text-sm">{user.email}</div>
                       <div className="text-xs text-zinc-500">{user.email} • {user.roles?.[0]?.role?.name || 'User'}</div>
                     </div>
                     <form action={handleImpersonate}>

@@ -1961,6 +1961,8 @@ model User {
   staffId      String? @db.Uuid
   email        String  @unique
   passwordHash String
+  // Deprecated compatibility alias. New code should use isLodgeCoreAdmin.
+  isSuperAdmin Boolean @default(false)
   isLodgeCoreAdmin Boolean @default(false)
 
   lastLoginAt DateTime? @db.Timestamptz

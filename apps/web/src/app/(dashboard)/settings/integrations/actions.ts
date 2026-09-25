@@ -35,10 +35,8 @@ export async function verifyBeds24InviteCode(inviteCode: string) {
     // Fetch the properties using the adapter
     const adapter = ProviderFactory.getAdapter('BEDS24');
     
-    // Beds24 doesn't have an externalPropertyId yet, so we just use the accountId derived from credentialsRef for the API call limit hash.
-    // The getProperties method only needs the token and accountId hash.
-    // We are hacking the generic fetchRemoteRooms here just to test, but we really want `getProperties`.
-    // Wait, let's call getProperties directly.
+    // Discovery is performed against the authenticated Beds24 account before a property is selected.
+    if (!adapter.getProperties) return { success: false, error: 'Provider does not support property discovery' };
     const properties = await adapter.getProperties(encryptedRefreshToken, Beds24TokenManager.getAccountKey(encryptedRefreshToken));
 
     return { 
@@ -225,14 +223,15 @@ export async function mapChannelRoom(mappingId: string, lodgecoreRoomTypeId: str
   const session = await auth();
   if (!session?.user) return { success: false, error: 'Unauthorized' };
   const ctx = await requireOrganizationContext(session.user.id);
+  const allowedConnectionIds = (await prisma.channelConnection.findMany({ where: { propertyId: { in: [...ctx.propertyIds] } }, select: { id: true } })).map((item) => item.id);
   const mapping = await prisma.channelRoomMapping.findFirst({
-    where: { id: mappingId, channelConnection: { propertyId: { in: ctx.propertyIds } } },
-    include: { channelConnection: true },
+    where: { id: mappingId, channelConnectionId: { in: allowedConnectionIds } },
   });
-  const room = await prisma.roomType.findFirst({ where: { id: lodgecoreRoomTypeId, propertyId: mapping?.channelConnection.propertyId, isActive: true } });
+  const connection = mapping ? await prisma.channelConnection.findUnique({ where: { id: mapping.channelConnectionId } }) : null;
+  const room = await prisma.roomType.findFirst({ where: { id: lodgecoreRoomTypeId, propertyId: connection?.propertyId, isActive: true } });
   if (!mapping || !room) return { success: false, error: 'Mapping or room type not found' };
   await prisma.channelRoomMapping.update({ where: { id: mapping.id }, data: { lodgecoreRoomTypeId: room.id, status: 'MAPPED', isActive: true } });
-  revalidatePath(`/settings/integrations/channels/${mapping.channelConnection.provider.toLowerCase()}`);
+  revalidatePath(`/settings/integrations/channels/${connection?.provider.toLowerCase()}`);
   return { success: true };
 }
 
@@ -240,13 +239,14 @@ export async function mapChannelRatePlan(mappingId: string, lodgecoreRatePlanId:
   const session = await auth();
   if (!session?.user) return { success: false, error: 'Unauthorized' };
   const ctx = await requireOrganizationContext(session.user.id);
+  const allowedConnectionIds = (await prisma.channelConnection.findMany({ where: { propertyId: { in: [...ctx.propertyIds] } }, select: { id: true } })).map((item) => item.id);
   const mapping = await prisma.channelRatePlanMapping.findFirst({
-    where: { id: mappingId, channelConnection: { propertyId: { in: ctx.propertyIds } } },
-    include: { channelConnection: true },
+    where: { id: mappingId, channelConnectionId: { in: allowedConnectionIds } },
   });
-  const ratePlan = await prisma.ratePlan.findFirst({ where: { id: lodgecoreRatePlanId, propertyId: mapping?.channelConnection.propertyId, isActive: true } });
+  const connection = mapping ? await prisma.channelConnection.findUnique({ where: { id: mapping.channelConnectionId } }) : null;
+  const ratePlan = await prisma.ratePlan.findFirst({ where: { id: lodgecoreRatePlanId, propertyId: connection?.propertyId, isActive: true } });
   if (!mapping || !ratePlan) return { success: false, error: 'Mapping or rate plan not found' };
   await prisma.channelRatePlanMapping.update({ where: { id: mapping.id }, data: { lodgecoreRatePlanId: ratePlan.id, status: 'MAPPED', isActive: true } });
-  revalidatePath(`/settings/integrations/channels/${mapping.channelConnection.provider.toLowerCase()}`);
+  revalidatePath(`/settings/integrations/channels/${connection?.provider.toLowerCase()}`);
   return { success: true };
 }

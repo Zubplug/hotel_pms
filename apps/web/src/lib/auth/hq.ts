@@ -50,7 +50,7 @@ export async function getImpersonationContext(): Promise<ImpersonationContext | 
   const session = await auth();
   if (!session?.user?.isLodgeCoreAdmin) return null;
 
-  const cookieStore = cookies();
+  const cookieStore = await cookies();
   const token = cookieStore.get(IMPERSONATION_COOKIE_NAME);
   
   if (!token?.value) return null;
@@ -112,7 +112,7 @@ export async function startImpersonation(impersonatedUserId: string, reason: str
   const body = encode(JSON.stringify(context));
   const tokenStr = `${body}.${sign(body)}`;
 
-  cookies().set(IMPERSONATION_COOKIE_NAME, tokenStr, {
+  (await cookies()).set(IMPERSONATION_COOKIE_NAME, tokenStr, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
@@ -156,5 +156,5 @@ export async function stopImpersonation() {
     });
   }
 
-  cookies().delete(IMPERSONATION_COOKIE_NAME);
+  (await cookies()).delete(IMPERSONATION_COOKIE_NAME);
 }

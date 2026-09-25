@@ -57,9 +57,12 @@ export const MappingResolver = {
       throw new Error(`Unmapped or inactive external Rate Plan ID: ${parsed.externalRatePlanId}`);
     }
 
+    const roomTypeId = roomMapping.lodgecoreRoomTypeId;
+    const ratePlanId = rateMapping.lodgecoreRatePlanId;
+    if (!roomTypeId || !ratePlanId) throw new Error('Mapping is incomplete. Manual mapping is required.');
     const [roomType, ratePlan] = await Promise.all([
-      prisma.roomType.findUnique({ where: { id: roomMapping.lodgecoreRoomTypeId } }),
-      prisma.ratePlan.findUnique({ where: { id: rateMapping.lodgecoreRatePlanId } }),
+      prisma.roomType.findUnique({ where: { id: roomTypeId } }),
+      prisma.ratePlan.findUnique({ where: { id: ratePlanId } }),
     ]);
 
     if (!roomType || roomType.propertyId !== propertyId) {
@@ -71,8 +74,8 @@ export const MappingResolver = {
     }
 
     return {
-      roomTypeId: roomMapping.lodgecoreRoomTypeId,
-      ratePlanId: rateMapping.lodgecoreRatePlanId,
+      roomTypeId,
+      ratePlanId,
     };
   }
 };
