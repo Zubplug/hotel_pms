@@ -1,8 +1,9 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, react-hooks/incompatible-library */
 'use client';
 
 import React, { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -11,7 +12,10 @@ import { Switch } from '@/components/ui/switch';
 import { useSWRConfig } from 'swr';
 import useSWR from 'swr';
 import { toast } from 'sonner';
-import { ShieldAlert, Plus } from 'lucide-react';
+import { Building2, CreditCard, Landmark, Mail, Phone, Plus, ShieldAlert, Tag, UserRound } from 'lucide-react';
+
+const dialogInput = 'border-white/10 bg-white/[.045] text-slate-100 placeholder:text-slate-600 shadow-inner shadow-black/10 focus-visible:border-indigo-400 focus-visible:ring-indigo-400/20 disabled:cursor-not-allowed disabled:opacity-50';
+const dialogSelect = 'border-white/10 bg-white/[.045] text-slate-100 shadow-inner shadow-black/10 focus:ring-indigo-400/20 data-[placeholder]:text-slate-500';
 
 interface QuickRateDialogProps {
   open: boolean;
@@ -54,7 +58,7 @@ function QuickRateDialog({ open, onOpenChange, onSaved, propertyId }: QuickRateD
   const onSubmit = async (data: any) => {
     try {
       const submittedRates = Object.entries(data.rates || {})
-        .filter(([_, amount]) => amount !== '' && amount !== null && amount !== undefined)
+        .filter((entry) => entry[1] !== '' && entry[1] !== null && entry[1] !== undefined)
         .map(([roomTypeId, amount]) => ({ roomTypeId, amount: Number(amount) }));
         
       if (submittedRates.length === 0) {
@@ -107,34 +111,34 @@ function QuickRateDialog({ open, onOpenChange, onSaved, propertyId }: QuickRateD
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl bg-slate-900 border-slate-800 max-h-[90vh] flex flex-col">
-        <DialogHeader>
-          <DialogTitle>Create Corporate Rate</DialogTitle>
+      <DialogContent className="max-h-[92vh] w-[calc(100vw-2rem)] max-w-4xl overflow-hidden rounded-2xl border-white/10 bg-[#0a0f1c] p-0 text-slate-100 shadow-[0_30px_100px_rgba(0,0,0,.65)]">
+        <DialogHeader className="border-b border-white/[.08] bg-gradient-to-r from-indigo-950/80 to-[#0f172a] px-6 py-5">
+          <div className="flex items-center gap-3"><div className="rounded-xl bg-indigo-500/15 p-2.5 text-indigo-300"><Tag className="h-5 w-5" /></div><div><DialogTitle className="text-lg text-white">Create negotiated rate</DialogTitle><DialogDescription className="mt-1 text-xs text-slate-400">Build a rate card for this property and assign it to a corporate account.</DialogDescription></div></div>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="flex-1 overflow-y-auto space-y-4 py-2 pr-2">
-          <div className="grid grid-cols-2 gap-4">
+        <form onSubmit={handleSubmit(onSubmit)} className="flex-1 space-y-5 overflow-y-auto px-6 py-5">
+          <div className="grid gap-4 rounded-xl border border-white/[.07] bg-white/[.02] p-4 sm:grid-cols-[1.35fr_1fr]">
             <div className="space-y-2">
-              <Label>Rate Name *</Label>
-              <Input {...register('name', { required: true })} placeholder="e.g. Apple Negotiated Rate" />
+              <Label className="text-xs font-medium text-slate-300">Rate name *</Label>
+              <Input className={dialogInput} {...register('name', { required: true })} placeholder="e.g. Apple negotiated rate" />
             </div>
             <div className="space-y-2">
-              <Label>Rate Code *</Label>
-              <Input {...register('code', { required: true })} placeholder="e.g. APP-CORP" />
+              <Label className="text-xs font-medium text-slate-300">Rate code *</Label>
+              <Input className={dialogInput} {...register('code', { required: true })} placeholder="e.g. APP-CORP" />
             </div>
           </div>
           
           <div className="space-y-2">
-            <Label>Currency</Label>
+            <Label className="text-xs font-medium text-slate-300">Settlement currency</Label>
             <div className="w-1/2">
               <Select 
                 value={watch('currency')} 
                 onValueChange={(v) => setValue('currency', v as string)}
               >
-                <SelectTrigger>
+                <SelectTrigger className={dialogSelect}>
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="border-white/10 bg-[#111827] text-slate-100">
                   <SelectItem value="NGN">NGN</SelectItem>
                   <SelectItem value="USD">USD</SelectItem>
                   <SelectItem value="EUR">EUR</SelectItem>
@@ -146,8 +150,8 @@ function QuickRateDialog({ open, onOpenChange, onSaved, propertyId }: QuickRateD
 
           <div className="pt-4 space-y-3">
             <div className="flex items-center justify-between">
-              <Label className="text-md font-semibold">Room Type Rates</Label>
-              <span className="text-sm font-medium text-slate-300 bg-slate-800 px-2 py-1 rounded">
+            <Label className="text-md font-semibold text-slate-100">Room type rates</Label>
+              <span className="rounded-full border border-indigo-400/20 bg-indigo-400/10 px-2.5 py-1 text-xs font-semibold text-indigo-300">
                 {includedCount} of {totalRoomTypes} included
               </span>
             </div>
@@ -156,9 +160,9 @@ function QuickRateDialog({ open, onOpenChange, onSaved, propertyId }: QuickRateD
               Leave the Corporate Rate blank if a room type is not included in the agreement.
             </p>
 
-            <div className="border border-slate-700 rounded-md overflow-hidden bg-slate-900/50">
+            <div className="overflow-hidden rounded-xl border border-white/[.08] bg-[#0d1422]">
               <table className="w-full text-sm text-left">
-                <thead className="bg-slate-800 text-slate-300">
+                <thead className="bg-white/[.04] text-slate-400">
                   <tr>
                     <th className="px-4 py-3 font-medium">Room Type</th>
                     <th className="px-4 py-3 font-medium text-right">Base Rate</th>
@@ -168,7 +172,7 @@ function QuickRateDialog({ open, onOpenChange, onSaved, propertyId }: QuickRateD
                 </thead>
                 <tbody className="divide-y divide-slate-700/50">
                   {roomTypes.map((rt: any) => (
-                    <tr key={rt.id} className="hover:bg-slate-800/30 transition-colors">
+                    <tr key={rt.id} className="transition-colors hover:bg-white/[.03]">
                       <td className="px-4 py-3 font-medium text-slate-200">
                         {rt.name}
                       </td>
@@ -181,7 +185,7 @@ function QuickRateDialog({ open, onOpenChange, onSaved, propertyId }: QuickRateD
                           step="0.01" 
                           placeholder="—"
                           {...register(`rates.${rt.id}`)} 
-                          className="h-8 bg-slate-950/50"
+                          className={`h-9 ${dialogInput}`}
                         />
                       </td>
                       <td className="px-4 py-3 text-right text-xs whitespace-nowrap">
@@ -201,8 +205,8 @@ function QuickRateDialog({ open, onOpenChange, onSaved, propertyId }: QuickRateD
             </div>
           </div>
 
-          <DialogFooter className="pt-4 sticky bottom-0 bg-slate-900 border-t border-slate-800 py-3 mt-4">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+          <DialogFooter className="sticky bottom-0 mt-4 border-t border-white/[.08] bg-[#0a0f1c] py-3">
+            <Button type="button" variant="outline" className="border-white/10 bg-white/[.04] text-slate-200 hover:bg-white/[.08]" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
             <Button type="submit" disabled={isSubmitting || includedCount === 0 || roomTypes.length === 0}>
@@ -355,70 +359,66 @@ export function CorporateAccountDialog({
         propertyId={propertyId}
       />
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-xl">
-          <DialogHeader>
-            <DialogTitle>{isEditing ? 'Edit Corporate Account' : 'New Corporate Account'}</DialogTitle>
+        <DialogContent className="max-h-[92vh] w-[calc(100vw-2rem)] max-w-4xl overflow-hidden rounded-2xl border-white/10 bg-[#0a0f1c] p-0 text-slate-100 shadow-[0_30px_100px_rgba(0,0,0,.65)]">
+          <DialogHeader className="border-b border-white/[.08] bg-gradient-to-r from-indigo-950/80 via-[#0f172a] to-[#0a0f1c] px-6 py-5">
+            <div className="flex items-center gap-3"><div className="rounded-xl bg-emerald-400/10 p-2.5 text-emerald-300"><Building2 className="h-5 w-5" /></div><div><DialogTitle className="text-lg text-white">{isEditing ? 'Edit corporate account' : 'Create corporate account'}</DialogTitle><DialogDescription className="mt-1 text-xs text-slate-400">{isEditing ? 'Update the account profile, contracted rates and financial controls.' : 'Set up a company profile for negotiated rates and direct billing.'}</DialogDescription></div></div>
           </DialogHeader>
 
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 py-2">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Company Name *</Label>
-                <Input {...register('name', { required: true })} disabled={formDisabled} />
+          {isEditing && <div className="grid gap-3 border-b border-white/[.08] bg-[#0d1422] px-6 py-4 sm:grid-cols-3"><div><p className="text-[10px] font-bold uppercase tracking-[.14em] text-slate-500">Ledger position</p><p className={`mt-1 text-lg font-bold ${Number(account?.balance || 0) < 0 ? 'text-cyan-300' : Number(account?.balance || 0) > 0 ? 'text-rose-300' : 'text-slate-300'}`}>{Number(account?.balance || 0) < 0 ? 'Advance credit' : Number(account?.balance || 0) > 0 ? 'Receivable' : 'Settled'}</p></div><div><p className="text-[10px] font-bold uppercase tracking-[.14em] text-slate-500">Current balance</p><p className="mt-1 text-lg font-bold text-slate-100">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: account?.currency || 'NGN', maximumFractionDigits: 0 }).format(Math.abs(Number(account?.balance || 0)))}</p></div><div><p className="text-[10px] font-bold uppercase tracking-[.14em] text-slate-500">Credit headroom</p><p className="mt-1 text-lg font-bold text-emerald-300">{account?.creditLimit > 0 ? new Intl.NumberFormat('en-NG', { style: 'currency', currency: account?.currency || 'NGN', maximumFractionDigits: 0 }).format(Number(account?.availableCredit || 0)) : 'Not configured'}</p></div></div>}
+          <form onSubmit={handleSubmit(onSubmit)} className="max-h-[calc(92vh-195px)] space-y-5 overflow-y-auto px-6 py-5">
+            <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[.16em] text-indigo-300"><UserRound className="h-4 w-4" />Company identity</div>
+            <div className="grid gap-4 rounded-xl border border-white/[.07] bg-white/[.02] p-4 sm:grid-cols-3">
+              <div className="space-y-2 sm:col-span-2">
+                <Label className="text-xs font-medium text-slate-300">Company name *</Label>
+                <Input className={dialogInput} {...register('name', { required: 'Company name is required' })} disabled={formDisabled} placeholder="e.g. Worldwide Commercial Venture Ltd" />
+                {errors.name && <p className="text-[11px] text-rose-300">{String(errors.name.message)}</p>}
               </div>
               <div className="space-y-2">
-                <Label>Corporate Code *</Label>
-                <Input {...register('code', { required: true })} disabled={formDisabled} placeholder="e.g. ABC" />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Contact Person</Label>
-                <Input {...register('contactPerson')} disabled={formDisabled} />
-              </div>
-              <div className="space-y-2">
-                <Label>Contact Phone</Label>
-                <Input {...register('contactPhone')} disabled={formDisabled} />
+                <Label className="text-xs font-medium text-slate-300">Corporate code *</Label>
+                <Input className={`${dialogInput} font-mono uppercase`} {...register('code', { required: 'Corporate code is required' })} disabled={formDisabled} placeholder="e.g. WCV-LTD" />
+                {errors.code && <p className="text-[11px] text-rose-300">{String(errors.code.message)}</p>}
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[.16em] text-indigo-300"><Phone className="h-4 w-4" />Primary contact</div>
+            <div className="grid gap-4 rounded-xl border border-white/[.07] bg-white/[.02] p-4 sm:grid-cols-3">
               <div className="space-y-2">
-                <Label>Contact Email</Label>
-                <Input type="email" {...register('contactEmail')} disabled={formDisabled} />
+                <Label className="text-xs font-medium text-slate-300">Contact person</Label>
+                <Input className={dialogInput} {...register('contactPerson')} disabled={formDisabled} placeholder="Account owner or billing lead" />
               </div>
               <div className="space-y-2">
-                <Label>Corporate Rate Plan</Label>
-                <div className="flex space-x-2">
+                <Label className="text-xs font-medium text-slate-300">Contact phone</Label>
+                <Input className={dialogInput} {...register('contactPhone')} disabled={formDisabled} placeholder="+234 800 000 0000" />
+              </div>
+              <div className="space-y-2">
+                <Label className="flex items-center gap-1.5 text-xs font-medium text-slate-300"><Mail className="h-3.5 w-3.5 text-slate-500" />Billing email</Label>
+                <Input className={dialogInput} type="email" {...register('contactEmail')} disabled={formDisabled} placeholder="billing@company.com" />
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[.16em] text-indigo-300"><Tag className="h-4 w-4" />Commercial agreement</div>
+            <div className="rounded-xl border border-white/[.07] bg-white/[.02] p-4">
+              <div className="space-y-2">
+                <Label className="text-xs font-medium text-slate-300">Corporate rate plan</Label>
+                <div className="flex gap-2">
                   <Select 
                     disabled={formDisabled} 
                     value={ratePlanId} 
                     onValueChange={v => setValue('ratePlanId', v || 'none')}
                   >
-                    <SelectTrigger className="flex-1">
+                    <SelectTrigger className={`flex-1 ${dialogSelect}`}>
                       <SelectValue placeholder="No corporate rate" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="border-white/10 bg-[#111827] text-slate-100">
                       <SelectItem value="none">No corporate rate</SelectItem>
                       {ratePlans.map((plan: any) => (
-                        <SelectItem key={plan.id} value={plan.id}>{plan.name} ({plan.code})</SelectItem>
+                        <SelectItem key={plan.id} value={plan.id}>{plan.name} · {plan.code}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
-                  
-                  {canEdit && canManageRates && (
-                    <Button 
-                      type="button" 
-                      variant="outline" 
-                      size="icon"
-                      onClick={() => setQuickRateOpen(true)}
-                      title="Create Custom Rate"
-                    >
-                      <Plus className="h-4 w-4" />
-                    </Button>
-                  )}
+                  {canEdit && canManageRates && <Button type="button" variant="outline" className="border-indigo-400/30 bg-indigo-500/10 text-indigo-300 hover:bg-indigo-500/20" size="icon" onClick={() => setQuickRateOpen(true)} title="Create custom rate"><Plus className="h-4 w-4" /></Button>}
                 </div>
+                <p className="text-[11px] text-slate-500">The negotiated rate will be applied when reservations are linked to this account.</p>
               </div>
             </div>
 
@@ -428,12 +428,12 @@ export function CorporateAccountDialog({
                 if (!selectedPlan || !selectedPlan.rates || selectedPlan.rates.length === 0) return null;
                 
                 return (
-                  <div className="rounded-lg border border-slate-700 bg-slate-900/30 overflow-hidden mt-4">
-                    <div className="bg-slate-800/80 px-4 py-2 text-sm font-medium text-slate-200 border-b border-slate-700">
-                      Included Room Types
+                  <div className="mt-4 overflow-hidden rounded-xl border border-indigo-400/15 bg-[#0d1422]">
+                    <div className="flex items-center justify-between border-b border-white/[.08] bg-indigo-500/[.06] px-4 py-3 text-sm font-medium text-slate-200">
+                      <span>Included room types</span><span className="text-[11px] font-normal text-indigo-300">Negotiated pricing preview</span>
                     </div>
                     <table className="w-full text-xs text-left">
-                      <thead className="bg-slate-900/50 text-slate-400">
+                      <thead className="bg-white/[.03] text-slate-500">
                         <tr>
                           <th className="px-4 py-2 font-medium">Room Type</th>
                           <th className="px-4 py-2 font-medium text-right">Base Rate</th>
@@ -450,7 +450,7 @@ export function CorporateAccountDialog({
                           const pct = baseRate > 0 ? ((Math.abs(variance) / baseRate) * 100).toFixed(1) : '0.0';
                           
                           return (
-                            <tr key={rate.id} className="hover:bg-slate-800/20">
+                            <tr key={rate.id} className="hover:bg-white/[.03]">
                               <td className="px-4 py-2 font-medium text-slate-300">
                                 {rate.roomType?.name || 'Unknown'}
                               </td>
@@ -479,16 +479,17 @@ export function CorporateAccountDialog({
               })()
             )}
 
-            <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-4 space-y-4">
-              <h4 className="flex items-center text-sm font-semibold text-slate-200">
-                <ShieldAlert className="mr-2 h-4 w-4 text-emerald-400" />
-                Financial Controls
+            <div className="space-y-4 rounded-xl border border-amber-400/15 bg-amber-400/[.035] p-4">
+              <h4 className="flex items-center text-sm font-semibold text-slate-100">
+                <ShieldAlert className="mr-2 h-4 w-4 text-amber-300" />
+                Financial controls
               </h4>
               
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-4 sm:grid-cols-3">
                 <div className="space-y-2">
-                  <Label>Credit Limit (City Ledger)</Label>
+                  <Label className="flex items-center gap-1.5 text-xs font-medium text-slate-300"><CreditCard className="h-3.5 w-3.5 text-slate-500" />Credit limit</Label>
                   <Input 
+                    className={dialogInput}
                     type="number" 
                     step="0.01"
                     {...register('creditLimit')} 
@@ -496,16 +497,16 @@ export function CorporateAccountDialog({
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Deposit Policy</Label>
+                  <Label className="flex items-center gap-1.5 text-xs font-medium text-slate-300"><Landmark className="h-3.5 w-3.5 text-slate-500" />Deposit policy</Label>
                   <Select 
                     disabled={formDisabled || depositPolicyDisabled} 
                     value={depositPolicy} 
                     onValueChange={v => setValue('depositPolicy', v as any)}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className={dialogSelect}>
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="border-white/10 bg-[#111827] text-slate-100">
                       <SelectItem value="WAIVED">Waived (Billed to AR)</SelectItem>
                       <SelectItem value="STANDARD">Standard (Guest pays)</SelectItem>
                     </SelectContent>
@@ -513,9 +514,9 @@ export function CorporateAccountDialog({
                 </div>
               </div>
 
-              <div className="flex items-center justify-between pt-2">
-                <Label className="flex-1 cursor-pointer">
-                  Exempt from High Balance Reports
+              <div className="flex items-center justify-between gap-4 border-t border-white/[.07] pt-3">
+                <Label className="flex-1 cursor-pointer text-xs text-slate-300">
+                  Exempt from high-balance controls
                 </Label>
                 <Switch 
                   disabled={formDisabled || financialsDisabled}
@@ -530,19 +531,19 @@ export function CorporateAccountDialog({
                 </p>
               )}
               {(canChangeFinancials || canChangeDepositPolicy) && (
-                <p className="text-xs text-emerald-400/80">
-                  Warning: Changing the credit limit affects the company's available credit for future City Ledger charges. This action will be audited.
+                <p className="text-xs leading-5 text-amber-200/70">
+                  Changes to credit limits affect available credit for future City Ledger charges and are recorded in the audit trail.
                 </p>
               )}
             </div>
 
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            <DialogFooter className="sticky bottom-0 -mx-6 -mb-5 mt-1 border-t border-white/[.08] bg-[#0a0f1c] px-6 py-4">
+              <Button type="button" variant="outline" className="border-white/10 bg-white/[.04] text-slate-200 hover:bg-white/[.08]" onClick={() => onOpenChange(false)}>
                 {canEdit ? 'Cancel' : 'Close'}
               </Button>
               {canEdit && (
-                <Button type="submit" disabled={isSubmitting}>
-                  {isSubmitting ? 'Saving...' : 'Save Account'}
+                <Button type="submit" disabled={isSubmitting} className="min-w-32 bg-indigo-600 text-white shadow-lg shadow-indigo-950/30 hover:bg-indigo-500">
+                  {isSubmitting ? 'Saving...' : isEditing ? 'Save changes' : 'Create account'}
                 </Button>
               )}
             </DialogFooter>
