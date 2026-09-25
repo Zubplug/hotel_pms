@@ -17,7 +17,7 @@ const steps = [
   { id: 4, title: 'Summary', icon: FileText }
 ];
 
-export function HallOnlyWizard({ initialHalls, equipmentList }: { initialHalls: any[], equipmentList: any[] }) {
+export function HallOnlyWizard({ initialHalls, equipmentList, onCreated }: { initialHalls: any[], equipmentList: any[], onCreated?: () => void }) {
   const router = useRouter();
   
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
@@ -104,7 +104,7 @@ export function HallOnlyWizard({ initialHalls, equipmentList }: { initialHalls: 
       });
 
       toast.success("Hall Booking successfully created!");
-      router.push(`/fnb/events`);
+      if (onCreated) onCreated(); else router.push(`/fnb/events/bookings`);
     } catch (err: any) {
       toast.error(err.message || "An error occurred creating the booking.");
     } finally {

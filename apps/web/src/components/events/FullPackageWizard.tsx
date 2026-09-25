@@ -19,7 +19,7 @@ const steps = [
   { id: 5, title: 'Summary', icon: FileText }
 ];
 
-export function FullPackageWizard({ initialHalls, initialPackages }: { initialHalls: any[], initialPackages: any[] }) {
+export function FullPackageWizard({ initialHalls, initialPackages, onCreated }: { initialHalls: any[], initialPackages: any[], onCreated?: () => void }) {
   const router = useRouter();
   
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
@@ -108,7 +108,7 @@ export function FullPackageWizard({ initialHalls, initialPackages }: { initialHa
       });
 
       toast.success("Banquet Event successfully created!");
-      router.push(`/fnb/events`);
+      if (onCreated) onCreated(); else router.push(`/fnb/events/bookings`);
     } catch (err: any) {
       toast.error(err.message || "An error occurred creating the booking.");
     } finally {

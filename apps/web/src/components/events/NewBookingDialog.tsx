@@ -13,28 +13,41 @@ import {
 import { Box, CalendarDays, Plus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
+import { FullPackageWizard } from './FullPackageWizard';
+import { HallOnlyWizard } from './HallOnlyWizard';
 
-export function NewBookingDialog() {
+type Hall = { id: string; name: string; capacity: number };
+type Package = { id: string; name: string; basePrice: unknown; description?: string | null };
+type Equipment = { id: string; name: string; totalStock: number; rentalPrice: unknown };
+
+export function NewBookingDialog({
+  initialHalls,
+  initialPackages,
+  equipmentList,
+}: {
+  initialHalls: Hall[];
+  initialPackages: Package[];
+  equipmentList: Equipment[];
+}) {
   const [open, setOpen] = useState(false);
+  const [selectedType, setSelectedType] = useState<'full' | 'hall_only' | null>(null);
   const router = useRouter();
 
   const handleSelect = (type: 'full' | 'hall_only') => {
-    setOpen(false);
-    router.push(`/fnb/events/bookings/create?type=${type}`);
+    setSelectedType(type);
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={(nextOpen) => { setOpen(nextOpen); if (!nextOpen) setSelectedType(null); }}>
       <DialogTrigger render={<Button><Plus className="mr-2 h-4 w-4" /> New Booking</Button>} />
-      <DialogContent className="sm:max-w-[600px]">
+      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-[1080px]">
         <DialogHeader>
-          <DialogTitle>Select Booking Type</DialogTitle>
+          <DialogTitle>{open && selectedType === 'full' ? 'New banquet event' : open && selectedType === 'hall_only' ? 'New hall booking' : 'Create a booking'}</DialogTitle>
           <DialogDescription>
-            Choose the type of booking you want to create to streamline the setup process.
+            {selectedType ? 'Complete the event details below. Availability and inventory are checked when you submit.' : 'Start with the booking type that matches the service you are selling.'}
           </DialogDescription>
         </DialogHeader>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
+        {!selectedType ? <div className="grid grid-cols-1 gap-4 py-4 md:grid-cols-2">
           <button
             onClick={() => handleSelect('full')}
             className={cn(
@@ -66,7 +79,7 @@ export function NewBookingDialog() {
               Simple space reservation without food, beverage, or complex setups.
             </p>
           </button>
-        </div>
+        </div> : selectedType === 'full' ? <FullPackageWizard initialHalls={initialHalls} initialPackages={initialPackages} onCreated={() => { setOpen(false); router.refresh(); }} /> : <HallOnlyWizard initialHalls={initialHalls} equipmentList={equipmentList} onCreated={() => { setOpen(false); router.refresh(); }} />}
       </DialogContent>
     </Dialog>
   );
