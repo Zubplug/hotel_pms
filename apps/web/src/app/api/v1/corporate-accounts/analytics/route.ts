@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
 
     const now = new Date();
     const trendStart = new Date(now.getFullYear(), now.getMonth() - 11, 1);
-    const [accounts, reservations, folioTotals, trendReservations, invoices] = await Promise.all([
+    const [accounts, reservations, folioTotals, trendReservations, trendRevenueItems, invoices] = await Promise.all([
       prisma.corporateAccount.findMany({
         where: { propertyId },
         include: { cityLedgerAccount: { select: { id: true, balance: true, currency: true } }, ratePlan: { select: { id: true, name: true, code: true, isActive: true } } },
@@ -37,8 +37,12 @@ export async function GET(req: NextRequest) {
       }),
       prisma.reservation.findMany({
         where: { propertyId, corporateAccountId: { not: null }, checkIn: { gte: trendStart }, status: { notIn: ['CANCELLED', 'NO_SHOW'] } },
-        select: { corporateAccountId: true, checkIn: true, allocatedAmount: true },
+        select: { corporateAccountId: true, checkIn: true },
         orderBy: { checkIn: 'asc' },
+      }),
+      prisma.folioItem.findMany({
+        where: { folio: { propertyId, corporateAccountId: { not: null } }, businessDate: { gte: trendStart }, type: 'CHARGE', voidedAt: null },
+        select: { businessDate: true, amount: true },
       }),
       prisma.cityLedgerInvoice.findMany({
         where: { propertyId, status: { in: ['OPEN', 'PARTIALLY_PAID'] } },
@@ -73,7 +77,11 @@ export async function GET(req: NextRequest) {
     }
     for (const reservation of trendReservations) {
       const row = monthMap.get(monthKey(new Date(reservation.checkIn)));
-      if (row) { row.bookings += 1; row.revenue += Number(reservation.allocatedAmount || 0); }
+      if (row) row.bookings += 1;
+    }
+    for (const item of trendRevenueItems) {
+      const row = monthMap.get(monthKey(new Date(item.businessDate)));
+      if (row) row.revenue += Number(item.amount || 0);
     }
 
     const rows = accounts.map(account => {
