@@ -1,7 +1,6 @@
 'use server';
 
 import { prisma } from '@hotel-pms/db';
-import { Prisma } from '@prisma/client';
 import { revalidatePath } from 'next/cache';
 import { toZonedTime, fromZonedTime } from 'date-fns-tz';
 import { addDays, getDay } from 'date-fns';
@@ -306,5 +305,5 @@ export async function createFullEventBooking(data: {
 
     revalidatePath('/fnb/events/bookings');
     return event;
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  }, { isolationLevel: 'Serializable' as any });
 }
