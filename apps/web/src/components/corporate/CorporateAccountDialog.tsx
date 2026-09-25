@@ -21,12 +21,18 @@ interface QuickRateDialogProps {
 }
 
 function QuickRateDialog({ open, onOpenChange, onSaved, propertyId }: QuickRateDialogProps) {
+  const { data: roomTypesData } = useSWR(
+    open ? `/api/v1/room-types?propertyId=${propertyId}` : null,
+    (url: string) => fetch(url).then(res => res.json())
+  );
+  const roomTypes = roomTypesData?.data || [];
+
   const { register, handleSubmit, reset, setValue, watch, formState: { isSubmitting } } = useForm({
     defaultValues: {
       name: '',
       code: '',
-      amount: '',
-      currency: 'NGN'
+      currency: 'NGN',
+      rates: {} as Record<string, string>
     }
   });
 
@@ -35,19 +41,34 @@ function QuickRateDialog({ open, onOpenChange, onSaved, propertyId }: QuickRateD
       reset({
         name: '',
         code: '',
-        amount: '',
-        currency: 'NGN'
+        currency: 'NGN',
+        rates: {}
       });
     }
   }, [open, reset]);
 
+  const ratesState = watch('rates') || {};
+  const includedCount = Object.values(ratesState).filter(val => val !== '' && val !== null && val !== undefined).length;
+  const totalRoomTypes = roomTypes.length;
+
   const onSubmit = async (data: any) => {
     try {
+      const submittedRates = Object.entries(data.rates || {})
+        .filter(([_, amount]) => amount !== '' && amount !== null && amount !== undefined)
+        .map(([roomTypeId, amount]) => ({ roomTypeId, amount: Number(amount) }));
+        
+      if (submittedRates.length === 0) {
+        throw new Error('Please enter a corporate rate for at least one room type.');
+      }
+
       const res = await fetch(`/api/v1/rate-plans`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ...data,
+          name: data.name,
+          code: data.code,
+          currency: data.currency,
+          rates: submittedRates,
           propertyId,
         })
       });
@@ -65,30 +86,47 @@ function QuickRateDialog({ open, onOpenChange, onSaved, propertyId }: QuickRateD
     }
   };
 
+  const renderVariance = (roomTypeId: string, baseRate: number) => {
+    const entered = ratesState[roomTypeId];
+    if (!entered || isNaN(Number(entered))) return <span className="text-slate-500">—</span>;
+    
+    const corpAmount = Number(entered);
+    const variance = baseRate - corpAmount;
+    const isDiscount = variance > 0;
+    
+    if (variance === 0) return <span className="text-slate-400">Match base</span>;
+    
+    const pct = ((Math.abs(variance) / baseRate) * 100).toFixed(1);
+    
+    return (
+      <span className={isDiscount ? "text-emerald-400" : "text-amber-400"}>
+        {isDiscount ? '↓' : '↑'} {variance.toLocaleString()} ({pct}%)
+      </span>
+    );
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md bg-slate-900 border-slate-800">
+      <DialogContent className="max-w-2xl bg-slate-900 border-slate-800 max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>Create Corporate Rate</DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 py-2">
-          <div className="space-y-2">
-            <Label>Rate Name *</Label>
-            <Input {...register('name', { required: true })} placeholder="e.g. Apple Negotiated Rate" />
-          </div>
-          <div className="space-y-2">
-            <Label>Rate Code *</Label>
-            <Input {...register('code', { required: true })} placeholder="e.g. APP-CORP" />
-          </div>
-          
+        <form onSubmit={handleSubmit(onSubmit)} className="flex-1 overflow-y-auto space-y-4 py-2 pr-2">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label>Flat Rate Amount *</Label>
-              <Input type="number" step="0.01" {...register('amount', { required: true })} placeholder="e.g. 25000" />
+              <Label>Rate Name *</Label>
+              <Input {...register('name', { required: true })} placeholder="e.g. Apple Negotiated Rate" />
             </div>
             <div className="space-y-2">
-              <Label>Currency</Label>
+              <Label>Rate Code *</Label>
+              <Input {...register('code', { required: true })} placeholder="e.g. APP-CORP" />
+            </div>
+          </div>
+          
+          <div className="space-y-2">
+            <Label>Currency</Label>
+            <div className="w-1/2">
               <Select 
                 value={watch('currency')} 
                 onValueChange={(v) => setValue('currency', v as string)}
@@ -106,15 +144,68 @@ function QuickRateDialog({ open, onOpenChange, onSaved, propertyId }: QuickRateD
             </div>
           </div>
 
-          <div className="mt-4 text-sm text-slate-400 bg-slate-800/50 p-3 rounded-md border border-slate-700">
-            <strong>ⓘ Note:</strong> This flat rate will initially apply to all active room types. Individual room-type rates can be adjusted later in Rate Management.
+          <div className="pt-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <Label className="text-md font-semibold">Room Type Rates</Label>
+              <span className="text-sm font-medium text-slate-300 bg-slate-800 px-2 py-1 rounded">
+                {includedCount} of {totalRoomTypes} included
+              </span>
+            </div>
+            
+            <p className="text-sm text-slate-400">
+              Leave the Corporate Rate blank if a room type is not included in the agreement.
+            </p>
+
+            <div className="border border-slate-700 rounded-md overflow-hidden bg-slate-900/50">
+              <table className="w-full text-sm text-left">
+                <thead className="bg-slate-800 text-slate-300">
+                  <tr>
+                    <th className="px-4 py-3 font-medium">Room Type</th>
+                    <th className="px-4 py-3 font-medium text-right">Base Rate</th>
+                    <th className="px-4 py-3 font-medium">Corporate Rate</th>
+                    <th className="px-4 py-3 font-medium text-right whitespace-nowrap">Variance</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-700/50">
+                  {roomTypes.map((rt: any) => (
+                    <tr key={rt.id} className="hover:bg-slate-800/30 transition-colors">
+                      <td className="px-4 py-3 font-medium text-slate-200">
+                        {rt.name}
+                      </td>
+                      <td className="px-4 py-3 text-right text-slate-400 tabular-nums">
+                        {Number(rt.baseRate).toLocaleString()}
+                      </td>
+                      <td className="px-4 py-2 w-40">
+                        <Input 
+                          type="number" 
+                          step="0.01" 
+                          placeholder="—"
+                          {...register(`rates.${rt.id}`)} 
+                          className="h-8 bg-slate-950/50"
+                        />
+                      </td>
+                      <td className="px-4 py-3 text-right text-xs whitespace-nowrap">
+                        {renderVariance(rt.id, Number(rt.baseRate))}
+                      </td>
+                    </tr>
+                  ))}
+                  {roomTypes.length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="px-4 py-8 text-center text-slate-500">
+                        No active room types found.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
 
-          <DialogFooter className="pt-4">
+          <DialogFooter className="pt-4 sticky bottom-0 bg-slate-900 border-t border-slate-800 py-3 mt-4">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button type="submit" disabled={isSubmitting}>
+            <Button type="submit" disabled={isSubmitting || includedCount === 0 || roomTypes.length === 0}>
               {isSubmitting ? 'Creating...' : 'Create Rate'}
             </Button>
           </DialogFooter>

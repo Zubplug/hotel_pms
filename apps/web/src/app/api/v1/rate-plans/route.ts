@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
 
     const { propertyIds } = await requireOrganizationContext((session.user as any).id);
     const body = await req.json();
-    let { name, code, amount, currency, propertyId } = body;
+    let { name, code, rates, currency, propertyId } = body;
 
     propertyId = propertyId || propertyIds[0];
     if (!propertyId) {
@@ -72,11 +72,28 @@ export async function POST(req: NextRequest) {
     
     code = code.trim().toUpperCase();
     
-    const parsedAmount = Number(amount);
-    if (isNaN(parsedAmount) || parsedAmount <= 0) {
-      return errorResponse('BAD_REQUEST', 'Amount must be greater than 0', 400);
+    if (!Array.isArray(rates) || rates.length === 0) {
+      return errorResponse('BAD_REQUEST', 'At least one room type rate must be provided', 400);
     }
-    
+
+    const uniqueRoomTypes = new Set<string>();
+    const validRates: { roomTypeId: string, amount: number }[] = [];
+
+    for (const rate of rates) {
+      if (!rate.roomTypeId || typeof rate.roomTypeId !== 'string') {
+        return errorResponse('BAD_REQUEST', 'Invalid roomTypeId in rates array', 400);
+      }
+      const parsedAmount = Number(rate.amount);
+      if (isNaN(parsedAmount) || parsedAmount <= 0) {
+        return errorResponse('BAD_REQUEST', `Amount for room type ${rate.roomTypeId} must be greater than 0`, 400);
+      }
+      if (uniqueRoomTypes.has(rate.roomTypeId)) {
+        return errorResponse('BAD_REQUEST', `Duplicate roomTypeId ${rate.roomTypeId} in request`, 400);
+      }
+      uniqueRoomTypes.add(rate.roomTypeId);
+      validRates.push({ roomTypeId: rate.roomTypeId, amount: parsedAmount });
+    }
+
     if (!currency || typeof currency !== 'string') return errorResponse('BAD_REQUEST', 'Currency is required', 400);
 
     // Enforce unique rate code within property
@@ -87,14 +104,14 @@ export async function POST(req: NextRequest) {
       return errorResponse('CONFLICT', `A rate plan with code ${code} already exists for this property.`, 409);
     }
 
-    // Fetch active room types
+    // Validate that provided room types exist and are active for this property
     const activeRoomTypes = await prisma.roomType.findMany({
-      where: { propertyId, isActive: true },
+      where: { propertyId, isActive: true, id: { in: Array.from(uniqueRoomTypes) } },
       select: { id: true }
     });
 
-    if (activeRoomTypes.length === 0) {
-      return errorResponse('BAD_REQUEST', 'Cannot create rate plan: property has no active room types.', 400);
+    if (activeRoomTypes.length !== uniqueRoomTypes.size) {
+      return errorResponse('BAD_REQUEST', 'One or more provided room types are invalid, inactive, or do not belong to this property.', 400);
     }
 
     // Create RatePlan + Rates transaction
@@ -111,17 +128,16 @@ export async function POST(req: NextRequest) {
         }
       });
 
-      // Create standard rates for all room types
       const today = new Date();
       today.setUTCHours(0, 0, 0, 0);
 
-      const ratePromises = activeRoomTypes.map((rt) => 
+      const ratePromises = validRates.map((rt) => 
         tx.rate.create({
           data: {
             ratePlanId: plan.id,
-            roomTypeId: rt.id,
+            roomTypeId: rt.roomTypeId,
             propertyId,
-            amount: parsedAmount,
+            amount: rt.amount,
             currency,
             effectiveFrom: today,
             dayOfWeek: [0, 1, 2, 3, 4, 5, 6],
