@@ -11,6 +11,7 @@ export async function GET(req: NextRequest) {
   try {
     const session = await auth();
     if (!session?.user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
+    if ((session.user as any).isLodgeCoreAdmin) return paginatedResponse([], { page: 1, pageSize: 20, total: 0, totalPages: 0 });
     const ctx = await requireOrganizationContext((session.user as any).id || (session as any).user.id);
 
     const { searchParams } = req.nextUrl;

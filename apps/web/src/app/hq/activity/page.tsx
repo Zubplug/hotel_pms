@@ -34,10 +34,10 @@ export default async function HQActivityPage() {
             {logs.map(log => (
               <tr key={log.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-900/50">
                 <td className="px-6 py-4 text-zinc-500 whitespace-nowrap">
-                  {format(new Date(log.createdAt), 'MMM d, HH:mm:ss')}
+                  {log.createdAt ? format(new Date(log.createdAt), 'MMM d, HH:mm:ss') : 'Unknown'}
                 </td>
                 <td className="px-6 py-4">
-                  <div className="font-medium text-zinc-900 dark:text-white">{log.organization.name}</div>
+                  <div className="font-medium text-zinc-900 dark:text-white">{log.organization?.name || "Unknown Tenant"}</div>
                 </td>
                 <td className="px-6 py-4">
                   <div className="font-medium">{log.userEmail || 'System'}</div>
