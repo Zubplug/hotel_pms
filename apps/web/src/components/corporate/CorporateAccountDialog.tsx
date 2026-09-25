@@ -111,12 +111,12 @@ function QuickRateDialog({ open, onOpenChange, onSaved, propertyId }: QuickRateD
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[92vh] w-[calc(100vw-2rem)] max-w-4xl overflow-hidden rounded-2xl border-white/10 bg-[#0a0f1c] p-0 text-slate-100 shadow-[0_30px_100px_rgba(0,0,0,.65)]">
+      <DialogContent className="!max-h-[calc(100vh-2rem)] !w-[calc(100vw-2rem)] !max-w-[1180px] overflow-hidden rounded-2xl border-white/10 bg-[#0a0f1c] p-0 text-slate-100 shadow-[0_30px_100px_rgba(0,0,0,.65)]">
         <DialogHeader className="border-b border-white/[.08] bg-gradient-to-r from-indigo-950/80 to-[#0f172a] px-6 py-5">
           <div className="flex items-center gap-3"><div className="rounded-xl bg-indigo-500/15 p-2.5 text-indigo-300"><Tag className="h-5 w-5" /></div><div><DialogTitle className="text-lg text-white">Create negotiated rate</DialogTitle><DialogDescription className="mt-1 text-xs text-slate-400">Build a rate card for this property and assign it to a corporate account.</DialogDescription></div></div>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="flex-1 space-y-5 overflow-y-auto px-6 py-5">
+        <form onSubmit={handleSubmit(onSubmit)} className="flex-1 space-y-5 overflow-y-auto px-6 py-5 lg:px-10">
           <div className="grid gap-4 rounded-xl border border-white/[.07] bg-white/[.02] p-4 sm:grid-cols-[1.35fr_1fr]">
             <div className="space-y-2">
               <Label className="text-xs font-medium text-slate-300">Rate name *</Label>
@@ -359,13 +359,13 @@ export function CorporateAccountDialog({
         propertyId={propertyId}
       />
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-h-[92vh] w-[calc(100vw-2rem)] max-w-4xl overflow-hidden rounded-2xl border-white/10 bg-[#0a0f1c] p-0 text-slate-100 shadow-[0_30px_100px_rgba(0,0,0,.65)]">
+        <DialogContent className="!max-h-[calc(100vh-2rem)] !w-[calc(100vw-2rem)] !max-w-[1180px] overflow-hidden rounded-2xl border-white/10 bg-[#0a0f1c] p-0 text-slate-100 shadow-[0_30px_100px_rgba(0,0,0,.65)]">
           <DialogHeader className="border-b border-white/[.08] bg-gradient-to-r from-indigo-950/80 via-[#0f172a] to-[#0a0f1c] px-6 py-5">
             <div className="flex items-center gap-3"><div className="rounded-xl bg-emerald-400/10 p-2.5 text-emerald-300"><Building2 className="h-5 w-5" /></div><div><DialogTitle className="text-lg text-white">{isEditing ? 'Edit corporate account' : 'Create corporate account'}</DialogTitle><DialogDescription className="mt-1 text-xs text-slate-400">{isEditing ? 'Update the account profile, contracted rates and financial controls.' : 'Set up a company profile for negotiated rates and direct billing.'}</DialogDescription></div></div>
           </DialogHeader>
 
           {isEditing && <div className="grid gap-3 border-b border-white/[.08] bg-[#0d1422] px-6 py-4 sm:grid-cols-3"><div><p className="text-[10px] font-bold uppercase tracking-[.14em] text-slate-500">Ledger position</p><p className={`mt-1 text-lg font-bold ${Number(account?.balance || 0) < 0 ? 'text-cyan-300' : Number(account?.balance || 0) > 0 ? 'text-rose-300' : 'text-slate-300'}`}>{Number(account?.balance || 0) < 0 ? 'Advance credit' : Number(account?.balance || 0) > 0 ? 'Receivable' : 'Settled'}</p></div><div><p className="text-[10px] font-bold uppercase tracking-[.14em] text-slate-500">Current balance</p><p className="mt-1 text-lg font-bold text-slate-100">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: account?.currency || 'NGN', maximumFractionDigits: 0 }).format(Math.abs(Number(account?.balance || 0)))}</p></div><div><p className="text-[10px] font-bold uppercase tracking-[.14em] text-slate-500">Credit headroom</p><p className="mt-1 text-lg font-bold text-emerald-300">{account?.creditLimit > 0 ? new Intl.NumberFormat('en-NG', { style: 'currency', currency: account?.currency || 'NGN', maximumFractionDigits: 0 }).format(Number(account?.availableCredit || 0)) : 'Not configured'}</p></div></div>}
-          <form onSubmit={handleSubmit(onSubmit)} className="max-h-[calc(92vh-195px)] space-y-5 overflow-y-auto px-6 py-5">
+          <form onSubmit={handleSubmit(onSubmit)} className="max-h-[calc(100vh-195px)] space-y-5 overflow-y-auto px-6 py-5 lg:px-10">
             <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[.16em] text-indigo-300"><UserRound className="h-4 w-4" />Company identity</div>
             <div className="grid gap-4 rounded-xl border border-white/[.07] bg-white/[.02] p-4 sm:grid-cols-3">
               <div className="space-y-2 sm:col-span-2">
