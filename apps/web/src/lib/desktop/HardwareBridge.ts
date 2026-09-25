@@ -138,7 +138,7 @@ export const HardwareBridge = {
     return invokeDesktop('hardware.printPaymentReceipt', { data });
   },
 
-  printShiftReport: async (data: { staffName: string, ordersCount: number, grossSales: number, netSales: number, cashSales: number, cardSales: number, roomCharges: number, totalDiscounts: number, currency: string, printedAt: string }) => {
+  printShiftReport: async (data: { staffName: string, ordersCount: number, grossSales: number, netSales: number, cashSales: number, cardSales: number, roomCharges: number, totalDiscounts: number, currency: string, printedAt: string, shiftReference?: string | null, till?: string | null, expectedCash?: number, declaredCash?: number | null, variance?: number | null, bankTransferSales?: number, otherPayments?: number, laundryCharges?: number, otherCharges?: number, cashIn?: number, cashDrops?: number, paidOuts?: number, transfersOut?: number, cashRefunds?: number, paymentsCount?: number, chargesCount?: number, pendingSync?: number, failedSync?: number, reportTitle?: string | null, folioPayments?: any[], paymentSummary?: any[] }) => {
     return invokeDesktop('hardware.printShiftReport', { data });
   },
 

@@ -363,26 +363,26 @@ public class EscPosService
             builder.AddRow("Cash In", $"{cur} {report.CashIn:N2}");
             builder.AddRow("Drops / Paid Out", $"{cur} {(report.CashDrops + report.PaidOuts + report.TransfersOut + report.CashRefunds):N2}");
             builder.AddDivider('-');
-            builder.AddRow("Pending Sync", report.PendingSync.ToString());
-            builder.AddRow("Failed Sync", report.FailedSync.ToString());
-            builder.AddLine("Cashier signature: __________________");
-            builder.AddLine("Manager signature: __________________");
         }
 
-        if (report.CheckInLines is { Count: > 0 })
+        if (report.FolioPayments is { Count: > 0 })
         {
             builder.AddDivider('-');
             builder.AddCommand(EscPosBuilder.AlignCenter);
-            builder.AddLine("TODAY'S CHECK-INS");
+            builder.AddLine("FOLIO PAYMENTS");
             builder.AddCommand(EscPosBuilder.AlignLeft);
-            foreach (var line in report.CheckInLines)
+            decimal totalFolioPayments = 0;
+            foreach (var payment in report.FolioPayments)
             {
-                builder.AddLine($"Room {line.RoomNumber}  {line.GuestName}");
-                if (!string.IsNullOrWhiteSpace(line.ConfirmationNumber)) builder.AddLine($"Ref: {line.ConfirmationNumber}");
-                builder.AddRow("Gross", $"{line.Currency} {line.GrossAmount:N2}");
-                builder.AddRow("Discount", $"-{line.Currency} {line.DiscountAmount:N2}");
-                builder.AddRow("Net", $"{line.Currency} {line.NetAmount:N2}");
+                builder.AddLine($"Room {payment.RoomNumber}  {payment.GuestName}");
+                if (!string.IsNullOrWhiteSpace(payment.ReceiptNumber) && payment.ReceiptNumber != "-") builder.AddLine($"Ref: {payment.ReceiptNumber}");
+                builder.AddRow(payment.Method ?? "Payment", $"{payment.Currency} {payment.Amount:N2}");
+                totalFolioPayments += payment.Amount;
             }
+            builder.AddDivider('-');
+            builder.AddCommand(EscPosBuilder.BoldOn);
+            builder.AddRow("Total Payments Collected", $"{cur} {totalFolioPayments:N2}");
+            builder.AddCommand(EscPosBuilder.BoldOff);
         }
 
         if (report.PaymentSummary is { Count: > 0 })
@@ -393,6 +393,13 @@ public class EscPosService
             builder.AddCommand(EscPosBuilder.AlignLeft);
             foreach (var payment in report.PaymentSummary)
                 builder.AddRow($"{payment.Method} ({payment.Count})", $"{cur} {payment.Amount:N2}");
+        }
+
+        if (report.ShiftReference != null)
+        {
+            builder.AddDivider('-');
+            builder.AddLine("Cashier signature: __________________");
+            builder.AddLine("Manager signature: __________________");
         }
         
         AddPrintFooter(builder, "Confidential shift accountability report", report.PrintedAt);

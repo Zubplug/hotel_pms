@@ -10,6 +10,8 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AlertTriangle, ArrowRightLeft, Banknote, Check, CheckCircle2, ChevronDown, FileText, Loader2, LockKeyhole, PlayCircle, Printer, ShieldCheck, WalletCards } from 'lucide-react';
 import { useLogout } from '@/hooks/useLogout';
+import { HardwareBridge } from '@/lib/desktop/HardwareBridge';
+import { toast } from 'sonner';
 
 type FrontdeskSession = { id: string; shiftReference: string; status: string; controlStatus?: string; openingFloat: number; systemExpectedCash: number; cashAccount?: { id: string; name: string } };
 type CashAccount = { id: string; name: string; type: string; balance: number };
@@ -151,6 +153,70 @@ export default function FrontdeskCashierPage() {
     setTimeout(() => window.print(), 120);
   };
 
+  const printTerminalReport = async () => {
+    if (!HardwareBridge.isAvailable()) {
+      toast.error('Terminal printer is not available');
+      return;
+    }
+    if (!summary) return;
+    
+    try {
+      const res = await HardwareBridge.printShiftReport({
+        staffName: summary.session.staffName,
+        ordersCount: summary.payments.count,
+        grossSales: summary.payments.total,
+        netSales: summary.payments.total,
+        cashSales: summary.payments.cash,
+        cardSales: summary.payments.card,
+        roomCharges: summary.charges.room,
+        totalDiscounts: 0,
+        currency: summary.property?.baseCurrency || 'NGN',
+        printedAt: new Date().toISOString(),
+        shiftReference: summary.session.shiftReference,
+        till: summary.session.till,
+        expectedCash: summary.cash.expected,
+        declaredCash: summary.cash.declared,
+        variance: summary.cash.variance,
+        bankTransferSales: summary.payments.bankTransfer,
+        otherPayments: summary.payments.other,
+        laundryCharges: summary.charges.laundry,
+        otherCharges: summary.charges.other,
+        cashIn: summary.cash.cashIn,
+        cashDrops: summary.cash.cashDrops,
+        paidOuts: summary.cash.paidOuts,
+        transfersOut: summary.cash.transfersOut,
+        cashRefunds: summary.cash.refunds,
+        paymentsCount: summary.payments.count,
+        chargesCount: summary.charges.count,
+        pendingSync: summary.exceptions.pendingSync,
+        failedSync: summary.exceptions.failedSync,
+        reportTitle: 'FRONT DESK END-OF-DAY REPORT',
+        folioPayments: summary.rows
+          .filter((r: any) => r.kind === 'PAYMENT' || (r.amount > 0 && r.method))
+          .map((r: any) => ({
+            roomNumber: String(r.room || r.rooms?.join(', ') || '-'),
+            guestName: String(r.guest || '-'),
+            receiptNumber: String(r.reference || '-'),
+            amount: Number(r.amount || 0),
+            method: String(r.method || 'Payment'),
+            currency: summary.property?.baseCurrency || 'NGN'
+          })),
+        paymentSummary: dailyReport?.paymentSummary?.map((i: any) => ({
+          method: i.method,
+          amount: Number(i.amount || 0),
+          count: Number(i.count || 0)
+        })) || []
+      });
+      if (!res.success) {
+        toast.error(`Printer Error: ${res.error || 'Unknown error'}`);
+      } else {
+        toast.success('Control sheet sent to terminal printer');
+      }
+    } catch (e: any) {
+      toast.error(`Printer Error: ${e.message || String(e)}`);
+    }
+  };
+
   const varianceTone = useMemo(() => {
     const variance = Number(summary?.cash.variance ?? 0);
     return variance === 0 ? 'text-emerald-700' : variance > 0 ? 'text-blue-700' : 'text-red-700';
@@ -167,17 +233,18 @@ export default function FrontdeskCashierPage() {
       <div className="mt-8 grid grid-cols-2 gap-8"><div><h2 className="border-b pb-2 text-lg font-bold">Payment Type Summary</h2><div className="mt-3 space-y-2">{(dailyReport.paymentSummary || []).map((item: any) => <SummaryRow key={`print-payment-${item.method}`} label={`${item.method} (${item.count})`} value={money(item.amount)} />)}</div></div><div><h2 className="border-b pb-2 text-lg font-bold">Report Control</h2><div className="mt-3 space-y-2"><SummaryRow label="Sessions" value={String(dailyReport.totals?.sessions || 0)} /><SummaryRow label="Report rows" value={String(dailyReport.rows?.length || 0)} /><SummaryRow label="Net movement" value={money(dailyReport.totals?.net || 0)} strong /></div></div></div>
       <div className="mt-14 grid grid-cols-3 gap-8 text-xs text-slate-500"><div className="border-t pt-2">Front Desk signature</div><div className="border-t pt-2">Auditor signature</div><div className="border-t pt-2">General Cashier signature</div></div><p className="mt-10 text-center text-[10px] text-slate-400">Generated from the terminal&apos;s offline transaction ledger · {new Date().toLocaleString()}</p>
     </div>}
-    {summary && <div id="frontdesk-shift-a4-report" className="hidden bg-white text-slate-900 print:block"><div className="border-b-2 border-slate-900 pb-5"><p className="text-xs font-bold uppercase tracking-[.22em] text-indigo-700">{summary.property?.name || 'LodgeCore Front Desk'}</p><p className="mt-1 text-xs text-slate-500">{summary.property?.address || ''}{summary.property?.city ? ` · ${summary.property.city}` : ''}{summary.property?.phone ? ` · ${summary.property.phone}` : ''}</p><h1 className="mt-3 text-3xl font-bold">Front Office Deposit Control Sheet</h1><p className="mt-2 text-sm text-slate-500">{summary.session.shiftReference} · Business date: {summary.session.businessDate || 'Current business date'}</p></div><div className="mt-6 grid grid-cols-4 gap-3"><div className="rounded-lg border p-3"><p className="text-[10px] uppercase text-slate-500">Cashier</p><p className="mt-1 font-bold">{summary.session.staffName}</p></div><div className="rounded-lg border p-3"><p className="text-[10px] uppercase text-slate-500">Till</p><p className="mt-1 font-bold">{summary.session.till}</p></div><div className="rounded-lg border p-3"><p className="text-[10px] uppercase text-slate-500">Status</p><p className="mt-1 font-bold">{effectiveControlStatus.replaceAll('_', ' ')}</p></div><div className="rounded-lg border p-3"><p className="text-[10px] uppercase text-slate-500">Transactions</p><p className="mt-1 font-bold">{summary.payments.count}</p></div></div><div className="mt-7 grid grid-cols-2 gap-8"><div><h2 className="border-b pb-2 text-lg font-bold">Payment capture</h2><div className="mt-3 space-y-2"><SummaryRow label="Cash" value={money(summary.payments.cash)} /><SummaryRow label="Card / POS" value={money(summary.payments.card)} /><SummaryRow label="Bank transfer" value={money(summary.payments.bankTransfer)} /><SummaryRow label="Other" value={money(summary.payments.other)} /><SummaryRow label="Total payments" value={money(summary.payments.total)} strong /></div></div><div><h2 className="border-b pb-2 text-lg font-bold">Shift analysis</h2><div className="mt-3 space-y-2"><SummaryRow label="Room charges" value={money(summary.charges.room)} /><SummaryRow label="Other charges" value={money(summary.charges.laundry + summary.charges.other)} /><SummaryRow label="Total charges" value={money(summary.charges.total)} strong /><SummaryRow label="Net movement" value={money(summary.payments.total - summary.charges.total)} strong /></div></div></div><h2 className="mt-7 border-b pb-2 text-lg font-bold">Cash reconciliation</h2><div className="mt-3 grid grid-cols-2 gap-x-12 gap-y-2"><SummaryRow label="Opening float" value={money(summary.cash.openingFloat)} /><SummaryRow label="Cash received" value={money(summary.payments.cash)} /><SummaryRow label="Cash in" value={money(summary.cash.cashIn)} /><SummaryRow label="Drops / paid out / refunds" value={money(summary.cash.refunds + summary.cash.cashDrops + summary.cash.paidOuts + summary.cash.transfersOut)} /><SummaryRow label="Expected cash" value={money(summary.cash.expected)} strong /><SummaryRow label="Declared cash" value={summary.cash.declared == null ? 'Not declared' : money(summary.cash.declared)} /><SummaryRow label="Variance" value={summary.cash.variance == null ? 'Not declared' : money(summary.cash.variance)} strong /></div><h2 className="mt-7 border-b pb-2 text-lg font-bold">Payment and transaction detail</h2><table className="mt-3 w-full border-collapse text-[10px]"><thead><tr className="border-b-2 border-slate-800 text-left"><th className="py-1">Room</th><th className="py-1">Guest / confirmation</th><th className="py-1">Description</th><th className="py-1">Method</th><th className="py-1">Reference</th><th className="py-1 text-right">Amount</th></tr></thead><tbody>{summary.rows.map((row, index) => <tr key={`shift-print-${row.date}-${index}`} className="border-b"><td className="py-1">{row.room || row.rooms?.join(', ') || '—'}</td><td className="py-1">{row.guest || '—'}<br />{row.confirmationNumber || '—'}</td><td className="py-1">{row.description || row.kind}</td><td className="py-1">{row.method || '—'}</td><td className="py-1">{row.reference || '—'}</td><td className="py-1 text-right">{money(row.amount)}</td></tr>)}</tbody></table><div className="mt-12 grid grid-cols-3 gap-8 text-xs text-slate-500"><div className="border-t pt-2">Cashier signature</div><div className="border-t pt-2">Night Auditor signature</div><div className="border-t pt-2">General Cashier signature</div></div><p className="mt-8 text-center text-[10px] text-slate-400">Generated from the cashier shift ledger · {new Date().toLocaleString()}</p></div>}
-    <style jsx global>{`@media print { @page { size: A4; margin: 12mm; } body * { visibility: hidden !important; } #frontdesk-${printTarget || 'shift'}-a4-report, #frontdesk-${printTarget || 'shift'}-a4-report * { visibility: visible !important; } #frontdesk-${printTarget || 'shift'}-a4-report { display: block !important; position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; min-height: 270mm; padding: 0 !important; background: #fff !important; } }`}</style>
+    <style jsx global>{`@media print { @page { size: A4; margin: 12mm; } body * { visibility: hidden !important; } #frontdesk-${printTarget || 'shift'}-a4-report, #frontdesk-${printTarget || 'shift'}-a4-report * { visibility: visible !important; } #frontdesk-${printTarget || 'shift'}-a4-report { display: block !important; position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; min-height: 270mm; padding: 0 !important; background: #fff !important; box-shadow: none !important; } }`}</style>
     <Dialog open={showShiftReport} onOpenChange={setShowShiftReport}>
-      <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto">
-        <DialogHeader><DialogTitle>Front Office Control Sheet</DialogTitle><DialogDescription>This is the single cashier control sheet for the current Front Desk shift, prepared for normal A4 printing.</DialogDescription></DialogHeader>
-        {summary && <div className="space-y-5 text-sm">
-          <div className="grid gap-3 sm:grid-cols-3"><div className="rounded-lg border p-3"><p className="text-xs text-muted-foreground">Cashier</p><p className="mt-1 font-semibold">{summary.session.staffName}</p></div><div className="rounded-lg border p-3"><p className="text-xs text-muted-foreground">Till</p><p className="mt-1 font-semibold">{summary.session.till}</p></div><div className="rounded-lg border p-3"><p className="text-xs text-muted-foreground">Shift</p><p className="mt-1 font-semibold">{summary.session.shiftReference}</p></div></div>
-          <div className="grid gap-5 md:grid-cols-2"><div><h3 className="mb-2 font-semibold">Collections</h3><div className="space-y-2 rounded-lg border p-3"><SummaryRow label="Cash" value={money(summary.payments.cash)} /><SummaryRow label="Card / POS" value={money(summary.payments.card)} /><SummaryRow label="Bank transfer" value={money(summary.payments.bankTransfer)} /><SummaryRow label="Other" value={money(summary.payments.other)} /><SummaryRow label="Total payments" value={money(summary.payments.total)} strong /></div></div><div><h3 className="mb-2 font-semibold">Charges</h3><div className="space-y-2 rounded-lg border p-3"><SummaryRow label="Room charges" value={money(summary.charges.room)} /><SummaryRow label="Laundry" value={money(summary.charges.laundry)} /><SummaryRow label="Other" value={money(summary.charges.other)} /><SummaryRow label="Total charges" value={money(summary.charges.total)} strong /></div></div></div>
-          <div><h3 className="mb-2 font-semibold">Cash reconciliation</h3><div className="grid gap-x-8 gap-y-2 rounded-lg border p-3 sm:grid-cols-2"><SummaryRow label="Expected cash" value={money(summary.cash.expected)} strong /><SummaryRow label="Declared cash" value={summary.cash.declared == null ? 'Not declared' : money(summary.cash.declared)} /><SummaryRow label="Variance" value={summary.cash.variance == null ? 'Not declared' : money(summary.cash.variance)} strong /><SummaryRow label="Pending sync" value={String(summary.exceptions.pendingSync)} /></div></div>
-        </div>}
-        <DialogFooter><Button variant="outline" onClick={() => setShowShiftReport(false)}>Close</Button><Button onClick={() => printA4Report('shift')} disabled={!summary}><Printer className="mr-2 h-4 w-4" />Print Control Sheet — A4</Button></DialogFooter>
+      <DialogContent className="max-h-[92vh] max-w-4xl overflow-y-auto border-0 bg-slate-100 p-0 shadow-2xl">
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-6 py-4 shadow-sm">
+          <div><DialogTitle className="text-lg text-slate-900">Print Preview</DialogTitle><DialogDescription className="text-xs">Front Office Deposit Control Sheet (A4)</DialogDescription></div>
+          <div className="flex gap-2"><Button variant="outline" onClick={() => setShowShiftReport(false)}>Cancel</Button><Button onClick={() => printA4Report('shift')} disabled={!summary} className="bg-indigo-600 text-white shadow-lg hover:bg-indigo-700"><Printer className="mr-2 h-4 w-4" />Print A4</Button></div>
+        </div>
+        <div className="p-4 sm:p-8">
+          {summary && <div id="frontdesk-shift-a4-report" className="mx-auto w-full max-w-[210mm] bg-white p-[12mm] text-slate-900 shadow-xl print:p-0 print:shadow-none">
+            <div className="border-b-2 border-slate-900 pb-5"><p className="text-xs font-bold uppercase tracking-[.22em] text-indigo-700">{summary.property?.name || 'LodgeCore Front Desk'}</p><p className="mt-1 text-xs text-slate-500">{summary.property?.address || ''}{summary.property?.city ? ` · ${summary.property.city}` : ''}{summary.property?.phone ? ` · ${summary.property.phone}` : ''}</p><h1 className="mt-3 text-3xl font-bold">Front Office Deposit Control Sheet</h1><p className="mt-2 text-sm text-slate-500">{summary.session.shiftReference} · Business date: {summary.session.businessDate || 'Current business date'}</p></div><div className="mt-6 grid grid-cols-4 gap-3"><div className="rounded-lg border p-3"><p className="text-[10px] uppercase text-slate-500">Cashier</p><p className="mt-1 font-bold">{summary.session.staffName}</p></div><div className="rounded-lg border p-3"><p className="text-[10px] uppercase text-slate-500">Till</p><p className="mt-1 font-bold">{summary.session.till}</p></div><div className="rounded-lg border p-3"><p className="text-[10px] uppercase text-slate-500">Status</p><p className="mt-1 font-bold">{effectiveControlStatus.replaceAll('_', ' ')}</p></div><div className="rounded-lg border p-3"><p className="text-[10px] uppercase text-slate-500">Transactions</p><p className="mt-1 font-bold">{summary.payments.count}</p></div></div><div className="mt-7 grid grid-cols-2 gap-8"><div><h2 className="border-b pb-2 text-lg font-bold">Payment capture</h2><div className="mt-3 space-y-2"><SummaryRow label="Cash" value={money(summary.payments.cash)} /><SummaryRow label="Card / POS" value={money(summary.payments.card)} /><SummaryRow label="Bank transfer" value={money(summary.payments.bankTransfer)} /><SummaryRow label="Other" value={money(summary.payments.other)} /><SummaryRow label="Total payments" value={money(summary.payments.total)} strong /></div></div><div><h2 className="border-b pb-2 text-lg font-bold">Shift analysis</h2><div className="mt-3 space-y-2"><SummaryRow label="Room charges" value={money(summary.charges.room)} /><SummaryRow label="Other charges" value={money(summary.charges.laundry + summary.charges.other)} /><SummaryRow label="Total charges" value={money(summary.charges.total)} strong /><SummaryRow label="Net movement" value={money(summary.payments.total - summary.charges.total)} strong /></div></div></div><h2 className="mt-7 border-b pb-2 text-lg font-bold">Cash reconciliation</h2><div className="mt-3 grid grid-cols-2 gap-x-12 gap-y-2"><SummaryRow label="Opening float" value={money(summary.cash.openingFloat)} /><SummaryRow label="Cash received" value={money(summary.payments.cash)} /><SummaryRow label="Cash in" value={money(summary.cash.cashIn)} /><SummaryRow label="Drops / paid out / refunds" value={money(summary.cash.refunds + summary.cash.cashDrops + summary.cash.paidOuts + summary.cash.transfersOut)} /><SummaryRow label="Expected cash" value={money(summary.cash.expected)} strong /><SummaryRow label="Declared cash" value={summary.cash.declared == null ? 'Not declared' : money(summary.cash.declared)} /><SummaryRow label="Variance" value={summary.cash.variance == null ? 'Not declared' : money(summary.cash.variance)} strong /></div><h2 className="mt-7 border-b pb-2 text-lg font-bold">Folio Payments</h2><table className="mt-3 w-full border-collapse text-[10px]"><thead><tr className="border-b-2 border-slate-800 text-left"><th className="py-2">Room</th><th className="py-2">Guest / confirmation</th><th className="py-2">Receipt Ref</th><th className="py-2">Method</th><th className="py-2 text-right">Amount</th></tr></thead><tbody>{summary.rows.filter((r: any) => r.kind === 'PAYMENT' || (r.amount > 0 && r.method)).map((row, index) => <tr key={`shift-print-${row.date}-${index}`} className="border-b border-slate-200"><td className="py-2 font-medium">{row.room || row.rooms?.join(', ') || '—'}</td><td className="py-2">{row.guest || '—'}</td><td className="py-2">{row.reference || '—'}</td><td className="py-2">{row.method || 'Payment'}</td><td className="py-2 text-right font-semibold">{money(row.amount)}</td></tr>)}<tr className="bg-slate-50"><td colSpan={4} className="py-3 px-2 font-bold text-right text-xs">Total Payments Collected:</td><td className="py-3 px-2 text-right font-bold text-xs">{money(summary.rows.filter((r: any) => r.kind === 'PAYMENT' || (r.amount > 0 && r.method)).reduce((acc, curr) => acc + Number(curr.amount || 0), 0))}</td></tr></tbody></table><div className="mt-12 grid grid-cols-3 gap-8 text-xs text-slate-500"><div className="border-t border-slate-800 pt-2 font-bold text-slate-900">Cashier signature</div><div className="border-t border-slate-800 pt-2 font-bold text-slate-900">Night Auditor signature</div><div className="border-t border-slate-800 pt-2 font-bold text-slate-900">General Cashier signature</div></div><p className="mt-8 text-center text-[10px] text-slate-400">Generated from the cashier shift ledger · {new Date().toLocaleString()}</p>
+          </div>}
+        </div>
       </DialogContent>
     </Dialog>
     <Dialog open={showDailyReport} onOpenChange={setShowDailyReport}>
@@ -219,7 +286,7 @@ export default function FrontdeskCashierPage() {
       <div className="pointer-events-none absolute -right-20 -top-28 h-72 w-72 rounded-full bg-indigo-500/20 blur-3xl" /><div className="pointer-events-none absolute bottom-[-120px] left-1/3 h-60 w-60 rounded-full bg-blue-400/10 blur-3xl" />
         <div className="relative flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
         <div><div className="mb-3 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[.24em] text-indigo-300"><span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,.8)]" />Front Desk Operations <span className="text-white/20">/</span> Cashier Control</div><h1 className="text-3xl font-semibold tracking-[-.04em] sm:text-4xl">Cashier shift workspace</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">Control today&apos;s till, review every collection, and close the shift with a traceable handover.</p></div>
-      <div className="flex flex-wrap gap-2"><Button onClick={() => setShowShiftReport(true)} disabled={busy || !summary} className="border border-indigo-300/20 bg-indigo-500/15 text-indigo-100 shadow-none hover:bg-indigo-500/25"><Printer className="mr-2 h-4 w-4" />Control Sheet</Button></div>
+      <div className="flex flex-wrap gap-2"><Button onClick={() => setShowShiftReport(true)} disabled={busy || !summary} className="border border-indigo-300/20 bg-indigo-500/15 text-indigo-100 shadow-none hover:bg-indigo-500/25"><Printer className="mr-2 h-4 w-4" />Front Office Deposit Control Sheet</Button><Button onClick={printTerminalReport} disabled={busy || !summary} className="border border-emerald-300/20 bg-emerald-500/15 text-emerald-100 shadow-none hover:bg-emerald-500/25"><Printer className="mr-2 h-4 w-4" />Print to Terminal</Button></div>
       </div>
       <div className="relative mt-7 flex flex-wrap items-center gap-x-6 gap-y-2 border-t border-white/10 pt-4 text-xs text-slate-400"><span className="inline-flex items-center gap-2"><ShieldCheck className="h-3.5 w-3.5 text-emerald-300" />Signed accountability trail</span><span className="inline-flex items-center gap-2"><LockKeyhole className="h-3.5 w-3.5 text-indigo-300" />Till control enabled</span><span className="inline-flex items-center gap-2"><Banknote className="h-3.5 w-3.5 text-amber-300" />Offline-ready collections</span></div>
     </div>

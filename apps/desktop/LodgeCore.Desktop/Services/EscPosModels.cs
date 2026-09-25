@@ -153,18 +153,17 @@ public record ShiftReportData(
     int PendingSync = 0,
     int FailedSync = 0,
     string? ReportTitle = null,
-    List<ShiftReportLine>? CheckInLines = null,
+    List<ShiftReportFolioPayment>? FolioPayments = null,
     List<ShiftReportPaymentSummary>? PaymentSummary = null
 );
 
-public record ShiftReportLine(
+public record ShiftReportFolioPayment(
     string RoomNumber,
     string GuestName,
-    decimal GrossAmount,
-    decimal DiscountAmount,
-    decimal NetAmount,
-    string Currency,
-    string? ConfirmationNumber = null
+    string ReceiptNumber,
+    decimal Amount,
+    string Method,
+    string Currency
 );
 
 public record ShiftReportPaymentSummary(
