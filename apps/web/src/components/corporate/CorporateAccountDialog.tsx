@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import useSWR from 'swr';
 import { toast } from 'sonner';
 import { ShieldAlert } from 'lucide-react';
 
@@ -42,9 +43,16 @@ export function CorporateAccountDialog({
       contactPhone: '',
       creditLimit: 0,
       depositPolicy: 'WAIVED',
-      exemptFromHighBalance: false
+      exemptFromHighBalance: false,
+      ratePlanId: 'none'
     }
   });
+
+  const { data: ratePlansData } = useSWR(
+    open ? `/api/v1/rate-plans?propertyId=${propertyId}` : null,
+    (url: string) => fetch(url).then(res => res.json())
+  );
+  const ratePlans = ratePlansData?.data || [];
 
   useEffect(() => {
     if (account && open) {
@@ -56,7 +64,8 @@ export function CorporateAccountDialog({
         contactPhone: account.contactPhone || '',
         creditLimit: account.creditLimit || 0,
         depositPolicy: account.depositPolicy || 'WAIVED',
-        exemptFromHighBalance: account.exemptFromHighBalance || false
+        exemptFromHighBalance: account.exemptFromHighBalance || false,
+        ratePlanId: account.ratePlanId || 'none'
       });
     } else if (open) {
       reset({
@@ -67,13 +76,15 @@ export function CorporateAccountDialog({
         contactPhone: '',
         creditLimit: 0,
         depositPolicy: 'WAIVED',
-        exemptFromHighBalance: false
+        exemptFromHighBalance: false,
+        ratePlanId: 'none'
       });
     }
   }, [account, open, reset]);
 
   const depositPolicy = watch('depositPolicy');
   const exemptFromHighBalance = watch('exemptFromHighBalance');
+  const ratePlanId = watch('ratePlanId');
 
   const onSubmit = async (data: any) => {
     try {
@@ -84,7 +95,8 @@ export function CorporateAccountDialog({
       const payload = {
         ...data,
         propertyId,
-        creditLimit: Number(data.creditLimit)
+        creditLimit: Number(data.creditLimit),
+        ratePlanId: data.ratePlanId === 'none' ? null : data.ratePlanId
       };
       if (isEditing && (
         Number(data.creditLimit) !== Number(account.creditLimit) ||
@@ -149,9 +161,29 @@ export function CorporateAccountDialog({
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label>Contact Email</Label>
-            <Input type="email" {...register('contactEmail')} disabled={formDisabled} />
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Contact Email</Label>
+              <Input type="email" {...register('contactEmail')} disabled={formDisabled} />
+            </div>
+            <div className="space-y-2">
+              <Label>Corporate Rate Plan</Label>
+              <Select 
+                disabled={formDisabled} 
+                value={ratePlanId} 
+                onValueChange={v => setValue('ratePlanId', v)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="No corporate rate" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No corporate rate</SelectItem>
+                  {ratePlans.map((plan: any) => (
+                    <SelectItem key={plan.id} value={plan.id}>{plan.name} ({plan.code})</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           <div className="rounded-lg border border-slate-800 bg-slate-900/50 p-4 space-y-4">
