@@ -53,7 +53,7 @@ function isToday(value: Date) {
   return value.getFullYear() === now.getFullYear() && value.getMonth() === now.getMonth() && value.getDate() === now.getDate();
 }
 
-export function EventTimeline({ halls, bookings, viewDate }: { halls: Hall[]; bookings: Booking[]; viewDate: Date }) {
+export function EventTimeline({ halls, bookings, viewDate, readOnly = false }: { halls: Hall[]; bookings: Booking[]; viewDate: Date; readOnly?: boolean }) {
   const activeBookings = bookings.filter((booking) => booking.status !== 'CANCELLED' && booking.event?.status !== 'CANCELLED');
   const nowOffset = minutesFromStart(new Date());
   const showNow = isToday(viewDate) && nowOffset >= 0 && nowOffset <= TOTAL_HOURS * 60;
@@ -86,12 +86,13 @@ export function EventTimeline({ halls, bookings, viewDate }: { halls: Hall[]; bo
                 const style = statusStyles[booking.event?.status || ''] || statusStyles.TENTATIVE;
                 const setup = booking.setupBufferMinutes || 0;
                 const teardown = booking.teardownBufferMinutes || 0;
+                const bookingCard = <div className={`group relative z-10 flex h-full min-w-[150px] flex-col justify-between overflow-hidden rounded-xl border-2 p-2.5 shadow-sm transition ${style.bar}`}>
+                  <div className="min-w-0"><div className="flex items-start justify-between gap-2"><p className="truncate text-xs font-bold text-[#24130d]">{booking.event?.name || 'Event booking'}</p>{!readOnly && <ChevronRight className="h-3.5 w-3.5 shrink-0 opacity-50 transition group-hover:translate-x-0.5" />}</div><p className="mt-0.5 truncate text-[10px] text-[#6f5d53]">{booking.event?.contactName || 'Client not specified'}</p></div>
+                  <div><div className="flex items-center justify-between gap-2 text-[10px] font-semibold text-[#6f5d53]"><span>{clock(booking.startTime)}–{clock(booking.endTime)}</span><span>{booking.event?.expectedGuests?.toLocaleString() || 0} guests</span></div><div className="mt-1 flex items-center gap-1.5"><span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ${style.badge}`}>{style.label}</span>{setup + teardown > 0 && <span className="truncate text-[9px] text-[#947d72]">Buffers {setup + teardown}m</span>}</div></div>
+                </div>;
                 return <div key={booking.id} className="absolute top-3 h-[88px]" style={blockStyle(booking.startTime, booking.endTime, setup, teardown, viewDate)}>
                   <div className="absolute inset-y-0 left-0 right-0 rounded-xl border border-dashed border-slate-300/70 bg-slate-100/50" />
-                  <Link href={`/fnb/events/bookings/${booking.eventId}`} className={`group relative z-10 flex h-full min-w-[150px] flex-col justify-between overflow-hidden rounded-xl border-2 p-2.5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${style.bar}`}>
-                    <div className="min-w-0"><div className="flex items-start justify-between gap-2"><p className="truncate text-xs font-bold text-[#24130d]">{booking.event?.name || 'Event booking'}</p><ChevronRight className="h-3.5 w-3.5 shrink-0 opacity-50 transition group-hover:translate-x-0.5" /></div><p className="mt-0.5 truncate text-[10px] text-[#6f5d53]">{booking.event?.contactName || 'Client not specified'}</p></div>
-                    <div><div className="flex items-center justify-between gap-2 text-[10px] font-semibold text-[#6f5d53]"><span>{clock(booking.startTime)}–{clock(booking.endTime)}</span><span>{booking.event?.expectedGuests?.toLocaleString() || 0} guests</span></div><div className="mt-1 flex items-center gap-1.5"><span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ${style.badge}`}>{style.label}</span>{setup + teardown > 0 && <span className="truncate text-[9px] text-[#947d72]">Buffers {setup + teardown}m</span>}</div></div>
-                  </Link>
+                  {readOnly ? bookingCard : <Link href={`/fnb/events/bookings/${booking.eventId}`} className="relative z-10 block h-full hover:-translate-y-0.5 hover:shadow-md">{bookingCard}</Link>}
                 </div>;
               })}
               {showNow && <div className="pointer-events-none absolute bottom-0 top-0 z-20 w-px bg-orange-500/70" style={{ left: `${(nowOffset / (TOTAL_HOURS * 60)) * 100}%` }} />}

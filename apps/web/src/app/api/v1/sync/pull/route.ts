@@ -680,6 +680,24 @@ export async function GET(req: NextRequest) {
       take: limit,
       orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
     });
+
+    // Read-only event schedule for the offline Front Desk. Event operations
+    // stay cloud-authoritative; the desktop only receives the current booking
+    // snapshot needed for operational visibility.
+    const eventSchedule = await prisma.eventBooking.findMany({
+      where: {
+        hall: { propertyId },
+        status: { not: 'CANCELLED' },
+        event: { status: { not: 'CANCELLED' } },
+      },
+      select: {
+        id: true, eventId: true, hallId: true, startTime: true, endTime: true,
+        setupBufferMinutes: true, teardownBufferMinutes: true, status: true, updatedAt: true,
+        hall: { select: { name: true, code: true, capacity: true } },
+        event: { select: { name: true, status: true, contactName: true, expectedGuests: true } },
+      },
+      orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
+    });
     
     // Resolve permissions for staff
     const staffWithPermissions = await Promise.all(
@@ -769,6 +787,7 @@ export async function GET(req: NextRequest) {
       guests:     Array.from(guestMap.values()),
       folios,
       eventInvoices,
+      eventSchedule,
       posOutlets: finalOutlets,
       posCategories: finalCategories,
       posProducts: finalProducts,

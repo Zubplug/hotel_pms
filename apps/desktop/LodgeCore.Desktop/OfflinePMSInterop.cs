@@ -61,6 +61,12 @@ public class OfflinePMSInterop
         }
     }
 
+    public async Task<string> GetEventScheduleAsync(string propertyId)
+    {
+        try { return JsonSerializer.Serialize(new { success = true, data = await _repo.GetEventScheduleAsync(propertyId) }, _jsonOptions); }
+        catch (Exception ex) { return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions); }
+    }
+
     public async Task<string> ProvisionTerminalAsync(string email, string password, string propertyId, string outletId, string terminalName, string terminalType)
     {
         try

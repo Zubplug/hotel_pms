@@ -445,6 +445,10 @@ public partial class MainPage : ContentPage
                         parameters?["propertyId"]?.ToString() ?? "",
                         parameters?["search"]?.ToString());
                     break;
+                case "eventSchedule.list":
+                    responseData = await pmsInterop.GetEventScheduleAsync(
+                        parameters?["propertyId"]?.ToString() ?? "");
+                    break;
                 case "folios.addPayment":
                     responseData = await pmsInterop.RecordPaymentAsync(
                         parameters?["folioId"]?.ToString() ?? "",

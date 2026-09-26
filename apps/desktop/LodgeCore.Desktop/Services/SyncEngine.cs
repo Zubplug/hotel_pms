@@ -1709,6 +1709,45 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                 }
             }
 
+            // Read-only event schedule for Front Desk offline operations.
+            if (root.TryGetProperty("eventSchedule", out var eventScheduleArray))
+            {
+                var incomingScheduleIds = new HashSet<string>();
+                foreach (var el in eventScheduleArray.EnumerateArray())
+                {
+                    var id = el.TryGetProperty("id", out var idEl) ? idEl.GetString() : null;
+                    if (string.IsNullOrWhiteSpace(id)) continue;
+                    incomingScheduleIds.Add(id);
+                    var item = dbContext.EventScheduleItems.Local.FirstOrDefault(x => x.Id == id)
+                        ?? await dbContext.EventScheduleItems.FirstOrDefaultAsync(x => x.Id == id, stoppingToken);
+                    if (item == null)
+                    {
+                        item = new LodgeCore.Desktop.Data.Entities.LocalEventScheduleItem { Id = id, PropertyId = propertyId };
+                        dbContext.EventScheduleItems.Add(item);
+                    }
+                    item.PropertyId = propertyId;
+                    item.EventId = el.TryGetProperty("eventId", out var eventId) ? eventId.GetString() ?? "" : "";
+                    item.HallId = el.TryGetProperty("hallId", out var hallId) ? hallId.GetString() ?? "" : "";
+                    var hasEvent = el.TryGetProperty("event", out var ev) && ev.ValueKind == System.Text.Json.JsonValueKind.Object;
+                    item.EventName = hasEvent && ev.TryGetProperty("name", out var name) ? name.GetString() ?? "Event" : "Event";
+                    item.EventStatus = ev.ValueKind == System.Text.Json.JsonValueKind.Object && ev.TryGetProperty("status", out var eventStatus) ? eventStatus.GetString() ?? "" : "";
+                    item.ContactName = ev.ValueKind == System.Text.Json.JsonValueKind.Object && ev.TryGetProperty("contactName", out var contact) ? contact.GetString() ?? "" : "";
+                    item.ExpectedGuests = ev.ValueKind == System.Text.Json.JsonValueKind.Object && ev.TryGetProperty("expectedGuests", out var guests) ? guests.GetInt32() : 0;
+                    var hasHall = el.TryGetProperty("hall", out var hall) && hall.ValueKind == System.Text.Json.JsonValueKind.Object;
+                    item.HallName = hasHall && hall.TryGetProperty("name", out var hallName) ? hallName.GetString() ?? "Hall" : "Hall";
+                    item.HallCode = hasHall && hall.TryGetProperty("code", out var hallCode) ? hallCode.GetString() ?? "" : "";
+                    item.HallCapacity = hasHall && hall.TryGetProperty("capacity", out var capacity) ? capacity.GetInt32() : 0;
+                    item.StartTime = el.TryGetProperty("startTime", out var start) ? start.GetDateTime() : DateTime.UtcNow;
+                    item.EndTime = el.TryGetProperty("endTime", out var end) ? end.GetDateTime() : item.StartTime;
+                    item.SetupBufferMinutes = el.TryGetProperty("setupBufferMinutes", out var setup) ? setup.GetInt32() : 0;
+                    item.TeardownBufferMinutes = el.TryGetProperty("teardownBufferMinutes", out var teardown) ? teardown.GetInt32() : 0;
+                    item.Status = el.TryGetProperty("status", out var bookingStatus) ? bookingStatus.GetString() ?? "ACTIVE" : "ACTIVE";
+                    item.UpdatedAt = DateTime.UtcNow;
+                }
+                var staleSchedule = await dbContext.EventScheduleItems.Where(x => x.PropertyId == propertyId && !incomingScheduleIds.Contains(x.Id)).ToListAsync(stoppingToken);
+                if (staleSchedule.Any()) dbContext.EventScheduleItems.RemoveRange(staleSchedule);
+            }
+
             // 6. POS Outlets
             if (root.TryGetProperty("posOutlets", out var posOutletsArray))
             {

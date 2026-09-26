@@ -19,6 +19,7 @@ import { formatRoomNumber } from '@/lib/format-room';
 import {
   UserPlus,
   CalendarPlus,
+  CalendarDays,
   Search,
   LogIn,
   LogOut,
@@ -474,11 +475,12 @@ export default function ReceptionistDashboardPage() {
                 <p className="mt-2 text-sm font-medium text-slate-400"><ClientOnlyDate date={bDate} format="date" locale="en-GB" options={{ weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }} /></p>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:w-[560px]">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-5 xl:w-[700px]">
               <ActionBtn icon={UserPlus} label="Walk-In" sub="Instant stay" onClick={() => router.push('/frontdesk/reservations/walk-in')} color="bg-emerald-500/10 border-emerald-500/20 text-emerald-300 hover:bg-emerald-500/15 hover:border-emerald-500/40" />
               <ActionBtn icon={CalendarPlus} label="New booking" sub="Reservation" onClick={() => router.push('/frontdesk/reservations/new')} color="bg-indigo-500/10 border-indigo-500/20 text-indigo-300 hover:bg-indigo-500/15 hover:border-indigo-500/40" />
               <ActionBtn icon={Search} label="Find guest" sub="Search desk" onClick={() => router.push('/frontdesk/reservations')} color="bg-white/5 border-white/10 text-slate-300 hover:bg-white/8 hover:border-white/20" />
               <ActionBtn icon={CreditCard} label="Read key" sub="Card tools" onClick={() => setReadCardOpen(true)} color="bg-violet-500/10 border-violet-500/20 text-violet-300 hover:bg-violet-500/15 hover:border-violet-500/40" />
+              <ActionBtn icon={CalendarDays} label="Hall & Events" sub="Read-only schedule" onClick={() => router.push('/frontdesk/events')} color="bg-cyan-500/10 border-cyan-500/20 text-cyan-300 hover:bg-cyan-500/15 hover:border-cyan-500/40" />
             </div>
           </div>
         </section>

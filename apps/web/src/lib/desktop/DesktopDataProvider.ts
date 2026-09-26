@@ -319,6 +319,9 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
   eventInvoices: {
     list: async (propertyId: string, search = '') => invokeDesktop('eventInvoices.list', { propertyId, search }),
   },
+  eventSchedule: {
+    list: async (propertyId: string) => invokeDesktop('eventSchedule.list', { propertyId }),
+  },
 
   nightAudit: {
     postRoomCharges: async (propertyId: string, businessDate?: string) => {

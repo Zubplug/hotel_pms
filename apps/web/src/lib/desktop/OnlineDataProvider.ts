@@ -239,6 +239,11 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
       return apiFetch(`/api/v1/frontdesk/event-invoices?${query.toString()}`);
     },
   },
+  eventSchedule: {
+    async list(propertyId: string) {
+      return apiFetch(`/api/v1/frontdesk/event-schedule?propertyId=${encodeURIComponent(propertyId)}`);
+    },
+  },
   guestCredits: {
     list: async (propertyId: string) => {
       return apiFetch(`/api/v1/guests/credits?propertyId=${encodeURIComponent(propertyId)}`);

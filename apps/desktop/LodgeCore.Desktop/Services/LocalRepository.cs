@@ -2699,6 +2699,14 @@ public class LocalRepository
         return await query.OrderByDescending(invoice => invoice.UpdatedAt).Take(100).ToListAsync();
     }
 
+    public async Task<List<LocalEventScheduleItem>> GetEventScheduleAsync(string propertyId)
+    {
+        return await _dbContext.EventScheduleItems
+            .Where(item => item.PropertyId == propertyId && item.Status != "CANCELLED")
+            .OrderBy(item => item.StartTime)
+            .ToListAsync();
+    }
+
     public async Task<LocalReservation?> GetReservationByRoomNumberAsync(string roomNumber)
     {
         return await _dbContext.Reservations

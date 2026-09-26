@@ -87,6 +87,9 @@ export interface LodgeCoreDataProvider {
   eventInvoices: {
     list(propertyId: string, search?: string): Promise<any>;
   };
+  eventSchedule: {
+    list(propertyId: string): Promise<any>;
+  };
   guestCredits: {
     /** Returns guests with available credit for this property. */
     list(propertyId: string): Promise<any>;

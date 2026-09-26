@@ -17,6 +17,7 @@ public class LocalDbContext : DbContext
     public DbSet<LocalCityLedgerAllocation> CityLedgerAllocations { get; set; } = null!;
     public DbSet<LocalFolio> Folios { get; set; } = null!;
     public DbSet<LocalEventInvoice> EventInvoices { get; set; } = null!;
+    public DbSet<LocalEventScheduleItem> EventScheduleItems { get; set; } = null!;
     public DbSet<LocalSyncEvent> SyncEvents { get; set; } = null!;
     public DbSet<LocalOutboxEvent> OutboxEvents { get; set; } = null!;
     public DbSet<LocalHousekeepingTask> HousekeepingTasks { get; set; } = null!;
@@ -349,7 +350,19 @@ public class LocalDbContext : DbContext
             );
             CREATE INDEX IF NOT EXISTS IX_EventInvoices_PropertyId ON EventInvoices(PropertyId);
             CREATE INDEX IF NOT EXISTS IX_EventInvoices_FolioId ON EventInvoices(FolioId);
+            CREATE TABLE IF NOT EXISTS EventScheduleItems (
+                Id TEXT NOT NULL PRIMARY KEY, PropertyId TEXT NOT NULL, EventId TEXT NOT NULL,
+                EventName TEXT NOT NULL, EventStatus TEXT NOT NULL, ContactName TEXT NOT NULL,
+                ExpectedGuests INTEGER NOT NULL, HallId TEXT NOT NULL, HallName TEXT NOT NULL, HallCode TEXT NOT NULL DEFAULT '',
+                HallCapacity INTEGER NOT NULL, StartTime TEXT NOT NULL, EndTime TEXT NOT NULL,
+                SetupBufferMinutes INTEGER NOT NULL, TeardownBufferMinutes INTEGER NOT NULL,
+                Status TEXT NOT NULL, UpdatedAt TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS IX_EventScheduleItems_PropertyId ON EventScheduleItems(PropertyId);
+            CREATE INDEX IF NOT EXISTS IX_EventScheduleItems_StartTime ON EventScheduleItems(StartTime);
         ");
+        try { await Database.ExecuteSqlRawAsync("ALTER TABLE EventScheduleItems ADD COLUMN HallCode TEXT NOT NULL DEFAULT ''"); }
+        catch (Microsoft.Data.Sqlite.SqliteException ex) when (ex.SqliteErrorCode == 1 && ex.Message.Contains("duplicate column", StringComparison.OrdinalIgnoreCase)) { }
     }
 
     /// <summary>
