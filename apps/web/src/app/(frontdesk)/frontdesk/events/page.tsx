@@ -63,7 +63,7 @@ export default function OfflineEventSchedulePage() {
   const lastFinish = selectedBookings.length ? new Date(Math.max(...selectedBookings.map((booking) => new Date(booking.endTime).getTime()))) : null;
   const operatingWindow = firstStart && lastFinish
     ? `${firstStart.toLocaleTimeString('en-NG', { hour: 'numeric', minute: '2-digit' })} – ${lastFinish.toLocaleTimeString('en-NG', { hour: 'numeric', minute: '2-digit' })}`
-    : '—';
+    : 'No scheduled events';
   const handoffMinutes = selectedBookings.reduce((total, booking) => total + booking.setupBufferMinutes + booking.teardownBufferMinutes, 0);
 
   return <div className="min-h-full bg-[#07111f] px-4 py-6 text-slate-100 sm:px-6 lg:px-8">
@@ -80,7 +80,7 @@ export default function OfflineEventSchedulePage() {
             ['Expected covers', String(expectedCovers), 'Guests scheduled to arrive'],
             ['Operating window', operatingWindow, 'First start · last finish'],
             ['Handoff buffers', `${handoffMinutes}m`, 'Setup and teardown protected'],
-          ].map(([label, value, hint], index) => <div key={label} className={`rounded-2xl border px-4 py-4 ${index === 3 ? 'border-orange-300/30 bg-orange-300/[.08]' : 'border-white/10 bg-white/[.04]'}`}><p className={`text-[10px] font-black uppercase tracking-[.16em] ${index === 3 ? 'text-orange-200' : 'text-slate-400'}`}>{label}</p><p className={`mt-2 text-2xl font-black ${index === 3 ? 'text-orange-100' : 'text-white'}`}>{value}</p><p className="mt-1 text-xs text-slate-400">{hint}</p></div>)}
+          ].map(([label, value, hint], index) => <div key={label} className={`rounded-2xl border px-4 py-4 ${index === 3 ? 'border-orange-300/30 bg-orange-300/[.08]' : 'border-white/10 bg-white/[.04]'}`}><p className={`text-[10px] font-black uppercase tracking-[.16em] ${index === 3 ? 'text-orange-200' : 'text-slate-400'}`}>{label}</p><p className={`mt-2 ${label === 'Operating window' && value === 'No scheduled events' ? 'text-lg' : 'text-2xl'} font-black ${index === 3 ? 'text-orange-100' : 'text-white'}`}>{value}</p><p className="mt-1 text-xs text-slate-400">{hint}</p></div>)}
         </div>
         <div className="overflow-hidden rounded-3xl border border-white/10 bg-[#0d1a2d] p-3 shadow-[0_24px_80px_-36px_rgba(34,211,238,.28)] sm:p-5"><div className="mb-4 flex items-center justify-between gap-3"><div><h2 className="text-xl font-bold text-white">{displayDate(viewDate)}</h2><p className="mt-1 text-xs text-slate-400">Read-only venue operations · {selectedBookings.length} scheduled event{selectedBookings.length === 1 ? '' : 's'}</p></div><Link href="/frontdesk" className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs font-bold text-cyan-200 hover:bg-white/10">Back to Front Desk</Link></div><EventTimeline halls={halls} bookings={selectedBookings} viewDate={viewDate} readOnly /></div>
       </>}
