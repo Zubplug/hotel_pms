@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useLogout } from '@/hooks/useLogout';
 import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
 import { cn } from '@/lib/utils';
@@ -98,8 +98,8 @@ const FNB_NAV = [
 export function FnbLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [hasMultipleProperties, setHasMultipleProperties] = useState(true);
+  const [timelineView, setTimelineView] = useState(false);
   const pathname = usePathname();
-  const searchParams = useSearchParams();
   const { data: session, status } = useLodgeCoreSession();
   const router = useRouter();
   const logout = useLogout();
@@ -109,6 +109,10 @@ export function FnbLayout({ children }: { children: React.ReactNode }) {
       router.replace('/login');
     }
   }, [status, router]);
+
+  useEffect(() => {
+    setTimelineView(new URLSearchParams(window.location.search).get('view') === 'timeline');
+  }, [pathname]);
 
   const sessionUser = session?.user as any;
   const userFullName = sessionUser?.firstName && sessionUser?.lastName
@@ -168,9 +172,9 @@ export function FnbLayout({ children }: { children: React.ReactNode }) {
               const isTimeline = item.activeWhen === 'timeline';
               const isRegister = item.activeWhen === 'register';
               const isActive = isTimeline
-                ? pathname === '/fnb/events/bookings' && searchParams.get('view') === 'timeline'
+                ? pathname === '/fnb/events/bookings' && timelineView
                 : isRegister
-                  ? pathname === '/fnb/events/bookings' && searchParams.get('view') !== 'timeline'
+                  ? pathname === '/fnb/events/bookings' && !timelineView
                   : pathname === item.href || pathname?.startsWith(`${item.href}/`);
               
               return (
