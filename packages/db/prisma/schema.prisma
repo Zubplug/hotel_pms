@@ -4563,6 +4563,7 @@ model Hall {
 
   bookings EventBooking[]
   leases   LeaseContract[]
+  leaseSegments LeaseContractSegment[]
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
@@ -4764,10 +4765,31 @@ model LeaseContract {
   cancellationTerms String?
 
   schedules LeaseBillingSchedule[]
+  segments  LeaseContractSegment[]
   createdBy String? @db.Uuid
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
+}
+
+model LeaseContractSegment {
+  id              String        @id @default(uuid()) @db.Uuid
+  leaseContractId String        @db.Uuid
+  leaseContract   LeaseContract @relation(fields: [leaseContractId], references: [id], onDelete: Cascade)
+  hallId          String        @db.Uuid
+  hall            Hall          @relation(fields: [hallId], references: [id])
+  usageDays       Json
+  startTime       String
+  endTime         String
+  rate            Decimal       @db.Decimal(18, 4)
+  isActive        Boolean       @default(true)
+  scheduleLines   LeaseBillingScheduleLine[]
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@index([leaseContractId])
+  @@index([hallId, startTime, endTime])
 }
 
 model LeaseBillingSchedule {
@@ -4784,8 +4806,22 @@ model LeaseBillingSchedule {
 
   invoiceId String? @unique @db.Uuid
   invoice EventInvoice? @relation(fields: [invoiceId], references: [id])
+  lines   LeaseBillingScheduleLine[]
 
   createdAt DateTime @default(now()) @db.Timestamptz
+}
+
+model LeaseBillingScheduleLine {
+  id         String                @id @default(uuid()) @db.Uuid
+  scheduleId String                @db.Uuid
+  schedule   LeaseBillingSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  segmentId  String                @db.Uuid
+  segment    LeaseContractSegment  @relation(fields: [segmentId], references: [id], onDelete: Restrict)
+  usageCount Int                   @default(0)
+  amount     Decimal               @db.Decimal(18, 4)
+
+  @@unique([scheduleId, segmentId])
+  @@index([segmentId])
 }
 
 model BanquetEventOrder {
