@@ -298,7 +298,7 @@ export async function executeNightAudit(
         lastHeartbeat = Date.now();
       }
 
-      await Promise.all(batch.map(async (reservation: any) => {
+      for (const reservation of batch) {
       try {
         await prisma.$transaction(async (tx: any) => {
           // Re-read the assignment inside the posting transaction. The
@@ -374,7 +374,7 @@ export async function executeNightAudit(
             if (!existingCharge) {
               let originalRate = activeRoom
                 ? Number(activeRoom.rateAmount || 0)
-                : Number(reservation.ratePlan?.baseRate || 0);
+                : 0;
               let chargeCurrency = activeRoom?.currency || property.supportedCurrencies[0] || 'NGN';
 
               // Corporate reservations keep the originally selected rate on
@@ -489,7 +489,7 @@ export async function executeNightAudit(
               // Guest Complimentary (contra-revenue) is debited for the
               // approved concession. The folio balance remains net.
               const grossRoomCharge = discountDeduction > 0 ? originalRate : effectiveRate;
-              if (isCorporateCharge && reservation.corporateAccount && reservation.corporateAccount.creditLimit > 0 && !reservation.corporateAccount.exemptFromHighBalance && Number(mainFolio.balance) + grossRoomCharge > Number(reservation.corporateAccount.creditLimit)) {
+              if (isCorporateCharge && reservation.corporateAccount && Number(reservation.corporateAccount.creditLimit) > 0 && !reservation.corporateAccount.exemptFromHighBalance && Number(mainFolio.balance) + grossRoomCharge > Number(reservation.corporateAccount.creditLimit)) {
                 throw new Error(`CREDIT_LIMIT_EXCEEDED: Night Audit room charge exceeds corporate account credit limit for reservation ${reservation.id}`);
               }
               await tx.folioItem.create({
@@ -660,7 +660,7 @@ export async function executeNightAudit(
               message: e instanceof Error ? e.message : String(e),
             });
           }
-        });
+        }, { maxWait: 10000, timeout: 30000 });
       } catch (e) {
         console.error(`[Night Audit] Failed to process stayover for reservation ${reservation.id}:`, e);
         errors++;
@@ -675,7 +675,7 @@ export async function executeNightAudit(
           message: e instanceof Error ? e.message : String(e),
         });
       }
-    }));
+    }
     }
 
   // The date was already rolled during cutover. Finish the previous date's
@@ -1093,7 +1093,7 @@ export async function executeNightAudit(
     });
 
     return [runUpdate, txErrors];
-  });
+  }, { maxWait: 15000, timeout: 60000 });
   
   errors = finalErrors;
 
