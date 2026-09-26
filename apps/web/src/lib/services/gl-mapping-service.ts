@@ -139,12 +139,16 @@ export class GLMappingService {
     const settings = (property.settings as any) || {};
     const revenueMap = settings?.accountingConfig?.revenueAccounts || {};
 
-    const configuredCode = fnbClass === 'POOL'
+    // OTHER is a legacy/default POS category value. For POS revenue it must
+    // not silently fall through to Other Operating Revenue; only recreation
+    // items should use the pool mapping, while unclassified F&B is FOOD.
+    const normalizedFnbClass = fnbClass === 'OTHER' ? 'FOOD' : fnbClass;
+    const configuredCode = normalizedFnbClass === 'POOL'
       ? (revenueMap.POOL || '4100')
-      : revenueMap[fnbClass];
+      : revenueMap[normalizedFnbClass];
 
     if (!configuredCode) {
-      throw new Error(`Revenue GL mapping required for class: ${fnbClass}. Please configure Property Settings (accountingConfig.revenueAccounts).`);
+      throw new Error(`Revenue GL mapping required for class: ${normalizedFnbClass}. Please configure Property Settings (accountingConfig.revenueAccounts).`);
     }
 
     const account = await prisma.chartOfAccount.findFirst({
@@ -152,7 +156,7 @@ export class GLMappingService {
     });
 
     if (!account) {
-      throw new Error(`Configured Revenue GL Account Code ${configuredCode} for ${fnbClass} is missing or inactive for this property.`);
+      throw new Error(`Configured Revenue GL Account Code ${configuredCode} for ${normalizedFnbClass} is missing or inactive for this property.`);
     }
 
     return account.id;

@@ -109,7 +109,12 @@ export class PosPaymentAccountingService {
         const isPoolItem = isRecreationOutlet
           || item.product?.itemCode?.startsWith('REC-POOL')
           || categoryName.toLowerCase().includes('pool');
-        const fnbClass = isPoolItem ? 'POOL' : (item.product?.category?.fnbClass || 'OTHER');
+        // POS categories historically defaulted to OTHER. For a normal F&B
+        // outlet that is an unclassified food item, not Other Revenue. Keep
+        // recreation/pool items on the pool account, but never silently route
+        // an unclassified restaurant/bar item to 4400.
+        const rawFnbClass = item.product?.category?.fnbClass || 'OTHER';
+        const fnbClass = isPoolItem ? 'POOL' : (rawFnbClass === 'OTHER' ? 'FOOD' : rawFnbClass);
         const itemTotal = Number(item.quantity) * Number(item.unitPrice);
         classTotals.set(fnbClass, (classTotals.get(fnbClass) || 0) + itemTotal);
         orderTotalFromItems += itemTotal;

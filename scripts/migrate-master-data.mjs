@@ -6,7 +6,7 @@ import pg from 'pg';
 const { Client } = pg;
 
 const STAGING_URL = "postgresql://postgres.assronuqrbnqdrcqfhkr:RestoreHope2026%40@aws-1-eu-west-1.pooler.supabase.com:5432/postgres";
-const PROD_URL    = "postgresql://neondb_owner:npg_2TMUSHGXeFx8@ep-aged-thunder-ayuphsro.c-5.us-east-2.aws.neon.tech/neondb?sslmode=require";
+const PROD_URL    = "postgresql://neondb_owner:npg_RJcVz67CsOTh@ep-square-frog-b4u924xh-pooler.c-6.us-east-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require";
 
 // Tables to migrate IN ORDER (dependencies first)
 const TABLES = [

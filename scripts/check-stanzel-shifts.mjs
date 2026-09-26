@@ -3,7 +3,7 @@ import { PrismaClient } from '@hotel-pms/db';
 const prisma = new PrismaClient({
   datasources: {
     db: {
-      url: 'postgresql://neondb_owner:npg_2TMUSHGXeFx8@ep-aged-thunder-ayuphsro.c-5.us-east-2.aws.neon.tech/neondb?sslmode=require'
+      url: 'postgresql://neondb_owner:npg_RJcVz67CsOTh@ep-square-frog-b4u924xh-pooler.c-6.us-east-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require'
     }
   }
 });

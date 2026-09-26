@@ -96,5 +96,7 @@ function inferFnbClass(name: string): FnbClass {
   const normalized = name.toLowerCase();
   if (/(beer|cider|liqueur|spirit|whiskey|brandy|gin|vodka|wine|champagne|soft drink|water|malt|juice|cocktail|drink)/.test(normalized)) return FnbClass.BEVERAGE;
   if (/(breakfast|rice|pasta|starter|main course|salad|dessert|snack|extra|side|pepper soup)/.test(normalized)) return FnbClass.FOOD;
-  return FnbClass.OTHER;
+  // POS categories belong to F&B by default. OTHER is reserved for
+  // recreation/pool or explicitly classified non-F&B categories.
+  return FnbClass.FOOD;
 }
