@@ -1606,6 +1606,7 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                 var len = foliosArray.GetArrayLength();
                 var i = 0;
                 var incomingFolioIds = new HashSet<string>();
+                var retainedFolioIds = new HashSet<string>();
 
                 foreach (var el in foliosArray.EnumerateArray())
                 {
@@ -1615,6 +1616,16 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                     if (string.IsNullOrEmpty(id)) continue;
                     
                     incomingFolioIds.Add(id);
+
+                    var corporateAccountId = el.TryGetProperty("corporateAccountId", out var cai) &&
+                                             cai.ValueKind != System.Text.Json.JsonValueKind.Null
+                        ? cai.GetString()
+                        : null;
+                    var reservationId = el.TryGetProperty("reservationId", out var ri) &&
+                                        ri.ValueKind != System.Text.Json.JsonValueKind.Null &&
+                                        !string.IsNullOrWhiteSpace(ri.GetString())
+                        ? ri.GetString()
+                        : null;
                     
                     // Querying the database does not see entities that were
                     // added earlier in this same sync page (or already
@@ -1626,17 +1637,44 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                     {
                         folio = await dbContext.Folios.FirstOrDefaultAsync(x => x.Id == id, stoppingToken);
                     }
+                    if (folio == null && reservationId != null)
+                    {
+                        folio = dbContext.Folios.Local.FirstOrDefault(x => x.ReservationId == reservationId);
+                        if (folio == null)
+                        {
+                            folio = await dbContext.Folios.FirstOrDefaultAsync(x => x.ReservationId == reservationId, stoppingToken);
+                        }
+                    }
+                    if (folio == null && corporateAccountId != null)
+                    {
+                        folio = dbContext.Folios.Local.FirstOrDefault(x =>
+                            x.CorporateAccountId == corporateAccountId && x.Type == "CITY_LEDGER");
+                        if (folio == null)
+                        {
+                            folio = await dbContext.Folios.FirstOrDefaultAsync(x =>
+                                x.CorporateAccountId == corporateAccountId && x.Type == "CITY_LEDGER", stoppingToken);
+                        }
+                    }
                     if (folio != null && folio.IsDirty) continue;
+
+                    if (folio != null)
+                    {
+                        // The cloud ID can differ from a locally-created
+                        // offline folio ID. Keep the matched local row from
+                        // being classified as stale during this full pull.
+                        retainedFolioIds.Add(folio.Id);
+                    }
 
                     if (folio == null)
                     {
                         folio = new LodgeCore.Desktop.Data.Entities.LocalFolio { Id = id, PropertyId = propertyId, CreatedAt = DateTime.UtcNow };
                         dbContext.Folios.Add(folio);
                     }
-                    folio.CorporateAccountId = el.TryGetProperty("corporateAccountId", out var cai) && cai.ValueKind != System.Text.Json.JsonValueKind.Null ? cai.GetString() : null;
-                    folio.ReservationId = el.TryGetProperty("reservationId", out var ri) && ri.ValueKind != System.Text.Json.JsonValueKind.Null
-                        ? ri.GetString()
-                        : (string.IsNullOrEmpty(folio.CorporateAccountId) ? null : string.Empty);
+                    // ReservationId is optional for city-ledger/corporate folios.
+                    // Never use an empty string as a sentinel: ReservationId is
+                    // unique and multiple corporate folios would collide on it.
+                    folio.CorporateAccountId = corporateAccountId;
+                    folio.ReservationId = reservationId;
                     folio.Type = el.TryGetProperty("type", out var folioType) && folioType.ValueKind != System.Text.Json.JsonValueKind.Null ? folioType.GetString() ?? "ROOM" : "ROOM";
                     folio.Status = el.TryGetProperty("status", out var st) && st.ValueKind != System.Text.Json.JsonValueKind.Null ? st.GetString() ?? "" : "";
                     folio.TotalCharges = el.TryGetProperty("totalCharges", out var tc) && tc.ValueKind != System.Text.Json.JsonValueKind.Null && decimal.TryParse(tc.GetString(), out var tcd) ? tcd : 0m;
@@ -1655,7 +1693,9 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                 }
                 
                 var staleFolios = await dbContext.Folios
-                    .Where(f => !incomingFolioIds.Contains(f.Id) && !f.IsDirty)
+                    .Where(f => !incomingFolioIds.Contains(f.Id) &&
+                                !retainedFolioIds.Contains(f.Id) &&
+                                !f.IsDirty)
                     .ToListAsync(stoppingToken);
                 if (staleFolios.Any() && !isIncremental)
                 {

@@ -133,14 +133,14 @@ export async function createLeaseContract(input: {
 }
 
 /** Generates one draft/submitted invoice per due period, with one line per hall segment. */
-export async function processLeaseBilling(propertyId: string, actor?: { userId: string }) {
+export async function processLeaseBilling(propertyId: string, actor?: { userId: string }, scheduleId?: string) {
   const context = actor ? { propertyId, userId: actor.userId } : await requireEventContext();
   if (context.propertyId !== propertyId) throw new Error('Property access denied.');
   return prisma.$transaction(async (tx) => {
     const property = await tx.property.findUnique({ where: { id: propertyId } });
     if (!property) throw new Error('Property not found.');
     const dueSchedules = await tx.leaseBillingSchedule.findMany({
-      where: { status: 'PENDING', dueDate: { lte: property.businessDate || new Date() }, leaseContract: { propertyId, isActive: true, corporateAccountId: { not: null } } },
+      where: { status: 'PENDING', ...(scheduleId ? { id: scheduleId } : { dueDate: { lte: property.businessDate || new Date() } }), leaseContract: { propertyId, isActive: true, corporateAccountId: { not: null } } },
       include: { lines: { include: { segment: { include: { hall: true } } } }, leaseContract: { include: { corporateAccount: { include: { cityLedgerAccount: true } } } } }, orderBy: { dueDate: 'asc' },
     });
     const generatedInvoices = [];
@@ -162,4 +162,12 @@ export async function processLeaseBilling(propertyId: string, actor?: { userId: 
     }
     return { processedCount: generatedInvoices.length, invoices: generatedInvoices };
   });
+}
+
+/** Allows F&B to submit a selected pending lease period before its normal due date. */
+export async function submitLeaseBillingSchedule(scheduleId: string) {
+  const { propertyId, userId } = await requireEventRole('FNB');
+  const result = await processLeaseBilling(propertyId, { userId }, scheduleId);
+  if (result.processedCount !== 1) throw new Error('This lease period is no longer pending or is not available for this property.');
+  return result.invoices[0];
 }

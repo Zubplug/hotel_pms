@@ -29,6 +29,7 @@ import {
   ShoppingCart,
   Truck,
   ShieldCheck,
+  Repeat2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -79,6 +80,7 @@ const FNB_NAV = [
       { name: 'Event Register', href: '/fnb/events/bookings', icon: ClipboardList, activeWhen: 'register' },
       { name: 'Event Schedule', href: '/fnb/events/bookings?view=timeline', icon: CalendarRange, activeWhen: 'timeline' },
       { name: 'Event CRM', href: '/fnb/events/crm', icon: Users },
+      { name: 'Recurring Hall Leases', href: '/fnb/events/leases', icon: Repeat2 },
       { name: 'BEO & Accounting', href: '/fnb/events/accounting', icon: FileCheck2 },
     ],
   },

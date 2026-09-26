@@ -42,7 +42,7 @@ export function ApprovalControlCenter({ audience }: ApprovalCenterProps) {
       const response = await fetch('/api/v1/approval-center', { cache: 'no-store' });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error || 'Unable to load approval center');
-      setData(body.data || { priceApprovals: [], refunds: [], eventInvoices: [] });
+    setData(body.data || { priceApprovals: [], refunds: [], eventInvoices: [] });
     } catch (error) { toast.error(error instanceof Error ? error.message : 'Unable to load approval center'); }
     finally { setLoading(false); }
   };

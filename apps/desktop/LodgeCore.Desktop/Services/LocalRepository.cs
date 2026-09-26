@@ -221,7 +221,10 @@ public class LocalRepository
         {
             Id = folioId,
             PropertyId = reservation.PropertyId,
-            ReservationId = string.IsNullOrEmpty(reservation.CorporateAccountId) ? reservation.Id : string.Empty,
+            // Corporate/city-ledger folios are not reservation folios. Keep
+            // ReservationId null rather than using an empty-string sentinel,
+            // because ReservationId has a unique index in the local database.
+            ReservationId = string.IsNullOrEmpty(reservation.CorporateAccountId) ? reservation.Id : null,
             Reservation = string.IsNullOrEmpty(reservation.CorporateAccountId) ? reservation : null,
             CorporateAccountId = reservation.CorporateAccountId,
             Type = string.IsNullOrEmpty(reservation.CorporateAccountId) ? "ROOM" : "CITY_LEDGER",
@@ -2743,6 +2746,12 @@ public class LocalRepository
     public async Task EnsureDatabaseCreatedAsync()
     {
         await _dbContext.ApplyMigrationsSafelyAsync();
+        // Repair databases created by older desktop versions. Corporate and
+        // city-ledger folios previously used "" for ReservationId, which
+        // violates the one-folio-per-reservation unique constraint as soon as
+        // a second corporate folio is synchronized.
+        await _dbContext.Database.ExecuteSqlRawAsync(
+            "UPDATE Folios SET ReservationId = NULL WHERE ReservationId = ''");
         await _dbContext.Database.ExecuteSqlRawAsync(@"CREATE TABLE IF NOT EXISTS RefundRequests (
             Id TEXT NOT NULL PRIMARY KEY, PropertyId TEXT NOT NULL, ReservationId TEXT NOT NULL,
             FolioId TEXT NOT NULL, PaymentId TEXT NOT NULL, IdempotencyKey TEXT NOT NULL, RequestedAmount TEXT NOT NULL,
