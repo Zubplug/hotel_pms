@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import {
   FileText, FileSpreadsheet, BarChart3, Users, ArrowUpDown,
   CreditCard, BookOpen, AlertOctagon, ShoppingBag, BedDouble,
@@ -125,6 +126,7 @@ const REPORTS: ReportDef[] = [
 
 export default function ReportsGeneratorPage({ managerMode = false }: { managerMode?: boolean }) {
   const { propertyId } = useProperty();
+  const pathname = usePathname();
   const [businessDate, setBusinessDate] = useState<string>('');
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
 
@@ -147,7 +149,9 @@ export default function ReportsGeneratorPage({ managerMode = false }: { managerM
 
   const openReport = (slug: string) => {
     if (!businessDate) { alert('Business date is required to view reports.'); return; }
-    const base = managerMode ? '/general-manager/night-audit/reports/print' : '/night-audit/reports/print';
+    const base = pathname.includes('/cash-management') 
+      ? '/cash-management/night-audit/reports/print' 
+      : managerMode ? '/general-manager/night-audit/reports/print' : '/night-audit/reports/print';
     window.location.href = `${base}/${slug}?propertyId=${propertyId}&businessDate=${businessDate}`;
   };
 
@@ -182,12 +186,14 @@ export default function ReportsGeneratorPage({ managerMode = false }: { managerM
               onChange={e => setBusinessDate(e.target.value)}
               className="h-10 rounded-xl border border-white/[0.08] bg-white/[0.04] px-3 text-sm font-medium text-slate-200 outline-none focus:border-indigo-400/50"
             />
-            <Link href="/night-audit/reconciliation">
-              <button className="inline-flex h-10 items-center gap-2 rounded-xl border border-indigo-400/30 bg-indigo-400/10 px-4 text-sm font-semibold text-indigo-300 transition-all hover:bg-indigo-400/20 hover:text-indigo-200">
-                <Scale className="h-4 w-4" />
-                Reconciliation
-              </button>
-            </Link>
+            {!pathname.includes('/cash-management') && (
+              <Link href="/night-audit/reconciliation">
+                <button className="inline-flex h-10 items-center gap-2 rounded-xl border border-indigo-400/30 bg-indigo-400/10 px-4 text-sm font-semibold text-indigo-300 transition-all hover:bg-indigo-400/20 hover:text-indigo-200">
+                  <Scale className="h-4 w-4" />
+                  Reconciliation
+                </button>
+              </Link>
+            )}
           </div>
         </header>
 

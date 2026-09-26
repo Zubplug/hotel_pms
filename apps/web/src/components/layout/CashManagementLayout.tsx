@@ -38,6 +38,7 @@ const CASH_MANAGEMENT_NAV = [
       { name: 'Receivables', href: '/reports/receivables', roles: ['GENERAL_CASHIER', 'ACCOUNTANT', 'FINANCE_MANAGER', 'MANAGER', 'DIRECTOR', 'CEO', 'SUPER_ADMIN'] },
       { name: 'Corporate Management', href: '/cashier/corporate', roles: ['GENERAL_CASHIER', 'ACCOUNTANT', 'ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'DIRECTOR', 'CEO', 'SUPER_ADMIN'] },
       { name: 'Night Audit', href: '/cash-management/night-audit' },
+      { name: 'Audit Reports', href: '/cash-management/night-audit/reports', roles: ['GENERAL_CASHIER', 'NIGHT_AUDITOR', 'ACCOUNTANT', 'FINANCE_MANAGER', 'MANAGER', 'DIRECTOR', 'CEO', 'SUPER_ADMIN'] },
       { name: 'Room Analysis', href: '/cash-management/room-analysis' },
       { name: 'Transaction Exceptions', href: '/cash-management/transaction-exceptions', roles: ['GENERAL_CASHIER', 'ACCOUNTANT', 'FINANCE_MANAGER', 'MANAGER', 'DIRECTOR', 'CEO', 'SUPER_ADMIN'] },
       { name: 'F&B Price Approvals', href: '/cashier/price-approvals', roles: ['GENERAL_CASHIER', 'ACCOUNTANT', 'FINANCE_MANAGER', 'MANAGER', 'DIRECTOR', 'CEO', 'SUPER_ADMIN'] },
