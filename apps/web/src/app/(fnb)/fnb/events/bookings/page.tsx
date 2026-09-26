@@ -5,6 +5,7 @@ import { auth } from '@/lib/auth';
 import { getEquipment } from '@/lib/events/booking-actions';
 import { EventTimeline } from '@/components/events/EventTimeline';
 import { NewBookingDialog } from '@/components/events/NewBookingDialog';
+import { NewLeaseDialog } from '@/components/events/NewLeaseDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { CalendarDays, ChevronLeft, ChevronRight, Clock3, FileCheck2, ListFilter, Search, Sparkles, Users, WalletCards } from 'lucide-react';
@@ -96,7 +97,7 @@ export default async function EventBookingsPage({ searchParams }: { searchParams
       <div className="mx-auto max-w-[1600px] px-4 py-7 sm:px-6 lg:px-8">
         <div className="flex flex-col justify-between gap-6 xl:flex-row xl:items-end">
           <div><div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-orange-300"><Sparkles className="h-4 w-4" /> F&B Hall operations</div><h1 className="text-3xl font-bold tracking-tight sm:text-4xl">{isTimeline ? 'Event schedule' : 'Event register'}</h1><p className="mt-2 max-w-2xl text-sm text-orange-100/75">{isTimeline ? 'A focused live schedule for today’s hall operations, setup windows, and service handoffs.' : 'Manage event bookings from inquiry through BEO approval, service, and settlement.'}</p></div>
-          <div className="flex flex-wrap gap-2"><NewBookingDialog initialHalls={halls} initialPackages={packages} equipmentList={equipment} guests={guests} corporateAccounts={corporateAccounts} /></div>
+          <div className="flex flex-wrap gap-2"><NewBookingDialog initialHalls={halls} initialPackages={packages} equipmentList={equipment} guests={guests} corporateAccounts={corporateAccounts} /><NewLeaseDialog propertyId={propertyId} halls={halls} corporates={corporateAccounts} currency="NGN" /></div>
         </div>
       </div>
     </div>

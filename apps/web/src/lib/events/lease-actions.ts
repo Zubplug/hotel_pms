@@ -93,7 +93,7 @@ export async function createLeaseContract(input: {
   const endDate = dateOnly(input.endDate);
   if (endDate < startDate) throw new Error('Lease end date must be after the start date.');
   if (!Number.isFinite(input.rate) || input.rate <= 0) throw new Error('Lease rate must be greater than zero.');
-  if (!['PER_USE', 'DAILY', 'WEEKLY'].includes(input.usageFrequency) || !['PER_USE', 'WEEKLY', 'MONTHLY', 'QUARTERLY', 'YEARLY'].includes(input.billingFrequency)) throw new Error('Invalid lease frequency.');
+  if (!['PER_USE', 'DAILY', 'WEEKLY'].includes(input.usageFrequency) || !['PER_USE', 'WEEKLY', 'MONTHLY', 'QUARTERLY', 'YEARLY', 'CUSTOM'].includes(input.billingFrequency)) throw new Error('Invalid lease frequency.');
   if (input.usageFrequency === 'PER_USE' && input.billingFrequency !== 'PER_USE') throw new Error('A single/per-use contract must be billed per use. Use Weekly or Daily usage for recurring billing.');
   const customBillingDates = [...new Set((input.customBillingDates || []).map(dateOnly).map((date) => date.toISOString()))].map((value) => new Date(value)).sort((left, right) => left.getTime() - right.getTime());
   if (input.billingFrequency === 'CUSTOM' && customBillingDates.length === 0) throw new Error('Custom billing requires at least one billing date.');
