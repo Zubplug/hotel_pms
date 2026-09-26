@@ -62,6 +62,10 @@ export const SharedReservationService = {
       tx: externalTx
     } = params;
 
+    // A corporate booking is a distinct reservation source even when the
+    // caller omitted source (the normal front-desk default is WALK_IN).
+    const reservationSource = corporateAccountId ? 'CORPORATE' : source;
+
     const nights = Math.max(1, Math.ceil((checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60 * 24)));
 
     let room;
@@ -146,7 +150,7 @@ export const SharedReservationService = {
           propertyId,
           primaryGuestId: finalGuestId as string,
           confirmationNumber: finalConfirmation,
-          source: source as any,
+          source: reservationSource as any,
           status: status as any,
           checkIn,
           checkOut,

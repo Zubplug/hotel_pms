@@ -1014,7 +1014,12 @@ export async function POST(req: NextRequest) {
                 id: aggregateId,
                 propertyId,
                 primaryGuestId: finalGuestId,
-                source: "WALK_IN",
+                // Corporate identity is authoritative over the generic source
+                // sent by an offline terminal. This keeps offline and online
+                // corporate reservations consistent in reporting and audit.
+                source: corporateAccountId
+                  ? "CORPORATE"
+                  : ((payload.Source || payload.source || "WALK_IN") as any),
                 status: (payload.Status ||
                   payload.status ||
                   "CONFIRMED") as any,

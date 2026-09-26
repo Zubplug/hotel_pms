@@ -1417,6 +1417,40 @@ public class OfflinePMSInterop
             res.RoomTypeId = root.TryGetProperty("roomTypeId", out var rtId) ? rtId.GetString() : null;
             if (string.IsNullOrEmpty(res.RoomTypeId)) res.RoomTypeId = null;
 
+            // Corporate bookings must retain their account identity before they
+            // enter the local repository. The repository uses this value to
+            // select the corporate rate, shared city-ledger folio, and outbox
+            // payload. Accept both API camelCase and desktop/PascalCase names
+            // because this boundary is also used by older desktop clients.
+            if (root.TryGetProperty("corporateAccountId", out var corporateAccountId) ||
+                root.TryGetProperty("CorporateAccountId", out corporateAccountId))
+            {
+                res.CorporateAccountId = corporateAccountId.ValueKind == System.Text.Json.JsonValueKind.String
+                    ? corporateAccountId.GetString()
+                    : null;
+            }
+            if (string.IsNullOrWhiteSpace(res.CorporateAccountId)) res.CorporateAccountId = null;
+
+            if (root.TryGetProperty("companyId", out var companyId) ||
+                root.TryGetProperty("CompanyId", out companyId))
+            {
+                res.CompanyId = companyId.ValueKind == System.Text.Json.JsonValueKind.String
+                    ? companyId.GetString()
+                    : null;
+            }
+
+            if (root.TryGetProperty("source", out var source) ||
+                root.TryGetProperty("Source", out source))
+            {
+                res.Source = source.ValueKind == System.Text.Json.JsonValueKind.String
+                    ? source.GetString()
+                    : null;
+            }
+            if (res.CorporateAccountId != null)
+                res.Source = "CORPORATE";
+            else if (string.IsNullOrWhiteSpace(res.Source))
+                res.Source = "WALK_IN";
+
             res.SpecialRequests = root.TryGetProperty("specialRequests", out var sr) ? sr.GetString() : null;
             
             res.CheckInDate = DateTime.Parse(root.GetProperty("checkIn").GetString() ?? DateTime.UtcNow.ToString("O"));
