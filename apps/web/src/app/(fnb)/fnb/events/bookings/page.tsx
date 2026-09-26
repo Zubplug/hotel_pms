@@ -91,7 +91,7 @@ export default async function EventBookingsPage({ searchParams }: { searchParams
   const previousDay = new Date(timelineDate); previousDay.setDate(previousDay.getDate() - 1);
   const nextDay = new Date(timelineDate); nextDay.setDate(nextDay.getDate() + 1);
 
-  return <div className={`min-h-full ${isTimeline ? 'bg-[#07111f] text-slate-100' : 'bg-[#fbf8f6] text-[#24130d]'}`}>
+  return <div className={`fnb-dark-surface min-h-full ${isTimeline ? 'bg-[#07111f] text-slate-100' : 'bg-[#fbf8f6] text-[#24130d]'}`}>
     <div className="border-b border-[#3d2318] bg-[#24130d] text-white">
       <div className="mx-auto max-w-[1600px] px-4 py-7 sm:px-6 lg:px-8">
         <div className="flex flex-col justify-between gap-6 xl:flex-row xl:items-end">

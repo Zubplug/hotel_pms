@@ -31,7 +31,7 @@ export default async function CreateHallOnlyPage() {
   });
 
   return (
-    <div className="p-6 max-w-4xl mx-auto space-y-6">
+    <div className="fnb-dark-surface min-h-full p-6 max-w-4xl mx-auto space-y-6">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">New Space Rental</h1>
         <p className="text-muted-foreground mt-1">Book halls and equipment.</p>

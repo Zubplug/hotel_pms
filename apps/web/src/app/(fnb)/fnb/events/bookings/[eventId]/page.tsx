@@ -28,7 +28,7 @@ export default async function EventBookingDetailPage({ params }: { params: Promi
   };
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="fnb-dark-surface min-h-full space-y-6 p-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <Button variant="link" asChild className="-ml-4 px-4"><Link href="/fnb/events/bookings">← Back to bookings</Link></Button>

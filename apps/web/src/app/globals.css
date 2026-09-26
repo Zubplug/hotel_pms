@@ -92,7 +92,136 @@
 
 /* F&B manager workspaces retain the orange hospitality accent while using the
    same high-contrast live control-room surface as the rest of the PMS. */
-.fnb-dark-surface { background: #07111f !important; color: #e2e8f0; }
+.fnb-dark-surface {
+  background: #07111f !important;
+  color: #e2e8f0;
+  --background: #07111f;
+  --foreground: #e2e8f0;
+  --card: #101b2f;
+  --card-foreground: #f8fafc;
+  --popover: #0d1424;
+  --popover-foreground: #e2e8f0;
+  --muted: #111d31;
+  --muted-foreground: #94a3b8;
+  --accent: #16233b;
+  --accent-foreground: #f8fafc;
+  --secondary: #16233b;
+  --secondary-foreground: #e2e8f0;
+  --border: rgba(255, 255, 255, 0.12);
+  --input: rgba(255, 255, 255, 0.12);
+  --ring: #fb923c;
+}
+.fnb-dark-surface .bg-white\/80,
+.fnb-dark-surface .bg-white\/85,
+.fnb-dark-surface .bg-white\/90 { background-color: rgba(16, 27, 47, 0.90) !important; }
+.fnb-dark-surface .bg-\[\#fff8f2\],
+.fnb-dark-surface .bg-\[\#fffaf7\],
+.fnb-dark-surface .bg-\[\#fffdfb\],
+.fnb-dark-surface .bg-\[\#fcfaf8\],
+.fnb-dark-surface .bg-\[\#fff3e8\],
+.fnb-dark-surface .bg-\[\#fff5ed\] { background-color: rgba(255, 255, 255, 0.045) !important; }
+.fnb-dark-surface .bg-\[\#f2e8e2\],
+.fnb-dark-surface .bg-\[\#f0e6e0\],
+.fnb-dark-surface .bg-\[\#f5eee9\],
+.fnb-dark-surface .bg-\[\#f8f3ef\] { background-color: rgba(255, 255, 255, 0.09) !important; }
+.fnb-dark-surface .border-\[\#f0e6e0\],
+.fnb-dark-surface .border-\[\#f0e6e0\]\/50,
+.fnb-dark-surface .border-\[\#d9c8bd\],
+.fnb-dark-surface .border-orange-200 { border-color: rgba(255, 255, 255, 0.12) !important; }
+.fnb-dark-surface .divide-\[\#f0e6e0\] > :not([hidden]) ~ :not([hidden]) { border-color: rgba(255, 255, 255, 0.08) !important; }
+.fnb-dark-surface .text-\[\#24130d\] { color: #f8fafc !important; }
+.fnb-dark-surface .text-\[\#3d2318\],
+.fnb-dark-surface .text-\[\#6f5d53\],
+.fnb-dark-surface .text-\[\#735c51\] { color: #cbd5e1 !important; }
+.fnb-dark-surface .text-\[\#7c2d12\] { color: #fdba74 !important; }
+.fnb-dark-surface .text-\[\#876f63\],
+.fnb-dark-surface .text-\[\#947d72\],
+.fnb-dark-surface .text-\[\#aa958a\],
+.fnb-dark-surface .text-\[\#c7b5aa\] { color: #94a3b8 !important; }
+.fnb-dark-surface input,
+.fnb-dark-surface textarea,
+.fnb-dark-surface select,
+.fnb-dark-surface [role='combobox'] { background-color: #0b1628; border-color: rgba(255, 255, 255, 0.12); color: #f8fafc; }
+.fnb-dark-surface input::placeholder,
+.fnb-dark-surface textarea::placeholder { color: #64748b; }
+.fnb-dark-surface table { color: #cbd5e1; }
+.fnb-dark-surface thead { background-color: rgba(255, 255, 255, 0.045); color: #94a3b8; }
+.fnb-dark-surface tbody { border-color: rgba(255, 255, 255, 0.08); }
+.fnb-dark-surface tbody tr:hover { background-color: rgba(255, 255, 255, 0.055); }
+.fnb-dark-surface .bg-sky-50 { background-color: rgba(14, 165, 233, 0.14) !important; }
+.fnb-dark-surface .bg-violet-50 { background-color: rgba(139, 92, 246, 0.14) !important; }
+.fnb-dark-surface .bg-rose-50 { background-color: rgba(244, 63, 94, 0.14) !important; }
+.fnb-dark-surface .bg-slate-100 { background-color: rgba(148, 163, 184, 0.12) !important; }
+.fnb-dark-surface .text-sky-700 { color: #7dd3fc !important; }
+.fnb-dark-surface .text-violet-700 { color: #c4b5fd !important; }
+.fnb-dark-surface .text-rose-700 { color: #fda4af !important; }
+.fnb-dark-surface .text-slate-600 { color: #cbd5e1 !important; }
+.fnb-dark-surface .hover\:bg-\[\#fff8f2\]:hover,
+.fnb-dark-surface .hover\:bg-\[\#fffaf7\]:hover,
+.fnb-dark-surface .hover\:bg-white:hover { background-color: rgba(255, 255, 255, 0.08) !important; }
+.fnb-dark-surface [class*="from-[#fff8f2]"],
+.fnb-dark-surface [class*="from-[#fff3e8]"] { background-image: linear-gradient(135deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.025)) !important; }
+.fnb-dark-surface [data-slot='dialog-overlay'] { background-color: rgba(2, 6, 23, 0.78) !important; }
+
+/* Event dialogs render through a portal, so they carry this explicit class
+   instead of relying on the route surface as their CSS ancestor. */
+.fnb-event-dialog {
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  background: #0d1424 !important;
+  color: #e2e8f0 !important;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.48) !important;
+  --background: #0d1424;
+  --foreground: #e2e8f0;
+  --card: #101b2f;
+  --card-foreground: #f8fafc;
+  --muted: #111d31;
+  --muted-foreground: #94a3b8;
+  --border: rgba(255, 255, 255, 0.12);
+  --input: rgba(255, 255, 255, 0.12);
+}
+.fnb-event-dialog [data-slot='dialog-title'] { color: #f8fafc !important; }
+.fnb-event-dialog [data-slot='dialog-description'] { color: #94a3b8 !important; }
+.fnb-event-dialog input,
+.fnb-event-dialog textarea,
+.fnb-event-dialog select { background-color: #0b1628; border-color: rgba(255, 255, 255, 0.12); color: #f8fafc; }
+.fnb-event-dialog input::placeholder,
+.fnb-event-dialog textarea::placeholder { color: #64748b; }
+.fnb-event-dialog .bg-white,
+.fnb-event-dialog .bg-\[\#fff8f2\],
+.fnb-event-dialog .bg-\[\#fffdfb\] { background-color: #101b2f !important; }
+.fnb-event-dialog .border-\[\#eadfd8\],
+.fnb-event-dialog .border-\[\#d9c8bd\] { border-color: rgba(255, 255, 255, 0.12) !important; }
+.fnb-event-dialog .text-\[\#24130d\],
+.fnb-event-dialog .text-\[\#3d2318\] { color: #f8fafc !important; }
+.fnb-event-dialog .text-\[\#6f5d53\],
+.fnb-event-dialog .text-\[\#947d72\] { color: #94a3b8 !important; }
+.fnb-event-dialog .bg-\[\#fff3e8\] { background-color: rgba(249, 115, 22, 0.14) !important; }
+.fnb-event-dialog [data-slot='dialog-footer'] { border-color: rgba(255, 255, 255, 0.10); }
+body:has(.fnb-dark-surface) [data-slot='dialog-content'] {
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  background: #0d1424 !important;
+  color: #e2e8f0 !important;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.48) !important;
+}
+body:has(.fnb-dark-surface) [data-slot='dialog-content'] [data-slot='dialog-title'] { color: #f8fafc !important; }
+body:has(.fnb-dark-surface) [data-slot='dialog-content'] [data-slot='dialog-description'] { color: #94a3b8 !important; }
+body:has(.fnb-dark-surface) [data-slot='dialog-content'] input,
+body:has(.fnb-dark-surface) [data-slot='dialog-content'] textarea,
+body:has(.fnb-dark-surface) [data-slot='dialog-content'] select { background-color: #0b1628; border-color: rgba(255, 255, 255, 0.12); color: #f8fafc; }
+body:has(.fnb-dark-surface) [data-slot='dialog-content'] .bg-white,
+body:has(.fnb-dark-surface) [data-slot='dialog-content'] .bg-\[\#fff8f2\],
+body:has(.fnb-dark-surface) [data-slot='dialog-content'] .bg-\[\#fffdfb\] { background-color: #101b2f !important; }
+body:has(.fnb-dark-surface) [data-slot='dialog-content'] .border-\[\#eadfd8\],
+body:has(.fnb-dark-surface) [data-slot='dialog-content'] .border-\[\#d9c8bd\] { border-color: rgba(255, 255, 255, 0.12) !important; }
+body:has(.fnb-dark-surface) [data-slot='dialog-content'] .text-\[\#24130d\],
+body:has(.fnb-dark-surface) [data-slot='dialog-content'] .text-\[\#3d2318\] { color: #f8fafc !important; }
+body:has(.fnb-dark-surface) [data-slot='dialog-content'] .text-\[\#6f5d53\],
+body:has(.fnb-dark-surface) [data-slot='dialog-content'] .text-\[\#947d72\] { color: #94a3b8 !important; }
+body:has(.fnb-dark-surface) [data-slot='dialog-content'] .bg-orange-50,
+body:has(.fnb-dark-surface) [data-slot='dialog-content'] .bg-amber-50,
+body:has(.fnb-dark-surface) [data-slot='dialog-content'] .bg-emerald-50,
+body:has(.fnb-dark-surface) [data-slot='dialog-content'] .bg-sky-50 { background-color: rgba(255, 255, 255, 0.06) !important; }
+body:has(.fnb-dark-surface) [data-slot='dialog-footer'] { border-color: rgba(255, 255, 255, 0.10) !important; background-color: #0b1628 !important; }
 .fnb-dark-surface .bg-\[\#fbf8f6\] { background-color: #07111f !important; }
 .fnb-dark-surface .bg-white { background-color: #101b2f !important; }
 .fnb-dark-surface .bg-\[\#fff7ed\] { background-color: rgba(249, 115, 22, 0.13) !important; }

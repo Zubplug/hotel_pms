@@ -8,7 +8,7 @@ export const metadata: Metadata = {
 
 export default function BookingTypeSelectorPage() {
   return (
-    <div className="p-6 max-w-4xl mx-auto space-y-6">
+    <div className="fnb-dark-surface min-h-full p-6 max-w-4xl mx-auto space-y-6">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">What are you booking?</h1>
         <p className="text-muted-foreground mt-1">Select the type of event you are planning to load the correct wizard.</p>
