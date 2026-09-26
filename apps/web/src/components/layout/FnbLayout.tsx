@@ -78,7 +78,6 @@ const FNB_NAV = [
       { name: 'Events Overview', href: '/fnb/events', icon: LayoutDashboard },
       { name: 'Event Register', href: '/fnb/events/bookings', icon: ClipboardList, activeWhen: 'register' },
       { name: 'Event Schedule', href: '/fnb/events/bookings?view=timeline', icon: CalendarRange, activeWhen: 'timeline' },
-      { name: 'New Booking', href: '/fnb/events/bookings/create', icon: CalendarDays },
       { name: 'Event CRM', href: '/fnb/events/crm', icon: Users },
       { name: 'BEO & Accounting', href: '/fnb/events/accounting', icon: FileCheck2 },
     ],

@@ -4,7 +4,6 @@ import { prisma } from '@hotel-pms/db';
 import { requireEventContext } from '@/lib/events/access';
 import { getEquipment } from '@/lib/events/booking-actions';
 import { NewBookingDialog } from '@/components/events/NewBookingDialog';
-import { Button } from '@/components/ui/button';
 import { ArrowUpRight, BarChart3, Calendar, CheckCircle2, ChevronRight, CircleDollarSign, FileCheck2, LayoutGrid, Package, Sparkles, Users, WalletCards } from 'lucide-react';
 
 export const metadata: Metadata = { title: 'F&B Events Command Centre | LodgeCore' };
@@ -65,7 +64,7 @@ export default async function FnbEventsDashboard() {
   const maxPipeline = Math.max(...pipeline.map((item) => item.count), 1);
 
   return <div className="min-h-full bg-[#fbf8f6] text-[#24130d]">
-    <header className="border-b border-[#3d2318] bg-[#24130d] text-white"><div className="mx-auto max-w-[1600px] px-4 py-7 sm:px-6 lg:px-8"><div className="flex flex-col justify-between gap-6 xl:flex-row xl:items-end"><div><div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-orange-300"><Sparkles className="h-4 w-4" /> F&B Hall & events</div><h1 className="text-3xl font-bold tracking-tight sm:text-4xl">Events command centre</h1><p className="mt-2 max-w-2xl text-sm text-orange-100/75">One live view of demand, venue capacity, BEO readiness, event revenue, and the next operational handoff.</p></div><div className="flex flex-wrap gap-2"><Button variant="outline" className="border-white/20 bg-white/10 text-white hover:bg-white/20" asChild><Link href="/fnb/events/bookings"><Calendar className="mr-2 h-4 w-4" /> Event register</Link></Button><NewBookingDialog initialHalls={halls} initialPackages={packages} equipmentList={equipment} guests={guests} corporateAccounts={corporateAccounts} /></div></div></div></header>
+    <header className="border-b border-[#3d2318] bg-[#24130d] text-white"><div className="mx-auto max-w-[1600px] px-4 py-7 sm:px-6 lg:px-8"><div className="flex flex-col justify-between gap-6 xl:flex-row xl:items-end"><div><div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-orange-300"><Sparkles className="h-4 w-4" /> F&B Hall & events</div><h1 className="text-3xl font-bold tracking-tight sm:text-4xl">Events command centre</h1><p className="mt-2 max-w-2xl text-sm text-orange-100/75">One live view of demand, venue capacity, BEO readiness, event revenue, and the next operational handoff.</p></div><NewBookingDialog initialHalls={halls} initialPackages={packages} equipmentList={equipment} guests={guests} corporateAccounts={corporateAccounts} /></div></div></header>
     <main className="mx-auto max-w-[1600px] space-y-6 px-4 py-6 sm:px-6 lg:px-8">
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {[
