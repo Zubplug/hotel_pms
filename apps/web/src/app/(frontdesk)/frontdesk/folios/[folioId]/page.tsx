@@ -1,21 +1,11 @@
-'use client';
+import FolioDetailClient from './FolioDetailClient';
 
-import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { Suspense } from 'react';
-import { FolioDetailView } from '@/components/finance/FolioDetailView';
-
-function FrontDeskFolioContent() {
-  const { folioId } = useParams<{ folioId: string }>();
-  const router = useRouter();
-  const searchParams = useSearchParams();
-
-  return (
-    <main className="min-h-full bg-slate-50 p-4 sm:p-6">
-      <FolioDetailView folioId={folioId} eventInvoiceId={searchParams.get('eventInvoiceId') || undefined} onBack={() => router.back()} />
-    </main>
-  );
+// Folio IDs are created at runtime. Desktop navigation uses the query-string
+// shell at /frontdesk/folios, so no unknown IDs should be pre-rendered here.
+export function generateStaticParams() {
+  return [];
 }
 
 export default function FrontDeskFolioPage() {
-  return <Suspense fallback={<main className="min-h-full bg-slate-50 p-6" /> }><FrontDeskFolioContent /></Suspense>;
+  return <FolioDetailClient />;
 }
