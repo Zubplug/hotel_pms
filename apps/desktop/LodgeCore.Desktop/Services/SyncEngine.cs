@@ -229,6 +229,15 @@ public class SyncEngine : BackgroundService
             using var scope = _serviceProvider.CreateScope();
             var dbContext = scope.ServiceProvider.GetRequiredService<LocalDbContext>();
 
+            // Repair databases created by older desktop versions before the
+            // first pull. Corporate/city-ledger folios historically used an
+            // empty string for ReservationId, but that column is unique and
+            // multiple such folios cannot coexist in SQLite.
+            await dbContext.Database.ExecuteSqlRawAsync(
+                "UPDATE Folios SET ReservationId = NULL WHERE ReservationId = '';",
+                stoppingToken
+            );
+
             // Ensure the SyncMetadata table exists (for existing non-migrated DBs before this change)
             await dbContext.Database.ExecuteSqlRawAsync(
                 "CREATE TABLE IF NOT EXISTS SyncMetadata (Id TEXT PRIMARY KEY, LastSuccessfulSyncAt TEXT, LastSyncVersion TEXT, SchemaVersion TEXT);"

@@ -666,7 +666,24 @@ export async function GET(req: NextRequest) {
 
     sharedCorporateFolios.forEach(addFolio);
     foliosChangedSinceCursor.forEach(addFolio);
-    const folios = Array.from(folioById.values());
+    // A reservation has one local folio and a corporate account has one
+    // shared city-ledger folio. Older desktop clients enforce those
+    // relationships with unique SQLite indexes, so do not send duplicate
+    // representations of the same logical folio when a reservation snapshot
+    // and the shared-ledger reference both appear in the pull page.
+    const folioIdentityKeys = new Set<string>();
+    const folios = Array.from(folioById.values()).filter((folio: any) => {
+      const reservationId = typeof folio.reservationId === 'string' ? folio.reservationId.trim() : '';
+      const corporateAccountId = typeof folio.corporateAccountId === 'string' ? folio.corporateAccountId.trim() : '';
+      const identity = reservationId
+        ? `reservation:${reservationId}`
+        : folio.type === 'CITY_LEDGER' && corporateAccountId
+          ? `corporate:${corporateAccountId}`
+          : `folio:${folio.id}`;
+      if (folioIdentityKeys.has(identity)) return false;
+      folioIdentityKeys.add(identity);
+      return true;
+    });
 
     // Issued event invoices are first-class front-desk receivables. Keep the
     // offline tab searchable without exposing draft/void invoices to cashiers.
