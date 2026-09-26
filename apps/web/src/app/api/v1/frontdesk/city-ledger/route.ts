@@ -26,12 +26,23 @@ export async function GET(req: NextRequest) {
     include: { account: true, invoice: true, allocations: true, guest: { select: { firstName: true, lastName: true } } },
     orderBy: { createdAt: 'desc' },
   });
-  return successResponse(entries.map(entry => {
+  const rows = entries.map(entry => {
     const paid = entry.type === 'PAYMENT'
       ? entry.allocations.reduce((sum, allocation) => sum + Number(allocation.amount), 0)
       : entry.allocations.filter(allocation => allocation.invoiceId === entry.invoiceId).reduce((sum, allocation) => sum + Number(allocation.amount), 0);
     return { entryId: entry.id, accountId: entry.accountId, invoiceId: entry.invoiceId, invoiceNumber: entry.type === 'PAYMENT' ? 'Corporate advance' : (entry.invoice?.invoiceNumber || entry.reference), entryKind: entry.type === 'PAYMENT' ? 'CORPORATE_ADVANCE' : 'CITY_LEDGER_INVOICE', accountType: entry.account.type, accountName: entry.account.name, guestName: entry.guest ? `${entry.guest.firstName} ${entry.guest.lastName}` : null, amount: Number(entry.amount), paidAmount: paid, outstandingAmount: Math.max(0, Number(entry.amount) - paid), currency: entry.currency, status: entry.status, reference: entry.reason, createdAt: entry.createdAt };
-  }).filter(entry => entry.outstandingAmount > 0.01));
+  }).filter(entry => entry.outstandingAmount > 0.01);
+  const representedCorporateAccounts = new Set(rows.filter((entry) => entry.accountType === 'CORPORATE').map((entry) => entry.accountId));
+  const activeCorporateAccounts = await prisma.corporateAccount.findMany({
+    where: { propertyId, isActive: true, cityLedgerAccountId: { not: null }, cityLedgerAccount: { is: { status: 'ACTIVE' } } },
+    select: { id: true, name: true, cityLedgerAccountId: true, cityLedgerAccount: { select: { currency: true } } },
+    orderBy: { name: 'asc' },
+  });
+  for (const account of activeCorporateAccounts) {
+    if (!account.cityLedgerAccountId || representedCorporateAccounts.has(account.cityLedgerAccountId)) continue;
+    rows.push({ entryId: null, accountId: account.cityLedgerAccountId, invoiceId: null, invoiceNumber: 'No open invoice', entryKind: 'CORPORATE_ACCOUNT', accountType: 'CORPORATE', accountName: account.name, guestName: null, amount: 0, paidAmount: 0, outstandingAmount: 0, currency: account.cityLedgerAccount?.currency || 'NGN', status: 'ACTIVE', reference: null, createdAt: new Date() });
+  }
+  return successResponse(rows);
 }
 
 export async function POST(req: NextRequest) {

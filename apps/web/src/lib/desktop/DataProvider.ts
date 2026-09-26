@@ -178,6 +178,7 @@ export interface LodgeCoreDataProvider {
   cityLedger: {
     list(propertyId: string): Promise<any>;
     settle(data: { entryId: string; accountId: string; invoiceId?: string; accountType: string; amount: number; method: string; reference: string }): Promise<any>;
+    advance(data: { accountId: string; amount: number; method: string; reference: string }): Promise<any>;
   };
   laundry: {
     getItems(propertyId: string): Promise<{ data: any[], error: string | null }>;

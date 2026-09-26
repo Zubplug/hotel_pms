@@ -776,9 +776,15 @@ export async function POST(req: NextRequest) {
               // Offline Fire More sends the complete updated order snapshot.
               // Materialize only unseen items so original items are never
               // duplicated during incremental sync.
+              const seenItemIds = new Set(existingItemIds);
               const items = candidateItems.filter((item: any) => {
                 const itemId = item.Id || item.id;
-                return itemId && !existingItemIds.has(itemId);
+                // Offline Fire More sends a complete snapshot. Guard both
+                // against items already in the cloud and duplicate rows in
+                // the same snapshot.
+                if (!itemId || seenItemIds.has(itemId)) return false;
+                seenItemIds.add(itemId);
+                return true;
               });
               for (const item of items) {
                   const discountAmount = Number(item.Discount ?? item.discount ?? 0);
@@ -1269,7 +1275,7 @@ export async function POST(req: NextRequest) {
         if (err.message === 'IDEMPOTENCY_DUPLICATE') {
            alreadyProcessed.push(event.id);
            results.push({ id: event.id, status: err.existingEvent?.syncConflict ? 'CONFLICT' : 'SYNCED', idempotencyKey: event.idempotencyKey });
-        } else if (err.message === 'CONCURRENCY_CONFLICT' || err.code === 'P2002') {
+        } else if (err.message === 'CONCURRENCY_CONFLICT') {
            let expectedVersion = err.currentVersion || event.aggregateVersion;
            try {
              await prisma.$transaction(async (tx2: any) => {

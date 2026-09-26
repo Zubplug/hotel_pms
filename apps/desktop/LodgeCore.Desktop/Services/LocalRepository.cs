@@ -3749,6 +3749,9 @@ public class LocalRepository
                 }
             }
 
+            var eventVersion = order.Version;
+            order.Version++;
+
             var evt = new LocalOutboxEvent
             {
                 Id = operationId,
@@ -3757,7 +3760,7 @@ public class LocalRepository
                 OperatorId = userId,
                 AggregateType = action == "REPLACE" ? "POS_ORDER" : "POS_VOID",
                 AggregateId = order.Id,
-                AggregateVersion = order.Version + 1,
+                AggregateVersion = eventVersion,
                 EventType = action == "REPLACE" ? "ITEM_REPLACED" : "CREATE",
                 Sequence = 1,
                 PayloadJson = System.Text.Json.JsonSerializer.Serialize(new {
@@ -4555,7 +4558,9 @@ public class LocalRepository
             
             _dbContext.PosOrderItems.Add(item);
             newItems.Add(item);
-            order.Items.Add(item);
+            // The item is already tracked by the context. Adding it to the
+            // navigation collection as well duplicates it in the serialized
+            // order snapshot and makes cloud sync insert the same UUID twice.
 
             if (item.Modifiers != null)
             {
@@ -7172,7 +7177,7 @@ public class LocalRepository
         var allocations = await _dbContext.CityLedgerAllocations.Where(a => a.PropertyId == propertyId).ToListAsync();
         var corporates = await _dbContext.CorporateAccounts.Where(a => a.PropertyId == propertyId).ToListAsync();
         var guests = await _dbContext.Guests.ToDictionaryAsync(g => g.Id, g => $"{g.FirstName} {g.LastName}".Trim());
-        return entries.Select(entry => {
+        var rows = entries.Select(entry => {
             var paid = allocations.Where(a => a.InvoiceId == entry.InvoiceId).Sum(a => a.Amount);
             var corporate = corporates.FirstOrDefault(c => c.CityLedgerAccountId == entry.AccountId);
             if (entry.Type == "PAYMENT" && corporate == null) return null;
@@ -7185,6 +7190,12 @@ public class LocalRepository
                 currency = entry.Currency, status = entry.Status, reference = entry.Description, createdAt = entry.CreatedAt,
             };
         }).Where(row => row != null && (row.outstandingAmount > 0.01m || row.status == "PENDING_SETTLEMENT")).Cast<object>().ToList();
+        var representedAccounts = rows.Select(row => (string?)row.GetType().GetProperty("accountId")?.GetValue(row)).Where(id => !string.IsNullOrWhiteSpace(id)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var corporate in corporates.Where(account => account.IsActive && !string.IsNullOrWhiteSpace(account.CityLedgerAccountId) && !representedAccounts.Contains(account.CityLedgerAccountId)))
+        {
+            rows.Add(new { entryId = (string?)null, accountId = corporate.CityLedgerAccountId, invoiceId = (string?)null, invoiceNumber = "No open invoice", accountType = "CORPORATE", entryKind = "CORPORATE_ACCOUNT", accountName = corporate.Name, guestName = (string?)null, amount = 0m, paidAmount = 0m, outstandingAmount = 0m, currency = "NGN", status = "ACTIVE", reference = (string?)null, createdAt = DateTime.UtcNow });
+        }
+        return rows;
     }
 
     public async Task<object> QueueCityLedgerPaymentAsync(string entryId, string accountId, string? invoiceId, string accountType, decimal amount, string method, string reference, string userId, string deviceId, DateTime businessDate)
@@ -7241,6 +7252,25 @@ public class LocalRepository
             PayloadJson = JsonSerializer.Serialize(new { accountId = entry.AccountId, invoiceId = isCorporate ? null : selectedInvoiceId, accountType = isCorporate ? "CORPORATE" : "SKIPPER", frontdeskSessionId = frontdeskSession.Id, shiftReference = frontdeskSession.ShiftReference, amount, method, reference, businessDate, entryId, timestamp = DateTime.UtcNow }),
             Status = "PENDING", CreatedAt = DateTime.UtcNow
         });
+        await _dbContext.SaveChangesAsync();
+        return new { success = true, pendingSync = true, operationId };
+    }
+
+    public async Task<object> QueueCorporateAdvancePaymentAsync(string accountId, decimal amount, string method, string reference, string userId, string deviceId, DateTime businessDate)
+    {
+        var corporate = await _dbContext.CorporateAccounts.FirstOrDefaultAsync(account => account.CityLedgerAccountId == accountId && account.IsActive);
+        if (corporate == null) throw new InvalidOperationException("Active corporate account not found.");
+        if (amount <= 0) throw new InvalidOperationException("Advance amount must be positive.");
+        method = method.Trim().ToUpperInvariant();
+        if (method is not ("CASH" or "BANK_TRANSFER" or "POS" or "CARD" or "CHEQUE" or "OTHER")) throw new InvalidOperationException("Invalid city ledger payment method.");
+        if (string.IsNullOrWhiteSpace(reference)) throw new InvalidOperationException("A payment reference is required.");
+        var frontdeskSession = await GetActiveFrontdeskSessionAsync(corporate.PropertyId, userId);
+        if (frontdeskSession == null) throw new InvalidOperationException("An open Front Desk shift is required before receiving an advance.");
+        var operationId = Guid.NewGuid().ToString();
+        var entryId = Guid.NewGuid().ToString();
+        var entry = new LocalCityLedgerEntry { Id = entryId, PropertyId = corporate.PropertyId, OrganizationId = corporate.OrganizationId, AccountId = accountId, Type = "PAYMENT", Amount = amount, Currency = "NGN", Status = "OPEN", Description = "Unapplied corporate advance", IdempotencyKey = operationId, BusinessDate = frontdeskSession.BusinessDate, CreatedAt = DateTime.UtcNow, Version = 1 };
+        _dbContext.CityLedgerEntries.Add(entry);
+        _dbContext.OutboxEvents.Add(new LocalOutboxEvent { Id = Guid.NewGuid().ToString(), IdempotencyKey = operationId, PropertyId = corporate.PropertyId, DeviceId = deviceId, OperatorId = userId, AggregateType = "CITY_LEDGER", AggregateId = entryId, AggregateVersion = 1, EventType = "CITY_LEDGER_PAYMENT", PayloadJson = JsonSerializer.Serialize(new { accountId, invoiceId = (string?)null, accountType = "CORPORATE", frontdeskSessionId = frontdeskSession.Id, shiftReference = frontdeskSession.ShiftReference, amount, method, reference, businessDate = frontdeskSession.BusinessDate, entryId, timestamp = DateTime.UtcNow }), Status = "PENDING", CreatedAt = DateTime.UtcNow });
         await _dbContext.SaveChangesAsync();
         return new { success = true, pendingSync = true, operationId };
     }

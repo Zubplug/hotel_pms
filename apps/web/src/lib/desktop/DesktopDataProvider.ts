@@ -139,6 +139,7 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
   cityLedger: {
     list: async (propertyId: string) => invokeDesktop('cityLedger.list', { propertyId }),
     settle: async (data: any) => invokeDesktop('cityLedger.settle', data),
+    advance: async (data: any) => invokeDesktop('cityLedger.advance', data),
   },
   
   roomTypes: {

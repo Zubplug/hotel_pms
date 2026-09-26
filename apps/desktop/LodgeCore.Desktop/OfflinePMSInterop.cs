@@ -593,6 +593,18 @@ public class OfflinePMSInterop
         catch (Exception ex) { return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions); }
     }
 
+    public async Task<string> ReceiveCorporateAdvanceAsync(string payloadJson)
+    {
+        try
+        {
+            var payload = JsonNode.Parse(payloadJson)?.AsObject() ?? throw new InvalidOperationException("Invalid corporate advance");
+            var ctx = await GetSecureContextAsync();
+            var result = await _repo.QueueCorporateAdvancePaymentAsync(payload["accountId"]?.ToString() ?? "", payload["amount"]?.GetValue<decimal>() ?? 0, payload["method"]?.ToString() ?? "BANK_TRANSFER", payload["reference"]?.ToString() ?? "", ctx.UserId, ctx.DeviceId, DateTime.UtcNow.Date);
+            return JsonSerializer.Serialize(result, _jsonOptions);
+        }
+        catch (Exception ex) { return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions); }
+    }
+
     public async Task<string> GetSyncEventsAsync()
     {
         try

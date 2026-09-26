@@ -215,6 +215,9 @@ public partial class MainPage : ContentPage
                 case "cityLedger.settle":
                     responseData = await pmsInterop.SettleCityLedgerAsync(parameters?.ToJsonString() ?? "{}");
                     break;
+                case "cityLedger.advance":
+                    responseData = await pmsInterop.ReceiveCorporateAdvanceAsync(parameters?.ToJsonString() ?? "{}");
+                    break;
                 case "hardware.readCard":
                     responseData = await hardwareInterop.ReadCardAsync();
                     break;

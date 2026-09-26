@@ -564,6 +564,16 @@ export async function POST(req: NextRequest) {
             aggregateType === "CITY_LEDGER" // append-only; idempotency guarded inside handler
           ) {
             updatedCount = 1; // No version field on cloud for these yet
+          } else if (aggregateType === "POS_ORDER" || aggregateType === "POS_VOID") {
+            // POS void/replacement outbox events mutate the order aggregate.
+            const orderId = aggregateType === "POS_VOID"
+              ? (payload.orderId || payload.OrderId || aggregateId)
+              : aggregateId;
+            const res = await tx.posOrder.updateMany({
+              where: { id: orderId, version: aggregateVersion },
+              data: { version: { increment: 1 } },
+            });
+            updatedCount = res.count;
           }
 
           if (updatedCount === 0) {

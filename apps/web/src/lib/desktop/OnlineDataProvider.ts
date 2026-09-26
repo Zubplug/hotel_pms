@@ -109,6 +109,7 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
   cityLedger: {
     async list(propertyId: string) { return apiFetch(`/api/v1/frontdesk/city-ledger?propertyId=${encodeURIComponent(propertyId)}`); },
     async settle(data: any) { return apiFetch(`/api/v1/frontdesk/city-ledger/settle`, { method: 'POST', body: JSON.stringify(data) }); },
+    async advance(data: any) { return apiFetch(`/api/v1/frontdesk/city-ledger/advance`, { method: 'POST', body: JSON.stringify(data) }); },
   },
   roomTypes: {
     async list(propertyId: string) {
