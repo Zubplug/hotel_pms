@@ -1693,7 +1693,9 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                     var guestName = "";
                     if (eventElement.ValueKind == System.Text.Json.JsonValueKind.Object && eventElement.TryGetProperty("guest", out var guest) && guest.ValueKind == System.Text.Json.JsonValueKind.Object)
                     {
-                        guestName = $"{guest.TryGetProperty("firstName", out var first) ? first.GetString() : ""} {guest.TryGetProperty("lastName", out var last) ? last.GetString() : ""}".Trim();
+                        var firstName = guest.TryGetProperty("firstName", out var first) ? first.GetString() : "";
+                        var lastName = guest.TryGetProperty("lastName", out var last) ? last.GetString() : "";
+                        guestName = $"{firstName} {lastName}".Trim();
                     }
                     if (string.IsNullOrWhiteSpace(guestName) && eventElement.ValueKind == System.Text.Json.JsonValueKind.Object && eventElement.TryGetProperty("corporateAccount", out var corporate) && corporate.ValueKind == System.Text.Json.JsonValueKind.Object && corporate.TryGetProperty("name", out var corporateName))
                         guestName = corporateName.GetString() ?? "";
