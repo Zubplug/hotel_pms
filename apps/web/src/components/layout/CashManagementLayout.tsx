@@ -179,7 +179,7 @@ export function CashManagementLayout({ children }: { children: React.ReactNode }
   );
 
   return (
-    <div className="flex h-screen bg-slate-50 font-sans overflow-hidden">
+    <div className="flex h-screen bg-[#080e1f] cashier-dark-surface font-sans overflow-hidden">
       {/* Mobile overlay */}
       {sidebarOpen && (
         <div
@@ -209,7 +209,7 @@ export function CashManagementLayout({ children }: { children: React.ReactNode }
       <main className="relative flex-1 flex flex-col h-screen overflow-hidden min-w-0">
         {/* Property switcher header is only useful when the user can switch properties. */}
         {hasMultipleProperties && (
-          <header className="h-14 shrink-0 border-b border-slate-200 bg-white/95 backdrop-blur flex items-center justify-end px-4 sticky top-0 z-30 shadow-sm">
+          <header className="h-14 shrink-0 border-b border-white/[0.08] bg-[#0a0c22]/95 backdrop-blur flex items-center justify-end px-4 sticky top-0 z-30 shadow-sm">
             <PropertySelector onMultiplePropertiesChange={setHasMultipleProperties} />
           </header>
         )}
@@ -219,7 +219,7 @@ export function CashManagementLayout({ children }: { children: React.ReactNode }
           <Button
             variant="outline"
             size="icon"
-            className="fixed left-4 top-4 z-30 h-9 w-9 bg-white shadow-sm lg:hidden"
+            className="fixed left-4 top-4 z-30 h-9 w-9 border-white/[0.08] bg-white/[0.03] text-white shadow-sm hover:bg-white/[0.08] lg:hidden"
             onClick={() => setSidebarOpen(true)}
             aria-label="Open navigation"
           >
@@ -228,7 +228,7 @@ export function CashManagementLayout({ children }: { children: React.ReactNode }
         )}
 
         {/* Page content */}
-        <div className="flex-1 overflow-y-auto bg-slate-50">
+        <div className="flex-1 overflow-y-auto bg-transparent">
           {/* Mount the selector even when the header is hidden so property access is resolved. */}
           {!hasMultipleProperties && (
             <div className="hidden">
