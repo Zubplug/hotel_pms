@@ -21,6 +21,7 @@ export function HallOnlyWizard({ initialHalls, equipmentList, guests, corporateA
 
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [additionalHallRows, setAdditionalHallRows] = useState<{ hallId: string; startTime: string; endTime: string; repeatDay: string }[]>([]);
 
   const [formData, setFormData] = useState({
     clientType: 'INDIVIDUAL' as 'INDIVIDUAL' | 'CORPORATE',
@@ -49,10 +50,12 @@ export function HallOnlyWizard({ initialHalls, equipmentList, guests, corporateA
   });
 
   const currentStep = steps[currentStepIndex].id;
+  const additionalHallsValid = additionalHallRows.every((row) => row.hallId && row.startTime && row.endTime && new Date(row.endTime) > new Date(row.startTime));
+  const hasPerHallRecurrence = additionalHallRows.some((row) => row.repeatDay !== '');
   const canContinue = currentStep === 1
     ? Boolean(Number(formData.expectedGuests) > 0 && (!formData.isExisting || formData.clientId) && (formData.isExisting || (formData.clientType === 'INDIVIDUAL' ? formData.firstName.trim() && formData.lastName.trim() : formData.companyName.trim())))
     : currentStep === 2
-      ? Boolean(formData.hallId && formData.startTime && formData.endTime && new Date(formData.endTime) > new Date(formData.startTime) && (formData.repeatFrequency === 'NONE' || (formData.repeatUntil && (formData.repeatFrequency !== 'WEEKLY' || formData.repeatDaysOfWeek.length > 0))))
+      ? Boolean(formData.hallId && formData.startTime && formData.endTime && new Date(formData.endTime) > new Date(formData.startTime) && additionalHallsValid && (!hasPerHallRecurrence || formData.repeatUntil) && (formData.repeatFrequency === 'NONE' || (formData.repeatUntil && (formData.repeatFrequency !== 'WEEKLY' || formData.repeatDaysOfWeek.length > 0))))
       : true;
 
   const handleNext = () => setCurrentStepIndex(prev => Math.min(prev + 1, steps.length - 1));
@@ -129,6 +132,7 @@ export function HallOnlyWizard({ initialHalls, equipmentList, guests, corporateA
         hallId: formData.hallId,
         startTime: new Date(formData.startTime),
         endTime: new Date(formData.endTime),
+        hallBookings: [{ hallId: formData.hallId, startTime: new Date(formData.startTime), endTime: new Date(formData.endTime) }, ...additionalHallRows.map((row) => ({ hallId: row.hallId, startTime: new Date(row.startTime), endTime: new Date(row.endTime), recurrenceRule: row.repeatDay === '' ? undefined : { frequency: 'WEEKLY' as const, daysOfWeek: [Number(row.repeatDay)], until: formData.repeatUntil } }))],
         setupBufferMinutes: Number(formData.setupBufferMinutes),
         teardownBufferMinutes: Number(formData.teardownBufferMinutes),
         packageIds: [],
@@ -273,6 +277,10 @@ export function HallOnlyWizard({ initialHalls, equipmentList, guests, corporateA
               <div className="space-y-2">
                 <Label htmlFor="endTime">End Time</Label>
                 <Input id="endTime" name="endTime" type="datetime-local" value={formData.endTime} onChange={handleChange} />
+              </div>
+              <div className="rounded-xl border border-orange-200 bg-orange-50/50 p-4 space-y-3">
+                <div className="flex items-center justify-between"><div><p className="text-sm font-bold">Additional halls and recurring days</p><p className="text-xs text-muted-foreground">Assign each space its own time and optional weekly day.</p></div><button type="button" className="text-xs font-bold text-orange-700" onClick={() => setAdditionalHallRows((rows) => [...rows, { hallId: '', startTime: formData.startTime, endTime: formData.endTime, repeatDay: '' }])}>+ Add hall</button></div>
+                {additionalHallRows.map((row, index) => <div key={index} className="grid gap-2 rounded-lg border bg-white p-3"><select value={row.hallId} onChange={(event) => setAdditionalHallRows((rows) => rows.map((item, i) => i === index ? { ...item, hallId: event.target.value } : item))} className="h-10 rounded-md border border-input bg-background px-3 text-sm"><option value="">Select hall</option>{initialHalls.map((hall) => <option key={hall.id} value={hall.id}>{hall.name}</option>)}</select><Input type="datetime-local" value={row.startTime} onChange={(event) => setAdditionalHallRows((rows) => rows.map((item, i) => i === index ? { ...item, startTime: event.target.value } : item))} /><Input type="datetime-local" value={row.endTime} onChange={(event) => setAdditionalHallRows((rows) => rows.map((item, i) => i === index ? { ...item, endTime: event.target.value } : item))} /><select value={row.repeatDay} onChange={(event) => setAdditionalHallRows((rows) => rows.map((item, i) => i === index ? { ...item, repeatDay: event.target.value } : item))} className="h-10 rounded-md border border-input bg-background px-3 text-sm"><option value="">One time</option><option value="0">Sunday weekly</option><option value="1">Monday weekly</option><option value="2">Tuesday weekly</option><option value="3">Wednesday weekly</option><option value="4">Thursday weekly</option><option value="5">Friday weekly</option><option value="6">Saturday weekly</option></select><button type="button" className="text-xs font-bold text-red-600" onClick={() => setAdditionalHallRows((rows) => rows.filter((_, i) => i !== index))}>Remove</button></div>)}
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">

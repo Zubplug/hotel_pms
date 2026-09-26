@@ -1684,6 +1684,11 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                     invoice.PropertyId = propertyId;
                     invoice.EventId = el.TryGetProperty("eventId", out var eventId) && eventId.ValueKind != System.Text.Json.JsonValueKind.Null ? eventId.GetString() : null;
                     invoice.FolioId = el.TryGetProperty("folioId", out var folioId) && folioId.ValueKind != System.Text.Json.JsonValueKind.Null ? folioId.GetString() : null;
+                    invoice.CityLedgerAccountId = el.TryGetProperty("cityLedgerAccountId", out var cityLedgerAccountId) && cityLedgerAccountId.ValueKind != System.Text.Json.JsonValueKind.Null ? cityLedgerAccountId.GetString() : null;
+                    invoice.CityLedgerInvoiceId = el.TryGetProperty("cityLedgerInvoiceId", out var cityLedgerInvoiceId) && cityLedgerInvoiceId.ValueKind != System.Text.Json.JsonValueKind.Null ? cityLedgerInvoiceId.GetString() : null;
+                    invoice.EventInvoiceWorkflowStatus = el.TryGetProperty("workflowStatus", out var workflowStatus) && workflowStatus.ValueKind != System.Text.Json.JsonValueKind.Null ? workflowStatus.GetString() : null;
+                    if (el.TryGetProperty("cityLedgerInvoice", out var cityLedgerInvoice) && cityLedgerInvoice.ValueKind == System.Text.Json.JsonValueKind.Object && cityLedgerInvoice.TryGetProperty("entries", out var ledgerEntries) && ledgerEntries.ValueKind == System.Text.Json.JsonValueKind.Array)
+                        invoice.CityLedgerEntryId = ledgerEntries.EnumerateArray().FirstOrDefault(entry => entry.TryGetProperty("type", out var entryType) && entryType.GetString() == "TRANSFER_IN").TryGetProperty("id", out var ledgerEntryId) ? ledgerEntryId.GetString() : null;
                     invoice.EventName = el.TryGetProperty("event", out var event) && event.TryGetProperty("name", out var eventName) ? eventName.GetString() ?? "Event" : "Event";
                     var guestName = "";
                     if (event.ValueKind == System.Text.Json.JsonValueKind.Object && event.TryGetProperty("guest", out var guest) && guest.ValueKind == System.Text.Json.JsonValueKind.Object)

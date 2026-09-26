@@ -38,8 +38,8 @@ async function auditTransition(
 
 async function scopedInvoice(tx: Tx, invoiceId: string, propertyId: string) {
   const invoice = await tx.eventInvoice.findFirst({
-    where: { id: invoiceId, event: { propertyId } },
-    include: { items: true, event: true },
+    where: { id: invoiceId, OR: [{ event: { propertyId } }, { propertyId }] },
+    include: { items: true, event: true, leaseBillingSchedule: { include: { leaseContract: true } } },
   });
   if (!invoice) throw new Error('Event invoice not found.');
   return invoice;
@@ -189,12 +189,12 @@ export async function issueEventInvoice(invoiceId: string) {
     const discountAccountId = await GLMappingService.getDiscountAllowanceAccount(propertyId);
     const taxAccountId = await GLMappingService.getTaxPayableAccount(propertyId);
 
-    if (outstandingAmount > 0 && invoice.cityLedgerAccountId && invoice.event?.propertyId) {
+    if (outstandingAmount > 0 && invoice.cityLedgerAccountId && (invoice.event?.propertyId === propertyId || invoice.propertyId === propertyId)) {
       const accountId = invoice.cityLedgerAccountId;
       const invoiceNumber = `INV-${invoice.id.substring(0, 8)}`;
       const existing = await tx.cityLedgerInvoice.findFirst({ where: { eventInvoiceId: invoice.id } });
       if (!existing) {
-        const cityInvoice = await tx.cityLedgerInvoice.create({ data: { propertyId, accountId, eventInvoiceId: invoice.id, invoiceNumber, issueDate: businessDate, dueDate: businessDate, description: `Event Billing for ${invoice.event.name || 'Event'}`, amount: invoice.totalAmount, outstandingAmount, paidAmount: invoice.paidAmount, currency: invoice.currency, createdBy: userId } });
+        const cityInvoice = await tx.cityLedgerInvoice.create({ data: { propertyId, accountId, eventInvoiceId: invoice.id, invoiceNumber, issueDate: businessDate, dueDate: businessDate, description: `Event Billing for ${invoice.event?.name || invoice.leaseBillingSchedule?.leaseContract?.contactName || 'Hall Lease'}`, amount: invoice.totalAmount, outstandingAmount, paidAmount: invoice.paidAmount, currency: invoice.currency, createdBy: userId } });
         await tx.cityLedgerEntry.create({ data: { accountId, propertyId, amount: outstandingAmount, currency: invoice.currency, type: 'TRANSFER_IN', status: 'OPEN', reference: invoiceNumber, reason: `Event invoice ${invoice.id}`, invoiceId: cityInvoice.id, createdBy: userId } });
         await tx.cityLedgerAccount.update({ where: { id: accountId }, data: { balance: { increment: outstandingAmount } } });
       }

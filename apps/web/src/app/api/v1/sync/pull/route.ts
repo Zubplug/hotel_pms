@@ -672,10 +672,13 @@ export async function GET(req: NextRequest) {
     // offline tab searchable without exposing draft/void invoices to cashiers.
     const eventInvoices = await prisma.eventInvoice.findMany({
       where: since
-        ? { event: { propertyId }, updatedAt: { gt: since, lte: watermark }, status: { notIn: ['DRAFT', 'VOID'] } }
-        : { event: { propertyId }, status: { notIn: ['DRAFT', 'VOID'] }, updatedAt: { lte: watermark } },
+        ? { OR: [{ propertyId }, { event: { propertyId } }], updatedAt: { gt: since, lte: watermark }, status: { notIn: ['DRAFT', 'VOID'] }, workflowStatus: 'ISSUED' }
+        : { OR: [{ propertyId }, { event: { propertyId } }], status: { notIn: ['DRAFT', 'VOID'] }, workflowStatus: 'ISSUED', updatedAt: { lte: watermark } },
       include: {
         event: { include: { guest: true, corporateAccount: true } },
+        cityLedgerAccount: true,
+        cityLedgerInvoice: { include: { entries: true } },
+        leaseBillingSchedule: { include: { leaseContract: { include: { hall: true, corporateAccount: true } } } },
       },
       take: limit,
       orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],

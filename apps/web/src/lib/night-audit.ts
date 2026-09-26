@@ -5,6 +5,7 @@ import { NotificationEngine } from '@/lib/notification-engine';
 import { applyAvailableFolioCredit } from '@/lib/finance/apply-folio-credit';
 import { applyAvailableGuestLedgerCredit } from '@/lib/finance/apply-guest-ledger-credit';
 import { postNightAuditJournal, buildNightAuditBalanceProof } from './night-audit-accounting';
+import { processLeaseBilling } from './events/lease-actions';
 
 const BATCH_SIZE = 50;
 
@@ -1097,6 +1098,17 @@ export async function executeNightAudit(
   
   errors = finalErrors;
 
+  // Recurring hall contracts are billed at the property business-date close.
+  // Generation is idempotent because only PENDING schedules are eligible and
+  // each schedule has a unique invoice relation.
+  let leaseBilling = { processedCount: 0 };
+  try {
+    leaseBilling = await processLeaseBilling(propertyId, userId ? { userId } : undefined);
+  } catch (leaseError) {
+    errors += 1;
+    console.error('[Night Audit] Recurring hall billing failed; invoice generation will retry:', leaseError);
+  }
+
   try {
     const prop = await prisma.property.findUnique({ where: { id: propertyId } });
     if (prop) {
@@ -1122,6 +1134,7 @@ export async function executeNightAudit(
     tasksCreated: totalTasksCreated,
     tasksSkipped: totalTasksSkipped,
     roomChargesPosted: totalRoomChargesPosted,
+    leaseInvoicesGenerated: leaseBilling.processedCount,
     errors
   };
   } catch (error) {

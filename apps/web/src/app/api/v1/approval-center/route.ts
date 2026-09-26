@@ -29,8 +29,8 @@ export async function GET(req: NextRequest) {
     }),
     prisma.approvalRequest.findMany({ where: { ...propertyFilter, type: 'REFUND' }, select: { id: true, status: true, details: true } }),
     prisma.eventInvoice.findMany({
-      where: { event: { propertyId: { in: user.allowedProperties } }, workflowStatus: { in: ['SUBMITTED', 'IN_REVIEW', 'APPROVED', 'REJECTED'] } },
-      include: { event: { include: { guest: true, corporateAccount: true } }, items: true },
+      where: { OR: [{ event: { propertyId: { in: user.allowedProperties } } }, { propertyId: { in: user.allowedProperties } }], workflowStatus: { in: ['SUBMITTED', 'IN_REVIEW', 'APPROVED', 'REJECTED'] } },
+      include: { event: { include: { guest: true, corporateAccount: true } }, cityLedgerAccount: true, leaseBillingSchedule: { include: { leaseContract: { include: { hall: true, corporateAccount: true } } } }, items: true },
       orderBy: { updatedAt: 'desc' }, take: 200,
     }),
   ]);

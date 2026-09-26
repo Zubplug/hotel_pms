@@ -177,6 +177,7 @@ model Property {
   eventEquipment      EventEquipment[]
   banquetPackages     BanquetPackage[]
   leaseContracts      LeaseContract[]
+  eventInvoices       EventInvoice[]
 
   // Enterprise Accounting Suite
   supplierInvoices           SupplierInvoice[]
@@ -664,6 +665,7 @@ model CorporateAccount {
   reservations Reservation[]
   folios       Folio[]
   events       Event[]
+  leaseContracts LeaseContract[]
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
@@ -4693,6 +4695,7 @@ model Event {
 
   bookings     EventBooking[]
   invoices     EventInvoice[]
+  leaseContract LeaseContract?
   beos         BanquetEventOrder[]
   changeOrders EventChangeOrder[]
 
@@ -4736,13 +4739,24 @@ model LeaseContract {
   hallId String @db.Uuid
   hall   Hall   @relation(fields: [hallId], references: [id])
 
+  corporateAccountId String? @db.Uuid
+  corporateAccount   CorporateAccount? @relation(fields: [corporateAccountId], references: [id])
+  eventId String? @unique @db.Uuid
+  event   Event? @relation(fields: [eventId], references: [id])
+
   contactName  String
   contactEmail String?
 
   startDate DateTime @db.Date
   endDate   DateTime @db.Date
 
-  billingFrequency String // MONTHLY, YEARLY
+  usageFrequency  String @default("WEEKLY") // PER_USE, DAILY, WEEKLY
+  billingFrequency String // PER_USE, WEEKLY, MONTHLY, QUARTERLY, YEARLY
+  billingDates     Json?
+  usageDays       Json?
+  startTime       String?
+  endTime         String?
+  currency        String @default("NGN")
   rate             Decimal @db.Decimal(18, 4)
   depositAmount    Decimal @default(0) @db.Decimal(18, 4)
 
@@ -4750,6 +4764,7 @@ model LeaseContract {
   cancellationTerms String?
 
   schedules LeaseBillingSchedule[]
+  createdBy String? @db.Uuid
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
@@ -4760,12 +4775,15 @@ model LeaseBillingSchedule {
   leaseContractId String        @db.Uuid
   leaseContract   LeaseContract @relation(fields: [leaseContractId], references: [id])
 
+  periodStart DateTime @db.Date
+  periodEnd   DateTime @db.Date
   dueDate DateTime @db.Date
+  usageCount Int @default(1)
   amount  Decimal  @db.Decimal(18, 4)
-  status  String   @default("PENDING") // PENDING, INVOICED, PAID
+  status  String   @default("PENDING") // PENDING, INVOICED, PAID, VOID
 
-  invoiceId String? @db.Uuid
-  // Optionally linked to an EventInvoice once generated to ensure idempotency
+  invoiceId String? @unique @db.Uuid
+  invoice EventInvoice? @relation(fields: [invoiceId], references: [id])
 
   createdAt DateTime @default(now()) @db.Timestamptz
 }
@@ -4810,6 +4828,9 @@ model EventInvoice {
   id      String  @id @default(uuid()) @db.Uuid
   eventId String? @db.Uuid
   event   Event?  @relation(fields: [eventId], references: [id])
+  propertyId String? @db.Uuid
+  property   Property? @relation(fields: [propertyId], references: [id])
+  leaseBillingSchedule LeaseBillingSchedule?
 
   subTotal      Decimal @default(0) @db.Decimal(18, 4)
   totalDiscount Decimal @default(0) @db.Decimal(18, 4)

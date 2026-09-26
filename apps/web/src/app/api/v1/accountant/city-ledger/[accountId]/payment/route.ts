@@ -184,7 +184,9 @@ export async function POST(
           const eventInvoice = await tx.eventInvoice.findUnique({ where: { id: invoice.eventInvoiceId }, select: { id: true, totalAmount: true, paidAmount: true } });
           if (eventInvoice) {
             const paidAmount = Number(eventInvoice.paidAmount) + applied;
-            await tx.eventInvoice.update({ where: { id: eventInvoice.id }, data: { paidAmount, status: paidAmount + 0.01 >= Number(eventInvoice.totalAmount) ? 'PAID' : 'PARTIAL' } });
+            const nextStatus = paidAmount + 0.01 >= Number(eventInvoice.totalAmount) ? 'PAID' : 'PARTIAL';
+            await tx.eventInvoice.update({ where: { id: eventInvoice.id }, data: { paidAmount, status: nextStatus } });
+            if (nextStatus === 'PAID') await tx.leaseBillingSchedule.updateMany({ where: { invoiceId: eventInvoice.id }, data: { status: 'PAID' } });
           }
         }
         

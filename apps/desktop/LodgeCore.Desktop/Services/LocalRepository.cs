@@ -2690,7 +2690,7 @@ public class LocalRepository
 
     public async Task<List<LocalEventInvoice>> GetEventInvoicesAsync(string propertyId, string? search = null)
     {
-        var query = _dbContext.EventInvoices.Where(invoice => invoice.PropertyId == propertyId && (invoice.Status == "UNPAID" || invoice.Status == "PARTIAL"));
+        var query = _dbContext.EventInvoices.Where(invoice => invoice.PropertyId == propertyId && (invoice.Status == "ISSUED" || invoice.Status == "UNPAID" || invoice.Status == "PARTIAL"));
         if (!string.IsNullOrWhiteSpace(search))
         {
             var term = search.Trim().ToLower();

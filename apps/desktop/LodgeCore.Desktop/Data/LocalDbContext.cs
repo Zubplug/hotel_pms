@@ -341,6 +341,10 @@ public class LocalDbContext : DbContext
                 PropertyId TEXT NOT NULL,
                 EventId TEXT NULL,
                 FolioId TEXT NULL,
+                CityLedgerEntryId TEXT NULL,
+                CityLedgerAccountId TEXT NULL,
+                CityLedgerInvoiceId TEXT NULL,
+                EventInvoiceWorkflowStatus TEXT NULL,
                 EventName TEXT NOT NULL DEFAULT '',
                 ClientName TEXT NOT NULL DEFAULT '',
                 Status TEXT NOT NULL DEFAULT 'UNPAID',
@@ -368,6 +372,11 @@ public class LocalDbContext : DbContext
             );
             CREATE INDEX IF NOT EXISTS IX_EventHalls_PropertyId ON EventHalls(PropertyId);
         ");
+        foreach (var column in new[] { "CityLedgerEntryId", "CityLedgerAccountId", "CityLedgerInvoiceId", "EventInvoiceWorkflowStatus" })
+        {
+            try { await Database.ExecuteSqlRawAsync($"ALTER TABLE EventInvoices ADD COLUMN {column} TEXT NULL"); }
+            catch (Microsoft.Data.Sqlite.SqliteException ex) when (ex.SqliteErrorCode == 1 && ex.Message.Contains("duplicate column", StringComparison.OrdinalIgnoreCase)) { }
+        }
         try { await Database.ExecuteSqlRawAsync("ALTER TABLE EventScheduleItems ADD COLUMN HallCode TEXT NOT NULL DEFAULT ''"); }
         catch (Microsoft.Data.Sqlite.SqliteException ex) when (ex.SqliteErrorCode == 1 && ex.Message.Contains("duplicate column", StringComparison.OrdinalIgnoreCase)) { }
     }
