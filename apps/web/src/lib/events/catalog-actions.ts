@@ -32,21 +32,57 @@ export async function saveHall(data: { id?: string; name: string; code: string; 
   revalidatePath('/fnb/events/bookings/create/full-package');
 }
 
-export async function saveBanquetPackage(data: { id?: string; name: string; description?: string; basePrice: number; isHallOnly?: boolean }) {
+export async function saveBanquetPackage(data: { id?: string; name: string; description?: string; basePrice: number; isHallOnly?: boolean; items?: Array<{ posProductId?: string; nameOverride?: string; quantity: number; priceOverride?: number }> }) {
   const { propertyId } = await requireEventContext();
   const name = data.name.trim();
   const basePrice = Number(data.basePrice);
   if (!name) throw new Error('Package name is required.');
   if (!Number.isFinite(basePrice) || basePrice < 0) throw new Error('Base price must be a valid non-negative amount.');
 
+  const items = data.items || [];
+  for (const item of items) {
+    if (!Number.isInteger(item.quantity) || item.quantity < 1) throw new Error('Package item quantities must be positive whole numbers.');
+    if (item.priceOverride !== undefined && (!Number.isFinite(Number(item.priceOverride)) || Number(item.priceOverride) < 0)) throw new Error('Package item prices must be valid non-negative amounts.');
+    if (item.posProductId) {
+      const product = await prisma.posProduct.findFirst({ where: { id: item.posProductId, propertyId, isActive: true }, select: { id: true } });
+      if (!product) throw new Error('One of the selected POS products is unavailable.');
+    }
+  }
+
   if (data.id) {
     const existing = await prisma.banquetPackage.findFirst({ where: { id: data.id, propertyId }, select: { id: true } });
     if (!existing) throw new Error('Package not found.');
-    await prisma.banquetPackage.update({ where: { id: existing.id }, data: { name, description: data.description?.trim() || null, basePrice, isHallOnly: Boolean(data.isHallOnly) } });
+    await prisma.$transaction(async (tx) => {
+      await tx.banquetPackage.update({ where: { id: existing.id }, data: { name, description: data.description?.trim() || null, basePrice, isHallOnly: Boolean(data.isHallOnly) } });
+      if (data.items !== undefined) {
+        await tx.banquetPackageItem.deleteMany({ where: { banquetPackageId: existing.id } });
+        if (items.length) await tx.banquetPackageItem.createMany({ data: items.map((item) => ({ banquetPackageId: existing.id, posProductId: item.posProductId || null, nameOverride: item.nameOverride?.trim() || null, quantity: item.quantity, priceOverride: item.priceOverride === undefined ? null : Number(item.priceOverride) })) });
+      }
+    });
   } else {
-    await prisma.banquetPackage.create({ data: { propertyId, name, description: data.description?.trim() || undefined, basePrice, isHallOnly: Boolean(data.isHallOnly), isActive: true } });
+    await prisma.banquetPackage.create({ data: { propertyId, name, description: data.description?.trim() || undefined, basePrice, isHallOnly: Boolean(data.isHallOnly), isActive: true, items: items.length ? { create: items.map((item) => ({ posProductId: item.posProductId || null, nameOverride: item.nameOverride?.trim() || null, quantity: item.quantity, priceOverride: item.priceOverride === undefined ? null : Number(item.priceOverride) })) } : undefined } });
   }
   revalidatePath('/fnb/events/packages');
+  revalidatePath('/fnb/events/bookings/create/full-package');
+}
+
+export async function saveEventEquipment(data: { id?: string; name: string; description?: string; totalStock: number; rentalPrice: number }) {
+  const { propertyId } = await requireEventContext();
+  const name = data.name.trim();
+  const totalStock = Number(data.totalStock);
+  const rentalPrice = Number(data.rentalPrice);
+  if (!name) throw new Error('Equipment name is required.');
+  if (!Number.isInteger(totalStock) || totalStock < 1) throw new Error('Total stock must be a positive whole number.');
+  if (!Number.isFinite(rentalPrice) || rentalPrice < 0) throw new Error('Rental price must be a valid non-negative amount.');
+  if (data.id) {
+    const existing = await prisma.eventEquipment.findFirst({ where: { id: data.id, propertyId }, select: { id: true } });
+    if (!existing) throw new Error('Equipment not found.');
+    await prisma.eventEquipment.update({ where: { id: existing.id }, data: { name, description: data.description?.trim() || null, totalStock, rentalPrice } });
+  } else {
+    await prisma.eventEquipment.create({ data: { propertyId, name, description: data.description?.trim() || null, totalStock, rentalPrice, isActive: true } });
+  }
+  revalidatePath('/fnb/events/packages');
+  revalidatePath('/fnb/events/bookings/create/hall-only');
   revalidatePath('/fnb/events/bookings/create/full-package');
 }
 
