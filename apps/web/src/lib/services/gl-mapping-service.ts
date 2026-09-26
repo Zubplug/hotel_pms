@@ -167,6 +167,30 @@ export class GLMappingService {
   }
 
   /**
+   * Resolves event revenue using the property's chart, never an arbitrary
+   * account. Event/Banquet is the production fallback for hall and equipment
+   * at properties whose settings predate category-level event mappings.
+   */
+  static async getEventRevenueAccount(propertyId: string, category: string): Promise<string> {
+    const property = await prisma.property.findUnique({ where: { id: propertyId } });
+    if (!property) throw new Error('Property not found');
+    const settings = (property.settings as Record<string, unknown>) || {};
+    const accountingConfig = (settings.accountingConfig as Record<string, unknown>) || {};
+    const revenueMap = (accountingConfig.revenueAccounts as Record<string, unknown>) || {};
+    const normalized = String(category || 'OTHER').toUpperCase();
+    const configuredKey = normalized === 'HALL' ? 'EVENT_HALL'
+      : normalized === 'EQUIPMENT' ? 'EVENT_EQUIPMENT'
+        : normalized === 'FOOD' ? 'FOOD'
+          : 'EVENT_OTHER';
+    const configured = typeof revenueMap[configuredKey] === 'string' ? revenueMap[configuredKey] as string : undefined;
+    const fallback = normalized === 'FOOD' ? (typeof revenueMap.FOOD === 'string' ? revenueMap.FOOD as string : '4250') : '4300';
+    const code = configured || fallback;
+    const account = await prisma.chartOfAccount.findFirst({ where: { propertyId, code, type: 'REVENUE', isActive: true } });
+    if (!account) throw new Error(`Event ${normalized} revenue GL account ${code} is missing or inactive for this property.`);
+    return account.id;
+  }
+
+  /**
    * Resolves the Laundry Revenue GL Account.
    * Reads from accountingConfig.revenueAccounts.LAUNDRY, default seeded to 4300.
    */

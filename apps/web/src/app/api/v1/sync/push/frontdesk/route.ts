@@ -2520,7 +2520,7 @@ export async function POST(req: NextRequest) {
             if (existingPayment) return;
             let masterFolio = await tx.folio.findFirst({ where: { propertyId, type: "CITY_LEDGER", corporateAccountId: null, reservationId: null, status: "OPEN" } });
             if (!masterFolio) masterFolio = await tx.folio.create({ data: { propertyId, type: "CITY_LEDGER", status: "OPEN", currency: account.currency, folioNumber: `AR-${propertyId.slice(0, 8).toUpperCase()}-${Date.now().toString().slice(-6)}` } });
-            const payment = await tx.payment.create({ data: { folioId: masterFolio.id, propertyId, frontdeskSessionId, method: method as PaymentMethod, collectionSource: "RECEIVABLES", amount, currency: account.currency, baseAmount: amount, status: "COMPLETED", businessDate: frontdeskSession.businessDate, idempotencyKey, reference, receivedBy: frontdeskSession.staffId, notes: invoice ? `Front Desk city ledger settlement for ${invoice.invoiceNumber || invoiceId}` : "Front Desk corporate city ledger payment" } });
+            const payment = await tx.payment.create({ data: { folioId: masterFolio.id, eventInvoiceId: invoice?.eventInvoiceId || undefined, propertyId, frontdeskSessionId, method: method as PaymentMethod, collectionSource: "RECEIVABLES", amount, currency: account.currency, baseAmount: amount, status: "COMPLETED", businessDate: frontdeskSession.businessDate, idempotencyKey, reference, receivedBy: frontdeskSession.staffId, notes: invoice ? `Front Desk city ledger settlement for ${invoice.invoiceNumber || invoiceId}` : "Front Desk corporate city ledger payment" } });
             await tx.folio.update({ where: { id: masterFolio.id }, data: { totalPayments: { increment: amount }, balance: { decrement: amount } } });
             let remaining = amount;
             let appliedAmount = 0;
@@ -2529,6 +2529,13 @@ export async function POST(req: NextRequest) {
               const applied = Math.min(remaining, Number(openInvoice.outstandingAmount));
               const invoiceRemaining = Number(openInvoice.outstandingAmount) - applied;
               await tx.cityLedgerInvoice.update({ where: { id: openInvoice.id }, data: { paidAmount: { increment: applied }, outstandingAmount: invoiceRemaining, status: invoiceRemaining <= 0.01 ? "PAID" : "PARTIALLY_PAID" } });
+              if (openInvoice.eventInvoiceId) {
+                const eventInvoice = await tx.eventInvoice.findUnique({ where: { id: openInvoice.eventInvoiceId }, select: { id: true, totalAmount: true, paidAmount: true } });
+                if (eventInvoice) {
+                  const paidAmount = Number(eventInvoice.paidAmount) + applied;
+                  await tx.eventInvoice.update({ where: { id: eventInvoice.id }, data: { paidAmount, status: paidAmount + 0.01 >= Number(eventInvoice.totalAmount) ? "PAID" : "PARTIAL" } });
+                }
+              }
               remaining -= applied;
               appliedAmount += applied;
             }

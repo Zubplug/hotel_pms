@@ -4,6 +4,9 @@ import { prisma } from '@hotel-pms/db';
 import type { Prisma } from '@hotel-pms/db';
 import { revalidatePath } from 'next/cache';
 import { requireEventRole } from './access';
+import { GLMappingService } from '@/lib/services/gl-mapping-service';
+import { GeneralLedgerService } from '@/lib/services/general-ledger-service';
+import { getPropertyBusinessDate } from '@/lib/date-utils';
 
 type Tx = Prisma.TransactionClient;
 
@@ -158,7 +161,7 @@ export async function reviewEventInvoice(invoiceId: string, input: { approve: bo
   return result;
 }
 
-/** Issues an approved invoice and posts exactly one folio/city-ledger charge. */
+/** Issues an approved invoice and posts exactly one subledger/GL transaction. */
 export async function issueEventInvoice(invoiceId: string) {
   const { propertyId, userId } = await requireEventRole('CASHIER');
   const result = await prisma.$transaction(async (tx) => {
@@ -169,23 +172,62 @@ export async function issueEventInvoice(invoiceId: string) {
 
     const operationId = `EVENT-INV-${invoice.id}`;
     const outstandingAmount = Number(invoice.totalAmount) - Number(invoice.paidAmount);
+    const property = await tx.property.findUnique({ where: { id: propertyId }, select: { organizationId: true, businessDate: true, timezone: true } });
+    if (!property) throw new Error('Property not found.');
+    const businessDate = property.businessDate || getPropertyBusinessDate(property.timezone);
+    const lines = invoice.items.map((item) => ({
+      item,
+      gross: Number(item.grossAmount || item.totalPrice),
+      discount: Number(item.discountAmount || 0),
+      tax: Number(item.taxAmount || 0),
+      category: String(item.category || 'OTHER').toUpperCase(),
+    }));
+    const revenueAccountByCategory = new Map<string, string>();
+    for (const category of [...new Set(lines.map((line) => line.category))]) {
+      revenueAccountByCategory.set(category, await GLMappingService.getEventRevenueAccount(propertyId, category));
+    }
+    const discountAccountId = await GLMappingService.getDiscountAllowanceAccount(propertyId);
+    const taxAccountId = await GLMappingService.getTaxPayableAccount(propertyId);
+
     if (outstandingAmount > 0 && invoice.cityLedgerAccountId && invoice.event?.propertyId) {
       const accountId = invoice.cityLedgerAccountId;
       const invoiceNumber = `INV-${invoice.id.substring(0, 8)}`;
-      const existing = await tx.cityLedgerInvoice.findFirst({ where: { propertyId, invoiceNumber } });
+      const existing = await tx.cityLedgerInvoice.findFirst({ where: { eventInvoiceId: invoice.id } });
       if (!existing) {
-        await tx.cityLedgerInvoice.create({
-          data: { propertyId, accountId, invoiceNumber, issueDate: new Date(), dueDate: new Date(), description: `Event Billing for ${invoice.event.name || 'Event'}`, amount: invoice.totalAmount, outstandingAmount, paidAmount: invoice.paidAmount, currency: invoice.currency, createdBy: userId },
-        });
+        const cityInvoice = await tx.cityLedgerInvoice.create({ data: { propertyId, accountId, eventInvoiceId: invoice.id, invoiceNumber, issueDate: businessDate, dueDate: businessDate, description: `Event Billing for ${invoice.event.name || 'Event'}`, amount: invoice.totalAmount, outstandingAmount, paidAmount: invoice.paidAmount, currency: invoice.currency, createdBy: userId } });
+        await tx.cityLedgerEntry.create({ data: { accountId, propertyId, amount: outstandingAmount, currency: invoice.currency, type: 'TRANSFER_IN', status: 'OPEN', reference: invoiceNumber, reason: `Event invoice ${invoice.id}`, invoiceId: cityInvoice.id, createdBy: userId } });
+        await tx.cityLedgerAccount.update({ where: { id: accountId }, data: { balance: { increment: outstandingAmount } } });
+      }
+      const journalReference = `EVENT-INVOICE-${invoice.id}`;
+      const journalExists = await tx.journalEntry.findFirst({ where: { propertyId, reference: journalReference }, select: { id: true } });
+      if (!journalExists) {
+        const cityLedgerAccountId = await GLMappingService.getCityLedgerAccount(propertyId);
+        await GeneralLedgerService.postJournal({ userId, propertyIds: [propertyId], organizationId: property.organizationId, role: 'SYSTEM', permissions: [], outletIds: [] }, {
+          propertyId, entryDate: businessDate, reference: journalReference, description: `Issue event invoice ${invoice.id}`, sourceModule: 'AR',
+          lines: [
+            { accountId: cityLedgerAccountId, debit: Number(invoice.totalAmount), credit: 0, description: 'Event city-ledger receivable', sourceType: 'EVENT_INVOICE', sourceId: invoice.id },
+            ...lines.filter((line) => line.gross > 0).map((line) => ({ accountId: revenueAccountByCategory.get(line.category)!, debit: 0, credit: line.gross, description: line.item.description, sourceType: 'EVENT_INVOICE_ITEM', sourceId: line.item.id })),
+            ...lines.filter((line) => line.discount > 0).map((line) => ({ accountId: discountAccountId, debit: line.discount, credit: 0, description: `${line.item.description} discount`, sourceType: 'EVENT_INVOICE_ITEM', sourceId: line.item.id })),
+            ...lines.filter((line) => line.tax > 0).map((line) => ({ accountId: taxAccountId, debit: 0, credit: line.tax, description: `${line.item.description} tax`, sourceType: 'EVENT_INVOICE_ITEM', sourceId: line.item.id })),
+          ],
+        }, tx);
       }
     } else if (outstandingAmount > 0 && invoice.folioId && invoice.event?.propertyId) {
       if (!invoice.event.guestId) throw new Error('Individual event invoice is missing its guest.');
       const folioId = invoice.folioId;
       const guestId = invoice.event.guestId;
-      const existing = await tx.folioItem.findFirst({ where: { folioId: invoice.folioId, operationId } });
+      const existing = await tx.folioItem.findFirst({ where: { folioId: invoice.folioId, operationId: `${operationId}-CHARGE-${invoice.items[0]?.id || 'TOTAL'}` } });
       if (!existing) {
-        await tx.folioItem.create({ data: { folioId, guestId, businessDate: new Date(), type: 'CHARGE', source: 'OTHER', revenueCategory: 'FNB', description: `Event Billing for ${invoice.event.name || 'Event'}`, quantity: 1, unitAmount: invoice.totalAmount, amount: invoice.totalAmount, currency: invoice.currency, baseAmount: invoice.totalAmount, postedBy: userId, operationId } });
-        await tx.folio.update({ where: { id: folioId }, data: { totalCharges: { increment: invoice.totalAmount }, balance: { increment: invoice.totalAmount }, version: { increment: 1 } } });
+        for (const line of lines) {
+          const base = { folioId, guestId, businessDate, source: 'OTHER' as const, revenueCategory: line.category === 'FOOD' ? 'FNB' as const : 'OTHER' as const, revenueClass: line.category, currency: invoice.currency, postedBy: userId };
+          if (line.gross > 0) await tx.folioItem.create({ data: { ...base, type: 'CHARGE', description: line.item.description, quantity: line.item.quantity, unitAmount: line.gross, amount: line.gross, baseAmount: line.gross, operationId: `${operationId}-CHARGE-${line.item.id}` } });
+          if (line.tax > 0) await tx.folioItem.create({ data: { ...base, type: 'TAX', description: `${line.item.description} tax`, quantity: 1, unitAmount: line.tax, amount: line.tax, baseAmount: line.tax, operationId: `${operationId}-TAX-${line.item.id}` } });
+          if (line.discount > 0) await tx.folioItem.create({ data: { ...base, type: 'DISCOUNT', description: `${line.item.description} discount`, quantity: 1, unitAmount: -line.discount, amount: -line.discount, baseAmount: -line.discount, operationId: `${operationId}-DISCOUNT-${line.item.id}` } });
+        }
+        const gross = lines.reduce((sum, line) => sum + line.gross, 0);
+        const tax = lines.reduce((sum, line) => sum + line.tax, 0);
+        const discount = lines.reduce((sum, line) => sum + line.discount, 0);
+        await tx.folio.update({ where: { id: folioId }, data: { totalCharges: { increment: gross + tax - discount }, balance: { increment: outstandingAmount }, version: { increment: 1 } } });
       }
     }
     const issued = await tx.eventInvoice.update({ where: { id: invoice.id }, data: { status: 'ISSUED', workflowStatus: 'ISSUED', issuedBy: userId, issuedAt: new Date(), version: { increment: 1 } } });

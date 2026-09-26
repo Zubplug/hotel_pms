@@ -1059,6 +1059,9 @@ model FolioItem {
   type            String // 'CHARGE' | 'PAYMENT' | 'REFUND' | 'DISCOUNT' | 'ADJUSTMENT' | 'TAX'
   source          FolioItemSource
   revenueCategory RevenueCategory @default(OTHER)
+  // Fine-grained revenue classification used by event billing and reporting.
+  // Null preserves the existing room/POS/manual folio behaviour.
+  revenueClass String?
 
   description String
 
@@ -1095,6 +1098,7 @@ model FolioItem {
   createdAt DateTime @default(now()) @db.Timestamptz
 
   @@unique([folioId, operationId])
+  @@index([revenueClass])
 }
 
 enum PaymentMethod {
@@ -4406,12 +4410,14 @@ model CityLedgerInvoice {
   outstandingAmount Decimal  @db.Decimal(18, 4)
   currency          String
   status            String   @default("OPEN") // OPEN | PARTIALLY_PAID | PAID | VOID
+  eventInvoiceId    String?  @unique @db.Uuid
   createdBy         String   @db.Uuid
   createdAt         DateTime @default(now()) @db.Timestamptz
   updatedAt         DateTime @updatedAt @db.Timestamptz
 
   property    Property               @relation(fields: [propertyId], references: [id])
   account     CityLedgerAccount      @relation(fields: [accountId], references: [id])
+  eventInvoice EventInvoice?         @relation(fields: [eventInvoiceId], references: [id])
   entries     CityLedgerEntry[]
   allocations CityLedgerAllocation[] @relation("InvoiceAllocations")
 
@@ -4838,6 +4844,7 @@ model EventInvoice {
 
   cityLedgerAccountId String?            @db.Uuid
   cityLedgerAccount   CityLedgerAccount? @relation(fields: [cityLedgerAccountId], references: [id])
+  cityLedgerInvoice   CityLedgerInvoice?
 
   items EventInvoiceItem[]
   payments Payment[]

@@ -124,6 +124,7 @@ export async function POST(
       const payment = await tx.payment.create({
         data: {
           folioId: masterFolio.id,
+          eventInvoiceId: invoiceId && invoicesToPay.length === 1 ? invoicesToPay[0].eventInvoiceId || undefined : undefined,
           propertyId: account.propertyId,
           method: method as PaymentMethod,
           collectionSource: 'RECEIVABLES',
@@ -179,6 +180,13 @@ export async function POST(
             status: outstandingAmount <= 0.01 ? 'PAID' : 'PARTIALLY_PAID'
           }
         });
+        if (invoice.eventInvoiceId) {
+          const eventInvoice = await tx.eventInvoice.findUnique({ where: { id: invoice.eventInvoiceId }, select: { id: true, totalAmount: true, paidAmount: true } });
+          if (eventInvoice) {
+            const paidAmount = Number(eventInvoice.paidAmount) + applied;
+            await tx.eventInvoice.update({ where: { id: eventInvoice.id }, data: { paidAmount, status: paidAmount + 0.01 >= Number(eventInvoice.totalAmount) ? 'PAID' : 'PARTIAL' } });
+          }
+        }
         
         await tx.cityLedgerAllocation.create({
           data: {

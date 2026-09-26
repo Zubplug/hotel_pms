@@ -61,8 +61,12 @@ export async function postNightAuditJournal(tx: any, input: {
   // Night Audit uses one canonical chart across all properties. Legacy codes
   // are normalized by migration before posting; do not silently fall back to
   // account names or property-specific codes.
+  const property = await tx.property.findUnique({ where: { id: input.propertyId }, select: { settings: true } });
+  const accountingConfig = ((property?.settings as any)?.accountingConfig || {}) as Record<string, any>;
+  const revenueMap = accountingConfig.revenueAccounts || {};
+  const eventAccountCodes = [revenueMap.EVENT_HALL, revenueMap.EVENT_EQUIPMENT, revenueMap.FOOD, '4300', '4250'].filter((code): code is string => typeof code === 'string');
   const accounts = await tx.chartOfAccount.findMany({
-    where: { propertyId: input.propertyId, code: { in: Object.values(ACCOUNT_CODES) }, isActive: true },
+    where: { propertyId: input.propertyId, code: { in: [...Object.values(ACCOUNT_CODES), ...eventAccountCodes] }, isActive: true },
     select: { id: true, code: true, name: true },
   }) as Account[];
   const byCode = new Map(accounts.map((account) => [account.code, account]));
@@ -98,7 +102,7 @@ export async function postNightAuditJournal(tx: any, input: {
         type: { in: ['CHARGE', 'TAX', 'DISCOUNT', 'ADJUSTMENT', 'COMPLIMENTARY'] },
         source: { notIn: ['POS', 'CITY_LEDGER'] }
       },
-      select: { id: true, type: true, amount: true, source: true, revenueCategory: true, description: true },
+      select: { id: true, type: true, amount: true, source: true, revenueCategory: true, revenueClass: true, description: true },
     }),
     tx.refund.findMany({
       where: { propertyId: input.propertyId, businessDate: input.businessDate, status: 'COMPLETED' },
@@ -124,9 +128,18 @@ export async function postNightAuditJournal(tx: any, input: {
       addLine(lines, { accountId: contraAccount.id, debit: amount, credit: 0, description: item.description, sourceType: 'FOLIO_ITEM', sourceId: item.id });
       addLine(lines, { accountId: account('guestLedger').id, debit: 0, credit: amount, description: item.description, sourceType: 'FOLIO_ITEM', sourceId: item.id });
     } else {
-      const key = ['ROOM_CHARGE', 'DAY_USE_ROOM_CHARGE'].includes(item.source) || item.revenueCategory === 'ROOM' ? 'roomsRevenue' : item.source === 'POS' || item.revenueCategory === 'FNB' ? 'fnbRevenue' : 'otherRevenue';
+      const eventCode = item.revenueClass === 'FOOD'
+        ? (typeof revenueMap.FOOD === 'string' ? revenueMap.FOOD : '4250')
+        : item.revenueClass === 'HALL'
+          ? (typeof revenueMap.EVENT_HALL === 'string' ? revenueMap.EVENT_HALL : '4300')
+          : item.revenueClass === 'EQUIPMENT'
+            ? (typeof revenueMap.EVENT_EQUIPMENT === 'string' ? revenueMap.EVENT_EQUIPMENT : '4300')
+            : null;
+      const eventAccount = eventCode ? byCode.get(eventCode) : undefined;
+      if (item.revenueClass && !eventAccount) return { status: 'MISSING_MAPPING', journalEntryId: null, missingAccounts: [`EVENT_${item.revenueClass}_REVENUE`], lineCount: lines.length };
+      const key = eventAccount ? null : (['ROOM_CHARGE', 'DAY_USE_ROOM_CHARGE'].includes(item.source) || item.revenueCategory === 'ROOM' ? 'roomsRevenue' : item.source === 'POS' || item.revenueCategory === 'FNB' ? 'fnbRevenue' : 'otherRevenue');
       addLine(lines, { accountId: account('guestLedger').id, debit: amount, credit: 0, description: item.description, sourceType: 'FOLIO_ITEM', sourceId: item.id });
-      addLine(lines, { accountId: account(key).id, debit: 0, credit: amount, description: item.description, sourceType: 'FOLIO_ITEM', sourceId: item.id });
+      addLine(lines, { accountId: eventAccount?.id || account(key!).id, debit: 0, credit: amount, description: item.description, sourceType: 'FOLIO_ITEM', sourceId: item.id });
     }
   }
 

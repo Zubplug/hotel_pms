@@ -34,14 +34,22 @@ function asRecord(value: unknown): Record<string, unknown> {
 
 function resolveAccountCode(
   propertyId: string,
-  item: { source: string; revenueCategory: string; type: string },
+  item: { source: string; revenueCategory: string; revenueClass?: string | null; type: string },
   accounts: Map<string, AccountRow>,
   accountingConfig: Record<string, unknown>,
-) {
+): string {
   const revenueAccounts = asRecord(accountingConfig.revenueAccounts);
   const contraAccounts = asRecord(accountingConfig.contraRevenueAccounts);
   const activeCode = (value: unknown) => typeof value === 'string' && accounts.has(value) ? value : undefined;
   const findByName = (...terms: string[]) => [...accounts.values()].find(account => terms.some(term => account.name.toLowerCase().includes(term)))?.code;
+
+  if (item.revenueClass) {
+    const key = item.revenueClass === 'HALL' ? 'EVENT_HALL' : item.revenueClass === 'EQUIPMENT' ? 'EVENT_EQUIPMENT' : item.revenueClass === 'FOOD' ? 'FOOD' : 'EVENT_OTHER';
+    const configured = activeCode(revenueAccounts[key]);
+    const canonical = activeCode(item.revenueClass === 'FOOD' ? '4250' : '4300');
+    if (configured || canonical) return configured || canonical!;
+    throw new Error(`Missing event ${item.revenueClass} revenue account for property ${propertyId}`);
+  }
 
   if (item.type === 'DISCOUNT' || item.type === 'COMPLIMENTARY') {
     const isComplimentary = item.type === 'COMPLIMENTARY';
@@ -56,11 +64,15 @@ function resolveAccountCode(
   }
 
   if (item.source === 'ROOM_CHARGE' || item.source === 'DAY_USE_ROOM_CHARGE' || item.source === 'ROOM_UPGRADE' || item.source === 'ROOM_DOWNGRADE_CREDIT' || item.revenueCategory === 'ROOM') {
-    return activeCode('4050') || findByName('room revenue', 'rooms revenue') || activeCode('4400') || [...accounts.keys()][0];
+    const resolved = activeCode('4050') || findByName('room revenue', 'rooms revenue') || activeCode('4400');
+    if (!resolved) throw new Error(`Missing room revenue account for property ${propertyId}`);
+    return resolved;
   }
 
   if (item.source === 'LAUNDRY') {
-    return activeCode(revenueAccounts.LAUNDRY) || findByName('laundry') || activeCode('4400') || [...accounts.keys()][0];
+    const resolved = activeCode(revenueAccounts.LAUNDRY) || findByName('laundry') || activeCode('4400');
+    if (!resolved) throw new Error(`Missing laundry revenue account for property ${propertyId}`);
+    return resolved;
   }
 
   if (item.source === 'POS' || item.source === 'RESTAURANT' || item.source === 'BAR' || item.source === 'MINIBAR' || item.revenueCategory === 'FNB') {
@@ -73,7 +85,9 @@ function resolveAccountCode(
     return resolved;
   }
 
-  return activeCode(revenueAccounts.OTHER) || findByName('other operating revenue') || activeCode('4400') || [...accounts.keys()][0];
+  const resolved = activeCode(revenueAccounts.OTHER) || findByName('other operating revenue') || activeCode('4400');
+  if (!resolved) throw new Error(`Missing other operating revenue account for property ${propertyId}`);
+  return resolved;
 }
 
 export async function GET(req: NextRequest) {
@@ -107,7 +121,7 @@ export async function GET(req: NextRequest) {
           type: { in: ['CHARGE', 'DISCOUNT', 'COMPLIMENTARY'] },
           voidedAt: null,
         },
-        select: { businessDate: true, source: true, type: true, amount: true, revenueCategory: true },
+        select: { businessDate: true, source: true, type: true, amount: true, revenueCategory: true, revenueClass: true },
       }),
       prisma.posOrder.findMany({
         where: { propertyId, businessDate: { gte: queryStart, lte: businessDate }, status: { not: 'VOIDED' }, folioId: null },
