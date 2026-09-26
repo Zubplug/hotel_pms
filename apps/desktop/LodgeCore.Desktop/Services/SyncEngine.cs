@@ -1689,15 +1689,15 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                     invoice.EventInvoiceWorkflowStatus = el.TryGetProperty("workflowStatus", out var workflowStatus) && workflowStatus.ValueKind != System.Text.Json.JsonValueKind.Null ? workflowStatus.GetString() : null;
                     if (el.TryGetProperty("cityLedgerInvoice", out var cityLedgerInvoice) && cityLedgerInvoice.ValueKind == System.Text.Json.JsonValueKind.Object && cityLedgerInvoice.TryGetProperty("entries", out var ledgerEntries) && ledgerEntries.ValueKind == System.Text.Json.JsonValueKind.Array)
                         invoice.CityLedgerEntryId = ledgerEntries.EnumerateArray().FirstOrDefault(entry => entry.TryGetProperty("type", out var entryType) && entryType.GetString() == "TRANSFER_IN").TryGetProperty("id", out var ledgerEntryId) ? ledgerEntryId.GetString() : null;
-                    invoice.EventName = el.TryGetProperty("event", out var event) && event.TryGetProperty("name", out var eventName) ? eventName.GetString() ?? "Event" : "Event";
+                    invoice.EventName = el.TryGetProperty("event", out var eventElement) && eventElement.TryGetProperty("name", out var eventName) ? eventName.GetString() ?? "Event" : "Event";
                     var guestName = "";
-                    if (event.ValueKind == System.Text.Json.JsonValueKind.Object && event.TryGetProperty("guest", out var guest) && guest.ValueKind == System.Text.Json.JsonValueKind.Object)
+                    if (eventElement.ValueKind == System.Text.Json.JsonValueKind.Object && eventElement.TryGetProperty("guest", out var guest) && guest.ValueKind == System.Text.Json.JsonValueKind.Object)
                     {
                         guestName = $"{guest.TryGetProperty("firstName", out var first) ? first.GetString() : ""} {guest.TryGetProperty("lastName", out var last) ? last.GetString() : ""}".Trim();
                     }
-                    if (string.IsNullOrWhiteSpace(guestName) && event.ValueKind == System.Text.Json.JsonValueKind.Object && event.TryGetProperty("corporateAccount", out var corporate) && corporate.ValueKind == System.Text.Json.JsonValueKind.Object && corporate.TryGetProperty("name", out var corporateName))
+                    if (string.IsNullOrWhiteSpace(guestName) && eventElement.ValueKind == System.Text.Json.JsonValueKind.Object && eventElement.TryGetProperty("corporateAccount", out var corporate) && corporate.ValueKind == System.Text.Json.JsonValueKind.Object && corporate.TryGetProperty("name", out var corporateName))
                         guestName = corporateName.GetString() ?? "";
-                    if (string.IsNullOrWhiteSpace(guestName) && event.ValueKind == System.Text.Json.JsonValueKind.Object && event.TryGetProperty("contactName", out var contactName))
+                    if (string.IsNullOrWhiteSpace(guestName) && eventElement.ValueKind == System.Text.Json.JsonValueKind.Object && eventElement.TryGetProperty("contactName", out var contactName))
                         guestName = contactName.GetString() ?? "";
                     invoice.ClientName = guestName;
                     invoice.Status = el.TryGetProperty("status", out var status) ? status.GetString() ?? "UNPAID" : "UNPAID";
