@@ -44,7 +44,8 @@ export function HallOnlyWizard({ initialHalls, equipmentList, guests, corporateA
     repeatDaysOfWeek: [] as number[],
     repeatUntil: '',
     equipmentRequests: {} as Record<string, number>,
-    discountAmount: 0
+    discountAmount: 0,
+    discountByCategory: { hall: 0, equipment: 0, food: 0 }
   });
 
   const currentStep = steps[currentStepIndex].id;
@@ -135,7 +136,8 @@ export function HallOnlyWizard({ initialHalls, equipmentList, guests, corporateA
         equipmentRequests: eqReqs,
         recurrenceRule,
         hallRate: hallRate,
-        discountAmount: Number(formData.discountAmount || 0)
+        discountAmount: Number(formData.discountAmount || 0),
+        discountByCategory: { hall: Number(formData.discountByCategory.hall || 0), equipment: Number(formData.discountByCategory.equipment || 0), food: 0 }
       });
 
       toast.success("Hall Booking successfully created!");
@@ -149,8 +151,10 @@ export function HallOnlyWizard({ initialHalls, equipmentList, guests, corporateA
 
   const selectedHall = initialHalls.find(h => h.id === formData.hallId);
   const hallGross = selectedHall ? Number(selectedHall.rate || 0) : 0;
-  const discount = Number(formData.discountAmount || 0);
-  const subTotal = Math.max(0, hallGross - discount);
+  const equipmentGross = Object.entries(formData.equipmentRequests).reduce((sum, [id, quantity]) => sum + Number(equipmentList.find(item => item.id === id)?.rentalPrice || 0) * quantity, 0);
+  const discount = Number(formData.discountByCategory.hall || 0) + Number(formData.discountByCategory.equipment || 0);
+  const grossTotal = hallGross + equipmentGross;
+  const subTotal = Math.max(0, grossTotal - discount);
   const taxAmt = subTotal * taxRate;
   const netTotal = subTotal + taxAmt;
 
@@ -385,14 +389,17 @@ export function HallOnlyWizard({ initialHalls, equipmentList, guests, corporateA
               <div className="space-y-4 mt-6 max-w-md">
                  <h4 className="font-semibold">Financial Breakdown</h4>
                  <div className="space-y-2">
-                    <Label htmlFor="discountAmount">Discount Amount (NGN)</Label>
-                    <Input id="discountAmount" name="discountAmount" type="number" value={formData.discountAmount} onChange={handleChange} />
+                    <Label>Requested Discounts by Category (NGN)</Label>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <Input aria-label="Hall discount" type="number" min="0" value={formData.discountByCategory.hall} onChange={e => setFormData(prev => ({ ...prev, discountByCategory: { ...prev.discountByCategory, hall: Number(e.target.value || 0) } }))} placeholder="Hall" />
+                      <Input aria-label="Equipment discount" type="number" min="0" value={formData.discountByCategory.equipment} onChange={e => setFormData(prev => ({ ...prev, discountByCategory: { ...prev.discountByCategory, equipment: Number(e.target.value || 0) } }))} placeholder="Equipment" />
+                    </div>
                  </div>
 
                  <div className="bg-slate-100 p-4 rounded-md space-y-2 text-sm border">
                     <div className="flex justify-between">
                        <span>Gross Rate:</span>
-                       <span className="font-medium">NGN {hallGross.toLocaleString()}</span>
+                       <span className="font-medium">NGN {grossTotal.toLocaleString()}</span>
                     </div>
                     <div className="flex justify-between text-red-600">
                        <span>Discount:</span>

@@ -4855,13 +4855,20 @@ model EventInvoiceItem {
   invoice   EventInvoice @relation(fields: [invoiceId], references: [id])
 
   description String
+  category    String  @default("OTHER") // HALL, EQUIPMENT, FOOD, OTHER
   quantity    Int     @default(1)
   unitPrice   Decimal @db.Decimal(18, 4)
 
   grossAmount    Decimal @default(0) @db.Decimal(18, 4)
+  requestedDiscount Decimal @default(0) @db.Decimal(18, 4)
   discountAmount Decimal @default(0) @db.Decimal(18, 4)
   taxAmount      Decimal @default(0) @db.Decimal(18, 4)
   totalPrice     Decimal @db.Decimal(18, 4)
+
+  discountReason     String?
+  discountApprovedBy String? @db.Uuid
+  discountApprovedAt DateTime? @db.Timestamptz
+  discountStatus     String @default("PENDING") // PENDING, APPROVED, REJECTED
 
   taxId      String? @db.Uuid
   discountId String? @db.Uuid

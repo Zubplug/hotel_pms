@@ -69,7 +69,7 @@ export async function submitEventInvoiceForReview(invoiceId: string) {
   return result;
 }
 
-export async function reviewEventInvoice(invoiceId: string, input: { approve: boolean; discountAmount?: number; discountReason?: string }) {
+export async function reviewEventInvoice(invoiceId: string, input: { approve: boolean; discountAmount?: number; discountReason?: string; lineDiscounts?: Record<string, number>; lineReasons?: Record<string, string> }) {
   const { propertyId, userId } = await requireEventRole('ACCOUNTING');
   const result = await prisma.$transaction(async (tx) => {
     const invoice = await scopedInvoice(tx, invoiceId, propertyId);
@@ -91,8 +91,15 @@ export async function reviewEventInvoice(invoiceId: string, input: { approve: bo
     }
 
     const grossTotal = invoice.items.reduce((sum, item) => sum + Number(item.grossAmount || item.totalPrice), 0);
-    const discount = Number(input.discountAmount ?? invoice.requestedDiscount);
-    if (!Number.isFinite(discount) || discount < 0 || discount > grossTotal) throw new Error('Discount must be between zero and the invoice gross amount.');
+    const requestedByLine = new Map(invoice.items.map((item) => [item.id, Number(item.requestedDiscount || 0)]));
+    const requestedTotal = invoice.items.reduce((sum, item) => sum + (requestedByLine.get(item.id) || 0), 0);
+    const legacyTotal = Number(input.discountAmount ?? invoice.requestedDiscount);
+    if (!Number.isFinite(legacyTotal) || legacyTotal < 0 || legacyTotal > grossTotal) throw new Error('Discount must be between zero and the invoice gross amount.');
+    const explicitLineTotal = input.lineDiscounts
+      ? Object.values(input.lineDiscounts).reduce((sum, amount) => sum + Number(amount || 0), 0)
+      : null;
+    const discount = explicitLineTotal == null ? legacyTotal : explicitLineTotal;
+    if (!Number.isFinite(discount) || discount < 0 || discount > grossTotal) throw new Error('Approved discounts must be between zero and the invoice gross amount.');
     const tax = await tx.tax.findFirst({
       where: { propertyId, isActive: true, OR: [{ code: 'VAT' }, { name: { contains: 'VAT', mode: 'insensitive' } }] },
       orderBy: { createdAt: 'asc' },
@@ -103,15 +110,26 @@ export async function reviewEventInvoice(invoiceId: string, input: { approve: bo
 
     for (const item of invoice.items) {
       const gross = Number(item.grossAmount || item.totalPrice);
-      const lineDiscount = grossTotal ? discount * (gross / grossTotal) : 0;
+      const requestedLineDiscount = requestedByLine.get(item.id) || 0;
+      const lineDiscount = input.lineDiscounts
+        ? Number(input.lineDiscounts[item.id] || 0)
+        : requestedTotal > 0
+          ? legacyTotal * (requestedLineDiscount / requestedTotal)
+          : grossTotal ? legacyTotal * (gross / grossTotal) : 0;
+      if (!Number.isFinite(lineDiscount) || lineDiscount < 0 || lineDiscount > gross) throw new Error(`Discount for ${item.description} is invalid.`);
       const lineTax = taxableSubtotal ? taxAmount * ((gross - lineDiscount) / taxableSubtotal) : 0;
       await tx.eventInvoiceItem.update({
         where: { id: item.id },
         data: {
           discountAmount: lineDiscount,
+          requestedDiscount: requestedLineDiscount,
           taxAmount: lineTax,
           totalPrice: gross - lineDiscount + lineTax,
           taxId: tax?.id ?? null,
+          discountReason: input.lineReasons?.[item.id]?.trim() || input.discountReason?.trim() || null,
+          discountApprovedBy: userId,
+          discountApprovedAt: new Date(),
+          discountStatus: 'APPROVED',
         },
       });
     }

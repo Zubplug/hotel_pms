@@ -139,7 +139,8 @@ export type ClientBookingData = {
   recurrenceRule?: { frequency: string; daysOfWeek?: number[]; until: string; };
   // Financial
   hallRate?: number; // Deprecated client hint; never trusted
-  discountAmount: number;
+  discountAmount?: number; // Legacy total request; prefer discountByCategory
+  discountByCategory?: { hall?: number; equipment?: number; food?: number };
 };
 
 export async function createFullEventBooking(data: ClientBookingData) {
@@ -382,7 +383,8 @@ export async function createFullEventBooking(data: ClientBookingData) {
       : [];
     if (equipmentRecords.length !== equipmentIds.length) throw new Error('One or more equipment items are unavailable.');
 
-    // Server-side financial snapshot. The client only supplies a requested discount.
+    // Server-side financial snapshot. The client supplies category requests only;
+    // accounting approval is required before any discount becomes final.
     const occurrencesCount = occurrences.length;
     const hallGross = hallRate * occurrencesCount;
     const packageGross = packageRecord ? packageRecord.basePrice.toNumber() * occurrencesCount : 0;
@@ -391,9 +393,20 @@ export async function createFullEventBooking(data: ClientBookingData) {
       return sum + (equipment?.rentalPrice.toNumber() || 0) * request.quantity * occurrencesCount;
     }, 0);
     const grossTotal = hallGross + packageGross + equipmentGross;
-    const requestedDiscount = Number(data.discountAmount || 0);
-    if (!Number.isFinite(requestedDiscount) || requestedDiscount < 0) throw new Error('Discount must be a valid non-negative amount.');
-    const discount = Math.min(requestedDiscount, grossTotal);
+    const legacyDiscount = Number(data.discountAmount || 0);
+    if (!Number.isFinite(legacyDiscount) || legacyDiscount < 0) throw new Error('Discount must be a valid non-negative amount.');
+    const categoryGross = { hall: hallGross, equipment: equipmentGross, food: packageGross };
+    const suppliedDiscounts = data.discountByCategory || {};
+    const requestedDiscounts = (['hall', 'equipment', 'food'] as const).reduce((result, category) => {
+      const supplied = suppliedDiscounts[category];
+      const raw = supplied == null && legacyDiscount > 0
+        ? legacyDiscount * (grossTotal ? categoryGross[category] / grossTotal : 0)
+        : Number(supplied || 0);
+      if (!Number.isFinite(raw) || raw < 0) throw new Error(`${category} discount must be a valid non-negative amount.`);
+      result[category] = Math.min(raw, categoryGross[category]);
+      return result;
+    }, {} as Record<'hall' | 'equipment' | 'food', number>);
+    const discount = requestedDiscounts.hall + requestedDiscounts.equipment + requestedDiscounts.food;
     const tax = await tx.tax.findFirst({ where: { propertyId, isActive: true, OR: [{ code: 'VAT' }, { name: { contains: 'VAT', mode: 'insensitive' } }] }, orderBy: { createdAt: 'asc' } });
     const taxableSubtotal = Math.max(0, grossTotal - discount);
     const taxRate = tax?.type === 'PERCENTAGE' ? tax.rate.toNumber() / 100 : 0;
@@ -485,17 +498,18 @@ export async function createFullEventBooking(data: ClientBookingData) {
 
     // 10. Create immutable line snapshots. Discount and tax are allocated pro-rata.
     const lines = [
-      { description: `Hall Rental: ${hall.name}`, quantity: occurrencesCount, unitPrice: hallRate, gross: hallGross },
-      ...(packageRecord ? [{ description: `Banquet Package: ${packageRecord.name}`, quantity: occurrencesCount, unitPrice: packageRecord.basePrice.toNumber(), gross: packageGross }] : []),
+      { description: `Hall Rental: ${hall.name}`, category: 'HALL', discountCategory: 'hall' as const, quantity: occurrencesCount, unitPrice: hallRate, gross: hallGross },
+      ...(packageRecord ? [{ description: `Banquet Package / Food: ${packageRecord.name}`, category: 'FOOD', discountCategory: 'food' as const, quantity: occurrencesCount, unitPrice: packageRecord.basePrice.toNumber(), gross: packageGross }] : []),
       ...(data.equipmentRequests || []).map((request) => {
         const equipment = equipmentRecords.find((item) => item.id === request.equipmentId)!;
-        return { description: `Equipment: ${equipment.name}`, quantity: request.quantity * occurrencesCount, unitPrice: equipment.rentalPrice.toNumber(), gross: equipment.rentalPrice.toNumber() * request.quantity * occurrencesCount };
+        return { description: `Equipment: ${equipment.name}`, category: 'EQUIPMENT', discountCategory: 'equipment' as const, quantity: request.quantity * occurrencesCount, unitPrice: equipment.rentalPrice.toNumber(), gross: equipment.rentalPrice.toNumber() * request.quantity * occurrencesCount };
       }),
     ];
     await tx.eventInvoiceItem.createMany({ data: lines.map((line) => {
-      const lineDiscount = grossTotal ? discount * (line.gross / grossTotal) : 0;
+      const categoryLinesGross = lines.filter((candidate) => candidate.discountCategory === line.discountCategory).reduce((sum, candidate) => sum + candidate.gross, 0);
+      const lineDiscount = categoryLinesGross ? requestedDiscounts[line.discountCategory] * (line.gross / categoryLinesGross) : 0;
       const lineTax = grossTotal ? taxAmt * ((line.gross - lineDiscount) / taxableSubtotal || 0) : 0;
-      return { invoiceId: invoice.id, description: line.description, quantity: line.quantity, unitPrice: line.unitPrice, grossAmount: line.gross, discountAmount: lineDiscount, taxAmount: lineTax, totalPrice: line.gross - lineDiscount + lineTax, taxId: tax?.id };
+      return { invoiceId: invoice.id, description: line.description, category: line.category, quantity: line.quantity, unitPrice: line.unitPrice, grossAmount: line.gross, requestedDiscount: lineDiscount, discountAmount: lineDiscount, discountStatus: 'PENDING', taxAmount: lineTax, totalPrice: line.gross - lineDiscount + lineTax, taxId: tax?.id };
     }) });
 
     revalidatePath('/fnb/events/bookings');

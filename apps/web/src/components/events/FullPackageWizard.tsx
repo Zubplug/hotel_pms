@@ -43,7 +43,8 @@ export function FullPackageWizard({ initialHalls, equipmentList, packageList, gu
     packageId: '',
     dietaryNotes: '',
     equipmentRequests: {} as Record<string, number>,
-    discountAmount: 0
+    discountAmount: 0,
+    discountByCategory: { hall: 0, equipment: 0, food: 0 }
   });
 
   const currentStep = steps[currentStepIndex].id;
@@ -115,7 +116,8 @@ export function FullPackageWizard({ initialHalls, equipmentList, packageList, gu
         equipmentRequests: eqReqs,
         dietaryNotes: formData.dietaryNotes ? { notes: formData.dietaryNotes } : undefined,
         hallRate: hallRate,
-        discountAmount: Number(formData.discountAmount || 0)
+        discountAmount: Number(formData.discountAmount || 0),
+        discountByCategory: { hall: Number(formData.discountByCategory.hall || 0), equipment: Number(formData.discountByCategory.equipment || 0), food: Number(formData.discountByCategory.food || 0) }
       });
 
       toast.success("Full Package Booking successfully created!");
@@ -140,7 +142,7 @@ export function FullPackageWizard({ initialHalls, equipmentList, packageList, gu
   }, 0);
 
   const totalGross = hallGross + packageGross + equipmentGross;
-  const discount = Number(formData.discountAmount || 0);
+  const discount = Number(formData.discountByCategory.hall || 0) + Number(formData.discountByCategory.equipment || 0) + Number(formData.discountByCategory.food || 0);
   const subTotal = Math.max(0, totalGross - discount);
   const taxAmt = subTotal * taxRate;
   const netTotal = subTotal + taxAmt;
@@ -350,8 +352,12 @@ export function FullPackageWizard({ initialHalls, equipmentList, packageList, gu
               <div className="space-y-4 mt-6 max-w-md">
                  <h4 className="font-semibold">Financial Breakdown</h4>
                  <div className="space-y-2">
-                    <Label htmlFor="discountAmount">Discount Amount (NGN)</Label>
-                    <Input id="discountAmount" name="discountAmount" type="number" value={formData.discountAmount} onChange={handleChange} />
+                    <Label>Requested Discounts by Category (NGN)</Label>
+                    <div className="grid gap-2 sm:grid-cols-3">
+                      <Input aria-label="Hall discount" type="number" min="0" value={formData.discountByCategory.hall} onChange={e => setFormData(prev => ({ ...prev, discountByCategory: { ...prev.discountByCategory, hall: Number(e.target.value || 0) } }))} placeholder="Hall" />
+                      <Input aria-label="Equipment discount" type="number" min="0" value={formData.discountByCategory.equipment} onChange={e => setFormData(prev => ({ ...prev, discountByCategory: { ...prev.discountByCategory, equipment: Number(e.target.value || 0) } }))} placeholder="Equipment" />
+                      <Input aria-label="Food/package discount" type="number" min="0" value={formData.discountByCategory.food} onChange={e => setFormData(prev => ({ ...prev, discountByCategory: { ...prev.discountByCategory, food: Number(e.target.value || 0) } }))} placeholder="Food / package" />
+                    </div>
                  </div>
 
                  <div className="bg-slate-100 p-4 rounded-md space-y-2 text-sm border">

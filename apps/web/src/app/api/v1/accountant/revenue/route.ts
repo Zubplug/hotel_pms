@@ -111,14 +111,49 @@ export async function GET(req: NextRequest) {
       }),
       prisma.posOrder.findMany({
         where: { propertyId, businessDate: { gte: queryStart, lte: businessDate }, status: { not: 'VOIDED' }, folioId: null },
-        select: { businessDate: true, total: true },
+        select: {
+          id: true,
+          businessDate: true,
+          subtotal: true,
+          discount: true,
+          total: true,
+        },
       }),
     ]);
+
+    const posOrderIds = posOrders.map((order) => order.id);
+    const [posPayments, posComplimentaryRecords] = posOrderIds.length
+      ? await Promise.all([
+        prisma.posPayment.findMany({
+          where: { orderId: { in: posOrderIds }, status: { notIn: ['VOIDED', 'FAILED', 'REFUNDED'] } },
+          select: { orderId: true, amount: true, method: true },
+        }),
+        prisma.complimentaryRecord.findMany({
+          where: { posOrderId: { in: posOrderIds }, status: { notIn: ['UNRESOLVED', 'REVERSED'] } },
+          select: { posOrderId: true, complAmount: true },
+        }),
+      ])
+      : [[], []];
+    const paymentsByOrder = new Map<string, typeof posPayments>();
+    for (const payment of posPayments) {
+      const payments = paymentsByOrder.get(payment.orderId) || [];
+      payments.push(payment);
+      paymentsByOrder.set(payment.orderId, payments);
+    }
+    const complimentaryByOrder = new Map<string, typeof posComplimentaryRecords>();
+    for (const record of posComplimentaryRecords) {
+      if (!record.posOrderId) continue;
+      const records = complimentaryByOrder.get(record.posOrderId) || [];
+      records.push(record);
+      complimentaryByOrder.set(record.posOrderId, records);
+    }
 
     const accounts = new Map(chartOfAccounts.map(account => [account.code, account]));
     const accountingConfig = asRecord(asRecord(property?.settings).accountingConfig);
     const totals = new Map<string, Totals>();
     const daily = new Map<string, DailyTotals>();
+    let discountsToday = 0;
+    let complimentaryToday = 0;
     const getTotals = (accountCode: string) => {
       const existing = totals.get(accountCode);
       if (existing) return existing;
@@ -151,6 +186,10 @@ export async function GET(req: NextRequest) {
       if (!accountCode) continue;
       const gross = item.type === 'CHARGE' ? Number(item.amount || 0) : 0;
       const discount = item.type === 'DISCOUNT' || item.type === 'COMPLIMENTARY' ? Math.abs(Number(item.amount || 0)) : 0;
+      if (key(itemDate) === key(businessDate)) {
+        if (item.type === 'DISCOUNT') discountsToday += discount;
+        if (item.type === 'COMPLIMENTARY') complimentaryToday += discount;
+      }
       addToTotals(accountCode, itemDate, value, gross, discount, item.type === 'CHARGE' ? 1 : 0);
     }
 
@@ -158,11 +197,50 @@ export async function GET(req: NextRequest) {
     // guest folio. Folio-routed POS sales are already represented by FolioItem.
     for (const order of posOrders) {
       if (!order.businessDate) continue;
-      const accountCode = resolveAccountCode(propertyId, { source: 'POS', revenueCategory: 'FNB', type: 'CHARGE' }, accounts, accountingConfig);
-      if (!accountCode) continue;
       const orderDate = dateOnly(new Date(order.businessDate));
-      const value = Number(order.total || 0);
-      addToTotals(accountCode, orderDate, value, value, 0, 1);
+      const revenueAccountCode = resolveAccountCode(propertyId, { source: 'POS', revenueCategory: 'FNB', type: 'CHARGE' }, accounts, accountingConfig);
+      if (!revenueAccountCode) continue;
+
+      // POS accounting posts the item subtotal to revenue. Tax and service
+      // charge are liabilities, while discounts/complimentary amounts are
+      // separate contra-revenue debits. Using order.total here previously
+      // made complimentary POS sales appear as ordinary net revenue.
+      const gross = Number(order.subtotal || 0);
+      const requestedDiscount = Math.max(0, Number(order.discount || 0));
+      const recordedComplimentary = Math.min(
+        requestedDiscount,
+        (complimentaryByOrder.get(order.id) || []).reduce((sum, record) => sum + Math.max(0, Number(record.complAmount || 0)), 0),
+      );
+      const discountAmount = Math.max(0, requestedDiscount - recordedComplimentary);
+      const payments = paymentsByOrder.get(order.id) || [];
+      const complimentaryPayments = payments
+        .filter((payment) => String(payment.method).toUpperCase() === 'COMPLIMENTARY')
+        .reduce((sum, payment) => sum + Math.max(0, Number(payment.amount || 0)), 0);
+      const nonComplimentaryPaymentTotal = payments
+        .filter((payment) => String(payment.method).toUpperCase() !== 'COMPLIMENTARY')
+        .reduce((sum, payment) => sum + Math.max(0, Number(payment.amount || 0)), 0);
+      const orderTotal = Math.max(0, Number(order.total || 0));
+      const paymentRatio = orderTotal > 0 ? nonComplimentaryPaymentTotal / orderTotal : 1;
+
+      addToTotals(revenueAccountCode, orderDate, gross, gross, 0, 1);
+
+      if (discountAmount > 0) {
+        const discountAccountCode = resolveAccountCode(propertyId, { source: 'POS', revenueCategory: 'FNB', type: 'DISCOUNT' }, accounts, accountingConfig);
+        if (key(orderDate) === key(businessDate)) discountsToday += discountAmount;
+        addToTotals(discountAccountCode, orderDate, -discountAmount, 0, discountAmount, 0);
+      }
+
+      // A COMPLIMENTARY tender is itself posted to 4950. If a complimentary
+      // record is paired with a normal tender, mirror the accounting service's
+      // proportional allowance allocation instead.
+      const complimentaryAmount = complimentaryPayments > 0
+        ? complimentaryPayments
+        : recordedComplimentary * paymentRatio;
+      if (complimentaryAmount > 0) {
+        const complimentaryAccountCode = resolveAccountCode(propertyId, { source: 'POS', revenueCategory: 'FNB', type: 'COMPLIMENTARY' }, accounts, accountingConfig);
+        if (key(orderDate) === key(businessDate)) complimentaryToday += complimentaryAmount;
+        addToTotals(complimentaryAccountCode, orderDate, -complimentaryAmount, 0, complimentaryAmount, 0);
+      }
     }
 
     const departments = chartOfAccounts.map(account => {
@@ -209,7 +287,8 @@ export async function GET(req: NextRequest) {
         ytd: Number(sum('ytd').toFixed(2)),
         priorYear: Number(priorYear.toFixed(2)),
         grossToday: Number(todayActivity.gross.toFixed(2)),
-        discountsToday: Number(todayActivity.discounts.toFixed(2)),
+        discountsToday: Number(discountsToday.toFixed(2)),
+        complimentaryToday: Number(complimentaryToday.toFixed(2)),
         transactionCountToday: todayActivity.transactions,
         variance: priorYear === 0 ? null : Number((((today - priorYear) / Math.abs(priorYear)) * 100).toFixed(1)),
         isUp: priorYear > 0 && today >= priorYear,

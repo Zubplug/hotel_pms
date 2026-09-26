@@ -14,6 +14,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         approve: body.action === 'approve',
         discountAmount: body.discountAmount == null ? undefined : Number(body.discountAmount),
         discountReason: typeof body.discountReason === 'string' ? body.discountReason : undefined,
+        lineDiscounts: body.lineDiscounts && typeof body.lineDiscounts === 'object' ? body.lineDiscounts : undefined,
+        lineReasons: body.lineReasons && typeof body.lineReasons === 'object' ? body.lineReasons : undefined,
       });
       return NextResponse.json({ data: { id: invoice.id, status: invoice.status, workflowStatus: invoice.workflowStatus } });
     }
