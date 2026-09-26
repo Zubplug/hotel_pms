@@ -76,9 +76,9 @@ export function EventTimeline({ halls, bookings, viewDate, readOnly = false }: {
         {!halls.length ? <div className="px-6 py-16 text-center text-sm text-[#947d72]">No active function spaces are configured.</div> : halls.map((hall) => {
           const hallBookings = activeBookings.filter((booking) => booking.hallId === hall.id);
           return <div key={hall.id} className={`flex min-h-[112px] border-b last:border-b-0 ${board.row}`}>
-            <div className={`sticky left-0 z-20 flex w-[230px] flex-none flex-col justify-center border-r px-5 ${board.grid} ${readOnly ? 'bg-[#0d1a2d]' : 'bg-white'}`}>
-              <div className="flex items-center gap-2"><span className={`truncate text-sm font-bold ${readOnly ? 'text-white' : 'text-[#24130d]'}`}>{hall.name}</span>{hall.code && <span className="rounded bg-[#fff3e8] px-1.5 py-0.5 text-[9px] font-bold text-orange-800">{hall.code}</span>}</div>
-              <div className={`mt-1 flex items-center gap-2 text-[10px] ${readOnly ? 'text-slate-400' : 'text-[#947d72]'}`}><Users className="h-3 w-3" /> Capacity {hall.capacity?.toLocaleString() || '—'} · {hallBookings.length} booking{hallBookings.length === 1 ? '' : 's'}</div>
+            <div className={`sticky left-0 z-20 flex w-[230px] flex-none flex-col justify-center border-r bg-[#0d1a2d] px-5 ${board.grid}`}>
+              <div className="flex items-center gap-2"><span className="truncate text-sm font-bold text-white">{hall.name}</span>{hall.code && <span className="rounded bg-[#fff3e8] px-1.5 py-0.5 text-[9px] font-bold text-orange-800">{hall.code}</span>}</div>
+              <div className="mt-1 flex items-center gap-2 text-[10px] text-slate-400"><Users className="h-3 w-3" /> Capacity {hall.capacity?.toLocaleString() || '—'} · {hallBookings.length} booking{hallBookings.length === 1 ? '' : 's'}</div>
             </div>
             <div className="relative min-w-0 flex-1">
               <div className="absolute inset-0 flex">{HOURS.map((hour) => <div key={hour} className={`flex-1 border-r border-dashed ${board.grid}`} />)}</div>
