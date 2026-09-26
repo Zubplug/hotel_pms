@@ -78,7 +78,7 @@ export async function POST(req: NextRequest) {
       return errorResponse('BAD_REQUEST', `Currency mismatch. Expected ${folio.currency}`, 400);
     }
     const eventInvoice = eventInvoiceId
-      ? await prisma.eventInvoice.findFirst({ where: { id: eventInvoiceId, folioId, event: { propertyId } } })
+      ? await prisma.eventInvoice.findFirst({ where: { id: eventInvoiceId, folioId, event: { propertyId: folio.propertyId } } })
       : null;
     if (eventInvoiceId && !eventInvoice) return errorResponse('BAD_REQUEST', 'Event invoice is not linked to this folio or property.', 400);
     if (eventInvoice && ['DRAFT', 'VOID'].includes(eventInvoice.status)) return errorResponse('BAD_REQUEST', 'Only an issued event invoice can receive payment.', 400);

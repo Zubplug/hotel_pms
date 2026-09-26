@@ -174,6 +174,8 @@ export async function createFullEventBooking(data: ClientBookingData) {
     if (expectedGuests > hall.capacity) {
       throw new Error(`Expected guests (${expectedGuests}) exceeds hall capacity (${hall.capacity}).`);
     }
+    const hallRate = hall.rate?.toNumber();
+    if (hallRate == null || !Number.isFinite(hallRate) || hallRate < 0) throw new Error('The selected hall has no valid rate configured.');
 
     // 2. Client Resolution
     let guestId: string | null = null;
@@ -370,7 +372,7 @@ export async function createFullEventBooking(data: ClientBookingData) {
 
     // Server-side financial snapshot. The client only supplies a requested discount.
     const occurrencesCount = occurrences.length;
-    const hallGross = hall.rate.toNumber() * occurrencesCount;
+    const hallGross = hallRate * occurrencesCount;
     const packageGross = packageRecord ? packageRecord.basePrice.toNumber() * occurrencesCount : 0;
     const equipmentGross = (data.equipmentRequests || []).reduce((sum, request) => {
       const equipment = equipmentRecords.find((item) => item.id === request.equipmentId);
@@ -466,7 +468,7 @@ export async function createFullEventBooking(data: ClientBookingData) {
 
     // 10. Create immutable line snapshots. Discount and tax are allocated pro-rata.
     const lines = [
-      { description: `Hall Rental: ${hall.name}`, quantity: occurrencesCount, unitPrice: hall.rate.toNumber(), gross: hallGross },
+      { description: `Hall Rental: ${hall.name}`, quantity: occurrencesCount, unitPrice: hallRate, gross: hallGross },
       ...(packageRecord ? [{ description: `Banquet Package: ${packageRecord.name}`, quantity: occurrencesCount, unitPrice: packageRecord.basePrice.toNumber(), gross: packageGross }] : []),
       ...(data.equipmentRequests || []).map((request) => {
         const equipment = equipmentRecords.find((item) => item.id === request.equipmentId)!;

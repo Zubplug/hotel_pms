@@ -41,6 +41,10 @@ export default async function EventBookingsPage({ searchParams }: { searchParams
   const halls = await prisma.hall.findMany({ where: { propertyId, isActive: true }, orderBy: { name: 'asc' } });
   const packages = await prisma.banquetPackage.findMany({ where: { propertyId, isActive: true }, orderBy: { name: 'asc' } });
   const equipment = await getEquipment(propertyId);
+  const [guests, corporateAccounts] = await Promise.all([
+    prisma.guest.findMany({ where: { propertyId, deletedAt: null }, select: { id: true, firstName: true, lastName: true, email: true }, orderBy: { firstName: 'asc' }, take: 200 }),
+    prisma.corporateAccount.findMany({ where: { propertyId, isActive: true }, select: { id: true, name: true, code: true }, orderBy: { name: 'asc' }, take: 200 }),
+  ]);
 
   const upcoming = allEvents.filter((event) => event.startDate >= now && event.startDate <= horizon && event.status !== 'CANCELLED');
   const activePipeline = allEvents.filter((event) => ['INQUIRY', 'TENTATIVE', 'CONFIRMED'].includes(event.status));
@@ -71,7 +75,7 @@ export default async function EventBookingsPage({ searchParams }: { searchParams
       <div className="mx-auto max-w-[1600px] px-4 py-7 sm:px-6 lg:px-8">
         <div className="flex flex-col justify-between gap-6 xl:flex-row xl:items-end">
           <div><div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-orange-300"><Sparkles className="h-4 w-4" /> F&B Hall operations</div><h1 className="text-3xl font-bold tracking-tight sm:text-4xl">Events command centre</h1><p className="mt-2 max-w-2xl text-sm text-orange-100/75">A live operating view from inquiry through BEO approval, service, and settlement.</p></div>
-          <div className="flex flex-wrap gap-2"><Button variant="outline" className="border-white/20 bg-white/10 text-white hover:bg-white/20" asChild><Link href="/fnb/events/bookings?view=timeline"><Calendar className="mr-2 h-4 w-4" /> Schedule</Link></Button><NewBookingDialog initialHalls={halls} initialPackages={packages} equipmentList={equipment} /></div>
+          <div className="flex flex-wrap gap-2"><Button variant="outline" className="border-white/20 bg-white/10 text-white hover:bg-white/20" asChild><Link href="/fnb/events/bookings?view=timeline"><Calendar className="mr-2 h-4 w-4" /> Schedule</Link></Button><NewBookingDialog initialHalls={halls} initialPackages={packages} equipmentList={equipment} guests={guests} corporateAccounts={corporateAccounts} /></div>
         </div>
       </div>
     </div>

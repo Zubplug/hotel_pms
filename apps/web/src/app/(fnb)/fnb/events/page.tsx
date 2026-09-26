@@ -29,7 +29,7 @@ export default async function FnbEventsDashboard() {
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const eightWeeksAgo = new Date(today); eightWeeksAgo.setDate(eightWeeksAgo.getDate() - 56);
 
-  const [events, leads, invoices, todaysBookings, halls, packages, equipment] = await Promise.all([
+  const [events, leads, invoices, todaysBookings, halls, packages, equipment, guests, corporateAccounts] = await Promise.all([
     prisma.event.findMany({ where: { propertyId }, orderBy: { startDate: 'asc' }, include: { bookings: { include: { hall: true }, orderBy: { startTime: 'asc' } }, beos: { orderBy: { version: 'desc' }, take: 1 } } }),
     prisma.eventLead.findMany({ where: { propertyId }, orderBy: { createdAt: 'desc' } }),
     prisma.eventInvoice.findMany({ where: { event: { propertyId }, createdAt: { gte: monthStart } }, select: { totalAmount: true, paidAmount: true, status: true } }),
@@ -37,6 +37,8 @@ export default async function FnbEventsDashboard() {
     prisma.hall.findMany({ where: { propertyId, isActive: true }, orderBy: { name: 'asc' } }),
     prisma.banquetPackage.findMany({ where: { propertyId, isActive: true }, orderBy: { name: 'asc' } }),
     getEquipment(propertyId),
+    prisma.guest.findMany({ where: { propertyId, deletedAt: null }, select: { id: true, firstName: true, lastName: true, email: true }, orderBy: { firstName: 'asc' }, take: 200 }),
+    prisma.corporateAccount.findMany({ where: { propertyId, isActive: true }, select: { id: true, name: true, code: true }, orderBy: { name: 'asc' }, take: 200 }),
   ]);
 
   const activeEvents = events.filter((event) => ['CONFIRMED', 'IN_SERVICE'].includes(event.status) && event.startDate >= today);
@@ -63,7 +65,7 @@ export default async function FnbEventsDashboard() {
   const maxPipeline = Math.max(...pipeline.map((item) => item.count), 1);
 
   return <div className="min-h-full bg-[#fbf8f6] text-[#24130d]">
-    <header className="border-b border-[#3d2318] bg-[#24130d] text-white"><div className="mx-auto max-w-[1600px] px-4 py-7 sm:px-6 lg:px-8"><div className="flex flex-col justify-between gap-6 xl:flex-row xl:items-end"><div><div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-orange-300"><Sparkles className="h-4 w-4" /> F&B Hall & events</div><h1 className="text-3xl font-bold tracking-tight sm:text-4xl">Events command centre</h1><p className="mt-2 max-w-2xl text-sm text-orange-100/75">One live view of demand, venue capacity, BEO readiness, event revenue, and the next operational handoff.</p></div><div className="flex flex-wrap gap-2"><Button variant="outline" className="border-white/20 bg-white/10 text-white hover:bg-white/20" asChild><Link href="/fnb/events/bookings"><Calendar className="mr-2 h-4 w-4" /> Event register</Link></Button><NewBookingDialog initialHalls={halls} initialPackages={packages} equipmentList={equipment} /></div></div></div></header>
+    <header className="border-b border-[#3d2318] bg-[#24130d] text-white"><div className="mx-auto max-w-[1600px] px-4 py-7 sm:px-6 lg:px-8"><div className="flex flex-col justify-between gap-6 xl:flex-row xl:items-end"><div><div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-orange-300"><Sparkles className="h-4 w-4" /> F&B Hall & events</div><h1 className="text-3xl font-bold tracking-tight sm:text-4xl">Events command centre</h1><p className="mt-2 max-w-2xl text-sm text-orange-100/75">One live view of demand, venue capacity, BEO readiness, event revenue, and the next operational handoff.</p></div><div className="flex flex-wrap gap-2"><Button variant="outline" className="border-white/20 bg-white/10 text-white hover:bg-white/20" asChild><Link href="/fnb/events/bookings"><Calendar className="mr-2 h-4 w-4" /> Event register</Link></Button><NewBookingDialog initialHalls={halls} initialPackages={packages} equipmentList={equipment} guests={guests} corporateAccounts={corporateAccounts} /></div></div></div></header>
     <main className="mx-auto max-w-[1600px] space-y-6 px-4 py-6 sm:px-6 lg:px-8">
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {[

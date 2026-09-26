@@ -24,10 +24,14 @@ export function NewBookingDialog({
   initialHalls,
   initialPackages,
   equipmentList,
+  guests,
+  corporateAccounts,
 }: {
   initialHalls: Hall[];
   initialPackages: Package[];
   equipmentList: Equipment[];
+  guests: any[];
+  corporateAccounts: any[];
 }) {
   const [open, setOpen] = useState(false);
   const [selectedType, setSelectedType] = useState<'full' | 'hall_only' | null>(null);
@@ -70,7 +74,7 @@ export function NewBookingDialog({
             </button>
           </div>
           <p className="mt-5 text-center text-xs text-[#947d72]">Both paths verify hall capacity, schedule conflicts, buffers, recurrence, and inventory before saving.</p>
-        </div> : selectedType === 'full' ? <FullPackageWizard initialHalls={initialHalls} initialPackages={initialPackages} onCreated={() => { setOpen(false); router.refresh(); }} /> : <HallOnlyWizard initialHalls={initialHalls} equipmentList={equipmentList} onCreated={() => { setOpen(false); router.refresh(); }} />}
+        </div> : selectedType === 'full' ? <FullPackageWizard initialHalls={initialHalls} equipmentList={equipmentList} packageList={initialPackages} guests={guests} corporateAccounts={corporateAccounts} onCreated={() => { setOpen(false); router.refresh(); }} /> : <HallOnlyWizard initialHalls={initialHalls} equipmentList={equipmentList} guests={guests} corporateAccounts={corporateAccounts} onCreated={() => { setOpen(false); router.refresh(); }} />}
       </DialogContent>
     </Dialog>
   );
