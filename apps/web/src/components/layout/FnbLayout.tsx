@@ -2,12 +2,11 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useLogout } from '@/hooks/useLogout';
 import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
 import { cn } from '@/lib/utils';
 import {
-  Hotel,
   LogOut,
   ChevronDown,
   Utensils,
@@ -17,6 +16,11 @@ import {
   ArrowLeftRight,
   Users,
   CalendarDays,
+  CalendarRange,
+  FileCheck2,
+  LayoutGrid,
+  MapPinned,
+  Package,
   TrendingUp,
   Settings,
   Menu,
@@ -60,12 +64,31 @@ const FNB_NAV = [
     ],
   },
   {
+    name: 'Hall Management',
+    icon: LayoutGrid,
+    children: [
+      { name: 'Halls & Spaces', href: '/fnb/events/halls', icon: MapPinned },
+      { name: 'Packages & Equipment', href: '/fnb/events/packages', icon: Package },
+    ],
+  },
+  {
+    name: 'Event Management',
+    icon: CalendarDays,
+    children: [
+      { name: 'Events Overview', href: '/fnb/events', icon: LayoutDashboard },
+      { name: 'Event Register', href: '/fnb/events/bookings', icon: ClipboardList, activeWhen: 'register' },
+      { name: 'Event Schedule', href: '/fnb/events/bookings?view=timeline', icon: CalendarRange, activeWhen: 'timeline' },
+      { name: 'New Booking', href: '/fnb/events/bookings/create', icon: CalendarDays },
+      { name: 'Event CRM', href: '/fnb/events/crm', icon: Users },
+      { name: 'BEO & Accounting', href: '/fnb/events/accounting', icon: FileCheck2 },
+    ],
+  },
+  {
     name: 'Management & Controls',
     icon: Settings,
     children: [
       { name: 'Audit & Controls', href: '/fnb/controls', icon: ShieldCheck },
       { name: 'Staff Performance', href: '/fnb/staff', icon: Users },
-      { name: 'Halls & Events', href: '/fnb/events', icon: CalendarDays },
       { name: 'Reports (DSS)', href: '/fnb/reports', icon: TrendingUp },
       { name: 'Settings', href: '/fnb/settings', icon: Settings },
     ],
@@ -76,6 +99,7 @@ export function FnbLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [hasMultipleProperties, setHasMultipleProperties] = useState(true);
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { data: session, status } = useLodgeCoreSession();
   const router = useRouter();
   const logout = useLogout();
@@ -141,8 +165,13 @@ export function FnbLayout({ children }: { children: React.ReactNode }) {
               </h3>
             </div>
             {section.children.map((item) => {
-              const isActive =
-                pathname === item.href || pathname?.startsWith(`${item.href}/`);
+              const isTimeline = item.activeWhen === 'timeline';
+              const isRegister = item.activeWhen === 'register';
+              const isActive = isTimeline
+                ? pathname === '/fnb/events/bookings' && searchParams.get('view') === 'timeline'
+                : isRegister
+                  ? pathname === '/fnb/events/bookings' && searchParams.get('view') !== 'timeline'
+                  : pathname === item.href || pathname?.startsWith(`${item.href}/`);
               
               return (
                 <Link
