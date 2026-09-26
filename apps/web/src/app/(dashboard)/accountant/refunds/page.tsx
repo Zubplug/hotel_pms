@@ -1,4 +1,4 @@
-import RefundsPage from '../../refunds/page';
+import { redirect } from 'next/navigation';
 
 /**
  * Accountant-scoped entry point for the refund control workflow.
@@ -7,5 +7,5 @@ import RefundsPage from '../../refunds/page';
  * approval, assignment, and settlement actions.
  */
 export default function AccountantRefundsPage() {
-  return <RefundsPage />;
+  redirect('/accountant/approval-center');
 }

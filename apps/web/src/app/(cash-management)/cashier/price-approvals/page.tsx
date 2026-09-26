@@ -1,1 +1,5 @@
-export { default } from '@/app/(admin)/admin/pos/price-approvals/page';
+import { redirect } from 'next/navigation';
+
+export default function CashierPriceApprovalsPage() {
+  redirect('/cashier/approval-center');
+}

@@ -49,7 +49,7 @@ export function HallOnlyWizard({ initialHalls, equipmentList, guests, corporateA
 
   const currentStep = steps[currentStepIndex].id;
   const canContinue = currentStep === 1
-    ? Boolean(formData.contactName.trim() && Number(formData.expectedGuests) > 0 && (!formData.isExisting || formData.clientId) && (formData.isExisting || (formData.clientType === 'INDIVIDUAL' ? formData.firstName.trim() && formData.lastName.trim() : formData.companyName.trim())))
+    ? Boolean(Number(formData.expectedGuests) > 0 && (!formData.isExisting || formData.clientId) && (formData.isExisting || (formData.clientType === 'INDIVIDUAL' ? formData.firstName.trim() && formData.lastName.trim() : formData.companyName.trim())))
     : currentStep === 2
       ? Boolean(formData.hallId && formData.startTime && formData.endTime && new Date(formData.endTime) > new Date(formData.startTime) && (formData.repeatFrequency === 'NONE' || (formData.repeatUntil && (formData.repeatFrequency !== 'WEEKLY' || formData.repeatDaysOfWeek.length > 0))))
       : true;
@@ -122,8 +122,8 @@ export function HallOnlyWizard({ initialHalls, equipmentList, guests, corporateA
           contactEmail: formData.email,
           contactPhone: formData.phone,
         },
-        contactName: formData.contactName,
-        contactPhone: formData.contactPhone || formData.phone,
+        contactName: formData.clientType === 'INDIVIDUAL' ? (formData.isExisting ? `${guests.find((guest: any) => guest.id === formData.clientId)?.firstName || ''} ${guests.find((guest: any) => guest.id === formData.clientId)?.lastName || ''}`.trim() : `${formData.firstName} ${formData.lastName}`.trim()) : (formData.isExisting ? corporateAccounts.find((account: any) => account.id === formData.clientId)?.name || '' : formData.contactPerson || formData.companyName),
+        contactPhone: formData.clientType === 'INDIVIDUAL' ? formData.phone : formData.phone,
         expectedGuests: Number(formData.expectedGuests || 0),
         hallId: formData.hallId,
         startTime: new Date(formData.startTime),
@@ -156,7 +156,7 @@ export function HallOnlyWizard({ initialHalls, equipmentList, guests, corporateA
 
   return (
     <BookingWizardShell steps={steps} currentStepIndex={currentStepIndex} isSubmitting={isSubmitting} canContinue={canContinue} onBack={handleBack} onNext={handleNext} onSubmit={handleSubmit} summary={[
-      { label: 'Client', value: formData.contactName || 'Not added' },
+      { label: 'Client', value: formData.clientType === 'INDIVIDUAL' ? (formData.isExisting ? `${guests.find((guest: any) => guest.id === formData.clientId)?.firstName || ''} ${guests.find((guest: any) => guest.id === formData.clientId)?.lastName || ''}`.trim() : `${formData.firstName} ${formData.lastName}`.trim()) || 'Not added' : (formData.isExisting ? corporateAccounts.find((account: any) => account.id === formData.clientId)?.name || 'Not added' : formData.companyName || 'Not added') },
       { label: 'Guests', value: formData.expectedGuests || 'Not set' },
       { label: 'Hall', value: initialHalls.find(h => h.id === formData.hallId)?.name || 'Not selected' },
       { label: 'Equipment', value: `${Object.values(formData.equipmentRequests).filter(quantity => quantity > 0).length} item types` },
@@ -237,15 +237,6 @@ export function HallOnlyWizard({ initialHalls, equipmentList, guests, corporateA
               )}
 
               <div className="pt-4 border-t border-slate-200 space-y-4">
-                <h4 className="text-sm font-semibold">Event Contact</h4>
-                <div className="space-y-2">
-                  <Label htmlFor="contactName">Primary Event Contact Name</Label>
-                  <Input id="contactName" name="contactName" value={formData.contactName} onChange={handleChange} placeholder="John Doe" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="contactPhone">Primary Event Contact Phone</Label>
-                  <Input id="contactPhone" name="contactPhone" value={formData.contactPhone} onChange={handleChange} placeholder="+1 234 567 890" />
-                </div>
                 <div className="space-y-2">
                   <Label htmlFor="expectedGuests">Expected Guests</Label>
                   <Input id="expectedGuests" name="expectedGuests" type="number" value={formData.expectedGuests} onChange={handleChange} placeholder="150" />
@@ -377,7 +368,7 @@ export function HallOnlyWizard({ initialHalls, equipmentList, guests, corporateA
             <div className="space-y-4">
               <h3 className="font-semibold text-lg">Hall Only Booking Summary</h3>
               <div className="grid grid-cols-2 gap-4 text-sm bg-slate-50 p-4 rounded-lg border">
-                <div><span className="text-muted-foreground">Client: </span> {formData.contactName || 'N/A'}</div>
+                <div><span className="text-muted-foreground">Client: </span> {formData.clientType === 'INDIVIDUAL' ? (formData.isExisting ? `${guests.find((guest: any) => guest.id === formData.clientId)?.firstName || ''} ${guests.find((guest: any) => guest.id === formData.clientId)?.lastName || ''}`.trim() : `${formData.firstName} ${formData.lastName}`.trim()) : (formData.isExisting ? corporateAccounts.find((account: any) => account.id === formData.clientId)?.name || 'N/A' : formData.companyName || 'N/A')}</div>
                 <div><span className="text-muted-foreground">Guests: </span> {formData.expectedGuests || 0}</div>
                 <div><span className="text-muted-foreground">Hall: </span> {selectedHall?.name || 'N/A'}</div>
                 <div><span className="text-muted-foreground">Type: </span> Hall Only</div>

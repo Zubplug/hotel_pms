@@ -18,17 +18,17 @@ export default async function EventAccountingPage() {
   });
 
   const allUnpaid = await prisma.eventInvoice.findMany({
-    where: { status: 'ISSUED', event: { propertyId } },
+    where: { status: { in: ['ISSUED', 'UNPAID', 'PARTIAL'] }, event: { propertyId } },
     select: { totalAmount: true, paidAmount: true }
   });
   
   const allAr = await prisma.eventInvoice.findMany({
-    where: { status: 'ISSUED', event: { propertyId }, cityLedgerAccountId: { not: null } },
+    where: { status: { in: ['ISSUED', 'UNPAID', 'PARTIAL'] }, event: { propertyId }, cityLedgerAccountId: { not: null } },
     select: { totalAmount: true, paidAmount: true }
   });
 
   const allPartial = await prisma.eventInvoice.findMany({
-    where: { status: 'PARTIAL', event: { propertyId } },
+    where: { status: { in: ['PARTIAL', 'ISSUED'] }, event: { propertyId } },
     select: { paidAmount: true }
   });
 
@@ -85,6 +85,7 @@ export default async function EventAccountingPage() {
                 <tr>
                   <th className="px-4 py-3">Event</th>
                   <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3">Workflow</th>
                   <th className="px-4 py-3 text-right">Total Amount</th>
                   <th className="px-4 py-3 text-right">Paid Amount</th>
                   <th className="px-4 py-3 text-right">Actions</th>
@@ -93,7 +94,7 @@ export default async function EventAccountingPage() {
               <tbody className="divide-y">
                 {invoices.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
+                    <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">
                       No invoices found.
                     </td>
                   </tr>
@@ -104,6 +105,11 @@ export default async function EventAccountingPage() {
                       <td className="px-4 py-3">
                         <span className="px-2 py-1 bg-slate-100 text-slate-700 text-xs rounded-full font-medium">
                           {inv.status}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="px-2 py-1 bg-blue-50 text-blue-700 text-xs rounded-full font-medium">
+                          {inv.workflowStatus}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-right">{Number(inv.totalAmount).toLocaleString()} {inv.currency}</td>

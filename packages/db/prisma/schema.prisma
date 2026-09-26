@@ -4814,6 +4814,24 @@ model EventInvoice {
 
   status String @default("UNPAID") // DRAFT, UNPAID, PARTIAL, PAID, VOID
 
+  // Operational approval lifecycle is deliberately separate from payment status.
+  // A draft can be reviewed without creating a folio charge or city-ledger AR.
+  workflowStatus    String   @default("DRAFT") // DRAFT, SUBMITTED, IN_REVIEW, APPROVED, REJECTED, ISSUED
+  requestedDiscount Decimal  @default(0) @db.Decimal(18, 4)
+  discountReason    String?
+  submittedBy      String?  @db.Uuid
+  submittedAt      DateTime? @db.Timestamptz
+  reviewedBy       String?  @db.Uuid
+  reviewedAt       DateTime? @db.Timestamptz
+  approvedBy       String?  @db.Uuid
+  approvedAt       DateTime? @db.Timestamptz
+  rejectedBy       String?  @db.Uuid
+  rejectedAt       DateTime? @db.Timestamptz
+  rejectionReason  String?
+  issuedBy         String?  @db.Uuid
+  issuedAt         DateTime? @db.Timestamptz
+  version          Int      @default(1)
+
   // Link to existing financial infrastructure
   folioId String? @db.Uuid
   folio   Folio?  @relation(fields: [folioId], references: [id])
@@ -4823,6 +4841,9 @@ model EventInvoice {
 
   items EventInvoiceItem[]
   payments Payment[]
+
+  @@index([workflowStatus])
+  @@index([eventId, workflowStatus])
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz

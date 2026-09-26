@@ -556,7 +556,7 @@ export default function MenuManagerPage() {
             </div>
             <div className="flex items-center gap-2">
               {isCashier && <button onClick={() => setShowCreateMenu(true)} className="rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white hover:bg-indigo-700">New menu request</button>}
-              {!isCashier && <Link href="/cashier/price-approvals" className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700 hover:bg-indigo-100">Price approvals</Link>}
+              {!isCashier && <Link href="/cashier/approval-center" className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700 hover:bg-indigo-100">Approval center</Link>}
             </div>
           </div>
           {/* Station overview pills */}

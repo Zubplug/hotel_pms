@@ -5,7 +5,7 @@ import { prisma } from '@hotel-pms/db';
 import { revalidatePath } from 'next/cache';
 import { toZonedTime, fromZonedTime } from 'date-fns-tz';
 import { addDays, getDay } from 'date-fns';
-import { requireEventContext } from './access';
+import { requireEventContext, requireEventRole } from './access';
 
 export type BookingConflictResult = {
   hasConflict: boolean;
@@ -124,8 +124,8 @@ export type ClientBookingData = {
     contactPhone?: string;
     address?: string;
   };
-  contactName: string;
-  contactPhone: string;
+  contactName?: string;
+  contactPhone?: string;
   expectedGuests: number;
   hallId: string;
   startTime: Date;
@@ -143,13 +143,11 @@ export type ClientBookingData = {
 };
 
 export async function createFullEventBooking(data: ClientBookingData) {
-  const { propertyId } = await requireEventContext();
+  const { propertyId, userId } = await requireEventRole('FNB');
 
-  const contactName = data.contactName.trim();
   const expectedGuests = Number(data.expectedGuests);
   const setupBufferMinutes = Number(data.setupBufferMinutes);
   const teardownBufferMinutes = Number(data.teardownBufferMinutes);
-  if (!contactName) throw new Error('Contact name is required.');
   if (!Number.isInteger(expectedGuests) || expectedGuests < 1) throw new Error('Expected guests must be at least 1.');
   if (!(data.startTime instanceof Date) || Number.isNaN(data.startTime.getTime())) throw new Error('A valid start time is required.');
   if (!(data.endTime instanceof Date) || Number.isNaN(data.endTime.getTime()) || data.endTime <= data.startTime) throw new Error('End time must be after start time.');
@@ -260,6 +258,20 @@ export async function createFullEventBooking(data: ClientBookingData) {
 
     if (!guestId && !corporateAccountId) throw new Error("No client resolved.");
     if (guestId && corporateAccountId) throw new Error("Cannot have both guest and corporate account.");
+
+    const resolvedGuest = guestId
+      ? await tx.guest.findUnique({ where: { id: guestId }, select: { firstName: true, lastName: true, phone: true, email: true } })
+      : null;
+    const resolvedCorporate = corporateAccountId
+      ? await tx.corporateAccount.findUnique({ where: { id: corporateAccountId }, select: { name: true, contactPerson: true, contactPhone: true, contactEmail: true } })
+      : null;
+    const contactName = data.clientType === 'INDIVIDUAL'
+      ? `${resolvedGuest?.firstName || ''} ${resolvedGuest?.lastName || ''}`.trim()
+      : (resolvedCorporate?.contactPerson || resolvedCorporate?.name || data.clientDetails?.contactPerson || data.clientDetails?.companyName || '').trim();
+    const contactPhone = data.clientType === 'INDIVIDUAL'
+      ? (resolvedGuest?.phone || data.clientDetails?.phone || data.contactPhone || '')
+      : (resolvedCorporate?.contactPhone || data.clientDetails?.contactPhone || data.contactPhone || '');
+    if (!contactName) throw new Error('Client contact could not be resolved.');
 
     // 3. Generate Occurrences preserving local property time
     const occurrences: { startTime: Date, endTime: Date }[] = [];
@@ -393,9 +405,9 @@ export async function createFullEventBooking(data: ClientBookingData) {
     const event = await tx.event.create({
       data: {
         propertyId: hall.propertyId,
-        name: `Event for ${data.contactName}`,
-        contactName: data.contactName,
-        contactPhone: data.contactPhone,
+        name: `Event for ${contactName}`,
+        contactName,
+        contactPhone,
         expectedGuests,
         startDate: occurrences[0].startTime,
         endDate: finalEndDate,
@@ -461,6 +473,11 @@ export async function createFullEventBooking(data: ClientBookingData) {
         totalAmount: netTotal,
         paidAmount: 0,
         status: 'DRAFT',
+        workflowStatus: 'SUBMITTED',
+        requestedDiscount: discount,
+        discountReason: data.discountAmount ? 'Requested during booking; subject to accounting approval.' : undefined,
+        submittedBy: userId,
+        submittedAt: new Date(),
         folioId,
         cityLedgerAccountId
       }

@@ -42,7 +42,7 @@ const ACCOUNTANT_NAV = [
       { name: 'City Ledger', href: '/accountant/city-ledger' },
       { name: 'Corporate Management', href: '/accountant/corporate' },
       { name: 'Guest Credits', href: '/accountant/guest-credits' },
-      { name: 'Refund Control', href: '/accountant/refunds' },
+      { name: 'Approval Control Center', href: '/accountant/approval-center' },
       { name: 'Accounts Payable', href: '/accountant/payables' },
       { name: 'Cash & Bank', href: '/accountant/cash-bank' },
       { name: 'Expense Control', href: '/accountant/expenses' },
