@@ -1635,18 +1635,6 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                                         !string.IsNullOrWhiteSpace(ri.GetString())
                         ? ri.GetString()
                         : null;
-                    var incomingType = el.TryGetProperty("type", out var incomingTypeProperty) &&
-                                       incomingTypeProperty.ValueKind != System.Text.Json.JsonValueKind.Null
-                        ? incomingTypeProperty.GetString() ?? "ROOM"
-                        : "ROOM";
-                    var isCorporateFolio = corporateAccountId != null ||
-                                           string.Equals(incomingType, "CITY_LEDGER", StringComparison.OrdinalIgnoreCase);
-
-                    // A shared corporate/city-ledger folio is not owned by one
-                    // reservation. Older cloud rows may still carry a stale
-                    // reservationId, so normalize it before touching SQLite's
-                    // unique ReservationId index.
-                    if (isCorporateFolio) reservationId = null;
                     
                     // Querying the database does not see entities that were
                     // added earlier in this same sync page (or already
@@ -1678,26 +1666,6 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                     }
                     if (folio != null && folio.IsDirty) continue;
 
-                    // If two cloud rows refer to the same room reservation, do
-                    // not let the second row violate the local one-folio-per-
-                    // reservation constraint. Keep the canonical/dirty row and
-                    // allow the next sync to reconcile the duplicate upstream.
-                    if (reservationId != null)
-                    {
-                        var reservationOwner = dbContext.Folios.Local.FirstOrDefault(x =>
-                            x.ReservationId == reservationId && x.Id != folio?.Id);
-                        if (reservationOwner == null)
-                        {
-                            reservationOwner = await dbContext.Folios.FirstOrDefaultAsync(x =>
-                                x.ReservationId == reservationId && x.Id != folio?.Id, stoppingToken);
-                        }
-                        if (reservationOwner != null)
-                        {
-                            retainedFolioIds.Add(reservationOwner.Id);
-                            continue;
-                        }
-                    }
-
                     if (folio != null)
                     {
                         // The cloud ID can differ from a locally-created
@@ -1716,7 +1684,7 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                     // unique and multiple corporate folios would collide on it.
                     folio.CorporateAccountId = corporateAccountId;
                     folio.ReservationId = reservationId;
-                    folio.Type = incomingType;
+                    folio.Type = el.TryGetProperty("type", out var folioType) && folioType.ValueKind != System.Text.Json.JsonValueKind.Null ? folioType.GetString() ?? "ROOM" : "ROOM";
                     folio.Status = el.TryGetProperty("status", out var st) && st.ValueKind != System.Text.Json.JsonValueKind.Null ? st.GetString() ?? "" : "";
                     folio.TotalCharges = el.TryGetProperty("totalCharges", out var tc) && tc.ValueKind != System.Text.Json.JsonValueKind.Null && decimal.TryParse(tc.GetString(), out var tcd) ? tcd : 0m;
                     folio.TotalPayments = el.TryGetProperty("totalPayments", out var tp) && tp.ValueKind != System.Text.Json.JsonValueKind.Null && decimal.TryParse(tp.GetString(), out var tpd) ? tpd : 0m;
