@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
     if (!session?.user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
 
     const userRole = (session.user as any).role;
-    const ALLOWED_ROLES = ['NIGHT_AUDITOR', 'MANAGER', 'HOTEL_MANAGER', 'ADMIN', 'SUPER_ADMIN', 'CEO', 'FINANCE_MANAGER'];
+    const ALLOWED_ROLES = ['NIGHT_AUDITOR', 'MANAGER', 'HOTEL_MANAGER', 'ADMIN', 'SUPER_ADMIN', 'CEO', 'FINANCE_MANAGER', 'GENERAL_CASHIER'];
     if (!ALLOWED_ROLES.includes(userRole)) {
       return errorResponse('FORBIDDEN', 'Insufficient permissions to view managers flash report', 403);
     }
