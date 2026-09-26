@@ -1,40 +1,34 @@
 import { Metadata } from 'next';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { KanbanBoard } from '@/components/events/KanbanBoard';
 import { AddLeadDialog } from '@/components/events/AddLeadDialog';
+import { KanbanBoard } from '@/components/events/KanbanBoard';
 import { prisma } from '@hotel-pms/db';
 import { requireEventContext } from '@/lib/events/access';
+import { ArrowUpRight, CalendarDays, CircleAlert, Clock3, Sparkles, Target, Users } from 'lucide-react';
+import Link from 'next/link';
 
-export const metadata: Metadata = {
-  title: 'Event CRM | LodgeCore',
-};
+export const metadata: Metadata = { title: 'Event CRM | LodgeCore' };
 
 export default async function EventCrmPage() {
   const { propertyId } = await requireEventContext();
-  const leads = await prisma.eventLead.findMany({
-    where: { propertyId },
-    orderBy: { createdAt: 'desc' }
-  });
+  const leads = await prisma.eventLead.findMany({ where: { propertyId }, orderBy: { createdAt: 'desc' } });
+  const openLeads = leads.filter((lead) => !['CONVERTED', 'LOST'].includes(lead.status));
+  const qualifiedLeads = leads.filter((lead) => ['QUALIFIED', 'PROPOSAL_SENT'].includes(lead.status));
+  const convertedLeads = leads.filter((lead) => lead.status === 'CONVERTED');
+  const followUpLeads = leads.filter((lead) => ['NEW', 'CONTACTED'].includes(lead.status));
+  const demandGuests = openLeads.reduce((sum, lead) => sum + (lead.expectedGuests || 0), 0);
+  const conversionRate = leads.length ? Math.round((convertedLeads.length / leads.length) * 100) : 0;
+  const thisMonth = new Date();
+  const thisMonthLeads = leads.filter((lead) => lead.createdAt.getMonth() === thisMonth.getMonth() && lead.createdAt.getFullYear() === thisMonth.getFullYear()).length;
+  const nextDatedLead = openLeads.filter((lead) => lead.preferredDate && lead.preferredDate >= new Date()).sort((a, b) => a.preferredDate!.getTime() - b.preferredDate!.getTime())[0];
 
-  return (
-    <div className="p-6 space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Event CRM</h1>
-          <p className="text-muted-foreground mt-1">Track inquiries, generate proposals, and manage the sales pipeline.</p>
-        </div>
-        <AddLeadDialog />
-      </div>
+  return <div className="min-h-full bg-[#fbf8f6] text-[#24130d]">
+    <header className="border-b border-[#3d2318] bg-[#24130d] text-white"><div className="mx-auto max-w-[1600px] px-4 py-7 sm:px-6 lg:px-8"><div className="flex flex-col justify-between gap-6 lg:flex-row lg:items-end"><div><div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-orange-300"><Sparkles className="h-4 w-4" /> F&B sales workspace</div><h1 className="text-3xl font-bold tracking-tight sm:text-4xl">Event CRM</h1><p className="mt-2 max-w-2xl text-sm text-orange-100/75">Move every event inquiry from first contact to a confident handoff for booking and operations.</p></div><div className="flex flex-wrap gap-2"><Link href="/fnb/events/bookings" className="inline-flex h-9 items-center justify-center rounded-md border border-white/20 bg-white/10 px-3 text-xs font-bold text-white hover:bg-white/20">Open event register <ArrowUpRight className="ml-2 h-4 w-4" /></Link><AddLeadDialog /></div></div></div></header>
+    <main className="mx-auto max-w-[1600px] space-y-6 px-4 py-6 sm:px-6 lg:px-8">
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><div className="rounded-2xl border border-[#eadfd8] bg-white p-5 shadow-[0_8px_24px_rgba(65,32,19,0.045)]"><div className="flex items-start justify-between"><div><p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#876f63]">Open pipeline</p><p className="mt-3 text-2xl font-bold">{openLeads.length}</p><p className="mt-1 text-xs text-[#947d72]">{thisMonthLeads} created this month</p></div><div className="rounded-xl bg-sky-50 p-3 text-sky-700"><Target className="h-5 w-5" /></div></div></div><div className="rounded-2xl border border-[#eadfd8] bg-white p-5 shadow-[0_8px_24px_rgba(65,32,19,0.045)]"><div className="flex items-start justify-between"><div><p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#876f63]">Qualified demand</p><p className="mt-3 text-2xl font-bold">{qualifiedLeads.length}</p><p className="mt-1 text-xs text-[#947d72]">{demandGuests.toLocaleString()} guests in open leads</p></div><div className="rounded-xl bg-amber-50 p-3 text-amber-700"><Users className="h-5 w-5" /></div></div></div><div className="rounded-2xl border border-[#eadfd8] bg-white p-5 shadow-[0_8px_24px_rgba(65,32,19,0.045)]"><div className="flex items-start justify-between"><div><p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#876f63]">Conversion rate</p><p className="mt-3 text-2xl font-bold">{conversionRate}%</p><p className="mt-1 text-xs text-[#947d72]">{convertedLeads.length} closed won · {leads.filter((lead) => lead.status === 'LOST').length} closed lost</p></div><div className="rounded-xl bg-emerald-50 p-3 text-emerald-700"><ArrowUpRight className="h-5 w-5" /></div></div></div><div className="rounded-2xl border border-orange-200 bg-[#fff8f2] p-5 shadow-[0_8px_24px_rgba(65,32,19,0.045)]"><div className="flex items-start justify-between"><div><p className="text-[10px] font-bold uppercase tracking-[0.14em] text-orange-800">Follow-up queue</p><p className="mt-3 text-2xl font-bold text-[#7c2d12]">{followUpLeads.length}</p><p className="mt-1 text-xs text-[#947d72]">New or contacted inquiries</p></div><div className="rounded-xl bg-white p-3 text-orange-700"><CircleAlert className="h-5 w-5" /></div></div></div></section>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Sales Pipeline (Kanban)</CardTitle>
-          <CardDescription>Drag and drop leads to update their status.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <KanbanBoard initialLeads={leads} />
-        </CardContent>
-      </Card>
-    </div>
-  );
+      <section className="grid gap-6 xl:grid-cols-[1.35fr_0.65fr]"><div className="rounded-2xl border border-[#eadfd8] bg-white p-5 shadow-[0_8px_24px_rgba(65,32,19,0.045)]"><div className="mb-4 flex items-center justify-between"><div><h2 className="text-base font-bold">Sales readiness</h2><p className="mt-1 text-xs text-[#947d72]">The next actions most likely to protect conversion and response time.</p></div><Clock3 className="h-5 w-5 text-orange-600" /></div><div className="grid gap-3 sm:grid-cols-3"><div className="rounded-xl bg-[#fff8f2] p-4"><p className="text-[10px] font-bold uppercase tracking-wider text-[#947d72]">Needs first response</p><p className="mt-2 text-2xl font-bold text-[#7c2d12]">{leads.filter((lead) => lead.status === 'NEW').length}</p><p className="mt-1 text-xs text-[#947d72]">New inquiries waiting for contact</p></div><div className="rounded-xl bg-[#fff8f2] p-4"><p className="text-[10px] font-bold uppercase tracking-wider text-[#947d72]">Next requested date</p><p className="mt-2 text-lg font-bold">{nextDatedLead?.preferredDate ? nextDatedLead.preferredDate.toLocaleDateString('en-NG', { day: '2-digit', month: 'short' }) : '—'}</p><p className="mt-1 truncate text-xs text-[#947d72]">{nextDatedLead?.contactName || 'No future date captured'}</p></div><div className="rounded-xl bg-[#fff8f2] p-4"><p className="text-[10px] font-bold uppercase tracking-wider text-[#947d72]">Proposal stage</p><p className="mt-2 text-2xl font-bold">{leads.filter((lead) => lead.status === 'PROPOSAL_SENT').length}</p><p className="mt-1 text-xs text-[#947d72]">Offers awaiting a decision</p></div></div></div><div className="rounded-2xl border border-[#eadfd8] bg-white p-5 shadow-[0_8px_24px_rgba(65,32,19,0.045)]"><div className="mb-4 flex items-center gap-2"><CalendarDays className="h-5 w-5 text-orange-600" /><h2 className="text-base font-bold">Demand profile</h2></div><div className="space-y-3 text-xs"><div className="flex items-center justify-between border-b border-[#f0e6e0] pb-3"><span className="text-[#947d72]">Leads with date requested</span><span className="font-bold">{openLeads.filter((lead) => lead.preferredDate).length}</span></div><div className="flex items-center justify-between border-b border-[#f0e6e0] pb-3"><span className="text-[#947d72]">Corporate/company enquiries</span><span className="font-bold">{openLeads.filter((lead) => lead.companyName).length}</span></div><div className="flex items-center justify-between"><span className="text-[#947d72]">Average party size</span><span className="font-bold">{openLeads.length ? Math.round(demandGuests / openLeads.length).toLocaleString() : 0} guests</span></div></div></div></section>
+
+      <section className="rounded-2xl border border-[#eadfd8] bg-white p-5 shadow-[0_8px_24px_rgba(65,32,19,0.045)]"><div className="mb-5 flex flex-col justify-between gap-2 sm:flex-row sm:items-end"><div><h2 className="text-base font-bold">Opportunity pipeline</h2><p className="mt-1 text-xs text-[#947d72]">Drag an opportunity between stages to keep the live sales record current.</p></div><span className="text-xs text-[#947d72]">{leads.length} total lead{leads.length === 1 ? '' : 's'}</span></div><KanbanBoard initialLeads={leads} /></section>
+    </main>
+  </div>;
 }
