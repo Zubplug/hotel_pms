@@ -49,3 +49,35 @@ export async function saveBanquetPackage(data: { id?: string; name: string; desc
   revalidatePath('/fnb/events/packages');
   revalidatePath('/fnb/events/bookings/create/full-package');
 }
+
+export async function getHallSchedule(hallId: string, startDate: string, endDate: string) {
+  const { propertyId } = await requireEventContext();
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) throw new Error('Invalid schedule range.');
+
+  const hall = await prisma.hall.findFirst({ where: { id: hallId, propertyId }, select: { id: true, name: true, code: true, capacity: true } });
+  if (!hall) throw new Error('Hall not found.');
+
+  const bookings = await prisma.eventBooking.findMany({
+    where: { hallId, startTime: { lt: end }, endTime: { gt: start } },
+    orderBy: { startTime: 'asc' },
+    select: { id: true, eventId: true, startTime: true, endTime: true, setupBufferMinutes: true, teardownBufferMinutes: true, status: true, event: { select: { name: true, contactName: true, expectedGuests: true, status: true } } },
+  });
+
+  return { hall, bookings: bookings.map((booking) => ({ ...booking, startTime: booking.startTime.toISOString(), endTime: booking.endTime.toISOString() })) };
+}
+
+export async function getEventSchedule(startDate: string, endDate: string) {
+  const { propertyId } = await requireEventContext();
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) throw new Error('Invalid schedule range.');
+
+  const [halls, bookings] = await Promise.all([
+    prisma.hall.findMany({ where: { propertyId, isActive: true }, orderBy: { name: 'asc' }, select: { id: true, name: true, code: true, capacity: true } }),
+    prisma.eventBooking.findMany({ where: { hall: { propertyId }, startTime: { lt: end }, endTime: { gt: start } }, orderBy: { startTime: 'asc' }, select: { id: true, eventId: true, hallId: true, startTime: true, endTime: true, setupBufferMinutes: true, status: true, hall: { select: { name: true, code: true } }, event: { select: { name: true, contactName: true, expectedGuests: true, status: true } } } }),
+  ]);
+
+  return { halls, bookings: bookings.map((booking) => ({ ...booking, startTime: booking.startTime.toISOString(), endTime: booking.endTime.toISOString() })) };
+}
