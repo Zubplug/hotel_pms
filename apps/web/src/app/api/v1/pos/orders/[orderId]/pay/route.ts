@@ -59,6 +59,9 @@ export async function POST(
     if (!order) {
       return NextResponse.json({ error: 'Order not found' }, { status: 404 });
     }
+    if (method.toUpperCase() === 'COMPLIMENTARY' && amount > Number(order.total) + 0.01) {
+      return NextResponse.json({ error: 'Complimentary payment cannot exceed the POS order total.' }, { status: 400 });
+    }
     if (await isNightAuditTransactionLocked(order.propertyId, order.businessDate)) {
       return NextResponse.json({ error: 'Night audit is in progress. New POS transactions are temporarily paused.' }, { status: 409 });
     }

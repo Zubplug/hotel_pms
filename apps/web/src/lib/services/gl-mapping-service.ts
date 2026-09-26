@@ -20,8 +20,12 @@ export class GLMappingService {
     const settings = (property.settings as any) || {};
     const assetMap = settings?.accountingConfig?.assetAccounts || {};
 
-    // 1. Check if the property has explicitly overridden the GL mapping for this method
-    let targetCode = assetMap[method];
+    // Complimentary is a contra-revenue transaction, not an asset/tender.
+    // Keep it on its dedicated allowance account even if an old property
+    // setting incorrectly placed it under assetAccounts.
+    let targetCode = method === 'COMPLIMENTARY'
+      ? (settings?.accountingConfig?.contraRevenueAccounts?.COMPLIMENTARY || '4950')
+      : assetMap[method];
 
     // 2. If no explicit override, use the standard USALI default mappings
     if (!targetCode) {
@@ -51,9 +55,9 @@ export class GLMappingService {
           targetCode = '1140'; // City Ledger
           break;
         case 'COMPLIMENTARY':
-          // For POS orders settled as COMPLIMENTARY, we debit the contra-revenue allowance account
-          const compCode = (property.settings as any)?.accountingConfig?.contraRevenueAccounts?.COMPLIMENTARY;
-          targetCode = compCode || '4900'; // 4900 is 'Revenue Rebates and Discounts' in the current DB schema
+          // For POS orders settled as COMPLIMENTARY, debit the dedicated
+          // complimentary allowance account, never the discount account.
+          targetCode = targetCode || '4950';
           break;
         default:
           throw new Error(`Cannot resolve automatic GL mapping for payment method: ${method}`);
@@ -216,11 +220,7 @@ export class GLMappingService {
 
     const settings = (property?.settings as any) || {};
     const contraMap = settings?.accountingConfig?.contraRevenueAccounts || {};
-    const configuredCode = contraMap['DISCOUNT'];
-
-    if (!configuredCode) {
-      throw new Error(`Discount allowance GL mapping required. Please configure Property Settings (accountingConfig.contraRevenueAccounts.DISCOUNT).`);
-    }
+    const configuredCode = contraMap['DISCOUNT'] || '4900';
 
     const account = await prisma.chartOfAccount.findFirst({
       where: { propertyId, code: configuredCode, isActive: true }
@@ -244,11 +244,7 @@ export class GLMappingService {
 
     const settings = (property?.settings as any) || {};
     const contraMap = settings?.accountingConfig?.contraRevenueAccounts || {};
-    const configuredCode = contraMap['COMPLIMENTARY'];
-
-    if (!configuredCode) {
-      throw new Error(`Complimentary allowance GL mapping required. Please configure Property Settings (accountingConfig.contraRevenueAccounts.COMPLIMENTARY).`);
-    }
+    const configuredCode = contraMap['COMPLIMENTARY'] || '4950';
 
     const account = await prisma.chartOfAccount.findFirst({
       where: { propertyId, code: configuredCode, isActive: true }

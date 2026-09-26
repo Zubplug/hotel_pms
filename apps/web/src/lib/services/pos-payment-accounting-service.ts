@@ -25,6 +25,24 @@ export class PosPaymentAccountingService {
     const orderTotalDiscount = Number(order.discount);
     const orderTotalTax = Number(order.taxAmount);
     const orderTotalServiceCharge = Number(order.serviceCharge);
+    const isComplimentaryPayment = String(payment.method).toUpperCase() === 'COMPLIMENTARY';
+
+    // POS complimentary events are represented by a complimentary record and
+    // the order's discount field for backward compatibility. Split that value
+    // before posting so a complimentary amount can never land in 4900.
+    const complimentaryRecord = await tx.complimentaryRecord.findFirst({
+      where: {
+        posOrderId: order.id,
+        status: { notIn: ['UNRESOLVED', 'REVERSED'] },
+      },
+      orderBy: { createdAt: 'desc' },
+      select: { complAmount: true },
+    });
+    const orderTotalComplimentary = Math.min(
+      Math.max(0, orderTotalDiscount),
+      Math.max(0, Number(complimentaryRecord?.complAmount || 0)),
+    );
+    const orderTotalDiscountAllowance = Math.max(0, orderTotalDiscount - orderTotalComplimentary);
     
     // Net order total = Gross - Discount + Tax + ServiceCharge
     const netOrderTotal = Number(order.total);
@@ -48,15 +66,34 @@ export class PosPaymentAccountingService {
       });
 
       // 2. Resolve & Post Discount Allowance if applicable (Contra-Revenue Debit)
-      if (orderTotalDiscount > 0) {
+      if (orderTotalDiscountAllowance > 0) {
         const discountGlAccountId = await GLMappingService.getDiscountAllowanceAccount(order.propertyId);
-        const discountAllocated = Math.round(orderTotalDiscount * paymentRatio * 100) / 100;
+        const discountAllocated = Math.round(orderTotalDiscountAllowance * paymentRatio * 100) / 100;
         if (discountAllocated > 0) {
           lines.push({
             accountId: discountGlAccountId,
             debit: discountAllocated,
             credit: 0,
             description: `POS Discount Allowance for Order ${order.id}`,
+            sourceType: 'POS_PAYMENT',
+            sourceId: payment.id,
+          });
+        }
+      }
+
+      // A complimentary adjustment paired with a non-complimentary payment
+      // reduces the amount ultimately collected and must be posted separately
+      // from ordinary discounts. A COMPLIMENTARY payment already debits 4950
+      // as its tender account, so do not debit the allowance twice.
+      if (orderTotalComplimentary > 0 && !isComplimentaryPayment) {
+        const complimentaryGlAccountId = await GLMappingService.getComplimentaryAllowanceAccount(order.propertyId);
+        const complimentaryAllocated = Math.round(orderTotalComplimentary * paymentRatio * 100) / 100;
+        if (complimentaryAllocated > 0) {
+          lines.push({
+            accountId: complimentaryGlAccountId,
+            debit: complimentaryAllocated,
+            credit: 0,
+            description: `POS Complimentary Allowance for Order ${order.id}`,
             sourceType: 'POS_PAYMENT',
             sourceId: payment.id,
           });

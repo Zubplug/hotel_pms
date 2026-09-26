@@ -15,6 +15,7 @@ const ACCOUNT_CODES = {
   otherRevenue: '4400',
   taxPayable: '2200',
   discounts: '4900',
+  complimentary: '4950',
   refunds: '4910',
   serviceCharge: '2210',
 } as const;
@@ -80,6 +81,7 @@ export async function postNightAuditJournal(tx: any, input: {
     otherRevenue: byCode.get(ACCOUNT_CODES.otherRevenue),
     taxPayable: byCode.get(ACCOUNT_CODES.taxPayable),
     discounts: byCode.get(ACCOUNT_CODES.discounts),
+    complimentary: byCode.get(ACCOUNT_CODES.complimentary),
     refunds: byCode.get(ACCOUNT_CODES.refunds),
     serviceCharge: byCode.get(ACCOUNT_CODES.serviceCharge),
   };
@@ -118,7 +120,8 @@ export async function postNightAuditJournal(tx: any, input: {
       addLine(lines, { accountId: account('guestLedger').id, debit: amount, credit: 0, description: item.description, sourceType: 'FOLIO_ITEM', sourceId: item.id });
       addLine(lines, { accountId: account('taxPayable').id, debit: 0, credit: amount, description: item.description, sourceType: 'FOLIO_ITEM', sourceId: item.id });
     } else if (item.type === 'DISCOUNT' || item.type === 'COMPLIMENTARY' || (item.type === 'ADJUSTMENT' && Number(item.amount) < 0)) {
-      addLine(lines, { accountId: account('discounts').id, debit: amount, credit: 0, description: item.description, sourceType: 'FOLIO_ITEM', sourceId: item.id });
+      const contraAccount = item.type === 'COMPLIMENTARY' ? account('complimentary') : account('discounts');
+      addLine(lines, { accountId: contraAccount.id, debit: amount, credit: 0, description: item.description, sourceType: 'FOLIO_ITEM', sourceId: item.id });
       addLine(lines, { accountId: account('guestLedger').id, debit: 0, credit: amount, description: item.description, sourceType: 'FOLIO_ITEM', sourceId: item.id });
     } else {
       const key = ['ROOM_CHARGE', 'DAY_USE_ROOM_CHARGE'].includes(item.source) || item.revenueCategory === 'ROOM' ? 'roomsRevenue' : item.source === 'POS' || item.revenueCategory === 'FNB' ? 'fnbRevenue' : 'otherRevenue';

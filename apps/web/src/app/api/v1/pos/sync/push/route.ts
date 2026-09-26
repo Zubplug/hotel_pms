@@ -593,11 +593,15 @@ export async function POST(req: NextRequest) {
                   // it with a misleading foreign-key error.
                   throw new Error(`RETRYABLE_ORDER_NOT_FOUND: POS order ${orderId} has not reached the cloud yet`);
               }
+              const paymentAmount = Number(payload.Amount ?? payload.amount);
+              if (String(method).toUpperCase() === 'COMPLIMENTARY' && paymentAmount > Number(order.total) + 0.01) {
+                  throw new Error('INVALID_COMPLIMENTARY_AMOUNT: Complimentary payment exceeds the POS order total');
+              }
               const payment = await tx.posPayment.create({
                   data: {
                       id: payload.Id || payload.id || crypto.randomUUID(), // If entityId was the order, payment needs its own ID
                       orderId,
-                      amount: payload.Amount ?? payload.amount,
+                      amount: paymentAmount,
                       method: method,
                       currency: payload.Currency || payload.currency || 'NGN',
                       status: "CONFIRMED",

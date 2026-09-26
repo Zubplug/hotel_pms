@@ -33,6 +33,7 @@ function asRecord(value: unknown): Record<string, unknown> {
 }
 
 function resolveAccountCode(
+  propertyId: string,
   item: { source: string; revenueCategory: string; type: string },
   accounts: Map<string, AccountRow>,
   accountingConfig: Record<string, unknown>,
@@ -43,12 +44,15 @@ function resolveAccountCode(
   const findByName = (...terms: string[]) => [...accounts.values()].find(account => terms.some(term => account.name.toLowerCase().includes(term)))?.code;
 
   if (item.type === 'DISCOUNT' || item.type === 'COMPLIMENTARY') {
-    return activeCode(contraAccounts[item.type === 'COMPLIMENTARY' ? 'COMPLIMENTARY' : 'DISCOUNT'])
-      || activeCode(contraAccounts.DISCOUNT)
-      || activeCode(contraAccounts.COMPLIMENTARY)
-      || activeCode('4900')
-      || findByName('rebate', 'discount', 'allowance')
-      || [...accounts.keys()][0];
+    const isComplimentary = item.type === 'COMPLIMENTARY';
+    const configured = activeCode(contraAccounts[isComplimentary ? 'COMPLIMENTARY' : 'DISCOUNT']);
+    const canonical = activeCode(isComplimentary ? '4950' : '4900');
+    const named = isComplimentary
+      ? findByName('complimentary allowance', 'complimentary')
+      : findByName('rebate', 'discount', 'allowance');
+    const resolved = configured || canonical || named;
+    if (!resolved) throw new Error(`Missing ${isComplimentary ? 'complimentary' : 'discount'} contra-revenue account for property ${propertyId}`);
+    return resolved;
   }
 
   if (item.source === 'ROOM_CHARGE' || item.source === 'DAY_USE_ROOM_CHARGE' || item.source === 'ROOM_UPGRADE' || item.source === 'ROOM_DOWNGRADE_CREDIT' || item.revenueCategory === 'ROOM') {
@@ -64,7 +68,9 @@ function resolveAccountCode(
     // 4250 is the canonical F&B revenue account. Prefer it before legacy
     // name-based matching, otherwise an old 4100 account labelled "F&B
     // Revenue" can steal current POS and folio production.
-    return activeCode(configured) || activeCode('4250') || findByName('food and beverage', 'f&b', 'food') || [...accounts.keys()][0];
+    const resolved = activeCode(configured) || activeCode('4250') || findByName('food and beverage', 'f&b', 'food');
+    if (!resolved) throw new Error(`Missing F&B revenue account for property ${propertyId}`);
+    return resolved;
   }
 
   return activeCode(revenueAccounts.OTHER) || findByName('other operating revenue') || activeCode('4400') || [...accounts.keys()][0];
@@ -141,7 +147,7 @@ export async function GET(req: NextRequest) {
     for (const item of items) {
       const itemDate = dateOnly(new Date(item.businessDate));
       const value = amountForItem(item);
-      const accountCode = resolveAccountCode(item, accounts, accountingConfig);
+      const accountCode = resolveAccountCode(propertyId, item, accounts, accountingConfig);
       if (!accountCode) continue;
       const gross = item.type === 'CHARGE' ? Number(item.amount || 0) : 0;
       const discount = item.type === 'DISCOUNT' || item.type === 'COMPLIMENTARY' ? Math.abs(Number(item.amount || 0)) : 0;
@@ -152,7 +158,7 @@ export async function GET(req: NextRequest) {
     // guest folio. Folio-routed POS sales are already represented by FolioItem.
     for (const order of posOrders) {
       if (!order.businessDate) continue;
-      const accountCode = resolveAccountCode({ source: 'POS', revenueCategory: 'FNB', type: 'CHARGE' }, accounts, accountingConfig);
+      const accountCode = resolveAccountCode(propertyId, { source: 'POS', revenueCategory: 'FNB', type: 'CHARGE' }, accounts, accountingConfig);
       if (!accountCode) continue;
       const orderDate = dateOnly(new Date(order.businessDate));
       const value = Number(order.total || 0);
