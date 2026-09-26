@@ -1,68 +1,41 @@
 import { Metadata } from 'next';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Package } from 'lucide-react';
+import Link from 'next/link';
 import { prisma } from '@hotel-pms/db';
 import { requireEventContext } from '@/lib/events/access';
 import { PackageForm } from '@/components/events/CatalogControls';
+import { Button } from '@/components/ui/button';
+import type { LucideIcon } from 'lucide-react';
+import { ArrowUpRight, CheckCircle2, ChevronRight, CircleDollarSign, ClipboardList, Package as PackageIcon, Plus, Sparkles, UtensilsCrossed, Wrench } from 'lucide-react';
 
-export const metadata: Metadata = {
-  title: 'Banquet Packages | LodgeCore',
-};
+export const metadata: Metadata = { title: 'Packages & Equipment | LodgeCore' };
+const money = (value: number) => `₦${Math.round(value).toLocaleString('en-NG')}`;
 
 export default async function BanquetPackagesPage() {
   const { propertyId } = await requireEventContext();
-  const packages = await prisma.banquetPackage.findMany({
-    where: { propertyId },
-    orderBy: { name: 'asc' },
-    include: { items: true }
-  });
+  const [packages, equipment] = await Promise.all([
+    prisma.banquetPackage.findMany({ where: { propertyId }, orderBy: { name: 'asc' }, include: { items: true } }),
+    prisma.eventEquipment.findMany({ where: { propertyId }, orderBy: { name: 'asc' } }),
+  ]);
+  const activePackages = packages.filter((item) => item.isActive);
+  const activeEquipment = equipment.filter((item) => item.isActive);
+  const averagePrice = activePackages.length ? activePackages.reduce((sum, item) => sum + Number(item.basePrice), 0) / activePackages.length : 0;
+  const inventoryUnits = activeEquipment.reduce((sum, item) => sum + item.totalStock, 0);
+  const metricCards: Array<{ label: string; value: string; detail: string; icon: LucideIcon }> = [
+    { label: 'Active packages', value: activePackages.length.toLocaleString(), detail: `${packages.length - activePackages.length} inactive`, icon: PackageIcon },
+    { label: 'Average package price', value: money(averagePrice), detail: 'Base price per booking', icon: CircleDollarSign },
+    { label: 'Included line items', value: activePackages.reduce((sum, item) => sum + item.items.length, 0).toLocaleString(), detail: 'POS-linked or custom items', icon: ClipboardList },
+    { label: 'Equipment units', value: inventoryUnits.toLocaleString(), detail: `${activeEquipment.length} active equipment types`, icon: Wrench },
+  ];
 
-  return (
-    <div className="p-6 space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Packages & Equipment</h1>
-          <p className="text-muted-foreground mt-1">Manage banquet packages, equipment rentals, and POS linkages.</p>
-        </div>
-        <PackageForm />
+  return <div className="min-h-full bg-[#fbf8f6] text-[#24130d]">
+    <header className="border-b border-[#3d2318] bg-[#24130d] text-white"><div className="mx-auto max-w-[1600px] px-4 py-7 sm:px-6 lg:px-8"><div className="flex flex-col justify-between gap-6 xl:flex-row xl:items-end"><div><div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-orange-300"><Sparkles className="h-4 w-4" /> F&B Hall & events</div><h1 className="text-3xl font-bold tracking-tight sm:text-4xl">Packages & equipment</h1><p className="mt-2 max-w-2xl text-sm text-orange-100/75">Shape the commercial offers and rentable inventory that flow into every banquet booking.</p></div><div className="flex flex-wrap gap-2"><Button variant="outline" className="border-white/20 bg-white/10 text-white hover:bg-white/20" asChild><Link href="/fnb/events/bookings/create/full-package"><UtensilsCrossed className="mr-2 h-4 w-4" /> Preview sales flow</Link></Button><PackageForm /></div></div></div></header>
+    <main className="mx-auto max-w-[1600px] space-y-6 px-4 py-6 sm:px-6 lg:px-8">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{metricCards.map(({ label, value, detail, icon: Icon }) => <div key={label} className="rounded-2xl border border-[#eadfd8] bg-white p-5 shadow-[0_8px_24px_rgba(65,32,19,0.05)]"><div className="flex items-start justify-between gap-4"><div><p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#876f63]">{label}</p><p className="mt-3 text-2xl font-bold tracking-tight">{value}</p><p className="mt-1 text-xs text-[#947d72]">{detail}</p></div><div className="rounded-xl bg-orange-50 p-3 text-orange-600"><Icon className="h-5 w-5" /></div></div></div>)} </div>
+      <section className="flex flex-col justify-between gap-4 rounded-2xl border border-orange-200 bg-gradient-to-r from-[#fff3e8] to-white p-5 shadow-[0_8px_24px_rgba(65,32,19,0.045)] sm:flex-row sm:items-center"><div><div className="flex items-center gap-2 text-sm font-bold text-[#7c2d12]"><CheckCircle2 className="h-4 w-4" /> Booking-ready offer catalog</div><p className="mt-1 text-xs text-[#947d72]">Package prices and active status are used directly by the banquet booking workflow. Item composition remains visible for operational review.</p></div><Link href="/fnb/events/bookings/create/full-package" className="inline-flex items-center text-xs font-bold text-orange-700">Test package selection <ArrowUpRight className="ml-1 h-3 w-3" /></Link></section>
+      <div className="grid gap-6 xl:grid-cols-[1.25fr_0.75fr]">
+        <section className="rounded-2xl border border-[#eadfd8] bg-white p-5 shadow-[0_8px_24px_rgba(65,32,19,0.045)]"><div className="mb-5 flex items-end justify-between gap-4"><div><h2 className="text-base font-bold">Sellable packages</h2><p className="mt-1 text-xs text-[#947d72]">{packages.length} configured offers · prices shown in NGN</p></div><span className="text-xs text-[#947d72]">Sorted by name</span></div>{packages.length === 0 ? <div className="rounded-xl border border-dashed border-[#d9c8bd] p-10 text-center"><PackageIcon className="mx-auto h-8 w-8 text-orange-400" /><p className="mt-3 text-sm font-semibold">No packages configured</p><p className="mt-1 text-xs text-[#947d72]">Create a banquet or hall-only offer to make it available to sales.</p><div className="mt-4"><PackageForm /></div></div> : <div className="grid gap-4 md:grid-cols-2">{packages.map((pkg) => <article key={pkg.id} className={`rounded-2xl border p-5 transition hover:-translate-y-0.5 hover:shadow-[0_12px_28px_rgba(65,32,19,0.07)] ${pkg.isActive ? 'border-[#eadfd8] bg-white' : 'border-dashed border-[#d9c8bd] bg-[#fcfaf8]'}`}><div className="flex items-start justify-between gap-3"><div><div className="flex items-center gap-2"><h3 className="font-bold">{pkg.name}</h3><span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${pkg.isHallOnly ? 'bg-slate-100 text-slate-600' : 'bg-orange-100 text-orange-800'}`}>{pkg.isHallOnly ? 'Hall only' : 'Banquet'}</span></div><p className="mt-1 line-clamp-2 min-h-5 text-xs text-[#947d72]">{pkg.description || 'No package description added.'}</p></div><span className={`text-[10px] font-bold uppercase ${pkg.isActive ? 'text-emerald-700' : 'text-slate-500'}`}>{pkg.isActive ? 'Active' : 'Inactive'}</span></div><div className="mt-5 flex items-end justify-between border-b border-[#f0e6e0] pb-4"><div><p className="text-[10px] text-[#947d72]">Base price</p><p className="mt-1 text-2xl font-bold text-[#7c2d12]">{money(Number(pkg.basePrice))}</p></div><div className="text-right"><p className="text-[10px] text-[#947d72]">Composition</p><p className="mt-1 text-sm font-bold">{pkg.items.length} item{pkg.items.length === 1 ? '' : 's'}</p></div></div><div className="mt-4 flex items-center gap-2 text-xs text-[#6f5d53]"><ClipboardList className="h-4 w-4 text-orange-600" /> {pkg.items.length ? 'Configured for operational handoff' : 'No line items linked yet'}</div><div className="mt-4"><PackageForm pkg={{ id: pkg.id, name: pkg.name, description: pkg.description, basePrice: pkg.basePrice.toString(), isHallOnly: pkg.isHallOnly }} /></div></article>)}</div>}</section>
+        <section className="rounded-2xl border border-[#eadfd8] bg-white p-5 shadow-[0_8px_24px_rgba(65,32,19,0.045)]"><div className="mb-5 flex items-start justify-between"><div><h2 className="text-base font-bold">Equipment readiness</h2><p className="mt-1 text-xs text-[#947d72]">Active rentable inventory available to booking workflows</p></div><Wrench className="h-5 w-5 text-orange-500" /></div><div className="space-y-2">{activeEquipment.slice(0, 8).map((item) => <div key={item.id} className="flex items-center justify-between rounded-xl border border-[#f0e6e0] p-3"><div className="min-w-0"><p className="truncate text-sm font-semibold">{item.name}</p><p className="text-[10px] text-[#947d72]">{money(Number(item.rentalPrice))} per unit</p></div><span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-bold text-emerald-700">{item.totalStock} in stock</span></div>)}{!activeEquipment.length && <div className="rounded-xl border border-dashed border-[#d9c8bd] p-8 text-center"><Wrench className="mx-auto h-7 w-7 text-[#c7b5aa]" /><p className="mt-2 text-sm font-semibold">No active equipment</p><p className="mt-1 text-xs text-[#947d72]">Equipment can be added to the event inventory module when available.</p></div>}</div>{activeEquipment.length > 8 && <p className="mt-4 text-center text-xs text-[#947d72]">Showing 8 of {activeEquipment.length} active equipment types.</p>}</section>
       </div>
-
-      {packages.length === 0 ? (
-        <Card className="flex flex-col items-center justify-center p-12 text-center">
-          <CardHeader>
-            <CardTitle>No Packages Found</CardTitle>
-            <CardDescription>Create your first event or catering package.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <PackageForm />
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {packages.map(pkg => (
-            <Card key={pkg.id}>
-              <CardHeader className="pb-3">
-                <div className="flex justify-between items-start">
-                  <div className="space-y-1">
-                    <CardTitle className="text-lg">{pkg.name}</CardTitle>
-                    <CardDescription>{pkg.isHallOnly ? 'Hall Only' : 'Catering / Banquet'}</CardDescription>
-                  </div>
-                  <Package className="h-5 w-5 text-muted-foreground opacity-50" />
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold mb-4">
-                  {Number(pkg.basePrice).toLocaleString('en-US', { style: 'currency', currency: 'NGN' })}
-                </div>
-                <div className="text-sm text-muted-foreground mb-6">
-                  {pkg.items.length} items included
-                </div>
-                <PackageForm pkg={{ id: pkg.id, name: pkg.name, description: pkg.description, basePrice: pkg.basePrice.toString(), isHallOnly: pkg.isHallOnly }} />
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
-    </div>
-  );
+    </main>
+  </div>;
 }
