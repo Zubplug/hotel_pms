@@ -698,6 +698,11 @@ export async function GET(req: NextRequest) {
       },
       orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
     });
+    const eventHalls = await prisma.hall.findMany({
+      where: { propertyId, isActive: true },
+      select: { id: true, name: true, code: true, capacity: true, updatedAt: true },
+      orderBy: { name: 'asc' },
+    });
     
     // Resolve permissions for staff
     const staffWithPermissions = await Promise.all(
@@ -788,6 +793,7 @@ export async function GET(req: NextRequest) {
       folios,
       eventInvoices,
       eventSchedule,
+      eventHalls,
       posOutlets: finalOutlets,
       posCategories: finalCategories,
       posProducts: finalProducts,

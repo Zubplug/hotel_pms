@@ -2707,6 +2707,14 @@ public class LocalRepository
             .ToListAsync();
     }
 
+    public async Task<List<LocalEventHall>> GetEventHallsAsync(string propertyId)
+    {
+        return await _dbContext.EventHalls
+            .Where(hall => hall.PropertyId == propertyId && hall.IsActive)
+            .OrderBy(hall => hall.Name)
+            .ToListAsync();
+    }
+
     public async Task<LocalReservation?> GetReservationByRoomNumberAsync(string roomNumber)
     {
         return await _dbContext.Reservations

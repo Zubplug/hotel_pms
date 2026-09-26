@@ -18,6 +18,7 @@ public class LocalDbContext : DbContext
     public DbSet<LocalFolio> Folios { get; set; } = null!;
     public DbSet<LocalEventInvoice> EventInvoices { get; set; } = null!;
     public DbSet<LocalEventScheduleItem> EventScheduleItems { get; set; } = null!;
+    public DbSet<LocalEventHall> EventHalls { get; set; } = null!;
     public DbSet<LocalSyncEvent> SyncEvents { get; set; } = null!;
     public DbSet<LocalOutboxEvent> OutboxEvents { get; set; } = null!;
     public DbSet<LocalHousekeepingTask> HousekeepingTasks { get; set; } = null!;
@@ -360,6 +361,12 @@ public class LocalDbContext : DbContext
             );
             CREATE INDEX IF NOT EXISTS IX_EventScheduleItems_PropertyId ON EventScheduleItems(PropertyId);
             CREATE INDEX IF NOT EXISTS IX_EventScheduleItems_StartTime ON EventScheduleItems(StartTime);
+            CREATE TABLE IF NOT EXISTS EventHalls (
+                Id TEXT NOT NULL PRIMARY KEY, PropertyId TEXT NOT NULL, Name TEXT NOT NULL,
+                Code TEXT NOT NULL, Capacity INTEGER NOT NULL, IsActive INTEGER NOT NULL DEFAULT 1,
+                UpdatedAt TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS IX_EventHalls_PropertyId ON EventHalls(PropertyId);
         ");
         try { await Database.ExecuteSqlRawAsync("ALTER TABLE EventScheduleItems ADD COLUMN HallCode TEXT NOT NULL DEFAULT ''"); }
         catch (Microsoft.Data.Sqlite.SqliteException ex) when (ex.SqliteErrorCode == 1 && ex.Message.Contains("duplicate column", StringComparison.OrdinalIgnoreCase)) { }

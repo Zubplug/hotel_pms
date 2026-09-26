@@ -1748,6 +1748,32 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                 if (staleSchedule.Any()) dbContext.EventScheduleItems.RemoveRange(staleSchedule);
             }
 
+            if (root.TryGetProperty("eventHalls", out var eventHallsArray))
+            {
+                var incomingHallIds = new HashSet<string>();
+                foreach (var el in eventHallsArray.EnumerateArray())
+                {
+                    var id = el.TryGetProperty("id", out var idEl) ? idEl.GetString() : null;
+                    if (string.IsNullOrWhiteSpace(id)) continue;
+                    incomingHallIds.Add(id);
+                    var hall = dbContext.EventHalls.Local.FirstOrDefault(x => x.Id == id)
+                        ?? await dbContext.EventHalls.FirstOrDefaultAsync(x => x.Id == id, stoppingToken);
+                    if (hall == null)
+                    {
+                        hall = new LodgeCore.Desktop.Data.Entities.LocalEventHall { Id = id, PropertyId = propertyId };
+                        dbContext.EventHalls.Add(hall);
+                    }
+                    hall.PropertyId = propertyId;
+                    hall.Name = el.TryGetProperty("name", out var name) ? name.GetString() ?? "Hall" : "Hall";
+                    hall.Code = el.TryGetProperty("code", out var code) ? code.GetString() ?? "" : "";
+                    hall.Capacity = el.TryGetProperty("capacity", out var capacity) ? capacity.GetInt32() : 0;
+                    hall.IsActive = el.TryGetProperty("isActive", out var active) ? active.GetBoolean() : true;
+                    hall.UpdatedAt = DateTime.UtcNow;
+                }
+                var staleHalls = await dbContext.EventHalls.Where(x => x.PropertyId == propertyId && !incomingHallIds.Contains(x.Id)).ToListAsync(stoppingToken);
+                if (staleHalls.Any()) dbContext.EventHalls.RemoveRange(staleHalls);
+            }
+
             // 6. POS Outlets
             if (root.TryGetProperty("posOutlets", out var posOutletsArray))
             {
