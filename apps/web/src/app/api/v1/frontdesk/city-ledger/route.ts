@@ -7,6 +7,23 @@ import { requireOrganizationContext } from '@/lib/organization-access';
 import { hasPermission } from '@/lib/rbac';
 
 const frontDeskRoles = ['FRONT_DESK', 'FRONT_DESK_MANAGER', 'RECEPTIONIST'];
+type CityLedgerRow = {
+  entryId: string | null;
+  accountId: string;
+  invoiceId: string | null;
+  invoiceNumber: string | null;
+  entryKind: string;
+  accountType: string;
+  accountName: string;
+  guestName: string | null;
+  amount: number;
+  paidAmount: number;
+  outstandingAmount: number;
+  currency: string;
+  status: string;
+  reference: string | null;
+  createdAt: Date;
+};
 
 export async function GET(req: NextRequest) {
   const session = await auth();
@@ -26,7 +43,7 @@ export async function GET(req: NextRequest) {
     include: { account: true, invoice: true, allocations: true, guest: { select: { firstName: true, lastName: true } } },
     orderBy: { createdAt: 'desc' },
   });
-  const rows = entries.map(entry => {
+  const rows: CityLedgerRow[] = entries.map(entry => {
     const paid = entry.type === 'PAYMENT'
       ? entry.allocations.reduce((sum, allocation) => sum + Number(allocation.amount), 0)
       : entry.allocations.filter(allocation => allocation.invoiceId === entry.invoiceId).reduce((sum, allocation) => sum + Number(allocation.amount), 0);
