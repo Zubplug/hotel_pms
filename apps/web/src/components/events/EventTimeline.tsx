@@ -1,101 +1,106 @@
 'use client';
 
-import React from 'react';
-import { Card } from '@/components/ui/card';
+import Link from 'next/link';
+import { CalendarClock, ChevronRight, CircleAlert, Clock3, Users } from 'lucide-react';
 
-// Config
-const START_HOUR = 8;
-const END_HOUR = 22; // 10 PM
-const HOURS = Array.from({ length: END_HOUR - START_HOUR + 1 }, (_, i) => i + START_HOUR);
+const START_HOUR = 6;
+const END_HOUR = 24;
+const TOTAL_HOURS = END_HOUR - START_HOUR;
+const HOURS = Array.from({ length: TOTAL_HOURS }, (_, index) => START_HOUR + index);
 
-export function EventTimeline({ halls, bookings }: { halls: any[], bookings: any[] }) {
-  
-  // Helper to calculate left % and width % based on time
-  const getStyleForBooking = (startTime: Date, endTime: Date) => {
-    const start = new Date(startTime);
-    const end = new Date(endTime);
-    
-    // Normalize to today's grid (assuming all bookings passed in are for "today" or a specific viewed day)
-    // For simplicity, we just use the hour and minutes
-    const startDecimal = start.getHours() + start.getMinutes() / 60;
-    const endDecimal = end.getHours() + end.getMinutes() / 60;
-    
-    const totalHours = END_HOUR - START_HOUR + 1;
-    
-    // If it starts before the grid, cap it at 0
-    const effectiveStart = Math.max(startDecimal - START_HOUR, 0);
-    const effectiveEnd = Math.min(endDecimal - START_HOUR, totalHours);
-    
-    const duration = effectiveEnd - effectiveStart;
-    
-    return {
-      left: `${(effectiveStart / totalHours) * 100}%`,
-      width: `${(duration / totalHours) * 100}%`,
-    };
+type Hall = { id: string; name: string; code?: string; capacity?: number };
+type Booking = {
+  id: string;
+  eventId: string;
+  hallId: string;
+  startTime: Date | string;
+  endTime: Date | string;
+  setupBufferMinutes?: number;
+  teardownBufferMinutes?: number;
+  status?: string;
+  event?: { name?: string; contactName?: string; expectedGuests?: number; status?: string };
+};
+
+const statusStyles: Record<string, { bar: string; badge: string; label: string }> = {
+  CONFIRMED: { bar: 'border-emerald-300 bg-emerald-50', badge: 'bg-emerald-100 text-emerald-800', label: 'Confirmed' },
+  TENTATIVE: { bar: 'border-amber-300 bg-amber-50', badge: 'bg-amber-100 text-amber-800', label: 'Tentative' },
+  INQUIRY: { bar: 'border-sky-300 bg-sky-50', badge: 'bg-sky-100 text-sky-800', label: 'Inquiry' },
+  IN_SERVICE: { bar: 'border-violet-300 bg-violet-50', badge: 'bg-violet-100 text-violet-800', label: 'In service' },
+  COMPLETED: { bar: 'border-slate-300 bg-slate-50', badge: 'bg-slate-200 text-slate-700', label: 'Completed' },
+};
+
+function clock(value: Date | string) {
+  return new Date(value).toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit' });
+}
+
+function minutesFromStart(value: Date | string) {
+  const date = new Date(value);
+  return date.getHours() * 60 + date.getMinutes() - START_HOUR * 60;
+}
+
+function blockStyle(startTime: Date | string, endTime: Date | string, before = 0, after = 0, viewDate: Date) {
+  const dayStart = new Date(viewDate.getFullYear(), viewDate.getMonth(), viewDate.getDate()).getTime();
+  const start = Math.max(((new Date(startTime).getTime() - dayStart) / 60000) - before, 0);
+  const end = Math.min(((new Date(endTime).getTime() - dayStart) / 60000) + after, TOTAL_HOURS * 60);
+  return {
+    left: `${(start / (TOTAL_HOURS * 60)) * 100}%`,
+    width: `${Math.max(((end - start) / (TOTAL_HOURS * 60)) * 100, 1.5)}%`,
   };
+}
 
-  return (
-    <Card className="w-full overflow-hidden border">
-      <div className="flex overflow-x-auto">
-        {/* Resource Column */}
-        <div className="w-48 flex-none border-r bg-slate-50 sticky left-0 z-20">
-          <div className="h-12 border-b flex items-center px-4 font-medium text-xs text-muted-foreground uppercase">
-            Spaces
+function isToday(value: Date) {
+  const now = new Date();
+  return value.getFullYear() === now.getFullYear() && value.getMonth() === now.getMonth() && value.getDate() === now.getDate();
+}
+
+export function EventTimeline({ halls, bookings, viewDate }: { halls: Hall[]; bookings: Booking[]; viewDate: Date }) {
+  const activeBookings = bookings.filter((booking) => booking.status !== 'CANCELLED' && booking.event?.status !== 'CANCELLED');
+  const nowOffset = minutesFromStart(new Date());
+  const showNow = isToday(viewDate) && nowOffset >= 0 && nowOffset <= TOTAL_HOURS * 60;
+
+  return <div className="overflow-hidden rounded-2xl border border-[#eadfd8] bg-white">
+    <div className="flex items-center justify-between border-b border-[#eadfd8] bg-[#fffaf7] px-4 py-3 text-xs text-[#947d72] sm:px-5">
+      <div className="flex items-center gap-2"><CalendarClock className="h-4 w-4 text-orange-600" /><span>Local venue time · {START_HOUR.toString().padStart(2, '0')}:00–00:00</span></div>
+      <span className="hidden font-medium sm:inline">{activeBookings.length} scheduled event{activeBookings.length === 1 ? '' : 's'}</span>
+    </div>
+    <div className="overflow-x-auto">
+      <div className="min-w-[1180px]">
+        <div className="flex border-b border-[#eadfd8] bg-[#fcfaf8]">
+          <div className="sticky left-0 z-20 flex w-[230px] flex-none items-center border-r border-[#eadfd8] bg-[#fcfaf8] px-5 py-3 text-[10px] font-bold uppercase tracking-[0.16em] text-[#947d72]">Function space</div>
+          <div className="relative flex min-w-0 flex-1">
+            {HOURS.map((hour) => <div key={hour} className="flex-1 border-r border-[#eadfd8] px-2 py-3 text-[10px] font-semibold text-[#947d72]">{hour === 12 ? '12 PM' : hour > 12 ? `${hour - 12} PM` : `${hour} AM`}</div>)}
+            {showNow && <div className="absolute bottom-0 top-0 z-10 w-px bg-orange-500" style={{ left: `${(nowOffset / (TOTAL_HOURS * 60)) * 100}%` }}><span className="absolute -top-1 -translate-x-1/2 rounded-full bg-orange-600 px-1.5 py-0.5 text-[9px] font-bold text-white">NOW</span></div>}
           </div>
-          {halls.map(hall => (
-            <div key={hall.id} className="h-20 border-b flex flex-col justify-center px-4 bg-white">
-              <span className="font-medium text-sm truncate">{hall.name}</span>
+        </div>
+        {!halls.length ? <div className="px-6 py-16 text-center text-sm text-[#947d72]">No active function spaces are configured.</div> : halls.map((hall) => {
+          const hallBookings = activeBookings.filter((booking) => booking.hallId === hall.id);
+          return <div key={hall.id} className="flex min-h-[112px] border-b border-[#eadfd8] last:border-b-0">
+            <div className="sticky left-0 z-20 flex w-[230px] flex-none flex-col justify-center border-r border-[#eadfd8] bg-white px-5">
+              <div className="flex items-center gap-2"><span className="truncate text-sm font-bold text-[#24130d]">{hall.name}</span>{hall.code && <span className="rounded bg-[#fff3e8] px-1.5 py-0.5 text-[9px] font-bold text-orange-800">{hall.code}</span>}</div>
+              <div className="mt-1 flex items-center gap-2 text-[10px] text-[#947d72]"><Users className="h-3 w-3" /> Capacity {hall.capacity?.toLocaleString() || '—'} · {hallBookings.length} booking{hallBookings.length === 1 ? '' : 's'}</div>
             </div>
-          ))}
-        </div>
-
-        {/* Timeline Grid */}
-        <div className="flex-1 min-w-[800px]">
-          <div className="flex h-12 border-b bg-slate-50">
-            {HOURS.map(hour => (
-              <div key={hour} className="flex-1 flex items-center justify-start px-2 border-r text-xs text-muted-foreground">
-                {hour}:00
-              </div>
-            ))}
-          </div>
-          
-          <div className="relative">
-            {halls.map((hall) => {
-              const hallBookings = bookings.filter(b => b.hallId === hall.id);
-              
-              return (
-                <div key={hall.id} className="flex h-20 border-b relative">
-                  {/* Background Grid Lines */}
-                  {HOURS.map(hour => (
-                    <div key={hour} className="flex-1 border-r border-dashed opacity-50" />
-                  ))}
-
-                  {/* Real Event Blocks */}
-                  {hallBookings.map(booking => {
-                    const style = getStyleForBooking(booking.startTime, booking.endTime);
-                    const isSetup = false; // Could render a separate block for setup buffers
-                    
-                    return (
-                      <div 
-                        key={booking.id}
-                        className="absolute h-[70%] top-[15%] bg-blue-100 border border-blue-300 rounded px-3 py-1 overflow-hidden shadow-sm"
-                        style={style}
-                        title={`Event: ${booking.event?.name}\nTime: ${new Date(booking.startTime).toLocaleTimeString()} - ${new Date(booking.endTime).toLocaleTimeString()}`}
-                      >
-                        <div className="text-xs font-bold text-blue-900 truncate">{booking.event?.name || 'Booking'}</div>
-                        <div className="text-[10px] text-blue-700 truncate">
-                          {new Date(booking.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - 
-                          {new Date(booking.endTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )
-            })}
-          </div>
-        </div>
+            <div className="relative min-w-0 flex-1">
+              <div className="absolute inset-0 flex">{HOURS.map((hour) => <div key={hour} className="flex-1 border-r border-dashed border-[#eadfd8]" />)}</div>
+              {hallBookings.length === 0 && <div className="relative flex h-full items-center px-6 text-xs text-[#c2afa4]">Available for new bookings</div>}
+              {hallBookings.map((booking) => {
+                const style = statusStyles[booking.event?.status || ''] || statusStyles.TENTATIVE;
+                const setup = booking.setupBufferMinutes || 0;
+                const teardown = booking.teardownBufferMinutes || 0;
+                return <div key={booking.id} className="absolute top-3 h-[88px]" style={blockStyle(booking.startTime, booking.endTime, setup, teardown, viewDate)}>
+                  <div className="absolute inset-y-0 left-0 right-0 rounded-xl border border-dashed border-slate-300/70 bg-slate-100/50" />
+                  <Link href={`/fnb/events/bookings/${booking.eventId}`} className={`group relative z-10 flex h-full min-w-[150px] flex-col justify-between overflow-hidden rounded-xl border-2 p-2.5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${style.bar}`}>
+                    <div className="min-w-0"><div className="flex items-start justify-between gap-2"><p className="truncate text-xs font-bold text-[#24130d]">{booking.event?.name || 'Event booking'}</p><ChevronRight className="h-3.5 w-3.5 shrink-0 opacity-50 transition group-hover:translate-x-0.5" /></div><p className="mt-0.5 truncate text-[10px] text-[#6f5d53]">{booking.event?.contactName || 'Client not specified'}</p></div>
+                    <div><div className="flex items-center justify-between gap-2 text-[10px] font-semibold text-[#6f5d53]"><span>{clock(booking.startTime)}–{clock(booking.endTime)}</span><span>{booking.event?.expectedGuests?.toLocaleString() || 0} guests</span></div><div className="mt-1 flex items-center gap-1.5"><span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ${style.badge}`}>{style.label}</span>{setup + teardown > 0 && <span className="truncate text-[9px] text-[#947d72]">Buffers {setup + teardown}m</span>}</div></div>
+                  </Link>
+                </div>;
+              })}
+              {showNow && <div className="pointer-events-none absolute bottom-0 top-0 z-20 w-px bg-orange-500/70" style={{ left: `${(nowOffset / (TOTAL_HOURS * 60)) * 100}%` }} />}
+            </div>
+          </div>;
+        })}
       </div>
-    </Card>
-  );
+    </div>
+    <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-[#eadfd8] bg-[#fffaf7] px-4 py-3 text-[10px] text-[#947d72] sm:px-5"><span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-emerald-500" /> Confirmed</span><span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-amber-400" /> Tentative</span><span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-sky-400" /> Inquiry</span><span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full border border-dashed border-slate-400 bg-slate-100" /> Setup / teardown buffer</span>{showNow && <span className="ml-auto flex items-center gap-1.5 font-semibold text-orange-700"><Clock3 className="h-3.5 w-3.5" /> Current time</span>}</div>
+    {!activeBookings.length && halls.length > 0 && <div className="flex items-center gap-2 border-t border-orange-100 bg-orange-50/50 px-5 py-3 text-xs text-orange-800"><CircleAlert className="h-4 w-4" /> No active bookings are scheduled for this date. The spaces remain available for new event sales.</div>}
+  </div>;
 }
