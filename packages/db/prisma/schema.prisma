@@ -39,6 +39,7 @@ model Organization {
   channelConnections ChannelConnection[]
   channelSyncEvents  ChannelSyncEvent[]
   externalAuditorAccesses ExternalAuditorAccess[]
+  externalAuditorInvitations ExternalAuditorInvitation[]
 
   billingCustomer    BillingCustomer?
   subscriptions      Subscription[]
@@ -2004,6 +2005,8 @@ model User {
   externalAuditorAccesses ExternalAuditorAccess[]
   grantedExternalAuditorAccesses ExternalAuditorAccess[] @relation("ExternalAuditorAccessGrantedBy")
   revokedExternalAuditorAccesses ExternalAuditorAccess[] @relation("ExternalAuditorAccessRevokedBy")
+  externalAuditorInvitations ExternalAuditorInvitation[] @relation("ExternalAuditorInvitationUser")
+  sentExternalAuditorInvitations ExternalAuditorInvitation[] @relation("ExternalAuditorInvitationInvitedBy")
 }
 
 // FCM device tokens for push notifications
@@ -2332,6 +2335,25 @@ model ExternalAuditorAccess {
   @@index([userId, status])
   @@index([propertyId, auditPeriodStart, auditPeriodEnd])
   @@index([organizationId, propertyId])
+}
+
+model ExternalAuditorInvitation {
+  id             String    @id @default(uuid()) @db.Uuid
+  email          String
+  organizationId String    @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String?   @db.Uuid
+  user           User?     @relation("ExternalAuditorInvitationUser", fields: [userId], references: [id], onDelete: SetNull)
+  tokenHash      String    @unique
+  expiresAt      DateTime  @db.Timestamptz
+  acceptedAt     DateTime? @db.Timestamptz
+  invitedById    String    @db.Uuid
+  invitedBy      User      @relation("ExternalAuditorInvitationInvitedBy", fields: [invitedById], references: [id])
+  createdAt      DateTime  @default(now()) @db.Timestamptz
+  updatedAt      DateTime  @updatedAt @db.Timestamptz
+
+  @@index([email, organizationId])
+  @@index([expiresAt, acceptedAt])
 }
 
 model OrganizationMembership {

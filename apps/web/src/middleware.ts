@@ -37,7 +37,7 @@ const { auth } = NextAuth({
 });
 
 // Routes that do NOT require authentication via NextAuth cookies
-const PUBLIC_PATHS = ['/login', '/api/auth', '/api/v1/hardware', '/api/manager', '/api/mobile', '/api/desktop-update', '/api/v1/pos', '/api/v1/sync', '/desktop'];
+const PUBLIC_PATHS = ['/login', '/api/auth', '/api/v1/hardware', '/api/manager', '/api/mobile', '/api/desktop-update', '/api/v1/pos', '/api/v1/sync', '/desktop', '/external-auditor/invite', '/api/v1/external-auditor/invitations/accept'];
 
 const MANAGEMENT_ROLES = ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'ADMIN', 'ACCOUNTANT', 'DIRECTOR'];
 const POS_ROLES = ['WAITER', 'WAITRESS', 'CASHIER', 'POS', 'POS_OPERATOR'];
