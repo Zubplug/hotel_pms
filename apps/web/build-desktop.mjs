@@ -12,7 +12,9 @@ const dirsToHide = [
   { src: path.join(process.cwd(), 'src/app/hq'), dest: path.join(process.cwd(), 'src/app/_hq_flat') },
   { src: path.join(process.cwd(), 'src/app/hub'), dest: path.join(process.cwd(), 'src/app/_hub') },
   { src: path.join(process.cwd(), 'src/app/admin'), dest: path.join(process.cwd(), 'src/app/_admin') },
-  { src: path.join(process.cwd(), 'src/app/night-audit'), dest: path.join(process.cwd(), 'src/app/_night-audit') }
+  { src: path.join(process.cwd(), 'src/app/night-audit'), dest: path.join(process.cwd(), 'src/app/_night-audit') },
+  { src: path.join(process.cwd(), 'src/app/(external-auditor)'), dest: path.join(process.cwd(), 'src/app/_external-auditor_group') },
+  { src: path.join(process.cwd(), 'src/app/external-auditor'), dest: path.join(process.cwd(), 'src/app/_external-auditor') }
 ];
 
 // These cashier pages reuse admin POS screens. When the admin route group is
