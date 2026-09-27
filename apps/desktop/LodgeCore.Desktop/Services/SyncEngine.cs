@@ -3124,6 +3124,8 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
         var eventsToPush = new List<LocalOutboxEvent>();
         await RefreshResolvedFrontDeskConflictsAsync(dbContext, identity, token, allPending, stoppingToken);
         allPending.RemoveAll(e => e.Status == "RESOLVED");
+        var originalOrder = allPending.Select((e, i) => new { e, i }).ToDictionary(x => x.e.Id, x => x.i);
+
         foreach (var group in allPending.GroupBy(e => e.AggregateId))
         {
              foreach (var evt in group.OrderBy(e => e.Sequence))
@@ -3135,7 +3137,11 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
              }
         }
 
-        var pendingEvents = eventsToPush.OrderBy(e => e.CreatedAt).Take(50).ToList();
+        var pendingEvents = eventsToPush
+            .OrderBy(e => e.CreatedAt)
+            .ThenBy(e => originalOrder[e.Id])
+            .Take(50)
+            .ToList();
 
         if (!pendingEvents.Any()) 
         {
