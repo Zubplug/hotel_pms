@@ -256,7 +256,7 @@ export function FrontDeskQuickCheckoutDialog({ open, onOpenChange, propertyId, i
                     <CheckCircle2 className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" />
                     <div>
                       <p className="font-bold text-blue-300 text-sm">Corporate Account</p>
-                      <p className="text-blue-400/70 text-xs mt-1 leading-relaxed">Guest has an outstanding balance of <strong className="text-blue-300">{formatCurrency(balance)}</strong>, which will be routed to the City Ledger upon checkout.</p>
+                      <p className="text-blue-400/70 text-xs mt-1 leading-relaxed">The charges for this reservation will be automatically routed to the Corporate City Ledger upon checkout.</p>
                     </div>
                   </div>
                 ) : hasGuestCredit ? (
