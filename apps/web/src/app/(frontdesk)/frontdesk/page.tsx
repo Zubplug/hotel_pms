@@ -41,6 +41,9 @@ import {
   TrendingUp,
   DoorOpen,
   BedDouble,
+  Landmark,
+  Wallet,
+  ReceiptText,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -625,10 +628,10 @@ export default function ReceptionistDashboardPage() {
         {/* ── Bottom quick links strip ───────────────────────────────────── */}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
           {[
-            { label: 'Cashier Shift',  icon: TrendingUp, action: () => router.push('/frontdesk/cashier'),      color: 'text-emerald-400' },
             { label: 'Room Status',    icon: Key,         action: () => router.push('/frontdesk/rooms'),        color: 'text-indigo-400' },
-            { label: 'Housekeeping',   icon: Briefcase,   action: () => router.push('/frontdesk/housekeeping'), color: 'text-amber-400' },
-            { label: 'Laundry',        icon: Shirt,       action: () => router.push('/laundry'),                 color: 'text-cyan-400' },
+            { label: 'City Ledger',    icon: Landmark,    action: () => router.push('/frontdesk/city-ledger'), color: 'text-emerald-400' },
+            { label: 'Guest Credit',   icon: Wallet,      action: () => router.push('/frontdesk/guest-credits'), color: 'text-amber-400' },
+            { label: 'Event Invoice',  icon: ReceiptText, action: () => router.push('/frontdesk/event-invoices'), color: 'text-cyan-400' },
             { label: 'Re-Encode Card', icon: KeySquare,   action: () => setReencodeCardOpen(true),             color: 'text-rose-400' },
             { label: 'Quick Checkout', icon: KeySquare,   action: () => setQuickCheckoutOpen(true),            color: 'text-violet-400' },
           ].map(({ label, icon: Icon, action, color }) => (

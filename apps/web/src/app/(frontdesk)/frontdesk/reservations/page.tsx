@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { goBack } from '@/lib/frontdesk-navigation';
 import { Search, User, LogIn, ArrowRight, Clock, ArrowLeft, CheckCircle2, UserPlus, CreditCard, Wallet, Landmark, CalendarCheck, Sparkles, ReceiptText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -11,8 +11,6 @@ import { useProperty } from '@/components/PropertyProvider';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { format } from 'date-fns';
 import { formatRoomNumber } from '@/lib/format-room';
-import { GuestCreditRefundDialog } from '@/components/accountant/GuestCreditRefundDialog';
-import { FrontDeskCityLedgerPaymentDialog } from '@/components/frontdesk/FrontDeskCityLedgerPaymentDialog';
 
 interface Reservation {
   id: string;
@@ -35,7 +33,13 @@ export default function FrontDeskReservationsPage() {
   const { provider, isOnline } = useLodgeCoreProvider();
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [activeFilter, setActiveFilter] = useState('ALL');
+  const searchParams = useSearchParams();
+  const filterParam = searchParams.get('filter');
+  const [activeFilter, setActiveFilter] = useState(filterParam || 'ALL');
+
+  React.useEffect(() => {
+    if (filterParam) setActiveFilter(filterParam);
+  }, [filterParam]);
 
   React.useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search), 300);
@@ -77,29 +81,6 @@ export default function FrontDeskReservationsPage() {
       };
       return await provider.reservations.list(propertyId, params);
     },
-  });
-
-  const { data: creditsData, isLoading: creditsLoading } = useQuery({
-    queryKey: ['frontdesk', 'guestCredits', propertyId],
-    queryFn: async () => {
-      return provider.guestCredits.list(propertyId);
-    },
-    enabled: activeFilter === 'GUEST_CREDITS',
-    refetchInterval: 30_000,
-  });
-
-  const { data: cityLedgerData, isLoading: cityLedgerLoading, refetch: refetchCityLedger } = useQuery({
-    queryKey: ['frontdesk', 'cityLedger', propertyId],
-    queryFn: () => provider.cityLedger.list(propertyId),
-    enabled: activeFilter === 'CITY_LEDGER',
-    refetchInterval: isOnline ? 30000 : false,
-  });
-
-  const { data: eventInvoicesData, isLoading: eventInvoicesLoading } = useQuery({
-    queryKey: ['frontdesk', 'eventInvoices', propertyId, debouncedSearch],
-    queryFn: () => provider.eventInvoices.list(propertyId, debouncedSearch),
-    enabled: activeFilter === 'EVENT_INVOICES',
-    refetchInterval: isOnline ? 30000 : false,
   });
 
 
@@ -194,9 +175,6 @@ export default function FrontDeskReservationsPage() {
             { id: 'IN_HOUSE', label: 'In-House' },
             { id: 'DEPARTURES', label: 'Departures' },
             { id: 'UNPAID', label: 'Unpaid Balance', icon: CreditCard },
-            { id: 'GUEST_CREDITS', label: 'Guest Credits', icon: Wallet },
-            { id: 'CITY_LEDGER', label: 'City Ledger', icon: Landmark },
-            { id: 'EVENT_INVOICES', label: 'Event Invoices', icon: ReceiptText },
           ].map(filter => (
             <button
               key={filter.id}
@@ -221,106 +199,6 @@ export default function FrontDeskReservationsPage() {
         <div className="flex justify-center p-12">
           <div className="w-10 h-10 border-4 border-slate-200 border-t-blue-600 rounded-full animate-spin"></div>
         </div>
-      ) : activeFilter === 'EVENT_INVOICES' ? (
-        eventInvoicesLoading ? <div className="flex justify-center p-12"><div className="w-10 h-10 border-4 border-slate-200 border-t-indigo-600 rounded-full animate-spin" /></div> : (() => {
-          const rawInvoices: any[] = Array.isArray(eventInvoicesData) ? eventInvoicesData : ((eventInvoicesData as any)?.data ?? []);
-          return rawInvoices.length === 0 ? (
-            <div className="text-center p-12 bg-slate-50 rounded-3xl border border-slate-100"><ReceiptText className="w-12 h-12 text-slate-300 mx-auto mb-3" /><h3 className="text-lg font-bold text-slate-900">No event invoices</h3><p className="text-slate-500">Issued event invoices for this property will appear here.</p></div>
-          ) : (
-            <div className="overflow-x-auto rounded-3xl border border-slate-200 bg-white shadow-sm"><table className="w-full text-sm"><thead className="border-b bg-slate-50 text-left text-xs uppercase tracking-wider text-slate-500"><tr><th className="px-5 py-4">Client</th><th className="px-5 py-4">Event</th><th className="px-5 py-4">Status</th><th className="px-5 py-4 text-right">Outstanding</th><th className="px-5 py-4">Action</th></tr></thead><tbody className="divide-y">{rawInvoices.map((invoice: any) => { const outstanding = Math.max(0, Number(invoice.totalAmount || 0) - Number(invoice.paidAmount || 0)); const folioId = invoice.folioId || invoice.folio?.id; const clientName = invoice.clientName || (invoice.event?.guest ? `${invoice.event.guest.firstName || ''} ${invoice.event.guest.lastName || ''}`.trim() : invoice.event?.corporateAccount?.name || invoice.event?.contactName || '—'); const ledgerEntry = invoice.cityLedgerEntryId ? { entryId: invoice.cityLedgerEntryId, accountId: invoice.cityLedgerAccountId, accountType: 'CORPORATE', accountName: clientName, invoiceId: invoice.cityLedgerInvoiceId, outstandingAmount: outstanding, currency: invoice.currency } : null; return <tr key={invoice.id}><td className="px-5 py-4 font-semibold text-slate-800">{clientName}</td><td className="px-5 py-4 text-slate-700">{invoice.eventName || invoice.event?.name || 'Event'}</td><td className="px-5 py-4"><span className={`rounded-full px-2.5 py-1 text-xs font-bold ${invoice.status === 'PAID' ? 'bg-emerald-100 text-emerald-700' : invoice.status === 'PARTIAL' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}`}>{invoice.status}</span></td><td className="px-5 py-4 text-right font-extrabold text-slate-900">{invoice.currency || 'NGN'} {outstanding.toLocaleString()}</td><td className="px-5 py-4">{folioId && outstanding > 0 ? <Link href={`/frontdesk/folios?folioId=${encodeURIComponent(folioId)}&eventInvoiceId=${encodeURIComponent(invoice.id)}`} className="inline-flex items-center gap-2 rounded-full bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-700"><CreditCard className="h-3.5 w-3.5" /> Receive payment</Link> : ledgerEntry && outstanding > 0 ? <FrontDeskCityLedgerPaymentDialog entry={ledgerEntry} onComplete={() => Promise.resolve()} /> : <span className="text-xs text-slate-400">{outstanding <= 0 ? 'Settled' : 'Payment route unavailable'}</span>}</td></tr>; })}</tbody></table></div>
-          );
-        })()
-      ) : activeFilter === 'CITY_LEDGER' ? (
-        cityLedgerLoading ? <div className="flex justify-center p-12"><div className="w-10 h-10 border-4 border-slate-200 border-t-indigo-600 rounded-full animate-spin" /></div> : (() => {
-          const rawEntries: any[] = Array.isArray(cityLedgerData) ? cityLedgerData : ((cityLedgerData as any)?.data ?? []);
-          const entries = Object.values(rawEntries.reduce((groups: Record<string, any>, entry: any) => {
-            if (entry.accountType !== 'CORPORATE') {
-              groups[`walkout:${entry.entryId}`] = entry;
-              return groups;
-            }
-            const key = `corporate:${entry.accountId}:${entry.entryKind === 'CORPORATE_ADVANCE' ? 'advance' : 'ledger'}`;
-            const current = groups[key];
-            groups[key] = current ? {
-              ...current,
-              amount: Number(current.amount || 0) + Number(entry.amount || 0),
-              paidAmount: Number(current.paidAmount || 0) + Number(entry.paidAmount || 0),
-              outstandingAmount: Number(current.outstandingAmount || 0) + Number(entry.outstandingAmount || 0),
-              status: current.status === 'PENDING_SETTLEMENT' || entry.status === 'PENDING_SETTLEMENT' ? 'PENDING_SETTLEMENT' : current.status,
-              invoiceNumber: 'Account balance',
-            } : { ...entry, invoiceNumber: 'Account balance' };
-            return groups;
-          }, {}));
-          return entries.length === 0 ? <div className="text-center p-12 bg-slate-50 rounded-3xl border border-slate-100"><Landmark className="w-12 h-12 text-slate-300 mx-auto mb-3" /><h3 className="text-lg font-bold text-slate-900">No open city-ledger balances</h3><p className="text-slate-500">Skipper/walkout invoices, corporate balances, and unapplied corporate advances will appear here after checkout.</p></div> : <div className="overflow-x-auto rounded-3xl border border-slate-200 bg-white shadow-sm"><table className="w-full text-sm"><thead className="border-b bg-slate-50 text-left text-xs uppercase tracking-wider text-slate-500"><tr><th className="px-5 py-4">Ledger</th><th className="px-5 py-4">Guest / organisation</th><th className="px-5 py-4">Reference</th><th className="px-5 py-4 text-right">Outstanding</th><th className="px-5 py-4">Action</th></tr></thead><tbody className="divide-y">{entries.map((entry: any) => <tr key={entry.accountType === 'CORPORATE' ? `corporate:${entry.accountId}:${entry.entryKind}` : entry.entryId}><td className="px-5 py-4"><span className={`rounded-full px-2.5 py-1 text-xs font-bold ${entry.accountType === 'CORPORATE' ? 'bg-blue-100 text-blue-700' : 'bg-rose-100 text-rose-700'}`}>{entry.entryKind === 'CORPORATE_ADVANCE' ? 'Corporate advance' : entry.accountType === 'CORPORATE' ? 'Corporate account' : 'Skipper / Walkout'}</span><div className="mt-2 text-xs text-slate-500">{entry.accountName}</div></td><td className="px-5 py-4 font-medium text-slate-800">{entry.accountType === 'CORPORATE' ? entry.accountName : (entry.guestName || '—')}</td><td className="px-5 py-4 font-mono text-xs text-slate-500">{entry.invoiceNumber || entry.entryId.slice(0, 8)}</td><td className="px-5 py-4 text-right font-extrabold text-slate-900">{new Intl.NumberFormat('en-NG', { style: 'currency', currency: entry.currency || 'NGN', maximumFractionDigits: 0 }).format(Number(entry.outstandingAmount))}</td><td className="px-5 py-4"><div className="flex flex-wrap gap-2">{entry.entryKind === 'CORPORATE_ADVANCE' && <><FrontDeskCityLedgerPaymentDialog entry={entry} onComplete={refetchCityLedger} /><GuestCreditRefundDialog entryId={entry.entryId} guestName={entry.accountName} amount={Number(entry.outstandingAmount)} currency={entry.currency || 'NGN'} propertyId={propertyId} accountType="CORPORATE_ADVANCE" /></>}{entry.entryKind !== 'CORPORATE_ADVANCE' && <FrontDeskCityLedgerPaymentDialog entry={entry} onComplete={refetchCityLedger} />}</div></td></tr>)}</tbody></table></div>;
-        })()
-      ) : activeFilter === 'GUEST_CREDITS' ? (
-        /* ── Guest Credits Panel ───────────────────────────────────────── */
-        creditsLoading ? (
-          <div className="flex justify-center p-12">
-            <div className="w-10 h-10 border-4 border-slate-200 border-t-emerald-600 rounded-full animate-spin"></div>
-          </div>
-        ) : (() => {
-          const credits: any[] = Array.isArray(creditsData) ? creditsData : ((creditsData as any)?.data ?? []);
-          return credits.length === 0 ? (
-            <div className="text-center p-12 bg-slate-50 rounded-3xl border border-slate-100">
-              <Wallet className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-              <h3 className="text-lg font-bold text-slate-900">No Guest Credits</h3>
-              <p className="text-slate-500">No guests with available credit (Refund Owed) at this property.</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-8 duration-700">
-              {credits.map((credit: any) => (
-                <div key={credit.guestId} className="group bg-white rounded-3xl p-6 border border-emerald-200 shadow-sm hover:shadow-xl hover:border-emerald-400 transition-all flex flex-col h-full">
-                  <div className="absolute top-0 left-0 w-full h-1.5 bg-emerald-500 rounded-t-3xl" />
-
-                  <div className="flex justify-between items-start mb-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center font-bold text-emerald-700 text-lg">
-                        {credit.guestName?.[0] ?? '?'}
-                      </div>
-                      <div>
-                        <h3 className="font-bold text-slate-900">{credit.guestName}</h3>
-                        <p className="text-xs text-slate-500">{credit.guestPhone}</p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-xs font-bold text-slate-400 uppercase">Available Credit</p>
-                      <p className="text-xl font-extrabold text-emerald-600">
-                        {new Intl.NumberFormat('en-NG', { style: 'currency', currency: credit.currency || 'NGN', maximumFractionDigits: 0 }).format(credit.availableAmount)}
-                      </p>
-                    </div>
-                  </div>
-
-                  <p className="text-xs text-slate-400 mb-4">
-                    Last activity: {credit.lastActivityAt ? format(new Date(credit.lastActivityAt), 'MMM d, yyyy') : '—'}
-                  </p>
-
-                  <div className="mt-auto pt-4 border-t border-slate-100">
-                    {(credit.creditEntryIds?.[0] || credit.creditEntryId) && (
-                      <div className="mb-2 flex justify-end">
-                        <GuestCreditRefundDialog
-                          entryId={credit.creditEntryIds?.[0] || credit.creditEntryId}
-                          guestId={credit.guestId}
-                          propertyId={propertyId}
-                          guestName={credit.guestName}
-                          amount={Number(credit.availableAmount || 0)}
-                          currency={credit.currency || 'NGN'}
-                        />
-                      </div>
-                    )}
-                    <Button
-                      onClick={() => router.push(`/frontdesk/reservations/walk-in?guestId=${encodeURIComponent(credit.guestId)}`)}
-                      className="w-full rounded-xl h-10 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm disabled:opacity-50"
-                    >
-                      <UserPlus className="w-4 h-4 mr-2" />
-                      Create New Reservation
-                    </Button>
-                    {!isOnline && <p className="text-xs text-amber-600 mt-1 text-center">Offline: reservation and credit application will sync later</p>}
-                  </div>
-                </div>
-              ))}
-            </div>
-          );
-        })()
       ) : filteredReservations.length === 0 ? (
         <div className="text-center p-12 bg-slate-50 rounded-3xl border border-slate-100">
           <User className="w-12 h-12 text-slate-300 mx-auto mb-3" />
