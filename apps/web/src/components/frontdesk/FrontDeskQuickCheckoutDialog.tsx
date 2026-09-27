@@ -129,7 +129,9 @@ export function FrontDeskQuickCheckoutDialog({ open, onOpenChange, propertyId, i
   // legacy desktop-derived value and can represent an exhausted advance
   // deposit as a negative credit even when the persisted folio is settled.
   const balance = (reservation?.folios || []).reduce((total: number, folio: any) => total + Number(folio?.balance ?? 0), 0);
+  const isCorporate = Boolean(reservation?.corporateAccountId || reservation?.corporateAccount);
   const isUnpaid = balance > 0.01;
+  const isGuestUnpaid = isUnpaid && !isCorporate;
   const hasGuestCredit = balance < -0.01;
 
   const guestName = `${reservation?.primaryGuest?.firstName || reservation?.guest?.firstName || 'Guest'} ${reservation?.primaryGuest?.lastName || reservation?.guest?.lastName || ''}`.trim();
@@ -232,14 +234,14 @@ export function FrontDeskQuickCheckoutDialog({ open, onOpenChange, propertyId, i
                 </div>
 
                 {/* Balance status */}
-                {isUnpaid ? (
+                {isGuestUnpaid ? (
                   <div className="rounded-2xl bg-red-500/8 border border-red-500/20 p-4">
                     <div className="flex items-start gap-3">
                       <Wallet className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
                       <div className="flex-1">
                         <p className="font-bold text-red-300 text-sm">Outstanding Balance — Manager Required</p>
                         <p className="text-red-400/80 text-xs mt-1 mb-3 leading-relaxed">Guest must pay <strong className="text-red-300">{formatCurrency(balance)}</strong> before checkout can be processed.</p>
-                        <p className="text-xs text-red-400/60 leading-relaxed mb-3">If the guest cannot settle this balance now, please refer the guest to the Manager or General Cashier.</p>
+                        <p className="text-xs text-red-400/60 leading-relaxed mb-3">If the guest has walked out, contact manager to process as a Skipper from the back-office checkout workflow.</p>
                         <button onClick={() => onOpenChange(false)} className="w-full h-9 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 border border-indigo-500 shadow-[0_0_20px_-5px_rgba(99,102,241,0.5)] transition-all mb-2 flex items-center justify-center gap-2">
                           Collect Payment
                         </button>
@@ -247,6 +249,14 @@ export function FrontDeskQuickCheckoutDialog({ open, onOpenChange, propertyId, i
                           Cancel & View Folio
                         </button>
                       </div>
+                    </div>
+                  </div>
+                ) : isCorporate && isUnpaid ? (
+                  <div className="rounded-2xl bg-blue-500/8 border border-blue-500/20 p-4 flex items-start gap-3">
+                    <CheckCircle2 className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-bold text-blue-300 text-sm">Corporate Account</p>
+                      <p className="text-blue-400/70 text-xs mt-1 leading-relaxed">Guest has an outstanding balance of <strong className="text-blue-300">{formatCurrency(balance)}</strong>, which will be routed to the City Ledger upon checkout.</p>
                     </div>
                   </div>
                 ) : hasGuestCredit ? (
@@ -268,7 +278,7 @@ export function FrontDeskQuickCheckoutDialog({ open, onOpenChange, propertyId, i
                 )}
 
                 {/* Actions */}
-                {!isUnpaid && (
+                {!isGuestUnpaid && (
                   <div className="flex gap-3 pt-2">
                     <button onClick={() => setStep('IDLE')} className="flex-1 h-12 rounded-xl font-bold text-sm text-slate-400 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 transition-all">Cancel</button>
                     <button
