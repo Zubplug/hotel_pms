@@ -2138,6 +2138,13 @@ enum AuditFindingStatus {
   CLOSED
 }
 
+enum AuditFinalPackStatus {
+  DRAFT
+  PENDING_SIGNOFF
+  ISSUED
+  SUPERSEDED
+}
+
 model AuditEngagement {
   id                 String                @id @default(uuid()) @db.Uuid
   organizationId     String                @db.Uuid
@@ -2149,6 +2156,10 @@ model AuditEngagement {
   objective          String?
   scope              String?
   exclusions         String?
+  risks              Json?
+  financialAreas     Json?
+  managementContacts Json?
+  milestones         Json?
   materiality        Decimal?              @db.Decimal(18, 4)
   currency           String?
   auditPeriodStart   DateTime              @db.Date
@@ -2182,6 +2193,8 @@ model AuditEvidenceRequest {
   acceptedAt     DateTime?          @db.Timestamptz
   responseNote   String?
   evidence       Json?
+  comments       Json?
+  attachments    Json?
   createdAt      DateTime           @default(now()) @db.Timestamptz
   updatedAt      DateTime           @updatedAt @db.Timestamptz
 
@@ -2202,11 +2215,17 @@ model AuditWorkpaper {
   population     String?
   sampleSize     Int?
   result         String?
+  expectedResult String?
+  actualResult   String?
+  sampleSelection String?
   status         AuditWorkpaperStatus @default(DRAFT)
   preparedById   String               @db.Uuid
   reviewedById   String?
   evidenceIds    Json?
   reviewerNote   String?
+  reviewerNotes  Json?
+  version        Int                  @default(1)
+  lockedAt       DateTime?            @db.Timestamptz
   signedAt       DateTime?            @db.Timestamptz
   createdAt      DateTime             @default(now()) @db.Timestamptz
   updatedAt      DateTime             @updatedAt @db.Timestamptz
@@ -2228,12 +2247,15 @@ model AuditFinding {
   rootCause      String?
   riskImpact     String?
   recommendation String?
+  controlArea    String?
+  financialImpact Decimal?            @db.Decimal(18, 4)
   severity       AuditFindingSeverity @default(MEDIUM)
   status         AuditFindingStatus   @default(OPEN)
   ownerId        String?
   dueDate        DateTime?            @db.Date
   managementResponse String?
   evidenceIds    Json?
+  linkedTransactionIds Json?
   createdById    String               @db.Uuid
   validatedById  String?
   closedAt       DateTime?            @db.Timestamptz
@@ -2263,6 +2285,26 @@ model AuditActionPlan {
 
   @@index([engagementId, status])
   @@index([propertyId, dueDate])
+}
+
+model AuditFinalPack {
+  id             String              @id @default(uuid()) @db.Uuid
+  engagementId   String              @db.Uuid
+  organizationId String              @db.Uuid
+  propertyId     String              @db.Uuid
+  status         AuditFinalPackStatus @default(DRAFT)
+  packageHash    String              @unique
+  manifest       Json
+  reportManifest Json?
+  auditorSignedAt DateTime?          @db.Timestamptz
+  managementSignedAt DateTime?       @db.Timestamptz
+  issuedAt       DateTime?           @db.Timestamptz
+  createdById    String              @db.Uuid
+  createdAt      DateTime             @default(now()) @db.Timestamptz
+  updatedAt      DateTime             @updatedAt @db.Timestamptz
+
+  @@index([engagementId, status])
+  @@index([propertyId, createdAt])
 }
 
 model ExternalAuditorAccess {

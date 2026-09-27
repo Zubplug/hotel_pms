@@ -19,6 +19,7 @@ import {
   ClipboardCheck,
   Activity,
   GitCompareArrows,
+  Archive,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -42,6 +43,7 @@ const AUDITOR_NAV: NavItem[] = [
   { section: 'Engagement', name: 'Audit operations', href: '/external-auditor/operations', icon: ClipboardCheck },
   { section: 'Engagement', name: 'Readiness & activity', href: '/external-auditor/readiness', icon: Activity },
   { section: 'Deliverables', name: 'Reconciliation center', href: '/external-auditor/assurance', icon: GitCompareArrows },
+  { section: 'Deliverables', name: 'Final audit pack', href: '/external-auditor/final-pack', icon: Archive },
   { section: 'Deliverables', name: 'Reports & exports', href: '/external-auditor/reports', icon: FileText },
 ];
 

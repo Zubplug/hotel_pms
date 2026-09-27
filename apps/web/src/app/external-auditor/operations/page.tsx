@@ -1,6 +1,7 @@
 'use client';
 
 import { FormEvent, useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { ClipboardCheck, FilePlus2, Flag, Loader2, Plus, ShieldAlert, UploadCloud } from 'lucide-react';
 
 type Engagement = { id: string; name: string; propertyId: string; status: string; auditType: string; auditPeriodStart: string; auditPeriodEnd: string; materiality?: number | null };
@@ -12,7 +13,7 @@ const human = (value: string) => value.replaceAll('_', ' ').toLowerCase().replac
 const pill = (value: string) => value === 'CRITICAL' || value === 'HIGH' ? 'bg-red-300/10 text-red-300' : value === 'MEDIUM' || value === 'IN_PROGRESS' ? 'bg-amber-300/10 text-amber-300' : 'bg-emerald-300/10 text-emerald-300';
 
 export default function AuditOperationsPage() {
-  const [propertyId, setPropertyId] = useState(''); const [engagements, setEngagements] = useState<Engagement[]>([]); const [requests, setRequests] = useState<Request[]>([]); const [workpapers, setWorkpapers] = useState<Workpaper[]>([]); const [findings, setFindings] = useState<Finding[]>([]); const [tab, setTab] = useState<'requests' | 'workpapers' | 'findings'>('requests'); const [showForm, setShowForm] = useState(false); const [loading, setLoading] = useState(true); const [saving, setSaving] = useState(false); const [error, setError] = useState('');
+  const searchParams = useSearchParams(); const initialTab = searchParams.get('tab'); const [propertyId, setPropertyId] = useState(''); const [engagements, setEngagements] = useState<Engagement[]>([]); const [requests, setRequests] = useState<Request[]>([]); const [workpapers, setWorkpapers] = useState<Workpaper[]>([]); const [findings, setFindings] = useState<Finding[]>([]); const [tab, setTab] = useState<'requests' | 'workpapers' | 'findings'>(initialTab === 'workpapers' || initialTab === 'findings' ? initialTab : 'requests'); const [showForm, setShowForm] = useState(false); const [loading, setLoading] = useState(true); const [saving, setSaving] = useState(false); const [error, setError] = useState('');
   const load = async (id: string, engagementId?: string) => { setLoading(true); const params = `propertyId=${id}${engagementId ? `&engagementId=${engagementId}` : ''}`; const [e, r, w, f] = await Promise.all([fetch(`/api/v1/external-auditor/management?resource=engagements&${params}`), fetch(`/api/v1/external-auditor/management?resource=requests&${params}`), fetch(`/api/v1/external-auditor/management?resource=workpapers&${params}`), fetch(`/api/v1/external-auditor/management?resource=findings&${params}`)]); const values = await Promise.all([e.json(), r.json(), w.json(), f.json()]); setEngagements(values[0].items || []); setRequests(values[1].items || []); setWorkpapers(values[2].items || []); setFindings(values[3].items || []); setLoading(false); };
   useEffect(() => { void fetch('/api/v1/external-auditor/context').then(r => r.json()).then(v => { const scope = v.scopes?.[0]; if (!scope) throw new Error(v.error || 'No active engagement'); setPropertyId(scope.propertyId); return load(scope.propertyId); }).catch(e => { setError(e.message); setLoading(false); }); }, []);
   const engagement = engagements[0];
