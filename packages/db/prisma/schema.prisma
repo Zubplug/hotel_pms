@@ -38,6 +38,7 @@ model Organization {
   outboxEvents       OutboxEvent[]
   channelConnections ChannelConnection[]
   channelSyncEvents  ChannelSyncEvent[]
+  externalAuditorAccesses ExternalAuditorAccess[]
 
   billingCustomer    BillingCustomer?
   subscriptions      Subscription[]
@@ -197,6 +198,7 @@ model Property {
   channelConnections ChannelConnection[]
   channelSyncEvents  ChannelSyncEvent[]
   Department         Department[]
+  externalAuditorAccesses ExternalAuditorAccess[]
 }
 
 model Building {
@@ -1999,6 +2001,9 @@ model User {
   refundApprovalRules     RefundApprovalRule[]         @relation("RefundRuleApprover")
   deviceTokens            DeviceToken[]
   notificationPreferences UserNotificationPreference[]
+  externalAuditorAccesses ExternalAuditorAccess[]
+  grantedExternalAuditorAccesses ExternalAuditorAccess[] @relation("ExternalAuditorAccessGrantedBy")
+  revokedExternalAuditorAccesses ExternalAuditorAccess[] @relation("ExternalAuditorAccessRevokedBy")
 }
 
 // FCM device tokens for push notifications
@@ -2085,6 +2090,39 @@ model UserRole {
 
   // Using a unique index because propertyId can be null, meaning org-wide role
   @@unique([userId, roleId, propertyId])
+}
+
+enum ExternalAuditorAccessStatus {
+  ACTIVE
+  REVOKED
+  EXPIRED
+}
+
+model ExternalAuditorAccess {
+  id                 String   @id @default(uuid()) @db.Uuid
+  userId             String   @db.Uuid
+  organizationId     String   @db.Uuid
+  propertyId         String   @db.Uuid
+  auditPeriodStart   DateTime @db.Date
+  auditPeriodEnd     DateTime @db.Date
+  accessStartsAt     DateTime @default(now()) @db.Timestamptz
+  accessExpiresAt    DateTime @db.Timestamptz
+  status             ExternalAuditorAccessStatus @default(ACTIVE)
+  grantedByUserId    String   @db.Uuid
+  revokedAt          DateTime? @db.Timestamptz
+  revokedByUserId    String?  @db.Uuid
+  revocationReason   String?
+  createdAt          DateTime @default(now()) @db.Timestamptz
+  updatedAt          DateTime @updatedAt @db.Timestamptz
+  user               User         @relation(fields: [userId], references: [id])
+  organization       Organization @relation(fields: [organizationId], references: [id])
+  property           Property     @relation(fields: [propertyId], references: [id])
+  grantedByUser      User         @relation("ExternalAuditorAccessGrantedBy", fields: [grantedByUserId], references: [id])
+  revokedByUser      User?        @relation("ExternalAuditorAccessRevokedBy", fields: [revokedByUserId], references: [id])
+
+  @@index([userId, status])
+  @@index([propertyId, auditPeriodStart, auditPeriodEnd])
+  @@index([organizationId, propertyId])
 }
 
 model OrganizationMembership {

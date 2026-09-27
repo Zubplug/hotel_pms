@@ -33,9 +33,19 @@ function atTime(day: Date, value: string, fallback: string, timeZone: string) {
   return fromZonedTime(`${dateKey}T${time}:00`, timeZone);
 }
 
-function buildPeriods(input: { startDate: Date; endDate: Date; billingFrequency: LeaseFrequency; billingDates?: Date[] }) {
+function buildPeriods(input: { startDate: Date; endDate: Date; billingFrequency: LeaseFrequency; billingDates?: Date[]; usageFrequency: UsageFrequency; segments: SegmentInput[] }) {
   const periods: { periodStart: Date; periodEnd: Date; dueDate: Date }[] = [];
-  if (input.billingFrequency === 'PER_USE') return [{ periodStart: input.startDate, periodEnd: input.startDate, dueDate: input.startDate }];
+  if (input.billingFrequency === 'PER_USE') {
+    const usageDatesByKey = new Map<string, Date>();
+    for (const segment of input.segments) {
+      for (const date of usageDates(input.startDate, input.endDate, input.usageFrequency, segment.usageDays)) {
+        usageDatesByKey.set(date.toISOString().slice(0, 10), date);
+      }
+    }
+    return [...usageDatesByKey.values()]
+      .sort((a, b) => a.getTime() - b.getTime())
+      .map((date) => ({ periodStart: date, periodEnd: date, dueDate: date }));
+  }
   if (input.billingFrequency === 'CUSTOM') {
     let periodStart = input.startDate;
     for (const dueDate of input.billingDates || []) {
@@ -123,7 +133,7 @@ export async function createLeaseContract(input: {
     await tx.eventBooking.createMany({ data: occurrences.map((occurrence) => ({ eventId: event.id, hallId: occurrence.segment.hallId, startTime: occurrence.startTime, endTime: occurrence.endTime, status: 'ACTIVE' })) });
     const createdSegments = await tx.leaseContractSegment.findMany({ where: { leaseContractId: contract.id }, orderBy: { createdAt: 'asc' } });
     const segmentByKey = new Map(createdSegments.map((segment) => [`${segment.hallId}|${segment.startTime}|${segment.endTime}|${JSON.stringify(segment.usageDays)}`, segment]));
-    for (const period of buildPeriods({ startDate, endDate, billingFrequency: input.billingFrequency, billingDates: customBillingDates })) {
+    for (const period of buildPeriods({ startDate, endDate, billingFrequency: input.billingFrequency, billingDates: customBillingDates, usageFrequency: input.usageFrequency, segments })) {
       const lines = segments.map((segment) => ({ segment, segmentRecord: segmentByKey.get(`${segment.hallId}|${segment.startTime}|${segment.endTime}|${JSON.stringify(segment.usageDays)}`)!, usageCount: usageDates(period.periodStart, period.periodEnd, input.usageFrequency, segment.usageDays).length }));
       const billable = lines.filter((line) => line.usageCount > 0).map((line) => ({ ...line, amount: line.usageCount * line.segment.rate }));
       if (!billable.length) continue;

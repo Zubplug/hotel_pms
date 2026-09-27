@@ -78,7 +78,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         
         capabilities = Array.from(new Set(capabilities));
         
-        let primaryRole = user.roles?.[0]?.role?.name || 'STAFF';
+        // Keep the external-auditor boundary authoritative even when an account
+        // has legacy or secondary roles. The portal still validates engagements
+        // from ExternalAuditorAccess on every request.
+        let primaryRole = user.roles?.some((ur: any) => ur.role?.name === 'EXTERNAL_AUDITOR')
+          ? 'EXTERNAL_AUDITOR'
+          : user.roles?.[0]?.role?.name || 'STAFF';
         let organizationId = staff?.organizationId || user.roles?.[0]?.role?.organizationId || null;
         let propertyId = propertyIds.length > 0 ? propertyIds[0] : null;
 

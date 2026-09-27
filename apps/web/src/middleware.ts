@@ -55,6 +55,25 @@ function hasModuleAccess(req: any, pathname: string): { allowed: boolean; redire
   const can = (moduleCapability: string, roles: string[]) =>
     roles.includes(role) || capabilities.includes(moduleCapability);
 
+  if (role === 'EXTERNAL_AUDITOR') {
+    if (pathname === '/external-auditor' || pathname.startsWith('/external-auditor/')) {
+      return { allowed: true };
+    }
+    if (pathname.startsWith('/api/v1/external-auditor/')) {
+      return { allowed: true };
+    }
+    if (pathname.startsWith('/api/')) {
+      return { allowed: false };
+    }
+    return { allowed: false, redirectTo: '/external-auditor' };
+  }
+
+  if (pathname === '/external-auditor' || pathname.startsWith('/external-auditor/')) {
+    // Other users like Super Admin can potentially look at it if needed
+    return can('ACCESS_MANAGEMENT', MANAGEMENT_ROLES)
+      ? { allowed: true } : { allowed: false, redirectTo: '/hub' };
+  }
+
   if (pathname === '/cash-management' || pathname.startsWith('/cash-management/')) {
     return can('ACCESS_CASH_MANAGEMENT', [...MANAGEMENT_ROLES, 'GENERAL_CASHIER', 'NIGHT_AUDITOR'])
       ? { allowed: true } : { allowed: false, redirectTo: '/hub' };
@@ -141,6 +160,12 @@ export default auth((req) => {
 
   // Public routes — no auth needed
   if (isPublic(nextUrl.pathname)) {
+    // Public device/sync paths must not become a back door for a browser
+    // session belonging to an external auditor.
+    if (isLoggedIn && String((req.auth?.user as any)?.role || '').toUpperCase() === 'EXTERNAL_AUDITOR' &&
+      !nextUrl.pathname.startsWith('/api/auth') && nextUrl.pathname !== '/login') {
+      return new Response('Forbidden', { status: 403 });
+    }
     // If already logged in and hitting /login, send to /hub.
     // /hub will then smart-redirect based on role:
     //   MANAGER / CEO / SUPER_ADMIN  → /general-manager
@@ -152,6 +177,9 @@ export default auth((req) => {
     if (nextUrl.pathname === '/login' && isLoggedIn) {
       if ((req.auth?.user as any)?.isLodgeCoreAdmin) {
         return Response.redirect(new URL('/hq', nextUrl));
+      }
+      if (String((req.auth?.user as any)?.role || '').toUpperCase() === 'EXTERNAL_AUDITOR') {
+        return Response.redirect(new URL('/external-auditor', nextUrl));
       }
       return Response.redirect(new URL('/hub', nextUrl));
     }

@@ -91,7 +91,11 @@ const systemRoles = {
   ],
   INVENTORY_MANAGER: [
     'ACCESS_INVENTORY'
-  ]
+  ],
+  AUDITOR: [
+    'ACCESS_REPORTS', 'ACCESS_NIGHT_AUDIT', 'ACCESS_CASH_MANAGEMENT', 'ACCESS_FRONT_DESK', 'ACCESS_POS', 'ACCESS_INVENTORY'
+  ],
+  EXTERNAL_AUDITOR: []
 };
 
 async function main() {

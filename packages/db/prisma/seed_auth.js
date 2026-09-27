@@ -94,7 +94,8 @@ const systemRoles = {
   ],
   INVENTORY_MANAGER: [
     'ACCESS_INVENTORY'
-  ]
+  ],
+  EXTERNAL_AUDITOR: []
 };
 
 async function main() {
