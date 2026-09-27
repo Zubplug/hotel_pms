@@ -1,0 +1,4673 @@
+import { NextRequest, NextResponse } from "next/server";
+import { authenticateSyncRequest } from "@/lib/sync-auth";
+import prisma, { PaymentMethod } from "@hotel-pms/db";
+import { createHash, randomUUID } from "crypto";
+import { compare } from "bcryptjs";
+import { NotificationEngine } from "@/lib/notification-engine";
+import { encrypt } from "@/lib/encryption";
+import { getReducedStayEstimate } from "@/lib/refunds/reduced-stay";
+import { calculateNoShowAssessment } from "@/lib/refunds/no-show";
+import { calculateFolioTotals } from "@/lib/finance/folio-totals";
+import { applyAvailableFolioCredit } from "@/lib/finance/apply-folio-credit";
+import { applyAvailableGuestLedgerCredit } from "@/lib/finance/apply-guest-ledger-credit";
+import { isNightAuditCutoverActive } from "@/lib/night-audit-guard";
+import { getPropertyBusinessDate } from "@/lib/date-utils";
+import { InventoryService } from "@/lib/inventory/InventoryService";
+import { routeFoliosToCityLedger } from "@/lib/finance/route-folio-to-city-ledger";
+import { FolioPaymentAccountingService } from "@/lib/services/folio-payment-accounting-service";
+import { CityLedgerAccountingService } from "@/lib/services/city-ledger-accounting-service";
+import { GeneralLedgerService } from "@/lib/services/general-ledger-service";
+import { GLMappingService } from "@/lib/services/gl-mapping-service";
+import { queueCancellationRefunds as queueCancellationRefundsProfessional } from "@/lib/finance/queue-cancellation-refund";
+import { QueuePublisher } from "@/lib/integrations/ota/queue";
+
+const parseLocalDateString = (dateString: string | Date | undefined): Date | undefined => {
+  if (!dateString) return undefined;
+  if (dateString instanceof Date) return dateString;
+  const datePart = String(dateString).split('T')[0];
+  return new Date(datePart + 'T00:00:00.000Z');
+};
+
+const isUuid = (value: unknown): value is string =>
+  typeof value === "string" &&
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value,
+  );
+
+/**
+ * Persist the approval side-effect for an offline discount independently of
+ * HotelEvent idempotency. A discount event may be recorded before its room
+ * dependency exists, or the original transaction may fail after the event is
+ * recorded. Reconciliation must therefore be safe to run repeatedly.
+ */
+async function reconcileOfflineRoomDiscount(
+  tx: any,
+  args: {
+    propertyId: string;
+    aggregateId: string;
+    idempotencyKey: string;
+    actorId: string;
+    payload: Record<string, any>;
+  },
+) {
+  const reservationRoomId = args.payload.reservationRoomId || args.aggregateId;
+  const resRoom = await tx.reservationRoom.findUnique({
+    where: { id: reservationRoomId },
+    include: { reservation: true },
+  });
+
+  if (resRoom && resRoom.reservation.propertyId !== args.propertyId) {
+    throw new Error(`DISCOUNT_PROPERTY_MISMATCH: Reservation room ${reservationRoomId} is not in this property`);
+  }
+
+  const approval = await tx.approvalRequest.upsert({
+    where: { idempotencyKey: `offline_discount:${args.idempotencyKey}` },
+    create: {
+      propertyId: args.propertyId,
+      type: "DISCOUNT",
+      status: "PENDING",
+      executionStatus: "NOT_APPLIED",
+      requestedBy: args.actorId,
+      amount: Number(args.payload.discountAmount || args.payload.amount || 0),
+      currency: resRoom?.currency || args.payload.currency || "NGN",
+      reason: args.payload.reason || "Offline room discount request",
+      details: {
+        ...args.payload,
+        reservationRoomId,
+        dependencyStatus: resRoom ? "READY" : "WAITING_FOR_RESERVATION_ROOM",
+      },
+      snapshot: {
+        ...args.payload,
+        targetType: "RESERVATION_ROOM",
+        reservationRoomId,
+        originalRate: resRoom ? Number(resRoom.rateAmount) : null,
+      },
+      idempotencyKey: `offline_discount:${args.idempotencyKey}`,
+    },
+    update: {
+      details: {
+        ...args.payload,
+        reservationRoomId,
+        dependencyStatus: resRoom ? "READY" : "WAITING_FOR_RESERVATION_ROOM",
+      },
+      snapshot: {
+        ...args.payload,
+        targetType: "RESERVATION_ROOM",
+        reservationRoomId,
+        originalRate: resRoom ? Number(resRoom.rateAmount) : null,
+      },
+    },
+  });
+
+  if (resRoom && !resRoom.discountApprovalId) {
+    await tx.reservationRoom.update({
+      where: { id: resRoom.id },
+      data: { discountApprovalId: `PENDING:${approval.id}` },
+    });
+  }
+
+  return approval;
+}
+
+async function queueCancellationRefunds(
+  tx: any,
+  reservation: any,
+  propertyId: string,
+  organizationId: string,
+  requestedById: string,
+  reason: string,
+) {
+  const workflowRules = await tx.refundApprovalRule.findMany({
+    where: { propertyId, isActive: true },
+    orderBy: { stepOrder: "asc" },
+  });
+  for (const folio of reservation.folios || []) {
+    for (const payment of folio.payments || []) {
+      if (payment.status !== "COMPLETED") continue;
+      const refunded = payment.refunds
+        .filter((refund: any) => refund.status !== "FAILED")
+        .reduce((sum: number, refund: any) => sum + Number(refund.amount), 0);
+      const pending = await tx.refundRequest.aggregate({
+        where: {
+          paymentId: payment.id,
+          status: { in: ["PENDING_APPROVAL", "APPROVED", "PROCESSING"] as any },
+        },
+        _sum: { requestedAmount: true },
+      });
+      const amount =
+        Number(payment.amount) -
+        refunded -
+        Number(pending._sum.requestedAmount || 0);
+      if (amount <= 0) continue;
+      const idempotencyKey = `reservation_cancel_refund_${reservation.id}_${payment.id}`;
+      if (await tx.refundRequest.findUnique({ where: { idempotencyKey } }))
+        continue;
+      const matchingRules = workflowRules.filter(
+        (rule: any) =>
+          (rule.minAmount == null || amount >= Number(rule.minAmount)) &&
+          (rule.maxAmount == null || amount <= Number(rule.maxAmount)),
+      );
+      const firstRule = matchingRules[0];
+      const fallbackRoleName =
+        amount > 250000
+          ? "FINANCE_MANAGER"
+          : amount > 50000
+            ? "MANAGER"
+            : "FRONT_DESK_MANAGER";
+      const role = firstRule?.roleId
+        ? await tx.role.findUnique({ where: { id: firstRule.roleId } })
+        : await tx.role.findFirst({
+            where: { organizationId, name: fallbackRoleName },
+          });
+      const candidate = firstRule?.approverId
+        ? { userId: firstRule.approverId }
+        : role
+          ? await tx.userRole.findFirst({
+              where: {
+                roleId: role.id,
+                userId: { not: requestedById },
+                OR: [{ propertyId }, { propertyId: null }],
+              },
+              select: { userId: true },
+            })
+          : null;
+      const request = await tx.refundRequest.create({
+        data: {
+          organizationId,
+          propertyId,
+          reservationId: reservation.id,
+          folioId: folio.id,
+          paymentId: payment.id,
+          guestId: reservation.primaryGuestId,
+          requestedAmount: amount,
+          currency: payment.currency,
+          requestedMethod: "ORIGINAL_PAYMENT",
+          category: "RESERVATION_CANCELLED",
+          reason: `Reservation cancelled: ${reason}`,
+          requestedById,
+          currentApproverId: candidate?.userId,
+          approvalRoleId: role?.id,
+          currentApprovalStep: firstRule?.stepOrder || 1,
+          idempotencyKey,
+          expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        },
+      });
+      await tx.approvalRequest.create({
+        data: {
+          propertyId,
+          type: "REFUND",
+          status: "PENDING",
+          requestedBy: requestedById,
+          amount,
+          currency: payment.currency,
+          reason: request.reason,
+          details: {
+            refundRequestId: request.id,
+            category: request.category,
+            requestedAmount: amount,
+            requestedMethod: "ORIGINAL_PAYMENT",
+            approverRoleId: role?.id,
+            approverId: candidate?.userId,
+            stepOrder: firstRule?.stepOrder || 1,
+          },
+          expiresAt: request.expiresAt,
+        },
+      });
+    }
+  }
+}
+
+async function queueBeds24InventorySync(tx: any, args: { propertyId: string; organizationId: string; eventId: string; eventType: string; }) {
+  const inventoryEvents = new Set([
+    "CREATE", "WALK_IN", "CHECK_IN", "CHECK_OUT", "CANCEL", "NO_SHOW",
+    "REINSTATE", "REASSIGN_ROOM", "EXTEND_STAY", "ROOM_STATUS_UPDATE",
+  ]);
+  if (!inventoryEvents.has(args.eventType)) return [] as string[];
+
+  const connections = await tx.channelConnection.findMany({
+    where: { propertyId: args.propertyId, provider: "BEDS24", status: "CONNECTED" },
+    include: { roomMappings: { where: { isActive: true, lodgecoreRoomTypeId: { not: null } } } },
+  });
+  const eventIds: string[] = [];
+  const start = new Date();
+  start.setUTCHours(0, 0, 0, 0);
+  const end = new Date(start);
+  end.setUTCDate(end.getUTCDate() + 30);
+
+  for (const connection of connections) {
+    const inventory: any[] = [];
+    for (const mapping of connection.roomMappings) {
+      const roomTypeId = mapping.lodgecoreRoomTypeId;
+      if (!roomTypeId) continue;
+      const totalRooms = await tx.room.count({ where: { propertyId: args.propertyId, roomTypeId, isActive: true } });
+      for (let cursor = new Date(start); cursor < end; cursor.setUTCDate(cursor.getUTCDate() + 1)) {
+        const nextDate = new Date(cursor);
+        nextDate.setUTCDate(nextDate.getUTCDate() + 1);
+        const booked = await tx.reservationRoom.count({
+          where: {
+            roomTypeId,
+            status: "ACTIVE",
+            checkIn: { lt: nextDate },
+            checkOut: { gt: cursor },
+            reservation: { propertyId: args.propertyId, status: { in: ["CONFIRMED", "CHECKED_IN"] } },
+          },
+        });
+        inventory.push({
+          date: cursor.toISOString(),
+          externalRoomTypeId: mapping.externalRoomTypeId,
+          availableRooms: Math.max(0, totalRooms - booked),
+        });
+      }
+    }
+    if (!inventory.length) continue;
+    const syncEvent = await tx.channelSyncEvent.create({
+      data: {
+        organizationId: args.organizationId,
+        propertyId: args.propertyId,
+        provider: "BEDS24",
+        direction: "OUTBOUND",
+        eventType: "AVAILABILITY",
+        entityId: args.eventId,
+        payload: { inventory, changeOrigin: "LOCAL", sourceEventId: args.eventId },
+        status: "PENDING",
+      },
+    });
+    eventIds.push(syncEvent.id);
+  }
+  return eventIds;
+}
+
+export async function POST(req: NextRequest) {
+  const requestId = randomUUID();
+  try {
+    const body = await req.json();
+    const { propertyId, events } = body;
+    console.info(
+      `[sync/frontdesk-push] request=${requestId} received propertyId=${propertyId ?? "missing"} events=${Array.isArray(events) ? events.length : "invalid"}`,
+    );
+
+    if (!propertyId || !events || !Array.isArray(events)) {
+      return NextResponse.json(
+        { error: "Invalid payload format" },
+        { status: 400 },
+      );
+    }
+
+    const authResult = await authenticateSyncRequest(req, propertyId);
+    if (!authResult.success) {
+      console.warn(
+        `[sync/frontdesk-push] request=${requestId} rejected propertyId=${propertyId} error=${authResult.error}`,
+      );
+      return NextResponse.json(
+        { error: authResult.error },
+        { status: authResult.status },
+      );
+    }
+    if (!authResult.isDevice) {
+      console.warn(
+        `[sync/frontdesk-push] request=${requestId} rejected propertyId=${propertyId} error=Must be a device`,
+      );
+      return NextResponse.json({ error: "Must be a device" }, { status: 403 });
+    }
+
+    // Verify terminal and property
+    const property = await prisma.property.findUnique({
+      where: { id: propertyId },
+    });
+    if (!property) {
+      return NextResponse.json(
+        { error: "Property not found" },
+        { status: 404 },
+      );
+    }
+    if (await isNightAuditCutoverActive(propertyId)) {
+      return NextResponse.json(
+        {
+          error:
+            "Night audit is in progress. Financial synchronization is temporarily paused.",
+        },
+        { status: 409 },
+      );
+    }
+
+    const device = { id: authResult.deviceId as string };
+    const authoritativeBusinessDate =
+      property.businessDate ||
+      getPropertyBusinessDate("Africa/Lagos", new Date());
+
+    console.info(
+      `[sync/frontdesk-push] request=${requestId} authorized terminalId=${device.id} propertyId=${propertyId} events=${events.length}`,
+    );
+
+    const results = [];
+    const otaSyncEventIds: string[] = [];
+    const otaInventoryQueued = new Set<string>();
+
+    // Process outbox events sequentially
+    for (const event of events) {
+      const {
+        id,
+        idempotencyKey,
+        aggregateType,
+        aggregateId: rawAggregateId,
+        aggregateVersion,
+        eventType,
+        occurredAt,
+        sequence,
+        payloadJson,
+        operatorId,
+      } = event;
+
+      try {
+        const payload = JSON.parse(payloadJson || "{}");
+        let resultStatus = "SYNCED";
+        let aggregateId = rawAggregateId;
+        // Only FOLIO and RESERVATION are version-checked aggregates in this
+        // endpoint. Other event types are append-only or have no cloud version
+        // field; older clients commonly submitted the default version=1 for
+        // each event. Keep the incoming version for diagnostics while using a
+        // stable per-event version for HotelEvent persistence so events on the
+        // same non-versioned aggregate cannot become false OCC conflicts.
+        const hotelEventAggregateVersion =
+          aggregateType !== "FOLIO" && aggregateType !== "RESERVATION"
+            ? (() => {
+                let hash = 0;
+                for (const char of String(idempotencyKey || id)) {
+                  hash = (hash * 31 + char.charCodeAt(0)) | 0;
+                }
+                return Math.max(1, hash === -2147483648 ? 2147483647 : Math.abs(hash));
+              })()
+            : aggregateVersion;
+        if (
+          aggregateType === "FOLIO" &&
+          eventType === "POST_PAYMENT" &&
+          payload.reservationId
+        ) {
+          const targetFolio = await prisma.folio.findFirst({
+            where: { id: aggregateId, propertyId },
+            select: { id: true },
+          });
+          if (!targetFolio) {
+            const reservationFolio = await prisma.folio.findFirst({
+              where: {
+                reservationId: payload.reservationId,
+                propertyId,
+                status: "OPEN",
+              },
+              select: { id: true },
+            });
+            if (reservationFolio) aggregateId = reservationFolio.id;
+          }
+        }
+        const actorId = isUuid(operatorId) ? operatorId : device.id;
+        const sessionBoundEvents = new Set([
+          "ROOM_CHARGE",
+          "POST_CHARGE",
+          "POST_PAYMENT",
+          "ADVANCE_DEPOSIT",
+          "ADVANCE_DEPOSIT_REQUEST",
+          "CREDIT_ADJUSTMENT_REQUEST",
+          "ROOM_CREDIT",
+          "REFUND_REQUESTED",
+        ]);
+        let sessionBusinessDate: Date | null = null;
+        if (
+          sessionBoundEvents.has(eventType) &&
+          payload.frontdeskTransaction !== false
+        ) {
+          const frontdeskSessionId = payload.frontdeskSessionId;
+          if (!frontdeskSessionId)
+            throw new Error(
+              "FRONTDESK_SHIFT_REQUIRED: Transaction has no cashier session.",
+            );
+          const frontdeskSession = await prisma.frontdeskSession.findUnique({
+            where: { id: frontdeskSessionId },
+          });
+          if (
+            !frontdeskSession ||
+            frontdeskSession.propertyId !== propertyId ||
+            frontdeskSession.staffId !== actorId ||
+            (frontdeskSession.status !== "OPEN" && frontdeskSession.status !== "CLOSED" && frontdeskSession.status !== "RETURNED")
+          ) {
+            throw new Error(
+              "FRONTDESK_SHIFT_CLOSED: Cashier session is missing, closed, or belongs to another receptionist.",
+            );
+          }
+
+          if (frontdeskSession.status !== "OPEN") {
+            const lockedControlStatuses = ["HANDOVER_PENDING", "HANDED_OVER", "DEPOSITED", "RECONCILED"];
+            if (lockedControlStatuses.includes(String(frontdeskSession.controlStatus))) {
+              throw new Error(
+                "FRONTDESK_SHIFT_LOCKED: Cashier session has already progressed in the handover pipeline and cannot accept late sync events.",
+              );
+            }
+          }
+
+          sessionBusinessDate = frontdeskSession.businessDate;
+        }
+
+        // A validated cashier session owns the accounting date for all
+        // session-bound financial events. This preserves a still-open
+        // yesterday shift when the event is synced after midnight instead of
+        // silently re-dating the credit/payment/charge to today.
+        const postingBusinessDate = sessionBusinessDate ?? authoritativeBusinessDate;
+
+        // 1 & 2. Atomic Concurrency Control & Execution within a Single Transaction
+        await prisma.$transaction(async (tx) => {
+          let staffOperatorId = actorId;
+          if (isUuid(actorId)) {
+            const staffRec = await tx.staff.findFirst({
+              where: { OR: [{ id: actorId }, { userId: actorId }] },
+              select: { id: true }
+            });
+            if (staffRec) staffOperatorId = staffRec.id;
+          }
+
+          // 1. Idempotency Check (inside transaction lock)
+          const existingEvent = await tx.hotelEvent.findUnique({
+            where: { idempotencyKey },
+            include: { syncConflict: true },
+          });
+
+          if (existingEvent) {
+            const e = new Error("IDEMPOTENCY_DUPLICATE");
+            (e as any).existingEvent = existingEvent;
+            throw e;
+          }
+
+          let updatedCount = 0;
+
+          if (aggregateType === "FRONTDESK_SESSION") {
+            updatedCount = 1;
+          } else if (aggregateType === "FOLIO") {
+            const res = await tx.folio.updateMany({
+              where: { id: aggregateId, version: aggregateVersion },
+              data: { version: { increment: 1 } },
+            });
+            updatedCount = res.count;
+          } else if (aggregateType === "RESERVATION") {
+            if (eventType === "CREATE") {
+              updatedCount = 1; // Bypass version lock since it doesn't exist yet
+            } else {
+              const res = await tx.reservation.updateMany({
+                where: { id: aggregateId, version: aggregateVersion },
+                data: { version: { increment: 1 } },
+              });
+              updatedCount = res.count;
+
+              // Safe version-mismatch bypass for CHECK_OUT.
+              // Night Audit folio operations can increment the server version
+              // while the desktop still holds an older cached version. A checkout
+              // is idempotent and safe to force-apply when:
+              //   (a) the reservation is still CHECKED_IN (not already checked out), AND
+              //   (b) the folio balance is zero (no outstanding charges or refunds).
+              // If the reservation is already CHECKED_OUT (e.g. processed server-side
+              // while the desktop was offline), we also succeed silently — pure idempotency.
+              if (updatedCount === 0 && eventType === "CHECK_OUT") {
+                const current = await tx.reservation.findUnique({
+                  where: { id: aggregateId },
+                  select: { status: true },
+                });
+                if (current?.status === "CHECKED_OUT") {
+                  // Already checked out — idempotent, succeed silently
+                  updatedCount = 1;
+                  console.log(
+                    `[sync/push] CHECK_OUT idempotent accept for already-CHECKED_OUT reservation ${aggregateId}`
+                  );
+                } else if (current?.status === "CHECKED_IN") {
+                  const folioBalances = await tx.folio.findMany({
+                    where: { reservationId: aggregateId, propertyId },
+                    select: { balance: true },
+                  });
+                  const totalBalance = folioBalances.reduce(
+                    (sum: number, f: any) => sum + Number(f.balance), 0
+                  );
+                  if (Math.abs(totalBalance) <= 0.01) {
+                    // Accept at current server version — bump version to maintain monotonicity
+                    await tx.reservation.updateMany({
+                      where: { id: aggregateId },
+                      data: { version: { increment: 1 } },
+                    });
+                    updatedCount = 1;
+                    console.log(
+                      `[sync/push] CHECK_OUT version-mismatch auto-resolved for ${aggregateId} ` +
+                      `(desktop v${aggregateVersion}, balance ${totalBalance})`
+                    );
+                  }
+                }
+              } else if (updatedCount === 0 && eventType === "EXTEND_STAY") {
+                const current = await tx.reservation.findUnique({
+                  where: { id: aggregateId },
+                  select: { status: true },
+                });
+                // Only allow auto-resolving if it's an active reservation
+                if (current?.status === "CONFIRMED" || current?.status === "CHECKED_IN") {
+                  await tx.reservation.updateMany({
+                    where: { id: aggregateId },
+                    data: { version: { increment: 1 } },
+                  });
+                  updatedCount = 1;
+                  console.log(
+                    `[sync/push] EXTEND_STAY version-mismatch auto-resolved for ${aggregateId} ` +
+                    `(desktop v${aggregateVersion})`
+                  );
+                }
+              }
+            }
+          } else if (
+            aggregateType === "HOUSEKEEPING_TASK" ||
+            aggregateType === "MAINTENANCE_TICKET" ||
+            aggregateType === "GUEST" ||
+            aggregateType === "ROOM" ||
+            aggregateType === "LAUNDRY_ORDER" ||
+            aggregateType === "RESERVATION_ROOM" ||
+            aggregateType === "CITY_LEDGER" // append-only; idempotency guarded inside handler
+          ) {
+            updatedCount = 1; // No version field on cloud for these yet
+          } else if (aggregateType === "POS_ORDER" || aggregateType === "POS_VOID") {
+            // POS void/replacement outbox events mutate the order aggregate.
+            const orderId = aggregateType === "POS_VOID"
+              ? (payload.orderId || payload.OrderId || aggregateId)
+              : aggregateId;
+            const res = await tx.posOrder.updateMany({
+              where: { id: orderId, version: aggregateVersion },
+              data: { version: { increment: 1 } },
+            });
+            updatedCount = res.count;
+          }
+
+          if (updatedCount === 0) {
+            if (aggregateType === "RESERVATION" && eventType !== "CREATE") {
+              const reservation = await tx.reservation.findUnique({
+                where: { id: aggregateId },
+              });
+              if (!reservation)
+                throw new Error(
+                  `DEPENDENCY_NOT_READY: Reservation ${aggregateId} has not been created yet`,
+                );
+            }
+
+            // Retrieve actual version to report in the conflict
+            let currentVersion = 1;
+            if (aggregateType === "FOLIO") {
+              const f = await tx.folio.findUnique({
+                where: { id: aggregateId },
+              });
+              if (f) currentVersion = f.version;
+            } else if (aggregateType === "RESERVATION") {
+              const r = await tx.reservation.findUnique({
+                where: { id: aggregateId },
+              });
+              if (r) currentVersion = r.version;
+            }
+
+            const e = new Error("CONCURRENCY_CONFLICT");
+            (e as any).currentVersion = currentVersion;
+            throw e;
+          }
+
+          // Authoritative Domain Routing
+          if (
+            aggregateType === "FRONTDESK_SESSION" &&
+            eventType === "FRONTDESK_SESSION_OPENED"
+          ) {
+            const sessionId = payload.sessionId || aggregateId;
+            // LocalRepository serializes nested session members with their C# names
+            // (BusinessDate / ShiftReference), while the explicitly named members are camelCase.
+            const businessDateValue =
+              payload.businessDate ?? payload.BusinessDate;
+            const businessDate = new Date(businessDateValue);
+            const shiftReference =
+              payload.shiftReference ?? payload.ShiftReference;
+            if (Number.isNaN(businessDate.getTime())) {
+              throw new Error(
+                "Invalid FRONTDESK_SESSION_OPENED payload: businessDate is required.",
+              );
+            }
+            if (!shiftReference) {
+              throw new Error(
+                "Invalid FRONTDESK_SESSION_OPENED payload: shiftReference is required.",
+              );
+            }
+            const existingSession = await tx.frontdeskSession.findUnique({
+              where: { id: sessionId },
+            });
+            if (!existingSession) {
+              const cashAccount = await tx.cashAccount.findFirst({
+                where: {
+                  id: payload.cashAccountId,
+                  propertyId,
+                  type: "FRONTDESK_TILL",
+                  isActive: true,
+                },
+              });
+              if (!cashAccount) {
+                throw new Error(
+                  "FRONTDESK_TILL_REQUIRED: Offline session must use an active Front Desk Till.",
+                );
+              }
+              await tx.frontdeskSession.create({
+                data: {
+                  id: sessionId,
+                  propertyId,
+                  staffId: payload.staffId || actorId,
+                  cashAccountId: payload.cashAccountId,
+                  shiftReference,
+                  businessDate,
+                  openingFloat: Number(payload.openingFloat || 0),
+                  systemExpectedCash: Number(payload.openingFloat || 0),
+                },
+              });
+              await tx.frontdeskSessionAudit.create({
+                data: {
+                  frontdeskSessionId: sessionId,
+                  action: "OPENED",
+                  performedBy: actorId,
+                  notes: "Offline session synchronized",
+                },
+              });
+            }
+          } else if (
+            aggregateType === "FRONTDESK_SESSION" &&
+            eventType === "FRONTDESK_SESSION_CLOSED"
+          ) {
+            const sessionId = payload.sessionId || aggregateId;
+            const current = await tx.frontdeskSession.findUnique({
+              where: { id: sessionId },
+              include: { cashMovements: true },
+            });
+            if (!current)
+              throw new Error(
+                `DEPENDENCY_NOT_READY: Front Desk session ${sessionId} has not been created yet`,
+              );
+            if (
+              [
+                "APPROVED",
+                "APPROVED_WITH_VARIANCE",
+                "HANDOVER_PENDING",
+                "HANDED_OVER",
+                "DEPOSITED",
+                "RECONCILED",
+              ].includes(String(current.controlStatus))
+            ) {
+              throw new Error(
+                "CONCURRENCY_CONFLICT: controlled Front Desk shift cannot be closed again",
+              );
+            }
+            const movementTotal = (types: string[]) =>
+              current.cashMovements
+                .filter((movement: any) => types.includes(movement.type))
+                .reduce(
+                  (sum: number, movement: any) =>
+                    sum + Number(movement.amount || 0),
+                  0,
+                );
+            const expectedCash =
+              Number(current.openingFloat || 0) +
+              movementTotal(["PAYMENT", "CASH_IN", "CASH_TRANSFER_IN"]) -
+              movementTotal([
+                "REFUND",
+                "PAID_OUT",
+                "CASH_DROP",
+                "CASH_TRANSFER_OUT",
+              ]);
+            const declaredCash = Number(payload.declaredCash || 0);
+            const variance = declaredCash - expectedCash;
+            await tx.frontdeskSession.update({
+              where: { id: sessionId },
+              data: {
+                status: "CLOSED",
+                controlStatus: "SUBMITTED",
+                varianceStatus: variance === 0 ? null : "OPEN",
+                submittedAt: occurredAt ? new Date(occurredAt) : new Date(),
+                submittedBy: actorId,
+                closingAt: occurredAt ? new Date(occurredAt) : new Date(),
+                closedAt: occurredAt ? new Date(occurredAt) : new Date(),
+                declaredCash,
+                systemExpectedCash: expectedCash,
+                variance,
+              },
+            });
+            await tx.frontdeskSessionAudit.create({
+              data: {
+                frontdeskSessionId: sessionId,
+                action: "CLOSED",
+                performedBy: actorId,
+                notes: "Offline close synchronized",
+              },
+            });
+          } else if (
+            aggregateType === "FRONTDESK_SESSION" &&
+            eventType === "FRONTDESK_SESSION_REVIEWED"
+          ) {
+            const sessionId = payload.sessionId || aggregateId;
+            const current = await tx.frontdeskSession.findUnique({
+              where: { id: sessionId },
+            });
+            if (!current)
+              throw new Error(
+                `DEPENDENCY_NOT_READY: Front Desk session ${sessionId} has not been created yet`,
+              );
+            if (current.staffId === actorId)
+              throw new Error(
+                "SEGREGATION_OF_DUTIES: Operator cannot approve their own shift",
+              );
+            if (
+              [
+                "APPROVED",
+                "APPROVED_WITH_VARIANCE",
+                "HANDOVER_PENDING",
+                "HANDED_OVER",
+                "DEPOSITED",
+                "RECONCILED",
+              ].includes(String(current.controlStatus))
+            ) {
+              throw new Error(
+                "CONCURRENCY_CONFLICT: controlled Front Desk shift cannot be reviewed again",
+              );
+            }
+            const decision = String(payload.decision || "").toUpperCase();
+            let nextControlStatus =
+              decision === "APPROVED_WITH_VARIANCE"
+                ? "APPROVED_WITH_VARIANCE"
+                : decision === "APPROVED"
+                  ? "APPROVED"
+                  : "RETURNED";
+            let nextStatus = "CLOSED";
+            let handoverId = null;
+
+            if (
+              nextControlStatus === "APPROVED" ||
+              nextControlStatus === "APPROVED_WITH_VARIANCE"
+            ) {
+              const expectedCash = Number(current.systemExpectedCash || 0);
+              const declaredCash = Number(current.declaredCash || 0);
+              const variance = Number(current.variance || 0);
+
+              if (expectedCash === 0 && declaredCash === 0 && variance === 0) {
+                // Cashless shift: bypass handover and go straight to RECONCILED
+                nextControlStatus = "RECONCILED";
+                nextStatus = "CLOSED";
+                await tx.shiftControlAudit.create({
+                  data: {
+                    id: randomUUID(),
+                    propertyId: current.propertyId,
+                    frontdeskSessionId: sessionId,
+                    action: "SHIFT_CASHLESS_ACKNOWLEDGED",
+                    fromStatus: "APPROVED",
+                    toStatus: "RECONCILED",
+                    performedBy: actorId,
+                    idempotencyKey: `audit_cashless_${randomUUID()}`,
+                    metadata: { expectedCash: 0, declaredCash: 0, variance: 0 },
+                  },
+                });
+              } else {
+                // Shift has cash: create handover
+                handoverId = randomUUID();
+                await tx.cashHandover.create({
+                  data: {
+                    id: handoverId,
+                    propertyId: current.propertyId,
+                    handoverReference: `HO-${Date.now()}-${randomUUID().split("-")[0].toUpperCase().substring(0, 4)}`,
+                    amount: declaredCash,
+                    handedOverById: current.staffId,
+                    notes:
+                      "Automatically created upon offline shift approval sync.",
+                    status: "PENDING",
+                  },
+                });
+                await tx.shiftControlAudit.create({
+                  data: {
+                    id: randomUUID(),
+                    propertyId: current.propertyId,
+                    frontdeskSessionId: sessionId,
+                    action: "HANDOVER_CREATED",
+                    fromStatus: nextControlStatus,
+                    toStatus: "HANDOVER_PENDING",
+                    performedBy: actorId,
+                    idempotencyKey: `audit_ho_${randomUUID()}`,
+                  },
+                });
+                nextControlStatus = "HANDOVER_PENDING";
+                nextStatus = "HANDOVER_PENDING";
+              }
+            }
+
+            await tx.frontdeskSession.update({
+              where: { id: sessionId },
+              data: {
+                status: nextStatus as any,
+                controlStatus: nextControlStatus as any,
+                cashHandoverId: handoverId,
+                varianceStatus:
+                  decision === "APPROVED_WITH_VARIANCE"
+                    ? "ACCEPTED"
+                    : current.varianceStatus,
+                approvalDecision: decision,
+                approvalNotes: payload.notes || null,
+                approvedBy: decision === "REJECTED" ? null : actorId,
+                approvedAt:
+                  decision === "REJECTED"
+                    ? null
+                    : payload.reviewedAt
+                      ? new Date(payload.reviewedAt)
+                      : new Date(),
+              },
+            });
+            await tx.frontdeskSessionAudit.create({
+              data: {
+                frontdeskSessionId: sessionId,
+                action: "REVIEWED",
+                performedBy: actorId,
+                notes: payload.notes || `Decision: ${decision}`,
+              },
+            });
+          } else if (
+            eventType === "CREATE" &&
+            aggregateType === "RESERVATION"
+          ) {
+            const property = await tx.property.findUnique({
+              where: { id: propertyId },
+            });
+            let finalGuestId = payload.GuestId || payload.guestId;
+
+            // If a GuestId is provided, check if it exists in the cloud DB
+            if (finalGuestId) {
+              const existingGuest = await tx.guest.findUnique({
+                where: { id: finalGuestId },
+              });
+              if (existingGuest && existingGuest.propertyId !== propertyId) {
+                throw new Error("Guest does not belong to this property");
+              }
+              if (!existingGuest && payload.Guest) {
+                // C# generated a local GuestId, but it's not in the cloud yet.
+                await tx.guest.create({
+                  data: {
+                    id: finalGuestId,
+                    organizationId: property?.organizationId || "",
+                    propertyId,
+                    firstName: payload.Guest.FirstName || "Unknown",
+                    lastName: payload.Guest.LastName || "Guest",
+                    email: payload.Guest.Email,
+                    phone: payload.Guest.Phone,
+                  },
+                });
+              } else if (!existingGuest) {
+                // No payload.Guest provided and it doesn't exist, we can't do much but fail
+                throw new Error(
+                  `GuestId ${finalGuestId} does not exist and no Guest details provided`,
+                );
+              }
+            } else if (payload.Guest) {
+              // Fallback: create guest in cloud with auto-generated ID
+              const g = await tx.guest.create({
+                data: {
+                  organizationId: property?.organizationId || "",
+                  propertyId,
+                  firstName: payload.Guest.FirstName || "Unknown",
+                  lastName: payload.Guest.LastName || "Guest",
+                  email: payload.Guest.Email,
+                  phone: payload.Guest.Phone,
+                },
+              });
+              finalGuestId = g.id;
+            }
+
+            if (!finalGuestId)
+              throw new Error("Missing GuestId for reservation");
+
+            const reqRoomId = payload.RoomId || payload.roomId;
+            const reqRoomTypeId = payload.RoomTypeId || payload.roomTypeId;
+
+            let room = null;
+            let roomType = null;
+
+            if (reqRoomId) {
+              room = await tx.room.findFirst({
+                where: { id: reqRoomId, propertyId },
+                include: { roomType: true },
+              });
+              if (!room) throw new Error("Room not found or unauthorized");
+              roomType = room.roomType;
+            } else if (reqRoomTypeId) {
+              roomType = await tx.roomType.findFirst({
+                where: { id: reqRoomTypeId, propertyId },
+              });
+              if (!roomType)
+                throw new Error("RoomType not found or unauthorized");
+            } else {
+              roomType = await tx.roomType.findFirst({
+                where: { propertyId, isActive: true },
+              });
+              if (!roomType)
+                throw new Error("No room types available for property");
+            }
+
+            const checkInDate = parseLocalDateString(
+              payload.CheckInDate || payload.checkInDate || payload.checkIn,
+            )!;
+            const checkOutDate = parseLocalDateString(
+              payload.CheckOutDate || payload.checkOutDate || payload.checkOut,
+            )!;
+            if (
+              isNaN(checkInDate.getTime()) ||
+              isNaN(checkOutDate.getTime()) ||
+              checkOutDate <= checkInDate
+            ) {
+              throw new Error("Check-out must be after check-in");
+            }
+            const nights = Math.max(
+              1,
+              Math.ceil(
+                (checkOutDate.getTime() - checkInDate.getTime()) /
+                  (1000 * 60 * 60 * 24),
+              ),
+            );
+            let baseRate = Number(roomType.baseRate);
+            const currency = roomType.currency || "NGN";
+
+            let finalRatePlanId = "";
+            const corporateAccountId =
+              payload.CorporateAccountId || payload.corporateAccountId;
+            if (corporateAccountId) {
+              const corporateAccount = await tx.corporateAccount.findUnique({
+                where: { id: corporateAccountId },
+                include: { ratePlan: true },
+              });
+              if (!corporateAccount || corporateAccount.propertyId !== propertyId) {
+                throw new Error("Corporate account is not valid for this property");
+              }
+              if (!corporateAccount.isActive) {
+                throw new Error("This corporate account is inactive and cannot be used for new reservations");
+              }
+              if (corporateAccount?.ratePlan) {
+                finalRatePlanId = corporateAccount.ratePlan.id;
+                const rate = await tx.rate.findFirst({
+                  where: {
+                    ratePlanId: finalRatePlanId,
+                    roomTypeId: roomType.id,
+                  },
+                });
+                if (rate && (rate as any).amount) {
+                  baseRate = Number((rate as any).amount);
+                } else if (rate && (rate as any).baseAmount) {
+                  baseRate = Number((rate as any).baseAmount);
+                }
+              }
+            }
+
+            if (!finalRatePlanId) {
+              const ratePlan = await tx.ratePlan.findFirst({
+                where: { propertyId, isActive: true },
+              });
+              if (!ratePlan)
+                throw new Error("No active RatePlan found for property");
+              finalRatePlanId = ratePlan.id;
+            }
+
+            const amount = baseRate * nights;
+            const requestedReservationRoomId =
+              payload.ReservationRoomId || payload.reservationRoomId;
+
+            await tx.reservation.create({
+              data: {
+                id: aggregateId,
+                propertyId,
+                primaryGuestId: finalGuestId,
+                // Corporate identity is authoritative over the generic source
+                // sent by an offline terminal. This keeps offline and online
+                // corporate reservations consistent in reporting and audit.
+                source: corporateAccountId
+                  ? "CORPORATE"
+                  : ((payload.Source || payload.source || "WALK_IN") as any),
+                status: (payload.Status ||
+                  payload.status ||
+                  "CONFIRMED") as any,
+                checkIn: checkInDate,
+                checkOut: checkOutDate,
+                adults: payload.Adults || payload.adults || 1,
+                children: payload.Children || payload.children || 0,
+                ratePlanId: finalRatePlanId,
+                ratePlanSnapshot: { baseRate, currency, nights, total: amount },
+                confirmationNumber: `RES-${Date.now().toString().slice(-6)}-${Math.floor(Math.random() * 1000)}`,
+                currency,
+                corporateAccountId: corporateAccountId || null,
+                createdBy: actorId,
+                version: aggregateVersion,
+              },
+            });
+
+            const createdReservationRoom = await tx.reservationRoom.create({
+              data: {
+                // Keep the edge ReservationRoom identity stable. Follow-up
+                // offline events (discounts, comps, extensions) reference
+                // this ID, so generating a new cloud ID breaks reconciliation.
+                ...(isUuid(requestedReservationRoomId)
+                  ? { id: requestedReservationRoomId }
+                  : {}),
+                reservationId: aggregateId,
+                roomTypeId: roomType.id,
+                roomId: room ? room.id : null,
+                checkIn: checkInDate,
+                checkOut: checkOutDate,
+                adults: payload.Adults || payload.adults || 1,
+                children: payload.Children || payload.children || 0,
+                ratePlanId: finalRatePlanId,
+                rateAmount: baseRate,
+                currency,
+                status: "ACTIVE",
+                // Discount fields from front desk
+                discountType: payload.discountType || payload.DiscountType || null,
+                discountAmount: (payload.discountType === 'FIXED_AMOUNT' || payload.DiscountType === 'FIXED_AMOUNT' || payload.discountType === 'COMPLIMENTARY' || payload.DiscountType === 'COMPLIMENTARY')
+                  ? Number(payload.discountValue || payload.DiscountValue || 0) : null,
+                discountPercent: (payload.discountType === 'PERCENTAGE' || payload.DiscountType === 'PERCENTAGE')
+                  ? Number(payload.discountValue || payload.DiscountValue || 0) : null,
+                discountReason: payload.discountReason || payload.DiscountReason || null,
+              },
+            });
+
+            // Link a discount request that arrived before its reservation
+            // create event. This makes out-of-order offline batches recoverable
+            // without requiring the front desk to submit the discount again.
+            const waitingDiscounts = await tx.approvalRequest.findMany({
+              where: {
+                propertyId,
+                type: "DISCOUNT",
+                status: "PENDING",
+                executionStatus: "NOT_APPLIED",
+              },
+            });
+            for (const waitingDiscount of waitingDiscounts) {
+              const waitingSnapshot = (waitingDiscount.snapshot || {}) as Record<string, unknown>;
+              const waitingDetails = (waitingDiscount.details || {}) as Record<string, unknown>;
+              const waitingRoomId = waitingSnapshot.reservationRoomId || waitingDetails.reservationRoomId;
+              if (waitingRoomId !== createdReservationRoom.id) continue;
+
+              await tx.reservationRoom.update({
+                where: { id: createdReservationRoom.id },
+                data: { discountApprovalId: `PENDING:${waitingDiscount.id}` },
+              });
+              await tx.approvalRequest.update({
+                where: { id: waitingDiscount.id },
+                data: {
+                  details: { ...waitingDetails, dependencyStatus: "READY" },
+                  snapshot: { ...waitingSnapshot, originalRate: Number(createdReservationRoom.rateAmount) },
+                },
+              });
+            }
+
+            // Create a PENDING ApprovalRequest if a discount was included on
+            // the reservation-create event itself.
+            const hasDiscount = !!(payload.discountType || payload.DiscountType);
+            if (hasDiscount) {
+              const managerId = payload.discountApprovingManagerId || payload.DiscountApprovingManagerId || null;
+              const discountType = payload.discountType || payload.DiscountType;
+              const discountValue = Number(payload.discountValue || payload.DiscountValue || 0);
+              if (discountType === 'COMPLIMENTARY') {
+                const complimentaryAmount = discountValue > 0 ? discountValue : Number(createdReservationRoom.rateAmount);
+                await tx.complimentaryRecord.create({
+                  data: {
+                    propertyId,
+                    businessDate: property?.businessDate || authoritativeBusinessDate,
+                    reference: `COMP_RES_${aggregateId}_${checkInDate.toISOString().slice(0, 10)}`,
+                    sourceModule: 'FRONT_DESK',
+                    roomId: createdReservationRoom.roomId,
+                    guestId: finalGuestId,
+                    operatorId: staffOperatorId,
+                    operationId: `COMP_CREATE_${aggregateId}`,
+                    grossAmount: complimentaryAmount,
+                    complAmount: complimentaryAmount,
+                    netAmount: 0,
+                    complType: complimentaryAmount >= Number(createdReservationRoom.rateAmount) ? 'FULL' : 'PARTIAL',
+                    reason: payload.discountReason || payload.DiscountReason || 'Offline guest complimentary reservation',
+                    notes: JSON.stringify({ acknowledgedByStaffId: managerId }),
+                  },
+                });
+              } else {
+                const discountApproval = await tx.approvalRequest.upsert({
+                where: { idempotencyKey: `DISCOUNT:${aggregateId}` },
+                create: {
+                  propertyId,
+                  type: 'DISCOUNT',
+                  status: 'PENDING',
+                  executionStatus: 'NOT_APPLIED',
+                  requestedBy: actorId!,
+                  amount: discountType === 'FIXED_AMOUNT' || discountType === 'COMPLIMENTARY' ? discountValue : 0,
+                  currency,
+                  reason: payload.discountReason || payload.DiscountReason || 'Front-desk discount',
+                  details: {
+                    reservationId: aggregateId,
+                    reservationRoomId: createdReservationRoom.id,
+                    discountType,
+                    discountValue,
+                    acknowledgedByManagerId: managerId,
+                    requestedByStaffId: actorId,
+                  },
+                  snapshot: {
+                    targetType: 'RESERVATION_ROOM',
+                    reservationRoomId: createdReservationRoom.id,
+                    originalRate: Number(createdReservationRoom.rateAmount),
+                    discountType,
+                    discountAmount: discountType === 'FIXED_AMOUNT' || discountType === 'COMPLIMENTARY' ? discountValue : 0,
+                    discountPercent: discountType === 'PERCENTAGE' ? discountValue : 0,
+                    reason: payload.discountReason || payload.DiscountReason || 'Front-desk discount',
+                  },
+                  idempotencyKey: `DISCOUNT:${aggregateId}`,
+                },
+                update: {},
+                });
+                // Link the approval back to the reservationRoom
+                await tx.reservationRoom.update({
+                  where: { id: createdReservationRoom.id },
+                  data: { discountApprovalId: `PENDING:${discountApproval.id}` },
+                });
+              }
+            }
+
+            const propertyBusinessDateStr = (property?.businessDate ?? new Date()).toISOString().split('T')[0];
+            const checkInStr = checkInDate.toISOString().split('T')[0];
+            if (
+              room &&
+              (payload.Status || payload.status || "CONFIRMED") === "CONFIRMED" &&
+              checkInStr === propertyBusinessDateStr
+            ) {
+              await tx.room.update({
+                where: { id: room.id },
+                data: { status: "RESERVED" },
+              });
+            }
+
+            await tx.reservationGuest.create({
+              data: {
+                reservationId: aggregateId,
+                guestId: finalGuestId,
+                isPrimary: true,
+              },
+            });
+
+            // 7D.1: Create Folio
+            const sharedCorporateFolio = corporateAccountId
+              ? await tx.folio.findFirst({
+                  where: { propertyId, corporateAccountId, type: "CITY_LEDGER", status: "OPEN" },
+                })
+              : null;
+              
+            const existingRoomFolio = corporateAccountId
+              ? null
+              : await tx.folio.findFirst({
+                  where: { reservationId: aggregateId, propertyId }
+                });
+
+            const newFolio = sharedCorporateFolio ?? existingRoomFolio ?? await tx.folio.create({
+              data: {
+                id: isUuid(payload.FolioId || payload.folioId) && !corporateAccountId
+                  ? payload.FolioId || payload.folioId
+                  : undefined,
+                reservationId: corporateAccountId ? null : aggregateId,
+                corporateAccountId: corporateAccountId || null,
+                propertyId,
+                guestId: corporateAccountId ? null : finalGuestId,
+                folioNumber:
+                  "FOL-" +
+                  Math.floor(Math.random() * 1000000)
+                    .toString()
+                    .padStart(6, "0"),
+                type: corporateAccountId ? "CITY_LEDGER" : "ROOM",
+                status: "OPEN",
+                currency: currency,
+                totalCharges: 0,
+                totalPayments: 0,
+                balance: 0,
+                version: 1,
+              },
+            });
+          } else if (aggregateType === "RESERVATION" && eventType === "CHECKIN_BYPASS") {
+            const bypassOpId = payload.operationId || randomUUID();
+
+            const existingBypass = await tx.checkInBypass.findUnique({
+              where: { operationId: bypassOpId }
+            });
+
+            if (!existingBypass) {
+              const operatorSession = await tx.frontdeskSession.findFirst({
+                where: { propertyId, staffId: operatorId, controlStatus: 'OPEN' }
+              });
+
+              if (!operatorSession) {
+                throw new Error("No open FrontdeskSession found for operator to bypass checkin.");
+              }
+
+              await tx.checkInBypass.create({
+                data: {
+                  operationId: bypassOpId,
+                  propertyId,
+                  reservationId: aggregateId,
+                  frontdeskSessionId: operatorSession.id,
+                  operatorId: operatorId,
+                  acknowledgedByStaffId: payload.acknowledgedByStaffId,
+                  reason: payload.reason,
+                  status: 'PENDING',
+                  businessDate: operatorSession.businessDate,
+                }
+              });
+            }
+          } else if (aggregateType === "RESERVATION" && eventType === "CHECK_IN") {
+            const reservation = await tx.reservation.findUnique({
+              where: { id: aggregateId },
+            });
+            if (!reservation)
+              throw new Error(`Reservation ${aggregateId} not found`);
+
+            await tx.reservation.update({
+              where: { id: aggregateId },
+              data: { status: "CHECKED_IN" },
+            });
+            let roomIdToOccupy = payload.roomId;
+            if (!roomIdToOccupy) {
+              const activeResRoom = await tx.reservationRoom.findFirst({ where: { reservationId: aggregateId, status: "ACTIVE" } });
+              if (activeResRoom && activeResRoom.roomId) {
+                roomIdToOccupy = activeResRoom.roomId;
+              }
+            }
+            if (roomIdToOccupy) {
+              await tx.room.update({
+                where: { id: roomIdToOccupy },
+                data: { status: "OCCUPIED" },
+              });
+            }
+          } else if (aggregateType === "RESERVATION" && eventType === "CHECK_OUT") {
+            // Desktop checkouts are queued while offline, so enforce the same
+            // financial rule again when the event reaches the cloud. This must
+            // happen inside the transaction before changing reservation/room state.
+            const reservation = await tx.reservation.findUnique({
+              where: { id: aggregateId },
+              select: {
+                confirmationNumber: true,
+                corporateAccountId: true,
+                primaryGuestId: true,
+                checkIn: true,
+                reservationRooms: {
+                  where: { status: "ACTIVE" },
+                  select: { id: true, rateAmount: true, currency: true },
+                },
+              },
+            });
+            if (!reservation) throw new Error(`Reservation ${aggregateId} not found`);
+            let folios = await tx.folio.findMany({
+              where: { reservationId: aggregateId, propertyId },
+              select: { id: true, balance: true, version: true, currency: true },
+            });
+            if (reservation.corporateAccountId) {
+              const shared = await tx.folio.findMany({
+                where: { corporateAccountId: reservation.corporateAccountId, propertyId, type: "CITY_LEDGER", status: "OPEN" },
+                select: { id: true, balance: true, version: true, currency: true },
+              });
+              // Corporate guests use the company's shared folio only.
+              folios = shared;
+            }
+
+            // Older desktop builds could submit CHECK_OUT without the day-use
+            // ROOM_CHARGE event. Repair that gap at the authoritative boundary
+            // before evaluating payment or closing the reservation.
+            if (!reservation.corporateAccountId && folios.length > 0) {
+              const sameDayCheckout =
+                reservation.checkIn.toISOString().slice(0, 10) ===
+                postingBusinessDate.toISOString().slice(0, 10);
+              const targetFolio = folios[0];
+              const dayUseOperationId = `ROOM_CHARGE_${aggregateId}_${postingBusinessDate.toISOString().slice(0, 10)}:DAY_USE`;
+              const existingDayUseCharge = await tx.folioItem.findFirst({
+                where: { folioId: targetFolio.id, operationId: dayUseOperationId, voidedAt: null },
+                select: { id: true },
+              });
+
+              if (sameDayCheckout && !existingDayUseCharge) {
+                const dayUseAmount = reservation.reservationRooms.reduce(
+                  (sum: number, room: any) => sum + Number(room.rateAmount || 0),
+                  0,
+                );
+                if (dayUseAmount > 0.01) {
+                  await tx.folioItem.create({
+                    data: {
+                      folioId: targetFolio.id,
+                      reservationId: aggregateId,
+                      guestId: reservation.primaryGuestId,
+                      businessDate: postingBusinessDate,
+                      type: "CHARGE",
+                      source: "DAY_USE_ROOM_CHARGE",
+                      revenueCategory: "ROOM",
+                      description: `Day-use room charge for ${postingBusinessDate.toISOString().slice(0, 10)}`,
+                      quantity: 1,
+                      unitAmount: dayUseAmount,
+                      amount: dayUseAmount,
+                      currency: targetFolio.currency || "NGN",
+                      baseAmount: dayUseAmount,
+                      postedBy: actorId,
+                      operationId: dayUseOperationId,
+                      deviceId: device.id,
+                      isLatePosting: true,
+                    },
+                  });
+                  await tx.folio.update({
+                    where: { id: targetFolio.id },
+                    data: {
+                      totalCharges: { increment: dayUseAmount },
+                      balance: { increment: dayUseAmount },
+                      version: { increment: 1 },
+                    },
+                  });
+
+                  const sameFolioApplied = await applyAvailableFolioCredit(tx, {
+                    folioId: targetFolio.id,
+                    propertyId,
+                    guestId: reservation.primaryGuestId,
+                    reservationId: aggregateId,
+                    amount: dayUseAmount,
+                    currency: targetFolio.currency || "NGN",
+                    source: "CHECKOUT_GUEST_CREDIT",
+                    description: `Applied guest credit at checkout for reservation ${reservation.confirmationNumber}`,
+                    appliedBy: actorId,
+                    operationKey: `CHECKOUT_GUEST_CREDIT:${aggregateId}:${targetFolio.id}`,
+                    businessDate: postingBusinessDate,
+                  });
+                  await applyAvailableGuestLedgerCredit(tx, {
+                    folioId: targetFolio.id,
+                    propertyId,
+                    organizationId: property.organizationId,
+                    guestId: reservation.primaryGuestId,
+                    reservationId: aggregateId,
+                    amount: Math.max(0, dayUseAmount - sameFolioApplied),
+                    currency: targetFolio.currency || "NGN",
+                    appliedBy: actorId,
+                    operationKey: `CHECKOUT_GUEST_CREDIT:${aggregateId}:${targetFolio.id}`,
+                    businessDate: postingBusinessDate,
+                    description: `Applied previous-stay guest credit at checkout for reservation ${reservation.confirmationNumber}`,
+                  });
+                  folios = await tx.folio.findMany({
+                    where: { reservationId: aggregateId, propertyId },
+                    select: { id: true, balance: true, version: true, currency: true },
+                  });
+                }
+              }
+            }
+            const checkoutFolios = reservation.corporateAccountId
+              ? await Promise.all(folios.map(async (folio: any) => {
+                  const items = await tx.folioItem.findMany({
+                    where: { folioId: folio.id, reservationId: aggregateId, voidedAt: null },
+                    select: { amount: true },
+                  });
+                  return { ...folio, balance: items.reduce((sum: number, item: any) => sum + Number(item.amount), 0) };
+                }))
+              : folios;
+            const totalBalance = checkoutFolios.reduce(
+              (sum: number, folio: any) => sum + Number(folio.balance),
+              0,
+            );
+            if (reservation.corporateAccountId && Math.abs(totalBalance) > 0.01) {
+              await routeFoliosToCityLedger({
+                tx,
+                folios: checkoutFolios,
+                reservationId: aggregateId,
+                guestId: reservation.primaryGuestId,
+                propertyId,
+                corporateAccountId: reservation.corporateAccountId,
+                confirmationNumber: reservation.confirmationNumber,
+                createdBy: actorId,
+                keepFolioOpen: true,
+              });
+            } else if (totalBalance > 0.01) throw new Error("PAYMENT_REQUIRED");
+            else if (totalBalance < -0.01) throw new Error("REFUND_REQUIRED");
+
+            const today = new Date(new Date().setHours(0, 0, 0, 0));
+            await tx.reservation.update({
+              where: { id: aggregateId },
+              data: { status: "CHECKED_OUT", checkOut: today },
+            });
+            await tx.reservationRoom.updateMany({
+              where: { reservationId: aggregateId },
+              data: { checkOut: today },
+            });
+            if (payload.roomId) {
+              await tx.room.update({
+                where: { id: payload.roomId },
+                data: { status: "AVAILABLE" },
+              });
+            }
+          } else if (aggregateType === "RESERVATION" && eventType === "ROOM_CREDIT") {
+            const amount = Number(payload.amount);
+            if (!Number.isFinite(amount) || amount <= 0)
+              throw new Error("Credit amount must be positive");
+            const folio = await tx.folio.findUnique({
+              where: { id: aggregateId, propertyId },
+            });
+            if (!folio) throw new Error("Folio not found or unauthorized");
+            const credit = await tx.folioCredit.create({
+              data: {
+                folioId: aggregateId,
+                reservationId: folio.reservationId,
+                propertyId,
+                amount,
+                remainingAmount: amount,
+                currency: payload.currency || "NGN",
+                method: "OTHER",
+                status: "AVAILABLE",
+                notes: payload.description || "Room downgrade credit",
+                receivedBy: actorId,
+                deviceId: device.id,
+                operationId: payload.operationId || id,
+                idempotencyKey,
+                businessDate: postingBusinessDate,
+              },
+            });
+            await tx.financialAuditLog.create({
+              data: {
+                operationId: payload.operationId || id,
+                propertyId,
+                reservationId: folio.reservationId,
+                folioId: aggregateId,
+                creditId: credit.id,
+                operationType: "ROOM_DOWNGRADE_CREDIT",
+                amount,
+                currency: payload.currency || folio.currency || "NGN",
+                operatorId: actorId,
+                deviceId: device.id,
+                businessDate: postingBusinessDate,
+                reason: payload.description || "Room downgrade credit",
+                balanceBefore: folio.balance,
+                balanceAfter: folio.balance,
+                approvalStatus: "NOT_REQUIRED",
+                idempotencyKey: `audit:${idempotencyKey}`,
+                metadata: { eventType, source: "DESKTOP" },
+              },
+            });
+            if (Number(folio.balance) > 0) {
+              const debitAmount = Math.min(Number(folio.balance), amount);
+              await applyAvailableFolioCredit(tx, {
+                folioId: aggregateId,
+                propertyId,
+                reservationId: folio.reservationId,
+                amount: debitAmount,
+                currency: payload.currency || folio.currency || "NGN",
+                source: "SYSTEM_AUTO_APPLY",
+                description: "Auto-applied credit to outstanding debit",
+                appliedBy: actorId,
+                deviceId: device.id,
+                operationKey: `AUTO_APPLY_${idempotencyKey}`,
+                businessDate: postingBusinessDate,
+              });
+            }
+          } else if (
+            eventType === "ROOM_CHARGE" ||
+            eventType === "POST_CHARGE"
+          ) {
+            if (eventType === "ROOM_CHARGE") {
+              // ROOM_CHARGE is the controlled nightly accommodation posting.
+              // It may only arrive from an authorized Night Audit operator;
+              // Front Desk, POS, and laundry use POST_CHARGE with their own
+              // source and can never impersonate nightly room revenue.
+              const poster = await tx.staff.findUnique({
+                where: { id: actorId },
+                select: { isActive: true, position: true },
+              });
+              const auditPositions = new Set([
+                "NIGHT_AUDITOR",
+                "HOTEL_MANAGER",
+                "MANAGER",
+                "ADMIN",
+                "SUPER_ADMIN",
+              ]);
+              if (!poster?.isActive || !auditPositions.has(String(poster.position).toUpperCase())) {
+                throw new Error("ROOM_CHARGE_REQUIRES_NIGHT_AUDIT_AUTHORITY");
+              }
+            }
+            const existingCharge = await tx.folioItem.findFirst({
+              where: { posTransactionId: idempotencyKey },
+            });
+            if (existingCharge) {
+              const e = new Error("IDEMPOTENCY_DUPLICATE");
+              throw e;
+            }
+
+            const amount = Number(payload.amount);
+            if (!Number.isFinite(amount) || amount <= 0)
+              throw new Error("Charge amount must be positive");
+            const folio = await tx.folio.findUnique({
+              where: { id: aggregateId, propertyId },
+            });
+            if (!folio) throw new Error("Folio not found or unauthorized");
+
+            const chargeReservationId = folio.type === "CITY_LEDGER" ? payload.reservationId : folio.reservationId;
+            const chargeGuestId = folio.type === "CITY_LEDGER" ? payload.guestId : folio.guestId;
+
+            if (folio.type === "CITY_LEDGER" && (!chargeReservationId || !chargeGuestId)) {
+              throw new Error("Corporate room charge requires a valid reservationId and guestId");
+            }
+
+            await tx.folioItem.create({
+              data: {
+                folioId: aggregateId,
+                businessDate: postingBusinessDate,
+                type: "CHARGE",
+                source: payload.source || "ROOM_CHARGE",
+                description: payload.description,
+                quantity: 1,
+                unitAmount: amount,
+                amount: amount,
+                currency: payload.currency || "NGN",
+                baseAmount: amount,
+                postedBy: actorId,
+                deviceId: device.id,
+                isLatePosting: true,
+                posTransactionId: idempotencyKey,
+                operationId: idempotencyKey,
+                reservationId: chargeReservationId,
+                guestId: chargeGuestId,
+              },
+            });
+
+            await tx.folio.update({
+              where: { id: aggregateId },
+              data: {
+                totalCharges: { increment: amount },
+                balance: { increment: amount },
+              },
+            });
+
+            const creditAmount = Number(payload.creditApplicationAmount || 0);
+            if (creditAmount > 0) {
+              if (!Number.isFinite(creditAmount) || creditAmount > amount)
+                throw new Error("Invalid credit application amount");
+              let remainingToApply = creditAmount;
+              const credits = await tx.folioCredit.findMany({
+                where: {
+                  folioId: aggregateId,
+                  propertyId,
+                  status: { in: ["AVAILABLE", "PARTIALLY_APPLIED"] },
+                  remainingAmount: { gt: 0 },
+                },
+                orderBy: { createdAt: "asc" },
+              });
+              for (const credit of credits) {
+                if (remainingToApply <= 0) break;
+                const applied = Math.min(
+                  remainingToApply,
+                  Number(credit.remainingAmount),
+                );
+                const updated = await tx.folioCredit.updateMany({
+                  where: { id: credit.id, remainingAmount: { gte: applied } },
+                  data: {
+                    remainingAmount: { decrement: applied },
+                    status:
+                      applied >= Number(credit.remainingAmount)
+                        ? "EXHAUSTED"
+                        : "PARTIALLY_APPLIED",
+                  },
+                });
+                if (updated.count !== 1) continue;
+                const application = await tx.folioCreditApplication.create({
+                  data: {
+                    creditId: credit.id,
+                    folioId: aggregateId,
+                    amount: applied,
+                    currency: payload.currency || "NGN",
+                    source: payload.source || "OTHER",
+                    description: payload.description || "Applied guest credit",
+                    idempotencyKey: `${payload.creditApplicationKey || `CREDIT_APPLICATION:${idempotencyKey}`}:${credit.id}`,
+                    appliedBy: actorId,
+                    deviceId: device.id,
+                    businessDate: postingBusinessDate,
+                  },
+                });
+                await tx.folio.update({
+                  where: { id: aggregateId },
+                  data: { balance: { decrement: applied } },
+                });
+                await tx.financialAuditLog.create({
+                  data: {
+                    operationId:
+                      payload.creditApplicationKey ||
+                      `CREDIT_APPLICATION:${idempotencyKey}`,
+                    propertyId,
+                    reservationId: folio.reservationId,
+                    folioId: aggregateId,
+                    creditId: credit.id,
+                    creditApplicationId: application.id,
+                    transactionId: idempotencyKey,
+                    operationType: "CREDIT_APPLICATION",
+                    amount: applied,
+                    currency: payload.currency || folio.currency || "NGN",
+                    operatorId: actorId,
+                    deviceId: device.id,
+                    businessDate: postingBusinessDate,
+                    reason: payload.description || "Applied guest credit",
+                    balanceBefore: credit.remainingAmount,
+                    balanceAfter: Number(credit.remainingAmount) - applied,
+                    approvalStatus: "NOT_REQUIRED",
+                    idempotencyKey: `audit:${payload.creditApplicationKey || `CREDIT_APPLICATION:${idempotencyKey}`}:${credit.id}`,
+                    metadata: { eventType, source: "DESKTOP" },
+                  },
+                });
+                remainingToApply -= applied;
+              }
+            }
+          } else if (aggregateType === "FOLIO" && eventType === "DISCOUNT_REQUESTED") {
+            const folio = await tx.folio.findUnique({ where: { id: aggregateId, propertyId } });
+            if (folio) {
+              await tx.approvalRequest.upsert({
+                where: { idempotencyKey: `offline_discount:${idempotencyKey}` },
+                create: {
+                  propertyId,
+                  type: "DISCOUNT",
+                  status: "PENDING",
+                  executionStatus: "NOT_APPLIED",
+                  requestedBy: actorId,
+                  amount: Number(payload.discountAmount || 0),
+                  currency: folio.currency || "NGN",
+                  reason: payload.reason || "Offline folio discount request",
+                  details: payload,
+                  snapshot: { ...payload, targetType: "FOLIO_ITEM", folioId: aggregateId },
+                  idempotencyKey: `offline_discount:${idempotencyKey}`,
+                },
+                update: {},
+              });
+            }
+          } else if (aggregateType === "FOLIO" && eventType === "GUEST_CREDIT_TRANSFER") {
+            const amount = Number(payload.amount);
+            if (!Number.isFinite(amount) || amount <= 0) {
+              throw new Error("Credit transfer amount must be positive");
+            }
+            if (!payload.guestId) {
+              throw new Error("Guest ID is required for credit transfer");
+            }
+
+            const refKey = `CR_SYNC_${idempotencyKey}`;
+            const existingEntry = await tx.cityLedgerEntry.findFirst({
+              where: { reference: refKey }
+            });
+
+            if (!existingEntry) {
+              // The desktop can be operating on stale/recovered local data. Never
+              // trust its proposed credit amount: the server folio balance is the
+              // financial source of truth. Lock the folio so two checkout syncs
+              // cannot both route the same credit.
+              const lockedFolios = await tx.$queryRaw<any[]>`
+                SELECT id, "propertyId", "reservationId", "currency", "balance", "totalCharges", "status"
+                FROM "Folio"
+                WHERE id = ${aggregateId}::uuid AND "propertyId" = ${propertyId}::uuid
+                FOR UPDATE
+              `;
+              const lockedFolio = lockedFolios[0];
+              if (!lockedFolio) throw new Error("Folio not found");
+
+              const folio = await tx.folio.findUnique({
+                where: { id: aggregateId, propertyId },
+                include: { reservation: true }
+              });
+              if (!folio) throw new Error("Folio not found");
+
+              const authoritativeBalance = Number(lockedFolio.balance);
+              const availableCredit = Math.max(0, -authoritativeBalance);
+              if (availableCredit <= 0.01) {
+                throw new Error(
+                  `GUEST_CREDIT_TRANSFER_IGNORED: folio has no credit (authoritative balance ${authoritativeBalance})`
+                );
+              }
+              if (Math.abs(amount - availableCredit) > 0.01) {
+                throw new Error(
+                  `GUEST_CREDIT_TRANSFER_REJECTED: requested ${amount} exceeds or differs from authoritative credit ${availableCredit}`
+                );
+              }
+              if (
+                folio.reservation?.primaryGuestId &&
+                folio.reservation.primaryGuestId !== payload.guestId
+              ) {
+                throw new Error("GUEST_CREDIT_TRANSFER_REJECTED: guest does not match reservation");
+              }
+              if (payload.currency && payload.currency !== folio.currency) {
+                throw new Error("GUEST_CREDIT_TRANSFER_REJECTED: currency does not match folio");
+              }
+
+              // Lock property to ensure race-safe ledger provisioning
+              const propRes = await tx.$queryRaw<any[]>`SELECT id, "organizationId" FROM "Property" WHERE id = ${propertyId}::uuid FOR UPDATE`;
+              const orgId = propRes[0].organizationId;
+              
+              let guestLedgerAccount = await tx.cityLedgerAccount.findFirst({
+                where: { propertyId, type: 'REFUND_PAYABLE', name: 'Pending Guest Refunds', status: 'ACTIVE' }
+              });
+              if (!guestLedgerAccount) {
+                guestLedgerAccount = await tx.cityLedgerAccount.create({
+                  data: {
+                    organizationId: orgId,
+                    propertyId,
+                    name: 'Pending Guest Refunds',
+                    type: 'REFUND_PAYABLE',
+                    currency: folio.currency || 'NGN'
+                  }
+                });
+              }
+
+              // Create REFUND_OWED entry
+              await tx.cityLedgerEntry.create({
+                data: {
+                  accountId: guestLedgerAccount.id,
+                  propertyId,
+                  guestId: payload.guestId || folio.reservation?.primaryGuestId,
+                  reservationId: folio.reservationId,
+                  folioId: aggregateId,
+                  amount,
+                  currency: folio.currency || "NGN",
+                  type: 'REFUND_OWED',
+                  status: 'OPEN',
+                  reason: 'Auto-routed guest credit to Guest Ledger upon offline checkout',
+                  reference: refKey,
+                  createdBy: actorId,
+                }
+              });
+              
+              // Increment HOUSE account balance
+              await tx.cityLedgerAccount.update({
+                where: { id: guestLedgerAccount.id },
+                data: { balance: { increment: amount } }
+              });
+
+              // Create offsetting FolioItem
+              await tx.folioItem.create({
+                data: {
+                  folioId: aggregateId,
+                  businessDate: parseLocalDateString(payload.businessDate) || authoritativeBusinessDate,
+                  type: "CHARGE",
+                  source: "CITY_LEDGER",
+                  description: "City Ledger credit at offline checkout",
+                  quantity: 1,
+                  unitAmount: amount,
+                  amount,
+                  currency: folio.currency || "NGN",
+                  baseAmount: amount,
+                  postedBy: actorId,
+                  deviceId: device.id,
+                  isLatePosting: true,
+                  posTransactionId: idempotencyKey,
+                },
+              });
+
+              await tx.folio.update({
+                where: { id: aggregateId },
+                data: {
+                  totalCharges: { increment: amount },
+                  balance: { increment: amount },
+                },
+              });
+
+              // DOUBLE-ENTRY GL POSTING
+              await CityLedgerAccountingService.processCityLedgerRouting(
+                tx,
+                propertyId,
+                orgId,
+                actorId,
+                -amount,
+                aggregateId,
+                refKey,
+                `cl_sync_${idempotencyKey}`,
+                authoritativeBusinessDate
+              );
+            }
+          } else if (aggregateType === "CITY_LEDGER" && eventType === "GUEST_CREDIT_REFUND_REQUESTED") {
+            const amount = Number(payload.amount);
+            const creditEntryId = payload.cityLedgerEntryId || aggregateId;
+            const guestId = payload.guestId;
+            const accountType = String(payload.accountType || "GUEST_CREDIT").toUpperCase();
+            const isCorporateAdvance = accountType === "CORPORATE";
+            const requestedMethod = String(payload.requestedMethod || "BANK_TRANSFER").toUpperCase();
+            const reason = String(payload.reason || "Guest requested refund of available folio credit").trim();
+            const bankAccountName = String(payload.bankAccountName || "").trim();
+            const bankAccountNumber = String(payload.bankAccountNumber || "").replace(/\s+/g, "");
+            const bankName = String(payload.bankName || "").trim();
+
+            if (!Number.isFinite(amount) || amount <= 0 || !isUuid(creditEntryId) || (!isCorporateAdvance && !isUuid(guestId))) {
+              throw new Error("Refund requires valid entry and amount");
+            }
+            if (!["CASH", "BANK_TRANSFER"].includes(requestedMethod)) {
+              throw new Error("Standalone guest credits can only be refunded by cash or bank transfer");
+            }
+            if (!reason) throw new Error("Guest credit refund reason is required");
+            if (requestedMethod === "BANK_TRANSFER" && (!bankAccountName || !/^\d{6,20}$/.test(bankAccountNumber) || !bankName)) {
+              throw new Error("Bank name, account name, and a valid account number are required");
+            }
+
+            const existingRequest = await tx.refundRequest.findUnique({ where: { idempotencyKey } });
+            if (existingRequest) return;
+
+            const entryRows = await tx.$queryRawUnsafe<any[]>(
+              'SELECT id, amount, currency, status, "propertyId", "guestId", "accountId", "reservationId", "folioId", type FROM "CityLedgerEntry" WHERE id = $1::uuid AND "propertyId" = $2::uuid FOR UPDATE',
+              creditEntryId,
+              propertyId,
+            );
+            const entry = entryRows[0];
+            const validGuestCredit = entry?.type === "REFUND_OWED" && entry.status === "OPEN" && entry.guestId === guestId;
+            const validCorporateAdvance = entry?.type === "PAYMENT" && entry.status === "OPEN" && !entry.guestId;
+            if (!entry || (isCorporateAdvance ? !validCorporateAdvance : !validGuestCredit)) {
+              throw new Error("GUEST_CREDIT_NOT_AVAILABLE");
+            }
+            const account = await tx.cityLedgerAccount.findUnique({ where: { id: entry.accountId }, select: { type: true } });
+            if (!account || account.type !== (isCorporateAdvance ? "CORPORATE" : "REFUND_PAYABLE")) throw new Error("INVALID_CREDIT_ACCOUNT");
+
+            const allocations = await tx.cityLedgerAllocation.aggregate({ where: { paymentId: creditEntryId }, _sum: { amount: true } });
+            const pending = await tx.refundRequest.aggregate({
+              where: { cityLedgerEntryId: creditEntryId, status: { in: ["PENDING_APPROVAL", "APPROVED", "PROCESSING"] } },
+              _sum: { requestedAmount: true },
+            });
+            const available = Number(entry.amount) - Number(allocations._sum.amount || 0);
+            if (Number(pending._sum.requestedAmount || 0) + amount > available + 0.01) throw new Error("CREDIT_LIMIT_EXCEEDED");
+
+            const propertyRecord = await tx.property.findUnique({ where: { id: propertyId }, select: { organizationId: true } });
+            if (!propertyRecord) throw new Error("PROPERTY_NOT_FOUND");
+            const accountantRole = await tx.role.findFirst({ where: { organizationId: propertyRecord.organizationId, name: { in: ["ACCOUNTANT", "FINANCE_MANAGER"] } } });
+            const accountant = accountantRole ? await tx.userRole.findFirst({
+              where: { roleId: accountantRole.id, userId: { not: actorId }, OR: [{ propertyId }, { propertyId: null }] },
+              select: { userId: true },
+            }) : null;
+            const request = await tx.refundRequest.create({
+              data: {
+                organizationId: propertyRecord.organizationId,
+                propertyId,
+                reservationId: entry.reservationId || null,
+                folioId: entry.folioId || null,
+                guestId: isCorporateAdvance ? null : guestId,
+                cityLedgerEntryId: creditEntryId,
+                requestedAmount: amount,
+                currency: entry.currency,
+                requestedMethod,
+                bankAccountName: requestedMethod === "BANK_TRANSFER" ? bankAccountName : null,
+                bankAccountNumberEncrypted: requestedMethod === "BANK_TRANSFER" ? encrypt(bankAccountNumber) : null,
+                bankName: requestedMethod === "BANK_TRANSFER" ? bankName : null,
+                category: isCorporateAdvance ? "CORPORATE_ADVANCE_BALANCE" : "FOLIO_CREDIT_BALANCE",
+                reason,
+                supportingNotes: `Offline ${isCorporateAdvance ? "corporate advance" : "guest credit"} entry: ${creditEntryId}`,
+                requestedById: actorId,
+                currentApproverId: accountant?.userId || null,
+                approvalRoleId: accountantRole?.id || null,
+                currentApprovalStep: 1,
+                idempotencyKey,
+                expiresAt: new Date(Date.now() + 7 * 86400000),
+              },
+            });
+            await tx.approvalRequest.create({
+              data: {
+                propertyId,
+                type: "REFUND",
+                status: "PENDING",
+                requestedBy: actorId,
+                amount,
+                currency: entry.currency,
+                reason,
+                details: { refundRequestId: request.id, cityLedgerEntryId: creditEntryId, category: request.category, requestedAmount: amount, requestedMethod, approverId: accountant?.userId, approverRoleId: accountantRole?.id, stepOrder: 1, stage: "ACCOUNTANT_REVIEW", source: "OFFLINE_FRONTDESK" },
+                expiresAt: request.expiresAt,
+              },
+            });
+          } else if (aggregateType === "CITY_LEDGER" && eventType === "GUEST_CREDIT_APPLICATION") {
+            const amount = Number(payload.amount);
+            const guestId = payload.guestId;
+            const creditEntryId = payload.creditEntryId || aggregateId;
+            const folioId = payload.folioId;
+            const allocationId = payload.allocationId;
+
+            if (!Number.isFinite(amount) || amount <= 0) {
+              throw new Error("Guest credit application amount must be positive");
+            }
+            if (!isUuid(guestId) || !isUuid(creditEntryId) || !isUuid(folioId)) {
+              throw new Error("Guest credit application requires valid guest, credit, and folio IDs");
+            }
+
+            const folio = await tx.folio.findUnique({
+              where: { id: folioId, propertyId },
+              include: { reservation: { select: { id: true, primaryGuestId: true } } },
+            });
+            if (!folio || !folio.reservation) throw new Error("Folio not found or has no reservation");
+            if (folio.status !== "OPEN") throw new Error("Cannot apply credit to a closed folio");
+            if (folio.reservation.primaryGuestId !== guestId) {
+              throw new Error("Guest credit does not belong to the folio guest");
+            }
+            if (payload.currency && payload.currency !== folio.currency) {
+              throw new Error("Currency mismatch. Expected " + folio.currency);
+            }
+
+            const existingAllocation = isUuid(allocationId)
+              ? await tx.cityLedgerAllocation.findUnique({ where: { id: allocationId }, select: { id: true, folioId: true, paymentId: true } })
+              : null;
+            if (existingAllocation) {
+              if (existingAllocation.folioId !== folioId || existingAllocation.paymentId !== creditEntryId) {
+                throw new Error("Credit allocation id is already linked to another transaction");
+              }
+              return;
+            }
+            const existingApplication = await tx.folioItem.findFirst({
+              where: { folioId, operationId: idempotencyKey, type: "PAYMENT", source: "CITY_LEDGER" },
+              select: { id: true },
+            });
+            if (existingApplication) return;
+
+            const lockedEntries = await tx.$queryRawUnsafe<any[]>(
+              'SELECT id, amount, currency, status, "accountId", "guestId" FROM "CityLedgerEntry" WHERE id = $1::uuid AND "propertyId" = $2::uuid AND "type" = $3 AND "status" = $4 FOR UPDATE',
+              creditEntryId,
+              propertyId,
+              "REFUND_OWED",
+              "OPEN",
+            );
+            const entry = lockedEntries[0];
+            if (!entry || entry.guestId !== guestId) {
+              throw new Error("GUEST_CREDIT_NOT_AVAILABLE");
+            }
+            const requestedCurrency = String(payload.currency || folio.currency || "NGN").toUpperCase();
+            const entryCurrency = String(entry.currency || "NGN").toUpperCase();
+            const folioCurrency = String(folio.currency || "NGN").toUpperCase();
+            if (requestedCurrency !== entryCurrency || requestedCurrency !== folioCurrency) {
+              throw new Error(`Currency mismatch. Credit=${entryCurrency}, folio=${folioCurrency}`);
+            }
+
+            const allocationTotals = await tx.cityLedgerAllocation.aggregate({
+              where: { paymentId: creditEntryId },
+              _sum: { amount: true },
+            });
+            const available = Number(entry.amount) - Number(allocationTotals._sum.amount || 0);
+            if (amount > available + 0.01) {
+              throw new Error("INSUFFICIENT_CREDIT");
+            }
+
+            const allocationData: any = {
+              paymentId: creditEntryId,
+              folioId,
+              amount,
+              currency: folio.currency || entry.currency || "NGN",
+              createdBy: staffOperatorId,
+            };
+            if (isUuid(allocationId)) allocationData.id = allocationId;
+
+            const allocation = await tx.cityLedgerAllocation.create({ data: allocationData });
+            const remaining = available - amount;
+
+            await tx.cityLedgerAccount.update({
+              where: { id: entry.accountId },
+              data: { balance: { decrement: amount } },
+            });
+            if (remaining <= 0.01) {
+              await tx.cityLedgerEntry.update({ where: { id: creditEntryId }, data: { status: "SETTLED" } });
+            }
+
+            const applicationDate = parseLocalDateString(payload.businessDate) || postingBusinessDate;
+            await tx.folioItem.create({
+              data: {
+                folioId,
+                businessDate: applicationDate,
+                type: "PAYMENT",
+                source: "CITY_LEDGER",
+                description: payload.description || "Applied guest credit",
+                quantity: 1,
+                unitAmount: -amount,
+                amount: -amount,
+                currency: folio.currency || entry.currency || "NGN",
+                baseAmount: -amount,
+                postedBy: staffOperatorId,
+                operationId: idempotencyKey,
+                reservationId: folio.reservationId,
+                guestId,
+              },
+            });
+            await tx.folio.update({
+              where: { id: folioId },
+              data: {
+                balance: { decrement: amount },
+                totalPayments: { increment: amount },
+                version: { increment: 1 },
+              },
+            });
+
+            const propertyForJournal = await tx.property.findUnique({
+              where: { id: propertyId },
+              select: { organizationId: true },
+            });
+            await GeneralLedgerService.postJournal(
+              {
+                userId: staffOperatorId,
+                propertyIds: [propertyId],
+                organizationId: propertyForJournal?.organizationId || property.organizationId,
+                role: "SYSTEM",
+                permissions: [],
+                outletIds: [],
+              },
+              {
+                propertyId,
+                entryDate: applicationDate,
+                reference: "GUEST-CREDIT-APPLICATION-" + idempotencyKey,
+                description: "Apply guest credit to folio (offline sync)",
+                sourceModule: "AR",
+                lines: [
+                  { accountId: await GLMappingService.getGuestRefundsPayableAccount(propertyId), debit: amount, credit: 0, description: "Release guest refund payable", sourceType: "GUEST_CREDIT_APPLICATION", sourceId: folioId },
+                  { accountId: await GLMappingService.getGuestLedgerAccount(propertyId), debit: 0, credit: amount, description: "Apply guest credit to folio", sourceType: "GUEST_CREDIT_APPLICATION", sourceId: folioId },
+                ],
+              },
+              tx,
+            );
+
+            await tx.financialAuditLog.create({
+              data: {
+                operationId: idempotencyKey,
+                propertyId,
+                reservationId: folio.reservationId,
+                folioId,
+                guestId,
+                amount,
+                currency: folio.currency || "NGN",
+                operatorId: staffOperatorId,
+                deviceId: device.id,
+                businessDate: applicationDate,
+                operationType: "GUEST_CREDIT_APPLICATION",
+                reason: payload.description || "Applied guest credit (offline sync)",
+                approvalStatus: "NOT_REQUIRED",
+                idempotencyKey: "audit:" + idempotencyKey,
+                metadata: { source: "OFFLINE_GUEST_CREDIT_APPLICATION", creditEntryId, allocationId: allocation.id },
+              },
+            });
+          } else if (aggregateType === "FOLIO" && eventType === "FOLIO_DISCOUNT_APPLIED") {
+            const existingDiscount = await tx.folioItem.findFirst({
+              where: { posTransactionId: idempotencyKey },
+            });
+            if (!existingDiscount) {
+              const amount = Number(payload.amount || Math.abs(payload.unitAmount || 0));
+              if (!Number.isFinite(amount) || amount <= 0)
+                throw new Error("Discount amount must be positive");
+
+              const folio = await tx.folio.findUnique({
+                where: { id: aggregateId, propertyId },
+              });
+              if (!folio) throw new Error("Folio not found or unauthorized");
+
+              await tx.folioItem.create({
+                data: {
+                folioId: aggregateId,
+                businessDate: postingBusinessDate,
+                type: "DISCOUNT",
+                source: payload.source || "MANUAL",
+                description: payload.description || payload.reason || "Discount Applied Offline",
+                quantity: 1,
+                unitAmount: -amount,
+                amount: -amount,
+                currency: folio.currency || "NGN",
+                baseAmount: -amount,
+                postedBy: actorId,
+                deviceId: device.id,
+                isLatePosting: true,
+                posTransactionId: idempotencyKey,
+                },
+              });
+
+              await tx.folio.update({
+                where: { id: aggregateId },
+                data: {
+                  totalCharges: { decrement: amount },
+                  balance: { decrement: amount },
+                },
+              });
+
+              // POST DISCOUNT ACCOUNTING
+              try {
+                const discountGlAccountId = await GLMappingService.getDiscountAllowanceAccount(propertyId);
+                const arGlAccountId = await GLMappingService.getGuestLedgerAccount(propertyId);
+
+                await GeneralLedgerService.postJournal({
+                  userId: actorId || 'system',
+                  propertyIds: [propertyId],
+                  organizationId: property.organizationId || '',
+                  role: 'SYSTEM',
+                  permissions: [],
+                  outletIds: []
+                } as any, {
+                  propertyId,
+                  entryDate: postingBusinessDate,
+                  reference: `FOL_DISC_${aggregateId}_${idempotencyKey}`,
+                  description: `Folio Discount - ${payload.description || payload.reason || 'Offline Applied'}`,
+                  sourceModule: 'AR',
+                  lines: [
+                    {
+                      accountId: discountGlAccountId,
+                      debit: amount,
+                      credit: 0,
+                      description: `Discount Allowance for Folio ${aggregateId}`,
+                      sourceType: 'FOLIO_DISCOUNT',
+                      sourceId: idempotencyKey,
+                    },
+                    {
+                      accountId: arGlAccountId,
+                      debit: 0,
+                      credit: amount,
+                      description: `Relieve Guest Ledger for Folio ${aggregateId}`,
+                      sourceType: 'FOLIO_DISCOUNT',
+                      sourceId: idempotencyKey,
+                    }
+                  ]
+                }, tx);
+              } catch (e: any) {
+                if (e.message?.includes('Missing') || e.message?.includes('mapping required') || e.message?.includes('is missing')) {
+                  throw new Error(`RETRYABLE_ACCOUNTING_CONFIG: Accounting Configuration Required: ${e.message}`);
+                }
+                throw e;
+              }
+
+              const approvalKey = `approval:${idempotencyKey}`;
+              await tx.approvalRequest.upsert({
+                where: { idempotencyKey: approvalKey },
+                create: {
+                propertyId,
+                type: "DISCOUNT",
+                status: "APPROVED",
+                executionStatus: "APPLIED",
+                requestedBy: actorId,
+                reviewedBy: payload.acknowledgedByStaffId || actorId,
+                reviewedAt: new Date(),
+                amount: amount,
+                currency: folio.currency || "NGN",
+                reason: payload.description || payload.reason || "Offline Folio Discount",
+                idempotencyKey: approvalKey,
+                details: payload,
+                },
+                update: {},
+              });
+            }
+
+          } else if (
+            eventType === "ADVANCE_DEPOSIT_REQUEST" ||
+            eventType === "CREDIT_ADJUSTMENT_REQUEST"
+          ) {
+            const amount = Number(payload.amount);
+            if (!Number.isFinite(amount) || amount <= 0)
+              throw new Error("Deposit amount must be positive");
+            const folio = await tx.folio.findUnique({
+              where: { id: aggregateId, propertyId },
+            });
+            if (!folio) throw new Error("Folio not found or unauthorized");
+            const approvalKey = `approval:${idempotencyKey}`;
+            const existingApproval = await tx.approvalRequest.findUnique({
+              where: { idempotencyKey: approvalKey },
+            });
+            const approval =
+              existingApproval ||
+              (await tx.approvalRequest.create({
+                data: {
+                  propertyId,
+                  type:
+                    eventType === "CREDIT_ADJUSTMENT_REQUEST"
+                      ? "CREDIT_ADJUSTMENT"
+                      : "ADVANCE_DEPOSIT",
+                  status: "PENDING",
+                  requestedBy: actorId,
+                  amount,
+                  currency: payload.currency || folio.currency || "NGN",
+                  reason:
+                    payload.description ||
+                    payload.notes ||
+                    "Financial operation requires approval",
+                  idempotencyKey: approvalKey,
+                  details: {
+                    folioId: aggregateId,
+                    reservationId: folio.reservationId,
+                    amount,
+                    method: payload.method || "OTHER",
+                    operationType:
+                      eventType === "CREDIT_ADJUSTMENT_REQUEST"
+                        ? "CREDIT_ADJUSTMENT"
+                        : "ADVANCE_DEPOSIT",
+                    reference: payload.reference || null,
+                    notes: payload.notes || null,
+                    operatorId: actorId,
+                    deviceId: device.id,
+                    sourceEventId: id,
+                    sourceEventKey: idempotencyKey,
+                  },
+                },
+              }));
+            await tx.financialAuditLog.create({
+              data: {
+                operationId: idempotencyKey,
+                approvalId: approval.id,
+                propertyId,
+                reservationId: folio.reservationId,
+                folioId: aggregateId,
+                operationType:
+                  eventType === "CREDIT_ADJUSTMENT_REQUEST"
+                    ? "CREDIT_ADJUSTMENT"
+                    : "ADVANCE_DEPOSIT",
+                amount,
+                currency: payload.currency || folio.currency || "NGN",
+                operatorId: actorId,
+                deviceId: device.id,
+                businessDate: postingBusinessDate,
+                reason:
+                  payload.description ||
+                  payload.notes ||
+                  "Financial operation requires approval",
+                balanceBefore: folio.balance,
+                balanceAfter: folio.balance,
+                approvalStatus: "PENDING_APPROVAL",
+                idempotencyKey: `audit:${idempotencyKey}`,
+                metadata: { eventType, source: "DESKTOP" },
+              },
+            });
+            resultStatus = "PENDING_APPROVAL";
+          } else if (aggregateType === "FOLIO" && eventType === "ADVANCE_DEPOSIT") {
+            const amount = Number(payload.amount);
+            if (!Number.isFinite(amount) || amount <= 0)
+              throw new Error("Deposit amount must be positive");
+
+            const folio = await tx.folio.findUnique({
+              where: { id: aggregateId, propertyId },
+            });
+            if (!folio) throw new Error("Folio not found or unauthorized");
+            if (folio.status !== "OPEN")
+              throw new Error("Cannot add a deposit to a closed folio");
+
+            let methodStr = String(payload.method || "CASH").toUpperCase();
+            const validMethods = [
+              "CASH",
+              "BANK_TRANSFER",
+              "POS",
+              "CARD",
+              "CARD_OFFLINE",
+              "PAYMENT_GATEWAY",
+              "MOBILE_PAYMENT",
+              "CHEQUE",
+              "ROOM_CHARGE",
+              "OTHER",
+            ];
+            if (!validMethods.includes(methodStr)) methodStr = "OTHER";
+
+            await tx.folioCredit.create({
+              data: {
+                folioId: aggregateId,
+                reservationId: folio.reservationId,
+                propertyId,
+                amount,
+                remainingAmount: amount,
+                currency: payload.currency || folio.currency || "NGN",
+                method: methodStr as any,
+                status: "AVAILABLE",
+                reference: payload.reference || null,
+                notes: payload.notes || null,
+                receivedBy: actorId,
+                deviceId: device.id,
+                operationId: payload.operationId || id,
+                idempotencyKey,
+                businessDate: postingBusinessDate,
+              },
+            });
+
+            await tx.payment.create({
+              data: {
+                folioId: aggregateId,
+                propertyId,
+                reservationId: folio.reservationId,
+                method: methodStr as any,
+                amount: amount,
+                currency: payload.currency || "NGN",
+                baseAmount: amount,
+                status: "COMPLETED",
+                businessDate: postingBusinessDate,
+                idempotencyKey: `dep_pay_${idempotencyKey}`,
+                receivedBy: actorId,
+                frontdeskSessionId: payload.frontdeskSessionId || null,
+                terminalId: payload.terminalId || device.id,
+                reference: payload.reference || null,
+              },
+            });
+
+            if (payload.frontdeskSessionId && methodStr === "CASH") {
+              const session = await tx.frontdeskSession.findUnique({
+                where: { id: payload.frontdeskSessionId },
+              });
+              if (session && session.status === "OPEN") {
+                await tx.cashAccount.update({
+                  where: { id: session.cashAccountId },
+                  data: { balance: { increment: amount } },
+                });
+                await tx.posCashMovement.create({
+                  data: {
+                    propertyId,
+                    deviceId: device.id,
+                    frontdeskSessionId: session.id,
+                    userId: actorId,
+                    amount,
+                    currency: payload.currency || "NGN",
+                    type: "PAYMENT",
+                    sourceAccountId: session.cashAccountId,
+                    destinationAccountId: session.cashAccountId,
+                    reasonCode: "ADVANCE_DEPOSIT",
+                    receiptReference: payload.reference || null,
+                    operationId: `FD-DEPOSIT-${idempotencyKey}`,
+                    businessDate: session.businessDate,
+                  },
+                });
+              }
+            }
+
+            // Increment totalPayments so the Payments counter in the folio
+            // summary reflects the true money received via advance deposit.
+            await tx.folio.update({
+              where: { id: aggregateId },
+              data: { totalPayments: { increment: amount } },
+            });
+
+            if (Number(folio.balance) > 0) {
+              const debitAmount = Math.min(Number(folio.balance), amount);
+              await applyAvailableFolioCredit(tx, {
+                folioId: aggregateId,
+                propertyId,
+                reservationId: folio.reservationId,
+                amount: debitAmount,
+                currency: payload.currency || folio.currency || "NGN",
+                source: "SYSTEM_AUTO_APPLY",
+                description: "Auto-applied credit to outstanding debit",
+                appliedBy: actorId,
+                deviceId: device.id,
+                operationKey: `AUTO_APPLY_${idempotencyKey}`,
+                businessDate: postingBusinessDate,
+              });
+            }
+          } else if (aggregateType === "FOLIO" && eventType === "POST_PAYMENT") {
+            // Folio-level payment — idempotent via posTransactionId uniqueness
+            const amount = Number(payload.amount);
+            if (!amount || amount <= 0)
+              throw new Error("Payment amount must be positive");
+
+            const folio = await tx.folio.findUnique({
+              where: { id: aggregateId, propertyId },
+            });
+            if (!folio) throw new Error("Folio not found or unauthorized");
+            const eventInvoiceId = payload.eventInvoiceId || null;
+            const eventInvoice = eventInvoiceId
+              ? await tx.eventInvoice.findFirst({ where: { id: eventInvoiceId, folioId: aggregateId, event: { propertyId } } })
+              : null;
+            if (eventInvoiceId && !eventInvoice) throw new Error("Event invoice not found or not linked to this folio");
+            if (eventInvoice && ["DRAFT", "VOID"].includes(eventInvoice.status)) throw new Error("Only an issued event invoice can receive payment");
+
+            // Idempotency: if a FolioItem already exists with this event's idempotencyKey, skip
+            const existing = await tx.folioItem.findFirst({
+              where: { posTransactionId: idempotencyKey },
+            });
+            if (!existing) {
+              if (amount > Number(folio.balance) + 0.01)
+                throw new Error("Payment amount exceeds outstanding balance");
+              if (eventInvoice && amount > Number(eventInvoice.totalAmount) - Number(eventInvoice.paidAmount) + 0.01)
+                throw new Error("Payment amount exceeds event invoice balance");
+              await tx.folioItem.create({
+                data: {
+                  folioId: aggregateId,
+                  businessDate: postingBusinessDate,
+                  type: "PAYMENT",
+                  source: "MANUAL",
+                  description:
+                    payload.description ||
+                    `${payload.method || "PAYMENT"} payment`,
+                  quantity: 1,
+                  unitAmount: -amount,
+                  amount: -amount,
+                  currency: payload.currency || "NGN",
+                  baseAmount: amount,
+                  postedBy: actorId,
+                  deviceId: device.id,
+                  isLatePosting: true,
+                  posTransactionId: idempotencyKey,
+                },
+              });
+
+              // Also create the corresponding Payment record so the web UI can display payment method and receipts
+              let methodStr = (payload.method || "CASH").toUpperCase();
+              const validMethods = [
+                "CASH",
+                "BANK_TRANSFER",
+                "POS",
+                "CARD",
+                "CARD_OFFLINE",
+                "PAYMENT_GATEWAY",
+                "MOBILE_PAYMENT",
+                "CHEQUE",
+                "ROOM_CHARGE",
+                "OTHER",
+              ];
+              if (!validMethods.includes(methodStr)) methodStr = "OTHER";
+
+              const payment = await tx.payment.create({
+                data: {
+                  folioId: aggregateId,
+                  propertyId,
+                  reservationId: folio.reservationId,
+                  eventInvoiceId: eventInvoice?.id,
+                  method: methodStr as any,
+                  amount: amount,
+                  currency: payload.currency || "NGN",
+                  baseAmount: amount,
+                  status: "COMPLETED",
+                  businessDate: postingBusinessDate,
+                  idempotencyKey: `pay_${idempotencyKey}`,
+                  receivedBy: actorId,
+                  frontdeskSessionId: payload.frontdeskSessionId || null,
+                  terminalId: payload.terminalId || device.id,
+                  reference: payload.reference || null,
+                  authorizationCode: payload.authorizationCode || null,
+                },
+              });
+
+              if (payload.frontdeskSessionId && methodStr === "CASH") {
+                const session = await tx.frontdeskSession.findUnique({
+                  where: { id: payload.frontdeskSessionId },
+                });
+                if (!session || session.status !== "OPEN")
+                  throw new Error("Front desk session is not open");
+                await tx.cashAccount.update({
+                  where: { id: session.cashAccountId },
+                  data: { balance: { increment: amount } },
+                });
+                await tx.posCashMovement.create({
+                  data: {
+                    propertyId,
+                    deviceId: device.id,
+                    frontdeskSessionId: session.id,
+                    userId: actorId,
+                    amount,
+                    currency: payload.currency || "NGN",
+                    type: "PAYMENT",
+                    sourceAccountId: session.cashAccountId,
+                    destinationAccountId: session.cashAccountId,
+                    reasonCode: "FOLIO_PAYMENT",
+                    receiptReference: payload.reference || null,
+                    operationId: `FD-PAYMENT-${idempotencyKey}`,
+                    businessDate: session.businessDate,
+                  },
+                });
+              }
+
+              await tx.folio.update({
+                where: { id: aggregateId },
+                data: {
+                  totalPayments: { increment: amount },
+                  balance: { decrement: amount },
+                },
+              });
+
+              if (eventInvoice) {
+                const paidAmount = Number(eventInvoice.paidAmount) + amount;
+                await tx.eventInvoice.update({
+                  where: { id: eventInvoice.id },
+                  data: { paidAmount, status: paidAmount + 0.01 >= Number(eventInvoice.totalAmount) ? "PAID" : "PARTIAL" },
+                });
+              }
+
+              // Safely construct double-entry GL inside the exact same sync transaction boundary
+              // The service is shared with the online /api/v1/payments route.
+              const organizationId = typeof property !== 'undefined' ? property.organizationId : null;
+              await FolioPaymentAccountingService.processPaymentAccounting(
+                tx,
+                payment,
+                propertyId,
+                organizationId,
+                actorId
+              );
+            }
+          } else if (aggregateType === "CITY_LEDGER" && eventType === "CITY_LEDGER_PAYMENT") {
+            const amount = Number(payload.amount);
+            const accountId = payload.accountId;
+            const invoiceId = payload.invoiceId || null;
+            const accountType = String(payload.accountType || "").toUpperCase();
+            const frontdeskSessionId = payload.frontdeskSessionId;
+            const method = String(payload.method || "BANK_TRANSFER").toUpperCase();
+            const reference = String(payload.reference || "").trim();
+            if (!Number.isFinite(amount) || amount <= 0 || !isUuid(accountId) || !isUuid(frontdeskSessionId) || !reference) throw new Error("City ledger payment requires account, shift, amount, and reference");
+            if (!["CASH", "BANK_TRANSFER", "POS", "CARD", "CHEQUE", "OTHER"].includes(method)) throw new Error("Invalid city ledger payment method");
+            const account = await tx.cityLedgerAccount.findUnique({ where: { id: accountId } });
+            if (!account || account.propertyId !== propertyId || !["CORPORATE", "SKIPPER"].includes(account.type) || (accountType && account.type !== accountType)) throw new Error("CITY_LEDGER_ACCOUNT_NOT_AVAILABLE");
+            const frontdeskSession = await tx.frontdeskSession.findUnique({ where: { id: frontdeskSessionId }, select: { propertyId: true, staffId: true, businessDate: true } });
+            if (!frontdeskSession || frontdeskSession.propertyId !== propertyId) throw new Error("FRONTDESK_SHIFT_NOT_FOUND");
+            if (account.type !== "CORPORATE" && !invoiceId) throw new Error("WALKOUT_INVOICE_REQUIRED");
+            if (invoiceId && !isUuid(invoiceId)) throw new Error("INVALID_INVOICE");
+            const invoice = invoiceId ? await tx.cityLedgerInvoice.findUnique({ where: { id: invoiceId } }) : null;
+            if (invoiceId && (!invoice || invoice.accountId !== accountId || invoice.status === "PAID" || invoice.status === "VOID")) throw new Error("CITY_LEDGER_INVOICE_NOT_AVAILABLE");
+            if (invoice && amount > Number(invoice.outstandingAmount) + 0.01) throw new Error("PAYMENT_EXCEEDS_INVOICE_BALANCE");
+            const invoices = invoice
+              ? [invoice]
+              : await tx.cityLedgerInvoice.findMany({ where: { accountId, status: { in: ["OPEN", "PARTIALLY_PAID"] } }, orderBy: [{ dueDate: "asc" }, { createdAt: "asc" }] });
+            if (!invoice && account.type !== "CORPORATE") throw new Error("WALKOUT_INVOICE_REQUIRED");
+            const existingPayment = await tx.cityLedgerEntry.findFirst({ where: { reference, accountId, type: "PAYMENT" } });
+            if (existingPayment) return;
+            let masterFolio = await tx.folio.findFirst({ where: { propertyId, type: "CITY_LEDGER", corporateAccountId: null, reservationId: null, status: "OPEN" } });
+            if (!masterFolio) masterFolio = await tx.folio.create({ data: { propertyId, type: "CITY_LEDGER", status: "OPEN", currency: account.currency, folioNumber: `AR-${propertyId.slice(0, 8).toUpperCase()}-${Date.now().toString().slice(-6)}` } });
+            const payment = await tx.payment.create({ data: { folioId: masterFolio.id, eventInvoiceId: invoice?.eventInvoiceId || undefined, propertyId, frontdeskSessionId, method: method as PaymentMethod, collectionSource: "RECEIVABLES", amount, currency: account.currency, baseAmount: amount, status: "COMPLETED", businessDate: frontdeskSession.businessDate, idempotencyKey, reference, receivedBy: frontdeskSession.staffId, notes: invoice ? `Front Desk city ledger settlement for ${invoice.invoiceNumber || invoiceId}` : "Front Desk corporate city ledger payment" } });
+            await tx.folio.update({ where: { id: masterFolio.id }, data: { totalPayments: { increment: amount }, balance: { decrement: amount } } });
+            let remaining = amount;
+            let appliedAmount = 0;
+            for (const openInvoice of invoices) {
+              if (remaining <= 0.01) break;
+              const applied = Math.min(remaining, Number(openInvoice.outstandingAmount));
+              const invoiceRemaining = Number(openInvoice.outstandingAmount) - applied;
+              await tx.cityLedgerInvoice.update({ where: { id: openInvoice.id }, data: { paidAmount: { increment: applied }, outstandingAmount: invoiceRemaining, status: invoiceRemaining <= 0.01 ? "PAID" : "PARTIALLY_PAID" } });
+              if (openInvoice.eventInvoiceId) {
+                const eventInvoice = await tx.eventInvoice.findUnique({ where: { id: openInvoice.eventInvoiceId }, select: { id: true, totalAmount: true, paidAmount: true } });
+                if (eventInvoice) {
+                  const paidAmount = Number(eventInvoice.paidAmount) + applied;
+                  const nextStatus = paidAmount + 0.01 >= Number(eventInvoice.totalAmount) ? "PAID" : "PARTIAL";
+                  await tx.eventInvoice.update({ where: { id: eventInvoice.id }, data: { paidAmount, status: nextStatus } });
+                  if (nextStatus === "PAID") await tx.leaseBillingSchedule.updateMany({ where: { invoiceId: eventInvoice.id }, data: { status: "PAID" } });
+                }
+              }
+              remaining -= applied;
+              appliedAmount += applied;
+            }
+            const paymentEntry = await tx.cityLedgerEntry.create({ data: { accountId, propertyId, amount, currency: account.currency, type: "PAYMENT", status: remaining <= 0.01 ? "SETTLED" : "OPEN", reference, reason: invoice ? `Settlement for invoice ${invoice.invoiceNumber || invoiceId}` : appliedAmount > 0.01 ? "Bulk corporate city ledger payment" : "Unapplied corporate advance", createdBy: actorId } });
+            // Re-read the affected invoices so allocation rows mirror the exact FIFO applications.
+            let allocationRemaining = amount;
+            for (const openInvoice of invoices) {
+              if (allocationRemaining <= 0.01) break;
+              const applied = Math.min(allocationRemaining, Number(openInvoice.outstandingAmount));
+              await tx.cityLedgerAllocation.create({ data: { paymentId: paymentEntry.id, invoiceId: openInvoice.id, amount: applied, currency: openInvoice.currency, createdBy: actorId } });
+              if (Number(openInvoice.outstandingAmount) - applied <= 0.01) await tx.cityLedgerEntry.updateMany({ where: { invoiceId: openInvoice.id, type: "TRANSFER_IN", status: "OPEN" }, data: { status: "SETTLED" } });
+              allocationRemaining -= applied;
+            }
+            if (appliedAmount > 0.01) await tx.cityLedgerAccount.update({ where: { id: accountId }, data: { balance: { decrement: appliedAmount } } });
+            const propertyRecord = await tx.property.findUnique({ where: { id: propertyId }, select: { organizationId: true, businessDate: true, timezone: true } });
+            const businessDate = propertyRecord?.businessDate || postingBusinessDate;
+            const lines = [{ accountId: await GLMappingService.getAssetAccountForMethod(propertyId, method), debit: amount, credit: 0, description: `Receivable collection by ${method}`, sourceType: "CITY_LEDGER_PAYMENT", sourceId: payment.id }, ...(appliedAmount > 0.01 ? [{ accountId: await GLMappingService.getCityLedgerAccount(propertyId), debit: 0, credit: appliedAmount, description: "Reduce city ledger receivable", sourceType: "CITY_LEDGER_PAYMENT", sourceId: payment.id }] : [])];
+            if (remaining > 0.01 && account.type === "CORPORATE") lines.push({ accountId: await GLMappingService.getCorporateAdvancesAccount(propertyId), debit: 0, credit: remaining, description: "Unapplied corporate advance", sourceType: "CITY_LEDGER_PAYMENT", sourceId: payment.id });
+            await GeneralLedgerService.postJournal({ userId: actorId, propertyIds: [propertyId], organizationId: propertyRecord?.organizationId || property.organizationId, role: "SYSTEM", permissions: [], outletIds: [] }, { propertyId, entryDate: businessDate, reference: `CITY-LEDGER-PAYMENT-${idempotencyKey}`, description: invoice ? `Settle city ledger invoice ${invoice.invoiceNumber || invoiceId}` : "Corporate city ledger payment", sourceModule: "AR", lines }, tx);
+          } else if (aggregateType === "FOLIO" && eventType === "CITY_LEDGER_SETTLEMENT") {
+            const amount = Number(payload.amount ?? payload.Amount);
+            const accountId = payload.accountId || payload.AccountId;
+            if (!Number.isFinite(amount) || amount <= 0)
+              throw new Error("Settlement amount must be positive");
+            if (!accountId)
+              throw new Error(
+                "accountId is required for CITY_LEDGER_SETTLEMENT",
+              );
+
+            const folio = await tx.folio.findUnique({
+              where: { id: aggregateId, propertyId },
+            });
+            if (!folio) throw new Error("Folio not found or unauthorized");
+
+            const invoiceNumber = String(payload.invoiceNumber || `AR-${payload.confirmationNumber || aggregateId}-${String(aggregateId).slice(0, 8).toUpperCase()}`);
+            const existing = await tx.cityLedgerEntry.findFirst({
+              // Corporate reservations share one folio. Amount-only matching
+              // would suppress a legitimate second checkout with the same
+              // balance; the immutable invoice/reference is the idempotency key.
+              where: { folioId: aggregateId, type: "TRANSFER_IN", reference: invoiceNumber },
+            });
+            if (!existing) {
+              const issueDate = new Date();
+              issueDate.setUTCHours(0, 0, 0, 0);
+              const dueDate = new Date(issueDate);
+              dueDate.setUTCDate(dueDate.getUTCDate() + 30);
+              const invoice = await tx.cityLedgerInvoice.upsert({
+                where: { propertyId_invoiceNumber: { propertyId, invoiceNumber } },
+                create: {
+                  propertyId,
+                  accountId,
+                  invoiceNumber,
+                  issueDate,
+                  dueDate,
+                  description: String(payload.invoiceDescription || `Corporate folio transfer ${aggregateId}`),
+                  amount,
+                  outstandingAmount: amount,
+                  currency: payload.currency || "NGN",
+                  createdBy: actorId,
+                },
+                update: {},
+              });
+              await tx.cityLedgerEntry.create({
+                data: {
+                  accountId,
+                  propertyId,
+                  reservationId: folio.reservationId,
+                  folioId: aggregateId,
+                  amount,
+                  currency: payload.currency || "NGN",
+                  type: "TRANSFER_IN",
+                  reference: invoiceNumber,
+                  invoiceId: invoice.id,
+                  reason:
+                    "Auto-routed to City Ledger upon checkout (Offline sync)",
+                  createdBy: actorId,
+                },
+              });
+              await tx.cityLedgerAccount.update({
+                where: { id: accountId },
+                data: { balance: { increment: amount } },
+              });
+              await tx.folio.update({
+                where: { id: aggregateId },
+                data: {
+                  totalPayments: { increment: amount },
+                  balance: { decrement: amount },
+                },
+              });
+
+              await tx.folioItem.create({
+                data: {
+                  folioId: aggregateId,
+                  businessDate: postingBusinessDate,
+                  type: "PAYMENT",
+                  source: "CITY_LEDGER",
+                  description: "City Ledger transfer at checkout",
+                  quantity: 1,
+                  unitAmount: -amount,
+                  amount: -amount,
+                  currency: payload.currency || "NGN",
+                  baseAmount: -amount,
+                  postedBy: actorId,
+                  reservationId: payload.reservationId || folio.reservationId,
+                  guestId: payload.guestId || folio.guestId,
+                },
+              });
+
+              // Safely construct double-entry GL inside the exact same sync transaction boundary
+              const property = await tx.property.findUnique({
+                where: { id: propertyId },
+                select: { organizationId: true }
+              });
+              await CityLedgerAccountingService.processCityLedgerRouting(
+                tx,
+                propertyId,
+                property?.organizationId || null,
+                actorId,
+                amount,
+                aggregateId,
+                invoiceNumber,
+                `cl_sync_${aggregateId}_${idempotencyKey}`,
+                authoritativeBusinessDate
+              );
+            }
+          } else if (aggregateType === "FOLIO" && eventType === "REFUND_REQUESTED") {
+            const amount = Math.abs(Number(payload.amount ?? payload.Amount));
+            const paymentId =
+              payload.paymentId || payload.PaymentId || aggregateId;
+            const payment = await tx.payment.findUnique({
+              where: { id: paymentId },
+              include: {
+                folio: { include: { items: true } },
+                reservation: true,
+              },
+            });
+            if (!payment || payment.propertyId !== propertyId)
+              throw new Error("Payment not found or unauthorized");
+            if (!Number.isFinite(amount) || amount <= 0)
+              throw new Error("Refund amount must be positive");
+            const requestedMethod = String(
+              payload.requestedMethod ||
+                payload.refundMethod ||
+                "ORIGINAL_PAYMENT",
+            ).toUpperCase();
+            if (
+              !["CASH", "BANK_TRANSFER", "ORIGINAL_PAYMENT"].includes(
+                requestedMethod,
+              )
+            )
+              throw new Error("Invalid refund method");
+            const category = String(
+              payload.category || "MANUAL_ADJUSTMENT",
+            ).toUpperCase();
+            const reducedStayNights = Number(
+              payload.reducedStayNights ?? payload.ReducedStayNights,
+            );
+            if (category === "REDUCED_STAY") {
+              const roomChargeTotal = payment.folio.items
+                .filter(
+                  (item) =>
+                    item.source === "ROOM_CHARGE" &&
+                    item.type === "CHARGE" &&
+                    !item.voidedAt,
+                )
+                .reduce((sum, item) => sum + Number(item.amount), 0);
+              const estimate = getReducedStayEstimate({
+                checkIn: payment.reservation?.checkIn,
+                checkOut: payment.reservation?.checkOut,
+                status: payment.reservation?.status,
+                roomChargeTotal,
+              });
+              if (
+                !Number.isInteger(reducedStayNights) ||
+                reducedStayNights <= 0 ||
+                reducedStayNights > estimate.availableNights ||
+                Math.abs(
+                  amount - reducedStayNights * estimate.nightlyRoomAmount,
+                ) > 0.01
+              )
+                throw new Error("Invalid reduced-stay refund calculation");
+            }
+            const existingRequest = await tx.refundRequest.findUnique({
+              where: { idempotencyKey },
+            });
+            if (!existingRequest) {
+              const requesterId = isUuid(event.operatorId)
+                ? event.operatorId
+                : device.id;
+              const bankAccountNumber = String(
+                payload.bankAccountNumber || "",
+              ).replace(/\s+/g, "");
+              const request = await tx.refundRequest.create({
+                data: {
+                  organizationId: property.organizationId,
+                  propertyId,
+                  reservationId: payment.reservationId,
+                  folioId: payment.folioId,
+                  paymentId,
+                  requestedAmount: amount,
+                  currency: payload.currency || payment.currency,
+                  requestedMethod,
+                  bankAccountName:
+                    requestedMethod === "BANK_TRANSFER"
+                      ? payload.bankAccountName || null
+                      : null,
+                  bankAccountNumberEncrypted:
+                    requestedMethod === "BANK_TRANSFER" && bankAccountNumber
+                      ? encrypt(bankAccountNumber)
+                      : null,
+                  bankAccountLast4:
+                    requestedMethod === "BANK_TRANSFER" && bankAccountNumber
+                      ? bankAccountNumber.slice(-4)
+                      : null,
+                  bankName:
+                    requestedMethod === "BANK_TRANSFER"
+                      ? payload.bankName || null
+                      : null,
+                  bankCode:
+                    requestedMethod === "BANK_TRANSFER"
+                      ? payload.bankCode || null
+                      : null,
+                  category,
+                  reason: payload.reason || "Offline refund request",
+                  supportingNotes:
+                    [
+                      payload.supportingNotes || null,
+                      category === "REDUCED_STAY"
+                        ? `Reduced stay nights: ${reducedStayNights}`
+                        : null,
+                    ]
+                      .filter(Boolean)
+                      .join("\n") || null,
+                  requestedById: requesterId,
+                  idempotencyKey,
+                  expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+                },
+              });
+              await tx.approvalRequest.create({
+                data: {
+                  propertyId,
+                  type: "REFUND",
+                  status: "PENDING",
+                  requestedBy: requesterId,
+                  amount,
+                  currency: request.currency,
+                  reason: request.reason,
+                  expiresAt: request.expiresAt,
+                  details: {
+                    refundRequestId: request.id,
+                    category: request.category,
+                    requestedAmount: amount,
+                    requestedMethod,
+                    stepOrder: 1,
+                  },
+                },
+              });
+            }
+          } else if (aggregateType === "RESERVATION" && eventType === "LATE_ARRIVAL") {
+            const res = await tx.reservation.findUnique({
+              where: { id: aggregateId, propertyId },
+            });
+            if (!res) throw new Error("Reservation not found or unauthorized");
+            if (res.status !== "CONFIRMED")
+              throw new Error(
+                `Cannot record late arrival for a ${res.status} reservation`,
+              );
+            await tx.reservation.update({
+              where: { id: aggregateId },
+              data: {
+                lateArrivalExpected: true,
+                lateArrivalNotes: payload.notes || null,
+                lateArrivalAt: new Date(),
+                lateArrivalBy: isUuid(event.operatorId)
+                  ? event.operatorId
+                  : null,
+              },
+            });
+          } else if (aggregateType === "RESERVATION" && eventType === "NO_SHOW") {
+            const res = await tx.reservation.findUnique({
+              where: { id: aggregateId, propertyId },
+              include: {
+                noShowPolicy: true,
+                folios: {
+                  include: {
+                    items: true,
+                    payments: { where: { status: "COMPLETED" } },
+                  },
+                },
+              },
+            });
+            if (!res) throw new Error("Reservation not found or unauthorized");
+            if (res.status !== "CONFIRMED")
+              throw new Error(
+                `Cannot assess a ${res.status} reservation as no-show`,
+              );
+            const cutoff = new Date(res.checkIn);
+            const [cutoffHour, cutoffMinute] = String(
+              res.noShowPolicy?.cutoffTime || "02:00",
+            )
+              .split(":")
+              .map(Number);
+            cutoff.setUTCHours(
+              24 + (Number.isFinite(cutoffHour) ? cutoffHour : 2),
+              Number.isFinite(cutoffMinute) ? cutoffMinute : 0,
+              0,
+              0,
+            );
+            cutoff.setTime(
+              cutoff.getTime() +
+                (res.noShowPolicy?.gracePeriodMinutes || 0) * 60_000,
+            );
+            if (new Date() < cutoff)
+              throw new Error(
+                `No-show cutoff has not passed; eligible after ${cutoff.toISOString()}`,
+              );
+            const bookedValue =
+              Number((res.ratePlanSnapshot as any)?.total || 0) ||
+              res.folios
+                .flatMap((folio) => folio.items)
+                .filter(
+                  (item) =>
+                    item.type === "CHARGE" &&
+                    item.source === "ROOM_CHARGE" &&
+                    !item.voidedAt,
+                )
+                .reduce((sum, item) => sum + Number(item.amount), 0);
+            const totalPaid = res.folios
+              .flatMap((folio) => folio.payments)
+              .reduce((sum, payment) => sum + Number(payment.amount), 0);
+            const assessment = calculateNoShowAssessment({
+              checkIn: res.checkIn,
+              checkOut: res.checkOut,
+              bookedValue,
+              totalPaid,
+              chargeType: res.noShowPolicy?.chargeType || "FIRST_NIGHT",
+              chargeValue: Number(res.noShowPolicy?.chargeValue || 0),
+              refundableUnusedNights:
+                res.noShowPolicy?.refundableUnusedNights ?? true,
+            });
+            await tx.reservation.update({
+              where: { id: aggregateId },
+              data: {
+                status: "NO_SHOW",
+                noShowAt: new Date(),
+                noShowBy: isUuid(event.operatorId) ? event.operatorId : null,
+                noShowAssessedAt: new Date(),
+                noShowChargeAmount: assessment.noShowCharge,
+                noShowRefundableAmount: assessment.refundableAmount,
+              },
+            });
+            await tx.reservationRoom.updateMany({
+              where: { reservationId: aggregateId, status: "ACTIVE" },
+              data: { status: "NO_SHOW" },
+            });
+          } else if (aggregateType === "RESERVATION" && eventType === "REINSTATE") {
+            const res = await tx.reservation.findUnique({
+              where: { id: aggregateId, propertyId },
+              include: { noShowPolicy: true },
+            });
+            if (!res) throw new Error("Reservation not found or unauthorized");
+            if (res.status !== "NO_SHOW")
+              throw new Error(`Cannot reinstate a ${res.status} reservation`);
+            if (res.noShowPolicy?.allowReinstatement === false)
+              throw new Error("Reinstatement is disabled by property policy");
+            const activeRefund = await tx.refundRequest.findFirst({
+              where: {
+                reservationId: aggregateId,
+                status: {
+                  in: [
+                    "PENDING_APPROVAL",
+                    "APPROVED",
+                    "PROCESSING",
+                    "COMPLETED",
+                  ],
+                },
+              },
+            });
+            if (activeRefund)
+              throw new Error("Refund workflow prevents reinstatement");
+            await tx.reservation.update({
+              where: { id: aggregateId },
+              data: {
+                status: "CONFIRMED",
+                reinstatedAt: new Date(),
+                reinstatedBy: isUuid(event.operatorId)
+                  ? event.operatorId
+                  : null,
+                reinstatementReason: payload.reason || "Offline reinstatement",
+              },
+            });
+            const reinstatedRooms = await tx.reservationRoom.findMany({
+              where: { reservationId: aggregateId, status: "NO_SHOW" },
+            });
+            await tx.reservationRoom.updateMany({
+              where: { reservationId: aggregateId, status: "NO_SHOW" },
+              data: { status: "ACTIVE" },
+            });
+            const propertyBusinessDateStr = (authoritativeBusinessDate || new Date()).toISOString().split('T')[0];
+            for (const reservationRoom of reinstatedRooms) {
+              if (reservationRoom.roomId) {
+                const checkInStr = reservationRoom.checkIn.toISOString().split('T')[0];
+                if (checkInStr === propertyBusinessDateStr) {
+                  await tx.room.update({
+                    where: { id: reservationRoom.roomId },
+                    data: { status: "RESERVED" },
+                  });
+                }
+              }
+            }
+          } else if (aggregateType === "RESERVATION" && eventType === "CANCEL") {
+            // Idempotent — if already cancelled, treat as success
+            const res = await tx.reservation.findUnique({
+              where: { id: aggregateId, propertyId },
+              include: {
+                reservationRooms: {
+                  where: { status: "ACTIVE" },
+                  orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }, { id: "desc" }],
+                },
+                folios: {
+                  include: { payments: { include: { refunds: true } } },
+                },
+              },
+            });
+            if (!res) throw new Error("Reservation not found or unauthorized");
+            if (res.status === "CHECKED_OUT")
+              throw new Error("Cannot cancel a checked-out reservation");
+
+            if (res.status !== "CANCELLED") {
+              await tx.reservation.update({
+                where: { id: aggregateId },
+                data: {
+                  status: "CANCELLED",
+                  cancelledAt: new Date(),
+                  cancelledBy: isUuid(event.operatorId) ? event.operatorId : null,
+                  cancellationReason: payload.reason || "Offline reservation cancellation",
+                },
+              });
+
+              // Mark active reservation rooms as cancelled
+              await tx.reservationRoom.updateMany({
+                where: { reservationId: aggregateId, status: "ACTIVE" },
+                data: { status: "CANCELLED" },
+              });
+
+              // Free the room only if it still belongs to this reservation
+              if (payload.roomId) {
+                const roomStillBelongs = res.reservationRooms.some(
+                  (rr: any) => rr.roomId === payload.roomId,
+                );
+                if (roomStillBelongs) {
+                  // Only mark AVAILABLE if no other active reservation owns it
+                  const otherActive = await tx.reservationRoom.findFirst({
+                    where: {
+                      roomId: payload.roomId,
+                      status: "ACTIVE",
+                      reservationId: { not: aggregateId },
+                    },
+                  });
+                  if (!otherActive) {
+                    await tx.room.update({
+                      where: { id: payload.roomId },
+                      data: { status: "AVAILABLE" },
+                    });
+                  }
+                }
+              }
+            }
+            await queueCancellationRefundsProfessional({
+              tx,
+              reservation: res,
+              propertyId,
+              organizationId: property.organizationId,
+              requestedById: isUuid(event.operatorId) ? event.operatorId : device.id,
+              reason: payload.reason || "Offline reservation cancellation",
+            });
+          } else if (aggregateType === "RESERVATION" && eventType === "REASSIGN_ROOM") {
+            const { newRoomId, oldRoomId, newRoomNumber } = payload;
+            if (!newRoomId)
+              throw new Error("newRoomId is required for REASSIGN_ROOM");
+
+            // Validate the reservation exists in this property
+            const res = await tx.reservation.findUnique({
+              where: { id: aggregateId, propertyId },
+              include: {
+                reservationRooms: { where: { status: "ACTIVE" } },
+                folios: { where: { type: "ROOM" }, include: { items: true } },
+              },
+            });
+            if (!res) throw new Error("Reservation not found or unauthorized");
+            if (res.status === "CHECKED_OUT" || res.status === "CANCELLED")
+              throw new Error(
+                `Cannot reassign room for a ${res.status} reservation`,
+              );
+
+            // Validate new room belongs to this property
+            const newRoom = await tx.room.findFirst({
+              where: { id: newRoomId, propertyId },
+            });
+            if (!newRoom) throw new Error("New room not found or unauthorized");
+
+            // Validate new room not already occupied by another active reservation
+            const newRoomConflict = await tx.reservationRoom.findFirst({
+              where: {
+                roomId: newRoomId,
+                status: "ACTIVE",
+                reservationId: { not: aggregateId },
+                reservation: {
+                  status: { notIn: ["CHECKED_OUT", "CANCELLED", "NO_SHOW"] },
+                },
+              },
+            });
+            if (newRoomConflict)
+              throw new Error(
+                "New room is already assigned to another active reservation",
+              );
+
+            // Deactivate all current active room assignments for this reservation.
+            // Room reassignment is operational state only. It must not create a
+            // folio charge or credit here: Night Audit prices the active room
+            // for each unposted business date, which prevents double posting
+            // and preserves already-posted nights at their original rate.
+            await tx.reservationRoom.updateMany({
+              where: { reservationId: aggregateId, status: "ACTIVE" },
+              data: { status: "INACTIVE" },
+            });
+
+            // Create new assignment
+            const activeRoom = res.reservationRooms[0];
+            const newRoomType = await tx.roomType.findUnique({
+              where: { id: newRoom.roomTypeId },
+              select: { baseRate: true },
+            });
+            const newRate = Number(newRoomType?.baseRate || activeRoom?.rateAmount || 0);
+            await tx.reservationRoom.create({
+              data: {
+                reservationId: aggregateId,
+                roomTypeId: newRoom.roomTypeId,
+                roomId: newRoomId,
+                checkIn: activeRoom?.checkIn || res.checkIn,
+                checkOut: activeRoom?.checkOut || res.checkOut,
+                adults: activeRoom?.adults || res.adults,
+                children: activeRoom?.children || res.children,
+                ratePlanId: activeRoom?.ratePlanId,
+                rateAmount: newRate,
+                currency: activeRoom?.currency || "NGN",
+                discountType: activeRoom?.discountType,
+                discountAmount: activeRoom?.discountAmount,
+                discountPercent: activeRoom?.discountPercent,
+                discountReason: activeRoom?.discountReason,
+                discountApprovalId: activeRoom?.discountApprovalId,
+                status: "ACTIVE",
+              },
+            });
+
+            // Do not update the reservation snapshot or post a downgrade credit.
+            // Both would alter financial history before the auditor has reviewed
+            // the business date. The active ReservationRoom rate is the input
+            // used by the next Night Audit run.
+
+            // Release old room if it was this reservation's room
+            if (oldRoomId && oldRoomId !== newRoomId) {
+              const stillOwned = await tx.reservationRoom.findFirst({
+                where: {
+                  roomId: oldRoomId,
+                  status: "ACTIVE",
+                  reservationId: { not: aggregateId },
+                  reservation: {
+                    status: { notIn: ["CHECKED_OUT", "CANCELLED", "NO_SHOW"] },
+                  },
+                },
+              });
+              if (!stillOwned) {
+                await tx.room.update({
+                  where: { id: oldRoomId },
+                  data: { status: "AVAILABLE" },
+                });
+              }
+            }
+            // Occupy new room based on reservation status
+            const propertyBusinessDateStr = (authoritativeBusinessDate || new Date()).toISOString().split('T')[0];
+            const checkInStr = res.checkIn.toISOString().split('T')[0];
+            const isToday = checkInStr === propertyBusinessDateStr;
+            
+            let newStatus = "AVAILABLE";
+            if (res.status === "CHECKED_IN") {
+              newStatus = "OCCUPIED";
+            } else if (res.status === "CONFIRMED" && isToday) {
+              newStatus = "RESERVED";
+            }
+
+            await tx.room.update({
+              where: { id: newRoomId },
+              data: { status: newStatus as any },
+            });
+          } else if (aggregateType === "RESERVATION" && eventType === "EXTEND_STAY") {
+            const newCheckOut = parseLocalDateString(payload.newCheckOutDate);
+            if (!newCheckOut || isNaN(newCheckOut.getTime()))
+              throw new Error("Invalid newCheckOutDate");
+
+            const res = await tx.reservation.findUnique({
+              where: { id: aggregateId, propertyId },
+              include: { reservationRooms: { where: { status: "ACTIVE" } } },
+            });
+            if (!res) throw new Error("Reservation not found or unauthorized");
+            if (res.status === "CHECKED_OUT" || res.status === "CANCELLED")
+              throw new Error(`Cannot extend a ${res.status} reservation`);
+
+            if (newCheckOut <= res.checkIn)
+              throw new Error("New checkout must be after check-in");
+            if (newCheckOut <= res.checkOut)
+              throw new Error(
+                "New checkout must be after the current checkout date",
+              );
+
+            // Conflict check: any other reservation in the same room during extension period
+            const activeRoom = res.reservationRooms[0];
+            if (activeRoom?.roomId) {
+              const conflict = await tx.reservationRoom.findFirst({
+                where: {
+                  roomId: activeRoom.roomId,
+                  status: { notIn: ["INACTIVE", "CANCELLED", "NO_SHOW"] },
+                  reservationId: { not: aggregateId },
+                  AND: [
+                    { checkIn: { lt: newCheckOut } },
+                    { checkOut: { gt: res.checkOut } },
+                  ],
+                },
+              });
+              if (conflict)
+                throw new Error(
+                  "Room is not available for the extended period",
+                );
+            }
+
+            await tx.reservation.update({
+              where: { id: aggregateId },
+              data: {
+                checkOut: newCheckOut,
+                ratePlanSnapshot: {
+                  ...((res.ratePlanSnapshot as any) || {}),
+                  nights: Math.ceil(
+                    (newCheckOut.getTime() - res.checkIn.getTime()) /
+                      (1000 * 60 * 60 * 24),
+                  ),
+                  total:
+                    Number(
+                      activeRoom?.rateAmount ||
+                        (res.ratePlanSnapshot as any)?.baseRate ||
+                        0,
+                    ) *
+                    Math.ceil(
+                      (newCheckOut.getTime() - res.checkIn.getTime()) /
+                        (1000 * 60 * 60 * 24),
+                    ),
+                },
+              },
+            });
+
+            if (activeRoom) {
+              await tx.reservationRoom.update({
+                where: { id: activeRoom.id },
+                data: { checkOut: newCheckOut },
+              });
+            }
+          } else if (aggregateType === "RESERVATION" && eventType === "KEYCARD_ENCODE") {
+            const reservation = await tx.reservation.findUnique({
+              where: { id: aggregateId, propertyId },
+              include: { reservationRooms: { where: { status: "ACTIVE" } } },
+            });
+            if (!reservation)
+              throw new Error("Reservation not found or unauthorized");
+
+            const roomId =
+              payload.roomId || reservation.reservationRooms[0]?.roomId;
+            if (!roomId)
+              throw new Error("Keycard encode event has no room assignment");
+
+            let doorLock = await tx.doorLock.findFirst({ where: { roomId } });
+            if (!doorLock) {
+              doorLock = await tx.doorLock.create({
+                data: {
+                  propertyId,
+                  roomId,
+                  lockCode: `ENCODER-${roomId}`,
+                  provider: "DELUNS_ENCODER",
+                  status: "ONLINE",
+                },
+              });
+            }
+
+            const encodeData = payload.encodeData || {};
+            const credential = await tx.lockCredential.create({
+              data: {
+                reservationId: aggregateId,
+                roomId,
+                lockId: doorLock.id,
+                credentialType: "rfid",
+                status: "ACTIVE",
+                validFrom: new Date(),
+                validUntil: new Date(reservation.checkOut),
+                cardSerialNumber: encodeData.cardSnr || null,
+                metadata: encodeData,
+              },
+            });
+
+            await tx.lockOperation.create({
+              data: {
+                propertyId,
+                reservationId: aggregateId,
+                roomId,
+                lockId: doorLock.id,
+                credentialId: credential.id,
+                idempotencyKey: `KEYCARD_ENCODE:${aggregateId}:${payload.operationId || id}`,
+                operation: "ENCODE_CARD",
+                status: "COMPLETED",
+                requestedAt: new Date(),
+                startedAt: new Date(),
+                completedAt: new Date(),
+                metadata: { initiatedBy: actorId, responseData: encodeData },
+              },
+            });
+          } else if (aggregateType === "RESERVATION" && eventType === "EDIT") {
+            const res = await tx.reservation.findUnique({
+              where: { id: aggregateId, propertyId },
+              include: {
+                reservationRooms: { orderBy: { createdAt: "desc" }, take: 1 },
+              },
+            });
+            if (!res) throw new Error("Reservation not found or unauthorized");
+            if (res.status === "CHECKED_OUT" || res.status === "CANCELLED")
+              throw new Error(`Cannot edit a ${res.status} reservation`);
+            if (res.status === "CHECKED_IN")
+              throw new Error("Cannot edit a CHECKED_IN reservation");
+
+            const p = payload;
+            const newCheckIn = p.checkIn ? parseLocalDateString(p.checkIn)! : res.checkIn;
+            const newCheckOut = p.checkOut
+              ? parseLocalDateString(p.checkOut)!
+              : res.checkOut;
+
+            if (newCheckOut <= newCheckIn)
+              throw new Error("Check-out must be after check-in");
+
+            // Availability check when dates or room changed
+            const newRoomId = p.roomId || res.reservationRooms[0]?.roomId;
+            if (newRoomId && (p.checkIn || p.checkOut || p.roomId)) {
+              const overlap = await tx.reservationRoom.findFirst({
+                where: {
+                  roomId: newRoomId,
+                  reservationId: { not: aggregateId },
+                  status: { notIn: ["INACTIVE", "CANCELLED", "NO_SHOW"] },
+                  AND: [
+                    { checkIn: { lt: newCheckOut } },
+                    { checkOut: { gt: newCheckIn } },
+                  ],
+                },
+              });
+              if (overlap)
+                throw new Error("Room is not available for the new dates");
+            }
+
+            // Recalculate rate if dates or room type changed using RoomType.baseRate
+            let newRateAmount: number | undefined = res.reservationRooms[0]
+              ?.rateAmount
+              ? Number(res.reservationRooms[0].rateAmount)
+              : undefined;
+            const newRoomTypeId =
+              p.roomTypeId || res.reservationRooms[0]?.roomTypeId;
+            if (newRoomTypeId && (p.roomTypeId || p.checkIn || p.checkOut)) {
+              const rt = await tx.roomType.findFirst({
+                where: { id: newRoomTypeId, propertyId },
+              });
+              if (rt) {
+                // ReservationRoom.rateAmount is the nightly rate. The total is
+                // represented by the folio room-charge items and snapshot.
+                newRateAmount = Number(rt.baseRate);
+              }
+            }
+
+            await tx.reservation.update({
+              where: { id: aggregateId },
+              data: {
+                primaryGuestId: p.guestId ?? res.primaryGuestId,
+                checkIn: newCheckIn,
+                checkOut: newCheckOut,
+                adults: p.adults ?? res.adults,
+                children: p.children ?? res.children,
+                specialRequests: p.specialRequests ?? res.specialRequests,
+                ...(newRateAmount !== undefined && newRoomTypeId
+                  ? {
+                      ratePlanSnapshot: {
+                        ...((res.ratePlanSnapshot as any) || {}),
+                        baseRate: newRateAmount,
+                        nights: Math.ceil(
+                          (newCheckOut.getTime() - newCheckIn.getTime()) /
+                            (1000 * 60 * 60 * 24),
+                        ),
+                        total:
+                          newRateAmount *
+                          Math.ceil(
+                            (newCheckOut.getTime() - newCheckIn.getTime()) /
+                              (1000 * 60 * 60 * 24),
+                          ),
+                      },
+                    }
+                  : {}),
+              },
+            });
+
+            if (res.reservationRooms[0]) {
+              await tx.reservationRoom.update({
+                where: { id: res.reservationRooms[0].id },
+                data: {
+                  roomId: newRoomId,
+                  roomTypeId: newRoomTypeId,
+                  checkIn: newCheckIn,
+                  checkOut: newCheckOut,
+                  adults: p.adults ?? res.reservationRooms[0].adults,
+                  children: p.children ?? res.reservationRooms[0].children,
+                  rateAmount: newRateAmount,
+                },
+              });
+            }
+
+            const folio = await tx.folio.findFirst({
+              where: { reservationId: aggregateId, propertyId },
+            });
+            if (folio && (p.checkIn || p.checkOut || p.roomTypeId)) {
+              // We no longer recreate room charges here in the incremental model.
+            }
+          } else if (eventType === "EDIT_GUEST" && aggregateType === "GUEST") {
+            const guestId = payload.guestId;
+            if (guestId) {
+              const existingGuest = await tx.guest.findUnique({
+                where: { id: guestId },
+              });
+              if (existingGuest && existingGuest.propertyId === propertyId) {
+                await tx.guest.update({
+                  where: { id: guestId },
+                  data: {
+                    firstName: payload.firstName,
+                    lastName: payload.lastName,
+                    email: payload.email,
+                    phone: payload.phone,
+                  },
+                });
+              }
+            }
+          } else if (
+            eventType === "ROOM_STATUS_UPDATE" &&
+            aggregateType === "ROOM"
+          ) {
+            const room = await tx.room.findUnique({
+              where: { id: aggregateId },
+            });
+            if (!room) throw new Error("Room not found or unauthorized");
+
+            const newStatus = payload.newStatus;
+            if (room.status !== newStatus) {
+              await tx.room.update({
+                where: { id: aggregateId },
+                data: { status: newStatus },
+              });
+
+              await tx.roomStatusHistory.create({
+                data: {
+                  roomId: aggregateId,
+                  propertyId: room.propertyId,
+                  previousStatus: room.status,
+                  newStatus: newStatus,
+                  source: payload.source || "OFFLINE_SYNC",
+                  changedBy: actorId,
+                },
+              });
+            }
+          } else if (aggregateType === "HOUSEKEEPING_TASK") {
+            if (eventType === "CREATE") {
+              const roomId = payload.RoomId || payload.roomId;
+              if (!isUuid(roomId))
+                throw new Error("Housekeeping task is missing a valid roomId");
+              const room = await tx.room.findFirst({
+                where: { id: roomId, propertyId },
+              });
+              if (!room)
+                throw new Error(
+                  "Housekeeping task room not found or unauthorized",
+                );
+              const taskType = payload.TaskType || payload.taskType || "CLEANING";
+              const taskStatus = String(
+                payload.Status || payload.status || "CLEANING",
+              ).replace(/^(PENDING|ASSIGNED|CLEAN)$/i, "CLEANING") as any;
+              const openTask = await tx.housekeepingTask.findFirst({
+                where: {
+                  propertyId,
+                  roomId,
+                  type: { in: ["STAYOVER", "CHECKOUT", "CLEANING"] },
+                  status: { notIn: ["INSPECTED", "CANCELLED"] },
+                },
+                orderBy: { createdAt: "desc" },
+              });
+              await (openTask
+                ? tx.housekeepingTask.update({
+                    where: { id: openTask.id },
+                    data: {
+                      ...(String(taskType).toUpperCase() === "CHECKOUT" ? { type: "CHECKOUT" } : {}),
+                      priority: payload.Priority || payload.priority || openTask.priority,
+                      status: taskStatus,
+                      businessDate: postingBusinessDate,
+                    },
+                  })
+                : tx.housekeepingTask.create({
+                    data: {
+                      id: aggregateId,
+                      propertyId,
+                      roomId,
+                      type: taskType,
+                      priority: payload.Priority || payload.priority || "NORMAL",
+                      status: taskStatus,
+                      businessDate: postingBusinessDate,
+                      assignedTo: isUuid(
+                        payload.AssignedToUserId || payload.assignedToUserId,
+                      )
+                        ? payload.AssignedToUserId || payload.assignedToUserId
+                        : null,
+                    },
+                  }));
+
+              // When a CLEANING or STAYOVER task is created the room must
+              // immediately become DIRTY so it never shows as AVAILABLE while
+              // housekeeping is pending. Only skip this if the room is already
+              // OCCUPIED (checked-in guest with a stayover task) — in that case
+              // keep OCCUPIED but still record the housekeepingStatus.
+              if (taskType === "CLEANING" || taskType === "STAYOVER") {
+                const checkedInAssignment = await tx.reservationRoom.findFirst({
+                  where: {
+                    roomId,
+                    status: "ACTIVE",
+                    reservation: { propertyId, status: "CHECKED_IN" },
+                  },
+                  select: { id: true },
+                });
+                const newRoomStatus =
+                  checkedInAssignment ? "OCCUPIED" : "DIRTY";
+                await tx.room.update({
+                  where: { id: roomId },
+                  data: {
+                    status: newRoomStatus as any,
+                    housekeepingStatus: "CLEANING",
+                  },
+                });
+              }
+            } else if (eventType === "UPDATE_STATUS") {
+              const currentStatus = String(
+                payload.Status || payload.status || "CLEANING",
+              ).replace(/^(PENDING|ASSIGNED|CLEAN)$/i, "CLEANING");
+              const updateData: any = { status: currentStatus as any };
+              const taskType = payload.TaskType || payload.taskType;
+              if (taskType) updateData.type = String(taskType).toUpperCase();
+              if (currentStatus === "IN_PROGRESS") {
+                updateData.startedAt = new Date();
+              } else if (currentStatus === "COMPLETED") {
+                updateData.completedAt = new Date();
+              }
+              await tx.housekeepingTask.update({
+                where: { id: aggregateId },
+                data: updateData,
+              });
+              const task = await tx.housekeepingTask.findUnique({
+                where: { id: aggregateId },
+                include: { room: { select: { status: true } } }
+              });
+              if (task) {
+                let roomStatus =
+                  currentStatus === "CLEANING"
+                    ? "CLEANING"
+                    : currentStatus === "CLEAN"
+                      ? "CLEAN"
+                      : currentStatus === "INSPECTED"
+                        ? "AVAILABLE"
+                        : currentStatus === "MAINTENANCE_REQUIRED"
+                          ? "MAINTENANCE"
+                          : undefined;
+
+                const checkedInReservation = await tx.reservationRoom.findFirst({
+                  where: {
+                    roomId: task.roomId,
+                    status: "ACTIVE",
+                    reservation: { propertyId, status: "CHECKED_IN" },
+                  },
+                  select: { id: true },
+                });
+                if (checkedInReservation && (roomStatus === "CLEANING" || roomStatus === "AVAILABLE")) {
+                  roomStatus = "OCCUPIED"; // Or undefined, to not change it
+                }
+
+                await tx.room.update({
+                  where: { id: task.roomId },
+                  data: {
+                    housekeepingStatus: currentStatus as any,
+                    ...(roomStatus ? { status: roomStatus as any } : {}),
+                  },
+                });
+              }
+            }
+          } else if (aggregateType === "MAINTENANCE_TICKET") {
+            if (eventType === "CREATE") {
+              // Ensure a category exists, else use a default or fail gracefully
+              let cat = await tx.maintenanceCategory.findFirst({
+                where: { propertyId },
+              });
+              if (!cat) {
+                cat = await tx.maintenanceCategory.create({
+                  data: {
+                    propertyId,
+                    name: "General",
+                    description: "General Maintenance",
+                  },
+                });
+              }
+              await tx.maintenanceTicket.create({
+                data: {
+                  id: aggregateId,
+                  propertyId,
+                  roomId: payload.RoomId || payload.roomId,
+                  location: payload.RoomNumber || payload.roomNumber || null,
+                  categoryId: cat.id,
+                  priority: (payload.Priority ||
+                    payload.priority ||
+                    "NORMAL") as any,
+                  status: (payload.Status || payload.status || "OPEN") as any,
+                  title: "Desktop Maintenance Ticket",
+                  description:
+                    payload.IssueDescription || payload.issueDescription || "",
+                  reportedBy: isUuid(payload.ReportedBy || payload.reportedBy)
+                    ? payload.ReportedBy || payload.reportedBy
+                    : actorId,
+                },
+              });
+            } else if (eventType === "RESOLVE") {
+              await tx.maintenanceTicket.update({
+                where: { id: aggregateId },
+                data: { status: "RESOLVED" },
+              });
+            }
+          } else if (aggregateType === "LAUNDRY_ORDER") {
+            if (eventType === "LAUNDRY_ORDER_CREATED") {
+              let finalGuestId = payload.guestId;
+              const cType = payload.customerType || "IN_HOUSE";
+
+              if (cType === "WALK_IN" && payload.guest) {
+                const phone = payload.guest.Phone || payload.guest.phone;
+                if (phone) {
+                  const existingGuest = await tx.guest.findFirst({
+                    where: {
+                      phone: phone,
+                      organizationId: property?.organizationId || "",
+                      propertyId: propertyId,
+                    },
+                  });
+                  if (existingGuest) {
+                    finalGuestId = existingGuest.id;
+                  } else {
+                    const newGuest = await tx.guest.create({
+                      data: {
+                        id: finalGuestId,
+                        organizationId: property?.organizationId || "",
+                        propertyId,
+                        firstName:
+                          payload.guest.FirstName ||
+                          payload.guest.firstName ||
+                          "Walk-In",
+                        lastName:
+                          payload.guest.LastName ||
+                          payload.guest.lastName ||
+                          "Guest",
+                        phone: phone,
+                        email:
+                          payload.guest.Email || payload.guest.email || null,
+                      },
+                    });
+                    finalGuestId = newGuest.id;
+                  }
+                }
+              }
+
+              const orderItemsData = (payload.items || []).map((i: any) => ({
+                itemId: i.itemId,
+                quantity: i.quantity,
+                unitPrice: i.unitPrice || 0,
+                totalPrice: i.totalPrice || 0,
+              }));
+
+              await tx.laundryOrder.create({
+                data: {
+                  id: aggregateId,
+                  propertyId,
+                  customerType: cType,
+                  reservationId:
+                    cType === "IN_HOUSE" ? payload.reservationId : null,
+                  roomId: cType === "IN_HOUSE" ? payload.roomId : null,
+                  guestId: finalGuestId,
+                  serviceType: payload.serviceType || "STANDARD",
+                  specialNotes: payload.specialNotes || null,
+                  totalAmount: payload.totalAmount || 0,
+                  currency: "NGN", // Hardcoded currency for sync safety as per LodgeCore standard
+                  status: payload.status || "PENDING",
+                  createdAt: payload.requestedAt
+                    ? new Date(payload.requestedAt)
+                    : new Date(),
+                  items: {
+                    create: orderItemsData,
+                  },
+                },
+              });
+
+              await tx.laundryOrderStatusHistory.create({
+                data: {
+                  laundryOrderId: aggregateId,
+                  newStatus: payload.status || "PENDING",
+                  changedBy: actorId,
+                  notes: "Order placed offline",
+                },
+              });
+            } else if (eventType === "LAUNDRY_STATUS_UPDATED") {
+              const order = await tx.laundryOrder.findUnique({
+                where: { id: aggregateId },
+                include: {
+                  reservation: {
+                    include: {
+                      folios: { where: { type: "ROOM", status: "OPEN" } },
+                    },
+                  },
+                },
+              });
+              if (!order) throw new Error("Laundry order not found");
+
+              const newStatus = payload.status;
+              if (order.status !== newStatus) {
+                const updateData: any = { status: newStatus };
+                if (newStatus === "COLLECTED") {
+                  updateData.collectedAt = new Date();
+                  updateData.collectedBy = actorId;
+                } else if (newStatus === "READY") {
+                  updateData.readyAt = new Date();
+                } else if (newStatus === "DELIVERED") {
+                  updateData.deliveredAt = new Date();
+                  updateData.deliveredBy = actorId;
+
+                  // ATOMIC FOLIO POSTING for DELIVERED
+                  if (!order.folioItemId) {
+                    let activeFolio;
+                    if (order.customerType === "IN_HOUSE") {
+                      const reservation = order.reservation;
+                      if (!reservation)
+                        throw new Error("IN_HOUSE order has no reservation");
+                      activeFolio =
+                        reservation.folios.length > 0
+                          ? reservation.folios[0]
+                          : await tx.folio.create({
+                              data: {
+                                reservationId: reservation.id,
+                                propertyId: order.propertyId,
+                                guestId: order.guestId,
+                                folioNumber: `FOL-${Date.now()}`,
+                                type: "ROOM",
+                                status: "OPEN",
+                                currency: order.currency,
+                              },
+                            });
+                    } else if (order.customerType === "WALK_IN") {
+                      const existingFolios = await tx.folio.findMany({
+                        where: {
+                          propertyId: order.propertyId,
+                          guestId: order.guestId,
+                          type: "WALK_IN",
+                          status: "OPEN",
+                        },
+                        take: 1,
+                      });
+                      activeFolio =
+                        existingFolios.length > 0
+                          ? existingFolios[0]
+                          : await tx.folio.create({
+                              data: {
+                                propertyId: order.propertyId,
+                                guestId: order.guestId,
+                                folioNumber: `FOL-${Date.now()}`,
+                                type: "WALK_IN",
+                                status: "OPEN",
+                                currency: order.currency,
+                              },
+                            });
+                    }
+
+                    if (activeFolio && Number(order.totalAmount) > 0) {
+                      const idempotencyKey = `${order.id}_DELIVERY_FOLIO_CHARGE`;
+                      const existingCharge = await tx.folioItem.findFirst({
+                        where: { posTransactionId: idempotencyKey },
+                      });
+
+                      let folioItem;
+                      if (!existingCharge) {
+                        folioItem = await tx.folioItem.create({
+                          data: {
+                            folioId: activeFolio.id,
+                            businessDate: postingBusinessDate,
+                            type: "CHARGE",
+                            source: "LAUNDRY",
+                            description: `Laundry Service - ${order.serviceType}`,
+                            quantity: 1,
+                            unitAmount: order.totalAmount,
+                            amount: order.totalAmount,
+                            currency: order.currency,
+                            baseAmount: order.totalAmount,
+                            postedBy: actorId,
+                            posTransactionId: idempotencyKey,
+                          },
+                        });
+
+                        await tx.folio.update({
+                          where: { id: activeFolio.id },
+                          data: {
+                            totalCharges: { increment: order.totalAmount },
+                            balance: { increment: order.totalAmount },
+                          },
+                        });
+
+                        // GL Journal for Laundry Revenue
+                        const guestLedgerAccountId = await GLMappingService.getGuestLedgerAccount(order.propertyId);
+                        const laundryRevenueAccountId = await GLMappingService.getLaundryRevenueAccount(order.propertyId);
+
+                        const existingJournal = await tx.journalEntry.findFirst({
+                          where: { reference: idempotencyKey, propertyId: order.propertyId },
+                        });
+
+                        if (!existingJournal) {
+                          await GeneralLedgerService.postJournal({ propertyIds: [order.propertyId] } as any, {
+                            propertyId: order.propertyId,
+                            entryDate: postingBusinessDate,
+                            description: `Laundry Service - ${order.serviceType}`,
+                            reference: idempotencyKey,
+                            sourceModule: 'LAUNDRY',
+                            lines: [
+                              { accountId: guestLedgerAccountId, debit: Number(order.totalAmount), credit: 0, description: 'Guest Ledger (AR)' },
+                              { accountId: laundryRevenueAccountId, debit: 0, credit: Number(order.totalAmount), description: 'Laundry Revenue' }
+                            ]
+                          }, tx);
+                        }
+
+                        await applyAvailableFolioCredit(tx, {
+                          folioId: activeFolio.id,
+                          propertyId: order.propertyId,
+                          guestId: activeFolio.guestId,
+                          reservationId: activeFolio.reservationId,
+                          amount: Number(order.totalAmount),
+                          currency: order.currency,
+                          source: "LAUNDRY",
+                          description: `Applied guest credit to Laundry Service - ${order.serviceType}`,
+                          appliedBy: actorId,
+                          operationKey: idempotencyKey,
+                            businessDate: postingBusinessDate,
+                        });
+                      } else {
+                        folioItem = existingCharge;
+                      }
+                      updateData.folioItemId = folioItem.id;
+                    }
+                  }
+                }
+
+                await tx.laundryOrder.update({
+                  where: { id: aggregateId },
+                  data: updateData,
+                });
+
+                await tx.laundryOrderStatusHistory.create({
+                  data: {
+                    laundryOrderId: aggregateId,
+                    previousStatus: order.status,
+                    newStatus: newStatus,
+                    changedBy: actorId,
+                    notes: `Status updated to ${newStatus} via offline sync`,
+                  },
+                });
+              }
+            }
+          } else if (aggregateType === "COMPLIMENTARY_RECORD") {
+            if (eventType === "COMPLIMENTARY_CREATED") {
+              await tx.complimentaryRecord.create({
+                data: {
+                  id: aggregateId,
+                  propertyId,
+                  businessDate: payload.businessDate ? new Date(payload.businessDate) : authoritativeBusinessDate,
+                  reference: payload.reference,
+                  sourceModule: payload.sourceModule,
+                  folioItemId: payload.folioItemId || null,
+                  posOrderId: payload.posOrderId || null,
+                  guestId: payload.guestId || null,
+                  staffId: payload.staffId || null,
+                  roomId: payload.roomId || null,
+                  grossAmount: payload.grossAmount,
+                  discountAmount: payload.discountAmount || 0,
+                  complAmount: payload.complAmount,
+                  netAmount: payload.netAmount,
+                  amountPaid: payload.amountPaid || 0,
+                  staffLiability: payload.staffLiability || 0,
+                  complType: payload.complType,
+                  reason: payload.reason,
+                  notes: payload.notes || null,
+                  operatorId: payload.operatorId,
+                  approverId: payload.approverId || null,
+                  status: payload.status || "PENDING_NIGHT_AUDIT",
+                  operationId: payload.operationId || idempotencyKey,
+                  deviceId: device.id,
+                  createdAt: payload.createdAt ? new Date(payload.createdAt) : new Date(),
+                }
+              });
+            } else if (eventType === "COMPLIMENTARY_VERIFIED") {
+              await tx.complimentaryRecord.update({
+                where: { id: aggregateId },
+                data: {
+                  status: "VERIFIED",
+                  nightAuditorId: actorId,
+                  verifiedAt: new Date()
+                }
+              });
+            } else if (eventType === "COMPLIMENTARY_REJECTED") {
+              await tx.complimentaryRecord.update({
+                where: { id: aggregateId },
+                data: {
+                  status: "UNRESOLVED",
+                  nightAuditorId: actorId,
+                  rejectionReason: payload.rejectionReason
+                }
+              });
+            } else if (eventType === "COMPLIMENTARY_RESOLVED") {
+              await tx.complimentaryRecord.update({
+                where: { id: aggregateId },
+                data: {
+                  status: payload.resolutionStatus || "ACCEPTED"
+                }
+              });
+            }
+          } else if (aggregateType === "STAFF_RECEIVABLE") {
+            if (eventType === "RECEIVABLE_CREATED") {
+              await tx.staffReceivable.create({
+                data: {
+                  id: aggregateId,
+                  propertyId,
+                  staffId: payload.staffId,
+                  reference: payload.reference,
+                  originalAmount: payload.originalAmount,
+                  paidAmount: payload.paidAmount || 0,
+                  outstanding: payload.outstanding || payload.originalAmount,
+                  status: payload.status || "OUTSTANDING",
+                  sourceId: payload.sourceId || null,
+                  operationId: payload.operationId || idempotencyKey,
+                  createdAt: payload.createdAt ? new Date(payload.createdAt) : new Date(),
+                }
+              });
+            } else if (eventType === "RECEIVABLE_SETTLED") {
+              await tx.staffReceivableSettlement.create({
+                data: {
+                  id: payload.settlementId,
+                  receivableId: aggregateId,
+                  amount: payload.amount,
+                  method: payload.method,
+                  paymentId: payload.paymentId || null,
+                  payrollPeriodId: payload.payrollPeriodId || null,
+                  payrollExportDate: payload.payrollExportDate ? new Date(payload.payrollExportDate) : null,
+                  payrollReference: payload.payrollReference || null,
+                  payrollStatus: payload.payrollStatus || "NOT_EXPORTED",
+                  createdBy: actorId,
+                  operationId: payload.operationId || idempotencyKey,
+                  createdAt: payload.createdAt ? new Date(payload.createdAt) : new Date(),
+                }
+              });
+              const rec = await tx.staffReceivable.findUnique({ where: { id: aggregateId } });
+              if (rec) {
+                const newPaid = Number(rec.paidAmount) + Number(payload.amount);
+                const newOut = Number(rec.originalAmount) - newPaid;
+                await tx.staffReceivable.update({
+                  where: { id: aggregateId },
+                  data: {
+                    paidAmount: newPaid,
+                    outstanding: newOut,
+                    status: newOut <= 0 ? "PAID" : "PARTIAL"
+                  }
+                });
+              }
+            }
+          } else if (aggregateType === "RESERVATION_ROOM") {
+            if (eventType === "DISCOUNT_REQUESTED") {
+              await reconcileOfflineRoomDiscount(tx, {
+                propertyId,
+                aggregateId,
+                idempotencyKey,
+                actorId,
+                payload,
+              });
+            } else if (eventType === "COMPLIMENTARY_REQUESTED") {
+              if (payload.beneficiaryType === "STAFF" || payload.beneficiaryStaffId || payload.settlementType === "STAFF_PAY_LATER") {
+                throw new Error("Complimentary benefits are for guests only");
+              }
+              const reservationRoomId = payload.reservationRoomId || aggregateId;
+              const resRoom = await tx.reservationRoom.findUnique({ where: { id: reservationRoomId }, include: { reservation: true } });
+              if (!resRoom || resRoom.reservation.propertyId !== propertyId) {
+                throw new Error(`DEPENDENCY_NOT_READY: Reservation room ${reservationRoomId} has not been created for this property yet`);
+              }
+              await tx.reservationRoom.update({
+                where: { id: reservationRoomId },
+                data: {
+                  discountType: "COMPLIMENTARY",
+                  discountAmount: payload.compType === "FULL"
+                    ? Number(resRoom.rateAmount || payload.compAmount || 0)
+                    : Number(payload.compAmount || 0),
+                  discountApprovalId: `PENDING:${idempotencyKey}`,
+                  discountReason: payload.reason || "Offline complimentary request",
+                },
+              });
+              const complimentaryAmount = payload.compType === "FULL"
+                ? Number(resRoom.rateAmount || payload.compAmount || 0)
+                : Number(payload.compAmount || 0);
+              await tx.complimentaryRecord.create({
+                  data: {
+                    propertyId,
+                    businessDate: postingBusinessDate,
+                    reference: `COMP_RES_${reservationRoomId}_${idempotencyKey}`,
+                    sourceModule: "FRONT_DESK",
+                    roomId: resRoom.roomId,
+                    guestId: resRoom.reservation?.primaryGuestId,
+                    staffId: null,
+                    operatorId: staffOperatorId,
+                    operationId: idempotencyKey,
+                    grossAmount: complimentaryAmount,
+                    complAmount: complimentaryAmount,
+                    netAmount: 0,
+                    complType: payload.compType === "FULL" ? "FULL" : "PARTIAL",
+                    reason: payload.reason || "Offline complimentary request",
+                    notes: JSON.stringify({
+                      acknowledgedByStaffId: payload.acknowledgedByStaffId || null,
+                      reservation: payload.reservation || null,
+                    })
+                  }
+              });
+            } else if (eventType === "DISCOUNT_APPLIED") {
+              const resRoom = await tx.reservationRoom.findUnique({
+                where: { id: aggregateId },
+                include: { reservation: true }
+              });
+              if (!resRoom) {
+                // Never acknowledge a discount that was not applied. The
+                // reservation-create event may still be in the queue; the
+                // desktop must retry this event after that dependency lands.
+                throw new Error(
+                  `DEPENDENCY_NOT_READY: Reservation room ${aggregateId} has not been created yet`,
+                );
+              }
+
+              // Create an ApprovalRequest so it appears in Night Audit
+              // Variances. Use the event key, never Date.now(), so retries
+              // cannot create duplicate approvals.
+              const discountApproval = await tx.approvalRequest.upsert({
+                where: { idempotencyKey: `disc_req_${idempotencyKey}` },
+                create: {
+                  propertyId,
+                  type: "DISCOUNT",
+                  status: "APPROVED",
+                  executionStatus: "APPLIED",
+                  requestedBy: actorId,
+                  reviewedBy: isUuid(payload.acknowledgedByStaffId)
+                    ? payload.acknowledgedByStaffId
+                    : actorId,
+                  reviewedAt: new Date(),
+                  amount: payload.discountAmount || payload.amount,
+                  currency: resRoom.currency || "NGN",
+                  reason: payload.reason || "Offline Room Discount",
+                  details: payload,
+                  idempotencyKey: `disc_req_${idempotencyKey}`
+                },
+                update: {
+                  status: "APPROVED",
+                  executionStatus: "APPLIED",
+                  reviewedAt: new Date(),
+                },
+              });
+
+              // Night Audit only applies reservation-room discounts linked to
+              // an approved request. Keep the approval link on the room so a
+              // synced discount is actually used for the room charge.
+              await tx.reservationRoom.update({
+                where: { id: aggregateId },
+                data: {
+                  discountType: payload.discountType,
+                  discountAmount: payload.discountAmount || payload.amount,
+                  discountPercent: payload.discountPercent || payload.percentage,
+                  discountReason: payload.reason,
+                  discountApprovalId: discountApproval.id,
+                }
+              });
+            } else if (eventType === "COMPLIMENTARY_APPLIED") {
+              if (payload.beneficiaryType === "STAFF" || payload.beneficiaryStaffId || payload.settlementType === "STAFF_PAY_LATER") {
+                throw new Error("Complimentary benefits are for guests only");
+              }
+              const resRoom = await tx.reservationRoom.findUnique({
+                where: { id: aggregateId },
+                include: { reservation: true }
+              });
+              if (resRoom) {
+                await tx.reservationRoom.update({
+                  where: { id: aggregateId },
+                  data: {
+                    discountType: "COMPLIMENTARY",
+                    discountAmount: payload.compAmount,
+                    discountReason: payload.reason,
+                  }
+                });
+
+                await tx.complimentaryRecord.create({
+                  data: {
+                    propertyId,
+                    businessDate: postingBusinessDate,
+                    reference: `COMP_RES_${aggregateId}_${Date.now()}`,
+                    sourceModule: "FRONT_DESK",
+                    roomId: resRoom.roomId,
+                    guestId: resRoom.reservation?.primaryGuestId,
+                    staffId: null,
+                    operatorId: staffOperatorId,
+                    operationId: idempotencyKey,
+                    grossAmount: payload.compAmount,
+                    complAmount: payload.compAmount,
+                    netAmount: 0,
+                    complType: payload.compType === "FULL" ? "FULL" : "PARTIAL",
+                    reason: payload.reason || "Complimentary Applied Offline"
+                  }
+                });
+              }
+            }
+          } else if (aggregateType === "POS_VOID" && eventType === "CREATE") {
+            const operationId = payload.operationId || payload.OperationId || idempotencyKey;
+            const existingVoid = await tx.posVoid.findUnique({ where: { operationId } });
+            if (!existingVoid) {
+              const orderId = payload.orderId || payload.OrderId || aggregateId;
+              const itemId = payload.orderItemId || payload.OrderItemId || payload.originalOrderItemId || null;
+              const order = await tx.posOrder.findUnique({
+                where: { id: orderId },
+                include: { items: true },
+              });
+              if (!order) throw new Error(`RETRYABLE_ORDER_NOT_FOUND: POS order ${orderId} has not reached the cloud yet`);
+
+              const item = itemId ? order.items.find((candidate: any) => candidate.id === itemId) : null;
+              if (itemId && !item) throw new Error(`POS order item ${itemId} was not found`);
+
+              if (item && !item.voidReason) {
+                await tx.posOrderItem.update({
+                  where: { id: item.id },
+                  data: {
+                    voidReason: payload.reason || payload.Reason || 'Voided',
+                    subtotal: 0,
+                    total: 0,
+                    taxAmount: 0,
+                    unitPrice: 0,
+                  },
+                });
+              }
+
+              const remainingItems = await tx.posOrderItem.findMany({
+                where: { orderId },
+                select: { total: true, voidReason: true },
+              });
+              const orderTotal = remainingItems.reduce(
+                (sum: number, candidate: any) => sum + Number(candidate.total || 0),
+                0,
+              );
+              await tx.posOrder.update({
+                where: { id: orderId },
+                data: { subtotal: orderTotal, total: orderTotal, updatedAt: new Date() },
+              });
+
+              const allItemsVoided = remainingItems.length > 0 && remainingItems.every(
+                (candidate: any) => candidate.voidReason || Number(candidate.total || 0) === 0,
+              );
+              if (allItemsVoided) {
+                await InventoryService.restoreSale(orderId, actorId, `pos_void_restore_${operationId}`, tx);
+              }
+
+              await tx.posVoid.create({
+                data: {
+                  id: isUuid(payload.id || payload.Id) ? (payload.id || payload.Id) : randomUUID(),
+                  orderId,
+                  orderItemId: itemId,
+                  replacedByItemId: payload.replacedByItemId || payload.ReplacedByItemId || null,
+                  reason: payload.reason || payload.Reason || 'Voided',
+                  authorizerId: isUuid(payload.approverId || payload.AuthorizerId)
+                    ? (payload.approverId || payload.AuthorizerId)
+                    : null,
+                  operationId,
+                  businessDate: order.businessDate,
+                  deviceId: payload.deviceId || payload.DeviceId || device.id,
+                },
+              });
+            }
+          } else if (aggregateType === "POS_ORDER") {
+            if (eventType === "DISCOUNT_REQUESTED") {
+              const order = await tx.posOrder.findUnique({ where: { id: aggregateId } });
+              if (order) {
+                await tx.approvalRequest.upsert({
+                  where: { idempotencyKey: `offline_discount:${idempotencyKey}` },
+                  create: {
+                    propertyId,
+                    outletId: order.outletId,
+                    type: "DISCOUNT",
+                    status: "PENDING",
+                    executionStatus: "NOT_APPLIED",
+                    requestedBy: actorId,
+                    amount: payload.amount || payload.discountAmount || 0,
+                    currency: "NGN",
+                    reason: payload.reason || "Offline POS discount request",
+                    details: payload,
+                    snapshot: { ...payload, targetType: "POS_ORDER", orderId: aggregateId },
+                    idempotencyKey: `offline_discount:${idempotencyKey}`
+                  },
+                  update: {},
+                });
+              }
+            } else if (eventType === "POS_COMPLIMENTARY_REQUESTED") {
+              if (payload.beneficiaryType === "STAFF" || payload.beneficiaryStaffId || payload.settlementType === "STAFF_PAY_LATER") {
+                throw new Error("Complimentary benefits are for guests only");
+              }
+              const order = await tx.posOrder.findUnique({ where: { id: aggregateId } });
+              if (order) {
+                await tx.complimentaryRecord.create({
+                  data: {
+                    propertyId,
+                    businessDate: order.businessDate || authoritativeBusinessDate,
+                    reference: `COMP_POS_${aggregateId}_${id}`,
+                    sourceModule: "POS",
+                    posOrderId: aggregateId,
+                    staffId: null,
+                    operatorId: staffOperatorId,
+                    operationId: idempotencyKey,
+                    grossAmount: payload.compAmount || 0,
+                    complAmount: payload.compAmount || 0,
+                    netAmount: 0,
+                    complType: payload.compType === "FULL" ? "FULL" : "PARTIAL",
+                    reason: payload.reason || "Offline POS complimentary request"
+                  }
+                });
+              }
+            } else if (eventType === "DISCOUNT_APPLIED") {
+              // Usually handled in POS sync, but Front Desk sync might receive it occasionally.
+              const order = await tx.posOrder.findUnique({ where: { id: aggregateId } });
+              if (order) {
+                const amount = Number(payload.amount || payload.discountAmount || 0);
+                const percentage = Number(payload.discountPercent || payload.percentage || 0);
+                const effectiveDiscount = amount > 0
+                  ? amount
+                  : Number(order.subtotal || 0) * (percentage / 100);
+                await tx.posOrder.update({
+                  where: { id: aggregateId },
+                  data: {
+                    discount: effectiveDiscount,
+                    total: Math.max(0, Number(order.subtotal || 0) + Number(order.serviceCharge || 0) + Number(order.taxAmount || 0) - effectiveDiscount)
+                  }
+                });
+                await tx.approvalRequest.upsert({
+                  where: { idempotencyKey: `pos_disc_${aggregateId}_${idempotencyKey}` },
+                  create: {
+                    propertyId,
+                    outletId: order.outletId,
+                    type: "DISCOUNT",
+                    status: "APPROVED",
+                    executionStatus: "APPLIED",
+                    requestedBy: actorId,
+                    reviewedBy: payload.acknowledgedByStaffId || actorId,
+                    reviewedAt: new Date(),
+                    amount: effectiveDiscount,
+                    currency: "NGN",
+                    reason: payload.reason || "Offline POS Discount",
+                    details: payload,
+                    idempotencyKey: `pos_disc_${aggregateId}_${idempotencyKey}`
+                  },
+                  update: {
+                    status: "APPROVED",
+                    executionStatus: "APPLIED",
+                    amount: effectiveDiscount,
+                  },
+                });
+              }
+            } else if (eventType === "POS_COMPLIMENTARY_APPLIED") {
+              if (payload.beneficiaryType === "STAFF" || payload.beneficiaryStaffId || payload.settlementType === "STAFF_PAY_LATER") {
+                throw new Error("Complimentary benefits are for guests only");
+              }
+              const order = await tx.posOrder.findUnique({ where: { id: aggregateId } });
+              if (order) {
+                await tx.posOrder.update({
+                  where: { id: aggregateId },
+                  data: {
+                    discount: { increment: payload.compAmount },
+                    total: Math.max(0, Number(order.total || 0) - Number(payload.compAmount))
+                  }
+                });
+                await tx.complimentaryRecord.create({
+                  data: {
+                    propertyId,
+                    businessDate: order.businessDate || authoritativeBusinessDate,
+                    reference: `COMP_POS_${aggregateId}_${Date.now()}`,
+                    sourceModule: "POS",
+                    posOrderId: aggregateId,
+                    staffId: null,
+                    operatorId: staffOperatorId,
+                    operationId: idempotencyKey,
+                    grossAmount: payload.compAmount,
+                    complAmount: payload.compAmount,
+                    netAmount: 0,
+                    complType: payload.compType === "FULL" ? "FULL" : "PARTIAL",
+                    reason: payload.reason || "POS Complimentary Offline"
+                  }
+                });
+              }
+            }
+          } else {
+            throw new Error(`Unknown eventType: ${eventType}`);
+          }
+
+          // 3. Save Immutable HotelEvent (Subject to unique constraint on aggregateVersion)
+          await tx.hotelEvent.create({
+            data: {
+              id,
+              idempotencyKey,
+              propertyId,
+              deviceId: device.id,
+              operatorId: actorId,
+              aggregateType,
+              aggregateId,
+              aggregateVersion: hotelEventAggregateVersion,
+              eventType,
+              occurredAt: new Date(occurredAt || Date.now()),
+              sequence,
+              payload,
+            },
+          });
+
+          const affectsInventory = new Set([
+            "CREATE", "WALK_IN", "CHECK_IN", "CHECK_OUT", "CANCEL", "NO_SHOW",
+            "REINSTATE", "REASSIGN_ROOM", "EXTEND_STAY", "ROOM_STATUS_UPDATE",
+          ]).has(eventType);
+          if (affectsInventory && !otaInventoryQueued.has(propertyId)) {
+            otaInventoryQueued.add(propertyId);
+            otaSyncEventIds.push(...await queueBeds24InventorySync(tx, {
+              propertyId,
+              organizationId: property.organizationId,
+              eventId: id,
+              eventType,
+            }));
+          }
+        });
+
+        results.push({ id, status: resultStatus, idempotencyKey });
+
+        // Post-transaction notifications for mobile hub parity
+        if (aggregateType === "RESERVATION") {
+          try {
+            let notificationType = null;
+            if (eventType === "CREATE" || eventType === "WALK_IN")
+              notificationType = "NEW_RESERVATION";
+            else if (eventType === "CHECK_IN") notificationType = "CHECK_IN";
+            else if (eventType === "CHECK_OUT") notificationType = "CHECK_OUT";
+            else if (eventType === "CANCEL") notificationType = "CANCEL";
+            else if (eventType === "CHECKIN_BYPASS") notificationType = "CHECKIN_BYPASS_CREATED";
+
+            if (notificationType && property.organizationId) {
+              const eventId = idempotencyKey || id;
+              await NotificationEngine.emit({
+                type: notificationType,
+                organizationId: property.organizationId,
+                propertyId: property.id,
+                entityType: "reservation",
+                entityId: aggregateId,
+                metadata: {
+                  ...payload,
+                  operatorName: "Sync Service",
+                  businessDate: payload.businessDate || authoritativeBusinessDate?.toISOString() || new Date().toISOString()
+                },
+                idempotencyKey: `sync_${notificationType}_${eventId}`,
+              });
+            }
+          } catch (notifErr) {
+            console.error(
+              `[Push Sync] Failed to emit notification for ${eventType}:`,
+              notifErr,
+            );
+          }
+        } else if (
+          aggregateType === "FOLIO" &&
+          (eventType === "POST_PAYMENT" || eventType === "ADVANCE_DEPOSIT")
+        ) {
+          try {
+            if (property.organizationId) {
+              const amount = Number(payload.amount);
+              await NotificationEngine.emit({
+                type: "PAYMENT_RECEIVED",
+                organizationId: property.organizationId,
+                propertyId: property.id,
+                entityType: "folio",
+                entityId: aggregateId,
+                metadata: {
+                  amount: amount > 0 ? amount : -amount,
+                  currency: payload.currency || "NGN",
+                  method:
+                    payload.method ||
+                    (eventType === "ADVANCE_DEPOSIT" ? "TOP-UP" : "PAYMENT"),
+                  operatorName: "Sync Service"
+                },
+                idempotencyKey: `sync_PAYMENT_${idempotencyKey || id}`,
+              });
+            }
+          } catch (notifErr) {
+            console.error(
+              `[Push Sync] Failed to emit notification for ${eventType}:`,
+              notifErr,
+            );
+          }
+        } else if (aggregateType === "COMPLIMENTARY_RECORD" && (eventType === "COMPLIMENTARY_CREATED" || eventType === "COMPLIMENTARY_APPLIED" || eventType === "COMPLIMENTARY_REQUESTED")) {
+          try {
+            if (property.organizationId) {
+              await NotificationEngine.emit({
+                type: "COMPLIMENTARY_RECORDED",
+                organizationId: property.organizationId,
+                propertyId: property.id,
+                entityType: "complimentary",
+                entityId: aggregateId,
+                metadata: {
+                  amount: Number(payload.grossAmount || payload.compAmount || 0),
+                  currency: "NGN",
+                  reason: payload.reason || "Offline Sync",
+                  businessDate: payload.businessDate || authoritativeBusinessDate?.toISOString() || new Date().toISOString(),
+                  operatorName: await (async () => {
+                    if (actorId && isUuid(actorId)) {
+                      const op = await prisma.staff.findFirst({ where: { OR: [{ userId: actorId }, { id: actorId }] }, select: { firstName: true, lastName: true } });
+                      if (op) return `${op.firstName} ${op.lastName}`.trim();
+                    }
+                    return "System";
+                  })(),
+                  target: payload.guestId ? "Guest/Room" : "Order/Folio"
+                },
+                idempotencyKey: `sync_COMPL_${eventType}_${idempotencyKey || id}`,
+              });
+            }
+          } catch (notifErr) {
+            console.error(`[Push Sync] Failed to emit notification for ${eventType}:`, notifErr);
+          }
+        } else if (
+          (aggregateType === "RESERVATION_ROOM" || aggregateType === "POS_ORDER") && 
+          (eventType === "DISCOUNT_APPLIED" || eventType === "DISCOUNT_REQUESTED")
+        ) {
+          try {
+            if (property.organizationId) {
+              await NotificationEngine.emit({
+                type: "DISCOUNT_APPLIED",
+                organizationId: property.organizationId,
+                propertyId: property.id,
+                entityType: aggregateType === "POS_ORDER" ? "order" : "reservation",
+                entityId: aggregateId,
+                metadata: {
+                  amount: Number(payload.amount || payload.discountAmount || 0),
+                  percentage: payload.percentage || payload.discountPercent,
+                  currency: "NGN",
+                  reason: payload.reason || "Offline Sync",
+                  businessDate: payload.businessDate || authoritativeBusinessDate?.toISOString() || new Date().toISOString(),
+                  operatorName: await (async () => {
+                    if (actorId && isUuid(actorId)) {
+                      const op = await prisma.staff.findFirst({ where: { OR: [{ userId: actorId }, { id: actorId }] }, select: { firstName: true, lastName: true } });
+                      if (op) return `${op.firstName} ${op.lastName}`.trim();
+                    }
+                    return "System";
+                  })(),
+                  target: aggregateType === "POS_ORDER" ? "POS Order" : "Reservation"
+                },
+                idempotencyKey: `sync_DISCOUNT_${eventType}_${idempotencyKey || id}`,
+              });
+            }
+          } catch (notifErr) {
+            console.error(`[Push Sync] Failed to emit notification for ${eventType}:`, notifErr);
+          }
+        }
+      } catch (err: any) {
+        if (err.message === "IDEMPOTENCY_DUPLICATE") {
+          // The HotelEvent may have been persisted by an earlier attempt
+          // before its approval side-effect completed. Reconcile the
+          // side-effect before treating the event as a harmless duplicate.
+          if (
+            aggregateType === "RESERVATION_ROOM" &&
+            eventType === "DISCOUNT_REQUESTED" &&
+            err.existingEvent
+          ) {
+            try {
+              await prisma.$transaction(async (tx: any) => {
+                await reconcileOfflineRoomDiscount(tx, {
+                  propertyId,
+                  aggregateId: rawAggregateId,
+                  idempotencyKey,
+                  actorId: isUuid(err.existingEvent.operatorId)
+                    ? err.existingEvent.operatorId
+                    : device.id,
+                  payload: (err.existingEvent.payload || {}) as Record<string, any>,
+                });
+              });
+            } catch (reconciliationError: any) {
+              console.error(
+                `[sync/frontdesk-push] failed to reconcile duplicate discount ${idempotencyKey}:`,
+                reconciliationError,
+              );
+              results.push({
+                id,
+                status: "FAILED",
+                idempotencyKey,
+                error: reconciliationError.message,
+              });
+              continue;
+            }
+          }
+
+          // The duplicate marker may be reconstructed by Prisma/transaction
+          // wrappers without carrying the original event object. A duplicate
+          // is still safely idempotent in that case; only classify it as a
+          // conflict when the relation is actually present.
+          if (err.existingEvent?.syncConflict) {
+            results.push({
+              id,
+              status: "CONFLICT",
+              idempotencyKey,
+              error: "Already flagged as conflict.",
+            });
+          } else {
+            results.push({ id, status: "SYNCED", idempotencyKey });
+          }
+        } else if (
+          err.message === "CONCURRENCY_CONFLICT" ||
+          err.code === "P2002"
+        ) {
+          // If the unique constraint violation is on idempotencyKey, treat it as a successful duplicate
+          if (err.code === "P2002" && err.meta?.target && (
+            (Array.isArray(err.meta.target) && err.meta.target.includes("idempotencyKey")) ||
+            (typeof err.meta.target === "string" && err.meta.target.includes("idempotencyKey"))
+          )) {
+            console.log(`[sync/push] Handled P2002 idempotencyKey conflict as SYNCED for ${idempotencyKey}`);
+            results.push({ id, status: "SYNCED", idempotencyKey });
+            continue;
+          }
+          
+          if (err.code === "P2002") {
+            console.warn(`[sync/push] P2002 error details for event ${id}:`, err.meta);
+          }
+          // If P2002, it means another thread inserted the same aggregateVersion for this aggregate.
+          let expectedVersion = err.currentVersion || aggregateVersion;
+
+          if (err.code === "P2002") {
+            // Fetch the true actual version from DB to populate the conflict correctly
+            try {
+              if (aggregateType === "FOLIO") {
+                const f = await prisma.folio.findUnique({
+                  where: { id: rawAggregateId },
+                });
+                if (f) expectedVersion = f.version;
+              } else if (aggregateType === "RESERVATION") {
+                const r = await prisma.reservation.findUnique({
+                  where: { id: rawAggregateId },
+                });
+                if (r) expectedVersion = r.version;
+              }
+            } catch (e) {}
+          }
+          // We must record the HotelEvent and SyncConflict outside the failed business transaction
+          try {
+            await prisma.$transaction(async (tx2) => {
+              const parsedPayload = JSON.parse(payloadJson || "{}");
+              const ev = await tx2.hotelEvent.upsert({
+                where: { id },
+                update: {
+                  idempotencyKey,
+                  payload: parsedPayload
+                },
+                create: {
+                  id,
+                  idempotencyKey,
+                  propertyId,
+                  deviceId: device.id,
+                  operatorId: isUuid(operatorId) ? operatorId : device.id,
+                  aggregateType,
+                  aggregateId: rawAggregateId,
+                  aggregateVersion,
+                  eventType,
+                  occurredAt: new Date(occurredAt || Date.now()),
+                  sequence,
+                  payload: parsedPayload,
+                },
+              });
+
+              await tx2.syncConflict.upsert({
+                where: { hotelEventId: ev.id },
+                update: {
+                  expectedVersion: expectedVersion,
+                  receivedVersion: aggregateVersion,
+                  status: "PENDING"
+                },
+                create: {
+                  propertyId,
+                  hotelEventId: ev.id,
+                  aggregateType,
+                  aggregateId: rawAggregateId,
+                  expectedVersion: expectedVersion,
+                  receivedVersion: aggregateVersion,
+                  conflictReason:
+                    "Optimistic Concurrency Failure: Edge node operated on stale state.",
+                  status: "PENDING",
+                },
+              });
+            });
+            results.push({
+              id,
+              status: "CONFLICT",
+              idempotencyKey,
+              error: "Concurrency conflict. Manager resolution required.",
+            });
+          } catch (conflictErr: any) {
+            console.error(
+              `Error saving conflict for event ${id}:`,
+              conflictErr,
+            );
+            results.push({
+              id,
+              status: "FAILED",
+              idempotencyKey,
+              error: "Failed to record conflict state.",
+            });
+          }
+        } else if (
+          aggregateType === "CITY_LEDGER" &&
+          eventType === "GUEST_CREDIT_APPLICATION" &&
+          ["INSUFFICIENT_CREDIT", "GUEST_CREDIT_NOT_AVAILABLE"].includes(err.message)
+        ) {
+          // A concurrent terminal consumed the credit. Return a conflict so
+          // the desktop marks its optimistic local allocation CONFLICTED and
+          // reverses the local payment mirror.
+          results.push({
+            id,
+            status: "CONFLICT",
+            idempotencyKey,
+            error: err.message,
+          });
+        } else if (
+          aggregateType === "CITY_LEDGER" &&
+          eventType === "GUEST_CREDIT_REFUND_REQUESTED"
+        ) {
+          // Refund requests are approval workflows, not retryable financial
+          // mutations. A rejected request must be surfaced to Front Desk and
+          // must not remain indefinitely in local PENDING_APPROVAL state.
+          results.push({
+            id,
+            status: "CONFLICT",
+            idempotencyKey,
+            error: err.message,
+          });
+        } else if (
+          aggregateType === "FOLIO" &&
+          eventType === "GUEST_CREDIT_TRANSFER" &&
+          typeof err.message === "string" &&
+          err.message.startsWith("GUEST_CREDIT_TRANSFER_IGNORED:")
+        ) {
+          // A stale desktop checkout can submit a transfer after the cloud folio
+          // has already settled. This is a safe no-op, not a financial conflict:
+          // there is no credit to allocate and no balance to reconcile.
+          results.push({ id, status: "SYNCED", idempotencyKey });
+        } else if (
+          aggregateType === "FOLIO" &&
+          eventType === "GUEST_CREDIT_TRANSFER" &&
+          typeof err.message === "string" &&
+          err.message.startsWith("GUEST_CREDIT_TRANSFER_REJECTED:")
+        ) {
+          // The edge event was based on stale local folio state. Preserve it as a
+          // conflict for operator review; never manufacture a guest credit.
+          results.push({
+            id,
+            status: "CONFLICT",
+            idempotencyKey,
+            error: err.message,
+          });
+        } else {
+          console.error(`Error processing event ${id}:`, err);
+          results.push({
+            id,
+            status: "FAILED",
+            idempotencyKey,
+            error: err.message,
+          });
+        }
+      }
+    }
+
+    for (const syncEventId of otaSyncEventIds) {
+      await QueuePublisher.scheduleOtaSync(syncEventId);
+    }
+
+    return NextResponse.json(
+      {
+        status: "SUCCESS",
+        results,
+      },
+      { status: 200 },
+    );
+  } catch (error: any) {
+    console.error(`[sync/frontdesk-push] request=${requestId} failed`, error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
