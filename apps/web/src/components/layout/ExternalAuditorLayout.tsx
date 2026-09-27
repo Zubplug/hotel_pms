@@ -45,7 +45,7 @@ export function ExternalAuditorLayout({ children }: { children: React.ReactNode 
   const { data: session, status } = useLodgeCoreSession();
   const router = useRouter();
   const logout = useLogout();
-  const [scope, setScope] = useState<{ propertyName: string; auditPeriodStart: string; auditPeriodEnd: string } | null>(null);
+  const [scope, setScope] = useState<{ propertyName: string; auditPeriodStart: string; auditPeriodEnd: string; accessExpiresAt: string } | null>(null);
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -82,7 +82,7 @@ export function ExternalAuditorLayout({ children }: { children: React.ReactNode 
 
   if (status === 'unauthenticated' || !session?.user) return null;
 
-  const sidebarProps = { pathname, userDisplayName, userInitials, logout };
+  const sidebarProps = { pathname, userDisplayName, userInitials, logout, scopeExpiresAt: scope?.accessExpiresAt };
 
   return (
     <div className="flex h-screen overflow-hidden bg-slate-950 text-slate-200">
@@ -102,33 +102,17 @@ export function ExternalAuditorLayout({ children }: { children: React.ReactNode 
         <AuditorSidebar {...sidebarProps} />
       </div>
 
-      <div className="flex flex-1 flex-col lg:pl-64 min-w-0">
-        <header className="sticky top-0 z-40 flex h-16 shrink-0 items-center gap-4 border-b border-slate-800 bg-slate-950/80 backdrop-blur-sm px-4 sm:px-6 lg:px-8 shadow-sm">
+      <div className="relative flex flex-1 flex-col lg:pl-64 min-w-0">
+        <main className="relative flex-1 overflow-y-auto pb-10 custom-scrollbar">
           <Button
             variant="ghost"
             size="icon"
-            className="lg:hidden text-slate-400 hover:text-slate-200 hover:bg-slate-800"
+            className="fixed left-4 top-4 z-40 bg-slate-900/90 text-slate-400 shadow-lg ring-1 ring-white/10 hover:bg-slate-800 hover:text-slate-200 lg:hidden"
             onClick={() => setSidebarOpen(true)}
+            aria-label="Open auditor navigation"
           >
             <Menu className="h-5 w-5" />
           </Button>
-
-          <div className="flex flex-1 items-center justify-between gap-4">
-            {/* Context Header for Auditor */}
-            <div className="flex items-center gap-2">
-              <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="text-sm font-medium text-slate-300">Secure audit session</span>
-            </div>
-
-            <div className="hidden sm:flex items-center gap-4 text-xs text-slate-400 bg-white/[.04] px-3 py-1.5 rounded-lg border border-white/[.07]">
-               <span className="font-medium text-slate-300">{scope?.propertyName || 'Loading property…'}</span>
-               <span className="text-slate-600">|</span>
-               <span>{scope ? `${new Date(scope.auditPeriodStart).toLocaleDateString()} — ${new Date(scope.auditPeriodEnd).toLocaleDateString()}` : 'Loading period…'}</span>
-            </div>
-          </div>
-        </header>
-
-        <main className="flex-1 overflow-y-auto pb-10 custom-scrollbar">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
             {children}
           </div>
@@ -138,7 +122,7 @@ export function ExternalAuditorLayout({ children }: { children: React.ReactNode 
   );
 }
 
-function AuditorSidebar({ pathname, userDisplayName, userInitials, logout, onNavigate }: { pathname: string | null; userDisplayName: string; userInitials: string; logout: () => void; onNavigate?: () => void }) {
+function AuditorSidebar({ pathname, userDisplayName, userInitials, logout, scopeExpiresAt, onNavigate }: { pathname: string | null; userDisplayName: string; userInitials: string; logout: () => void; scopeExpiresAt?: string; onNavigate?: () => void }) {
   return (
     <>
       <div className="flex h-[76px] shrink-0 items-center px-5 border-b border-white/[.07] gap-3">
@@ -155,6 +139,7 @@ function AuditorSidebar({ pathname, userDisplayName, userInitials, logout, onNav
         <div className="mb-5 rounded-2xl border border-emerald-400/15 bg-emerald-400/[.06] p-3.5">
           <div className="mb-2 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[.16em] text-emerald-300"><LockKeyhole className="h-3.5 w-3.5" /> Controlled access</div>
           <p className="text-xs leading-5 text-slate-400">Read-only engagement workspace. Every view is limited to the authorized property and period.</p>
+          {scopeExpiresAt && <p className="mt-3 border-t border-emerald-400/10 pt-3 text-[11px] text-slate-500">Access expires <span className="font-medium text-slate-300">{new Date(scopeExpiresAt).toLocaleDateString()}</span></p>}
         </div>
         {AUDITOR_NAV.map((item, index) => {
           const isActive = pathname === item.href || (item.href !== '/external-auditor' && pathname?.startsWith(item.href));

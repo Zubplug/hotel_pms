@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
       prisma.posSettlement.count({ where: { propertyId, businessDate: date, status: { not: 'SETTLED' } } }),
       prisma.nightAuditFinancialSnapshot.count({ where: { nightAudit: { propertyId, businessDate: date }, cashVariance: { not: 0 } } }),
       prisma.nightAudit.findMany({ where: { propertyId, businessDate: date }, select: { businessDate: true, status: true, totalRevenue: true, occupancy: true, adr: true, revpar: true, errors: true, posUnresolvedVariances: true }, orderBy: { businessDate: 'asc' } }),
-      prisma.folioItem.groupBy({ where: { folio: { propertyId }, businessDate: date, type: 'CHARGE', voidedAt: null }, by: ['revenueCategory'], _sum: { amount: true } }),
+      prisma.folioItem.findMany({ where: { folio: { propertyId }, businessDate: date, type: 'CHARGE', voidedAt: null }, select: { amount: true, revenueCategory: true, revenueClass: true, source: true } }),
     ]);
     if (!property) return NextResponse.json({ error: 'Property not found' }, { status: 404 });
 
@@ -48,7 +48,11 @@ export async function GET(request: NextRequest) {
         closeFinalizedAt: latestClose?.finalizedAt || null,
       },
       trend: audits.map(item => ({ date: item.businessDate, revenue: number(item.totalRevenue), occupancy: number(item.occupancy), adr: number(item.adr), revpar: number(item.revpar), status: item.status, exceptions: item.errors + item.posUnresolvedVariances })),
-      revenueMix: revenueMix.map(item => ({ category: item.revenueCategory, amount: number(item._sum.amount) })),
+      revenueMix: Object.entries(revenueMix.reduce<Record<string, number>>((mix, item) => {
+        const stream = item.revenueClass?.trim() || item.source;
+        mix[stream] = (mix[stream] || 0) + number(item.amount);
+        return mix;
+      }, {})).map(([category, amount]) => ({ category, amount })).sort((a, b) => b.amount - a.amount),
       review: { evidenceRecords: await prisma.folioItem.count({ where: { folio: { propertyId }, businessDate: date } }), journalEntries: journals, auditEvents: await prisma.auditLog.count({ where: { propertyId, createdAt: date } }) },
       exceptions: [
         { key: 'cash-variance', label: 'Cash Variances', count: cashVariances, risk: 'HIGH' },
