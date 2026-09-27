@@ -98,7 +98,7 @@ export function ExternalAuditorLayout({ children }: { children: React.ReactNode 
         </div>
       )}
 
-      <div className="hidden lg:flex lg:w-64 lg:flex-col lg:fixed lg:inset-y-0 lg:border-r lg:border-slate-800 lg:bg-slate-900">
+      <div className="relative z-40 hidden lg:flex lg:w-64 lg:flex-col lg:fixed lg:inset-y-0 lg:border-r lg:border-slate-800 lg:bg-slate-900 pointer-events-auto">
         <AuditorSidebar {...sidebarProps} />
       </div>
 
