@@ -81,7 +81,9 @@ export async function PATCH(request: NextRequest) {
     const current = await prisma.externalAuditorAccess.findUnique({ where: { id } });
     if (!current) return NextResponse.json({ error: 'Access record not found' }, { status: 404 });
     const action = body.action === 'revoke' ? 'EXTERNAL_AUDITOR_ACCESS_REVOKED' : 'EXTERNAL_AUDITOR_ACCESS_EXTENDED';
-    const data = action.endsWith('REVOKED') ? { status: 'REVOKED' as const, revokedAt: new Date(), revokedByUserId: session.user.id, revocationReason: String(body.reason || 'Revoked by administrator') } : { accessExpiresAt: new Date(body.accessExpiresAt), status: 'ACTIVE' as const };
+    const nextExpiry = new Date(body.accessExpiresAt);
+    if (!action.endsWith('REVOKED') && (Number.isNaN(nextExpiry.getTime()) || nextExpiry <= new Date(current.accessExpiresAt))) return NextResponse.json({ error: 'New expiry must be later than the current expiry' }, { status: 400 });
+    const data = action.endsWith('REVOKED') ? { status: 'REVOKED' as const, revokedAt: new Date(), revokedByUserId: session.user.id, revocationReason: String(body.reason || 'Revoked by administrator') } : { accessExpiresAt: nextExpiry, status: 'ACTIVE' as const };
     const updated = await prisma.$transaction(async tx => {
       const value = await tx.externalAuditorAccess.update({ where: { id }, data });
       await tx.auditLog.create({ data: { organizationId: current.organizationId, propertyId: current.propertyId, userId: session.user.id, action, resource: 'ExternalAuditorAccess', resourceId: id, previousValue: current as any, newValue: value as any, requestId: randomUUID() } });
