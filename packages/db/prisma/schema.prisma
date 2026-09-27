@@ -2098,6 +2098,173 @@ enum ExternalAuditorAccessStatus {
   EXPIRED
 }
 
+enum AuditEngagementStatus {
+  PLANNING
+  ACTIVE
+  FIELDWORK
+  REPORTING
+  CLOSED
+  ARCHIVED
+}
+
+enum AuditRequestStatus {
+  OPEN
+  IN_PROGRESS
+  SUBMITTED
+  RETURNED
+  ACCEPTED
+  CLOSED
+}
+
+enum AuditWorkpaperStatus {
+  DRAFT
+  IN_REVIEW
+  APPROVED
+  LOCKED
+}
+
+enum AuditFindingSeverity {
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum AuditFindingStatus {
+  OPEN
+  MANAGEMENT_RESPONSE
+  IN_REMEDIATION
+  PENDING_VALIDATION
+  CLOSED
+}
+
+model AuditEngagement {
+  id                 String                @id @default(uuid()) @db.Uuid
+  organizationId     String                @db.Uuid
+  propertyId         String                @db.Uuid
+  leadAuditorId      String                @db.Uuid
+  status             AuditEngagementStatus  @default(PLANNING)
+  name               String
+  auditType          String
+  objective          String?
+  scope              String?
+  exclusions         String?
+  materiality        Decimal?              @db.Decimal(18, 4)
+  currency           String?
+  auditPeriodStart   DateTime              @db.Date
+  auditPeriodEnd     DateTime              @db.Date
+  plannedStartAt     DateTime?             @db.Timestamptz
+  plannedEndAt       DateTime?             @db.Timestamptz
+  closedAt           DateTime?             @db.Timestamptz
+  metadata           Json?
+  createdById        String                @db.Uuid
+  createdAt          DateTime              @default(now()) @db.Timestamptz
+  updatedAt          DateTime              @updatedAt @db.Timestamptz
+
+  @@index([propertyId, status])
+  @@index([organizationId, auditPeriodStart, auditPeriodEnd])
+}
+
+model AuditEvidenceRequest {
+  id             String             @id @default(uuid()) @db.Uuid
+  engagementId   String             @db.Uuid
+  organizationId String             @db.Uuid
+  propertyId     String             @db.Uuid
+  title          String
+  description    String
+  category       String
+  status         AuditRequestStatus @default(OPEN)
+  priority       String             @default("MEDIUM")
+  ownerId        String?
+  requesterId    String             @db.Uuid
+  dueDate        DateTime?          @db.Date
+  submittedAt    DateTime?          @db.Timestamptz
+  acceptedAt     DateTime?          @db.Timestamptz
+  responseNote   String?
+  evidence       Json?
+  createdAt      DateTime           @default(now()) @db.Timestamptz
+  updatedAt      DateTime           @updatedAt @db.Timestamptz
+
+  @@index([engagementId, status])
+  @@index([propertyId, dueDate])
+}
+
+model AuditWorkpaper {
+  id             String              @id @default(uuid()) @db.Uuid
+  engagementId   String              @db.Uuid
+  organizationId String              @db.Uuid
+  propertyId     String              @db.Uuid
+  reference      String
+  title          String
+  controlArea    String
+  objective      String?
+  procedure      String?
+  population     String?
+  sampleSize     Int?
+  result         String?
+  status         AuditWorkpaperStatus @default(DRAFT)
+  preparedById   String               @db.Uuid
+  reviewedById   String?
+  evidenceIds    Json?
+  reviewerNote   String?
+  signedAt       DateTime?            @db.Timestamptz
+  createdAt      DateTime             @default(now()) @db.Timestamptz
+  updatedAt      DateTime             @updatedAt @db.Timestamptz
+
+  @@unique([engagementId, reference])
+  @@index([engagementId, status])
+}
+
+model AuditFinding {
+  id             String               @id @default(uuid()) @db.Uuid
+  engagementId   String               @db.Uuid
+  organizationId String               @db.Uuid
+  propertyId     String               @db.Uuid
+  reference      String
+  title          String
+  description    String
+  criteria       String?
+  condition      String?
+  rootCause      String?
+  riskImpact     String?
+  recommendation String?
+  severity       AuditFindingSeverity @default(MEDIUM)
+  status         AuditFindingStatus   @default(OPEN)
+  ownerId        String?
+  dueDate        DateTime?            @db.Date
+  managementResponse String?
+  evidenceIds    Json?
+  createdById    String               @db.Uuid
+  validatedById  String?
+  closedAt       DateTime?            @db.Timestamptz
+  createdAt      DateTime             @default(now()) @db.Timestamptz
+  updatedAt      DateTime             @updatedAt @db.Timestamptz
+
+  @@unique([engagementId, reference])
+  @@index([engagementId, status, severity])
+  @@index([propertyId, dueDate])
+}
+
+model AuditActionPlan {
+  id             String               @id @default(uuid()) @db.Uuid
+  findingId      String               @db.Uuid
+  engagementId   String               @db.Uuid
+  organizationId String               @db.Uuid
+  propertyId     String               @db.Uuid
+  action         String
+  ownerId        String
+  dueDate        DateTime             @db.Date
+  status         AuditFindingStatus   @default(IN_REMEDIATION)
+  progress       Int                  @default(0)
+  completionNote String?
+  completedAt    DateTime?            @db.Timestamptz
+  createdAt      DateTime             @default(now()) @db.Timestamptz
+  updatedAt      DateTime             @updatedAt @db.Timestamptz
+
+  @@index([engagementId, status])
+  @@index([propertyId, dueDate])
+}
+
 model ExternalAuditorAccess {
   id                 String   @id @default(uuid()) @db.Uuid
   userId             String   @db.Uuid

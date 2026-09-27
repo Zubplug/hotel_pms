@@ -3,6 +3,10 @@ import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { randomUUID } from 'crypto';
 
+/* This route predates the strict session type and is used by the same
+ * augmented NextAuth session boundary as the management API. */
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars */
+
 const ADMIN_ROLES = new Set(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'GENERAL_MANAGER', 'DIRECTOR', 'CEO']);
 const canAdminister = (session: any) => Boolean(session?.user?.isSuperAdmin || ADMIN_ROLES.has(String(session?.user?.role || '').toUpperCase()));
 const dateOnly = (value: unknown) => {
@@ -46,6 +50,25 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Unable to grant access' }, { status: 400 });
   }
+}
+
+export async function GET(request: NextRequest) {
+  const session = await auth();
+  if (!session?.user?.id) return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+  if (!canAdminister(session)) return NextResponse.json({ error: 'Auditor access administration required' }, { status: 403 });
+  const propertyId = request.nextUrl.searchParams.get('propertyId');
+  const organizationId = String((session.user as any).organizationId || '');
+  const [accesses, users, properties] = await Promise.all([
+    prisma.externalAuditorAccess.findMany({
+    where: { ...(organizationId ? { organizationId } : {}), ...(propertyId ? { propertyId } : {}) },
+    include: { user: { select: { id: true, email: true, staffId: true } }, property: { select: { id: true, name: true, code: true } }, grantedByUser: { select: { email: true } } },
+    orderBy: { updatedAt: 'desc' },
+    take: 250,
+    }),
+    prisma.user.findMany({ where: { ...(organizationId ? { membership: { organizationId } } : {}) }, select: { id: true, email: true }, orderBy: { email: 'asc' }, take: 500 }),
+    prisma.property.findMany({ where: organizationId ? { organizationId } : {}, select: { id: true, name: true, code: true, baseCurrency: true }, orderBy: { name: 'asc' }, take: 250 }),
+  ]);
+  return NextResponse.json({ accesses, users, properties }, { headers: { 'Cache-Control': 'no-store' } });
 }
 
 export async function PATCH(request: NextRequest) {

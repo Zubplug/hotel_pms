@@ -16,6 +16,9 @@ import {
   type LucideIcon,
   Search,
   LockKeyhole,
+  ClipboardCheck,
+  Activity,
+  GitCompareArrows,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -36,6 +39,9 @@ type NavItem = {
 const AUDITOR_NAV: NavItem[] = [
   { section: 'Engagement', name: 'Command center', href: '/external-auditor', icon: LayoutDashboard },
   { section: 'Engagement', name: 'Evidence explorer', href: '/external-auditor/evidence', icon: Search },
+  { section: 'Engagement', name: 'Audit operations', href: '/external-auditor/operations', icon: ClipboardCheck },
+  { section: 'Engagement', name: 'Readiness & activity', href: '/external-auditor/readiness', icon: Activity },
+  { section: 'Deliverables', name: 'Reconciliation center', href: '/external-auditor/assurance', icon: GitCompareArrows },
   { section: 'Deliverables', name: 'Reports & exports', href: '/external-auditor/reports', icon: FileText },
 ];
 
