@@ -37,6 +37,7 @@ import {
   BarChart3,
   Utensils,
   RefreshCw,
+  ShieldCheck,
   type LucideIcon,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -80,6 +81,7 @@ const ALL_NAV: NavItem[] = [
   { section: 'Administration', name: 'F&B Management', href: '/fnb/dashboard', icon: Utensils, restrictedTo: ['FNB_MANAGER', 'EVENT_MANAGER', 'RESTAURANT_MANAGER', 'BANQUET_MANAGER'] },
 
   { section: 'Administration', name: 'People & Access', href: '/settings/team', icon: Users, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'DIRECTOR'] },
+  { section: 'Administration', name: 'External Auditors', href: '/admin/external-auditors', icon: ShieldCheck, restrictedTo: ['ADMIN', 'CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'DIRECTOR'] },
   { section: 'Administration', name: 'Amenities', href: '/amenities', icon: Star, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'DIRECTOR'] },
   { section: 'Administration', name: 'Settings', href: '/settings', icon: Settings, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'DIRECTOR'] },
 ];
