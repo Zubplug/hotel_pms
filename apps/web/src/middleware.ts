@@ -1,4 +1,7 @@
 import NextAuth from 'next-auth';
+import { NextResponse } from 'next/server';
+
+import { isPwaEligiblePath, isPwaExcludedPath } from '@/lib/pwa/route-policy';
 
 // Minimal edge-compatible NextAuth config for middleware
 // Must include secret to avoid #missingsecret error
@@ -216,6 +219,19 @@ export default auth((req) => {
   if (!moduleAccess.allowed) {
     return Response.redirect(new URL(moduleAccess.redirectTo || '/hub', nextUrl));
   }
+
+  // Make the PWA boundary explicit at the edge. The service worker also
+  // enforces this boundary client-side, but this header makes the decision
+  // observable in production and prevents future navigation-shell code from
+  // accidentally treating desktop-owned routes as PWA routes.
+  const response = NextResponse.next();
+  if (isPwaExcludedPath(nextUrl.pathname)) {
+    response.headers.set('X-LodgeCore-PWA-Route', 'excluded');
+    response.headers.set('Cache-Control', 'no-store');
+  } else if (isPwaEligiblePath(nextUrl.pathname)) {
+    response.headers.set('X-LodgeCore-PWA-Route', 'online');
+  }
+  return response;
 });
 
 export const config = {

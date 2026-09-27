@@ -1,0 +1,19 @@
+{
+  "name": "LodgeCore PMS",
+  "short_name": "LodgeCore",
+  "description": "LodgeCore online hospitality management workspace",
+  "start_url": "/hub",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#020617",
+  "theme_color": "#0f172a",
+  "lang": "en",
+  "categories": ["business", "productivity"],
+  "icons": [{
+    "src": "/lodgecore-logo.png",
+    "sizes": "1024x1024",
+    "type": "image/png",
+    "purpose": "any maskable"
+  }]
+}

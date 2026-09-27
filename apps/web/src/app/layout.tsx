@@ -3,6 +3,7 @@ import { Geist, Geist_Mono, Inter } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/providers";
 import { Toaster } from "@/components/ui/sonner";
+import { PwaRuntime } from "@/lib/pwa/PwaRuntime";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -22,6 +23,10 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "LodgeCore PMS",
   description: "Enterprise Property Management System",
+  manifest: "/manifest.webmanifest",
+  applicationName: "LodgeCore PMS",
+  appleWebApp: { capable: true, title: "LodgeCore PMS", statusBarStyle: "black-translucent" },
+  icons: { icon: "/favicon.ico", apple: "/lodgecore-logo.png" },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -32,6 +37,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     >
       <body className="min-h-full flex flex-col">
         <Providers>
+          <PwaRuntime />
           {children}
           <Toaster />
         </Providers>
