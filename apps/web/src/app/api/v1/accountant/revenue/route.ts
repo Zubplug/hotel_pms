@@ -107,7 +107,7 @@ export async function GET(req: NextRequest) {
     const priorYearDate = addYears(businessDate, -1);
     const queryStart = addYears(yearStart, -1);
 
-    const [property, chartOfAccounts, items, posOrders] = await Promise.all([
+    const [property, chartOfAccounts, items, posOrders, eventInvoiceJournals] = await Promise.all([
       prisma.property.findUnique({ where: { id: propertyId }, select: { name: true, baseCurrency: true, settings: true } }),
       prisma.chartOfAccount.findMany({
         where: { propertyId, type: 'REVENUE', isActive: true },
@@ -131,6 +131,29 @@ export async function GET(req: NextRequest) {
           subtotal: true,
           discount: true,
           total: true,
+        },
+      }),
+      // Corporate/event invoices are posted directly to the general ledger
+      // and therefore do not create FolioItems. Include only their posted
+      // revenue journals here so hall revenue is visible without double-
+      // counting room or POS production already covered above.
+      prisma.journalEntry.findMany({
+        where: {
+          propertyId,
+          entryDate: { gte: queryStart, lte: businessDate },
+          status: 'POSTED',
+          isReversed: false,
+          reference: { startsWith: 'EVENT-INVOICE-' },
+        },
+        select: {
+          entryDate: true,
+          lines: {
+            select: {
+              debit: true,
+              credit: true,
+              account: { select: { code: true } },
+            },
+          },
         },
       }),
     ]);
@@ -205,6 +228,29 @@ export async function GET(req: NextRequest) {
         if (item.type === 'COMPLIMENTARY') complimentaryToday += discount;
       }
       addToTotals(accountCode, itemDate, value, gross, discount, item.type === 'CHARGE' ? 1 : 0);
+    }
+
+    // Event/hall invoices issued to City Ledger are represented by posted
+    // EVENT-INVOICE journals rather than FolioItems. Revenue credits increase
+    // the mapped account; contra-revenue debits reduce it. Receivable, tax,
+    // and other balance-sheet lines are not present in the revenue account
+    // map and are intentionally ignored.
+    for (const journal of eventInvoiceJournals) {
+      const journalDate = dateOnly(new Date(journal.entryDate));
+      for (const line of journal.lines) {
+        const accountCode = line.account.code;
+        const account = accounts.get(accountCode);
+        if (!account) continue;
+
+        const credit = Number(line.credit || 0);
+        const debit = Number(line.debit || 0);
+        if (credit > 0) {
+          addToTotals(accountCode, journalDate, credit, credit, 0, 1);
+        } else if (debit > 0 && (account.category.toLowerCase().includes('contra') || account.normalBalance === 'DEBIT')) {
+          addToTotals(accountCode, journalDate, -debit, 0, debit, 0);
+          if (key(journalDate) === key(businessDate)) discountsToday += debit;
+        }
+      }
     }
 
     // Direct POS sales are revenue when they were paid without routing to a
