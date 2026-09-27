@@ -2,6 +2,7 @@
 
 import { prisma } from '@hotel-pms/db';
 import { requireEventContext, requireEventRole } from './access';
+import { fromZonedTime } from 'date-fns-tz';
 
 type LeaseFrequency = 'PER_USE' | 'WEEKLY' | 'MONTHLY' | 'QUARTERLY' | 'YEARLY' | 'CUSTOM';
 type UsageFrequency = 'PER_USE' | 'DAILY' | 'WEEKLY';
@@ -24,11 +25,12 @@ function usageDates(start: Date, end: Date, frequency: UsageFrequency, days: num
   return dates;
 }
 
-function atTime(day: Date, value: string, fallback: string) {
+function atTime(day: Date, value: string, fallback: string, timeZone: string) {
   const time = value || fallback;
   const match = /^(\d{2}):(\d{2})$/.exec(time);
   if (!match || Number(match[1]) > 23 || Number(match[2]) > 59) throw new Error('Lease times must use HH:mm format.');
-  return new Date(Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate(), Number(match[1]), Number(match[2])));
+  const dateKey = `${day.getUTCFullYear()}-${String(day.getUTCMonth() + 1).padStart(2, '0')}-${String(day.getUTCDate()).padStart(2, '0')}`;
+  return fromZonedTime(`${dateKey}T${time}:00`, timeZone);
 }
 
 function buildPeriods(input: { startDate: Date; endDate: Date; billingFrequency: LeaseFrequency; billingDates?: Date[] }) {
@@ -60,7 +62,7 @@ function normaliseSegments(input: { segments?: SegmentInput[]; hallId: string; u
     if (!segment.hallId || !Number.isFinite(segment.rate) || segment.rate <= 0) throw new Error('Each lease segment needs a hall and a rate greater than zero.');
     const startTime = segment.startTime || '09:00';
     const endTime = segment.endTime || '17:00';
-    if (atTime(startDate, endTime, '17:00') <= atTime(startDate, startTime, '09:00')) throw new Error('Each lease segment end time must be after its start time.');
+    if (atTime(startDate, endTime, '17:00', 'UTC') <= atTime(startDate, startTime, '09:00', 'UTC')) throw new Error('Each lease segment end time must be after its start time.');
     if (!usageDays.length && input.usageFrequency !== 'DAILY' && input.usageFrequency !== 'PER_USE') throw new Error('Select at least one usage day for each lease segment.');
     return { hallId: segment.hallId, usageDays, startTime, endTime, rate: segment.rate };
   });
@@ -97,7 +99,7 @@ export async function createLeaseContract(input: {
     const occurrences: { segment: SegmentInput; startTime: Date; endTime: Date }[] = [];
     for (const segment of segments) {
       const dates = usageDates(startDate, endDate, input.usageFrequency, segment.usageDays);
-      for (const day of dates) occurrences.push({ segment, startTime: atTime(day, segment.startTime, '09:00'), endTime: atTime(day, segment.endTime, '17:00') });
+      for (const day of dates) occurrences.push({ segment, startTime: atTime(day, segment.startTime, '09:00', property.timezone), endTime: atTime(day, segment.endTime, '17:00', property.timezone) });
     }
     if (!occurrences.length) throw new Error('The lease produces no hall usage dates.');
     for (const occurrence of occurrences) {
