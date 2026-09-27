@@ -1392,7 +1392,7 @@ export async function POST(req: NextRequest) {
             const checkoutFolios = reservation.corporateAccountId
               ? await Promise.all(folios.map(async (folio: any) => {
                   const items = await tx.folioItem.findMany({
-                    where: { folioId: folio.id, operationId: { startsWith: `ROOM_CHARGE_${aggregateId}_` }, voidedAt: null },
+                    where: { folioId: folio.id, reservationId: aggregateId, voidedAt: null },
                     select: { amount: true },
                   });
                   return { ...folio, balance: items.reduce((sum: number, item: any) => sum + Number(item.amount), 0) };
@@ -1558,6 +1558,7 @@ export async function POST(req: NextRequest) {
                 deviceId: device.id,
                 isLatePosting: true,
                 posTransactionId: idempotencyKey,
+                operationId: idempotencyKey,
                 reservationId: chargeReservationId,
                 guestId: chargeGuestId,
               },
@@ -2640,6 +2641,24 @@ export async function POST(req: NextRequest) {
                 data: {
                   totalPayments: { increment: amount },
                   balance: { decrement: amount },
+                },
+              });
+
+              await tx.folioItem.create({
+                data: {
+                  folioId: aggregateId,
+                  businessDate: postingBusinessDate,
+                  type: "PAYMENT",
+                  source: "CITY_LEDGER",
+                  description: "City Ledger transfer at checkout",
+                  quantity: 1,
+                  unitAmount: -amount,
+                  amount: -amount,
+                  currency: payload.currency || "NGN",
+                  baseAmount: -amount,
+                  postedBy: actorId,
+                  reservationId: payload.reservationId || folio.reservationId,
+                  guestId: payload.guestId || folio.guestId,
                 },
               });
 

@@ -239,7 +239,10 @@ export function FrontDeskQuickCheckoutDialog({ open, onOpenChange, propertyId, i
                       <div className="flex-1">
                         <p className="font-bold text-red-300 text-sm">Outstanding Balance — Manager Required</p>
                         <p className="text-red-400/80 text-xs mt-1 mb-3 leading-relaxed">Guest must pay <strong className="text-red-300">{formatCurrency(balance)}</strong> before checkout can be processed.</p>
-                        <p className="text-xs text-red-400/60 leading-relaxed mb-3">If the guest has walked out, contact a manager to process as a Skipper from the back-office checkout workflow.</p>
+                        <p className="text-xs text-red-400/60 leading-relaxed mb-3">If the guest cannot settle this balance now, please refer the guest to the Manager or General Cashier.</p>
+                        <button onClick={() => onOpenChange(false)} className="w-full h-9 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 border border-indigo-500 shadow-[0_0_20px_-5px_rgba(99,102,241,0.5)] transition-all mb-2 flex items-center justify-center gap-2">
+                          Collect Payment
+                        </button>
                         <button onClick={() => onOpenChange(false)} className="w-full h-9 rounded-xl text-xs font-bold text-red-300 bg-red-500/15 hover:bg-red-500/25 border border-red-500/20 transition-all">
                           Cancel & View Folio
                         </button>
