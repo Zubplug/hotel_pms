@@ -81,7 +81,13 @@ const ALL_NAV: NavItem[] = [
   { section: 'Administration', name: 'F&B Management', href: '/fnb/dashboard', icon: Utensils, restrictedTo: ['FNB_MANAGER', 'EVENT_MANAGER', 'RESTAURANT_MANAGER', 'BANQUET_MANAGER'] },
 
   { section: 'Administration', name: 'People & Access', href: '/settings/team', icon: Users, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'DIRECTOR'] },
-  { section: 'Administration', name: 'External Auditors', href: '/admin/external-auditors', icon: ShieldCheck, restrictedTo: ['ADMIN', 'CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'DIRECTOR'] },
+  { section: 'Administration', name: 'External Auditors', href: '/admin/external-auditors', icon: ShieldCheck, restrictedTo: ['ADMIN', 'CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'DIRECTOR'], children: [
+    { name: 'Auditor management', href: '/admin/external-auditors' },
+    { name: 'Active engagements', href: '/admin/external-auditors' },
+    { name: 'Invitations', href: '/admin/external-auditors/invite' },
+    { name: 'Final-pack sign-off', href: '/admin/external-auditors/final-pack' },
+    { name: 'Audit activity', href: '/admin/external-auditors/activity' },
+  ] },
   { section: 'Administration', name: 'Amenities', href: '/amenities', icon: Star, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'DIRECTOR'] },
   { section: 'Administration', name: 'Settings', href: '/settings', icon: Settings, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'DIRECTOR'] },
 ];

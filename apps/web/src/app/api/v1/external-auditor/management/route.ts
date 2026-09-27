@@ -46,6 +46,7 @@ export async function GET(request: NextRequest) {
     if (resource === 'findings') return NextResponse.json({ items: await prisma.auditFinding.findMany({ where: { ...organizationFilter, ...propertyFilter, ...engagementFilter }, orderBy: [{ status: 'asc' }, { severity: 'asc' }, { dueDate: 'asc' }], take: 250 }) });
     if (resource === 'action-plans') return NextResponse.json({ items: await prisma.auditActionPlan.findMany({ where: { ...organizationFilter, ...propertyFilter, ...engagementFilter }, orderBy: { dueDate: 'asc' }, take: 250 }) });
     if (resource === 'final-packs') return NextResponse.json({ items: await prisma.auditFinalPack.findMany({ where: { ...organizationFilter, ...propertyFilter, ...engagementFilter }, orderBy: { createdAt: 'desc' }, take: 50 }) });
+    if (resource === 'activity') return NextResponse.json({ items: await prisma.auditLog.findMany({ where: { ...organizationFilter, ...propertyFilter }, select: { id: true, action: true, resource: true, resourceId: true, userEmail: true, userRole: true, requestId: true, ipAddress: true, createdAt: true }, orderBy: { createdAt: 'desc' }, take: 500 }) });
     const [engagements, requests, workpapers, findings, actionPlans] = await Promise.all([
       prisma.auditEngagement.count({ where: { ...organizationFilter, ...propertyFilter } }),
       prisma.auditEvidenceRequest.count({ where: { ...organizationFilter, ...propertyFilter, status: { not: 'CLOSED' } } }),
