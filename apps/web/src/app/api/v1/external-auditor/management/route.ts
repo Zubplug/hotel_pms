@@ -108,12 +108,24 @@ export async function PATCH(request: NextRequest) {
     const resource = String(body.resource || '');
     const id = String(body.id || '');
     const status = String(body.status || '');
-    const record = resource === 'request' ? await prisma.auditEvidenceRequest.findUnique({ where: { id } }) : resource === 'workpaper' ? await prisma.auditWorkpaper.findUnique({ where: { id } }) : await prisma.auditFinding.findUnique({ where: { id } });
+    const record = resource === 'request'
+      ? await prisma.auditEvidenceRequest.findUnique({ where: { id } })
+      : resource === 'workpaper'
+        ? await prisma.auditWorkpaper.findUnique({ where: { id } })
+        : resource === 'finding'
+          ? await prisma.auditFinding.findUnique({ where: { id } })
+          : resource === 'action-plan'
+            ? await prisma.auditActionPlan.findUnique({ where: { id } })
+            : resource === 'engagement'
+              ? await prisma.auditEngagement.findUnique({ where: { id } })
+              : null;
     if (!record || (ctx.external && !ctx.scopes.some(scope => scope.propertyId === record.propertyId))) throw new Error('403');
     let value: unknown;
     if (resource === 'request') value = await prisma.auditEvidenceRequest.update({ where: { id }, data: { status: status as any, responseNote: body.responseNote ? String(body.responseNote) : undefined, submittedAt: status === 'SUBMITTED' ? new Date() : undefined, acceptedAt: status === 'ACCEPTED' ? new Date() : undefined } });
     else if (resource === 'workpaper') value = await prisma.auditWorkpaper.update({ where: { id }, data: { status: status as any, reviewerNote: body.reviewerNote ? String(body.reviewerNote) : undefined, reviewedById: status === 'APPROVED' ? session.user.id : undefined, signedAt: status === 'APPROVED' || status === 'LOCKED' ? new Date() : undefined } });
-    else value = await prisma.auditFinding.update({ where: { id }, data: { status: status as any, managementResponse: body.managementResponse ? String(body.managementResponse) : undefined, validatedById: status === 'CLOSED' ? session.user.id : undefined, closedAt: status === 'CLOSED' ? new Date() : undefined } });
+    else if (resource === 'finding') value = await prisma.auditFinding.update({ where: { id }, data: { status: status as any, managementResponse: body.managementResponse ? String(body.managementResponse) : undefined, validatedById: status === 'CLOSED' ? session.user.id : undefined, closedAt: status === 'CLOSED' ? new Date() : undefined } });
+    else if (resource === 'action-plan') value = await prisma.auditActionPlan.update({ where: { id }, data: { status: status as any, progress: body.progress === undefined ? undefined : Number(body.progress), completionNote: body.completionNote ? String(body.completionNote) : undefined, completedAt: status === 'COMPLETED' ? new Date() : undefined } });
+    else if (resource === 'engagement') value = await prisma.auditEngagement.update({ where: { id }, data: { status: status as any, closedAt: status === 'CLOSED' ? new Date() : undefined } });
     return NextResponse.json({ value });
   } catch (error) {
     if (error instanceof Error && error.message === '403') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
