@@ -15,7 +15,7 @@ const isAdmin = (session: any) => Boolean(session?.user?.isSuperAdmin || session
 async function context(session: any) {
   const external = isExternalAuditor(session);
   const scopes = external ? await getExternalAuditorScopes(session.user.id) : [];
-  const organizationId = String(session.user.organizationId || '');
+  const organizationId = String(session.user.organizationId || scopes[0]?.organizationId || '');
   if (!external && !isAdmin(session)) throw new Error('403');
   return { external, scopes, organizationId };
 }
