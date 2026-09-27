@@ -2,6 +2,7 @@ import { Metadata } from 'next';
 import Link from 'next/link';
 import { prisma } from '@hotel-pms/db';
 import { auth } from '@/lib/auth';
+import { fromZonedTime, toZonedTime } from 'date-fns-tz';
 import { getEquipment } from '@/lib/events/booking-actions';
 import { EventTimeline } from '@/components/events/EventTimeline';
 import { NewBookingDialog } from '@/components/events/NewBookingDialog';
@@ -35,11 +36,14 @@ export default async function EventBookingsPage({ searchParams }: { searchParams
   const session = await auth();
   const propertyId = session?.user?.propertyId;
   if (!propertyId) throw new Error('No property is assigned to this account.');
+  const property = await prisma.property.findUnique({ where: { id: propertyId }, select: { timezone: true } });
+  const timeZone = property?.timezone || 'Africa/Lagos';
 
   const query = params.q?.trim() || '';
   const selectedStatus = params.status && params.status !== 'ALL' ? params.status : undefined;
   const now = new Date();
-  const timelineDate = parseLocalDate(params.date, now);
+  const venueNow = toZonedTime(now, timeZone);
+  const timelineDate = parseLocalDate(params.date, venueNow);
   const horizon = new Date(now); horizon.setDate(horizon.getDate() + 30);
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const events = await prisma.event.findMany({
@@ -79,7 +83,10 @@ export default async function EventBookingsPage({ searchParams }: { searchParams
     { label: 'Open receivables', value: money(unpaid), detail: `${money(monthValue)} invoiced this month`, icon: WalletCards },
   ];
   const selectedHallId = params.hallId;
-  const timelineStart = new Date(timelineDate); const timelineEnd = new Date(timelineDate); timelineEnd.setDate(timelineEnd.getDate() + 1);
+  const timelineDateKey = dayKey(timelineDate);
+  const nextTimelineDate = new Date(timelineDate); nextTimelineDate.setDate(nextTimelineDate.getDate() + 1);
+  const timelineStart = fromZonedTime(`${timelineDateKey}T00:00:00`, timeZone);
+  const timelineEnd = fromZonedTime(`${dayKey(nextTimelineDate)}T00:00:00`, timeZone);
   const todaysBookings = await prisma.eventBooking.findMany({ where: { hall: { propertyId, ...(selectedHallId ? { id: selectedHallId } : {}) }, status: { not: 'CANCELLED' }, event: { status: { not: 'CANCELLED' } }, startTime: { lt: timelineEnd }, endTime: { gt: timelineStart } }, include: { event: true }, orderBy: { startTime: 'asc' } });
   const scheduledBookings = todaysBookings.filter((booking) => booking.status !== 'CANCELLED' && booking.event.status !== 'CANCELLED');
   const occupiedHallCount = new Set(scheduledBookings.map((booking) => booking.hallId)).size;
@@ -87,7 +94,8 @@ export default async function EventBookingsPage({ searchParams }: { searchParams
   const bufferMinutes = scheduledBookings.reduce((sum, booking) => sum + booking.setupBufferMinutes + booking.teardownBufferMinutes, 0);
   const firstBooking = scheduledBookings[0];
   const lastBooking = scheduledBookings[scheduledBookings.length - 1];
-  const operatingWindow = firstBooking && lastBooking ? `${firstBooking.startTime.toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit' })} – ${lastBooking.endTime.toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit' })}` : 'No scheduled events';
+  const formatVenueTime = (value: Date) => new Intl.DateTimeFormat('en-NG', { timeZone, hour: '2-digit', minute: '2-digit', hour12: false }).format(value);
+  const operatingWindow = firstBooking && lastBooking ? `${formatVenueTime(firstBooking.startTime)} – ${formatVenueTime(lastBooking.endTime)}` : 'No scheduled events';
   const timelineHallFilter = selectedHallId ? `&hallId=${encodeURIComponent(selectedHallId)}` : '';
   const previousDay = new Date(timelineDate); previousDay.setDate(previousDay.getDate() - 1);
   const nextDay = new Date(timelineDate); nextDay.setDate(nextDay.getDate() + 1);
@@ -117,10 +125,10 @@ export default async function EventBookingsPage({ searchParams }: { searchParams
       <section className={isTimeline ? 'space-y-5' : 'hidden'}>
         <div className="flex flex-col gap-4 rounded-2xl border border-white/10 bg-[#101a2d] p-5 shadow-[0_24px_80px_-36px_rgba(34,211,238,.28)] lg:flex-row lg:items-center lg:justify-between">
           <div><div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.16em] text-cyan-300"><CalendarDays className="h-4 w-4" /> Operations diary</div><h2 className="mt-2 text-xl font-bold text-white">{timelineDate.toLocaleDateString('en-NG', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</h2><p className="mt-1 text-sm text-slate-400">A live room-by-room view of service windows, setup buffers, and guest flow.</p></div>
-          <div className="flex flex-wrap items-center gap-2"><Link href={`/fnb/events/bookings?view=timeline&date=${dayKey(previousDay)}${timelineHallFilter}`} className="inline-flex h-9 items-center justify-center rounded-md border border-white/10 bg-white/5 px-3 text-sm font-medium text-slate-200 hover:bg-white/10" aria-label="Previous day"><ChevronLeft className="h-4 w-4" /></Link><Link href={`/fnb/events/bookings?view=timeline&date=${dayKey(now)}${timelineHallFilter}`} className="inline-flex h-9 items-center justify-center rounded-md border border-cyan-300/20 bg-cyan-400/10 px-3 text-xs font-bold text-cyan-200 hover:bg-cyan-400/20">Today</Link><Link href={`/fnb/events/bookings?view=timeline&date=${dayKey(nextDay)}${timelineHallFilter}`} className="inline-flex h-9 items-center justify-center rounded-md border border-white/10 bg-white/5 px-3 text-sm font-medium text-slate-200 hover:bg-white/10" aria-label="Next day"><ChevronRight className="h-4 w-4" /></Link><Link href="/fnb/events/bookings" className="ml-1 inline-flex h-9 items-center justify-center rounded-md bg-cyan-400 px-3 text-xs font-bold text-slate-950 hover:bg-cyan-300">Back to register</Link></div>
+          <div className="flex flex-wrap items-center gap-2"><Link href={`/fnb/events/bookings?view=timeline&date=${dayKey(previousDay)}${timelineHallFilter}`} className="inline-flex h-9 items-center justify-center rounded-md border border-white/10 bg-white/5 px-3 text-sm font-medium text-slate-200 hover:bg-white/10" aria-label="Previous day"><ChevronLeft className="h-4 w-4" /></Link><Link href={`/fnb/events/bookings?view=timeline&date=${dayKey(venueNow)}${timelineHallFilter}`} className="inline-flex h-9 items-center justify-center rounded-md border border-cyan-300/20 bg-cyan-400/10 px-3 text-xs font-bold text-cyan-200 hover:bg-cyan-400/20">Today</Link><Link href={`/fnb/events/bookings?view=timeline&date=${dayKey(nextDay)}${timelineHallFilter}`} className="inline-flex h-9 items-center justify-center rounded-md border border-white/10 bg-white/5 px-3 text-sm font-medium text-slate-200 hover:bg-white/10" aria-label="Next day"><ChevronRight className="h-4 w-4" /></Link><Link href="/fnb/events/bookings" className="ml-1 inline-flex h-9 items-center justify-center rounded-md bg-cyan-400 px-3 text-xs font-bold text-slate-950 hover:bg-cyan-300">Back to register</Link></div>
         </div>
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><div className="rounded-2xl border border-white/10 bg-[#101a2d] p-4"><p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">Scheduled events</p><p className="mt-2 text-2xl font-bold text-white">{scheduledBookings.length}</p><p className="mt-1 text-xs text-slate-400">Across {occupiedHallCount} of {halls.length} active spaces</p></div><div className="rounded-2xl border border-white/10 bg-[#101a2d] p-4"><p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">Expected covers</p><p className="mt-2 text-2xl font-bold text-white">{scheduledGuests.toLocaleString()}</p><p className="mt-1 text-xs text-slate-400">Guests scheduled to arrive</p></div><div className="rounded-2xl border border-white/10 bg-[#101a2d] p-4"><p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">Operating window</p><p className={`mt-2 font-bold text-white ${operatingWindow === 'No scheduled events' ? 'text-lg' : 'text-2xl'}`}>{operatingWindow}</p><p className="mt-1 text-xs text-slate-400">{operatingWindow === 'No scheduled events' ? 'No start or finish captured' : 'First start · last finish'}</p></div><div className="rounded-2xl border border-orange-300/30 bg-orange-300/[.08] p-4"><p className="text-[10px] font-bold uppercase tracking-[0.12em] text-orange-200">Handoff buffers</p><p className="mt-2 text-2xl font-bold text-orange-100">{bufferMinutes}m</p><p className="mt-1 text-xs text-slate-400">Setup and teardown protected</p></div></div>
-        <div className="rounded-2xl border border-white/10 bg-[#0d1a2d] p-3 shadow-[0_24px_80px_-36px_rgba(34,211,238,.28)] sm:p-5"><EventTimeline viewDate={timelineDate} halls={selectedHallId ? halls.filter((hall) => hall.id === selectedHallId) : halls} bookings={todaysBookings} /></div>
+        <div className="rounded-2xl border border-white/10 bg-[#0d1a2d] p-3 shadow-[0_24px_80px_-36px_rgba(34,211,238,.28)] sm:p-5"><EventTimeline viewDate={timelineDate} timeZone={timeZone} halls={selectedHallId ? halls.filter((hall) => hall.id === selectedHallId) : halls} bookings={todaysBookings} /></div>
       </section>
     </main>
   </div>;

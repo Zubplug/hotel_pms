@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { CalendarDays, ChevronLeft, ChevronRight, Info, RefreshCw } from 'lucide-react';
+import { fromZonedTime, toZonedTime } from 'date-fns-tz';
 import { EventTimeline } from '@/components/events/EventTimeline';
 import { useProperty } from '@/components/PropertyProvider';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
@@ -16,12 +17,14 @@ type EventScheduleItem = {
 type EventHall = { id: string; name: string; code?: string; capacity?: number };
 
 const displayDate = (date: Date) => date.toLocaleDateString('en-NG', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+const dayKey = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 
 export default function OfflineEventSchedulePage() {
   const { propertyId } = useProperty();
   const { provider, isOnline } = useLodgeCoreProvider();
   const [items, setItems] = useState<EventScheduleItem[]>([]);
   const [halls, setHalls] = useState<EventHall[]>([]);
+  const [timeZone, setTimeZone] = useState('Africa/Lagos');
   const [viewDate, setViewDate] = useState(() => new Date());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -30,12 +33,16 @@ export default function OfflineEventSchedulePage() {
     if (!propertyId) return;
     setLoading(true); setError('');
     try {
-      const [scheduleResult, hallsResult] = await Promise.all([
+      const [scheduleResult, hallsResult, propertiesResult] = await Promise.all([
         provider.eventSchedule.list(propertyId),
         provider.eventHalls.list(propertyId),
+        provider.properties.list(),
       ]);
       setItems((scheduleResult?.data || scheduleResult || []) as EventScheduleItem[]);
       setHalls((hallsResult?.data || hallsResult || []) as EventHall[]);
+      const propertyPayload = propertiesResult?.data?.data ?? propertiesResult?.data ?? propertiesResult ?? [];
+      const properties = propertyPayload as Array<{ id: string; timezone?: string }>;
+      setTimeZone(properties.find((property) => property.id === propertyId)?.timezone || 'Africa/Lagos');
     } catch (err) { setError(err instanceof Error ? err.message : 'Unable to load the synchronized event schedule.'); }
     finally { setLoading(false); }
   };
@@ -51,18 +58,20 @@ export default function OfflineEventSchedulePage() {
     event: { name: item.eventName, contactName: item.contactName, expectedGuests: item.expectedGuests, status: item.eventStatus },
   })), [items]);
   const selectedBookings = bookings.filter((booking) => {
-    const start = new Date(viewDate); start.setHours(0, 0, 0, 0);
-    const end = new Date(start); end.setDate(end.getDate() + 1);
+    const start = fromZonedTime(`${dayKey(viewDate)}T00:00:00`, timeZone);
+    const nextDate = new Date(viewDate); nextDate.setDate(nextDate.getDate() + 1);
+    const end = fromZonedTime(`${dayKey(nextDate)}T00:00:00`, timeZone);
     return new Date(booking.startTime) < end && new Date(booking.endTime) > start;
   });
   const previousDate = new Date(viewDate); previousDate.setDate(previousDate.getDate() - 1);
   const nextDate = new Date(viewDate); nextDate.setDate(nextDate.getDate() + 1);
-  const today = new Date();
+  const today = toZonedTime(new Date(), timeZone);
   const expectedCovers = selectedBookings.reduce((total, booking) => total + (booking.event.expectedGuests || 0), 0);
   const firstStart = selectedBookings.length ? new Date(Math.min(...selectedBookings.map((booking) => new Date(booking.startTime).getTime()))) : null;
   const lastFinish = selectedBookings.length ? new Date(Math.max(...selectedBookings.map((booking) => new Date(booking.endTime).getTime()))) : null;
+  const formatVenueTime = (value: Date) => new Intl.DateTimeFormat('en-NG', { timeZone, hour: '2-digit', minute: '2-digit', hour12: false }).format(value);
   const operatingWindow = firstStart && lastFinish
-    ? `${firstStart.toLocaleTimeString('en-NG', { hour: 'numeric', minute: '2-digit' })} – ${lastFinish.toLocaleTimeString('en-NG', { hour: 'numeric', minute: '2-digit' })}`
+    ? `${formatVenueTime(firstStart)} – ${formatVenueTime(lastFinish)}`
     : 'No scheduled events';
   const handoffMinutes = selectedBookings.reduce((total, booking) => total + booking.setupBufferMinutes + booking.teardownBufferMinutes, 0);
 
@@ -82,7 +91,7 @@ export default function OfflineEventSchedulePage() {
             ['Handoff buffers', `${handoffMinutes}m`, 'Setup and teardown protected'],
           ].map(([label, value, hint], index) => <div key={label} className={`rounded-2xl border px-4 py-4 ${index === 3 ? 'border-orange-300/30 bg-orange-300/[.08]' : 'border-white/10 bg-white/[.04]'}`}><p className={`text-[10px] font-black uppercase tracking-[.16em] ${index === 3 ? 'text-orange-200' : 'text-slate-400'}`}>{label}</p><p className={`mt-2 ${label === 'Operating window' && value === 'No scheduled events' ? 'text-lg' : 'text-2xl'} font-black ${index === 3 ? 'text-orange-100' : 'text-white'}`}>{value}</p><p className="mt-1 text-xs text-slate-400">{hint}</p></div>)}
         </div>
-        <div className="overflow-hidden rounded-3xl border border-white/10 bg-[#0d1a2d] p-3 shadow-[0_24px_80px_-36px_rgba(34,211,238,.28)] sm:p-5"><div className="mb-4 flex items-center justify-between gap-3"><div><h2 className="text-xl font-bold text-white">{displayDate(viewDate)}</h2><p className="mt-1 text-xs text-slate-400">Read-only venue operations · {selectedBookings.length} scheduled event{selectedBookings.length === 1 ? '' : 's'}</p></div><Link href="/frontdesk" className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs font-bold text-cyan-200 hover:bg-white/10">Back to Front Desk</Link></div><EventTimeline halls={halls} bookings={selectedBookings} viewDate={viewDate} readOnly /></div>
+        <div className="overflow-hidden rounded-3xl border border-white/10 bg-[#0d1a2d] p-3 shadow-[0_24px_80px_-36px_rgba(34,211,238,.28)] sm:p-5"><div className="mb-4 flex items-center justify-between gap-3"><div><h2 className="text-xl font-bold text-white">{displayDate(viewDate)}</h2><p className="mt-1 text-xs text-slate-400">Read-only venue operations · {selectedBookings.length} scheduled event{selectedBookings.length === 1 ? '' : 's'}</p></div><Link href="/frontdesk" className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs font-bold text-cyan-200 hover:bg-white/10">Back to Front Desk</Link></div><EventTimeline halls={halls} bookings={selectedBookings} viewDate={viewDate} timeZone={timeZone} readOnly /></div>
       </>}
     </div>
   </div>;
