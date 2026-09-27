@@ -156,6 +156,8 @@ export default auth((req) => {
   if (
     nextUrl.pathname.startsWith('/_next') ||
     nextUrl.pathname.startsWith('/favicon') ||
+    nextUrl.pathname === '/manifest.webmanifest' ||
+    nextUrl.pathname === '/sw.js' ||
     nextUrl.pathname.match(/\.(svg|png|jpg|jpeg|ico|webp)$/)
   ) {
     return;
