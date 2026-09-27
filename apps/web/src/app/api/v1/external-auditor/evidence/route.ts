@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ scope, evidence: { item, auditLogs, financialLogs } }, { headers: { 'Cache-Control': 'no-store' } });
     }
     const [items, journals, logs] = await Promise.all([
-      prisma.folioItem.findMany({ where: { folio: { propertyId }, businessDate: { gte: start, lt: end }, ...(q ? { description: text } : {}) }, select: { id: true, businessDate: true, type: true, amount: true, currency: true, description: true, postedBy: true, voidedAt: true, isLatePosting: true }, orderBy: { businessDate: 'desc' }, take: 500 }),
+      prisma.folioItem.findMany({ where: { folio: { propertyId }, businessDate: { gte: start, lt: end }, ...(q ? { OR: [{ description: text }, { type: text }, { id: q }] } : {}) }, select: { id: true, businessDate: true, type: true, amount: true, currency: true, description: true, postedBy: true, voidedAt: true, isLatePosting: true }, orderBy: { businessDate: 'desc' }, take: 500 }),
       prisma.journalEntry.findMany({ where: { propertyId, entryDate: { gte: start, lt: end }, ...(q ? { OR: [{ description: text }, { entryNumber: q }] } : {}) }, select: { id: true, entryNumber: true, entryDate: true, description: true, totalDebit: true, totalCredit: true, source: true, status: true }, orderBy: { entryDate: 'desc' }, take: 500 }),
       prisma.auditLog.findMany({ where: { propertyId, createdAt: { gte: start, lt: end }, ...(q ? { OR: [{ action: text }, { resource: text }, { resourceId: text }] } : {}) }, select: { id: true, createdAt: true, action: true, resource: true, resourceId: true, userEmail: true, userRole: true, requestId: true }, orderBy: { createdAt: 'desc' }, take: 500 }),
     ]);

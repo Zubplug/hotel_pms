@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
     assertAuditorAccess(scope, propertyId, scope.auditPeriodStart);
     const date = { gte: start, lt: end };
 
-    const [property, charges, cash, occupancy, latestClose, late, voids, discounts, journals, settlements, cashVariances] = await Promise.all([
+    const [property, charges, cash, occupancy, latestClose, late, voids, discounts, journals, settlements, cashVariances, audits, revenueMix] = await Promise.all([
       prisma.property.findUnique({ where: { id: propertyId }, select: { id: true, name: true, baseCurrency: true } }),
       prisma.folioItem.aggregate({ where: { folio: { propertyId }, businessDate: date, type: 'CHARGE', voidedAt: null }, _sum: { amount: true } }),
       prisma.payment.aggregate({ where: { propertyId, businessDate: date, method: 'CASH', status: { in: ['COMPLETED', 'PARTIALLY_REFUNDED'] } }, _sum: { amount: true } }),
@@ -32,6 +32,8 @@ export async function GET(request: NextRequest) {
       prisma.journalEntry.count({ where: { propertyId, entryDate: date, source: 'MANUAL' } }),
       prisma.posSettlement.count({ where: { propertyId, businessDate: date, status: { not: 'SETTLED' } } }),
       prisma.nightAuditFinancialSnapshot.count({ where: { nightAudit: { propertyId, businessDate: date }, cashVariance: { not: 0 } } }),
+      prisma.nightAudit.findMany({ where: { propertyId, businessDate: date }, select: { businessDate: true, status: true, totalRevenue: true, occupancy: true, adr: true, revpar: true, errors: true, posUnresolvedVariances: true }, orderBy: { businessDate: 'asc' } }),
+      prisma.folioItem.groupBy({ where: { folio: { propertyId }, businessDate: date, type: 'CHARGE', voidedAt: null }, by: ['revenueCategory'], _sum: { amount: true } }),
     ]);
     if (!property) return NextResponse.json({ error: 'Property not found' }, { status: 404 });
 
@@ -43,7 +45,11 @@ export async function GET(request: NextRequest) {
         averageOccupancy: number(occupancy._avg.occupancy),
         adr: number(occupancy._avg.adr),
         reconciliationStatus: latestClose?.status || 'NOT_FINALIZED',
+        closeFinalizedAt: latestClose?.finalizedAt || null,
       },
+      trend: audits.map(item => ({ date: item.businessDate, revenue: number(item.totalRevenue), occupancy: number(item.occupancy), adr: number(item.adr), revpar: number(item.revpar), status: item.status, exceptions: item.errors + item.posUnresolvedVariances })),
+      revenueMix: revenueMix.map(item => ({ category: item.revenueCategory, amount: number(item._sum.amount) })),
+      review: { evidenceRecords: await prisma.folioItem.count({ where: { folio: { propertyId }, businessDate: date } }), journalEntries: journals, auditEvents: await prisma.auditLog.count({ where: { propertyId, createdAt: date } }) },
       exceptions: [
         { key: 'cash-variance', label: 'Cash Variances', count: cashVariances, risk: 'HIGH' },
         { key: 'late-posting', label: 'Backdated Transactions', count: late, risk: 'MEDIUM' },

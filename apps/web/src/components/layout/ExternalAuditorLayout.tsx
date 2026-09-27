@@ -11,11 +11,11 @@ import {
   FileText,
   ShieldCheck,
   Menu,
-  Hotel,
   LogOut,
   ChevronDown,
   type LucideIcon,
   Search,
+  LockKeyhole,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -34,9 +34,9 @@ type NavItem = {
 };
 
 const AUDITOR_NAV: NavItem[] = [
-  { section: 'Audit Hub', name: 'Command Center', href: '/external-auditor', icon: LayoutDashboard },
-  { section: 'Audit Hub', name: 'Audit Evidence', href: '/external-auditor/evidence', icon: Search },
-  { section: 'Reports', name: 'Financial Reports', href: '/external-auditor/reports', icon: FileText },
+  { section: 'Engagement', name: 'Command center', href: '/external-auditor', icon: LayoutDashboard },
+  { section: 'Engagement', name: 'Evidence explorer', href: '/external-auditor/evidence', icon: Search },
+  { section: 'Deliverables', name: 'Reports & exports', href: '/external-auditor/reports', icon: FileText },
 ];
 
 export function ExternalAuditorLayout({ children }: { children: React.ReactNode }) {
@@ -82,19 +82,80 @@ export function ExternalAuditorLayout({ children }: { children: React.ReactNode 
 
   if (status === 'unauthenticated' || !session?.user) return null;
 
-  const Sidebar = ({ onNavigate }: { onNavigate?: () => void }) => (
+  const sidebarProps = { pathname, userDisplayName, userInitials, logout };
+
+  return (
+    <div className="flex h-screen overflow-hidden bg-slate-950 text-slate-200">
+      {sidebarOpen && (
+        <div className="fixed inset-0 z-50 lg:hidden">
+          <div
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm"
+            onClick={() => setSidebarOpen(false)}
+          />
+          <div className="fixed inset-y-0 left-0 w-64 bg-slate-900 border-r border-slate-800 shadow-xl flex flex-col">
+            <AuditorSidebar {...sidebarProps} onNavigate={() => setSidebarOpen(false)} />
+          </div>
+        </div>
+      )}
+
+      <div className="hidden lg:flex lg:w-64 lg:flex-col lg:fixed lg:inset-y-0 lg:border-r lg:border-slate-800 lg:bg-slate-900">
+        <AuditorSidebar {...sidebarProps} />
+      </div>
+
+      <div className="flex flex-1 flex-col lg:pl-64 min-w-0">
+        <header className="sticky top-0 z-40 flex h-16 shrink-0 items-center gap-4 border-b border-slate-800 bg-slate-950/80 backdrop-blur-sm px-4 sm:px-6 lg:px-8 shadow-sm">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="lg:hidden text-slate-400 hover:text-slate-200 hover:bg-slate-800"
+            onClick={() => setSidebarOpen(true)}
+          >
+            <Menu className="h-5 w-5" />
+          </Button>
+
+          <div className="flex flex-1 items-center justify-between gap-4">
+            {/* Context Header for Auditor */}
+            <div className="flex items-center gap-2">
+              <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="text-sm font-medium text-slate-300">Secure audit session</span>
+            </div>
+
+            <div className="hidden sm:flex items-center gap-4 text-xs text-slate-400 bg-white/[.04] px-3 py-1.5 rounded-lg border border-white/[.07]">
+               <span className="font-medium text-slate-300">{scope?.propertyName || 'Loading property…'}</span>
+               <span className="text-slate-600">|</span>
+               <span>{scope ? `${new Date(scope.auditPeriodStart).toLocaleDateString()} — ${new Date(scope.auditPeriodEnd).toLocaleDateString()}` : 'Loading period…'}</span>
+            </div>
+          </div>
+        </header>
+
+        <main className="flex-1 overflow-y-auto pb-10 custom-scrollbar">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
+            {children}
+          </div>
+        </main>
+      </div>
+    </div>
+  );
+}
+
+function AuditorSidebar({ pathname, userDisplayName, userInitials, logout, onNavigate }: { pathname: string | null; userDisplayName: string; userInitials: string; logout: () => void; onNavigate?: () => void }) {
+  return (
     <>
-      <div className="flex h-16 shrink-0 items-center px-6 border-b border-slate-800 gap-3">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-slate-700 to-slate-900 shadow shadow-slate-900/50">
-          <ShieldCheck className="h-4 w-4 text-emerald-400" />
+      <div className="flex h-[76px] shrink-0 items-center px-5 border-b border-white/[.07] gap-3">
+        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-400 text-slate-950 shadow-lg shadow-emerald-400/10">
+          <ShieldCheck className="h-[18px] w-[18px]" />
         </div>
         <div className="flex flex-col leading-tight">
-          <span className="text-sm font-bold tracking-tight text-slate-200">EXTERNAL AUDITOR</span>
-          <span className="text-[10px] uppercase text-emerald-500 font-medium tracking-widest">Read-Only Access</span>
+          <span className="text-[13px] font-bold tracking-[.14em] text-white">LODGECORE</span>
+          <span className="text-[10px] uppercase text-emerald-400 font-semibold tracking-[.18em]">Audit workspace</span>
         </div>
       </div>
 
-      <div className="flex flex-1 flex-col overflow-y-auto px-4 py-6 gap-1">
+      <div className="flex flex-1 flex-col overflow-y-auto px-3 py-5 gap-1">
+        <div className="mb-5 rounded-2xl border border-emerald-400/15 bg-emerald-400/[.06] p-3.5">
+          <div className="mb-2 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[.16em] text-emerald-300"><LockKeyhole className="h-3.5 w-3.5" /> Controlled access</div>
+          <p className="text-xs leading-5 text-slate-400">Read-only engagement workspace. Every view is limited to the authorized property and period.</p>
+        </div>
         {AUDITOR_NAV.map((item, index) => {
           const isActive = pathname === item.href || (item.href !== '/external-auditor' && pathname?.startsWith(item.href));
 
@@ -111,8 +172,8 @@ export function ExternalAuditorLayout({ children }: { children: React.ReactNode 
                 className={cn(
                   'group flex items-center rounded-lg px-3 py-2.5 text-sm font-medium transition-all',
                   isActive
-                    ? 'bg-slate-800 text-slate-200 shadow-sm'
-                    : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'
+                    ? 'bg-white/[.09] text-white shadow-sm ring-1 ring-white/[.06]'
+                    : 'text-slate-400 hover:bg-white/[.05] hover:text-slate-200'
                 )}
               >
                 <item.icon
@@ -132,7 +193,7 @@ export function ExternalAuditorLayout({ children }: { children: React.ReactNode 
         <DropdownMenu>
           <DropdownMenuTrigger className="rounded-lg hover:bg-slate-800/50 transition-colors cursor-pointer outline-none w-full">
             <div className="flex w-full items-center gap-3 px-2 py-2 text-sm text-slate-300">
-              <div className="h-8 w-8 rounded-full bg-slate-800 flex items-center justify-center text-emerald-400 text-xs font-bold shrink-0 border border-slate-700">
+              <div className="h-8 w-8 rounded-full bg-emerald-400/10 flex items-center justify-center text-emerald-300 text-xs font-bold shrink-0 border border-emerald-400/20">
                 {userInitials}
               </div>
               <div className="flex-1 text-left min-w-0">
@@ -155,58 +216,5 @@ export function ExternalAuditorLayout({ children }: { children: React.ReactNode 
         </DropdownMenu>
       </div>
     </>
-  );
-
-  return (
-    <div className="flex h-screen overflow-hidden bg-slate-950 text-slate-200">
-      {sidebarOpen && (
-        <div className="fixed inset-0 z-50 lg:hidden">
-          <div
-            className="fixed inset-0 bg-black/80 backdrop-blur-sm"
-            onClick={() => setSidebarOpen(false)}
-          />
-          <div className="fixed inset-y-0 left-0 w-64 bg-slate-900 border-r border-slate-800 shadow-xl flex flex-col">
-            <Sidebar onNavigate={() => setSidebarOpen(false)} />
-          </div>
-        </div>
-      )}
-
-      <div className="hidden lg:flex lg:w-64 lg:flex-col lg:fixed lg:inset-y-0 lg:border-r lg:border-slate-800 lg:bg-slate-900">
-        <Sidebar />
-      </div>
-
-      <div className="flex flex-1 flex-col lg:pl-64 min-w-0">
-        <header className="sticky top-0 z-40 flex h-16 shrink-0 items-center gap-4 border-b border-slate-800 bg-slate-950/80 backdrop-blur-sm px-4 sm:px-6 lg:px-8 shadow-sm">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="lg:hidden text-slate-400 hover:text-slate-200 hover:bg-slate-800"
-            onClick={() => setSidebarOpen(true)}
-          >
-            <Menu className="h-5 w-5" />
-          </Button>
-
-          <div className="flex flex-1 items-center justify-between gap-4">
-            {/* Context Header for Auditor */}
-            <div className="flex items-center gap-2">
-              <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="text-sm font-medium text-slate-300">Secure Audit Session Active</span>
-            </div>
-
-            <div className="hidden sm:flex items-center gap-4 text-xs font-mono text-slate-400 bg-slate-900 px-3 py-1.5 rounded-md border border-slate-800">
-               <span>Property: {scope?.propertyName || 'Loading…'}</span>
-               <span className="text-slate-600">|</span>
-               <span>Audit Period: {scope ? `${new Date(scope.auditPeriodStart).toLocaleDateString()} - ${new Date(scope.auditPeriodEnd).toLocaleDateString()}` : 'Loading…'}</span>
-            </div>
-          </div>
-        </header>
-
-        <main className="flex-1 overflow-y-auto pb-10 custom-scrollbar">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
-            {children}
-          </div>
-        </main>
-      </div>
-    </div>
   );
 }
