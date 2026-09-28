@@ -1,111 +1,81 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import type { ElementType } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import type { ElementType, SVGProps } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useQuery } from '@tanstack/react-query';
+import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import {
-  BedDouble, Building2, CheckCircle2, Filter, KeyRound, LayoutGrid,
-  List, Plus, Power, Search, ShieldAlert, Wrench,
+  Activity, BedDouble, Building2, CheckCircle2, ChevronRight, CircleAlert,
+  Filter, LayoutGrid, List, Plus, Power, RefreshCw, Search, ShieldAlert,
+  Sparkles, Wrench,
 } from 'lucide-react';
-import { PageHeader } from '@/components/ui/PageHeader';
+import { useProperty } from '@/components/PropertyProvider';
+import { StatusTransitionDialog } from '@/components/rooms/StatusTransitionDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { StatusBadge } from '@/components/ui/StatusBadge';
 import { formatRoomNumber } from '@/lib/format-room';
 import { toast } from 'sonner';
 
-interface Room {
-  id: string;
-  number: string;
-  code: string;
-  status: string;
-  isActive: boolean;
-  maintenanceStatus: string | null;
-  maxAdults: number;
-  maxChildren: number;
-  roomType: { name: string; code: string } | null;
-  building: { name: string } | null;
-  floor: { number: number; name?: string | null } | null;
-}
-
-const statusOptions = [
-  { value: 'ALL', label: 'All statuses' },
-  { value: 'AVAILABLE', label: 'Available' },
-  { value: 'OCCUPIED', label: 'Occupied' },
-  { value: 'DIRTY', label: 'Dirty' },
-  { value: 'CLEANING', label: 'Cleaning' },
-  { value: 'OUT_OF_ORDER', label: 'Out of order' },
-  { value: 'MAINTENANCE', label: 'Maintenance' },
-];
-
-const statusTone: Record<string, string> = {
-  AVAILABLE: 'border-emerald-200 bg-emerald-50 text-emerald-800',
-  OCCUPIED: 'border-blue-200 bg-blue-50 text-blue-800',
-  DIRTY: 'border-amber-200 bg-amber-50 text-amber-800',
-  CLEANING: 'border-violet-200 bg-violet-50 text-violet-800',
-  OUT_OF_ORDER: 'border-rose-200 bg-rose-50 text-rose-800',
-  MAINTENANCE: 'border-orange-200 bg-orange-50 text-orange-800',
+type Room = {
+  id: string; number: string; code: string; status: string; isActive: boolean;
+  maintenanceStatus: string | null; roomType: { name: string; code: string } | null;
+  building: { name: string } | null; floor: { number: number; name?: string | null } | null;
 };
 
-function SummaryCard({ label, value, detail, icon: Icon, tone }: { label: string; value: number; detail: string; icon: ElementType; tone: string }) {
-  return <Card className="border-slate-200/80 shadow-sm"><CardContent className="flex items-start justify-between p-4"><div><p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">{label}</p><p className="mt-2 text-2xl font-bold tracking-tight">{value}</p><p className="mt-1 text-xs text-muted-foreground">{detail}</p></div><div className={`flex h-10 w-10 items-center justify-center rounded-xl ${tone}`}><Icon className="h-5 w-5" /></div></CardContent></Card>;
+const colors = ['#34d399', '#60a5fa', '#fbbf24', '#a78bfa', '#fb7185', '#f97316'];
+const statusLabel = (status: string) => status.replaceAll('_', ' ');
+const statusTone: Record<string, string> = { AVAILABLE: 'border-emerald-300/20 bg-emerald-300/10 text-emerald-200', OCCUPIED: 'border-sky-300/20 bg-sky-300/10 text-sky-200', DIRTY: 'border-amber-300/20 bg-amber-300/10 text-amber-200', CLEANING: 'border-violet-300/20 bg-violet-300/10 text-violet-200', OUT_OF_ORDER: 'border-rose-300/20 bg-rose-300/10 text-rose-200', MAINTENANCE: 'border-orange-300/20 bg-orange-300/10 text-orange-200' };
+
+function Metric({ label, value, detail, icon: Icon, tone }: { label: string; value: number | string; detail: string; icon: ElementType; tone: string }) {
+  return <Card className="border-white/[0.08] bg-white/[0.045] text-slate-100 shadow-2xl shadow-black/10"><CardContent className="flex items-start justify-between gap-3 p-5"><div><p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">{label}</p><p className="mt-2 text-2xl font-semibold tracking-tight">{value}</p><p className="mt-1 text-xs text-slate-500">{detail}</p></div><div className={`rounded-xl p-2.5 ${tone}`}><Icon className="h-5 w-5" /></div></CardContent></Card>;
+}
+
+function LoadingRooms() {
+  return <div className="min-h-[70vh] space-y-6 rounded-3xl bg-[#07111f] p-6 text-slate-200"><div className="h-10 w-80 animate-pulse rounded bg-white/[0.07]" /><div className="grid gap-4 md:grid-cols-4">{[1, 2, 3, 4].map((item) => <div key={item} className="h-28 animate-pulse rounded-2xl bg-white/[0.06]" />)}</div><div className="h-96 animate-pulse rounded-2xl bg-white/[0.06]" /></div>;
 }
 
 export default function RoomsPage() {
-  const router = useRouter();
+  const { propertyId, isLoading: propertyLoading } = useProperty();
   const [view, setView] = useState<'grid' | 'list'>('grid');
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('ALL');
+  const [building, setBuilding] = useState('ALL');
+  const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
   const [busyRoomId, setBusyRoomId] = useState<string | null>(null);
-
-  const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['rooms'],
-    queryFn: async () => {
-      const res = await fetch('/api/v1/rooms');
-      if (!res.ok) throw new Error('Failed to fetch rooms');
-      return (await res.json()).data as Room[];
-    },
+  const enabled = !propertyLoading && !!propertyId;
+  const { data: response, isLoading, isError, refetch } = useQuery({
+    queryKey: ['rooms', 'command-center', propertyId],
+    queryFn: async () => { const res = await fetch(`/api/v1/rooms?propertyId=${propertyId}&page=1&pageSize=200`); if (!res.ok) throw new Error('Failed to fetch rooms'); return res.json(); },
+    enabled,
   });
+  const rooms: Room[] = useMemo(() => Array.isArray(response?.data) ? response.data : [], [response]);
+  const buildings = useMemo(() => Array.from(new Set(rooms.map((room) => room.building?.name).filter(Boolean))) as string[], [rooms]);
+  const filteredRooms = useMemo(() => { const query = search.trim().toLowerCase(); return rooms.filter((room) => { const matchesSearch = !query || [room.number, room.code, room.roomType?.name, room.building?.name].filter(Boolean).join(' ').toLowerCase().includes(query); return matchesSearch && (status === 'ALL' || room.status === status) && (building === 'ALL' || room.building?.name === building); }); }, [rooms, search, status, building]);
+  const counts = useMemo(() => ({ total: rooms.length, active: rooms.filter((room) => room.isActive).length, available: rooms.filter((room) => room.status === 'AVAILABLE').length, occupied: rooms.filter((room) => room.status === 'OCCUPIED').length, attention: rooms.filter((room) => ['DIRTY', 'CLEANING', 'OUT_OF_ORDER', 'MAINTENANCE'].includes(room.status) || (room.maintenanceStatus && room.maintenanceStatus !== 'NONE')).length, outOfOrder: rooms.filter((room) => room.status === 'OUT_OF_ORDER').length }), [rooms]);
+  const statusData = useMemo(() => Object.entries(rooms.reduce((result: Record<string, number>, room) => { result[room.status] = (result[room.status] || 0) + 1; return result; }, {})).map(([name, value]) => ({ name: statusLabel(name), value })), [rooms]);
+  const buildingData = useMemo(() => buildings.map((name) => ({ name, rooms: rooms.filter((room) => room.building?.name === name).length, ready: rooms.filter((room) => room.building?.name === name && room.status === 'AVAILABLE').length })), [buildings, rooms]);
+  const readiness = counts.total ? Math.round((counts.available / counts.total) * 100) : 0;
 
-  const rooms = data || [];
-  const filteredRooms = useMemo(() => {
-    const query = search.trim().toLowerCase();
-    return rooms.filter((room) => {
-      const matchesSearch = !query || [room.number, room.code, room.roomType?.name, room.building?.name].filter(Boolean).join(' ').toLowerCase().includes(query);
-      return matchesSearch && (status === 'ALL' || room.status === status);
-    });
-  }, [rooms, search, status]);
+  const toggleRoom = async (room: Room) => { setBusyRoomId(room.id); try { const response = await fetch(`/api/v1/rooms/${room.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ isActive: !room.isActive }) }); if (!response.ok) throw new Error('Unable to update room'); toast.success(room.isActive ? 'Room deactivated' : 'Room activated'); await refetch(); } catch (error) { toast.error(error instanceof Error ? error.message : 'Unable to update room'); } finally { setBusyRoomId(null); } };
 
-  const counts = useMemo(() => ({
-    total: rooms.length,
-    available: rooms.filter((room) => room.status === 'AVAILABLE').length,
-    occupied: rooms.filter((room) => room.status === 'OCCUPIED').length,
-    attention: rooms.filter((room) => ['DIRTY', 'CLEANING', 'OUT_OF_ORDER', 'MAINTENANCE'].includes(room.status) || (room.maintenanceStatus && room.maintenanceStatus !== 'NONE')).length,
-  }), [rooms]);
-
-  const toggleRoom = async (room: Room) => {
-    setBusyRoomId(room.id);
-    try {
-      const response = await fetch(`/api/v1/rooms/${room.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ isActive: !room.isActive }) });
-      if (!response.ok) throw new Error((await response.json()).error?.message || 'Unable to update room');
-      toast.success(room.isActive ? 'Room disabled' : 'Room enabled', { description: `${formatRoomNumber(room.number)} is now ${room.isActive ? 'hidden from active inventory' : 'available in active inventory'}.` });
-      await refetch();
-    } catch (error) { toast.error(error instanceof Error ? error.message : 'Unable to update room'); }
-    finally { setBusyRoomId(null); }
-  };
-
-  return <div className="min-h-full space-y-7 pb-10">
-    <PageHeader title="Rooms" description="Monitor room readiness, occupancy, and maintenance across the property." actions={<Button className="gap-2" asChild><Link href="/rooms/new"><Plus className="h-4 w-4" />Add room</Link></Button>} />
-
-    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><SummaryCard label="Total rooms" value={counts.total} detail="Active room inventory" icon={BedDouble} tone="bg-blue-100 text-blue-700" /><SummaryCard label="Available" value={counts.available} detail="Ready for assignment" icon={CheckCircle2} tone="bg-emerald-100 text-emerald-700" /><SummaryCard label="Occupied" value={counts.occupied} detail="Currently in-house" icon={KeyRound} tone="bg-violet-100 text-violet-700" /><SummaryCard label="Needs attention" value={counts.attention} detail="Cleaning or maintenance" icon={ShieldAlert} tone="bg-amber-100 text-amber-700" /></div>
-
-    <Card className="border-slate-200/80 shadow-sm"><CardContent className="p-4"><div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"><div className="flex flex-1 flex-col gap-3 sm:flex-row"><div className="relative w-full max-w-md"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search room, type, building…" className="h-10 pl-9" /></div><Select value={status} onValueChange={(value) => value && setStatus(value)}><SelectTrigger className="w-full sm:w-[190px]"><Filter className="mr-2 h-4 w-4 text-muted-foreground" /><SelectValue /></SelectTrigger><SelectContent>{statusOptions.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent></Select></div><div className="flex items-center justify-between gap-3"><p className="text-sm text-muted-foreground"><span className="font-semibold text-foreground">{filteredRooms.length}</span> of {rooms.length} rooms</p><div className="flex items-center rounded-lg border bg-muted/30 p-1"><Button variant={view === 'grid' ? 'secondary' : 'ghost'} size="sm" className="h-8 gap-2" onClick={() => setView('grid')}><LayoutGrid className="h-4 w-4" /><span className="sr-only sm:not-sr-only">Grid</span></Button><Button variant={view === 'list' ? 'secondary' : 'ghost'} size="sm" className="h-8 gap-2" onClick={() => setView('list')}><List className="h-4 w-4" /><span className="sr-only sm:not-sr-only">List</span></Button></div></div></div></CardContent></Card>
-
-    {isLoading ? <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">{Array.from({ length: 12 }).map((_, index) => <Card key={index} className="h-40 animate-pulse border-slate-200 bg-muted/40" />)}</div> : isError ? <Card className="border-rose-200 bg-rose-50/50"><CardContent className="flex flex-col items-center gap-3 py-16 text-center"><ShieldAlert className="h-8 w-8 text-rose-600" /><p className="font-semibold">Rooms could not be loaded</p><p className="text-sm text-muted-foreground">Check the connection and try again.</p><Button variant="outline" onClick={() => refetch()}>Try again</Button></CardContent></Card> : filteredRooms.length === 0 ? <Card className="border-dashed"><CardContent className="flex flex-col items-center gap-3 py-16 text-center"><div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-muted"><KeyRound className="h-7 w-7 text-muted-foreground" /></div><p className="text-lg font-semibold">{rooms.length ? 'No matching rooms' : 'No rooms configured'}</p><p className="max-w-sm text-sm text-muted-foreground">{rooms.length ? 'Try clearing the search or choosing another status.' : 'Add the first room to begin managing room inventory.'}</p>{rooms.length === 0 && <Button asChild><Link href="/rooms/new"><Plus className="mr-2 h-4 w-4" />Add first room</Link></Button>}</CardContent></Card> : view === 'grid' ? <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">{filteredRooms.map((room) => <Card key={room.id} className={`group relative overflow-hidden border-slate-200/80 shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md ${!room.isActive ? 'opacity-65' : ''}`}><CardContent className="p-4"><div className="flex items-start justify-between gap-2"><Link href={`/rooms/${room.id}/edit`} className="min-w-0"><p className="text-2xl font-bold tracking-tight group-hover:text-primary">{formatRoomNumber(room.number)}</p><p className="truncate text-xs font-medium uppercase tracking-wider text-muted-foreground">{room.roomType?.name || 'No room type'}</p></Link></div><div className="mt-4 flex flex-wrap gap-1.5"><Badge variant="outline" className={statusTone[room.status] || ''}>{room.status.replace(/_/g, ' ')}</Badge>{!room.isActive && <Badge variant="destructive">Disabled</Badge>}{room.floor && <Badge variant="outline" className="text-[10px]">Floor {room.floor.number}</Badge>}</div><div className="mt-4 border-t pt-3 text-xs text-muted-foreground">{room.maintenanceStatus && room.maintenanceStatus !== 'NONE' ? <span className="flex items-center gap-1.5 font-medium text-amber-700"><Wrench className="h-3.5 w-3.5" />{room.maintenanceStatus.replace(/_/g, ' ')}</span> : <span className="flex items-center gap-1.5"><Building2 className="h-3.5 w-3.5" />{room.building?.name || 'No building assigned'}</span>}<Button variant="ghost" size="sm" className="mt-2 h-7 px-0 text-xs" disabled={busyRoomId === room.id} onClick={() => toggleRoom(room)}><Power className="mr-1.5 h-3.5 w-3.5" />{busyRoomId === room.id ? 'Saving…' : room.isActive ? 'Disable room' : 'Enable room'}</Button></div></CardContent></Card>)}</div> : <Card className="border-slate-200/80 shadow-sm"><CardHeader className="border-b bg-muted/20 py-4"><CardTitle className="text-base">Room inventory</CardTitle></CardHeader><CardContent className="p-0"><div className="overflow-x-auto"><table className="w-full min-w-[820px] text-sm"><thead><tr className="border-b text-left text-xs uppercase tracking-wider text-muted-foreground"><th className="px-5 py-3">Room</th><th className="px-5 py-3">Type</th><th className="px-5 py-3">Location</th><th className="px-5 py-3">Status</th><th className="px-5 py-3">Maintenance</th><th className="px-5 py-3 text-right">Actions</th></tr></thead><tbody className="divide-y">{filteredRooms.map((room) => <tr key={room.id} className={`group hover:bg-muted/20 ${!room.isActive ? 'opacity-65' : ''}`}><td className="px-5 py-4"><Link href={`/rooms/${room.id}/edit`} className="font-semibold group-hover:text-primary">{formatRoomNumber(room.number)}</Link><p className="text-xs text-muted-foreground">{room.code || 'No code'}{!room.isActive && ' · Disabled'}</p></td><td className="px-5 py-4">{room.roomType?.name || 'No room type'}</td><td className="px-5 py-4 text-muted-foreground">{[room.building?.name, room.floor && `Floor ${room.floor.number}`].filter(Boolean).join(' · ') || 'Unassigned'}</td><td className="px-5 py-4"><StatusBadge status={room.status} /></td><td className="px-5 py-4 text-muted-foreground">{room.maintenanceStatus && room.maintenanceStatus !== 'NONE' ? room.maintenanceStatus.replace(/_/g, ' ') : 'Clear'}</td><td className="px-5 py-4 text-right"><Button variant={room.isActive ? 'ghost' : 'secondary'} size="sm" disabled={busyRoomId === room.id} onClick={() => toggleRoom(room)}><Power className="mr-1.5 h-3.5 w-3.5" />{busyRoomId === room.id ? 'Saving…' : room.isActive ? 'Disable' : 'Enable'}</Button></td></tr>)}</tbody></table></div></CardContent></Card>}
+  if (propertyLoading || (enabled && isLoading)) return <LoadingRooms />;
+  return <div className="min-h-full space-y-6 rounded-3xl bg-[#07111f] p-4 text-slate-100 sm:p-6">
+    <section className="relative overflow-hidden rounded-3xl border border-emerald-300/15 bg-gradient-to-br from-[#112b35] via-[#0b1d2c] to-[#091522] p-6 shadow-2xl shadow-black/20 sm:p-8"><div className="pointer-events-none absolute -right-20 -top-28 h-72 w-72 rounded-full border-[40px] border-emerald-300/[0.06]" /><div className="relative flex flex-col justify-between gap-5 lg:flex-row lg:items-end"><div><div className="mb-3 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[.18em] text-emerald-300"><span className="h-1.5 w-1.5 rounded-full bg-emerald-300" />Live room operations</div><h1 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">Rooms & inventory</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">Control availability, room readiness, housekeeping exceptions, and physical inventory for the assigned property.</p></div><div className="flex gap-2"><Button variant="outline" size="sm" onClick={() => void refetch()} className="border-white/15 bg-white/[0.04] text-slate-200 hover:bg-white/10"><RefreshCw className="mr-2 h-4 w-4" />Refresh</Button><Button asChild size="sm" className="bg-emerald-300 text-slate-950 hover:bg-emerald-200"><Link href={`/rooms/new?propertyId=${propertyId}`}><Plus className="mr-2 h-4 w-4" />Add room</Link></Button></div></div></section>
+    {isError ? <Card className="border-rose-300/20 bg-rose-300/[0.06] text-slate-100"><CardContent className="flex flex-col items-center gap-3 py-16 text-center"><ShieldAlert className="h-8 w-8 text-rose-300" /><p className="font-semibold">Room inventory could not be loaded</p><Button variant="outline" onClick={() => void refetch()} className="border-white/10 bg-transparent text-slate-200">Try again</Button></CardContent></Card> : <>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5"><Metric label="Physical rooms" value={counts.total} detail={`${counts.active} active inventory`} icon={BedDouble} tone="bg-sky-300/10 text-sky-300" /><Metric label="Ready to sell" value={counts.available} detail={`${readiness}% available now`} icon={CheckCircle2} tone="bg-emerald-300/10 text-emerald-300" /><Metric label="In house" value={counts.occupied} detail="Currently occupied" icon={KeyRoundIcon} tone="bg-violet-300/10 text-violet-300" /><Metric label="Attention queue" value={counts.attention} detail="Cleaning or maintenance" icon={CircleAlert} tone="bg-amber-300/10 text-amber-300" /><Metric label="Out of order" value={counts.outOfOrder} detail="Removed from sellable stock" icon={Wrench} tone="bg-rose-300/10 text-rose-300" /></div>
+      <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]"><Card className="border-white/[0.08] bg-white/[0.045] text-slate-100"><CardHeader><CardTitle>Room status control</CardTitle><CardDescription className="text-slate-400">Current front-office and housekeeping distribution from the live room ledger.</CardDescription></CardHeader><CardContent><div className="h-72"><ResponsiveContainer width="100%" height="100%"><BarChart data={statusData} margin={{ top: 8, right: 8, left: -20, bottom: 8 }}><CartesianGrid vertical={false} stroke="rgba(148,163,184,.12)" /><XAxis dataKey="name" tick={{ fill: '#94a3b8', fontSize: 10 }} axisLine={false} tickLine={false} /><YAxis allowDecimals={false} tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} /><Tooltip contentStyle={{ background: '#0d1b2a', border: '1px solid rgba(148,163,184,.2)', borderRadius: 12, color: '#e2e8f0' }} /><Bar dataKey="value" name="Rooms" radius={[6, 6, 0, 0]} fill="#34d399" /></BarChart></ResponsiveContainer></div></CardContent></Card><Card className="border-white/[0.08] bg-white/[0.045] text-slate-100"><CardHeader><CardTitle>Inventory readiness</CardTitle><CardDescription className="text-slate-400">Available, occupied, and exception mix.</CardDescription></CardHeader><CardContent><div className="h-56"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={statusData} dataKey="value" nameKey="name" innerRadius={58} outerRadius={82} paddingAngle={3}>{statusData.map((entry, index) => <Cell key={entry.name} fill={colors[index % colors.length]} />)}</Pie><Tooltip contentStyle={{ background: '#0d1b2a', border: '1px solid rgba(148,163,184,.2)', borderRadius: 12, color: '#e2e8f0' }} /></PieChart></ResponsiveContainer></div><p className="text-center text-3xl font-semibold text-white">{readiness}%</p><p className="text-center text-xs text-slate-500">ready for assignment</p></CardContent></Card></div>
+      <Card className="border-white/[0.08] bg-white/[0.045] text-slate-100"><CardHeader><CardTitle>Building readiness</CardTitle><CardDescription className="text-slate-400">Compare total inventory with rooms ready for assignment by building.</CardDescription></CardHeader><CardContent><div className="h-64"><ResponsiveContainer width="100%" height="100%"><BarChart data={buildingData} margin={{ top: 8, right: 8, left: -20, bottom: 8 }}><CartesianGrid vertical={false} stroke="rgba(148,163,184,.12)" /><XAxis dataKey="name" tick={{ fill: '#94a3b8', fontSize: 11 }} axisLine={false} tickLine={false} /><YAxis allowDecimals={false} tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} /><Tooltip contentStyle={{ background: '#0d1b2a', border: '1px solid rgba(148,163,184,.2)', borderRadius: 12, color: '#e2e8f0' }} /><Bar dataKey="rooms" name="Total rooms" fill="#475569" radius={[5, 5, 0, 0]} /><Bar dataKey="ready" name="Ready" fill="#34d399" radius={[5, 5, 0, 0]} /></BarChart></ResponsiveContainer></div></CardContent></Card>
+      <Card className="border-white/[0.08] bg-white/[0.045] text-slate-100"><CardContent className="p-4"><div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"><div className="flex flex-1 flex-col gap-3 sm:flex-row"><div className="relative w-full max-w-md"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" /><Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search room, type, building…" className="h-10 border-white/10 bg-slate-950 pl-9 text-slate-100 placeholder:text-slate-600" /></div><Select value={status} onValueChange={(value) => value && setStatus(value)}><SelectTrigger className="w-full border-white/10 bg-slate-950 text-slate-200 sm:w-[180px]"><Filter className="mr-2 h-4 w-4 text-slate-500" /><SelectValue /></SelectTrigger><SelectContent className="border-white/10 bg-[#0d1b2a] text-slate-200">{['ALL', 'AVAILABLE', 'OCCUPIED', 'DIRTY', 'CLEANING', 'OUT_OF_ORDER', 'MAINTENANCE'].map((item) => <SelectItem key={item} value={item}>{item === 'ALL' ? 'All statuses' : statusLabel(item)}</SelectItem>)}</SelectContent></Select><Select value={building} onValueChange={(value) => value && setBuilding(value)}><SelectTrigger className="w-full border-white/10 bg-slate-950 text-slate-200 sm:w-[180px]"><Building2 className="mr-2 h-4 w-4 text-slate-500" /><SelectValue placeholder="All buildings" /></SelectTrigger><SelectContent className="border-white/10 bg-[#0d1b2a] text-slate-200"><SelectItem value="ALL">All buildings</SelectItem>{buildings.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select></div><div className="flex items-center justify-between gap-3"><p className="text-sm text-slate-500"><span className="font-semibold text-slate-200">{filteredRooms.length}</span> of {rooms.length} rooms</p><div className="flex items-center rounded-lg border border-white/10 bg-slate-950 p-1"><Button variant={view === 'grid' ? 'secondary' : 'ghost'} size="sm" className="h-8 text-slate-300" onClick={() => setView('grid')}><LayoutGrid className="h-4 w-4" /></Button><Button variant={view === 'list' ? 'secondary' : 'ghost'} size="sm" className="h-8 text-slate-300" onClick={() => setView('list')}><List className="h-4 w-4" /></Button></div></div></div></CardContent></Card>
+      {filteredRooms.length === 0 ? <Card className="border-dashed border-white/10 bg-white/[0.03] text-slate-100"><CardContent className="flex flex-col items-center gap-3 py-16 text-center"><Sparkles className="h-8 w-8 text-slate-600" /><p className="font-semibold">{rooms.length ? 'No matching rooms' : 'No rooms configured'}</p><p className="text-sm text-slate-500">{rooms.length ? 'Adjust the search or filters to find another room.' : 'Add the first room to begin managing inventory.'}</p>{!rooms.length && <Button asChild className="bg-emerald-300 text-slate-950 hover:bg-emerald-200"><Link href={`/rooms/new?propertyId=${propertyId}`}><Plus className="mr-2 h-4 w-4" />Add room</Link></Button>}</CardContent></Card> : view === 'grid' ? <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">{filteredRooms.map((room) => <Card key={room.id} className={`group border-white/[0.08] bg-white/[0.045] text-slate-100 shadow-xl shadow-black/10 transition hover:-translate-y-0.5 hover:border-emerald-300/30 ${!room.isActive ? 'opacity-60' : ''}`}><CardContent className="p-4"><button type="button" onClick={() => setSelectedRoom(room)} className="w-full text-left"><div className="flex items-start justify-between gap-2"><div><p className="text-2xl font-semibold tracking-tight text-white group-hover:text-emerald-300">{formatRoomNumber(room.number)}</p><p className="mt-1 truncate text-[10px] font-semibold uppercase tracking-[.14em] text-slate-500">{room.roomType?.name || 'No room type'}</p></div><ChevronRight className="h-4 w-4 text-slate-600 transition group-hover:translate-x-1 group-hover:text-emerald-300" /></div><div className="mt-4 flex flex-wrap gap-1.5"><Badge variant="outline" className={statusTone[room.status] || 'border-white/10 text-slate-300'}>{statusLabel(room.status)}</Badge>{!room.isActive && <Badge variant="outline" className="border-rose-300/20 text-rose-200">Inactive</Badge>}</div><div className="mt-4 border-t border-white/[0.08] pt-3 text-xs text-slate-500">{room.maintenanceStatus && room.maintenanceStatus !== 'NONE' ? <span className="flex items-center gap-1.5 text-amber-300"><Wrench className="h-3.5 w-3.5" />{statusLabel(room.maintenanceStatus)}</span> : <span className="flex items-center gap-1.5"><Building2 className="h-3.5 w-3.5" />{room.building?.name || 'No building assigned'}</span>}</div></button><div className="mt-2 flex items-center justify-between"><Button variant="ghost" size="sm" className="h-7 px-0 text-xs text-slate-400 hover:bg-transparent hover:text-white" disabled={busyRoomId === room.id} onClick={() => void toggleRoom(room)}><Power className="mr-1.5 h-3.5 w-3.5" />{busyRoomId === room.id ? 'Saving…' : room.isActive ? 'Deactivate' : 'Activate'}</Button><Link href={`/rooms/${room.id}/edit`} className="text-xs text-emerald-300 hover:text-emerald-200">Edit</Link></div></CardContent></Card>)}</div> : <Card className="overflow-hidden border-white/[0.08] bg-white/[0.045] text-slate-100"><CardHeader className="border-b border-white/[0.08] bg-white/[0.03]"><CardTitle className="text-base">Room inventory</CardTitle></CardHeader><CardContent className="p-0"><div className="overflow-x-auto"><table className="w-full min-w-[820px] text-sm"><thead><tr className="border-b border-white/[0.08] text-left text-[10px] uppercase tracking-wider text-slate-500"><th className="px-5 py-3">Room</th><th className="px-5 py-3">Type</th><th className="px-5 py-3">Location</th><th className="px-5 py-3">Status</th><th className="px-5 py-3">Action</th></tr></thead><tbody className="divide-y divide-white/[0.06]">{filteredRooms.map((room) => <tr key={room.id} className="hover:bg-white/[0.03]"><td className="px-5 py-4"><button type="button" onClick={() => setSelectedRoom(room)} className="font-semibold text-slate-200 hover:text-emerald-300">{formatRoomNumber(room.number)}</button><p className="text-xs text-slate-500">{room.code || 'No code'}</p></td><td className="px-5 py-4 text-slate-300">{room.roomType?.name || 'No room type'}</td><td className="px-5 py-4 text-slate-500">{[room.building?.name, room.floor && `Floor ${room.floor.number}`].filter(Boolean).join(' · ') || 'Unassigned'}</td><td className="px-5 py-4"><Badge variant="outline" className={statusTone[room.status] || 'border-white/10 text-slate-300'}>{statusLabel(room.status)}</Badge></td><td className="px-5 py-4"><Button variant="ghost" size="sm" disabled={busyRoomId === room.id} onClick={() => void toggleRoom(room)} className="text-slate-300 hover:bg-white/10">{room.isActive ? 'Deactivate' : 'Activate'}</Button></td></tr>)}</tbody></table></div></CardContent></Card>}
+    </>}
+    {selectedRoom && <StatusTransitionDialog isOpen={!!selectedRoom} onClose={() => setSelectedRoom(null)} roomId={selectedRoom.id} currentStatus={selectedRoom.status} onSuccess={() => void refetch()} />}
   </div>;
+}
+
+function KeyRoundIcon(props: SVGProps<SVGSVGElement>) {
+  return <Activity {...props} />;
 }
