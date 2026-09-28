@@ -1,14 +1,23 @@
 'use client';
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { PropertyForm, PropertyFormValues } from '@/components/properties/PropertyForm';
 import { toast } from 'sonner';
+import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
 
 export default function NewPropertyPage() {
   const router = useRouter();
+  const { data: session } = useLodgeCoreSession();
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    if ((session?.user as any)?.role === 'GENERAL_MANAGER') router.replace('/properties');
+  }, [router, session]);
+
+  if ((session?.user as any)?.role === 'GENERAL_MANAGER') return null;
 
   async function handleSubmit(data: PropertyFormValues) {
     setIsSubmitting(true);

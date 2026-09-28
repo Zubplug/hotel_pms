@@ -99,7 +99,9 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const logout = useLogout();
 
   const isDesktop = process.env.NEXT_PUBLIC_IS_DESKTOP === 'true';
-  const isDarkWorkspace = pathname === '/general-manager'
+  const isDarkWorkspace = pathname === '/properties'
+    || pathname?.startsWith('/properties/')
+    || pathname === '/general-manager'
     || pathname?.startsWith('/general-manager/')
     || pathname === '/admin'
     || pathname?.startsWith('/admin/');
@@ -147,9 +149,15 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   // Block render while session is resolving — prevents flash of admin content
   if (status === 'loading') {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-muted/30">
+      <div className={cn(
+        'flex min-h-screen items-center justify-center',
+        isDarkWorkspace ? 'bg-[#07111f] text-slate-200' : 'bg-muted/30'
+      )}>
         <div className="flex flex-col items-center gap-3">
-          <div className="h-8 w-8 rounded-full border-4 border-blue-600 border-t-transparent animate-spin" />
+          <div className={cn(
+            'h-8 w-8 animate-spin rounded-full border-4 border-t-transparent',
+            isDarkWorkspace ? 'border-emerald-300 border-t-transparent' : 'border-blue-600 border-t-transparent'
+          )} />
           <p className="text-sm text-muted-foreground">Loading&hellip;</p>
         </div>
       </div>

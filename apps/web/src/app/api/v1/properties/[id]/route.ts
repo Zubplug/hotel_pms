@@ -75,35 +75,12 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   }
 }
 
-export async function DELETE(_req: NextRequest, { params }: Params) {
+export async function DELETE() {
   try {
     const session = await auth();
     if (!session?.user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
-    const ctx = await requireOrganizationContext((session.user as any).id || (session as any).user.id);
-
-    const { id } = await params;
-    await assertPropertyAccess(session.user.id, id);
-    const canDelete = await hasPermission(session.user.id, 'property', 'delete', id);
-    if (!canDelete) return errorResponse('FORBIDDEN', 'Insufficient permissions', 403);
-
-    const property = await prisma.property.findUnique({ where: { id } });
-    if (!property) return errorResponse('NOT_FOUND', 'Property not found', 404);
-
-    await prisma.property.update({ where: { id }, data: { deletedAt: new Date() } });
-
-    await createAuditLog({
-      organizationId: property.organizationId,
-      propertyId: id,
-      userId: session.user.id,
-      action: 'DELETE',
-      resource: 'property',
-      resourceId: id,
-      previousValue: property,
-    });
-
-    return successResponse({ id });
-  } catch (err) {
-    if (err instanceof ForbiddenError) return errorResponse('FORBIDDEN', err.message, 403);
+    return errorResponse('FORBIDDEN', 'Property deletion is permanently disabled', 403);
+  } catch {
     return errorResponse('INTERNAL_ERROR', 'An unexpected error occurred', 500);
   }
 }

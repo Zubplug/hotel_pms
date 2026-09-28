@@ -62,6 +62,9 @@ export async function POST(req: NextRequest) {
   try {
     const session = await auth();
     if (!session?.user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
+    if ((session.user as any).role === 'GENERAL_MANAGER') {
+      return errorResponse('FORBIDDEN', 'General managers cannot create new properties', 403);
+    }
     const ctx = await requireOrganizationContext((session.user as any).id || (session as any).user.id);
 
     const canCreate = await hasPermission(session.user.id, 'property', 'create');
