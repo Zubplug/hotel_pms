@@ -291,6 +291,7 @@ export async function PATCH(
         where: {
           roomId: newRoomId,
           reservationId: { not: id },
+          reservation: { status: { in: ['CONFIRMED', 'CHECKED_IN'] } },
           status: { notIn: ['CANCELLED', 'NO_SHOW'] },
           AND: [
             { checkIn: { lt: newCheckOutDate } },
