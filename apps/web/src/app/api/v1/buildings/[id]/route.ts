@@ -4,7 +4,7 @@ import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
 import { createAuditLog } from '@/lib/audit';
 import { hasPermission } from '@/lib/rbac';
-import { assertPropertyAccess, ForbiddenError } from '@/lib/property-access';
+import { ForbiddenError } from '@/lib/property-access';
 import { updateBuildingSchema } from '@hotel-pms/types';
 import { requireOrganizationContext } from "@/lib/organization-access";
 
@@ -66,19 +66,11 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   }
 }
 
-export async function DELETE(_req: NextRequest, { params }: Params) {
+export async function DELETE() {
   try {
     const session = await auth();
     if (!session?.user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
-    const ctx = await requireOrganizationContext((session.user as any).id || (session as any).user.id);
-    const { id } = await params;
-    const building = await prisma.building.findUnique({ where: { id } });
-    if (!building) return errorResponse('NOT_FOUND', 'Building not found', 404);
-    if (!(await requireOrganizationContext(session.user.id)).propertyIds.includes(building.propertyId)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    const canDelete = await hasPermission(session.user.id, 'building', 'delete', building.propertyId);
-    if (!canDelete) return errorResponse('FORBIDDEN', 'Insufficient permissions', 403);
-    await prisma.building.update({ where: { id }, data: { isActive: false } });
-    return successResponse({ id });
+    return errorResponse('FORBIDDEN', 'Buildings cannot be deleted. Deactivate the building instead.', 403);
   } catch (err) {
     if (err instanceof ForbiddenError) return errorResponse('FORBIDDEN', err.message, 403);
     return errorResponse('INTERNAL_ERROR', 'An unexpected error occurred', 500);

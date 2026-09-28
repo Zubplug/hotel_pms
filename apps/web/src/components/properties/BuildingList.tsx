@@ -2,7 +2,7 @@
 
 import React from "react"
 import { useQuery } from "@tanstack/react-query"
-import { Building2, MoreHorizontal, Pencil, Trash2 } from "lucide-react"
+import { Building2, MoreHorizontal, Pencil } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 import {
@@ -148,11 +148,6 @@ export function BuildingList({ propertyId, onSelectBuilding }: BuildingListProps
                       <DropdownMenuItem>
                         <Pencil className="mr-2 h-4 w-4 text-muted-foreground" />
                         Edit Details
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10">
-                        <Trash2 className="mr-2 h-4 w-4" />
-                        Delete
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>

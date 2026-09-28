@@ -21,6 +21,7 @@ export interface PropertyFormValues {
 interface PropertyFormProps {
   defaultValues?: Partial<PropertyFormValues>;
   onSubmit: (data: PropertyFormValues) => Promise<void>;
+  onCancel?: () => void;
   isSubmitting?: boolean;
   mode?: 'create' | 'edit';
 }
@@ -28,6 +29,7 @@ interface PropertyFormProps {
 export function PropertyForm({
   defaultValues,
   onSubmit,
+  onCancel,
   isSubmitting,
   mode = 'create',
 }: PropertyFormProps) {
@@ -118,7 +120,7 @@ export function PropertyForm({
       </Card>
 
       <div className="flex flex-col-reverse gap-3 rounded-2xl border bg-muted/20 p-4 sm:flex-row sm:justify-end">
-        <Button type="button" variant="outline" onClick={() => window.history.back()}>
+        <Button type="button" variant="outline" onClick={onCancel ?? (() => window.history.back())}>
           Cancel
         </Button>
         <Button type="submit" disabled={isSubmitting}>
