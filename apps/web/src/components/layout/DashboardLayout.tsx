@@ -48,7 +48,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { PropertySelector } from '@/components/properties/PropertySelector';
 
 type NavItem = {
   section: string;
@@ -92,7 +91,6 @@ const ALL_NAV: NavItem[] = [
 
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [hasMultipleProperties, setHasMultipleProperties] = useState<boolean | null>(null);
   const pathname = usePathname();
   const { data: session, status } = useLodgeCoreSession();
   const router = useRouter();
@@ -105,8 +103,6 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     || pathname?.startsWith('/general-manager/')
     || pathname === '/admin'
     || pathname?.startsWith('/admin/');
-  const isGeneralManagerWorkspace = pathname === '/general-manager'
-    || pathname?.startsWith('/general-manager/');
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -278,17 +274,18 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className={cn('flex h-screen overflow-hidden bg-muted/30', isDarkWorkspace && 'pms-dark-shell')}>
-      {isGeneralManagerWorkspace && (
-        <Button
-          variant="ghost"
-          size="icon"
-          className="fixed left-4 top-4 z-50 text-slate-300 hover:bg-white/[.08] hover:text-white lg:hidden"
-          onClick={() => setSidebarOpen(true)}
-          aria-label="Open navigation"
-        >
-          <Menu className="h-5 w-5" />
-        </Button>
-      )}
+      <Button
+        variant="ghost"
+        size="icon"
+        className={cn(
+          'fixed left-4 top-4 z-50 text-slate-300 hover:bg-white/[.08] hover:text-white lg:hidden',
+          isDarkWorkspace ? 'bg-[#0d1b2a]/80' : 'bg-background/80'
+        )}
+        onClick={() => setSidebarOpen(true)}
+        aria-label="Open navigation"
+      >
+        <Menu className="h-5 w-5" />
+      </Button>
       {/* Mobile sidebar overlay */}
       {sidebarOpen && (
         <div className="fixed inset-0 z-50 lg:hidden">
@@ -309,26 +306,6 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 
       {/* Main content area */}
       <div className="flex flex-1 flex-col lg:pl-64 min-w-0">
-        {/* Top bar */}
-        {!isGeneralManagerWorkspace && (
-          <header className="sticky top-0 z-40 flex h-16 shrink-0 items-center gap-4 border-b bg-background/95 backdrop-blur-sm px-4 sm:px-6 lg:px-8 shadow-sm">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="lg:hidden"
-              onClick={() => setSidebarOpen(true)}
-            >
-              <Menu className="h-5 w-5" />
-            </Button>
-
-            <div className="flex flex-1 items-center gap-4">
-              {hasMultipleProperties !== false && (
-                <PropertySelector onMultiplePropertiesChange={setHasMultipleProperties} />
-              )}
-            </div>
-          </header>
-        )}
-
         {/* Page content */}
         <main className="flex-1 overflow-y-auto pb-10">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
