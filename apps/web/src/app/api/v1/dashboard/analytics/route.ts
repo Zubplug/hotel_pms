@@ -122,7 +122,14 @@ function aggregateAccountingRevenue(lines: AccountingRevenueLine[]) {
   const accountMap = new Map<string, AccountingRevenueLine['account'] & { netRevenue: number }>();
   const trendMap = new Map<string, number>();
   for (const line of lines) {
-    const value = Number(line.credit || 0) - Number(line.debit || 0);
+    const credit = Number(line.credit || 0);
+    const debit = Number(line.debit || 0);
+    // Posted reversal journals can debit a normal revenue account while
+    // remaining in the ledger for audit history. Only contra-revenue
+    // accounts are allowed to reduce reported revenue.
+    const value = line.account.category.toLowerCase().includes('contra')
+      ? credit - debit
+      : credit;
     const existing = accountMap.get(line.account.id) || { ...line.account, netRevenue: 0 };
     existing.netRevenue += value;
     accountMap.set(line.account.id, existing);
