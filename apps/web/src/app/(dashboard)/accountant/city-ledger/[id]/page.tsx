@@ -28,6 +28,7 @@ export default async function CityLedgerDetailPage(props: { params: Promise<{ id
       entries: {
         orderBy: { createdAt: 'desc' },
         take: 50,
+        include: { allocations: { select: { amount: true } } },
       }
     }
   });

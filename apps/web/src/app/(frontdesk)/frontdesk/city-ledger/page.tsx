@@ -56,16 +56,38 @@ export default function FrontDeskCityLedgerPage() {
               groups[`walkout:${entry.entryId}`] = entry;
               return groups;
             }
-            const key = `corporate:${entry.accountId}:${entry.entryKind === 'CORPORATE_ADVANCE' ? 'advance' : 'ledger'}`;
+            // Keep one professional row per corporate account. The row can
+            // still carry both actions: invoice payment and new advance.
+            const key = `corporate:${entry.accountId}`;
+            const isAdvance = entry.entryKind === 'CORPORATE_ADVANCE';
             const current = groups[key];
-            groups[key] = current ? {
-              ...current,
-              amount: Number(current.amount || 0) + Number(entry.amount || 0),
-              paidAmount: Number(current.paidAmount || 0) + Number(entry.paidAmount || 0),
-              outstandingAmount: Number(current.outstandingAmount || 0) + Number(entry.outstandingAmount || 0),
-              status: current.status === 'PENDING_SETTLEMENT' || entry.status === 'PENDING_SETTLEMENT' ? 'PENDING_SETTLEMENT' : current.status,
-              invoiceNumber: 'Account balance',
-            } : { ...entry, invoiceNumber: 'Account balance' };
+            if (!current) {
+              groups[key] = {
+                ...entry,
+                entryKind: 'CORPORATE_ACCOUNT',
+                invoiceNumber: 'Account balance',
+                ledgerEntry: isAdvance ? null : entry,
+                advanceEntry: isAdvance ? entry : null,
+                ledgerAmount: isAdvance ? 0 : Number(entry.amount || 0),
+                ledgerOutstandingAmount: isAdvance ? 0 : Number(entry.outstandingAmount || 0),
+                advanceAmount: isAdvance ? Number(entry.amount || 0) : 0,
+                advanceOutstandingAmount: isAdvance ? Number(entry.outstandingAmount || 0) : 0,
+              };
+              return groups;
+            }
+            current.amount = Number(current.amount || 0) + Number(entry.amount || 0);
+            current.paidAmount = Number(current.paidAmount || 0) + Number(entry.paidAmount || 0);
+            current.status = current.status === 'PENDING_SETTLEMENT' || entry.status === 'PENDING_SETTLEMENT' ? 'PENDING_SETTLEMENT' : current.status;
+            if (isAdvance) {
+              current.advanceEntry = current.advanceEntry?.entryId ? current.advanceEntry : entry;
+              current.advanceAmount += Number(entry.amount || 0);
+              current.advanceOutstandingAmount += Number(entry.outstandingAmount || 0);
+            } else {
+              current.ledgerEntry = current.ledgerEntry || entry;
+              current.ledgerAmount += Number(entry.amount || 0);
+              current.ledgerOutstandingAmount += Number(entry.outstandingAmount || 0);
+            }
+            current.outstandingAmount = current.ledgerOutstandingAmount || current.advanceOutstandingAmount;
             return groups;
           }, {}));
           return entries.length === 0 ? (
@@ -87,38 +109,47 @@ export default function FrontDeskCityLedgerPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y">
-                  {entries.map((entry: any) => (
-                    <tr key={entry.accountType === 'CORPORATE' ? `corporate:${entry.accountId}:${entry.entryKind}` : entry.entryId}>
+                  {entries.map((entry: any) => {
+                    const isCorporate = entry.accountType === 'CORPORATE';
+                    const ledgerEntry = isCorporate && entry.ledgerEntry
+                      ? { ...entry.ledgerEntry, amount: entry.ledgerAmount, outstandingAmount: entry.ledgerOutstandingAmount }
+                      : null;
+                    const advanceEntry = isCorporate && entry.advanceEntry
+                      ? { ...entry.advanceEntry, amount: entry.advanceAmount, outstandingAmount: entry.advanceOutstandingAmount }
+                      : null;
+                    return (
+                    <tr key={isCorporate ? `corporate:${entry.accountId}` : entry.entryId}>
                       <td className="px-5 py-4">
-                        <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${entry.accountType === 'CORPORATE' ? 'bg-blue-100 text-blue-700' : 'bg-rose-100 text-rose-700'}`}>
-                          {entry.entryKind === 'CORPORATE_ADVANCE' ? 'Corporate advance' : entry.accountType === 'CORPORATE' ? 'Corporate account' : 'Skipper / Walkout'}
+                        <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${isCorporate ? 'bg-blue-100 text-blue-700' : 'bg-rose-100 text-rose-700'}`}>
+                          {isCorporate ? 'Corporate account' : 'Skipper / Walkout'}
                         </span>
                         <div className="mt-2 text-xs text-slate-500">{entry.accountName}</div>
                       </td>
                       <td className="px-5 py-4 font-medium text-slate-800">
-                        {entry.accountType === 'CORPORATE' ? entry.accountName : (entry.guestName || '—')}
+                        {isCorporate ? entry.accountName : (entry.guestName || '—')}
                       </td>
                       <td className="px-5 py-4 font-mono text-xs text-slate-500">
-                        {entry.invoiceNumber || entry.entryId.slice(0, 8)}
+                        {entry.invoiceNumber || entry.entryId?.slice(0, 8)}
                       </td>
                       <td className="px-5 py-4 text-right font-extrabold text-slate-900">
-                        {new Intl.NumberFormat('en-NG', { style: 'currency', currency: entry.currency || 'NGN', maximumFractionDigits: 0 }).format(Number(entry.outstandingAmount))}
+                        {isCorporate && ledgerEntry && advanceEntry && Number(advanceEntry.outstandingAmount) > 0 ? (
+                          <div>
+                            <div>{new Intl.NumberFormat('en-NG', { style: 'currency', currency: entry.currency || 'NGN', maximumFractionDigits: 0 }).format(Number(ledgerEntry.outstandingAmount))}</div>
+                            <div className="mt-1 text-xs font-semibold text-emerald-600">Advance: {new Intl.NumberFormat('en-NG', { style: 'currency', currency: entry.currency || 'NGN', maximumFractionDigits: 0 }).format(Number(advanceEntry.outstandingAmount))}</div>
+                          </div>
+                        ) : new Intl.NumberFormat('en-NG', { style: 'currency', currency: entry.currency || 'NGN', maximumFractionDigits: 0 }).format(Number(entry.outstandingAmount))}
                       </td>
                       <td className="px-5 py-4">
                         <div className="flex flex-wrap gap-2">
-                          {entry.entryKind === 'CORPORATE_ADVANCE' && (
-                            <>
-                              <FrontDeskCityLedgerPaymentDialog entry={entry} onComplete={refetchCityLedger} />
-                              {entry.entryId && <GuestCreditRefundDialog entryId={entry.entryId} guestName={entry.accountName} amount={Number(entry.outstandingAmount)} currency={entry.currency || 'NGN'} propertyId={propertyId} accountType="CORPORATE_ADVANCE" />}
-                            </>
-                          )}
-                          {entry.entryKind !== 'CORPORATE_ADVANCE' && (
-                            <FrontDeskCityLedgerPaymentDialog entry={entry} onComplete={refetchCityLedger} />
-                          )}
+                          {isCorporate && ledgerEntry && <FrontDeskCityLedgerPaymentDialog entry={ledgerEntry} onComplete={refetchCityLedger} />}
+                          {isCorporate && advanceEntry && <FrontDeskCityLedgerPaymentDialog entry={advanceEntry} onComplete={refetchCityLedger} />}
+                          {isCorporate && advanceEntry?.entryId && Number(advanceEntry.outstandingAmount) > 0 && <GuestCreditRefundDialog entryId={advanceEntry.entryId} guestName={entry.accountName} amount={Number(advanceEntry.outstandingAmount)} currency={entry.currency || 'NGN'} propertyId={propertyId} accountType="CORPORATE_ADVANCE" />}
+                          {!isCorporate && <FrontDeskCityLedgerPaymentDialog entry={entry} onComplete={refetchCityLedger} />}
                         </div>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

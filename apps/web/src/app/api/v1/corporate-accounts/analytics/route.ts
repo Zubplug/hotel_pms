@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
 
     const now = new Date();
     const trendStart = new Date(now.getFullYear(), now.getMonth() - 11, 1);
-    const [accounts, reservations, folioTotals, openSharedFolios, checkedInGuests, trendReservations, trendRevenueItems, invoices] = await Promise.all([
+    const [accounts, reservations, folioTotals, openSharedFolios, checkedInGuests, trendReservations, trendRevenueItems, invoices, paymentEntries] = await Promise.all([
       prisma.corporateAccount.findMany({
         where: { propertyId },
         include: { cityLedgerAccount: { select: { id: true, balance: true, currency: true } }, ratePlan: { select: { id: true, name: true, code: true, isActive: true } } },
@@ -59,6 +59,10 @@ export async function GET(req: NextRequest) {
         select: { id: true, accountId: true, invoiceNumber: true, issueDate: true, dueDate: true, outstandingAmount: true, currency: true, status: true, account: { select: { name: true, type: true } } },
         orderBy: { dueDate: 'asc' },
       }),
+      prisma.cityLedgerEntry.findMany({
+        where: { propertyId, type: 'PAYMENT', status: { not: 'REVERSED' }, account: { type: 'CORPORATE' } },
+        select: { accountId: true, amount: true, allocations: { select: { amount: true } } },
+      }),
     ]);
 
     const accountByLedger = new Map(accounts.filter(a => a.cityLedgerAccountId).map(a => [a.cityLedgerAccountId!, a]));
@@ -67,6 +71,11 @@ export async function GET(req: NextRequest) {
     const openSharedFolioCounts = new Map(openSharedFolios.map(row => [row.corporateAccountId!, row._count._all]));
     const checkedInGuestCounts = new Map(checkedInGuests.map(row => [row.corporateAccountId!, row._count._all]));
     const corporateInvoices = invoices.filter(invoice => accountByLedger.has(invoice.accountId));
+    const unappliedAdvanceByLedger = new Map<string, number>();
+    for (const payment of paymentEntries) {
+      const unapplied = Math.max(0, Number(payment.amount) - payment.allocations.reduce((sum, allocation) => sum + Number(allocation.amount), 0));
+      if (unapplied > 0.01) unappliedAdvanceByLedger.set(payment.accountId, (unappliedAdvanceByLedger.get(payment.accountId) || 0) + unapplied);
+    }
     const ageBuckets = { current: 0, days1to30: 0, days31to60: 0, days61to90: 0, over90: 0 };
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     for (const invoice of corporateInvoices) {
@@ -99,7 +108,8 @@ export async function GET(req: NextRequest) {
     const rows = accounts.map(account => {
       const ledgerBalance = Number(account.cityLedgerAccount?.balance || 0);
       const receivable = Math.max(0, ledgerBalance);
-      const advanceCredit = Math.max(0, -ledgerBalance);
+      const unappliedAdvanceCredit = unappliedAdvanceByLedger.get(account.cityLedgerAccountId || '') || 0;
+      const advanceCredit = Math.max(0, -ledgerBalance) + unappliedAdvanceCredit;
       const folio = folioByAccount.get(account.id);
       const bookings = reservationCounts.get(account.id) || 0;
       const openSharedFolioCount = openSharedFolioCounts.get(account.id) || 0;
@@ -109,7 +119,7 @@ export async function GET(req: NextRequest) {
       return {
         id: account.id, name: account.name, code: account.code, isActive: account.isActive,
         contactPerson: account.contactPerson, contactEmail: account.contactEmail, contactPhone: account.contactPhone,
-        creditLimit, balance: ledgerBalance, receivable, advanceCredit,
+        creditLimit, balance: ledgerBalance, receivable, advanceCredit, unappliedAdvanceCredit,
         availableCredit: Math.max(0, creditLimit - receivable + advanceCredit), utilization,
         depositPolicy: account.depositPolicy, exemptFromHighBalance: account.exemptFromHighBalance,
         ratePlanId: account.ratePlanId, ratePlan: account.ratePlan, cityLedgerAccountId: account.cityLedgerAccountId, currency: account.cityLedgerAccount?.currency || 'NGN',
