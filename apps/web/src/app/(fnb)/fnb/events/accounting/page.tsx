@@ -18,7 +18,7 @@ const label = (value: string) => value.replaceAll('_', ' ');
 
 export default async function EventAccountingPage() {
   const { propertyId } = await requireEventContext();
-  const invoiceWhere = { OR: [{ event: { propertyId } }, { propertyId }] };
+  const invoiceWhere = { status: { not: 'VOID' }, OR: [{ event: { propertyId } }, { propertyId }] };
   const [invoices, allInvoices, totals, workflowGroups] = await Promise.all([
     prisma.eventInvoice.findMany({ where: invoiceWhere, orderBy: { createdAt: 'desc' }, include: { event: true, leaseBillingSchedule: { include: { leaseContract: { include: { hall: true, corporateAccount: true } } } } }, take: 50 }),
     prisma.eventInvoice.findMany({ where: invoiceWhere, select: { status: true, workflowStatus: true, totalAmount: true, paidAmount: true, currency: true, createdAt: true } }),

@@ -56,7 +56,7 @@ export default async function EventBookingsPage({ searchParams }: { searchParams
     include: { bookings: { include: { hall: true }, orderBy: { startTime: 'asc' } }, banquetPackage: true, beos: { orderBy: { version: 'desc' }, take: 1 } },
   });
   const allEvents = await prisma.event.findMany({ where: { propertyId }, select: { id: true, status: true, startDate: true, endDate: true, expectedGuests: true, financialStatus: true, beos: { select: { status: true }, orderBy: { version: 'desc' }, take: 1 } } });
-  const invoices = await prisma.eventInvoice.findMany({ where: { event: { propertyId }, createdAt: { gte: monthStart } }, select: { totalAmount: true, paidAmount: true, status: true } });
+  const invoices = await prisma.eventInvoice.findMany({ where: { event: { propertyId }, createdAt: { gte: monthStart }, status: { not: 'VOID' } }, select: { totalAmount: true, paidAmount: true, status: true } });
   const halls = await prisma.hall.findMany({ where: { propertyId, isActive: true }, orderBy: { name: 'asc' } });
   const packages = await prisma.banquetPackage.findMany({ where: { propertyId, isActive: true }, orderBy: { name: 'asc' } });
   const equipment = await getEquipment(propertyId);

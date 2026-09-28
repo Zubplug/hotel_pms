@@ -32,7 +32,7 @@ export default async function FnbEventsDashboard() {
   const [events, leads, invoices, todaysBookings, halls, packages, equipment, guests, corporateAccounts] = await Promise.all([
     prisma.event.findMany({ where: { propertyId }, orderBy: { startDate: 'asc' }, include: { bookings: { include: { hall: true }, orderBy: { startTime: 'asc' } }, beos: { orderBy: { version: 'desc' }, take: 1 } } }),
     prisma.eventLead.findMany({ where: { propertyId }, orderBy: { createdAt: 'desc' } }),
-    prisma.eventInvoice.findMany({ where: { event: { propertyId }, createdAt: { gte: monthStart } }, select: { totalAmount: true, paidAmount: true, status: true } }),
+    prisma.eventInvoice.findMany({ where: { event: { propertyId }, createdAt: { gte: monthStart }, status: { not: 'VOID' } }, select: { totalAmount: true, paidAmount: true, status: true } }),
     prisma.eventBooking.findMany({ where: { hall: { propertyId }, startTime: { gte: today, lt: tomorrow } }, include: { hall: true, event: true }, orderBy: { startTime: 'asc' } }),
     prisma.hall.findMany({ where: { propertyId, isActive: true }, orderBy: { name: 'asc' } }),
     prisma.banquetPackage.findMany({ where: { propertyId, isActive: true }, orderBy: { name: 'asc' } }),

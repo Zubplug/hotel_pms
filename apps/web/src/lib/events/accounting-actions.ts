@@ -45,6 +45,12 @@ async function scopedInvoice(tx: Tx, invoiceId: string, propertyId: string) {
   return invoice;
 }
 
+function recognitionDate(invoice: { event?: { startDate: Date } | null; leaseBillingSchedule?: { periodStart: Date; dueDate: Date } | null }, timezone: string, fallback: Date) {
+  if (invoice.leaseBillingSchedule) return invoice.leaseBillingSchedule.dueDate;
+  if (invoice.event?.startDate) return getPropertyBusinessDate(timezone, invoice.event.startDate);
+  return fallback;
+}
+
 export async function submitEventInvoiceForReview(invoiceId: string) {
   const { propertyId, userId } = await requireEventRole('FNB');
   const result = await prisma.$transaction(async (tx) => {
@@ -175,6 +181,7 @@ export async function issueEventInvoice(invoiceId: string) {
     const property = await tx.property.findUnique({ where: { id: propertyId }, select: { organizationId: true, businessDate: true, timezone: true } });
     if (!property) throw new Error('Property not found.');
     const businessDate = property.businessDate || getPropertyBusinessDate(property.timezone);
+    const revenueDate = recognitionDate(invoice, property.timezone, businessDate);
     const lines = invoice.items.map((item) => ({
       item,
       gross: Number(item.grossAmount || item.totalPrice),
@@ -203,7 +210,7 @@ export async function issueEventInvoice(invoiceId: string) {
       if (!journalExists) {
         const cityLedgerAccountId = await GLMappingService.getCityLedgerAccount(propertyId);
         await GeneralLedgerService.postJournal({ userId, propertyIds: [propertyId], organizationId: property.organizationId, role: 'SYSTEM', permissions: [], outletIds: [] }, {
-          propertyId, entryDate: businessDate, reference: journalReference, description: `Issue event invoice ${invoice.id}`, sourceModule: 'AR',
+          propertyId, entryDate: revenueDate, reference: journalReference, description: `Recognize event revenue for ${invoice.id}`, sourceModule: 'AR',
           lines: [
             { accountId: cityLedgerAccountId, debit: Number(invoice.totalAmount), credit: 0, description: 'Event city-ledger receivable', sourceType: 'EVENT_INVOICE', sourceId: invoice.id },
             ...lines.filter((line) => line.gross > 0).map((line) => ({ accountId: revenueAccountByCategory.get(line.category)!, debit: 0, credit: line.gross, description: line.item.description, sourceType: 'EVENT_INVOICE_ITEM', sourceId: line.item.id })),
@@ -219,7 +226,7 @@ export async function issueEventInvoice(invoiceId: string) {
       const existing = await tx.folioItem.findFirst({ where: { folioId: invoice.folioId, operationId: `${operationId}-CHARGE-${invoice.items[0]?.id || 'TOTAL'}` } });
       if (!existing) {
         for (const line of lines) {
-          const base = { folioId, guestId, businessDate, source: 'OTHER' as const, revenueCategory: line.category === 'FOOD' ? 'FNB' as const : 'OTHER' as const, revenueClass: line.category, currency: invoice.currency, postedBy: userId };
+          const base = { folioId, guestId, businessDate: revenueDate, source: 'OTHER' as const, revenueCategory: line.category === 'FOOD' ? 'FNB' as const : 'OTHER' as const, revenueClass: line.category, currency: invoice.currency, postedBy: userId };
           if (line.gross > 0) await tx.folioItem.create({ data: { ...base, type: 'CHARGE', description: line.item.description, quantity: line.item.quantity, unitAmount: line.gross, amount: line.gross, baseAmount: line.gross, operationId: `${operationId}-CHARGE-${line.item.id}` } });
           if (line.tax > 0) await tx.folioItem.create({ data: { ...base, type: 'TAX', description: `${line.item.description} tax`, quantity: 1, unitAmount: line.tax, amount: line.tax, baseAmount: line.tax, operationId: `${operationId}-TAX-${line.item.id}` } });
           if (line.discount > 0) await tx.folioItem.create({ data: { ...base, type: 'DISCOUNT', description: `${line.item.description} discount`, quantity: 1, unitAmount: -line.discount, amount: -line.discount, baseAmount: -line.discount, operationId: `${operationId}-DISCOUNT-${line.item.id}` } });
