@@ -1,14 +1,42 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { goBack } from '@/lib/frontdesk-navigation';
-import { ArrowLeft, ReceiptText, CreditCard } from 'lucide-react';
+import { ArrowLeft, CreditCard, ReceiptText } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { useProperty } from '@/components/PropertyProvider';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { FrontDeskCityLedgerPaymentDialog } from '@/components/frontdesk/FrontDeskCityLedgerPaymentDialog';
+import { FrontDeskAddPaymentDialog } from '@/components/frontdesk/FrontDeskAddPaymentDialog';
+
+function EventInvoicePaymentAction({ invoice, folioId, outstanding, onPaymentSuccess }: { invoice: any; folioId: string; outstanding: number; onPaymentSuccess: () => void }) {
+  const [open, setOpen] = useState(false);
+  const folio = {
+    id: folioId,
+    balance: outstanding,
+    currency: invoice.currency || 'NGN',
+    reservationId: invoice.reservationId,
+    reservation: invoice.event?.guest ? { primaryGuest: invoice.event.guest } : undefined,
+  };
+
+  return (
+    <>
+      <Button onClick={() => setOpen(true)} className="inline-flex items-center gap-2 rounded-full bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-700">
+        <CreditCard className="h-3.5 w-3.5" /> Receive payment
+      </Button>
+      <FrontDeskAddPaymentDialog
+        open={open}
+        onOpenChange={setOpen}
+        folio={folio}
+        initialAmount={outstanding}
+        eventInvoiceId={invoice.id}
+        onPaymentSuccess={onPaymentSuccess}
+      />
+    </>
+  );
+}
 
 export default function FrontDeskEventInvoicesPage() {
   const { propertyId } = useProperty();
@@ -89,9 +117,7 @@ export default function FrontDeskEventInvoicesPage() {
                         </td>
                         <td className="px-5 py-4">
                           {folioId && outstanding > 0 ? (
-                            <Link href={`/frontdesk/folios?folioId=${encodeURIComponent(folioId)}&eventInvoiceId=${encodeURIComponent(invoice.id)}`} className="inline-flex items-center gap-2 rounded-full bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-700">
-                              <CreditCard className="h-3.5 w-3.5" /> Receive payment
-                            </Link>
+                            <EventInvoicePaymentAction invoice={invoice} folioId={folioId} outstanding={outstanding} onPaymentSuccess={() => { void refetchEventInvoices(); }} />
                           ) : ledgerEntry && outstanding > 0 ? (
                             <FrontDeskCityLedgerPaymentDialog entry={ledgerEntry} onComplete={() => Promise.resolve(refetchEventInvoices())} />
                           ) : (
