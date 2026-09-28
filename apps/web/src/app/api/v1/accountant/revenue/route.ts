@@ -246,7 +246,11 @@ export async function GET(req: NextRequest) {
         const debit = Number(line.debit || 0);
         if (credit > 0) {
           addToTotals(accountCode, journalDate, credit, credit, 0, 1);
-        } else if (debit > 0 && (account.category.toLowerCase().includes('contra') || account.normalBalance === 'DEBIT')) {
+        } else if (debit > 0 && account.category.toLowerCase().includes('contra')) {
+          // A debit to a normal revenue account is a reversal entry, not
+          // current revenue. Reversal journals for void event invoices can
+          // remain posted for audit history, so only explicit contra-revenue
+          // accounts are allowed to reduce this report.
           addToTotals(accountCode, journalDate, -debit, 0, debit, 0);
           if (key(journalDate) === key(businessDate)) discountsToday += debit;
         }
