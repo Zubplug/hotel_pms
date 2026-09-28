@@ -18,7 +18,7 @@ export function FrontDeskCityLedgerPaymentDialog({ entry, onComplete }: { entry:
   const [reference, setReference] = useState('');
   const [busy, setBusy] = useState(false);
   const isCorporate = entry.accountType === 'CORPORATE';
-  const isAdvance = entry.entryKind === 'CORPORATE_ACCOUNT';
+  const isAdvance = entry.entryKind === 'CORPORATE_ADVANCE' || entry.entryKind === 'CORPORATE_ACCOUNT';
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();

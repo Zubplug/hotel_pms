@@ -109,7 +109,7 @@ export default function FrontDeskCityLedgerPage() {
                           {entry.entryKind === 'CORPORATE_ADVANCE' && (
                             <>
                               <FrontDeskCityLedgerPaymentDialog entry={entry} onComplete={refetchCityLedger} />
-                              <GuestCreditRefundDialog entryId={entry.entryId} guestName={entry.accountName} amount={Number(entry.outstandingAmount)} currency={entry.currency || 'NGN'} propertyId={propertyId} accountType="CORPORATE_ADVANCE" />
+                              {entry.entryId && <GuestCreditRefundDialog entryId={entry.entryId} guestName={entry.accountName} amount={Number(entry.outstandingAmount)} currency={entry.currency || 'NGN'} propertyId={propertyId} accountType="CORPORATE_ADVANCE" />}
                             </>
                           )}
                           {entry.entryKind !== 'CORPORATE_ADVANCE' && (

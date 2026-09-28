@@ -7199,10 +7199,12 @@ public class LocalRepository
                 currency = entry.Currency, status = entry.Status, reference = entry.Description, createdAt = entry.CreatedAt,
             };
         }).Where(row => row != null && (row.outstandingAmount > 0.01m || row.status == "PENDING_SETTLEMENT")).Cast<object>().ToList();
-        var representedAccounts = rows.Select(row => (string?)row.GetType().GetProperty("accountId")?.GetValue(row)).Where(id => !string.IsNullOrWhiteSpace(id)).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        foreach (var corporate in corporates.Where(account => account.IsActive && !string.IsNullOrWhiteSpace(account.CityLedgerAccountId) && !representedAccounts.Contains(account.CityLedgerAccountId)))
+        foreach (var corporate in corporates.Where(account => account.IsActive && !string.IsNullOrWhiteSpace(account.CityLedgerAccountId)))
         {
-            rows.Add(new { entryId = (string?)null, accountId = corporate.CityLedgerAccountId, invoiceId = (string?)null, invoiceNumber = "No open invoice", accountType = "CORPORATE", entryKind = "CORPORATE_ACCOUNT", accountName = corporate.Name, guestName = (string?)null, amount = 0m, paidAmount = 0m, outstandingAmount = 0m, currency = "NGN", status = "ACTIVE", reference = (string?)null, createdAt = DateTime.UtcNow });
+            // Keep a dedicated account row even when invoices exist. This is
+            // the entry point for receiving an unapplied corporate advance;
+            // it does not create another CityLedgerAccount.
+            rows.Add(new { entryId = (string?)null, accountId = corporate.CityLedgerAccountId, invoiceId = (string?)null, invoiceNumber = "Corporate account / advance", accountType = "CORPORATE", entryKind = "CORPORATE_ADVANCE", accountName = corporate.Name, guestName = (string?)null, amount = 0m, paidAmount = 0m, outstandingAmount = 0m, currency = "NGN", status = "ACTIVE", reference = (string?)null, createdAt = DateTime.UtcNow });
         }
         return rows;
     }
