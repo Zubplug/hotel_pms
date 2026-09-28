@@ -111,42 +111,65 @@ async function buildDepartmentAnalytics(propertyIds: string[], businessDate: Dat
   };
 }
 
-async function buildAccountingRevenueAnalytics(propertyIds: string[], businessDate: Date) {
-  const lines = await prisma.journalEntryLine.findMany({
-    where: {
-      account: { propertyId: { in: propertyIds }, type: 'REVENUE', isActive: true },
-      entry: { propertyId: { in: propertyIds }, entryDate: businessDate, status: 'POSTED', isReversed: false },
-    },
-    select: {
-      debit: true,
-      credit: true,
-      account: { select: { id: true, propertyId: true, code: true, name: true, category: true, normalBalance: true } },
-    },
-  });
+type AccountingRevenueLine = {
+  debit: unknown;
+  credit: unknown;
+  entry: { entryDate: Date };
+  account: { id: string; propertyId: string; code: string; name: string; category: string; normalBalance: string };
+};
 
-  const accountMap = new Map<string, {
-    id: string;
-    propertyId: string;
-    code: string;
-    name: string;
-    category: string;
-    normalBalance: string;
-    netRevenue: number;
-  }>();
+function aggregateAccountingRevenue(lines: AccountingRevenueLine[]) {
+  const accountMap = new Map<string, AccountingRevenueLine['account'] & { netRevenue: number }>();
+  const trendMap = new Map<string, number>();
   for (const line of lines) {
+    const value = Number(line.credit || 0) - Number(line.debit || 0);
     const existing = accountMap.get(line.account.id) || { ...line.account, netRevenue: 0 };
-    existing.netRevenue += Number(line.credit || 0) - Number(line.debit || 0);
+    existing.netRevenue += value;
     accountMap.set(line.account.id, existing);
+    const dateKey = line.entry.entryDate.toISOString().slice(0, 10);
+    trendMap.set(dateKey, (trendMap.get(dateKey) || 0) + value);
   }
-
   const accounts = [...accountMap.values()]
     .map(account => ({ ...account, netRevenue: Number(account.netRevenue.toFixed(2)) }))
     .filter(account => account.netRevenue !== 0)
     .sort((a, b) => b.netRevenue - a.netRevenue);
-
   return {
     totalRevenue: Number(accounts.reduce((sum, account) => sum + account.netRevenue, 0).toFixed(2)),
     accounts,
+    trend: [...trendMap.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([date, revenue]) => ({ date, revenue: Number(revenue.toFixed(2)) })),
+  };
+}
+
+async function buildAccountingRevenueAnalytics(propertyIds: string[], businessDate: Date) {
+  const monthStart = new Date(Date.UTC(businessDate.getUTCFullYear(), businessDate.getUTCMonth(), 1));
+  const [monthLines, latestAudits] = await Promise.all([
+    prisma.journalEntryLine.findMany({
+      where: {
+        account: { propertyId: { in: propertyIds }, type: 'REVENUE', isActive: true },
+        entry: { propertyId: { in: propertyIds }, entryDate: { gte: monthStart, lte: businessDate }, status: 'POSTED', isReversed: false },
+      },
+      select: { debit: true, credit: true, entry: { select: { entryDate: true } }, account: { select: { id: true, propertyId: true, code: true, name: true, category: true, normalBalance: true } } },
+      orderBy: { entry: { entryDate: 'asc' } },
+    }),
+    prisma.nightAudit.findMany({ where: { propertyId: { in: propertyIds }, status: 'COMPLETED', businessDate: { lte: businessDate } }, orderBy: [{ businessDate: 'desc' }, { completedAt: 'desc' }], take: propertyIds.length, select: { propertyId: true, businessDate: true, completedAt: true } }),
+  ]);
+
+  const lastAuditDates = latestAudits.map(audit => audit.businessDate);
+  const lastAuditLines = lastAuditDates.length ? await prisma.journalEntryLine.findMany({
+    where: {
+      account: { propertyId: { in: propertyIds }, type: 'REVENUE', isActive: true },
+      entry: { propertyId: { in: propertyIds }, entryDate: { in: lastAuditDates }, status: 'POSTED', isReversed: false },
+    },
+    select: { debit: true, credit: true, entry: { select: { entryDate: true } }, account: { select: { id: true, propertyId: true, code: true, name: true, category: true, normalBalance: true } } },
+  }) : [];
+
+  const month = aggregateAccountingRevenue(monthLines);
+  const lastAudit = aggregateAccountingRevenue(lastAuditLines);
+  return {
+    totalRevenue: month.trend.find(item => item.date === businessDate.toISOString().slice(0, 10))?.revenue || 0,
+    accounts: month.accounts,
+    month: { ...month, startDate: monthStart.toISOString(), endDate: businessDate.toISOString() },
+    lastAudit: { ...lastAudit, businessDate: latestAudits[0]?.businessDate?.toISOString() || null, completedAt: latestAudits[0]?.completedAt?.toISOString() || null },
   };
 }
 
@@ -218,7 +241,6 @@ export async function GET(req: NextRequest) {
 
     const totalRooms = snapshots.reduce((sum, item) => sum + item.kpi.availableRooms, 0);
     const occupiedRooms = snapshots.reduce((sum, item) => sum + item.kpi.occupiedRooms, 0);
-    const totalRevenue = snapshots.reduce((sum, item) => sum + item.kpi.revenue.totalRevenue, 0);
     const roomRevenue = snapshots.reduce((sum, item) => sum + item.kpi.revenue.roomRevenue, 0);
     const fbRevenue = snapshots.reduce((sum, item) => sum + item.kpi.revenue.fbRevenue + item.kpi.revenue.barRevenue, 0);
     const otherRevenue = snapshots.reduce((sum, item) => sum + item.kpi.revenue.otherRevenue, 0);
