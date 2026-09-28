@@ -16,9 +16,12 @@ import { useQuery } from '@tanstack/react-query';
 
 interface RoomFormProps {
   initialData?: any;
+  onSaved?: () => void;
+  onCancel?: () => void;
+  darkTheme?: boolean;
 }
 
-export function RoomForm({ initialData }: RoomFormProps) {
+export function RoomForm({ initialData, onSaved, onCancel, darkTheme = false }: RoomFormProps) {
   const { propertyId } = useProperty();
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = React.useState(false);
@@ -100,8 +103,11 @@ export function RoomForm({ initialData }: RoomFormProps) {
       }
 
       toast.success(`Room ${initialData ? 'updated' : 'created'} successfully`);
-      router.push('/rooms');
-      router.refresh();
+      if (onSaved) onSaved();
+      else {
+        router.push('/rooms');
+        router.refresh();
+      }
     } catch (error: any) {
       toast.error(error.message || 'An error occurred');
     } finally {
@@ -111,7 +117,7 @@ export function RoomForm({ initialData }: RoomFormProps) {
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit as any)} className="space-y-6 max-w-2xl">
+      <form onSubmit={form.handleSubmit(onSubmit as any)} className={`max-w-2xl space-y-6 ${darkTheme ? 'text-slate-100' : ''}`}>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <FormField
             control={form.control as any}
@@ -120,7 +126,7 @@ export function RoomForm({ initialData }: RoomFormProps) {
               <FormItem>
                 <FormLabel>Room Number</FormLabel>
                 <FormControl>
-                  <Input placeholder="e.g. 101" {...field} />
+                  <Input className={darkTheme ? 'border-white/10 bg-slate-950 text-slate-100 placeholder:text-slate-600' : ''} placeholder="e.g. 101" {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -133,7 +139,7 @@ export function RoomForm({ initialData }: RoomFormProps) {
               <FormItem>
                 <FormLabel>Room Code (Optional)</FormLabel>
                 <FormControl>
-                  <Input placeholder="e.g. 101A" {...field} />
+                  <Input className={darkTheme ? 'border-white/10 bg-slate-950 text-slate-100 placeholder:text-slate-600' : ''} placeholder="e.g. 101A" {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -145,10 +151,10 @@ export function RoomForm({ initialData }: RoomFormProps) {
             name="roomTypeId"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Room Type</FormLabel>
+                <FormLabel className={darkTheme ? 'text-slate-300' : ''}>Room Type</FormLabel>
                 <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
                   <FormControl>
-                    <SelectTrigger>
+                    <SelectTrigger className={darkTheme ? 'border-white/10 bg-slate-950 text-slate-100' : ''}>
                       <SelectValue placeholder="Select a room type">
                         {roomTypes?.find((roomType: any) => roomType.id === field.value)?.name || 'Select a room type'}
                       </SelectValue>
@@ -170,13 +176,13 @@ export function RoomForm({ initialData }: RoomFormProps) {
             name="buildingId"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Building</FormLabel>
+                <FormLabel className={darkTheme ? 'text-slate-300' : ''}>Building</FormLabel>
                 <Select onValueChange={(val) => {
                   field.onChange(val);
                   form.setValue('floorId', ''); // Reset floor when building changes
                 }} defaultValue={field.value} value={field.value}>
                   <FormControl>
-                    <SelectTrigger>
+                    <SelectTrigger className={darkTheme ? 'border-white/10 bg-slate-950 text-slate-100' : ''}>
                       <SelectValue placeholder="Select a building">
                         {buildings?.find((building: any) => building.id === field.value)?.name || 'Select a building'}
                       </SelectValue>
@@ -198,10 +204,10 @@ export function RoomForm({ initialData }: RoomFormProps) {
             name="floorId"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Floor</FormLabel>
+                <FormLabel className={darkTheme ? 'text-slate-300' : ''}>Floor</FormLabel>
                 <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value} disabled={!selectedBuildingId}>
                   <FormControl>
-                    <SelectTrigger>
+                    <SelectTrigger className={darkTheme ? 'border-white/10 bg-slate-950 text-slate-100' : ''}>
                       <SelectValue placeholder="Select a floor">
                         {(() => {
                           const floor = floors?.find((item: any) => item.id === field.value);
@@ -228,7 +234,7 @@ export function RoomForm({ initialData }: RoomFormProps) {
               <FormItem>
                 <FormLabel>Bed Configuration</FormLabel>
                 <FormControl>
-                  <Input placeholder="e.g. 1 King Bed" {...field} />
+                  <Input className={darkTheme ? 'border-white/10 bg-slate-950 text-slate-100 placeholder:text-slate-600' : ''} placeholder="e.g. 1 King Bed" {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -242,7 +248,7 @@ export function RoomForm({ initialData }: RoomFormProps) {
               <FormItem>
                 <FormLabel>Max Total Occupancy</FormLabel>
                 <FormControl>
-                  <Input type="number" {...field} onChange={e => field.onChange(parseInt(e.target.value))} />
+                  <Input className={darkTheme ? 'border-white/10 bg-slate-950 text-slate-100' : ''} type="number" {...field} onChange={e => field.onChange(parseInt(e.target.value))} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -255,7 +261,7 @@ export function RoomForm({ initialData }: RoomFormProps) {
               <FormItem>
                 <FormLabel>Max Adults</FormLabel>
                 <FormControl>
-                  <Input type="number" {...field} onChange={e => field.onChange(parseInt(e.target.value))} />
+                  <Input className={darkTheme ? 'border-white/10 bg-slate-950 text-slate-100' : ''} type="number" {...field} onChange={e => field.onChange(parseInt(e.target.value))} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -264,8 +270,8 @@ export function RoomForm({ initialData }: RoomFormProps) {
         </div>
 
         <div className="flex justify-end gap-4">
-          <Button type="button" variant="outline" onClick={() => router.back()}>Cancel</Button>
-          <Button type="submit" disabled={isSubmitting}>
+          <Button type="button" variant="outline" className={darkTheme ? 'border-white/10 bg-transparent text-slate-300 hover:bg-white/10' : ''} onClick={onCancel ?? (() => router.back())}>Cancel</Button>
+          <Button type="submit" disabled={isSubmitting} className={darkTheme ? 'bg-emerald-300 text-slate-950 hover:bg-emerald-200' : ''}>
             {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Save Room
           </Button>
