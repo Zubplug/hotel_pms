@@ -16,7 +16,7 @@ const formatMoney = (amount: number, currency: string = 'NGN') => {
 };
 
 export function FinancialReview({ data, onResolve }: FinancialReviewProps) {
-  const { pendingNightAuditPostings = [], unverifiedComplimentary, pendingDiscounts, pendingCheckInBypasses } = data.financial;
+  const { pendingNightAuditPostings = [], unverifiedComplimentary, pendingDiscounts, pendingCheckInBypasses, eventHall } = data.financial;
   const propertyId = data.property.id;
   const currency = data.property.baseCurrency || 'NGN';
   const estimatedRoomCharges = pendingNightAuditPostings.reduce(
@@ -26,7 +26,7 @@ export function FinancialReview({ data, onResolve }: FinancialReviewProps) {
 
   const unverifiedCompl = unverifiedComplimentary?.filter((c: any) => c.status === 'PENDING_NIGHT_AUDIT') || [];
 
-  const hasIssues = (pendingNightAuditPostings?.length || 0) > 0 || unverifiedCompl.length > 0 || (pendingDiscounts?.length || 0) > 0 || (pendingCheckInBypasses?.length || 0) > 0;
+  const hasIssues = (pendingNightAuditPostings?.length || 0) > 0 || unverifiedCompl.length > 0 || (pendingDiscounts?.length || 0) > 0 || (pendingCheckInBypasses?.length || 0) > 0 || (eventHall?.warnings || 0) > 0 || (eventHall?.blockers || 0) > 0;
 
   if (!hasIssues) {
     return (
@@ -41,6 +41,26 @@ export function FinancialReview({ data, onResolve }: FinancialReviewProps) {
 
   return (
     <div className="space-y-6">
+
+      {eventHall && (eventHall.warnings > 0 || eventHall.blockers > 0) && (
+        <div>
+          <div className="mb-3 flex items-center justify-between">
+            <div>
+              <h4 className={`text-sm font-bold ${eventHall.blockers > 0 ? 'text-rose-300' : 'text-cyan-300'}`}>Event & Hall Revenue Control</h4>
+              <p className="mt-0.5 text-xs text-slate-400">Recurring leases and event invoices are reconciled against this business date. Approval is never bypassed.</p>
+            </div>
+            <span className={`rounded-full border px-3 py-1 text-xs font-bold ${eventHall.blockers > 0 ? 'border-rose-400/20 bg-rose-400/10 text-rose-300' : 'border-cyan-400/20 bg-cyan-400/10 text-cyan-300'}`}>
+              {eventHall.postedCount} posted
+            </span>
+          </div>
+          <div className="space-y-2 rounded-xl border border-white/[.08] bg-white/[.02] p-4 text-xs">
+            {eventHall.pendingBillingPeriods.length > 0 && <p className="text-amber-200">{eventHall.pendingBillingPeriods.length} recurring lease period(s) still need billing generation.</p>}
+            {eventHall.awaitingApproval.length > 0 && <p className="text-amber-200">{eventHall.awaitingApproval.length} event/hall invoice(s) await Accountant approval.</p>}
+            {eventHall.approvedAwaitingIssue.length > 0 && <p className="text-amber-200">{eventHall.approvedAwaitingIssue.length} approved event/hall invoice(s) await cashier issue.</p>}
+            {eventHall.missingRevenuePosting.length > 0 && <p className="font-semibold text-rose-200">{eventHall.missingRevenuePosting.length} issued event/hall invoice(s) have no posted revenue entry.</p>}
+          </div>
+        </div>
+      )}
 
       {/* ── Unposted Room Charges ───────────────────────────────────────── */}
       {pendingNightAuditPostings?.length > 0 && (

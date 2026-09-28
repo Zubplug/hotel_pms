@@ -145,14 +145,14 @@ export async function createLeaseContract(input: {
 }
 
 /** Generates one draft/submitted invoice per due period, with one line per hall segment. */
-export async function processLeaseBilling(propertyId: string, actor?: { userId: string }, scheduleId?: string) {
+export async function processLeaseBilling(propertyId: string, actor?: { userId: string }, scheduleId?: string, asOfDate?: Date) {
   const context = actor ? { propertyId, userId: actor.userId } : await requireEventContext();
   if (context.propertyId !== propertyId) throw new Error('Property access denied.');
   return prisma.$transaction(async (tx) => {
     const property = await tx.property.findUnique({ where: { id: propertyId } });
     if (!property) throw new Error('Property not found.');
     const dueSchedules = await tx.leaseBillingSchedule.findMany({
-      where: { status: 'PENDING', ...(scheduleId ? { id: scheduleId } : { dueDate: { lte: property.businessDate || new Date() } }), leaseContract: { propertyId, isActive: true, corporateAccountId: { not: null } } },
+      where: { status: 'PENDING', ...(scheduleId ? { id: scheduleId } : { dueDate: { lte: asOfDate || property.businessDate || new Date() } }), leaseContract: { propertyId, isActive: true, corporateAccountId: { not: null } } },
       include: { lines: { include: { segment: { include: { hall: true } } } }, leaseContract: { include: { corporateAccount: { include: { cityLedgerAccount: true } } } } }, orderBy: { dueDate: 'asc' },
     });
     const generatedInvoices = [];

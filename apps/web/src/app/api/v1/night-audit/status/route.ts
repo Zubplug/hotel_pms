@@ -278,6 +278,8 @@ export async function GET(req: NextRequest) {
     if (financial.pendingDiscounts?.length > 0) warnings++;
     if (financial.unverifiedComplimentary?.length > 0) blockers++;
     if (financial.pendingCheckInBypasses?.length > 0) blockers++;
+    if (financial.eventHall?.blockers > 0) blockers++;
+    if (financial.eventHall?.warnings > 0) warnings++;
     
     // Cash blockers/warnings
     // Cash handovers are informational for the auditor and must not prevent close.

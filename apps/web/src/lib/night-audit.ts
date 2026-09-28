@@ -32,6 +32,8 @@ export async function getNightAuditPreview(ctx: any, propertyId: string) {
 
   if (financial.highBalances.length > 0) warnings++;
   if (financial.unverifiedComplimentary?.length > 0) blockers++;
+  if (financial.eventHall?.blockers > 0) blockers++;
+  if (financial.eventHall?.warnings > 0) warnings++;
 
   return {
     operational,
@@ -77,7 +79,7 @@ export async function executeNightAudit(
   // must be reconciled before the old business date can be closed.
   if (!isRecovery) {
     const { openPosSessions, openFrontdeskSessions, financialSyncConflicts, openPosOrders } = await getSystemIntegrity(ctx, propertyId);
-    const { unverifiedComplimentary, pendingCheckInBypasses } = await getFinancialAudit(ctx, propertyId);
+    const { unverifiedComplimentary, pendingCheckInBypasses, eventHall } = await getFinancialAudit(ctx, propertyId);
     const { unverifiedTransactions } = await getCashReconciliation(ctx, propertyId);
     const { exceptions: { openOrders: additionalFnbOpenOrders, openSessions: additionalFnbOpenSessions } } = await getFnbControl(ctx, propertyId);
     
@@ -90,6 +92,9 @@ export async function executeNightAudit(
     if (openPosOrders.length > 0 || additionalFnbOpenOrders.length > 0) throw new Error('BLOCKER:Cannot execute audit. There are open POS orders.');
     
     if (financialSyncConflicts.length > 0) throw new Error('BLOCKER:Cannot execute audit. There are unresolved financial sync conflicts.');
+    if (eventHall?.blockers > 0) {
+      throw new Error('BLOCKER:Cannot execute audit. Issued event or recurring hall revenue is missing its posted accounting entry.');
+    }
 
     // Auto-close RECONCILIATION_REQUIRED POS sessions with zero expected cash.
     // These are SERVER-banking waiter sessions already submitted; no physical
@@ -239,6 +244,7 @@ export async function executeNightAudit(
     stage: 'ROOM_CHARGE' | 'HOUSEKEEPING';
     message: string;
   }> = [];
+  let leaseBilling = { processedCount: 0 };
 
   try {
     // Resolve a valid UUID actor for DB fields that require one (postedBy, appliedBy).
@@ -252,6 +258,16 @@ export async function executeNightAudit(
         select: { id: true }
       });
       actorId = fallbackStaff?.id ?? null;
+    }
+
+    // Generate all recurring hall billing periods due on the date being
+    // closed before the close package is finalized. This keeps the billing
+    // cutoff aligned with the audited business date rather than the date
+    // after the property rolls forward.
+    try {
+      leaseBilling = await processLeaseBilling(propertyId, actorId ? { userId: actorId } : undefined, undefined, businessDate);
+    } catch (leaseError) {
+      throw new Error(`BLOCKER:Recurring hall billing could not be generated for ${businessDate.toISOString().slice(0, 10)}: ${leaseError instanceof Error ? leaseError.message : String(leaseError)}`);
     }
 
     // 3. Post Room Charges
@@ -1097,17 +1113,6 @@ export async function executeNightAudit(
   }, { maxWait: 15000, timeout: 60000 });
   
   errors = finalErrors;
-
-  // Recurring hall contracts are billed at the property business-date close.
-  // Generation is idempotent because only PENDING schedules are eligible and
-  // each schedule has a unique invoice relation.
-  let leaseBilling = { processedCount: 0 };
-  try {
-    leaseBilling = await processLeaseBilling(propertyId, userId ? { userId } : undefined);
-  } catch (leaseError) {
-    errors += 1;
-    console.error('[Night Audit] Recurring hall billing failed; invoice generation will retry:', leaseError);
-  }
 
   try {
     const prop = await prisma.property.findUnique({ where: { id: propertyId } });

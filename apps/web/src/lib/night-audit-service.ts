@@ -202,6 +202,70 @@ export async function getSystemIntegrity(ctx: TenantContext, propertyId: string)
   return { openPosSessions, openFrontdeskSessions, syncConflicts, financialSyncConflicts, openPosOrders };
 }
 
+/**
+ * Reconciles event and recurring-hall revenue for the business date without
+ * bypassing the invoice approval workflow. Night Audit may verify that an
+ * issued invoice has posted revenue, but F&B/Accounting must still approve and
+ * issue an invoice before it becomes revenue.
+ */
+export async function getEventHallAuditControl(ctx: TenantContext, propertyId: string, auditDate?: Date) {
+  if (!ctx.propertyIds.includes(propertyId)) throw new Error('FORBIDDEN');
+  const property = await prisma.property.findUnique({ where: { id: propertyId }, select: { timezone: true, businessDate: true } });
+  if (!property) throw new Error('NOT_FOUND:Property not found');
+  const businessDate = auditDate || property.businessDate || getPropertyBusinessDate(property.timezone, new Date());
+  const nextDate = getNextBusinessDate(businessDate);
+
+  const [dueSchedules, invoices] = await Promise.all([
+    prisma.leaseBillingSchedule.findMany({
+      where: { dueDate: businessDate, status: 'PENDING', leaseContract: { propertyId, isActive: true } },
+      select: { id: true, amount: true, dueDate: true, periodStart: true, periodEnd: true, leaseContract: { select: { contactName: true, corporateAccount: { select: { name: true } } } } },
+      orderBy: { dueDate: 'asc' },
+    }),
+    prisma.eventInvoice.findMany({
+      where: { status: { not: 'VOID' }, OR: [{ propertyId }, { event: { propertyId } }] },
+      select: { id: true, status: true, workflowStatus: true, totalAmount: true, event: { select: { name: true, startDate: true } }, leaseBillingSchedule: { select: { dueDate: true, periodStart: true, periodEnd: true, leaseContract: { select: { contactName: true, corporateAccount: { select: { name: true } } } } } }, folioId: true },
+    }),
+  ]);
+
+  const serviceInvoices = invoices.filter((invoice) => {
+    if (invoice.leaseBillingSchedule) return invoice.leaseBillingSchedule.dueDate.getTime() === businessDate.getTime();
+    return Boolean(invoice.event?.startDate && getPropertyBusinessDate(property.timezone, invoice.event.startDate).getTime() === businessDate.getTime());
+  });
+  const invoiceIds = serviceInvoices.map((invoice) => invoice.id);
+  const [journals, folioItems] = await Promise.all([
+    invoiceIds.length ? prisma.journalEntry.findMany({ where: { propertyId, reference: { in: invoiceIds.map((id) => `EVENT-INVOICE-${id}`) }, status: 'POSTED', isReversed: false }, select: { reference: true } }) : [],
+    serviceInvoices.filter((invoice) => invoice.folioId).length
+      ? prisma.folioItem.findMany({ where: { folioId: { in: serviceInvoices.map((invoice) => invoice.folioId).filter((id): id is string => Boolean(id)) }, operationId: { startsWith: 'EVENT-INV-' }, voidedAt: null }, select: { operationId: true, folioId: true } })
+      : [],
+  ]);
+  const postedJournalIds = new Set(journals.map((journal) => journal.reference?.replace('EVENT-INVOICE-', '')));
+  const postedFolioInvoiceIds = new Set(folioItems.map((item) => item.operationId?.match(/^EVENT-INV-([0-9a-f-]+)-/)?.[1]).filter(Boolean));
+  const pendingBillingPeriods = dueSchedules.map((schedule) => ({
+    id: schedule.id,
+    amount: Number(schedule.amount),
+    dueDate: schedule.dueDate,
+    periodStart: schedule.periodStart,
+    periodEnd: schedule.periodEnd,
+    customer: schedule.leaseContract.corporateAccount?.name || schedule.leaseContract.contactName,
+  }));
+  const awaitingApproval = serviceInvoices.filter((invoice) => ['SUBMITTED', 'IN_REVIEW', 'REJECTED'].includes(invoice.workflowStatus));
+  const approvedAwaitingIssue = serviceInvoices.filter((invoice) => invoice.workflowStatus === 'APPROVED' && ['DRAFT', 'UNPAID'].includes(invoice.status));
+  const missingRevenuePosting = serviceInvoices.filter((invoice) => ['ISSUED', 'PARTIAL', 'PAID'].includes(invoice.status) && !postedJournalIds.has(invoice.id) && !postedFolioInvoiceIds.has(invoice.id));
+  const postedCount = serviceInvoices.filter((invoice) => ['ISSUED', 'PARTIAL', 'PAID'].includes(invoice.status) && (postedJournalIds.has(invoice.id) || postedFolioInvoiceIds.has(invoice.id))).length;
+
+  return {
+    businessDate,
+    pendingBillingPeriods,
+    awaitingApproval: awaitingApproval.map((invoice) => ({ id: invoice.id, amount: Number(invoice.totalAmount), status: invoice.workflowStatus, customer: invoice.leaseBillingSchedule?.leaseContract.corporateAccount?.name || invoice.leaseBillingSchedule?.leaseContract.contactName || invoice.event?.name || 'Event' })),
+    approvedAwaitingIssue: approvedAwaitingIssue.map((invoice) => ({ id: invoice.id, amount: Number(invoice.totalAmount), customer: invoice.leaseBillingSchedule?.leaseContract.corporateAccount?.name || invoice.leaseBillingSchedule?.leaseContract.contactName || invoice.event?.name || 'Event' })),
+    missingRevenuePosting: missingRevenuePosting.map((invoice) => ({ id: invoice.id, amount: Number(invoice.totalAmount), customer: invoice.leaseBillingSchedule?.leaseContract.corporateAccount?.name || invoice.leaseBillingSchedule?.leaseContract.contactName || invoice.event?.name || 'Event' })),
+    postedCount,
+    blockers: missingRevenuePosting.length,
+    warnings: pendingBillingPeriods.length + awaitingApproval.length + approvedAwaitingIssue.length,
+    nextDate,
+  };
+}
+
 export async function getFinancialAudit(ctx: TenantContext, propertyId: string) {
   if (!ctx.propertyIds.includes(propertyId)) throw new Error('FORBIDDEN');
   const property = await prisma.property.findUnique({ where: { id: propertyId } });
@@ -514,7 +578,8 @@ export async function getFinancialAudit(ctx: TenantContext, propertyId: string) 
     }
   });
 
-  return { openFolios, highBalances, rateVariances, pendingDiscounts: enrichedPendingDiscounts, pendingNightAuditPostings, unverifiedComplimentary: enrichedComplimentary, pendingCheckInBypasses };
+  const eventHall = await getEventHallAuditControl(ctx, propertyId, businessDate);
+  return { openFolios, highBalances, rateVariances, pendingDiscounts: enrichedPendingDiscounts, pendingNightAuditPostings, unverifiedComplimentary: enrichedComplimentary, pendingCheckInBypasses, eventHall };
 }
 
 export async function getCashReconciliation(ctx: TenantContext, propertyId: string) {

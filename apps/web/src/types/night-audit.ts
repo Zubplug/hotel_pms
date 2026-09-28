@@ -57,6 +57,15 @@ export interface FinancialData {
   pendingCheckInBypasses: any[];
   rateVariances: any[];
   pendingNightAuditPostings?: any[];
+  eventHall?: {
+    pendingBillingPeriods: any[];
+    awaitingApproval: any[];
+    approvedAwaitingIssue: any[];
+    missingRevenuePosting: any[];
+    postedCount: number;
+    blockers: number;
+    warnings: number;
+  };
 }
 
 export interface CashData {
