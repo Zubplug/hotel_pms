@@ -34,6 +34,22 @@ const isUuid = (value: unknown): value is string =>
     value,
   );
 
+function isMatchingCheckoutTransfer(checkoutEvent: any, transferEvent: any): boolean {
+  if (
+    checkoutEvent?.aggregateType !== "RESERVATION" ||
+    checkoutEvent?.eventType !== "CHECK_OUT" ||
+    transferEvent?.aggregateType !== "FOLIO" ||
+    transferEvent?.eventType !== "GUEST_CREDIT_TRANSFER"
+  ) return false;
+
+  const transferPayload = typeof transferEvent.payloadJson === "string"
+    ? (() => {
+        try { return JSON.parse(transferEvent.payloadJson); } catch { return {}; }
+      })()
+    : (transferEvent.payloadJson || {});
+  return transferPayload.reservationId === checkoutEvent.aggregateId;
+}
+
 /**
  * Persist the approval side-effect for an offline discount independently of
  * HotelEvent idempotency. A discount event may be recorded before its room
@@ -343,8 +359,30 @@ export async function POST(req: NextRequest) {
     const otaSyncEventIds: string[] = [];
     const otaInventoryQueued = new Set<string>();
 
+    // Process outbox events sequentially. A desktop checkout can produce two
+    // events on different aggregates: a FOLIO/GUEST_CREDIT_TRANSFER and a
+    // RESERVATION/CHECK_OUT. The checkout handler is also responsible for
+    // repairing a missing same-day room charge. If the transfer is processed
+    // first, it moves the negative folio balance to zero, the checkout repair
+    // then adds the room charge, and checkout incorrectly fails with
+    // PAYMENT_REQUIRED. Keep the checkout ahead of its matching transfer so
+    // the authoritative checkout transaction settles the folio first; the
+    // transfer will then be a safe no-op when no credit remains.
+    const orderedEvents = [...events].sort((left: any, right: any) => {
+      const leftIsCheckout = left.aggregateType === "RESERVATION" && left.eventType === "CHECK_OUT";
+      const rightIsCheckout = right.aggregateType === "RESERVATION" && right.eventType === "CHECK_OUT";
+      const leftIsTransfer = left.aggregateType === "FOLIO" && left.eventType === "GUEST_CREDIT_TRANSFER";
+      const rightIsTransfer = right.aggregateType === "FOLIO" && right.eventType === "GUEST_CREDIT_TRANSFER";
+
+      const leftMatchesTransfer = leftIsCheckout && isMatchingCheckoutTransfer(left, right);
+      const rightMatchesTransfer = rightIsCheckout && isMatchingCheckoutTransfer(right, left);
+      if (leftMatchesTransfer && rightIsTransfer) return -1;
+      if (rightMatchesTransfer && leftIsTransfer) return 1;
+      return 0;
+    });
+
     // Process outbox events sequentially
-    for (const event of events) {
+    for (const event of orderedEvents) {
       const {
         id,
         idempotencyKey,
@@ -1389,6 +1427,52 @@ export async function POST(req: NextRequest) {
                 }
               }
             }
+
+            // A guest-credit transfer may have reached the cloud before this
+            // checkout event. In that case the transfer has created an OPEN
+            // REFUND_OWED entry and offset the old negative folio balance, but
+            // any room charge that was already on the folio still needs to
+            // consume that credit before checkout evaluates payment. Keep the
+            // sync path consistent with the online checkout path and apply
+            // both same-folio and prior-stay credit here as well.
+            if (!reservation.corporateAccountId && reservation.primaryGuestId) {
+              for (const folio of folios) {
+                const outstanding = Number(folio.balance);
+                if (outstanding <= 0.01) continue;
+
+                const sameFolioApplied = await applyAvailableFolioCredit(tx, {
+                  folioId: folio.id,
+                  propertyId,
+                  guestId: reservation.primaryGuestId,
+                  reservationId: aggregateId,
+                  amount: outstanding,
+                  currency: folio.currency || "NGN",
+                  source: "CHECKOUT_GUEST_CREDIT",
+                  description: `Applied guest credit at checkout for reservation ${reservation.confirmationNumber}`,
+                  appliedBy: actorId,
+                  operationKey: `CHECKOUT_GUEST_CREDIT:${aggregateId}:${folio.id}`,
+                  businessDate: postingBusinessDate,
+                });
+                await applyAvailableGuestLedgerCredit(tx, {
+                  folioId: folio.id,
+                  propertyId,
+                  organizationId: property.organizationId,
+                  guestId: reservation.primaryGuestId,
+                  reservationId: aggregateId,
+                  amount: Math.max(0, outstanding - sameFolioApplied),
+                  currency: folio.currency || "NGN",
+                  appliedBy: actorId,
+                  operationKey: `CHECKOUT_GUEST_CREDIT:${aggregateId}:${folio.id}`,
+                  businessDate: postingBusinessDate,
+                  description: `Applied previous-stay guest credit at checkout for reservation ${reservation.confirmationNumber}`,
+                });
+              }
+              folios = await tx.folio.findMany({
+                where: { reservationId: aggregateId, propertyId },
+                select: { id: true, balance: true, version: true, currency: true },
+              });
+            }
+
             const checkoutFolios = reservation.corporateAccountId
               ? await Promise.all(folios.map(async (folio: any) => {
                   const items = await tx.folioItem.findMany({
