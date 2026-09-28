@@ -111,6 +111,45 @@ async function buildDepartmentAnalytics(propertyIds: string[], businessDate: Dat
   };
 }
 
+async function buildAccountingRevenueAnalytics(propertyIds: string[], businessDate: Date) {
+  const lines = await prisma.journalEntryLine.findMany({
+    where: {
+      account: { propertyId: { in: propertyIds }, type: 'REVENUE', isActive: true },
+      entry: { propertyId: { in: propertyIds }, entryDate: businessDate, status: 'POSTED', isReversed: false },
+    },
+    select: {
+      debit: true,
+      credit: true,
+      account: { select: { id: true, propertyId: true, code: true, name: true, category: true, normalBalance: true } },
+    },
+  });
+
+  const accountMap = new Map<string, {
+    id: string;
+    propertyId: string;
+    code: string;
+    name: string;
+    category: string;
+    normalBalance: string;
+    netRevenue: number;
+  }>();
+  for (const line of lines) {
+    const existing = accountMap.get(line.account.id) || { ...line.account, netRevenue: 0 };
+    existing.netRevenue += Number(line.credit || 0) - Number(line.debit || 0);
+    accountMap.set(line.account.id, existing);
+  }
+
+  const accounts = [...accountMap.values()]
+    .map(account => ({ ...account, netRevenue: Number(account.netRevenue.toFixed(2)) }))
+    .filter(account => account.netRevenue !== 0)
+    .sort((a, b) => b.netRevenue - a.netRevenue);
+
+  return {
+    totalRevenue: Number(accounts.reduce((sum, account) => sum + account.netRevenue, 0).toFixed(2)),
+    accounts,
+  };
+}
+
 async function buildPropertySnapshot(property: { id: string; name: string; code: string }) {
   const businessDate = await getPropertyBusinessDate(property.id);
   const [kpi, trend, sync, arrivals, departures, activeGuests, receivables, approvals, housekeeping, maintenance] = await Promise.all([
@@ -172,7 +211,10 @@ export async function GET(req: NextRequest) {
     const snapshots = await Promise.all(properties.map(buildPropertySnapshot));
     const portfolioBusinessDate = snapshots[0]?.businessDate ? new Date(snapshots[0].businessDate) : new Date();
     const inventoryAndAudit = await buildInventoryAndAuditAnalytics([...propertyIds], portfolioBusinessDate);
-    const departments = await buildDepartmentAnalytics([...propertyIds], portfolioBusinessDate);
+    const [departments, accounting] = await Promise.all([
+      buildDepartmentAnalytics([...propertyIds], portfolioBusinessDate),
+      buildAccountingRevenueAnalytics([...propertyIds], portfolioBusinessDate),
+    ]);
 
     const totalRooms = snapshots.reduce((sum, item) => sum + item.kpi.availableRooms, 0);
     const occupiedRooms = snapshots.reduce((sum, item) => sum + item.kpi.occupiedRooms, 0);
@@ -204,7 +246,7 @@ export async function GET(req: NextRequest) {
       generatedAt: new Date().toISOString(),
       scope: { propertyId: requestedPropertyId || 'ALL', properties },
       kpis: {
-        revenueToday: totalRevenue,
+        revenueToday: accounting.totalRevenue,
         roomRevenue,
         fbRevenue,
         otherRevenue,
@@ -239,6 +281,7 @@ export async function GET(req: NextRequest) {
       })),
       inventory: inventoryAndAudit.inventory,
       audit: inventoryAndAudit.audit,
+      accounting,
       departments,
       activity: activity.map((event) => ({ id: event.id, action: event.action, property: properties.find((property) => property.id === event.propertyId)?.name || 'System', timeAgo: event.createdAt.toISOString(), details: event.newValue })),
     });
