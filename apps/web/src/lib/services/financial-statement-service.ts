@@ -84,7 +84,7 @@ export class FinancialStatementService {
         COALESCE(SUM(l.credit), 0) as "sumCredit"
       FROM "ChartOfAccount" c
       JOIN "JournalEntryLine" l ON l."accountId" = c.id
-      JOIN "JournalEntry" e ON e.id = l."entryId" AND e.status = 'POSTED' AND e."entryDate" >= ${startDate} AND e."entryDate" <= ${endDate}
+      JOIN "JournalEntry" e ON e.id = l."entryId" AND e.status = 'POSTED' AND e."entryDate" >= ${startDate} AND e."entryDate" <= ${endDate} AND COALESCE(e.reference, '') NOT LIKE 'REVERSAL-EVENT-INVOICE-%'
       WHERE c."propertyId" = ${propertyId}::uuid AND c.type IN ('REVENUE', 'EXPENSE')
       GROUP BY c.code, c.name, c.type, c.category
       ORDER BY c.type DESC, c.code ASC

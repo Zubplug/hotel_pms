@@ -114,7 +114,7 @@ async function buildDepartmentAnalytics(propertyIds: string[], businessDate: Dat
 type AccountingRevenueLine = {
   debit: unknown;
   credit: unknown;
-  entry: { entryDate: Date };
+  entry: { entryDate: Date; reference: string | null };
   account: { id: string; propertyId: string; code: string; name: string; category: string; normalBalance: string };
 };
 
@@ -122,14 +122,10 @@ function aggregateAccountingRevenue(lines: AccountingRevenueLine[]) {
   const accountMap = new Map<string, AccountingRevenueLine['account'] & { netRevenue: number }>();
   const trendMap = new Map<string, number>();
   for (const line of lines) {
+    if (line.entry.reference?.startsWith('REVERSAL-EVENT-INVOICE-')) continue;
     const credit = Number(line.credit || 0);
     const debit = Number(line.debit || 0);
-    // Posted reversal journals can debit a normal revenue account while
-    // remaining in the ledger for audit history. Only contra-revenue
-    // accounts are allowed to reduce reported revenue.
-    const value = line.account.category.toLowerCase().includes('contra')
-      ? credit - debit
-      : credit;
+    const value = credit - debit;
     const existing = accountMap.get(line.account.id) || { ...line.account, netRevenue: 0 };
     existing.netRevenue += value;
     accountMap.set(line.account.id, existing);
@@ -155,7 +151,7 @@ async function buildAccountingRevenueAnalytics(propertyIds: string[], businessDa
         account: { propertyId: { in: propertyIds }, type: 'REVENUE', isActive: true },
         entry: { propertyId: { in: propertyIds }, entryDate: { gte: monthStart, lte: businessDate }, status: 'POSTED', isReversed: false },
       },
-      select: { debit: true, credit: true, entry: { select: { entryDate: true } }, account: { select: { id: true, propertyId: true, code: true, name: true, category: true, normalBalance: true } } },
+      select: { debit: true, credit: true, entry: { select: { entryDate: true, reference: true } }, account: { select: { id: true, propertyId: true, code: true, name: true, category: true, normalBalance: true } } },
       orderBy: { entry: { entryDate: 'asc' } },
     }),
     prisma.nightAudit.findMany({ where: { propertyId: { in: propertyIds }, status: 'COMPLETED', businessDate: { lte: businessDate } }, orderBy: [{ businessDate: 'desc' }, { completedAt: 'desc' }], take: propertyIds.length, select: { propertyId: true, businessDate: true, completedAt: true } }),
@@ -167,7 +163,7 @@ async function buildAccountingRevenueAnalytics(propertyIds: string[], businessDa
       account: { propertyId: { in: propertyIds }, type: 'REVENUE', isActive: true },
       entry: { propertyId: { in: propertyIds }, entryDate: { in: lastAuditDates }, status: 'POSTED', isReversed: false },
     },
-    select: { debit: true, credit: true, entry: { select: { entryDate: true } }, account: { select: { id: true, propertyId: true, code: true, name: true, category: true, normalBalance: true } } },
+    select: { debit: true, credit: true, entry: { select: { entryDate: true, reference: true } }, account: { select: { id: true, propertyId: true, code: true, name: true, category: true, normalBalance: true } } },
   }) : [];
 
   const month = aggregateAccountingRevenue(monthLines);

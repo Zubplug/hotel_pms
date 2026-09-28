@@ -32,7 +32,7 @@ export class DailyAccountingService {
         COALESCE(SUM(l.credit), 0) - COALESCE(SUM(l.debit), 0) as "netRevenue"
       FROM "JournalEntryLine" l
       JOIN "ChartOfAccount" c ON l."accountId" = c.id
-      JOIN "JournalEntry" e ON e.id = l."entryId" AND e.status = 'POSTED' AND e."entryDate" = ${businessDate}
+      JOIN "JournalEntry" e ON e.id = l."entryId" AND e.status = 'POSTED' AND e."entryDate" = ${businessDate} AND COALESCE(e.reference, '') NOT LIKE 'REVERSAL-EVENT-INVOICE-%'
       LEFT JOIN "Department" d ON l."departmentId" = d.id
       LEFT JOIN "PosOutlet" o ON l."outletId" = o.id
       WHERE c."propertyId" = ${propertyId}::uuid AND c.type = 'REVENUE'
