@@ -92,6 +92,7 @@ const ALL_NAV: NavItem[] = [
 
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [hasMultipleProperties, setHasMultipleProperties] = useState<boolean | null>(null);
   const pathname = usePathname();
   const { data: session, status } = useLodgeCoreSession();
   const router = useRouter();
@@ -300,7 +301,9 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 
           <div className="flex flex-1 items-center gap-4">
 
-            <PropertySelector />
+            {hasMultipleProperties !== false && (
+              <PropertySelector onMultiplePropertiesChange={setHasMultipleProperties} />
+            )}
           </div>
         </header>
 

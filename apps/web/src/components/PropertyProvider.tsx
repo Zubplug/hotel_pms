@@ -15,19 +15,13 @@ export function PropertyProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
   useEffect(() => {
-    // 1. If we already have a stored selection, use it immediately
     const stored = localStorage.getItem('selectedPropertyId');
-    if (stored) {
-      setPropertyId(stored);
-      setIsLoading(false);
-      return;
-    }
 
-    // 2. Nothing stored — auto-select the first property the user has access to
-    //    This handles first-login scenarios (e.g. Night Auditor, Receptionist)
+    // Resolve the selection from the live authorized property list. A stored
+    // browser value is only accepted when it is still in the user's scope.
     async function autoSelectProperty() {
       try {
-        const res = await fetch('/api/v1/properties?pageSize=1');
+        const res = await fetch('/api/v1/properties?pageSize=100');
         if (!res.ok) return;
         const json = await res.json();
         // Support both { data: [...] } and paginated { data: { data: [...] } } shapes
@@ -38,9 +32,11 @@ export function PropertyProvider({ children }: { children: React.ReactNode }) {
             ? json.data
             : [];
         if (list.length > 0) {
-          const firstId = list[0].id;
-          setPropertyId(firstId);
-          localStorage.setItem('selectedPropertyId', firstId);
+          const resolvedId = stored && list.some((property) => property.id === stored)
+            ? stored
+            : list[0].id;
+          setPropertyId(resolvedId);
+          localStorage.setItem('selectedPropertyId', resolvedId);
         }
       } catch {
         // Silently fail — user can still pick manually from the dropdown
