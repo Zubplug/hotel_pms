@@ -2598,6 +2598,7 @@ export async function POST(req: NextRequest) {
             const accountId = payload.accountId;
             const invoiceId = payload.invoiceId || null;
             const accountType = String(payload.accountType || "").toUpperCase();
+            const isCorporateAdvance = accountType === "CORPORATE" && payload.isCorporateAdvance === true;
             const frontdeskSessionId = payload.frontdeskSessionId;
             const method = String(payload.method || "BANK_TRANSFER").toUpperCase();
             const reference = String(payload.reference || "").trim();
@@ -2641,7 +2642,25 @@ export async function POST(req: NextRequest) {
               remaining -= applied;
               appliedAmount += applied;
             }
-            const paymentEntry = await tx.cityLedgerEntry.create({ data: { accountId, propertyId, amount, currency: account.currency, type: "PAYMENT", status: remaining <= 0.01 ? "SETTLED" : "OPEN", reference, reason: invoice ? `Settlement for invoice ${invoice.invoiceNumber || invoiceId}` : appliedAmount > 0.01 ? "Bulk corporate city ledger payment" : "Unapplied corporate advance", createdBy: actorId } });
+            // Corporate advances are created optimistically in the offline
+            // desktop ledger. Reuse that UUID when materializing the cloud
+            // entry so the next pull updates the placeholder instead of
+            // importing a second PAYMENT row. Invoice settlements must keep
+            // their own payment entry because their local row is the invoice.
+            const offlineEntryId = isUuid(payload.entryId)
+              ? payload.entryId
+              : isUuid(aggregateId)
+                ? aggregateId
+                : undefined;
+            const existingOfflineEntry = offlineEntryId
+              ? await tx.cityLedgerEntry.findUnique({ where: { id: offlineEntryId }, select: { id: true } })
+              : null;
+            // The fallback also repairs advances queued by older desktop
+            // builds, which did not include isCorporateAdvance in the event.
+            const offlineAdvanceId = (isCorporateAdvance || (account.type === "CORPORATE" && !invoiceId)) && !existingOfflineEntry
+              ? offlineEntryId
+              : undefined;
+            const paymentEntry = await tx.cityLedgerEntry.create({ data: { id: offlineAdvanceId, accountId, propertyId, amount, currency: account.currency, type: "PAYMENT", status: remaining <= 0.01 ? "SETTLED" : "OPEN", reference, reason: invoice ? `Settlement for invoice ${invoice.invoiceNumber || invoiceId}` : appliedAmount > 0.01 ? "Bulk corporate city ledger payment" : "Unapplied corporate advance", createdBy: actorId } });
             // Re-read the affected invoices so allocation rows mirror the exact FIFO applications.
             let allocationRemaining = amount;
             for (const openInvoice of invoices) {
