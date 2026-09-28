@@ -49,7 +49,7 @@ export default function RoomsPage() {
   const enabled = !propertyLoading && !!propertyId;
   const { data: response, isLoading, isError, refetch } = useQuery({
     queryKey: ['rooms', 'command-center', propertyId],
-    queryFn: async () => { const res = await fetch(`/api/v1/rooms?propertyId=${propertyId}&page=1&pageSize=200`); if (!res.ok) throw new Error('Failed to fetch rooms'); return res.json(); },
+    queryFn: async () => { const res = await fetch(`/api/v1/rooms?propertyId=${propertyId}&page=1&pageSize=100`); if (!res.ok) throw new Error('Failed to fetch rooms'); return res.json(); },
     enabled,
   });
   const rooms: Room[] = useMemo(() => Array.isArray(response?.data) ? response.data : [], [response]);

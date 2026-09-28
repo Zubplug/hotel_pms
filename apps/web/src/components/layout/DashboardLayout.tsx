@@ -99,6 +99,8 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const isDesktop = process.env.NEXT_PUBLIC_IS_DESKTOP === 'true';
   const isDarkWorkspace = pathname === '/properties'
     || pathname?.startsWith('/properties/')
+    || pathname === '/rooms'
+    || pathname?.startsWith('/rooms/')
     || pathname === '/general-manager'
     || pathname?.startsWith('/general-manager/')
     || pathname === '/admin'
