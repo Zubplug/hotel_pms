@@ -26,12 +26,16 @@ export async function GET(req: NextRequest) {
       return paginatedResponse([], { page, pageSize, total: 0, totalPages: 0 });
     }
 
-    const where: Record<string, unknown> = {
+    const propertyWhere: Record<string, unknown> = {
       propertyId: {
         in: propertyId && allowedPropertyIds.includes(propertyId)
           ? [propertyId]
           : allowedPropertyIds,
       },
+      deletedAt: null,
+    };
+    const where: Record<string, unknown> = {
+      ...propertyWhere,
       ...(status ? { status } : {}),
       ...(search
         ? {
@@ -45,7 +49,13 @@ export async function GET(req: NextRequest) {
         : {}),
     };
 
-    const [total, reservations] = await Promise.all([
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const analyticsWhere = propertyWhere;
+
+    const [total, reservations, statusCounts, sourceCounts, arrivalsToday, departuresToday, inHouse] = await Promise.all([
       prisma.reservation.count({ where }),
       prisma.reservation.findMany({
         where,
@@ -63,13 +73,25 @@ export async function GET(req: NextRequest) {
           },
         },
       }),
+      prisma.reservation.groupBy({ where: analyticsWhere, by: ['status'], _count: { _all: true } }),
+      prisma.reservation.groupBy({ where: analyticsWhere, by: ['source'], _count: { _all: true } }),
+      prisma.reservation.count({ where: { ...analyticsWhere, checkIn: { gte: today, lt: tomorrow }, status: { notIn: ['CANCELLED', 'NO_SHOW', 'EXPIRED'] } } }),
+      prisma.reservation.count({ where: { ...analyticsWhere, checkOut: { gte: today, lt: tomorrow }, status: { in: ['CONFIRMED', 'CHECKED_IN'] } } }),
+      prisma.reservation.count({ where: { ...analyticsWhere, status: 'CHECKED_IN' } }),
     ]);
 
-    return paginatedResponse(reservations, {
-      page,
-      pageSize,
-      total,
-      totalPages: Math.ceil(total / pageSize),
+    return NextResponse.json({
+      success: true,
+      data: reservations,
+      meta: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) },
+      analytics: {
+        arrivalsToday,
+        departuresToday,
+        inHouse,
+        activeBookings: statusCounts.filter((item) => ['INQUIRY', 'PENDING', 'CONFIRMED', 'CHECKED_IN'].includes(item.status)).reduce((sum, item) => sum + item._count._all, 0),
+        status: statusCounts.map((item) => ({ name: item.status, value: item._count._all })),
+        source: sourceCounts.map((item) => ({ name: item.source, value: item._count._all })),
+      },
     });
   } catch (err) {
     console.error('[Reservations GET]', err);

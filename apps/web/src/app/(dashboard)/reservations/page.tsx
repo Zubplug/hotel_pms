@@ -1,272 +1,79 @@
 'use client';
 
-import React, { useState } from 'react';
+import { useMemo, useState } from 'react';
+import type { ElementType } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { AlertTriangle, ArrowRight, BedDouble, CalendarCheck2, CalendarDays, CheckCircle2, LogIn, LogOut, Plus, RefreshCw, Search, UserRound, UsersRound, XCircle } from 'lucide-react';
 import Link from 'next/link';
-import {
-  CalendarDays, Search, User, BedDouble,
-  ArrowRight, CheckCircle2, Clock, XCircle,
-  AlertCircle, LogIn, Filter,
-} from 'lucide-react';
+import { useProperty } from '@/components/PropertyProvider';
+import { ReservationForm } from '@/components/reservations/ReservationForm';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { LoadingState, EmptyState } from '@/components/ui/EmptyState';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatRoomNumber } from '@/lib/format-room';
-// ─── Types ────────────────────────────────────────────────────────────────────
 
-interface Reservation {
-  id: string;
-  confirmationNumber: string;
-  status: string;
-  source: string;
-  checkIn: string;
-  checkOut: string;
-  adults: number;
-  children: number;
-  primaryGuest: { firstName: string; lastName: string; email?: string; phone?: string };
-  property: { name: string; city: string };
-  reservationRooms: Array<{
-    room?: { number: string; status: string } | null;
-    roomType?: { name: string } | null;
-  }>;
+type Reservation = { id: string; confirmationNumber: string; status: string; source: string; checkIn: string; checkOut: string; adults: number; children: number; primaryGuest: { firstName: string; lastName: string; email?: string | null; phone?: string | null }; reservationRooms: Array<{ room?: { number: string; status: string } | null; roomType?: { name: string } | null }> };
+type Analytics = { arrivalsToday: number; departuresToday: number; inHouse: number; activeBookings: number; status: Array<{ name: string; value: number }>; source: Array<{ name: string; value: number }> };
+const statusLabels: Record<string, string> = { INQUIRY: 'Inquiry', PENDING: 'Pending', CONFIRMED: 'Confirmed', CHECKED_IN: 'Checked in', CHECKED_OUT: 'Checked out', CANCELLED: 'Cancelled', NO_SHOW: 'No show', EXPIRED: 'Expired' };
+const statusTone: Record<string, string> = { INQUIRY: 'border-slate-300/20 bg-slate-300/10 text-slate-200', PENDING: 'border-amber-300/20 bg-amber-300/10 text-amber-200', CONFIRMED: 'border-sky-300/20 bg-sky-300/10 text-sky-200', CHECKED_IN: 'border-emerald-300/20 bg-emerald-300/10 text-emerald-200', CHECKED_OUT: 'border-slate-300/20 bg-slate-300/10 text-slate-400', CANCELLED: 'border-rose-300/20 bg-rose-300/10 text-rose-200', NO_SHOW: 'border-orange-300/20 bg-orange-300/10 text-orange-200', EXPIRED: 'border-slate-300/20 bg-slate-300/10 text-slate-500' };
+const chartColors = ['#34d399', '#60a5fa', '#a78bfa', '#fbbf24', '#fb7185', '#f97316', '#94a3b8'];
+const tooltipStyle = { background: '#0d1b2a', border: '1px solid rgba(148,163,184,.2)', borderRadius: 12, color: '#e2e8f0' };
+const dateKey = (date: string) => new Date(date).toISOString().slice(0, 10);
+const todayKey = () => { const now = new Date(); return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`; };
+const dateLabel = (date: string) => new Date(date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+const nights = (checkIn: string, checkOut: string) => Math.max(1, Math.round((new Date(checkOut).getTime() - new Date(checkIn).getTime()) / 86400000));
+
+function Metric({ label, value, detail, icon: Icon, tone }: { label: string; value: string | number; detail: string; icon: ElementType; tone: string }) {
+  return <Card className="border-white/[0.08] bg-white/[0.045] text-slate-100 shadow-2xl shadow-black/10"><CardContent className="flex items-start justify-between gap-3 p-5"><div><p className="text-[10px] font-semibold uppercase tracking-[.16em] text-slate-500">{label}</p><p className="mt-2 text-2xl font-semibold tracking-tight text-white">{value}</p><p className="mt-1 text-xs text-slate-500">{detail}</p></div><div className={`rounded-xl p-2.5 ${tone}`}><Icon className="h-5 w-5" /></div></CardContent></Card>;
 }
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-const STATUS_STYLES: Record<string, { label: string; badge: string; icon: React.ElementType }> = {
-  INQUIRY:      { label: 'Inquiry',     badge: 'bg-gray-100 text-gray-700',    icon: Clock },
-  PENDING:      { label: 'Pending',     badge: 'bg-yellow-100 text-yellow-700', icon: Clock },
-  CONFIRMED:    { label: 'Confirmed',   badge: 'bg-blue-100 text-blue-700',    icon: CheckCircle2 },
-  CHECKED_IN:   { label: 'Checked In',  badge: 'bg-emerald-100 text-emerald-700', icon: LogIn },
-  CHECKED_OUT:  { label: 'Checked Out', badge: 'bg-slate-100 text-slate-600',  icon: CheckCircle2 },
-  CANCELLED:    { label: 'Cancelled',   badge: 'bg-red-100 text-red-700',      icon: XCircle },
-  NO_SHOW:      { label: 'No Show',     badge: 'bg-orange-100 text-orange-700', icon: AlertCircle },
-  EXPIRED:      { label: 'Expired',     badge: 'bg-gray-100 text-gray-500',    icon: Clock },
-};
-
-const ALL_STATUSES = Object.keys(STATUS_STYLES);
-
-function formatDate(d: string) {
-  return new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-}
-
-function nightCount(checkIn: string, checkOut: string) {
-  const diff = new Date(checkOut).getTime() - new Date(checkIn).getTime();
-  return Math.round(diff / 86400000);
-}
-
-// ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ReservationsPage() {
+  const { propertyId, isLoading: propertyLoading } = useProperty();
   const [search, setSearch] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
+  const [status, setStatus] = useState('ALL');
   const [page, setPage] = useState(1);
-
-  // Debounce search input
-  React.useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(search), 300);
-    return () => clearTimeout(t);
-  }, [search]);
-
-  const { data, isLoading } = useQuery({
-    queryKey: ['reservations', 'list', { search: debouncedSearch, status: statusFilter, page }],
+  const [createOpen, setCreateOpen] = useState(false);
+  const enabled = !propertyLoading && Boolean(propertyId);
+  const query = useQuery({
+    queryKey: ['reservations', 'command-center', propertyId, search, status, page],
     queryFn: async () => {
-      const params = new URLSearchParams({
-        page: String(page),
-        pageSize: '20',
-        ...(debouncedSearch ? { search: debouncedSearch } : {}),
-        ...(statusFilter ? { status: statusFilter } : {}),
-      });
-      const res = await fetch(`/api/v1/reservations?${params}`);
-      if (!res.ok) throw new Error('Failed to load reservations');
-      return res.json();
+      const params = new URLSearchParams({ propertyId: propertyId || '', page: String(page), pageSize: '25', ...(search ? { search } : {}), ...(status !== 'ALL' ? { status } : {}) });
+      const response = await fetch(`/api/v1/reservations?${params}`);
+      if (!response.ok) throw new Error('Failed to load reservations');
+      return await response.json() as { data: Reservation[]; meta: { total: number; totalPages: number }; analytics: Analytics };
     },
+    enabled,
   });
+  const reservations = useMemo(() => query.data?.data || [], [query.data?.data]);
+  const analytics = query.data?.analytics;
+  const today = todayKey();
+  const todayQueue = useMemo(() => reservations.filter((reservation) => dateKey(reservation.checkIn) === today || dateKey(reservation.checkOut) === today), [reservations, today]);
+  const statusData = analytics?.status?.filter((item) => item.value > 0) || [];
+  const sourceData = analytics?.source?.filter((item) => item.value > 0) || [];
+  const activeExceptions = (analytics?.status || []).filter((item) => ['PENDING', 'NO_SHOW', 'CANCELLED'].includes(item.name)).reduce((sum, item) => sum + item.value, 0);
 
-  const reservations: Reservation[] = data?.data ?? [];
-  const meta = data?.meta ?? { total: 0, totalPages: 1 };
-
-  return (
-    <div className="space-y-6 animate-in fade-in duration-300">
-
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Reservations</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            Manage guest reservations and key card check-in
-          </p>
-        </div>
-      </div>
-
-      {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-            placeholder="Search guest, confirmation #…"
-            className="w-full pl-9 pr-4 py-2 text-sm rounded-lg border bg-background focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all"
-          />
-        </div>
-
-        <div className="relative">
-          <Filter className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-          <select
-            value={statusFilter}
-            onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
-            className="pl-9 pr-8 py-2 text-sm rounded-lg border bg-background focus:outline-none focus:ring-2 focus:ring-primary/30 appearance-none cursor-pointer transition-all"
-          >
-            <option value="">All Statuses</option>
-            {ALL_STATUSES.map((s) => (
-              <option key={s} value={s}>{STATUS_STYLES[s]?.label ?? s}</option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      {/* List */}
-      {isLoading ? (
-        <LoadingState message="Loading reservations…" />
-      ) : reservations.length === 0 ? (
-        <EmptyState
-          icon={<CalendarDays />}
-          title="No reservations found"
-          description={search || statusFilter ? 'Try adjusting your filters.' : 'Reservations will appear here once created.'}
-        />
-      ) : (
-        <div className="rounded-xl border overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b bg-muted/40 text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                <th className="px-4 py-3 text-left">Guest</th>
-                <th className="px-4 py-3 text-left hidden md:table-cell">Confirmation</th>
-                <th className="px-4 py-3 text-left hidden sm:table-cell">Room</th>
-                <th className="px-4 py-3 text-left">Dates</th>
-                <th className="px-4 py-3 text-left">Status</th>
-                <th className="px-4 py-3 text-right"></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {reservations.map((res) => {
-                const s = STATUS_STYLES[res.status] ?? STATUS_STYLES.PENDING;
-                const StatusIcon = s.icon;
-                const room = res.reservationRooms[0];
-                const nights = nightCount(res.checkIn, res.checkOut);
-                return (
-                  <tr
-                    key={res.id}
-                    className="hover:bg-muted/30 transition-colors group"
-                  >
-                    {/* Guest */}
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2.5">
-                        <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                          <User className="h-4 w-4 text-primary" />
-                        </div>
-                        <div className="min-w-0">
-                          <p className="font-medium truncate">
-                            {res.primaryGuest.firstName} {res.primaryGuest.lastName}
-                          </p>
-                          <p className="text-xs text-muted-foreground truncate">
-                            {res.primaryGuest.email}
-                          </p>
-                        </div>
-                      </div>
-                    </td>
-
-                    {/* Confirmation */}
-                    <td className="px-4 py-3 hidden md:table-cell">
-                      <span className="font-mono text-xs text-muted-foreground">
-                        {res.confirmationNumber}
-                      </span>
-                    </td>
-
-                    {/* Room */}
-                    <td className="px-4 py-3 hidden sm:table-cell">
-                      {room ? (
-                        <div className="flex items-center gap-1.5">
-                          <BedDouble className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                          <span className="font-medium">
-                            {formatRoomNumber(room.room?.number) || '—'}
-                          </span>
-                          <span className="text-xs text-muted-foreground hidden lg:inline">
-                            · {room.roomType?.name}
-                          </span>
-                        </div>
-                      ) : (
-                        <span className="text-muted-foreground text-xs">No room</span>
-                      )}
-                    </td>
-
-                    {/* Dates */}
-                    <td className="px-4 py-3">
-                      <p className="font-medium text-xs">
-                        {formatDate(res.checkIn)} → {formatDate(res.checkOut)}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {nights} night{nights !== 1 ? 's' : ''} · {res.adults}A{res.children > 0 ? ` ${res.children}C` : ''}
-                      </p>
-                    </td>
-
-                    {/* Status */}
-                    <td className="px-4 py-3">
-                      <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${s.badge}`}>
-                        <StatusIcon className="h-3 w-3" />
-                        {s.label}
-                      </span>
-                    </td>
-
-                    {/* Action */}
-                    <td className="px-4 py-3 text-right">
-                      <Link href={`/reservations/${res.id}`}>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="opacity-0 group-hover:opacity-100 transition-opacity h-7 px-2"
-                        >
-                          <ArrowRight className="h-4 w-4" />
-                        </Button>
-                      </Link>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-
-          {/* Pagination */}
-          {meta.totalPages > 1 && (
-            <div className="flex items-center justify-between px-4 py-3 border-t bg-muted/20 text-sm text-muted-foreground">
-              <span>{meta.total} reservations</span>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={page <= 1}
-                  onClick={() => setPage((p) => p - 1)}
-                >
-                  Previous
-                </Button>
-                <span className="text-xs">
-                  {page} / {meta.totalPages}
-                </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={page >= meta.totalPages}
-                  onClick={() => setPage((p) => p + 1)}
-                >
-                  Next
-                </Button>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
+  const refresh = () => void query.refetch();
+  if (propertyLoading || (enabled && query.isLoading)) return <div className="min-h-[70vh] space-y-6 rounded-3xl bg-[#07111f] p-6"><div className="h-40 animate-pulse rounded-3xl bg-white/[0.06]" /><div className="grid gap-4 md:grid-cols-4">{[1, 2, 3, 4].map((item) => <div key={item} className="h-28 animate-pulse rounded-2xl bg-white/[0.06]" />)}</div><div className="h-80 animate-pulse rounded-3xl bg-white/[0.06]" /></div>;
+  return <div className="min-h-full space-y-6 rounded-3xl bg-[#07111f] p-4 text-slate-100 sm:p-6">
+    <section className="relative overflow-hidden rounded-3xl border border-sky-300/15 bg-gradient-to-br from-[#122e41] via-[#0e2134] to-[#091522] p-6 shadow-2xl shadow-black/20 sm:p-8"><div className="pointer-events-none absolute -right-16 -top-28 h-72 w-72 rounded-full border-[40px] border-sky-300/[0.06]" /><div className="relative flex flex-col justify-between gap-5 lg:flex-row lg:items-end"><div><div className="mb-3 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[.18em] text-sky-300"><span className="h-1.5 w-1.5 rounded-full bg-sky-300" />Live reservations command center</div><h1 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">Reservations & guest flow</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">Coordinate arrivals, departures, in-house guests, booking demand, and reservation exceptions for the assigned property.</p></div><div className="flex gap-2"><Button variant="outline" size="sm" onClick={refresh} className="border-white/15 bg-white/[0.04] text-slate-200 hover:bg-white/10"><RefreshCw className="mr-2 h-4 w-4" />Refresh</Button><Button size="sm" onClick={() => setCreateOpen(true)} className="bg-sky-300 text-slate-950 hover:bg-sky-200"><Plus className="mr-2 h-4 w-4" />New reservation</Button></div></div></section>
+    {query.isError ? <Card className="border-rose-300/20 bg-rose-300/[0.06] text-slate-100"><CardContent className="flex flex-col items-center gap-3 py-16 text-center"><XCircle className="h-8 w-8 text-rose-300" /><p className="font-semibold">Reservation intelligence could not be loaded</p><Button variant="outline" onClick={refresh} className="border-white/10 bg-transparent text-slate-200">Try again</Button></CardContent></Card> : <>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5"><Metric label="Active bookings" value={analytics?.activeBookings || 0} detail="Inquiry through in-house" icon={CalendarCheck2} tone="bg-sky-300/10 text-sky-300" /><Metric label="Arrivals today" value={analytics?.arrivalsToday || 0} detail="Expected guest movements" icon={LogIn} tone="bg-emerald-300/10 text-emerald-300" /><Metric label="Departures today" value={analytics?.departuresToday || 0} detail="Due-outs and checked-in" icon={LogOut} tone="bg-violet-300/10 text-violet-300" /><Metric label="In house" value={analytics?.inHouse || 0} detail="Guests currently staying" icon={UsersRound} tone="bg-indigo-300/10 text-indigo-300" /><Metric label="Control exceptions" value={activeExceptions} detail="Pending, cancelled, or no-show" icon={AlertTriangle} tone="bg-amber-300/10 text-amber-300" /></div>
+      <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]"><Card className="border-white/[0.08] bg-white/[0.045] text-slate-100"><CardHeader><CardTitle>Reservation status pipeline</CardTitle><CardDescription className="text-slate-400">Portfolio-wide distribution across the live reservation ledger.</CardDescription></CardHeader><CardContent><div className="h-72">{statusData.length ? <ResponsiveContainer width="100%" height="100%"><BarChart data={statusData.map((item) => ({ ...item, name: statusLabels[item.name] || item.name }))} margin={{ top: 8, right: 8, left: -20, bottom: 8 }}><CartesianGrid vertical={false} stroke="rgba(148,163,184,.12)" /><XAxis dataKey="name" tick={{ fill: '#94a3b8', fontSize: 10 }} axisLine={false} tickLine={false} /><YAxis allowDecimals={false} tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} /><Tooltip contentStyle={tooltipStyle} /><Bar dataKey="value" name="Reservations" fill="#60a5fa" radius={[6, 6, 0, 0]} /></BarChart></ResponsiveContainer> : <EmptyChart text="Reservation status data will appear here." />}</div></CardContent></Card><Card className="border-white/[0.08] bg-white/[0.045] text-slate-100"><CardHeader><CardTitle>Booking source mix</CardTitle><CardDescription className="text-slate-400">Where reservations are being created for this property.</CardDescription></CardHeader><CardContent><div className="h-56">{sourceData.length ? <ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={sourceData} dataKey="value" nameKey="name" innerRadius={58} outerRadius={82} paddingAngle={3}>{sourceData.map((entry, index) => <Cell key={entry.name} fill={chartColors[index % chartColors.length]} />)}</Pie><Tooltip contentStyle={tooltipStyle} /></PieChart></ResponsiveContainer> : <EmptyChart text="No booking-source data is available." />}</div><div className="flex flex-wrap justify-center gap-3 text-xs text-slate-400">{sourceData.map((item, index) => <span key={item.name} className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full" style={{ backgroundColor: chartColors[index % chartColors.length] }} />{item.name.replaceAll('_', ' ')} {item.value}</span>)}</div></CardContent></Card></div>
+      <section className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]"><Card className="border-white/[0.08] bg-white/[0.045] text-slate-100"><CardHeader><CardTitle>Today’s control board</CardTitle><CardDescription className="text-slate-400">Arrivals and departures visible in the current reservation page.</CardDescription></CardHeader><CardContent className="space-y-3">{todayQueue.length ? todayQueue.slice(0, 6).map((reservation) => { const isArrival = dateKey(reservation.checkIn) === today; const guest = `${reservation.primaryGuest.firstName} ${reservation.primaryGuest.lastName}`; return <Link key={reservation.id} href={`/reservations/${reservation.id}`} className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.07] bg-white/[0.03] p-3 transition hover:border-sky-300/30 hover:bg-white/[0.06]"><div className="flex min-w-0 items-center gap-3"><div className={`rounded-lg p-2 ${isArrival ? 'bg-emerald-300/10 text-emerald-300' : 'bg-violet-300/10 text-violet-300'}`}>{isArrival ? <LogIn className="h-4 w-4" /> : <LogOut className="h-4 w-4" />}</div><div className="min-w-0"><p className="truncate text-sm font-medium text-white">{guest}</p><p className="text-xs text-slate-500">{isArrival ? 'Arrival' : 'Departure'} · {reservation.confirmationNumber}</p></div></div><span className="shrink-0 text-xs text-slate-400">{isArrival ? dateLabel(reservation.checkIn) : dateLabel(reservation.checkOut)} <ArrowRight className="ml-1 inline h-3.5 w-3.5" /></span></Link> }) : <EmptyChart text="No arrivals or departures are listed for today." />}</CardContent></Card><Card className="border-white/[0.08] bg-white/[0.045] text-slate-100"><CardHeader><CardTitle>Manager insights</CardTitle><CardDescription className="text-slate-400">Signals generated from the live reservation ledger.</CardDescription></CardHeader><CardContent className="space-y-3">{activeExceptions > 0 && <Insight icon={AlertTriangle} tone="amber" title={`${activeExceptions} control exception${activeExceptions === 1 ? '' : 's'} need review`} detail="Review pending, cancelled, and no-show reservations before the next operating cycle." />}{(analytics?.arrivalsToday || 0) > 0 && <Insight icon={LogIn} tone="emerald" title={`${analytics?.arrivalsToday} arrival${analytics?.arrivalsToday === 1 ? '' : 's'} expected today`} detail="Use the arrivals queue to verify room assignment, guest identity, and payment readiness." />}{(analytics?.departuresToday || 0) > 0 && <Insight icon={LogOut} tone="violet" title={`${analytics?.departuresToday} departure${analytics?.departuresToday === 1 ? '' : 's'} due today`} detail="Coordinate folio settlement, key return, and housekeeping release." />}{activeExceptions === 0 && !analytics?.arrivalsToday && !analytics?.departuresToday && <Insight icon={CheckCircle2} tone="sky" title="No immediate reservation exceptions" detail="The live reservation ledger has no current arrival, departure, or exception signal." />}</CardContent></Card></section>
+      <Card className="border-white/[0.08] bg-white/[0.045] text-slate-100"><CardContent className="p-4"><div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"><div className="flex flex-1 flex-col gap-3 sm:flex-row"><div className="relative w-full max-w-md"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" /><Input value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder="Search guest, confirmation, email…" className="h-10 border-white/10 bg-slate-950 pl-9 text-slate-100 placeholder:text-slate-600" /></div><Select value={status} onValueChange={(value) => { setStatus(value || 'ALL'); setPage(1); }}><SelectTrigger className="w-full border-white/10 bg-slate-950 text-slate-200 sm:w-[190px]"><SelectValue placeholder="All statuses" /></SelectTrigger><SelectContent className="border-white/10 bg-[#0d1b2a] text-slate-200"><SelectItem value="ALL">All statuses</SelectItem>{Object.keys(statusLabels).map((item) => <SelectItem key={item} value={item}>{statusLabels[item]}</SelectItem>)}</SelectContent></Select></div><p className="text-sm text-slate-500"><span className="font-semibold text-slate-200">{reservations.length}</span> of {query.data?.meta.total || 0} reservations</p></div></CardContent></Card>
+      {reservations.length ? <Card className="overflow-hidden border-white/[0.08] bg-white/[0.045] text-slate-100"><div className="overflow-x-auto"><table className="w-full min-w-[900px] text-sm"><thead className="border-b border-white/[0.08] bg-white/[0.03] text-left text-[10px] uppercase tracking-[.14em] text-slate-500"><tr><th className="px-5 py-4 font-medium">Guest / confirmation</th><th className="px-5 py-4 font-medium">Stay</th><th className="px-5 py-4 font-medium">Room</th><th className="px-5 py-4 font-medium">Source</th><th className="px-5 py-4 font-medium">Status</th><th className="px-5 py-4 text-right font-medium">Open</th></tr></thead><tbody className="divide-y divide-white/[0.07]">{reservations.map((reservation) => { const room = reservation.reservationRooms[0]; return <tr key={reservation.id} className="transition hover:bg-white/[0.035]"><td className="px-5 py-4"><div className="flex items-center gap-3"><div className="rounded-lg bg-sky-300/10 p-2 text-sky-300"><UserRound className="h-4 w-4" /></div><div><p className="font-medium text-white">{reservation.primaryGuest.firstName} {reservation.primaryGuest.lastName}</p><p className="mt-0.5 font-mono text-[10px] text-slate-500">{reservation.confirmationNumber}</p></div></div></td><td className="px-5 py-4"><p className="text-xs text-slate-300">{dateLabel(reservation.checkIn)} → {dateLabel(reservation.checkOut)}</p><p className="mt-1 text-xs text-slate-500">{nights(reservation.checkIn, reservation.checkOut)} nights · {reservation.adults}A {reservation.children}C</p></td><td className="px-5 py-4"><div className="flex items-center gap-2 text-xs"> <BedDouble className="h-4 w-4 text-slate-500" />{room?.room?.number ? formatRoomNumber(room.room.number) : 'Unassigned'}<span className="text-slate-500">{room?.roomType?.name || ''}</span></div></td><td className="px-5 py-4 text-xs uppercase text-slate-400">{reservation.source.replaceAll('_', ' ')}</td><td className="px-5 py-4"><Badge variant="outline" className={statusTone[reservation.status] || statusTone.PENDING}>{statusLabels[reservation.status] || reservation.status}</Badge></td><td className="px-5 py-4 text-right"><Link href={`/reservations/${reservation.id}`} className="inline-flex rounded-lg p-2 text-slate-500 hover:bg-white/10 hover:text-sky-300"><ArrowRight className="h-4 w-4" /></Link></td></tr> })}</tbody></table></div>{(query.data?.meta.totalPages || 1) > 1 && <div className="flex items-center justify-between border-t border-white/[0.08] px-5 py-3 text-xs text-slate-500"><span>{query.data?.meta.total || 0} reservations</span><div className="flex items-center gap-3"><Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((current) => current - 1)} className="border-white/10 bg-transparent text-slate-300">Previous</Button><span>{page} / {query.data?.meta.totalPages}</span><Button variant="outline" size="sm" disabled={page >= (query.data?.meta.totalPages || 1)} onClick={() => setPage((current) => current + 1)} className="border-white/10 bg-transparent text-slate-300">Next</Button></div></div>}</Card> : <Card className="border-dashed border-white/10 bg-white/[0.03] text-slate-100"><CardContent className="flex flex-col items-center gap-3 py-16 text-center"><CalendarDays className="h-8 w-8 text-slate-600" /><p className="font-semibold">No reservations found</p><p className="text-sm text-slate-500">{search || status !== 'ALL' ? 'Adjust your search or status filter.' : 'Reservations will appear here once created.'}</p>{!search && status === 'ALL' && <Button onClick={() => setCreateOpen(true)} className="bg-sky-300 text-slate-950 hover:bg-sky-200"><Plus className="mr-2 h-4 w-4" />Create reservation</Button>}</CardContent></Card>}
+    </>}
+    <Dialog open={createOpen} onOpenChange={setCreateOpen}><DialogContent className="max-h-[92vh] overflow-y-auto border-white/10 bg-[#0d1424] text-slate-100 sm:max-w-4xl"><DialogHeader><DialogTitle>New reservation</DialogTitle><DialogDescription className="text-slate-400">Create a live reservation for the assigned property. Room availability is checked for the selected dates.</DialogDescription></DialogHeader><ReservationForm onSaved={() => { setCreateOpen(false); refresh(); }} onCancel={() => setCreateOpen(false)} darkTheme /></DialogContent></Dialog>
+  </div>;
 }
+
+function Insight({ icon: Icon, tone, title, detail }: { icon: ElementType; tone: 'amber' | 'emerald' | 'violet' | 'sky'; title: string; detail: string }) {
+  const tones = { amber: 'bg-amber-300/10 text-amber-300', emerald: 'bg-emerald-300/10 text-emerald-300', violet: 'bg-violet-300/10 text-violet-300', sky: 'bg-sky-300/10 text-sky-300' };
+  return <div className="flex gap-3 rounded-xl border border-white/[0.07] bg-white/[0.03] p-3"><div className={`mt-0.5 rounded-lg p-2 ${tones[tone]}`}><Icon className="h-4 w-4" /></div><div><p className="text-sm font-medium text-white">{title}</p><p className="mt-1 text-xs leading-5 text-slate-500">{detail}</p></div></div>;
+}
+
+function EmptyChart({ text }: { text: string }) { return <div className="flex h-full items-center justify-center text-center text-sm text-slate-500">{text}</div>; }

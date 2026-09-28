@@ -47,7 +47,7 @@ const formSchema = z.object({
   path: ['guestId'],
 });
 
-export function ReservationForm() {
+export function ReservationForm({ onSaved, onCancel, darkTheme = false }: { onSaved?: () => void; onCancel?: () => void; darkTheme?: boolean }) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { propertyId } = useProperty();
@@ -128,7 +128,8 @@ export function ReservationForm() {
     onSuccess: () => {
       toast.success('Reservation created successfully');
       queryClient.invalidateQueries({ queryKey: ['reservations'] });
-      router.push('/reservations');
+      if (onSaved) onSaved();
+      else router.push('/reservations');
     },
     onError: (error) => {
       toast.error(error.message);
@@ -151,7 +152,7 @@ export function ReservationForm() {
   }) : null;
 
   return (
-    <Card className="max-w-3xl mx-auto">
+    <Card className={`mx-auto max-w-3xl ${darkTheme ? 'border-white/10 bg-white/[0.045] text-slate-100' : ''}`}>
       <CardHeader>
         <CardTitle>Create Booking</CardTitle>
         <CardDescription>
@@ -352,8 +353,8 @@ export function ReservationForm() {
 
           </CardContent>
           <CardFooter className="flex justify-between border-t p-6">
-            <Button variant="outline" type="button" onClick={() => router.back()}>Cancel</Button>
-            <Button type="submit" disabled={createReservation.isPending}>
+            <Button variant="outline" type="button" className={darkTheme ? 'border-white/10 bg-transparent text-slate-300 hover:bg-white/10' : ''} onClick={onCancel ?? (() => router.back())}>Cancel</Button>
+            <Button type="submit" disabled={createReservation.isPending} className={darkTheme ? 'bg-emerald-300 text-slate-950 hover:bg-emerald-200' : ''}>
               {createReservation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Create Reservation
             </Button>
