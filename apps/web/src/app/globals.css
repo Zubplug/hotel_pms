@@ -105,6 +105,25 @@
 .pms-dark-shell input::placeholder,
 .pms-dark-shell textarea::placeholder { color: #64748b; }
 
+/* Room cards: keep the financial exception readable at narrow card widths. */
+.pms-dark-shell div:has(> div > span.text-rose-300) {
+  border-color: rgba(251, 113, 133, .22) !important;
+  border-radius: .9rem;
+  background: rgba(244, 63, 94, .055);
+  padding: .75rem;
+}
+.pms-dark-shell div:has(> div > span.text-rose-300) > div.flex.items-center.justify-between {
+  align-items: flex-start;
+  flex-direction: column;
+  gap: .35rem;
+}
+.pms-dark-shell div:has(> div > span.text-rose-300) > button.bg-indigo-500 {
+  min-height: 2.25rem;
+  width: 100%;
+  white-space: normal;
+  line-height: 1.2;
+}
+
 /* Radix/shadcn overlays render at document level, outside the shell node. */
 body:has(.pms-dark-shell) [data-slot='dialog-content'],
 body:has(.pms-dark-shell) [data-slot='popover-content'],
