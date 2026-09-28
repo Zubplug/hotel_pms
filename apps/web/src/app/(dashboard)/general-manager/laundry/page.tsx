@@ -1,7 +1,7 @@
 'use client';
 
-import { LaundryDashboardClient } from '@/app/(frontdesk)/laundry/client';
+import { GeneralManagerLaundryDashboard } from '@/components/laundry/GeneralManagerLaundryDashboard';
 
 export default function GeneralManagerLaundryPage() {
-  return <LaundryDashboardClient managementMode />;
+  return <GeneralManagerLaundryDashboard />;
 }
