@@ -115,7 +115,7 @@ export default function PropertiesPage() {
           <DialogDescription className="text-slate-400">Update the assigned property identity, location, and contact details.</DialogDescription>
         </DialogHeader>
         <div className="px-4 py-5 sm:px-6 [&_form]:max-w-none [&_form]:space-y-4 [&_section]:border-white/10 [&_section]:bg-white/[0.03] [&_section_header]:border-white/10 [&_section_header]:bg-white/[0.03] [&_input]:border-white/10 [&_input]:bg-slate-950 [&_input]:text-slate-100 [&_label]:text-slate-300">
-          <PropertyForm defaultValues={property} mode="edit" onSubmit={saveProperty} onCancel={() => setEditOpen(false)} isSubmitting={isSaving} />
+          <PropertyForm defaultValues={property} mode="edit" darkTheme onSubmit={saveProperty} onCancel={() => setEditOpen(false)} isSubmitting={isSaving} />
         </div>
       </DialogContent>
     </Dialog>
