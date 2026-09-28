@@ -73,7 +73,7 @@ export async function GET(req: NextRequest) {
         take: query.pageSize,
         orderBy: sortField[query.sortBy] as never,
         include: {
-          roomType: { select: { name: true, code: true } },
+          roomType: { select: { id: true, name: true, code: true } },
           building: { select: { name: true } },
           floor: { select: { name: true, number: true } },
           reservationRooms: {

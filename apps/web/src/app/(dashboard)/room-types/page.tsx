@@ -1,113 +1,85 @@
 'use client';
 
-import React, { useState } from 'react';
+import { useMemo, useState } from 'react';
+import type { ElementType } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { PageHeader } from '@/components/ui/PageHeader';
+import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { BedDouble, CheckCircle2, CircleAlert, Edit3, Layers3, Plus, RefreshCw, Sparkles, Users, XCircle } from 'lucide-react';
+import { useProperty } from '@/components/PropertyProvider';
+import { RoomTypeForm } from '@/components/room-types/RoomTypeForm';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardFooter } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { formatCurrency } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Plus, Layers, BedDouble, Power, Users } from 'lucide-react';
-import { LoadingState, EmptyState } from '@/components/ui/EmptyState';
-import Link from 'next/link';
 import { toast } from 'sonner';
 
-interface RoomType {
-  id: string;
-  name: string;
-  code: string;
-  baseRate: number;
-  maxAdults: number;
-  maxChildren: number;
-  isActive: boolean;
-  _count?: { rooms: number };
+type RoomType = { id: string; name: string; code: string; description?: string | null; baseRate: number | string; maxOccupancy: number; maxAdults: number; maxChildren: number; defaultBedConfig: string; isActive: boolean };
+type Room = { id: string; status: string; isActive: boolean; roomType?: { id?: string; name: string; code: string } | null };
+const chartColors = ['#34d399', '#60a5fa', '#a78bfa', '#fbbf24', '#fb7185', '#f97316'];
+const money = (value: unknown) => new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', maximumFractionDigits: 0 }).format(Number(value || 0));
+const tooltipStyle = { background: '#0d1b2a', border: '1px solid rgba(148,163,184,.2)', borderRadius: 12, color: '#e2e8f0' };
+
+function Metric({ label, value, detail, icon: Icon, tone }: { label: string; value: string | number; detail: string; icon: ElementType; tone: string }) {
+  return <Card className="border-white/[0.08] bg-white/[0.045] text-slate-100 shadow-2xl shadow-black/10"><CardContent className="flex items-start justify-between gap-3 p-5"><div><p className="text-[10px] font-semibold uppercase tracking-[.16em] text-slate-500">{label}</p><p className="mt-2 text-2xl font-semibold tracking-tight text-white">{value}</p><p className="mt-1 text-xs text-slate-500">{detail}</p></div><div className={`rounded-xl p-2.5 ${tone}`}><Icon className="h-5 w-5" /></div></CardContent></Card>;
 }
 
 export default function RoomTypesPage() {
-  const [busyId, setBusyId] = useState<string | null>(null);
-  const { data, isLoading, refetch } = useQuery({
-    queryKey: ['roomTypes'],
+  const { propertyId, isLoading: propertyLoading } = useProperty();
+  const [search, setSearch] = useState('');
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const enabled = !propertyLoading && Boolean(propertyId);
+  const roomTypesQuery = useQuery({
+    queryKey: ['room-types', 'command-center', propertyId],
     queryFn: async () => {
-      const res = await fetch('/api/v1/room-types?includeInactive=true');
-      if (!res.ok) throw new Error('Failed to fetch room types');
-      return (await res.json()).data as RoomType[];
+      const response = await fetch(`/api/v1/room-types?propertyId=${propertyId}&includeInactive=true`);
+      if (!response.ok) throw new Error('Failed to load room types');
+      return (await response.json()).data as RoomType[];
     },
+    enabled,
   });
+  const roomsQuery = useQuery({
+    queryKey: ['rooms', 'room-type-mix', propertyId],
+    queryFn: async () => {
+      const response = await fetch(`/api/v1/rooms?propertyId=${propertyId}&page=1&pageSize=100`);
+      if (!response.ok) throw new Error('Failed to load room inventory');
+      const payload = await response.json();
+      return (Array.isArray(payload?.data) ? payload.data : []) as Room[];
+    },
+    enabled,
+  });
+  const roomTypes = useMemo(() => roomTypesQuery.data || [], [roomTypesQuery.data]);
+  const rooms = useMemo(() => roomsQuery.data || [], [roomsQuery.data]);
+  const rows = useMemo(() => roomTypes.map((type) => {
+    const inventory = rooms.filter((room) => room.roomType?.id === type.id || room.roomType?.code === type.code);
+    const occupied = inventory.filter((room) => room.status === 'OCCUPIED').length;
+    const available = inventory.filter((room) => room.status === 'AVAILABLE').length;
+    const attention = inventory.filter((room) => ['DIRTY', 'CLEANING', 'OUT_OF_ORDER', 'MAINTENANCE'].includes(room.status)).length;
+    return { ...type, inventory: inventory.length, occupied, available, attention, occupancy: inventory.length ? Math.round((occupied / inventory.length) * 100) : 0, configuredRate: Number(type.baseRate) > 0 };
+  }), [roomTypes, rooms]);
+  const filteredRows = rows.filter((row) => `${row.name} ${row.code} ${row.defaultBedConfig}`.toLowerCase().includes(search.toLowerCase().trim()));
+  const totals = useMemo(() => ({ types: rows.length, active: rows.filter((row) => row.isActive).length, rooms: rows.reduce((sum, row) => sum + row.inventory, 0), available: rows.reduce((sum, row) => sum + row.available, 0), occupied: rows.reduce((sum, row) => sum + row.occupied, 0), attention: rows.reduce((sum, row) => sum + row.attention, 0), configured: rows.filter((row) => row.configuredRate).length }), [rows]);
+  const occupancyData = rows.filter((row) => row.inventory > 0).map((row) => ({ name: row.code, occupancy: row.occupancy, available: row.available, occupied: row.occupied }));
+  const inventoryData = rows.map((row) => ({ name: row.code, rooms: row.inventory, available: row.available }));
+  const statusData = [{ name: 'Available', value: totals.available }, { name: 'Occupied', value: totals.occupied }, { name: 'Attention', value: totals.attention }].filter((item) => item.value > 0);
+  const openCreate = () => { setEditingId(null); setEditorOpen(true); };
+  const openEdit = (id: string) => { setEditingId(id); setEditorOpen(true); };
+  const closeEditor = () => { setEditorOpen(false); setEditingId(null); };
+  const editQuery = useQuery({ queryKey: ['room-type', editingId], queryFn: async () => { const response = await fetch(`/api/v1/room-types/${editingId}`); if (!response.ok) throw new Error('Failed to load room type'); return (await response.json()).data as RoomType; }, enabled: editorOpen && Boolean(editingId) });
+  const refreshAll = async () => { await Promise.all([roomTypesQuery.refetch(), roomsQuery.refetch()]); toast.success('Room-type intelligence refreshed'); };
 
-  const toggleRoomType = async (roomType: RoomType) => {
-    setBusyId(roomType.id);
-    try {
-      const response = await fetch(`/api/v1/room-types/${roomType.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ isActive: !roomType.isActive }) });
-      if (!response.ok) throw new Error((await response.json()).error?.message || 'Unable to update room type');
-      toast.success(roomType.isActive ? 'Room type disabled' : 'Room type enabled', { description: `${roomType.name} is now ${roomType.isActive ? 'hidden from active selections' : 'available for new room setup'}.` });
-      await refetch();
-    } catch (error) { toast.error(error instanceof Error ? error.message : 'Unable to update room type'); }
-    finally { setBusyId(null); }
-  };
-
-  return (
-    <div className="space-y-6 animate-in fade-in duration-500">
-      <PageHeader
-        title="Room Types"
-        description="Configure room categories, capacities, and base rates."
-        actions={
-          <Button className="gap-2" asChild>
-            <Link href="/room-types/new">
-              <Plus className="h-4 w-4" />
-              New Room Type
-            </Link>
-          </Button>
-        }
-      />
-
-      {isLoading ? (
-        <LoadingState message="Loading room types..." />
-      ) : !data || data.length === 0 ? (
-        <EmptyState
-          icon={<Layers className="h-6 w-6" />}
-          title="No room types"
-          description="Create your first room type to categorize rooms."
-          action={<Button asChild><Link href="/room-types/new"><Plus className="mr-2 h-4 w-4" />Create Room Type</Link></Button>}
-        />
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-          {data.map((rt) => (
-            <Card key={rt.id} className={`group hover:shadow-md transition-all border-muted/60 ${!rt.isActive ? 'opacity-70' : ''}`}>
-              <CardContent className="p-6">
-                <div className="flex items-start justify-between mb-3">
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="font-semibold text-lg group-hover:text-primary transition-colors">{rt.name}</span>
-                      {!rt.isActive && (
-                        <Badge variant="destructive" className="text-[10px]">Disabled</Badge>
-                      )}
-                    </div>
-                    <Badge variant="secondary" className="text-xs">{rt.code}</Badge>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xl font-bold">{formatCurrency(Number(rt.baseRate))}</p>
-                    <p className="text-xs text-muted-foreground">base rate / night</p>
-                  </div>
-                </div>
-                <div className="flex gap-4 text-sm text-muted-foreground mt-4 pt-4 border-t">
-                  <div className="flex items-center gap-1.5">
-                    <BedDouble className="h-4 w-4" />
-                    {rt._count?.rooms ?? 0} rooms
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <Users className="h-4 w-4" />
-                    {rt.maxAdults} adults · {rt.maxChildren} children
-                  </div>
-                </div>
-              </CardContent>
-              <CardFooter className="px-6 py-3 bg-muted/20 border-t">
-                <div className="flex w-full gap-2"><Button variant="outline" size="sm" className="flex-1" asChild><Link href={`/room-types/${rt.id}`}>Manage type</Link></Button><Button variant={rt.isActive ? 'ghost' : 'secondary'} size="sm" disabled={busyId === rt.id} onClick={() => toggleRoomType(rt)} title={rt.isActive ? 'Disable room type' : 'Enable room type'}>{busyId === rt.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Power className="mr-1.5 h-4 w-4" />{rt.isActive ? 'Disable' : 'Enable'}</>}</Button></div>
-              </CardFooter>
-            </Card>
-          ))}
-        </div>
-      )}
-    </div>
-  );
+  if (propertyLoading || (enabled && (roomTypesQuery.isLoading || roomsQuery.isLoading))) return <div className="min-h-[70vh] space-y-6 rounded-3xl bg-[#07111f] p-6"><div className="h-40 animate-pulse rounded-3xl bg-white/[0.06]" /><div className="grid gap-4 md:grid-cols-4">{[1, 2, 3, 4].map((item) => <div key={item} className="h-28 animate-pulse rounded-2xl bg-white/[0.06]" />)}</div><div className="h-80 animate-pulse rounded-3xl bg-white/[0.06]" /></div>;
+  return <div className="min-h-full space-y-6 rounded-3xl bg-[#07111f] p-4 text-slate-100 sm:p-6">
+    <section className="relative overflow-hidden rounded-3xl border border-violet-300/15 bg-gradient-to-br from-[#241c3d] via-[#111c34] to-[#091522] p-6 shadow-2xl shadow-black/20 sm:p-8"><div className="pointer-events-none absolute -right-16 -top-28 h-72 w-72 rounded-full border-[40px] border-violet-300/[0.06]" /><div className="relative flex flex-col justify-between gap-5 lg:flex-row lg:items-end"><div><div className="mb-3 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[.18em] text-violet-300"><span className="h-1.5 w-1.5 rounded-full bg-violet-300" />Live inventory intelligence</div><h1 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">Room types & yield readiness</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">Shape your sellable inventory, capacity strategy, and operational mix from the assigned property’s live room ledger.</p></div><div className="flex gap-2"><Button variant="outline" size="sm" onClick={() => void refreshAll()} className="border-white/15 bg-white/[0.04] text-slate-200 hover:bg-white/10"><RefreshCw className="mr-2 h-4 w-4" />Refresh</Button><Button size="sm" onClick={openCreate} className="bg-violet-300 text-slate-950 hover:bg-violet-200"><Plus className="mr-2 h-4 w-4" />New room type</Button></div></div></section>
+    {(roomTypesQuery.isError || roomsQuery.isError) ? <Card className="border-rose-300/20 bg-rose-300/[0.06] text-slate-100"><CardContent className="flex flex-col items-center gap-3 py-16 text-center"><XCircle className="h-8 w-8 text-rose-300" /><p className="font-semibold">Room-type intelligence could not be loaded</p><Button variant="outline" onClick={() => void refreshAll()} className="border-white/10 bg-transparent text-slate-200">Try again</Button></CardContent></Card> : <>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5"><Metric label="Room-type catalog" value={totals.types} detail={`${totals.active} active configurations`} icon={Layers3} tone="bg-violet-300/10 text-violet-300" /><Metric label="Physical inventory" value={totals.rooms} detail={`${totals.available} ready to sell now`} icon={BedDouble} tone="bg-sky-300/10 text-sky-300" /><Metric label="Current occupancy" value={`${totals.rooms ? Math.round((totals.occupied / totals.rooms) * 100) : 0}%`} detail={`${totals.occupied} rooms in house`} icon={Users} tone="bg-emerald-300/10 text-emerald-300" /><Metric label="Service exceptions" value={totals.attention} detail="Inventory requiring attention" icon={CircleAlert} tone="bg-amber-300/10 text-amber-300" /><Metric label="Rate-ready types" value={`${totals.configured}/${totals.types}`} detail="Positive base rate configured" icon={CheckCircle2} tone="bg-indigo-300/10 text-indigo-300" /></div>
+      <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]"><Card className="border-white/[0.08] bg-white/[0.045] text-slate-100"><CardHeader><CardTitle>Occupancy by room type</CardTitle><CardDescription className="text-slate-400">Live occupied inventory against each type’s physical capacity.</CardDescription></CardHeader><CardContent><div className="h-72">{occupancyData.length ? <ResponsiveContainer width="100%" height="100%"><BarChart data={occupancyData} margin={{ top: 8, right: 8, left: -20, bottom: 8 }}><CartesianGrid vertical={false} stroke="rgba(148,163,184,.12)" /><XAxis dataKey="name" tick={{ fill: '#94a3b8', fontSize: 10 }} axisLine={false} tickLine={false} /><YAxis unit="%" domain={[0, 100]} tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} /><Tooltip formatter={(value: number) => `${value}%`} contentStyle={tooltipStyle} /><Bar dataKey="occupancy" name="Occupancy" fill="#a78bfa" radius={[6, 6, 0, 0]} /></BarChart></ResponsiveContainer> : <EmptyChart text="Assign rooms to room types to see occupancy." />}</div></CardContent></Card><Card className="border-white/[0.08] bg-white/[0.045] text-slate-100"><CardHeader><CardTitle>Sellable mix</CardTitle><CardDescription className="text-slate-400">How today’s physical inventory is distributed.</CardDescription></CardHeader><CardContent><div className="h-56">{statusData.length ? <ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={statusData} dataKey="value" nameKey="name" innerRadius={58} outerRadius={82} paddingAngle={3}>{statusData.map((entry, index) => <Cell key={entry.name} fill={chartColors[index]} />)}</Pie><Tooltip contentStyle={tooltipStyle} /></PieChart></ResponsiveContainer> : <EmptyChart text="No room inventory is assigned yet." />}</div><div className="flex justify-center gap-4 text-xs text-slate-400">{statusData.map((item, index) => <span key={item.name} className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full" style={{ backgroundColor: chartColors[index] }} />{item.name} {item.value}</span>)}</div></CardContent></Card></div>
+      <Card className="border-white/[0.08] bg-white/[0.045] text-slate-100"><CardHeader><CardTitle>Inventory depth by type</CardTitle><CardDescription className="text-slate-400">Physical rooms and currently sellable rooms, with no estimated or placeholder values.</CardDescription></CardHeader><CardContent><div className="h-64">{inventoryData.length ? <ResponsiveContainer width="100%" height="100%"><BarChart data={inventoryData} margin={{ top: 8, right: 8, left: -20, bottom: 8 }}><CartesianGrid vertical={false} stroke="rgba(148,163,184,.12)" /><XAxis dataKey="name" tick={{ fill: '#94a3b8', fontSize: 10 }} axisLine={false} tickLine={false} /><YAxis allowDecimals={false} tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} /><Tooltip contentStyle={tooltipStyle} /><Bar dataKey="rooms" name="Physical rooms" fill="#475569" radius={[5, 5, 0, 0]} /><Bar dataKey="available" name="Available" fill="#34d399" radius={[5, 5, 0, 0]} /></BarChart></ResponsiveContainer> : <EmptyChart text="Create room types and assign rooms to build inventory depth." />}</div></CardContent></Card>
+      <section><div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-[10px] font-bold uppercase tracking-[.18em] text-violet-300">Configuration control</p><h2 className="mt-1 text-xl font-semibold text-white">Room-type catalog</h2></div><div className="relative w-full sm:w-72"><Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search name, code, bed setup…" className="border-white/10 bg-slate-950 text-slate-100 placeholder:text-slate-600" /></div></div>{filteredRows.length ? <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{filteredRows.map((row) => <Card key={row.id} className={`border-white/[0.08] bg-white/[0.045] text-slate-100 shadow-xl shadow-black/10 transition hover:-translate-y-0.5 hover:border-violet-300/30 ${!row.isActive ? 'opacity-65' : ''}`}><CardContent className="p-5"><div className="flex items-start justify-between gap-3"><div><div className="flex items-center gap-2"><h3 className="font-semibold text-white">{row.name}</h3>{!row.isActive && <Badge variant="outline" className="border-rose-300/20 text-rose-200">Inactive</Badge>}</div><p className="mt-1 text-[10px] font-bold uppercase tracking-[.16em] text-violet-300">{row.code}</p></div><button type="button" onClick={() => openEdit(row.id)} className="rounded-lg p-2 text-slate-500 hover:bg-white/10 hover:text-violet-300" aria-label={`Edit ${row.name}`}><Edit3 className="h-4 w-4" /></button></div><div className="mt-5 grid grid-cols-3 gap-2"><div className="rounded-xl border border-white/[0.07] bg-white/[0.03] p-3"><p className="text-[10px] uppercase tracking-wider text-slate-500">Rooms</p><p className="mt-1 text-lg font-semibold text-white">{row.inventory}</p></div><div className="rounded-xl border border-white/[0.07] bg-white/[0.03] p-3"><p className="text-[10px] uppercase tracking-wider text-slate-500">Occupancy</p><p className="mt-1 text-lg font-semibold text-white">{row.occupancy}%</p></div><div className="rounded-xl border border-white/[0.07] bg-white/[0.03] p-3"><p className="text-[10px] uppercase tracking-wider text-slate-500">Ready</p><p className="mt-1 text-lg font-semibold text-emerald-300">{row.available}</p></div></div><div className="mt-4 flex items-center justify-between border-t border-white/[0.08] pt-4 text-xs"><span className="text-slate-500">{row.defaultBedConfig} · up to {row.maxOccupancy} guests</span><span className={row.configuredRate ? 'text-emerald-300' : 'text-amber-300'}>{row.configuredRate ? money(row.baseRate) : 'Rate missing'}</span></div>{row.attention > 0 && <div className="mt-3 flex items-center gap-2 rounded-lg border border-amber-300/15 bg-amber-300/[0.06] px-3 py-2 text-xs text-amber-200"><Sparkles className="h-3.5 w-3.5" />{row.attention} room{row.attention === 1 ? '' : 's'} need operational attention</div>}<Button type="button" variant="ghost" onClick={() => openEdit(row.id)} className="mt-3 h-8 w-full text-xs text-slate-400 hover:bg-white/10 hover:text-white">Manage configuration <Edit3 className="ml-2 h-3.5 w-3.5" /></Button></CardContent></Card>)}</div> : <Card className="border-dashed border-white/10 bg-white/[0.03] text-slate-100"><CardContent className="flex flex-col items-center gap-3 py-16 text-center"><Layers3 className="h-8 w-8 text-slate-600" /><p className="font-semibold">{rows.length ? 'No matching room types' : 'No room types configured'}</p><p className="text-sm text-slate-500">{rows.length ? 'Adjust your search to find another configuration.' : 'Create the first room type to establish your inventory model.'}</p>{!rows.length && <Button onClick={openCreate} className="bg-violet-300 text-slate-950 hover:bg-violet-200"><Plus className="mr-2 h-4 w-4" />Create room type</Button>}</CardContent></Card>}</section>
+    </>}
+    <Dialog open={editorOpen} onOpenChange={(open) => { if (!open) closeEditor(); }}><DialogContent className="max-h-[90vh] overflow-y-auto border-white/10 bg-[#0d1424] text-slate-100 sm:max-w-3xl"><DialogHeader><DialogTitle>{editingId ? 'Edit room type' : 'Create room type'}</DialogTitle><DialogDescription className="text-slate-400">Define sellable capacity, guest limits, bed setup, and the base rate used by this property.</DialogDescription></DialogHeader>{editingId && editQuery.isLoading ? <div className="h-64 animate-pulse rounded-2xl bg-white/[0.06]" /> : <RoomTypeForm initialData={editingId ? editQuery.data : undefined} onSaved={() => { closeEditor(); void refreshAll(); }} onCancel={closeEditor} darkTheme />}</DialogContent></Dialog>
+  </div>;
 }
+
+function EmptyChart({ text }: { text: string }) { return <div className="flex h-full items-center justify-center text-center text-sm text-slate-500">{text}</div>; }
