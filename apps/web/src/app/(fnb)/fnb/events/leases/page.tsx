@@ -21,7 +21,9 @@ export default async function HallUseContractsPage() {
   const active = contracts.filter((contract) => contract.isActive);
   const recent = contracts.filter((contract) => !contract.isActive);
   const currency = property?.baseCurrency || 'NGN';
-  const pendingSchedules = active.flatMap((contract) => contract.schedules.filter((schedule) => schedule.status === 'PENDING').map((schedule) => ({ ...schedule, corporateName: contract.corporateAccount?.name || contract.contactName })));
+  const pendingSchedules = active
+    .flatMap((contract) => contract.schedules.filter((schedule) => schedule.status === 'PENDING').map((schedule) => ({ ...schedule, corporateName: contract.corporateAccount?.name || contract.contactName })))
+    .sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime() || a.periodStart.getTime() - b.periodStart.getTime());
   const scheduledValue = active.reduce((total, contract) => total + contract.schedules.filter((schedule) => schedule.status !== 'VOID').reduce((sum, schedule) => sum + Number(schedule.amount), 0), 0);
 
   return <div className="fnb-dark-surface min-h-full bg-[#07111f] text-slate-100">
