@@ -22,7 +22,19 @@ export async function applyAvailableGuestLedgerCredit(
   if (!options.guestId || options.amount <= 0) return 0;
 
   const entries = await tx.cityLedgerEntry.findMany({
-    where: { guestId: options.guestId, propertyId: options.propertyId, type: 'REFUND_OWED', status: 'OPEN' },
+    // Guest identity is normally the primary key for a previous-stay credit.
+    // Offline transfer events can, however, carry a stale/missing guest mirror
+    // while still being securely linked to the exact reservation and folio.
+    // Keep that linked credit applicable during checkout recovery as well.
+    where: {
+      propertyId: options.propertyId,
+      type: 'REFUND_OWED',
+      status: 'OPEN',
+      OR: [
+        { guestId: options.guestId },
+        { reservationId: options.reservationId, folioId: options.folioId },
+      ],
+    },
     include: { allocations: { select: { amount: true } } },
     orderBy: { createdAt: 'asc' },
   });
