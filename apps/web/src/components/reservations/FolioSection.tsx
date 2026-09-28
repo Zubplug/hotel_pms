@@ -18,6 +18,7 @@ import { formatRoomNumber } from '@/lib/format-room';
 export function FolioSection({ reservation, readOnly = false }: { reservation: any; readOnly?: boolean }) {
   const pathname = usePathname();
   const isFrontDesk = pathname.startsWith('/frontdesk');
+  const isDarkReservation = pathname.startsWith('/reservations');
   const [isAddPaymentOpen, setIsAddPaymentOpen] = useState(false);
   const [isCheckOutOpen, setIsCheckOutOpen] = useState(false);
   
@@ -51,6 +52,10 @@ export function FolioSection({ reservation, readOnly = false }: { reservation: a
   const totalPayments = Number(folio.totalPayments || 0);
   const outstandingBalance = Math.max(0, Number(folio.balance || 0));
   const folioAvailableCredit = Number(folio.availableCredit || 0);
+  const showAvailableCredit = !isClosed && folioAvailableCredit > 0;
+  const folioSurface = isDarkReservation
+    ? 'reservation-folio-dark border-white/[0.08] bg-[#101b2f] text-slate-100 shadow-2xl shadow-black/30'
+    : 'border-slate-200 bg-white shadow-lg shadow-slate-200/50';
 
 
   // Build a set of payment IDs that are the raw "backing" record for an advance
@@ -218,7 +223,7 @@ export function FolioSection({ reservation, readOnly = false }: { reservation: a
 
   return (
     <>
-      <Card className="mt-6 overflow-hidden rounded-2xl border-slate-200 bg-white shadow-lg shadow-slate-200/50">
+      <Card className={`mt-6 overflow-hidden rounded-2xl ${folioSurface}`}>
         <CardHeader className="flex flex-col gap-5 border-b border-slate-200 bg-gradient-to-br from-slate-950 via-slate-900 to-blue-950 px-5 py-5 text-white sm:px-6 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex min-w-0 items-center gap-3">
             <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/10 ring-1 ring-white/20">
@@ -271,7 +276,7 @@ export function FolioSection({ reservation, readOnly = false }: { reservation: a
           </div>}
         </CardHeader>
         <CardContent className="p-0">
-          <div className="border-b bg-slate-50 p-4 sm:p-6">
+          <div className={`border-b p-4 sm:p-6 ${isDarkReservation ? 'border-white/[0.08] bg-[#172437]' : 'bg-slate-50'}`}>
             <div className={`rounded-2xl p-5 text-white shadow-sm ${outstandingBalance > 0 ? 'bg-gradient-to-br from-rose-600 to-red-700' : 'bg-gradient-to-br from-emerald-600 to-teal-700'}`}>
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
@@ -284,25 +289,26 @@ export function FolioSection({ reservation, readOnly = false }: { reservation: a
               </div>
             </div>
             <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
-              <div className="rounded-xl border border-slate-200 bg-white p-4">
-                <div className="flex items-center gap-2 text-slate-500"><TrendingUp className="h-4 w-4" /><p className="text-xs font-bold uppercase tracking-wider">Charges</p></div>
-                <p className="mt-2 text-xl font-bold tabular-nums text-slate-900">{formatCurrency(totalCharges)}</p>
+              <div className={`rounded-xl border p-4 ${isDarkReservation ? 'border-white/[0.08] bg-white/[0.04]' : 'border-slate-200 bg-white'}`}>
+                <div className="flex items-center gap-2 text-slate-400"><TrendingUp className="h-4 w-4" /><p className="text-xs font-bold uppercase tracking-wider">Charges</p></div>
+                <p className={`mt-2 text-xl font-bold tabular-nums ${isDarkReservation ? 'text-white' : 'text-slate-900'}`}>{formatCurrency(totalCharges)}</p>
               </div>
-              <div className="rounded-xl border border-emerald-100 bg-emerald-50/60 p-4">
-                <div className="flex items-center gap-2 text-emerald-700"><Wallet className="h-4 w-4" /><p className="text-xs font-bold uppercase tracking-wider">Payments</p></div>
-                <p className="mt-2 text-xl font-bold tabular-nums text-emerald-700">{formatCurrency(totalPayments)}</p>
+              <div className={`rounded-xl border p-4 ${isDarkReservation ? 'border-emerald-300/20 bg-emerald-300/[0.08]' : 'border-emerald-100 bg-emerald-50/60'}`}>
+                <div className="flex items-center gap-2 text-emerald-300"><Wallet className="h-4 w-4" /><p className="text-xs font-bold uppercase tracking-wider">Payments received</p></div>
+                <p className="mt-2 text-xl font-bold tabular-nums text-emerald-300">{formatCurrency(totalPayments)}</p>
               </div>
-              <div className="rounded-xl border border-blue-100 bg-blue-50/60 p-4">
-                <div className="flex items-center gap-2 text-blue-700"><CornerDownRight className="h-4 w-4" /><p className="text-xs font-bold uppercase tracking-wider">Credit available</p></div>
-                <p className="mt-2 text-xl font-bold tabular-nums text-blue-700">{formatCurrency(folioAvailableCredit)}</p>
+              <div className={`rounded-xl border p-4 ${isDarkReservation ? 'border-sky-300/20 bg-sky-300/[0.08]' : 'border-blue-100 bg-blue-50/60'}`}>
+                <div className={`flex items-center gap-2 ${isDarkReservation ? 'text-sky-300' : 'text-blue-700'}`}><CornerDownRight className="h-4 w-4" /><p className="text-xs font-bold uppercase tracking-wider">{isClosed ? 'Settlement state' : 'Credit available'}</p></div>
+                <p className={`mt-2 text-xl font-bold tabular-nums ${isDarkReservation ? 'text-sky-200' : 'text-blue-700'}`}>{isClosed ? 'Closed' : showAvailableCredit ? formatCurrency(folioAvailableCredit) : formatCurrency(0)}</p>
+                {isClosed && <p className="mt-1 text-xs text-slate-400">No further credit actions</p>}
               </div>
             </div>
           </div>
 
           <div className="p-4 sm:p-6">
             <div className="mb-3 flex items-center justify-between gap-3">
-              <div><h3 className="font-bold text-slate-900">Transaction history</h3><p className="text-xs text-slate-500">{ledgerItems.length} posted transaction{ledgerItems.length === 1 ? '' : 's'}</p></div>
-              <span className="text-xs font-medium text-slate-500">All amounts in {folio.currency || 'NGN'}</span>
+              <div><h3 className={`font-bold ${isDarkReservation ? 'text-white' : 'text-slate-900'}`}>Transaction history</h3><p className="text-xs text-slate-400">{ledgerItems.length} posted transaction{ledgerItems.length === 1 ? '' : 's'}</p></div>
+              <span className="text-xs font-medium text-slate-400">All amounts in {folio.currency || 'NGN'}</span>
             </div>
             <div className="hidden overflow-x-auto rounded-xl border border-slate-200 md:block">
             <table className="w-full min-w-[820px] table-fixed text-left text-sm">

@@ -733,6 +733,19 @@ body:has(.fnb-dark-surface) [data-slot='dialog-footer'] { border-color: rgba(255
   --sidebar-ring: oklch(0.45 0.15 250);
 }
 
+.reservation-folio-dark .bg-white { background-color: rgba(255, 255, 255, 0.035) !important; }
+.reservation-folio-dark .bg-slate-50 { background-color: rgba(255, 255, 255, 0.045) !important; }
+.reservation-folio-dark .border-slate-200,
+.reservation-folio-dark .border-slate-100 { border-color: rgba(255, 255, 255, 0.10) !important; }
+.reservation-folio-dark .divide-slate-100 > :not([hidden]) ~ :not([hidden]) { border-color: rgba(255, 255, 255, 0.08) !important; }
+.reservation-folio-dark .text-slate-900,
+.reservation-folio-dark .text-slate-800 { color: #f8fafc !important; }
+.reservation-folio-dark .text-slate-700,
+.reservation-folio-dark .text-slate-600 { color: #cbd5e1 !important; }
+.reservation-folio-dark .text-slate-500,
+.reservation-folio-dark .text-slate-400 { color: #94a3b8 !important; }
+.reservation-folio-dark .hover\:bg-blue-50\/40:hover { background-color: rgba(96, 165, 250, 0.08) !important; }
+
 .dark {
   --background: oklch(0.12 0.015 250);
   --foreground: oklch(0.98 0.005 250);
