@@ -98,6 +98,10 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const logout = useLogout();
 
   const isDesktop = process.env.NEXT_PUBLIC_IS_DESKTOP === 'true';
+  const isDarkWorkspace = pathname === '/general-manager'
+    || pathname?.startsWith('/general-manager/')
+    || pathname === '/admin'
+    || pathname?.startsWith('/admin/');
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -262,7 +266,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   );
 
   return (
-    <div className="flex h-screen overflow-hidden bg-muted/30">
+    <div className={cn('flex h-screen overflow-hidden bg-muted/30', isDarkWorkspace && 'pms-dark-shell')}>
       {/* Mobile sidebar overlay */}
       {sidebarOpen && (
         <div className="fixed inset-0 z-50 lg:hidden">

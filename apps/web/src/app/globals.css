@@ -2,6 +2,128 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
+/* General Manager executive control room. The route is intentionally scoped so
+   the rest of the PMS can keep its existing theme tokens and workflows. */
+.gm-shell {
+  background: #07111f;
+  color: #e2e8f0;
+  --background: #07111f;
+  --foreground: #e2e8f0;
+  --card: #101b2f;
+  --card-foreground: #f8fafc;
+  --muted: #111d31;
+  --muted-foreground: #94a3b8;
+  --border: rgba(255, 255, 255, 0.10);
+  --input: rgba(255, 255, 255, 0.12);
+  --ring: #34d399;
+}
+.gm-hero {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, .09);
+  border-radius: 1.35rem;
+  background: linear-gradient(135deg, #0d1b2e 0%, #0b1729 52%, #102c35 100%);
+  padding: 1.5rem;
+  box-shadow: 0 22px 80px rgba(0, 0, 0, .18);
+}
+.gm-panel { border: 1px solid rgba(255,255,255,.09); border-radius: 1rem; background: rgba(16,27,47,.82); box-shadow: 0 14px 44px rgba(0,0,0,.12); }
+.gm-metric { display: flex; min-width: 0; align-items: flex-start; gap: .75rem; border: 1px solid rgba(255,255,255,.08); border-radius: 1rem; background: rgba(16,27,47,.82); padding: 1rem; }
+.gm-label { color: #64748b; font-size: 10px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; }
+.gm-icon { display: flex; height: 2rem; width: 2rem; flex-shrink: 0; align-items: center; justify-content: center; border-radius: .65rem; }
+.gm-green { background: rgba(52,211,153,.12); color: #6ee7b7; }
+.gm-blue { background: rgba(96,165,250,.12); color: #93c5fd; }
+.gm-violet { background: rgba(167,139,250,.12); color: #c4b5fd; }
+.gm-amber { background: rgba(251,191,36,.12); color: #fcd34d; }
+.gm-live-dot { height: .4rem; width: .4rem; border-radius: 999px; background: #34d399; box-shadow: 0 0 0 4px rgba(52,211,153,.1); }
+.gm-link { display: inline-flex; align-items: center; gap: .35rem; color: #6ee7b7; font-size: 11px; font-weight: 600; }
+.gm-shell .bg-background { background: #0b1628; }
+.gm-shell [data-slot='select-trigger'] { color: #e2e8f0; }
+.gm-shell [data-slot='select-trigger'] svg { color: #94a3b8; }
+.gm-shell [data-slot='select-content'] { border-color: rgba(255,255,255,.12); background: #0d1424; color: #e2e8f0; }
+
+/* Shared dark shell for General Manager and Admin routes. This lives above
+   individual page skins so the navigation chrome and older admin screens use
+   the same production theme as the redesigned dashboard. */
+.pms-dark-shell {
+  background: #07111f !important;
+  color: #e2e8f0;
+  --background: #07111f;
+  --foreground: #e2e8f0;
+  --card: #101b2f;
+  --card-foreground: #f8fafc;
+  --popover: #0d1424;
+  --popover-foreground: #e2e8f0;
+  --primary: #34d399;
+  --primary-foreground: #07111f;
+  --secondary: #16233b;
+  --secondary-foreground: #e2e8f0;
+  --muted: #111d31;
+  --muted-foreground: #94a3b8;
+  --accent: #16233b;
+  --accent-foreground: #f8fafc;
+  --border: rgba(255, 255, 255, .10);
+  --input: rgba(255, 255, 255, .12);
+  --ring: #34d399;
+  --sidebar: #091525;
+  --sidebar-foreground: #e2e8f0;
+  --sidebar-accent: #16233b;
+  --sidebar-accent-foreground: #f8fafc;
+  --sidebar-border: rgba(255, 255, 255, .10);
+}
+.pms-dark-shell .bg-background,
+.pms-dark-shell .bg-muted\/30 { background-color: #07111f !important; }
+.pms-dark-shell > .hidden.lg\:flex,
+.pms-dark-shell .fixed.inset-y-0.left-0 { background-color: #091525 !important; border-color: rgba(255,255,255,.10) !important; }
+.pms-dark-shell > .flex.flex-1 > header { background-color: rgba(7,17,31,.92) !important; border-color: rgba(255,255,255,.10) !important; }
+.pms-dark-shell .bg-white,
+.pms-dark-shell .bg-white\/80,
+.pms-dark-shell .bg-white\/90,
+.pms-dark-shell .bg-slate-50,
+.pms-dark-shell .bg-slate-50\/50,
+.pms-dark-shell .bg-slate-100,
+.pms-dark-shell .bg-gray-50 { background-color: rgba(255,255,255,.045) !important; }
+.pms-dark-shell .border-slate-100,
+.pms-dark-shell .border-slate-200,
+.pms-dark-shell .border-gray-200,
+.pms-dark-shell .border-gray-100 { border-color: rgba(255,255,255,.10) !important; }
+.pms-dark-shell .divide-slate-100 > :not([hidden]) ~ :not([hidden]),
+.pms-dark-shell .divide-slate-200 > :not([hidden]) ~ :not([hidden]) { border-color: rgba(255,255,255,.08) !important; }
+.pms-dark-shell .text-slate-950,
+.pms-dark-shell .text-slate-900,
+.pms-dark-shell .text-slate-800,
+.pms-dark-shell .text-gray-900 { color: #f8fafc !important; }
+.pms-dark-shell .text-slate-700,
+.pms-dark-shell .text-slate-600,
+.pms-dark-shell .text-gray-700 { color: #cbd5e1 !important; }
+.pms-dark-shell .text-slate-500,
+.pms-dark-shell .text-slate-400,
+.pms-dark-shell .text-gray-500 { color: #94a3b8 !important; }
+.pms-dark-shell input,
+.pms-dark-shell textarea,
+.pms-dark-shell select,
+.pms-dark-shell [role='combobox'] { background-color: #0b1628; border-color: rgba(255,255,255,.12); color: #f8fafc; }
+.pms-dark-shell input::placeholder,
+.pms-dark-shell textarea::placeholder { color: #64748b; }
+
+/* Radix/shadcn overlays render at document level, outside the shell node. */
+body:has(.pms-dark-shell) [data-slot='dialog-content'],
+body:has(.pms-dark-shell) [data-slot='popover-content'],
+body:has(.pms-dark-shell) [data-slot='dropdown-menu-content'],
+body:has(.pms-dark-shell) [data-slot='select-content'],
+body:has(.pms-dark-shell) [data-slot='command'] {
+  border-color: rgba(255,255,255,.12) !important;
+  background: #0d1424 !important;
+  color: #e2e8f0 !important;
+}
+body:has(.pms-dark-shell) [data-slot='dialog-title'],
+body:has(.pms-dark-shell) [data-slot='popover-title'] { color: #f8fafc !important; }
+body:has(.pms-dark-shell) [data-slot='dialog-description'],
+body:has(.pms-dark-shell) [data-slot='popover-description'] { color: #94a3b8 !important; }
+body:has(.pms-dark-shell) [data-slot='dialog-content'] input,
+body:has(.pms-dark-shell) [data-slot='dialog-content'] textarea,
+body:has(.pms-dark-shell) [data-slot='dialog-content'] select { background: #0b1628 !important; border-color: rgba(255,255,255,.12) !important; color: #f8fafc !important; }
+body:has(.pms-dark-shell) [data-slot='dialog-overlay'] { background: rgba(2,6,23,.78) !important; }
+
 .field {
   min-height: 2.75rem;
   width: 100%;
