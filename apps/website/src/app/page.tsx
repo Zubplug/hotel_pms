@@ -139,6 +139,15 @@ const productViews = {
   }
 };
 
+const productImages: Record<keyof typeof productViews, string> = {
+  "Front Desk": "/lodgecore/front-desk.png",
+  Reservations: "/lodgecore/front-desk.png",
+  POS: "/lodgecore/f-and-b.png",
+  Housekeeping: "/lodgecore/front-desk.png",
+  Accounting: "/lodgecore/f-and-b.png",
+  Analytics: "/lodgecore/f-and-b.png",
+};
+
 export default function WebsiteHome() {
   const [activeTab, setActiveTab] = useState<keyof typeof productViews>("Front Desk");
   const [plans, setPlans] = useState<{ name: string; description: string | null }[]>([]);
@@ -294,7 +303,7 @@ export default function WebsiteHome() {
                 </div>
               </div>
               <div className="bg-[#091a2b]">
-                {currentView.content}
+                <div className="product-image-frame"><Image src={productImages[activeTab]} alt={`${currentView.title} LodgeCore product interface`} fill sizes="(max-width: 768px) 100vw, 70vw" /></div>
               </div>
             </div>
           </div>
@@ -438,14 +447,14 @@ export default function WebsiteHome() {
           <div className="group-board shadow-xl">
             <div className="flex justify-between border-b border-[#31506F] pb-4 text-sm mb-4">
               <b className="text-white text-lg">LodgeCore Corporate</b>
-              <span className="text-[#5CC9F5] font-bold px-3 py-1 bg-[#5CC9F5]/10 rounded-full">5 properties connected</span>
+              <span className="text-[#5CC9F5] font-bold px-3 py-1 bg-[#5CC9F5]/10 rounded-full">Live portfolio view</span>
             </div>
             {[
-              "Lagos · 84% occupancy · ₦4.8m",
-              "Abuja · 78% occupancy · ₦3.2m",
-              "Port Harcourt · 91% occupancy · ₦2.7m",
-              "Accra · 82% occupancy · ₦3.9m",
-              "Nairobi · 76% occupancy · ₦2.1m"
+              "Property operations · Connected",
+              "Occupancy and room performance · Live",
+              "Outlet and payment activity · Live",
+              "Finance and reconciliation · Live",
+              "Staff and implementation status · Live"
             ].map(x => (
               <div className="group-row hover:bg-white/5 px-2 transition-colors rounded" key={x}>
                 <span className="text-[#AAB8C8]">{x.split('·')[0]}</span>
