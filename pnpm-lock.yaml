@@ -82,7 +82,7 @@ importers:
         version: 16.3.0(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(@types/node@20.19.43)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       next-auth:
         specifier: ^5.0.0-beta.32
-        version: 5.0.0-beta.32(next@16.3.0(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(@types/node@20.19.43)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react@19.2.8)
+        version: 5.0.0-beta.32(next@16.3.0(@opentelemetry/api@1.9.1)(@types/node@20.19.43)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react@19.2.8)
       next-themes:
         specifier: ^0.4.6
         version: 0.4.6(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -165,6 +165,52 @@ importers:
       vitest:
         specifier: ^4.1.10
         version: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@20.19.43)(@vitest/ui@4.1.10)(vite@8.2.1(@types/node@20.19.43)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12))
+
+  apps/website:
+    dependencies:
+      '@hotel-pms/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      bcryptjs:
+        specifier: ^3.0.3
+        version: 3.0.3
+      next:
+        specifier: 16.3.0
+        version: 16.3.0(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(@types/node@20.19.43)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      next-auth:
+        specifier: ^5.0.0-beta.32
+        version: 5.0.0-beta.32(next@16.3.0(@opentelemetry/api@1.9.1)(@types/node@20.19.43)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react@19.2.8)
+      react:
+        specifier: 19.2.8
+        version: 19.2.8
+      react-dom:
+        specifier: 19.2.8
+        version: 19.2.8(react@19.2.8)
+      stripe:
+        specifier: ^22.6.2
+        version: 22.6.2(@types/node@20.19.43)
+      zod:
+        specifier: ^3.22.0
+        version: 3.25.76
+    devDependencies:
+      '@tailwindcss/postcss':
+        specifier: ^4
+        version: 4.3.3
+      '@types/node':
+        specifier: ^20
+        version: 20.19.43
+      '@types/react':
+        specifier: ^19
+        version: 19.2.18
+      '@types/react-dom':
+        specifier: ^19
+        version: 19.2.4(@types/react@19.2.18)
+      tailwindcss:
+        specifier: ^4
+        version: 4.3.3
+      typescript:
+        specifier: ^5
+        version: 5.9.3
 
   packages/config: {}
 
@@ -1362,7 +1408,6 @@ packages:
   '@tailwindcss/oxide-linux-x64-gnu@4.3.3':
     resolution: {integrity: sha512-tx7us1muwOKAKWao2v/GaafFeQboE6aj88vC6ziN2NCGcRm8gWUhwjzg+YdVB1e4boAtdtma4L43onunI6NS4w==}
     engines: {node: '>= 20'}
-    cpu: [x64]
     os: [linux]
 
   '@tailwindcss/oxide-linux-x64-musl@4.3.3':
@@ -8213,7 +8258,7 @@ snapshots:
 
   neverthrow@7.2.0: {}
 
-  next-auth@5.0.0-beta.32(next@16.3.0(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(@types/node@20.19.43)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react@19.2.8):
+  next-auth@5.0.0-beta.32(next@16.3.0(@opentelemetry/api@1.9.1)(@types/node@20.19.43)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react@19.2.8):
     dependencies:
       '@auth/core': 0.41.3
       next: 16.3.0(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(@types/node@20.19.43)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)

@@ -45,6 +45,16 @@ model Organization {
   subscriptions      Subscription[]
   entitlements       Entitlement[]
   billingInvoices    BillingInvoice[]
+  salesLeads          SalesLead[]
+  proposals           Proposal[]
+  implementationProjects ImplementationProject[]
+  hardwareInventory   HardwareInventory[]
+  hardwareInstallations HardwareInstallation[]
+  supportTickets      SupportTicket[]
+  integrationDefinitions IntegrationDefinition[]
+  installedIntegrations InstalledIntegration[]
+  portalApiKeys       PortalApiKey[]
+  usageRecords        Usage[]
 
 
   createdAt DateTime @default(now()) @db.Timestamptz
@@ -118,6 +128,10 @@ model Property {
   maintenanceTickets       MaintenanceTicket[]
   maintenanceCats          MaintenanceCategory[]
   doorLocks                DoorLock[]
+  hardwareInventory        HardwareInventory[]
+  hardwareInstallations    HardwareInstallation[]
+  propertySetups           PropertySetup[]
+  installedIntegrations     InstalledIntegration[]
   hardwareAgents           HardwareAgent[]
   lockOperations           LockOperation[]
   lockEvents               LockEvent[]
@@ -6006,6 +6020,8 @@ model BillingProduct {
 
   prices          BillingPrice[]
   entitlements    Entitlement[]
+  planItems       BillingPlanItem[]
+  modules         Module[]
 
   createdAt       DateTime @default(now()) @db.Timestamptz
   updatedAt       DateTime @updatedAt @db.Timestamptz
@@ -6041,6 +6057,8 @@ model Subscription {
   id                   String       @id @default(uuid()) @db.Uuid
   organizationId       String       @db.Uuid
   organization         Organization @relation(fields: [organizationId], references: [id])
+  planId               String?      @db.Uuid
+  plan                 BillingPlan? @relation(fields: [planId], references: [id])
 
   stripeSubscriptionId String       @unique
   status               String       // 'TRIALING', 'ACTIVE', 'PAST_DUE', 'PAUSED', 'CANCELED', 'INCOMPLETE'
@@ -6127,4 +6145,303 @@ model BillingInvoice {
   updatedAt        DateTime     @updatedAt @db.Timestamptz
 
   @@index([organizationId, createdAt])
+}
+
+// -----------------------------------------------------------------------------
+// LODGECORE CONTROL PLANE
+// -----------------------------------------------------------------------------
+
+model BillingPlan {
+  id              String   @id @default(uuid()) @db.Uuid
+  code            String   @unique
+  name            String
+  description     String?
+  active          Boolean  @default(true)
+  displayOrder    Int      @default(0)
+  metadata        Json?
+  items           BillingPlanItem[]
+  subscriptions   Subscription[]
+  createdAt       DateTime @default(now()) @db.Timestamptz
+  updatedAt       DateTime @updatedAt @db.Timestamptz
+}
+
+model BillingPlanItem {
+  id          String        @id @default(uuid()) @db.Uuid
+  planId      String        @db.Uuid
+  plan        BillingPlan   @relation(fields: [planId], references: [id], onDelete: Cascade)
+  productId   String        @db.Uuid
+  product     BillingProduct @relation(fields: [productId], references: [id])
+  required    Boolean       @default(true)
+  includedQty Int?
+  metadata    Json?
+
+  @@unique([planId, productId])
+  @@index([productId])
+}
+
+model SalesLead {
+  id               String       @id @default(uuid()) @db.Uuid
+  organizationId   String?      @db.Uuid
+  organization     Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  source           String       @default("WEBSITE")
+  status           String       @default("NEW")
+  name             String
+  email            String
+  phone            String?
+  company          String?
+  propertyName     String?
+  location         String?
+  roomCount        Int?
+  message          String?
+  consentAt        DateTime?    @db.Timestamptz
+  sourceCampaign   String?
+  idempotencyKey   String?      @unique
+  assignedTo       String?
+  convertedAt      DateTime?    @db.Timestamptz
+  metadata         Json?
+  createdAt        DateTime     @default(now()) @db.Timestamptz
+  updatedAt        DateTime     @updatedAt @db.Timestamptz
+
+  proposals        Proposal[]
+  @@index([email, createdAt])
+  @@index([status, createdAt])
+  @@index([organizationId])
+}
+
+model Proposal {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String?      @db.Uuid
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  leadId         String?
+  lead           SalesLead?   @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  number         String       @unique
+  status         String       @default("DRAFT")
+  currency       String       @default("NGN")
+  subtotal       Int         @default(0)
+  tax            Int         @default(0)
+  total          Int         @default(0)
+  validUntil     DateTime?    @db.Timestamptz
+  notes          String?
+  lineItems      Json
+  createdAt      DateTime     @default(now()) @db.Timestamptz
+  updatedAt      DateTime     @updatedAt @db.Timestamptz
+
+  @@index([organizationId, status])
+  @@index([leadId])
+}
+
+model ImplementationProject {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String
+  status         String       @default("DISCOVERY")
+  ownerId        String?
+  targetGoLiveAt DateTime?    @db.Timestamptz
+  completedAt    DateTime?    @db.Timestamptz
+  notes          String?
+  metadata       Json?
+  propertySetups PropertySetup[]
+  dataMigrations DataMigration[]
+  trainings      Training[]
+  createdAt      DateTime     @default(now()) @db.Timestamptz
+  updatedAt      DateTime     @updatedAt @db.Timestamptz
+
+  @@index([organizationId, status])
+}
+
+model PropertySetup {
+  id             String       @id @default(uuid()) @db.Uuid
+  projectId      String       @db.Uuid
+  project        ImplementationProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  propertyId     String       @db.Uuid
+  property       Property     @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  status         String       @default("PENDING")
+  roomCount      Int?
+  completedAt    DateTime?    @db.Timestamptz
+  checklist      Json?
+  createdAt      DateTime     @default(now()) @db.Timestamptz
+  updatedAt      DateTime     @updatedAt @db.Timestamptz
+
+  @@unique([projectId, propertyId])
+  @@index([propertyId, status])
+}
+
+model DataMigration {
+  id             String       @id @default(uuid()) @db.Uuid
+  projectId      String       @db.Uuid
+  project        ImplementationProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  type           String
+  status         String       @default("PLANNED")
+  sourceSystem   String?
+  recordCounts   Json?
+  errorSummary   String?
+  completedAt    DateTime?    @db.Timestamptz
+  createdAt      DateTime     @default(now()) @db.Timestamptz
+  updatedAt      DateTime     @updatedAt @db.Timestamptz
+
+  @@index([projectId, status])
+}
+
+model Training {
+  id             String       @id @default(uuid()) @db.Uuid
+  projectId      String       @db.Uuid
+  project        ImplementationProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  topic          String
+  scheduledAt    DateTime?    @db.Timestamptz
+  status         String       @default("PLANNED")
+  attendeeCount  Int?
+  notes          String?
+  createdAt      DateTime     @default(now()) @db.Timestamptz
+  updatedAt      DateTime     @updatedAt @db.Timestamptz
+
+  @@index([projectId, scheduledAt])
+}
+
+model HardwareInventory {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  propertyId     String?      @db.Uuid
+  property       Property?    @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  category       String
+  brand          String?
+  model          String?
+  serialNumber   String?
+  status         String       @default("IN_STOCK")
+  warrantyEndsAt DateTime?    @db.Timestamptz
+  metadata       Json?
+  installations  HardwareInstallation[]
+  createdAt      DateTime     @default(now()) @db.Timestamptz
+  updatedAt      DateTime     @updatedAt @db.Timestamptz
+
+  @@unique([organizationId, serialNumber])
+  @@index([organizationId, category, status])
+  @@index([propertyId])
+}
+
+model HardwareInstallation {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  propertyId     String?      @db.Uuid
+  property       Property?    @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  inventoryId    String?      @db.Uuid
+  inventory      HardwareInventory? @relation(fields: [inventoryId], references: [id], onDelete: SetNull)
+  status         String       @default("REQUESTED")
+  installationType String
+  requestedAt    DateTime     @default(now()) @db.Timestamptz
+  scheduledAt    DateTime?    @db.Timestamptz
+  completedAt    DateTime?    @db.Timestamptz
+  installer      String?
+  notes          String?
+  siteInfo       Json?
+  createdAt      DateTime     @default(now()) @db.Timestamptz
+  updatedAt      DateTime     @updatedAt @db.Timestamptz
+
+  @@index([organizationId, status])
+  @@index([propertyId, scheduledAt])
+}
+
+model SupportTicket {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  number         String       @unique
+  subject        String
+  description    String
+  status         String       @default("OPEN")
+  priority       String       @default("NORMAL")
+  requesterEmail String
+  assignee       String?
+  slaDueAt       DateTime?    @db.Timestamptz
+  resolvedAt     DateTime?    @db.Timestamptz
+  metadata       Json?
+  createdAt      DateTime     @default(now()) @db.Timestamptz
+  updatedAt      DateTime     @updatedAt @db.Timestamptz
+
+  @@index([organizationId, status, priority])
+}
+
+model IntegrationDefinition {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String?      @db.Uuid
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  slug           String       @unique
+  name           String
+  category       String
+  description    String
+  active         Boolean      @default(true)
+  setupSchema    Json?
+  metadata       Json?
+  installed      InstalledIntegration[]
+  createdAt      DateTime     @default(now()) @db.Timestamptz
+  updatedAt      DateTime     @updatedAt @db.Timestamptz
+}
+
+model InstalledIntegration {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  definitionId   String       @db.Uuid
+  definition     IntegrationDefinition @relation(fields: [definitionId], references: [id])
+  propertyId     String?      @db.Uuid
+  property       Property?    @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  status         String       @default("PENDING")
+  credentialsRef String?
+  config         Json?
+  lastSyncAt     DateTime?    @db.Timestamptz
+  createdAt      DateTime     @default(now()) @db.Timestamptz
+  updatedAt      DateTime     @updatedAt @db.Timestamptz
+
+  @@unique([organizationId, definitionId, propertyId])
+  @@index([organizationId, status])
+}
+
+model PortalApiKey {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String
+  prefix         String       @unique
+  secretHash     String
+  lastUsedAt     DateTime?    @db.Timestamptz
+  expiresAt      DateTime?    @db.Timestamptz
+  revokedAt      DateTime?    @db.Timestamptz
+  createdAt      DateTime     @default(now()) @db.Timestamptz
+  updatedAt      DateTime     @updatedAt @db.Timestamptz
+
+  @@index([organizationId, revokedAt])
+}
+
+model Module {
+  id          String        @id @default(uuid()) @db.Uuid
+  productId   String?       @db.Uuid
+  product     BillingProduct? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  code        String        @unique
+  name        String
+  description String?
+  active      Boolean       @default(true)
+  metadata    Json?
+  createdAt   DateTime      @default(now()) @db.Timestamptz
+  updatedAt   DateTime      @updatedAt @db.Timestamptz
+
+  @@index([productId, active])
+}
+
+model Usage {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  metric         String
+  quantity       Decimal      @db.Decimal(18, 4)
+  unit           String?
+  periodStart    DateTime     @db.Timestamptz
+  periodEnd      DateTime     @db.Timestamptz
+  source         String?
+  metadata       Json?
+  createdAt      DateTime     @default(now()) @db.Timestamptz
+
+  @@index([organizationId, metric, periodStart, periodEnd])
+  @@unique([organizationId, metric, periodStart, periodEnd, source])
 }

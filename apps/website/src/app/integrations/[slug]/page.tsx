@@ -1,0 +1,7 @@
+import Link from "next/link";
+
+export default async function IntegrationPage({ params }: { params: Promise<{ slug: string }> }) {
+  const slug = (await params).slug;
+  const name = slug.split("-").map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" ");
+  return <main className="min-h-screen bg-[#07111f] px-6"><header className="mx-auto flex max-w-7xl items-center justify-between py-6"><Link href="/" className="text-xl font-bold text-white">Lodge<span className="text-sky-300">Core</span></Link><Link href="/integrations" className="text-sm text-slate-400">All integrations</Link></header><section className="mx-auto max-w-3xl py-24"><p className="text-xs font-bold uppercase tracking-[.22em] text-sky-300">Integration marketplace</p><h1 className="mt-5 text-6xl font-bold text-white">{name}</h1><p className="mt-6 text-xl leading-8 text-slate-400">Connect {name} to LodgeCore with clear setup requirements, secure credentials and operational visibility.</p><div className="mt-10 rounded-2xl border border-white/10 bg-white/[.04] p-6 text-sm leading-7 text-slate-300">Compatibility, setup and availability are managed through the LodgeCore control plane. Contact our implementation team for requirements and activation.</div><Link href="/book-demo" className="mt-10 inline-block rounded-full bg-sky-300 px-6 py-3 text-sm font-bold text-[#07111f]">Talk to integrations →</Link></section></main>;
+}

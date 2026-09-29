@@ -1,0 +1,3 @@
+import type { MetadataRoute } from "next";
+const routes = ["/", "/pricing", "/book-demo", "/integrations", "/platform/pms", "/platform/front-desk", "/platform/pos", "/platform/accounting", "/platform/housekeeping", "/platform/offline-operations", "/hardware", "/security", "/privacy", "/terms", "/about", "/resources", "/documentation"];
+export default function sitemap(): MetadataRoute.Sitemap { const base = process.env.NEXT_PUBLIC_SITE_URL || "https://getlodgecore.vercel.app"; return routes.map((path) => ({ url: `${base}${path}`, lastModified: new Date(), changeFrequency: path === "/" ? "weekly" : "monthly", priority: path === "/" ? 1 : .7 })); }
