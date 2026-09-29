@@ -6,296 +6,111 @@ import { useQuery } from '@tanstack/react-query';
 import { useProperty } from '@/components/PropertyProvider';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { Loader2, RefreshCcw, ArrowDownToLine, ArrowUpFromLine, WalletCards, Printer, Download, CalendarDays, ShieldCheck, FileSpreadsheet } from 'lucide-react';
 import { exportToCSV } from '@/lib/export-utils';
+import {
+  AlertTriangle, ArrowDownToLine, ArrowLeftRight, ArrowUpFromLine, Banknote,
+  CalendarDays, CheckCircle2, ChevronRight, CircleDollarSign, Download,
+  FileCheck2, FileSpreadsheet, Filter, Landmark, Loader2, Printer, RefreshCcw,
+  Search, ShieldCheck, TriangleAlert, WalletCards, X,
+} from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 
 type ReportRow = {
-  id: string;
-  kind: string;
-  sessionId?: string;
-  shiftReference: string;
-  date: string;
-  direction: 'INFLOW' | 'OUTFLOW';
-  amount: number;
-  currency: string;
-  method: string;
-  type: string;
-  description: string;
-  reference?: string | null;
-  confirmationNumber?: string | null;
-  folioNumber?: string | null;
-  guest?: string | null;
-  rooms: string[];
+  id: string; kind: string; sessionId?: string; shiftReference: string; date: string;
+  direction: 'INFLOW' | 'OUTFLOW'; amount: number; currency: string; method: string;
+  type: string; description: string; reference?: string | null; confirmationNumber?: string | null;
+  folioNumber?: string | null; guest?: string | null; rooms: string[];
 };
+
+type SessionSummary = {
+  id: string; shiftReference: string; businessDate: string; status: string;
+  openingFloat: number; expectedCash: number; declaredCash: number | null; variance: number | null;
+  openedAt: string; closedAt: string | null; staff?: { firstName?: string | null; lastName?: string | null } | null;
+  cashAccount?: { name?: string | null } | null; exceptions?: Array<{ id: string }>;
+};
+
+type ReportData = { rows: ReportRow[]; sessions: SessionSummary[]; totals: { inflows: number; outflows: number; net: number; sessions: number } };
+
+const money = (amount: number) => new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', maximumFractionDigits: 0 }).format(Number(amount || 0));
+const fullMoney = (amount: number) => new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', maximumFractionDigits: 2 }).format(Number(amount || 0));
+
+function Pill({ children, tone = 'slate' }: { children: ReactNode; tone?: 'slate' | 'green' | 'amber' | 'red' | 'indigo' }) {
+  const styles = { slate: 'border-white/10 bg-white/[0.04] text-slate-400', green: 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300', amber: 'border-amber-400/20 bg-amber-400/10 text-amber-300', red: 'border-rose-400/20 bg-rose-400/10 text-rose-300', indigo: 'border-indigo-400/20 bg-indigo-400/10 text-indigo-300' };
+  return <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.13em] ${styles[tone]}`}>{children}</span>;
+}
+
+function Metric({ label, value, detail, icon: Icon, tone = 'indigo' }: { label: string; value: string; detail: string; icon: LucideIcon; tone?: 'indigo' | 'green' | 'amber' | 'red' }) {
+  const styles = { indigo: 'border-indigo-400/15 bg-indigo-400/[0.06] text-indigo-300', green: 'border-emerald-400/15 bg-emerald-400/[0.06] text-emerald-300', amber: 'border-amber-400/15 bg-amber-400/[0.06] text-amber-300', red: 'border-rose-400/15 bg-rose-400/[0.06] text-rose-300' };
+  return <div className={`rounded-2xl border p-4 ${styles[tone]}`}><div className="flex items-center justify-between"><span className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">{label}</span><Icon className="h-4 w-4" /></div><p className="mt-3 text-2xl font-bold tracking-tight text-white">{value}</p><p className="mt-1 text-[11px] text-slate-500">{detail}</p></div>;
+}
+
+function Panel({ title, detail, icon: Icon, action, children, className = '' }: { title: string; detail: string; icon: LucideIcon; action?: ReactNode; children: ReactNode; className?: string }) {
+  return <section className={`overflow-hidden rounded-[24px] border border-white/[0.07] bg-[#0d1424]/85 shadow-[0_20px_60px_rgba(0,0,0,0.12)] ${className}`}><div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.06] px-5 py-4 sm:px-6"><div className="flex items-center gap-3"><span className="flex h-9 w-9 items-center justify-center rounded-xl border border-indigo-400/20 bg-indigo-400/10 text-indigo-300"><Icon className="h-4 w-4" /></span><div><h2 className="text-sm font-bold text-white">{title}</h2><p className="mt-0.5 text-xs text-slate-500">{detail}</p></div></div>{action}</div><div className="p-5 sm:p-6">{children}</div></section>;
+}
+
+function statusTone(session: SessionSummary) {
+  if (session.variance !== null && Math.abs(session.variance) > 0.01) return 'red' as const;
+  if (session.status === 'CLOSED' || session.status === 'RECONCILED' || session.status === 'APPROVED') return 'green' as const;
+  if (session.status === 'OPEN' || session.status === 'CLOSING') return 'amber' as const;
+  return 'indigo' as const;
+}
 
 export function FrontdeskReconciliationReport() {
   const { propertyId } = useProperty();
   const { provider } = useLodgeCoreProvider();
   const session = useLodgeCoreSession();
-
   const [startDate, setStartDate] = useState(format(subDays(new Date(), 1), 'yyyy-MM-dd'));
   const [endDate, setEndDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [search, setSearch] = useState('');
+  const [direction, setDirection] = useState<'ALL' | 'INFLOW' | 'OUTFLOW'>('ALL');
+  const [selectedSession, setSelectedSession] = useState<SessionSummary | null>(null);
 
-  // Fetch report data
   const query = useQuery({
     queryKey: ['frontdesk-reconciliation', propertyId, startDate, endDate],
     enabled: Boolean(propertyId),
     queryFn: async () => {
-      const result = await provider.frontdesk.getReport(
-        propertyId!,
-        startOfDay(new Date(startDate)).toISOString(),
-        endOfDay(new Date(endDate)).toISOString(),
-      );
+      const result = await provider.frontdesk.getReport(propertyId!, startOfDay(new Date(startDate)).toISOString(), endOfDay(new Date(endDate)).toISOString());
       if (result.error) throw new Error(result.error?.message || result.error);
-      return (result.data || result) as { rows: ReportRow[]; totals: { inflows: number; outflows: number; net: number; sessions: number } };
+      return (result.data || result) as ReportData;
     },
   });
-
-  // Fetch property details for the print header
-  const propertyQuery = useQuery({
-    queryKey: ['properties'],
-    queryFn: async () => {
-      const res = await provider.properties.list();
-      return (res.data || res) as any[];
-    }
-  });
-
-  const activeProperty = propertyQuery.data?.find((p: any) => p.id === propertyId);
+  const propertyQuery = useQuery({ queryKey: ['properties'], queryFn: async () => { const result = await provider.properties.list(); return (result.data || result) as any[]; } });
+  const activeProperty = propertyQuery.data?.find((property: any) => property.id === propertyId);
   const staffName = session.data?.user?.name || 'Authorized Staff';
-
-  const money = (amount: number) => new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(amount);
-  const rows = query.data?.rows || [];
   const reportId = `FD-REC-${startDate.replaceAll('-', '')}-${endDate.replaceAll('-', '')}`;
-  const methodTotals = useMemo(() => rows.reduce<Record<string, number>>((totals, row) => {
-    const key = (row.method || 'OTHER').toUpperCase();
-    totals[key] = (totals[key] || 0) + (row.direction === 'INFLOW' ? row.amount : -row.amount);
-    return totals;
-  }, {}), [rows]);
+  const rows = query.data?.rows || [];
+  const sessions = query.data?.sessions || [];
+  const totals = query.data?.totals || { inflows: 0, outflows: 0, net: 0, sessions: 0 };
+  const filteredRows = useMemo(() => rows.filter((row) => {
+    const haystack = [row.description, row.guest, row.folioNumber, row.shiftReference, row.reference, row.method, row.type].filter(Boolean).join(' ').toLowerCase();
+    return (direction === 'ALL' || row.direction === direction) && (!search.trim() || haystack.includes(search.trim().toLowerCase()));
+  }), [direction, rows, search]);
+  const methodTotals = useMemo(() => rows.reduce<Record<string, number>>((result, row) => { const key = (row.method || 'OTHER').toUpperCase(); result[key] = (result[key] || 0) + (row.direction === 'INFLOW' ? row.amount : -row.amount); return result; }, {}), [rows]);
+  const varianceSessions = sessions.filter((item) => item.variance !== null && Math.abs(item.variance) > 0.01);
+  const openSessions = sessions.filter((item) => ['OPEN', 'CLOSING', 'SUBMITTED', 'UNDER_REVIEW'].includes(item.status));
+  const exceptionSessions = sessions.filter((item) => (item.exceptions?.length || 0) > 0);
+  const health = sessions.length ? Math.round(((sessions.length - varianceSessions.length - openSessions.length - exceptionSessions.length) / sessions.length) * 100) : 100;
+  const handleExport = () => exportToCSV(`frontdesk-reconciliation-${startDate}-to-${endDate}.csv`, ['Date', 'Direction', 'Type', 'Description', 'Guest', 'Rooms', 'Folio', 'Method', 'Reference', 'Shift', 'Amount'], filteredRows.map((row) => [format(new Date(row.date), 'dd MMM yyyy HH:mm'), row.direction, row.type, row.description, row.guest || '', row.rooms.join('; '), row.folioNumber || '', row.method, row.reference || '', row.shiftReference || '', row.amount]));
 
-  const handlePrint = () => {
-    window.print();
-  };
+  if (query.isLoading) return <div className="flex min-h-[70vh] items-center justify-center bg-[#070d19]"><Loader2 className="h-8 w-8 animate-spin text-indigo-400" /></div>;
+  if (query.error) return <div className="min-h-[70vh] bg-[#070d19] p-8"><div className="mx-auto max-w-3xl rounded-2xl border border-rose-400/20 bg-rose-400/[0.06] p-6 text-sm text-rose-300"><div className="flex items-center gap-2 font-semibold"><TriangleAlert className="h-5 w-5" /> Unable to load settlement data</div><p className="mt-2 text-slate-400">{(query.error as Error).message}</p></div></div>;
 
-  const handleExport = () => {
-    if (!rows.length) return;
-    const headers = ['Date', 'Direction', 'Type', 'Description', 'Guest', 'Rooms', 'Folio', 'Method', 'Reference', 'Shift', 'Amount'];
-    const csvRows = rows.map(r => [
-      format(new Date(r.date), 'dd MMM yyyy HH:mm'),
-      r.direction,
-      r.type,
-      r.description,
-      r.guest || '',
-      r.rooms.join('; '),
-      r.folioNumber || '',
-      r.method,
-      r.reference || '',
-      r.shiftReference || '',
-      r.amount
-    ]);
-    exportToCSV(`frontdesk-reconciliation-${startDate}-to-${endDate}.csv`, headers, csvRows);
-  };
+  return <main className="min-h-full bg-[radial-gradient(circle_at_80%_0%,#202052_0%,transparent_30%),radial-gradient(circle_at_0%_40%,#101d35_0%,transparent_25%),#070d19 px-4 pb-16 pt-6 sm:px-6 lg:px-8 print:bg-white print:p-0"><div className="mx-auto max-w-[1580px] space-y-5 print:max-w-none print:space-y-4">
+    <header className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end print:hidden"><div><div className="mb-3 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.24em] text-indigo-300"><ShieldCheck className="h-3.5 w-3.5" /> General manager / Cash management</div><h1 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">Front desk settlement control</h1><p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-400">Trace collections from cashier shift to folio, payment method, cash movement, and final settlement evidence.</p></div><div className="flex flex-wrap gap-2"><button onClick={handleExport} disabled={!filteredRows.length} className="inline-flex items-center gap-2 rounded-xl border border-white/[0.09] bg-white/[0.05] px-3 py-2 text-xs font-semibold text-slate-300 hover:bg-white/[0.1] disabled:opacity-50"><Download className="h-3.5 w-3.5" /> Export view</button><button onClick={() => window.print()} disabled={!rows.length} className="inline-flex items-center gap-2 rounded-xl border border-white/[0.09] bg-white/[0.05] px-3 py-2 text-xs font-semibold text-slate-300 hover:bg-white/[0.1] disabled:opacity-50"><Printer className="h-3.5 w-3.5" /> Print report</button><button onClick={() => query.refetch()} disabled={query.isFetching} className="inline-flex items-center gap-2 rounded-xl bg-indigo-500 px-3 py-2 text-xs font-bold text-white hover:bg-indigo-400 disabled:opacity-50"><RefreshCcw className={`h-3.5 w-3.5 ${query.isFetching ? 'animate-spin' : ''}`} /> Refresh</button></div></header>
 
-  return (
-    <div className="space-y-6 print:space-y-4">
-      {/* Print Header (Only visible when printing) */}
-      <div className="hidden print:block mb-6 border-b-2 border-slate-900 pb-5">
-        <div className="flex items-start justify-between gap-8">
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-slate-500">Official financial record</p>
-            <h1 className="mt-1 text-2xl font-black uppercase tracking-tight">{activeProperty?.name || 'Hotel Property'}</h1>
-            <p className="mt-1 text-xs text-gray-600">{activeProperty?.address || 'Address Not Available'}</p>
-          </div>
-          <div className="text-right text-xs text-slate-600">
-            <p className="font-bold text-slate-900">{reportId}</p>
-            <p className="mt-1">Generated {format(new Date(), 'dd MMM yyyy · HH:mm')}</p>
-            <p>Prepared by {staffName}</p>
-          </div>
-        </div>
+    <section className="relative overflow-hidden rounded-[28px] border border-indigo-400/20 bg-gradient-to-br from-indigo-500/[0.16] via-[#121a36] to-[#0e1528] p-6 shadow-[0_24px_80px_rgba(50,43,140,0.18)] sm:p-8 print:hidden"><div className="pointer-events-none absolute -right-28 -top-40 h-[28rem] w-[28rem] rounded-full bg-indigo-500/20 blur-3xl" /><div className="relative grid gap-8 xl:grid-cols-[1fr_390px] xl:items-center"><div><div className="flex flex-wrap items-center gap-3"><Pill tone={health >= 90 ? 'green' : health >= 60 ? 'amber' : 'red'}>{health}% settlement health</Pill><span className="text-xs text-slate-500">{activeProperty?.name || 'Assigned property'} · {format(new Date(startDate), 'dd MMM')} — {format(new Date(endDate), 'dd MMM yyyy')}</span></div><h2 className="mt-4 max-w-2xl text-2xl font-bold tracking-tight text-white sm:text-3xl">{varianceSessions.length || openSessions.length ? 'Settlement requires management review.' : 'Front desk settlement is in control.'}</h2><p className="mt-3 max-w-2xl text-sm leading-6 text-slate-400">{varianceSessions.length ? `${varianceSessions.length} session${varianceSessions.length === 1 ? '' : 's'} show a variance. Inspect the session evidence before approving the custody handover.` : 'Review the movement ledger and cashier session evidence before filing the business-date settlement.'}</p></div><div className="grid grid-cols-2 gap-3"><div className="rounded-2xl border border-white/[0.09] bg-black/20 p-4"><p className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-500">Net movement</p><p className="mt-2 text-xl font-bold text-white">{money(totals.net)}</p><p className="mt-1 text-[11px] text-slate-500">Selected period</p></div><div className="rounded-2xl border border-white/[0.09] bg-black/20 p-4"><p className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-500">Sessions</p><p className="mt-2 text-3xl font-bold text-white">{sessions.length}</p><p className="mt-1 text-[11px] text-slate-500">In selected period</p></div><div className="rounded-2xl border border-white/[0.09] bg-black/20 p-4"><p className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-500">Open</p><p className="mt-2 text-3xl font-bold text-white">{openSessions.length}</p><p className="mt-1 text-[11px] text-slate-500">Awaiting closure</p></div><div className="rounded-2xl border border-white/[0.09] bg-black/20 p-4"><p className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-500">Variances</p><p className="mt-2 text-3xl font-bold text-white">{varianceSessions.length}</p><p className="mt-1 text-[11px] text-slate-500">Needs explanation</p></div></div></div></section>
 
-        <div className="mt-6">
-          <h2 className="text-xl font-bold">Front Desk Reconciliation Report</h2>
-          <p className="mt-1 text-sm text-gray-500">Reporting period: {format(new Date(startDate), 'dd MMM yyyy')} — {format(new Date(endDate), 'dd MMM yyyy')}</p>
-        </div>
-      </div>
+    <section className="hidden print:block border-b-2 border-slate-900 pb-5"><div className="flex justify-between"><div><p className="text-[10px] font-bold uppercase tracking-[0.24em] text-slate-500">Official financial record</p><h1 className="mt-1 text-2xl font-black uppercase">{activeProperty?.name || 'Hotel Property'}</h1><p className="mt-1 text-xs text-gray-600">Front Desk Settlement Report · {format(new Date(startDate), 'dd MMM yyyy')} — {format(new Date(endDate), 'dd MMM yyyy')}</p></div><div className="text-right text-xs text-slate-600"><p className="font-bold text-slate-900">{reportId}</p><p className="mt-1">Prepared by {staffName}</p></div></div></section>
 
-      {/* Screen Header (Hidden when printing) */}
-      <div className="flex flex-col gap-5 rounded-3xl bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 p-6 text-white shadow-xl shadow-slate-300/40 md:flex-row md:items-end md:justify-between print:hidden">
-        <div>
-          <div className="mb-3 flex items-center gap-2 text-indigo-200"><ShieldCheck className="h-5 w-5" /><span className="text-xs font-bold uppercase tracking-[0.2em]">Controlled audit workspace</span></div>
-          <h1 className="text-3xl font-black tracking-tight">Front Desk Reconciliation</h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">Review every cashier movement, payment, charge, and exception across the selected business dates before filing the official report.</p>
-          <div className="mt-4 flex flex-wrap gap-2 text-xs font-medium text-slate-300"><span className="rounded-full border border-white/15 bg-white/10 px-3 py-1">Report {reportId}</span><span className="rounded-full border border-white/15 bg-white/10 px-3 py-1">Prepared by {staffName}</span></div>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" size="sm" onClick={handleExport} disabled={!rows.length || query.isFetching}>
-            <Download className="mr-2 h-4 w-4" /> Export CSV
-          </Button>
-          <Button variant="outline" size="sm" onClick={handlePrint} disabled={!rows.length || query.isFetching}>
-            <Printer className="mr-2 h-4 w-4" /> Print Report
-          </Button>
-          <Button onClick={() => query.refetch()} disabled={query.isFetching} size="sm" className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm">
-            <RefreshCcw className={`mr-2 h-4 w-4 ${query.isFetching ? 'animate-spin' : ''}`} /> Refresh
-          </Button>
-        </div>
-      </div>
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5 print:grid-cols-5"><Metric label="Total inflows" value={money(totals.inflows)} detail="Payments and cash received" icon={ArrowDownToLine} tone="green" /><Metric label="Total outflows" value={money(totals.outflows)} detail="Refunds and cash movements" icon={ArrowUpFromLine} tone="red" /><Metric label="Net settlement" value={money(totals.net)} detail="Inflow less outflow" icon={WalletCards} /><Metric label="Settlement health" value={`${health}%`} detail={`${varianceSessions.length} variance sessions`} icon={FileCheck2} tone={health >= 90 ? 'green' : 'amber'} /><Metric label="Ledger lines" value={String(rows.length)} detail={`${sessions.length} shifts in scope`} icon={FileSpreadsheet} /></div>
 
-      {/* Date Filters (Hidden when printing) */}
-      <Card className="print:hidden border-slate-200 bg-white shadow-sm">
-        <CardContent className="flex flex-wrap items-end justify-between gap-6 p-5">
-          <div className="flex flex-wrap items-end gap-6">
-          <div className="space-y-2">
-            <label className="flex items-center gap-2 text-sm font-semibold text-slate-700"><CalendarDays className="h-4 w-4 text-indigo-600" />Start date</label>
-            <Input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} className="w-[180px] border-slate-300" />
-          </div>
-          <div className="space-y-2">
-            <label className="flex items-center gap-2 text-sm font-semibold text-slate-700"><CalendarDays className="h-4 w-4 text-indigo-600" />End date</label>
-            <Input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} className="w-[180px] border-slate-300" />
-          </div>
-          </div>
-          <div className="flex items-center gap-2 text-xs text-slate-500"><FileSpreadsheet className="h-4 w-4" />{rows.length} ledger entries · {query.data?.totals.sessions || 0} shifts</div>
-        </CardContent>
-      </Card>
+    <div className="grid gap-5 xl:grid-cols-[1.15fr_0.85fr]"><Panel title="Settlement scope" detail="Select the business dates and narrow the live ledger" icon={CalendarDays} action={<span className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-600">{reportId}</span>}><div className="flex flex-wrap items-end gap-4"><label className="space-y-2 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">Start date<input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} className="mt-1 block rounded-xl border border-white/10 bg-white/[0.05] px-3 py-2 text-sm font-normal tracking-normal text-slate-200 outline-none focus:border-indigo-400/50" /></label><label className="space-y-2 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">End date<input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} className="mt-1 block rounded-xl border border-white/10 bg-white/[0.05] px-3 py-2 text-sm font-normal tracking-normal text-slate-200 outline-none focus:border-indigo-400/50" /></label><div className="flex items-center gap-2 text-xs text-slate-500"><FileSpreadsheet className="h-4 w-4" />{rows.length} ledger entries · {sessions.length} sessions</div></div></Panel><Panel title="Movement by channel" detail="Net recorded movement by payment method" icon={Banknote}><div className="grid grid-cols-2 gap-3 sm:grid-cols-4">{['CASH', 'CARD', 'BANK TRANSFER', 'FOLIO'].map((method) => <div key={method} className="rounded-2xl border border-white/[0.06] bg-white/[0.025] p-3"><p className="text-[10px] font-bold uppercase tracking-[0.13em] text-slate-500">{method}</p><p className="mt-2 text-sm font-bold tabular-nums text-white">{money(methodTotals[method] || 0)}</p></div>)}</div></Panel></div>
 
-      {query.isLoading ? (
-        <div className="flex justify-center p-12 print:hidden">
-          <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
-        </div>
-      ) : query.error ? (
-        <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-red-800 shadow-sm print:hidden">
-          <h3 className="font-semibold mb-1">Failed to load accountability data</h3>
-          <p className="text-sm">{(query.error as Error).message}</p>
-        </div>
-      ) : (
-        <>
-          <div className="grid gap-4 md:grid-cols-4 print:grid-cols-4">
-            <SummaryCard label="Total Inflows" value={money(query.data?.totals.inflows || 0)} tone="text-emerald-600" bg="bg-emerald-50/50" icon={<ArrowDownToLine className="text-emerald-500" />} />
-            <SummaryCard label="Total Outflows" value={money(query.data?.totals.outflows || 0)} tone="text-rose-600" bg="bg-rose-50/50" icon={<ArrowUpFromLine className="text-rose-500" />} />
-            <SummaryCard label="Net Movement" value={money(query.data?.totals.net || 0)} tone="text-slate-900" bg="bg-slate-50" icon={<WalletCards className="text-slate-500" />} />
-            <SummaryCard label="Frontdesk Shifts" value={String(query.data?.totals.sessions || 0)} tone="text-indigo-600" bg="bg-indigo-50/50" icon={<WalletCards className="text-indigo-500" />} />
-          </div>
+    <div className="grid gap-5 xl:grid-cols-[1.15fr_0.85fr]"><Panel title="Cashier session register" detail="Expected cash, declared cash, variance, and approval posture" icon={WalletCards} action={<span className="text-xs text-slate-600">Click a session for evidence</span>}><div className="space-y-2">{sessions.length ? sessions.map((item) => { const tone = statusTone(item); const name = [item.staff?.firstName, item.staff?.lastName].filter(Boolean).join(' ') || 'Unassigned cashier'; return <button key={item.id} onClick={() => setSelectedSession(item)} className="group flex w-full items-center gap-3 rounded-2xl border border-white/[0.06] bg-white/[0.02] p-3 text-left transition hover:border-indigo-400/20 hover:bg-indigo-400/[0.05]"><span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${tone === 'red' ? 'bg-rose-400/10 text-rose-300' : tone === 'amber' ? 'bg-amber-400/10 text-amber-300' : tone === 'green' ? 'bg-emerald-400/10 text-emerald-300' : 'bg-indigo-400/10 text-indigo-300'}`}><WalletCards className="h-4 w-4" /></span><span className="min-w-0 flex-1"><span className="flex flex-wrap items-center gap-2"><span className="text-sm font-semibold text-white">{item.shiftReference}</span><Pill tone={tone}>{item.status.replaceAll('_', ' ')}</Pill></span><span className="mt-1 block truncate text-[11px] text-slate-500">{name} · {item.cashAccount?.name || 'Cash account'} · {format(new Date(item.businessDate), 'dd MMM yyyy')}</span></span><span className="hidden text-right sm:block"><span className="block text-xs font-semibold text-slate-300">{money(item.declaredCash ?? item.expectedCash)}</span><span className="mt-1 block text-[10px] text-slate-600">{item.variance === null ? 'Not declared' : `Variance ${fullMoney(item.variance)}`}</span></span><ChevronRight className="h-4 w-4 shrink-0 text-slate-600 group-hover:text-indigo-300" /></button>; }) : <div className="flex min-h-36 items-center justify-center rounded-2xl border border-dashed border-white/[0.08] text-xs text-slate-600">No front desk sessions in this period.</div>}</div></Panel><Panel title="Control signals" detail="Signals that determine whether the settlement is ready" icon={ShieldCheck}><div className="space-y-2">{[{ label: 'Closed sessions', value: sessions.length - openSessions.length, detail: `${sessions.length} total sessions`, tone: openSessions.length ? 'amber' : 'green', icon: CheckCircle2 }, { label: 'Variance sessions', value: varianceSessions.length, detail: 'Expected vs declared cash', tone: varianceSessions.length ? 'red' : 'green', icon: TriangleAlert }, { label: 'Session exceptions', value: exceptionSessions.length, detail: 'Needs supporting resolution', tone: exceptionSessions.length ? 'red' : 'green', icon: AlertTriangle }, { label: 'Payment lines', value: rows.length, detail: 'Traceable ledger entries', tone: 'indigo', icon: FileCheck2 }].map((signal) => <div key={signal.label} className="flex items-center justify-between rounded-2xl border border-white/[0.06] bg-white/[0.02] px-3.5 py-3"><span className="flex items-center gap-3"><span className={`flex h-8 w-8 items-center justify-center rounded-xl ${signal.tone === 'red' ? 'bg-rose-400/10 text-rose-300' : signal.tone === 'amber' ? 'bg-amber-400/10 text-amber-300' : signal.tone === 'green' ? 'bg-emerald-400/10 text-emerald-300' : 'bg-indigo-400/10 text-indigo-300'}`}><signal.icon className="h-4 w-4" /></span><span><span className="block text-xs font-semibold text-slate-300">{signal.label}</span><span className="mt-1 block text-[11px] text-slate-600">{signal.detail}</span></span></span><span className="text-lg font-bold text-white">{signal.value}</span></div>)}</div></Panel></div>
 
-          <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr] print:grid-cols-2">
-            <Card className="border-slate-200 shadow-sm print:shadow-none print:border print:border-slate-300">
-              <CardHeader className="border-b border-slate-100 px-5 py-4"><CardTitle className="text-base">Movement by channel</CardTitle><CardDescription>Net recorded movement by transaction source</CardDescription></CardHeader>
-              <CardContent className="grid grid-cols-2 gap-3 p-5 sm:grid-cols-4 print:p-4">
-                {['CASH', 'CARD', 'BANK TRANSFER', 'FOLIO'].map(method => <div key={method} className="rounded-xl bg-slate-50 p-3 print:border print:border-slate-200 print:bg-white"><p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{method}</p><p className="mt-1 text-sm font-bold tabular-nums text-slate-900">{money(methodTotals[method] || 0)}</p></div>)}
-              </CardContent>
-            </Card>
-            <Card className="border-slate-200 shadow-sm print:shadow-none print:border print:border-slate-300">
-              <CardHeader className="border-b border-slate-100 px-5 py-4"><CardTitle className="text-base">Control status</CardTitle><CardDescription>Scope and filing reference</CardDescription></CardHeader>
-              <CardContent className="space-y-3 p-5 text-sm print:p-4"><div className="flex justify-between gap-4"><span className="text-slate-500">Report ID</span><span className="font-mono font-semibold text-slate-900">{reportId}</span></div><div className="flex justify-between gap-4"><span className="text-slate-500">Ledger lines</span><span className="font-semibold text-slate-900">{rows.length}</span></div><div className="flex justify-between gap-4"><span className="text-slate-500">Prepared by</span><span className="font-semibold text-slate-900">{staffName}</span></div></CardContent>
-            </Card>
-          </div>
+    <Panel title="Settlement ledger" detail="Line-by-line evidence for payments, charges, and cash movements" icon={Landmark} action={<div className="flex flex-wrap items-center gap-2 print:hidden"><div className="relative"><Search className="pointer-events-none absolute left-2.5 top-2 h-3.5 w-3.5 text-slate-600" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search ledger" className="w-40 rounded-lg border border-white/10 bg-white/[0.04] py-1.5 pl-8 pr-2 text-xs text-slate-200 outline-none placeholder:text-slate-600" /></div><button onClick={() => setDirection(direction === 'ALL' ? 'INFLOW' : direction === 'INFLOW' ? 'OUTFLOW' : 'ALL')} className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1.5 text-xs font-semibold text-slate-400 hover:bg-white/[0.08]"><Filter className="h-3.5 w-3.5" /> {direction === 'ALL' ? 'All flows' : direction}</button></div>}><div className="overflow-x-auto"><table className="w-full min-w-[1160px] text-sm"><thead className="border-b border-white/[0.06] text-left text-[10px] uppercase tracking-[0.14em] text-slate-600"><tr>{['Date', 'Flow', 'Activity', 'Guest / room', 'Folio', 'Method', 'Shift', 'Amount'].map((heading) => <th key={heading} className="px-4 py-3 font-bold">{heading}</th>)}</tr></thead><tbody className="divide-y divide-white/[0.05]">{filteredRows.map((row) => <tr key={`${row.kind}-${row.id}`} className="transition hover:bg-white/[0.025]"><td className="whitespace-nowrap px-4 py-3 text-xs text-slate-400">{format(new Date(row.date), 'dd MMM yyyy')}<span className="mt-1 block text-[10px] text-slate-600">{format(new Date(row.date), 'HH:mm')}</span></td><td className="px-4 py-3"><span className={`inline-flex items-center rounded-full border px-2 py-1 text-[10px] font-bold ${row.direction === 'INFLOW' ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300' : 'border-rose-400/20 bg-rose-400/10 text-rose-300'}`}>{row.direction}</span></td><td className="max-w-[260px] px-4 py-3"><p className="truncate font-semibold text-slate-200">{row.type}</p><p className="mt-1 truncate text-[11px] text-slate-600">{row.description}</p></td><td className="px-4 py-3"><p className="text-slate-300">{row.guest || '—'}</p><p className="mt-1 text-[11px] text-slate-600">{row.rooms.length ? `Room ${row.rooms.join(', ')}` : 'No room'}</p></td><td className="px-4 py-3"><p className="text-slate-300">{row.folioNumber || '—'}</p><p className="mt-1 text-[11px] text-slate-600">{row.confirmationNumber || '—'}</p></td><td className="px-4 py-3"><p className="font-medium text-slate-300">{row.method}</p><p className="mt-1 max-w-28 truncate text-[11px] text-slate-600">{row.reference || '—'}</p></td><td className="px-4 py-3 font-mono text-[11px] text-slate-500">{row.shiftReference || '—'}</td><td className={`whitespace-nowrap px-4 py-3 text-right font-bold ${row.direction === 'INFLOW' ? 'text-emerald-300' : 'text-rose-300'}`}>{row.direction === 'INFLOW' ? '+' : '-'}{money(row.amount)}</td></tr>)}{!filteredRows.length && <tr><td colSpan={8} className="p-14 text-center text-xs text-slate-600">No ledger entries match the current scope.</td></tr>}</tbody></table></div><div className="mt-4 flex items-center justify-between border-t border-white/[0.06] pt-4 text-xs text-slate-600"><span>Showing {filteredRows.length} of {rows.length} live entries</span><span>{staffName} · {reportId}</span></div></Panel>
+  </div>
 
-          <Card className="border-slate-200 shadow-sm print:shadow-none print:border-none print:p-0">
-            <CardHeader className="border-b bg-slate-50/50 px-6 py-4 print:bg-white print:px-0">
-              <CardTitle className="text-lg">Transaction Detail</CardTitle>
-              <CardDescription>Line-by-line ledger of all recorded activities</CardDescription>
-            </CardHeader>
-            <CardContent className="overflow-x-auto p-0 print:overflow-visible">
-              <table className="w-full min-w-[1250px] print:min-w-full text-sm">
-                <thead className="border-b border-slate-200 bg-slate-100/50 print:bg-transparent text-left text-xs uppercase tracking-wider text-slate-500">
-                  <tr>
-                    {['Date', 'Direction', 'Type / Description', 'Guest / Room', 'Folio / Res', 'Method', 'Shift', 'Amount'].map((heading) => (
-                      <th key={heading} className="px-6 py-4 font-semibold">{heading}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {rows.map((row) => (
-                    <tr key={`${row.kind}-${row.id}`} className="hover:bg-slate-50/50 print:hover:bg-transparent transition-colors">
-                      <td className="whitespace-nowrap px-6 py-4 text-slate-600 print:text-black">
-                        {format(new Date(row.date), 'dd MMM yyyy')}
-                        <div className="text-xs text-slate-400 print:text-gray-500 mt-0.5">{format(new Date(row.date), 'HH:mm')}</div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border ${
-                          row.direction === 'INFLOW'
-                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200 print:border-none print:p-0 print:bg-transparent'
-                            : 'bg-rose-50 text-rose-700 border-rose-200 print:border-none print:p-0 print:bg-transparent'
-                        }`}>
-                          {row.direction}
-                        </span>
-                      </td>
-                      <td className="max-w-[260px] px-6 py-4">
-                        <div className="font-medium text-slate-900 print:text-black">{row.type}</div>
-                        <div className="text-slate-500 print:text-gray-600 text-xs mt-0.5 truncate" title={row.description}>{row.description}</div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="text-slate-900 print:text-black">{row.guest || '—'}</div>
-                        <div className="text-slate-500 print:text-gray-600 text-xs mt-0.5">
-                          {row.rooms.length ? (
-                            <span className="inline-flex items-center gap-1">
-                              Room {row.rooms.join(', ')}
-                            </span>
-                          ) : '—'}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="text-slate-900 print:text-black">{row.folioNumber || '—'}</div>
-                        <div className="text-slate-500 print:text-gray-600 text-xs mt-0.5">{row.confirmationNumber || '—'}</div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="font-medium text-slate-700 print:text-black">{row.method}</div>
-                        <div className="text-slate-500 print:text-gray-600 text-xs mt-0.5 truncate" title={row.reference || ''}>{row.reference || '—'}</div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="text-xs font-mono bg-slate-100 print:bg-transparent print:font-sans px-2 py-1 rounded text-slate-600">
-                          {row.shiftReference || '—'}
-                        </div>
-                      </td>
-                      <td className={`whitespace-nowrap px-6 py-4 text-right font-bold tracking-tight ${row.direction === 'INFLOW' ? 'text-emerald-600' : 'text-rose-600'} print:text-black`}>
-                        {row.direction === 'INFLOW' ? '+' : '-'}{money(row.amount)}
-                      </td>
-                    </tr>
-                  ))}
-                  {!rows.length && (
-                    <tr>
-                      <td colSpan={8} className="p-12 text-center text-slate-500">
-                        No financial activities recorded for the selected period.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </CardContent>
-          </Card>
-
-          {/* Print Footer (Only visible when printing) */}
-          <div className="hidden print:block mt-12 pt-8 border-t border-gray-300">
-             <div className="flex justify-between">
-                <div className="w-1/3 text-center">
-                   <div className="border-b border-black w-full mb-2"></div>
-                   <span className="text-xs font-medium text-gray-700">Prepared By (Signature)</span>
-                </div>
-                <div className="w-1/3 text-center">
-                   <div className="border-b border-black w-full mb-2"></div>
-                   <span className="text-xs font-medium text-gray-700">Authorized By (Signature)</span>
-                </div>
-             </div>
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
-function SummaryCard({ label, value, tone, icon, bg }: { label: string; value: string; tone: string; icon: ReactNode, bg: string }) {
-  return (
-    <Card className={`border-slate-200 shadow-sm print:shadow-none print:border-gray-300 ${bg} print:bg-transparent`}>
-      <CardContent className="flex items-center justify-between p-6 print:p-4">
-        <div>
-          <div className="text-sm font-medium text-slate-600 print:text-gray-600">{label}</div>
-          <div className={`mt-2 text-3xl font-bold tracking-tight ${tone} print:text-black`}>{value}</div>
-        </div>
-        <div className="rounded-full bg-white/60 print:hidden p-3 shadow-sm border border-black/5">
-          {icon}
-        </div>
-      </CardContent>
-    </Card>
-  );
+  {selectedSession && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm print:hidden" role="dialog" aria-modal="true" onClick={() => setSelectedSession(null)}><div className="w-full max-w-lg rounded-3xl border border-white/10 bg-[#10182a] p-6 shadow-2xl" onClick={(event) => event.stopPropagation()}><div className="flex items-start justify-between gap-4"><div><Pill tone={statusTone(selectedSession)}>{selectedSession.status.replaceAll('_', ' ')}</Pill><h2 className="mt-4 text-xl font-bold text-white">{selectedSession.shiftReference}</h2><p className="mt-1 text-xs text-slate-500">{format(new Date(selectedSession.businessDate), 'dd MMM yyyy')} · {[selectedSession.staff?.firstName, selectedSession.staff?.lastName].filter(Boolean).join(' ') || 'Unassigned cashier'}</p></div><button onClick={() => setSelectedSession(null)} className="rounded-xl p-2 text-slate-500 hover:bg-white/[0.06] hover:text-white" aria-label="Close session details"><X className="h-5 w-5" /></button></div><div className="mt-6 grid grid-cols-2 gap-3">{[['Opening float', fullMoney(selectedSession.openingFloat)], ['Expected cash', fullMoney(selectedSession.expectedCash)], ['Declared cash', selectedSession.declaredCash === null ? 'Not declared' : fullMoney(selectedSession.declaredCash)], ['Variance', selectedSession.variance === null ? 'Not calculated' : fullMoney(selectedSession.variance)]].map(([label, value]) => <div key={label} className="rounded-2xl border border-white/[0.07] bg-white/[0.03] p-4"><p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-600">{label}</p><p className="mt-2 text-sm font-bold text-white">{value}</p></div>)}</div><div className="mt-4 space-y-3 rounded-2xl border border-white/[0.07] bg-white/[0.02] p-4 text-sm"><div className="flex justify-between"><span className="text-slate-500">Opened</span><span className="text-slate-200">{format(new Date(selectedSession.openedAt), 'dd MMM yyyy · HH:mm')}</span></div><div className="flex justify-between"><span className="text-slate-500">Closed</span><span className="text-slate-200">{selectedSession.closedAt ? format(new Date(selectedSession.closedAt), 'dd MMM yyyy · HH:mm') : 'Still open'}</span></div><div className="flex justify-between"><span className="text-slate-500">Exceptions</span><span className="text-slate-200">{selectedSession.exceptions?.length || 0}</span></div></div><div className="mt-6 flex justify-end"><button onClick={() => setSelectedSession(null)} className="rounded-xl bg-indigo-500 px-4 py-2.5 text-xs font-bold text-white hover:bg-indigo-400">Close evidence</button></div></div></div>}
+  </main>;
 }

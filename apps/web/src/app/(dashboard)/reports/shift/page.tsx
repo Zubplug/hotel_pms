@@ -96,7 +96,7 @@ function StatusChip({ status }: { status: string }) {
   );
 }
 
-export default function ShiftReportPage() {
+export default function ShiftReportPage({ readOnly = false, managementBasePath = '/reports/shift' }: { readOnly?: boolean; managementBasePath?: string }) {
   const router = useRouter();
   const { propertyId } = useProperty();
   const { data: session } = useLodgeCoreSession();
@@ -310,13 +310,13 @@ export default function ShiftReportPage() {
     setShiftId(id);
     const params = new URLSearchParams(window.location.search);
     params.set('shiftId', id);
-    router.push(`/reports/shift?${params.toString()}`);
+    router.push(`${managementBasePath}?${params.toString()}`);
   };
   const clearSelectedShift = () => {
     setShiftId(null);
     const params = new URLSearchParams(window.location.search);
     params.delete('shiftId');
-    router.push(`/reports/shift${params.toString() ? `?${params.toString()}` : ''}`);
+    router.push(`${managementBasePath}${params.toString() ? `?${params.toString()}` : ''}`);
   };
 
   return (
@@ -552,7 +552,7 @@ export default function ShiftReportPage() {
             )}
 
             {/* ─── General Cashier Review Panel ─── */}
-            {needsApproval && (
+            {needsApproval && !readOnly && (
               <div className="bg-white rounded-2xl border border-indigo-200 shadow-sm overflow-hidden">
                 <div className="bg-indigo-50/60 border-b border-indigo-100 px-6 py-4 flex items-center gap-2">
                   <ShieldCheck className="h-4 w-4 text-indigo-600" />
