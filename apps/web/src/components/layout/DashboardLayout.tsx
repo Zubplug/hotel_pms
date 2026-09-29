@@ -99,6 +99,8 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     || pathname?.startsWith('/properties/')
     || pathname === '/rooms'
     || pathname?.startsWith('/rooms/')
+    || pathname === '/maintenance'
+    || pathname?.startsWith('/maintenance/')
     || pathname === '/room-types'
     || pathname?.startsWith('/room-types/')
     || pathname === '/reservations'
