@@ -69,7 +69,7 @@ export default function GeneralManagerNightAudit() {
   useEffect(() => { load(); }, [propertyId]);
 
   const currency = data?.property.baseCurrency || 'NGN';
-  const rooms = data?.analytics.rooms;
+  const rooms = data?.analytics.rooms ?? { total: 0, occupied: 0, available: 0, outOfOrder: 0 };
   const trend = data?.analytics.trend || [];
   const maxRevenue = Math.max(...trend.map(point => Number(point.totalRevenue || 0)), 1);
   const revenue = useMemo(() => ({
