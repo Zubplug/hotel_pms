@@ -1717,18 +1717,18 @@ public class OfflinePMSInterop
                     if (doc.RootElement.ValueKind == JsonValueKind.Object)
                     {
                         if (doc.RootElement.TryGetProperty("items", out var items))
-                            resultObj["items"] = items;
+                            resultObj["items"] = items.Clone();
                         else
                             resultObj["items"] = new JsonArray();
 
                         if (doc.RootElement.TryGetProperty("payments", out var payments))
-                            resultObj["payments"] = payments;
+                            resultObj["payments"] = payments.Clone();
                         else
                             resultObj["payments"] = new JsonArray();
                     }
                     else if (doc.RootElement.ValueKind == JsonValueKind.Array)
                     {
-                        resultObj["items"] = doc.RootElement;
+                        resultObj["items"] = doc.RootElement.Clone();
                         resultObj["payments"] = new JsonArray();
                     }
                 }

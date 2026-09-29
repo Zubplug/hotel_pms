@@ -629,7 +629,10 @@ public class LocalRepository
         var availabilityStart = isSameDayStay
             ? res.CheckInDate.Date
             : res.Status == "CHECKED_IN"
-                ? new[] { currentRoom?.CheckInDate.Date ?? res.CheckInDate.Date, DateTime.UtcNow.Date.AddDays(1) }.Max()
+                // A checked-in guest may need to move during the current
+                // night. Starting tomorrow incorrectly rejects one-night
+                // stays whose checkout is tomorrow.
+                ? new[] { currentRoom?.CheckInDate.Date ?? res.CheckInDate.Date, DateTime.UtcNow.Date }.Max()
                 : currentRoom?.CheckInDate.Date ?? res.CheckInDate.Date;
         var availabilityEnd = currentRoom?.CheckOutDate.Date ?? res.CheckOutDate.Date;
         if (availabilityEnd <= availabilityStart && !isSameDayStay)

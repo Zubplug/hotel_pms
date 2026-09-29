@@ -36,11 +36,12 @@ export function FrontDeskReassignRoomDialog({ reservation, open, onOpenChange }:
   
   // A checked-in guest is moving for the remaining stay. Using the original
   // check-in date makes an old reservation overlap itself and can hide rooms
-  // that are available now.
+  // that are available now. The current night is still part of the stay, so
+  // start from today rather than tomorrow (which breaks one-night stays).
   const availabilityStart = reservation.status === 'CHECKED_IN'
     ? new Date(Math.max(
         new Date(resRoom?.checkIn || 0).setHours(0, 0, 0, 0),
-        new Date().setHours(0, 0, 0, 0) + 86400000,
+        new Date().setHours(0, 0, 0, 0),
       ))
     : (resRoom?.checkIn ? new Date(resRoom.checkIn) : null);
   const checkIn = availabilityStart ? availabilityStart.toISOString().split('T')[0] : '';
