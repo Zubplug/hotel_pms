@@ -151,7 +151,7 @@ export async function GET(req: NextRequest) {
       const isRefundPayable = ledger.type === 'REFUND_PAYABLE';
       const receivable = isRefundPayable ? 0 : Math.max(0, ledgerBalance);
       const unappliedAdvanceCredit = ledger.type === 'CORPORATE' ? (unappliedAdvanceByLedger.get(ledger.id) || 0) : 0;
-      const advanceCredit = ledger.type === 'CORPORATE' ? Math.max(0, -ledgerBalance) + unappliedAdvanceCredit : 0;
+      const advanceCredit = ledger.type === 'CORPORATE' ? Math.max(0, -ledgerBalance, unappliedAdvanceCredit) : 0;
       const folio = account ? folioByAccount.get(account.id) : null;
       const bookings = account ? (reservationCounts.get(account.id) || 0) : 0;
       const openSharedFolioCount = account ? (openSharedFolioCounts.get(account.id) || 0) : 0;
@@ -195,12 +195,14 @@ export async function GET(req: NextRequest) {
     ].slice(0, 8);
     const recentActivity = corporateInvoices.slice(0, 8).map(invoice => ({
       id: invoice.id, accountName: invoice.account.name, invoiceNumber: invoice.invoiceNumber,
-      dueDate: invoice.dueDate, amount: Number(invoice.outstandingAmount), currency: invoice.currency, status: invoice.status,
+      accountType: invoice.account.type, dueDate: invoice.dueDate, amount: Number(invoice.outstandingAmount), currency: invoice.currency, status: invoice.status,
     }));
+    const corporateRows = rows.filter(row => row.type === 'CORPORATE');
+    const corporateInvoiceCount = corporateInvoices.filter(invoice => invoice.account.type === 'CORPORATE').length;
 
     return successResponse({
       generatedAt: now.toISOString(), period: { start: trendStart.toISOString(), end: now.toISOString() },
-      overview: { totalAccounts: rows.length, activeAccounts: rows.filter(row => row.isActive).length, creditExposure, outstanding, advanceCredit, skipperOutstanding, refundPayable, pendingRefundAmount, guestCreditOutstanding, overdue, bookings: rows.reduce((sum, row) => sum + row.bookings, 0), invoices: corporateInvoices.length },
+      overview: { totalAccounts: rows.length, activeAccounts: rows.filter(row => row.isActive).length, creditExposure, outstanding, advanceCredit, skipperOutstanding, refundPayable, pendingRefundAmount, guestCreditOutstanding, overdue, bookings: rows.reduce((sum, row) => sum + row.bookings, 0), invoices: corporateInvoices.length, corporate: { totalAccounts: corporateRows.length, activeAccounts: corporateRows.filter(row => row.isActive).length, creditExposure: corporateRows.reduce((sum, row) => sum + row.creditLimit, 0), outstanding: corporateRows.reduce((sum, row) => sum + row.receivable, 0), advanceCredit: corporateRows.reduce((sum, row) => sum + row.advanceCredit, 0), bookings: corporateRows.reduce((sum, row) => sum + row.bookings, 0), invoices: corporateInvoiceCount } },
       accounts: rows.sort((a, b) => b.receivable - a.receivable),
       trend: Array.from(monthMap.values()),
       aging: Object.entries(ageBuckets).map(([bucket, amount]) => ({ bucket, amount })),
