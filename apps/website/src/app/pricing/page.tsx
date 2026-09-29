@@ -1,6 +1,8 @@
 import Link from "next/link";
 import prisma from "@hotel-pms/db";
 
+export const dynamic = "force-dynamic";
+
 const fallbackPlans = [["Starter", "PMS, reservations, front desk and basic reports."], ["Professional", "PMS, POS, housekeeping, accounting, inventory and channels."], ["Enterprise", "Everything, plus multi-property, APIs, custom integrations and dedicated support."]];
 export default async function PricingPage() {
   const plans = await prisma.billingPlan.findMany({ where: { active: true }, orderBy: { displayOrder: "asc" }, include: { items: { include: { product: { select: { name: true } } } } } });
