@@ -1,5 +1,5 @@
-import GeneralCashierDashboardPage from '@/app/(cash-management)/cash-management/page';
+import GeneralManagerCashManagement from '@/components/cash-management/GeneralManagerCashManagement';
 
 export default function GeneralManagerCashManagementPage() {
-  return <GeneralCashierDashboardPage />;
+  return <GeneralManagerCashManagement />;
 }
