@@ -10,13 +10,15 @@ export async function GET(request: NextRequest) {
     if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const propertyId = request.nextUrl.searchParams.get('propertyId');
     if (!propertyId) return NextResponse.json({ error: 'Missing propertyId' }, { status: 400 });
+    const range = request.nextUrl.searchParams.get('range') || 'month';
+    if (!['week', 'month', 'quarter', 'year'].includes(range)) return NextResponse.json({ error: 'Unsupported range' }, { status: 400 });
 
     const context = await requireOrganizationContext(session.user.id);
     if (!context.propertyIds.includes(propertyId)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
     const [analytics, management] = await Promise.all([
       AccountantAnalyticsService.getOverviewKPIs(context, propertyId),
-      GeneralManagerAccountingService.getCommandCenter(context, propertyId),
+      GeneralManagerAccountingService.getCommandCenter(context, propertyId, range as 'week' | 'month' | 'quarter' | 'year'),
     ]);
     return NextResponse.json({ ...analytics, management });
   } catch (error: any) {

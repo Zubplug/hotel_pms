@@ -23,7 +23,7 @@ export default function GeneralManagerAccountingReports() {
     quiet ? setRefreshing(true) : setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`/api/v1/general-manager/accounting/command-center?propertyId=${encodeURIComponent(propertyId)}`, { cache: 'no-store' });
+      const response = await fetch(`/api/v1/general-manager/accounting/command-center?propertyId=${encodeURIComponent(propertyId)}&range=${range}`, { cache: 'no-store' });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error || 'Unable to load accounting reports');
       setData(body);
@@ -31,7 +31,7 @@ export default function GeneralManagerAccountingReports() {
     finally { setLoading(false); setRefreshing(false); }
   };
 
-  useEffect(() => { if (sessionStatus === 'authenticated' && !propertyLoading) void load(); }, [propertyId, propertyLoading, sessionStatus]);
+  useEffect(() => { if (sessionStatus === 'authenticated' && !propertyLoading) void load(); }, [propertyId, propertyLoading, sessionStatus, range]);
 
   if (sessionStatus === 'loading' || propertyLoading || loading) return <div className="flex min-h-[70vh] items-center justify-center bg-[#060c18]"><Loader2 className="h-7 w-7 animate-spin text-emerald-400" /></div>;
   if (error || !data) return <div className="min-h-[70vh] bg-[#060c18] p-8"><div className="mx-auto max-w-3xl rounded-2xl border border-rose-400/20 bg-rose-400/[0.06] p-5 text-sm text-rose-300">{error || 'Accounting report data is unavailable.'}</div></div>;
