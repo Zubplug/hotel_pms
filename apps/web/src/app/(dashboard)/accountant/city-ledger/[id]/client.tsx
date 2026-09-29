@@ -15,15 +15,18 @@ export function CityLedgerDetailClient({ account, openInvoices, recentEntries, t
   const isSkipper = account.type === 'SKIPPER';
   const isRefundPayable = account.type === 'REFUND_PAYABLE';
   const currency = account.currency || 'NGN';
-  const balance = Number(account.balance);
+  const dbBalance = Number(account.balance);
+  const unappliedAdvance = !isRefundPayable ? recentEntries.filter(entry => entry.type === 'PAYMENT' && entry.status !== 'REVERSED').reduce((sum, entry) => sum + Math.max(0, Number(entry.amount) - (entry.allocations || []).reduce((allocated, allocation) => allocated + Number(allocation.amount), 0)), 0) : 0;
+  const balance = isRefundPayable ? dbBalance : (Math.max(0, dbBalance) - unappliedAdvance);
+  
   const formatCurrency = (amount: number | string) => new Intl.NumberFormat('en-NG', { style: 'currency', currency, maximumFractionDigits: 0 }).format(Number(amount));
   const formatBalance = (amount: number) => amount > .01 ? `${formatCurrency(amount)} DR` : amount < -.01 ? `${formatCurrency(Math.abs(amount))} CR` : formatCurrency(0);
   const overdueInvoices = useMemo(() => openInvoices.filter(invoice => new Date(invoice.dueDate).getTime() < asAt), [openInvoices, asAt]);
   const overdueAmount = overdueInvoices.reduce((sum, invoice) => sum + Number(invoice.outstandingAmount), 0);
   const currentAmount = Math.max(0, totalOutstanding - overdueAmount);
-  const debitExposure = isRefundPayable ? Math.max(balance, 0) : Math.max(balance, 0);
-  const unappliedAdvance = !isRefundPayable ? recentEntries.filter(entry => entry.type === 'PAYMENT' && entry.status !== 'REVERSED').reduce((sum, entry) => sum + Math.max(0, Number(entry.amount) - (entry.allocations || []).reduce((allocated, allocation) => allocated + Number(allocation.amount), 0)), 0) : 0;
-  const creditExposure = (isRefundPayable ? Math.max(-balance, 0) : Math.max(-balance, 0)) + unappliedAdvance;
+  
+  const debitExposure = Math.max(balance, 0);
+  const creditExposure = Math.max(-balance, 0);
 
   return <main className="space-y-6 pb-10">
     <header className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end"><div><Link href="/accountant/city-ledger" className="mb-4 inline-flex items-center gap-2 text-xs text-cyan-300 hover:text-cyan-200"><ArrowLeft className="h-3.5 w-3.5" />Back to city ledger</Link><div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[.2em] text-cyan-300"><Building2 className="h-4 w-4" />Account detail</div><h1 className="text-3xl font-semibold tracking-tight text-white md:text-4xl">{isSkipper ? 'Skippers & Walk-Outs' : (account.CorporateAccount?.[0]?.name || account.name || 'Corporate account')}</h1><p className="mt-2 text-sm text-slate-400">{isSkipper ? 'Individual invoice settlement for walk-out and skipper exposure.' : 'Corporate city-ledger account with controlled invoice allocation and payment history.'}</p></div><div className="flex items-center gap-2"><Badge className="border border-emerald-300/20 bg-emerald-300/10 px-3 py-1.5 text-emerald-300">{account.status}</Badge><span className="rounded-lg border border-white/10 bg-white/[.04] px-3 py-2 text-xs text-slate-400">{account.type}</span></div></header>
