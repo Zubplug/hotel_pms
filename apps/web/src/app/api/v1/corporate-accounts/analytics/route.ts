@@ -13,7 +13,10 @@ export async function GET(req: NextRequest) {
     if (!session?.user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
     const { propertyIds } = await requireOrganizationContext(session.user.id);
     const propertyId = req.nextUrl.searchParams.get('propertyId');
-    if (!propertyId || !propertyIds.includes(propertyId) || !(await hasPermission(session.user.id, propertyId, 'corporate_account:view'))) {
+    const userRole = String((session.user as any).role || '').toUpperCase();
+    const managementReadRoles = new Set(['SUPER_ADMIN', 'ADMIN', 'CEO', 'DIRECTOR', 'MANAGER', 'HOTEL_MANAGER', 'GENERAL_MANAGER']);
+    const canReadCorporateAnalytics = managementReadRoles.has(userRole) || await hasPermission(session.user.id, propertyId || '', 'corporate_account:view');
+    if (!propertyId || !propertyIds.includes(propertyId) || !canReadCorporateAnalytics) {
       return errorResponse('FORBIDDEN', 'Missing required corporate account permission', 403);
     }
 
