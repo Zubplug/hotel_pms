@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { requireOrganizationContext } from '@/lib/organization-access';
 import prisma from '@hotel-pms/db';
+import { FinancialStatementService } from '@/lib/services/financial-statement-service';
 
-type ReportKind = 'pack' | 'journals' | 'trial-balance' | 'tax' | 'payroll' | 'periods' | 'audit' | 'receivables';
+type ReportKind = 'pack' | 'journals' | 'trial-balance' | 'pnl' | 'balance-sheet' | 'cash-flow' | 'gl-reconciliation' | 'tax' | 'payroll' | 'periods' | 'audit' | 'receivables';
 type RangeKind = 'week' | 'month' | 'quarter' | 'half-year' | 'year';
 
 const csvCell = (value: unknown) => {
@@ -34,7 +35,7 @@ export async function GET(request: NextRequest) {
     const kind = (params.get('report') || 'pack') as ReportKind;
     const range = (params.get('range') || 'month') as RangeKind;
     if (!propertyId) return NextResponse.json({ error: 'Missing propertyId' }, { status: 400 });
-    if (!['pack', 'journals', 'trial-balance', 'tax', 'payroll', 'periods', 'audit', 'receivables'].includes(kind)) return NextResponse.json({ error: 'Unsupported report' }, { status: 400 });
+    if (!['pack', 'journals', 'trial-balance', 'pnl', 'balance-sheet', 'cash-flow', 'gl-reconciliation', 'tax', 'payroll', 'periods', 'audit', 'receivables'].includes(kind)) return NextResponse.json({ error: 'Unsupported report' }, { status: 400 });
     if (!['week', 'month', 'quarter', 'half-year', 'year'].includes(range)) return NextResponse.json({ error: 'Unsupported range' }, { status: 400 });
 
     const context = await requireOrganizationContext(session.user.id);
@@ -42,6 +43,12 @@ export async function GET(request: NextRequest) {
     const property = await prisma.property.findUnique({ where: { id: propertyId }, select: { name: true, baseCurrency: true, businessDate: true } });
     if (!property) return NextResponse.json({ error: 'Property not found' }, { status: 404 });
     const { start, end } = rangeBounds(property.businessDate || new Date(), range);
+    const [pnl, balanceSheet, cashFlowStatement, glReconciliation] = await Promise.all([
+      FinancialStatementService.getProfitAndLoss(propertyId, start, end),
+      FinancialStatementService.getBalanceSheet(propertyId, end),
+      FinancialStatementService.getCashFlowStatement(propertyId, start, end),
+      FinancialStatementService.getGLReconciliation(propertyId, end),
+    ]);
     const [journals, taxes, payroll, periods, audit, receivables] = await Promise.all([
       prisma.journalEntry.findMany({ where: { propertyId, entryDate: { gte: start, lte: end } }, include: { lines: { include: { account: { select: { code: true, name: true, type: true, normalBalance: true } } } } }, orderBy: [{ entryDate: 'asc' }, { entryNumber: 'asc' }] }),
       prisma.taxRemittance.findMany({ where: { propertyId, periodStart: { lte: end }, periodEnd: { gte: start } }, orderBy: { periodStart: 'asc' } }),
@@ -63,9 +70,17 @@ export async function GET(request: NextRequest) {
     const periodRows = periods.map(item => [item.name, iso(item.periodStart), iso(item.periodEnd), item.status, item.notes || '']);
     const auditRows = audit.map(item => [iso(item.createdAt), item.action, item.resource, item.resourceId, item.userEmail || item.userRole || 'System', item.requestId]);
     const receivableRows = receivables.map(item => [item.folioNumber, item.guest ? `${item.guest.firstName} ${item.guest.lastName}` : 'Master folio', item.currency, amount(item.balance), amount(item.totalCharges), amount(item.totalPayments), iso(item.createdAt)]);
+    const pnlRows = pnl.rows.map(item => [item.code, item.name, item.type, item.category || '', amount(item.balance)]);
+    const balanceSheetRows = balanceSheet.rows.map(item => [item.code, item.name, item.type, item.category || '', amount(item.balance)]);
+    const cashFlowRows = cashFlowStatement.rows.map(item => [item.code, item.name, item.source, amount(item.cashIn), amount(item.cashOut), amount(item.netMovement)]);
+    const reconciliationRows = glReconciliation.rows.map(item => [item.control, amount(item.glBalance), amount(item.subledgerBalance), amount(item.variance), item.status]);
     const sections: Record<ReportKind, [string[], unknown[][]]> = {
       journals: [['Entry number', 'Entry date', 'Status', 'Source', 'Description', 'Account code', 'Account name', 'Account type', 'Debit', 'Credit'], journalRows],
       'trial-balance': [['Account code', 'Account name', 'Account type', 'Debit', 'Credit', 'Net debit position', 'Posting lines'], trialRows],
+      pnl: [['Account code', 'Account name', 'Account type', 'Category', 'Balance'], pnlRows],
+      'balance-sheet': [['Account code', 'Account name', 'Account type', 'Category', 'Balance'], balanceSheetRows],
+      'cash-flow': [['Account code', 'Account name', 'Source', 'Cash in', 'Cash out', 'Net movement'], cashFlowRows],
+      'gl-reconciliation': [['Control', 'GL balance', 'Subledger balance', 'Variance', 'Status'], reconciliationRows],
       tax: [['Reference', 'Tax type', 'Period start', 'Period end', 'Collected', 'Remitted', 'Status', 'Authority'], taxRows],
       payroll: [['Period', 'Start', 'End', 'Payment date', 'Status', 'Gross', 'Deductions', 'Net', 'Journal entry'], payrollRows],
       periods: [['Period', 'Start', 'End', 'Status', 'Notes'], periodRows],
@@ -74,7 +89,7 @@ export async function GET(request: NextRequest) {
       pack: [[], []],
     };
     const packSections: Array<[string, [string[], unknown[][]]]> = [
-      ['JOURNAL REGISTER', sections.journals], ['TRIAL BALANCE', sections['trial-balance']], ['TAX REMITTANCES', sections.tax], ['PAYROLL PERIODS', sections.payroll], ['ACCOUNTING PERIODS', sections.periods], ['OPEN RECEIVABLES', sections.receivables], ['AUDIT ACTIVITY', sections.audit],
+      ['JOURNAL REGISTER', sections.journals], ['PROFIT AND LOSS', sections.pnl], ['BALANCE SHEET', sections['balance-sheet']], ['CASH FLOW', sections['cash-flow']], ['TRIAL BALANCE', sections['trial-balance']], ['GL RECONCILIATION', sections['gl-reconciliation']], ['TAX REMITTANCES', sections.tax], ['PAYROLL PERIODS', sections.payroll], ['ACCOUNTING PERIODS', sections.periods], ['OPEN RECEIVABLES', sections.receivables], ['AUDIT ACTIVITY', sections.audit],
     ];
     const body = kind === 'pack'
       ? [`Property,${csvCell(property.name)}`, `Currency,${csvCell(property.baseCurrency || 'NGN')}`, `Range,${csvCell(range)}`, `From,${iso(start)}`, `To,${iso(end)}`, '', ...packSections.flatMap(([title, [headers, rows]]) => [`${title}`, csv(headers, rows), ''])].join('\n')
