@@ -46,18 +46,30 @@ export default async function ReceivablesPage() {
       orderBy: [{ dueDate: 'asc' }, { issueDate: 'asc' }],
     }),
     prisma.cityLedgerEntry.findMany({
-      where: { propertyId, type: 'PAYMENT' },
-      include: { account: { select: { id: true, name: true, currency: true } } },
+      where: { propertyId, type: 'PAYMENT', status: { not: 'REVERSED' } },
+      include: { account: { select: { id: true, name: true, currency: true } }, allocations: { select: { amount: true } } },
       orderBy: { createdAt: 'asc' },
     }),
     prisma.chartOfAccount.findFirst({ where: { propertyId, code: '1140', isActive: true }, select: { id: true, code: true, name: true } }),
   ]);
 
   const currency = property?.baseCurrency || accounts[0]?.currency || 'NGN';
+  const unappliedPayments = payments.filter(payment => Number(payment.amount) - payment.allocations.reduce((sum, allocation) => sum + Number(allocation.amount), 0) > 0.01);
+  
+  const unappliedByAccount = new Map<string, number>();
+  for (const payment of unappliedPayments) {
+    const amount = Number(payment.amount) - payment.allocations.reduce((sum, allocation) => sum + Number(allocation.amount), 0);
+    unappliedByAccount.set(payment.accountId, (unappliedByAccount.get(payment.accountId) || 0) + amount);
+  }
+
+  const getTrueBalance = (account: { id: string; type: string; balance: any; }) => {
+    return Math.max(0, Number(account.balance)) - (unappliedByAccount.get(account.id) || 0);
+  };
+
   const arAccounts = accounts.filter(account => account.type !== 'REFUND_PAYABLE');
-  const positiveAccounts = arAccounts.filter(account => Number(account.balance) > 0);
-  const totalOutstanding = positiveAccounts.reduce((sum, account) => sum + Number(account.balance), 0);
-  const creditBalances = arAccounts.reduce((sum, account) => sum + Math.abs(Math.min(0, Number(account.balance))), 0);
+  const positiveAccounts = arAccounts.filter(account => getTrueBalance(account) > 0.01);
+  const totalOutstanding = positiveAccounts.reduce((sum, account) => sum + getTrueBalance(account), 0);
+  const creditBalances = arAccounts.reduce((sum, account) => sum + Math.abs(Math.min(0, getTrueBalance(account))), 0);
   const openInvoiceRows = invoices.map(invoice => {
     const days = daysBetween(invoice.dueDate, now);
     return { invoice, days, bucket: bucketFor(days), overdue: invoice.dueDate.getTime() < now };
@@ -68,7 +80,9 @@ export default async function ReceivablesPage() {
   }));
   const overdueAmount = aging.filter(item => item.key !== 'CURRENT').reduce((sum, item) => sum + item.amount, 0);
   const weightedDays = totalOutstanding ? openInvoiceRows.reduce((sum, row) => sum + Number(row.invoice.outstandingAmount) * row.days, 0) / totalOutstanding : 0;
-  const unmatchedPayments = payments.filter(payment => payment.status !== 'SETTLED');
+  
+  const unappliedAmount = unappliedPayments.reduce((sum, payment) => sum + Number(payment.amount) - payment.allocations.reduce((allocationSum, allocation) => allocationSum + Number(allocation.amount), 0), 0);
+  
   const payments90 = payments.filter(payment => payment.createdAt.getTime() >= now - 90 * 86_400_000);
   const collected90 = payments90.reduce((sum, payment) => sum + Number(payment.amount), 0);
   const focusInvoices = openInvoiceRows.slice().sort((a, b) => Number(b.invoice.outstandingAmount) - Number(a.invoice.outstandingAmount)).slice(0, 6);
@@ -97,7 +111,7 @@ export default async function ReceivablesPage() {
           <Metric title="Net AR exposure" value={money(totalOutstanding, currency)} caption={`${positiveAccounts.length} debtor accounts`} icon={Building2} tone="cyan" href="/accountant/city-ledger" />
           <Metric title="Overdue exposure" value={money(overdueAmount, currency)} caption={`${totalOutstanding ? Math.round(overdueAmount / totalOutstanding * 100) : 0}% of gross AR`} icon={AlertCircle} tone="rose" href="/accountant/city-ledger" />
           <Metric title="Collection velocity" value={money(collected90, currency)} caption="Cash applied in last 90 days" icon={Banknote} tone="emerald" href="/accountant/city-ledger" />
-          <Metric title="Unapplied cash" value={money(unmatchedPayments.reduce((sum, payment) => sum + Number(payment.amount), 0), currency)} caption={`${unmatchedPayments.length} payment${unmatchedPayments.length === 1 ? '' : 's'} to reconcile`} icon={Link2} tone="amber" href="/accountant/city-ledger" />
+          <Metric title="Unapplied cash" value={money(unappliedAmount, currency)} caption={`${unappliedPayments.length} payment${unappliedPayments.length === 1 ? '' : 's'} to reconcile`} icon={Link2} tone="amber" href="/accountant/city-ledger" />
         </section>
 
         <section className="grid gap-6 xl:grid-cols-[1.35fr_0.65fr]">
@@ -117,7 +131,7 @@ export default async function ReceivablesPage() {
           <Panel title="Control health" subtitle="Subledger to general ledger integrity"><div className="space-y-3"><ControlRow label="AR control account" value={controlAccount ? `${controlAccount.code} · ${controlAccount.name}` : 'Not configured'} status={controlAccount ? 'OK' : 'REVIEW'} /><ControlRow label="Subledger balance" value={money(totalOutstanding, currency)} status="OK" /><ControlRow label="GL control balance" value={glBalance === null ? 'Unavailable' : money(glBalance, currency)} status={glBalance === null ? 'REVIEW' : 'OK'} /><ControlRow label="Reconciliation variance" value={controlVariance === null ? 'Not tested' : money(Math.abs(controlVariance), currency)} status={controlVariance === null || Math.abs(controlVariance) < 0.01 ? 'OK' : 'REVIEW'} /></div><div className="mt-5 rounded-xl border border-emerald-400/15 bg-emerald-400/[0.06] p-3 text-xs leading-5 text-emerald-200"><ShieldCheck className="mr-1 inline h-4 w-4" />Balances are sourced from invoice outstanding amounts and the live city-ledger accounts.</div></Panel>
         </section>
 
-        <section className="grid gap-6 lg:grid-cols-3"><Insight icon={Sparkles} title="Accountant insight" text={overdueAmount ? `${Math.round(overdueAmount / Math.max(totalOutstanding, 1) * 100)}% of current AR is beyond 30 days. Prioritise the ${money(aging.find(item => item.key === 'OVER_90')?.amount || 0, currency)} in critical exposure.` : 'No overdue invoice exposure detected in the live city ledger.'} tone="cyan" /><Insight icon={Clock3} title="Follow-up queue" text={`${focusInvoices.length} high-value invoice${focusInvoices.length === 1 ? '' : 's'} are ready for collection follow-up. Open the account to record a payment or review its ledger history.`} tone="amber" /><Insight icon={Receipt} title="Audit trail" text={`${payments.length} city-ledger payment${payments.length === 1 ? '' : 's'} captured. ${unmatchedPayments.length ? 'Unapplied cash needs reconciliation.' : 'All captured payments are marked settled.'}`} tone="emerald" /></section>
+        <section className="grid gap-6 lg:grid-cols-3"><Insight icon={Sparkles} title="Accountant insight" text={overdueAmount ? `${Math.round(overdueAmount / Math.max(totalOutstanding, 1) * 100)}% of current AR is beyond 30 days. Prioritise the ${money(aging.find(item => item.key === 'OVER_90')?.amount || 0, currency)} in critical exposure.` : 'No overdue invoice exposure detected in the live city ledger.'} tone="cyan" /><Insight icon={Clock3} title="Follow-up queue" text={`${focusInvoices.length} high-value invoice${focusInvoices.length === 1 ? '' : 's'} are ready for collection follow-up. Open the account to record a payment or review its ledger history.`} tone="amber" /><Insight icon={Receipt} title="Audit trail" text={`${payments.length} city-ledger payment${payments.length === 1 ? '' : 's'} captured. ${unappliedPayments.length ? 'Unapplied cash needs reconciliation.' : 'All captured payments are marked settled.'}`} tone="emerald" /></section>
 
       </div>
     </main>
