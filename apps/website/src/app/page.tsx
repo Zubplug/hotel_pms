@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useEffect, useState } from "react";
 
 function Button({ children, secondary = false, href = "/book-demo" }: { children: React.ReactNode; secondary?: boolean; href?: string }) {
@@ -165,7 +166,7 @@ export default function WebsiteHome() {
             <a href="#pricing" className="hover:text-[#1677c8] transition-colors">Pricing</a>
           </nav>
           <div className="flex items-center gap-4">
-            <Link href="/portal" className="hidden text-sm font-bold text-white sm:block hover:text-[#1677c8] transition-colors">Sign in</Link>
+            <Link href="/portal" className="hidden text-sm font-bold text-[#07111f] sm:block hover:text-[#1677c8] transition-colors">Sign in</Link>
             <Button>Book a demo</Button>
           </div>
         </div>
@@ -401,6 +402,7 @@ export default function WebsiteHome() {
               Don't treat hardware as an afterthought. We provide seamless integration with e-locks and POS terminals, plus full lifecycle management from installation to maintenance.
             </p>
           </div>
+          <div className="hardware-photo mt-12"><Image src="/lodgecore/events.png" alt="LodgeCore hotel events and spaces operations screen" fill sizes="100vw" /><div><span className="eyebrow">Physical hotel operations</span><strong>From configuration to go-live, every deployment step stays visible.</strong></div></div>
           <div className="hw-flow">
             <div className="hw-node">LodgeCore</div>
             <div className="hw-arrow">→</div>
@@ -525,6 +527,10 @@ export default function WebsiteHome() {
         <div className="mx-auto max-w-7xl">
           <p className="eyebrow">Tailored for your business</p>
           <h2 className="section-title text-white mb-12">Designed for diverse hospitality models.</h2>
+          <div className="image-feature-grid mb-12">
+            <div className="image-feature"><Image src="/lodgecore/front-desk.png" alt="LodgeCore front desk operations screen" fill sizes="(max-width: 768px) 100vw, 50vw" /><span>Front desk operations</span></div>
+            <div className="image-feature"><Image src="/lodgecore/f-and-b.png" alt="LodgeCore food and beverage analytics screen" fill sizes="(max-width: 768px) 100vw, 50vw" /><span>Restaurant and F&amp;B control</span></div>
+          </div>
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
             <div className="prop-type">
               <h3>Luxury Hotels</h3>
@@ -548,11 +554,11 @@ export default function WebsiteHome() {
 
       {/* 14 CUSTOMER PROOF */}
       <section className="dark-section-alt px-5 py-24 lg:px-8 border-y border-white/10">
-        <div className="mx-auto max-w-4xl text-center">
-          <p className="text-xl md:text-3xl font-bold text-white leading-relaxed mb-8">
-            "LodgeCore fundamentally changed how we operate our multi-property group. The offline capabilities alone saved us during local internet outages, and the unified reporting gives us total visibility."
-          </p>
-          <div className="font-bold text-[#1677c8]">— Director of Operations, West Africa Hospitality Group</div>
+        <div className="mx-auto max-w-7xl">
+          <div className="max-w-2xl"><p className="eyebrow">Customer proof</p><h2 className="section-title text-white">Built to earn the trust of hotel teams.</h2><p className="section-copy">Customer stories, verified outcomes and implementation references will appear here as they are approved for publication.</p></div>
+          <div className="mt-12 grid gap-5 md:grid-cols-3">
+            {["Operations leadership", "Front desk teams", "Finance and ownership"].map((group) => <div className="proof-card" key={group}><p className="text-xs font-bold uppercase tracking-[.16em] text-[#1677c8]">Customer story slot</p><h3 className="mt-6 text-lg font-bold text-[#07111f]">{group}</h3><p className="mt-3 text-sm leading-6 text-slate-600">Verified testimonial and deployment outcome to be published after customer approval.</p><span className="mt-6 block text-xs font-bold text-[#1677c8]">Case study coming soon →</span></div>)}
+          </div>
         </div>
       </section>
 
