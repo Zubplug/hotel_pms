@@ -86,6 +86,7 @@ export default async function ReceivablesPage() {
   const payments90 = payments.filter(payment => payment.createdAt.getTime() >= now - 90 * 86_400_000);
   const collected90 = payments90.reduce((sum, payment) => sum + Number(payment.amount), 0);
   const focusInvoices = openInvoiceRows.slice().sort((a, b) => Number(b.invoice.outstandingAmount) - Number(a.invoice.outstandingAmount)).slice(0, 6);
+  const focusAccounts = positiveAccounts.slice().sort((a, b) => getTrueBalance(b) - getTrueBalance(a)).slice(0, 6);
   const weekly = Array.from({ length: 8 }, (_, index) => {
     const end = now - (7 - index) * 7 * 86_400_000;
     const start = end - 7 * 86_400_000;
@@ -125,13 +126,30 @@ export default async function ReceivablesPage() {
         </section>
 
         <section className="grid gap-6 xl:grid-cols-[1.35fr_0.65fr]">
-          <Panel title="Collection focus" subtitle="Highest-value open invoices requiring the next action" action={<Link href="/accountant/city-ledger" className="text-xs text-slate-400 hover:text-white">View all <ArrowRight className="ml-1 inline h-3.5 w-3.5" /></Link>}>
+          <Panel title="Collection focus" subtitle="Highest-value open invoices requiring the next action" action={<Link href="/accountant/city-ledger" className="text-xs text-slate-400 hover:text-white">View all invoices <ArrowRight className="ml-1 inline h-3.5 w-3.5" /></Link>}>
             <div className="overflow-x-auto"><table className="w-full min-w-[680px] text-left text-sm"><thead className="text-[10px] uppercase tracking-wider text-slate-500"><tr><th className="pb-3 font-medium">Invoice / account</th><th className="pb-3 font-medium">Due</th><th className="pb-3 font-medium">Age</th><th className="pb-3 text-right font-medium">Open balance</th><th className="pb-3 text-right font-medium">Action</th></tr></thead><tbody className="divide-y divide-white/[0.07]">{focusInvoices.length ? focusInvoices.map(row => <tr key={row.invoice.id} className="group"><td className="py-4"><div className="font-medium text-slate-200">{row.invoice.invoiceNumber}</div><div className="mt-1 text-xs text-slate-500">{row.invoice.account.name} · {row.invoice.account.type}</div></td><td className={row.overdue ? 'py-4 text-rose-300' : 'py-4 text-slate-400'}>{date(row.invoice.dueDate)}</td><td className="py-4"><span className={`rounded-full border px-2 py-1 text-[10px] font-semibold ${row.overdue ? 'border-rose-400/20 bg-rose-400/10 text-rose-300' : 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300'}`}>{row.days}d</span></td><td className="py-4 text-right font-semibold text-slate-100">{money(Number(row.invoice.outstandingAmount), row.invoice.currency || currency)}</td><td className="py-4 text-right"><Link href={`/accountant/city-ledger/${row.invoice.account.id}`} className="text-xs text-cyan-300 opacity-80 hover:opacity-100">Open account</Link></td></tr>) : <tr><td colSpan={5} className="py-10 text-center text-slate-500">No open invoices require collection action.</td></tr>}</tbody></table></div>
           </Panel>
-          <Panel title="Control health" subtitle="Subledger to general ledger integrity"><div className="space-y-3"><ControlRow label="AR control account" value={controlAccount ? `${controlAccount.code} · ${controlAccount.name}` : 'Not configured'} status={controlAccount ? 'OK' : 'REVIEW'} /><ControlRow label="Subledger balance" value={money(totalOutstanding, currency)} status="OK" /><ControlRow label="GL control balance" value={glBalance === null ? 'Unavailable' : money(glBalance, currency)} status={glBalance === null ? 'REVIEW' : 'OK'} /><ControlRow label="Reconciliation variance" value={controlVariance === null ? 'Not tested' : money(Math.abs(controlVariance), currency)} status={controlVariance === null || Math.abs(controlVariance) < 0.01 ? 'OK' : 'REVIEW'} /></div><div className="mt-5 rounded-xl border border-emerald-400/15 bg-emerald-400/[0.06] p-3 text-xs leading-5 text-emerald-200"><ShieldCheck className="mr-1 inline h-4 w-4" />Balances are sourced from invoice outstanding amounts and the live city-ledger accounts.</div></Panel>
+          <Panel title="Top debtor accounts" subtitle="Accounts with the largest outstanding balances" action={<Link href="/accountant/city-ledger/accounts" className="text-xs text-slate-400 hover:text-white">View ledger <ArrowRight className="ml-1 inline h-3.5 w-3.5" /></Link>}>
+            <div className="space-y-3">
+              {focusAccounts.length ? focusAccounts.map(account => (
+                <Link href={`/accountant/city-ledger/${account.id}`} key={account.id} className="flex items-center justify-between rounded-xl border border-white/[.07] bg-slate-950/30 p-3 hover:bg-white/[.05]">
+                  <span className="min-w-0 pr-3">
+                    <span className="block truncate text-sm font-medium text-slate-200">{account.name}</span>
+                    <span className="mt-1 block text-xs text-slate-500">{account.type}</span>
+                  </span>
+                  <span className="shrink-0 font-semibold text-rose-300">{money(getTrueBalance(account), account.currency || currency)}</span>
+                </Link>
+              )) : (
+                <p className="text-sm text-slate-500">No debtor accounts.</p>
+              )}
+            </div>
+          </Panel>
         </section>
 
-        <section className="grid gap-6 lg:grid-cols-3"><Insight icon={Sparkles} title="Accountant insight" text={overdueAmount ? `${Math.round(overdueAmount / Math.max(totalOutstanding, 1) * 100)}% of current AR is beyond 30 days. Prioritise the ${money(aging.find(item => item.key === 'OVER_90')?.amount || 0, currency)} in critical exposure.` : 'No overdue invoice exposure detected in the live city ledger.'} tone="cyan" /><Insight icon={Clock3} title="Follow-up queue" text={`${focusInvoices.length} high-value invoice${focusInvoices.length === 1 ? '' : 's'} are ready for collection follow-up. Open the account to record a payment or review its ledger history.`} tone="amber" /><Insight icon={Receipt} title="Audit trail" text={`${payments.length} city-ledger payment${payments.length === 1 ? '' : 's'} captured. ${unappliedPayments.length ? 'Unapplied cash needs reconciliation.' : 'All captured payments are marked settled.'}`} tone="emerald" /></section>
+        <section className="grid gap-6 xl:grid-cols-[1fr_2fr]">
+          <Panel title="Control health" subtitle="Subledger to general ledger integrity"><div className="space-y-3"><ControlRow label="AR control account" value={controlAccount ? `${controlAccount.code} · ${controlAccount.name}` : 'Not configured'} status={controlAccount ? 'OK' : 'REVIEW'} /><ControlRow label="Subledger balance" value={money(totalOutstanding, currency)} status="OK" /><ControlRow label="GL control balance" value={glBalance === null ? 'Unavailable' : money(glBalance, currency)} status={glBalance === null ? 'REVIEW' : 'OK'} /><ControlRow label="Reconciliation variance" value={controlVariance === null ? 'Not tested' : money(Math.abs(controlVariance), currency)} status={controlVariance === null || Math.abs(controlVariance) < 0.01 ? 'OK' : 'REVIEW'} /></div><div className="mt-5 rounded-xl border border-emerald-400/15 bg-emerald-400/[0.06] p-3 text-xs leading-5 text-emerald-200"><ShieldCheck className="mr-1 inline h-4 w-4" />Balances are sourced from invoice outstanding amounts and the live city-ledger accounts.</div></Panel>
+          <div className="grid gap-6 lg:grid-cols-2"><Insight icon={Sparkles} title="Accountant insight" text={overdueAmount ? `${Math.round(overdueAmount / Math.max(totalOutstanding, 1) * 100)}% of current AR is beyond 30 days. Prioritise the ${money(aging.find(item => item.key === 'OVER_90')?.amount || 0, currency)} in critical exposure.` : 'No overdue invoice exposure detected in the live city ledger.'} tone="cyan" /><Insight icon={Clock3} title="Follow-up queue" text={`${focusInvoices.length} high-value invoice${focusInvoices.length === 1 ? '' : 's'} are ready for collection follow-up. Open the account to record a payment or review its ledger history.`} tone="amber" /></div>
+        </section>
 
       </div>
     </main>
