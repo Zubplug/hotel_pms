@@ -57,6 +57,10 @@ export async function executeNightAudit(
   if (!property) throw new Error('NOT_FOUND:Property not found');
 
   const propertyBusinessDate = property.businessDate ?? getPropertyBusinessDate(property.timezone, new Date());
+  if (propertyBusinessDate.getTime() > getPropertyBusinessDate(property.timezone, new Date()).getTime()) {
+    throw new Error('BLOCKER:Cannot execute audit. The business date is in the future. Today\'s audit has already been completed.');
+  }
+
   const failedAudit = await prisma.nightAudit.findFirst({
     // A failed run normally remains on the current business date. The
     // `lt` case is retained for properties that were already rolled forward

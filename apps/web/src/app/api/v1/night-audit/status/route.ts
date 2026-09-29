@@ -331,7 +331,8 @@ export async function GET(req: NextRequest) {
       activeAudit?.status === 'POSTING'     ? 'POSTING' :
       currentAudit?.status === 'COMPLETED'  ? 'COMPLETED' :
       currentAudit?.status === 'FAILED'     ? 'FAILED' :
-      businessDate < localToday             ? 'OVERDUE' :
+      businessDate.getTime() > localToday.getTime() ? 'COMPLETED' :
+      businessDate.getTime() < localToday.getTime() ? 'OVERDUE' :
                                               'PENDING';
 
     return successResponse({
