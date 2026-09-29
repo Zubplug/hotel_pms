@@ -69,11 +69,12 @@ export default function GeneralManagerAccountingDomain({ domain }: { domain: Dom
   const totalFlags = Object.values(flags).reduce((sum: number, value: unknown) => sum + Number(value || 0), 0);
   const reviewCount = domain === 'gl' ? Number(flags.glExceptions || 0) : domain === 'taxes' ? Number(flags.taxExceptions || 0) : domain === 'payables' ? Number(flags.overdueInvoices || 0) + Number(flags.pendingExpenses || 0) : Number(flags.overdueReceivables || 0) + Number(flags.openExceptions || 0);
   const businessDate = date(analytics.businessDate);
+  const domainCards = buildDomainCards(domain, detail, analytics, flags);
 
   return <main className="min-h-full bg-[linear-gradient(160deg,#060c18_0%,#080e1f_68%,#0a0c22_100%)] px-4 pb-16 pt-6 text-slate-200 sm:px-6 md:px-8"><div className="mx-auto max-w-[1500px] space-y-6">
     <header className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end"><div><div className="mb-3 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[.22em] text-emerald-400"><HeaderIcon className="h-3.5 w-3.5" /> {current.eyebrow}</div><h1 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">{current.title}</h1><p className="mt-2 max-w-3xl text-sm leading-relaxed text-slate-500">{current.description} This management view is read-only; operational posting stays with the accountant workspace.</p></div><div className="flex flex-wrap items-center gap-2"><span className="rounded-xl border border-white/[.08] bg-white/[.035] px-3 py-2 text-xs text-slate-400">Business date <strong className="ml-1 text-slate-200">{businessDate}</strong></span><button onClick={() => load(true)} disabled={refreshing} className="inline-flex items-center gap-2 rounded-xl border border-white/[.08] bg-white/[.04] px-3 py-2 text-xs font-semibold text-slate-300 hover:bg-white/[.08] disabled:opacity-50"><RefreshCcw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} /> Refresh</button></div></header>
     <section className={`flex flex-col justify-between gap-4 rounded-2xl border p-5 sm:flex-row sm:items-center ${reviewCount ? 'border-amber-400/20 bg-amber-400/[.06]' : 'border-emerald-400/20 bg-emerald-400/[.06]'}`}><div className="flex items-start gap-3">{reviewCount ? <AlertTriangle className="mt-0.5 h-5 w-5 text-amber-300" /> : <CheckCircle2 className="mt-0.5 h-5 w-5 text-emerald-300" />}<div><p className="text-sm font-semibold text-white">{reviewCount ? `${reviewCount} item${reviewCount === 1 ? '' : 's'} require management review` : 'Control posture is clear'}</p><p className="mt-1 text-xs text-slate-500">Last night audit: {analytics.audit?.lastAuditStatus || 'PENDING'} · Read-only evidence view for the assigned property.</p></div></div><a href={current.link} className="inline-flex items-center gap-2 text-xs font-semibold text-indigo-300 hover:text-indigo-200">Open supporting evidence <ArrowUpRight className="h-3.5 w-3.5" /></a></section>
-    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><Metric label="Revenue today" value={money(analytics.revenue?.today?.totalRevenue)} detail={`${money(analytics.revenue?.today?.roomRevenue)} rooms · ${money(analytics.revenue?.today?.fbRevenue)} F&B`} icon={CircleDollarSign} tone="emerald" /><Metric label="Cash & bank" value={money(analytics.balances?.cashTotal)} detail={`${money(analytics.balances?.safe)} safe · ${money(analytics.balances?.bank)} bank`} icon={WalletCards} tone="blue" /><Metric label={domain === 'payables' ? 'Accounts payable' : domain === 'taxes' ? 'Tax liability' : 'Accounts receivable'} value={money(domain === 'payables' ? analytics.balances?.apOutstanding : domain === 'taxes' ? analytics.balances?.taxLiability?.total : analytics.balances?.arTotal)} detail={domain === 'payables' ? `${number(flags.overdueInvoices)} overdue invoices` : domain === 'taxes' ? 'Unremitted statutory exposure' : 'Guest and city ledger exposure'} icon={domain === 'payables' ? FileText : Scale} tone="amber" /><Metric label="Control signals" value={number(reviewCount)} detail={`${number(totalFlags)} total flags from finance controls`} icon={ShieldCheck} tone={reviewCount ? 'rose' : 'violet'} /></div>
+    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{domainCards.map((card) => <Metric key={card.label} {...card} />)}</div>
     <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><Evidence label="Net operating result" value={money(management.statements?.profitAndLoss?.summary?.balance)} detail="Current business month" tone="emerald" /><Evidence label="Balance sheet check" value={money(management.statements?.balanceSheet?.summary?.balance)} detail="Assets less liabilities and equity" tone={Math.abs(Number(management.statements?.balanceSheet?.summary?.balance || 0)) < .01 ? 'emerald' : 'rose'} /><Evidence label="GL control variance" value={money(management.controls?.gl?.variance)} detail={management.controls?.gl?.status || 'Subledger proof'} tone={Math.abs(Number(management.controls?.gl?.variance || 0)) < .01 ? 'emerald' : 'rose'} /><Evidence label="Accounting period" value={management.close?.currentPeriod?.name || 'Not configured'} detail={management.close?.currentPeriod?.status || 'No period status'} tone="violet" /></section>
     <DomainView domain={domain} detail={detail} analytics={analytics} detailError={data.detailError} />
   </div></main>;
@@ -85,6 +86,68 @@ function DomainView({ domain, detail, analytics, detailError }: { domain: Domain
   if (domain === 'payables') return <Payables detail={detail} analytics={analytics} detailError={detailError} />;
   if (domain === 'taxes') return <Taxes detail={detail} analytics={analytics} detailError={detailError} />;
   return <GeneralLedger detail={detail} analytics={analytics} detailError={detailError} />;
+}
+
+function buildDomainCards(domain: Domain, detail: Json, analytics: Json, flags: Json) {
+  if (domain === 'receivables') {
+    const rows = detail?.receivables || [];
+    const outstanding = rows.reduce((sum: number, row: Json) => sum + Number(row.financials?.balance || 0), 0);
+    const overdue = rows.filter((row: Json) => row.aging?.status === 'OVERDUE');
+    const overdueAmount = overdue.reduce((sum: number, row: Json) => sum + Number(row.financials?.balance || 0), 0);
+    const checkedOutAmount = rows.filter((row: Json) => row.aging?.status === 'CHECKED_OUT').reduce((sum: number, row: Json) => sum + Number(row.financials?.balance || 0), 0);
+    const avgDays = rows.length ? Math.round(rows.reduce((sum: number, row: Json) => sum + Number(row.aging?.daysOutstanding || 0), 0) / rows.length) : 0;
+    return [
+      { label: 'Overdue share', value: outstanding ? `${Math.round((overdueAmount / outstanding) * 100)}%` : '0%', detail: `${number(overdue.length)} folios past due`, icon: AlertTriangle, tone: overdueAmount ? 'rose' as Tone : 'emerald' as Tone },
+      { label: 'Checked-out exposure', value: money(checkedOutAmount), detail: 'Debt after departure', icon: ShieldCheck, tone: checkedOutAmount ? 'amber' as Tone : 'emerald' as Tone },
+      { label: 'Average age', value: `${number(avgDays)} days`, detail: 'Across unsettled guest balances', icon: BarChart3, tone: avgDays > 30 ? 'rose' as Tone : 'blue' as Tone },
+      { label: 'Collection focus', value: overdue.length ? 'Required' : 'Stable', detail: 'Management collection posture', icon: WalletCards, tone: overdue.length ? 'amber' as Tone : 'emerald' as Tone },
+    ];
+  }
+  if (domain === 'city-ledger') {
+    const overview = detail?.overview || {};
+    const topAccount = detail?.topAccounts?.[0];
+    const activeAccounts = detail?.accounts?.filter((account: Json) => account.isActive) || [];
+    const utilization = activeAccounts.filter((account: Json) => account.utilization !== null);
+    const averageUtilization = utilization.length ? Math.round(utilization.reduce((sum: number, account: Json) => sum + Number(account.utilization || 0), 0) / utilization.length) : 0;
+    return [
+      { label: 'Portfolio utilization', value: `${averageUtilization}%`, detail: 'Average active-account credit use', icon: Scale, tone: averageUtilization >= 80 ? 'amber' as Tone : 'blue' as Tone },
+      { label: 'Largest exposure', value: money(topAccount?.receivable), detail: topAccount?.name || 'No concentration recorded', icon: Landmark, tone: 'amber' as Tone },
+      { label: 'Advance credits', value: money(overview.advanceCredit), detail: 'Available customer credit', icon: CircleDollarSign, tone: 'emerald' as Tone },
+      { label: 'Collection risk', value: overview.overdue ? 'Review' : 'Stable', detail: money(overview.overdue) + ' past due', icon: AlertTriangle, tone: overview.overdue ? 'rose' as Tone : 'emerald' as Tone },
+    ];
+  }
+  if (domain === 'payables') {
+    const rows = (Array.isArray(detail) ? detail : detail?.data || []).filter((row: Json) => !['PAID', 'CANCELLED'].includes(row.status) && Number(row.outstandingAmount || 0) > 0);
+    const dueSoon = rows.filter((row: Json) => { const daysUntilDue = row.dueDate ? Math.ceil((new Date(row.dueDate).getTime() - Date.now()) / 86400000) : 999; return Number(row.daysOverdue || 0) <= 0 && daysUntilDue >= 0 && daysUntilDue <= 7; });
+    const supplierCount = new Set(rows.map((row: Json) => row.supplierId || row.supplier?.id)).size;
+    const purchaseOrderLinked = rows.filter((row: Json) => row.purchaseOrderId || row.purchaseOrder).length;
+    return [
+      { label: '7-day cash need', value: money(dueSoon.reduce((sum: number, row: Json) => sum + Number(row.outstandingAmount || 0), 0)), detail: `${number(dueSoon.length)} invoices due soon`, icon: CircleDollarSign, tone: dueSoon.length ? 'amber' as Tone : 'emerald' as Tone },
+      { label: 'Supplier breadth', value: number(supplierCount), detail: 'Suppliers with open obligations', icon: Landmark, tone: 'blue' as Tone },
+      { label: 'PO-linked invoices', value: `${rows.length ? Math.round((purchaseOrderLinked / rows.length) * 100) : 0}%`, detail: 'Purchase-order coverage', icon: ShieldCheck, tone: 'violet' as Tone },
+      { label: 'Payment readiness', value: rows.some((row: Json) => ['RECEIVED', 'UNDER_REVIEW'].includes(row.status)) ? 'Review' : 'Ready', detail: 'Approval queue posture', icon: AlertTriangle, tone: rows.some((row: Json) => ['RECEIVED', 'UNDER_REVIEW'].includes(row.status)) ? 'amber' as Tone : 'emerald' as Tone },
+    ];
+  }
+  if (domain === 'taxes') {
+    const rows = (Array.isArray(detail) ? detail : detail?.data || []);
+    const collected = rows.reduce((sum: number, row: Json) => sum + Number(row.collectedAmount || 0), 0);
+    const remitted = rows.reduce((sum: number, row: Json) => sum + Number(row.remittedAmount || 0), 0);
+    const authorities = new Set(rows.map((row: Json) => row.authorityName).filter(Boolean)).size;
+    return [
+      { label: 'Remittance coverage', value: collected ? `${Math.round((remitted / collected) * 100)}%` : '0%', detail: `${money(remitted)} remitted of ${money(collected)}`, icon: CheckCircle2, tone: remitted >= collected && collected > 0 ? 'emerald' as Tone : 'amber' as Tone },
+      { label: 'Pending filings', value: number(rows.filter((row: Json) => row.status === 'SUBMITTED').length), detail: 'Submitted and awaiting settlement', icon: FileText, tone: 'blue' as Tone },
+      { label: 'Rejected filings', value: number(rows.filter((row: Json) => row.status === 'REJECTED').length), detail: 'Correction required', icon: AlertTriangle, tone: rows.some((row: Json) => row.status === 'REJECTED') ? 'rose' as Tone : 'emerald' as Tone },
+      { label: 'Authorities', value: number(authorities), detail: 'Statutory bodies represented', icon: Landmark, tone: 'violet' as Tone },
+    ];
+  }
+  const accounts = (Array.isArray(detail) ? detail : detail?.data || []);
+  const trialBalanceVariance = Number(analytics.management?.statements?.trialBalance?.summary?.debit || 0) - Number(analytics.management?.statements?.trialBalance?.summary?.credit || 0);
+    return [
+    { label: 'Trial-balance variance', value: money(trialBalanceVariance), detail: 'Debit less credit', icon: Scale, tone: Math.abs(trialBalanceVariance) < .01 ? 'emerald' as Tone : 'rose' as Tone },
+    { label: 'Draft journals', value: number(analytics.management?.controls?.journals?.drafts), detail: 'Entries awaiting posting', icon: FileText, tone: analytics.management?.controls?.journals?.drafts ? 'amber' as Tone : 'emerald' as Tone },
+    { label: 'Account coverage', value: number(accounts.filter((account: Json) => account.isActive).length), detail: `${number(new Set(accounts.map((account: Json) => account.type)).size)} account classes`, icon: BarChart3, tone: 'blue' as Tone },
+    { label: 'Audit state', value: analytics.audit?.lastAuditStatus || 'PENDING', detail: 'Latest night-audit status', icon: ShieldCheck, tone: analytics.audit?.lastAuditStatus === 'COMPLETED' ? 'emerald' as Tone : 'amber' as Tone },
+  ];
 }
 
 function Receivables({ detail, analytics, detailError }: { detail: Json; analytics: Json; detailError: string | null }) {

@@ -47,10 +47,10 @@ export default function GeneralManagerAccountingReports() {
   const journalControls = management.controls?.journals || {};
   const currentPeriod = management.close?.currentPeriod;
   const summaryCards: Array<{ label: string; value: string; detail: string; icon: ElementType; tone: 'emerald' | 'blue' | 'amber' | 'rose' }> = [
-    { label: 'Revenue today', value: money(revenue.totalRevenue), detail: 'Posted operating revenue', icon: CircleDollarSign, tone: 'emerald' },
-    { label: 'Cash & bank', value: money(balances.cashTotal), detail: `${money(balances.safe)} safe · ${money(balances.bank)} bank`, icon: WalletCards, tone: 'blue' },
-    { label: 'Receivables', value: money(balances.arTotal), detail: 'Guest and city ledger', icon: Scale, tone: 'amber' },
-    { label: 'Payables', value: money(balances.apOutstanding), detail: `${flags.overdueInvoices || 0} overdue invoices`, icon: FileText, tone: 'rose' },
+    { label: 'Net profit / loss', value: money(statement.profitAndLoss?.summary?.balance), detail: 'Current reporting period', icon: CircleDollarSign, tone: 'emerald' },
+    { label: 'Trial balance', value: money(Number(statement.trialBalance?.summary?.debit || 0) - Number(statement.trialBalance?.summary?.credit || 0)), detail: 'Debit less credit control', icon: Scale, tone: 'blue' },
+    { label: 'GL variance', value: money(management.controls?.gl?.variance), detail: management.controls?.gl?.status || 'Subledger reconciliation', icon: ShieldCheck, tone: 'amber' },
+    { label: 'Posted journals', value: String(journalControls.posted || 0), detail: `${journalControls.drafts || 0} drafts pending review`, icon: FileText, tone: 'rose' },
   ];
 
   return <main className="min-h-full bg-[linear-gradient(160deg,#060c18_0%,#080e1f_65%,#0a0c22_100%)] px-4 pb-16 pt-6 sm:px-6 md:px-8"><div className="mx-auto max-w-[1500px] space-y-6">
