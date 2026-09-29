@@ -1,2 +1,3 @@
 import GeneralManagerAccountingDomain from '@/components/accounting/GeneralManagerAccountingDomain';
-export default function GeneralManagerGLPage() { return <GeneralManagerAccountingDomain domain="gl" />; }
+import { GeneralManagerAccountingShell } from '@/components/accounting/GeneralManagerAccountingShell';
+export default function GeneralManagerGLPage() { return <GeneralManagerAccountingShell section="GL integrity"><GeneralManagerAccountingDomain domain="gl" /></GeneralManagerAccountingShell>; }

@@ -1,2 +1,3 @@
 import GeneralManagerAccountingDomain from '@/components/accounting/GeneralManagerAccountingDomain';
-export default function GeneralManagerPayablesPage() { return <GeneralManagerAccountingDomain domain="payables" />; }
+import { GeneralManagerAccountingShell } from '@/components/accounting/GeneralManagerAccountingShell';
+export default function GeneralManagerPayablesPage() { return <GeneralManagerAccountingShell section="Payables"><GeneralManagerAccountingDomain domain="payables" /></GeneralManagerAccountingShell>; }

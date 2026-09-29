@@ -11,7 +11,7 @@ type Tone = 'emerald' | 'blue' | 'amber' | 'rose' | 'violet';
 type Json = any;
 
 const config: Record<Domain, { title: string; eyebrow: string; description: string; icon: ElementType; link: string }> = {
-  receivables: { title: 'Receivables control centre', eyebrow: 'Accounting Management / Receivables', description: 'Executive visibility into guest balances, collection pressure, aging, and unsettled folios.', icon: WalletCards, link: '/reports/receivables' },
+  receivables: { title: 'Receivables control centre', eyebrow: 'Accounting Management / Receivables', description: 'Executive visibility into guest balances, collection pressure, aging, and unsettled folios.', icon: WalletCards, link: '/general-manager/accounting/reports' },
   'city-ledger': { title: 'City ledger control centre', eyebrow: 'Accounting Management / City Ledger', description: 'Corporate exposure, credit utilization, invoice aging, and collection risk across the property.', icon: Landmark, link: '/general-manager/accounting/reports' },
   payables: { title: 'Payables control centre', eyebrow: 'Accounting Management / Payables', description: 'Supplier obligations, due-date pressure, review queues, and payment readiness for management.', icon: FileText, link: '/general-manager/accounting/reports' },
   taxes: { title: 'Tax position control centre', eyebrow: 'Accounting Management / Tax Position', description: 'Tax collected, remittance posture, statutory exposure, and filing exceptions before close.', icon: Scale, link: '/general-manager/accounting/reports' },

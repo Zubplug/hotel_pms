@@ -1,2 +1,3 @@
 import GeneralManagerAccountingDomain from '@/components/accounting/GeneralManagerAccountingDomain';
-export default function GeneralManagerReceivablesPage() { return <GeneralManagerAccountingDomain domain="receivables" />; }
+import { GeneralManagerAccountingShell } from '@/components/accounting/GeneralManagerAccountingShell';
+export default function GeneralManagerReceivablesPage() { return <GeneralManagerAccountingShell section="Receivables"><GeneralManagerAccountingDomain domain="receivables" /></GeneralManagerAccountingShell>; }

@@ -1,5 +1,6 @@
 import GeneralManagerAccounting from '@/components/accounting/GeneralManagerAccounting';
+import { GeneralManagerAccountingShell } from '@/components/accounting/GeneralManagerAccountingShell';
 
 export default function GeneralManagerAccountingPage() {
-  return <GeneralManagerAccounting />;
+  return <GeneralManagerAccountingShell section="Overview"><GeneralManagerAccounting /></GeneralManagerAccountingShell>;
 }
