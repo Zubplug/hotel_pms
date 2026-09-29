@@ -22,8 +22,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "LodgeCore | The operating system for modern hotels",
-  description: "Run your hotel, restaurant, payments, rooms, events, accounting and guest operations from one connected platform.",
+  title: "LodgeCore PMS",
+  description: "Enterprise Property Management System",
   manifest: "/manifest.webmanifest",
   applicationName: "LodgeCore PMS",
   appleWebApp: { capable: true, title: "LodgeCore PMS", statusBarStyle: "black-translucent" },
