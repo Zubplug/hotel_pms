@@ -663,3 +663,5 @@ a {
   .arch-split::before { display: none; }
   .arch-split-item::before { display: none; }
 }
+section:not(.dark-section):not(.blue-section):not(.final-cta) .section-copy{color:#526173}
+section:not(.dark-section):not(.blue-section):not(.final-cta) .text-slate-600{color:#526173}
