@@ -49,6 +49,24 @@ export default async function CityLedgerDetailPage(props: { params: Promise<{ id
   const totalOutstanding = account.invoices.reduce((sum, inv) => sum + Number(inv.outstandingAmount), 0);
   const asAt = new Date().getTime();
 
+  let trueBalance = Number(account.balance);
+  if (account.type === 'REFUND_PAYABLE') {
+    const allRefundEntries = await prisma.cityLedgerEntry.findMany({
+      where: { accountId: account.id, type: 'REFUND_OWED', status: 'OPEN' },
+      include: { allocations: { select: { amount: true } } }
+    });
+    trueBalance = -allRefundEntries.reduce((sum, entry) => sum + Math.max(0, Number(entry.amount) - entry.allocations.reduce((allocated, allocation) => allocated + Number(allocation.amount), 0)), 0);
+  } else {
+    const allUnappliedPayments = await prisma.cityLedgerEntry.findMany({
+      where: { accountId: account.id, type: 'PAYMENT', status: { not: 'REVERSED' } },
+      include: { allocations: { select: { amount: true } } }
+    });
+    const unappliedAdvance = allUnappliedPayments.reduce((sum, entry) => sum + Math.max(0, Number(entry.amount) - entry.allocations.reduce((allocated, allocation) => allocated + Number(allocation.amount), 0)), 0);
+    trueBalance = Math.max(0, trueBalance) - unappliedAdvance;
+  }
+  
+  account.balance = trueBalance as any;
+
   return (
     <div className="min-h-screen bg-slate-950 p-6 text-slate-50 md:p-8">
       <div className="mx-auto max-w-7xl">
