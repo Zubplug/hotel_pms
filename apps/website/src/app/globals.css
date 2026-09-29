@@ -1,22 +1,15 @@
 @import "tailwindcss";
 
 :root {
-  color-scheme: light;
-  /* Light Theme Variables */
-  --light-bg-1: #FFFFFF;
-  --light-bg-2: #F5F8FC;
-  --light-heading: #071426;
-  --light-body: #526173;
-  --light-accent: #1677c8;
-  --light-border: #E2E8F0;
-  
-  /* Dark Theme Variables */
+  color-scheme: dark;
+  /* Dark Theme Variables (Used everywhere now) */
   --dark-bg-1: #061321;
   --dark-bg-2: #0B1C2E;
   --dark-heading: #FFFFFF;
   --dark-body: #AAB8C8;
   --dark-accent: #5CC9F5;
   --dark-border: rgba(255, 255, 255, 0.1);
+  --dark-card-bg: rgba(255, 255, 255, 0.03);
 }
 
 * {
@@ -29,8 +22,8 @@ html {
 
 body {
   margin: 0;
-  background: var(--light-bg-1);
-  color: var(--light-body);
+  background: var(--dark-bg-1);
+  color: var(--dark-body);
   font-family: Arial, Helvetica, sans-serif;
 }
 
@@ -40,18 +33,6 @@ a {
 }
 
 /* SECTION STYLES */
-.light-section {
-  background: var(--light-bg-1);
-  color: var(--light-body);
-}
-.light-section-alt {
-  background: var(--light-bg-2);
-  color: var(--light-body);
-}
-.light-section .section-title, .light-section-alt .section-title {
-  color: var(--light-heading);
-}
-
 .dark-section {
   background: var(--dark-bg-1);
   color: var(--dark-body);
@@ -70,9 +51,6 @@ a {
   font-weight: 800;
   letter-spacing: 0.2em;
   text-transform: uppercase;
-  color: var(--light-accent);
-}
-.dark-section .eyebrow, .dark-section-alt .eyebrow {
   color: var(--dark-accent);
 }
 
@@ -82,7 +60,7 @@ a {
   font-weight: 900;
   line-height: 0.94;
   letter-spacing: -0.05em;
-  color: var(--dark-heading); /* Hero is always dark */
+  color: var(--dark-heading);
 }
 
 .section-title {
@@ -255,16 +233,16 @@ a {
   align-items: center;
   font-family: monospace;
   font-size: 14px;
-  color: var(--light-body);
-  background: var(--light-bg-1);
+  color: var(--dark-body);
+  background: var(--dark-bg-2);
   padding: 40px;
-  border: 1px solid var(--light-border);
+  border: 1px solid var(--dark-border);
   border-radius: 12px;
 }
 .arch-node {
   padding: 10px 20px;
-  border: 1px solid var(--light-border);
-  background: var(--light-bg-2);
+  border: 1px solid var(--dark-border);
+  background: var(--dark-bg-1);
   border-radius: 6px;
   font-weight: bold;
   text-align: center;
@@ -272,15 +250,15 @@ a {
   z-index: 2;
 }
 .arch-node.core {
-  background: var(--light-accent);
+  background: #113654;
   color: #fff;
-  border-color: #0d548f;
+  border-color: #5CC9F5;
   font-size: 16px;
 }
 .arch-line {
   width: 2px;
   height: 24px;
-  background: var(--light-border);
+  background: var(--dark-border);
 }
 .arch-split {
   display: flex;
@@ -296,7 +274,7 @@ a {
   transform: translateX(-50%);
   width: calc(100% - 100px); /* rough approx based on items */
   height: 2px;
-  background: var(--light-border);
+  background: var(--dark-border);
 }
 .arch-split-item {
   display: flex;
@@ -308,34 +286,34 @@ a {
   content: "";
   width: 2px;
   height: 12px;
-  background: var(--light-border);
+  background: var(--dark-border);
 }
 
 /* INTERACTIVE PRODUCT TABS */
 .tab {
-  border: 1px solid var(--light-border);
+  border: 1px solid var(--dark-border);
   border-radius: 99px;
-  background: white;
+  background: var(--dark-bg-2);
   padding: 10px 18px;
   font-size: 13px;
   font-weight: 700;
-  color: var(--light-body);
+  color: var(--dark-body);
   cursor: pointer;
   transition: 0.2s;
 }
 .tab:hover {
-  background: var(--light-bg-2);
+  background: rgba(255, 255, 255, 0.05);
 }
 .tab.active {
-  border-color: var(--light-accent);
-  background: var(--light-accent);
-  color: white;
+  border-color: var(--dark-accent);
+  background: rgba(92, 201, 245, 0.1);
+  color: var(--dark-accent);
 }
 .product-screen {
   border: 1px solid #274865;
   border-radius: 16px;
   background: #091a2b;
-  box-shadow: 0 30px 70px rgba(7, 17, 31, 0.2);
+  box-shadow: 0 30px 70px rgba(0, 0, 0, 0.5);
   overflow: hidden;
   min-height: 400px;
   color: white;
@@ -420,14 +398,14 @@ a {
 .journey-step span {
   display: block;
   font-size: 11px;
-  color: var(--light-accent);
+  color: var(--dark-accent);
   font-weight: bold;
 }
 .journey-step b {
   display: block;
   margin-top: 13px;
   font-size: 14px;
-  color: var(--light-heading);
+  color: var(--dark-heading);
 }
 .journey-step i {
   position: absolute;
@@ -468,20 +446,20 @@ a {
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
 .card {
-  border: 1px solid var(--light-border);
+  border: 1px solid var(--dark-border);
   border-radius: 12px;
-  background: white;
+  background: var(--dark-card-bg);
   padding: 24px;
   transition: 0.2s;
 }
 .card:hover {
   transform: translateY(-4px);
-  box-shadow: 0 14px 35px rgba(0,0,0,0.05);
+  background: rgba(255, 255, 255, 0.05);
 }
 .card h3 {
   font-size: 18px;
   font-weight: bold;
-  color: var(--light-heading);
+  color: var(--dark-heading);
   margin-bottom: 8px;
 }
 .card p {
@@ -515,8 +493,8 @@ a {
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
 }
 .market-category {
-  background: var(--light-bg-2);
-  border: 1px solid var(--light-border);
+  background: var(--dark-card-bg);
+  border: 1px solid var(--dark-border);
   border-radius: 12px;
   padding: 20px;
 }
@@ -524,7 +502,7 @@ a {
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  color: var(--light-heading);
+  color: var(--dark-heading);
   margin-bottom: 16px;
   font-weight: 800;
 }
@@ -535,14 +513,14 @@ a {
   margin-bottom: 12px;
   font-size: 14px;
   font-weight: 600;
-  color: var(--light-body);
+  color: var(--dark-body);
 }
 .market-item::before {
   content: "";
   display: block;
   width: 8px;
   height: 8px;
-  background: var(--light-accent);
+  background: var(--dark-accent);
   border-radius: 2px;
 }
 
@@ -553,14 +531,14 @@ a {
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
 }
 .trust-item {
-  border: 1px solid var(--light-border);
-  background: white;
+  border: 1px solid var(--dark-border);
+  background: var(--dark-card-bg);
   padding: 16px;
   border-radius: 8px;
 }
 .trust-item strong {
   display: block;
-  color: var(--light-heading);
+  color: var(--dark-heading);
   font-size: 14px;
   margin-bottom: 6px;
 }
@@ -569,7 +547,7 @@ a {
   margin: 0;
 }
 
-/* PROPERTY TYPES (Images replaced by styled blocks) */
+/* PROPERTY TYPES */
 .prop-type {
   height: 240px;
   border-radius: 12px;
@@ -613,14 +591,14 @@ a {
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
 }
 .pricing-card {
-  border: 1px solid var(--light-border);
-  background: white;
+  border: 1px solid var(--dark-border);
+  background: var(--dark-card-bg);
   border-radius: 16px;
   padding: 32px;
 }
 .pricing-card.professional {
-  border-color: var(--light-accent);
-  box-shadow: 0 10px 30px rgba(22, 119, 200, 0.1);
+  border-color: var(--dark-accent);
+  box-shadow: 0 10px 30px rgba(92, 201, 245, 0.1);
   position: relative;
 }
 .pricing-card.professional::before {
@@ -629,8 +607,8 @@ a {
   top: -12px;
   left: 50%;
   transform: translateX(-50%);
-  background: var(--light-accent);
-  color: white;
+  background: var(--dark-accent);
+  color: #061321;
   font-size: 11px;
   font-weight: bold;
   padding: 4px 12px;
@@ -639,7 +617,7 @@ a {
 .pricing-card h3 {
   font-size: 24px;
   font-weight: 900;
-  color: var(--light-heading);
+  color: var(--dark-heading);
   margin-bottom: 12px;
 }
 .pricing-card p {
@@ -661,12 +639,12 @@ a {
 }
 .pricing-card ul li::before {
   content: "✓";
-  color: var(--light-accent);
+  color: var(--dark-accent);
   font-weight: bold;
 }
 .pricing-addons {
-  background: var(--light-bg-2);
-  border: 1px solid var(--light-border);
+  background: var(--dark-card-bg);
+  border: 1px solid var(--dark-border);
   border-radius: 12px;
   padding: 24px;
   margin-top: 30px;

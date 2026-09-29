@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 
 function Button({ children, secondary = false, href = "/book-demo" }: { children: React.ReactNode; secondary?: boolean; href?: string }) {
   return (
-    <Link href={href} className={`inline-flex items-center justify-center rounded-full px-6 py-3.5 text-sm font-bold transition hover:-translate-y-0.5 ${secondary ? "border border-slate-300/30 text-white hover:border-sky-300" : "bg-sky-400 text-[#07111f] hover:bg-white"}`}>
+    <Link href={href} className={`inline-flex items-center justify-center rounded-full px-6 py-3.5 text-sm font-bold transition hover:-translate-y-0.5 ${secondary ? "border border-slate-300/30 text-white hover:border-sky-300" : "bg-sky-400 text-white hover:bg-white"}`}>
       {children}
     </Link>
   );
@@ -153,9 +153,9 @@ export default function WebsiteHome() {
 
   return (
     <main className="home-shell overflow-hidden">
-      <header className="sticky top-0 z-50 border-b border-slate-200/80 bg-white/90 backdrop-blur-xl">
+      <header className="sticky top-0 z-50 border-b border-white/10 bg-[#061321]/90 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4 lg:px-8">
-          <Link href="/" className="text-xl font-black tracking-tight text-[#07111f]">
+          <Link href="/" className="text-xl font-black tracking-tight text-white">
             Lodge<span className="text-[#1677c8]">Core</span>
           </Link>
           <nav className="hidden items-center gap-7 text-sm font-semibold text-slate-600 lg:flex">
@@ -165,7 +165,7 @@ export default function WebsiteHome() {
             <a href="#pricing" className="hover:text-[#1677c8] transition-colors">Pricing</a>
           </nav>
           <div className="flex items-center gap-4">
-            <Link href="/portal" className="hidden text-sm font-bold text-[#07111f] sm:block hover:text-[#1677c8] transition-colors">Sign in</Link>
+            <Link href="/portal" className="hidden text-sm font-bold text-white sm:block hover:text-[#1677c8] transition-colors">Sign in</Link>
             <Button>Book a demo</Button>
           </div>
         </div>
@@ -228,11 +228,11 @@ export default function WebsiteHome() {
       </section>
 
       {/* 02 HOTEL OPERATING SYSTEM */}
-      <section id="platform" className="light-section px-5 py-24 lg:px-8">
+      <section id="platform" className="dark-section px-5 py-24 lg:px-8">
         <div className="mx-auto max-w-7xl">
           <div className="text-center max-w-3xl mx-auto mb-16">
             <p className="eyebrow">Hotel Operating System</p>
-            <h2 className="section-title mx-auto text-[#071426]">One platform. Every department.</h2>
+            <h2 className="section-title mx-auto text-white">One platform. Every department.</h2>
             <p className="section-copy mx-auto">
               LodgeCore replaces fragmented systems with a single, coherent architecture. Data flows seamlessly from the guest to the general ledger.
             </p>
@@ -301,7 +301,7 @@ export default function WebsiteHome() {
       </section>
 
       {/* 04 GUEST JOURNEY */}
-      <section className="light-section-alt px-5 py-24 lg:px-8 border-y border-[#E2E8F0]">
+      <section className="dark-section-alt px-5 py-24 lg:px-8 border-y border-white/10">
         <div className="mx-auto max-w-7xl">
           <div className="max-w-2xl">
             <p className="eyebrow">Guest Journey</p>
@@ -353,16 +353,16 @@ export default function WebsiteHome() {
       </section>
 
       {/* 06 HOTEL COMMERCE & 07 HOTEL OPERATIONS & 08 HOTEL FINANCE */}
-      <section className="light-section px-5 py-24 lg:px-8">
+      <section className="dark-section px-5 py-24 lg:px-8">
         <div className="mx-auto max-w-7xl">
           <div className="text-center max-w-3xl mx-auto mb-16">
             <p className="eyebrow">The Complete Suite</p>
-            <h2 className="section-title mx-auto text-[#071426]">Everything you need to sell, operate, and reconcile.</h2>
+            <h2 className="section-title mx-auto text-white">Everything you need to sell, operate, and reconcile.</h2>
           </div>
           
           <div className="space-y-16">
             <div>
-              <h3 className="text-2xl font-black text-[#071426] mb-6 border-b border-slate-200 pb-4">Hotel Commerce</h3>
+              <h3 className="text-2xl font-black text-white mb-6 border-b border-white/10 pb-4">Hotel Commerce</h3>
               <div className="grid-cards">
                 <div className="card"><h3>Booking Engine</h3><p>Direct, commission-free reservations integrated instantly into your availability.</p></div>
                 <div className="card"><h3>Channel Manager</h3><p>Two-way sync with OTAs (Booking.com, Expedia) to maximize distribution.</p></div>
@@ -371,7 +371,7 @@ export default function WebsiteHome() {
             </div>
 
             <div>
-              <h3 className="text-2xl font-black text-[#071426] mb-6 border-b border-slate-200 pb-4">Hotel Operations</h3>
+              <h3 className="text-2xl font-black text-white mb-6 border-b border-white/10 pb-4">Hotel Operations</h3>
               <div className="grid-cards">
                 <div className="card"><h3>Front Desk</h3><p>Fast check-ins, room assignment, and full guest lifecycle management.</p></div>
                 <div className="card"><h3>Housekeeping</h3><p>Mobile-friendly room status updates and maintenance ticketing.</p></div>
@@ -380,7 +380,7 @@ export default function WebsiteHome() {
             </div>
 
             <div>
-              <h3 className="text-2xl font-black text-[#071426] mb-6 border-b border-slate-200 pb-4">Hotel Finance</h3>
+              <h3 className="text-2xl font-black text-white mb-6 border-b border-white/10 pb-4">Hotel Finance</h3>
               <div className="grid-cards">
                 <div className="card"><h3>Folios & Cash</h3><p>Complex multi-folio routing, cash drawer management, and shift drops.</p></div>
                 <div className="card"><h3>Accounts Receivable</h3><p>City ledger management and automated corporate invoicing.</p></div>
@@ -424,11 +424,11 @@ export default function WebsiteHome() {
       </section>
 
       {/* 10 MULTI-PROPERTY */}
-      <section className="light-section px-5 py-24 lg:px-8">
+      <section className="dark-section px-5 py-24 lg:px-8">
         <div className="mx-auto grid max-w-7xl gap-12 lg:grid-cols-[.75fr_1.25fr] lg:items-center">
           <div>
             <p className="eyebrow">Multi-property control</p>
-            <h2 className="section-title text-[#071426]">One platform for every property.</h2>
+            <h2 className="section-title text-white">One platform for every property.</h2>
             <p className="section-copy">
               Centralize performance, finance and standards while each hotel keeps the tools it needs to operate day to day. Manage your entire portfolio from a single login.
             </p>
@@ -457,10 +457,10 @@ export default function WebsiteHome() {
       </section>
 
       {/* 11 INTEGRATIONS */}
-      <section id="integrations" className="light-section-alt px-5 py-24 lg:px-8 border-t border-[#E2E8F0]">
+      <section id="integrations" className="dark-section-alt px-5 py-24 lg:px-8 border-t border-white/10">
         <div className="mx-auto max-w-7xl">
           <p className="eyebrow">Marketplace</p>
-          <h2 className="section-title text-[#071426]">Connect the systems you already use.</h2>
+          <h2 className="section-title text-white">Connect the systems you already use.</h2>
           <div className="integration-market mt-12">
             <div className="market-category">
               <h4>Payments</h4>
@@ -521,10 +521,10 @@ export default function WebsiteHome() {
       </section>
 
       {/* 13 PROPERTY TYPES */}
-      <section className="light-section px-5 py-24 lg:px-8">
+      <section className="dark-section px-5 py-24 lg:px-8">
         <div className="mx-auto max-w-7xl">
           <p className="eyebrow">Tailored for your business</p>
-          <h2 className="section-title text-[#071426] mb-12">Designed for diverse hospitality models.</h2>
+          <h2 className="section-title text-white mb-12">Designed for diverse hospitality models.</h2>
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
             <div className="prop-type">
               <h3>Luxury Hotels</h3>
@@ -547,9 +547,9 @@ export default function WebsiteHome() {
       </section>
 
       {/* 14 CUSTOMER PROOF */}
-      <section className="light-section-alt px-5 py-24 lg:px-8 border-y border-[#E2E8F0]">
+      <section className="dark-section-alt px-5 py-24 lg:px-8 border-y border-white/10">
         <div className="mx-auto max-w-4xl text-center">
-          <p className="text-xl md:text-3xl font-bold text-[#071426] leading-relaxed mb-8">
+          <p className="text-xl md:text-3xl font-bold text-white leading-relaxed mb-8">
             "LodgeCore fundamentally changed how we operate our multi-property group. The offline capabilities alone saved us during local internet outages, and the unified reporting gives us total visibility."
           </p>
           <div className="font-bold text-[#1677c8]">— Director of Operations, West Africa Hospitality Group</div>
@@ -557,11 +557,11 @@ export default function WebsiteHome() {
       </section>
 
       {/* 15 PRICING */}
-      <section id="pricing" className="light-section px-5 py-24 lg:px-8">
+      <section id="pricing" className="dark-section px-5 py-24 lg:px-8">
         <div className="mx-auto max-w-7xl">
           <div className="text-center mb-16">
             <p className="eyebrow">SaaS Control Plane</p>
-            <h2 className="section-title mx-auto text-[#071426]">Choose the plan that fits your property.</h2>
+            <h2 className="section-title mx-auto text-white">Choose the plan that fits your property.</h2>
           </div>
           
           <div className="pricing-grid">
@@ -603,8 +603,8 @@ export default function WebsiteHome() {
           </div>
 
           <div className="pricing-addons">
-            <h4 className="font-bold text-[#071426] mb-4">Available Add-ons</h4>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm text-[#526173]">
+            <h4 className="font-bold text-white mb-4">Available Add-ons</h4>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm text-[#AAB8C8]">
               <div>□ Point of Sale (POS)</div>
               <div>□ Channel Manager</div>
               <div>□ Booking Engine</div>
