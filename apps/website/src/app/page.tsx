@@ -3,62 +3,657 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-const views = {
-  "Front Desk": ["Arrivals 18", "Departures 11", "Rooms ready 126", "Room rack"],
-  Reservations: ["Today 24", "Waitlist 11", "Direct 42%", "Rate calendar"],
-  POS: ["Restaurant ₦428,500", "Open checks 24", "Kitchen tickets 38", "Outlet performance"],
-  Finance: ["Today ₦4.8m", "Reconciled 98%", "City ledger ₦2.1m", "Night audit ready"],
-  Accounting: ["Folio postings 184", "Cash control ₦1.2m", "AR ₦2.1m", "Reconciliation"],
-  Housekeeping: ["Ready 126", "In progress 12", "Inspected 84", "Maintenance 6"],
-  Analytics: ["Occupancy 84.6%", "ADR ₦82,400", "RevPAR ₦69,700", "Three properties"],
-};
-const products = ["Property Management", "Point of Sale", "Housekeeping", "Accounting", "Events", "Analytics", "Payments", "Hardware"];
-const properties = ["Boutique hotels", "Business hotels", "Resorts", "Luxury hotels", "Serviced apartments", "Lodges", "Restaurants", "Event venues", "Multi-property groups"];
-
 function Button({ children, secondary = false, href = "/book-demo" }: { children: React.ReactNode; secondary?: boolean; href?: string }) {
-  return <Link href={href} className={`inline-flex items-center justify-center rounded-full px-5 py-3 text-sm font-bold transition hover:-translate-y-0.5 ${secondary ? "border border-slate-300/30 text-white hover:border-sky-300" : "bg-sky-300 text-[#07111f] hover:bg-white"}`}>{children}</Link>;
+  return (
+    <Link href={href} className={`inline-flex items-center justify-center rounded-full px-6 py-3.5 text-sm font-bold transition hover:-translate-y-0.5 ${secondary ? "border border-slate-300/30 text-white hover:border-sky-300" : "bg-sky-400 text-[#07111f] hover:bg-white"}`}>
+      {children}
+    </Link>
+  );
 }
 
+// Data for interactive tabs
+const productViews = {
+  "Front Desk": {
+    title: "Front Desk Operations",
+    desc: "Manage arrivals, departures, and current guests in real time.",
+    content: (
+      <div className="grid gap-4 md:grid-cols-2 p-5">
+        <div className="bg-[#122436] rounded-xl p-4 border border-white/10">
+          <p className="text-xs uppercase text-slate-400 mb-3">Room Rack</p>
+          {["101 · VIP Arrival", "102 · Occupied", "103 · Due Out", "104 · Dirty"].map((r, i) => (
+            <div key={r} className="flex justify-between items-center py-2 border-b border-white/5 last:border-0 text-sm">
+              <span>{r}</span>
+              <span className={`text-[10px] px-2 py-1 rounded ${i === 1 ? 'bg-sky-500/20 text-sky-300' : 'bg-white/5'}`}>Action</span>
+            </div>
+          ))}
+        </div>
+        <div className="bg-[#122436] rounded-xl p-4 border border-white/10">
+          <p className="text-xs uppercase text-slate-400 mb-3">Quick Actions</p>
+          <div className="space-y-2">
+            <button className="w-full text-left px-3 py-2 bg-white/5 rounded text-sm hover:bg-white/10">Check-in Guest</button>
+            <button className="w-full text-left px-3 py-2 bg-white/5 rounded text-sm hover:bg-white/10">Process Payment</button>
+            <button className="w-full text-left px-3 py-2 bg-white/5 rounded text-sm hover:bg-white/10">Print Registration</button>
+          </div>
+        </div>
+      </div>
+    )
+  },
+  "Reservations": {
+    title: "Reservations & Booking",
+    desc: "Centralized view of all channels, direct bookings, and groups.",
+    content: (
+      <div className="p-5">
+        <div className="bg-[#122436] rounded-xl p-4 border border-white/10 mb-4 flex justify-between">
+          <div><p className="text-xs text-slate-400">Total Today</p><p className="text-xl font-bold">24</p></div>
+          <div><p className="text-xs text-slate-400">Direct</p><p className="text-xl font-bold text-sky-400">42%</p></div>
+          <div><p className="text-xs text-slate-400">OTA</p><p className="text-xl font-bold">58%</p></div>
+        </div>
+        <div className="bg-[#122436] rounded-xl p-4 border border-white/10">
+          <p className="text-xs uppercase text-slate-400 mb-2">Rate Calendar Overview</p>
+          <div className="flex gap-2 h-16 items-end">
+            {[40, 60, 50, 80, 90, 70, 50].map((h, i) => (
+              <div key={i} className="flex-1 bg-sky-500/40 rounded-t" style={{ height: `${h}%` }}></div>
+            ))}
+          </div>
+        </div>
+      </div>
+    )
+  },
+  "POS": {
+    title: "Point of Sale",
+    desc: "Restaurant and bar operations fully synced with guest folios.",
+    content: (
+      <div className="grid gap-4 md:grid-cols-[1fr_200px] p-5">
+        <div className="bg-[#122436] rounded-xl p-4 border border-white/10">
+          <p className="text-xs uppercase text-slate-400 mb-3">Menu / Items</p>
+          <div className="grid grid-cols-3 gap-2">
+            {[1,2,3,4,5,6].map(i => <div key={i} className="bg-white/5 h-16 rounded flex items-center justify-center text-xs">Item {i}</div>)}
+          </div>
+        </div>
+        <div className="bg-[#122436] rounded-xl p-4 border border-white/10 flex flex-col">
+          <p className="text-xs uppercase text-slate-400 mb-2">Current Check</p>
+          <div className="flex-1 border-y border-white/5 my-2 py-2 text-xs space-y-1">
+            <div className="flex justify-between"><span>Item 1</span><span>$12</span></div>
+            <div className="flex justify-between"><span>Item 4</span><span>$8</span></div>
+          </div>
+          <button className="w-full bg-sky-500 text-white rounded py-2 text-xs font-bold mt-auto">Post to Room</button>
+        </div>
+      </div>
+    )
+  },
+  "Housekeeping": {
+    title: "Housekeeping",
+    desc: "Room status, task assignment, and maintenance tracking.",
+    content: (
+      <div className="p-5 grid gap-4">
+        <div className="flex gap-4">
+          <div className="flex-1 bg-[#122436] rounded-xl p-4 border border-emerald-500/30 text-center"><p className="text-2xl text-emerald-400 font-bold">126</p><p className="text-xs text-slate-400">Ready</p></div>
+          <div className="flex-1 bg-[#122436] rounded-xl p-4 border border-sky-500/30 text-center"><p className="text-2xl text-sky-400 font-bold">12</p><p className="text-xs text-slate-400">Cleaning</p></div>
+          <div className="flex-1 bg-[#122436] rounded-xl p-4 border border-orange-500/30 text-center"><p className="text-2xl text-orange-400 font-bold">6</p><p className="text-xs text-slate-400">Maintenance</p></div>
+        </div>
+        <div className="bg-[#122436] rounded-xl p-4 border border-white/10">
+          <p className="text-xs uppercase text-slate-400 mb-2">Task Board</p>
+          <div className="text-sm space-y-2">
+            <div className="flex justify-between"><span>Room 306 - Full Clean</span><span className="text-sky-300">In Progress</span></div>
+            <div className="flex justify-between"><span>Room 412 - Fix AC</span><span className="text-orange-300">Pending</span></div>
+          </div>
+        </div>
+      </div>
+    )
+  },
+  "Accounting": {
+    title: "Accounting & Folios",
+    desc: "City ledgers, AR, and night audit orchestration.",
+    content: (
+      <div className="p-5">
+        <div className="bg-[#122436] rounded-xl p-4 border border-white/10 mb-4">
+          <div className="flex justify-between items-center mb-4">
+            <p className="text-xs uppercase text-slate-400">Ledger Overview</p>
+            <span className="px-2 py-1 bg-emerald-500/20 text-emerald-300 text-xs rounded">Reconciled</span>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div><p className="text-slate-400 text-xs">Guest Ledger</p><p className="text-lg">₦1.2m</p></div>
+            <div><p className="text-slate-400 text-xs">City Ledger</p><p className="text-lg">₦2.1m</p></div>
+          </div>
+        </div>
+      </div>
+    )
+  },
+  "Analytics": {
+    title: "Reporting & Analytics",
+    desc: "Deep insights into RevPAR, ADR, and operational efficiency.",
+    content: (
+      <div className="p-5">
+        <div className="bg-[#122436] rounded-xl p-4 border border-white/10 h-48 flex flex-col justify-between">
+          <div className="flex justify-between">
+            <div><p className="text-slate-400 text-xs">RevPAR</p><p className="text-xl font-bold">₦69,700</p></div>
+            <div><p className="text-slate-400 text-xs">ADR</p><p className="text-xl font-bold">₦82,400</p></div>
+          </div>
+          <div className="flex items-end gap-2 h-20 mt-4 border-b border-white/10 pb-2">
+             {[4,7,5,8,6,9,10,8].map((h,i) => <div key={i} className="flex-1 bg-sky-400 rounded-t" style={{height: `${h}0%`}}></div>)}
+          </div>
+        </div>
+      </div>
+    )
+  }
+};
+
 export default function WebsiteHome() {
-  const [view, setView] = useState<keyof typeof views>("Front Desk");
+  const [activeTab, setActiveTab] = useState<keyof typeof productViews>("Front Desk");
   const [plans, setPlans] = useState<{ name: string; description: string | null }[]>([]);
-  useEffect(() => { fetch("/api/catalog").then((r) => r.ok ? r.json() : null).then((d) => setPlans(d?.plans ?? [])).catch(() => undefined); }, []);
-  const cards = views[view];
-  return <main className="home-shell overflow-hidden">
-    <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-white/90 backdrop-blur-xl"><div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4 lg:px-8">
-      <Link href="/" className="text-xl font-black tracking-tight text-[#07111f]">Lodge<span className="text-[#1677c8]">Core</span></Link>
-      <nav className="hidden items-center gap-7 text-sm font-medium text-slate-600 lg:flex"><a href="#platform">Platform</a><a href="#solutions">Solutions</a><a href="#hardware">Hardware</a><a href="#integrations">Integrations</a><Link href="/pricing">Pricing</Link></nav>
-      <div className="flex items-center gap-3"><Link href="/portal" className="hidden text-sm font-semibold text-slate-600 sm:block">Sign in</Link><Button>Book a demo</Button></div>
-    </div></header>
 
-    <section className="hero-grid mx-auto grid max-w-7xl gap-14 px-5 pb-24 pt-20 lg:grid-cols-[.85fr_1.15fr] lg:items-center lg:px-8 lg:pt-28">
-      <div><p className="eyebrow">The hotel operating platform</p><h1 className="hero-title">Everything your hotel needs to operate.</h1><p className="mt-7 max-w-xl text-lg leading-8 text-slate-600">LodgeCore connects your front desk, rooms, restaurants, reservations, payments, finance, guests and hotel hardware in one powerful platform.</p><div className="mt-9 flex flex-wrap gap-3"><Button>Book a demo</Button><Button secondary href="#platform">Explore the platform</Button></div><p className="mt-7 text-sm font-medium text-slate-500">Built for modern hotels. Designed for uninterrupted operations.</p></div>
-      <div className="command-window"><div className="flex items-center justify-between border-b border-white/10 px-5 py-4"><div><p className="text-[10px] uppercase tracking-[.2em] text-slate-400">Property command center</p><p className="mt-1 font-semibold text-white">LodgeCore / Today</p></div><span className="status">● All systems live</span></div><div className="grid grid-cols-2 gap-3 p-5 sm:grid-cols-4">{[["Occupancy","84.6%"],["Revenue","₦4.8m"],["Arrivals","18"],["Rooms ready","126"]].map(([a,b])=><div className="metric" key={a}><span>{a}</span><strong>{b}</strong><small>Operational view</small></div>)}</div><div className="grid gap-3 px-5 pb-5 sm:grid-cols-[1.15fr_.85fr]"><div className="panel"><p className="panel-label">Room operations</p>{["204 · Checked in · Deluxe","118 · Ready · Standard","306 · Cleaning · Suite","412 · Maintenance · King"].map((x,i)=><div className="room-row" key={x}><span className={`dot d${i}`}/>{x}<b>{i === 0 ? "Guest" : i === 1 ? "Ready" : "Task"}</b></div>)}</div><div className="panel"><p className="panel-label">Live activity</p><p className="activity">✓ Payment received <small>2 min ago</small></p><p className="activity">✓ Housekeeping · 12 ready <small>8 min ago</small></p><p className="activity">✓ Night audit · Ready <small>Today</small></p></div></div><div className="float-note note-one">Restaurant <b>₦428,500 today</b></div><div className="float-note note-two">Payment received <b>Folio #LC-204</b></div></div>
-    </section>
+  useEffect(() => { 
+    fetch("/api/catalog")
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => setPlans(d?.plans ?? []))
+      .catch(() => undefined); 
+  }, []);
 
-    <section id="platform" className="dark-section px-5 py-24 lg:px-8"><div className="mx-auto max-w-7xl"><div className="max-w-2xl"><p className="eyebrow">The hotel operating system</p><h2 className="section-title">One platform. Every department.</h2><p className="section-copy">The operational backbone connecting the people, processes and systems that keep a property moving.</p></div><div className="ecosystem mt-16"><div className="orbit-center">LODGE<span>CORE</span><small>Connected operations</small></div>{["Front Desk","Reservations","Housekeeping","POS & F&B","Finance","Guests","E-Locks","Analytics"].map((x,i)=><div className={`orbit-node n${i}`} key={x}>{x}</div>)}</div></div></section>
+  const currentView = productViews[activeTab];
 
-    <section className="mx-auto max-w-7xl px-5 py-24 lg:px-8"><p className="eyebrow">See the product</p><h2 className="section-title dark-title">Run the property from one place.</h2><p className="section-copy text-slate-600">Purpose-built workflows for the rooms, outlets and teams that make hospitality work.</p><div className="mt-10 flex flex-wrap gap-2">{Object.keys(views).map((x) => <button className={`tab ${view === x ? "active" : ""}`} onClick={() => setView(x as keyof typeof views)} key={x}>{x}</button>)}</div><div className="product-screen mt-5"><div className="screen-top"><span>● LodgeCore</span><span>Operations / {view}</span><span>Today · 09:42</span></div><div className="grid gap-5 p-5 md:grid-cols-[.7fr_1.3fr]"><div><p className="text-xs uppercase tracking-widest text-slate-400">{view} overview</p><h3 className="mt-2 text-2xl font-bold text-white">Everything in context.</h3><div className="mt-7 space-y-3">{cards.map((x,i)=><div className="screen-card" key={x}><span className="screen-icon">{String(i+1).padStart(2,"0")}</span><div><b>{x}</b><small>Live operational data</small></div><span className="text-sky-300">↗</span></div>)}</div></div><div className="screen-chart"><div className="flex items-center justify-between"><span className="text-sm font-semibold text-white">Performance overview</span><span className="text-xs text-emerald-300">↑ 8.2%</span></div><div className="bars">{[36,51,42,67,58,74,62,88,71,95,81,100].map((h,i)=><i style={{height:`${h}%`}} className={i>8 ? "bright" : ""} key={i}/>)}</div><div className="flex justify-between text-xs text-slate-500"><span>Mon</span><span>Today</span></div></div></div></div></section>
+  return (
+    <main className="home-shell overflow-hidden">
+      <header className="sticky top-0 z-50 border-b border-slate-200/80 bg-white/90 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4 lg:px-8">
+          <Link href="/" className="text-xl font-black tracking-tight text-[#07111f]">
+            Lodge<span className="text-[#1677c8]">Core</span>
+          </Link>
+          <nav className="hidden items-center gap-7 text-sm font-semibold text-slate-600 lg:flex">
+            <a href="#platform" className="hover:text-[#1677c8] transition-colors">Platform</a>
+            <a href="#product" className="hover:text-[#1677c8] transition-colors">Product</a>
+            <a href="#integrations" className="hover:text-[#1677c8] transition-colors">Integrations</a>
+            <a href="#pricing" className="hover:text-[#1677c8] transition-colors">Pricing</a>
+          </nav>
+          <div className="flex items-center gap-4">
+            <Link href="/portal" className="hidden text-sm font-bold text-[#07111f] sm:block hover:text-[#1677c8] transition-colors">Sign in</Link>
+            <Button>Book a demo</Button>
+          </div>
+        </div>
+      </header>
 
-    <section className="dark-section px-5 py-24 lg:px-8"><div className="mx-auto grid max-w-7xl gap-14 lg:grid-cols-2 lg:items-center"><div><p className="eyebrow">Offline-first operations</p><h2 className="section-title">Your hotel doesn&apos;t stop when the internet does.</h2><p className="section-copy">LodgeCore desktop Front Desk and POS keep essential operations available offline, then synchronize securely when connectivity returns.</p><div className="mt-10 space-y-4">{["Connection available · LodgeCore operating normally","Connection lost · Front Desk + POS continue","Connection restored · Secure synchronization"].map((x,i)=><div className="offline-step" key={x}><span>0{i+1}</span><p>{x}</p></div>)}</div></div><div className="offline-visual"><div className="signal">SYNC <span>↔</span> READY</div><div className="offline-grid">{["Reservations","Check-in / out","POS transactions","Room operations","Payments","Guest profiles"].map(x=><div key={x}>✓ {x}</div>)}</div></div></div></section>
+      {/* 01 HERO */}
+      <section className="dark-section pt-20 pb-24 lg:pt-28">
+        <div className="hero-grid mx-auto grid max-w-7xl gap-14 px-5 lg:grid-cols-[0.8fr_1.2fr] lg:items-center lg:px-8 rounded-3xl overflow-hidden">
+          <div className="py-12">
+            <p className="eyebrow">The hotel operating platform</p>
+            <h1 className="hero-title mt-4">Everything your hotel needs to operate.</h1>
+            <p className="mt-6 max-w-xl text-lg leading-8 text-[#AAB8C8]">
+              LodgeCore connects your front desk, rooms, restaurants, reservations, payments, finance, guests and hotel hardware in one powerful enterprise platform.
+            </p>
+            <div className="mt-9 flex flex-wrap gap-4">
+              <Button>Book a demo</Button>
+              <Button secondary href="#platform">Explore the platform</Button>
+            </div>
+            <p className="mt-7 text-sm font-medium text-slate-400">
+              Built for modern hotels. Designed for uninterrupted operations.
+            </p>
+          </div>
+          <div className="command-window">
+            <div className="cmd-sidebar">
+              <div className="cmd-sidebar-header">Lodge<span>Core</span></div>
+              <div className="cmd-nav">
+                <div className="cmd-nav-item">Dashboard</div>
+                <div className="cmd-nav-item active">Front Desk</div>
+                <div className="cmd-nav-item">Reservations</div>
+                <div className="cmd-nav-item">Rooms</div>
+                <div className="cmd-nav-item">POS</div>
+                <div className="cmd-nav-item">F&B</div>
+                <div className="cmd-nav-item">Housekeeping</div>
+                <div className="cmd-nav-item">Accounting</div>
+              </div>
+            </div>
+            <div className="cmd-main">
+              <div className="cmd-topbar">
+                <div>Today's Operations · 09:42 AM</div>
+                <div className="cmd-status">All systems live</div>
+              </div>
+              <div className="cmd-content">
+                <div className="cmd-stats">
+                  <div className="cmd-stat-box"><span>Occupancy</span><strong>78%</strong></div>
+                  <div className="cmd-stat-box"><span>Arrivals</span><strong>24</strong></div>
+                  <div className="cmd-stat-box"><span>Departures</span><strong>18</strong></div>
+                  <div className="cmd-stat-box"><span>Revenue</span><strong>₦4.82m</strong></div>
+                </div>
+                <div className="cmd-rack">
+                  <div className="cmd-rack-header">Room Rack / Activity</div>
+                  <div className="cmd-rack-row"><div className="cmd-room">201</div><div className="cmd-guest">Michael O. - Check in</div><div className="cmd-status-badge bg-ready">Ready</div></div>
+                  <div className="cmd-rack-row"><div className="cmd-room">202</div><div className="cmd-guest">Sarah K. - In House</div><div className="cmd-status-badge bg-occ">Occupied</div></div>
+                  <div className="cmd-rack-row"><div className="cmd-room">203</div><div className="cmd-guest">AC Repair</div><div className="cmd-status-badge bg-maint">Maint</div></div>
+                  <div className="cmd-rack-row"><div className="cmd-room">204</div><div className="cmd-guest">David L. - Check out</div><div className="cmd-status-badge bg-ready">Cleaning</div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
 
-    <section className="mx-auto max-w-7xl px-5 py-24 lg:px-8"><div className="max-w-2xl"><p className="eyebrow">One guest journey</p><h2 className="section-title text-[#07111f]">One guest. One connected journey.</h2><p className="section-copy text-slate-600">From the first booking to a reconciled folio, every handoff stays visible.</p></div><div className="journey mt-14">{["Booking Engine","Reservation","Front Desk","E-lock / Key card","Restaurant POS","Housekeeping","Payment + Accounting"].map((x,i)=><div className="journey-step" key={x}><span>{String(i+1).padStart(2,"0")}</span><b>{x}</b>{i<6 && <i>→</i>}</div>)}</div></section>
+      {/* 02 HOTEL OPERATING SYSTEM */}
+      <section id="platform" className="light-section px-5 py-24 lg:px-8">
+        <div className="mx-auto max-w-7xl">
+          <div className="text-center max-w-3xl mx-auto mb-16">
+            <p className="eyebrow">Hotel Operating System</p>
+            <h2 className="section-title mx-auto text-[#071426]">One platform. Every department.</h2>
+            <p className="section-copy mx-auto">
+              LodgeCore replaces fragmented systems with a single, coherent architecture. Data flows seamlessly from the guest to the general ledger.
+            </p>
+          </div>
+          <div className="arch-tree">
+             <div className="arch-node">GUEST</div>
+             <div className="arch-line"></div>
+             <div className="arch-node">BOOKING ENGINE</div>
+             <div className="arch-line"></div>
+             <div className="arch-node core">LODGECORE</div>
+             <div className="arch-line"></div>
+             <div className="arch-split">
+               <div className="arch-split-item"><div className="arch-node">FRONT DESK</div><div className="arch-line"></div><div className="arch-node">ROOMS</div></div>
+               <div className="arch-split-item"><div className="arch-node">POS</div><div className="arch-line"></div><div className="arch-node">F&B</div></div>
+               <div className="arch-split-item"><div className="arch-node">HOUSEKEEPING</div><div className="arch-line"></div><div className="arch-node">MAINTENANCE</div></div>
+             </div>
+             <div className="arch-line"></div>
+             <div className="arch-node">FOLIO / PAYMENTS</div>
+             <div className="arch-line"></div>
+             <div className="arch-node">ACCOUNTING</div>
+             <div className="arch-line"></div>
+             <div className="arch-node">ANALYTICS</div>
+          </div>
+        </div>
+      </section>
 
-    <section id="hardware" className="blue-section px-5 py-24 lg:px-8"><div className="mx-auto grid max-w-7xl gap-12 lg:grid-cols-2 lg:items-center"><div><p className="eyebrow">Hardware + e-locks</p><h2 className="section-title">Software that connects to the physical hotel.</h2><p className="section-copy">From electronic locks and key cards to POS hardware, LodgeCore connects the software your team uses with the infrastructure your guests experience.</p><div className="mt-8 flex flex-wrap gap-2">{["E-Locks","RFID key cards","Encoders","Door access","POS terminals","Kitchen printers"].map(x=><span className="hardware-pill" key={x}>{x}</span>)}</div><div className="mt-9 flex flex-wrap gap-3"><Button href="/hardware">Explore hotel hardware</Button><Button secondary href="/hardware/request">Book an installation</Button></div></div><div className="hardware-card"><div className="door-visual"><span>LC</span></div><p className="mt-6 text-xs uppercase tracking-widest text-sky-200">Deployment lifecycle</p><div className="mt-4 grid grid-cols-2 gap-3 text-sm text-white">{["Survey","Selection","Installation","Configuration","Testing","Training"].map(x=><div key={x}>✓ {x}</div>)}</div></div></div></section>
+      {/* 03 PRODUCT */}
+      <section id="product" className="dark-section px-5 py-24 lg:px-8">
+        <div className="mx-auto max-w-7xl">
+          <p className="eyebrow">See LodgeCore in action</p>
+          <h2 className="section-title">Run the property from one place.</h2>
+          <p className="section-copy">
+            Purpose-built interfaces for the front desk, outlets, and back office. No more context switching between different apps.
+          </p>
+          <div className="mt-10 flex flex-wrap gap-3">
+            {Object.keys(productViews).map((tab) => (
+              <button 
+                key={tab} 
+                className={`tab ${activeTab === tab ? "active" : ""}`}
+                onClick={() => setActiveTab(tab as keyof typeof productViews)}
+              >
+                {tab}
+              </button>
+            ))}
+          </div>
+          <div className="product-screen mt-8">
+            <div className="screen-top">
+              <span>● LodgeCore</span>
+              <span className="font-bold text-white">{activeTab}</span>
+              <span>100% Online</span>
+            </div>
+            <div className="grid md:grid-cols-[1fr_2fr] gap-6">
+              <div className="p-8 border-r border-white/10 bg-[#05101A]">
+                <h3 className="text-2xl font-bold text-white mb-4">{currentView.title}</h3>
+                <p className="text-[#AAB8C8] leading-relaxed">{currentView.desc}</p>
+                <div className="mt-8 text-sm text-sky-400 font-bold flex items-center gap-2 cursor-pointer hover:text-white transition">
+                  Explore feature <span aria-hidden="true">→</span>
+                </div>
+              </div>
+              <div className="bg-[#091a2b]">
+                {currentView.content}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
 
-    <section id="solutions" className="mx-auto max-w-7xl px-5 py-24 lg:px-8"><p className="eyebrow">Built around your operation</p><h2 className="section-title dark-title">Built for the way your property operates.</h2><div className="property-grid mt-10">{properties.map((x,i)=><div className={`property p${i}`} key={x}><span>0{i+1}</span><h3>{x}</h3><p>Flexible workflows for the teams and service model behind every stay.</p></div>)}</div></section>
+      {/* 04 GUEST JOURNEY */}
+      <section className="light-section-alt px-5 py-24 lg:px-8 border-y border-[#E2E8F0]">
+        <div className="mx-auto max-w-7xl">
+          <div className="max-w-2xl">
+            <p className="eyebrow">Guest Journey</p>
+            <h2 className="section-title">From booking to checkout.</h2>
+            <p className="section-copy">
+              A unified guest profile travels through every touchpoint, ensuring personalized service and accurate billing.
+            </p>
+          </div>
+          <div className="journey mt-14">
+            {["Booking Engine", "Reservation", "Front Desk", "E-lock / Key card", "Restaurant POS", "Housekeeping", "Payment + Accounting"].map((step, i) => (
+              <div className="journey-step" key={step}>
+                <span>{String(i + 1).padStart(2, "0")}</span>
+                <b>{step}</b>
+                {i < 6 && <i>→</i>}
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
 
-    <section className="dark-section px-5 py-24 lg:px-8"><div className="mx-auto grid max-w-7xl gap-12 lg:grid-cols-[.75fr_1.25fr] lg:items-center"><div><p className="eyebrow">Multi-property control</p><h2 className="section-title">One platform for every property.</h2><p className="section-copy">Centralize performance, finance and standards while each hotel keeps the tools it needs to operate day to day.</p></div><div className="group-board"><div className="flex justify-between border-b border-white/10 pb-4 text-sm"><b className="text-white">LodgeCore Corporate</b><span className="text-sky-300">5 properties connected</span></div>{["Lagos · 84% occupancy · ₦4.8m","Abuja · 78% occupancy · ₦3.2m","Port Harcourt · 91% occupancy · ₦2.7m","Accra · 82% occupancy · ₦3.9m","Nairobi · 76% occupancy · ₦2.1m"].map(x=><div className="group-row" key={x}>{x}<span>View property →</span></div>)}</div></div></section>
+      {/* 05 OFFLINE-FIRST */}
+      <section className="dark-section px-5 py-24 lg:px-8">
+        <div className="mx-auto grid max-w-7xl gap-14 lg:grid-cols-2 lg:items-center">
+          <div>
+            <p className="eyebrow">Offline-first operations</p>
+            <h2 className="section-title">Your hotel doesn't stop when the internet does.</h2>
+            <p className="section-copy">
+              Internet drops shouldn't mean operational pauses. LodgeCore's desktop and POS modules keep essential functions alive offline, syncing automatically the second connectivity returns. This is a real differentiator for properties in developing regions.
+            </p>
+          </div>
+          <div className="offline-container">
+             <div className="offline-node">INTERNET CONNECTION</div>
+             <div className="offline-arrow"><span>ONLINE</span><i></i>▼</div>
+             <div className="offline-node active font-bold w-full">LODGECORE CLOUD</div>
+             <div className="offline-arrow"><span>CONNECTION LOST</span><i></i>▼</div>
+             <div className="offline-node mode w-full">
+               <strong>OFFLINE MODE</strong>
+               <ul>
+                 <li>✓ Check-in / Check-out</li>
+                 <li>✓ POS Transactions</li>
+                 <li>✓ Room Operations</li>
+                 <li>✓ Local Folio Postings</li>
+               </ul>
+             </div>
+             <div className="offline-arrow"><span>CONNECTION RESTORED</span><i></i>▼</div>
+             <div className="offline-node active font-bold w-full">SECURE SYNC</div>
+          </div>
+        </div>
+      </section>
 
-    <section id="integrations" className="mx-auto max-w-7xl px-5 py-24 lg:px-8"><p className="eyebrow">Integrations</p><h2 className="section-title dark-title">Connect the systems you already use.</h2><div className="integration-grid mt-10">{["Payments","OTAs","Channel managers","Accounting","E-Locks","POS hardware","Communication","APIs"].map(x=><Link href="/integrations" className="integration" key={x}><span>✦</span><b>{x}</b><small>Explore connections →</small></Link>)}</div></section>
+      {/* 06 HOTEL COMMERCE & 07 HOTEL OPERATIONS & 08 HOTEL FINANCE */}
+      <section className="light-section px-5 py-24 lg:px-8">
+        <div className="mx-auto max-w-7xl">
+          <div className="text-center max-w-3xl mx-auto mb-16">
+            <p className="eyebrow">The Complete Suite</p>
+            <h2 className="section-title mx-auto text-[#071426]">Everything you need to sell, operate, and reconcile.</h2>
+          </div>
+          
+          <div className="space-y-16">
+            <div>
+              <h3 className="text-2xl font-black text-[#071426] mb-6 border-b border-slate-200 pb-4">Hotel Commerce</h3>
+              <div className="grid-cards">
+                <div className="card"><h3>Booking Engine</h3><p>Direct, commission-free reservations integrated instantly into your availability.</p></div>
+                <div className="card"><h3>Channel Manager</h3><p>Two-way sync with OTAs (Booking.com, Expedia) to maximize distribution.</p></div>
+                <div className="card"><h3>Payments</h3><p>Integrated payment gateways for deposits, card-on-file, and final settlements.</p></div>
+              </div>
+            </div>
 
-    <section className="trust-section border-y border-slate-200 px-5 py-20 lg:px-8"><div className="mx-auto max-w-7xl"><p className="eyebrow">Reliability by design</p><h2 className="section-title text-[#07111f]">Built for hotel operations you can&apos;t afford to interrupt.</h2><div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{["Role-based access","Audit trails","Secure authentication","Offline synchronization","Backups","Operational resilience","Multi-property controls","Clear permissions"].map(x=><div className="trust-card" key={x}>✓ <b>{x}</b><p>Designed into the operating workflow.</p></div>)}</div></div></section>
+            <div>
+              <h3 className="text-2xl font-black text-[#071426] mb-6 border-b border-slate-200 pb-4">Hotel Operations</h3>
+              <div className="grid-cards">
+                <div className="card"><h3>Front Desk</h3><p>Fast check-ins, room assignment, and full guest lifecycle management.</p></div>
+                <div className="card"><h3>Housekeeping</h3><p>Mobile-friendly room status updates and maintenance ticketing.</p></div>
+                <div className="card"><h3>POS & F&B</h3><p>Restaurant and bar point of sale, with instant room charge posting.</p></div>
+              </div>
+            </div>
 
-    <section className="mx-auto max-w-7xl px-5 py-24 lg:px-8"><p className="eyebrow">Product depth</p><h2 className="section-title dark-title">More than a PMS.</h2><div className="product-grid mt-10">{products.map((x,i)=><Link href="/platform/pms" className="product-card" key={x}><span>0{i+1}</span><h3>{x}</h3><p>{["Reservations, rooms, guests and front desk.","Restaurant, bar, pool and outlet operations.","Room status and operational coordination.","Revenue, payments and financial reporting."][i%4]}</p><b>Explore product →</b></Link>)}</div></section>
+            <div>
+              <h3 className="text-2xl font-black text-[#071426] mb-6 border-b border-slate-200 pb-4">Hotel Finance</h3>
+              <div className="grid-cards">
+                <div className="card"><h3>Folios & Cash</h3><p>Complex multi-folio routing, cash drawer management, and shift drops.</p></div>
+                <div className="card"><h3>Accounts Receivable</h3><p>City ledger management and automated corporate invoicing.</p></div>
+                <div className="card"><h3>Night Audit</h3><p>One-click day end routines with comprehensive financial reporting.</p></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
 
-    <section className="price-section px-5 py-20 lg:px-8"><div className="mx-auto flex max-w-7xl flex-col justify-between gap-8 lg:flex-row lg:items-end"><div><p className="eyebrow">Plans from the control plane</p><h2 className="section-title text-[#07111f]">Choose the plan that fits your property.</h2><p className="section-copy text-slate-600">Pricing and included modules are managed centrally and update as the catalog evolves.</p></div><Button href="/pricing">View pricing →</Button></div><div className="mt-10 grid gap-4 md:grid-cols-3">{(plans.length ? plans : [{name:"Starter",description:"PMS, reservations and front desk."},{name:"Professional",description:"Connected operations for growing properties."},{name:"Enterprise",description:"Multi-property, APIs and dedicated support."}]).map(p=><div className="price-card" key={p.name}><h3>{p.name}</h3><p>{p.description}</p><Link href="/pricing">View plan →</Link></div>)}</div></section>
+      {/* 09 PHYSICAL HOTEL */}
+      <section className="dark-section-alt px-5 py-24 lg:px-8">
+        <div className="mx-auto max-w-7xl">
+          <div className="max-w-3xl">
+            <p className="eyebrow">Hardware integration</p>
+            <h2 className="section-title">LodgeCore connects your digital hotel to the physical hotel.</h2>
+            <p className="section-copy">
+              Don't treat hardware as an afterthought. We provide seamless integration with e-locks and POS terminals, plus full lifecycle management from installation to maintenance.
+            </p>
+          </div>
+          <div className="hw-flow">
+            <div className="hw-node">LodgeCore</div>
+            <div className="hw-arrow">→</div>
+            <div className="hw-node">Encoder</div>
+            <div className="hw-arrow">→</div>
+            <div className="hw-node">Key Card</div>
+            <div className="hw-arrow">→</div>
+            <div className="hw-node">E-Lock</div>
+            <div className="hw-arrow">→</div>
+            <div className="hw-node">Guest Room</div>
+          </div>
+          <div className="mt-8 grid grid-cols-2 md:grid-cols-6 gap-4 text-sm text-[#AAB8C8] font-bold">
+            <div>✓ Installation</div>
+            <div>✓ Configuration</div>
+            <div>✓ Commissioning</div>
+            <div>✓ Staff training</div>
+            <div>✓ Maintenance</div>
+            <div>✓ Replacement</div>
+          </div>
+        </div>
+      </section>
 
-    <section className="final-cta px-5 py-28 text-center lg:px-8"><p className="eyebrow">Ready when you are</p><h2 className="mx-auto mt-4 max-w-3xl text-5xl font-black tracking-[-.05em] text-white sm:text-7xl">Run your hotel with LodgeCore.</h2><p className="mx-auto mt-6 max-w-xl text-lg leading-8 text-slate-300">One platform for rooms, reservations, restaurants, finance, guests, payments and operations.</p><div className="mt-9 flex justify-center gap-3"><Button>Book a demo</Button><Button secondary href="/start-trial">Start with LodgeCore</Button></div></section>
-    <footer className="footer px-5 py-12 lg:px-8"><div className="mx-auto flex max-w-7xl flex-col justify-between gap-8 md:flex-row"><div><Link href="/" className="text-xl font-black text-white">Lodge<span className="text-sky-300">Core</span></Link><p className="mt-3 text-sm text-slate-400">Everything. One App.</p></div><div className="grid grid-cols-2 gap-x-12 gap-y-3 text-sm text-slate-400 sm:grid-cols-4"><Link href="#platform">Platform</Link><Link href="#solutions">Solutions</Link><Link href="#hardware">Hardware</Link><Link href="/documentation">Documentation</Link><Link href="/help">Help centre</Link><Link href="/security">Security</Link><Link href="/privacy">Privacy</Link><Link href="/terms">Terms</Link></div></div><div className="mx-auto mt-12 max-w-7xl border-t border-white/10 pt-5 text-xs text-slate-500">© {new Date().getFullYear()} LodgeCore. Hospitality operations, connected.</div></footer>
-  </main>;
+      {/* 10 MULTI-PROPERTY */}
+      <section className="light-section px-5 py-24 lg:px-8">
+        <div className="mx-auto grid max-w-7xl gap-12 lg:grid-cols-[.75fr_1.25fr] lg:items-center">
+          <div>
+            <p className="eyebrow">Multi-property control</p>
+            <h2 className="section-title text-[#071426]">One platform for every property.</h2>
+            <p className="section-copy">
+              Centralize performance, finance and standards while each hotel keeps the tools it needs to operate day to day. Manage your entire portfolio from a single login.
+            </p>
+          </div>
+          <div className="group-board shadow-xl">
+            <div className="flex justify-between border-b border-[#31506F] pb-4 text-sm mb-4">
+              <b className="text-white text-lg">LodgeCore Corporate</b>
+              <span className="text-[#5CC9F5] font-bold px-3 py-1 bg-[#5CC9F5]/10 rounded-full">5 properties connected</span>
+            </div>
+            {[
+              "Lagos · 84% occupancy · ₦4.8m",
+              "Abuja · 78% occupancy · ₦3.2m",
+              "Port Harcourt · 91% occupancy · ₦2.7m",
+              "Accra · 82% occupancy · ₦3.9m",
+              "Nairobi · 76% occupancy · ₦2.1m"
+            ].map(x => (
+              <div className="group-row hover:bg-white/5 px-2 transition-colors rounded" key={x}>
+                <span className="text-[#AAB8C8]">{x.split('·')[0]}</span>
+                <span className="text-white font-bold">{x.split('·')[1]}</span>
+                <span className="text-emerald-400">{x.split('·')[2]}</span>
+                <span className="text-sky-400 cursor-pointer">View property →</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* 11 INTEGRATIONS */}
+      <section id="integrations" className="light-section-alt px-5 py-24 lg:px-8 border-t border-[#E2E8F0]">
+        <div className="mx-auto max-w-7xl">
+          <p className="eyebrow">Marketplace</p>
+          <h2 className="section-title text-[#071426]">Connect the systems you already use.</h2>
+          <div className="integration-market mt-12">
+            <div className="market-category">
+              <h4>Payments</h4>
+              <div className="market-item">Paystack</div>
+              <div className="market-item">Flutterwave</div>
+              <div className="market-item">Local Banks</div>
+            </div>
+            <div className="market-category">
+              <h4>Distribution</h4>
+              <div className="market-item">Beds24</div>
+              <div className="market-item">Booking.com</div>
+              <div className="market-item">Expedia</div>
+            </div>
+            <div className="market-category">
+              <h4>Hardware</h4>
+              <div className="market-item">Dormakaba</div>
+              <div className="market-item">Salto</div>
+              <div className="market-item">Xeeder</div>
+            </div>
+            <div className="market-category">
+              <h4>Accounting</h4>
+              <div className="market-item">Xero</div>
+              <div className="market-item">QuickBooks</div>
+              <div className="market-item">Sage</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 12 SECURITY & CONTROL */}
+      <section className="dark-section px-5 py-24 lg:px-8">
+        <div className="mx-auto max-w-7xl">
+          <div className="max-w-2xl mb-12">
+            <p className="eyebrow">Enterprise Trust</p>
+            <h2 className="section-title">Built for critical hotel operations.</h2>
+            <p className="section-copy">
+              A hotel cannot afford software failure or data breaches. LodgeCore is built on a foundation of zero-trust security and financial control.
+            </p>
+          </div>
+          <div className="trust-grid">
+            {[
+              {title: "Role-based access", desc: "Granular permissions for every staff member."},
+              {title: "Audit trails", desc: "Every action, posting, and deletion is logged."},
+              {title: "Offline operation", desc: "Critical modules survive internet outages."},
+              {title: "Secure synchronization", desc: "Encrypted data sync when connectivity returns."},
+              {title: "Data backups", desc: "Automated, redundant cloud backups."},
+              {title: "Property isolation", desc: "Strict data siloing between hotel properties."},
+              {title: "Financial controls", desc: "Shift drops, blind drops, and cash variance tracking."},
+              {title: "Activity history", desc: "Trace changes back to the exact user and time."}
+            ].map(f => (
+              <div className="trust-item" key={f.title}>
+                <strong>{f.title}</strong>
+                <p>{f.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* 13 PROPERTY TYPES */}
+      <section className="light-section px-5 py-24 lg:px-8">
+        <div className="mx-auto max-w-7xl">
+          <p className="eyebrow">Tailored for your business</p>
+          <h2 className="section-title text-[#071426] mb-12">Designed for diverse hospitality models.</h2>
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="prop-type">
+              <h3>Luxury Hotels</h3>
+              <p>Personalized guest profiles, VIP management, and high-touch service routing.</p>
+            </div>
+            <div className="prop-type">
+              <h3>Resorts</h3>
+              <p>Complex multi-outlet billing, activity scheduling, and group reservations.</p>
+            </div>
+            <div className="prop-type">
+              <h3>Boutiques</h3>
+              <p>Streamlined operations, aesthetic booking engines, and intimate guest tracking.</p>
+            </div>
+            <div className="prop-type">
+              <h3>Serviced Apartments</h3>
+              <p>Long-stay billing, recurring invoicing, and simplified housekeeping schedules.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 14 CUSTOMER PROOF */}
+      <section className="light-section-alt px-5 py-24 lg:px-8 border-y border-[#E2E8F0]">
+        <div className="mx-auto max-w-4xl text-center">
+          <p className="text-xl md:text-3xl font-bold text-[#071426] leading-relaxed mb-8">
+            "LodgeCore fundamentally changed how we operate our multi-property group. The offline capabilities alone saved us during local internet outages, and the unified reporting gives us total visibility."
+          </p>
+          <div className="font-bold text-[#1677c8]">— Director of Operations, West Africa Hospitality Group</div>
+        </div>
+      </section>
+
+      {/* 15 PRICING */}
+      <section id="pricing" className="light-section px-5 py-24 lg:px-8">
+        <div className="mx-auto max-w-7xl">
+          <div className="text-center mb-16">
+            <p className="eyebrow">SaaS Control Plane</p>
+            <h2 className="section-title mx-auto text-[#071426]">Choose the plan that fits your property.</h2>
+          </div>
+          
+          <div className="pricing-grid">
+            <div className="pricing-card">
+              <h3>Starter</h3>
+              <p>Essential property management for independent hotels and motels.</p>
+              <ul>
+                <li>Core PMS</li>
+                <li>Front Desk Operations</li>
+                <li>Guest Management</li>
+                <li>Basic Reporting</li>
+              </ul>
+              <Button secondary href="/pricing">View Plan</Button>
+            </div>
+            <div className="pricing-card professional">
+              <h3>Professional</h3>
+              <p>Full connected operations for growing properties and busy hotels.</p>
+              <ul>
+                <li>Everything in Starter</li>
+                <li>Offline-first Operations</li>
+                <li>Advanced Accounting</li>
+                <li>Multi-user Roles</li>
+                <li>Standard Integrations</li>
+              </ul>
+              <Button href="/pricing">View Plan</Button>
+            </div>
+            <div className="pricing-card">
+              <h3>Enterprise</h3>
+              <p>Multi-property capabilities, APIs, and dedicated infrastructure.</p>
+              <ul>
+                <li>Everything in Professional</li>
+                <li>Multi-property Dashboard</li>
+                <li>Custom API Access</li>
+                <li>Dedicated Account Manager</li>
+                <li>Custom SLA</li>
+              </ul>
+              <Button secondary href="/pricing">Contact Sales</Button>
+            </div>
+          </div>
+
+          <div className="pricing-addons">
+            <h4 className="font-bold text-[#071426] mb-4">Available Add-ons</h4>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm text-[#526173]">
+              <div>□ Point of Sale (POS)</div>
+              <div>□ Channel Manager</div>
+              <div>□ Booking Engine</div>
+              <div>□ Advanced Events</div>
+              <div>□ E-Lock Hardware Integration</div>
+              <div>□ Additional Property Licenses</div>
+              <div>□ Premium Support</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 16 FINAL CTA */}
+      <section className="dark-section px-5 py-28 text-center lg:px-8 border-t border-white/10">
+        <p className="eyebrow">Ready when you are</p>
+        <h2 className="mx-auto mt-4 max-w-3xl text-5xl font-black tracking-[-.05em] text-white sm:text-7xl">
+          Run your hotel with LodgeCore.
+        </h2>
+        <p className="mx-auto mt-6 max-w-xl text-lg leading-8 text-[#AAB8C8]">
+          One platform for rooms, reservations, restaurants, finance, guests, payments and operations.
+        </p>
+        <div className="mt-9 flex justify-center flex-wrap gap-4">
+          <Button>Book a demo</Button>
+          <Button secondary href="/start-trial">Start with LodgeCore</Button>
+        </div>
+      </section>
+
+      {/* FOOTER */}
+      <footer className="footer px-5 py-12 lg:px-8">
+        <div className="mx-auto flex max-w-7xl flex-col justify-between gap-8 md:flex-row">
+          <div>
+            <Link href="/" className="text-xl font-black text-white">Lodge<span className="text-[#5CC9F5]">Core</span></Link>
+            <p className="mt-3 text-sm text-[#AAB8C8]">Everything. One App.</p>
+          </div>
+          <div className="grid grid-cols-2 gap-x-12 gap-y-3 text-sm text-[#AAB8C8] sm:grid-cols-4">
+            <Link href="#platform" className="hover:text-white transition">Platform</Link>
+            <Link href="#product" className="hover:text-white transition">Solutions</Link>
+            <Link href="#hardware" className="hover:text-white transition">Hardware</Link>
+            <Link href="/documentation" className="hover:text-white transition">Documentation</Link>
+            <Link href="/help" className="hover:text-white transition">Help centre</Link>
+            <Link href="/security" className="hover:text-white transition">Security</Link>
+            <Link href="/privacy" className="hover:text-white transition">Privacy</Link>
+            <Link href="/terms" className="hover:text-white transition">Terms</Link>
+          </div>
+        </div>
+        <div className="mx-auto mt-12 max-w-7xl border-t border-white/10 pt-5 text-xs text-[#AAB8C8]">
+          © {new Date().getFullYear()} LodgeCore. Hospitality operations, connected.
+        </div>
+      </footer>
+    </main>
+  );
 }
