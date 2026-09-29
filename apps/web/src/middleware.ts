@@ -145,7 +145,10 @@ function hasModuleAccess(req: any, pathname: string): { allowed: boolean; redire
 }
 
 function isPublic(pathname: string): boolean {
-  return PUBLIC_PATHS.some((p) => pathname.startsWith(p));
+  // The marketing homepage is public, while all operational routes remain
+  // protected. Keep this as an exact match so '/' does not make every route
+  // public via startsWith('/').
+  return pathname === '/' || PUBLIC_PATHS.some((p) => pathname.startsWith(p));
 }
 
 export default auth((req) => {
