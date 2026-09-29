@@ -19,11 +19,11 @@ export async function GET(req: NextRequest) {
   const userRoleIds = new Set(userRoles.map((role) => role.roleId));
   const [priceApprovalsRaw, refunds, refundApprovals, eventInvoicesRaw] = await Promise.all([
     prisma.approvalRequest.findMany({
-      where: { ...propertyFilter, type: { in: ['POS_PRICE_CHANGE', 'POS_MENU_CREATE', 'POS_MODIFIER_CREATE', 'POS_MODIFIER_UPDATE'] } },
+      where: { ...propertyFilter, type: { in: ['POS_PRICE_CHANGE', 'POS_MENU_CREATE', 'POS_MODIFIER_CREATE', 'POS_MODIFIER_UPDATE'] }, status: { not: 'CANCELLED' } },
       orderBy: { createdAt: 'desc' }, take: 200,
     }),
     prisma.refundRequest.findMany({
-      where: propertyFilter,
+      where: { ...propertyFilter, status: { not: 'CANCELLED' } },
       select: { id: true, propertyId: true, requestedById: true, requestedAmount: true, approvedAmount: true, currency: true, category: true, reason: true, status: true, createdAt: true, requestedMethod: true, approvedMethod: true },
       orderBy: { createdAt: 'desc' }, take: 200,
     }),
