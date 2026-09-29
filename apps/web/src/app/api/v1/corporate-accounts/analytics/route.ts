@@ -77,7 +77,7 @@ export async function GET(req: NextRequest) {
       }),
       prisma.cityLedgerEntry.findMany({
         where: { propertyId, type: 'REFUND_OWED', status: 'OPEN', account: { type: 'REFUND_PAYABLE', status: 'ACTIVE' } },
-        select: { id: true, accountId: true, guestId: true, reservationId: true, amount: true, currency: true, createdAt: true },
+        select: { id: true, accountId: true, guestId: true, guest: { select: { firstName: true, lastName: true, email: true, phone: true } }, reservationId: true, amount: true, currency: true, createdAt: true, allocations: { select: { amount: true } }, refundRequests: { select: { id: true, requestedAmount: true, approvedAmount: true, status: true } } },
         orderBy: { createdAt: 'asc' },
       }),
     ]);
@@ -130,8 +130,10 @@ export async function GET(req: NextRequest) {
     }
     const openGuestCreditByAccount = new Map<string, { amount: number; count: number }>();
     for (const entry of openGuestCreditEntries) {
+      const remainingAmount = Math.max(0, Number(entry.amount || 0) - entry.allocations.reduce((sum, allocation) => sum + Number(allocation.amount || 0), 0));
+      if (remainingAmount <= 0.01) continue;
       const current = openGuestCreditByAccount.get(entry.accountId) || { amount: 0, count: 0 };
-      current.amount += Number(entry.amount || 0);
+      current.amount += remainingAmount;
       current.count += 1;
       openGuestCreditByAccount.set(entry.accountId, current);
     }
@@ -160,7 +162,7 @@ export async function GET(req: NextRequest) {
       return {
         id: account?.id || ledger.id, ledgerAccountId: ledger.id, name: account?.name || ledger.name, code: account?.code || ledger.type, type: ledger.type, isActive: ledger.status === 'ACTIVE',
         contactPerson: account?.contactPerson || null, contactEmail: account?.contactEmail || null, contactPhone: account?.contactPhone || null,
-        creditLimit, balance: ledgerBalance, receivable, liability: isRefundPayable ? Math.max(0, -ledgerBalance) : 0, openGuestCreditAmount: openGuestCredit.amount, openGuestCreditCount: openGuestCredit.count, advanceCredit, unappliedAdvanceCredit,
+        creditLimit, balance: ledgerBalance, receivable, liability: isRefundPayable ? openGuestCredit.amount : 0, openGuestCreditAmount: openGuestCredit.amount, openGuestCreditCount: openGuestCredit.count, advanceCredit, unappliedAdvanceCredit,
         pendingRefundAmount: pendingRefundByAccount.get(ledger.id) || 0, availableCredit: Math.max(0, creditLimit - receivable + advanceCredit), utilization,
         depositPolicy: account?.depositPolicy || null, exemptFromHighBalance: account?.exemptFromHighBalance || false,
         ratePlanId: account?.ratePlanId || null, ratePlan: account?.ratePlan || null, cityLedgerAccountId: ledger.id, currency: ledger.currency || 'NGN',
@@ -205,7 +207,7 @@ export async function GET(req: NextRequest) {
       topAccounts: [...rows].sort((a, b) => b.receivable - a.receivable).slice(0, 6),
       attention, recentActivity,
       pendingRefunds: pendingRefundRequests.map(request => ({ id: request.id, accountId: request.cityLedgerEntry?.accountId, accountName: request.cityLedgerEntry?.accountId ? accountByLedger.get(request.cityLedgerEntry.accountId)?.name || request.cityLedgerEntry.accountId : 'Unassigned refund', amount: Number(request.approvedAmount || request.requestedAmount || 0), currency: request.currency, status: request.status })),
-      guestCredits: openGuestCreditEntries.map(entry => ({ id: entry.id, accountId: entry.accountId, accountName: accountByLedger.get(entry.accountId)?.name || entry.accountId, guestId: entry.guestId, reservationId: entry.reservationId, amount: Number(entry.amount || 0), currency: entry.currency, createdAt: entry.createdAt })),
+      guestCredits: openGuestCreditEntries.map(entry => ({ id: entry.id, accountId: entry.accountId, accountName: accountByLedger.get(entry.accountId)?.name || entry.accountId, guestId: entry.guestId, guestName: entry.guest ? `${entry.guest.firstName} ${entry.guest.lastName}`.trim() : 'Unassigned guest', guestEmail: entry.guest?.email || null, guestPhone: entry.guest?.phone || null, reservationId: entry.reservationId, amount: Math.max(0, Number(entry.amount || 0) - entry.allocations.reduce((sum, allocation) => sum + Number(allocation.amount || 0), 0)), currency: entry.currency, createdAt: entry.createdAt, refundRequests: entry.refundRequests.map(request => ({ id: request.id, requestedAmount: Number(request.requestedAmount || 0), approvedAmount: request.approvedAmount == null ? null : Number(request.approvedAmount), status: request.status })) })).filter(entry => entry.amount > 0.01),
     });
   } catch (error) {
     console.error('[corporate-accounts/analytics]', error);
