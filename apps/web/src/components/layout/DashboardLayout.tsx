@@ -24,6 +24,7 @@ import {
   FileText,
   MoonStar,
   Clock3,
+  Scale,
   Shirt,
   Wrench,
   HandCoins,
