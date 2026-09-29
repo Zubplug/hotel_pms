@@ -9,5 +9,5 @@ export function PublicFooter() {
 }
 
 export function PublicShell({ eyebrow, title, description, children }: { eyebrow: string; title: string; description: string; children: React.ReactNode }) {
-  return <main className="min-h-screen bg-[#f7fafc] text-[#07111f]"><PublicHeader /><section className="mx-auto max-w-7xl px-6 pb-16 pt-20 md:pt-28"><p className="eyebrow">{eyebrow}</p><h1 className="mt-4 max-w-4xl text-5xl font-black leading-[.98] tracking-[-.06em] md:text-7xl">{title}</h1><p className="mt-6 max-w-2xl text-lg leading-8 text-slate-600">{description}</p>{children}</section><PublicFooter /></main>;
+  return <main className="public-shell min-h-screen bg-[#061321] text-white"><PublicHeader /><section className="mx-auto max-w-7xl px-6 pb-16 pt-20 md:pt-28"><p className="eyebrow">{eyebrow}</p><h1 className="mt-4 max-w-4xl text-5xl font-black leading-[.98] tracking-[-.06em] text-white md:text-7xl">{title}</h1><p className="mt-6 max-w-2xl text-lg leading-8 text-[#AAB8C8]">{description}</p>{children}</section><PublicFooter /></main>;
 }
