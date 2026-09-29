@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
 
     const now = new Date();
     const trendStart = new Date(now.getFullYear(), now.getMonth() - 11, 1);
-    const [accounts, ledgerAccounts, reservations, folioTotals, openSharedFolios, checkedInGuests, trendReservations, trendRevenueItems, invoices, paymentEntries, pendingRefundRequests] = await Promise.all([
+    const [accounts, ledgerAccounts, reservations, folioTotals, openSharedFolios, checkedInGuests, trendReservations, trendRevenueItems, invoices, paymentEntries, pendingRefundRequests, openGuestCreditEntries] = await Promise.all([
       prisma.corporateAccount.findMany({
         where: { propertyId },
         include: { cityLedgerAccount: { select: { id: true, balance: true, currency: true } }, ratePlan: { select: { id: true, name: true, code: true, isActive: true } } },
@@ -75,6 +75,11 @@ export async function GET(req: NextRequest) {
         where: { propertyId, status: { in: ['PENDING_APPROVAL', 'APPROVED', 'PROCESSING'] }, cityLedgerEntryId: { not: null } },
         select: { id: true, requestedAmount: true, approvedAmount: true, currency: true, status: true, cityLedgerEntry: { select: { accountId: true } } },
       }),
+      prisma.cityLedgerEntry.findMany({
+        where: { propertyId, type: 'REFUND_OWED', status: 'OPEN', account: { type: 'REFUND_PAYABLE', status: 'ACTIVE' } },
+        select: { id: true, accountId: true, guestId: true, reservationId: true, amount: true, currency: true, createdAt: true },
+        orderBy: { createdAt: 'asc' },
+      }),
     ]);
 
     const corporateByLedger = new Map(accounts.filter(a => a.cityLedgerAccountId).map(a => [a.cityLedgerAccountId!, a]));
@@ -123,10 +128,17 @@ export async function GET(req: NextRequest) {
       const accountId = request.cityLedgerEntry?.accountId;
       if (accountId) pendingRefundByAccount.set(accountId, (pendingRefundByAccount.get(accountId) || 0) + Number(request.approvedAmount || request.requestedAmount || 0));
     }
+    const openGuestCreditByAccount = new Map<string, { amount: number; count: number }>();
+    for (const entry of openGuestCreditEntries) {
+      const current = openGuestCreditByAccount.get(entry.accountId) || { amount: 0, count: 0 };
+      current.amount += Number(entry.amount || 0);
+      current.count += 1;
+      openGuestCreditByAccount.set(entry.accountId, current);
+    }
     const rows: Array<{
       id: string; ledgerAccountId: string | null; name: string; code: string; type: string; isActive: boolean;
       contactPerson: string | null; contactEmail: string | null; contactPhone: string | null; creditLimit: number;
-      balance: number; receivable: number; liability: number; advanceCredit: number; unappliedAdvanceCredit: number;
+      balance: number; receivable: number; liability: number; openGuestCreditAmount: number; openGuestCreditCount: number; advanceCredit: number; unappliedAdvanceCredit: number;
       pendingRefundAmount: number; availableCredit: number; utilization: number | null; depositPolicy: string | null;
       exemptFromHighBalance: boolean; ratePlanId: string | null; ratePlan: unknown; cityLedgerAccountId: string | null;
       currency: string; bookings: number; charges: number; payments: number; ratePlanLocked: boolean;
@@ -144,10 +156,11 @@ export async function GET(req: NextRequest) {
       const checkedInGuestCount = account ? (checkedInGuestCounts.get(account.id) || 0) : 0;
       const creditLimit = Number(account?.creditLimit || 0);
       const utilization = creditLimit > 0 ? Math.round((receivable / creditLimit) * 100) : null;
+      const openGuestCredit = openGuestCreditByAccount.get(ledger.id) || { amount: 0, count: 0 };
       return {
         id: account?.id || ledger.id, ledgerAccountId: ledger.id, name: account?.name || ledger.name, code: account?.code || ledger.type, type: ledger.type, isActive: ledger.status === 'ACTIVE',
         contactPerson: account?.contactPerson || null, contactEmail: account?.contactEmail || null, contactPhone: account?.contactPhone || null,
-        creditLimit, balance: ledgerBalance, receivable, liability: isRefundPayable ? Math.max(0, ledgerBalance) : 0, advanceCredit, unappliedAdvanceCredit,
+        creditLimit, balance: ledgerBalance, receivable, liability: isRefundPayable ? Math.max(0, -ledgerBalance) : 0, openGuestCreditAmount: openGuestCredit.amount, openGuestCreditCount: openGuestCredit.count, advanceCredit, unappliedAdvanceCredit,
         pendingRefundAmount: pendingRefundByAccount.get(ledger.id) || 0, availableCredit: Math.max(0, creditLimit - receivable + advanceCredit), utilization,
         depositPolicy: account?.depositPolicy || null, exemptFromHighBalance: account?.exemptFromHighBalance || false,
         ratePlanId: account?.ratePlanId || null, ratePlan: account?.ratePlan || null, cityLedgerAccountId: ledger.id, currency: ledger.currency || 'NGN',
@@ -159,7 +172,7 @@ export async function GET(req: NextRequest) {
     const corporateWithoutLedger = accounts.filter(account => !account.cityLedgerAccountId).map(account => ({
       id: account.id, ledgerAccountId: null, name: account.name, code: account.code, type: 'CORPORATE', isActive: account.isActive,
       contactPerson: account.contactPerson, contactEmail: account.contactEmail, contactPhone: account.contactPhone,
-      creditLimit: Number(account.creditLimit || 0), balance: 0, receivable: 0, liability: 0, advanceCredit: 0, unappliedAdvanceCredit: 0, pendingRefundAmount: 0,
+      creditLimit: Number(account.creditLimit || 0), balance: 0, receivable: 0, liability: 0, openGuestCreditAmount: 0, openGuestCreditCount: 0, advanceCredit: 0, unappliedAdvanceCredit: 0, pendingRefundAmount: 0,
       availableCredit: Number(account.creditLimit || 0), utilization: null, depositPolicy: account.depositPolicy, exemptFromHighBalance: account.exemptFromHighBalance,
       ratePlanId: account.ratePlanId, ratePlan: account.ratePlan, cityLedgerAccountId: null, currency: 'NGN', bookings: reservationCounts.get(account.id) || 0,
       charges: Number(folioByAccount.get(account.id)?.totalCharges || 0), payments: Number(folioByAccount.get(account.id)?.totalPayments || 0), ratePlanLocked: false, openSharedFolios: 0, checkedInGuests: 0,
@@ -171,6 +184,7 @@ export async function GET(req: NextRequest) {
     const skipperOutstanding = rows.filter(row => row.type === 'SKIPPER').reduce((sum, row) => sum + row.receivable, 0);
     const refundPayable = rows.filter(row => row.type === 'REFUND_PAYABLE').reduce((sum, row) => sum + row.liability, 0);
     const pendingRefundAmount = rows.reduce((sum, row) => sum + row.pendingRefundAmount, 0);
+    const guestCreditOutstanding = rows.reduce((sum, row) => sum + row.openGuestCreditAmount, 0);
     const overdue = ageBuckets.days1to30 + ageBuckets.days31to60 + ageBuckets.days61to90 + ageBuckets.over90;
     const attention = [
       ...rows.filter(row => row.isActive && row.utilization !== null && row.utilization >= 80).map(row => ({ type: 'CREDIT', severity: row.utilization! >= 100 ? 'critical' : 'warning', title: `${row.name} is at ${row.utilization}% credit utilization`, detail: `${row.balance.toLocaleString()} outstanding against ${row.creditLimit.toLocaleString()} limit`, accountId: row.id })),
@@ -184,13 +198,14 @@ export async function GET(req: NextRequest) {
 
     return successResponse({
       generatedAt: now.toISOString(), period: { start: trendStart.toISOString(), end: now.toISOString() },
-      overview: { totalAccounts: rows.length, activeAccounts: rows.filter(row => row.isActive).length, creditExposure, outstanding, advanceCredit, skipperOutstanding, refundPayable, pendingRefundAmount, overdue, bookings: rows.reduce((sum, row) => sum + row.bookings, 0), invoices: corporateInvoices.length },
+      overview: { totalAccounts: rows.length, activeAccounts: rows.filter(row => row.isActive).length, creditExposure, outstanding, advanceCredit, skipperOutstanding, refundPayable, pendingRefundAmount, guestCreditOutstanding, overdue, bookings: rows.reduce((sum, row) => sum + row.bookings, 0), invoices: corporateInvoices.length },
       accounts: rows.sort((a, b) => b.receivable - a.receivable),
       trend: Array.from(monthMap.values()),
       aging: Object.entries(ageBuckets).map(([bucket, amount]) => ({ bucket, amount })),
       topAccounts: [...rows].sort((a, b) => b.receivable - a.receivable).slice(0, 6),
       attention, recentActivity,
       pendingRefunds: pendingRefundRequests.map(request => ({ id: request.id, accountId: request.cityLedgerEntry?.accountId, accountName: request.cityLedgerEntry?.accountId ? accountByLedger.get(request.cityLedgerEntry.accountId)?.name || request.cityLedgerEntry.accountId : 'Unassigned refund', amount: Number(request.approvedAmount || request.requestedAmount || 0), currency: request.currency, status: request.status })),
+      guestCredits: openGuestCreditEntries.map(entry => ({ id: entry.id, accountId: entry.accountId, accountName: accountByLedger.get(entry.accountId)?.name || entry.accountId, guestId: entry.guestId, reservationId: entry.reservationId, amount: Number(entry.amount || 0), currency: entry.currency, createdAt: entry.createdAt })),
     });
   } catch (error) {
     console.error('[corporate-accounts/analytics]', error);
