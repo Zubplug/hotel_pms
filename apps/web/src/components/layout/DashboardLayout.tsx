@@ -65,7 +65,20 @@ const ALL_NAV: NavItem[] = [
   { section: 'Operations', name: 'Reservations', href: '/reservations', icon: CalendarDays },
   { section: 'Operations', name: 'Laundry', href: '/general-manager/laundry', icon: Shirt, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'DIRECTOR'] },
   { section: 'Operations', name: 'Maintenance', href: '/maintenance', icon: Wrench },
-  { section: 'Operations', name: 'Night Audit', href: '/general-manager/night-audit', icon: MoonStar, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'DIRECTOR'] },
+  {
+    section: 'Finance & Reports',
+    name: 'Night Audit',
+    href: '/general-manager/night-audit',
+    icon: MoonStar,
+    restrictedTo: ['ADMIN', 'CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'DIRECTOR'],
+    children: [
+      { name: 'Audit overview', href: '/general-manager/night-audit' },
+      { name: 'Room & guest control', href: '/general-manager/night-audit/rooms' },
+      { name: 'Revenue reconciliation', href: '/night-audit/reconciliation' },
+      { name: 'Audit history', href: '/night-audit/history' },
+      { name: 'Audit reports', href: '/general-manager/night-audit/reports' },
+    ],
+  },
   { section: 'Operations', name: 'Night Audit', href: '/night-audit', icon: MoonStar, restrictedTo: ['NIGHT_AUDITOR'] },
   { section: 'Finance & Reports', name: 'Reports', href: '/reports', icon: FileText },
   { section: 'Finance & Reports', name: 'Cash Management', href: '/general-manager/cash-management', icon: HandCoins, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'DIRECTOR'] },
@@ -189,9 +202,13 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
       {/* Nav */}
       <div className="flex flex-1 flex-col overflow-y-auto px-4 py-6 gap-1">
         {navigation.map((item, index) => {
+          const isChildActive = item.children?.some(child =>
+            pathname === child.href || pathname?.startsWith(`${child.href}/`)
+          );
           const isActive =
             pathname === item.href ||
-            (item.href !== '/general-manager' && item.href !== '/admin/external-auditors' && pathname?.startsWith(item.href));
+            (item.href !== '/general-manager' && item.href !== '/admin/external-auditors' && pathname?.startsWith(item.href)) ||
+            Boolean(isChildActive);
           
           return (
             <div key={item.name}>

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
 
 interface PropertyContextType {
   propertyId: string;
@@ -13,16 +14,24 @@ const PropertyContext = createContext<PropertyContextType | undefined>(undefined
 export function PropertyProvider({ children }: { children: React.ReactNode }) {
   const [propertyId, setPropertyId] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const { status: sessionStatus } = useLodgeCoreSession();
 
   useEffect(() => {
+    if (sessionStatus === 'loading') return;
+
+    if (sessionStatus === 'unauthenticated') {
+      setIsLoading(false);
+      return;
+    }
+
     const stored = localStorage.getItem('selectedPropertyId');
 
     // Resolve the selection from the live authorized property list. A stored
     // browser value is only accepted when it is still in the user's scope.
     async function autoSelectProperty() {
       try {
-        const res = await fetch('/api/v1/properties?pageSize=100');
-        if (!res.ok) return;
+        const res = await fetch('/api/v1/properties?pageSize=100', { cache: 'no-store' });
+        if (!res.ok) throw new Error(`Property scope request failed (${res.status})`);
         const json = await res.json();
         // Support both { data: [...] } and paginated { data: { data: [...] } } shapes
         const list: { id: string }[] =
@@ -46,7 +55,7 @@ export function PropertyProvider({ children }: { children: React.ReactNode }) {
     }
 
     autoSelectProperty();
-  }, []);
+  }, [sessionStatus]);
 
   const handleSetPropertyId = (id: string) => {
     setPropertyId(id);

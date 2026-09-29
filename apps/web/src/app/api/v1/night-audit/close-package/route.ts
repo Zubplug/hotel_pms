@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
     const session = await auth();
     const user: any = session?.user || await resolveUser(req);
     if (!user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
-    const allowedRoles = ['NIGHT_AUDITOR', 'ACCOUNTANT', 'MANAGER', 'HOTEL_MANAGER', 'ADMIN', 'SUPER_ADMIN', 'CEO', 'FINANCE_MANAGER', 'GENERAL_CASHIER'];
+    const allowedRoles = ['NIGHT_AUDITOR', 'ACCOUNTANT', 'MANAGER', 'HOTEL_MANAGER', 'ADMIN', 'SUPER_ADMIN', 'CEO', 'GENERAL_MANAGER', 'DIRECTOR', 'FINANCE_MANAGER', 'GENERAL_CASHIER'];
     if (!allowedRoles.includes(String(user.role || '').toUpperCase())) return errorResponse('FORBIDDEN', 'Insufficient permissions to view close evidence', 403);
 
     const propertyId = req.nextUrl.searchParams.get('propertyId');

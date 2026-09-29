@@ -1,7 +1,5 @@
-'use client';
-
-import NightAuditDashboard from '@/app/night-audit/client';
+import GeneralManagerNightAudit from '@/components/night-audit/GeneralManagerNightAudit';
 
 export default function GeneralManagerNightAuditPage() {
-  return <NightAuditDashboard managerMode />;
+  return <GeneralManagerNightAudit />;
 }

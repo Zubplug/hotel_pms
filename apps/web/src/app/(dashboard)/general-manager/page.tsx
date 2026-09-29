@@ -76,7 +76,7 @@ function RevenuePeriodPanel({ title, detail, total, accounts, trend, period }: {
 }
 
 export default function GeneralManagerDashboardPage() {
-  const { data: session } = useLodgeCoreSession();
+  const { data: session, status: sessionStatus } = useLodgeCoreSession();
   const { propertyId, isLoading: isPropertyLoading } = useProperty();
   const { data, isLoading, isError, refetch, isFetching } = useQuery({
     queryKey: ['general-manager', 'analytics', propertyId],
@@ -85,7 +85,9 @@ export default function GeneralManagerDashboardPage() {
       if (!response.ok) throw new Error('Unable to load management analytics');
       return (await response.json()).data as Analytics;
     },
-    enabled: Boolean(propertyId),
+    enabled: Boolean(propertyId) && !isPropertyLoading && sessionStatus === 'authenticated',
+    retry: 2,
+    refetchOnMount: 'always',
   });
   const firstName = session?.user?.name?.split(' ')[0] || session?.user?.email?.split('@')[0] || 'Manager';
   const hour = new Date().getHours();
@@ -98,7 +100,7 @@ export default function GeneralManagerDashboardPage() {
       ? { tone: 'warn', title: 'High-demand operating window', body: `${data.kpis.occupancy.toFixed(1)}% occupancy with ${data.kpis.arrivals} arrivals today. Protect room readiness and front-desk throughput.` }
       : { tone: 'warn', title: `${alertCount} control items need review`, body: 'Open the relevant workstream to assign owners and close the operating loop.' };
 
-  if (isPropertyLoading || isLoading) return <div className="gm-shell flex min-h-screen items-center justify-center"><div className="flex flex-col items-center gap-4"><div className="h-9 w-9 animate-spin rounded-full border-4 border-emerald-300 border-t-transparent" /><p className="text-sm text-slate-400">Preparing the executive control room…</p></div></div>;
+  if (sessionStatus === 'loading' || isPropertyLoading || isLoading) return <div className="gm-shell flex min-h-screen items-center justify-center"><div className="flex flex-col items-center gap-4"><div className="h-9 w-9 animate-spin rounded-full border-4 border-emerald-300 border-t-transparent" /><p className="text-sm text-slate-400">Preparing the executive control room…</p></div></div>;
   if (isError || !data) return <ErrorState description="Management analytics could not be loaded." action={<Button onClick={() => refetch()}>Try again</Button>} />;
 
   return <div className="gm-shell -mx-4 -my-8 min-h-screen px-4 py-6 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
