@@ -1,3 +1,8 @@
-import Link from "next/link";
+import { redirect } from "next/navigation";
+import { auth } from "@/auth";
 
-export default function PortalPage() { return <main className="min-h-screen bg-[#07111f] px-6"><section className="mx-auto max-w-lg py-32 text-center"><Link href="/" className="text-xl font-bold text-white">Lodge<span className="text-sky-300">Core</span></Link><h1 className="mt-10 text-4xl font-bold text-white">Customer portal</h1><p className="mt-4 leading-7 text-slate-400">Manage subscriptions, properties, hardware, implementation and support from one secure workspace.</p><Link href="/portal/dashboard" className="mt-8 inline-block rounded-full bg-sky-300 px-6 py-3 text-sm font-bold text-[#07111f]">Continue to portal</Link><p className="mt-5 text-xs text-slate-500">Portal authentication will use your LodgeCore organization account.</p></section></main>; }
+export default async function PortalRoot() {
+  const session = await auth();
+  if (!session?.user) redirect("/portal/login");
+  redirect("/portal/dashboard");
+}

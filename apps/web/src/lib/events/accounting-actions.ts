@@ -200,10 +200,24 @@ export async function issueEventInvoice(invoiceId: string) {
       const accountId = invoice.cityLedgerAccountId;
       const invoiceNumber = `INV-${invoice.id.substring(0, 8)}`;
       const existing = await tx.cityLedgerInvoice.findFirst({ where: { eventInvoiceId: invoice.id } });
+      let cityInvoice = existing;
       if (!existing) {
-        const cityInvoice = await tx.cityLedgerInvoice.create({ data: { propertyId, accountId, eventInvoiceId: invoice.id, invoiceNumber, issueDate: businessDate, dueDate: businessDate, description: `Event Billing for ${invoice.event?.name || invoice.leaseBillingSchedule?.leaseContract?.contactName || 'Hall Lease'}`, amount: invoice.totalAmount, outstandingAmount, paidAmount: invoice.paidAmount, currency: invoice.currency, createdBy: userId } });
+        cityInvoice = await tx.cityLedgerInvoice.create({ data: { propertyId, accountId, eventInvoiceId: invoice.id, invoiceNumber, issueDate: businessDate, dueDate: businessDate, description: `Event Billing for ${invoice.event?.name || invoice.leaseBillingSchedule?.leaseContract?.contactName || 'Hall Lease'}`, amount: invoice.totalAmount, outstandingAmount, paidAmount: invoice.paidAmount, currency: invoice.currency, createdBy: userId } });
         await tx.cityLedgerEntry.create({ data: { accountId, propertyId, amount: outstandingAmount, currency: invoice.currency, type: 'TRANSFER_IN', status: 'OPEN', reference: invoiceNumber, reason: `Event invoice ${invoice.id}`, invoiceId: cityInvoice.id, createdBy: userId } });
         await tx.cityLedgerAccount.update({ where: { id: accountId }, data: { balance: { increment: outstandingAmount } } });
+      }
+      if (cityInvoice && Number(cityInvoice.outstandingAmount) > 0.01) {
+        await CityLedgerAccountingService.applyAvailableCorporateAdvance(tx, {
+          propertyId,
+          organizationId: property.organizationId,
+          staffId: userId,
+          accountId,
+          invoiceId: cityInvoice.id,
+          amount: Number(cityInvoice.outstandingAmount),
+          currency: cityInvoice.currency,
+          businessDate,
+          eventInvoiceId: invoice.id,
+        });
       }
       const journalReference = `EVENT-INVOICE-${invoice.id}`;
       const journalExists = await tx.journalEntry.findFirst({ where: { propertyId, reference: journalReference }, select: { id: true } });
@@ -240,7 +254,7 @@ export async function issueEventInvoice(invoiceId: string) {
     const issued = await tx.eventInvoice.update({ where: { id: invoice.id }, data: { status: 'ISSUED', workflowStatus: 'ISSUED', issuedBy: userId, issuedAt: new Date(), version: { increment: 1 } } });
     await auditTransition(tx, propertyId, userId, invoice.id, 'EVENT_INVOICE_ISSUED', { status: invoice.status, workflowStatus: invoice.workflowStatus }, { status: 'ISSUED', workflowStatus: 'ISSUED' });
     return issued;
-  });
+  }, { timeout: 30000 });
   revalidatePath('/fnb/events/accounting');
   revalidatePath(`/fnb/events/accounting/${invoiceId}`);
   return result;

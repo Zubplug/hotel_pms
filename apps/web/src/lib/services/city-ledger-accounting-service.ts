@@ -2,6 +2,176 @@ import { GLMappingService } from './gl-mapping-service';
 import { GeneralLedgerService } from './general-ledger-service';
 
 export class CityLedgerAccountingService {
+  /**
+   * Applies existing unapplied corporate receipts to a newly-created city
+   * ledger invoice. This is intentionally transaction-scoped so lease/event
+   * invoice issuance cannot leave an invoice open when the account already
+   * has available advance credit.
+   */
+  static async applyAvailableCorporateAdvance(
+    tx: any,
+    input: {
+      propertyId: string;
+      organizationId: string;
+      staffId: string;
+      accountId: string;
+      invoiceId: string;
+      amount: number;
+      currency: string;
+      businessDate: Date;
+      eventInvoiceId?: string | null;
+    },
+  ) {
+    if (input.amount <= 0.01) return 0;
+
+    const account = await tx.cityLedgerAccount.findUnique({
+      where: { id: input.accountId },
+      select: { type: true, currency: true },
+    });
+    if (!account || account.type !== 'CORPORATE') return 0;
+
+    const openPayments = await tx.cityLedgerEntry.findMany({
+      where: {
+        accountId: input.accountId,
+        type: 'PAYMENT',
+        status: 'OPEN',
+        currency: input.currency,
+      },
+      include: { allocations: true },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    let remaining = input.amount;
+    let appliedTotal = 0;
+    for (const payment of openPayments) {
+      if (remaining <= 0.01) break;
+      const allocated = payment.allocations.reduce(
+        (sum: number, allocation: any) => sum + Number(allocation.amount),
+        0,
+      );
+      const available = Number(payment.amount) - allocated;
+      if (available <= 0.01) {
+        await tx.cityLedgerEntry.update({
+          where: { id: payment.id },
+          data: { status: 'SETTLED' },
+        });
+        continue;
+      }
+
+      const applied = Math.min(available, remaining);
+      await tx.cityLedgerAllocation.create({
+        data: {
+          paymentId: payment.id,
+          invoiceId: input.invoiceId,
+          amount: applied,
+          currency: input.currency,
+          createdBy: input.staffId,
+        },
+      });
+
+      if (available - applied <= 0.01) {
+        await tx.cityLedgerEntry.update({
+          where: { id: payment.id },
+          data: { status: 'SETTLED' },
+        });
+      }
+      remaining -= applied;
+      appliedTotal += applied;
+    }
+
+    if (appliedTotal <= 0.01) return 0;
+
+    const invoice = await tx.cityLedgerInvoice.update({
+      where: { id: input.invoiceId },
+      data: {
+        paidAmount: { increment: appliedTotal },
+        outstandingAmount: { decrement: appliedTotal },
+        status: remaining <= 0.01 ? 'PAID' : 'PARTIALLY_PAID',
+      },
+    });
+
+    if (remaining <= 0.01) {
+      await tx.cityLedgerEntry.updateMany({
+        where: {
+          invoiceId: input.invoiceId,
+          type: 'TRANSFER_IN',
+          status: 'OPEN',
+        },
+        data: { status: 'SETTLED' },
+      });
+    }
+
+    if (input.eventInvoiceId) {
+      const eventInvoice = await tx.eventInvoice.findUnique({
+        where: { id: input.eventInvoiceId },
+        select: { id: true, totalAmount: true, paidAmount: true },
+      });
+      if (eventInvoice) {
+        const paidAmount = Number(eventInvoice.paidAmount) + appliedTotal;
+        const paid = paidAmount + 0.01 >= Number(eventInvoice.totalAmount);
+        await tx.eventInvoice.update({
+          where: { id: eventInvoice.id },
+          data: { paidAmount, status: paid ? 'PAID' : 'PARTIAL' },
+        });
+        if (paid) {
+          await tx.leaseBillingSchedule.updateMany({
+            where: { invoiceId: eventInvoice.id },
+            data: { status: 'PAID' },
+          });
+        }
+      }
+    }
+
+    await tx.cityLedgerAccount.update({
+      where: { id: input.accountId },
+      data: { balance: { decrement: appliedTotal } },
+    });
+
+    const property = await tx.property.findUnique({
+      where: { id: input.propertyId },
+      select: { organizationId: true },
+    });
+    if (!property) throw new Error('PROPERTY_NOT_FOUND');
+    await GeneralLedgerService.postJournal(
+      {
+        userId: input.staffId,
+        propertyIds: [input.propertyId],
+        organizationId: input.organizationId || property.organizationId,
+        role: 'SYSTEM',
+        permissions: [],
+        outletIds: [],
+      },
+      {
+        propertyId: input.propertyId,
+        entryDate: input.businessDate,
+        reference: `CITY-LEDGER-ADVANCE-APPLICATION-${input.invoiceId}`,
+        description: `Apply corporate advance to city ledger invoice ${invoice.invoiceNumber}`,
+        sourceModule: 'AR',
+        lines: [
+          {
+            accountId: await GLMappingService.getCorporateAdvancesAccount(input.propertyId),
+            debit: appliedTotal,
+            credit: 0,
+            description: 'Reduce corporate advance liability',
+            sourceType: 'CITY_LEDGER_ADVANCE_APPLICATION',
+            sourceId: input.invoiceId,
+          },
+          {
+            accountId: await GLMappingService.getCityLedgerAccount(input.propertyId),
+            debit: 0,
+            credit: appliedTotal,
+            description: 'Reduce city ledger receivable',
+            sourceType: 'CITY_LEDGER_ADVANCE_APPLICATION',
+            sourceId: input.invoiceId,
+          },
+        ],
+      },
+      tx,
+    );
+
+    return appliedTotal;
+  }
+
   static async settleGuestRefund(
     tx: any,
     input: { propertyId: string; organizationId: string; staffId: string; cityLedgerEntryId: string; refundRequestId: string; amount: number; method: string; businessDate: Date },
