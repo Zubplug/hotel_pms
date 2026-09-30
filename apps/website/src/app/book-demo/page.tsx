@@ -1,11 +1,8 @@
-import type { Metadata } from "next";
-import Link from "next/link";
-import { PublicHeader, PublicFooter } from "@/components/public-shell";
+"use client";
 
-export const metadata: Metadata = {
-  title: "Book a Demo — LodgeCore Property Technology",
-  description: "Talk to the LodgeCore team about hospitality software, access control, smart rooms, hardware deployment and property technology for your property.",
-};
+import Link from "next/link";
+import { FormEvent, useState } from "react";
+import { PublicHeader, PublicFooter } from "@/components/public-shell";
 
 const TEAMS = [
   { id: "hospitality", icon: "🏨", name: "LodgeCore Hospitality",  desc: "PMS, POS, booking engine, accounting and operations software." },
@@ -22,6 +19,41 @@ const PROPERTY_TYPES = [
 ];
 
 export default function BookDemoPage() {
+  const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setStatus("sending");
+    const form = event.currentTarget;
+    const values = new FormData(form);
+    const firstName = String(values.get("firstName") || "").trim();
+    const lastName = String(values.get("lastName") || "").trim();
+    const interests = values.getAll("interest").map(String);
+    try {
+      const response = await fetch("/api/leads", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          name: `${firstName} ${lastName}`.trim(),
+          email: values.get("email"),
+          phone: values.get("phone"),
+          company: values.get("propertyName"),
+          propertyName: values.get("propertyName"),
+          propertyType: values.get("propertyType"),
+          roomCount: values.get("roomCount"),
+          message: values.get("message"),
+          interests,
+          source: "BOOK_DEMO",
+          consent: "true",
+        }),
+      });
+      setStatus(response.ok ? "sent" : "error");
+      if (response.ok) form.reset();
+    } catch {
+      setStatus("error");
+    }
+  }
+
   return (
     <main className="site-shell">
       <PublicHeader />
@@ -62,7 +94,7 @@ export default function BookDemoPage() {
               We&apos;ll get back to you within one business day.
             </p>
 
-            <form action="https://formspree.io/f/lodgecore" method="POST" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                 <div>
                   <label style={{ display: "block", fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: ".15em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 6 }}>First name</label>
@@ -101,6 +133,15 @@ export default function BookDemoPage() {
               </div>
 
               <div>
+                <label style={{ display: "block", fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: ".15em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 6 }}>Property name</label>
+                <input name="propertyName" type="text" placeholder="Your property name" style={{
+                  width: "100%", background: "var(--bg-overlay)", border: "1px solid var(--border)",
+                  borderRadius: "var(--radius-sm)", padding: "10px 12px", color: "var(--text-primary)",
+                  fontSize: 13, outline: "none", boxSizing: "border-box",
+                }} />
+              </div>
+
+              <div>
                 <label style={{ display: "block", fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: ".15em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 6 }}>Property type</label>
                 <select name="propertyType" style={{
                   width: "100%", background: "var(--bg-overlay)", border: "1px solid var(--border)",
@@ -110,6 +151,15 @@ export default function BookDemoPage() {
                   <option value="">Select property type…</option>
                   {PROPERTY_TYPES.map((pt) => <option key={pt} value={pt}>{pt}</option>)}
                 </select>
+              </div>
+
+              <div>
+                <label style={{ display: "block", fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: ".15em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 6 }}>Number of rooms</label>
+                <input name="roomCount" type="number" min="0" max="100000" placeholder="e.g.  forty" style={{
+                  width: "100%", background: "var(--bg-overlay)", border: "1px solid var(--border)",
+                  borderRadius: "var(--radius-sm)", padding: "10px 12px", color: "var(--text-primary)",
+                  fontSize: 13, outline: "none", boxSizing: "border-box",
+                }} />
               </div>
 
               <div>
@@ -133,9 +183,12 @@ export default function BookDemoPage() {
                 }} />
               </div>
 
-              <button type="submit" className="btn btn-primary" style={{ width: "100%", border: "none", padding: "14px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
-                Send request →
+              <button disabled={status === "sending"} type="submit" className="btn btn-primary" style={{ width: "100%", border: "none", padding: "14px", fontSize: 14, fontWeight: 700, cursor: status === "sending" ? "wait" : "pointer", opacity: status === "sending" ? .65 : 1 }}>
+                {status === "sending" ? "Sending request…" : "Send request →"}
               </button>
+
+              {status === "sent" && <p role="status" style={{ fontSize: 12, color: "var(--green)", textAlign: "center" }}>Request received. A LodgeCore team member will contact you within one business day.</p>}
+              {status === "error" && <p role="alert" style={{ fontSize: 12, color: "#ff7b8e", textAlign: "center" }}>We could not submit your request. Please try again.</p>}
 
               <p style={{ fontSize: 10, color: "var(--text-muted)", textAlign: "center", lineHeight: 1.5 }}>
                 By submitting, you agree to LodgeCore&apos;s{" "}

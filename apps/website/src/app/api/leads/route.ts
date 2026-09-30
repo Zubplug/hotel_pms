@@ -13,6 +13,9 @@ const leadSchema = z.object({
   message: z.string().trim().max(4000).optional().or(z.literal("")),
   source: z.string().trim().max(80).default("WEBSITE"),
   consent: z.union([z.literal("true"), z.literal(true)]),
+  propertyType: z.string().trim().max(100).optional().or(z.literal("")),
+  interests: z.array(z.string().trim().max(80)).max(20).optional(),
+  metadata: z.record(z.unknown()).optional(),
   idempotencyKey: z.string().trim().max(120).optional(),
 });
 
@@ -33,7 +36,7 @@ export async function POST(request: NextRequest) {
       name: data.name, email: data.email, phone: data.phone || null, company: data.company || null,
       propertyName: data.propertyName || null, location: data.location || null, roomCount: data.roomCount,
       message: data.message || null, source: data.source, consentAt: new Date(), idempotencyKey,
-      metadata: { userAgent: request.headers.get("user-agent")?.slice(0, 500) || null },
+      metadata: { ...(data.metadata || {}), propertyType: data.propertyType || null, interests: data.interests || [], userAgent: request.headers.get("user-agent")?.slice(0, 500) || null },
     }, select: { id: true } });
     return NextResponse.json({ id: lead.id }, { status: 201 });
   } catch (error) {

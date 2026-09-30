@@ -2,7 +2,6 @@ import prisma from '@hotel-pms/db';
 import Link from 'next/link';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { format } from 'date-fns';
 import { requireHQAdmin } from '@/lib/auth/hq';
 
 export default async function HQOrganizationsPage() {
@@ -68,7 +67,7 @@ export default async function HQOrganizationsPage() {
                     </div>
                   </td>
                   <td className="px-6 py-4 text-zinc-500">
-                    {format(new Date(org.createdAt), 'MMM d, yyyy')}
+                    {new Date(org.createdAt).toLocaleDateString('en-NG', { dateStyle: 'medium' })}
                   </td>
                   <td className="px-6 py-4 text-right">
                     <Link 

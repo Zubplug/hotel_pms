@@ -16,8 +16,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({ ...authConfig,
       if (!await bcrypt.compare(password, user.passwordHash)) return null;
       const staff = user.staffId ? await prisma.staff.findUnique({ where: { id: user.staffId }, select: { organizationId: true, firstName: true, lastName: true } }) : null;
       const organizationId = staff?.organizationId || user.membership?.organizationId || null;
-      if (!organizationId) return null;
-      return { id: user.id, email: user.email, name: staff ? `${staff.firstName} ${staff.lastName}`.trim() : user.email, organizationId };
+      if (!organizationId && !user.isLodgeCoreAdmin) return null;
+      return { id: user.id, email: user.email, name: staff ? `${staff.firstName} ${staff.lastName}`.trim() : user.email, organizationId, isLodgeCoreAdmin: user.isLodgeCoreAdmin, isSuperAdmin: user.isSuperAdmin || user.isLodgeCoreAdmin };
     },
   })],
 });

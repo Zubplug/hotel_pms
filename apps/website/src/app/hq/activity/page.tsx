@@ -1,6 +1,5 @@
 import prisma from '@hotel-pms/db';
 import { Card } from '@/components/ui/card';
-import { format } from 'date-fns';
 import { requireHQAdmin } from '@/lib/auth/hq';
 
 export default async function HQActivityPage() {
@@ -34,7 +33,7 @@ export default async function HQActivityPage() {
             {logs.map(log => (
               <tr key={log.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-900/50">
                 <td className="px-6 py-4 text-zinc-500 whitespace-nowrap">
-                  {log.createdAt ? format(new Date(log.createdAt), 'MMM d, HH:mm:ss') : 'Unknown'}
+                  {log.createdAt ? new Date(log.createdAt).toLocaleString('en-NG', { dateStyle: 'medium', timeStyle: 'short' }) : 'Unknown'}
                 </td>
                 <td className="px-6 py-4">
                   <div className="font-medium text-zinc-900 dark:text-white">{log.organization?.name || "Unknown Tenant"}</div>

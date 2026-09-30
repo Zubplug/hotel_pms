@@ -3,7 +3,7 @@ export const PWA_EXCLUDED_PREFIXES = ['/frontdesk', '/pos', '/desktop', '/admin/
 
 export const PWA_ONLINE_PREFIXES = [
   '/admin', '/accountant', '/cash-management', '/external-auditor', '/fnb',
-  '/general-manager', '/housekeeping', '/hq', '/hub', '/inventory',
+  '/general-manager', '/housekeeping', '/hub', '/inventory',
   '/maintenance', '/night-audit', '/reports', '/reservations', '/properties',
   '/rooms', '/room-types', '/amenities', '/refunds', '/settings', '/staff',
   '/sync-center',

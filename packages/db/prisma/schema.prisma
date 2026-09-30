@@ -40,6 +40,7 @@ model Organization {
   channelSyncEvents  ChannelSyncEvent[]
   externalAuditorAccesses ExternalAuditorAccess[]
   externalAuditorInvitations ExternalAuditorInvitation[]
+  customerInvitations         CustomerInvitation[]
 
   billingCustomer    BillingCustomer?
   subscriptions      Subscription[]
@@ -2021,6 +2022,8 @@ model User {
   revokedExternalAuditorAccesses ExternalAuditorAccess[] @relation("ExternalAuditorAccessRevokedBy")
   externalAuditorInvitations ExternalAuditorInvitation[] @relation("ExternalAuditorInvitationUser")
   sentExternalAuditorInvitations ExternalAuditorInvitation[] @relation("ExternalAuditorInvitationInvitedBy")
+  customerInvitations         CustomerInvitation[] @relation("CustomerInvitationUser")
+  sentCustomerInvitations     CustomerInvitation[] @relation("CustomerInvitationCreatedBy")
 }
 
 // FCM device tokens for push notifications
@@ -2382,6 +2385,25 @@ model OrganizationMembership {
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
+}
+
+model CustomerInvitation {
+  id             String       @id @default(uuid()) @db.Uuid
+  email          String
+  organizationId String       @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String?      @db.Uuid
+  user           User?        @relation("CustomerInvitationUser", fields: [userId], references: [id], onDelete: SetNull)
+  tokenHash      String       @unique
+  expiresAt      DateTime     @db.Timestamptz
+  acceptedAt     DateTime?    @db.Timestamptz
+  createdById    String       @db.Uuid
+  createdBy      User         @relation("CustomerInvitationCreatedBy", fields: [createdById], references: [id])
+  createdAt      DateTime     @default(now()) @db.Timestamptz
+  updatedAt      DateTime     @updatedAt @db.Timestamptz
+
+  @@index([email, organizationId])
+  @@index([expiresAt, acceptedAt])
 }
 
 // -----------------------------------------------------------------------------

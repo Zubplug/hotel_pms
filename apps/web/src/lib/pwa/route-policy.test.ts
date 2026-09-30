@@ -8,7 +8,7 @@ describe('PWA route policy', () => {
     expect(isPwaEligiblePath(pathname)).toBe(false);
   });
 
-  it.each(['/accountant', '/accountant/gl', '/external-auditor/reports', '/inventory', '/fnb/dashboard', '/cash-management', '/general-manager', '/night-audit/reports', '/hq'])('allows online route %s', (pathname) => {
+  it.each(['/accountant', '/accountant/gl', '/external-auditor/reports', '/inventory', '/fnb/dashboard', '/cash-management', '/general-manager', '/night-audit/reports'])('allows online route %s', (pathname) => {
     expect(isPwaEligiblePath(pathname)).toBe(true);
   });
 

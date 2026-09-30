@@ -1,6 +1,5 @@
 import { requireHQAdmin } from '@/lib/auth/hq';
 import Link from 'next/link';
-import { Shield, Building2, Package, Activity, FileText } from 'lucide-react';
 import { Suspense } from 'react';
 import { headers } from 'next/headers';
 import { HQLogoutButton } from './HQLogoutButton';
@@ -15,11 +14,12 @@ export default async function HQLayout({
   const admin = await requireHQAdmin();
   const pathname = (await headers()).get('x-pathname') || '';
   const nav = [
-    { href: '/hq', label: 'Command centre', icon: Activity },
-    { href: '/hq/organizations', label: 'Organisations', icon: Building2 },
-    { href: '/hq/products', label: 'Products & pricing', icon: Package },
-    { href: '/hq/invoices', label: 'Invoices', icon: FileText },
-    { href: '/hq/activity', label: 'Audit log', icon: Shield },
+    { href: '/hq', label: 'Command centre', icon: '⌂' },
+    { href: '/hq/organizations', label: 'Organisations', icon: '▦' },
+    { href: '/hq/leads', label: 'Sales leads', icon: '◉' },
+    { href: '/hq/products', label: 'Products & pricing', icon: '▤' },
+    { href: '/hq/invoices', label: 'Invoices', icon: '▥' },
+    { href: '/hq/activity', label: 'Audit log', icon: '◌' },
   ];
 
   return (
@@ -28,7 +28,7 @@ export default async function HQLayout({
       <aside className="hidden w-72 shrink-0 border-r border-white/10 bg-[#0b1628] text-slate-300 lg:flex lg:flex-col">
         <div className="border-b border-white/10 px-6 py-6">
           <div className="flex items-center gap-3">
-            <div className="flex size-10 items-center justify-center rounded-xl bg-indigo-500/15 ring-1 ring-indigo-300/20"><Shield className="size-5 text-indigo-300" /></div>
+            <div className="flex size-10 items-center justify-center rounded-xl bg-indigo-500/15 text-lg text-indigo-300 ring-1 ring-indigo-300/20">✦</div>
             <div><p className="font-semibold tracking-tight text-white">LodgeCore</p><p className="text-[10px] font-semibold uppercase tracking-[.22em] text-indigo-300">HQ control plane</p></div>
           </div>
         </div>
@@ -37,7 +37,7 @@ export default async function HQLayout({
           <p className="px-3 pb-3 pt-2 text-[10px] font-semibold uppercase tracking-[.2em] text-slate-500">Platform management</p>
           {nav.map(({ href, label, icon: Icon }) => {
             const active = pathname === href || (href !== '/hq' && pathname.startsWith(`${href}/`));
-            return <Link key={href} href={href} className={`flex items-center gap-3 rounded-xl px-3 py-3 text-sm transition ${active ? 'bg-indigo-500/15 font-medium text-white ring-1 ring-indigo-400/20' : 'text-slate-400 hover:bg-white/[.05] hover:text-white'}`}><Icon className={`size-4 ${active ? 'text-indigo-300' : 'text-slate-500'}`} />{label}</Link>;
+            return <Link key={href} href={href} className={`flex items-center gap-3 rounded-xl px-3 py-3 text-sm transition ${active ? 'bg-indigo-500/15 font-medium text-white ring-1 ring-indigo-400/20' : 'text-slate-400 hover:bg-white/[.05] hover:text-white'}`}><span aria-hidden="true" className={`w-4 text-center text-sm ${active ? 'text-indigo-300' : 'text-slate-500'}`}>{Icon}</span>{label}</Link>;
           })}
         </nav>
 

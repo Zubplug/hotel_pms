@@ -13,15 +13,19 @@ export default function PortalLogin() {
     setError(false);
     setLoading(true);
     const form = new FormData(event.currentTarget);
+    const requestedCallback = new URLSearchParams(window.location.search).get("callbackUrl");
+    const callbackUrl = requestedCallback && requestedCallback.startsWith("/") && !requestedCallback.startsWith("//")
+      ? requestedCallback
+      : "/portal/dashboard";
     const result = await signIn("credentials", {
       email: form.get("email"),
       password: form.get("password"),
       redirect: false,
-      callbackUrl: "/portal/dashboard",
+      callbackUrl,
     });
     setLoading(false);
     if (!result?.ok) setError(true);
-    else window.location.href = result.url || "/portal/dashboard";
+    else window.location.href = result.url || callbackUrl;
   }
 
   return (

@@ -3,8 +3,6 @@ import { notFound } from 'next/navigation';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { format } from 'date-fns';
-import { ShieldAlert, Users, Home } from 'lucide-react';
 import { startImpersonation } from '@/lib/auth/hq';
 import { requireHQAdmin } from '@/lib/auth/hq';
 
@@ -48,7 +46,7 @@ export default async function TenantControlPage({
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-zinc-500">Properties</CardTitle>
-            <Home className="w-4 h-4 text-zinc-400" />
+            <span aria-hidden="true" className="text-zinc-400">⌂</span>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{org.properties.length}</div>
@@ -58,7 +56,7 @@ export default async function TenantControlPage({
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-zinc-500">Users</CardTitle>
-            <Users className="w-4 h-4 text-zinc-400" />
+            <span aria-hidden="true" className="text-zinc-400">◉</span>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{users.length}</div>
@@ -68,7 +66,7 @@ export default async function TenantControlPage({
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-zinc-500">Status</CardTitle>
-            <ShieldAlert className="w-4 h-4 text-zinc-400" />
+            <span aria-hidden="true" className="text-zinc-400">!</span>
           </CardHeader>
           <CardContent>
             <Badge variant="outline" className="text-sm px-3 py-1">Active</Badge>
@@ -92,7 +90,7 @@ export default async function TenantControlPage({
                       <div>
                         <div className="font-medium">Stripe: {sub.stripeSubscriptionId.slice(0, 12)}...</div>
                         <div className="text-sm text-zinc-500">
-                          Renews {format(new Date(sub.currentPeriodEnd), 'MMM d, yyyy')}
+                          Renews {new Date(sub.currentPeriodEnd).toLocaleDateString('en-NG', { dateStyle: 'medium' })}
                         </div>
                       </div>
                       <Badge variant={sub.status === 'ACTIVE' ? 'default' : 'destructive'}>{sub.status}</Badge>
