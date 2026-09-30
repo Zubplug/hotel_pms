@@ -9,11 +9,11 @@ export const metadata: Metadata = {
 };
 
 const CATEGORIES = [
-  { href: "/smart/smart-hotel",       icon: "🏨", name: "Smart Hotel Rooms",   desc: "Energy management, key-card switches, occupancy sensors, smart AC, lighting and DND panels for guestrooms.",   tags: ["Energy", "Occupancy", "Smart AC", "Lighting"] },
-  { href: "/smart/smart-home",        icon: "🏠", name: "Smart Homes",         desc: "Locks, lighting, switches, sockets, motorised curtains, AC control and full home automation.",               tags: ["Locks", "Lighting", "AC", "Curtains"] },
-  { href: "/smart/smart-building",    icon: "🏗",  name: "Smart Buildings",     desc: "Building automation, energy management, occupancy monitoring and centralised access for commercial buildings.", tags: ["BMS", "Energy", "Occupancy"] },
-  { href: "/smart/energy-management", icon: "⚡", name: "Energy Management",   desc: "Monitor, control and optimise energy use with smart meters, IoT sensors and rules-based automation.",         tags: ["Monitoring", "Control", "Optimisation"] },
-  { href: "/smart/automation",        icon: "🤖", name: "Automation",          desc: "Scenes, schedules, occupancy triggers and multi-step automation sequences for any property.",                   tags: ["Scenes", "Schedules", "Rules"] },
+  { href: "/smart/smart-hotel",       img: "/icon-smart-room.png", name: "Smart Hotel Rooms",   desc: "Energy management, key-card switches, occupancy sensors, smart AC, lighting and DND panels for guestrooms.",   tags: ["Energy", "Occupancy", "Smart AC", "Lighting"] },
+  { href: "/smart/smart-home",        img: "/icon-smart.png",      name: "Smart Homes",         desc: "Locks, lighting, switches, sockets, motorised curtains, AC control and full home automation.",               tags: ["Locks", "Lighting", "AC", "Curtains"] },
+  { href: "/smart/smart-building",    img: "/icon-systems.png",    name: "Smart Buildings",     desc: "Building automation, energy management, occupancy monitoring and centralised access for commercial buildings.", tags: ["BMS", "Energy", "Occupancy"] },
+  { href: "/smart/energy-management", img: "/icon-energy.png",     name: "Energy Management",   desc: "Monitor, control and optimise energy use with smart meters, IoT sensors and rules-based automation.",         tags: ["Monitoring", "Control", "Optimisation"] },
+  { href: "/smart/automation",        img: "/icon-automation.png", name: "Automation",          desc: "Scenes, schedules, occupancy triggers and multi-step automation sequences for any property.",                   tags: ["Scenes", "Schedules", "Rules"] },
 ] as const;
 
 const STATS = [
@@ -24,12 +24,12 @@ const STATS = [
 ] as const;
 
 const WHY = [
-  { icon: "⚡", title: "Energy Savings",       desc: "Occupancy-based automation reduces energy waste in unoccupied rooms by up to 30%." },
-  { icon: "🎯", title: "Guest Comfort",         desc: "Automatic climate, lighting and curtain control create premium, personalised room experiences." },
-  { icon: "📊", title: "Real-Time Visibility",  desc: "See every room's occupancy, energy use and system status from one central dashboard." },
-  { icon: "🔗", title: "PMS Integration",       desc: "Rooms activate automatically at check-in and power down at checkout — no manual intervention." },
-  { icon: "🛡️", title: "Remote Management",    desc: "LodgeCore Care monitors all smart systems remotely with alerts and automated incident response." },
-  { icon: "📈", title: "ROI in 12–18 Months",  desc: "Energy savings and operational efficiencies typically recover the investment within 18 months." },
+  { img: "/icon-energy.png",      title: "Energy Savings",       desc: "Occupancy-based automation reduces energy waste in unoccupied rooms by up to 30%." },
+  { img: "/icon-smart-room.png",  title: "Guest Comfort",         desc: "Automatic climate, lighting and curtain control create premium, personalised room experiences." },
+  { img: "/icon-finance.png",     title: "Real-Time Visibility",  desc: "See every room's occupancy, energy use and system status from one central dashboard." },
+  { img: "/icon-pms.png",         title: "PMS Integration",       desc: "Rooms activate automatically at check-in and power down at checkout — no manual intervention." },
+  { img: "/icon-care.png",        title: "Remote Management",     desc: "LodgeCore Care monitors all smart systems remotely with alerts and automated incident response." },
+  { img: "/icon-finance.png",     title: "ROI in 12–18 Months",  desc: "Energy savings and operational efficiencies typically recover the investment within 18 months." },
 ] as const;
 
 export default function SmartPage() {
@@ -89,7 +89,9 @@ export default function SmartPage() {
           <div className="cap-grid" style={{ "--div-color": "#a78bfa", "--div-color-dim": "rgba(167,139,250,.08)" } as React.CSSProperties}>
             {CATEGORIES.map(c => (
               <Link key={c.href} href={c.href} className="cap-card" style={{ textDecoration: "none" }}>
-                <div className="cap-icon">{c.icon}</div>
+                <div className="cap-icon">
+                  <Image src={c.img} alt={c.name} width={56} height={56} style={{ borderRadius: 10, objectFit: "cover" }} />
+                </div>
                 <div className="cap-name">{c.name}</div>
                 <div className="cap-desc">{c.desc}</div>
                 <div className="cap-tags">
@@ -111,7 +113,9 @@ export default function SmartPage() {
           <div className="cap-grid" style={{ "--div-color": "#a78bfa", "--div-color-dim": "rgba(167,139,250,.08)" } as React.CSSProperties}>
             {WHY.map(w => (
               <div key={w.title} className="cap-card">
-                <div className="cap-icon">{w.icon}</div>
+                <div className="cap-icon">
+                  <Image src={w.img} alt={w.title} width={56} height={56} style={{ borderRadius: 10, objectFit: "cover" }} />
+                </div>
                 <div className="cap-name">{w.title}</div>
                 <div className="cap-desc">{w.desc}</div>
               </div>

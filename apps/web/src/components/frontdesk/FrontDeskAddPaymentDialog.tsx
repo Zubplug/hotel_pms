@@ -14,10 +14,10 @@ import { Loader2, CreditCard, Banknote, Landmark, Receipt, CheckCircle2, Chevron
 import { cn, generateUUID } from '@/lib/utils';
 import { HardwareBridge } from '@/lib/desktop/HardwareBridge';
 
-export function FrontDeskAddPaymentDialog({ open, onOpenChange, folio, initialAmount, onPaymentSuccess, mode = 'payment', eventInvoiceId }: { open: boolean, onOpenChange: (open: boolean) => void, folio: any, initialAmount?: number, onPaymentSuccess?: () => void, mode?: 'payment' | 'deposit', eventInvoiceId?: string }) {
+export function FrontDeskAddPaymentDialog({ open, onOpenChange, folio, initialAmount, onPaymentSuccess, mode = 'payment', eventInvoiceId, requireActualAmount = false }: { open: boolean, onOpenChange: (open: boolean) => void, folio: any, initialAmount?: number, onPaymentSuccess?: () => void, mode?: 'payment' | 'deposit', eventInvoiceId?: string, requireActualAmount?: boolean }) {
   const isDeposit = mode === 'deposit';
   const [method, setMethod] = useState<string>('CASH');
-  const [amount, setAmount] = useState<string>(initialAmount?.toString() || (!isDeposit && folio?.balance > 0 ? folio.balance.toString() : ''));
+  const [amount, setAmount] = useState<string>(requireActualAmount ? '' : initialAmount?.toString() || (!isDeposit && folio?.balance > 0 ? folio.balance.toString() : ''));
   const [notes, setNotes] = useState('');
   const [auditOverrideReason, setAuditOverrideReason] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -29,8 +29,8 @@ export function FrontDeskAddPaymentDialog({ open, onOpenChange, folio, initialAm
   const { provider, isDesktopMode } = useLodgeCoreProvider();
 
   useEffect(() => {
-    if (open) setAmount(initialAmount?.toString() || (!isDeposit && folio?.balance > 0 ? folio.balance.toString() : ''));
-  }, [open, initialAmount, folio?.balance, isDeposit]);
+    if (open) setAmount(requireActualAmount ? '' : initialAmount?.toString() || (!isDeposit && folio?.balance > 0 ? folio.balance.toString() : ''));
+  }, [open, initialAmount, folio?.balance, isDeposit, requireActualAmount]);
 
   const triggerPrint = async (paymentId: string) => {
     if (!HardwareBridge.isAvailable()) return;
@@ -218,7 +218,7 @@ export function FrontDeskAddPaymentDialog({ open, onOpenChange, folio, initialAm
 
               {/* Amount Input */}
               <div className="space-y-3 bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-                <Label className="text-sm font-bold text-slate-700">Amount Received ({folio?.currency})</Label>
+                <Label className="text-sm font-bold text-slate-700">Amount Received ({folio?.currency}){requireActualAmount ? ' — enter actual amount' : ''}</Label>
                 <div>
                   <AmountInput
                     decimals={2}

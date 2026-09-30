@@ -9,12 +9,12 @@ export const metadata: Metadata = {
 };
 
 const PRODUCTS = [
-  { href: "/access/hotel-locks",    icon: "🔒", name: "Hotel Electronic Locks", desc: "RFID and MIFARE locks for hotel guestrooms and common areas. Integrated with PMS.",       tags: ["RFID", "MIFARE", "Mortise", "Handle Sets"] },
-  { href: "/access/smart-locks",    icon: "📱", name: "Smart Locks",            desc: "PIN, Bluetooth, mobile key and biometric locks for apartments, homes and offices.",       tags: ["Bluetooth", "Mobile Key", "PIN", "Fingerprint"] },
-  { href: "/access/access-control", icon: "🚪", name: "Access Control",         desc: "Controllers, RFID readers, electric strikes, magnetic locks and exit hardware.",          tags: ["Controllers", "Readers", "Strikes", "Mag Locks"] },
-  { href: "/access/encoders",       icon: "💾", name: "Card Encoders",          desc: "RFID and MIFARE key card encoding and management systems for hotel front desks.",          tags: ["Encoding", "RFID Cards", "MIFARE"] },
-  { href: "/access/programmers",    icon: "⚙️",  name: "Lock Programmers",       desc: "Handheld and USB programmers for configuring and maintaining electronic lock systems.",   tags: ["Handheld", "USB", "Configuration"] },
-  { href: "/access/door-hardware",  icon: "🔧", name: "Door Hardware",          desc: "Door handles, lock bodies, cylinders, closers and mechanical hardware.",                  tags: ["Handles", "Cylinders", "Closers"] },
+  { href: "/access/hotel-locks",    img: "/icon-hotel-lock.png",  name: "Hotel Electronic Locks", desc: "RFID and MIFARE locks for hotel guestrooms and common areas. Integrated with PMS.",       tags: ["RFID", "MIFARE", "Mortise", "Handle Sets"] },
+  { href: "/access/smart-locks",    img: "/icon-smart-lock.png",  name: "Smart Locks",            desc: "PIN, Bluetooth, mobile key and biometric locks for apartments, homes and offices.",       tags: ["Bluetooth", "Mobile Key", "PIN", "Fingerprint"] },
+  { href: "/access/access-control", img: "/icon-access.png",      name: "Access Control",         desc: "Controllers, RFID readers, electric strikes, magnetic locks and exit hardware.",          tags: ["Controllers", "Readers", "Strikes", "Mag Locks"] },
+  { href: "/access/encoders",       img: "/icon-pms.png",         name: "Card Encoders",          desc: "RFID and MIFARE key card encoding and management systems for hotel front desks.",          tags: ["Encoding", "RFID Cards", "MIFARE"] },
+  { href: "/access/programmers",    img: "/icon-systems.png",     name: "Lock Programmers",       desc: "Handheld and USB programmers for configuring and maintaining electronic lock systems.",   tags: ["Handheld", "USB", "Configuration"] },
+  { href: "/access/door-hardware",  img: "/icon-hardware.png",    name: "Door Hardware",          desc: "Door handles, lock bodies, cylinders, closers and mechanical hardware.",                  tags: ["Handles", "Cylinders", "Closers"] },
 ] as const;
 
 const STATS = [
@@ -99,7 +99,9 @@ export default function AccessPage() {
           <div className="cap-grid" style={{ "--div-color": "#3ef5a0", "--div-color-dim": "rgba(62,245,160,.08)" } as React.CSSProperties}>
             {PRODUCTS.map(p => (
               <Link key={p.href} href={p.href} className="cap-card" style={{ textDecoration: "none" }}>
-                <div className="cap-icon">{p.icon}</div>
+                <div className="cap-icon">
+                  <Image src={p.img} alt={p.name} width={56} height={56} style={{ borderRadius: 10, objectFit: "cover" }} />
+                </div>
                 <div className="cap-name">{p.name}</div>
                 <div className="cap-desc">{p.desc}</div>
                 <div className="cap-tags">

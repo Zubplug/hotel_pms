@@ -16,11 +16,11 @@ const STATS = [
 ] as const;
 
 const SERVICES = [
-  { href: "/services/installation",  icon: "🔧", name: "Installation",      desc: "Professional on-site installation of all hardware — locks, access control, smart devices and structured cabling.",    tags: ["On-Site", "Certified", "All Hardware"] },
-  { href: "/services/integration",   icon: "🔗", name: "Integration",       desc: "Connecting PMS, POS, access control, smart systems and third-party platforms through APIs and middleware.",          tags: ["API", "Middleware", "Multi-System"] },
-  { href: "/services/deployment",    icon: "🚀", name: "Full Deployment",   desc: "End-to-end property technology rollout from consultation and specification through to handover and training.",        tags: ["End-to-End", "Managed", "Turnkey"] },
-  { href: "/services/maintenance",   icon: "🛡️", name: "Maintenance",       desc: "Preventive maintenance schedules, emergency callout and hardware replacement services under LodgeCore Care.",         tags: ["Preventive", "Emergency", "SLA"] },
-  { href: "/services/support",       icon: "📞", name: "Technical Support", desc: "Remote and on-site technical support from the LodgeCore team for all software and integrated hardware systems.",    tags: ["Remote", "On-Site", "Multi-System"] },
+  { href: "/services/installation",  img: "/icon-systems.png",  name: "Installation",      desc: "Professional on-site installation of all hardware — locks, access control, smart devices and structured cabling.",    tags: ["On-Site", "Certified", "All Hardware"] },
+  { href: "/services/integration",   img: "/icon-pms.png",      name: "Integration",       desc: "Connecting PMS, POS, access control, smart systems and third-party platforms through APIs and middleware.",          tags: ["API", "Middleware", "Multi-System"] },
+  { href: "/services/deployment",    img: "/icon-multi-property.png", name: "Full Deployment",   desc: "End-to-end property technology rollout from consultation and specification through to handover and training.",        tags: ["End-to-End", "Managed", "Turnkey"] },
+  { href: "/services/maintenance",   img: "/icon-care.png",     name: "Maintenance",       desc: "Preventive maintenance schedules, emergency callout and hardware replacement services under LodgeCore Care.",         tags: ["Preventive", "Emergency", "SLA"] },
+  { href: "/services/support",       img: "/icon-care.png",     name: "Technical Support", desc: "Remote and on-site technical support from the LodgeCore team for all software and integrated hardware systems.",    tags: ["Remote", "On-Site", "Multi-System"] },
 ] as const;
 
 const STEPS = [
@@ -113,7 +113,9 @@ export default function SystemsPage() {
           <div className="cap-grid" style={{ "--div-color": "#ffbe5a", "--div-color-dim": "rgba(255,190,90,.08)" } as React.CSSProperties}>
             {SERVICES.map(s => (
               <Link key={s.href} href={s.href} className="cap-card" style={{ textDecoration: "none" }}>
-                <div className="cap-icon">{s.icon}</div>
+                <div className="cap-icon">
+                  <Image src={s.img} alt={s.name} width={56} height={56} style={{ borderRadius: 10, objectFit: "cover" }} />
+                </div>
                 <div className="cap-name">{s.name}</div>
                 <div className="cap-desc">{s.desc}</div>
                 <div className="cap-tags">

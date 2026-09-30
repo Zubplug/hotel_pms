@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Landmark, Loader2, ReceiptText } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -10,15 +10,19 @@ import { AmountInput } from '@/components/ui/amount-input';
 import { Label } from '@/components/ui/label';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 
-export function FrontDeskCityLedgerPaymentDialog({ entry, onComplete }: { entry: any; onComplete: () => Promise<any> | void }) {
+export function FrontDeskCityLedgerPaymentDialog({ entry, onComplete, requireActualAmount = false }: { entry: any; onComplete: () => Promise<any> | void; requireActualAmount?: boolean }) {
   const { provider, isOnline } = useLodgeCoreProvider();
   const [open, setOpen] = useState(false);
   const [method, setMethod] = useState('BANK_TRANSFER');
-  const [amount, setAmount] = useState(String(Number(entry.outstandingAmount || 0)));
+  const [amount, setAmount] = useState(requireActualAmount ? '' : String(Number(entry.outstandingAmount || 0)));
   const [reference, setReference] = useState('');
   const [busy, setBusy] = useState(false);
   const isCorporate = entry.accountType === 'CORPORATE';
   const isAdvance = entry.entryKind === 'CORPORATE_ADVANCE' || entry.entryKind === 'CORPORATE_ACCOUNT';
+
+  useEffect(() => {
+    if (open) setAmount(requireActualAmount ? '' : String(Number(entry.outstandingAmount || 0)));
+  }, [open, entry.outstandingAmount, requireActualAmount]);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -66,7 +70,7 @@ export function FrontDeskCityLedgerPaymentDialog({ entry, onComplete }: { entry:
           </div>
         </DialogHeader>
         <div className="space-y-5 px-6 py-5">
-          <div className="grid gap-2"><Label className="font-semibold text-slate-700">{isAdvance ? 'Advance amount' : 'Payment amount'} ({entry.currency || 'NGN'})</Label><AmountInput min="0.01" max={isAdvance ? undefined : entry.outstandingAmount} value={amount} onValueChange={setAmount} required className="h-11 border-slate-200 bg-white text-slate-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500/20" /></div>
+          <div className="grid gap-2"><Label className="font-semibold text-slate-700">{isAdvance ? 'Advance amount' : 'Payment amount'} ({entry.currency || 'NGN'}){requireActualAmount ? ' — enter actual amount' : ''}</Label><AmountInput min="0.01" max={isAdvance ? undefined : entry.outstandingAmount} value={amount} onValueChange={setAmount} required className="h-11 border-slate-200 bg-white text-slate-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500/20" /></div>
           <div className="grid gap-2"><Label className="font-semibold text-slate-700">Payment method</Label><select value={method} onChange={event => setMethod(event.target.value)} className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 shadow-sm outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10"><option value="BANK_TRANSFER">Bank transfer</option><option value="CASH">Cash office</option><option value="POS">POS</option><option value="CARD">Card</option><option value="CHEQUE">Cheque</option><option value="OTHER">Other</option></select></div>
           <div className="grid gap-2"><Label className="font-semibold text-slate-700">Receipt / payment reference</Label><Input value={reference} onChange={event => setReference(event.target.value)} placeholder="Enter receipt or transfer reference" required className="h-11 border-slate-200 bg-white text-slate-900 shadow-sm focus:border-indigo-500 focus:ring-indigo-500/20" /></div>
           <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-800">This payment is recorded against the active Front Desk shift. {isCorporate ? 'Corporate payments are automatically allocated to the oldest open invoices first.' : 'This payment settles only the selected invoice.'}</div>

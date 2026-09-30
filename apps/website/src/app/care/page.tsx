@@ -16,12 +16,12 @@ const STATS = [
 ] as const;
 
 const OFFERINGS = [
-  { icon: "🔧", name: "Preventive Maintenance",  desc: "Scheduled maintenance visits, system health checks and hardware servicing for all installed systems on a regular cadence." },
-  { icon: "📞", name: "Technical Support",        desc: "Remote and on-site technical support from the LodgeCore team. Phone, email and ticket-based support across all plans." },
-  { icon: "📡", name: "Remote Monitoring",        desc: "24/7 remote monitoring of all connected systems with automated alert escalation and real-time incident management." },
-  { icon: "⚡", name: "Emergency Callout",        desc: "Priority emergency response for critical system failures. SLA-backed response times with on-site dispatch where required." },
-  { icon: "🔄", name: "Software Updates",         desc: "Managed LodgeCore software updates, security patches and version upgrades with zero-downtime deployment windows." },
-  { icon: "📖", name: "Training & Enablement",    desc: "Staff training sessions, refresher programmes and documentation for all LodgeCore software and hardware systems." },
+  { img: "/icon-systems.png",  name: "Preventive Maintenance",  desc: "Scheduled maintenance visits, system health checks and hardware servicing for all installed systems on a regular cadence." },
+  { img: "/icon-care.png",    name: "Technical Support",        desc: "Remote and on-site technical support from the LodgeCore team. Phone, email and ticket-based support across all plans." },
+  { img: "/icon-care.png",    name: "Remote Monitoring",        desc: "24/7 remote monitoring of all connected systems with automated alert escalation and real-time incident management." },
+  { img: "/icon-energy.png",  name: "Emergency Callout",        desc: "Priority emergency response for critical system failures. SLA-backed response times with on-site dispatch where required." },
+  { img: "/icon-pms.png",     name: "Software Updates",         desc: "Managed LodgeCore software updates, security patches and version upgrades with zero-downtime deployment windows." },
+  { img: "/icon-booking.png", name: "Training & Enablement",    desc: "Staff training sessions, refresher programmes and documentation for all LodgeCore software and hardware systems." },
 ] as const;
 
 const PLANS = [
@@ -103,7 +103,9 @@ export default function CarePage() {
           <div className="cap-grid" style={{ "--div-color": "#ff8c60", "--div-color-dim": "rgba(255,140,96,.08)" } as React.CSSProperties}>
             {OFFERINGS.map(o => (
               <div key={o.name} className="cap-card">
-                <div className="cap-icon">{o.icon}</div>
+                <div className="cap-icon">
+                  <Image src={o.img} alt={o.name} width={56} height={56} style={{ borderRadius: 10, objectFit: "cover" }} />
+                </div>
                 <div className="cap-name">{o.name}</div>
                 <div className="cap-desc">{o.desc}</div>
               </div>

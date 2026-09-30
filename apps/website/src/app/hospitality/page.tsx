@@ -9,14 +9,14 @@ export const metadata: Metadata = {
 };
 
 const MODULES = [
-  { href: "/hospitality/pms",            icon: "🏨", name: "Property Management",   desc: "Front desk, reservations, room management, guest folios and automated check-in/out.",          tags: ["Reservations", "Front Desk", "Room Status", "Folios"] },
-  { href: "/hospitality/pos",            icon: "🍽",  name: "Point of Sale",         desc: "Restaurant, bar, spa and room-service POS with automatic real-time folio posting.",            tags: ["F&B", "Bar", "Spa", "Room Service"] },
-  { href: "/hospitality/booking",        icon: "📅", name: "Booking Engine",         desc: "Direct online booking with live rate management and multi-OTA channel synchronisation.",        tags: ["Direct Booking", "OTA Sync", "Rate Management"] },
-  { href: "/hospitality/accounting",     icon: "📊", name: "Finance & Accounting",  desc: "Folios, invoicing, cash management, night audit and complete financial reporting.",             tags: ["Night Audit", "Invoicing", "Cash", "Reports"] },
-  { href: "/hospitality/housekeeping",   icon: "🧹", name: "Housekeeping",           desc: "Room readiness tracking, task assignment, laundry and maintenance request management.",         tags: ["Room Status", "Tasks", "Laundry", "Maintenance"] },
-  { href: "/hospitality/inventory",      icon: "📦", name: "Inventory",              desc: "Stock control, procurement, purchase orders and full supplier relationship management.",         tags: ["Stock", "Procurement", "POs", "Suppliers"] },
-  { href: "/hospitality/events",         icon: "🎪", name: "Events & Banqueting",    desc: "Conference rooms, weddings, events management, function sheets and group billing.",             tags: ["Conferences", "Weddings", "Groups", "Function Sheets"] },
-  { href: "/hospitality/multi-property", icon: "🌐", name: "Multi-Property",         desc: "Centralised management across hotel groups, chains and multi-site portfolios.",                 tags: ["Groups", "Chains", "Central Reservations"] },
+  { href: "/hospitality/pms",            img: "/icon-pms.png",          name: "Property Management",   desc: "Front desk, reservations, room management, guest folios and automated check-in/out.",          tags: ["Reservations", "Front Desk", "Room Status", "Folios"] },
+  { href: "/hospitality/pos",            img: "/icon-pos.png",          name: "Point of Sale",         desc: "Restaurant, bar, spa and room-service POS with automatic real-time folio posting.",            tags: ["F&B", "Bar", "Spa", "Room Service"] },
+  { href: "/hospitality/booking",        img: "/icon-booking.png",      name: "Booking Engine",         desc: "Direct online booking with live rate management and multi-OTA channel synchronisation.",        tags: ["Direct Booking", "OTA Sync", "Rate Management"] },
+  { href: "/hospitality/accounting",     img: "/icon-finance.png",      name: "Finance & Accounting",  desc: "Folios, invoicing, cash management, night audit and complete financial reporting.",             tags: ["Night Audit", "Invoicing", "Cash", "Reports"] },
+  { href: "/hospitality/housekeeping",   img: "/icon-housekeeping.png", name: "Housekeeping",           desc: "Room readiness tracking, task assignment, laundry and maintenance request management.",         tags: ["Room Status", "Tasks", "Laundry", "Maintenance"] },
+  { href: "/hospitality/inventory",      img: "/icon-inventory.png",    name: "Inventory",              desc: "Stock control, procurement, purchase orders and full supplier relationship management.",         tags: ["Stock", "Procurement", "POs", "Suppliers"] },
+  { href: "/hospitality/events",         img: "/icon-events.png",       name: "Events & Banqueting",    desc: "Conference rooms, weddings, events management, function sheets and group billing.",             tags: ["Conferences", "Weddings", "Groups", "Function Sheets"] },
+  { href: "/hospitality/multi-property", img: "/icon-hospitality.png",  name: "Multi-Property",         desc: "Centralised management across hotel groups, chains and multi-site portfolios.",                 tags: ["Groups", "Chains", "Central Reservations"] },
 ] as const;
 
 const STATS = [
@@ -27,14 +27,14 @@ const STATS = [
 ] as const;
 
 const AUDIENCES = [
-  { icon: "🏨", label: "Hotels" },
-  { icon: "🌴", label: "Resorts" },
-  { icon: "🏕",  label: "Lodges" },
-  { icon: "🏠", label: "Guest Houses" },
-  { icon: "🏢", label: "Serviced Apartments" },
-  { icon: "🎒", label: "Hostels" },
-  { icon: "🏡", label: "Short-Let Operators" },
-  { icon: "🏗",  label: "Property Managers" },
+  { img: "/icon-hospitality.png", label: "Hotels" },
+  { img: "/icon-hospitality.png", label: "Resorts" },
+  { img: "/icon-hospitality.png", label: "Lodges" },
+  { img: "/icon-hospitality.png", label: "Guest Houses" },
+  { img: "/icon-hospitality.png", label: "Serviced Apartments" },
+  { img: "/icon-hospitality.png", label: "Hostels" },
+  { img: "/icon-access.png",      label: "Short-Let Operators" },
+  { img: "/icon-systems.png",     label: "Property Managers" },
 ] as const;
 
 export default function HospitalityPage() {
@@ -99,7 +99,9 @@ export default function HospitalityPage() {
           <div className="cap-grid" style={{ "--div-color": "#00d4e8", "--div-color-dim": "rgba(0,212,232,.08)" } as React.CSSProperties}>
             {MODULES.map(m => (
               <Link key={m.href} href={m.href} className="cap-card" style={{ textDecoration: "none" }}>
-                <div className="cap-icon">{m.icon}</div>
+                <div className="cap-icon">
+                  <Image src={m.img} alt={m.name} width={56} height={56} style={{ borderRadius: 10, objectFit: "cover" }} />
+                </div>
                 <div className="cap-name">{m.name}</div>
                 <div className="cap-desc">{m.desc}</div>
                 <div className="cap-tags">
@@ -164,7 +166,7 @@ export default function HospitalityPage() {
                 background: "var(--bg-card)", fontSize: 13, color: "var(--text-secondary)", fontWeight: 600,
                 transition: "border-color .2s",
               }}>
-                <span style={{ fontSize: 22 }}>{a.icon}</span> {a.label}
+                <Image src={a.img} alt={a.label} width={28} height={28} style={{ borderRadius: 6, objectFit: "cover" }} /> {a.label}
               </div>
             ))}
           </div>
@@ -177,8 +179,8 @@ export default function HospitalityPage() {
           <div className="feature-row flip" style={{ "--div-color": "#00d4e8" } as React.CSSProperties}>
             <div className="feature-row-visual">
               <div style={{ textAlign: "center" }}>
-                <div style={{ fontSize: 64 }}>🍽</div>
-                <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--accent)", letterSpacing: ".15em", marginTop: 12, textTransform: "uppercase" }}>POS → PMS → Folio</div>
+                  <Image src="/icon-pos.png" alt="POS System" width={100} height={100} style={{ borderRadius: 16, objectFit: "cover" }} />
+                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--accent)", letterSpacing: ".15em", marginTop: 12, textTransform: "uppercase" }}>POS → PMS → Folio</div>
               </div>
             </div>
             <div className="feature-row-copy">

@@ -9,7 +9,7 @@ import { processLeaseBilling } from './events/lease-actions';
 
 const BATCH_SIZE = 50;
 
-import { getOperationalReview, getSystemIntegrity, getFinancialAudit, getCashReconciliation, getFnbControl, postEventHallRevenueForDate } from './night-audit-service';
+import { getOperationalReview, getSystemIntegrity, getFinancialAudit, getCashReconciliation, getFnbControl, postEventHallRevenueForDate, submitDueEventInvoicesForReview } from './night-audit-service';
 
 export async function getNightAuditPreview(ctx: any, propertyId: string) {
   const [operational, system, financial, cash] = await Promise.all([
@@ -268,6 +268,13 @@ export async function executeNightAudit(
       leaseBilling = await processLeaseBilling(propertyId, actorId ? { userId: actorId } : undefined, undefined, businessDate);
     } catch (leaseError) {
       throw new Error(`BLOCKER:Recurring hall billing could not be generated for ${businessDate.toISOString().slice(0, 10)}: ${leaseError instanceof Error ? leaseError.message : String(leaseError)}`);
+    }
+
+    // Night Audit may submit due draft invoices into the review queue, but it
+    // never approves or issues them. Accounting and Cashier remain separate
+    // control steps.
+    if (actorId) {
+      await submitDueEventInvoicesForReview(propertyId, actorId, businessDate);
     }
 
     // Revenue is recognized at the event/service date, never when a future

@@ -7,7 +7,7 @@ import { PublicHeader, PublicFooter } from "@/components/public-shell";
 /* ─── Types ─────────────────────────────────────────────── */
 type DivisionType = {
   href: string;
-  icon: string;
+  img: string;
   color: string;
   colorRgb: string;
   label: string;
@@ -21,7 +21,7 @@ type DivisionType = {
 const DIVISIONS: DivisionType[] = [
   {
     href: "/hospitality",
-    icon: "🏨",
+    img: "/icon-hospitality.png",
     color: "#00d4e8",
     colorRgb: "0,212,232",
     label: "Hospitality",
@@ -32,7 +32,7 @@ const DIVISIONS: DivisionType[] = [
   },
   {
     href: "/access",
-    icon: "🔑",
+    img: "/icon-access.png",
     color: "#3ef5a0",
     colorRgb: "62,245,160",
     label: "Access",
@@ -42,7 +42,7 @@ const DIVISIONS: DivisionType[] = [
   },
   {
     href: "/smart",
-    icon: "⚡",
+    img: "/icon-smart.png",
     color: "#a78bfa",
     colorRgb: "167,139,250",
     label: "Smart",
@@ -52,7 +52,7 @@ const DIVISIONS: DivisionType[] = [
   },
   {
     href: "/systems",
-    icon: "🔧",
+    img: "/icon-systems.png",
     color: "#ffbe5a",
     colorRgb: "255,190,90",
     label: "Systems",
@@ -62,7 +62,7 @@ const DIVISIONS: DivisionType[] = [
   },
   {
     href: "/care",
-    icon: "🛡️",
+    img: "/icon-care.png",
     color: "#ff8c60",
     colorRgb: "255,140,96",
     label: "Care",
@@ -80,16 +80,16 @@ const METRICS = [
 ];
 
 const JOURNEY = [
-  { n: "01", icon: "📅", title: "Reservation",    sub: "Guest books via OTA or booking engine" },
-  { n: "02", icon: "🛎",  title: "Check-in",       sub: "PMS processes arrival & identity" },
-  { n: "03", icon: "🃏",  title: "Key Issued",     sub: "Card or mobile key generated instantly" },
-  { n: "04", icon: "🔓",  title: "Door Access",    sub: "Lock validates and grants entry" },
-  { n: "05", icon: "💡",  title: "Room Activates", sub: "Energy, AC & lighting automatically on" },
-  { n: "06", icon: "🍽",  title: "Hotel Services", sub: "Dining, spa & amenities tracked to folio" },
-  { n: "07", icon: "💳",  title: "POS Charges",    sub: "All spend posted in real-time to PMS" },
-  { n: "08", icon: "📄",  title: "Checkout",       sub: "Folio settled, receipt sent to guest" },
-  { n: "09", icon: "🔒",  title: "Key Revoked",    sub: "Lock access automatically updated" },
-  { n: "10", icon: "📊",  title: "Analytics",      sub: "Insights for operations & revenue" },
+  { n: "01", img: "/icon-booking.png",     color: "#00d4e8", title: "Reservation",    sub: "Guest books via OTA or booking engine" },
+  { n: "02", img: "/icon-pms.png",         color: "#00d4e8", title: "Check-in",       sub: "PMS processes arrival & identity" },
+  { n: "03", img: "/icon-access.png",      color: "#3ef5a0", title: "Key Issued",     sub: "Card or mobile key generated instantly" },
+  { n: "04", img: "/icon-access.png",      color: "#3ef5a0", title: "Door Access",    sub: "Lock validates and grants entry" },
+  { n: "05", img: "/icon-smart.png",       color: "#a78bfa", title: "Room Activates", sub: "Energy, AC & lighting automatically on" },
+  { n: "06", img: "/icon-pos.png",         color: "#00d4e8", title: "Hotel Services", sub: "Dining, spa & amenities tracked to folio" },
+  { n: "07", img: "/icon-finance.png",     color: "#00d4e8", title: "POS Charges",    sub: "All spend posted in real-time to PMS" },
+  { n: "08", img: "/icon-hospitality.png", color: "#00d4e8", title: "Checkout",       sub: "Folio settled, receipt sent to guest" },
+  { n: "09", img: "/icon-access.png",      color: "#3ef5a0", title: "Key Revoked",    sub: "Lock access automatically updated" },
+  { n: "10", img: "/icon-finance.png",     color: "#00d4e8", title: "Analytics",      sub: "Insights for operations & revenue" },
 ];
 
 const TESTIMONIALS = [
@@ -117,13 +117,13 @@ const TESTIMONIALS = [
 ];
 
 const SOLUTIONS = [
-  { href: "/solutions/hotels",     icon: "🏨", name: "Hotels & Resorts",     tags: ["PMS", "Access", "Smart"] },
-  { href: "/solutions/apartments", icon: "🏢", name: "Apartments",            tags: ["Access", "Management"] },
-  { href: "/solutions/short-let",  icon: "🏡", name: "Short-Let Properties", tags: ["Remote Access", "IoT"] },
-  { href: "/solutions/homes",      icon: "🏠", name: "Smart Homes",           tags: ["Smart", "Security"] },
-  { href: "/solutions/offices",    icon: "🏗", name: "Offices",               tags: ["Access", "Automation"] },
-  { href: "/solutions/commercial", icon: "🏛", name: "Commercial Buildings", tags: ["BMS", "Energy"] },
-  { href: "/solutions/estates",    icon: "🌿", name: "Estates",               tags: ["Gate", "Smart", "Access"] },
+  { href: "/solutions/hotels",     img: "/icon-hospitality.png", name: "Hotels & Resorts",     tags: ["PMS", "Access", "Smart"] },
+  { href: "/solutions/apartments", img: "/icon-hospitality.png", name: "Apartments",            tags: ["Access", "Management"] },
+  { href: "/solutions/short-let",  img: "/icon-access.png",      name: "Short-Let Properties", tags: ["Remote Access", "IoT"] },
+  { href: "/solutions/homes",      img: "/icon-smart.png",       name: "Smart Homes",           tags: ["Smart", "Security"] },
+  { href: "/solutions/offices",    img: "/icon-systems.png",     name: "Offices",               tags: ["Access", "Automation"] },
+  { href: "/solutions/commercial", img: "/icon-systems.png",     name: "Commercial Buildings", tags: ["BMS", "Energy"] },
+  { href: "/solutions/estates",    img: "/icon-smart.png",       name: "Estates",               tags: ["Gate", "Smart", "Access"] },
 ];
 
 /* ─── Animated Counter ──────────────────────────────────── */
@@ -235,12 +235,12 @@ export default function HomePage() {
                 borderTop: "1px solid var(--border)",
               }}>
                 {[
-                  { icon: "🏨", val: "Hotels & Homes", sub: "Every property type" },
-                  { icon: "🔑", val: "Hardware Included", sub: "Supply & installation" },
-                  { icon: "🌍", val: "End-to-End", sub: "Software + hardware + care" },
+                  { img: "/icon-hospitality.png", val: "Hotels & Homes", sub: "Every property type" },
+                  { img: "/icon-access.png",      val: "Hardware Included", sub: "Supply & installation" },
+                  { img: "/icon-systems.png",     val: "End-to-End", sub: "Software + hardware + care" },
                 ].map((t) => (
                   <div key={t.val} style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                    <span style={{ fontSize: 18 }}>{t.icon}</span>
+                    <Image src={t.img} alt={t.val} width={32} height={32} style={{ borderRadius: 6, objectFit: "cover" }} />
                     <div>
                       <div style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 12, color: "var(--text-primary)", letterSpacing: "-.02em" }}>{t.val}</div>
                       <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--text-muted)", letterSpacing: ".1em", textTransform: "uppercase" }}>{t.sub}</div>
@@ -325,7 +325,9 @@ export default function HomePage() {
                   className={`div-bento-card ${div.wide ? "div-bento-wide" : ""}`}
                   style={{ "--div-color": div.color, "--div-color-rgb": div.colorRgb } as React.CSSProperties}
                 >
-                  <div className="div-bento-icon">{div.icon}</div>
+                  <div className="div-bento-icon">
+                    <Image src={div.img} alt={div.title} width={64} height={64} style={{ borderRadius: 12, objectFit: "cover" }} />
+                  </div>
                   <div className="div-bento-label">LodgeCore {div.label}</div>
                   <div className="div-bento-title">{div.title}</div>
                   <div className="div-bento-desc">{div.desc}</div>
@@ -479,7 +481,9 @@ export default function HomePage() {
                 {JOURNEY.map((step) => (
                   <div key={step.n} className="journey-v2-step">
                     <div className="journey-v2-dot">{step.n}</div>
-                    <div style={{ fontSize: 20, marginBottom: 8 }}>{step.icon}</div>
+                    <div style={{ marginBottom: 8 }}>
+                      <Image src={step.img} alt={step.title} width={40} height={40} style={{ borderRadius: 8, objectFit: "cover" }} />
+                    </div>
                     <div className="journey-v2-title">{step.title}</div>
                     <div className="journey-v2-sub">{step.sub}</div>
                   </div>
@@ -506,7 +510,9 @@ export default function HomePage() {
             {SOLUTIONS.map((sol, i) => (
               <Reveal key={sol.href} delay={i * 60}>
                 <Link href={sol.href} className="solution-card">
-                  <div className="solution-icon">{sol.icon}</div>
+                  <div className="solution-icon">
+                    <Image src={sol.img} alt={sol.name} width={48} height={48} style={{ borderRadius: 10, objectFit: "cover" }} />
+                  </div>
                   <div className="solution-name">{sol.name}</div>
                   <div className="solution-tech">
                     {sol.tags.map((t) => <span key={t} className="solution-tag">{t}</span>)}

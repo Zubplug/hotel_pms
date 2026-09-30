@@ -9,19 +9,19 @@ export const metadata: Metadata = {
 };
 
 const CATEGORIES = [
-  { href: "/hardware/locks",         icon: "🔒", name: "Electronic Locks",      count: "12+", desc: "RFID, MIFARE, Bluetooth and smart lock solutions for hotels, apartments, offices and homes.",                     products: ["Hotel RFID Locks", "Smart PIN Locks", "Bluetooth Locks", "Fingerprint Locks", "Mortise Sets"] },
-  { href: "/hardware/access-control",icon: "🚪", name: "Access Control",        count: "28+", desc: "Controllers, RFID card readers, electric strikes, magnetic locks and door control hardware.",                   products: ["Access Controllers", "RFID Readers", "Electric Strikes", "Magnetic Locks", "Exit Hardware"] },
-  { href: "/hardware/smart-room",    icon: "⚡", name: "Smart Room Systems",    count: "34+", desc: "Key-card switches, occupancy sensors, thermostats and room control panels for hotels and residences.",           products: ["Key-Card Switches", "Occupancy Sensors", "Thermostats", "Room Panels", "Curtain Controllers"] },
-  { href: "/hardware/security",      icon: "📷", name: "Security",              count: "45+", desc: "IP cameras, NVR systems, intercom and perimeter security hardware for property protection.",                     products: ["IP Cameras", "NVR Systems", "Intercom Systems", "Video Doorbells", "Gate Controllers"] },
-  { href: "/hardware/networking",    icon: "🌐", name: "Networking",            count: "19+", desc: "Routers, managed switches, Wi-Fi access points and structured cabling for property networks.",                   products: ["Business Routers", "Managed Switches", "Wi-Fi Access Points", "PoE Switches", "Cabling"] },
-  { href: "/hardware/programming",   icon: "💾", name: "Programming Tools",     count: "9+",  desc: "Card encoders, lock programmers and configuration tools for managing access hardware.",                          products: ["Card Encoders", "Handheld Programmers", "USB Programmers", "Blank Key Cards"] },
+  { href: "/hardware/locks",         img: "/icon-hotel-lock.png",  name: "Electronic Locks",      count: "12+", desc: "RFID, MIFARE, Bluetooth and smart lock solutions for hotels, apartments, offices and homes.",                     products: ["Hotel RFID Locks", "Smart PIN Locks", "Bluetooth Locks", "Fingerprint Locks", "Mortise Sets"] },
+  { href: "/hardware/access-control",img: "/icon-access.png",       name: "Access Control",        count: "28+", desc: "Controllers, RFID card readers, electric strikes, magnetic locks and door control hardware.",                   products: ["Access Controllers", "RFID Readers", "Electric Strikes", "Magnetic Locks", "Exit Hardware"] },
+  { href: "/hardware/smart-room",    img: "/icon-smart-room.png",  name: "Smart Room Systems",    count: "34+", desc: "Key-card switches, occupancy sensors, thermostats and room control panels for hotels and residences.",           products: ["Key-Card Switches", "Occupancy Sensors", "Thermostats", "Room Panels", "Curtain Controllers"] },
+  { href: "/hardware/security",      img: "/icon-care.png",        name: "Security",              count: "45+", desc: "IP cameras, NVR systems, intercom and perimeter security hardware for property protection.",                     products: ["IP Cameras", "NVR Systems", "Intercom Systems", "Video Doorbells", "Gate Controllers"] },
+  { href: "/hardware/networking",    img: "/icon-systems.png",     name: "Networking",            count: "19+", desc: "Routers, managed switches, Wi-Fi access points and structured cabling for property networks.",                   products: ["Business Routers", "Managed Switches", "Wi-Fi Access Points", "PoE Switches", "Cabling"] },
+  { href: "/hardware/programming",   img: "/icon-pms.png",         name: "Programming Tools",     count: "9+",  desc: "Card encoders, lock programmers and configuration tools for managing access hardware.",                          products: ["Card Encoders", "Handheld Programmers", "USB Programmers", "Blank Key Cards"] },
 ] as const;
 
 const STEPS = [
-  { icon: "📋", title: "Specification",  desc: "We help you select the right hardware for your property type, infrastructure and budget requirements." },
-  { icon: "📦", title: "Supply",         desc: "Hardware delivered to site from verified technology vendors, fully checked and ready to install." },
-  { icon: "🔧", title: "Installation",   desc: "Professional on-site installation by trained LodgeCore technicians across all hardware categories." },
-  { icon: "🛡️", title: "Care",           desc: "Ongoing maintenance, monitoring and support under LodgeCore Care contracts. SLA-backed response." },
+  { img: "/icon-pms.png",      title: "Specification",  desc: "We help you select the right hardware for your property type, infrastructure and budget requirements." },
+  { img: "/icon-inventory.png",title: "Supply",         desc: "Hardware delivered to site from verified technology vendors, fully checked and ready to install." },
+  { img: "/icon-systems.png",  title: "Installation",   desc: "Professional on-site installation by trained LodgeCore technicians across all hardware categories." },
+  { img: "/icon-care.png",     title: "Care",           desc: "Ongoing maintenance, monitoring and support under LodgeCore Care contracts. SLA-backed response." },
 ] as const;
 
 export default function HardwarePage() {
@@ -81,7 +81,7 @@ export default function HardwarePage() {
             {CATEGORIES.map(cat => (
               <Link key={cat.href} href={cat.href} className="hw-showcase-card">
                 <div className="hw-showcase-visual">
-                  <span style={{ fontSize: 56, position: "relative", zIndex: 1 }}>{cat.icon}</span>
+                  <Image src={cat.img} alt={cat.name} width={80} height={80} style={{ borderRadius: 14, objectFit: "cover", position: "relative", zIndex: 1 }} />
                 </div>
                 <div className="hw-showcase-body">
                   <div className="hw-showcase-count">{cat.count} Products</div>
@@ -111,7 +111,9 @@ export default function HardwarePage() {
           >
             {STEPS.map(s => (
               <div key={s.title} className="process-step" style={{ textAlign: "center" }}>
-                <div style={{ fontSize: 36, marginBottom: 16 }}>{s.icon}</div>
+                <div style={{ marginBottom: 16 }}>
+                  <Image src={s.img} alt={s.title} width={56} height={56} style={{ borderRadius: 10, objectFit: "cover" }} />
+                </div>
                 <div className="process-label">{s.title}</div>
                 <div className="process-sub">{s.desc}</div>
               </div>

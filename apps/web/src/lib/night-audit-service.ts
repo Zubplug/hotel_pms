@@ -312,6 +312,71 @@ export async function postEventHallRevenueForDate(propertyId: string, userId: st
   return { postedCount };
 }
 
+/** Submit due draft event/hall invoices for review without approving or issuing them. */
+export async function submitDueEventInvoicesForReview(propertyId: string, userId: string, businessDate: Date) {
+  const property = await prisma.property.findUnique({
+    where: { id: propertyId },
+    select: { organizationId: true, timezone: true },
+  });
+  if (!property) throw new Error('NOT_FOUND:Property not found');
+
+  const invoices = await prisma.eventInvoice.findMany({
+    where: {
+      workflowStatus: 'DRAFT',
+      status: { notIn: ['VOID', 'PAID'] },
+      OR: [{ propertyId }, { event: { propertyId } }],
+    },
+    select: {
+      id: true,
+      event: { select: { startDate: true } },
+      leaseBillingSchedule: { select: { dueDate: true } },
+    },
+  });
+
+  let submittedCount = 0;
+  for (const invoice of invoices) {
+    const serviceDate = invoice.leaseBillingSchedule
+      ? invoice.leaseBillingSchedule.dueDate
+      : invoice.event?.startDate
+        ? getPropertyBusinessDate(property.timezone, invoice.event.startDate)
+        : null;
+    if (!serviceDate || serviceDate.getTime() !== businessDate.getTime()) continue;
+
+    await prisma.$transaction(async (tx) => {
+      const current = await tx.eventInvoice.findUnique({
+        where: { id: invoice.id },
+        select: { workflowStatus: true, status: true, submittedBy: true, submittedAt: true, version: true },
+      });
+      if (!current || current.workflowStatus !== 'DRAFT' || ['VOID', 'PAID'].includes(current.status)) return;
+
+      await tx.eventInvoice.update({
+        where: { id: invoice.id },
+        data: {
+          workflowStatus: 'SUBMITTED',
+          submittedBy: userId,
+          submittedAt: new Date(),
+          version: { increment: 1 },
+        },
+      });
+      await tx.auditLog.create({
+        data: {
+          organizationId: property.organizationId,
+          propertyId,
+          userId,
+          action: 'EVENT_INVOICE_AUTO_SUBMITTED_FOR_REVIEW',
+          resource: 'EventInvoice',
+          resourceId: invoice.id,
+          previousValue: { workflowStatus: current.workflowStatus },
+          newValue: { workflowStatus: 'SUBMITTED', source: 'NIGHT_AUDIT' },
+          requestId: crypto.randomUUID(),
+        },
+      });
+      submittedCount += 1;
+    });
+  }
+  return { submittedCount };
+}
+
 export async function getFinancialAudit(ctx: TenantContext, propertyId: string) {
   if (!ctx.propertyIds.includes(propertyId)) throw new Error('FORBIDDEN');
   const property = await prisma.property.findUnique({ where: { id: propertyId } });

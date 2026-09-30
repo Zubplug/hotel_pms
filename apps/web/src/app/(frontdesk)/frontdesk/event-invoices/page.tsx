@@ -32,6 +32,7 @@ function EventInvoicePaymentAction({ invoice, folioId, outstanding, onPaymentSuc
         folio={folio}
         initialAmount={outstanding}
         eventInvoiceId={invoice.id}
+        requireActualAmount
         onPaymentSuccess={onPaymentSuccess}
       />
     </>
@@ -119,7 +120,7 @@ export default function FrontDeskEventInvoicesPage() {
                           {folioId && outstanding > 0 ? (
                             <EventInvoicePaymentAction invoice={invoice} folioId={folioId} outstanding={outstanding} onPaymentSuccess={() => { void refetchEventInvoices(); }} />
                           ) : ledgerEntry && outstanding > 0 ? (
-                            <FrontDeskCityLedgerPaymentDialog entry={ledgerEntry} onComplete={() => Promise.resolve(refetchEventInvoices())} />
+                            <FrontDeskCityLedgerPaymentDialog entry={ledgerEntry} requireActualAmount onComplete={() => Promise.resolve(refetchEventInvoices())} />
                           ) : (
                             <span className="text-xs text-slate-400">{outstanding <= 0 ? 'Settled' : 'Payment route unavailable'}</span>
                           )}

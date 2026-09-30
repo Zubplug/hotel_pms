@@ -50,33 +50,6 @@ function recognitionDate(invoice: { event?: { startDate: Date } | null; leaseBil
   return fallback;
 }
 
-export async function submitEventInvoiceForReview(invoiceId: string) {
-  const { propertyId, userId } = await requireEventRole('FNB');
-  const result = await prisma.$transaction(async (tx) => {
-    const invoice = await scopedInvoice(tx, invoiceId, propertyId);
-    if (!['DRAFT', 'REJECTED'].includes(invoice.workflowStatus)) {
-      throw new Error('Only a draft or rejected invoice can be submitted for review.');
-    }
-    const updated = await tx.eventInvoice.update({
-      where: { id: invoice.id },
-      data: {
-        workflowStatus: 'SUBMITTED',
-        submittedBy: userId,
-        submittedAt: new Date(),
-        rejectionReason: null,
-        rejectedBy: null,
-        rejectedAt: null,
-        version: { increment: 1 },
-      },
-    });
-    await auditTransition(tx, propertyId, userId, invoice.id, 'EVENT_INVOICE_SUBMITTED', { workflowStatus: invoice.workflowStatus }, { workflowStatus: 'SUBMITTED' });
-    return updated;
-  });
-  revalidatePath('/fnb/events/accounting');
-  revalidatePath(`/fnb/events/accounting/${invoiceId}`);
-  return result;
-}
-
 export async function reviewEventInvoice(invoiceId: string, input: { approve: boolean; discountAmount?: number; discountReason?: string; lineDiscounts?: Record<string, number>; lineReasons?: Record<string, string> }) {
   const { propertyId, userId } = await requireEventRole('ACCOUNTING');
   const result = await prisma.$transaction(async (tx) => {
