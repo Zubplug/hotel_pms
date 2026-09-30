@@ -3078,13 +3078,15 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
 
         // A previous server version classified stale offline checkout credit
         // transfers as conflicts. Recheck those events against the authoritative
-        // folio: the current server will acknowledge a zero-balance transfer as a
-        // safe no-op, while a real negative-balance mismatch remains a conflict.
+        // folio: the current server acknowledges zero-balance transfers as safe
+        // no-ops and reconciles amount mismatches when the matching reservation
+        // is already checked out. Unrelated guest/currency mismatches remain
+        // protected by the server's fail-closed validation.
         foreach (var evt in allPending.Where(e =>
             e.Status == "CONFLICT" &&
             e.AggregateType == "FOLIO" &&
             e.EventType == "GUEST_CREDIT_TRANSFER" &&
-            e.LastError?.Contains("GUEST_CREDIT_TRANSFER_REJECTED: folio has no credit", StringComparison.OrdinalIgnoreCase) == true))
+            e.LastError?.Contains("GUEST_CREDIT_TRANSFER_REJECTED:", StringComparison.OrdinalIgnoreCase) == true))
         {
             evt.Status = "FAILED";
             evt.LastError = "Rechecking stale guest-credit transfer against the authoritative folio.";

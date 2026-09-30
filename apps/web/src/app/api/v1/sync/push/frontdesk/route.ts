@@ -1782,6 +1782,19 @@ export async function POST(req: NextRequest) {
               const lockedFolio = lockedFolios[0];
               if (!lockedFolio) throw new Error("Folio not found");
 
+              // The first idempotency check happens before the folio lock for
+              // the common path. Recheck after acquiring the lock so two
+              // concurrent retries cannot both create REFUND_OWED entries.
+              const existingEntryAfterLock = await tx.cityLedgerEntry.findFirst({
+                where: { reference: refKey },
+                select: { id: true },
+              });
+              if (existingEntryAfterLock) {
+                throw new Error(
+                  `GUEST_CREDIT_TRANSFER_IGNORED: transfer already recorded for ${refKey}`
+                );
+              }
+
               const folio = await tx.folio.findUnique({
                 where: { id: aggregateId, propertyId },
                 include: { reservation: true }
@@ -1795,11 +1808,6 @@ export async function POST(req: NextRequest) {
                   `GUEST_CREDIT_TRANSFER_IGNORED: folio has no credit (authoritative balance ${authoritativeBalance})`
                 );
               }
-              if (Math.abs(amount - availableCredit) > 0.01) {
-                throw new Error(
-                  `GUEST_CREDIT_TRANSFER_REJECTED: requested ${amount} exceeds or differs from authoritative credit ${availableCredit}`
-                );
-              }
               if (
                 folio.reservation?.primaryGuestId &&
                 folio.reservation.primaryGuestId !== payload.guestId
@@ -1809,6 +1817,26 @@ export async function POST(req: NextRequest) {
               if (payload.currency && payload.currency !== folio.currency) {
                 throw new Error("GUEST_CREDIT_TRANSFER_REJECTED: currency does not match folio");
               }
+
+              // A checkout can be retried after the desktop has already
+              // calculated its transfer from an older local folio snapshot.
+              // Once the matching reservation is CHECKED_OUT, the cloud folio
+              // is authoritative: reconcile the transfer to the credit that
+              // actually remains instead of turning a harmless stale amount
+              // into a permanent desktop conflict. Transfers that are not
+              // demonstrably linked to a completed checkout must still fail
+              // closed when their amount differs.
+              const isCompletedCheckoutTransfer =
+                payload.reservationId === folio.reservationId &&
+                folio.reservation?.status === "CHECKED_OUT";
+              if (Math.abs(amount - availableCredit) > 0.01 && !isCompletedCheckoutTransfer) {
+                throw new Error(
+                  `GUEST_CREDIT_TRANSFER_REJECTED: requested ${amount} exceeds or differs from authoritative credit ${availableCredit}`
+                );
+              }
+              const reconciledAmount = isCompletedCheckoutTransfer
+                ? availableCredit
+                : amount;
 
               // Lock property to ensure race-safe ledger provisioning
               const propRes = await tx.$queryRaw<any[]>`SELECT id, "organizationId" FROM "Property" WHERE id = ${propertyId}::uuid FOR UPDATE`;
@@ -1837,11 +1865,13 @@ export async function POST(req: NextRequest) {
                   guestId: payload.guestId || folio.reservation?.primaryGuestId,
                   reservationId: folio.reservationId,
                   folioId: aggregateId,
-                  amount,
+                  amount: reconciledAmount,
                   currency: folio.currency || "NGN",
                   type: 'REFUND_OWED',
                   status: 'OPEN',
-                  reason: 'Auto-routed guest credit to Guest Ledger upon offline checkout',
+                  reason: isCompletedCheckoutTransfer
+                    ? `Auto-reconciled guest credit at offline checkout (requested ${amount}, authoritative ${reconciledAmount})`
+                    : 'Auto-routed guest credit to Guest Ledger upon offline checkout',
                   reference: refKey,
                   createdBy: actorId,
                 }
@@ -1850,7 +1880,7 @@ export async function POST(req: NextRequest) {
               // Increment HOUSE account balance
               await tx.cityLedgerAccount.update({
                 where: { id: guestLedgerAccount.id },
-                data: { balance: { increment: amount } }
+                data: { balance: { increment: reconciledAmount } }
               });
 
               // Create offsetting FolioItem
@@ -1862,10 +1892,10 @@ export async function POST(req: NextRequest) {
                   source: "CITY_LEDGER",
                   description: "City Ledger credit at offline checkout",
                   quantity: 1,
-                  unitAmount: amount,
-                  amount,
+                  unitAmount: reconciledAmount,
+                  amount: reconciledAmount,
                   currency: folio.currency || "NGN",
-                  baseAmount: amount,
+                  baseAmount: reconciledAmount,
                   postedBy: actorId,
                   deviceId: device.id,
                   isLatePosting: true,
@@ -1876,8 +1906,8 @@ export async function POST(req: NextRequest) {
               await tx.folio.update({
                 where: { id: aggregateId },
                 data: {
-                  totalCharges: { increment: amount },
-                  balance: { increment: amount },
+                  totalCharges: { increment: reconciledAmount },
+                  balance: { increment: reconciledAmount },
                 },
               });
 
@@ -1887,7 +1917,7 @@ export async function POST(req: NextRequest) {
                 propertyId,
                 orgId,
                 actorId,
-                -amount,
+                -reconciledAmount,
                 aggregateId,
                 refKey,
                 `cl_sync_${idempotencyKey}`,
