@@ -3,7 +3,9 @@ import type { NextAuthConfig } from "next-auth";
 export const authConfig: NextAuthConfig = {
   providers: [],
   trustHost: true,
-  secret: process.env.AUTH_SECRET,
+  // Keep production deployments compatible with both NextAuth naming conventions.
+  // The same secret must be present for the login handler, middleware, and HQ guard.
+  secret: process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET,
   session: { strategy: "jwt" },
   pages: { signIn: "/portal/login" },
   callbacks: {
