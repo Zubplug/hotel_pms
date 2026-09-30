@@ -9,7 +9,7 @@ import { processLeaseBilling } from './events/lease-actions';
 
 const BATCH_SIZE = 50;
 
-import { getOperationalReview, getSystemIntegrity, getFinancialAudit, getCashReconciliation, getFnbControl } from './night-audit-service';
+import { getOperationalReview, getSystemIntegrity, getFinancialAudit, getCashReconciliation, getFnbControl, postEventHallRevenueForDate } from './night-audit-service';
 
 export async function getNightAuditPreview(ctx: any, propertyId: string) {
   const [operational, system, financial, cash] = await Promise.all([
@@ -83,7 +83,7 @@ export async function executeNightAudit(
   // must be reconciled before the old business date can be closed.
   if (!isRecovery) {
     const { openPosSessions, openFrontdeskSessions, financialSyncConflicts, openPosOrders } = await getSystemIntegrity(ctx, propertyId);
-    const { unverifiedComplimentary, pendingCheckInBypasses, eventHall } = await getFinancialAudit(ctx, propertyId);
+    const { unverifiedComplimentary, pendingCheckInBypasses } = await getFinancialAudit(ctx, propertyId);
     const { unverifiedTransactions } = await getCashReconciliation(ctx, propertyId);
     const { exceptions: { openOrders: additionalFnbOpenOrders, openSessions: additionalFnbOpenSessions } } = await getFnbControl(ctx, propertyId);
     
@@ -96,10 +96,6 @@ export async function executeNightAudit(
     if (openPosOrders.length > 0 || additionalFnbOpenOrders.length > 0) throw new Error('BLOCKER:Cannot execute audit. There are open POS orders.');
     
     if (financialSyncConflicts.length > 0) throw new Error('BLOCKER:Cannot execute audit. There are unresolved financial sync conflicts.');
-    if (eventHall?.blockers > 0) {
-      throw new Error('BLOCKER:Cannot execute audit. Issued event or recurring hall revenue is missing its posted accounting entry.');
-    }
-
     // Auto-close RECONCILIATION_REQUIRED POS sessions with zero expected cash.
     // These are SERVER-banking waiter sessions already submitted; no physical
     // cash handover is needed so the Night Audit closes them automatically.
@@ -273,6 +269,11 @@ export async function executeNightAudit(
     } catch (leaseError) {
       throw new Error(`BLOCKER:Recurring hall billing could not be generated for ${businessDate.toISOString().slice(0, 10)}: ${leaseError instanceof Error ? leaseError.message : String(leaseError)}`);
     }
+
+    // Revenue is recognized at the event/service date, never when a future
+    // event invoice is issued. The journal reference is idempotent, so a
+    // retry or recovery audit cannot recognize the same invoice twice.
+    await postEventHallRevenueForDate(propertyId, actorId || userId || 'system', businessDate);
 
     // 3. Post Room Charges
     const eligibleReservations = await prisma.reservation.findMany({

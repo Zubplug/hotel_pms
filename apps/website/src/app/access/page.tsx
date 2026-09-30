@@ -1,19 +1,38 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import Image from "next/image";
 import { PublicHeader, PublicFooter } from "@/components/public-shell";
 
 export const metadata: Metadata = {
   title: "LodgeCore Access — Electronic Locks & Access Control for Properties",
-  description: "Hotel electronic locks, RFID, smart locks, access control, card encoders and door hardware supplied, installed and maintained by LodgeCore.",
+  description: "Hotel electronic locks, RFID, smart locks, access control, card encoders and door hardware. Supplied, installed and maintained by LodgeCore.",
 };
 
 const PRODUCTS = [
-  { href: "/access/hotel-locks",    icon: "🔒", name: "Hotel Electronic Locks", desc: "RFID, MIFARE and smart locks for hotel guestrooms and common areas.", tags: ["RFID", "MIFARE", "Mortise", "Handle Sets"] },
-  { href: "/access/smart-locks",    icon: "📱", name: "Smart Locks",            desc: "PIN, Bluetooth, mobile key and biometric smart lock solutions.", tags: ["Bluetooth", "Mobile Key", "PIN", "Fingerprint"] },
-  { href: "/access/access-control", icon: "🚪", name: "Access Control",         desc: "Controllers, RFID readers, electric strikes, magnetic locks and exit hardware.", tags: ["Controllers", "Readers", "Strikes", "Mag Locks"] },
-  { href: "/access/encoders",       icon: "💾", name: "Card Encoders",          desc: "RFID and MIFARE key card encoding and management systems.", tags: ["Encoding", "RFID Cards", "MIFARE", "Programming"] },
-  { href: "/access/programmers",    icon: "⚙️", name: "Lock Programmers",       desc: "Handheld and USB programmers for configuring and maintaining lock systems.", tags: ["Handheld", "USB", "Configuration"] },
-  { href: "/access/door-hardware",  icon: "🔧", name: "Door Hardware",          desc: "Door handles, lock bodies, cylinders, closers and mechanical hardware.", tags: ["Handles", "Cylinders", "Closers", "Bodies"] },
+  { href: "/access/hotel-locks",    icon: "🔒", name: "Hotel Electronic Locks", desc: "RFID and MIFARE locks for hotel guestrooms and common areas. Integrated with PMS.",       tags: ["RFID", "MIFARE", "Mortise", "Handle Sets"] },
+  { href: "/access/smart-locks",    icon: "📱", name: "Smart Locks",            desc: "PIN, Bluetooth, mobile key and biometric locks for apartments, homes and offices.",       tags: ["Bluetooth", "Mobile Key", "PIN", "Fingerprint"] },
+  { href: "/access/access-control", icon: "🚪", name: "Access Control",         desc: "Controllers, RFID readers, electric strikes, magnetic locks and exit hardware.",          tags: ["Controllers", "Readers", "Strikes", "Mag Locks"] },
+  { href: "/access/encoders",       icon: "💾", name: "Card Encoders",          desc: "RFID and MIFARE key card encoding and management systems for hotel front desks.",          tags: ["Encoding", "RFID Cards", "MIFARE"] },
+  { href: "/access/programmers",    icon: "⚙️",  name: "Lock Programmers",       desc: "Handheld and USB programmers for configuring and maintaining electronic lock systems.",   tags: ["Handheld", "USB", "Configuration"] },
+  { href: "/access/door-hardware",  icon: "🔧", name: "Door Hardware",          desc: "Door handles, lock bodies, cylinders, closers and mechanical hardware.",                  tags: ["Handles", "Cylinders", "Closers"] },
+] as const;
+
+const STATS = [
+  { value: "500+", label: "Locks Installed" },
+  { value: "50+",  label: "Properties Secured" },
+  { value: "6",    label: "Product Categories" },
+  { value: "24h",  label: "Emergency Response" },
+] as const;
+
+const STEPS = [
+  { n: "01", label: "Specification",  sub: "Select the right lock technology for your property type, door configuration and access requirements." },
+  { n: "02", label: "Supply",         sub: "Hardware delivered from verified technology vendors, checked and ready to install." },
+  { n: "03", label: "Installation",   sub: "Professional on-site installation of all lock hardware by trained LodgeCore technicians." },
+  { n: "04", label: "Integration",    sub: "Connect locks to PMS for automatic key issuance on check-in and revocation at checkout." },
+  { n: "05", label: "Configuration",  sub: "Programme all access levels, staff hierarchies, master cards and audit settings." },
+  { n: "06", label: "Training",       sub: "Train your front desk team on key encoding, key management and emergency procedures." },
+  { n: "07", label: "Monitoring",     sub: "Remote access audit trail, battery monitoring and system health under LodgeCore Care." },
+  { n: "08", label: "Maintenance",    sub: "Scheduled maintenance, battery replacement, firmware updates and emergency callout." },
 ] as const;
 
 export default function AccessPage() {
@@ -21,51 +40,70 @@ export default function AccessPage() {
     <main className="site-shell">
       <PublicHeader />
 
-      {/* Hero */}
-      <section className="division-hero" style={{ "--div-color": "#3ef5a0", "--div-color-dim": "rgba(62,245,160,.06)" } as React.CSSProperties}>
-        <div className="division-hero-bg" />
+      {/* ── HERO V2 ── */}
+      <section
+        className="div-hero-v2"
+        style={{ "--div-color": "#3ef5a0", "--div-color-dim": "rgba(62,245,160,.06)" } as React.CSSProperties}
+      >
+        <div className="div-hero-v2-glow" />
         <div className="contain">
-          <div className="division-hero-kicker">🔑 LodgeCore Access</div>
-          <h1 style={{ fontFamily: "var(--font-display)", fontSize: "clamp(2.6rem,5vw,4.2rem)", fontWeight: 800, letterSpacing: "-.06em", lineHeight: .92, color: "var(--text-primary)", marginBottom: 24 }}>
-            Control Every Door,<br /><span style={{ color: "#3ef5a0" }}>Every Room,</span><br />Every Property.
-          </h1>
-          <p style={{ fontSize: 17, lineHeight: 1.75, color: "var(--text-secondary)", maxWidth: 560, marginBottom: 36 }}>
-            LodgeCore Access provides electronic locks, RFID access control, smart lock technology and door hardware — supplied, installed, configured and maintained for hotels, apartments, offices and homes.
-          </p>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
-            <Link href="/book-demo" className="btn btn-primary">Request a quote →</Link>
-            <Link href="/access/hotel-locks" className="btn btn-outline">Hotel locks</Link>
-            <Link href="/hardware/locks" className="btn btn-outline">Browse hardware</Link>
+          <div className="div-hero-v2-grid">
+            <div>
+              <div className="div-hero-v2-badge">🔑 LodgeCore Access</div>
+              <h1 className="div-hero-v2-h1">
+                Control Every Door,<br /><em>Every Room,</em><br />Every Property.
+              </h1>
+              <p className="div-hero-v2-desc">
+                Electronic locks, RFID access control, smart lock technology and door hardware — sourced, supplied, installed, configured and maintained for hotels, apartments, offices and homes.
+              </p>
+              <div className="div-hero-v2-ctas">
+                <Link href="/book-demo" className="btn btn-primary btn-lg">Request a quote →</Link>
+                <Link href="/access/hotel-locks" className="btn btn-outline btn-lg">Hotel locks</Link>
+              </div>
+              <div className="div-hero-v2-chips">
+                {["RFID", "MIFARE", "Bluetooth", "Mobile Key", "Biometric", "PMS Integrated"].map(c => (
+                  <span key={c} className="div-hero-chip">{c}</span>
+                ))}
+              </div>
+            </div>
+            <div className="div-hero-v2-img">
+              <Image src="/access-dashboard.png" alt="LodgeCore Access Control Dashboard" width={720} height={540} priority />
+            </div>
+          </div>
+          <div className="div-stats-bar">
+            {STATS.map(s => (
+              <div key={s.label} className="div-stat">
+                <div className="div-stat-value">{s.value}</div>
+                <div className="div-stat-label">{s.label}</div>
+              </div>
+            ))}
           </div>
         </div>
       </section>
 
-      {/* Important disclaimer */}
-      <div className="contain" style={{ padding: "20px 28px" }}>
-        <div style={{
-          padding: "14px 20px", borderRadius: "var(--radius-md)",
-          background: "rgba(255,190,90,.06)", border: "1px solid rgba(255,190,90,.2)",
-          fontSize: 12, color: "var(--text-muted)", lineHeight: 1.6,
-        }}>
-          <strong style={{ color: "var(--amber)" }}>Hardware supplied by LodgeCore.</strong> All access hardware listed is sourced, supplied and installed by LodgeCore. LodgeCore does not manufacture hardware but selects and works with leading access technology vendors.
+      {/* ── NOTICE ── */}
+      <div className="contain" style={{ paddingBottom: 0 }}>
+        <div className="notice-banner">
+          <strong>Hardware supplied by LodgeCore.</strong> All access hardware is sourced from verified vendors and supplied, installed and maintained by LodgeCore. We do not manufacture hardware.
         </div>
       </div>
 
-      {/* Products */}
+      {/* ── PRODUCTS GRID ── */}
       <section className="section-gap">
         <div className="contain">
-          <div style={{ marginBottom: 48 }}>
+          <div style={{ marginBottom: 56 }}>
             <div className="section-kicker">Access Products</div>
             <h2 className="section-title">Everything You Need for Property Access.</h2>
+            <p className="section-body">From hotel guestroom locks to commercial access control systems — LodgeCore Access covers every door.</p>
           </div>
-          <div className="solutions-grid" style={{ gridTemplateColumns: "repeat(3,1fr)" }}>
-            {PRODUCTS.map((p) => (
-              <Link key={p.href} href={p.href} className="solution-card">
-                <div className="solution-icon">{p.icon}</div>
-                <div className="solution-name">{p.name}</div>
-                <div className="solution-desc">{p.desc}</div>
-                <div className="solution-tech">
-                  {p.tags.map((t) => <span key={t} className="solution-tag">{t}</span>)}
+          <div className="cap-grid" style={{ "--div-color": "#3ef5a0", "--div-color-dim": "rgba(62,245,160,.08)" } as React.CSSProperties}>
+            {PRODUCTS.map(p => (
+              <Link key={p.href} href={p.href} className="cap-card" style={{ textDecoration: "none" }}>
+                <div className="cap-icon">{p.icon}</div>
+                <div className="cap-name">{p.name}</div>
+                <div className="cap-desc">{p.desc}</div>
+                <div className="cap-tags">
+                  {p.tags.map(t => <span key={t} className="cap-tag">{t}</span>)}
                 </div>
               </Link>
             ))}
@@ -73,63 +111,65 @@ export default function AccessPage() {
         </div>
       </section>
 
-      {/* PMS integration highlight */}
+      {/* ── PMS INTEGRATION ── */}
       <section className="section-gap" style={{ background: "var(--bg-raised)" }}>
         <div className="contain">
-          <div className="feature-row" style={{ "--div-color": "#3ef5a0" } as React.CSSProperties}>
-            <div className="feature-row-visual">🔑</div>
-            <div className="feature-row-copy">
-              <div className="feature-row-kicker">Software + Hardware</div>
-              <h2 className="feature-row-title">Locks That Talk to Your PMS.</h2>
-              <div className="feature-row-body">
-                When LodgeCore Hospitality and LodgeCore Access work together, key cards are issued automatically at check-in and revoked at checkout — no separate key system required.
-              </div>
+          <div className="eco-panel" style={{ "--div-color": "#3ef5a0", "--div-color-dim": "rgba(62,245,160,.06)" } as React.CSSProperties}>
+            <div>
+              <div className="section-kicker">Software + Hardware</div>
+              <h2 className="section-title" style={{ fontSize: "clamp(1.6rem, 3vw, 2.2rem)" }}>Locks That Talk to Your PMS.</h2>
+              <p style={{ fontSize: 14, color: "var(--text-secondary)", lineHeight: 1.75, marginBottom: 24 }}>
+                When LodgeCore Hospitality and LodgeCore Access work together, key cards are encoded and issued automatically at check-in and revoked at checkout — zero manual intervention.
+              </p>
               <div className="feature-list">
                 {[
-                  "Automatic key issuance on check-in",
-                  "Room access controlled by PMS reservation",
-                  "Staff and master key management",
-                  "Audit trail of all access events",
+                  "Automatic key issuance on check-in confirmation",
+                  "Room access controlled by active PMS reservation",
+                  "Staff and master key hierarchy management",
+                  "Full audit trail of every access event",
                   "Emergency override and master card support",
-                ].map((f) => (
+                  "Low battery alerts sent to maintenance",
+                ].map(f => (
                   <div key={f} className="feature-list-item">
                     <div className="feature-list-check">✓</div><span>{f}</span>
                   </div>
                 ))}
               </div>
-              <Link href="/hospitality/pms" className="btn btn-outline">Learn about PMS integration →</Link>
+              <Link href="/hospitality/pms" className="btn btn-outline" style={{ marginTop: 16 }}>Learn about PMS integration →</Link>
+            </div>
+            <div className="eco-img">
+              <Image src="/access-dashboard.png" alt="Access Control Dashboard" width={580} height={440} />
             </div>
           </div>
         </div>
       </section>
 
-      {/* Services */}
+      {/* ── DEPLOYMENT PROCESS ── */}
       <section className="section-gap">
         <div className="contain">
-          <div style={{ textAlign: "center", marginBottom: 48 }}>
-            <div className="section-kicker">LodgeCore Systems</div>
+          <div style={{ marginBottom: 48, maxWidth: 600 }}>
+            <div className="section-kicker">The LodgeCore Way</div>
             <h2 className="section-title">Supply, Install, Configure and Maintain.</h2>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14 }}>
-            {[
-              { icon: "📋", title: "Specification", desc: "We help you select the right lock technology for your property type, door configuration and access requirements." },
-              { icon: "📦", title: "Supply",        desc: "Hardware delivered to site from verified access technology vendors, checked and ready to install." },
-              { icon: "🔧", title: "Installation",  desc: "Professional on-site installation of all lock hardware by trained LodgeCore technicians." },
-              { icon: "🛡️", title: "Maintenance",   desc: "Preventive maintenance, emergency callout and lock replacement services under LodgeCore Care contracts." },
-            ].map((step) => (
-              <div key={step.title} className="portal-card" style={{ textAlign: "center" }}>
-                <div style={{ fontSize: 32, marginBottom: 12 }}>{step.icon}</div>
-                <div className="portal-card-title" style={{ justifyContent: "center", marginBottom: 8 }}>{step.title}</div>
-                <p style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.6 }}>{step.desc}</p>
+          <div
+            className="process-grid"
+            style={{ "--div-color": "#3ef5a0" } as React.CSSProperties}
+          >
+            {STEPS.map(step => (
+              <div key={step.n} className="process-step">
+                <div className="process-num">{step.n}</div>
+                <div className="process-label">{step.label}</div>
+                <div className="process-sub">{step.sub}</div>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* CTA */}
+      {/* ── CTA ── */}
       <section className="cta-section">
         <div className="contain" style={{ textAlign: "center" }}>
+          <div className="section-kicker">LodgeCore Access</div>
           <h2 className="cta-title">Ready to Upgrade Your Property Access?</h2>
           <p className="cta-body">Talk to the LodgeCore Access team about electronic locks, access control and smart hardware for your property.</p>
           <div style={{ display: "flex", gap: 14, justifyContent: "center", flexWrap: "wrap", marginTop: 32 }}>

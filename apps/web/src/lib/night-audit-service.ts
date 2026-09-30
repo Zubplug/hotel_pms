@@ -2,6 +2,7 @@ import prisma from '@hotel-pms/db';
 import { getPropertyBusinessDate, getNextBusinessDate } from '@/lib/date-utils';
 import crypto from 'crypto';
 import { TenantContext } from './organization-access';
+import { postEventInvoiceRevenue } from './events/event-revenue-accounting';
 
 export async function getOperationalReview(ctx: TenantContext, propertyId: string) {
   if (!ctx.propertyIds.includes(propertyId)) throw new Error('FORBIDDEN');
@@ -260,10 +261,55 @@ export async function getEventHallAuditControl(ctx: TenantContext, propertyId: s
     approvedAwaitingIssue: approvedAwaitingIssue.map((invoice) => ({ id: invoice.id, amount: Number(invoice.totalAmount), customer: invoice.leaseBillingSchedule?.leaseContract.corporateAccount?.name || invoice.leaseBillingSchedule?.leaseContract.contactName || invoice.event?.name || 'Event' })),
     missingRevenuePosting: missingRevenuePosting.map((invoice) => ({ id: invoice.id, amount: Number(invoice.totalAmount), customer: invoice.leaseBillingSchedule?.leaseContract.corporateAccount?.name || invoice.leaseBillingSchedule?.leaseContract.contactName || invoice.event?.name || 'Event' })),
     postedCount,
-    blockers: missingRevenuePosting.length,
-    warnings: pendingBillingPeriods.length + awaitingApproval.length + approvedAwaitingIssue.length,
+    // Missing revenue is posted automatically during Night Audit when the
+    // service date is reached. It remains visible for control review but is
+    // not a blocker before that posting step runs.
+    blockers: 0,
+    warnings: pendingBillingPeriods.length + awaitingApproval.length + approvedAwaitingIssue.length + missingRevenuePosting.length,
     nextDate,
   };
+}
+
+/** Recognize issued corporate event/hall invoices exactly once on service date. */
+export async function postEventHallRevenueForDate(propertyId: string, userId: string, businessDate: Date) {
+  const property = await prisma.property.findUnique({
+    where: { id: propertyId },
+    select: { organizationId: true, timezone: true },
+  });
+  if (!property) throw new Error('NOT_FOUND:Property not found');
+
+  const invoices = await prisma.eventInvoice.findMany({
+    where: {
+      status: { in: ['ISSUED', 'PARTIAL', 'PAID'] },
+      cityLedgerAccountId: { not: null },
+      OR: [{ propertyId }, { event: { propertyId } }],
+    },
+    include: {
+      items: true,
+      event: { select: { startDate: true } },
+      leaseBillingSchedule: { select: { dueDate: true } },
+    },
+  });
+
+  let postedCount = 0;
+  for (const invoice of invoices) {
+    const serviceDate = invoice.leaseBillingSchedule
+      ? invoice.leaseBillingSchedule.dueDate
+      : invoice.event?.startDate
+        ? getPropertyBusinessDate(property.timezone, invoice.event.startDate)
+        : null;
+    if (!serviceDate || serviceDate.getTime() !== businessDate.getTime()) continue;
+
+    const posted = await prisma.$transaction(async (tx) => postEventInvoiceRevenue(tx, {
+      propertyId,
+      organizationId: property.organizationId,
+      userId,
+      entryDate: serviceDate,
+      invoice,
+    }), { timeout: 30000 });
+    if (posted) postedCount += 1;
+  }
+  return { postedCount };
 }
 
 export async function getFinancialAudit(ctx: TenantContext, propertyId: string) {

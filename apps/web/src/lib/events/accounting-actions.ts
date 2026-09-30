@@ -4,9 +4,8 @@ import { prisma } from '@hotel-pms/db';
 import type { Prisma } from '@hotel-pms/db';
 import { revalidatePath } from 'next/cache';
 import { requireEventRole } from './access';
-import { GLMappingService } from '@/lib/services/gl-mapping-service';
-import { GeneralLedgerService } from '@/lib/services/general-ledger-service';
 import { getPropertyBusinessDate } from '@/lib/date-utils';
+import { postEventInvoiceRevenue } from './event-revenue-accounting';
 
 type Tx = Prisma.TransactionClient;
 
@@ -167,7 +166,7 @@ export async function reviewEventInvoice(invoiceId: string, input: { approve: bo
   return result;
 }
 
-/** Issues an approved invoice and posts exactly one subledger/GL transaction. */
+/** Issues an approved invoice and posts the receivable; revenue is recognized on service date. */
 export async function issueEventInvoice(invoiceId: string) {
   const { propertyId, userId } = await requireEventRole('CASHIER');
   const result = await prisma.$transaction(async (tx) => {
@@ -189,12 +188,6 @@ export async function issueEventInvoice(invoiceId: string) {
       tax: Number(item.taxAmount || 0),
       category: String(item.category || 'OTHER').toUpperCase(),
     }));
-    const revenueAccountByCategory = new Map<string, string>();
-    for (const category of [...new Set(lines.map((line) => line.category))]) {
-      revenueAccountByCategory.set(category, await GLMappingService.getEventRevenueAccount(propertyId, category));
-    }
-    const discountAccountId = await GLMappingService.getDiscountAllowanceAccount(propertyId);
-    const taxAccountId = await GLMappingService.getTaxPayableAccount(propertyId);
 
     if (outstandingAmount > 0 && invoice.cityLedgerAccountId && (invoice.event?.propertyId === propertyId || invoice.propertyId === propertyId)) {
       const accountId = invoice.cityLedgerAccountId;
@@ -219,19 +212,8 @@ export async function issueEventInvoice(invoiceId: string) {
           eventInvoiceId: invoice.id,
         });
       }
-      const journalReference = `EVENT-INVOICE-${invoice.id}`;
-      const journalExists = await tx.journalEntry.findFirst({ where: { propertyId, reference: journalReference }, select: { id: true } });
-      if (!journalExists) {
-        const cityLedgerAccountId = await GLMappingService.getCityLedgerAccount(propertyId);
-        await GeneralLedgerService.postJournal({ userId, propertyIds: [propertyId], organizationId: property.organizationId, role: 'SYSTEM', permissions: [], outletIds: [] }, {
-          propertyId, entryDate: revenueDate, reference: journalReference, description: `Recognize event revenue for ${invoice.id}`, sourceModule: 'AR',
-          lines: [
-            { accountId: cityLedgerAccountId, debit: Number(invoice.totalAmount), credit: 0, description: 'Event city-ledger receivable', sourceType: 'EVENT_INVOICE', sourceId: invoice.id },
-            ...lines.filter((line) => line.gross > 0).map((line) => ({ accountId: revenueAccountByCategory.get(line.category)!, debit: 0, credit: line.gross, description: line.item.description, sourceType: 'EVENT_INVOICE_ITEM', sourceId: line.item.id })),
-            ...lines.filter((line) => line.discount > 0).map((line) => ({ accountId: discountAccountId, debit: line.discount, credit: 0, description: `${line.item.description} discount`, sourceType: 'EVENT_INVOICE_ITEM', sourceId: line.item.id })),
-            ...lines.filter((line) => line.tax > 0).map((line) => ({ accountId: taxAccountId, debit: 0, credit: line.tax, description: `${line.item.description} tax`, sourceType: 'EVENT_INVOICE_ITEM', sourceId: line.item.id })),
-          ],
-        }, tx);
+      if (revenueDate.getTime() <= businessDate.getTime()) {
+        await postEventInvoiceRevenue(tx, { propertyId, organizationId: property.organizationId, userId, entryDate: revenueDate, invoice });
       }
     } else if (outstandingAmount > 0 && invoice.folioId && invoice.event?.propertyId) {
       if (!invoice.event.guestId) throw new Error('Individual event invoice is missing its guest.');
