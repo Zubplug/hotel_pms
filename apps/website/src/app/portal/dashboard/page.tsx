@@ -36,7 +36,8 @@ const AREA_CARDS = [
 
 export default async function PortalDashboard() {
   const session = await auth();
-  const user = session?.user as SessionUser | undefined;
+  const user = session?.user as SessionUser & { isLodgeCoreAdmin?: boolean } | undefined;
+  if (user?.isLodgeCoreAdmin) redirect("/hq");
   if (!user?.organizationId) redirect("/portal/login");
 
   const { organizationId } = user;
