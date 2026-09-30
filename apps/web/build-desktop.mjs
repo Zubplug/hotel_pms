@@ -60,7 +60,12 @@ const buildTimeImportBridges = [
   path.join(process.cwd(), 'src/app/night-audit/city-ledger/invoices/page.tsx'),
   path.join(process.cwd(), 'src/app/night-audit/city-ledger/page.tsx'),
   path.join(process.cwd(), 'src/app/night-audit/city-ledger/payments/page.tsx'),
-  path.join(process.cwd(), 'src/app/night-audit/guest-credits/page.tsx')
+  path.join(process.cwd(), 'src/app/night-audit/guest-credits/page.tsx'),
+  path.join(process.cwd(), 'src/app/(dashboard)/general-manager/cash-management/cashier-shifts/page.tsx'),
+  path.join(process.cwd(), 'src/app/(dashboard)/general-manager/cash-management/frontdesk-settlement/page.tsx'),
+  path.join(process.cwd(), 'src/app/(dashboard)/general-manager/cash-management/receivables/page.tsx'),
+  path.join(process.cwd(), 'src/app/(dashboard)/general-manager/night-audit/history/page.tsx'),
+  path.join(process.cwd(), 'src/app/(dashboard)/general-manager/night-audit/reconciliation/page.tsx')
 ];
 const originalBridgeContents = new Map();
 
