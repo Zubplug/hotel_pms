@@ -5,6 +5,7 @@ import type { Prisma } from '@hotel-pms/db';
 import { revalidatePath } from 'next/cache';
 import { requireEventRole } from './access';
 import { getPropertyBusinessDate } from '@/lib/date-utils';
+import { CityLedgerAccountingService } from '@/lib/services/city-ledger-accounting-service';
 import { postEventInvoiceRevenue } from './event-revenue-accounting';
 
 type Tx = Prisma.TransactionClient;

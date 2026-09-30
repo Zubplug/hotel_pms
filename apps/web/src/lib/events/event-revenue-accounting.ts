@@ -31,7 +31,7 @@ export async function postEventInvoiceRevenue(
     category: String(item.category || 'OTHER').toUpperCase(),
   }));
   const revenueAccountByCategory = new Map<string, string>();
-  for (const category of [...new Set(lines.map((line: any) => line.category))]) {
+  for (const category of new Set<string>(lines.map((line: any) => line.category as string))) {
     revenueAccountByCategory.set(category, await GLMappingService.getEventRevenueAccount(input.propertyId, category));
   }
 
