@@ -67,6 +67,7 @@ export default function WebsiteHome() {
       <section id="integrations" className="section integrations-section"><div className="integration-heading"><div className="section-kicker">Open by design</div><h2>Your hotel ecosystem,<br /><em>finally in sync.</em></h2><p>Connect the tools you rely on today—and the ones you will need tomorrow. LodgeCore is designed to extend, not isolate, your operation.</p><Link href="/integrations" className="text-link">View all integrations <span>↗</span></Link></div><div className="integration-cloud">{integrations.map((item, index) => <div className="integration-chip" key={item}><span>{String(index + 1).padStart(2, "0")}</span>{item}</div>)}<div className="integration-core">L<span>c</span><b>+ your stack</b></div></div></section>
 
       <section id="pricing" className="section cta-section"><div className="cta-glow" /><div className="section-kicker">A better way to run the property</div><h2>Give your team<br /><em>the clear way forward.</em></h2><p>See what a connected operating system can do for your property.</p><div className="hero-actions"><Link href="/book-demo" className="button button-primary">Book a tailored demo <span>↗</span></Link><Link href="/pricing" className="button button-outline">View plans {plans.length > 0 ? `(${plans.length})` : ""} <span>↗</span></Link></div></section>
+      <PublicFooter />
     </main>
   );
 }
