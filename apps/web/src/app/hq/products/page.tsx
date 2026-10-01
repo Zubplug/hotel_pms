@@ -17,7 +17,7 @@ export default async function HQProductsPage() {
       orderBy: [{ active: 'desc' }, { createdAt: 'desc' }],
     }),
     prisma.billingPlan.findMany({ include: { items: { include: { product: { select: { id: true, name: true, code: true } } } } }, orderBy: { displayOrder: 'asc' } }),
-    prisma.subscription.findMany({ where: { status: { in: ['ACTIVE', 'TRIALING', 'PAST_DUE', 'PAUSED'] } }, include: { plan: { select: { id: true, name: true, code: true } }, items: { include: { price: { include: { product: { select: { id: true, name: true, code: true } } } } } } } }),
+    prisma.subscription.findMany({ where: { status: { in: ['ACTIVE', 'TRIALING', 'PAST_DUE', 'PAUSED'] } }, include: { plan: { select: { id: true, name: true, code: true, items: { select: { productId: true } } } }, items: { include: { price: { include: { product: { select: { id: true, name: true, code: true } } } } } } } }),
     prisma.billingInvoice.findMany({ where: { createdAt: { gte: since } }, select: { total: true, amountPaid: true, amountDue: true, status: true, currency: true, createdAt: true }, orderBy: { createdAt: 'desc' } }),
     prisma.organization.findMany({ select: { id: true, name: true, createdAt: true, subscriptions: { orderBy: { createdAt: 'desc' }, take: 1, select: { status: true } } } }),
     prisma.billingInvoice.findMany({ take: 6, orderBy: { createdAt: 'desc' }, select: { id: true, total: true, amountDue: true, status: true, currency: true, createdAt: true, organization: { select: { name: true } } } }),
@@ -26,12 +26,18 @@ export default async function HQProductsPage() {
   const activeSubscriptions = subscriptions.filter((subscription) => ['ACTIVE', 'TRIALING'].includes(subscription.status));
   const productUsage = new Map<string, { accounts: Set<string>; quantity: number; mrr: number }>();
   for (const subscription of subscriptions) {
+    const isLive = ['ACTIVE', 'TRIALING'].includes(subscription.status);
+    if (isLive && subscription.plan) for (const planItem of subscription.plan.items) {
+      const current = productUsage.get(planItem.productId) ?? { accounts: new Set<string>(), quantity: 0, mrr: 0 };
+      current.accounts.add(subscription.organizationId);
+      productUsage.set(planItem.productId, current);
+    }
     for (const item of subscription.items) {
       const product = item.price.product;
       const current = productUsage.get(product.id) ?? { accounts: new Set<string>(), quantity: 0, mrr: 0 };
-      if (['ACTIVE', 'TRIALING'].includes(subscription.status)) current.accounts.add(subscription.organizationId);
-      current.quantity += 1;
-      current.mrr += item.price.interval === 'year' ? Math.round(item.price.amount / 12) : item.price.amount;
+      if (isLive) current.accounts.add(subscription.organizationId);
+      current.quantity += item.quantity;
+      current.mrr += item.price.interval === 'year' ? Math.round((item.price.amount * item.quantity) / 12) : item.price.amount * item.quantity;
       productUsage.set(product.id, current);
     }
   }
