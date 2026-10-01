@@ -31,10 +31,11 @@ export async function createBillingPrice(formData: FormData): Promise<ActionResu
   try {
     await requireHQAdmin();
     const productId = String(formData.get('productId') || '');
-    const amount = Number(formData.get('amount'));
+    const amountMajor = Number(formData.get('amount'));
     const currency = String(formData.get('currency') || '').trim().toLowerCase();
     const interval = String(formData.get('interval') || 'month') as 'month' | 'year';
-    if (!productId || !Number.isInteger(amount) || amount <= 0 || !/^[a-z]{3}$/.test(currency) || !['month', 'year'].includes(interval)) throw new Error('Invalid billing price');
+    if (!productId || !Number.isFinite(amountMajor) || amountMajor <= 0 || !Number.isInteger(amountMajor) || !/^[a-z]{3}$/.test(currency) || !['month', 'year'].includes(interval)) throw new Error('Enter a valid whole-currency amount, such as 50000 for ₦50,000.');
+    const amount = amountMajor * 100;
     await prisma.billingProduct.findUniqueOrThrow({ where: { id: productId } });
     await prisma.billingPrice.create({ data: { productId, amount, currency, interval } });
     revalidatePath('/hq/products');
