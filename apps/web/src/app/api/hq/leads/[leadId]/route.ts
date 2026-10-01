@@ -49,7 +49,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       return { organization, account, updatedLead };
     });
     userId = result.account.id;
-    const websiteOrigin = process.env.WEBSITE_URL || process.env.NEXT_PUBLIC_WEBSITE_URL || request.nextUrl.origin;
+    const websiteOrigin = process.env.WEBSITE_URL || process.env.NEXT_PUBLIC_WEBSITE_URL || 'https://getlodgecore.vercel.app';
     await sendCustomerInvitationEmail({ to: lead.email, inviteUrl: `${websiteOrigin}/portal/invite/${rawToken}`, expiresAt, organizationName: result.organization.name });
     const updatedLead = await prisma.salesLead.update({ where: { id: lead.id }, data: { status: 'CONVERTED', convertedAt: new Date() } });
     return NextResponse.json({ lead: updatedLead, organizationId: result.organization.id, userId });
