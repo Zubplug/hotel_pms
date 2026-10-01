@@ -10,10 +10,10 @@ export default async function SubscriptionPage() {
   if (!user?.organizationId) redirect("/portal/login");
   const organizationId = user.organizationId;
   const [subscription, entitlements, plans, addOns, properties, invoices, projects] = await Promise.all([
-    prisma.subscription.findFirst({ where: { organizationId }, orderBy: { createdAt: "desc" }, include: { plan: { include: { items: { include: { product: true } } } } } }),
+    prisma.subscription.findFirst({ where: { organizationId }, orderBy: { createdAt: "desc" }, include: { plan: { include: { items: { include: { product: { include: { modules: { where: { active: true }, orderBy: { name: "asc" } } } } } } } } } }),
     prisma.entitlement.findMany({ where: { organizationId, status: "ACTIVE" }, include: { product: true, property: { select: { name: true } } }, orderBy: [{ propertyId: "asc" }, { productCode: "asc" }] }),
-    prisma.billingPlan.findMany({ where: { active: true }, orderBy: { displayOrder: "asc" }, include: { items: { include: { product: { include: { prices: { orderBy: { amount: "asc" } } } } } } } }),
-    prisma.billingProduct.findMany({ where: { active: true, type: "ADDON" }, orderBy: { name: "asc" }, include: { prices: { orderBy: { amount: "asc" } } } }),
+    prisma.billingPlan.findMany({ where: { active: true }, orderBy: { displayOrder: "asc" }, include: { items: { include: { product: { include: { prices: { orderBy: { amount: "asc" } }, modules: { where: { active: true }, orderBy: { name: "asc" } } } } } } } }),
+    prisma.billingProduct.findMany({ where: { active: true, type: "ADDON" }, orderBy: { name: "asc" }, include: { prices: { orderBy: { amount: "asc" } }, modules: { where: { active: true }, orderBy: { name: "asc" } } } }),
     prisma.property.findMany({ where: { organizationId }, select: { id: true, name: true, isActive: true, businessDate: true, auditStatus: true }, orderBy: { name: "asc" } }),
     prisma.billingInvoice.findMany({ where: { organizationId }, orderBy: { createdAt: "desc" }, take: 12, select: { id: true, status: true, currency: true, total: true, amountPaid: true, amountDue: true, periodStart: true, periodEnd: true, hostedInvoiceUrl: true, invoicePdf: true, createdAt: true } }),
     prisma.implementationProject.findMany({ where: { organizationId }, orderBy: { createdAt: "desc" }, take: 5, select: { id: true, name: true, status: true, targetGoLiveAt: true, createdAt: true } }),
