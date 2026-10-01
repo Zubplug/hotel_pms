@@ -1664,7 +1664,12 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                                 x.CorporateAccountId == corporateAccountId && x.Type == "CITY_LEDGER", stoppingToken);
                         }
                     }
-                    if (folio != null && folio.IsDirty) continue;
+                    // A dirty local folio means there are local events waiting
+                    // for the cloud; it must not hide authoritative financial
+                    // changes such as Night Audit room charges. Local events
+                    // live in OutboxEvents and will be replayed independently,
+                    // so apply the server snapshot here and let checkout block
+                    // while unresolved financial events remain.
 
                     if (folio != null)
                     {
@@ -1696,8 +1701,15 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                         : el.TryGetProperty("credits", out var credits) && credits.ValueKind == System.Text.Json.JsonValueKind.Array
                             ? credits.EnumerateArray().Sum(credit => credit.TryGetProperty("remainingAmount", out var remaining) && decimal.TryParse(remaining.GetString(), out var remainingAmount) ? remainingAmount : 0m)
                             : 0m;
-                    // Stringify the whole folio for local offline rendering without full schema
-                    folio.TransactionsJson = el.GetRawText();
+                    // Keep locally-created financial entries visible while their
+                    // outbox events are still unresolved. The server snapshot
+                    // remains authoritative for totals; this merge only keeps
+                    // pending local evidence from disappearing during a pull.
+                    folio.TransactionsJson = await MergePendingFolioTransactionsAsync(
+                        dbContext,
+                        folio,
+                        el.GetRawText(),
+                        stoppingToken);
                     folio.UpdatedAt = DateTime.UtcNow;
                 }
                 
@@ -3254,6 +3266,14 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                                     await repo.ReopenCityLedgerPaymentAsync(evt.IdempotencyKey);
                                 }
                             }
+                            else if (res.Status == "FAILED" && IsNonRetryableFrontDeskError(res.Error))
+                            {
+                                // Business-rule rejections are not transient transport
+                                // failures. Retrying checkout cannot settle a folio and
+                                // can leave the terminal showing an endless retry loop.
+                                evt.Status = "DEAD_LETTER";
+                                evt.NextAttemptAt = null;
+                            }
                             else if (res.Status == "FAILED")
                             {
                                 evt.LastAttemptAt = DateTime.UtcNow;
@@ -3557,6 +3577,17 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
         return normalized.Length <= 1000 ? normalized : normalized[..1000] + "...";
     }
 
+    private static bool IsNonRetryableFrontDeskError(string? error)
+    {
+        if (string.IsNullOrWhiteSpace(error)) return false;
+
+        return error.Contains("PAYMENT_REQUIRED", StringComparison.OrdinalIgnoreCase)
+            || error.Contains("REFUND_REQUIRED", StringComparison.OrdinalIgnoreCase)
+            || error.Contains("CREDIT_LIMIT_EXCEEDED", StringComparison.OrdinalIgnoreCase)
+            || error.Contains("FORBIDDEN_SKIPPER_CHECKOUT", StringComparison.OrdinalIgnoreCase)
+            || error.Contains("NO_SKIPPER_ACCOUNT", StringComparison.OrdinalIgnoreCase);
+    }
+
     private class SyncPushFrontDeskResponse
     {
         public string Status { get; set; } = string.Empty;
@@ -3722,6 +3753,63 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
     {
         if (value.ValueKind == JsonValueKind.Number && value.TryGetDecimal(out var number)) return number;
         return value.ValueKind == JsonValueKind.String && decimal.TryParse(value.GetString(), out var parsed) ? parsed : 0m;
+    }
+
+    private static async Task<string> MergePendingFolioTransactionsAsync(
+        LocalDbContext dbContext,
+        LodgeCore.Desktop.Data.Entities.LocalFolio folio,
+        string serverJson,
+        CancellationToken stoppingToken)
+    {
+        try
+        {
+            var pendingKeys = await dbContext.OutboxEvents
+                .Where(e => e.AggregateType == "FOLIO" &&
+                            e.AggregateId == folio.Id &&
+                            e.Status != "SYNCED")
+                .Select(e => e.IdempotencyKey)
+                .ToListAsync(stoppingToken);
+            if (pendingKeys.Count == 0) return serverJson;
+
+            var serverRoot = System.Text.Json.Nodes.JsonNode.Parse(serverJson) as System.Text.Json.Nodes.JsonObject;
+            var localRoot = System.Text.Json.Nodes.JsonNode.Parse(folio.TransactionsJson ?? "{}");
+            if (serverRoot == null || localRoot is not System.Text.Json.Nodes.JsonObject localObject)
+                return serverJson;
+
+            var pendingKeySet = pendingKeys.ToHashSet(StringComparer.Ordinal);
+            foreach (var arrayName in new[] { "items", "payments", "credits" })
+            {
+                if (localObject[arrayName] is not System.Text.Json.Nodes.JsonArray localArray)
+                    continue;
+
+                if (serverRoot[arrayName] is not System.Text.Json.Nodes.JsonArray serverArray)
+                {
+                    serverArray = new System.Text.Json.Nodes.JsonArray();
+                    serverRoot[arrayName] = serverArray;
+                }
+
+                var serverKeys = serverArray
+                    .OfType<System.Text.Json.Nodes.JsonObject>()
+                    .Select(item => item["idempotencyKey"]?.GetValue<string>())
+                    .Where(key => !string.IsNullOrWhiteSpace(key))
+                    .ToHashSet(StringComparer.Ordinal);
+
+                foreach (var localItem in localArray.OfType<System.Text.Json.Nodes.JsonObject>())
+                {
+                    var key = localItem["idempotencyKey"]?.GetValue<string>();
+                    if (!string.IsNullOrWhiteSpace(key) && pendingKeySet.Contains(key) && !serverKeys.Contains(key))
+                        serverArray.Add(localItem.DeepClone());
+                }
+            }
+
+            return serverRoot.ToJsonString();
+        }
+        catch
+        {
+            // A malformed local transaction snapshot must never prevent the
+            // authoritative server folio from syncing.
+            return serverJson;
+        }
     }
 
     private void ClearIsDirtyIfSafe(LocalDbContext dbContext, LodgeCore.Desktop.Data.Entities.LocalOutboxEvent evt)

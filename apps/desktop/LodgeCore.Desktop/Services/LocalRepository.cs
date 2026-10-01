@@ -2229,6 +2229,34 @@ public class LocalRepository
         var property = await _dbContext.Properties.FindAsync(res.PropertyId);
         var operationalDate = property?.BusinessDate.Date ?? DateTime.UtcNow.Date;
 
+        // Never finalize an offline checkout against a folio whose financial
+        // history is still unresolved. Night Audit may have posted a charge on
+        // the server while this terminal was offline; the pull path now brings
+        // that authoritative folio snapshot down even when it is locally dirty.
+        // The outbox event must settle before the operator can retry checkout.
+        var unresolvedFinancialEvents = await _dbContext.OutboxEvents
+            .Where(e => e.PropertyId == res.PropertyId &&
+                        ((e.AggregateType == "FOLIO" && e.AggregateId == res.Folio!.Id) ||
+                         (e.AggregateType == "RESERVATION" && e.AggregateId == res.Id)) &&
+                        (e.EventType == "ADVANCE_DEPOSIT" ||
+                         e.EventType == "POST_PAYMENT" ||
+                         e.EventType == "GUEST_CREDIT_TRANSFER" ||
+                         e.EventType == "ROOM_CREDIT" ||
+                         e.EventType == "ROOM_CHARGE" ||
+                         e.EventType == "EXTEND_STAY" ||
+                         e.EventType == "CHECK_OUT") &&
+                        e.Status != "SYNCED")
+            .Select(e => new { e.EventType, e.Status, e.LastError })
+            .ToListAsync();
+        if (unresolvedFinancialEvents.Count > 0)
+        {
+            var eventSummary = string.Join(", ", unresolvedFinancialEvents
+                .Select(e => $"{e.EventType}/{e.Status}")
+                .Distinct());
+            throw new InvalidOperationException(
+                $"Cannot check out while financial sync is unresolved ({eventSummary}). Sync the folio and retry.");
+        }
+
         // Day-use stays are no longer CHECKED_IN when Night Audit runs, so
         // post their room charge at checkout. The idempotency key keeps this
         // from duplicating a charge already posted by an audit/recovery flow.
