@@ -51,10 +51,8 @@ export async function POST(req: Request) {
     }
 
     const metadata = billingMetadata({ organizationId, planId: plan?.id, propertyIds: scopedPropertyIds, productCodes: prices.map((price) => price.product.code), priceIds: prices.map((price) => price.id) });
-    const interval = prices[0]?.interval;
-    const configuredPlan = prices.length === 1 ? Number(prices[0]?.flutterwavePriceId) : Number(interval === 'year' ? process.env.FLW_YEARLY_PAYMENT_PLAN_ID : process.env.FLW_MONTHLY_PAYMENT_PLAN_ID);
     if (!session.user.email) return NextResponse.json({ error: 'A billing email is required' }, { status: 400 });
-    const checkout = await createFlutterwaveCheckout({ amount: Math.round(prices.reduce((sum, price) => sum + price.amount, 0) / 100), currency: prices[0]?.currency || 'NGN', txRef: `lodgecore-${organizationId}-${requestId || randomUUID()}`, redirectUrl: safeReturnUrl(successUrl, `${process.env.NEXT_PUBLIC_APP_URL}/settings/billing?success=true`), customer: { email: session.user.email, name: organization.name }, paymentPlan: Number.isInteger(configuredPlan) && configuredPlan > 0 ? configuredPlan : undefined, paymentOptions: Number.isInteger(configuredPlan) && configuredPlan > 0 ? 'card' : undefined, meta: metadata });
+    const checkout = await createFlutterwaveCheckout({ amount: Math.round(prices.reduce((sum, price) => sum + price.amount, 0) / 100), currency: prices[0]?.currency || 'NGN', txRef: `lodgecore-${organizationId}-${requestId || randomUUID()}`, redirectUrl: safeReturnUrl(successUrl, `${process.env.NEXT_PUBLIC_APP_URL}/settings/billing?success=true`), customer: { email: session.user.email, name: organization.name }, meta: metadata });
     return NextResponse.json({ url: checkout.link });
 
   } catch (error: any) {
