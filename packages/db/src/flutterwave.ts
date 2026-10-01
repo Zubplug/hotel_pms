@@ -9,6 +9,7 @@ export type FlutterwaveCheckoutInput = {
   redirectUrl: string;
   customer: { email: string; name?: string; phoneNumber?: string };
   paymentPlan?: number;
+  paymentOptions?: string;
   meta?: Record<string, string>;
 };
 
@@ -38,6 +39,7 @@ export async function createFlutterwaveCheckout(input: FlutterwaveCheckoutInput)
       redirect_url: input.redirectUrl,
       customer: { email: input.customer.email, name: input.customer.name, phonenumber: input.customer.phoneNumber },
       payment_plan: input.paymentPlan,
+      payment_options: input.paymentOptions ?? (input.paymentPlan ? 'card' : undefined),
       meta: input.meta,
       customizations: { title: 'LodgeCore subscription' },
     }),
