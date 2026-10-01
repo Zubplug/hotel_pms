@@ -184,8 +184,8 @@ function PulseItem({ icon: Icon, label, value, tone = 'indigo', onClick }: {
     emerald: 'text-emerald-300 bg-emerald-500/10 border-emerald-500/15',
     rose: 'text-rose-300 bg-rose-500/10 border-rose-500/15',
   };
-  return (
-    <button onClick={onClick} className="group flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition-colors hover:bg-white/[0.045]">
+  const content = (
+    <>
       <span className={cn('flex h-9 w-9 items-center justify-center rounded-xl border', tones[tone])}>
         <Icon className="h-4 w-4" />
       </span>
@@ -193,8 +193,20 @@ function PulseItem({ icon: Icon, label, value, tone = 'indigo', onClick }: {
         <span className="block truncate text-xs font-semibold text-slate-400">{label}</span>
         <span className="mt-0.5 block text-sm font-bold text-white">{value}</span>
       </span>
-      <ArrowRight className="h-4 w-4 text-slate-700 transition-all group-hover:translate-x-0.5 group-hover:text-slate-400" />
+      {onClick && <ArrowRight className="h-4 w-4 text-slate-700 transition-all group-hover:translate-x-0.5 group-hover:text-slate-400" />}
+    </>
+  );
+
+  const className = 'group flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition-colors';
+  return onClick ? (
+    <button onClick={onClick} className={`${className} hover:bg-white/[0.045]`}>
+      {content}
     </button>
+  ) : (
+    <div className={className}>
+      {content}
+    </div>
+  );
   );
 }
 
@@ -594,7 +606,7 @@ export default function ReceptionistDashboardPage() {
               <PulseItem icon={LogIn} label="Guests arriving" value={`${arrivals.length} scheduled today`} onClick={() => setActiveTab('arrivals')} />
               <PulseItem icon={LogOut} label="Guests departing" value={`${departures.length} due out`} tone="amber" onClick={() => setActiveTab('departures')} />
               <PulseItem icon={CheckCircle2} label="Rooms ready" value={`${kpis.roomsAvailable} of ${kpis.roomsTotal} sellable`} tone="emerald" onClick={() => router.push('/frontdesk/rooms')} />
-              <PulseItem icon={AlertCircle} label="Needs attention" value={`${roomsNeedingAttention + unsettledArrivals} open items`} tone={roomsNeedingAttention + unsettledArrivals > 0 ? 'rose' : 'emerald'} onClick={() => router.push('/frontdesk/housekeeping')} />
+              <PulseItem icon={AlertCircle} label="Needs attention" value={`${roomsNeedingAttention + unsettledArrivals} open items`} tone={roomsNeedingAttention + unsettledArrivals > 0 ? 'rose' : 'emerald'} />
             </div>
           </div>
 

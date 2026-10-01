@@ -1,10 +1,8 @@
 import { NextResponse } from 'next/server';
-import Stripe from 'stripe';
-import prisma, { Prisma } from '@hotel-pms/db';
+import { randomUUID } from 'node:crypto';
+import prisma, { billingMetadata, billingPriceIds, createFlutterwaveCheckout } from '@hotel-pms/db';
 import { auth } from '@/lib/auth';
-
-const stripeKey = process.env.STRIPE_SECRET_KEY;
-const stripe = stripeKey ? new Stripe(stripeKey, { apiVersion: '2026-08-26.dahlia' }) : null;
+import { validateCheckoutSelection } from '@hotel-pms/db';
 
 function safeReturnUrl(value: unknown, fallback: string) {
   if (typeof value !== 'string' || !value) return fallback;
@@ -17,16 +15,17 @@ function safeReturnUrl(value: unknown, fallback: string) {
 
 export async function POST(req: Request) {
   try {
-    if (!stripe) return NextResponse.json({ error: 'Stripe is not configured' }, { status: 503 });
+    if (!process.env.FLW_SECRET_KEY) return NextResponse.json({ error: 'Flutterwave is not configured' }, { status: 503 });
     const session = await auth();
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { organizationId, priceId, successUrl, cancelUrl } = await req.json();
+    const { organizationId, priceId, priceIds, planId, propertyIds, successUrl, cancelUrl } = await req.json();
     const requestId = req.headers.get('Idempotency-Key');
 
-    if (!organizationId || !priceId) {
+    const requestedPriceIds = billingPriceIds(priceId, priceIds);
+    if (!organizationId || requestedPriceIds.length === 0) {
       return NextResponse.json({ error: 'Missing organizationId or priceId' }, { status: 400 });
     }
 
@@ -36,66 +35,27 @@ export async function POST(req: Request) {
     }
 
     // Verify the price exists in LodgeCore catalog
-    const billingPrice = await prisma.billingPrice.findUnique({
-      where: { id: priceId },
-      include: { product: true }
-    });
-
-    if (!billingPrice || !billingPrice.product.active || !billingPrice.stripePriceId) {
-      return NextResponse.json({ error: 'Invalid price ID' }, { status: 400 });
+    let prices;
+    let plan;
+    let scopedPropertyIds;
+    try {
+      ({ prices, plan, propertyIds: scopedPropertyIds } = await validateCheckoutSelection(prisma, { organizationId, priceIds: requestedPriceIds, planId: typeof planId === 'string' ? planId : null, propertyIds: Array.isArray(propertyIds) ? propertyIds.map(String) : [] }));
+    } catch (error) {
+      return NextResponse.json({ error: error instanceof Error ? error.message : 'Invalid billing selection' }, { status: 400 });
     }
 
-    const organization = await prisma.organization.findUnique({
-      where: { id: organizationId },
-      include: { billingCustomer: true }
-    });
+    const organization = await prisma.organization.findUnique({ where: { id: organizationId }, select: { id: true, name: true } });
 
     if (!organization) {
       return NextResponse.json({ error: 'Organization not found' }, { status: 404 });
     }
 
-    let customerId = organization.billingCustomer?.stripeCustomerId;
-
-    if (!customerId) {
-      // Create Stripe Customer
-      const customer = await stripe.customers.create({
-        name: organization.name,
-        metadata: {
-          organizationId: organization.id
-        }
-      });
-      customerId = customer.id;
-
-      // Link in database
-      try {
-        await prisma.billingCustomer.create({ data: { organizationId: organization.id, stripeCustomerId: customerId } });
-      } catch (error) {
-        if (!(error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002')) throw error;
-        customerId = (await prisma.billingCustomer.findUniqueOrThrow({ where: { organizationId: organization.id } })).stripeCustomerId;
-      }
-    }
-
-    // Create Checkout Session
-    const checkoutSession = await stripe.checkout.sessions.create({
-      customer: customerId,
-      line_items: [
-        {
-          price: billingPrice.stripePriceId,
-          quantity: 1,
-        },
-      ],
-      mode: 'subscription',
-      success_url: safeReturnUrl(successUrl, `${process.env.NEXT_PUBLIC_APP_URL}/settings/billing?success=true`),
-      cancel_url: safeReturnUrl(cancelUrl, `${process.env.NEXT_PUBLIC_APP_URL}/settings/billing?canceled=true`),
-      metadata: {
-        organizationId,
-        productId: billingPrice.productId,
-        productCode: billingPrice.product.code
-      },
-      subscription_data: { metadata: { organizationId, productCode: billingPrice.product.code } },
-    }, requestId ? { idempotencyKey: requestId } : undefined);
-
-    return NextResponse.json({ url: checkoutSession.url });
+    const metadata = billingMetadata({ organizationId, planId: plan?.id, propertyIds: scopedPropertyIds, productCodes: prices.map((price) => price.product.code), priceIds: prices.map((price) => price.id) });
+    const interval = prices[0]?.interval;
+    const configuredPlan = prices.length === 1 ? Number(prices[0]?.flutterwavePriceId) : Number(interval === 'year' ? process.env.FLW_YEARLY_PAYMENT_PLAN_ID : process.env.FLW_MONTHLY_PAYMENT_PLAN_ID);
+    if (!session.user.email) return NextResponse.json({ error: 'A billing email is required' }, { status: 400 });
+    const checkout = await createFlutterwaveCheckout({ amount: prices.reduce((sum, price) => sum + price.amount, 0), currency: prices[0]?.currency || 'NGN', txRef: `lodgecore-${organizationId}-${requestId || randomUUID()}`, redirectUrl: safeReturnUrl(successUrl, `${process.env.NEXT_PUBLIC_APP_URL}/settings/billing?success=true`), customer: { email: session.user.email, name: organization.name }, paymentPlan: Number.isInteger(configuredPlan) && configuredPlan > 0 ? configuredPlan : undefined, meta: metadata });
+    return NextResponse.json({ url: checkout.link });
 
   } catch (error: any) {
     console.error('Checkout error:', error);

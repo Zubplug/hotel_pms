@@ -1,0 +1,15 @@
+import prisma from '@hotel-pms/db';
+import { requireOrganizationContext } from '@/lib/organization-access';
+import { assertPropertyAccess } from '@/lib/property-access';
+import { requireEntitlement } from '@/lib/auth/entitlement';
+
+export async function requireModuleAccess(userId: string, productCode: string, propertyId?: string | null) {
+  const ctx = await requireOrganizationContext(userId);
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { isLodgeCoreAdmin: true } });
+  if (user?.isLodgeCoreAdmin) return ctx;
+  const selectedPropertyId = propertyId ?? ctx.propertyIds[0];
+  if (!selectedPropertyId) throw new Error('No property is available for this module');
+  await assertPropertyAccess(userId, selectedPropertyId);
+  await requireEntitlement(ctx.organizationId, productCode, selectedPropertyId);
+  return ctx;
+}

@@ -5,6 +5,7 @@ import prisma from '@hotel-pms/db';
 import { hasInventoryPermission } from '@/lib/inventory/permissions';
 import { requireOrganizationContext } from "@/lib/organization-access";
 import { generateStockBarcode, generateStockSku } from '@/lib/inventory/identifiers';
+import { requireEntitlement } from '@/lib/auth/entitlement';
 
 const STOCK_ITEM_TYPES = ['SELLABLE', 'RAW_MATERIAL', 'CONSUMABLE', 'CLEANING', 'HOUSEKEEPING', 'ASSET', 'PACKAGING'] as const;
 
@@ -16,6 +17,7 @@ export async function GET(request: Request) {
         if (!session?.user) return NextResponse.json({ error: 'Unauthorized', data: null }, { status: 401 });
         const { role, isSuperAdmin } = session.user as any;
     const ctx = await requireOrganizationContext(session.user.id);
+    await requireEntitlement(ctx.organizationId, 'PROFESSIONAL_OPERATIONS', ctx.propertyIds[0]);
         if (!hasInventoryPermission(role, 'inventory.read', isSuperAdmin)) return NextResponse.json({ error: 'Forbidden', data: null }, { status: 403 });
 
         const { searchParams } = new URL(request.url);
@@ -82,6 +84,7 @@ export async function POST(request: Request) {
         if (!session?.user) return NextResponse.json({ error: 'Unauthorized', data: null }, { status: 401 });
         const { role, isSuperAdmin } = session.user as any;
     const ctx = await requireOrganizationContext(session.user.id);
+    await requireEntitlement(ctx.organizationId, 'PROFESSIONAL_OPERATIONS', ctx.propertyIds[0]);
         if (!hasInventoryPermission(role, 'inventory.manage', isSuperAdmin)) return NextResponse.json({ error: 'Forbidden', data: null }, { status: 403 });
 
         const body = await request.json();

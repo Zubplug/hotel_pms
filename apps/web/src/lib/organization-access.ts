@@ -25,7 +25,7 @@ export async function requireOrganizationContext(userId: string): Promise<Tenant
   let propertyIds: string[] = [];
   if (['ADMIN', 'SUPER_ADMIN', 'OWNER'].includes(membership.role)) {
     const orgProps = await prisma.property.findMany({
-      where: { organizationId: membership.organizationId },
+      where: { organizationId: membership.organizationId, isActive: true },
       select: { id: true },
     });
     propertyIds = orgProps.map((p: any) => p.id);
@@ -35,7 +35,7 @@ export async function requireOrganizationContext(userId: string): Promise<Tenant
         userId,
         propertyId: { not: null },
         role: { organizationId: membership.organizationId },
-        property: { organizationId: membership.organizationId },
+        property: { organizationId: membership.organizationId, isActive: true },
       },
       select: { propertyId: true },
     });
@@ -47,7 +47,7 @@ export async function requireOrganizationContext(userId: string): Promise<Tenant
     });
     if (staff?.propertyAccess?.length) {
       const staffProperties = await prisma.property.findMany({
-        where: { organizationId: membership.organizationId, id: { in: staff.propertyAccess } },
+        where: { organizationId: membership.organizationId, id: { in: staff.propertyAccess }, isActive: true },
         select: { id: true },
       });
       propertyIds = Array.from(new Set([...propertyIds, ...staffProperties.map(property => property.id)]));
@@ -60,7 +60,7 @@ export async function requireOrganizationContext(userId: string): Promise<Tenant
   let outletIds: string[] = [];
   if (['ADMIN', 'SUPER_ADMIN', 'OWNER'].includes(membership.role)) {
     const orgOutlets = await prisma.posOutlet.findMany({
-      where: { property: { organizationId: membership.organizationId } },
+      where: { property: { organizationId: membership.organizationId, isActive: true } },
       select: { id: true },
     });
     outletIds = orgOutlets.map((o: any) => o.id);

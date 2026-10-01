@@ -8,4 +8,6 @@ if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
 
 export * from '@prisma/client';
 export * from './src/crypto';
+export * from './src/billing';
+export * from './src/flutterwave';
 export default prisma;

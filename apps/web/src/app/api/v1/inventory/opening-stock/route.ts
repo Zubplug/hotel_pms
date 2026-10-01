@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth';
 import prisma, { AdjustmentReason, StockTransactionSource, UnitOfMeasure } from '@hotel-pms/db';
 import { hasInventoryPermission } from '@/lib/inventory/permissions';
 import { requireOrganizationContext } from '@/lib/organization-access';
+import { requireInventoryAccess } from '@/lib/auth/inventory-access';
 import { assertNightAuditAllowsTransaction } from '@/lib/night-audit-guard';
 
 export const dynamic = 'force-dynamic';
@@ -12,7 +13,7 @@ export async function GET() {
     const session = await auth();
     if (!session?.user) return NextResponse.json({ data: null, error: 'Unauthorized' }, { status: 401 });
     const { role, isSuperAdmin } = session.user as any;
-    const ctx = await requireOrganizationContext(session.user.id);
+    const ctx = await requireInventoryAccess(session.user.id);
     if (!hasInventoryPermission(role, 'inventory.opening.balance', isSuperAdmin)) {
       return NextResponse.json({ data: null, error: 'Forbidden' }, { status: 403 });
     }
@@ -33,7 +34,7 @@ export async function POST(request: Request) {
     const session = await auth();
     if (!session?.user) return NextResponse.json({ data: null, error: 'Unauthorized' }, { status: 401 });
     const { role, isSuperAdmin, id: userId } = session.user as any;
-    const ctx = await requireOrganizationContext(session.user.id);
+    const ctx = await requireInventoryAccess(session.user.id);
     if (!hasInventoryPermission(role, 'inventory.opening.balance', isSuperAdmin)) {
       return NextResponse.json({ data: null, error: 'Forbidden' }, { status: 403 });
     }

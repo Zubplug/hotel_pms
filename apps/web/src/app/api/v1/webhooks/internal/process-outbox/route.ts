@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
 
       // Entitlement Check for BEDS24
       if (parsedRes.provider === 'BEDS24') {
-        const entitled = await hasEntitlement(event.organizationId, 'ADDON_BEDS24');
+        const entitled = await hasEntitlement(event.organizationId, 'ADDON_BEDS24', event.propertyId);
         if (!entitled) {
           await prisma.outboxEvent.update({
             where: { id: event.id },

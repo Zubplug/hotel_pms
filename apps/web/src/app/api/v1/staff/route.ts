@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
 import { auth } from '@/lib/auth';
 import { hash } from 'bcryptjs';
+import { requirePlanLimit } from '@/lib/auth/entitlement';
 
 export async function GET(req: NextRequest) {
   try {
@@ -63,6 +64,9 @@ export async function POST(req: NextRequest) {
     if (!organizationId) {
       return NextResponse.json({ error: 'Session is missing organizationId' }, { status: 403 });
     }
+
+    const currentStaffCount = await prisma.staff.count({ where: { organizationId, isActive: true, deletedAt: null } });
+    await requirePlanLimit(organizationId, 'maxUsers', currentStaffCount);
 
     let posPinHash = null;
     if (posPin && posPin.length === 4) {

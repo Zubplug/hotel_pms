@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
 import { auth } from '@/lib/auth';
 import { requireOrganizationContext } from "@/lib/organization-access";
+import { requirePlanLimit } from '@/lib/auth/entitlement';
+import { requireEntitlement } from '@/lib/auth/entitlement';
 
 export async function GET(req: NextRequest) {
   try {
@@ -19,6 +21,7 @@ export async function GET(req: NextRequest) {
     }
 
     if (!ctx.propertyIds.includes(String(propertyId))) return NextResponse.json({ error: 'Forbidden property' }, { status: 403 });
+    await requireEntitlement(ctx.organizationId, 'PROFESSIONAL_OPERATIONS', String(propertyId));
     const outlets = await prisma.posOutlet.findMany({
       where: { propertyId: String(propertyId) },
       orderBy: { name: 'asc' }
@@ -50,6 +53,10 @@ export async function POST(req: NextRequest) {
     if (!propertyId || !name) {
       return NextResponse.json({ error: 'propertyId and name are required' }, { status: 400 });
     }
+    await requireEntitlement(ctx.organizationId, 'PROFESSIONAL_OPERATIONS', String(propertyId));
+
+    const currentOutletCount = await prisma.posOutlet.count({ where: { propertyId: String(propertyId), isActive: true } });
+    await requirePlanLimit(ctx.organizationId, 'maxOutlets', currentOutletCount);
 
     const outlet = await prisma.posOutlet.create({
       data: {

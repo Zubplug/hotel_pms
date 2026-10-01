@@ -6,6 +6,7 @@ import { createAuditLog } from '@/lib/audit';
 import { hasPermission } from '@/lib/rbac';
 import { getUserOrganizationId, requireOrganizationContext } from '@/lib/organization-access';
 import { createPropertySchema, propertyQuerySchema } from '@hotel-pms/types';
+import { requirePlanLimit } from '@/lib/auth/entitlement';
 
 export async function GET(req: NextRequest) {
   try {
@@ -76,6 +77,8 @@ export async function POST(req: NextRequest) {
     const data = createPropertySchema.parse(body);
 
     const organizationId = await getUserOrganizationId(session.user.id);
+    const currentPropertyCount = await prisma.property.count({ where: { organizationId, isActive: true } });
+    await requirePlanLimit(organizationId, 'maxProperties', currentPropertyCount);
     const property = await prisma.property.create({ 
       data: { ...data, organizationId } as any 
     });

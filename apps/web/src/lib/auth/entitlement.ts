@@ -1,35 +1,25 @@
-import prisma from '@hotel-pms/db';
+import prisma, { hasEntitlement as readEntitlement, requireEntitlement as demandEntitlement, requireEntitlementCapacity as demandCapacity, requirePlanLimit as demandPlanLimit } from '@hotel-pms/db';
 
 /**
  * Validates that an organization has an active entitlement for a specific product.
  * Returns true if entitled, false otherwise.
  */
-export async function hasEntitlement(organizationId: string, productCode: string): Promise<boolean> {
-  const entitlement = await prisma.entitlement.findUnique({
-    where: {
-      organizationId_productCode: {
-        organizationId,
-        productCode
-      }
-    }
-  });
-
-  if (!entitlement) return false;
-  if (entitlement.status !== 'ACTIVE') return false;
-  
-  // If there's an explicit expiry and we are past it, deny
-  if (entitlement.expiresAt && new Date() > entitlement.expiresAt) return false;
-
-  return true;
+export async function hasEntitlement(organizationId: string, productCode: string, propertyId?: string | null): Promise<boolean> {
+  return readEntitlement(prisma, { organizationId, productCode, propertyId });
 }
 
 /**
  * Like hasEntitlement, but throws an Error if not entitled.
  * Useful for fast-failing inside server actions or API routes.
  */
-export async function requireEntitlement(organizationId: string, productCode: string): Promise<void> {
-  const isEntitled = await hasEntitlement(organizationId, productCode);
-  if (!isEntitled) {
-    throw new Error(`Payment Required: Your organization does not have an active entitlement for ${productCode}`);
-  }
+export async function requireEntitlement(organizationId: string, productCode: string, propertyId?: string | null): Promise<void> {
+  return demandEntitlement(prisma, { organizationId, productCode, propertyId });
+}
+
+export async function requireEntitlementCapacity(organizationId: string, productCode: string, propertyId?: string | null, requestedQuantity = 1): Promise<void> {
+  return demandCapacity(prisma, { organizationId, productCode, propertyId, requestedQuantity });
+}
+
+export async function requirePlanLimit(organizationId: string, limit: 'maxProperties' | 'maxRooms' | 'maxUsers' | 'maxOutlets' | 'maxIntegrations', currentQuantity: number, requestedQuantity = 1): Promise<void> {
+  return demandPlanLimit(prisma, { organizationId, limit, currentQuantity, requestedQuantity });
 }

@@ -29,7 +29,7 @@ export default async function ChannelProviderPage({ params }: { params: Promise<
 
   let isEntitled = true;
   if (providerSlug === 'BEDS24') {
-    isEntitled = await hasEntitlement(ctx.organizationId, 'ADDON_BEDS24');
+    isEntitled = await hasEntitlement(ctx.organizationId, 'ADDON_BEDS24', propertyId);
   }
 
   let connection;

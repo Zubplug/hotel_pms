@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { WasteService } from '@/lib/inventory/WasteService';
 import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
+import { requireInventoryAccess } from '@/lib/auth/inventory-access';
 
 export const POST = auth(async (req: any) => {
   if (!req.auth) {
@@ -10,14 +11,14 @@ export const POST = auth(async (req: any) => {
   const actorId = req.auth.user.id;
 
   try {
-    const property = await prisma.property.findFirst({ where: { isActive: true } });
-    if (!property) throw new Error('No active property found');
+    const ctx = await requireInventoryAccess(actorId);
+    const propertyId = ctx.propertyIds[0];
 
     const body = await req.json();
     const { stockItemId, outletId, quantity, unitOfMeasure, reason, notes } = body;
 
     const entry = await WasteService.submitWaste({
-      propertyId: property.id,
+      propertyId,
       stockItemId,
       outletId,
       quantity: Number(quantity),

@@ -1,1 +1,1 @@
-export { GeneralManagerMaintenanceDashboard as default } from '@/components/maintenance/GeneralManagerMaintenanceDashboard';
+export { default } from '@/components/maintenance/MaintenanceDashboard';

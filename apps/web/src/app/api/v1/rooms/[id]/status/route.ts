@@ -9,6 +9,7 @@ import { isValidTransition } from '@/lib/room-state-machine';
 import { roomStatusTransitionSchema } from '@hotel-pms/types';
 import { NotificationEngine } from '@/lib/notification-engine';
 import { requireOrganizationContext } from "@/lib/organization-access";
+import crypto from 'crypto';
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -28,14 +29,6 @@ export async function POST(req: NextRequest, { params }: Params) {
         let reqPropertyId = body?.propertyId;
         if (reqPropertyId && !ctx.propertyIds.includes(reqPropertyId)) return NextResponse.json({ error: 'Forbidden property' }, { status: 403 });
     const { newStatus, reason, source, referenceId } = roomStatusTransitionSchema.parse(body);
-
-    if (newStatus === 'AVAILABLE' && ['MAINTENANCE', 'OUT_OF_ORDER'].includes(room.status)) {
-      return errorResponse(
-        'HOUSEKEEPING_REQUIRED',
-        'This room must be cleared by maintenance before it becomes Available.',
-        422
-      );
-    }
 
     if (newStatus === 'AVAILABLE' && room.status === 'DIRTY') {
       const activeCheckedIn = await prisma.reservationRoom.findFirst({
@@ -82,6 +75,45 @@ export async function POST(req: NextRequest, { params }: Params) {
           reason,
         },
       });
+      if (newStatus === 'AVAILABLE' && ['MAINTENANCE', 'OUT_OF_ORDER'].includes(room.status)) {
+        const property = await tx.property.findUnique({
+          where: { id: room.propertyId },
+          select: { organizationId: true },
+        });
+        const activeTickets = await tx.maintenanceTicket.findMany({
+          where: {
+            roomId: room.id,
+            status: { in: ['OPEN', 'ASSIGNED', 'IN_PROGRESS', 'WAITING_PARTS'] },
+          },
+        });
+        for (const ticket of activeTickets) {
+          await tx.maintenanceTicket.update({
+            where: { id: ticket.id },
+            data: { status: 'RESOLVED', resolvedAt: new Date() },
+          });
+          await tx.auditLog.create({
+            data: {
+              organizationId: property!.organizationId,
+              propertyId: room.propertyId,
+              userId: session.user.id,
+              userEmail: session.user.email,
+              userRole: (session.user as any).role || 'STAFF',
+              action: 'MAINTENANCE_RESOLVED',
+              resource: 'MaintenanceTicket',
+              resourceId: ticket.id,
+              previousValue: { status: ticket.status },
+              newValue: { status: 'RESOLVED', reason: 'FRONT_DESK_ROOM_RELEASE' },
+              ipAddress: req.headers.get('x-forwarded-for') || '127.0.0.1',
+              userAgent: req.headers.get('user-agent') || 'Unknown',
+              requestId: req.headers.get('x-request-id') || crypto.randomUUID(),
+            },
+          });
+        }
+        await tx.room.update({
+          where: { id: room.id },
+          data: { maintenanceStatus: 'COMPLETED' },
+        });
+      }
       if (newStatus === 'AVAILABLE' && room.status === 'DIRTY') {
         const openTask = await tx.housekeepingTask.findFirst({
           where: {

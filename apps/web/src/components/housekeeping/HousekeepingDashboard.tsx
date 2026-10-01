@@ -229,16 +229,16 @@ export default function HousekeepingDashboard() {
   const role = String((session?.user as any)?.role || '').toUpperCase();
   const capabilities = ((session?.user as any)?.capabilities || []) as string[];
   const canManage =
-    ['RECEPTIONIST', 'FRONT_DESK', 'MANAGER', 'ADMIN'].includes(role) ||
+    ['RECEPTIONIST', 'FRONT_DESK', 'HOUSEKEEPER', 'HOUSEKEEPING_MANAGER', 'MANAGER', 'ADMIN'].includes(role) ||
     capabilities.includes('ACCESS_MANAGEMENT');
 
   if (!canManage) {
     return (
       <div className="flex flex-col items-center justify-center h-[70vh] gap-4">
         <ShieldCheck className="w-16 h-16 text-slate-300" />
-        <h2 className="text-xl font-bold text-slate-700">Reception-Managed</h2>
+        <h2 className="text-xl font-bold text-slate-700">Housekeeping access required</h2>
         <p className="text-sm text-slate-500 max-w-sm text-center">
-          Housekeeping tasks are managed exclusively by reception staff. Contact reception for task changes.
+          Housekeeping tasks are managed from this dashboard by authorized housekeeping and operations staff.
         </p>
       </div>
     );

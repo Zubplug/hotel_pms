@@ -10,6 +10,15 @@ describe('Room State Machine', () => {
     expect(isValidTransition('OCCUPIED', 'DIRTY')).toBe(true);
   });
 
+  it('allows Front Desk to release an unoccupied dirty room', () => {
+    expect(isValidTransition('DIRTY', 'AVAILABLE')).toBe(true);
+  });
+
+  it('allows Front Desk to release maintenance-controlled rooms', () => {
+    expect(isValidTransition('MAINTENANCE', 'AVAILABLE')).toBe(true);
+    expect(isValidTransition('OUT_OF_ORDER', 'AVAILABLE')).toBe(true);
+  });
+
   it('prevents invalid transitions', () => {
     // You cannot go straight from OCCUPIED to CLEAN, it must be DIRTY first
     expect(isValidTransition('OCCUPIED', 'CLEAN')).toBe(false);

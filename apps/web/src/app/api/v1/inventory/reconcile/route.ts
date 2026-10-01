@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { hasInventoryPermission } from '@/lib/inventory/permissions';
 import { requireOrganizationContext } from "@/lib/organization-access";
+import { requireInventoryAccess } from '@/lib/auth/inventory-access';
 
 export async function POST(request: Request) {
   try {
@@ -12,7 +13,7 @@ export async function POST(request: Request) {
     }
 
     const { role, isSuperAdmin, id: userId } = session.user as any;
-    const ctx = await requireOrganizationContext(session.user.id);
+    const ctx = await requireInventoryAccess(session.user.id);
 
     if (!hasInventoryPermission(role, 'inventory.adjust', isSuperAdmin)) {
       return NextResponse.json({ data: null, error: 'Forbidden' }, { status: 403 });

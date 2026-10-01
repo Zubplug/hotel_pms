@@ -1,120 +1,91 @@
 import { NextResponse } from 'next/server';
-import Stripe from 'stripe';
-import prisma from '@hotel-pms/db';
-import type { Prisma } from '@hotel-pms/db';
+import prisma, { Prisma } from '@hotel-pms/db';
+import { subscriptionScope, verifyFlutterwaveLegacyWebhook, verifyFlutterwaveTransaction, verifyFlutterwaveWebhook } from '@hotel-pms/db';
 
-const stripeKey = process.env.STRIPE_SECRET_KEY;
-const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
-const stripe = stripeKey ? new Stripe(stripeKey, { apiVersion: '2026-08-26.dahlia' }) : null;
+const GRACE_PERIOD_MS = 3 * 24 * 60 * 60 * 1000;
 
-function statusFor(subscription: Stripe.Subscription) {
-  if (subscription.pause_collection) return 'PAUSED';
-  if (subscription.status === 'past_due') return 'PAST_DUE';
-  if (subscription.status === 'canceled' || subscription.status === 'unpaid') return 'CANCELED';
-  if (subscription.status === 'trialing') return 'TRIALING';
-  if (subscription.status === 'incomplete' || subscription.status === 'incomplete_expired') return 'INCOMPLETE';
-  return 'ACTIVE';
+function nextPeriod(interval: string, from: Date) {
+  const end = new Date(from);
+  if (interval === 'year') end.setFullYear(end.getFullYear() + 1);
+  else end.setMonth(end.getMonth() + 1);
+  return end;
 }
 
-async function findOrganizationId(tx: Prisma.TransactionClient, object: any) {
-  if (typeof object?.metadata?.organizationId === 'string') return object.metadata.organizationId;
-  const customerId = typeof object?.customer === 'string' ? object.customer : null;
-  if (!customerId) return null;
-  const customer = await tx.billingCustomer.findUnique({ where: { stripeCustomerId: customerId } });
-  return customer?.organizationId ?? null;
+function metadataValue(meta: unknown, key: string) {
+  return meta && typeof meta === 'object' && !Array.isArray(meta) && typeof (meta as Record<string, unknown>)[key] === 'string'
+    ? String((meta as Record<string, unknown>)[key])
+    : '';
 }
 
 async function reconcileEntitlements(tx: Prisma.TransactionClient, organizationId: string) {
+  const graceCutoff = new Date(Date.now() - GRACE_PERIOD_MS);
   const subscriptions = await tx.subscription.findMany({
-    where: { organizationId, status: { in: ['ACTIVE', 'TRIALING', 'PAST_DUE'] } },
+    where: { organizationId, OR: [{ status: { in: ['ACTIVE', 'TRIALING'] } }, { status: 'PAST_DUE', OR: [{ pastDueSince: null }, { pastDueSince: { gt: graceCutoff } }] }] },
     include: { items: { include: { price: { include: { product: true } } } } },
   });
-  const active = new Map<string, Date>();
+  const active = new Map<string, { productCode: string; propertyId: string | null; expiresAt: Date; startsAt: Date; quantity: number | null }>();
   for (const subscription of subscriptions) {
-    for (const item of subscription.items) {
-      const current = active.get(item.price.product.code);
-      if (!current || current < subscription.currentPeriodEnd) active.set(item.price.product.code, subscription.currentPeriodEnd);
+    const quantities = new Map<string, number | null>(subscription.items.map((item) => [item.price.product.code, item.quantity] as const));
+    if (subscription.planId) {
+      const plan = await tx.billingPlan.findUnique({ where: { id: subscription.planId }, include: { items: true } });
+      for (const item of plan?.items ?? []) quantities.set((await tx.billingProduct.findUniqueOrThrow({ where: { id: item.productId }, select: { code: true } })).code, item.includedQty ?? null);
+    }
+    for (const propertyId of (subscription.scopePropertyIds.length ? subscription.scopePropertyIds : [null])) {
+      for (const [productCode, quantity] of quantities) {
+        const scopeKey = `${organizationId}:${propertyId ?? '*'}:${productCode}`;
+        active.set(scopeKey, { productCode, propertyId, expiresAt: subscription.currentPeriodEnd, startsAt: subscription.currentPeriodStart, quantity });
+      }
     }
   }
-
   const existing = await tx.entitlement.findMany({ where: { organizationId } });
-  for (const [productCode, expiresAt] of active) {
-    await tx.entitlement.upsert({
-      where: { organizationId_productCode: { organizationId, productCode } },
-      create: { organizationId, productCode, status: 'ACTIVE', expiresAt },
-      update: { status: 'ACTIVE', expiresAt, suspendedAt: null, suspensionReason: null },
-    });
+  for (const [scopeKey, entitlement] of active) {
+    await tx.entitlement.upsert({ where: { scopeKey }, create: { organizationId, propertyId: entitlement.propertyId, productCode: entitlement.productCode, scopeKey, status: 'ACTIVE', quantity: entitlement.quantity, startsAt: entitlement.startsAt, expiresAt: entitlement.expiresAt, metadata: { source: 'flutterwave' } }, update: { status: 'ACTIVE', quantity: entitlement.quantity, startsAt: entitlement.startsAt, expiresAt: entitlement.expiresAt, suspendedAt: null, suspensionReason: null, metadata: { source: 'flutterwave' } } });
   }
-  for (const entitlement of existing) {
-    if (!active.has(entitlement.productCode)) {
-      await tx.entitlement.update({
-        where: { id: entitlement.id },
-        data: { status: 'SUSPENDED', suspendedAt: entitlement.suspendedAt ?? new Date(), suspensionReason: 'No active subscription' },
-      });
-    }
-  }
-}
-
-async function handleSubscriptionChange(tx: Prisma.TransactionClient, subscription: Stripe.Subscription) {
-  const customerId = typeof subscription.customer === 'string' ? subscription.customer : subscription.customer.id;
-  const customer = await tx.billingCustomer.findUnique({ where: { stripeCustomerId: customerId } });
-  if (!customer) throw new Error(`Unknown Stripe customer ${customerId}`);
-  const status = statusFor(subscription);
-  const stripeSubscription = subscription as Stripe.Subscription & { current_period_start?: number; current_period_end?: number };
-  const currentPeriodStart = new Date(((stripeSubscription.current_period_start ?? (subscription.items.data[0] as any)?.current_period_start ?? subscription.billing_cycle_anchor) as number) * 1000);
-  const currentPeriodEnd = new Date(((stripeSubscription.current_period_end ?? (subscription.items.data[0] as any)?.current_period_end ?? subscription.billing_cycle_anchor) as number) * 1000);
-  const saved = await tx.subscription.upsert({
-    where: { stripeSubscriptionId: subscription.id },
-    create: { organizationId: customer.organizationId, stripeSubscriptionId: subscription.id, status, currentPeriodStart, currentPeriodEnd, cancelAtPeriodEnd: subscription.cancel_at_period_end, canceledAt: subscription.canceled_at ? new Date(subscription.canceled_at * 1000) : null, trialEndsAt: subscription.trial_end ? new Date(subscription.trial_end * 1000) : null },
-    update: { status, currentPeriodStart, currentPeriodEnd, cancelAtPeriodEnd: subscription.cancel_at_period_end, canceledAt: subscription.canceled_at ? new Date(subscription.canceled_at * 1000) : null, trialEndsAt: subscription.trial_end ? new Date(subscription.trial_end * 1000) : null },
-  });
-  const prices = await Promise.all(subscription.items.data.map((item) => tx.billingPrice.findUnique({ where: { stripePriceId: item.price.id } })));
-  if (prices.some((price) => !price)) throw new Error(`Stripe subscription ${subscription.id} contains an unknown catalog price`);
-  const priceIds = prices.map((price) => price!.id);
-  await tx.subscriptionItem.deleteMany({ where: { subscriptionId: saved.id, ...(priceIds.length ? { priceId: { notIn: priceIds } } : {}) } });
-  for (const priceId of priceIds) {
-    await tx.subscriptionItem.upsert({ where: { subscriptionId_priceId: { subscriptionId: saved.id, priceId } }, create: { subscriptionId: saved.id, priceId }, update: {} });
-  }
-  await reconcileEntitlements(tx, customer.organizationId);
-}
-
-async function handleInvoice(tx: Prisma.TransactionClient, invoice: Stripe.Invoice) {
-  const organizationId = await findOrganizationId(tx, invoice);
-  if (!organizationId) throw new Error(`Unknown Stripe customer ${invoice.customer}`);
-  await tx.billingInvoice.upsert({
-    where: { stripeInvoiceId: invoice.id },
-      create: { organizationId, stripeInvoiceId: invoice.id, stripeCustomerId: String(invoice.customer), stripeSubscriptionId: typeof (invoice as any).subscription === 'string' ? (invoice as any).subscription : (invoice as any).subscription?.id ?? null, status: invoice.status ?? 'unknown', currency: invoice.currency, subtotal: invoice.subtotal ?? 0, total: invoice.total ?? 0, amountPaid: invoice.amount_paid ?? 0, amountDue: invoice.amount_due ?? 0, periodStart: invoice.period_start ? new Date(invoice.period_start * 1000) : null, periodEnd: invoice.period_end ? new Date(invoice.period_end * 1000) : null, hostedInvoiceUrl: invoice.hosted_invoice_url, invoicePdf: invoice.invoice_pdf, payload: invoice as unknown as Prisma.InputJsonValue },
-    update: { status: invoice.status ?? 'unknown', subtotal: invoice.subtotal ?? 0, total: invoice.total ?? 0, amountPaid: invoice.amount_paid ?? 0, amountDue: invoice.amount_due ?? 0, periodStart: invoice.period_start ? new Date(invoice.period_start * 1000) : null, periodEnd: invoice.period_end ? new Date(invoice.period_end * 1000) : null, hostedInvoiceUrl: invoice.hosted_invoice_url, invoicePdf: invoice.invoice_pdf, payload: invoice as unknown as Prisma.InputJsonValue },
-  });
+  for (const entitlement of existing) if (!active.has(entitlement.scopeKey)) await tx.entitlement.update({ where: { id: entitlement.id }, data: { status: 'SUSPENDED', suspendedAt: entitlement.suspendedAt ?? new Date(), suspensionReason: 'No active subscription' } });
 }
 
 export async function POST(req: Request) {
-  if (!stripe || !endpointSecret) return NextResponse.json({ error: 'Stripe webhook is not configured' }, { status: 503 });
-  const signature = req.headers.get('stripe-signature');
-  if (!signature) return NextResponse.json({ error: 'Missing stripe-signature header' }, { status: 400 });
-  let event: Stripe.Event;
+  const secretHash = process.env.FLW_WEBHOOK_SECRET_HASH;
+  if (!process.env.FLW_SECRET_KEY || !secretHash) return NextResponse.json({ error: 'Flutterwave webhook is not configured' }, { status: 503 });
+  const rawBody = await req.text();
+  const signature = req.headers.get('flutterwave-signature');
+  const legacySignature = req.headers.get('verif-hash');
+  if (!verifyFlutterwaveWebhook(rawBody, signature, secretHash) && !verifyFlutterwaveLegacyWebhook(legacySignature, secretHash)) return NextResponse.json({ error: 'Webhook signature verification failed' }, { status: 400 });
+  let payload: any;
+  try { payload = JSON.parse(rawBody); } catch { return NextResponse.json({ error: 'Invalid webhook payload' }, { status: 400 }); }
+
   try {
-    event = stripe.webhooks.constructEvent(await req.text(), signature, endpointSecret);
-  } catch {
-    return NextResponse.json({ error: 'Webhook signature verification failed' }, { status: 400 });
-  }
-  try {
-    let duplicate = false;
+    const data = payload?.data ?? payload;
+    const transactionId = String(data?.id ?? data?.transaction_id ?? '');
+    if (!transactionId) return NextResponse.json({ received: true });
+    const verified = await verifyFlutterwaveTransaction(transactionId);
+    const meta = verified.meta ?? data.meta;
+    const organizationId = metadataValue(meta, 'organizationId');
+    if (!organizationId) throw new Error('Flutterwave transaction has no organization metadata');
+    const txRef = verified.tx_ref || String(data.tx_ref || transactionId);
+    const productCodes = metadataValue(meta, 'productCodes').split(',').filter(Boolean);
+    const priceIds = metadataValue(meta, 'priceIds').split(',').filter(Boolean);
+    const propertyIds = subscriptionScope(metadataValue(meta, 'propertyIds').split(','));
+    const planId = metadataValue(meta, 'planId') || null;
+    const status = String(verified.status || data.status || '').toLowerCase();
+    const successful = status === 'successful' || status === 'success';
+
     await prisma.$transaction(async (tx) => {
-      const object = event.data.object as any;
-      const organizationId = await findOrganizationId(tx, object);
-      try {
-        await tx.billingEvent.create({ data: { stripeEventId: event.id, type: event.type, payload: event as unknown as Prisma.InputJsonValue, organizationId } });
-      } catch (error) {
-        if ((error as { code?: string })?.code === 'P2002') { duplicate = true; return; }
-        throw error;
-      }
-      if (event.type.startsWith('customer.subscription.')) await handleSubscriptionChange(tx, object as Stripe.Subscription);
-      if (event.type === 'invoice.created' || event.type === 'invoice.finalized' || event.type === 'invoice.paid' || event.type === 'invoice.payment_failed') await handleInvoice(tx, object as Stripe.Invoice);
+      const duplicate = await tx.billingEvent.findUnique({ where: { flutterwaveEventId: transactionId } });
+      if (duplicate) return;
+      await tx.billingEvent.create({ data: { flutterwaveEventId: transactionId, type: String(payload.event || payload.type || `transaction.${status}`), organizationId, payload: payload as Prisma.InputJsonValue } });
+      const now = new Date();
+      const prices = priceIds.length ? await tx.billingPrice.findMany({ where: { id: { in: priceIds } }, include: { product: true } }) : await tx.billingPrice.findMany({ where: { product: { code: { in: productCodes } }, interval: 'month' }, include: { product: true } });
+      const interval = prices[0]?.interval || 'month';
+      const currentPeriodEnd = nextPeriod(interval, now);
+      const subscription = await tx.subscription.upsert({ where: { flutterwaveSubscriptionId: txRef }, create: { organizationId, planId, scopePropertyIds: propertyIds, flutterwaveSubscriptionId: txRef, status: successful ? 'ACTIVE' : 'PAST_DUE', currentPeriodStart: now, currentPeriodEnd, pastDueSince: successful ? null : now, cancelAtPeriodEnd: false }, update: { planId, scopePropertyIds: propertyIds, status: successful ? 'ACTIVE' : 'PAST_DUE', currentPeriodStart: now, currentPeriodEnd, pastDueSince: successful ? null : now } });
+      for (const price of prices) await tx.subscriptionItem.upsert({ where: { subscriptionId_priceId: { subscriptionId: subscription.id, priceId: price.id } }, create: { subscriptionId: subscription.id, priceId: price.id, quantity: 1 }, update: { quantity: 1 } });
+      await tx.billingInvoice.upsert({ where: { flutterwaveInvoiceId: transactionId }, create: { organizationId, flutterwaveInvoiceId: transactionId, flutterwaveCustomerId: verified.customer?.email ?? null, flutterwaveSubscriptionId: txRef, status: successful ? 'paid' : 'failed', currency: verified.currency, subtotal: Math.round(verified.amount * 100), total: Math.round(verified.amount * 100), amountPaid: successful ? Math.round(verified.amount * 100) : 0, amountDue: successful ? 0 : Math.round(verified.amount * 100), periodStart: now, periodEnd: currentPeriodEnd, hostedInvoiceUrl: null, invoicePdf: null, payload: verified as unknown as Prisma.InputJsonValue }, update: { status: successful ? 'paid' : 'failed', amountPaid: successful ? Math.round(verified.amount * 100) : 0, amountDue: successful ? 0 : Math.round(verified.amount * 100), payload: verified as unknown as Prisma.InputJsonValue } });
+      await reconcileEntitlements(tx, organizationId);
     }, { timeout: 30000 });
-    return NextResponse.json({ received: true, duplicate });
+    return NextResponse.json({ received: true });
   } catch (error) {
-    console.error('Stripe webhook processing failed:', error);
+    console.error('Flutterwave webhook processing failed:', error);
     return NextResponse.json({ error: 'Webhook processing failed' }, { status: 500 });
   }
 }

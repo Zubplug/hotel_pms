@@ -43,7 +43,7 @@ const TILES = [
   { cap: ['ACCESS_SYNC_CENTER'], label: 'Sync Center', icon: RefreshCw, href: '/sync-center' },
 ];
 
-export function AppSwitcher() {
+export function AppSwitcher({ hideOperations }: { hideOperations?: boolean }) {
   const [isOpen, setIsOpen] = useState(false);
   const { data: session } = useSession();
   const { lock } = useLock();
@@ -52,9 +52,12 @@ export function AppSwitcher() {
   const isSuperAdmin = (session?.user as any)?.isSuperAdmin;
   
   // Exclude modules they don't have access to
-  const availableTiles = TILES.filter(t => 
-    isSuperAdmin || t.cap.some(c => capabilities.includes(c))
-  );
+  const availableTiles = TILES.filter(t => {
+    if (hideOperations && (t.href === '/housekeeping' || t.href === '/maintenance')) {
+      return false;
+    }
+    return isSuperAdmin || t.cap.some(c => capabilities.includes(c));
+  });
 
   return (
     <>

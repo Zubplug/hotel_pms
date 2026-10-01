@@ -91,6 +91,8 @@ model Property {
   auditStatus  String? // 'OPEN' | 'IN_PROGRESS' | 'POSTING' | 'COMPLETED' | 'COMPLETED_WITH_EXCEPTIONS' | 'FAILED'
 
   isActive Boolean @default(true)
+  suspendedAt DateTime? @db.Timestamptz
+  suspensionReason String?
 
   timezone          String @default("Africa/Lagos")
   locale            String @default("en-NG")
@@ -132,6 +134,7 @@ model Property {
   hardwareInventory        HardwareInventory[]
   hardwareInstallations    HardwareInstallation[]
   propertySetups           PropertySetup[]
+  entitlements             Entitlement[]
   installedIntegrations     InstalledIntegration[]
   hardwareAgents           HardwareAgent[]
   lockOperations           LockOperation[]
@@ -6037,7 +6040,7 @@ model BillingProduct {
   code            String   @unique
   name            String
   type            String   // 'BASE', 'ADDON'
-  stripeProductId String?
+  flutterwaveProductId String?
   active          Boolean  @default(true)
 
   prices          BillingPrice[]
@@ -6054,7 +6057,7 @@ model BillingPrice {
   productId     String   @db.Uuid
   product       BillingProduct @relation(fields: [productId], references: [id])
 
-  stripePriceId String   @unique
+  flutterwavePriceId String? @unique
   amount        Int
   currency      String
   interval      String   // 'month', 'year'
@@ -6069,7 +6072,7 @@ model BillingCustomer {
   id               String       @id @default(uuid()) @db.Uuid
   organizationId   String       @unique @db.Uuid
   organization     Organization @relation(fields: [organizationId], references: [id])
-  stripeCustomerId String       @unique
+  flutterwaveCustomerId String? @unique
 
   createdAt        DateTime @default(now()) @db.Timestamptz
   updatedAt        DateTime @updatedAt @db.Timestamptz
@@ -6082,7 +6085,7 @@ model Subscription {
   planId               String?      @db.Uuid
   plan                 BillingPlan? @relation(fields: [planId], references: [id])
 
-  stripeSubscriptionId String       @unique
+  flutterwaveSubscriptionId String       @unique
   status               String       // 'TRIALING', 'ACTIVE', 'PAST_DUE', 'PAUSED', 'CANCELED', 'INCOMPLETE'
 
   currentPeriodStart   DateTime     @db.Timestamptz
@@ -6090,6 +6093,8 @@ model Subscription {
   cancelAtPeriodEnd    Boolean      @default(false)
   canceledAt           DateTime?    @db.Timestamptz
   trialEndsAt          DateTime?    @db.Timestamptz
+  scopePropertyIds     String[]     @default([]) @db.Uuid
+  pastDueSince         DateTime?    @db.Timestamptz
 
   items                SubscriptionItem[]
 
@@ -6106,6 +6111,7 @@ model SubscriptionItem {
 
   priceId        String       @db.Uuid
   price          BillingPrice @relation(fields: [priceId], references: [id])
+  quantity       Int          @default(1)
 
   createdAt      DateTime @default(now()) @db.Timestamptz
   updatedAt      DateTime @updatedAt @db.Timestamptz
@@ -6117,28 +6123,33 @@ model Entitlement {
   id               String         @id @default(uuid()) @db.Uuid
   organizationId   String         @db.Uuid
   organization     Organization   @relation(fields: [organizationId], references: [id])
+  propertyId       String?        @db.Uuid
+  property         Property?      @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 
   productCode      String
   product          BillingProduct @relation(fields: [productCode], references: [code])
+  scopeKey         String         @unique
 
   status           String         // 'ACTIVE', 'SUSPENDED'
+  quantity         Int?
+  startsAt         DateTime       @default(now()) @db.Timestamptz
 
   activatedAt      DateTime       @default(now()) @db.Timestamptz
   suspendedAt      DateTime?      @db.Timestamptz
   expiresAt        DateTime?      @db.Timestamptz
   suspensionReason String?
+  metadata         Json?
 
   createdAt        DateTime @default(now()) @db.Timestamptz
   updatedAt        DateTime @updatedAt @db.Timestamptz
 
-  @@unique([organizationId, productCode])
-  @@index([organizationId, status])
+  @@index([organizationId, propertyId, status])
 }
 
 model BillingEvent {
   id             String       @id @default(uuid()) @db.Uuid
-  organizationId String?      @db.Uuid // Optional because some stripe events might not have customer mapped yet
-  stripeEventId  String       @unique
+  organizationId String?      @db.Uuid // Optional because some Flutterwave events might not have customer mapped yet
+  flutterwaveEventId  String       @unique
   type           String
   payload        Json
 
@@ -6149,9 +6160,9 @@ model BillingInvoice {
   id               String       @id @default(uuid()) @db.Uuid
   organizationId   String       @db.Uuid
   organization     Organization @relation(fields: [organizationId], references: [id])
-  stripeInvoiceId  String       @unique
-  stripeCustomerId String
-  stripeSubscriptionId String?
+  flutterwaveInvoiceId  String       @unique
+  flutterwaveCustomerId String?
+  flutterwaveSubscriptionId String?
   status           String
   currency         String
   subtotal         Int

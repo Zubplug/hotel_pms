@@ -90,7 +90,7 @@ export default async function TenantControlPage({
                   {org.subscriptions.map((sub: any) => (
                     <li key={sub.id} className="p-4 border rounded-lg flex justify-between items-center bg-zinc-50 dark:bg-zinc-900/50">
                       <div>
-                        <div className="font-medium">Stripe: {sub.stripeSubscriptionId.slice(0, 12)}...</div>
+                        <div className="font-medium">Flutterwave: {sub.flutterwaveSubscriptionId.slice(0, 12)}...</div>
                         <div className="text-sm text-zinc-500">
                           Renews {format(new Date(sub.currentPeriodEnd), 'MMM d, yyyy')}
                         </div>

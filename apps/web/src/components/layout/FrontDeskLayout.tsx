@@ -11,8 +11,6 @@ import {
   LogOut,
   Key,
   AlertCircle,
-  Brush,
-  Wrench,
   Shirt,
   Printer,
   RefreshCw,
@@ -111,8 +109,6 @@ export function FrontDeskLayout({ children }: { children: React.ReactNode }) {
     { href: '/frontdesk/refunds', label: 'Refunds' },
     { href: '/frontdesk/cashier', label: 'Cashier Shift' },
     { href: '/laundry', label: 'Laundry', icon: Shirt },
-    { href: '/frontdesk/housekeeping', label: 'Housekeeping', icon: Brush },
-    { href: '/frontdesk/maintenance', label: 'Maintenance', icon: Wrench },
   ];
 
   return (
@@ -124,7 +120,7 @@ export function FrontDeskLayout({ children }: { children: React.ReactNode }) {
 
         {/* Left: Switcher · Logo · Property · Nav */}
         <div className="flex items-center gap-4 lg:gap-5 flex-1 min-w-0">
-          {!isDesktop && <AppSwitcher />}
+          {!isDesktop && <AppSwitcher hideOperations />}
 
           <Link href="/frontdesk" className="flex items-center gap-2.5 group shrink-0">
             <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-600 to-violet-600 shadow-[0_0_16px_-4px_rgba(99,102,241,0.6)] transition-all group-hover:shadow-[0_0_20px_-4px_rgba(99,102,241,0.8)] group-hover:scale-105">

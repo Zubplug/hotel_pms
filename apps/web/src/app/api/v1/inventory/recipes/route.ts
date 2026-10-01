@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { hasInventoryPermission } from '@/lib/inventory/permissions';
 import { requireOrganizationContext } from "@/lib/organization-access";
+import { requireInventoryAccess } from '@/lib/auth/inventory-access';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,7 +11,7 @@ async function getContext(permission?: 'inventory.manage') {
   const session = await auth();
   if (!session?.user) return { response: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
   const user = session.user as any;
-  const ctx = await requireOrganizationContext(session.user.id);
+  const ctx = await requireInventoryAccess(session.user.id);
   if (permission && !hasInventoryPermission(user.role, permission, user.isSuperAdmin)) return { response: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
   return { ctx };
 }

@@ -86,7 +86,7 @@ export async function handleOtaWebhook(req: NextRequest, providerId: string) {
       return new Response('No active connection found for property', { status: 404 });
     }
 
-    if (provider === 'BEDS24' && !(await hasEntitlement(connection.organizationId, 'ADDON_BEDS24'))) {
+    if (provider === 'BEDS24' && !(await hasEntitlement(connection.organizationId, 'ADDON_BEDS24', connection.propertyId))) {
       OTALogger.warn('OTA_WEBHOOK_ENTITLEMENT_REQUIRED', { connectionId: connection.id, organizationId: connection.organizationId });
       return new Response('Beds24 entitlement is not active', { status: 402 });
     }

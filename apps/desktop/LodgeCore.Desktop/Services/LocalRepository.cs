@@ -3140,10 +3140,6 @@ public class LocalRepository
             if (room.IsOccupied || hasCheckedInGuest)
                 throw new InvalidOperationException("An occupied room cannot be marked Available from the room status dialog.");
         }
-        else if (newStatus == "AVAILABLE" && new[] { "MAINTENANCE", "OUT_OF_ORDER" }.Contains(currentStatus))
-        {
-            throw new InvalidOperationException("This room must be cleared by maintenance before it becomes Available.");
-        }
 
         room.Status = newStatus;
         // If it's CLEAN or DIRTY, also update HousekeepingStatus to match cloud behavior if necessary.
@@ -3181,10 +3177,8 @@ public class LocalRepository
 
         if (newStatus == "AVAILABLE" && currentStatus == "DIRTY")
         {
-            // Front desk may release an unoccupied dirty room when housekeeping
-            // has already completed it. Close the active local task as inspected
-            // and sync both changes together so the server cannot leave the room
-            // available with an open housekeeping task.
+            // Front Desk release completes the active housekeeping task in the
+            // offline workflow, matching the cloud status transition behavior.
             var openTask = await _dbContext.HousekeepingTasks
                 .Where(task => task.PropertyId == room.PropertyId
                     && task.RoomId == room.Id
@@ -3215,6 +3209,41 @@ public class LocalRepository
                 });
             }
             room.HousekeepingStatus = "INSPECTED";
+        }
+
+        if (newStatus == "AVAILABLE" && (currentStatus == "MAINTENANCE" || currentStatus == "OUT_OF_ORDER"))
+        {
+            var activeTickets = await _dbContext.MaintenanceTickets
+                .Where(ticket => ticket.RoomId == room.Id
+                    && ticket.Status != "RESOLVED"
+                    && ticket.Status != "CLOSED"
+                    && ticket.Status != "CANCELLED")
+                .ToListAsync();
+
+            foreach (var ticket in activeTickets)
+            {
+                ticket.Status = "RESOLVED";
+                ticket.RequiresRoomRestriction = false;
+                ticket.UpdatedAt = DateTime.UtcNow;
+                ticket.IsDirty = true;
+                ticket.Version++;
+                _dbContext.OutboxEvents.Add(new LocalOutboxEvent
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    PropertyId = ticket.PropertyId,
+                    DeviceId = "System",
+                    OperatorId = "System",
+                    AggregateType = "MAINTENANCE_TICKET",
+                    AggregateId = ticket.Id,
+                    AggregateVersion = ticket.Version,
+                    EventType = "RESOLVE",
+                    Sequence = ticket.Version,
+                    PayloadJson = JsonSerializer.Serialize(new { status = "RESOLVED", requiresRoomRestriction = false }),
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
+
+            room.MaintenanceStatus = "COMPLETED";
         }
         
         room.UpdatedAt = DateTime.UtcNow;

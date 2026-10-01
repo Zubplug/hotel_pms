@@ -2,6 +2,7 @@ import { auth } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import React from 'react';
 import { InventoryLayout } from '@/components/layout/InventoryLayout';
+import { requireModuleAccess } from '@/lib/auth/module-access';
 
 // General Cashiers may access the cost-control views linked from Cash Management.
 // Actions on those pages remain protected by their individual role checks.
@@ -15,6 +16,11 @@ export default async function InventoryRootLayout({ children }: { children: Reac
   // Enforce server-side authorization
   if (!session?.user || (!isSuperAdmin && !ALLOWED.includes(role))) {
     redirect('/general-manager');
+  }
+  try {
+    await requireModuleAccess(session.user.id, 'PROFESSIONAL_OPERATIONS', (session.user as any).propertyId);
+  } catch {
+    redirect('/settings/billing?required=PROFESSIONAL_OPERATIONS');
   }
 
   return (

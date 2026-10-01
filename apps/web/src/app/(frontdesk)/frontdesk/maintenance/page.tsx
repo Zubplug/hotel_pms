@@ -1,1 +1,5 @@
-export { default } from '@/components/maintenance/MaintenanceDashboard';
+import { redirect } from 'next/navigation';
+
+export default function FrontDeskMaintenanceRedirect() {
+  redirect('/maintenance');
+}

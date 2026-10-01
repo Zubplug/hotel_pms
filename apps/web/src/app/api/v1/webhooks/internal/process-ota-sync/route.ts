@@ -82,7 +82,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (syncEvent.provider === 'BEDS24') {
-      const entitled = await hasEntitlement(connection.property.organizationId, 'ADDON_BEDS24');
+      const entitled = await hasEntitlement(connection.property.organizationId, 'ADDON_BEDS24', connection.propertyId);
       if (!entitled) {
         throw new Error('Payment Required: Organization does not have an active entitlement for BEDS24');
       }

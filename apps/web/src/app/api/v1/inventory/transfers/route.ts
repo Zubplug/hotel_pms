@@ -7,6 +7,7 @@ import { InventoryService } from '@/lib/inventory/InventoryService';
 import { resolveStockUnitConversion } from '@/lib/inventory/UnitConversionService';
 import { isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
 import { requireOrganizationContext } from "@/lib/organization-access";
+import { requireInventoryAccess } from '@/lib/auth/inventory-access';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,7 +19,7 @@ export async function GET(request: Request) {
     }
 
     const { role, isSuperAdmin } = session.user as any;
-    const ctx = await requireOrganizationContext(session.user.id);
+    const ctx = await requireInventoryAccess(session.user.id);
     if (!hasInventoryPermission(role, 'inventory.transfer', isSuperAdmin)) {
       return NextResponse.json({ data: null, error: 'Forbidden' }, { status: 403 });
     }
@@ -51,7 +52,7 @@ export async function POST(request: Request) {
     }
 
     const { role, isSuperAdmin, id: userId, staffId } = session.user as any;
-    const ctx = await requireOrganizationContext(session.user.id);
+    const ctx = await requireInventoryAccess(session.user.id);
     const normalizedRole = String(role || '').toUpperCase();
 
     if (!hasInventoryPermission(role, 'inventory.transfer', isSuperAdmin)) {

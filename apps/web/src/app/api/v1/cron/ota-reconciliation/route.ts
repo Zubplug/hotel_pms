@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
 
     for (const connection of connections) {
       if (!connection.credentialsRef) continue;
-      if (!(await hasEntitlement(connection.organizationId, 'ADDON_BEDS24'))) continue;
+      if (!(await hasEntitlement(connection.organizationId, 'ADDON_BEDS24', connection.propertyId))) continue;
 
       // 1. Watermark logic
       const lastSync = connection.lastSuccessfulSync || new Date(Date.now() - 24 * 60 * 60 * 1000); // default to 24h ago

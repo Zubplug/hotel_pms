@@ -9,6 +9,7 @@ import { requireOrganizationContext } from '@/lib/organization-access';
 import { createRoomSchema, roomQuerySchema } from '@hotel-pms/types';
 import { getPropertyBusinessDate } from '@/lib/kpi';
 import { reconcileRoomOccupancy } from '@/lib/room-occupancy';
+import { requireEntitlementCapacity } from '@/lib/auth/entitlement';
 
 export async function GET(req: NextRequest) {
   try {
@@ -123,6 +124,9 @@ export async function POST(req: NextRequest) {
       where: { propertyId_number: { propertyId: data.propertyId, number: data.number } },
     });
     if (existing) return errorResponse('ROOM_NUMBER_DUPLICATE', `Room ${data.number} already exists in this property`, 409);
+
+    const activeRoomCount = await prisma.room.count({ where: { propertyId: data.propertyId, deletedAt: null } });
+    await requireEntitlementCapacity(ctx.organizationId, 'CORE_PMS', data.propertyId, activeRoomCount + 1);
 
     const room = await prisma.room.create({
       data: { ...data, squareMeters: data.squareMeters } as any,

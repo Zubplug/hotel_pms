@@ -45,8 +45,11 @@ export async function PATCH(
     const capabilities = (session.user as any).capabilities || [];
     const userRole = String((session.user as any).role || '').toUpperCase();
     const isReceptionist = userRole === 'RECEPTIONIST' || userRole === 'FRONT_DESK';
-    const canManage = isReceptionist || capabilities.includes('ACCESS_MANAGEMENT') || await hasPermission(session.user.id, 'housekeeping', 'update', task.propertyId);
-    if (!canManage) return errorResponse('FORBIDDEN', 'Only reception or management can update housekeeping tasks', 403);
+    const canManage = isReceptionist
+      || capabilities.includes('ACCESS_HOUSEKEEPING')
+      || capabilities.includes('ACCESS_MANAGEMENT')
+      || await hasPermission(session.user.id, 'housekeeping', 'update', task.propertyId);
+    if (!canManage) return errorResponse('FORBIDDEN', 'Housekeeping staff, reception, or management can update housekeeping tasks', 403);
 
     const businessDate = await getPropertyBusinessDate(task.propertyId);
     const occupiedAssignment = await prisma.reservationRoom.findFirst({

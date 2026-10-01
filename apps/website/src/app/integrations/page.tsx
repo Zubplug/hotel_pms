@@ -12,8 +12,7 @@ const CATEGORIES = [
     name: "Payments",
     icon: "💳",
     integrations: [
-      { name: "Stripe",          desc: "Online payments and card processing." },
-      { name: "Flutterwave",     desc: "African payment gateway integration." },
+      { name: "Flutterwave",     desc: "Online payments and recurring billing." },
       { name: "Paystack",        desc: "Nigerian and Ghana payment processing." },
       { name: "Square",          desc: "POS and card payment terminals." },
     ],

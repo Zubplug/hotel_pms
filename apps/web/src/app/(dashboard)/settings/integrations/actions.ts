@@ -7,7 +7,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { Beds24TokenManager } from '@/lib/integrations/ota/providers/beds24/token-manager';
 import { ProviderFactory } from '@/lib/integrations/ota/ProviderFactory';
-import { requireEntitlement } from '@/lib/auth/entitlement';
+import { requireEntitlement, requirePlanLimit } from '@/lib/auth/entitlement';
 
 const connectionSchema = z.object({
   provider: z.enum(['CHANNEX', 'BEDS24']),
@@ -27,7 +27,7 @@ export async function verifyBeds24InviteCode(inviteCode: string) {
     const session = await auth();
     if (!session?.user) return { success: false, error: 'Unauthorized' };
     const ctx = await requireOrganizationContext(session.user.id);
-    await requireEntitlement(ctx.organizationId, 'ADDON_BEDS24');
+    await requireEntitlement(ctx.organizationId, 'ADDON_BEDS24', ctx.propertyIds[0]);
 
     // Exchange the invite code
     const encryptedRefreshToken = await Beds24TokenManager.exchangeInviteCode(inviteCode);
@@ -65,8 +65,12 @@ export async function saveChannelConnection(data: z.infer<typeof connectionSchem
     const { provider, externalPropertyId, webhookSecret, apiToken, credentialsRef } = parsed.data;
 
     const ctx = await requireOrganizationContext(session.user.id);
-    if (provider === 'BEDS24') await requireEntitlement(ctx.organizationId, 'ADDON_BEDS24');
     const propertyId = ctx.propertyIds[0];
+    if (provider === 'BEDS24') await requireEntitlement(ctx.organizationId, 'ADDON_BEDS24', propertyId);
+    else await requireEntitlement(ctx.organizationId, 'PROFESSIONAL_OPERATIONS', propertyId);
+    const existingConnection = await prisma.channelConnection.findUnique({ where: { propertyId_provider: { propertyId, provider } }, select: { id: true } });
+    const integrationCount = await prisma.channelConnection.count({ where: { organizationId: ctx.organizationId, NOT: existingConnection ? { id: existingConnection.id } : undefined } });
+    await requirePlanLimit(ctx.organizationId, 'maxIntegrations', integrationCount);
 
     // Determine the credentials format
     let finalCredentialsRef = credentialsRef;
@@ -116,7 +120,7 @@ export async function syncRemoteRooms(providerSlug: string) {
     const session = await auth();
     if (!session?.user) return { success: false, error: 'Unauthorized' };
     const ctx = await requireOrganizationContext(session.user.id);
-    if (providerSlug.toUpperCase() === 'BEDS24') await requireEntitlement(ctx.organizationId, 'ADDON_BEDS24');
+    if (providerSlug.toUpperCase() === 'BEDS24') await requireEntitlement(ctx.organizationId, 'ADDON_BEDS24', ctx.propertyIds[0]);
     const propertyId = ctx.propertyIds[0];
 
     const connection = await prisma.channelConnection.findUnique({
@@ -171,7 +175,7 @@ export async function syncRemoteRatePlans(providerSlug: string) {
     const session = await auth();
     if (!session?.user) return { success: false, error: 'Unauthorized' };
     const ctx = await requireOrganizationContext(session.user.id);
-    if (providerSlug.toUpperCase() === 'BEDS24') await requireEntitlement(ctx.organizationId, 'ADDON_BEDS24');
+    if (providerSlug.toUpperCase() === 'BEDS24') await requireEntitlement(ctx.organizationId, 'ADDON_BEDS24', ctx.propertyIds[0]);
     const propertyId = ctx.propertyIds[0];
 
     const connection = await prisma.channelConnection.findUnique({

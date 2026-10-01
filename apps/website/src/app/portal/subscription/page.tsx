@@ -32,6 +32,12 @@ export default async function SubscriptionPage() {
     },
   });
 
+  const entitlements = await prisma.entitlement.findMany({
+    where: { organizationId: user.organizationId, status: "ACTIVE" },
+    include: { product: true, property: { select: { name: true } } },
+    orderBy: [{ propertyId: "asc" }, { productCode: "asc" }],
+  });
+
   const plan = subscription?.plan ?? null;
 
   return (
@@ -53,6 +59,30 @@ export default async function SubscriptionPage() {
           <div className="portal-empty-title">No active subscription</div>
           <div className="portal-empty-body">
             Your organization doesn&apos;t have a subscription yet. Talk to the LodgeCore team to get set up.
+          </div>
+
+          <div className="portal-card" style={{ padding: 0 }}>
+            <div className="portal-card-title" style={{ padding: "20px 22px 0" }}>
+              Active entitlements
+              <span style={{ fontSize: 12, color: "var(--text-muted)", fontFamily: "var(--font-mono)", fontWeight: 400 }}>
+                {entitlements.length}
+              </span>
+            </div>
+            <div className="portal-table-wrap" style={{ border: "none", borderRadius: 0 }}>
+              <table className="portal-table">
+                <thead><tr><th>Product</th><th>Scope</th><th>Status</th></tr></thead>
+                <tbody>
+                  {entitlements.map((entitlement) => (
+                    <tr key={entitlement.id}>
+                      <td style={{ color: "var(--text-primary)", fontWeight: 600 }}>{entitlement.product.name}</td>
+                      <td>{entitlement.property?.name ?? "All organisation properties"}</td>
+                      <td><span className="portal-badge badge-active">Active</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {!entitlements.length && <div className="portal-empty" style={{ margin: "0 22px 22px" }}><div className="portal-empty-body">Entitlements will appear after billing is confirmed.</div></div>}
+            </div>
           </div>
           <Link href="/book-demo" className="btn btn-primary btn-sm" style={{ marginTop: 8 }}>Contact sales →</Link>
         </div>
@@ -86,6 +116,13 @@ export default async function SubscriptionPage() {
                 </div>
               </div>
             </div>
+            {(subscription.cancelAtPeriodEnd || subscription.status === "PAST_DUE") && (
+              <div role="status" style={{ marginTop: 18, padding: "12px 14px", borderRadius: 8, background: "var(--accent-dim)", color: "var(--text-primary)", fontSize: 13 }}>
+                {subscription.cancelAtPeriodEnd
+                  ? `Your subscription is scheduled to end on ${new Date(subscription.currentPeriodEnd).toLocaleDateString("en-GB")}.`
+                  : "Payment is past due. Update your payment method to keep all modules active."}
+              </div>
+            )}
             {plan?.description && (
               <p style={{ marginTop: 18, fontSize: 13, color: "var(--text-muted)", lineHeight: 1.7, borderTop: "1px solid var(--border)", paddingTop: 16 }}>
                 {plan.description}

@@ -60,9 +60,10 @@ const COMPARE = [
 
 type Plan = {
   id: string;
+  code: string;
   name: string;
   description: string | null;
-  items: { product: { name: string } }[];
+  items: { required: boolean; includedQty: number | null; product: { name: string; code: string; prices: { amount: number; currency: string; interval: string }[] } }[];
 };
 
 function FaqItem({ q, a }: { q: string; a: string }) {
@@ -137,17 +138,35 @@ const STATIC_PLANS = [
 
 export default function PricingPage() {
   const [liveLoaded, setLiveLoaded] = useState(false);
-  const [plans] = useState<Plan[]>([]);
+  const [plans, setPlans] = useState<Plan[]>([]);
+  const [billingInterval, setBillingInterval] = useState<"month" | "year">("month");
   const [openFaq, setOpenFaq] = useState<number | null>(null);
 
   useEffect(() => {
     fetch("/api/catalog")
       .then((r) => (r.ok ? r.json() : null))
+      .then((data: { plans?: Plan[] } | null) => setPlans(data?.plans ?? []))
       .then(() => setLiveLoaded(true))
       .catch(() => setLiveLoaded(true));
   }, []);
 
-  void plans;
+  const displayPlans = plans.length
+    ? plans.map((plan, index) => {
+        const price = plan.items.flatMap((item) => item.product.prices).find((item) => item.interval === billingInterval)
+          ?? plan.items.flatMap((item) => item.product.prices).find((item) => item.interval === "month");
+        return {
+          id: plan.code.toLowerCase(),
+          name: plan.name,
+          description: plan.description ?? "A modular LodgeCore subscription for hospitality operations.",
+          features: plan.items.map((item) => `${item.product.name}${item.includedQty ? ` · ${item.includedQty} included` : ""}`),
+          featured: plan.code === "PROFESSIONAL",
+          cta: plan.code === "ENTERPRISE" ? "Talk to enterprise →" : "Talk to sales →",
+          priceLabel: price ? `${price.currency.toUpperCase()} ${price.amount.toLocaleString()} / ${price.interval}` : "Pricing on request",
+          live: true,
+          index,
+        };
+      })
+    : STATIC_PLANS;
 
   return (
     <main className="site-shell">
@@ -205,12 +224,16 @@ export default function PricingPage() {
       <section className="section-gap" style={{ paddingTop: 0 }}>
         <div className="contain">
           <Reveal>
+            {plans.length > 0 && <div style={{ display: "flex", justifyContent: "center", gap: 6, marginBottom: 20 }} role="group" aria-label="Billing interval">
+              {(["month", "year"] as const).map((interval) => <button key={interval} type="button" onClick={() => setBillingInterval(interval)} className={`btn btn-sm ${billingInterval === interval ? "btn-primary" : "btn-outline"}`}>{interval === "month" ? "Monthly" : "Annual · save two months"}</button>)}
+            </div>}
             <div className="pricing-grid" style={{ marginBottom: 40 }}>
-              {STATIC_PLANS.map((plan) => (
+              {displayPlans.map((plan) => (
                 <article key={plan.id} className={`pricing-card${plan.featured ? " featured" : ""}`}>
                   {plan.featured && <div className="pricing-badge">Most popular</div>}
                   <div className="plan-name">{plan.name}</div>
                   <p className="plan-desc">{plan.description}</p>
+                  {"priceLabel" in plan && <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--accent)", marginTop: 10 }}>{String(plan.priceLabel)}</div>}
                   <div className="plan-divider" />
                   <ul className="plan-features" role="list">
                     {plan.features.map((f) => (
