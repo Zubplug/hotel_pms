@@ -37,7 +37,10 @@ const AREA_CARDS = [
 export default async function PortalDashboard() {
   const session = await auth();
   const user = session?.user as SessionUser & { isLodgeCoreAdmin?: boolean } | undefined;
-  if (user?.isLodgeCoreAdmin) redirect("/hq");
+  if (user?.isLodgeCoreAdmin) {
+    const webUrl = process.env.NEXTAUTH_URL || "https://lodgecore.vercel.app";
+    redirect(`${webUrl}/hq`);
+  }
   if (!user?.organizationId) redirect("/portal/login");
 
   const { organizationId } = user;
