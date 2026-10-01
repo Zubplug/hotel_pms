@@ -181,10 +181,7 @@ export default auth((req) => {
     //   Multi-cap staff             → hub tile picker
     if (nextUrl.pathname === '/login' && isLoggedIn) {
       if ((req.auth?.user as any)?.isLodgeCoreAdmin) {
-        const websiteUrl = process.env.WEBSITE_URL || process.env.NEXT_PUBLIC_WEBSITE_URL || 'https://getlodgecore.vercel.app';
-        const hqLoginUrl = new URL(`${websiteUrl.replace(/\/$/, '')}/portal/login`);
-        hqLoginUrl.searchParams.set('callbackUrl', '/hq');
-        return Response.redirect(hqLoginUrl);
+        return Response.redirect(new URL('/hq', nextUrl));
       }
       if (String((req.auth?.user as any)?.role || '').toUpperCase() === 'EXTERNAL_AUDITOR') {
         return Response.redirect(new URL('/external-auditor', nextUrl));

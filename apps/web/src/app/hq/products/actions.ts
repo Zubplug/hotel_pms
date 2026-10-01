@@ -33,4 +33,3 @@ export async function createBillingPrice(formData: FormData) {
   await prisma.billingPrice.create({ data: { productId, stripePriceId: stripePrice.id, amount, currency, interval } });
   revalidatePath('/hq/products');
 }
-
