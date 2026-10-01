@@ -32,8 +32,7 @@ function getDirectLandingUrl(
   isLodgeCoreAdmin: boolean
 ): string | null {
   if (isLodgeCoreAdmin) {
-    const websiteUrl = process.env.WEBSITE_URL || process.env.NEXT_PUBLIC_WEBSITE_URL || 'https://getlodgecore.vercel.app';
-    return `${websiteUrl.replace(/\/$/, '')}/hq`;
+    return '/hq';
   }
 
   // Super admins and management roles → Management Dashboard
