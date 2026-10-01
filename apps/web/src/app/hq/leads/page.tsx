@@ -1,10 +1,32 @@
 import prisma from '@hotel-pms/db';
 import { requireHQAdmin } from '@/lib/auth/hq';
-import { LeadActions } from './LeadActions';
+import { LeadsCommandCenter } from './LeadsCommandCenter';
+
+const DAY = 24 * 60 * 60 * 1000;
 
 export default async function HQLeadsPage() {
   await requireHQAdmin();
-  const leads = await prisma.salesLead.findMany({ orderBy: { createdAt: 'desc' }, take: 100, include: { organization: { select: { id: true, name: true } } } });
-  return <div className="min-h-full bg-[#07111f] p-5 text-slate-200 sm:p-8 xl:p-10"><div className="mx-auto max-w-[1500px] space-y-6"><div><p className="text-xs font-medium uppercase tracking-[.18em] text-indigo-300">Sales pipeline</p><h1 className="mt-2 text-3xl font-semibold tracking-tight text-white">Inbound leads</h1><p className="mt-2 text-sm text-slate-400">Qualify requests and provision customer portal access when a lead is ready.</p></div><div className="overflow-x-auto rounded-2xl border border-white/10 bg-[#101b2f]"><table className="w-full min-w-[900px] text-left text-sm"><thead className="border-b border-white/10 text-[10px] uppercase tracking-[.15em] text-slate-500"><tr><th className="px-5 py-4">Contact</th><th className="px-5 py-4">Property</th><th className="px-5 py-4">Status</th><th className="px-5 py-4">Received</th><th className="px-5 py-4 text-right">Action</th></tr></thead><tbody className="divide-y divide-white/6">{leads.map((lead) => <tr key={lead.id}><td className="px-5 py-4"><p className="font-medium text-white">{lead.name}</p><p className="mt-1 text-xs text-slate-500">{lead.email}{lead.phone ? ` · ${lead.phone}` : ''}</p></td><td className="px-5 py-4 text-slate-300">{lead.propertyName || lead.company || '—'}<p className="mt-1 text-xs text-slate-500">{lead.roomCount ? `${lead.roomCount} rooms` : 'Room count not provided'}</p></td><td className="px-5 py-4"><span className="rounded-full bg-white/[.06] px-2.5 py-1 text-xs text-slate-300">{lead.status}</span>{lead.organization && <p className="mt-2 text-xs text-emerald-300">{lead.organization.name}</p>}</td><td className="px-5 py-4 text-xs text-slate-500">{lead.createdAt.toLocaleString('en-NG', { dateStyle: 'medium', timeStyle: 'short' })}</td><td className="px-5 py-4 text-right"><LeadActions leadId={lead.id} status={lead.status} defaultOrganizationName={lead.propertyName || lead.company || ''} /></td></tr>)}</tbody></table>{leads.length === 0 && <p className="p-12 text-center text-sm text-slate-500">No inbound leads have been received.</p>}</div></div></div>;
-}
+  const now = new Date();
+  const since = new Date(now.getTime() - 5 * 30 * DAY);
 
+  const [leads, proposals, implementationProjects] = await Promise.all([
+    prisma.salesLead.findMany({ orderBy: { createdAt: 'desc' }, take: 250, include: { organization: { select: { id: true, name: true, slug: true } }, proposals: { select: { id: true, number: true, status: true, total: true, currency: true, validUntil: true, createdAt: true } } } }),
+    prisma.proposal.findMany({ where: { createdAt: { gte: since } }, select: { id: true, leadId: true, organizationId: true, status: true, total: true, currency: true, validUntil: true, createdAt: true } }),
+    prisma.implementationProject.findMany({ where: { createdAt: { gte: since } }, select: { id: true, organizationId: true, status: true, targetGoLiveAt: true, createdAt: true } }),
+  ]);
+
+  const pipelineStages = ['NEW', 'QUALIFIED', 'INVITE_PENDING', 'CONVERTED'];
+  const stageLabels: Record<string, string> = { NEW: 'New', QUALIFIED: 'Qualified', INVITE_PENDING: 'Invite pending', CONVERTED: 'Converted' };
+  const stageProbability: Record<string, number> = { NEW: 0.1, QUALIFIED: 0.4, INVITE_PENDING: 0.75, CONVERTED: 1 };
+  const stageCounts = pipelineStages.map((status) => ({ status, label: stageLabels[status], count: leads.filter((lead) => lead.status === status).length, probability: stageProbability[status] }));
+  const sourceCounts = Object.entries(leads.reduce<Record<string, number>>((acc, lead) => { const source = lead.source || 'UNKNOWN'; acc[source] = (acc[source] ?? 0) + 1; return acc; }, {})).map(([source, count]) => ({ source, count })).sort((a, b) => b.count - a.count);
+  const monthly = Array.from({ length: 6 }, (_, index) => { const date = new Date(since); date.setMonth(since.getMonth() + index); return { label: date.toLocaleDateString('en-US', { month: 'short' }), leads: leads.filter((lead) => lead.createdAt.getFullYear() === date.getFullYear() && lead.createdAt.getMonth() === date.getMonth()).length, converted: leads.filter((lead) => lead.convertedAt && lead.convertedAt.getFullYear() === date.getFullYear() && lead.convertedAt.getMonth() === date.getMonth()).length }; });
+  const openLeads = leads.filter((lead) => !['CONVERTED', 'LOST', 'DISQUALIFIED'].includes(lead.status));
+  const staleLeads = openLeads.filter((lead) => now.getTime() - lead.updatedAt.getTime() > 7 * DAY);
+  const qualified = leads.filter((lead) => ['QUALIFIED', 'INVITE_PENDING', 'CONVERTED'].includes(lead.status)).length;
+  const converted = leads.filter((lead) => lead.status === 'CONVERTED').length;
+  const proposalValue = proposals.filter((proposal) => !['DECLINED', 'EXPIRED', 'DRAFT'].includes(proposal.status)).reduce((sum, proposal) => sum + proposal.total, 0);
+  const leadRows = leads.map((lead) => ({ id: lead.id, name: lead.name, email: lead.email, phone: lead.phone, company: lead.company, propertyName: lead.propertyName, location: lead.location, roomCount: lead.roomCount, message: lead.message, source: lead.source, campaign: lead.sourceCampaign, status: lead.status, assignedTo: lead.assignedTo, organization: lead.organization, createdAt: lead.createdAt.toISOString(), updatedAt: lead.updatedAt.toISOString(), convertedAt: lead.convertedAt?.toISOString() ?? null, proposals: lead.proposals.map((proposal) => ({ id: proposal.id, number: proposal.number, status: proposal.status, total: proposal.total, currency: proposal.currency, validUntil: proposal.validUntil?.toISOString() ?? null, createdAt: proposal.createdAt.toISOString() })) }));
+
+  return <LeadsCommandCenter data={{ generatedAt: now.toISOString(), leads: leadRows, stageCounts, sourceCounts, monthly, implementationProjects: implementationProjects.map((project) => ({ id: project.id, organizationId: project.organizationId, status: project.status, targetGoLiveAt: project.targetGoLiveAt?.toISOString() ?? null, createdAt: project.createdAt.toISOString() })), metrics: { total: leads.length, open: openLeads.length, stale: staleLeads.length, qualified, converted, qualificationRate: leads.length ? Math.round((qualified / leads.length) * 100) : 0, conversionRate: leads.length ? Math.round((converted / leads.length) * 100) : 0, proposalCount: proposals.length, proposalValue } }} />;
+}
