@@ -187,7 +187,6 @@ export default function BookDemoPage() {
                 {status === "sending" ? "Sending request…" : "Send request →"}
               </button>
 
-              {status === "sent" && <p role="status" style={{ fontSize: 12, color: "var(--green)", textAlign: "center" }}>Request received. A LodgeCore team member will contact you within one business day.</p>}
               {status === "error" && <p role="alert" style={{ fontSize: 12, color: "#ff7b8e", textAlign: "center" }}>We could not submit your request. Please try again.</p>}
 
               <p style={{ fontSize: 10, color: "var(--text-muted)", textAlign: "center", lineHeight: 1.5 }}>
@@ -199,6 +198,39 @@ export default function BookDemoPage() {
           </div>
         </div>
       </section>
+
+      {/* SUCCESS MODAL */}
+      {status === "sent" && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md p-4">
+          <div className="relative w-full max-w-md overflow-hidden rounded-2xl border border-white/10 bg-[#0a1120] p-8 shadow-2xl animate-in fade-in zoom-in duration-300">
+            {/* Ambient glow behind icon */}
+            <div className="absolute left-1/2 top-10 -translate-x-1/2 -translate-y-1/2 w-32 h-32 bg-emerald-500/20 blur-3xl rounded-full pointer-events-none" />
+            
+            <div className="relative flex flex-col items-center text-center">
+              <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/10 ring-1 ring-emerald-500/30">
+                <svg className="h-8 w-8 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              
+              <h3 className="mb-2 font-display text-2xl font-bold tracking-tight text-white">
+                Request Received
+              </h3>
+              
+              <p className="mb-8 text-sm leading-relaxed text-slate-400">
+                Thank you for your interest in LodgeCore. A member of our team will review your property details and contact you within one business day.
+              </p>
+              
+              <Link 
+                href="/"
+                className="flex w-full items-center justify-center rounded-lg bg-white py-3 text-sm font-bold text-slate-900 transition-colors hover:bg-slate-200"
+              >
+                Return to homepage
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
 
       <PublicFooter />
     </main>
