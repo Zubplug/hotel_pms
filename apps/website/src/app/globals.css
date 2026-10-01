@@ -70,10 +70,12 @@ body {
   line-height: 1.6;
   overflow-x: hidden;
 }
-a { color: inherit; text-decoration: none; }
-button { font: inherit; border: none; background: none; cursor: pointer; }
 img, video { display: block; max-width: 100%; }
-ul, ol { list-style: none; }
+
+/* Scoped to public marketing shell only — does NOT affect HQ or portal */
+.site-shell a, .site-shell footer a { color: inherit; text-decoration: none; }
+.site-shell button { font: inherit; border: none; background: none; cursor: pointer; }
+.site-shell ul, .site-shell ol { list-style: none; }
 
 /* ── UTILITY ────────────────────────────────────────────── */
 .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); border:0; }
@@ -156,8 +158,15 @@ ul, ol { list-style: none; }
   background-size: 64px 64px;
 }
 
-/* ── TYPOGRAPHY ─────────────────────────────────────────── */
-h1, h2, h3, h4, h5, h6 { font-family: var(--font-display); color: var(--text-primary); line-height: 1; letter-spacing: -.04em; }
+/* ── TYPOGRAPHY — scoped to public marketing shell only ─── */
+/* HQ and portal pages are NOT affected by these heading rules */
+.site-shell h1, .site-shell h2, .site-shell h3,
+.site-shell h4, .site-shell h5, .site-shell h6 {
+  font-family: var(--font-display);
+  color: var(--text-primary);
+  line-height: 1;
+  letter-spacing: -.04em;
+}
 .display-xl {
   font-size: clamp(3.4rem, 6.5vw, 7rem);
   font-weight: 800;
@@ -4815,51 +4824,14 @@ textarea.form-input { resize: vertical; min-height: 90px; }
 }
 
 /* ═══════════════════════════════════════════════════════════
-   HQ CONTROL PLANE — CSS ISOLATION
-   Scoped resets so the website marketing design system does
-   NOT bleed into the HQ admin shell and its sub-pages.
+   HQ CONTROL PLANE — BASE STYLES
+   The aggressive website typography rules are now scoped to
+   .site-shell, so HQ pages are clean by default. This block
+   just sets the correct font baseline for the HQ shell.
    ═══════════════════════════════════════════════════════════ */
 .hq-root {
   font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   font-size: 16px;
   line-height: 1.5;
-}
-
-/* Reset heading overrides */
-.hq-root h1,
-.hq-root h2,
-.hq-root h3,
-.hq-root h4,
-.hq-root h5,
-.hq-root h6 {
-  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  font-size: revert;
-  line-height: revert;
-  letter-spacing: revert;
-  color: inherit;
-}
-
-/* Reset button overrides — let Tailwind control buttons */
-.hq-root button {
-  font: inherit;
-  border: revert;
-  background: revert;
-  cursor: pointer;
-}
-
-/* Reset link colour — let Tailwind text-* control link colours */
-.hq-root a {
-  color: inherit;
-  text-decoration: none;
-}
-
-/* Reset list styles — let Tailwind control */
-.hq-root ul,
-.hq-root ol {
-  list-style: revert;
-}
-
-/* Reset body font-size bleed for the HQ subtree */
-.hq-root * {
-  box-sizing: border-box;
+  -webkit-font-smoothing: antialiased;
 }
