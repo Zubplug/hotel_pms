@@ -1,65 +1,36 @@
 import prisma from '@hotel-pms/db';
-import { Card } from '@/components/ui/card';
-import { format } from 'date-fns';
 import { requireHQAdmin } from '@/lib/auth/hq';
+import { ActivityCommandCenter } from './ActivityCommandCenter';
+
+const DAY = 24 * 60 * 60 * 1000;
+const SENSITIVE_ACTIONS = ['ROLE_CHANGED', 'PERMISSION_CHANGED', 'FINANCIAL_OVERRIDE', 'UNAUTHORIZED_DISCOUNT', 'USER_DEACTIVATED', 'IMPERSONATION_STARTED', 'IMPERSONATION_ENDED'];
 
 export default async function HQActivityPage() {
   await requireHQAdmin();
-  // Fetch the latest 100 audit logs across the entire system
-  const logs = await prisma.auditLog.findMany({
-    orderBy: { createdAt: 'desc' },
-    take: 100,
-    include: { organization: { select: { name: true, slug: true } } }
-  });
-
-  return (
-    <div className="p-8 space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight text-zinc-900 dark:text-white">Global Activity Feed</h1>
-        <p className="text-zinc-500 mt-1">Real-time audit log of all system actions across all tenants.</p>
-      </div>
-
-      <Card className="overflow-hidden">
-        <table className="w-full text-sm text-left">
-          <thead className="bg-zinc-50 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800">
-            <tr>
-              <th className="px-6 py-4 font-medium text-zinc-500">Timestamp</th>
-              <th className="px-6 py-4 font-medium text-zinc-500">Tenant</th>
-              <th className="px-6 py-4 font-medium text-zinc-500">Actor</th>
-              <th className="px-6 py-4 font-medium text-zinc-500">Action</th>
-              <th className="px-6 py-4 font-medium text-zinc-500">Resource</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
-            {logs.map(log => (
-              <tr key={log.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-900/50">
-                <td className="px-6 py-4 text-zinc-500 whitespace-nowrap">
-                  {log.createdAt ? format(new Date(log.createdAt), 'MMM d, HH:mm:ss') : 'Unknown'}
-                </td>
-                <td className="px-6 py-4">
-                  <div className="font-medium text-zinc-900 dark:text-white">{log.organization?.name || "Unknown Tenant"}</div>
-                </td>
-                <td className="px-6 py-4">
-                  <div className="font-medium">{log.userEmail || 'System'}</div>
-                  {log.impersonatorUserId && (
-                    <div className="text-xs text-orange-600 dark:text-orange-400 font-semibold mt-1">
-                      (Impersonated by HQ Admin)
-                    </div>
-                  )}
-                </td>
-                <td className="px-6 py-4">
-                  <span className="font-mono text-xs bg-zinc-100 dark:bg-zinc-800 px-2 py-1 rounded">
-                    {log.action}
-                  </span>
-                </td>
-                <td className="px-6 py-4 text-zinc-500">
-                  {log.resource} <span className="opacity-50">#{log.resourceId.slice(0,8)}</span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </Card>
-    </div>
-  );
+  const now = new Date();
+  const since = new Date(now.getTime() - 29 * DAY);
+  const logs = await prisma.auditLog.findMany({ where: { createdAt: { gte: since } }, orderBy: { createdAt: 'desc' }, take: 1000, include: { organization: { select: { id: true, name: true, slug: true } } } });
+  const daily = Array.from({ length: 14 }, (_, index) => { const date = new Date(now.getTime() - (13 - index) * DAY); return { key: date.toISOString().slice(0, 10), label: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), events: 0, sensitive: 0 }; });
+  const actionCounts = new Map<string, number>();
+  const resourceCounts = new Map<string, number>();
+  const actorCounts = new Map<string, { label: string; count: number }>();
+  const organizationCounts = new Map<string, { name: string; count: number }>();
+  let impersonated = 0;
+  let sensitive = 0;
+  for (const log of logs) {
+    const action = log.action.toUpperCase();
+    actionCounts.set(action, (actionCounts.get(action) ?? 0) + 1);
+    resourceCounts.set(log.resource, (resourceCounts.get(log.resource) ?? 0) + 1);
+    const actorLabel = log.userEmail || 'System';
+    const actor = actorCounts.get(actorLabel) ?? { label: actorLabel, count: 0 };
+    actor.count += 1; actorCounts.set(actorLabel, actor);
+    const organization = organizationCounts.get(log.organizationId) ?? { name: log.organization.name, count: 0 };
+    organization.count += 1; organizationCounts.set(log.organizationId, organization);
+    if (log.impersonatorUserId) impersonated += 1;
+    if (SENSITIVE_ACTIONS.includes(action)) sensitive += 1;
+    const point = daily.find((item) => item.key === log.createdAt.toISOString().slice(0, 10));
+    if (point) { point.events += 1; if (SENSITIVE_ACTIONS.includes(action)) point.sensitive += 1; }
+  }
+  const logsForClient = logs.map((log) => ({ id: log.id, organizationId: log.organizationId, organizationName: log.organization.name, organizationSlug: log.organization.slug, propertyId: log.propertyId, userId: log.userId, userEmail: log.userEmail, userRole: log.userRole, impersonatorUserId: log.impersonatorUserId, action: log.action, resource: log.resource, resourceId: log.resourceId, previousValue: log.previousValue, newValue: log.newValue, ipAddress: log.ipAddress, userAgent: log.userAgent, requestId: log.requestId, createdAt: log.createdAt.toISOString(), sensitive: SENSITIVE_ACTIONS.includes(log.action.toUpperCase()) }));
+  return <ActivityCommandCenter data={{ generatedAt: now.toISOString(), logs: logsForClient, daily: daily.map(({ key, ...point }) => point), actions: [...actionCounts.entries()].map(([action, count]) => ({ action, count })).sort((a, b) => b.count - a.count), resources: [...resourceCounts.entries()].map(([resource, count]) => ({ resource, count })).sort((a, b) => b.count - a.count), actors: [...actorCounts.values()].sort((a, b) => b.count - a.count).slice(0, 8), organizations: [...organizationCounts.entries()].map(([id, value]) => ({ id, ...value })).sort((a, b) => b.count - a.count).slice(0, 8), metrics: { total: logs.length, sensitive, impersonated, organizations: organizationCounts.size, actors: actorCounts.size, failedSignals: logs.filter((log) => /FAIL|ERROR|DENIED|REJECT/i.test(log.action)).length } }} />;
 }
