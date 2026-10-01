@@ -25,12 +25,18 @@ export async function createBillingPrice(formData: FormData) {
   const product = await prisma.billingProduct.findUniqueOrThrow({ where: { id: productId } });
   if (!process.env.FLW_SECRET_KEY) throw new Error('Flutterwave is not configured');
   if (currency.toUpperCase() !== 'NGN') throw new Error('Flutterwave catalogue prices currently require NGN');
-  const paymentPlan = await createFlutterwavePaymentPlan({
-    name: `${product.name} (${interval})`,
-    amount: Math.round(amount / 100),
-    currency: 'NGN',
-    interval: interval === 'year' ? 'yearly' : 'monthly',
-  });
-  await prisma.billingPrice.create({ data: { productId, flutterwavePriceId: String(paymentPlan.id), amount, currency, interval } });
+  try {
+    const paymentPlan = await createFlutterwavePaymentPlan({
+      name: `${product.name} (${interval})`,
+      amount: Math.round(amount / 100),
+      currency: 'NGN',
+      interval: interval === 'year' ? 'yearly' : 'monthly',
+    });
+    if (!paymentPlan?.id) throw new Error('Flutterwave did not return a payment-plan ID');
+    await prisma.billingPrice.create({ data: { productId, flutterwavePriceId: String(paymentPlan.id), amount, currency, interval } });
+  } catch (error) {
+    console.error('[HQ products] Flutterwave price publish failed', { productId, interval, currency, message: error instanceof Error ? error.message : String(error) });
+    throw new Error(error instanceof Error ? error.message : 'Unable to publish the Flutterwave price');
+  }
   revalidatePath('/hq/products');
 }
