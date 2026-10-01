@@ -17,7 +17,7 @@ export default async function HQProductsPage() {
       orderBy: [{ active: 'desc' }, { createdAt: 'desc' }],
     }),
     prisma.billingPlan.findMany({ include: { items: { include: { product: { select: { id: true, name: true, code: true } } } } }, orderBy: { displayOrder: 'asc' } }),
-    prisma.subscription.findMany({ where: { status: { in: ['ACTIVE', 'TRIALING', 'PAST_DUE', 'PAUSED'] } }, include: { items: { include: { price: { include: { product: { select: { id: true, name: true, code: true } } } } } } } }),
+    prisma.subscription.findMany({ where: { status: { in: ['ACTIVE', 'TRIALING', 'PAST_DUE', 'PAUSED'] } }, include: { plan: { select: { id: true, name: true, code: true } }, items: { include: { price: { include: { product: { select: { id: true, name: true, code: true } } } } } } } }),
     prisma.billingInvoice.findMany({ where: { createdAt: { gte: since } }, select: { total: true, amountPaid: true, amountDue: true, status: true, currency: true, createdAt: true }, orderBy: { createdAt: 'desc' } }),
     prisma.organization.findMany({ select: { id: true, name: true, createdAt: true, subscriptions: { orderBy: { createdAt: 'desc' }, take: 1, select: { status: true } } } }),
     prisma.billingInvoice.findMany({ take: 6, orderBy: { createdAt: 'desc' }, select: { id: true, total: true, amountDue: true, status: true, currency: true, createdAt: true, organization: { select: { name: true } } } }),
@@ -52,18 +52,24 @@ export default async function HQProductsPage() {
     createdAt: product.createdAt.toISOString(),
     prices: product.prices.map((price) => ({ id: price.id, amount: price.amount, currency: price.currency, interval: price.interval, flutterwavePriceId: price.flutterwavePriceId })),
     adoption: productUsage.get(product.id)?.accounts.size ?? 0,
+    quantity: productUsage.get(product.id)?.quantity ?? 0,
     mrr: productUsage.get(product.id)?.mrr ?? 0,
     planCount: product._count.planItems,
     entitlementCount: product._count.entitlements,
     moduleCount: product._count.modules,
   }));
 
+  const planMix = plans.map((plan) => ({ name: plan.name, value: activeSubscriptions.filter((subscription) => subscription.plan?.id === plan.id).length })).filter((plan) => plan.value > 0);
+  const statusMix = ['ACTIVE', 'TRIALING', 'PAST_DUE', 'PAUSED'].map((status) => ({ name: status.replace('_', ' '), value: subscriptions.filter((subscription) => subscription.status === status).length })).filter((status) => status.value > 0);
+
   return <ProductsWorkspace data={{
+    generatedAt: new Date().toISOString(),
     catalog,
-    plans: plans.map((plan) => ({ id: plan.id, name: plan.name, code: plan.code, active: plan.active, itemCount: plan.items.length })),
+    plans: plans.map((plan) => ({ id: plan.id, name: plan.name, code: plan.code, active: plan.active, itemCount: plan.items.length, subscriptionCount: activeSubscriptions.filter((subscription) => subscription.plan?.id === plan.id).length, products: plan.items.map((item) => item.product.name) })),
     monthlyRevenue,
+    planMix,
+    statusMix,
     recentInvoices: recentInvoices.map((invoice) => ({ ...invoice, createdAt: invoice.createdAt.toISOString(), organizationName: invoice.organization.name })),
-    metrics: { totalProducts: products.length, activeProducts: products.filter((product) => product.active).length, totalPlans: plans.length, activeSubscriptions: activeSubscriptions.length, totalOrganizations: organizations.length, totalMrr, collected, outstanding, failedInvoices: invoices.filter((invoice) => ['failed', 'uncollectible', 'past_due'].includes(invoice.status.toLowerCase())).length },
+    metrics: { totalProducts: products.length, activeProducts: products.filter((product) => product.active).length, totalPlans: plans.length, activePlans: plans.filter((plan) => plan.active).length, activeSubscriptions: activeSubscriptions.length, totalSubscriptions: subscriptions.length, totalOrganizations: organizations.length, totalMrr, collected, outstanding, failedInvoices: invoices.filter((invoice) => ['failed', 'uncollectible', 'past_due'].includes(invoice.status.toLowerCase())).length, pricedProducts: products.filter((product) => product.prices.length > 0).length, syncedProducts: products.filter((product) => product.flutterwaveProductId).length },
   }} />;
 }
-

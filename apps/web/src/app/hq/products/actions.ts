@@ -25,7 +25,12 @@ export async function createBillingPrice(formData: FormData) {
   const product = await prisma.billingProduct.findUniqueOrThrow({ where: { id: productId } });
   if (!process.env.FLW_SECRET_KEY) throw new Error('Flutterwave is not configured');
   if (currency.toUpperCase() !== 'NGN') throw new Error('Flutterwave catalogue prices currently require NGN');
-  const paymentPlan = await createFlutterwavePaymentPlan({ name: product.name, amount: Math.round(amount / 100), interval: interval === 'year' ? 'yearly' : 'monthly' });
+  const paymentPlan = await createFlutterwavePaymentPlan({
+    name: `${product.name} (${interval})`,
+    amount: Math.round(amount / 100),
+    currency: 'NGN',
+    interval: interval === 'year' ? 'yearly' : 'monthly',
+  });
   await prisma.billingPrice.create({ data: { productId, flutterwavePriceId: String(paymentPlan.id), amount, currency, interval } });
   revalidatePath('/hq/products');
 }

@@ -44,7 +44,7 @@ export async function createFlutterwaveCheckout(input: FlutterwaveCheckoutInput)
   });
 }
 
-export async function createFlutterwavePaymentPlan(input: { name: string; amount: number; interval: 'monthly' | 'yearly' }) {
+export async function createFlutterwavePaymentPlan(input: { name: string; amount: number; interval: 'monthly' | 'yearly'; currency?: string; duration?: number }) {
   return request<{ id: number; name: string; amount: number; interval: string; status: string }>('/payment-plans', { method: 'POST', body: JSON.stringify(input) });
 }
 
