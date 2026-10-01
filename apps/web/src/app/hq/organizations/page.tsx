@@ -33,7 +33,7 @@ export default async function HQOrganizationsPage() {
     }),
     prisma.folioItem.findMany({
       where: { businessDate: { gte: periodStart, lte: today }, type: 'CHARGE', voidedAt: null },
-      select: { propertyId: true, businessDate: true, amount: true, currency: true, revenueCategory: true },
+      select: { businessDate: true, amount: true, currency: true, revenueCategory: true, folio: { select: { propertyId: true } } },
     }),
     prisma.housekeepingTask.findMany({ where: { businessDate: { gte: periodStart, lte: today }, status: { notIn: ['CANCELLED', 'INSPECTED'] } }, select: { propertyId: true, status: true } }),
     prisma.maintenanceTicket.findMany({ where: { status: { notIn: ['RESOLVED', 'CLOSED', 'CANCELLED'] } }, select: { propertyId: true, status: true, priority: true } }),
@@ -55,11 +55,12 @@ export default async function HQOrganizationsPage() {
   const revenueByProperty = new Map<string, { total: number; room: number }>();
   const revenueDaily = new Map<string, number>();
   for (const item of folioItems) {
-    const current = revenueByProperty.get(item.propertyId) ?? { total: 0, room: 0 };
+    const propertyId = item.folio.propertyId;
+    const current = revenueByProperty.get(propertyId) ?? { total: 0, room: 0 };
     const amount = Number(item.amount);
     current.total += amount;
     if (item.revenueCategory === 'ROOM') current.room += amount;
-    revenueByProperty.set(item.propertyId, current);
+    revenueByProperty.set(propertyId, current);
     const key = dayKey(item.businessDate);
     revenueDaily.set(key, (revenueDaily.get(key) ?? 0) + amount);
   }
