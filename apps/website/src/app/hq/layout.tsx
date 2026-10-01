@@ -23,7 +23,7 @@ export default async function HQLayout({
   ];
 
   return (
-    <div className="flex h-screen bg-[#07111f] text-slate-200">
+    <div className="hq-root flex h-screen bg-[#07111f] text-slate-200">
       {/* HQ Sidebar */}
       <aside className="hidden w-72 shrink-0 border-r border-white/10 bg-[#0b1628] text-slate-300 lg:flex lg:flex-col">
         <div className="border-b border-white/10 px-6 py-6">
