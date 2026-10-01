@@ -14,7 +14,7 @@ export default async function HQOrganizationsPage() {
   });
 
   return (
-    <div className="min-h-full bg-[#07111f] p-5 text-slate-200 sm:p-8 xl:p-10">
+    <div className="min-h-full bg-slate-950 p-5 text-slate-200 sm:p-8 xl:p-10">
       <div className="mx-auto max-w-[1500px] space-y-8">
         {/* Page header */}
         <header>
@@ -26,9 +26,9 @@ export default async function HQOrganizationsPage() {
         </header>
 
         {/* Table */}
-        <div className="overflow-x-auto rounded-2xl border border-white/10 bg-[#101b2f]">
+        <div className="overflow-x-auto rounded-2xl border border-white/[.06] bg-slate-900">
           <table className="w-full min-w-[900px] text-left text-sm">
-            <thead className="border-b border-white/10 text-[10px] uppercase tracking-[.15em] text-slate-500">
+            <thead className="border-b border-white/[.06] text-[10px] uppercase tracking-[.15em] text-slate-500">
               <tr>
                 <th className="px-6 py-4 font-medium">Organisation</th>
                 <th className="px-6 py-4 font-medium">Properties</th>
@@ -83,7 +83,7 @@ export default async function HQOrganizationsPage() {
                     <td className="px-6 py-4 text-right">
                       <Link
                         href={`/hq/organizations/${org.id}`}
-                        className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-white/10 bg-white/[.04] px-3 text-xs font-medium text-slate-200 transition hover:bg-white/[.08] hover:text-white"
+                        className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-white/[.06] bg-white/[.04] px-3 text-xs font-medium text-slate-200 transition hover:bg-white/[.08] hover:text-white"
                       >
                         Manage →
                       </Link>

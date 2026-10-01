@@ -13,7 +13,7 @@ export default async function HQProductsPage() {
   });
 
   return (
-    <div className="min-h-full bg-[#07111f] p-5 text-slate-200 sm:p-8 xl:p-10">
+    <div className="min-h-full bg-slate-950 p-5 text-slate-200 sm:p-8 xl:p-10">
       <div className="mx-auto max-w-[1500px] space-y-8">
 
         {/* Page header + Create product form */}
@@ -30,7 +30,7 @@ export default async function HQProductsPage() {
                 name="code"
                 required
                 placeholder="ADDON_BEDS24"
-                className="h-9 w-36 rounded-lg border border-white/10 bg-white/[.04] px-3 text-sm text-slate-200 placeholder-slate-600 outline-none transition focus:border-indigo-400/50 focus:bg-white/[.06]"
+                className="h-9 w-36 rounded-lg border border-white/[.06] bg-white/[.04] px-3 text-sm text-slate-200 placeholder-slate-600 outline-none transition focus:border-indigo-400/50 focus:bg-white/[.06]"
               />
             </div>
             <div className="flex flex-col gap-1">
@@ -39,14 +39,14 @@ export default async function HQProductsPage() {
                 name="name"
                 required
                 placeholder="Product name"
-                className="h-9 w-44 rounded-lg border border-white/10 bg-white/[.04] px-3 text-sm text-slate-200 placeholder-slate-600 outline-none transition focus:border-indigo-400/50 focus:bg-white/[.06]"
+                className="h-9 w-44 rounded-lg border border-white/[.06] bg-white/[.04] px-3 text-sm text-slate-200 placeholder-slate-600 outline-none transition focus:border-indigo-400/50 focus:bg-white/[.06]"
               />
             </div>
             <div className="flex flex-col gap-1">
               <label className="text-[10px] font-semibold uppercase tracking-[.12em] text-slate-500">Type</label>
               <select
                 name="type"
-                className="h-9 rounded-lg border border-white/10 bg-[#101b2f] px-3 text-sm text-slate-200 outline-none transition focus:border-indigo-400/50"
+                className="h-9 rounded-lg border border-white/[.06] bg-slate-900 px-3 text-sm text-slate-200 outline-none transition focus:border-indigo-400/50"
               >
                 <option value="ADDON">ADDON</option>
                 <option value="BASE">BASE</option>
@@ -64,7 +64,7 @@ export default async function HQProductsPage() {
         {/* Product cards */}
         <div className="space-y-5">
           {products.map((product) => (
-            <div key={product.id} className="rounded-2xl border border-white/10 bg-[#101b2f] p-5">
+            <div key={product.id} className="rounded-2xl border border-white/[.06] bg-slate-900 p-5">
               {/* Product header */}
               <div className="mb-5 flex flex-wrap items-center justify-between gap-3 border-b border-white/8 pb-4">
                 <div className="flex items-center gap-3">
@@ -100,7 +100,7 @@ export default async function HQProductsPage() {
                   </div>
                 ))}
                 {product.prices.length === 0 && (
-                  <div className="col-span-full rounded-xl border border-dashed border-white/10 p-6 text-center text-sm text-slate-600">
+                  <div className="col-span-full rounded-xl border border-dashed border-white/[.06] p-6 text-center text-sm text-slate-600">
                     No prices configured
                   </div>
                 )}
@@ -117,7 +117,7 @@ export default async function HQProductsPage() {
                     min="1"
                     required
                     placeholder="9900"
-                    className="h-9 w-28 rounded-lg border border-white/10 bg-white/[.04] px-3 text-sm text-slate-200 placeholder-slate-600 outline-none transition focus:border-indigo-400/50"
+                    className="h-9 w-28 rounded-lg border border-white/[.06] bg-white/[.04] px-3 text-sm text-slate-200 placeholder-slate-600 outline-none transition focus:border-indigo-400/50"
                   />
                 </div>
                 <div className="flex flex-col gap-1">
@@ -127,14 +127,14 @@ export default async function HQProductsPage() {
                     defaultValue="usd"
                     maxLength={3}
                     required
-                    className="h-9 w-20 rounded-lg border border-white/10 bg-white/[.04] px-3 text-sm uppercase text-slate-200 outline-none transition focus:border-indigo-400/50"
+                    className="h-9 w-20 rounded-lg border border-white/[.06] bg-white/[.04] px-3 text-sm uppercase text-slate-200 outline-none transition focus:border-indigo-400/50"
                   />
                 </div>
                 <div className="flex flex-col gap-1">
                   <label className="text-[10px] font-semibold uppercase tracking-[.12em] text-slate-500">Interval</label>
                   <select
                     name="interval"
-                    className="h-9 rounded-lg border border-white/10 bg-[#101b2f] px-3 text-sm text-slate-200 outline-none transition focus:border-indigo-400/50"
+                    className="h-9 rounded-lg border border-white/[.06] bg-slate-900 px-3 text-sm text-slate-200 outline-none transition focus:border-indigo-400/50"
                   >
                     <option value="month">month</option>
                     <option value="year">year</option>
@@ -142,7 +142,7 @@ export default async function HQProductsPage() {
                 </div>
                 <button
                   type="submit"
-                  className="h-9 rounded-lg border border-white/10 bg-white/[.04] px-4 text-sm font-medium text-slate-200 transition hover:bg-white/[.08] hover:text-white"
+                  className="h-9 rounded-lg border border-white/[.06] bg-white/[.04] px-4 text-sm font-medium text-slate-200 transition hover:bg-white/[.08] hover:text-white"
                 >
                   Add Stripe price
                 </button>
@@ -152,7 +152,7 @@ export default async function HQProductsPage() {
         </div>
 
         {products.length === 0 && (
-          <div className="rounded-2xl border border-dashed border-white/10 p-16 text-center">
+          <div className="rounded-2xl border border-dashed border-white/[.06] p-16 text-center">
             <p className="text-sm text-slate-500">No billing products configured yet.</p>
           </div>
         )}

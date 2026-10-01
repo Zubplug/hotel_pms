@@ -33,7 +33,7 @@ export default async function TenantControlPage({
   }
 
   return (
-    <div className="min-h-full bg-[#07111f] p-5 text-slate-200 sm:p-8 xl:p-10">
+    <div className="min-h-full bg-slate-950 p-5 text-slate-200 sm:p-8 xl:p-10">
       <div className="mx-auto max-w-[1500px] space-y-8">
 
         {/* Breadcrumb + Header */}
@@ -52,7 +52,7 @@ export default async function TenantControlPage({
             { label: 'Users', value: users.length, icon: '◉', tone: 'sky' },
             { label: 'Entitlements', value: org.entitlements.filter((e: any) => e.status === 'ACTIVE').length, icon: '▤', tone: 'emerald' },
           ].map((item) => (
-            <div key={item.label} className="rounded-2xl border border-white/10 bg-[#101b2f] p-5 shadow-2xl shadow-slate-950/10">
+            <div key={item.label} className="rounded-2xl border border-white/[.06] bg-slate-900 p-5 shadow-2xl shadow-slate-950/10">
               <div className="flex items-start justify-between">
                 <div>
                   <p className="text-xs font-medium uppercase tracking-[.15em] text-slate-500">{item.label}</p>
@@ -68,7 +68,7 @@ export default async function TenantControlPage({
 
         <div className="grid gap-6 xl:grid-cols-2">
           {/* Subscriptions */}
-          <div className="rounded-2xl border border-white/10 bg-[#101b2f] p-5">
+          <div className="rounded-2xl border border-white/[.06] bg-slate-900 p-5">
             <p className="mb-4 text-sm font-semibold text-white">Subscriptions</p>
             {org.subscriptions.length === 0 ? (
               <p className="text-sm text-slate-500">No active subscriptions.</p>
@@ -98,7 +98,7 @@ export default async function TenantControlPage({
           </div>
 
           {/* Entitlements */}
-          <div className="rounded-2xl border border-white/10 bg-[#101b2f] p-5">
+          <div className="rounded-2xl border border-white/[.06] bg-slate-900 p-5">
             <p className="mb-4 text-sm font-semibold text-white">Entitlements</p>
             {org.entitlements.length === 0 ? (
               <p className="text-sm text-slate-500">No active entitlements.</p>
@@ -126,7 +126,7 @@ export default async function TenantControlPage({
           </div>
 
           {/* Properties */}
-          <div className="rounded-2xl border border-white/10 bg-[#101b2f] p-5">
+          <div className="rounded-2xl border border-white/[.06] bg-slate-900 p-5">
             <p className="mb-4 text-sm font-semibold text-white">Properties</p>
             {org.properties.length === 0 ? (
               <p className="text-sm text-slate-500">No properties configured.</p>
@@ -151,7 +151,7 @@ export default async function TenantControlPage({
           </div>
 
           {/* User Administration & Impersonation */}
-          <div className="rounded-2xl border border-white/10 bg-[#101b2f] p-5">
+          <div className="rounded-2xl border border-white/[.06] bg-slate-900 p-5">
             <p className="mb-4 text-sm font-semibold text-white">User administration &amp; impersonation</p>
             {users.length === 0 ? (
               <p className="text-sm text-slate-500">No users found.</p>
