@@ -207,7 +207,6 @@ function PulseItem({ icon: Icon, label, value, tone = 'indigo', onClick }: {
       {content}
     </div>
   );
-  );
 }
 
 function GuestRow({ name, room, balance, availableCredit, roomStatus, status, checkOutTime, mode, onAction, onViewFolio }: {
