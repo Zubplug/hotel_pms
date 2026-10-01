@@ -1,102 +1,23 @@
 'use client';
 
-import {
-  Area,
-  AreaChart,
-  Bar,
-  BarChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts';
+import { useState } from 'react';
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { ArrowUpRight, Building2, CheckCircle2, Layers3, X } from 'lucide-react';
 
 type MonthlyPoint = { label: string; organizations: number; properties: number };
+type OrganizationPoint = { id: string; name: string; slug: string; properties: number; activeProperties: number; plan: string; subscriptionStatus: string; state: string };
 type StatusPoint = { status: string; count: number };
+type LifecyclePoint = { status: string; count: number };
+const tooltipStyle = { background: '#101b2f', border: '1px solid rgba(148, 163, 184, .2)', borderRadius: 12, color: '#e2e8f0', fontSize: 11 };
+const lifecycleColors = ['#34d399', '#fbbf24'];
 
-const tooltipStyle = {
-  background: '#101b2f',
-  border: '1px solid rgba(148, 163, 184, .2)',
-  borderRadius: 12,
-  color: '#e2e8f0',
-};
-
-export function HQPortfolioCharts({
-  monthly,
-  subscriptions,
-  connections,
-}: {
-  monthly: MonthlyPoint[];
-  subscriptions: StatusPoint[];
-  connections: StatusPoint[];
-}) {
-  return (
-    <div className="grid gap-5 xl:grid-cols-[1.5fr_1fr]">
-      <section className="rounded-2xl border border-white/10 bg-[#101b2f] p-5 shadow-2xl shadow-slate-950/10">
-        <div className="mb-5 flex items-start justify-between gap-4">
-          <div>
-            <p className="text-sm font-semibold text-white">Portfolio growth</p>
-            <p className="mt-1 text-xs text-slate-400">New organisations and properties · last 6 months</p>
-          </div>
-          <span className="rounded-full bg-emerald-400/10 px-2.5 py-1 text-[11px] font-medium text-emerald-300">Live data</span>
-        </div>
-        <div className="h-64">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={monthly} margin={{ top: 8, right: 4, left: -24, bottom: 0 }}>
-              <defs>
-                <linearGradient id="orgFill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#818cf8" stopOpacity={0.35} />
-                  <stop offset="95%" stopColor="#818cf8" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid stroke="rgba(148,163,184,.11)" vertical={false} />
-              <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fill: '#64748b', fontSize: 11 }} />
-              <YAxis allowDecimals={false} tickLine={false} axisLine={false} tick={{ fill: '#64748b', fontSize: 11 }} />
-              <Tooltip contentStyle={tooltipStyle} cursor={{ stroke: 'rgba(129,140,248,.35)' }} />
-              <Area type="monotone" dataKey="organizations" name="Organisations" stroke="#a5b4fc" strokeWidth={2.5} fill="url(#orgFill)" />
-              <Area type="monotone" dataKey="properties" name="Properties" stroke="#34d399" strokeWidth={2} fill="none" />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-      </section>
-
-      <section className="rounded-2xl border border-white/10 bg-[#101b2f] p-5 shadow-2xl shadow-slate-950/10">
-        <div className="mb-5">
-          <p className="text-sm font-semibold text-white">Subscription mix</p>
-          <p className="mt-1 text-xs text-slate-400">Current billing state across the portfolio</p>
-        </div>
-        <div className="h-64">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={subscriptions} layout="vertical" margin={{ top: 0, right: 12, left: 8, bottom: 0 }}>
-              <CartesianGrid stroke="rgba(148,163,184,.11)" horizontal={false} />
-              <XAxis type="number" allowDecimals={false} hide />
-              <YAxis dataKey="status" type="category" width={78} tickLine={false} axisLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} />
-              <Tooltip contentStyle={tooltipStyle} cursor={{ fill: 'rgba(255,255,255,.04)' }} />
-              <Bar dataKey="count" name="Subscriptions" fill="#818cf8" radius={[0, 6, 6, 0]} barSize={22} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </section>
-
-      <section className="rounded-2xl border border-white/10 bg-[#101b2f] p-5 shadow-2xl shadow-slate-950/10 xl:col-span-2">
-        <div className="mb-5 flex items-start justify-between gap-4">
-          <div>
-            <p className="text-sm font-semibold text-white">Distribution health</p>
-            <p className="mt-1 text-xs text-slate-400">OTA/channel connections by current status</p>
-          </div>
-          <a href="/hq/activity" className="text-xs font-medium text-indigo-300 hover:text-indigo-200">View audit trail →</a>
-        </div>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {connections.map((item) => (
-            <div key={item.status} className="rounded-xl border border-white/8 bg-white/[.035] p-4">
-              <p className="text-xs uppercase tracking-[.14em] text-slate-500">{item.status}</p>
-              <p className="mt-2 text-2xl font-semibold text-white">{item.count}</p>
-            </div>
-          ))}
-          {connections.length === 0 && <p className="text-sm text-slate-400">No channel connections have been configured.</p>}
-        </div>
-      </section>
-    </div>
-  );
+export function HQPortfolioCharts({ monthly, organizations, subscriptions, connections, propertyLifecycle }: { monthly: MonthlyPoint[]; organizations: OrganizationPoint[]; subscriptions: StatusPoint[]; connections: StatusPoint[]; propertyLifecycle: LifecyclePoint[] }) {
+  const [selected, setSelected] = useState<OrganizationPoint | null>(null);
+  const organizationStates = Object.entries(organizations.reduce<Record<string, number>>((acc, organization) => { acc[organization.state] = (acc[organization.state] || 0) + 1; return acc; }, {})).map(([state, count]) => ({ state, count }));
+  return <>
+    <div className="grid gap-5 xl:grid-cols-[1.4fr_.8fr]"><section className="rounded-2xl border border-white/10 bg-[#101b2f] p-5 shadow-2xl shadow-slate-950/10"><div className="mb-5 flex items-start justify-between gap-4"><div><p className="text-sm font-semibold text-white">Organisation onboarding</p><p className="mt-1 text-xs text-slate-400">New organisations and properties added to the estate · last 6 months</p></div><span className="rounded-full bg-emerald-400/10 px-2.5 py-1 text-[11px] font-medium text-emerald-300">Live records</span></div><div className="h-64"><ResponsiveContainer width="100%" height="100%"><AreaChart data={monthly} margin={{ top: 8, right: 4, left: -20, bottom: 0 }}><defs><linearGradient id="hqOrgFill" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#818cf8" stopOpacity={.35} /><stop offset="95%" stopColor="#818cf8" stopOpacity={0} /></linearGradient></defs><CartesianGrid stroke="rgba(148,163,184,.11)" vertical={false} /><XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fill: '#64748b', fontSize: 10 }} /><YAxis allowDecimals={false} tickLine={false} axisLine={false} tick={{ fill: '#64748b', fontSize: 10 }} /><Tooltip contentStyle={tooltipStyle} /><Area type="monotone" dataKey="organizations" name="Organisations" stroke="#a5b4fc" strokeWidth={2.5} fill="url(#hqOrgFill)" /><Area type="monotone" dataKey="properties" name="Properties" stroke="#34d399" strokeWidth={2} fill="none" /></AreaChart></ResponsiveContainer></div></section><section className="rounded-2xl border border-white/10 bg-[#101b2f] p-5 shadow-2xl shadow-slate-950/10"><div className="mb-5"><p className="text-sm font-semibold text-white">Organisation state</p><p className="mt-1 text-xs text-slate-400">Readiness and subscription attention</p></div><div className="h-64"><ResponsiveContainer width="100%" height="100%"><BarChart data={organizationStates} layout="vertical" margin={{ top: 0, right: 10, left: 8, bottom: 0 }}><CartesianGrid stroke="rgba(148,163,184,.11)" horizontal={false} /><XAxis type="number" allowDecimals={false} hide /><YAxis dataKey="state" type="category" width={90} tickLine={false} axisLine={false} tick={{ fill: '#94a3b8', fontSize: 10 }} /><Tooltip contentStyle={tooltipStyle} cursor={{ fill: 'rgba(255,255,255,.04)' }} /><Bar dataKey="count" name="Organisations" fill="#818cf8" radius={[0, 6, 6, 0]} barSize={20} /></BarChart></ResponsiveContainer></div></section></div>
+    <section className="rounded-2xl border border-white/10 bg-[#101b2f] p-5 shadow-2xl shadow-slate-950/10"><div className="mb-5 flex items-start justify-between gap-4"><div><p className="text-sm font-semibold text-white">Organisation directory</p><p className="mt-1 text-xs text-slate-400">Super-admin view of every organisation, its property estate and access state.</p></div><span className="text-xs text-slate-500">{organizations.length} organisations</span></div><div className="overflow-x-auto"><table className="w-full min-w-[780px] text-left text-sm"><thead className="border-b border-white/8 text-[10px] uppercase tracking-[.14em] text-slate-500"><tr><th className="pb-3 font-medium">Organisation</th><th className="pb-3 font-medium">Properties</th><th className="pb-3 font-medium">Plan</th><th className="pb-3 font-medium">Subscription</th><th className="pb-3 font-medium">HQ state</th><th className="pb-3 text-right font-medium">Manage</th></tr></thead><tbody className="divide-y divide-white/6">{organizations.map((organization) => <tr key={organization.id} className="group"><td className="py-3"><button onClick={() => setSelected(organization)} className="text-left"><p className="font-medium text-slate-200 group-hover:text-white">{organization.name}</p><p className="mt-0.5 text-xs text-slate-500">{organization.slug}</p></button></td><td className="py-3 text-xs text-slate-400">{organization.activeProperties}/{organization.properties} active</td><td className="py-3 text-xs text-slate-300">{organization.plan}</td><td className="py-3"><span className="rounded-full bg-white/[.05] px-2 py-1 text-[10px] text-slate-300">{organization.subscriptionStatus}</span></td><td className="py-3"><span className={`rounded-full px-2 py-1 text-[10px] font-medium ${organization.state === 'Operational' ? 'bg-emerald-400/10 text-emerald-300' : organization.state === 'Attention' ? 'bg-amber-400/10 text-amber-300' : 'bg-slate-400/10 text-slate-400'}`}>{organization.state}</span></td><td className="py-3 text-right"><button onClick={() => setSelected(organization)} className="inline-flex items-center gap-1 text-xs font-medium text-indigo-300 hover:text-indigo-200">Inspect <ArrowUpRight className="size-3" /></button></td></tr>)}</tbody></table>{!organizations.length && <p className="py-8 text-center text-sm text-slate-500">No organisations have been created yet.</p>}</div></section>
+    <div className="grid gap-5 xl:grid-cols-[.8fr_1.2fr]"><section className="rounded-2xl border border-white/10 bg-[#101b2f] p-5"><div className="mb-5"><p className="text-sm font-semibold text-white">Property setup state</p><p className="mt-1 text-xs text-slate-400">Readiness of properties under HQ management</p></div><div className="flex items-center gap-4"><div className="h-32 w-32"><ResponsiveContainer><PieChart><Pie data={propertyLifecycle.length ? propertyLifecycle : [{ status: 'No properties', count: 1 }]} dataKey="count" innerRadius={40} outerRadius={56} paddingAngle={4} stroke="none">{(propertyLifecycle.length ? propertyLifecycle : [{ status: 'No properties', count: 1 }]).map((item, index) => <Cell key={item.status} fill={propertyLifecycle.length ? lifecycleColors[index % lifecycleColors.length] : '#334155'} />)}</Pie></PieChart></ResponsiveContainer></div><div className="space-y-3">{propertyLifecycle.map((item, index) => <div key={item.status} className="flex items-center justify-between gap-6 text-xs"><span className="flex items-center gap-2 text-slate-400"><span className="size-2 rounded-full" style={{ background: lifecycleColors[index % lifecycleColors.length] }} />{item.status}</span><span className="font-semibold text-white">{item.count}</span></div>)}</div></div></section><section className="rounded-2xl border border-white/10 bg-[#101b2f] p-5"><div className="mb-5"><p className="text-sm font-semibold text-white">Subscription & integration state</p><p className="mt-1 text-xs text-slate-400">Cross-organisation access and distribution health</p></div><div className="grid gap-4 sm:grid-cols-2"><div><p className="mb-3 text-[10px] uppercase tracking-wider text-slate-500">Subscriptions</p><div className="space-y-2">{subscriptions.map((item) => <div key={item.status} className="flex justify-between rounded-lg bg-white/[.03] px-3 py-2 text-xs"><span className="text-slate-400">{item.status}</span><span className="font-semibold text-white">{item.count}</span></div>)}</div></div><div><p className="mb-3 text-[10px] uppercase tracking-wider text-slate-500">Connections</p><div className="space-y-2">{connections.map((item) => <div key={item.status} className="flex justify-between rounded-lg bg-white/[.03] px-3 py-2 text-xs"><span className="text-slate-400">{item.status}</span><span className="font-semibold text-white">{item.count}</span></div>)}</div></div></div></section></div>
+    {selected && <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#020713]/80 p-4 backdrop-blur-sm"><div className="w-full max-w-lg rounded-2xl border border-white/10 bg-[#101b2f] p-5 shadow-2xl"><div className="mb-5 flex items-start justify-between"><div><p className="text-[10px] font-semibold uppercase tracking-[.18em] text-indigo-300">Super-admin organisation view</p><h2 className="mt-1 text-lg font-semibold text-white">{selected.name}</h2><p className="mt-1 text-xs text-slate-500">{selected.slug} · {selected.state}</p></div><button onClick={() => setSelected(null)} className="rounded-lg p-2 text-slate-500 hover:bg-white/5 hover:text-white"><X className="size-4" /></button></div><div className="grid gap-3 sm:grid-cols-2"><div className="rounded-xl bg-white/[.035] p-4"><p className="text-[10px] uppercase tracking-wider text-slate-500">Property estate</p><p className="mt-2 text-2xl font-semibold text-white">{selected.properties}</p><p className="mt-1 text-xs text-slate-500">{selected.activeProperties} active properties</p></div><div className="rounded-xl bg-white/[.035] p-4"><p className="text-[10px] uppercase tracking-wider text-slate-500">Commercial access</p><p className="mt-2 text-sm font-semibold text-white">{selected.plan}</p><p className="mt-1 text-xs text-slate-500">{selected.subscriptionStatus}</p></div></div><div className="mt-5 flex items-center gap-2 rounded-xl border border-indigo-300/15 bg-indigo-300/[.06] p-3 text-xs text-indigo-100"><CheckCircle2 className="size-4 text-indigo-300" /> HQ can inspect the complete organisation record, properties, subscription and audit history.</div><div className="mt-5 flex justify-end gap-2"><button onClick={() => setSelected(null)} className="rounded-lg px-3 py-2 text-xs text-slate-400 hover:bg-white/5">Close</button><a href={`/hq/organizations/${selected.id}`} className="rounded-lg bg-indigo-500 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-400">Manage organisation <ArrowUpRight className="ml-1 inline size-3" /></a></div></div></div>}
+  </>;
 }
