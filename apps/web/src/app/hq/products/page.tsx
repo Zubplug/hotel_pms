@@ -1,76 +1,68 @@
 import prisma from '@hotel-pms/db';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { requireHQAdmin } from '@/lib/auth/hq';
-import { createBillingProduct, createBillingPrice } from './actions';
+import ProductsWorkspace from './ProductsWorkspace';
+
+const monthLabel = (date: Date) => date.toLocaleDateString('en-US', { month: 'short' });
 
 export default async function HQProductsPage() {
   await requireHQAdmin();
-  const products = await prisma.billingProduct.findMany({
-    include: { prices: true },
-    orderBy: { createdAt: 'desc' }
-  });
 
-  return (
-    <div className="p-8 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-zinc-900 dark:text-white">Product Catalog</h1>
-          <p className="text-zinc-500 mt-1">Manage billing products, modules, and prices.</p>
-        </div>
-        <form action={createBillingProduct} className="flex items-end gap-2">
-          <input name="code" required placeholder="ADDON_BEDS24" className="h-10 rounded border px-2 text-sm" />
-          <input name="name" required placeholder="Product name" className="h-10 rounded border px-2 text-sm" />
-          <select name="type" className="h-10 rounded border px-2 text-sm"><option>ADDON</option><option>BASE</option></select>
-          <Button type="submit">Create Product</Button>
-        </form>
-      </div>
+  const since = new Date();
+  since.setMonth(since.getMonth() - 5, 1);
+  since.setHours(0, 0, 0, 0);
 
-      <div className="grid grid-cols-1 gap-6">
-        {products.map(product => (
-          <Card key={product.id}>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div className="flex items-center gap-4">
-                <CardTitle>{product.name}</CardTitle>
-                <Badge variant={product.type === 'BASE' ? 'default' : 'secondary'}>{product.type}</Badge>
-                {!product.active && <Badge variant="destructive">INACTIVE</Badge>}
-              </div>
-              <div className="text-sm font-mono text-zinc-500 bg-zinc-100 dark:bg-zinc-800 px-2 py-1 rounded">
-                {product.code}
-              </div>
-            </CardHeader>
-            <CardContent>
-              <h4 className="text-sm font-medium text-zinc-500 mb-4">Prices</h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {product.prices.map(price => (
-                  <div key={price.id} className="p-4 border rounded-lg bg-zinc-50 dark:bg-zinc-900">
-                    <div className="text-xl font-bold">
-                      {new Intl.NumberFormat('en-US', { style: 'currency', currency: price.currency }).format(price.amount / 100)}
-                      <span className="text-sm text-zinc-500 font-normal"> / {price.interval}</span>
-                    </div>
-                    <div className="text-xs text-zinc-400 mt-2 font-mono">
-                      Stripe: {price.stripePriceId}
-                    </div>
-                  </div>
-                ))}
-                {product.prices.length === 0 && (
-                  <div className="p-4 border border-dashed rounded-lg text-center text-zinc-500">
-                    No prices configured
-                  </div>
-                )}
-              </div>
-              <form action={createBillingPrice} className="mt-5 flex flex-wrap items-end gap-2 border-t pt-4">
-                <input type="hidden" name="productId" value={product.id} />
-                <input name="amount" type="number" min="1" required placeholder="Amount cents" className="h-9 w-28 rounded border px-2 text-sm" />
-                <input name="currency" defaultValue="usd" maxLength={3} required className="h-9 w-20 rounded border px-2 text-sm uppercase" />
-                <select name="interval" className="h-9 rounded border px-2 text-sm"><option>month</option><option>year</option></select>
-                <Button type="submit" variant="outline">Create Stripe Price</Button>
-              </form>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-    </div>
-  );
+  const [products, plans, subscriptions, invoices, organizations, recentInvoices] = await Promise.all([
+    prisma.billingProduct.findMany({
+      include: { prices: { orderBy: { amount: 'asc' } }, _count: { select: { entitlements: true, planItems: true, modules: true } } },
+      orderBy: [{ active: 'desc' }, { createdAt: 'desc' }],
+    }),
+    prisma.billingPlan.findMany({ include: { items: { include: { product: { select: { id: true, name: true, code: true } } } } }, orderBy: { displayOrder: 'asc' } }),
+    prisma.subscription.findMany({ where: { status: { in: ['ACTIVE', 'TRIALING', 'PAST_DUE', 'PAUSED'] } }, include: { items: { include: { price: { include: { product: { select: { id: true, name: true, code: true } } } } } } } }),
+    prisma.billingInvoice.findMany({ where: { createdAt: { gte: since } }, select: { total: true, amountPaid: true, amountDue: true, status: true, currency: true, createdAt: true }, orderBy: { createdAt: 'desc' } }),
+    prisma.organization.findMany({ select: { id: true, name: true, createdAt: true, subscriptions: { orderBy: { createdAt: 'desc' }, take: 1, select: { status: true } } } }),
+    prisma.billingInvoice.findMany({ take: 6, orderBy: { createdAt: 'desc' }, select: { id: true, total: true, amountDue: true, status: true, currency: true, createdAt: true, organization: { select: { name: true } } } }),
+  ]);
+
+  const activeSubscriptions = subscriptions.filter((subscription) => ['ACTIVE', 'TRIALING'].includes(subscription.status));
+  const productUsage = new Map<string, { accounts: Set<string>; quantity: number; mrr: number }>();
+  for (const subscription of subscriptions) {
+    for (const item of subscription.items) {
+      const product = item.price.product;
+      const current = productUsage.get(product.id) ?? { accounts: new Set<string>(), quantity: 0, mrr: 0 };
+      if (['ACTIVE', 'TRIALING'].includes(subscription.status)) current.accounts.add(subscription.organizationId);
+      current.quantity += 1;
+      current.mrr += item.price.interval === 'year' ? Math.round(item.price.amount / 12) : item.price.amount;
+      productUsage.set(product.id, current);
+    }
+  }
+
+  const totalMrr = activeSubscriptions.reduce((total, subscription) => total + subscription.items.reduce((subtotal, item) => subtotal + (item.price.interval === 'year' ? Math.round(item.price.amount / 12) : item.price.amount), 0), 0);
+  const collected = invoices.reduce((total, invoice) => total + invoice.amountPaid, 0);
+  const outstanding = invoices.reduce((total, invoice) => total + invoice.amountDue, 0);
+  const monthlyRevenue = Array.from({ length: 6 }, (_, index) => { const date = new Date(since); date.setMonth(since.getMonth() + index); return { label: monthLabel(date), revenue: 0, invoices: 0 }; });
+  for (const invoice of invoices) { const point = monthlyRevenue.find((item, index) => { const date = new Date(since); date.setMonth(since.getMonth() + index); return date.getFullYear() === invoice.createdAt.getFullYear() && date.getMonth() === invoice.createdAt.getMonth(); }); if (point) { point.revenue += invoice.amountPaid; point.invoices += 1; } }
+
+  const catalog = products.map((product) => ({
+    id: product.id,
+    name: product.name,
+    code: product.code,
+    type: product.type,
+    active: product.active,
+    stripeProductId: product.stripeProductId,
+    createdAt: product.createdAt.toISOString(),
+    prices: product.prices.map((price) => ({ id: price.id, amount: price.amount, currency: price.currency, interval: price.interval, stripePriceId: price.stripePriceId })),
+    adoption: productUsage.get(product.id)?.accounts.size ?? 0,
+    mrr: productUsage.get(product.id)?.mrr ?? 0,
+    planCount: product._count.planItems,
+    entitlementCount: product._count.entitlements,
+    moduleCount: product._count.modules,
+  }));
+
+  return <ProductsWorkspace data={{
+    catalog,
+    plans: plans.map((plan) => ({ id: plan.id, name: plan.name, code: plan.code, active: plan.active, itemCount: plan.items.length })),
+    monthlyRevenue,
+    recentInvoices: recentInvoices.map((invoice) => ({ ...invoice, createdAt: invoice.createdAt.toISOString(), organizationName: invoice.organization.name })),
+    metrics: { totalProducts: products.length, activeProducts: products.filter((product) => product.active).length, totalPlans: plans.length, activeSubscriptions: activeSubscriptions.length, totalOrganizations: organizations.length, totalMrr, collected, outstanding, failedInvoices: invoices.filter((invoice) => ['failed', 'uncollectible', 'past_due'].includes(invoice.status.toLowerCase())).length },
+  }} />;
 }
