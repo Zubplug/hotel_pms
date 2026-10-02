@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { useProperty } from '@/components/PropertyProvider';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
+import { useNavigationModules } from '@/lib/auth/useNavigationModules';
 
 /* ─────────────────────────────────────────────────────────────────────────────
    Zod schema (unchanged from original)
@@ -338,6 +339,8 @@ export function FrontDeskReservationForm({ isWalkIn = false, prefillGuestId }: F
   const router = useRouter();
   const queryClient = useQueryClient();
   const { propertyId } = useProperty();
+  const { data: enabledModules = [] } = useNavigationModules(propertyId);
+  const corporateAccessEnabled = enabledModules.includes('MODULE_OPERATIONS');
   const { provider } = useLodgeCoreProvider();
 
   const [datesInitialized, setDatesInitialized] = useState(false);
@@ -367,7 +370,7 @@ export function FrontDeskReservationForm({ isWalkIn = false, prefillGuestId }: F
   const { data: dashboardRes } = useQuery({
     queryKey: ['frontdesk', 'dashboard', propertyId],
     queryFn: () => provider.dashboard.get(propertyId),
-    enabled: !!propertyId,
+    enabled: !!propertyId && corporateAccessEnabled,
     staleTime: 60_000,
   });
 
@@ -598,7 +601,7 @@ export function FrontDeskReservationForm({ isWalkIn = false, prefillGuestId }: F
           <div className="lg:col-span-7 space-y-6">
 
             {/* ── Section 1: Guest Identity ── */}
-            <SectionCard>
+            {corporateAccessEnabled && <SectionCard>
               <SectionHeader
                 step={1}
                 title="Guest Identity"
@@ -764,7 +767,7 @@ export function FrontDeskReservationForm({ isWalkIn = false, prefillGuestId }: F
                   </div>
                 )}
               </div>
-            </SectionCard>
+            </SectionCard>}
 
             {/* ── Section 2: Occupancy ── */}
             <SectionCard>

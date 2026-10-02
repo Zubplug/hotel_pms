@@ -794,6 +794,12 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
 
         _httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
 
+        // Refresh the terminal license before applying the rest of the pull.
+        // If the network is unavailable this safely leaves the last locally
+        // validated license in place for offline operation.
+        await RefreshTerminalLicenseAsync(dbContext, identity, token, stoppingToken);
+        await RefreshTerminalEntitlementsAsync(dbContext, identity, token, stoppingToken);
+
         bool hasMore = true;
         int pageCount = 0;
 
@@ -2993,6 +2999,96 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
         {
             dbContext.Reservations.RemoveRange(oldReservations);
             await dbContext.SaveChangesAsync(stoppingToken);
+        }
+    }
+
+    private async Task RefreshTerminalLicenseAsync(
+        LocalDbContext dbContext,
+        SyncIdentity identity,
+        string token,
+        CancellationToken stoppingToken)
+    {
+        if (string.IsNullOrWhiteSpace(identity.TerminalId)) return;
+
+        try
+        {
+            using var request = new HttpRequestMessage(
+                HttpMethod.Post,
+                $"pos/terminals/{Uri.EscapeDataString(identity.TerminalId)}/validate");
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            using var response = await _httpClient.SendAsync(request, stoppingToken);
+            if (!response.IsSuccessStatusCode) return;
+
+            using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync(stoppingToken));
+            var terminalJson = document.RootElement
+                .GetProperty("data")
+                .GetProperty("terminal");
+            var terminal = await dbContext.PosTerminals
+                .FirstOrDefaultAsync(value => value.Id == identity.TerminalId, stoppingToken);
+            if (terminal == null) return;
+
+            if (terminalJson.TryGetProperty("licenseState", out var state) && state.ValueKind != JsonValueKind.Null)
+                terminal.LicenseState = state.GetString() ?? terminal.LicenseState;
+
+            terminal.LicenseExpiresAt = terminalJson.TryGetProperty("licenseExpiresAt", out var expiry)
+                && expiry.ValueKind != JsonValueKind.Null
+                && DateTime.TryParse(expiry.GetString(), out var parsedExpiry)
+                ? parsedExpiry.ToUniversalTime()
+                : null;
+
+            terminal.RevokedAt = terminalJson.TryGetProperty("revokedAt", out var revoked)
+                && revoked.ValueKind != JsonValueKind.Null
+                && DateTime.TryParse(revoked.GetString(), out var parsedRevoked)
+                ? parsedRevoked.ToUniversalTime()
+                : null;
+
+            await dbContext.SaveChangesAsync(stoppingToken);
+        }
+        catch (Exception ex) when (ex is HttpRequestException || ex is TaskCanceledException || ex is JsonException)
+        {
+            _logger.LogWarning("Unable to refresh terminal license; retaining the last local license snapshot. {Message}", ex.Message);
+        }
+    }
+
+    private async Task RefreshTerminalEntitlementsAsync(
+        LocalDbContext dbContext,
+        SyncIdentity identity,
+        string token,
+        CancellationToken stoppingToken)
+    {
+        if (string.IsNullOrWhiteSpace(identity.TerminalId)) return;
+
+        try
+        {
+            using var request = new HttpRequestMessage(
+                HttpMethod.Post,
+                $"pos/terminals/{Uri.EscapeDataString(identity.TerminalId)}/entitlements");
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            using var response = await _httpClient.SendAsync(request, stoppingToken);
+            if (!response.IsSuccessStatusCode) return;
+
+            using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync(stoppingToken));
+            var data = document.RootElement.GetProperty("data");
+            var terminal = await dbContext.PosTerminals
+                .FirstOrDefaultAsync(value => value.Id == identity.TerminalId, stoppingToken);
+            if (terminal == null) return;
+
+            terminal.EnabledModulesJson = data.TryGetProperty("enabledModules", out var modules)
+                ? modules.GetRawText()
+                : "[]";
+            terminal.EntitlementsJson = data.TryGetProperty("entitlements", out var entitlements)
+                ? entitlements.GetRawText()
+                : "[]";
+            terminal.EntitlementsCapturedAt = data.TryGetProperty("capturedAt", out var capturedAt)
+                && DateTime.TryParse(capturedAt.GetString(), out var parsedCapturedAt)
+                ? parsedCapturedAt.ToUniversalTime()
+                : DateTime.UtcNow;
+
+            await dbContext.SaveChangesAsync(stoppingToken);
+        }
+        catch (Exception ex) when (ex is HttpRequestException || ex is TaskCanceledException || ex is JsonException)
+        {
+            _logger.LogWarning("Unable to refresh terminal entitlements; retaining the last local snapshot. {Message}", ex.Message);
         }
     }
 

@@ -76,6 +76,8 @@ export async function GET(
           name: terminal.name,
           terminalType: terminal.terminalType,
           licenseState: terminal.licenseState,
+          licenseExpiresAt: terminal.licenseExpiresAt,
+          revokedAt: terminal.revokedAt,
           autoLockSeconds: terminal.autoLockSeconds ?? terminal.outlet.autoLockSeconds
         },
         // Property config — desktop SyncEngine reads bankingModel from here

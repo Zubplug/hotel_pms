@@ -38,17 +38,28 @@ import { AppSwitcher } from '@/components/layout/AppSwitcher';
 import { HardwareBridge } from '@/lib/desktop/HardwareBridge';
 import { toast } from 'sonner';
 import { FrontDeskMasterCardModal } from '@/components/frontdesk/FrontDeskMasterCardModal';
+import { writeOfflineNavigationSnapshot } from '@/lib/auth/offline-navigation-snapshot';
+import type { OfflineLicenseSnapshot } from '@/lib/auth/offline-navigation-snapshot';
+import { useOfflineLicenseGuard } from '@/lib/auth/useOfflineLicenseGuard';
+import { useNavigationModules } from '@/lib/auth/useNavigationModules';
 
-export function FrontDeskLayout({ children, enabledModules = [] }: { children: React.ReactNode; enabledModules?: readonly string[] }) {
+export function FrontDeskLayout({ children, enabledModules = [], licenseSnapshot }: {
+  children: React.ReactNode;
+  enabledModules?: readonly string[];
+  licenseSnapshot?: OfflineLicenseSnapshot | null;
+}) {
   const { data: session, status } = useLodgeCoreSession();
   const { propertyId } = useProperty();
   const { provider, isOnline, isDesktopMode } = useLodgeCoreProvider();
+  const licenseGuard = useOfflineLicenseGuard(propertyId);
+  const { data: cachedModules = [] } = useNavigationModules(propertyId);
   const logout = useLogout();
   const router = useRouter();
   const [time, setTime] = useState<Date | null>(null);
   const [showMasterCardModal, setShowMasterCardModal] = useState(false);
 
   const isDesktop = process.env.NEXT_PUBLIC_IS_DESKTOP === 'true';
+  const visibleModules = isDesktop || isDesktopMode ? cachedModules : enabledModules;
 
   useEffect(() => {
     if (status === 'unauthenticated') logout();
@@ -64,6 +75,16 @@ export function FrontDeskLayout({ children, enabledModules = [] }: { children: R
     document.body.classList.add('frontdesk-dark-surface');
     return () => document.body.classList.remove('frontdesk-dark-surface');
   }, []);
+
+  useEffect(() => {
+    // Seed the local UI snapshot from the server-resolved entitlement set.
+    // This lets the desktop keep the correct navigation after connectivity is
+    // lost; the local database/native license still controls actual access.
+    if (enabledModules.length || licenseSnapshot) {
+      writeOfflineNavigationSnapshot(enabledModules, propertyId, licenseSnapshot);
+      writeOfflineNavigationSnapshot(enabledModules, null, licenseSnapshot);
+    }
+  }, [enabledModules, licenseSnapshot, propertyId]);
 
   const { data: res } = useQuery({
     queryKey: ['frontdesk', 'dashboard', propertyId],
@@ -87,6 +108,29 @@ export function FrontDeskLayout({ children, enabledModules = [] }: { children: R
   }
 
   if (status === 'unauthenticated' || !session?.user) return null;
+
+  if (licenseGuard.restrictedMode) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#080c18] px-6 text-center">
+        <div className="max-w-md rounded-2xl border border-amber-400/20 bg-white/[.04] p-8 shadow-2xl">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-amber-400/10 text-amber-300">
+            <AlertCircle className="h-6 w-6" />
+          </div>
+          <h1 className="text-xl font-semibold text-white">Subscription access is restricted</h1>
+          <p className="mt-3 text-sm leading-6 text-slate-400">
+            {licenseGuard.isRevoked
+              ? 'This desktop license has been revoked. Connect to LodgeCore support before continuing.'
+              : 'This subscription has expired. Connect to the internet to renew and synchronize this desktop.'}
+          </p>
+          {licenseGuard.expiresAt && (
+            <p className="mt-4 text-xs text-slate-500">
+              License date: {new Date(licenseGuard.expiresAt).toLocaleDateString()}
+            </p>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   const cloudHardware = res?.data?.hardware;
   const businessDate = res?.data?.businessDate ? new Date(res.data.businessDate) : null;
@@ -115,7 +159,7 @@ export function FrontDeskLayout({ children, enabledModules = [] }: { children: R
   // separate dashboard remains available to entitled online users; it is not
   // advertised in the offline Front Desk shell.
   const visibleNavLinks = navLinks.filter((item) =>
-    (!item.module || enabledModules.includes(item.module)) &&
+    (!item.module || visibleModules.includes(item.module)) &&
     !(isDesktopApp && item.href === '/laundry'),
   );
 
@@ -128,7 +172,7 @@ export function FrontDeskLayout({ children, enabledModules = [] }: { children: R
 
         {/* Left: Switcher · Logo · Property · Nav */}
         <div className="flex items-center gap-4 lg:gap-5 flex-1 min-w-0">
-          {!isDesktop && <AppSwitcher hideOperations enabledModules={enabledModules} />}
+          {!isDesktop && <AppSwitcher hideOperations enabledModules={visibleModules} />}
 
           <Link href="/frontdesk" className="flex items-center gap-2.5 group shrink-0">
             <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-600 to-violet-600 shadow-[0_0_16px_-4px_rgba(99,102,241,0.6)] transition-all group-hover:shadow-[0_0_20px_-4px_rgba(99,102,241,0.8)] group-hover:scale-105">

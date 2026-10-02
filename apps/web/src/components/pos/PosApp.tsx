@@ -89,6 +89,7 @@ export default function PosApp() {
   const [tableRefreshTrigger, setTableRefreshTrigger] = useState<number>(0);
   const [guestCount, setGuestCount] = useState(2);
   const [sessionContext, setSessionContext] = useState<any | null>(null);
+  const [terminalStatus, setTerminalStatus] = useState<any | null>(null);
   const [posSessionId, setPosSessionId] = useState<string>('');
   const [bankingModel, setBankingModel] = useState<string>('CENTRAL_CASHIER');
   const [currentOrderId, setCurrentOrderId] = useState<string | null>(null);
@@ -141,7 +142,7 @@ export default function PosApp() {
 
   // ── Audit & Resilience hooks ──────────────────────────────────────
   const { isOnline, syncPending } = usePosOnlineStatus({ onBackOnline: refreshActiveOrders });
-  const { isExpired, isRevoked, restrictedMode } = useLicenseGuard({ sessionContext });
+  const { isExpired, isRevoked, restrictedMode } = useLicenseGuard({ sessionContext, terminalStatus });
 
   useEffect(() => {
     if (!isDesktopMode || terminalPropertyId) return;
@@ -149,7 +150,10 @@ export default function PosApp() {
     void (async () => {
       try {
         const status = await provider.system?.getTerminalStatus?.();
-        if (!cancelled && (status as any)?.propertyId) setTerminalPropertyId((status as any).propertyId);
+        if (!cancelled) {
+          setTerminalStatus(status);
+          if ((status as any)?.propertyId) setTerminalPropertyId((status as any).propertyId);
+        }
       } catch {
         // The POS operator screen will remain available once terminal context is ready.
       }
@@ -181,9 +185,10 @@ export default function PosApp() {
         const configuredBankingModel = (session as any)?.user?.bankingModel;
         if (configuredBankingModel) setBankingModel(configuredBankingModel);
         if (isDesktopMode) {
-          const terminalStatus = await provider.system?.getTerminalStatus?.();
-          if (terminalStatus?.bankingModel) setBankingModel(terminalStatus.bankingModel);
-          if (terminalStatus?.propertyId && !terminalPropertyId) setTerminalPropertyId(terminalStatus.propertyId);
+          const localTerminalStatus = await provider.system?.getTerminalStatus?.();
+          setTerminalStatus(localTerminalStatus);
+          if (localTerminalStatus?.bankingModel) setBankingModel(localTerminalStatus.bankingModel);
+          if (localTerminalStatus?.propertyId && !terminalPropertyId) setTerminalPropertyId(localTerminalStatus.propertyId);
         }
         // Read the active outlet from localStorage — set when the operator selects their outlet at session start
         const activeOutletId = localStorage.getItem('lodgecore_pos_outlet_id') || undefined;

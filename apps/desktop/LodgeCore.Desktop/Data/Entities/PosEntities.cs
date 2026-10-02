@@ -580,6 +580,12 @@ public class LocalPosTerminal
 
     public DateTime? LicenseExpiresAt { get; set; }
     public int? AutoLockSeconds { get; set; }
+
+    // Last cloud-validated entitlement projection used by the offline shell.
+    // JSON keeps this additive and backwards-compatible with existing local DBs.
+    public string EnabledModulesJson { get; set; } = "[]";
+    public string EntitlementsJson { get; set; } = "[]";
+    public DateTime? EntitlementsCapturedAt { get; set; }
     
     public DateTime? LastSyncAt { get; set; }
     public DateTime? LastSeenAt { get; set; }

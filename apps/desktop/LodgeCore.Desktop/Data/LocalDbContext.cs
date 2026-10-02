@@ -175,6 +175,21 @@ public class LocalDbContext : DbContext
         }
     }
 
+    public async Task ApplyEntitlementSchemaAsync()
+    {
+        var columns = new[]
+        {
+            "ALTER TABLE PosTerminals ADD COLUMN EnabledModulesJson TEXT NOT NULL DEFAULT '[]'",
+            "ALTER TABLE PosTerminals ADD COLUMN EntitlementsJson TEXT NOT NULL DEFAULT '[]'",
+            "ALTER TABLE PosTerminals ADD COLUMN EntitlementsCapturedAt TEXT"
+        };
+        foreach (var sql in columns)
+        {
+            try { await Database.ExecuteSqlRawAsync(sql); }
+            catch (Microsoft.Data.Sqlite.SqliteException ex) when (ex.SqliteErrorCode == 1 && ex.Message.Contains("duplicate column", StringComparison.OrdinalIgnoreCase)) { }
+        }
+    }
+
     public async Task ApplyFinancialControlSchemaAsync()
     {
         var columns = new[]

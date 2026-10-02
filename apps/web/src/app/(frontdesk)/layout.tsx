@@ -3,9 +3,18 @@ import React from 'react';
 import { auth } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import { requireModuleAccess } from '@/lib/auth/module-access';
-import { getNavigationModules } from '@/lib/auth/navigation-entitlements';
+import { getNavigationLicenseSnapshot } from '@/lib/auth/navigation-entitlements';
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
+  // The desktop build is a static export. Authentication, property scope and
+  // billing are resolved by the native/local provider there; calling
+  // NextAuth/Prisma during static export would make the offline shell depend
+  // on the cloud. The client workspace still filters optional navigation from
+  // its locally cached entitlement snapshot.
+  if (process.env.NEXT_PUBLIC_IS_DESKTOP === 'true') {
+    return <FrontDeskLayout enabledModules={[]}>{children}</FrontDeskLayout>;
+  }
+
   const session = await auth();
   if (!session?.user) redirect('/login');
   try {
@@ -13,9 +22,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   } catch {
     redirect('/settings/billing?required=MODULE_PMS');
   }
-  const navigationModules = await getNavigationModules(session.user.id, session.user.propertyId);
+  const navigationLicense = await getNavigationLicenseSnapshot(session.user.id, session.user.propertyId);
   return (
-    <FrontDeskLayout enabledModules={navigationModules}>
+    <FrontDeskLayout enabledModules={navigationLicense.modules} licenseSnapshot={navigationLicense}>
       {children}
     </FrontDeskLayout>
   );

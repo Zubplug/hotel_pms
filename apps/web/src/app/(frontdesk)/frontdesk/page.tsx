@@ -46,6 +46,7 @@ import {
   ReceiptText,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useNavigationModules } from '@/lib/auth/useNavigationModules';
 
 // ─── Colour palette token helpers ──────────────────────────────────────────
 const STATUS_CLASSES: Record<string, string> = {
@@ -308,6 +309,8 @@ function GuestRow({ name, room, balance, availableCredit, roomStatus, status, ch
 export default function ReceptionistDashboardPage() {
   const router = useRouter();
   const { propertyId } = useProperty();
+  const { data: enabledModules = [] } = useNavigationModules(propertyId);
+  const operationsEnabled = enabledModules.includes('MODULE_OPERATIONS');
   const { data: session } = useLodgeCoreSession();
   const { provider, syncStatus } = useLodgeCoreProvider();
 
@@ -494,7 +497,7 @@ export default function ReceptionistDashboardPage() {
               <ActionBtn icon={CalendarPlus} label="New booking" sub="Reservation" onClick={() => router.push('/frontdesk/reservations/new')} color="bg-indigo-500/10 border-indigo-500/20 text-indigo-300 hover:bg-indigo-500/15 hover:border-indigo-500/40" />
               <ActionBtn icon={Search} label="Find guest" sub="Search desk" onClick={() => router.push('/frontdesk/reservations')} color="bg-white/5 border-white/10 text-slate-300 hover:bg-white/8 hover:border-white/20" />
               <ActionBtn icon={CreditCard} label="Read key" sub="Card tools" onClick={() => setReadCardOpen(true)} color="bg-violet-500/10 border-violet-500/20 text-violet-300 hover:bg-violet-500/15 hover:border-violet-500/40" />
-              <ActionBtn icon={CalendarDays} label="Hall & Events" sub="Read-only schedule" onClick={() => router.push('/frontdesk/events')} color="bg-cyan-500/10 border-cyan-500/20 text-cyan-300 hover:bg-cyan-500/15 hover:border-cyan-500/40" />
+              {operationsEnabled && <ActionBtn icon={CalendarDays} label="Hall & Events" sub="Read-only schedule" onClick={() => router.push('/frontdesk/events')} color="bg-cyan-500/10 border-cyan-500/20 text-cyan-300 hover:bg-cyan-500/15 hover:border-cyan-500/40" />}
             </div>
           </div>
         </section>
@@ -642,9 +645,11 @@ export default function ReceptionistDashboardPage() {
             { label: 'Room Status',    icon: Key,         action: () => router.push('/frontdesk/rooms'),        color: 'text-indigo-400' },
             { label: 'City Ledger',    icon: Landmark,    action: () => router.push('/frontdesk/city-ledger'), color: 'text-emerald-400' },
             { label: 'Guest Credit',   icon: Wallet,      action: () => router.push('/frontdesk/guest-credits'), color: 'text-amber-400' },
-            { label: 'Event Invoice',  icon: ReceiptText, action: () => router.push('/frontdesk/event-invoices'), color: 'text-cyan-400' },
             { label: 'Re-Encode Card', icon: KeySquare,   action: () => setReencodeCardOpen(true),             color: 'text-rose-400' },
             { label: 'Quick Checkout', icon: KeySquare,   action: () => setQuickCheckoutOpen(true),            color: 'text-violet-400' },
+            ...(operationsEnabled ? [
+              { label: 'Event Invoice', icon: ReceiptText, action: () => router.push('/frontdesk/event-invoices'), color: 'text-cyan-400' },
+            ] : []),
           ].map(({ label, icon: Icon, action, color }) => (
             <button
               key={label}

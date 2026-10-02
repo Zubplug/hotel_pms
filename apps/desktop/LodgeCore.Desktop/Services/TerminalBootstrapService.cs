@@ -83,11 +83,28 @@ public class TerminalBootstrapService
             name = terminal.Name,
             propertyId = terminal.PropertyId,
             licenseState = terminal.LicenseState,
+            licenseExpiresAt = terminal.LicenseExpiresAt,
+            revokedAt = terminal.RevokedAt,
+            enabledModules = DeserializeStringArray(terminal.EnabledModulesJson),
+            entitlements = DeserializeEntitlements(terminal.EntitlementsJson),
+            entitlementsCapturedAt = terminal.EntitlementsCapturedAt,
             bankingModel = bankingModel,
             outletId = terminal.OutletId,
             outletType = outletType,
             desktopMode = desktopMode
         };
+    }
+
+    private static string[] DeserializeStringArray(string? json)
+    {
+        try { return JsonSerializer.Deserialize<string[]>(json ?? "[]") ?? Array.Empty<string>(); }
+        catch (JsonException) { return Array.Empty<string>(); }
+    }
+
+    private static object[] DeserializeEntitlements(string? json)
+    {
+        try { return JsonSerializer.Deserialize<object[]>(json ?? "[]") ?? Array.Empty<object>(); }
+        catch (JsonException) { return Array.Empty<object>(); }
     }
 
     public async Task<object> ProvisionTerminalAsync(string email, string password, string propertyId, string outletId, string terminalName, string terminalType)
@@ -141,6 +158,9 @@ public class TerminalBootstrapService
             RegistrationState = terminalInfo.RegistrationState,
             LicenseState = terminalInfo.LicenseState,
             LicenseExpiresAt = terminalInfo.LicenseExpiresAt,
+            EnabledModulesJson = JsonSerializer.Serialize(terminalInfo.EnabledModules ?? Array.Empty<string>()),
+            EntitlementsJson = JsonSerializer.Serialize(terminalInfo.Entitlements ?? Array.Empty<EntitlementInfo>()),
+            EntitlementsCapturedAt = terminalInfo.EntitlementsCapturedAt,
             ConfigurationVersion = terminalInfo.ConfigurationVersion,
             StaffVersion = terminalInfo.StaffVersion,
             MenuVersion = terminalInfo.MenuVersion,
@@ -202,7 +222,19 @@ public class TerminalIdentity
     public string RegistrationState { get; set; } = string.Empty;
     public string LicenseState { get; set; } = string.Empty;
     public DateTime? LicenseExpiresAt { get; set; }
+    public string[]? EnabledModules { get; set; }
+    public EntitlementInfo[]? Entitlements { get; set; }
+    public DateTime? EntitlementsCapturedAt { get; set; }
     public int ConfigurationVersion { get; set; }
     public int StaffVersion { get; set; }
     public int MenuVersion { get; set; }
+}
+
+public class EntitlementInfo
+{
+    public string ProductCode { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public DateTime StartsAt { get; set; }
+    public DateTime? ExpiresAt { get; set; }
+    public int? Quantity { get; set; }
 }

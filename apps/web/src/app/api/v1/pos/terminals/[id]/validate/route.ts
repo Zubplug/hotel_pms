@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
-import { compare } from 'bcryptjs';
-import { requireOrganizationContext } from "@/lib/organization-access";
+import { verifyDeviceCredential } from '@/lib/pos/device-credential';
 
 export async function POST(
   req: NextRequest,
@@ -23,32 +22,77 @@ export async function POST(
       return NextResponse.json({ error: 'Terminal not found' }, { status: 404 });
     }
 
-    if (terminal.registrationState !== 'REGISTERED') {
-      return NextResponse.json({ error: `Terminal is ${terminal.registrationState.toLowerCase()}` }, { status: 403 });
-    }
-
-    const isTokenValid = await compare(deviceToken, terminal.deviceCredentialHash);
+    const isTokenValid = await verifyDeviceCredential(deviceToken, terminal.deviceCredentialHash);
     if (!isTokenValid) {
       return NextResponse.json({ error: 'Invalid device token' }, { status: 401 });
     }
 
+    const now = new Date();
+    const [subscription, pmsEntitlement] = await Promise.all([
+      prisma.subscription.findFirst({
+        where: {
+          organizationId: terminal.organizationId,
+          status: { in: ['ACTIVE', 'TRIALING', 'PAST_DUE'] },
+          planId: { not: null },
+          currentPeriodEnd: { gt: now },
+        },
+        select: { currentPeriodEnd: true },
+        orderBy: { currentPeriodEnd: 'desc' },
+      }),
+      prisma.entitlement.findFirst({
+        where: {
+          organizationId: terminal.organizationId,
+          productCode: 'MODULE_PMS',
+          status: 'ACTIVE',
+          startsAt: { lte: now },
+          OR: [{ propertyId: terminal.propertyId }, { propertyId: null }],
+          AND: [{ OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] }],
+        },
+        select: { expiresAt: true },
+        orderBy: { expiresAt: 'desc' },
+      }),
+    ]);
+
+    const billingValid = Boolean(subscription && pmsEntitlement);
+    const expiryCandidates = [
+      terminal.licenseExpiresAt,
+      subscription?.currentPeriodEnd ?? null,
+      pmsEntitlement?.expiresAt ?? null,
+    ].filter((value): value is Date => value instanceof Date);
+    const effectiveExpiry = expiryCandidates.length
+      ? new Date(Math.min(...expiryCandidates.map((value) => value.getTime())))
+      : null;
+    const effectiveLicenseState = terminal.revokedAt
+      ? 'REVOKED'
+      : billingValid && terminal.licenseState !== 'RESTRICTED'
+        ? 'VALID'
+        : 'EXPIRED';
+
     // Update last seen
     await prisma.posTerminal.update({
       where: { id: (await params).id },
-      data: { lastSeenAt: new Date() }
+      data: {
+        lastSeenAt: now,
+        licenseState: effectiveLicenseState,
+        licenseExpiresAt: effectiveExpiry,
+      }
     });
 
     return NextResponse.json({
       data: {
-        isValid: true,
+        isValid: terminal.registrationState === 'REGISTERED'
+          && effectiveLicenseState === 'VALID'
+          && !terminal.revokedAt,
         terminal: {
           status: terminal.registrationState,
-          licenseState: terminal.licenseState
+          licenseState: effectiveLicenseState,
+          licenseExpiresAt: effectiveExpiry,
+          revokedAt: terminal.revokedAt,
         }
       }
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Terminal Validate Error:', error);
-    return NextResponse.json({ error: error?.message || 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Internal Server Error' }, { status: 500 });
   }
 }

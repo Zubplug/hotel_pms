@@ -102,6 +102,7 @@ public static class MauiProgram
             var db = scope.ServiceProvider.GetRequiredService<LocalDbContext>();
             db.Database.EnsureCreated();
             db.ApplyNoShowSchemaAsync().GetAwaiter().GetResult();
+            db.ApplyEntitlementSchemaAsync().GetAwaiter().GetResult();
             db.ApplyFinancialControlSchemaAsync().GetAwaiter().GetResult();
             db.ApplyManagerOverrideSchemaAsync().GetAwaiter().GetResult();
             db.ApplyPosRoutingSchemaAsync().GetAwaiter().GetResult();   // was defined but never called

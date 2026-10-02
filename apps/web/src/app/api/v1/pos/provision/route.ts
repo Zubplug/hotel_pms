@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@hotel-pms/db';
 import { randomBytes, createHash } from 'crypto';
-import { requireOrganizationContext } from "@/lib/organization-access";
 
 export async function POST(req: NextRequest) {
   try {
@@ -68,6 +67,19 @@ export async function POST(req: NextRequest) {
     const categories = await prisma.productCategory.findMany({ where: { outletId } });
     const products = await prisma.posProduct.findMany({ where: { propertyId } });
     const outlet = await prisma.posOutlet.findUnique({ where: { id: outletId } });
+    const entitlements = await prisma.entitlement.findMany({
+      where: {
+        organizationId: adminStaff.organizationId,
+        OR: [{ propertyId }, { propertyId: null }],
+      },
+      select: { productCode: true, status: true, startsAt: true, expiresAt: true, quantity: true },
+    });
+    const now = new Date();
+    const activeEntitlements = entitlements.filter((item) =>
+      item.status === 'ACTIVE'
+      && item.startsAt <= now
+      && (item.expiresAt === null || item.expiresAt > now),
+    );
 
     // 4. Return Snapshot
     return NextResponse.json({
@@ -84,6 +96,11 @@ export async function POST(req: NextRequest) {
           registrationState: terminal.registrationState,
           licenseState: terminal.licenseState,
           licenseExpiresAt: terminal.licenseExpiresAt,
+          enabledModules: activeEntitlements
+            .map((item) => item.productCode)
+            .filter((code) => ['MODULE_PMS', 'MODULE_OPERATIONS', 'MODULE_ENTERPRISE'].includes(code)),
+          entitlements,
+          entitlementsCapturedAt: now,
           configurationVersion: terminal.configurationVersion,
           staffVersion: terminal.staffVersion,
           menuVersion: terminal.menuVersion,
@@ -96,8 +113,8 @@ export async function POST(req: NextRequest) {
         }
       }
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Provisioning error:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return NextResponse.json({ success: false, error: error instanceof Error ? error.message : 'Internal Server Error' }, { status: 500 });
   }
 }
