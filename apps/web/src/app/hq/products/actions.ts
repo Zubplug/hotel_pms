@@ -34,17 +34,26 @@ export async function createBillingPrice(formData: FormData): Promise<ActionResu
   try {
     await requireHQAdmin();
     const productId = String(formData.get('productId') || '');
+    const priceId = String(formData.get('priceId') || '').trim();
     const amountMajor = Number(formData.get('amount'));
     const currency = String(formData.get('currency') || '').trim().toLowerCase();
-    const interval = String(formData.get('interval') || 'month') as 'month' | 'year';
-    if (!productId || !Number.isFinite(amountMajor) || amountMajor <= 0 || !Number.isInteger(amountMajor) || !/^[a-z]{3}$/.test(currency) || !['month', 'year'].includes(interval)) throw new Error('Enter a valid whole-currency amount, such as 50000 for ₦50,000.');
+    const interval = String(formData.get('interval') || 'month');
+    if (!productId || !Number.isFinite(amountMajor) || amountMajor <= 0 || !Number.isInteger(amountMajor) || !/^[a-z]{3}$/.test(currency) || !['month', 'year', 'one_time'].includes(interval)) throw new Error('Enter a valid amount and interval.');
     const amount = amountMajor * 100;
     const product = await prisma.billingProduct.findUniqueOrThrow({ where: { id: productId }, select: { active: true, code: true, catalogVersion: true } });
     if (!product.active) throw new Error('Prices can only be added to active catalogue products.');
     if (product.code === 'ADDON_SMART_ACCESS' || product.code === 'SMART_ACCESS') {
       throw new Error('Smart Access is included in MODULE_PMS and cannot have a separate price.');
     }
-    await prisma.billingPrice.create({ data: { productId, amount, currency, interval, catalogVersion: product.catalogVersion } });
+    if (priceId) {
+      const existing = await prisma.billingPrice.findFirst({ where: { id: priceId, productId }, select: { id: true } });
+      if (!existing) throw new Error('Price not found for this product.');
+      await prisma.billingPrice.update({ where: { id: existing.id }, data: { amount, currency, interval } });
+    } else {
+      const existing = await prisma.billingPrice.findFirst({ where: { productId, interval, catalogVersion: product.catalogVersion }, select: { id: true } });
+      if (existing) await prisma.billingPrice.update({ where: { id: existing.id }, data: { amount, currency } });
+      else await prisma.billingPrice.create({ data: { productId, amount, currency, interval, catalogVersion: product.catalogVersion } });
+    }
     revalidatePath('/hq/products');
     return { ok: true };
   } catch (error) {
