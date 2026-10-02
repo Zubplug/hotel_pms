@@ -1,6 +1,6 @@
 // POST /api/v1/cron/expire-booking-holds
 // Expires ACTIVE BookingHold records whose TTL has elapsed.
-// Called by Vercel Cron (every 2 minutes) or QStash.
+// Called by the daily Vercel Hobby fallback or an external scheduler every 2 minutes.
 // Secured by deployment-level access control — no public exposure.
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -38,4 +38,3 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
-
