@@ -34,6 +34,6 @@ describe('billing entitlement isolation', () => {
         findFirst: async () => ({ status: 'ACTIVE', startsAt: new Date(0), expiresAt: null, quantity: 30 }),
       },
     };
-    await expect(requireEntitlementCapacity(db, { organizationId: 'org-1', productCode: 'CORE_PMS', propertyId: 'property-1', requestedQuantity: 31 })).rejects.toThrow('Usage limit exceeded');
+    await expect(requireEntitlementCapacity(db, { organizationId: 'org-1', productCode: 'MODULE_PMS', propertyId: 'property-1', requestedQuantity: 31 })).rejects.toThrow('Usage limit exceeded');
   });
 });

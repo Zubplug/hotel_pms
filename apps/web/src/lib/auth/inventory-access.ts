@@ -5,6 +5,6 @@ export async function requireInventoryAccess(userId: string): Promise<TenantCont
   const ctx = await requireOrganizationContext(userId);
   const propertyId = ctx.propertyIds[0];
   if (!propertyId) throw new Error('No active property is available');
-  await requireEntitlement(ctx.organizationId, 'PROFESSIONAL_OPERATIONS', propertyId);
+  await requireEntitlement(ctx.organizationId, 'MODULE_OPERATIONS', propertyId);
   return ctx;
 }

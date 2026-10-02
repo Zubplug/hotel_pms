@@ -15,9 +15,9 @@ export default async function CashierRootLayout({ children }: { children: React.
     redirect('/general-manager');
   }
   try {
-    await requireModuleAccess(session.user.id, 'CORE_PMS', (session.user as any).propertyId);
+    await requireModuleAccess(session.user.id, 'MODULE_PMS', (session.user as any).propertyId);
   } catch {
-    redirect('/settings/billing?required=CORE_PMS');
+    redirect('/settings/billing?required=MODULE_PMS');
   }
 
   return (

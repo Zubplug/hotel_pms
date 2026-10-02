@@ -17,7 +17,7 @@ export async function GET(req: Request) {
 
     const { role, isSuperAdmin } = session.user as any;
     const ctx = await requireOrganizationContext(session.user.id);
-    await requireEntitlement(ctx.organizationId, 'PROFESSIONAL_OPERATIONS', ctx.propertyIds[0]);
+    await requireEntitlement(ctx.organizationId, 'MODULE_OPERATIONS', ctx.propertyIds[0]);
     if (!hasInventoryPermission(role, 'inventory.read', isSuperAdmin)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
@@ -52,7 +52,7 @@ export async function POST(req: Request) {
 
     const { role, isSuperAdmin, id: userId } = session.user as any;
     const ctx = await requireOrganizationContext(session.user.id);
-    await requireEntitlement(ctx.organizationId, 'PROFESSIONAL_OPERATIONS', ctx.propertyIds[0]);
+    await requireEntitlement(ctx.organizationId, 'MODULE_OPERATIONS', ctx.propertyIds[0]);
     if (!hasInventoryPermission(role, 'procurement.po.create', isSuperAdmin)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }

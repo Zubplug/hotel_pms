@@ -126,7 +126,7 @@ export async function POST(req: NextRequest) {
     if (existing) return errorResponse('ROOM_NUMBER_DUPLICATE', `Room ${data.number} already exists in this property`, 409);
 
     const activeRoomCount = await prisma.room.count({ where: { propertyId: data.propertyId, deletedAt: null } });
-    await requireEntitlementCapacity(ctx.organizationId, 'CORE_PMS', data.propertyId, activeRoomCount + 1);
+    await requireEntitlementCapacity(ctx.organizationId, 'MODULE_PMS', data.propertyId, activeRoomCount + 1);
 
     const room = await prisma.room.create({
       data: { ...data, squareMeters: data.squareMeters } as any,

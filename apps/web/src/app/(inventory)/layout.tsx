@@ -18,9 +18,9 @@ export default async function InventoryRootLayout({ children }: { children: Reac
     redirect('/general-manager');
   }
   try {
-    await requireModuleAccess(session.user.id, 'PROFESSIONAL_OPERATIONS', (session.user as any).propertyId);
+    await requireModuleAccess(session.user.id, 'MODULE_OPERATIONS', (session.user as any).propertyId);
   } catch {
-    redirect('/settings/billing?required=PROFESSIONAL_OPERATIONS');
+    redirect('/settings/billing?required=MODULE_OPERATIONS');
   }
 
   return (

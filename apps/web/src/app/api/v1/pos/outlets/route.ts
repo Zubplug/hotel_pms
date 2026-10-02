@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
     }
 
     if (!ctx.propertyIds.includes(String(propertyId))) return NextResponse.json({ error: 'Forbidden property' }, { status: 403 });
-    await requireEntitlement(ctx.organizationId, 'PROFESSIONAL_OPERATIONS', String(propertyId));
+    await requireEntitlement(ctx.organizationId, 'MODULE_OPERATIONS', String(propertyId));
     const outlets = await prisma.posOutlet.findMany({
       where: { propertyId: String(propertyId) },
       orderBy: { name: 'asc' }
@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
     if (!propertyId || !name) {
       return NextResponse.json({ error: 'propertyId and name are required' }, { status: 400 });
     }
-    await requireEntitlement(ctx.organizationId, 'PROFESSIONAL_OPERATIONS', String(propertyId));
+    await requireEntitlement(ctx.organizationId, 'MODULE_OPERATIONS', String(propertyId));
 
     const currentOutletCount = await prisma.posOutlet.count({ where: { propertyId: String(propertyId), isActive: true } });
     await requirePlanLimit(ctx.organizationId, 'maxOutlets', currentOutletCount);

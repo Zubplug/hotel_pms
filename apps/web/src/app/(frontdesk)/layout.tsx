@@ -8,9 +8,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const session = await auth();
   if (!session?.user) redirect('/login');
   try {
-    await requireModuleAccess(session.user.id, 'CORE_PMS', session.user.propertyId);
+    await requireModuleAccess(session.user.id, 'MODULE_PMS', session.user.propertyId);
   } catch {
-    redirect('/settings/billing?required=CORE_PMS');
+    redirect('/settings/billing?required=MODULE_PMS');
   }
   return (
     <FrontDeskLayout>

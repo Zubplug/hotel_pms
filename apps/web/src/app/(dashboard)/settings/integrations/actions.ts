@@ -67,7 +67,7 @@ export async function saveChannelConnection(data: z.infer<typeof connectionSchem
     const ctx = await requireOrganizationContext(session.user.id);
     const propertyId = ctx.propertyIds[0];
     if (provider === 'BEDS24') await requireEntitlement(ctx.organizationId, 'ADDON_BEDS24', propertyId);
-    else await requireEntitlement(ctx.organizationId, 'PROFESSIONAL_OPERATIONS', propertyId);
+    else await requireEntitlement(ctx.organizationId, 'MODULE_OPERATIONS', propertyId);
     const existingConnection = await prisma.channelConnection.findUnique({ where: { propertyId_provider: { propertyId, provider } }, select: { id: true } });
     const integrationCount = await prisma.channelConnection.count({ where: { organizationId: ctx.organizationId, NOT: existingConnection ? { id: existingConnection.id } : undefined } });
     await requirePlanLimit(ctx.organizationId, 'maxIntegrations', integrationCount);

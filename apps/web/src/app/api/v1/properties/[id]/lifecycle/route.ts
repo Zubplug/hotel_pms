@@ -31,7 +31,7 @@ export async function POST(req: NextRequest, { params }: Params) {
   }
 
   if (action === 'REACTIVATE') {
-    try { await requireEntitlement(ctx.organizationId, 'CORE_PMS', id); } catch { return errorResponse('PAYMENT_REQUIRED', 'An active CORE_PMS entitlement is required before reactivation', 402); }
+    try { await requireEntitlement(ctx.organizationId, 'MODULE_PMS', id); } catch { return errorResponse('PAYMENT_REQUIRED', 'An active PMS entitlement is required before reactivation', 402); }
     const updated = await prisma.property.update({ where: { id }, data: { isActive: true, suspendedAt: null, suspensionReason: null } });
     await createAuditLog({ organizationId: property.organizationId, propertyId: id, userId: session.user.id, action: 'PROPERTY_REACTIVATED', resource: 'property', resourceId: id, previousValue: property, newValue: updated });
     return successResponse(updated);

@@ -6,9 +6,9 @@ export default async function MaintenanceLayout({ children }: { children: React.
   const session = await auth();
   if (!session?.user) redirect('/login');
   try {
-    await requireModuleAccess(session.user.id, 'PROFESSIONAL_OPERATIONS', session.user.propertyId);
+    await requireModuleAccess(session.user.id, 'MODULE_OPERATIONS', session.user.propertyId);
   } catch {
-    redirect('/settings/billing?required=PROFESSIONAL_OPERATIONS');
+    redirect('/settings/billing?required=MODULE_OPERATIONS');
   }
   return children;
 }

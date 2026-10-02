@@ -9,6 +9,7 @@
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
     "db:seed": "prisma db seed",
+    "db:sync:pricing": "tsx prisma/sync-2026-pricing-catalog.ts",
     "db:studio": "prisma studio",
     "type-check": "tsc --noEmit",
     "postinstall": "prisma generate"

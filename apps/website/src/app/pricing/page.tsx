@@ -40,23 +40,33 @@ const FAQS = [
 ];
 
 const COMPARE = [
-  { feature: "Property Management System",       essential: true, pro: true,  enterprise: true },
-  { feature: "Front Desk & Reservations",        essential: true, pro: true,  enterprise: true },
-  { feature: "Guest Profiles & Folios",          essential: true, pro: true,  enterprise: true },
-  { feature: "Night Audit & Reporting",          essential: true, pro: true,  enterprise: true },
-  { feature: "Offline-Ready Workflows",          essential: true, pro: true,  enterprise: true },
-  { feature: "Point of Sale (Outlets)",          essential: false, pro: true, enterprise: true },
-  { feature: "Housekeeping Module",              essential: false, pro: true, enterprise: true },
-  { feature: "Booking Engine & OTA Sync",        essential: false, pro: true, enterprise: true },
-  { feature: "Events & Banqueting",              essential: false, pro: true, enterprise: true },
-  { feature: "Finance & Accounting",             essential: false, pro: true, enterprise: true },
-  { feature: "Multi-Property Control Plane",     essential: false, pro: false, enterprise: true },
-  { feature: "Group Reporting & Analytics",      essential: false, pro: false, enterprise: true },
-  { feature: "Centralised User Management",      essential: false, pro: false, enterprise: true },
-  { feature: "Dedicated Account Manager",        essential: false, pro: false, enterprise: true },
-  { feature: "Priority SLA & On-Site Support",   essential: false, pro: false, enterprise: true },
-  { feature: "Custom Integrations & Open API",   essential: false, pro: false, enterprise: true },
+  { feature: "Property Management System",       starter: true,  professional: true,  business: true,  enterprise: true,  enterprisePlus: true },
+  { feature: "Front Desk & Reservations",        starter: true,  professional: true,  business: true,  enterprise: true,  enterprisePlus: true },
+  { feature: "Guest Profiles & Folios",          starter: true,  professional: true,  business: true,  enterprise: true,  enterprisePlus: true },
+  { feature: "Night Audit & Reporting",          starter: true,  professional: true,  business: true,  enterprise: true,  enterprisePlus: true },
+  { feature: "Offline-Ready Workflows",          starter: true,  professional: true,  business: true,  enterprise: true,  enterprisePlus: true },
+  { feature: "Point of Sale (Outlets)",          starter: false, professional: true,  business: true,  enterprise: true,  enterprisePlus: true },
+  { feature: "Housekeeping Module",              starter: false, professional: true,  business: true,  enterprise: true,  enterprisePlus: true },
+  { feature: "Maintenance Module",              starter: false, professional: true,  business: true,  enterprise: true,  enterprisePlus: true },
+  { feature: "Inventory & Procurement",          starter: false, professional: true,  business: true,  enterprise: true,  enterprisePlus: true },
+  { feature: "Booking Engine & OTA Sync",        starter: false, professional: true,  business: true,  enterprise: true,  enterprisePlus: true },
+  { feature: "Events & Banqueting",              starter: false, professional: true,  business: true,  enterprise: true,  enterprisePlus: true },
+  { feature: "Finance & Accounting",             starter: false, professional: true,  business: true,  enterprise: true,  enterprisePlus: true },
+  { feature: "Multi-Property Control Plane",     starter: false, professional: false, business: true,  enterprise: true,  enterprisePlus: true },
+  { feature: "Group Reporting & Analytics",      starter: false, professional: false, business: true,  enterprise: true,  enterprisePlus: true },
+  { feature: "Centralised User Management",      starter: false, professional: false, business: true,  enterprise: true,  enterprisePlus: true },
+  { feature: "Dedicated Account Manager",        starter: false, professional: false, business: false, enterprise: true,  enterprisePlus: true },
+  { feature: "Priority SLA & On-Site Support",   starter: false, professional: false, business: false, enterprise: true,  enterprisePlus: true },
+  { feature: "Custom Integrations & Open API",   starter: false, professional: false, business: true,  enterprise: true,  enterprisePlus: true },
 ];
+
+const LIVE_PLAN_FEATURES: Record<string, string[]> = {
+  ESSENTIAL: ["PMS / Front Desk", "Reservations & folios", "Housekeeping", "Maintenance", "Basic reports", "Offline-ready workflows"],
+  PROFESSIONAL: ["Everything in Starter", "Full POS & KDS", "Inventory & procurement", "Accounting & cash management", "Events & banqueting", "Booking engine"],
+  BUSINESS: ["Everything in Professional", "Multi-outlet operations", "Advanced accounting", "Channel Manager & OTA", "Multi-property reporting", "API integrations & analytics"],
+  ENTERPRISE: ["Everything in Business", "Multi-property control plane", "Centralised user management", "Group reporting & analytics", "Dedicated account manager", "Priority SLA & support"],
+  ENTERPRISE_PLUS: ["Everything in Enterprise", "Custom workflows", "Enterprise integrations", "On-site implementation", "Custom SLA", "Executive support"],
+};
 
 type Plan = {
   id: string;
@@ -111,28 +121,44 @@ function Reveal({ children, delay = 0 }: { children: React.ReactNode; delay?: nu
 
 const STATIC_PLANS = [
   {
-    id: "essential",
-    name: "Essential",
-    description: "The core operating foundation for independent hotels and guesthouses. Everything you need to run daily operations reliably.",
-    features: ["Property Management System", "Front Desk & Reservations", "Guest Profiles & Folios", "Night Audit & Reporting", "Offline-Ready Workflows"],
+    id: "starter",
+    name: "Starter",
+    description: "The core operating foundation for independent hotels and guesthouses with up to 20 rooms.",
+    features: ["PMS / Front Desk", "Reservations & folios", "Guest profiles & folios", "Night audit", "Basic reports", "Offline-ready workflows"],
     featured: false,
-    cta: "Talk to sales →",
+    cta: "Get started →",
   },
   {
     id: "professional",
     name: "Professional",
-    description: "The full hospitality stack for hotels, resorts and multi-outlet properties. All modules connected in one platform.",
-    features: ["Everything in Essential", "Point of Sale (All Outlets)", "Booking Engine & OTA Sync", "Housekeeping Module", "Events & Banqueting", "Finance & Accounting"],
+    description: "The full hospitality stack for hotels, resorts and multi-outlet properties.",
+    features: ["Everything in Starter", "Full POS & KDS", "Inventory & procurement", "Accounting & cash management", "Events & banqueting", "Booking engine"],
     featured: true,
     cta: "Talk to sales →",
   },
   {
+    id: "business",
+    name: "Business",
+    description: "Advanced operations, finance and connectivity for properties with up to 100 rooms.",
+    features: ["Everything in Professional", "Multi-outlet operations", "Advanced accounting", "Payroll", "Channel Manager & OTA", "API integrations & analytics"],
+    featured: false,
+    cta: "Get started →",
+  },
+  {
     id: "enterprise",
     name: "Enterprise",
-    description: "For hotel groups, chains and multi-property portfolios. Centralised control with per-property reporting and dedicated support.",
-    features: ["Everything in Professional", "Multi-Property Control Plane", "Group Reporting & Analytics", "Centralised User Management", "Dedicated Account Manager", "Priority SLA & On-Site Support"],
+    description: "For hotel groups, chains and multi-property portfolios. Centralised control with dedicated support.",
+    features: ["Everything in Business", "Multi-property control plane", "Group reporting & analytics", "Centralised user management", "Dedicated account manager", "Priority SLA & support"],
     featured: false,
     cta: "Talk to enterprise →",
+  },
+  {
+    id: "enterprise-plus",
+    name: "Enterprise Plus",
+    description: "A custom operating model for 250+ room groups and complex portfolios.",
+    features: ["Everything in Enterprise", "Custom workflows", "Enterprise integrations", "On-site implementation", "Custom SLA", "Executive support"],
+    featured: false,
+    cta: "Request a quote →",
   },
 ];
 
@@ -152,16 +178,16 @@ export default function PricingPage() {
 
   const displayPlans = plans.length
     ? plans.map((plan, index) => {
-        const price = plan.items.flatMap((item) => item.product.prices).find((item) => item.interval === billingInterval)
-          ?? plan.items.flatMap((item) => item.product.prices).find((item) => item.interval === "month");
+        const price = plan.items.filter((item) => item.required).flatMap((item) => item.product.prices).find((item) => item.interval === billingInterval)
+          ?? plan.items.filter((item) => item.required).flatMap((item) => item.product.prices).find((item) => item.interval === "month");
         return {
           id: plan.code.toLowerCase(),
           name: plan.name,
           description: plan.description ?? "A modular LodgeCore subscription for hospitality operations.",
-          features: plan.items.map((item) => `${item.product.name}${item.includedQty ? ` · ${item.includedQty} included` : ""}`),
+          features: LIVE_PLAN_FEATURES[plan.code] ?? plan.items.filter((item) => item.required).map((item) => `${item.product.name}${item.includedQty ? ` · ${item.includedQty} included` : ""}`),
           featured: plan.code === "PROFESSIONAL",
-          cta: plan.code === "ENTERPRISE" ? "Talk to enterprise →" : "Talk to sales →",
-          priceLabel: price ? `${price.currency.toUpperCase()} ${price.amount.toLocaleString()} / ${price.interval}` : "Pricing on request",
+          cta: ["ENTERPRISE", "ENTERPRISE_PLUS"].includes(plan.code) ? "Request a quote →" : "Get started →",
+          priceLabel: price ? `${price.currency.toUpperCase()} ${(price.amount / 100).toLocaleString()} / ${price.interval}` : "Pricing on request",
           live: true,
           index,
         };
@@ -314,12 +340,13 @@ export default function PricingPage() {
                 border: "1px solid var(--border-card)",
                 borderRadius: "var(--radius-xl)",
                 overflow: "hidden",
+                overflowX: "auto",
                 background: "var(--surface-1)",
               }}>
                 {/* Table header */}
-                <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr", borderBottom: "1px solid var(--border-card)", background: "var(--surface-2)" }}>
+                <div style={{ display: "grid", minWidth: 900, gridTemplateColumns: "2fr repeat(5, 1fr)", borderBottom: "1px solid var(--border-card)", background: "var(--surface-2)" }}>
                   <div style={{ padding: "14px 20px", fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: ".14em", textTransform: "uppercase", color: "var(--text-muted)" }}>Feature</div>
-                  {["Essential", "Professional", "Enterprise"].map((col, i) => (
+                  {["Starter", "Professional", "Business", "Enterprise", "Enterprise Plus"].map((col, i) => (
                     <div key={col} style={{
                       padding: "14px 20px", textAlign: "center",
                       fontFamily: "var(--font-display)", fontSize: 13, fontWeight: 700, letterSpacing: "-.03em",
@@ -336,12 +363,14 @@ export default function PricingPage() {
                 {/* Rows */}
                 {COMPARE.map((row, i) => (
                   <div key={row.feature} style={{
-                    display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr",
+                    display: "grid",
+                    minWidth: 900,
+                    gridTemplateColumns: "2fr repeat(5, 1fr)",
                     borderBottom: i < COMPARE.length - 1 ? "1px solid var(--border-card)" : "none",
                     background: i % 2 === 0 ? "transparent" : "rgba(255,255,255,.012)",
                   }}>
                     <div style={{ padding: "12px 20px", fontSize: 13, color: "var(--text-secondary)" }}>{row.feature}</div>
-                    {[row.essential, row.pro, row.enterprise].map((has, j) => (
+                    {[row.starter, row.professional, row.business, row.enterprise, row.enterprisePlus].map((has, j) => (
                       <div key={j} style={{
                         padding: "12px 20px", textAlign: "center",
                         borderLeft: "1px solid var(--border-card)",
