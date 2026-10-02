@@ -32,6 +32,19 @@ export default async function SettingsPage() {
         </div>
       </div>
 
+      {/* Booking Engine */}
+      <div className="portal-card" style={{ border: "1px solid rgba(0,212,232,.28)", background: "linear-gradient(135deg, rgba(0,212,232,.08), rgba(15,23,42,.18))" }}>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 18, flexWrap: "wrap" }}>
+          <div>
+            <div className="portal-card-title">Booking Engine & website</div>
+            <p style={{ fontSize: 13, color: "var(--text-muted)", lineHeight: 1.7, maxWidth: 620, marginTop: 8 }}>
+              Configure your property booking sites, select a visual template, manage payments, request custom website design, and connect a custom domain.
+            </p>
+          </div>
+          <Link href="/portal/settings/booking-engine" className="btn btn-primary btn-sm" style={{ whiteSpace: "nowrap" }}>Open Booking Engine →</Link>
+        </div>
+      </div>
+
       {/* Organization */}
       <div className="portal-card">
         <div className="portal-card-title">Organization</div>
