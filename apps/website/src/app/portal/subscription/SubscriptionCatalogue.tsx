@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { ReactNode } from "react";
 
 /* ─────────────────────────────────────────────────────────────
@@ -43,6 +43,10 @@ function addOnFeatures(product: Product): string[] {
 
 function planFeatures(plan: Plan): { feature: string; included: boolean }[] {
   const code = plan.code.toUpperCase();
+  const isStarter = code === "ESSENTIAL" || code === "STARTER";
+  const isProfessional = code === "PROFESSIONAL";
+  const isBusiness = code === "BUSINESS";
+  const isEnterprise = code === "ENTERPRISE" || code === "ENTERPRISE_PLUS";
   const all = [
     { feature: "Front desk & reservations", essential: true, professional: true, enterprise: true },
     { feature: "Tape chart & room assignment", essential: true, professional: true, enterprise: true },
@@ -58,8 +62,9 @@ function planFeatures(plan: Plan): { feature: string; included: boolean }[] {
     { feature: "Events & banqueting", essential: false, professional: true, enterprise: true },
     { feature: "Direct booking engine", essential: false, professional: true, enterprise: true },
     { feature: "Finance & accounting", essential: "Basic", professional: true, enterprise: true },
-    { feature: "FIRS tax compliance", essential: false, professional: true, enterprise: true },
-    { feature: "Guest loyalty & CRM", essential: false, professional: true, enterprise: true },
+    { feature: "FIRS tax compliance", essential: false, professional: false, enterprise: true },
+    { feature: "Guest loyalty & CRM", essential: false, professional: false, enterprise: true },
+    { feature: "Channel Manager & OTA connectivity", essential: false, professional: false, enterprise: true },
     { feature: "AI revenue management", essential: false, professional: false, enterprise: true },
     { feature: "Multi-property dashboard", essential: false, professional: false, enterprise: true },
     { feature: "RBAC & audit controls", essential: false, professional: false, enterprise: true },
@@ -69,7 +74,7 @@ function planFeatures(plan: Plan): { feature: string; included: boolean }[] {
 
   return all.map(f => ({
     feature: f.feature,
-    included: code === "ENTERPRISE" ? !!f.enterprise : code === "PROFESSIONAL" ? !!f.professional : !!f.essential,
+    included: isEnterprise ? !!f.enterprise : isBusiness ? (f.feature !== "AI revenue management" ? !!(f.enterprise || f.professional) : false) : isProfessional ? !!f.professional : isStarter ? !!f.essential : false,
   }));
 }
 
@@ -81,9 +86,12 @@ function planLimits(plan: Plan): { label: string; value: string }[] {
 }
 
 const PLAN_TIER: Record<string, { badge: string; color: string; dim: string; glow: string; icon: string }> = {
-  ESSENTIAL: { badge: "Essential", color: "#00d4e8", dim: "rgba(0,212,232,0.08)", glow: "rgba(0,212,232,0.2)", icon: "◈" },
+  ESSENTIAL: { badge: "Starter", color: "#00d4e8", dim: "rgba(0,212,232,0.08)", glow: "rgba(0,212,232,0.2)", icon: "◈" },
+  STARTER: { badge: "Starter", color: "#00d4e8", dim: "rgba(0,212,232,0.08)", glow: "rgba(0,212,232,0.2)", icon: "◈" },
   PROFESSIONAL: { badge: "Professional", color: "#3ef5a0", dim: "rgba(62,245,160,0.08)", glow: "rgba(62,245,160,0.2)", icon: "⬡" },
+  BUSINESS: { badge: "Business", color: "#f5c542", dim: "rgba(245,197,66,0.08)", glow: "rgba(245,197,66,0.2)", icon: "◆" },
   ENTERPRISE: { badge: "Enterprise", color: "#a78bfa", dim: "rgba(167,139,250,0.08)", glow: "rgba(167,139,250,0.2)", icon: "▣" },
+  ENTERPRISE_PLUS: { badge: "Enterprise Plus", color: "#f59eeb", dim: "rgba(245,158,235,0.08)", glow: "rgba(245,158,235,0.2)", icon: "✦" },
 };
 
 function getPlanTier(code: string) {
@@ -112,6 +120,13 @@ function DetailDrawer({
   const addonFeatures = product ? addOnFeatures(product) : [];
   const tier = plan ? getPlanTier(plan.code) : null;
 
+  useEffect(() => {
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, []);
+
   return (
     <div
       className="sub-modal-backdrop"
@@ -120,8 +135,7 @@ function DetailDrawer({
       aria-modal="true"
       aria-labelledby="sub-modal-title"
     >
-      <div className="sub-modal-wrapper">
-        <div className="sub-modal" onClick={e => e.stopPropagation()}>
+      <div className="sub-modal" onClick={e => e.stopPropagation()}>
         {/* Drawer header */}
         <div className="sub-modal-header">
           <div>
@@ -155,9 +169,10 @@ function DetailDrawer({
                   <div>
                     <div style={{ color: tier.color, fontSize: 13, fontWeight: 700 }}>{tier.badge}</div>
                     <div style={{ color: "rgba(255,255,255,0.4)", fontSize: 11 }}>
-                      {plan.code.toUpperCase() === "ESSENTIAL" ? "Up to 30 rooms · Up to 10 users"
-                        : plan.code.toUpperCase() === "PROFESSIONAL" ? "Up to 100 rooms · Up to 30 users"
-                        : "Unlimited rooms · Unlimited users"}
+                      {plan.code.toUpperCase() === "ESSENTIAL" || plan.code.toUpperCase() === "STARTER" ? "Up to 20 rooms · Up to 10 users"
+                        : plan.code.toUpperCase() === "PROFESSIONAL" ? "Up to 50 rooms · Up to 30 users"
+                        : plan.code.toUpperCase() === "BUSINESS" ? "Up to 100 rooms · Up to 60 users"
+                        : "Custom room and user limits"}
                     </div>
                   </div>
                 </div>
@@ -293,7 +308,6 @@ function DetailDrawer({
         </div>
       </div>
     </div>
-    </div>
   );
 }
 
@@ -326,7 +340,7 @@ function PlanCard({
   onCheckout: (key: string, priceIds: string[], planId: string) => void;
   onDetails: () => void;
 }) {
-  const prices = plan.items.map(item => item.product.prices.find(p => p.interval === interval)).filter(Boolean) as Price[];
+  const prices = plan.items.filter(item => item.required).map(item => item.product.prices.find(p => p.interval === interval)).filter(Boolean) as Price[];
   const complete = prices.length === plan.items.filter(i => i.required).length;
   const total = prices.reduce((s, p) => s + p.amount, 0);
   const tier = getPlanTier(plan.code);
