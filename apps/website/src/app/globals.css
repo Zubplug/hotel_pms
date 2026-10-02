@@ -5077,13 +5077,13 @@ textarea.form-input { resize: vertical; min-height: 90px; }
 /* ══════════════════════════════════════════════════════════════
    DETAIL MODAL
    ══════════════════════════════════════════════════════════════ */
-.sub-modal-backdrop { position: fixed; inset: 0; z-index: 999; background: rgba(2,6,16,.75); backdrop-filter: blur(6px); display: flex; align-items: flex-start; justify-content: center; padding: 60px 20px; overflow-y: auto; animation: fade-in .25s var(--ease) both; }
-.sub-modal { width: 100%; max-width: 600px; margin: auto; background: var(--bg-raised); border-radius: var(--radius-xl); border: 1px solid var(--border-card); box-shadow: 0 20px 80px rgba(0,0,0,.5); display: flex; flex-direction: column; animation: fade-up .3s var(--ease-spring) both; }
+.sub-modal-backdrop { position: fixed; inset: 0; z-index: 999; background: rgba(2,6,16,.75); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; padding: 40px 20px; animation: fade-in .25s var(--ease) both; }
+.sub-modal { width: 100%; max-width: 600px; max-height: calc(100vh - 80px); background: var(--bg-raised); border-radius: var(--radius-xl); border: 1px solid var(--border-card); box-shadow: 0 20px 80px rgba(0,0,0,.5); display: flex; flex-direction: column; animation: fade-up .3s var(--ease-spring) both; overflow: hidden; }
 .sub-modal-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 24px 26px 20px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
 .sub-modal-title { font-family: var(--font-display); font-size: 1.15rem; font-weight: 700; letter-spacing: -.04em; color: var(--text-primary); margin-top: 5px; }
 .sub-modal-close { width: 32px; height: 32px; border-radius: var(--radius-md); border: 1px solid var(--border); background: rgba(255,255,255,.04); color: var(--text-muted); display: flex; align-items: center; justify-content: center; cursor: pointer; transition: background .2s, color .2s; flex-shrink: 0; }
 .sub-modal-close:hover { background: rgba(255,255,255,.08); color: var(--text-primary); }
-.sub-modal-body { flex: 1; padding: 24px 26px; }
+.sub-modal-body { flex: 1; overflow-y: auto; padding: 24px 26px; }
 .sub-modal-tier-badge { display: flex; align-items: center; gap: 14px; padding: 14px 18px; border-radius: var(--radius-md); margin-bottom: 24px; }
 .sub-modal-features { display: flex; flex-direction: column; gap: 9px; }
 .sub-modal-feature-row { display: flex; align-items: center; gap: 10px; }
