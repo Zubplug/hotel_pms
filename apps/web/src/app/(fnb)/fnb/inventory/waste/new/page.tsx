@@ -4,7 +4,17 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Trash2, Loader2, ArrowLeft, Save, AlertCircle, FileText } from 'lucide-react';
 import Link from 'next/link';
-import { UnitOfMeasure, KitchenWasteReason } from '@hotel-pms/db';
+
+// Client-side option lists must not import the server-only database package.
+const UNIT_OF_MEASURE = [
+  'UNIT', 'EACH', 'KG', 'GRAM', 'TONNE', 'LITRE', 'ML', 'GALLON', 'PIECE',
+  'PAIR', 'SET', 'DOZEN', 'BOX', 'BOTTLE', 'CAN', 'JAR', 'TIN', 'SACHET',
+  'PACK', 'CART', 'CARTON', 'CASE', 'PALLET', 'BAG', 'BUNDLE',
+] as const;
+const KITCHEN_WASTE_REASONS = [
+  'SPOILAGE', 'OVER_PRODUCTION', 'BURNED', 'DAMAGED', 'RETURNED', 'WRONG_ORDER', 'OTHER',
+] as const;
+type KitchenWasteReason = typeof KITCHEN_WASTE_REASONS[number];
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -127,7 +137,7 @@ export default function NewWasteEntryPage() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {Object.keys(UnitOfMeasure).map(unit => (
+                      {UNIT_OF_MEASURE.map(unit => (
                         <SelectItem key={unit} value={unit}>{unit}</SelectItem>
                       ))}
                     </SelectContent>
@@ -157,7 +167,7 @@ export default function NewWasteEntryPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {Object.keys(KitchenWasteReason).map(reason => (
+                    {KITCHEN_WASTE_REASONS.map(reason => (
                       <SelectItem key={reason} value={reason}>{reason.replace(/_/g, ' ')}</SelectItem>
                     ))}
                   </SelectContent>

@@ -1,0 +1,882 @@
+import { prisma } from "@hotel-pms/db";
+
+export interface NotificationEvent {
+  type: string;
+  organizationId: string;
+  propertyId?: string;
+  entityType: string;
+  entityId: string;
+  incidentKey?: string;
+  idempotencyKey?: string;
+  metadata?: Record<string, any>;
+}
+
+// Notification threshold policies should be configured per-property in Property.settings.
+// For live production, we dynamically fetch these and do not use hardcoded fallbacks.
+export interface NotificationPolicy {
+  largePaymentThreshold?: number;
+  highValueRefundThreshold?: number;
+  cashVarianceThreshold?: number;
+  significantCancellationThreshold?: number;
+  significantBookingThreshold?: number;
+  creditLimitThreshold?: number;
+  notifyOnCheckIn?: boolean;
+  notifyOnCheckOut?: boolean;
+  notifyOnPayment?: boolean;
+  notifyOnReservationCreated?: boolean;
+  notifyOnReservationCancelled?: boolean;
+  notifyOnStayExtended?: boolean;
+  notifyOnPosSale?: boolean;
+  posSaleThreshold?: number;
+  notifyOnComplimentary?: boolean;
+  notifyOnDiscount?: boolean;
+  notifyOnCheckinBypass?: boolean;
+}
+
+export const NotificationEngine = {
+  async emit(event: NotificationEvent) {
+    try {
+      if (!event.propertyId) {
+        // If no property scope, skip policy evaluation for now (or fetch org policy)
+        return;
+      }
+
+      const policy = await fetchPolicy(event.propertyId);
+      if (!policy) return;
+
+      // 1. Evaluate Policy and format notification payload
+      const payload = await evaluateEvent(event, policy);
+      if (!payload) return; // Event did not meet threshold or criteria
+
+      // 2. Resolve Recipients
+      const recipientIds = await resolveRecipients(
+        event.organizationId,
+        event.propertyId,
+      );
+      if (recipientIds.length === 0) return;
+
+      // 3. Deduplicate
+      if (event.incidentKey || event.idempotencyKey) {
+        const isDuplicate = await checkDuplicate(recipientIds, event);
+        if (isDuplicate) return;
+      }
+
+      // 4. Persist
+      const notificationRecords = recipientIds.map((recipientId) => ({
+        organizationId: event.organizationId,
+        propertyId: event.propertyId,
+        recipientType: "staff",
+        recipientId,
+        status: "sent",
+        channel: "in_app",
+        subject: payload.subject,
+        body: payload.body,
+        category: payload.category,
+        priority: payload.priority,
+        action: `/${event.entityType}/${event.entityId}`, // Generic deep link format
+        metadata: event.metadata || {},
+      }));
+
+      await prisma.notification.createMany({
+        data: notificationRecords,
+      });
+
+      // Push notifications not dispatched from public booking API
+    } catch (error) {
+      console.error("[NotificationEngine] Failed to process event:", error);
+    }
+  },
+};
+
+/**
+ * Resolves which users should receive this notification based on RBAC.
+ */
+async function resolveRecipients(
+  organizationId: string,
+  propertyId?: string,
+): Promise<string[]> {
+  const targetRoles = ["EXECUTIVE", "MANAGER", "GENERAL_MANAGER", "DIRECTOR"];
+
+  const whereClause: any = {
+    role: {
+      name: { in: targetRoles },
+    },
+    user: {
+      membership: {
+        organizationId: organizationId,
+      },
+    },
+  };
+
+  if (propertyId) {
+    whereClause.OR = [
+      { propertyId: propertyId },
+      { propertyId: null }, // Org-wide executives
+    ];
+  } else {
+    whereClause.propertyId = null;
+  }
+
+  const [userRoles, orgAdmins] = await Promise.all([
+    prisma.userRole.findMany({
+      where: whereClause,
+      select: { userId: true },
+    }),
+    prisma.organizationMembership.findMany({
+      where: {
+        organizationId,
+        role: { in: ["OWNER", "ADMIN", "SUPER_ADMIN", "DIRECTOR", "EXECUTIVE"] },
+        status: "ACTIVE",
+      },
+      select: { userId: true },
+    }),
+  ]);
+
+  // Unique list of user IDs
+  const allUserIds = [
+    ...userRoles.map((ur: any) => ur.userId),
+    ...orgAdmins.map((oa: any) => oa.userId),
+  ];
+  return Array.from(new Set(allUserIds));
+}
+
+/**
+ * Checks if a notification already exists based on incident or idempotency keys.
+ */
+async function checkDuplicate(
+  recipientIds: string[],
+  event: NotificationEvent,
+): Promise<boolean> {
+  const key = event.idempotencyKey || event.incidentKey;
+  if (!key) return false;
+
+  // If it's an incidentKey, we might want to check if there's an unread notification with that metadata.
+  // We'll use the JSON metadata field to store the keys for lookup.
+  const existing = await prisma.notification.findFirst({
+    where: {
+      recipientId: { in: recipientIds },
+      channel: "in_app",
+      readAt: null,
+      metadata: {
+        path: [event.idempotencyKey ? "idempotencyKey" : "incidentKey"],
+        equals: key,
+      },
+    },
+  });
+
+  return !!existing;
+}
+
+/**
+ * Fetches the notification policy thresholds directly from the Property settings.
+ */
+async function fetchPolicy(
+  propertyId: string,
+): Promise<NotificationPolicy | null> {
+  const property = await prisma.property.findUnique({
+    where: { id: propertyId },
+    select: { settings: true },
+  });
+
+  const settings = (property?.settings as any) || {};
+  const np = settings.notificationPolicy || {};
+
+  return {
+    largePaymentThreshold: np.largePaymentThreshold,
+    highValueRefundThreshold: np.highValueRefundThreshold,
+    cashVarianceThreshold: np.cashVarianceThreshold,
+    significantCancellationThreshold: np.significantCancellationThreshold,
+    significantBookingThreshold: np.significantBookingThreshold,
+    creditLimitThreshold: np.creditLimitThreshold,
+    notifyOnCheckIn: np.notifyOnCheckIn ?? true,
+    notifyOnCheckOut: np.notifyOnCheckOut ?? true,
+    notifyOnPayment: np.notifyOnPayment ?? true,
+    notifyOnReservationCreated: np.notifyOnReservationCreated ?? true,
+    notifyOnReservationCancelled: np.notifyOnReservationCancelled ?? true,
+    notifyOnStayExtended: np.notifyOnStayExtended ?? true,
+    notifyOnPosSale: np.notifyOnPosSale ?? true, // Temporarily enabled for all sales per user request
+    posSaleThreshold: np.posSaleThreshold ?? 0,
+    notifyOnComplimentary: np.notifyOnComplimentary ?? true,
+    notifyOnDiscount: np.notifyOnDiscount ?? true,
+    notifyOnCheckinBypass: np.notifyOnCheckinBypass ?? true,
+  };
+}
+
+/**
+ * Evaluates the event against policies to determine if a notification should be sent,
+ * and formats the subject/body/category/priority.
+ */
+async function evaluateEvent(
+  event: NotificationEvent,
+  policy: NotificationPolicy,
+) {
+  // Enhance event metadata with keys for deduplication storage
+  event.metadata = {
+    ...event.metadata,
+    ...(event.idempotencyKey && { idempotencyKey: event.idempotencyKey }),
+    ...(event.incidentKey && { incidentKey: event.incidentKey }),
+  };
+
+  switch (event.type) {
+    case "PAYMENT_RECEIVED": {
+      if (!policy.notifyOnPayment) return null;
+
+      const folio = await prisma.folio.findUnique({
+        where: { id: event.entityId },
+        include: {
+          reservation: { include: { primaryGuest: true } },
+          guest: true,
+        },
+      });
+      if (!folio) return null;
+
+      const guest = folio.reservation?.primaryGuest || folio.guest;
+      const guestName = guest?.firstName
+        ? `${guest.firstName} ${guest.lastName}`
+        : "Guest";
+      const amount = Number(event.metadata?.amount || 0);
+      const currency = event.metadata?.currency || folio.currency;
+      const method = String(event.metadata?.method || "PAYMENT").replaceAll(
+        "_",
+        " ",
+      );
+
+      return {
+        subject: `Payment Received — ${guestName}`,
+        body: `💳 ${currency} ${amount.toLocaleString()} received via ${method}\n👤 Guest: ${guestName}\n🧾 Folio: ${folio.folioNumber}`,
+        category: "Finance",
+        priority: "Normal",
+      };
+    }
+
+    case "PAYMENT_LARGE": {
+      if (!policy.largePaymentThreshold) return null;
+      const payment = await prisma.payment.findUnique({
+        where: { id: event.entityId },
+      });
+      if (!payment || Number(payment.amount) < policy.largePaymentThreshold)
+        return null;
+
+      return {
+        subject: "Large Payment Received",
+        body: `A payment of ${payment.currency} ${Number(payment.amount).toLocaleString()} was received via ${payment.method}.`,
+        category: "Finance",
+        priority: "Normal",
+      };
+    }
+
+    case "REFUND_HIGH_VALUE": {
+      if (!policy.highValueRefundThreshold) return null;
+      const refund = await prisma.refund.findUnique({
+        where: { id: event.entityId },
+      });
+      if (!refund) return null;
+
+      const amount = Number(refund.amount);
+      const isOverride = event.metadata?.isManagerOverride === true;
+
+      // Only notify if above threshold OR if it was an override
+      if (amount < policy.highValueRefundThreshold && !isOverride) return null;
+
+      return {
+        subject: isOverride
+          ? "Unusual Refund / Manager Override"
+          : "High-Value Refund",
+        body: `A refund of ${refund.currency} ${amount.toLocaleString()} was processed. Reason: ${refund.reason || "Not specified"}.`,
+        category: "Finance",
+        priority: "Critical",
+      };
+    }
+
+    case "CASH_VARIANCE": {
+      if (!policy.cashVarianceThreshold) return null;
+      const amount = event.metadata?.varianceAmount;
+      if (!amount || Math.abs(amount) < policy.cashVarianceThreshold)
+        return null;
+
+      return {
+        subject: "Cash Variance Detected",
+        body: `A cash variance of ₦${Math.abs(amount).toLocaleString()} was detected at POS Shift close.`,
+        category: "Finance",
+        priority: "Critical",
+      };
+    }
+
+    case "SYSTEM_INCIDENT": {
+      return {
+        subject: event.metadata?.incidentTitle || "System Incident",
+        body:
+          event.metadata?.incidentDescription ||
+          "A critical system integration is offline.",
+        category: "Critical",
+        priority: "Critical",
+      };
+    }
+
+    case "ROOM_OOO_CRITICAL": {
+      const room = await prisma.room.findUnique({
+        where: { id: event.entityId },
+      });
+      if (!room) return null;
+
+      return {
+        subject: `Room ${room.number} Out of Order`,
+        body: `Operationally significant room ${room.number} was placed Out of Order.`,
+        category: "Operations",
+        priority: "Normal", // Or Critical depending on occupancy
+      };
+    }
+
+    case "SIGNIFICANT_CANCELLATION": {
+      if (!policy.significantCancellationThreshold && !event.metadata?.isVip)
+        return null;
+
+      const amount = event.metadata?.bookingValue || 0;
+      const isVip = event.metadata?.isVip === true;
+
+      if (
+        amount < (policy.significantCancellationThreshold || Infinity) &&
+        !isVip
+      )
+        return null;
+
+      return {
+        subject: isVip ? "VIP Cancellation" : "Significant Cancellation",
+        body: `A booking valued at ₦${amount.toLocaleString()} has been cancelled.`,
+        category: "Operations",
+        priority: "High",
+      };
+    }
+
+    case "SIGNIFICANT_BOOKING": {
+      if (!policy.significantBookingThreshold && !event.metadata?.isVip)
+        return null;
+
+      const amount = event.metadata?.bookingValue || 0;
+      const isVip = event.metadata?.isVip === true;
+
+      if (amount < (policy.significantBookingThreshold || Infinity) && !isVip)
+        return null;
+
+      return {
+        subject: isVip ? "VIP Booking Received" : "High-Value Booking Received",
+        body: `A new booking valued at ₦${amount.toLocaleString()} was just created.`,
+        category: "Operations",
+        priority: "Normal",
+      };
+    }
+
+    case "CRITICAL_STOCKOUT": {
+      const stockItem = await prisma.stockItem.findUnique({
+        where: { id: event.entityId },
+      });
+      if (!stockItem) return null;
+
+      return {
+        subject: "Critical Stockout Alert",
+        body: `Inventory for ${stockItem.name} has dropped to ${stockItem.quantityOnHand}, triggering a critical stockout alert.`,
+        category: "Operations",
+        priority: "High",
+      };
+    }
+
+    case "SECURITY_EXCEPTION": {
+      return {
+        subject: event.metadata?.alertTitle || "Security Exception",
+        body:
+          event.metadata?.alertDescription ||
+          "A sensitive security or audit event occurred.",
+        category: "Critical",
+        priority: "Critical",
+      };
+    }
+
+    case "CHECK_IN": {
+      if (!policy.notifyOnCheckIn && !event.metadata?.isVip) return null;
+
+      const resIn = await prisma.reservation.findUnique({
+        where: { id: event.entityId },
+        include: {
+          primaryGuest: true,
+          reservationRooms: {
+            include: { room: { include: { roomType: true } } },
+          },
+        },
+      });
+      if (!resIn) return null;
+      const guestNameIn = resIn.primaryGuest?.firstName
+        ? `${resIn.primaryGuest.firstName} ${resIn.primaryGuest.lastName}`
+        : "A guest";
+      const rawRoomIn = resIn.reservationRooms?.[0]?.room?.number;
+      const roomNumIn = rawRoomIn ? rawRoomIn.split(".").pop() : "N/A";
+      const roomTypeIn =
+        resIn.reservationRooms?.[0]?.room?.roomType?.name || "Room";
+      const phoneIn = resIn.primaryGuest?.phone || "N/A";
+      const checkOutIn = resIn.checkOut.toLocaleDateString("en-GB", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      });
+      const nightsIn = Math.ceil(
+        (resIn.checkOut.getTime() - resIn.checkIn.getTime()) /
+          (1000 * 60 * 60 * 24),
+      );
+      const adultsIn = resIn.adults || 1;
+      const checkInTimeIn = new Date().toLocaleString("en-GB", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+
+      return {
+        subject: event.metadata?.isVip
+          ? `⭐ VIP Checked In — ${guestNameIn}`
+          : `✅ Guest Checked In — ${guestNameIn}`,
+        body: `${event.metadata?.isVip ? "⭐ VIP " : ""}📋 Conf: ${resIn.confirmationNumber || event.entityId}\n👤 Guest: ${guestNameIn} | 📞 ${phoneIn}\n🏠 Room ${roomNumIn} (${roomTypeIn})\n🕒 Checked In: ${checkInTimeIn}\n📅 Check-out: ${checkOutIn} (${nightsIn} night${nightsIn !== 1 ? "s" : ""})\n👥 Adults: ${adultsIn}`,
+        category: "Operations",
+        priority: event.metadata?.isVip ? "High" : "Normal",
+      };
+    }
+
+    case "CHECK_OUT": {
+      if (!policy.notifyOnCheckOut && !event.metadata?.isVip) return null;
+
+      const resOut = await prisma.reservation.findUnique({
+        where: { id: event.entityId },
+        include: {
+          primaryGuest: true,
+          reservationRooms: {
+            include: { room: { include: { roomType: true } } },
+          },
+          folios: {
+            where: { type: "ROOM" },
+            orderBy: { createdAt: "asc" },
+            take: 1,
+          },
+        },
+      });
+      if (!resOut) return null;
+      const guestNameOut = resOut.primaryGuest?.firstName
+        ? `${resOut.primaryGuest.firstName} ${resOut.primaryGuest.lastName}`
+        : "A guest";
+      const rawRoomOut = resOut.reservationRooms?.[0]?.room?.number;
+      const roomNumOut = rawRoomOut ? rawRoomOut.split(".").pop() : "N/A";
+      const roomTypeOut =
+        resOut.reservationRooms?.[0]?.room?.roomType?.name || "Room";
+      const phoneOut = resOut.primaryGuest?.phone || "N/A";
+      const checkInOut = resOut.checkIn.toLocaleDateString("en-GB", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      });
+      const nightsOut = Math.ceil(
+        (resOut.checkOut.getTime() - resOut.checkIn.getTime()) /
+          (1000 * 60 * 60 * 24),
+      );
+      const folioOut = resOut.folios?.[0];
+      const totalOut = folioOut
+        ? `${resOut.currency} ${Number(folioOut.totalCharges).toLocaleString()}`
+        : "N/A";
+      const balanceOut = folioOut
+        ? Number(folioOut.balance) === 0
+          ? "Settled"
+          : `${resOut.currency} ${Number(folioOut.balance).toLocaleString()}`
+        : "N/A";
+
+      const checkOutTimeOut = new Date().toLocaleString("en-GB", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+
+      return {
+        subject: event.metadata?.isVip
+          ? `⭐ VIP Checked Out — ${guestNameOut}`
+          : `🚪 Guest Checked Out — ${guestNameOut}`,
+        body: `${event.metadata?.isVip ? "⭐ VIP " : ""}📋 Conf: ${resOut.confirmationNumber || event.entityId}\n👤 Guest: ${guestNameOut} | 📞 ${phoneOut}\n🏠 Room ${roomNumOut} (${roomTypeOut})\n🕒 Checked Out: ${checkOutTimeOut}\n📅 Stayed: ${checkInOut} (${nightsOut} night${nightsOut !== 1 ? "s" : ""})\n💰 Total Charged: ${totalOut}\n🧾 Balance: ${balanceOut}`,
+        category: "Operations",
+        priority: event.metadata?.isVip ? "High" : "Normal",
+      };
+    }
+
+    case "CREDIT_RETAINED": {
+      const res = await prisma.reservation.findUnique({
+        where: { id: event.entityId },
+        include: { primaryGuest: true },
+      });
+      if (!res) return null;
+      const guestName = res.primaryGuest?.firstName
+        ? `${res.primaryGuest.firstName} ${res.primaryGuest.lastName}`
+        : "A guest";
+      const amount = event.metadata?.amount || 0;
+      const reasonCode = event.metadata?.reasonCode || "Early Departure";
+
+      return {
+        subject: `Credit Retained — ${guestName}`,
+        body: `Guest checked out, and a credit balance of ${res.currency} ${amount.toLocaleString()} was retained by the property.\nReason: ${reasonCode}`,
+        category: "Finance",
+        priority: "High", // High priority so executives see revenue retentions clearly
+      };
+    }
+
+    case "CREDIT_TRANSFERRED": {
+      const res = await prisma.reservation.findUnique({
+        where: { id: event.entityId },
+        include: { primaryGuest: true },
+      });
+      if (!res) return null;
+      const guestName = res.primaryGuest?.firstName
+        ? `${res.primaryGuest.firstName} ${res.primaryGuest.lastName}`
+        : "A guest";
+      const amount = event.metadata?.amount || 0;
+      const reason = event.metadata?.reason || "Unknown";
+
+      return {
+        subject: `Credit Transferred (Refund Payable) — ${guestName}`,
+        body: `A credit of ${res.currency} ${amount.toLocaleString()} was transferred to City Ledger / Refund Payables at check-out.\nReason: ${reason}`,
+        category: "Finance",
+        priority: "High",
+      };
+    }
+
+    case "RESERVATION_CREATED": {
+      if (!policy.notifyOnReservationCreated) return null;
+      const res = await prisma.reservation.findUnique({
+        where: { id: event.entityId },
+        include: {
+          primaryGuest: true,
+          reservationRooms: {
+            include: { room: { include: { roomType: true } } },
+          },
+          folios: {
+            where: { type: "ROOM" },
+            orderBy: { createdAt: "asc" },
+            take: 1,
+          },
+        },
+      });
+      if (!res) return null;
+      const guestName = res.primaryGuest?.firstName
+        ? `${res.primaryGuest.firstName} ${res.primaryGuest.lastName}`
+        : "A guest";
+      const checkIn = res.checkIn.toLocaleDateString("en-GB", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      });
+      const checkOut = res.checkOut.toLocaleDateString("en-GB", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      });
+      const nights = Math.ceil(
+        (res.checkOut.getTime() - res.checkIn.getTime()) /
+          (1000 * 60 * 60 * 24),
+      );
+      const roomDetails = res.reservationRooms
+        .map((rr: any) => {
+          const roomNum = rr.room?.number.split(".").pop() || "N/A";
+          const type = rr.room?.roomType?.name || "Room";
+          return `Room ${roomNum} (${type})`;
+        })
+        .join(", ");
+      const folio = res.folios?.[0];
+      const totalAmount = folio
+        ? `${res.currency} ${Number(folio.totalCharges).toLocaleString()}`
+        : "N/A";
+      const adults = res.adults || 1;
+      const phone = res.primaryGuest?.phone || "N/A";
+
+      return {
+        subject: `New Reservation — ${guestName}`,
+        body: `📋 Conf: ${res.confirmationNumber || event.entityId}\n👤 Guest: ${guestName} | 📞 ${phone}\n🏠 ${roomDetails}\n📅 Check-in: ${checkIn} → Check-out: ${checkOut} (${nights} night${nights !== 1 ? "s" : ""})\n👥 Adults: ${adults}\n💰 Total: ${totalAmount}`,
+        category: "Operations",
+        priority: "Normal",
+      };
+    }
+
+    case "RESERVATION_CANCELLED": {
+      if (!policy.notifyOnReservationCancelled) return null;
+      const res = await prisma.reservation.findUnique({
+        where: { id: event.entityId },
+        include: {
+          primaryGuest: true,
+          reservationRooms: {
+            include: { room: { include: { roomType: true } } },
+          },
+          folios: {
+            where: { type: "ROOM" },
+            orderBy: { createdAt: "asc" },
+            take: 1,
+          },
+        },
+      });
+      if (!res) return null;
+      const guestName = res.primaryGuest?.firstName
+        ? `${res.primaryGuest.firstName} ${res.primaryGuest.lastName}`
+        : "A guest";
+      const checkIn = res.checkIn.toLocaleDateString("en-GB", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      });
+      const checkOut = res.checkOut.toLocaleDateString("en-GB", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      });
+      const nights = Math.ceil(
+        (res.checkOut.getTime() - res.checkIn.getTime()) /
+          (1000 * 60 * 60 * 24),
+      );
+      const roomDetails = res.reservationRooms
+        .map((rr: any) => {
+          const roomNum = rr.room?.number.split(".").pop() || "N/A";
+          const type = rr.room?.roomType?.name || "Room";
+          return `Room ${roomNum} (${type})`;
+        })
+        .join(", ");
+      const folio = res.folios?.[0];
+      const totalAmount = folio
+        ? `${res.currency} ${Number(folio.totalCharges).toLocaleString()}`
+        : "N/A";
+      const phone = res.primaryGuest?.phone || "N/A";
+      const cancelReason =
+        (event.metadata?.reason as string) ||
+        res.cancellationReason ||
+        "No reason provided";
+
+      return {
+        subject: `Reservation Cancelled — ${guestName}`,
+        body: `❌ Conf: ${res.confirmationNumber || event.entityId}\n👤 Guest: ${guestName} | 📞 ${phone}\n🏠 ${roomDetails || "N/A"}\n📅 Was: ${checkIn} → ${checkOut} (${nights} night${nights !== 1 ? "s" : ""})\n💰 Value: ${totalAmount}\n📝 Reason: ${cancelReason}`,
+        category: "Operations",
+        priority: "High",
+      };
+    }
+
+    case "STAY_EXTENDED": {
+      if (!policy.notifyOnStayExtended) return null;
+      const res = await prisma.reservation.findUnique({
+        where: { id: event.entityId },
+        include: {
+          primaryGuest: true,
+          reservationRooms: {
+            include: { room: { include: { roomType: true } } },
+          },
+          folios: {
+            where: { type: "ROOM" },
+            orderBy: { createdAt: "asc" },
+            take: 1,
+          },
+        },
+      });
+      if (!res) return null;
+      const guestName = res.primaryGuest?.firstName
+        ? `${res.primaryGuest.firstName} ${res.primaryGuest.lastName}`
+        : "A guest";
+      const rawRoom = res.reservationRooms?.[0]?.room?.number;
+      const roomNum = rawRoom ? rawRoom.split(".").pop() : "N/A";
+      const roomType =
+        res.reservationRooms?.[0]?.room?.roomType?.name || "Room";
+      const phone = res.primaryGuest?.phone || "N/A";
+      const prevCheckOut = event.metadata?.previousCheckOut
+        ? new Date(
+            event.metadata.previousCheckOut as string,
+          ).toLocaleDateString("en-GB", {
+            day: "numeric",
+            month: "short",
+            year: "numeric",
+          })
+        : "N/A";
+      const newCheckOut = res.checkOut.toLocaleDateString("en-GB", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      });
+      const totalNights = Math.ceil(
+        (res.checkOut.getTime() - res.checkIn.getTime()) /
+          (1000 * 60 * 60 * 24),
+      );
+      const folio = res.folios?.[0];
+      const totalAmount = folio
+        ? `${res.currency} ${Number(folio.totalCharges).toLocaleString()}`
+        : "N/A";
+
+      return {
+        subject: `📆 Stay Extended — ${guestName}`,
+        body: `📋 Conf: ${res.confirmationNumber || event.entityId}\n👤 Guest: ${guestName} | 📞 ${phone}\n🏠 Room ${roomNum} (${roomType})\n📅 Previous Check-out: ${prevCheckOut}\n📅 New Check-out: ${newCheckOut} (${totalNights} night${totalNights !== 1 ? "s" : ""} total)\n💰 Updated Total: ${totalAmount}`,
+        category: "Operations",
+        priority: "Normal",
+      };
+    }
+
+    case "NIGHT_AUDIT_COMPLETED": {
+      return {
+        subject: "Night Audit Completed Successfully",
+        body: `Business day closed. Processed ${event.metadata?.tasksCreated} stayover tasks.`,
+        category: "Operations",
+        priority: "Normal", // Optional / low-priority
+      };
+    }
+
+    case "NIGHT_AUDIT_DISCREPANCY": {
+      return {
+        subject: "Night Audit Completed with Discrepancies",
+        body: `Business day closed but ${event.metadata?.errors} errors occurred.`,
+        category: "Critical",
+        priority: "Critical",
+      };
+    }
+
+    case "NIGHT_AUDIT_FAILED": {
+      return {
+        subject: "Night Audit Failed!",
+        body: `CRITICAL: The property day could not close. Error: ${event.metadata?.error}`,
+        category: "Critical",
+        priority: "Critical",
+      };
+    }
+
+    case "APPROVAL_REQUESTED": {
+      return {
+        subject: "Approval Required",
+        body:
+          event.metadata?.requestReason ||
+          `A staff member requested an override requiring your approval.`,
+        category: "Approvals",
+        priority: "High",
+      };
+    }
+
+    case "CREDIT_LIMIT_BREACH": {
+      return {
+        subject: "Credit Limit Breached",
+        body: `Folio balance has crossed the credit limit threshold. Current Balance: ₦${event.metadata?.newBalance}.`,
+        category: "Finance",
+        priority: "Critical",
+      };
+    }
+
+    case "POS_SALE_SYNCED": {
+      if (!policy.notifyOnPosSale) return null;
+      const amount = Number(event.metadata?.total || 0);
+      if (policy.posSaleThreshold && policy.posSaleThreshold > 0 && amount < policy.posSaleThreshold) {
+        return null; // Below threshold
+      }
+
+      const eventType = event.metadata?.eventType as string;
+      const isNew = eventType === "ORDER_CREATED";
+      const titlePrefix = isNew ? "🍽️ New POS Order" : "🧾 POS Order Closed";
+      const itemsCount = event.metadata?.itemsCount;
+      const itemsText = itemsCount ? ` (${itemsCount} item${itemsCount !== 1 ? 's' : ''})` : "";
+
+      return {
+        subject: `${titlePrefix} — ${event.metadata?.outletName || "Outlet"}`,
+        body: `📋 Order: #${event.metadata?.orderNumber || event.entityId}${itemsText}\n💰 Total: ${event.metadata?.currency || "NGN"} ${amount.toLocaleString()}\n👨‍🍳 Server: ${event.metadata?.operatorName || "System"}`,
+        category: "Operations",
+        priority: "Normal",
+      };
+    }
+    case "COMPLIMENTARY_RECORDED": {
+      if (!policy.notifyOnComplimentary) return null;
+
+      let guestName = "Guest";
+      let targetDetails = "Guest/Room";
+      
+      if (event.entityType === "complimentary") {
+         const comp = await prisma.complimentaryRecord.findUnique({
+           where: { id: event.entityId }
+         });
+         
+         if (comp?.posOrderId) {
+            const posOrder = await prisma.posOrder.findUnique({ where: { id: comp.posOrderId } });
+            if (posOrder) targetDetails = `Order #${posOrder.orderNumber}`;
+         }
+      }
+
+      const amount = Number(event.metadata?.amount || 0);
+      const reason = event.metadata?.reason || "No reason provided";
+      let busDate = event.metadata?.businessDate || "N/A";
+      try {
+          if (busDate !== "N/A") {
+             busDate = new Date(busDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+          }
+      } catch(e) {}
+
+      return {
+        subject: `🎁 Complimentary Applied`,
+        body: `A complimentary of ${event.metadata?.currency || "NGN"} ${amount.toLocaleString()} was applied to ${targetDetails}.\n📝 Reason: ${reason}\n📅 Business Date: ${busDate}\n👨‍💼 Operator: ${event.metadata?.operatorName || "Staff"}`,
+        category: "Operations",
+        priority: "High",
+      };
+    }
+
+    case "DISCOUNT_APPLIED": {
+      if (!policy.notifyOnDiscount) return null;
+
+      const amount = Number(event.metadata?.amount || 0);
+      const percent = event.metadata?.percentage ? ` (${event.metadata?.percentage}%)` : "";
+      const reason = event.metadata?.reason || "No reason provided";
+      let targetDetails = event.metadata?.target || "Reservation/Order";
+
+      if (event.entityType === "order") {
+          const order = await prisma.posOrder.findUnique({ where: { id: event.entityId } });
+          if (order) targetDetails = `Order #${order.orderNumber}`;
+      }
+
+      let busDate = event.metadata?.businessDate || "N/A";
+      try {
+          if (busDate !== "N/A") {
+             busDate = new Date(busDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+          }
+      } catch(e) {}
+
+      return {
+        subject: `🏷️ Discount Applied`,
+        body: `A discount of ${event.metadata?.currency || "NGN"} ${amount.toLocaleString()}${percent} was applied to ${targetDetails}.\n📝 Reason: ${reason}\n📅 Business Date: ${busDate}\n👨‍💼 Operator: ${event.metadata?.operatorName || "Staff"}`,
+        category: "Operations",
+        priority: "Normal",
+      };
+    }
+
+    case "CHECKIN_BYPASS_CREATED": {
+      if (!policy.notifyOnCheckinBypass) return null;
+
+      const res = await prisma.reservation.findUnique({
+        where: { id: event.entityId },
+        include: {
+          primaryGuest: true,
+          reservationRooms: { include: { room: { include: { roomType: true } } } },
+        }
+      });
+
+      const guestName = res?.primaryGuest?.firstName ? `${res.primaryGuest.firstName} ${res.primaryGuest.lastName}` : (event.metadata?.guestName || "Guest");
+      const confNumber = res?.confirmationNumber || event.metadata?.confirmationNumber || event.entityId;
+      const roomDetails = res?.reservationRooms?.map((rr: any) => `${rr.room?.number || 'N/A'}`).join(', ') || event.metadata?.roomNumber || "N/A";
+
+      const reason = event.metadata?.reason || "No reason provided";
+      
+      let busDate = event.metadata?.businessDate || "N/A";
+      try {
+          if (busDate !== "N/A") {
+             busDate = new Date(busDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+          }
+      } catch(e) {}
+
+      return {
+        subject: `⚠️ Check-in Bypass Used — ${guestName}`,
+        body: `A strict check-in control was bypassed by management.\n📋 Conf: ${confNumber} | 🏠 Room: ${roomDetails}\n👤 Guest: ${guestName}\n📝 Reason: ${reason}\n📅 Business Date: ${busDate}\n👨‍💼 Authorized By: ${event.metadata?.operatorName || "Staff"}`,
+        category: "Operations",
+        priority: "High",
+      };
+    }
+
+    // Default fallback - if not handled, don't notify
+    default:
+      return null;
+  }
+}

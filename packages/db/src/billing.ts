@@ -87,13 +87,15 @@ export function billingPriceIds(priceId: unknown, priceIds: unknown): string[] {
   ].filter((value): value is string => typeof value === 'string' && value.length > 0)));
 }
 
-export function billingMetadata(input: { organizationId: string; planId?: string | null; propertyIds: readonly string[]; productCodes: readonly string[]; priceIds?: readonly string[] }) {
+export function billingMetadata(input: { organizationId: string; planId?: string | null; propertyIds: readonly string[]; productCodes: readonly string[]; priceIds?: readonly string[]; customDomainRequestId?: string | null; customWebsiteRequestId?: string | null }) {
   return {
     organizationId: input.organizationId,
     planId: input.planId ?? '',
     propertyIds: input.propertyIds.join(','),
     productCodes: input.productCodes.join(','),
     priceIds: (input.priceIds ?? []).join(','),
+    customDomainRequestId: input.customDomainRequestId ?? '',
+    customWebsiteRequestId: input.customWebsiteRequestId ?? '',
   };
 }
 

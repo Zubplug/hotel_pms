@@ -28,7 +28,9 @@ export const catalogProducts: CatalogProduct[] = [
   { code: 'MODULE_ENTERPRISE', name: 'Enterprise Platform', type: 'BASE', active: true, metadata: { family: 'MODULE', version: CATALOG_VERSION, offlineCapable: true } },
   { code: 'ADDON_BEDS24', name: 'Beds24 Channel Integration', type: 'ADDON', active: true, metadata: { family: 'CONNECTIVITY', provider: 'BEDS24', unit: 'PROPERTY', sellable: true, offlineCapable: false, version: CATALOG_VERSION } },
   { code: 'ADDON_CHANNEL_MANAGER', name: 'Channel Manager', type: 'ADDON', active: false, metadata: { family: 'CONNECTIVITY', unit: 'PROPERTY', sellable: false, offlineCapable: false, version: CATALOG_VERSION } },
-  { code: 'ADDON_BOOKING_ENGINE', name: 'Booking Engine', type: 'ADDON', active: false, metadata: { family: 'CONNECTIVITY', unit: 'PROPERTY', sellable: false, offlineCapable: false, version: CATALOG_VERSION } },
+  { code: 'ADDON_BOOKING_ENGINE', name: 'Booking Engine', type: 'ADDON', active: true, metadata: { family: 'CONNECTIVITY', unit: 'PROPERTY', sellable: true, offlineCapable: false, version: CATALOG_VERSION } },
+  { code: 'ADDON_CUSTOM_DOMAIN', name: 'Custom Booking Domain', type: 'ADDON', active: true, metadata: { family: 'CONNECTIVITY', unit: 'PROPERTY', sellable: true, offlineCapable: false, requiresApproval: true, version: CATALOG_VERSION } },
+  { code: 'ADDON_CUSTOM_WEBSITE_DESIGN', name: 'Custom Website Design Service', type: 'ADDON', active: true, metadata: { family: 'SERVICES', unit: 'PROJECT', sellable: true, offlineCapable: false, requiresApproval: true, oneTime: true, version: CATALOG_VERSION } },
   { code: 'ADDON_WHATSAPP', name: 'WhatsApp Guest Messaging', type: 'ADDON', active: false, metadata: { family: 'CONNECTIVITY', unit: 'USAGE', sellable: false, offlineCapable: false, version: CATALOG_VERSION } },
   { code: 'ADDON_SMS', name: 'SMS Notifications', type: 'ADDON', active: false, metadata: { family: 'CONNECTIVITY', unit: 'USAGE', sellable: false, offlineCapable: false, version: CATALOG_VERSION } },
   { code: 'ADDON_API', name: 'API and Integrations', type: 'ADDON', active: false, metadata: { family: 'CONNECTIVITY', unit: 'FLAT', sellable: false, offlineCapable: false, version: CATALOG_VERSION } },
@@ -44,6 +46,11 @@ export const planPrices = [
   { code: 'PLAN_PROFESSIONAL', month: 6500000, year: 65000000 },
   { code: 'PLAN_BUSINESS', month: 12000000, year: 120000000 },
   { code: 'PLAN_ENTERPRISE', month: 20000000, year: 200000000 },
+] as const;
+
+// One-time professional services are kept separate from recurring plan prices.
+export const oneTimePrices = [
+  { code: 'ADDON_CUSTOM_WEBSITE_DESIGN', amount: 35000000, currency: 'ngn' }, // ₦350,000
 ] as const;
 
 export const catalogPlans: CatalogPlan[] = [

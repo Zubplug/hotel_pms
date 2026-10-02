@@ -67,6 +67,8 @@ export async function POST(req: Request) {
     const priceIds = metadataValue(meta, 'priceIds').split(',').filter(Boolean);
     const propertyIds = subscriptionScope(metadataValue(meta, 'propertyIds').split(','));
     const planId = metadataValue(meta, 'planId') || null;
+    const customDomainRequestId = metadataValue(meta, 'customDomainRequestId') || null;
+    const customWebsiteRequestId = metadataValue(meta, 'customWebsiteRequestId') || null;
     const status = String(verified.status || data.status || '').toLowerCase();
     const successful = status === 'successful' || status === 'success';
 
@@ -76,12 +78,23 @@ export async function POST(req: Request) {
       await tx.billingEvent.create({ data: { flutterwaveEventId: transactionId, type: String(payload.event || payload.type || `transaction.${status}`), organizationId, payload: payload as Prisma.InputJsonValue } });
       const now = new Date();
       const prices = priceIds.length ? await tx.billingPrice.findMany({ where: { id: { in: priceIds } }, include: { product: true } }) : await tx.billingPrice.findMany({ where: { product: { code: { in: productCodes } }, interval: 'month' }, include: { product: true } });
+      const isCustomWebsiteOneTime = productCodes.includes('ADDON_CUSTOM_WEBSITE_DESIGN') && productCodes.every((code) => code === 'ADDON_CUSTOM_WEBSITE_DESIGN');
       const interval = prices[0]?.interval || 'month';
       const currentPeriodEnd = nextPeriod(interval, now);
-      const subscription = await tx.subscription.upsert({ where: { flutterwaveSubscriptionId: txRef }, create: { organizationId, planId, scopePropertyIds: propertyIds, flutterwaveSubscriptionId: txRef, status: successful ? 'ACTIVE' : 'PAST_DUE', currentPeriodStart: now, currentPeriodEnd, pastDueSince: successful ? null : now, cancelAtPeriodEnd: false }, update: { planId, scopePropertyIds: propertyIds, status: successful ? 'ACTIVE' : 'PAST_DUE', currentPeriodStart: now, currentPeriodEnd, pastDueSince: successful ? null : now } });
-      for (const price of prices) await tx.subscriptionItem.upsert({ where: { subscriptionId_priceId: { subscriptionId: subscription.id, priceId: price.id } }, create: { subscriptionId: subscription.id, priceId: price.id, quantity: 1 }, update: { quantity: 1 } });
-      await tx.billingInvoice.upsert({ where: { flutterwaveInvoiceId: transactionId }, create: { organizationId, flutterwaveInvoiceId: transactionId, flutterwaveCustomerId: verified.customer?.email ?? null, flutterwaveSubscriptionId: txRef, status: successful ? 'paid' : 'failed', currency: verified.currency, subtotal: Math.round(verified.amount * 100), total: Math.round(verified.amount * 100), amountPaid: successful ? Math.round(verified.amount * 100) : 0, amountDue: successful ? 0 : Math.round(verified.amount * 100), periodStart: now, periodEnd: currentPeriodEnd, hostedInvoiceUrl: null, invoicePdf: null, payload: verified as unknown as Prisma.InputJsonValue }, update: { status: successful ? 'paid' : 'failed', amountPaid: successful ? Math.round(verified.amount * 100) : 0, amountDue: successful ? 0 : Math.round(verified.amount * 100), payload: verified as unknown as Prisma.InputJsonValue } });
-      await reconcileEntitlements(tx, organizationId);
+      let subscriptionRef: string | null = null;
+      if (!isCustomWebsiteOneTime) {
+        const subscription = await tx.subscription.upsert({ where: { flutterwaveSubscriptionId: txRef }, create: { organizationId, planId, scopePropertyIds: propertyIds, flutterwaveSubscriptionId: txRef, status: successful ? 'ACTIVE' : 'PAST_DUE', currentPeriodStart: now, currentPeriodEnd, pastDueSince: successful ? null : now, cancelAtPeriodEnd: false }, update: { planId, scopePropertyIds: propertyIds, status: successful ? 'ACTIVE' : 'PAST_DUE', currentPeriodStart: now, currentPeriodEnd, pastDueSince: successful ? null : now } });
+        subscriptionRef = subscription.flutterwaveSubscriptionId;
+        for (const price of prices) await tx.subscriptionItem.upsert({ where: { subscriptionId_priceId: { subscriptionId: subscription.id, priceId: price.id } }, create: { subscriptionId: subscription.id, priceId: price.id, quantity: 1 }, update: { quantity: 1 } });
+        await reconcileEntitlements(tx, organizationId);
+      }
+      await tx.billingInvoice.upsert({ where: { flutterwaveInvoiceId: transactionId }, create: { organizationId, flutterwaveInvoiceId: transactionId, flutterwaveCustomerId: verified.customer?.email ?? null, flutterwaveSubscriptionId: subscriptionRef, status: successful ? 'paid' : 'failed', currency: verified.currency, subtotal: Math.round(verified.amount * 100), total: Math.round(verified.amount * 100), amountPaid: successful ? Math.round(verified.amount * 100) : 0, amountDue: successful ? 0 : Math.round(verified.amount * 100), periodStart: isCustomWebsiteOneTime ? null : now, periodEnd: isCustomWebsiteOneTime ? null : currentPeriodEnd, hostedInvoiceUrl: null, invoicePdf: null, payload: verified as unknown as Prisma.InputJsonValue }, update: { status: successful ? 'paid' : 'failed', amountPaid: successful ? Math.round(verified.amount * 100) : 0, amountDue: successful ? 0 : Math.round(verified.amount * 100), payload: verified as unknown as Prisma.InputJsonValue } });
+      if (customDomainRequestId && successful) {
+        await tx.customDomainRequest.updateMany({ where: { id: customDomainRequestId, organizationId, status: 'APPROVED' }, data: { status: 'PAID', paidAt: now, checkoutRef: txRef } });
+      }
+      if (customWebsiteRequestId && successful) {
+        await tx.customWebsiteRequest.updateMany({ where: { id: customWebsiteRequestId, organizationId, status: 'APPROVED' }, data: { status: 'PAID', paidAt: now, checkoutRef: txRef } });
+      }
     }, { timeout: 30000 });
     return NextResponse.json({ received: true });
   } catch (error) {

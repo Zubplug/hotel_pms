@@ -1,5 +1,5 @@
 import { Prisma, PrismaClient } from '@prisma/client';
-import { catalogPlans, catalogProducts, CATALOG_VERSION, legacyProductCodes, legacyToCanonical, planPrices } from './catalog';
+import { catalogPlans, catalogProducts, CATALOG_VERSION, legacyProductCodes, legacyToCanonical, oneTimePrices, planPrices } from './catalog';
 
 const prisma = new PrismaClient();
 
@@ -26,6 +26,13 @@ async function main() {
         if (existing) await tx.billingPrice.update({ where: { id: existing.id }, data: { amount, currency: 'ngn' } });
         else await tx.billingPrice.create({ data: { productId: product.id, interval, amount, currency: 'ngn', catalogVersion: CATALOG_VERSION } });
       }
+    }
+
+    for (const price of oneTimePrices) {
+      const product = products.get(price.code)!;
+      const existing = await tx.billingPrice.findFirst({ where: { productId: product.id, interval: 'one_time', catalogVersion: CATALOG_VERSION } });
+      if (existing) await tx.billingPrice.update({ where: { id: existing.id }, data: { amount: price.amount, currency: price.currency } });
+      else await tx.billingPrice.create({ data: { productId: product.id, interval: 'one_time', amount: price.amount, currency: price.currency, catalogVersion: CATALOG_VERSION } });
     }
 
     for (const definition of catalogPlans) {

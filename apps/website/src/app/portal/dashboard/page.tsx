@@ -24,15 +24,17 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 const AREA_CARDS = [
-  { href: "/portal/subscription",   icon: "⬡",  label: "Subscription",   desc: "Plan, modules and usage details",        color: "#00d4e8" },
-  { href: "/portal/properties",     icon: "🏨", label: "Properties",     desc: "Active properties and their scope",       color: "#3ef5a0" },
-  { href: "/portal/implementation", icon: "🚀", label: "Implementation", desc: "Migration and installation progress",     color: "#a78bfa" },
-  { href: "/portal/hardware",       icon: "🔧", label: "Hardware",       desc: "Installed devices and pending items",     color: "#ffbe5a" },
-  { href: "/portal/integrations",   icon: "⟳",  label: "Integrations",  desc: "Connected systems and API access",        color: "#ff8c60" },
-  { href: "/portal/support",        icon: "◎",  label: "Support",        desc: "Open tickets, SLA and help resources",    color: "#3ef5a0" },
-  { href: "/portal/billing",        icon: "◇",  label: "Billing",        desc: "Invoices, payments and statements",       color: "#00d4e8" },
-  { href: "/portal/settings",       icon: "⚙",  label: "Settings",       desc: "Organisation and user management",        color: "#a78bfa" },
+  { href: "/portal/subscription",          icon: "⬡",  label: "Subscription",    desc: "Plan, modules and usage details",        color: "#00d4e8" },
+  { href: "/portal/properties",            icon: "🏨", label: "Properties",      desc: "Active properties and their scope",       color: "#3ef5a0" },
+  { href: "/portal/implementation",        icon: "🚀", label: "Implementation",  desc: "Migration and installation progress",     color: "#a78bfa" },
+  { href: "/portal/hardware",              icon: "🔧", label: "Hardware",        desc: "Installed devices and pending items",     color: "#ffbe5a" },
+  { href: "/portal/integrations",          icon: "⟳",  label: "Integrations",   desc: "Connected systems and API access",        color: "#ff8c60" },
+  { href: "/portal/settings/booking-engine", icon: "🌐", label: "Booking Engine", desc: "Online booking sites for your properties", color: "#60a5fa" },
+  { href: "/portal/support",               icon: "◎",  label: "Support",         desc: "Open tickets, SLA and help resources",   color: "#3ef5a0" },
+  { href: "/portal/billing",               icon: "◇",  label: "Billing",         desc: "Invoices, payments and statements",      color: "#00d4e8" },
+  { href: "/portal/settings",              icon: "⚙",  label: "Settings",        desc: "Organisation and user management",       color: "#a78bfa" },
 ];
+
 
 export default async function PortalDashboard() {
   const session = await auth();

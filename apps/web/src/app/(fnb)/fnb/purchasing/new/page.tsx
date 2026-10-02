@@ -4,7 +4,13 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Truck, Loader2, ArrowLeft, Plus, Save, Trash } from 'lucide-react';
 import Link from 'next/link';
-import { UnitOfMeasure } from '@hotel-pms/db';
+
+// Keep client-side forms independent from the server-only database package.
+const UNIT_OF_MEASURE = [
+  'UNIT', 'EACH', 'KG', 'GRAM', 'TONNE', 'LITRE', 'ML', 'GALLON', 'PIECE',
+  'PAIR', 'SET', 'DOZEN', 'BOX', 'BOTTLE', 'CAN', 'JAR', 'TIN', 'SACHET',
+  'PACK', 'CART', 'CARTON', 'CASE', 'PALLET', 'BAG', 'BUNDLE',
+] as const;
 
 export default function NewPurchaseOrderPage() {
   const router = useRouter();
@@ -157,7 +163,7 @@ export default function NewPurchaseOrderPage() {
                       }}
                       className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none"
                     >
-                      {Object.keys(UnitOfMeasure).map(u => (
+                      {UNIT_OF_MEASURE.map(u => (
                         <option key={u} value={u}>{u}</option>
                       ))}
                     </select>

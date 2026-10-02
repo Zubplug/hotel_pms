@@ -1,5 +1,11 @@
 {
   "buildCommand": "cd ../.. && pnpm --filter website build",
   "installCommand": "cd ../.. && pnpm install --frozen-lockfile",
-  "framework": "nextjs"
+  "framework": "nextjs",
+  "crons": [
+    {
+      "path": "/api/v1/cron/expire-booking-holds",
+      "schedule": "*/2 * * * *"
+    }
+  ]
 }

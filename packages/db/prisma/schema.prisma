@@ -26,41 +26,46 @@ model Organization {
   defaultLocale   String  @default("en-NG")
   settings        Json?
 
-  properties         Property[]
-  guests             Guest[]
-  staff              Staff[]
-  roles              Role[]
-  notifications      Notification[]
-  auditLogs          AuditLog[]
-  refundRequests     RefundRequest[]
-  memberships        OrganizationMembership[]
-  corporateAccounts  CorporateAccount[]
-  outboxEvents       OutboxEvent[]
-  channelConnections ChannelConnection[]
-  channelSyncEvents  ChannelSyncEvent[]
-  externalAuditorAccesses ExternalAuditorAccess[]
+  properties                 Property[]
+  guests                     Guest[]
+  staff                      Staff[]
+  roles                      Role[]
+  notifications              Notification[]
+  auditLogs                  AuditLog[]
+  refundRequests             RefundRequest[]
+  memberships                OrganizationMembership[]
+  corporateAccounts          CorporateAccount[]
+  outboxEvents               OutboxEvent[]
+  channelConnections         ChannelConnection[]
+  channelSyncEvents          ChannelSyncEvent[]
+  externalAuditorAccesses    ExternalAuditorAccess[]
   externalAuditorInvitations ExternalAuditorInvitation[]
-  customerInvitations         CustomerInvitation[]
+  customerInvitations        CustomerInvitation[]
 
-  billingCustomer    BillingCustomer?
-  subscriptions      Subscription[]
-  entitlements       Entitlement[]
-  billingInvoices    BillingInvoice[]
-  salesLeads          SalesLead[]
-  proposals           Proposal[]
+  billingCustomer        BillingCustomer?
+  subscriptions          Subscription[]
+  entitlements           Entitlement[]
+  billingInvoices        BillingInvoice[]
+  salesLeads             SalesLead[]
+  proposals              Proposal[]
   implementationProjects ImplementationProject[]
-  hardwareInventory   HardwareInventory[]
-  hardwareInstallations HardwareInstallation[]
-  supportTickets      SupportTicket[]
+  hardwareInventory      HardwareInventory[]
+  hardwareInstallations  HardwareInstallation[]
+  supportTickets         SupportTicket[]
   integrationDefinitions IntegrationDefinition[]
-  installedIntegrations InstalledIntegration[]
-  portalApiKeys       PortalApiKey[]
-  usageRecords        Usage[]
+  installedIntegrations  InstalledIntegration[]
+  portalApiKeys          PortalApiKey[]
+  usageRecords           Usage[]
 
+  // Booking Engine
+  bookingEngineConfigs   BookingEngineConfig[]
+  bookingSites           BookingSite[]
+  bookingPaymentAccounts BookingPaymentAccount[]
+  customDomainRequests   CustomDomainRequest[]
+  customWebsiteRequests  CustomWebsiteRequest[]
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
-
 }
 
 model Property {
@@ -90,8 +95,8 @@ model Property {
   lastAuditAt  DateTime? @db.Timestamptz
   auditStatus  String? // 'OPEN' | 'IN_PROGRESS' | 'POSTING' | 'COMPLETED' | 'COMPLETED_WITH_EXCEPTIONS' | 'FAILED'
 
-  isActive Boolean @default(true)
-  suspendedAt DateTime? @db.Timestamptz
+  isActive         Boolean   @default(true)
+  suspendedAt      DateTime? @db.Timestamptz
   suspensionReason String?
 
   timezone          String @default("Africa/Lagos")
@@ -135,7 +140,7 @@ model Property {
   hardwareInstallations    HardwareInstallation[]
   propertySetups           PropertySetup[]
   entitlements             Entitlement[]
-  installedIntegrations     InstalledIntegration[]
+  installedIntegrations    InstalledIntegration[]
   hardwareAgents           HardwareAgent[]
   lockOperations           LockOperation[]
   lockEvents               LockEvent[]
@@ -213,11 +218,18 @@ model Property {
   assetDepreciations         AssetDepreciation[]
   budgets                    Budget[]
 
-  outboxEvents       OutboxEvent[]
-  channelConnections ChannelConnection[]
-  channelSyncEvents  ChannelSyncEvent[]
-  Department         Department[]
+  outboxEvents            OutboxEvent[]
+  channelConnections      ChannelConnection[]
+  channelSyncEvents       ChannelSyncEvent[]
+  Department              Department[]
   externalAuditorAccesses ExternalAuditorAccess[]
+
+  // Booking Engine
+  bookingEngineConfig    BookingEngineConfig?
+  bookingSite            BookingSite?
+  bookingPaymentAccounts BookingPaymentAccount[]
+  customDomainRequests   CustomDomainRequest[]
+  customWebsiteRequests  CustomWebsiteRequest[]
 }
 
 model Building {
@@ -662,6 +674,18 @@ enum ReservationStatus {
   EXPIRED
 }
 
+// Actor type for who/what created a reservation.
+// STAFF   = created by an authenticated staff user in Front Desk
+// GUEST   = created via the public Booking Engine (no staff session)
+// SYSTEM  = created by an automated/system process (e.g. night audit, scheduled task)
+// OTA     = created via OTA channel manager integration
+enum ReservationCreatedByType {
+  STAFF
+  GUEST
+  SYSTEM
+  OTA
+}
+
 model CorporateAccount {
   id                    String  @id @default(uuid()) @db.Uuid
   organizationId        String  @db.Uuid
@@ -683,9 +707,9 @@ model CorporateAccount {
   ratePlan          RatePlan?          @relation(fields: [ratePlanId], references: [id])
   cityLedgerAccount CityLedgerAccount? @relation(fields: [cityLedgerAccountId], references: [id])
 
-  reservations Reservation[]
-  folios       Folio[]
-  events       Event[]
+  reservations   Reservation[]
+  folios         Folio[]
+  events         Event[]
   leaseContracts LeaseContract[]
 
   createdAt DateTime @default(now()) @db.Timestamptz
@@ -755,8 +779,17 @@ model Reservation {
   reinstatedBy           String?   @db.Uuid
   reinstatementReason    String?
 
-  version   Int    @default(1) // Optimistic locking
-  createdBy String @db.Uuid // Staff ID
+  version       Int                      @default(1) // Optimistic locking
+  // Actor who created this reservation. Null when createdByType = GUEST (public booking)
+  // or SYSTEM (automated). For STAFF/OTA this is the User.id of the actor.
+  createdBy     String?                  @db.Uuid
+  createdByType ReservationCreatedByType @default(STAFF)
+
+  // Booking Engine fields — populated only for source = WEBSITE reservations
+  bookingChannelRef          String? // Reference to BookingHold.id at creation time
+  // SHA-256(token) stored here; the raw token is issued to the guest only
+  guestConfirmationTokenHash String? @unique
+  guestCancellationTokenHash String? @unique
 
   reservationGuests ReservationGuest[]
   reservationRooms  ReservationRoom[]
@@ -917,14 +950,14 @@ model Folio {
 
   version Int @default(1)
 
-  items              FolioItem[]
-  payments           Payment[]
-  credits            FolioCredit[]
-  creditApplications FolioCreditApplication[]
-  refunds            Refund[]
-  refundRequests     RefundRequest[]
-  posOrders          PosOrder[]
-  cityLedgerAllocations CityLedgerAllocation[] @relation("FolioCityLedgerAllocations")
+  items                 FolioItem[]
+  payments              Payment[]
+  credits               FolioCredit[]
+  creditApplications    FolioCreditApplication[]
+  refunds               Refund[]
+  refundRequests        RefundRequest[]
+  posOrders             PosOrder[]
+  cityLedgerAllocations CityLedgerAllocation[]   @relation("FolioCityLedgerAllocations")
 
   createdAt       DateTime          @default(now()) @db.Timestamptz
   updatedAt       DateTime          @updatedAt @db.Timestamptz
@@ -1084,7 +1117,7 @@ model FolioItem {
   revenueCategory RevenueCategory @default(OTHER)
   // Fine-grained revenue classification used by event billing and reporting.
   // Null preserves the existing room/POS/manual folio behaviour.
-  revenueClass String?
+  revenueClass    String?
 
   description String
 
@@ -1240,20 +1273,20 @@ enum RefundRequestStatus {
 }
 
 model RefundRequest {
-  id             String  @id @default(uuid()) @db.Uuid
-  organizationId String  @db.Uuid
-  propertyId     String  @db.Uuid
-  reservationId  String? @db.Uuid
-  folioId        String? @db.Uuid
-  paymentId      String? @db.Uuid
-  guestId        String? @db.Uuid
+  id                String  @id @default(uuid()) @db.Uuid
+  organizationId    String  @db.Uuid
+  propertyId        String  @db.Uuid
+  reservationId     String? @db.Uuid
+  folioId           String? @db.Uuid
+  paymentId         String? @db.Uuid
+  guestId           String? @db.Uuid
   cityLedgerEntryId String? @db.Uuid
 
-  organization Organization @relation(fields: [organizationId], references: [id])
-  property     Property     @relation(fields: [propertyId], references: [id])
-  reservation  Reservation? @relation(fields: [reservationId], references: [id])
-  folio        Folio?       @relation(fields: [folioId], references: [id])
-  payment      Payment?     @relation(fields: [paymentId], references: [id])
+  organization    Organization     @relation(fields: [organizationId], references: [id])
+  property        Property         @relation(fields: [propertyId], references: [id])
+  reservation     Reservation?     @relation(fields: [reservationId], references: [id])
+  folio           Folio?           @relation(fields: [folioId], references: [id])
+  payment         Payment?         @relation(fields: [paymentId], references: [id])
   cityLedgerEntry CityLedgerEntry? @relation(fields: [cityLedgerEntryId], references: [id])
 
   requestedAmount            Decimal             @db.Decimal(18, 4)
@@ -1991,12 +2024,12 @@ model StaffPosOutletAccess {
 }
 
 model User {
-  id           String  @id @default(uuid()) @db.Uuid
-  staffId      String? @db.Uuid
-  email        String  @unique
-  passwordHash String
+  id               String  @id @default(uuid()) @db.Uuid
+  staffId          String? @db.Uuid
+  email            String  @unique
+  passwordHash     String
   // Deprecated compatibility alias. New code should use isLodgeCoreAdmin.
-  isSuperAdmin Boolean @default(false)
+  isSuperAdmin     Boolean @default(false)
   isLodgeCoreAdmin Boolean @default(false)
 
   lastLoginAt DateTime? @db.Timestamptz
@@ -2012,21 +2045,21 @@ model User {
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
 
-  membership              OrganizationMembership?
-  roles                   UserRole[]
-  requestedRefunds        RefundRequest[]              @relation("RefundRequestedBy")
-  assignedRefunds         RefundRequest[]              @relation("RefundCurrentApprover")
-  refundApprovals         RefundApproval[]             @relation("RefundApprover")
-  refundApprovalRules     RefundApprovalRule[]         @relation("RefundRuleApprover")
-  deviceTokens            DeviceToken[]
-  notificationPreferences UserNotificationPreference[]
-  externalAuditorAccesses ExternalAuditorAccess[]
-  grantedExternalAuditorAccesses ExternalAuditorAccess[] @relation("ExternalAuditorAccessGrantedBy")
-  revokedExternalAuditorAccesses ExternalAuditorAccess[] @relation("ExternalAuditorAccessRevokedBy")
-  externalAuditorInvitations ExternalAuditorInvitation[] @relation("ExternalAuditorInvitationUser")
-  sentExternalAuditorInvitations ExternalAuditorInvitation[] @relation("ExternalAuditorInvitationInvitedBy")
-  customerInvitations         CustomerInvitation[] @relation("CustomerInvitationUser")
-  sentCustomerInvitations     CustomerInvitation[] @relation("CustomerInvitationCreatedBy")
+  membership                     OrganizationMembership?
+  roles                          UserRole[]
+  requestedRefunds               RefundRequest[]              @relation("RefundRequestedBy")
+  assignedRefunds                RefundRequest[]              @relation("RefundCurrentApprover")
+  refundApprovals                RefundApproval[]             @relation("RefundApprover")
+  refundApprovalRules            RefundApprovalRule[]         @relation("RefundRuleApprover")
+  deviceTokens                   DeviceToken[]
+  notificationPreferences        UserNotificationPreference[]
+  externalAuditorAccesses        ExternalAuditorAccess[]
+  grantedExternalAuditorAccesses ExternalAuditorAccess[]      @relation("ExternalAuditorAccessGrantedBy")
+  revokedExternalAuditorAccesses ExternalAuditorAccess[]      @relation("ExternalAuditorAccessRevokedBy")
+  externalAuditorInvitations     ExternalAuditorInvitation[]  @relation("ExternalAuditorInvitationUser")
+  sentExternalAuditorInvitations ExternalAuditorInvitation[]  @relation("ExternalAuditorInvitationInvitedBy")
+  customerInvitations            CustomerInvitation[]         @relation("CustomerInvitationUser")
+  sentCustomerInvitations        CustomerInvitation[]         @relation("CustomerInvitationCreatedBy")
 }
 
 // FCM device tokens for push notifications
@@ -2173,7 +2206,7 @@ model AuditEngagement {
   organizationId     String                @db.Uuid
   propertyId         String                @db.Uuid
   leadAuditorId      String                @db.Uuid
-  status             AuditEngagementStatus  @default(PLANNING)
+  status             AuditEngagementStatus @default(PLANNING)
   name               String
   auditType          String
   objective          String?
@@ -2226,64 +2259,64 @@ model AuditEvidenceRequest {
 }
 
 model AuditWorkpaper {
-  id             String              @id @default(uuid()) @db.Uuid
-  engagementId   String              @db.Uuid
-  organizationId String              @db.Uuid
-  propertyId     String              @db.Uuid
-  reference      String
-  title          String
-  controlArea    String
-  objective      String?
-  procedure      String?
-  population     String?
-  sampleSize     Int?
-  result         String?
-  expectedResult String?
-  actualResult   String?
+  id              String               @id @default(uuid()) @db.Uuid
+  engagementId    String               @db.Uuid
+  organizationId  String               @db.Uuid
+  propertyId      String               @db.Uuid
+  reference       String
+  title           String
+  controlArea     String
+  objective       String?
+  procedure       String?
+  population      String?
+  sampleSize      Int?
+  result          String?
+  expectedResult  String?
+  actualResult    String?
   sampleSelection String?
-  status         AuditWorkpaperStatus @default(DRAFT)
-  preparedById   String               @db.Uuid
-  reviewedById   String?
-  evidenceIds    Json?
-  reviewerNote   String?
-  reviewerNotes  Json?
-  version        Int                  @default(1)
-  lockedAt       DateTime?            @db.Timestamptz
-  signedAt       DateTime?            @db.Timestamptz
-  createdAt      DateTime             @default(now()) @db.Timestamptz
-  updatedAt      DateTime             @updatedAt @db.Timestamptz
+  status          AuditWorkpaperStatus @default(DRAFT)
+  preparedById    String               @db.Uuid
+  reviewedById    String?
+  evidenceIds     Json?
+  reviewerNote    String?
+  reviewerNotes   Json?
+  version         Int                  @default(1)
+  lockedAt        DateTime?            @db.Timestamptz
+  signedAt        DateTime?            @db.Timestamptz
+  createdAt       DateTime             @default(now()) @db.Timestamptz
+  updatedAt       DateTime             @updatedAt @db.Timestamptz
 
   @@unique([engagementId, reference])
   @@index([engagementId, status])
 }
 
 model AuditFinding {
-  id             String               @id @default(uuid()) @db.Uuid
-  engagementId   String               @db.Uuid
-  organizationId String               @db.Uuid
-  propertyId     String               @db.Uuid
-  reference      String
-  title          String
-  description    String
-  criteria       String?
-  condition      String?
-  rootCause      String?
-  riskImpact     String?
-  recommendation String?
-  controlArea    String?
-  financialImpact Decimal?            @db.Decimal(18, 4)
-  severity       AuditFindingSeverity @default(MEDIUM)
-  status         AuditFindingStatus   @default(OPEN)
-  ownerId        String?
-  dueDate        DateTime?            @db.Date
-  managementResponse String?
-  evidenceIds    Json?
+  id                   String               @id @default(uuid()) @db.Uuid
+  engagementId         String               @db.Uuid
+  organizationId       String               @db.Uuid
+  propertyId           String               @db.Uuid
+  reference            String
+  title                String
+  description          String
+  criteria             String?
+  condition            String?
+  rootCause            String?
+  riskImpact           String?
+  recommendation       String?
+  controlArea          String?
+  financialImpact      Decimal?             @db.Decimal(18, 4)
+  severity             AuditFindingSeverity @default(MEDIUM)
+  status               AuditFindingStatus   @default(OPEN)
+  ownerId              String?
+  dueDate              DateTime?            @db.Date
+  managementResponse   String?
+  evidenceIds          Json?
   linkedTransactionIds Json?
-  createdById    String               @db.Uuid
-  validatedById  String?
-  closedAt       DateTime?            @db.Timestamptz
-  createdAt      DateTime             @default(now()) @db.Timestamptz
-  updatedAt      DateTime             @updatedAt @db.Timestamptz
+  createdById          String               @db.Uuid
+  validatedById        String?
+  closedAt             DateTime?            @db.Timestamptz
+  createdAt            DateTime             @default(now()) @db.Timestamptz
+  updatedAt            DateTime             @updatedAt @db.Timestamptz
 
   @@unique([engagementId, reference])
   @@index([engagementId, status, severity])
@@ -2291,66 +2324,66 @@ model AuditFinding {
 }
 
 model AuditActionPlan {
-  id             String               @id @default(uuid()) @db.Uuid
-  findingId      String               @db.Uuid
-  engagementId   String               @db.Uuid
-  organizationId String               @db.Uuid
-  propertyId     String               @db.Uuid
+  id             String             @id @default(uuid()) @db.Uuid
+  findingId      String             @db.Uuid
+  engagementId   String             @db.Uuid
+  organizationId String             @db.Uuid
+  propertyId     String             @db.Uuid
   action         String
   ownerId        String
-  dueDate        DateTime             @db.Date
-  status         AuditFindingStatus   @default(IN_REMEDIATION)
-  progress       Int                  @default(0)
+  dueDate        DateTime           @db.Date
+  status         AuditFindingStatus @default(IN_REMEDIATION)
+  progress       Int                @default(0)
   completionNote String?
-  completedAt    DateTime?            @db.Timestamptz
-  createdAt      DateTime             @default(now()) @db.Timestamptz
-  updatedAt      DateTime             @updatedAt @db.Timestamptz
+  completedAt    DateTime?          @db.Timestamptz
+  createdAt      DateTime           @default(now()) @db.Timestamptz
+  updatedAt      DateTime           @updatedAt @db.Timestamptz
 
   @@index([engagementId, status])
   @@index([propertyId, dueDate])
 }
 
 model AuditFinalPack {
-  id             String              @id @default(uuid()) @db.Uuid
-  engagementId   String              @db.Uuid
-  organizationId String              @db.Uuid
-  propertyId     String              @db.Uuid
-  status         AuditFinalPackStatus @default(DRAFT)
-  packageHash    String              @unique
-  manifest       Json
-  reportManifest Json?
-  auditorSignedAt DateTime?          @db.Timestamptz
-  managementSignedAt DateTime?       @db.Timestamptz
-  issuedAt       DateTime?           @db.Timestamptz
-  createdById    String              @db.Uuid
-  createdAt      DateTime             @default(now()) @db.Timestamptz
-  updatedAt      DateTime             @updatedAt @db.Timestamptz
+  id                 String               @id @default(uuid()) @db.Uuid
+  engagementId       String               @db.Uuid
+  organizationId     String               @db.Uuid
+  propertyId         String               @db.Uuid
+  status             AuditFinalPackStatus @default(DRAFT)
+  packageHash        String               @unique
+  manifest           Json
+  reportManifest     Json?
+  auditorSignedAt    DateTime?            @db.Timestamptz
+  managementSignedAt DateTime?            @db.Timestamptz
+  issuedAt           DateTime?            @db.Timestamptz
+  createdById        String               @db.Uuid
+  createdAt          DateTime             @default(now()) @db.Timestamptz
+  updatedAt          DateTime             @updatedAt @db.Timestamptz
 
   @@index([engagementId, status])
   @@index([propertyId, createdAt])
 }
 
 model ExternalAuditorAccess {
-  id                 String   @id @default(uuid()) @db.Uuid
-  userId             String   @db.Uuid
-  organizationId     String   @db.Uuid
-  propertyId         String   @db.Uuid
-  auditPeriodStart   DateTime @db.Date
-  auditPeriodEnd     DateTime @db.Date
-  accessStartsAt     DateTime @default(now()) @db.Timestamptz
-  accessExpiresAt    DateTime @db.Timestamptz
-  status             ExternalAuditorAccessStatus @default(ACTIVE)
-  grantedByUserId    String   @db.Uuid
-  revokedAt          DateTime? @db.Timestamptz
-  revokedByUserId    String?  @db.Uuid
-  revocationReason   String?
-  createdAt          DateTime @default(now()) @db.Timestamptz
-  updatedAt          DateTime @updatedAt @db.Timestamptz
-  user               User         @relation(fields: [userId], references: [id])
-  organization       Organization @relation(fields: [organizationId], references: [id])
-  property           Property     @relation(fields: [propertyId], references: [id])
-  grantedByUser      User         @relation("ExternalAuditorAccessGrantedBy", fields: [grantedByUserId], references: [id])
-  revokedByUser      User?        @relation("ExternalAuditorAccessRevokedBy", fields: [revokedByUserId], references: [id])
+  id               String                      @id @default(uuid()) @db.Uuid
+  userId           String                      @db.Uuid
+  organizationId   String                      @db.Uuid
+  propertyId       String                      @db.Uuid
+  auditPeriodStart DateTime                    @db.Date
+  auditPeriodEnd   DateTime                    @db.Date
+  accessStartsAt   DateTime                    @default(now()) @db.Timestamptz
+  accessExpiresAt  DateTime                    @db.Timestamptz
+  status           ExternalAuditorAccessStatus @default(ACTIVE)
+  grantedByUserId  String                      @db.Uuid
+  revokedAt        DateTime?                   @db.Timestamptz
+  revokedByUserId  String?                     @db.Uuid
+  revocationReason String?
+  createdAt        DateTime                    @default(now()) @db.Timestamptz
+  updatedAt        DateTime                    @updatedAt @db.Timestamptz
+  user             User                        @relation(fields: [userId], references: [id])
+  organization     Organization                @relation(fields: [organizationId], references: [id])
+  property         Property                    @relation(fields: [propertyId], references: [id])
+  grantedByUser    User                        @relation("ExternalAuditorAccessGrantedBy", fields: [grantedByUserId], references: [id])
+  revokedByUser    User?                       @relation("ExternalAuditorAccessRevokedBy", fields: [revokedByUserId], references: [id])
 
   @@index([userId, status])
   @@index([propertyId, auditPeriodStart, auditPeriodEnd])
@@ -2358,19 +2391,19 @@ model ExternalAuditorAccess {
 }
 
 model ExternalAuditorInvitation {
-  id             String    @id @default(uuid()) @db.Uuid
+  id             String       @id @default(uuid()) @db.Uuid
   email          String
-  organizationId String    @db.Uuid
+  organizationId String       @db.Uuid
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  userId         String?   @db.Uuid
-  user           User?     @relation("ExternalAuditorInvitationUser", fields: [userId], references: [id], onDelete: SetNull)
-  tokenHash      String    @unique
-  expiresAt      DateTime  @db.Timestamptz
-  acceptedAt     DateTime? @db.Timestamptz
-  invitedById    String    @db.Uuid
-  invitedBy      User      @relation("ExternalAuditorInvitationInvitedBy", fields: [invitedById], references: [id])
-  createdAt      DateTime  @default(now()) @db.Timestamptz
-  updatedAt      DateTime  @updatedAt @db.Timestamptz
+  userId         String?      @db.Uuid
+  user           User?        @relation("ExternalAuditorInvitationUser", fields: [userId], references: [id], onDelete: SetNull)
+  tokenHash      String       @unique
+  expiresAt      DateTime     @db.Timestamptz
+  acceptedAt     DateTime?    @db.Timestamptz
+  invitedById    String       @db.Uuid
+  invitedBy      User         @relation("ExternalAuditorInvitationInvitedBy", fields: [invitedById], references: [id])
+  createdAt      DateTime     @default(now()) @db.Timestamptz
+  updatedAt      DateTime     @updatedAt @db.Timestamptz
 
   @@index([email, organizationId])
   @@index([expiresAt, acceptedAt])
@@ -4217,12 +4250,12 @@ model PosProcessedEvent {
 // a reinstall or concurrent terminal opened against an already-open shift.
 // This keeps later offline orders attached to the existing financial shift.
 model PosSessionAlias {
-  localSessionId    String   @id @db.Uuid
-  canonicalSessionId String  @db.Uuid
-  propertyId        String   @db.Uuid
-  terminalId        String?  @db.Uuid
-  operatorId        String?  @db.Uuid
-  createdAt         DateTime @default(now()) @db.Timestamptz
+  localSessionId     String   @id @db.Uuid
+  canonicalSessionId String   @db.Uuid
+  propertyId         String   @db.Uuid
+  terminalId         String?  @db.Uuid
+  operatorId         String?  @db.Uuid
+  createdAt          DateTime @default(now()) @db.Timestamptz
 
   @@index([canonicalSessionId])
   @@index([propertyId, operatorId])
@@ -4725,11 +4758,11 @@ model CityLedgerInvoice {
   createdAt         DateTime @default(now()) @db.Timestamptz
   updatedAt         DateTime @updatedAt @db.Timestamptz
 
-  property    Property               @relation(fields: [propertyId], references: [id])
-  account     CityLedgerAccount      @relation(fields: [accountId], references: [id])
-  eventInvoice EventInvoice?         @relation(fields: [eventInvoiceId], references: [id])
-  entries     CityLedgerEntry[]
-  allocations CityLedgerAllocation[] @relation("InvoiceAllocations")
+  property     Property               @relation(fields: [propertyId], references: [id])
+  account      CityLedgerAccount      @relation(fields: [accountId], references: [id])
+  eventInvoice EventInvoice?          @relation(fields: [eventInvoiceId], references: [id])
+  entries      CityLedgerEntry[]
+  allocations  CityLedgerAllocation[] @relation("InvoiceAllocations")
 
   @@unique([propertyId, invoiceNumber])
   @@index([propertyId, dueDate])
@@ -4754,12 +4787,12 @@ model CityLedgerEntry {
 
   createdBy String @db.Uuid // Staff ID
 
-  account     CityLedgerAccount      @relation(fields: [accountId], references: [id])
-  guest       Guest?                 @relation(fields: [guestId], references: [id])
-  reservation Reservation?           @relation(fields: [reservationId], references: [id])
-  folio       Folio?                 @relation(fields: [folioId], references: [id])
-  invoice     CityLedgerInvoice?     @relation(fields: [invoiceId], references: [id])
-  allocations CityLedgerAllocation[] @relation("PaymentAllocations")
+  account        CityLedgerAccount      @relation(fields: [accountId], references: [id])
+  guest          Guest?                 @relation(fields: [guestId], references: [id])
+  reservation    Reservation?           @relation(fields: [reservationId], references: [id])
+  folio          Folio?                 @relation(fields: [folioId], references: [id])
+  invoice        CityLedgerInvoice?     @relation(fields: [invoiceId], references: [id])
+  allocations    CityLedgerAllocation[] @relation("PaymentAllocations")
   refundRequests RefundRequest[]
 
   createdAt DateTime @default(now()) @db.Timestamptz
@@ -4869,8 +4902,8 @@ model Hall {
   // Pricing configuration
   rate Decimal? @db.Decimal(18, 4)
 
-  bookings EventBooking[]
-  leases   LeaseContract[]
+  bookings      EventBooking[]
+  leases        LeaseContract[]
   leaseSegments LeaseContractSegment[]
 
   createdAt DateTime @default(now()) @db.Timestamptz
@@ -4981,11 +5014,10 @@ model Event {
   contactPhone String?
   contactEmail String?
 
-  guestId            String? @db.Uuid
-  guest              Guest?  @relation(fields: [guestId], references: [id])
-  corporateAccountId String? @db.Uuid
+  guestId            String?           @db.Uuid
+  guest              Guest?            @relation(fields: [guestId], references: [id])
+  corporateAccountId String?           @db.Uuid
   corporateAccount   CorporateAccount? @relation(fields: [corporateAccountId], references: [id])
-
 
   status          EventStatus          @default(INQUIRY)
   financialStatus EventFinancialStatus @default(QUOTE)
@@ -5002,11 +5034,11 @@ model Event {
 
   recurrenceRule Json? // Structured JSON: { frequency: "WEEKLY", daysOfWeek: [2,6], until: "2026-12-31" }
 
-  bookings     EventBooking[]
-  invoices     EventInvoice[]
+  bookings      EventBooking[]
+  invoices      EventInvoice[]
   leaseContract LeaseContract?
-  beos         BanquetEventOrder[]
-  changeOrders EventChangeOrder[]
+  beos          BanquetEventOrder[]
+  changeOrders  EventChangeOrder[]
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
@@ -5048,10 +5080,10 @@ model LeaseContract {
   hallId String @db.Uuid
   hall   Hall   @relation(fields: [hallId], references: [id])
 
-  corporateAccountId String? @db.Uuid
+  corporateAccountId String?           @db.Uuid
   corporateAccount   CorporateAccount? @relation(fields: [corporateAccountId], references: [id])
-  eventId String? @unique @db.Uuid
-  event   Event? @relation(fields: [eventId], references: [id])
+  eventId            String?           @unique @db.Uuid
+  event              Event?            @relation(fields: [eventId], references: [id])
 
   contactName  String
   contactEmail String?
@@ -5059,13 +5091,13 @@ model LeaseContract {
   startDate DateTime @db.Date
   endDate   DateTime @db.Date
 
-  usageFrequency  String @default("WEEKLY") // PER_USE, DAILY, WEEKLY
+  usageFrequency   String  @default("WEEKLY") // PER_USE, DAILY, WEEKLY
   billingFrequency String // PER_USE, WEEKLY, MONTHLY, QUARTERLY, YEARLY
   billingDates     Json?
-  usageDays       Json?
-  startTime       String?
-  endTime         String?
-  currency        String @default("NGN")
+  usageDays        Json?
+  startTime        String?
+  endTime          String?
+  currency         String  @default("NGN")
   rate             Decimal @db.Decimal(18, 4)
   depositAmount    Decimal @default(0) @db.Decimal(18, 4)
 
@@ -5074,23 +5106,23 @@ model LeaseContract {
 
   schedules LeaseBillingSchedule[]
   segments  LeaseContractSegment[]
-  createdBy String? @db.Uuid
+  createdBy String?                @db.Uuid
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
 }
 
 model LeaseContractSegment {
-  id              String        @id @default(uuid()) @db.Uuid
-  leaseContractId String        @db.Uuid
-  leaseContract   LeaseContract @relation(fields: [leaseContractId], references: [id], onDelete: Cascade)
-  hallId          String        @db.Uuid
-  hall            Hall          @relation(fields: [hallId], references: [id])
+  id              String                     @id @default(uuid()) @db.Uuid
+  leaseContractId String                     @db.Uuid
+  leaseContract   LeaseContract              @relation(fields: [leaseContractId], references: [id], onDelete: Cascade)
+  hallId          String                     @db.Uuid
+  hall            Hall                       @relation(fields: [hallId], references: [id])
   usageDays       Json
   startTime       String
   endTime         String
-  rate            Decimal       @db.Decimal(18, 4)
-  isActive        Boolean       @default(true)
+  rate            Decimal                    @db.Decimal(18, 4)
+  isActive        Boolean                    @default(true)
   scheduleLines   LeaseBillingScheduleLine[]
 
   createdAt DateTime @default(now()) @db.Timestamptz
@@ -5107,26 +5139,26 @@ model LeaseBillingSchedule {
 
   periodStart DateTime @db.Date
   periodEnd   DateTime @db.Date
-  dueDate DateTime @db.Date
-  usageCount Int @default(1)
-  amount  Decimal  @db.Decimal(18, 4)
-  status  String   @default("PENDING") // PENDING, INVOICED, PAID, VOID
+  dueDate     DateTime @db.Date
+  usageCount  Int      @default(1)
+  amount      Decimal  @db.Decimal(18, 4)
+  status      String   @default("PENDING") // PENDING, INVOICED, PAID, VOID
 
-  invoiceId String? @unique @db.Uuid
-  invoice EventInvoice? @relation(fields: [invoiceId], references: [id])
-  lines   LeaseBillingScheduleLine[]
+  invoiceId String?                    @unique @db.Uuid
+  invoice   EventInvoice?              @relation(fields: [invoiceId], references: [id])
+  lines     LeaseBillingScheduleLine[]
 
   createdAt DateTime @default(now()) @db.Timestamptz
 }
 
 model LeaseBillingScheduleLine {
-  id         String                @id @default(uuid()) @db.Uuid
-  scheduleId String                @db.Uuid
+  id         String               @id @default(uuid()) @db.Uuid
+  scheduleId String               @db.Uuid
   schedule   LeaseBillingSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
-  segmentId  String                @db.Uuid
-  segment    LeaseContractSegment  @relation(fields: [segmentId], references: [id], onDelete: Restrict)
-  usageCount Int                   @default(0)
-  amount     Decimal               @db.Decimal(18, 4)
+  segmentId  String               @db.Uuid
+  segment    LeaseContractSegment @relation(fields: [segmentId], references: [id], onDelete: Restrict)
+  usageCount Int                  @default(0)
+  amount     Decimal              @db.Decimal(18, 4)
 
   @@unique([scheduleId, segmentId])
   @@index([segmentId])
@@ -5169,11 +5201,11 @@ model EventChangeOrder {
 }
 
 model EventInvoice {
-  id      String  @id @default(uuid()) @db.Uuid
-  eventId String? @db.Uuid
-  event   Event?  @relation(fields: [eventId], references: [id])
-  propertyId String? @db.Uuid
-  property   Property? @relation(fields: [propertyId], references: [id])
+  id                   String                @id @default(uuid()) @db.Uuid
+  eventId              String?               @db.Uuid
+  event                Event?                @relation(fields: [eventId], references: [id])
+  propertyId           String?               @db.Uuid
+  property             Property?             @relation(fields: [propertyId], references: [id])
   leaseBillingSchedule LeaseBillingSchedule?
 
   subTotal      Decimal @default(0) @db.Decimal(18, 4)
@@ -5187,21 +5219,21 @@ model EventInvoice {
 
   // Operational approval lifecycle is deliberately separate from payment status.
   // A draft can be reviewed without creating a folio charge or city-ledger AR.
-  workflowStatus    String   @default("DRAFT") // DRAFT, SUBMITTED, IN_REVIEW, APPROVED, REJECTED, ISSUED
-  requestedDiscount Decimal  @default(0) @db.Decimal(18, 4)
+  workflowStatus    String    @default("DRAFT") // DRAFT, SUBMITTED, IN_REVIEW, APPROVED, REJECTED, ISSUED
+  requestedDiscount Decimal   @default(0) @db.Decimal(18, 4)
   discountReason    String?
-  submittedBy      String?  @db.Uuid
-  submittedAt      DateTime? @db.Timestamptz
-  reviewedBy       String?  @db.Uuid
-  reviewedAt       DateTime? @db.Timestamptz
-  approvedBy       String?  @db.Uuid
-  approvedAt       DateTime? @db.Timestamptz
-  rejectedBy       String?  @db.Uuid
-  rejectedAt       DateTime? @db.Timestamptz
-  rejectionReason  String?
-  issuedBy         String?  @db.Uuid
-  issuedAt         DateTime? @db.Timestamptz
-  version          Int      @default(1)
+  submittedBy       String?   @db.Uuid
+  submittedAt       DateTime? @db.Timestamptz
+  reviewedBy        String?   @db.Uuid
+  reviewedAt        DateTime? @db.Timestamptz
+  approvedBy        String?   @db.Uuid
+  approvedAt        DateTime? @db.Timestamptz
+  rejectedBy        String?   @db.Uuid
+  rejectedAt        DateTime? @db.Timestamptz
+  rejectionReason   String?
+  issuedBy          String?   @db.Uuid
+  issuedAt          DateTime? @db.Timestamptz
+  version           Int       @default(1)
 
   // Link to existing financial infrastructure
   folioId String? @db.Uuid
@@ -5211,14 +5243,14 @@ model EventInvoice {
   cityLedgerAccount   CityLedgerAccount? @relation(fields: [cityLedgerAccountId], references: [id])
   cityLedgerInvoice   CityLedgerInvoice?
 
-  items EventInvoiceItem[]
+  items    EventInvoiceItem[]
   payments Payment[]
-
-  @@index([workflowStatus])
-  @@index([eventId, workflowStatus])
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@index([workflowStatus])
+  @@index([eventId, workflowStatus])
 }
 
 model EventInvoiceItem {
@@ -5231,16 +5263,16 @@ model EventInvoiceItem {
   quantity    Int     @default(1)
   unitPrice   Decimal @db.Decimal(18, 4)
 
-  grossAmount    Decimal @default(0) @db.Decimal(18, 4)
+  grossAmount       Decimal @default(0) @db.Decimal(18, 4)
   requestedDiscount Decimal @default(0) @db.Decimal(18, 4)
-  discountAmount Decimal @default(0) @db.Decimal(18, 4)
-  taxAmount      Decimal @default(0) @db.Decimal(18, 4)
-  totalPrice     Decimal @db.Decimal(18, 4)
+  discountAmount    Decimal @default(0) @db.Decimal(18, 4)
+  taxAmount         Decimal @default(0) @db.Decimal(18, 4)
+  totalPrice        Decimal @db.Decimal(18, 4)
 
   discountReason     String?
-  discountApprovedBy String? @db.Uuid
+  discountApprovedBy String?   @db.Uuid
   discountApprovedAt DateTime? @db.Timestamptz
-  discountStatus     String @default("PENDING") // PENDING, APPROVED, REJECTED
+  discountStatus     String    @default("PENDING") // PENDING, APPROVED, REJECTED
 
   taxId      String? @db.Uuid
   discountId String? @db.Uuid
@@ -6009,11 +6041,11 @@ model ChannelReservation {
 }
 
 model ChannelSyncEvent {
-  id             String       @id @default(uuid()) @db.Uuid
-  organizationId String       @db.Uuid
-  organization   Organization @relation(fields: [organizationId], references: [id])
-  propertyId     String       @db.Uuid
-  property       Property     @relation(fields: [propertyId], references: [id])
+  id             String          @id @default(uuid()) @db.Uuid
+  organizationId String          @db.Uuid
+  organization   Organization    @relation(fields: [organizationId], references: [id])
+  propertyId     String          @db.Uuid
+  property       Property        @relation(fields: [propertyId], references: [id])
   provider       ChannelProvider
 
   direction String // 'INBOUND' | 'OUTBOUND'
@@ -6036,75 +6068,75 @@ model ChannelSyncEvent {
 // -----------------------------------------------------------------------------
 
 model BillingProduct {
-  id              String   @id @default(uuid()) @db.Uuid
-  code            String   @unique
-  name            String
-  type            String   // 'BASE', 'ADDON'
+  id                   String  @id @default(uuid()) @db.Uuid
+  code                 String  @unique
+  name                 String
+  type                 String // 'BASE', 'ADDON'
   flutterwaveProductId String?
-  active          Boolean  @default(true)
-  catalogVersion  Int      @default(1)
-  metadata        Json?
+  active               Boolean @default(true)
+  catalogVersion       Int     @default(1)
+  metadata             Json?
 
-  prices          BillingPrice[]
-  entitlements    Entitlement[]
-  planItems       BillingPlanItem[]
-  modules         Module[]
+  prices       BillingPrice[]
+  entitlements Entitlement[]
+  planItems    BillingPlanItem[]
+  modules      Module[]
 
-  createdAt       DateTime @default(now()) @db.Timestamptz
-  updatedAt       DateTime @updatedAt @db.Timestamptz
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
 }
 
 model BillingPrice {
-  id            String   @id @default(uuid()) @db.Uuid
-  productId     String   @db.Uuid
-  product       BillingProduct @relation(fields: [productId], references: [id])
+  id        String         @id @default(uuid()) @db.Uuid
+  productId String         @db.Uuid
+  product   BillingProduct @relation(fields: [productId], references: [id])
 
   flutterwavePriceId String? @unique
-  amount        Int
-  currency      String
-  interval      String   // 'month', 'year'
-  catalogVersion Int     @default(1)
+  amount             Int
+  currency           String
+  interval           String // 'month', 'year'
+  catalogVersion     Int     @default(1)
 
   subscriptionItems SubscriptionItem[]
 
-  createdAt     DateTime @default(now()) @db.Timestamptz
-  updatedAt     DateTime @updatedAt @db.Timestamptz
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
 
   @@unique([productId, interval, catalogVersion])
 }
 
 model BillingCustomer {
-  id               String       @id @default(uuid()) @db.Uuid
-  organizationId   String       @unique @db.Uuid
-  organization     Organization @relation(fields: [organizationId], references: [id])
-  flutterwaveCustomerId String? @unique
+  id                    String       @id @default(uuid()) @db.Uuid
+  organizationId        String       @unique @db.Uuid
+  organization          Organization @relation(fields: [organizationId], references: [id])
+  flutterwaveCustomerId String?      @unique
 
-  createdAt        DateTime @default(now()) @db.Timestamptz
-  updatedAt        DateTime @updatedAt @db.Timestamptz
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
 }
 
 model Subscription {
-  id                   String       @id @default(uuid()) @db.Uuid
-  organizationId       String       @db.Uuid
-  organization         Organization @relation(fields: [organizationId], references: [id])
-  planId               String?      @db.Uuid
-  plan                 BillingPlan? @relation(fields: [planId], references: [id])
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  planId         String?      @db.Uuid
+  plan           BillingPlan? @relation(fields: [planId], references: [id])
 
-  flutterwaveSubscriptionId String       @unique
-  status               String       // 'TRIALING', 'ACTIVE', 'PAST_DUE', 'PAUSED', 'CANCELED', 'INCOMPLETE'
+  flutterwaveSubscriptionId String @unique
+  status                    String // 'TRIALING', 'ACTIVE', 'PAST_DUE', 'PAUSED', 'CANCELED', 'INCOMPLETE'
 
-  currentPeriodStart   DateTime     @db.Timestamptz
-  currentPeriodEnd     DateTime     @db.Timestamptz
-  cancelAtPeriodEnd    Boolean      @default(false)
-  canceledAt           DateTime?    @db.Timestamptz
-  trialEndsAt          DateTime?    @db.Timestamptz
-  scopePropertyIds     String[]     @default([]) @db.Uuid
-  pastDueSince         DateTime?    @db.Timestamptz
+  currentPeriodStart DateTime  @db.Timestamptz
+  currentPeriodEnd   DateTime  @db.Timestamptz
+  cancelAtPeriodEnd  Boolean   @default(false)
+  canceledAt         DateTime? @db.Timestamptz
+  trialEndsAt        DateTime? @db.Timestamptz
+  scopePropertyIds   String[]  @default([]) @db.Uuid
+  pastDueSince       DateTime? @db.Timestamptz
 
-  items                SubscriptionItem[]
+  items SubscriptionItem[]
 
-  createdAt            DateTime @default(now()) @db.Timestamptz
-  updatedAt            DateTime @updatedAt @db.Timestamptz
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
 
   @@index([organizationId, status])
 }
@@ -6114,73 +6146,73 @@ model SubscriptionItem {
   subscriptionId String       @db.Uuid
   subscription   Subscription @relation(fields: [subscriptionId], references: [id])
 
-  priceId        String       @db.Uuid
-  price          BillingPrice @relation(fields: [priceId], references: [id])
-  quantity       Int          @default(1)
+  priceId  String       @db.Uuid
+  price    BillingPrice @relation(fields: [priceId], references: [id])
+  quantity Int          @default(1)
 
-  createdAt      DateTime @default(now()) @db.Timestamptz
-  updatedAt      DateTime @updatedAt @db.Timestamptz
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
 
   @@unique([subscriptionId, priceId])
 }
 
 model Entitlement {
-  id               String         @id @default(uuid()) @db.Uuid
-  organizationId   String         @db.Uuid
-  organization     Organization   @relation(fields: [organizationId], references: [id])
-  propertyId       String?        @db.Uuid
-  property         Property?      @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  propertyId     String?      @db.Uuid
+  property       Property?    @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 
-  productCode      String
-  product          BillingProduct @relation(fields: [productCode], references: [code])
-  scopeKey         String         @unique
+  productCode String
+  product     BillingProduct @relation(fields: [productCode], references: [code])
+  scopeKey    String         @unique
 
-  status           String         // 'ACTIVE', 'SUSPENDED'
-  quantity         Int?
-  startsAt         DateTime       @default(now()) @db.Timestamptz
+  status   String // 'ACTIVE', 'SUSPENDED'
+  quantity Int?
+  startsAt DateTime @default(now()) @db.Timestamptz
 
-  activatedAt      DateTime       @default(now()) @db.Timestamptz
-  suspendedAt      DateTime?      @db.Timestamptz
-  expiresAt        DateTime?      @db.Timestamptz
+  activatedAt      DateTime  @default(now()) @db.Timestamptz
+  suspendedAt      DateTime? @db.Timestamptz
+  expiresAt        DateTime? @db.Timestamptz
   suspensionReason String?
   metadata         Json?
 
-  createdAt        DateTime @default(now()) @db.Timestamptz
-  updatedAt        DateTime @updatedAt @db.Timestamptz
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
 
   @@index([organizationId, propertyId, status])
 }
 
 model BillingEvent {
-  id             String       @id @default(uuid()) @db.Uuid
-  organizationId String?      @db.Uuid // Optional because some Flutterwave events might not have customer mapped yet
-  flutterwaveEventId  String       @unique
-  type           String
-  payload        Json
+  id                 String  @id @default(uuid()) @db.Uuid
+  organizationId     String? @db.Uuid // Optional because some Flutterwave events might not have customer mapped yet
+  flutterwaveEventId String  @unique
+  type               String
+  payload            Json
 
-  createdAt      DateTime @default(now()) @db.Timestamptz
+  createdAt DateTime @default(now()) @db.Timestamptz
 }
 
 model BillingInvoice {
-  id               String       @id @default(uuid()) @db.Uuid
-  organizationId   String       @db.Uuid
-  organization     Organization @relation(fields: [organizationId], references: [id])
-  flutterwaveInvoiceId  String       @unique
-  flutterwaveCustomerId String?
+  id                        String       @id @default(uuid()) @db.Uuid
+  organizationId            String       @db.Uuid
+  organization              Organization @relation(fields: [organizationId], references: [id])
+  flutterwaveInvoiceId      String       @unique
+  flutterwaveCustomerId     String?
   flutterwaveSubscriptionId String?
-  status           String
-  currency         String
-  subtotal         Int
-  total            Int
-  amountPaid       Int
-  amountDue        Int
-  periodStart      DateTime?    @db.Timestamptz
-  periodEnd        DateTime?    @db.Timestamptz
-  hostedInvoiceUrl String?
-  invoicePdf       String?
-  payload          Json
-  createdAt        DateTime     @default(now()) @db.Timestamptz
-  updatedAt        DateTime     @updatedAt @db.Timestamptz
+  status                    String
+  currency                  String
+  subtotal                  Int
+  total                     Int
+  amountPaid                Int
+  amountDue                 Int
+  periodStart               DateTime?    @db.Timestamptz
+  periodEnd                 DateTime?    @db.Timestamptz
+  hostedInvoiceUrl          String?
+  invoicePdf                String?
+  payload                   Json
+  createdAt                 DateTime     @default(now()) @db.Timestamptz
+  updatedAt                 DateTime     @updatedAt @db.Timestamptz
 
   @@index([organizationId, createdAt])
 }
@@ -6190,26 +6222,26 @@ model BillingInvoice {
 // -----------------------------------------------------------------------------
 
 model BillingPlan {
-  id              String   @id @default(uuid()) @db.Uuid
-  code            String   @unique
-  name            String
-  description     String?
-  active          Boolean  @default(true)
-  displayOrder    Int      @default(0)
-  metadata        Json?
-  items           BillingPlanItem[]
-  subscriptions   Subscription[]
-  createdAt       DateTime @default(now()) @db.Timestamptz
-  updatedAt       DateTime @updatedAt @db.Timestamptz
+  id            String            @id @default(uuid()) @db.Uuid
+  code          String            @unique
+  name          String
+  description   String?
+  active        Boolean           @default(true)
+  displayOrder  Int               @default(0)
+  metadata      Json?
+  items         BillingPlanItem[]
+  subscriptions Subscription[]
+  createdAt     DateTime          @default(now()) @db.Timestamptz
+  updatedAt     DateTime          @updatedAt @db.Timestamptz
 }
 
 model BillingPlanItem {
-  id          String        @id @default(uuid()) @db.Uuid
-  planId      String        @db.Uuid
-  plan        BillingPlan   @relation(fields: [planId], references: [id], onDelete: Cascade)
-  productId   String        @db.Uuid
+  id          String         @id @default(uuid()) @db.Uuid
+  planId      String         @db.Uuid
+  plan        BillingPlan    @relation(fields: [planId], references: [id], onDelete: Cascade)
+  productId   String         @db.Uuid
   product     BillingProduct @relation(fields: [productId], references: [id])
-  required    Boolean       @default(true)
+  required    Boolean        @default(true)
   includedQty Int?
   metadata    Json?
 
@@ -6218,140 +6250,141 @@ model BillingPlanItem {
 }
 
 model SalesLead {
-  id               String       @id @default(uuid()) @db.Uuid
-  organizationId   String?      @db.Uuid
-  organization     Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
-  source           String       @default("WEBSITE")
-  status           String       @default("NEW")
-  name             String
-  email            String
-  phone            String?
-  company          String?
-  propertyName     String?
-  location         String?
-  roomCount        Int?
-  message          String?
-  consentAt        DateTime?    @db.Timestamptz
-  sourceCampaign   String?
-  idempotencyKey   String?      @unique
-  assignedTo       String?
-  convertedAt      DateTime?    @db.Timestamptz
-  metadata         Json?
-  createdAt        DateTime     @default(now()) @db.Timestamptz
-  updatedAt        DateTime     @updatedAt @db.Timestamptz
+  id             String        @id @default(uuid()) @db.Uuid
+  organizationId String?       @db.Uuid
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  source         String        @default("WEBSITE")
+  status         String        @default("NEW")
+  name           String
+  email          String
+  phone          String?
+  company        String?
+  propertyName   String?
+  location       String?
+  roomCount      Int?
+  message        String?
+  consentAt      DateTime?     @db.Timestamptz
+  sourceCampaign String?
+  idempotencyKey String?       @unique
+  assignedTo     String?
+  convertedAt    DateTime?     @db.Timestamptz
+  metadata       Json?
+  createdAt      DateTime      @default(now()) @db.Timestamptz
+  updatedAt      DateTime      @updatedAt @db.Timestamptz
 
-  proposals        Proposal[]
+  proposals Proposal[]
+
   @@index([email, createdAt])
   @@index([status, createdAt])
   @@index([organizationId])
 }
 
 model Proposal {
-  id             String       @id @default(uuid()) @db.Uuid
-  organizationId String?      @db.Uuid
+  id             String        @id @default(uuid()) @db.Uuid
+  organizationId String?       @db.Uuid
   organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   leadId         String?
-  lead           SalesLead?   @relation(fields: [leadId], references: [id], onDelete: SetNull)
-  number         String       @unique
-  status         String       @default("DRAFT")
-  currency       String       @default("NGN")
-  subtotal       Int         @default(0)
-  tax            Int         @default(0)
-  total          Int         @default(0)
-  validUntil     DateTime?    @db.Timestamptz
+  lead           SalesLead?    @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  number         String        @unique
+  status         String        @default("DRAFT")
+  currency       String        @default("NGN")
+  subtotal       Int           @default(0)
+  tax            Int           @default(0)
+  total          Int           @default(0)
+  validUntil     DateTime?     @db.Timestamptz
   notes          String?
   lineItems      Json
-  createdAt      DateTime     @default(now()) @db.Timestamptz
-  updatedAt      DateTime     @updatedAt @db.Timestamptz
+  createdAt      DateTime      @default(now()) @db.Timestamptz
+  updatedAt      DateTime      @updatedAt @db.Timestamptz
 
   @@index([organizationId, status])
   @@index([leadId])
 }
 
 model ImplementationProject {
-  id             String       @id @default(uuid()) @db.Uuid
-  organizationId String       @db.Uuid
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  id             String          @id @default(uuid()) @db.Uuid
+  organizationId String          @db.Uuid
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   name           String
-  status         String       @default("DISCOVERY")
+  status         String          @default("DISCOVERY")
   ownerId        String?
-  targetGoLiveAt DateTime?    @db.Timestamptz
-  completedAt    DateTime?    @db.Timestamptz
+  targetGoLiveAt DateTime?       @db.Timestamptz
+  completedAt    DateTime?       @db.Timestamptz
   notes          String?
   metadata       Json?
   propertySetups PropertySetup[]
   dataMigrations DataMigration[]
   trainings      Training[]
-  createdAt      DateTime     @default(now()) @db.Timestamptz
-  updatedAt      DateTime     @updatedAt @db.Timestamptz
+  createdAt      DateTime        @default(now()) @db.Timestamptz
+  updatedAt      DateTime        @updatedAt @db.Timestamptz
 
   @@index([organizationId, status])
 }
 
 model PropertySetup {
-  id             String       @id @default(uuid()) @db.Uuid
-  projectId      String       @db.Uuid
-  project        ImplementationProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  propertyId     String       @db.Uuid
-  property       Property     @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  status         String       @default("PENDING")
-  roomCount      Int?
-  completedAt    DateTime?    @db.Timestamptz
-  checklist      Json?
-  createdAt      DateTime     @default(now()) @db.Timestamptz
-  updatedAt      DateTime     @updatedAt @db.Timestamptz
+  id          String                @id @default(uuid()) @db.Uuid
+  projectId   String                @db.Uuid
+  project     ImplementationProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  propertyId  String                @db.Uuid
+  property    Property              @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  status      String                @default("PENDING")
+  roomCount   Int?
+  completedAt DateTime?             @db.Timestamptz
+  checklist   Json?
+  createdAt   DateTime              @default(now()) @db.Timestamptz
+  updatedAt   DateTime              @updatedAt @db.Timestamptz
 
   @@unique([projectId, propertyId])
   @@index([propertyId, status])
 }
 
 model DataMigration {
-  id             String       @id @default(uuid()) @db.Uuid
-  projectId      String       @db.Uuid
-  project        ImplementationProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  type           String
-  status         String       @default("PLANNED")
-  sourceSystem   String?
-  recordCounts   Json?
-  errorSummary   String?
-  completedAt    DateTime?    @db.Timestamptz
-  createdAt      DateTime     @default(now()) @db.Timestamptz
-  updatedAt      DateTime     @updatedAt @db.Timestamptz
+  id           String                @id @default(uuid()) @db.Uuid
+  projectId    String                @db.Uuid
+  project      ImplementationProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  type         String
+  status       String                @default("PLANNED")
+  sourceSystem String?
+  recordCounts Json?
+  errorSummary String?
+  completedAt  DateTime?             @db.Timestamptz
+  createdAt    DateTime              @default(now()) @db.Timestamptz
+  updatedAt    DateTime              @updatedAt @db.Timestamptz
 
   @@index([projectId, status])
 }
 
 model Training {
-  id             String       @id @default(uuid()) @db.Uuid
-  projectId      String       @db.Uuid
-  project        ImplementationProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  topic          String
-  scheduledAt    DateTime?    @db.Timestamptz
-  status         String       @default("PLANNED")
-  attendeeCount  Int?
-  notes          String?
-  createdAt      DateTime     @default(now()) @db.Timestamptz
-  updatedAt      DateTime     @updatedAt @db.Timestamptz
+  id            String                @id @default(uuid()) @db.Uuid
+  projectId     String                @db.Uuid
+  project       ImplementationProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  topic         String
+  scheduledAt   DateTime?             @db.Timestamptz
+  status        String                @default("PLANNED")
+  attendeeCount Int?
+  notes         String?
+  createdAt     DateTime              @default(now()) @db.Timestamptz
+  updatedAt     DateTime              @updatedAt @db.Timestamptz
 
   @@index([projectId, scheduledAt])
 }
 
 model HardwareInventory {
-  id             String       @id @default(uuid()) @db.Uuid
-  organizationId String       @db.Uuid
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  propertyId     String?      @db.Uuid
-  property       Property?    @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  id             String                 @id @default(uuid()) @db.Uuid
+  organizationId String                 @db.Uuid
+  organization   Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  propertyId     String?                @db.Uuid
+  property       Property?              @relation(fields: [propertyId], references: [id], onDelete: SetNull)
   category       String
   brand          String?
   model          String?
   serialNumber   String?
-  status         String       @default("IN_STOCK")
-  warrantyEndsAt DateTime?    @db.Timestamptz
+  status         String                 @default("IN_STOCK")
+  warrantyEndsAt DateTime?              @db.Timestamptz
   metadata       Json?
   installations  HardwareInstallation[]
-  createdAt      DateTime     @default(now()) @db.Timestamptz
-  updatedAt      DateTime     @updatedAt @db.Timestamptz
+  createdAt      DateTime               @default(now()) @db.Timestamptz
+  updatedAt      DateTime               @updatedAt @db.Timestamptz
 
   @@unique([organizationId, serialNumber])
   @@index([organizationId, category, status])
@@ -6359,23 +6392,23 @@ model HardwareInventory {
 }
 
 model HardwareInstallation {
-  id             String       @id @default(uuid()) @db.Uuid
-  organizationId String       @db.Uuid
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  propertyId     String?      @db.Uuid
-  property       Property?    @relation(fields: [propertyId], references: [id], onDelete: SetNull)
-  inventoryId    String?      @db.Uuid
-  inventory      HardwareInventory? @relation(fields: [inventoryId], references: [id], onDelete: SetNull)
-  status         String       @default("REQUESTED")
+  id               String             @id @default(uuid()) @db.Uuid
+  organizationId   String             @db.Uuid
+  organization     Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  propertyId       String?            @db.Uuid
+  property         Property?          @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  inventoryId      String?            @db.Uuid
+  inventory        HardwareInventory? @relation(fields: [inventoryId], references: [id], onDelete: SetNull)
+  status           String             @default("REQUESTED")
   installationType String
-  requestedAt    DateTime     @default(now()) @db.Timestamptz
-  scheduledAt    DateTime?    @db.Timestamptz
-  completedAt    DateTime?    @db.Timestamptz
-  installer      String?
-  notes          String?
-  siteInfo       Json?
-  createdAt      DateTime     @default(now()) @db.Timestamptz
-  updatedAt      DateTime     @updatedAt @db.Timestamptz
+  requestedAt      DateTime           @default(now()) @db.Timestamptz
+  scheduledAt      DateTime?          @db.Timestamptz
+  completedAt      DateTime?          @db.Timestamptz
+  installer        String?
+  notes            String?
+  siteInfo         Json?
+  createdAt        DateTime           @default(now()) @db.Timestamptz
+  updatedAt        DateTime           @updatedAt @db.Timestamptz
 
   @@index([organizationId, status])
   @@index([propertyId, scheduledAt])
@@ -6402,35 +6435,35 @@ model SupportTicket {
 }
 
 model IntegrationDefinition {
-  id             String       @id @default(uuid()) @db.Uuid
-  organizationId String?      @db.Uuid
-  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  slug           String       @unique
+  id             String                 @id @default(uuid()) @db.Uuid
+  organizationId String?                @db.Uuid
+  organization   Organization?          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  slug           String                 @unique
   name           String
   category       String
   description    String
-  active         Boolean      @default(true)
+  active         Boolean                @default(true)
   setupSchema    Json?
   metadata       Json?
   installed      InstalledIntegration[]
-  createdAt      DateTime     @default(now()) @db.Timestamptz
-  updatedAt      DateTime     @updatedAt @db.Timestamptz
+  createdAt      DateTime               @default(now()) @db.Timestamptz
+  updatedAt      DateTime               @updatedAt @db.Timestamptz
 }
 
 model InstalledIntegration {
-  id             String       @id @default(uuid()) @db.Uuid
-  organizationId String       @db.Uuid
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  definitionId   String       @db.Uuid
+  id             String                @id @default(uuid()) @db.Uuid
+  organizationId String                @db.Uuid
+  organization   Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  definitionId   String                @db.Uuid
   definition     IntegrationDefinition @relation(fields: [definitionId], references: [id])
-  propertyId     String?      @db.Uuid
-  property       Property?    @relation(fields: [propertyId], references: [id], onDelete: SetNull)
-  status         String       @default("PENDING")
+  propertyId     String?               @db.Uuid
+  property       Property?             @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  status         String                @default("PENDING")
   credentialsRef String?
   config         Json?
-  lastSyncAt     DateTime?    @db.Timestamptz
-  createdAt      DateTime     @default(now()) @db.Timestamptz
-  updatedAt      DateTime     @updatedAt @db.Timestamptz
+  lastSyncAt     DateTime?             @db.Timestamptz
+  createdAt      DateTime              @default(now()) @db.Timestamptz
+  updatedAt      DateTime              @updatedAt @db.Timestamptz
 
   @@unique([organizationId, definitionId, propertyId])
   @@index([organizationId, status])
@@ -6453,16 +6486,16 @@ model PortalApiKey {
 }
 
 model Module {
-  id          String        @id @default(uuid()) @db.Uuid
-  productId   String?       @db.Uuid
+  id          String          @id @default(uuid()) @db.Uuid
+  productId   String?         @db.Uuid
   product     BillingProduct? @relation(fields: [productId], references: [id], onDelete: SetNull)
-  code        String        @unique
+  code        String          @unique
   name        String
   description String?
-  active      Boolean       @default(true)
+  active      Boolean         @default(true)
   metadata    Json?
-  createdAt   DateTime      @default(now()) @db.Timestamptz
-  updatedAt   DateTime      @updatedAt @db.Timestamptz
+  createdAt   DateTime        @default(now()) @db.Timestamptz
+  updatedAt   DateTime        @updatedAt @db.Timestamptz
 
   @@index([productId, active])
 }
@@ -6480,6 +6513,271 @@ model Usage {
   metadata       Json?
   createdAt      DateTime     @default(now()) @db.Timestamptz
 
-  @@index([organizationId, metric, periodStart, periodEnd])
   @@unique([organizationId, metric, periodStart, periodEnd, source])
+  @@index([organizationId, metric, periodStart, periodEnd])
+}
+
+// =============================================================================
+// CUSTOM DOMAIN REQUESTS
+// =============================================================================
+
+/// HQ-controlled request and payment lifecycle for a customer's custom booking domain.
+model CustomDomainRequest {
+  id               String    @id @default(uuid()) @db.Uuid
+  organizationId   String    @db.Uuid
+  propertyId       String    @db.Uuid
+  domain           String
+  status           String    @default("REQUESTED") // REQUESTED | APPROVED | PAYMENT_PENDING | PAID | ACTIVE | REJECTED | CANCELLED
+  currency         String    @default("NGN")
+  amount           Int       @default(0)
+  billingPriceId   String?   @db.Uuid
+  checkoutRef      String?
+  requestedByEmail String?
+  reviewedBy       String?
+  reviewedAt       DateTime? @db.Timestamptz
+  paidAt           DateTime? @db.Timestamptz
+  activatedAt      DateTime? @db.Timestamptz
+  notes            String?
+  metadata         Json?
+  createdAt        DateTime  @default(now()) @db.Timestamptz
+  updatedAt        DateTime  @updatedAt @db.Timestamptz
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  property     Property     @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@unique([propertyId, domain])
+  @@index([organizationId, status, createdAt])
+  @@index([propertyId, status])
+}
+
+/// HQ-managed, one-time custom website design request for a property.
+model CustomWebsiteRequest {
+  id               String    @id @default(uuid()) @db.Uuid
+  organizationId   String    @db.Uuid
+  propertyId       String    @db.Uuid
+  status           String    @default("REQUESTED") // REQUESTED | APPROVED | PAID | IN_PROGRESS | DELIVERED | REJECTED | CANCELLED
+  currency         String    @default("NGN")
+  amount           Int       @default(0)
+  billingPriceId   String?   @db.Uuid
+  checkoutRef      String?
+  requestedByEmail String?
+  brief            String?
+  reviewedBy       String?
+  reviewedAt       DateTime? @db.Timestamptz
+  paidAt           DateTime? @db.Timestamptz
+  activatedAt      DateTime? @db.Timestamptz
+  notes            String?
+  metadata         Json?
+  createdAt        DateTime  @default(now()) @db.Timestamptz
+  updatedAt        DateTime  @updatedAt @db.Timestamptz
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  property     Property     @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, status, createdAt])
+  @@index([propertyId, status])
+}
+
+// BOOKING ENGINE
+// =============================================================================
+
+/// Per-property configuration for the public-facing Booking Engine.
+/// Controls availability rules, rate plan exposure, and payment behaviour.
+model BookingEngineConfig {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @db.Uuid
+  propertyId     String @unique @db.Uuid
+
+  /// Whether the Booking Engine is enabled for this property. Requires
+  /// ADDON_BOOKING_ENGINE entitlement. Toggled from Hub settings.
+  enabled              Boolean  @default(false)
+  /// URL-safe slug: book.lodgecore.com/[publicSlug]
+  publicSlug           String   @unique
+  /// Minimum hours before arrival that a guest can book. 0 = same-day allowed.
+  bookingLeadTimeHours Int      @default(0)
+  /// How many days ahead guests can book. Null = unlimited.
+  maxAdvanceDays       Int?
+  /// Whitelist of RatePlan IDs exposed publicly. Empty array = all public plans.
+  allowedRatePlanIds   String[]
+  /// FULL = full payment at booking, DEPOSIT = deposit only, PAY_LATER = no online payment
+  paymentMode          String   @default("PAY_LATER")
+  minStay              Int      @default(1)
+  maxStay              Int?
+  settings             Json?
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  property     Property     @relation(fields: [propertyId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([publicSlug])
+}
+
+/// White-label booking website configuration for a property.
+/// Controls the public booking site appearance and domain settings.
+model BookingSite {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @db.Uuid
+  propertyId     String @unique @db.Uuid
+
+  publicSlug String @unique
+  siteName   String
+  /// DRAFT | PUBLISHED | SUSPENDED
+  status     String @default("DRAFT")
+
+  /// Built-in template key: CLASSIC_HOTEL | MODERN_BOUTIQUE | RESORT | BUSINESS_HOTEL
+  templateKey    String  @default("CLASSIC_HOTEL")
+  logoUrl        String?
+  primaryColor   String?
+  secondaryColor String?
+  /// Additional theme tokens (fonts, radius, etc.) as JSON
+  theme          Json?
+  /// Editable page content (hero text, amenities list, etc.) as JSON
+  content        Json?
+
+  /// Custom domain (e.g. book.hotel.com). Null until configured.
+  customDomain      String?   @unique
+  /// PENDING | VERIFYING | VERIFIED | ACTIVE | FAILED | SUSPENDED
+  domainStatus      String?
+  /// TXT record value the hotel must add for DNS verification
+  verificationToken String?
+  verifiedAt        DateTime? @db.Timestamptz
+  publishedAt       DateTime? @db.Timestamptz
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  property     Property     @relation(fields: [propertyId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([publicSlug])
+  @@index([customDomain])
+}
+
+/// Short-lived inventory hold placed by a guest during the online booking flow.
+/// A hold consumes room-type inventory until it is CONVERTED (reservation created),
+/// EXPIRED (TTL elapsed), or CANCELLED.
+///
+/// IMPORTANT: The exclusion constraint on ReservationRoom covers roomId only
+/// (physical rooms). Room-type level overbooking for holds is prevented at the
+/// application layer inside a serialized transaction.
+model BookingHold {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @db.Uuid
+  propertyId     String @db.Uuid
+  roomTypeId     String @db.Uuid
+
+  checkIn  DateTime @db.Date
+  checkOut DateTime @db.Date
+  quantity Int      @default(1)
+
+  /// SHA-256 of the hold token issued to the guest. The raw token is never stored.
+  tokenHash String
+  /// ACTIVE | CONVERTED | EXPIRED | CANCELLED
+  status    String
+  expiresAt DateTime @db.Timestamptz
+
+  /// Immutable price snapshot captured when the hold was created.
+  /// Used to detect rate changes between hold and reservation conversion.
+  quoteSnapshot Json
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+
+  @@index([propertyId, roomTypeId, checkIn, checkOut, status])
+  @@index([tokenHash])
+  /// For the expiry cron: find all ACTIVE holds past their TTL
+  @@index([status, expiresAt])
+}
+
+/// Gateway-level record for a payment transaction initiated via the Booking Engine.
+/// On success, this drives creation of a native Payment record in the existing
+/// Folio/accounting pipeline. It is NOT a parallel accounting system.
+model BookingPaymentTransaction {
+  id             String  @id @default(uuid()) @db.Uuid
+  organizationId String  @db.Uuid
+  propertyId     String  @db.Uuid
+  reservationId  String? @db.Uuid
+  holdId         String? @db.Uuid
+
+  /// PAYSTACK | FLUTTERWAVE
+  provider     String
+  /// Provider's reference for this transaction (e.g. Paystack reference)
+  providerRef  String? @unique
+  /// Provider's internal transaction ID after verification
+  providerTxId String?
+
+  amount   Decimal @db.Decimal(18, 4)
+  currency String
+
+  /// PENDING | SUCCESS | FAILED | REFUNDED
+  status String
+
+  /// Server-generated key — prevents duplicate payment processing from webhook replays
+  idempotencyKey  String  @unique
+  webhookVerified Boolean @default(false)
+  webhookPayload  Json?
+
+  /// Set after a successful webhook: the ID of the Payment record created in the folio
+  paymentId String? @db.Uuid
+
+  metadata Json?
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@index([providerRef])
+  @@index([reservationId])
+  @@index([idempotencyKey])
+}
+
+/// Idempotency guard for the reservation creation step of the booking flow.
+/// Prevents duplicate reservations from browser retries, network replays, or
+/// double-clicks. One record per booking attempt keyed by a client-generated UUID.
+model BookingRequest {
+  /// Client-generated UUID, unique per booking attempt
+  idempotencyKey String @id
+  propertyId     String @db.Uuid
+
+  /// PROCESSING | COMPLETED | FAILED
+  status        String
+  reservationId String? @db.Uuid
+  errorMessage  String?
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+
+  @@index([propertyId, createdAt])
+}
+
+/// Payment provider account configuration for the Booking Engine.
+/// Supports both LodgeCore platform accounts (PLATFORM mode) and
+/// customer-owned merchant accounts (CUSTOMER mode).
+/// Secret keys are stored as environment variable name references only —
+/// the raw key is NEVER persisted to the database.
+model BookingPaymentAccount {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @db.Uuid
+  /// Null = org-level account; set = property-specific account
+  propertyId     String?   @db.Uuid
+  property       Property? @relation(fields: [propertyId], references: [id])
+
+  /// PAYSTACK | FLUTTERWAVE
+  provider String
+  /// PLATFORM = LodgeCore's own account; CUSTOMER = hotel's own merchant account
+  mode     String
+
+  publicKey        String?
+  /// Name of the environment variable that holds the secret key. Never the raw key.
+  secretRef        String?
+  /// Name of the environment variable that holds the webhook secret.
+  webhookSecretRef String?
+
+  currency String
+  isActive Boolean @default(false)
+
+  createdAt    DateTime     @default(now()) @db.Timestamptz
+  updatedAt    DateTime     @updatedAt @db.Timestamptz
+  Organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId, provider, isActive])
 }

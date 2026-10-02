@@ -1,6 +1,6 @@
 import { requireHQAdmin } from '@/lib/auth/hq';
 import Link from 'next/link';
-import { Shield, Building2, Package, Activity, FileText, Target } from 'lucide-react';
+import { Shield, Building2, Package, Activity, FileText, Target, Globe } from 'lucide-react';
 import { Suspense } from 'react';
 import { headers } from 'next/headers';
 import { HQLogoutButton } from './HQLogoutButton';
@@ -19,6 +19,8 @@ export default async function HQLayout({
     { href: '/hq/organizations', label: 'Organisations', icon: Building2 },
     { href: '/hq/leads', label: 'Sales leads', icon: Target },
     { href: '/hq/products', label: 'Products & pricing', icon: Package },
+    { href: '/hq/custom-domains', label: 'Custom domains', icon: Globe },
+    { href: '/hq/custom-websites', label: 'Custom websites', icon: Globe },
     { href: '/hq/invoices', label: 'Invoices', icon: FileText },
     { href: '/hq/activity', label: 'Audit log', icon: Shield },
   ];

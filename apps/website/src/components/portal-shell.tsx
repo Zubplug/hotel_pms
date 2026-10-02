@@ -6,16 +6,18 @@ import { signOut } from "next-auth/react";
 import { useState } from "react";
 
 const NAV_ITEMS = [
-  { href: "/portal/dashboard",      icon: "◈",  label: "Overview",        badge: null },
-  { href: "/portal/subscription",   icon: "⬡",  label: "Subscription",    badge: null },
-  { href: "/portal/properties",     icon: "🏨", label: "Properties",      badge: null },
-  { href: "/portal/implementation", icon: "🚀", label: "Implementation",  badge: null },
-  { href: "/portal/hardware",       icon: "🔧", label: "Hardware",        badge: null },
-  { href: "/portal/integrations",   icon: "⟳",  label: "Integrations",   badge: null },
-  { href: "/portal/support",        icon: "◎",  label: "Support",         badge: null },
-  { href: "/portal/billing",        icon: "◇",  label: "Billing",         badge: null },
-  { href: "/portal/settings",       icon: "⚙",  label: "Settings",        badge: null },
+  { href: "/portal/dashboard",        icon: "◈",  label: "Overview",         badge: null },
+  { href: "/portal/subscription",     icon: "⬡",  label: "Subscription",     badge: null },
+  { href: "/portal/properties",       icon: "🏨", label: "Properties",       badge: null },
+  { href: "/portal/implementation",   icon: "🚀", label: "Implementation",   badge: null },
+  { href: "/portal/hardware",         icon: "🔧", label: "Hardware",         badge: null },
+  { href: "/portal/integrations",     icon: "⟳",  label: "Integrations",    badge: null },
+  { href: "/portal/settings/booking-engine", icon: "🌐", label: "Booking Engine", badge: null },
+  { href: "/portal/support",          icon: "◎",  label: "Support",          badge: null },
+  { href: "/portal/billing",          icon: "◇",  label: "Billing",          badge: null },
+  { href: "/portal/settings",         icon: "⚙",  label: "Settings",         badge: null },
 ];
+
 
 export function PortalShell({
   children,

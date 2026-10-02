@@ -99,13 +99,13 @@ export default async function HubPage() {
 
   const { id: userId, email, role, capabilities = [], propertyId, isLodgeCoreAdmin } = session.user as any;
   const userName = session.user.name || email?.split('@')[0] || 'User';
-  const enabledModules = await getNavigationModules(userId, propertyId);
-
   // Smart role-based redirect — single-purpose roles skip the hub entirely
   const directUrl = getDirectLandingUrl(role, capabilities, isLodgeCoreAdmin);
   if (directUrl) {
     redirect(directUrl);
   }
+
+  const enabledModules = await getNavigationModules(userId, propertyId);
 
   // Format business date (Today for now, could be fetched from Property settings)
   const businessDate = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
