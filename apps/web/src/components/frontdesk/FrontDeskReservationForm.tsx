@@ -601,7 +601,7 @@ export function FrontDeskReservationForm({ isWalkIn = false, prefillGuestId }: F
           <div className="lg:col-span-7 space-y-6">
 
             {/* ── Section 1: Guest Identity ── */}
-            {corporateAccessEnabled && <SectionCard>
+            <SectionCard>
               <SectionHeader
                 step={1}
                 title="Guest Identity"
@@ -767,7 +767,7 @@ export function FrontDeskReservationForm({ isWalkIn = false, prefillGuestId }: F
                   </div>
                 )}
               </div>
-            </SectionCard>}
+            </SectionCard>
 
             {/* ── Section 2: Occupancy ── */}
             <SectionCard>
@@ -807,7 +807,7 @@ export function FrontDeskReservationForm({ isWalkIn = false, prefillGuestId }: F
             </SectionCard>
 
             {/* ── Section 3: Corporate Client ── */}
-            <SectionCard>
+            {corporateAccessEnabled && <SectionCard>
               <SectionHeader step={3} title="Corporate Client" hint="Attach a corporate account to apply negotiated rates" icon={<Building2 className="h-5 w-5" />} />
               <div className="p-6">
                 <FormField control={form.control} name="corporateAccountId" render={({ field }) => (
@@ -835,7 +835,7 @@ export function FrontDeskReservationForm({ isWalkIn = false, prefillGuestId }: F
                   </FormItem>
                 )} />
               </div>
-            </SectionCard>
+            </SectionCard>}
 
             {/* ── Section 4: Discount / Complimentary ── */}
             <SectionCard>

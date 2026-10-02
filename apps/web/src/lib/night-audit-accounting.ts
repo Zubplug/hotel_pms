@@ -36,6 +36,67 @@ function addLine(lines: PostingLine[], line: PostingLine) {
   lines.push(line);
 }
 
+function getCalendarMonthBounds(date: Date) {
+  const year = date.getUTCFullYear();
+  const month = date.getUTCMonth();
+  return {
+    start: new Date(Date.UTC(year, month, 1)),
+    end: new Date(Date.UTC(year, month + 1, 0)),
+    name: new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(date),
+  };
+}
+
+/**
+ * Night Audit must always have a period for its business date. If the month
+ * has not been opened yet, create the calendar-month period inside the same
+ * transaction as the journal so concurrent audits cannot create duplicates.
+ * A deliberately closed period is never reopened or replaced.
+ */
+async function ensureAccountingPeriod(tx: any, input: { propertyId: string; businessDate: Date; createdBy: string }) {
+  const coveringPeriod = await tx.accountingPeriod.findFirst({
+    where: {
+      propertyId: input.propertyId,
+      periodStart: { lte: input.businessDate },
+      periodEnd: { gte: input.businessDate },
+    },
+    orderBy: { periodStart: 'desc' },
+    select: { id: true, status: true },
+  });
+
+  if (coveringPeriod) {
+    return ['OPEN', 'CLOSING'].includes(coveringPeriod.status) ? coveringPeriod : null;
+  }
+
+  const bounds = getCalendarMonthBounds(input.businessDate);
+  try {
+    return await tx.accountingPeriod.create({
+      data: {
+        propertyId: input.propertyId,
+        name: bounds.name,
+        periodStart: bounds.start,
+        periodEnd: bounds.end,
+        status: 'OPEN',
+        openedBy: input.createdBy,
+        notes: 'Automatically created by Night Audit for the calendar month.',
+      },
+      select: { id: true, status: true },
+    });
+  } catch (error: any) {
+    // Another audit may have created this month's period between our read and
+    // create. Re-read it rather than turning a harmless race into a blocker.
+    if (error?.code !== 'P2002') throw error;
+    return tx.accountingPeriod.findFirst({
+      where: {
+        propertyId: input.propertyId,
+        periodStart: { lte: input.businessDate },
+        periodEnd: { gte: input.businessDate },
+        status: { in: ['OPEN', 'CLOSING'] },
+      },
+      select: { id: true, status: true },
+    });
+  }
+}
+
 /**
  * Posts one idempotent, source-linked Night Audit journal. A missing mapping
  * is returned as a control exception so the audit never creates a partially
@@ -93,7 +154,14 @@ export async function postNightAuditJournal(tx: any, input: {
   if (missingAccounts.length) return { status: 'MISSING_MAPPING', journalEntryId: null, missingAccounts, lineCount: 0 };
   const account = (key: keyof typeof resolved) => resolved[key]!;
 
-  const [folioItems, refunds, period, fnbDepartment, recreationDepartment, posOutlets] = await Promise.all([
+  const period = await ensureAccountingPeriod(tx, {
+    propertyId: input.propertyId,
+    businessDate: input.businessDate,
+    createdBy: input.createdBy,
+  });
+  if (!period) return { status: 'ACCOUNTING_PERIOD_LOCKED', journalEntryId: null, missingAccounts: ['OPEN_ACCOUNTING_PERIOD'], lineCount: 0 };
+
+  const [folioItems, refunds, fnbDepartment, recreationDepartment, posOutlets] = await Promise.all([
     tx.folioItem.findMany({
       where: { 
         folio: { propertyId: input.propertyId }, 
@@ -108,12 +176,10 @@ export async function postNightAuditJournal(tx: any, input: {
       where: { propertyId: input.propertyId, businessDate: input.businessDate, status: 'COMPLETED' },
       select: { id: true, method: true, amount: true, reason: true, payment: { select: { method: true } } },
     }),
-    tx.accountingPeriod.findFirst({ where: { propertyId: input.propertyId, periodStart: { lte: input.businessDate }, periodEnd: { gte: input.businessDate }, status: { in: ['OPEN', 'CLOSING'] } }, select: { id: true } }),
     tx.department.findFirst({ where: { propertyId: input.propertyId, name: { in: ['F&B', 'Food & Beverage', 'Food and Beverage'] } }, select: { id: true } }),
     tx.department.findFirst({ where: { propertyId: input.propertyId, name: { in: ['Recreation', 'Pool'] } }, select: { id: true } }),
     tx.posOutlet.findMany({ where: { propertyId: input.propertyId }, select: { id: true, type: true } }),
   ]);
-  if (!period) return { status: 'ACCOUNTING_PERIOD_LOCKED', journalEntryId: null, missingAccounts: ['OPEN_ACCOUNTING_PERIOD'], lineCount: 0 };
   const outletTypes = new Map(posOutlets.map((o: any) => [o.id, o.type]));
 
   const lines: PostingLine[] = [];
