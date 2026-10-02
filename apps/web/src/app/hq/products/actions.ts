@@ -39,12 +39,12 @@ export async function createBillingPrice(formData: FormData): Promise<ActionResu
     const interval = String(formData.get('interval') || 'month') as 'month' | 'year';
     if (!productId || !Number.isFinite(amountMajor) || amountMajor <= 0 || !Number.isInteger(amountMajor) || !/^[a-z]{3}$/.test(currency) || !['month', 'year'].includes(interval)) throw new Error('Enter a valid whole-currency amount, such as 50000 for ₦50,000.');
     const amount = amountMajor * 100;
-    const product = await prisma.billingProduct.findUniqueOrThrow({ where: { id: productId }, select: { active: true, code: true } });
+    const product = await prisma.billingProduct.findUniqueOrThrow({ where: { id: productId }, select: { active: true, code: true, catalogVersion: true } });
     if (!product.active) throw new Error('Prices can only be added to active catalogue products.');
     if (product.code === 'ADDON_SMART_ACCESS' || product.code === 'SMART_ACCESS') {
       throw new Error('Smart Access is included in MODULE_PMS and cannot have a separate price.');
     }
-    await prisma.billingPrice.create({ data: { productId, amount, currency, interval } });
+    await prisma.billingPrice.create({ data: { productId, amount, currency, interval, catalogVersion: product.catalogVersion } });
     revalidatePath('/hq/products');
     return { ok: true };
   } catch (error) {

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import prisma from '@hotel-pms/db';
+import prisma, { requirePlanLimit } from '@hotel-pms/db';
 import { auth } from '@/lib/auth';
 import { hash } from 'bcryptjs';
 import crypto from 'crypto';
@@ -38,6 +38,11 @@ export async function POST(req: NextRequest) {
     if (!outlet || outlet.property.id !== propertyId) {
       return NextResponse.json({ error: 'Invalid outlet or property' }, { status: 400 });
     }
+
+    const terminalCount = await prisma.posTerminal.count({
+      where: { organisationId: outlet.property.organizationId, registrationState: { not: 'REVOKED' } },
+    });
+    await requirePlanLimit(outlet.property.organizationId, 'maxTerminals', terminalCount);
 
     // Generate a secure random device token
     const deviceToken = crypto.randomBytes(32).toString('hex');

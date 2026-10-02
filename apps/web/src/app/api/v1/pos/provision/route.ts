@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@hotel-pms/db';
+import { prisma, requirePlanLimit } from '@hotel-pms/db';
 import { randomBytes, createHash } from 'crypto';
 
 export async function POST(req: NextRequest) {
@@ -37,6 +37,11 @@ export async function POST(req: NextRequest) {
     if (!property) {
       return NextResponse.json({ success: false, error: 'Invalid Property ID: Property not found' }, { status: 400 });
     }
+
+    const terminalCount = await prisma.posTerminal.count({
+      where: { organisationId: adminStaff.organizationId, registrationState: { not: 'REVOKED' } },
+    });
+    await requirePlanLimit(adminStaff.organizationId, 'maxTerminals', terminalCount);
     
     // 2. Register Terminal
     const deviceCredential = randomBytes(32).toString('hex');

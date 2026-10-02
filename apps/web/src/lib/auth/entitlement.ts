@@ -1,4 +1,4 @@
-import prisma, { hasEntitlement as readEntitlement, requireEntitlement as demandEntitlement, requireEntitlementCapacity as demandCapacity, requirePlanLimit as demandPlanLimit } from '@hotel-pms/db';
+import prisma, { getEffectiveLimit as readEffectiveLimit, hasEntitlement as readEntitlement, requireEntitlement as demandEntitlement, requireEntitlementCapacity as demandCapacity, requirePlanLimit as demandPlanLimit } from '@hotel-pms/db';
 
 /**
  * Validates that an organization has an active entitlement for a specific product.
@@ -20,6 +20,10 @@ export async function requireEntitlementCapacity(organizationId: string, product
   return demandCapacity(prisma, { organizationId, productCode, propertyId, requestedQuantity });
 }
 
-export async function requirePlanLimit(organizationId: string, limit: 'maxProperties' | 'maxRooms' | 'maxUsers' | 'maxOutlets' | 'maxIntegrations', currentQuantity: number, requestedQuantity = 1): Promise<void> {
+export async function getEffectiveLimit(organizationId: string, limit: 'maxProperties' | 'maxRooms' | 'maxUsers' | 'maxOutlets' | 'maxIntegrations' | 'maxTerminals'): Promise<number | null> {
+  return readEffectiveLimit(prisma, { organizationId, limit });
+}
+
+export async function requirePlanLimit(organizationId: string, limit: 'maxProperties' | 'maxRooms' | 'maxUsers' | 'maxOutlets' | 'maxIntegrations' | 'maxTerminals', currentQuantity: number, requestedQuantity = 1): Promise<void> {
   return demandPlanLimit(prisma, { organizationId, limit, currentQuantity, requestedQuantity });
 }

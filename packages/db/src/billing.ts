@@ -105,6 +105,10 @@ export async function validateCheckoutSelection(
   if (!requestedPriceIds.length) throw new Error('At least one billing price is required');
   const prices = await db.billingPrice.findMany({ where: { id: { in: requestedPriceIds } }, include: { product: true } });
   if (prices.length !== requestedPriceIds.length || prices.some((price) => !price.product.active)) throw new Error('Invalid or inactive billing price');
+  if (prices.some((price) => {
+    const metadata = price.product.metadata;
+    return metadata && typeof metadata === 'object' && !Array.isArray(metadata) && (metadata as Record<string, unknown>).sellable === false;
+  })) throw new Error('One or more selected catalogue products are not yet available for purchase');
   const intervals = new Set(prices.map((price) => price.interval));
   if (intervals.size > 1) throw new Error('Monthly and annual billing prices cannot be mixed');
   const plan = input.planId ? await db.billingPlan.findUnique({ where: { id: input.planId }, include: { items: true } }) : null;
@@ -136,10 +140,10 @@ export async function validateCheckoutSelection(
   return { prices, plan, propertyIds };
 }
 
-export async function requirePlanLimit(
+export async function getEffectiveLimit(
   db: PrismaClient,
-  input: { organizationId: string; limit: 'maxProperties' | 'maxRooms' | 'maxUsers' | 'maxOutlets' | 'maxIntegrations'; currentQuantity: number; requestedQuantity?: number },
-): Promise<void> {
+  input: { organizationId: string; limit: 'maxProperties' | 'maxRooms' | 'maxUsers' | 'maxOutlets' | 'maxIntegrations' | 'maxTerminals' },
+): Promise<number | null> {
   const subscriptions = await db.subscription.findMany({
     where: { organizationId: input.organizationId, status: { in: [...ACTIVE_BILLING_STATUSES] } },
     include: { plan: { select: { metadata: true } } },
@@ -156,8 +160,39 @@ export async function requirePlanLimit(
     if (!Number.isFinite(numeric)) return best;
     return best === null ? numeric : Math.max(best, numeric);
   }, 0);
+  if (limit === null) return null;
+  if (!subscriptions.length) return 0;
+
+  const now = new Date();
+  const capacityAddOns = await db.entitlement.findMany({
+    where: {
+      organizationId: input.organizationId,
+      status: 'ACTIVE',
+      startsAt: { lte: now },
+      OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+    },
+    include: { product: { select: { metadata: true } } },
+  });
+  const addOnCapacity = capacityAddOns.reduce((total, entitlement) => {
+    const metadata = entitlement.product.metadata;
+    if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return total;
+    const values = metadata as Record<string, unknown>;
+    if (values.capacityKey !== input.limit) return total;
+    const quantity = entitlement.quantity ?? 0;
+    const amount = typeof values.capacityAmount === 'number' ? values.capacityAmount : Number(values.capacityAmount);
+    return Number.isFinite(amount) ? total + quantity * amount : total;
+  }, 0);
+  const effectiveLimit = limit + addOnCapacity;
+  return effectiveLimit;
+}
+
+export async function requirePlanLimit(
+  db: PrismaClient,
+  input: { organizationId: string; limit: 'maxProperties' | 'maxRooms' | 'maxUsers' | 'maxOutlets' | 'maxIntegrations' | 'maxTerminals'; currentQuantity: number; requestedQuantity?: number },
+): Promise<void> {
+  const limit = await getEffectiveLimit(db, input);
   if (limit === null) return;
-  if (!subscriptions.length || limit === 0) throw new Error(`Active subscription does not include ${input.limit}`);
+  if (limit === 0) throw new Error(`Active subscription does not include ${input.limit}`);
   const requested = input.requestedQuantity ?? 1;
   if (input.currentQuantity + requested > limit) throw new Error(`${input.limit} limit exceeded: ${input.currentQuantity + requested} requested, ${limit} allowed`);
 }

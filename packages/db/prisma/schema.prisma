@@ -6042,6 +6042,8 @@ model BillingProduct {
   type            String   // 'BASE', 'ADDON'
   flutterwaveProductId String?
   active          Boolean  @default(true)
+  catalogVersion  Int      @default(1)
+  metadata        Json?
 
   prices          BillingPrice[]
   entitlements    Entitlement[]
@@ -6061,11 +6063,14 @@ model BillingPrice {
   amount        Int
   currency      String
   interval      String   // 'month', 'year'
+  catalogVersion Int     @default(1)
 
   subscriptionItems SubscriptionItem[]
 
   createdAt     DateTime @default(now()) @db.Timestamptz
   updatedAt     DateTime @updatedAt @db.Timestamptz
+
+  @@unique([productId, interval, catalogVersion])
 }
 
 model BillingCustomer {
