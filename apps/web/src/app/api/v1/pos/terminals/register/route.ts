@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import prisma, { requirePlanLimit } from '@hotel-pms/db';
+import prisma from '@hotel-pms/db';
 import { auth } from '@/lib/auth';
 import { hash } from 'bcryptjs';
 import crypto from 'crypto';
 import { requireOrganizationContext } from "@/lib/organization-access";
+import { requirePlanLimit } from '@/lib/auth/entitlement';
 
 export async function POST(req: NextRequest) {
   try {

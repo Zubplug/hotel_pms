@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma, requirePlanLimit } from '@hotel-pms/db';
+import { prisma } from '@hotel-pms/db';
 import { randomBytes, createHash } from 'crypto';
+import { requirePlanLimit } from '@/lib/auth/entitlement';
 
 export async function POST(req: NextRequest) {
   try {
