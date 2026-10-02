@@ -8,13 +8,14 @@ import { createPortal } from "react-dom";
    TYPES
 ───────────────────────────────────────────────────────────── */
 type Price = { id: string; amount: number; currency: string; interval: string };
-type Product = {
+  type Product = {
   id: string;
   code: string;
   name: string;
   type: string;
   prices: Price[];
   modules?: { id: string; code: string; name: string; description: string | null }[];
+  metadata?: unknown;
 };
 type PlanItem = { id: string; required: boolean; includedQty: number | null; product: Product };
 type Plan = { id: string; code: string; name: string; description: string | null; metadata: unknown; items: PlanItem[] };
@@ -33,6 +34,9 @@ function addOnFeatures(product: Product): string[] {
   const mapped: Record<string, string[]> = {
     ADDON_OTA_CHANNEL_MANAGER: ["OTA channel availability sync", "Reservation import automation", "Rate & inventory distribution", "Channel performance reporting"],
     ADDON_BEDS24: ["Beds24 API synchronization", "Automated booking import", "Live availability updates", "Dynamic rate push"],
+    ADDON_BOOKING_ENGINE: ["Direct booking website", "Live room availability", "Rate-plan and seasonal pricing", "Guest holds and secure checkout"],
+    ADDON_CUSTOM_DOMAIN: ["Branded booking URL", "DNS ownership verification", "Vercel domain attachment", "Automatic SSL provisioning"],
+    ADDON_CUSTOM_WEBSITE_DESIGN: ["Bespoke website design", "Brand-led visual direction", "Mobile-responsive booking experience", "HQ design and launch support"],
   };
   return mapped[code] || product.modules?.map(m => m.name) || ["Extended capability module"];
 }
@@ -110,7 +114,7 @@ function DetailDrawer({
   const value = details.value;
   const plan = details.kind === "plan" ? value as Plan : null;
   const product = details.kind === "addon" ? value as Product : null;
-  const prices = product ? product.prices.filter(p => p.interval === interval) : [];
+  const prices = product ? product.prices.filter(p => p.interval === interval || p.interval === "one_time") : [];
   const limits = plan ? planLimits(plan) : [];
   const features = plan ? planFeatures(plan) : [];
   const addonFeatures = product ? addOnFeatures(product) : [];
@@ -293,9 +297,9 @@ function DetailDrawer({
                         <div style={{ fontSize: 20, fontWeight: 800, color: "var(--text-primary)", letterSpacing: "-0.04em" }}>
                           {money(p.amount, p.currency.toUpperCase())}
                         </div>
-                        <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>per {p.interval}</div>
+                        <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>{p.interval === "one_time" ? "one-time service fee" : `per ${p.interval}`}</div>
                       </div>
-                      <span className="portal-badge badge-normal">{interval === "year" ? "Annual" : "Monthly"}</span>
+                      <span className="portal-badge badge-normal">{p.interval === "one_time" ? "One-time" : interval === "year" ? "Annual" : "Monthly"}</span>
                     </div>
                   ))
                 ) : (
@@ -478,7 +482,7 @@ function AddOnCard({
   onDetails: () => void;
   canSubscribe: boolean;
 }) {
-  const price = product.prices.find(p => p.interval === interval);
+  const price = product.prices.find(p => p.interval === interval) ?? product.prices.find(p => p.interval === "one_time");
   const key = `addon-${product.id}`;
   const features = addOnFeatures(product);
 
@@ -515,7 +519,7 @@ function AddOnCard({
         {price ? (
           <>
             <span className="sub-addon-price-amount">{money(price.amount, price.currency.toUpperCase())}</span>
-            <span className="sub-addon-price-interval">/ {interval}</span>
+            <span className="sub-addon-price-interval">{price.interval === "one_time" ? "one-time" : `/ ${price.interval}`}</span>
           </>
         ) : (
           <span style={{ color: "var(--text-muted)", fontSize: 13 }}>Price pending</span>
