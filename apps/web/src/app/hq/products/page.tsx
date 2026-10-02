@@ -18,7 +18,7 @@ export default async function HQProductsPage() {
       orderBy: { createdAt: 'desc' },
     }),
     prisma.billingPlan.findMany({ where: { active: true }, include: { items: { include: { product: { select: { id: true, name: true, code: true, prices: { select: { amount: true, interval: true } } } } } } }, orderBy: { displayOrder: 'asc' } }),
-    prisma.subscription.findMany({ where: { status: { in: ['ACTIVE', 'TRIALING', 'PAST_DUE', 'PAUSED'] } }, include: { plan: { select: { id: true, name: true, code: true, items: { select: { productId: true } } } }, items: { include: { price: { include: { product: { select: { id: true, name: true, code: true } } } } } } } }),
+    prisma.subscription.findMany({ where: { status: { in: ['ACTIVE', 'TRIALING', 'PAST_DUE', 'PAUSED'] } }, include: { plan: { select: { id: true, name: true, code: true, items: { select: { productId: true, required: true, product: { select: { prices: { select: { amount: true, interval: true } } } } } } } }, items: { include: { price: { include: { product: { select: { id: true, name: true, code: true } } } } } } } }),
     prisma.billingInvoice.findMany({ where: { createdAt: { gte: since } }, select: { total: true, amountPaid: true, amountDue: true, status: true, currency: true, createdAt: true }, orderBy: { createdAt: 'desc' } }),
     prisma.organization.findMany({ select: { id: true, name: true, createdAt: true, subscriptions: { orderBy: { createdAt: 'desc' }, take: 1, select: { status: true } } } }),
     prisma.billingInvoice.findMany({ take: 6, orderBy: { createdAt: 'desc' }, select: { id: true, total: true, amountDue: true, status: true, currency: true, createdAt: true, organization: { select: { name: true } } } }),
