@@ -155,7 +155,7 @@ export default async function HubPage() {
     { cap: 'ACCESS_MANAGEMENT', module: 'MODULE_ENTERPRISE', label: 'MANAGEMENT', icon: BarChart3, href: '/general-manager', color: 'bg-slate-700 hover:bg-slate-600' },
     { cap: 'ACCESS_NIGHT_AUDIT', module: 'MODULE_PMS', label: 'NIGHT AUDIT', icon: Moon, href: '/night-audit', color: 'bg-purple-600 hover:bg-purple-700' },
     { cap: 'ACCESS_SYNC_CENTER', module: 'MODULE_PMS', label: 'SYNC CENTER', icon: RefreshCw, href: '/sync-center', color: 'bg-blue-600 hover:bg-blue-700' },
-  ];
+  ] as const;
 
   return (
     <div className="flex-1 flex flex-col pb-12">
