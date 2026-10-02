@@ -112,30 +112,30 @@ function DetailDrawer({
 
   return (
     <div
-      className="sub-drawer-backdrop"
+      className="sub-modal-backdrop"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
-      aria-labelledby="sub-drawer-title"
+      aria-labelledby="sub-modal-title"
     >
-      <div className="sub-drawer" onClick={e => e.stopPropagation()}>
+      <div className="sub-modal" onClick={e => e.stopPropagation()}>
         {/* Drawer header */}
-        <div className="sub-drawer-header">
+        <div className="sub-modal-header">
           <div>
             <div className="sub-section-kicker">{details.kind === "plan" ? "Plan detail" : "Add-on detail"}</div>
-            <h2 id="sub-drawer-title" className="sub-drawer-title">{value.name}</h2>
+            <h2 id="sub-modal-title" className="sub-modal-title">{value.name}</h2>
             <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--accent)", marginTop: 4 }}>
               {value.code}
             </div>
           </div>
-          <button className="sub-drawer-close" onClick={onClose} aria-label="Close details">
+          <button className="sub-modal-close" onClick={onClose} aria-label="Close details">
             <svg viewBox="0 0 14 14" fill="none" width="14">
               <path d="M1 1l12 12M13 1L1 13" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
             </svg>
           </button>
         </div>
 
-        <div className="sub-drawer-body">
+        <div className="sub-modal-body">
           {/* Plan detail */}
           {plan && (
             <>
@@ -147,7 +147,7 @@ function DetailDrawer({
 
               {/* Tier highlights */}
               {tier && (
-                <div className="sub-drawer-tier-badge" style={{ background: tier.dim, border: `1px solid ${tier.glow}` }}>
+                <div className="sub-modal-tier-badge" style={{ background: tier.dim, border: `1px solid ${tier.glow}` }}>
                   <span style={{ fontSize: 20 }}>{tier.icon}</span>
                   <div>
                     <div style={{ color: tier.color, fontSize: 13, fontWeight: 700 }}>{tier.badge}</div>
@@ -162,9 +162,9 @@ function DetailDrawer({
 
               {/* Feature list */}
               <DrawerSection title="Platform capabilities">
-                <div className="sub-drawer-features">
+                <div className="sub-modal-features">
                   {features.map(f => (
-                    <div key={f.feature} className="sub-drawer-feature-row">
+                    <div key={f.feature} className="sub-modal-feature-row">
                       <span style={{
                         width: 16, height: 16, borderRadius: 4,
                         background: f.included ? "rgba(62,245,160,0.12)" : "rgba(255,255,255,0.04)",
@@ -230,9 +230,9 @@ function DetailDrawer({
           {product && (
             <>
               <DrawerSection title="Key capabilities">
-                <div className="sub-drawer-features">
+                <div className="sub-modal-features">
                   {addonFeatures.map(f => (
-                    <div key={f} className="sub-drawer-feature-row">
+                    <div key={f} className="sub-modal-feature-row">
                       <span style={{
                         width: 16, height: 16, borderRadius: 4,
                         background: "rgba(0,212,232,0.1)", border: "1px solid rgba(0,212,232,0.25)",
