@@ -231,7 +231,9 @@ function InvoiceStatusPip({ status }: { status: string }) {
 export default function SubscriptionWorkspace({ data, plans, addOns, checkoutProperties }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"overview" | "modules" | "billing" | "catalogue">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "modules" | "billing" | "catalogue">(
+    data.subscription ? "overview" : "catalogue"
+  );
   const [expandedInvoice, setExpandedInvoice] = useState<string | null>(null);
 
   const daysRemaining = data.subscription
