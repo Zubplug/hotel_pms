@@ -14,9 +14,10 @@ export default async function HQProductsPage() {
   const [products, plans, subscriptions, invoices, organizations, recentInvoices] = await Promise.all([
     prisma.billingProduct.findMany({
       include: { prices: { orderBy: { amount: 'asc' } }, _count: { select: { entitlements: true, planItems: true, modules: true } } },
-      orderBy: [{ active: 'desc' }, { createdAt: 'desc' }],
+      where: { active: true },
+      orderBy: { createdAt: 'desc' },
     }),
-    prisma.billingPlan.findMany({ include: { items: { include: { product: { select: { id: true, name: true, code: true } } } } }, orderBy: { displayOrder: 'asc' } }),
+    prisma.billingPlan.findMany({ where: { active: true }, include: { items: { include: { product: { select: { id: true, name: true, code: true, prices: { select: { amount: true, interval: true } } } } } } }, orderBy: { displayOrder: 'asc' } }),
     prisma.subscription.findMany({ where: { status: { in: ['ACTIVE', 'TRIALING', 'PAST_DUE', 'PAUSED'] } }, include: { plan: { select: { id: true, name: true, code: true, items: { select: { productId: true } } } }, items: { include: { price: { include: { product: { select: { id: true, name: true, code: true } } } } } } } }),
     prisma.billingInvoice.findMany({ where: { createdAt: { gte: since } }, select: { total: true, amountPaid: true, amountDue: true, status: true, currency: true, createdAt: true }, orderBy: { createdAt: 'desc' } }),
     prisma.organization.findMany({ select: { id: true, name: true, createdAt: true, subscriptions: { orderBy: { createdAt: 'desc' }, take: 1, select: { status: true } } } }),
@@ -30,6 +31,8 @@ export default async function HQProductsPage() {
     if (isLive && subscription.plan) for (const planItem of subscription.plan.items) {
       const current = productUsage.get(planItem.productId) ?? { accounts: new Set<string>(), quantity: 0, mrr: 0 };
       current.accounts.add(subscription.organizationId);
+      const planPrice = planItem.product.prices.find((price) => price.interval === 'month') ?? planItem.product.prices.find((price) => price.interval === 'year');
+      if (planPrice) current.mrr += planPrice.interval === 'year' ? Math.round(planPrice.amount / 12) : planPrice.amount;
       productUsage.set(planItem.productId, current);
     }
     for (const item of subscription.items) {
@@ -42,7 +45,11 @@ export default async function HQProductsPage() {
     }
   }
 
-  const totalMrr = activeSubscriptions.reduce((total, subscription) => total + subscription.items.reduce((subtotal, item) => subtotal + (item.price.interval === 'year' ? Math.round(item.price.amount / 12) : item.price.amount), 0), 0);
+  const totalMrr = activeSubscriptions.reduce((total, subscription) => {
+    if (subscription.items.length) return total + subscription.items.reduce((subtotal, item) => subtotal + (item.price.interval === 'year' ? Math.round(item.price.amount / 12) : item.price.amount), 0);
+    const planPrice = subscription.plan?.items.find((item) => item.required)?.product.prices.find((price) => price.interval === 'month') ?? subscription.plan?.items.find((item) => item.required)?.product.prices.find((price) => price.interval === 'year');
+    return total + (planPrice ? (planPrice.interval === 'year' ? Math.round(planPrice.amount / 12) : planPrice.amount) : 0);
+  }, 0);
   const collected = invoices.reduce((total, invoice) => total + invoice.amountPaid, 0);
   const outstanding = invoices.reduce((total, invoice) => total + invoice.amountDue, 0);
   const monthlyRevenue = Array.from({ length: 6 }, (_, index) => { const date = new Date(since); date.setMonth(since.getMonth() + index); return { label: monthLabel(date), revenue: 0, invoices: 0 }; });
@@ -76,6 +83,6 @@ export default async function HQProductsPage() {
     planMix,
     statusMix,
     recentInvoices: recentInvoices.map((invoice) => ({ ...invoice, createdAt: invoice.createdAt.toISOString(), organizationName: invoice.organization.name })),
-    metrics: { totalProducts: products.length, activeProducts: products.filter((product) => product.active).length, totalPlans: plans.length, activePlans: plans.filter((plan) => plan.active).length, activeSubscriptions: activeSubscriptions.length, totalSubscriptions: subscriptions.length, totalOrganizations: organizations.length, totalMrr, collected, outstanding, failedInvoices: invoices.filter((invoice) => ['failed', 'uncollectible', 'past_due'].includes(invoice.status.toLowerCase())).length, pricedProducts: products.filter((product) => product.prices.length > 0).length, syncedProducts: products.filter((product) => product.flutterwaveProductId).length },
+    metrics: { totalProducts: products.length, activeProducts: products.length, totalPlans: plans.length, activePlans: plans.length, activeSubscriptions: activeSubscriptions.length, totalSubscriptions: subscriptions.length, totalOrganizations: organizations.length, totalMrr, collected, outstanding, failedInvoices: invoices.filter((invoice) => ['failed', 'uncollectible', 'past_due'].includes(invoice.status.toLowerCase())).length, pricedProducts: products.filter((product) => product.prices.length > 0).length },
   }} />;
 }
