@@ -30,11 +30,13 @@ const labelify = (value: string) =>
 function addOnFeatures(product: Product): string[] {
   const code = product.code.toUpperCase();
   const mapped: Record<string, string[]> = {
-    GROWTH_PACK: ["Corporate rate tiers & promotions", "Advanced commercial reports", "Promotional code engine", "Booking pace & performance analytics"],
+    ADDON_GROWTH: ["Corporate rate tiers & promotions", "Advanced commercial reports", "Promotional code engine", "Booking pace & performance analytics"],
     ADDON_GUEST_EXPERIENCE: ["Digital check-in & mobile key", "In-app guest messaging", "Service request automation", "Post-stay satisfaction surveys"],
     ADDON_INTELLIGENCE: ["AI-powered revenue management", "Demand forecasting engine", "Overbooking optimisation", "Competitor rate intelligence"],
     ADDON_SMART_ACCESS: ["Electronic lock integration", "Keycard & digital credentials", "Mobile key issuance", "Access activity & audit logs"],
     ADDON_OTA_CHANNEL_MANAGER: ["OTA channel availability sync", "Reservation import automation", "Rate & inventory distribution", "Channel performance reporting"],
+    ADDON_BEDS24: ["Beds24 API synchronization", "Automated booking import", "Live availability updates", "Dynamic rate push"],
+    ADDON_ENTERPRISE_OPERATIONS: ["Multi-property consolidation", "Advanced role-based access (RBAC)", "Custom operational reports", "Audit logging & compliance"],
   };
   return mapped[code] || product.modules?.map(m => m.name) || ["Extended capability module"];
 }
