@@ -120,7 +120,8 @@ function DetailDrawer({
       aria-modal="true"
       aria-labelledby="sub-modal-title"
     >
-      <div className="sub-modal" onClick={e => e.stopPropagation()}>
+      <div className="sub-modal-wrapper">
+        <div className="sub-modal" onClick={e => e.stopPropagation()}>
         {/* Drawer header */}
         <div className="sub-modal-header">
           <div>
@@ -291,6 +292,7 @@ function DetailDrawer({
           )}
         </div>
       </div>
+    </div>
     </div>
   );
 }
