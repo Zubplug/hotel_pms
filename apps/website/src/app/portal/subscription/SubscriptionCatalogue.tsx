@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import type { ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 /* ─────────────────────────────────────────────────────────────
    TYPES
@@ -120,14 +121,19 @@ function DetailDrawer({
   const addonFeatures = product ? addOnFeatures(product) : [];
   const tier = plan ? getPlanTier(plan.code) : null;
 
+  const [mounted, setMounted] = useState(false);
+
   useEffect(() => {
+    setMounted(true);
     document.body.style.overflow = "hidden";
     return () => {
       document.body.style.overflow = "";
     };
   }, []);
 
-  return (
+  if (!mounted) return null;
+
+  return createPortal(
     <div
       className="sub-modal-backdrop"
       onClick={onClose}
@@ -307,7 +313,8 @@ function DetailDrawer({
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
