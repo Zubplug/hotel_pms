@@ -115,6 +115,7 @@ function DetailDrawer({
   const plan = details.kind === "plan" ? value as Plan : null;
   const product = details.kind === "addon" ? value as Product : null;
   const prices = product ? product.prices.filter(p => p.interval === interval || p.interval === "one_time") : [];
+  const displayPrices = prices.length ? prices : product?.prices ?? [];
   const limits = plan ? planLimits(plan) : [];
   const features = plan ? planFeatures(plan) : [];
   const addonFeatures = product ? addOnFeatures(product) : [];
@@ -286,8 +287,8 @@ function DetailDrawer({
               )}
 
               <DrawerSection title="Pricing">
-                {prices.length ? (
-                  prices.map(p => (
+                {displayPrices.length ? (
+                  displayPrices.map(p => (
                     <div key={p.id} style={{
                       padding: "14px 16px", border: "1px solid var(--border-strong)",
                       borderRadius: 10, background: "var(--accent-dim)",
@@ -482,7 +483,7 @@ function AddOnCard({
   onDetails: () => void;
   canSubscribe: boolean;
 }) {
-  const price = product.prices.find(p => p.interval === interval) ?? product.prices.find(p => p.interval === "one_time");
+  const price = product.prices.find(p => p.interval === interval) ?? product.prices.find(p => p.interval === "one_time") ?? product.prices[0];
   const key = `addon-${product.id}`;
   const features = addOnFeatures(product);
 
