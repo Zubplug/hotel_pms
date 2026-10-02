@@ -11,6 +11,7 @@ import { getPropertyBusinessDate } from '@/lib/date-utils';
 import { applyAvailableGuestLedgerCredit } from '@/lib/finance/apply-guest-ledger-credit';
 import { GeneralLedgerService } from '@/lib/services/general-ledger-service';
 import { GLMappingService } from '@/lib/services/gl-mapping-service';
+import { hasPropertyModuleEntitlement } from '@/lib/auth/service-entitlement';
 const TRANSITIONS: Record<string, string[]> = {
   'PENDING': ['COLLECTED', 'CANCELLED'],
   'COLLECTED': ['WASHING', 'CANCELLED'],
@@ -33,6 +34,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     });
     if (!order) return errorResponse('NOT_FOUND', 'Laundry order not found', 404);
     const property = await prisma.property.findUnique({ where: { id: order.propertyId }, select: { organizationId: true, businessDate: true, timezone: true } });
+    if (!(await hasPropertyModuleEntitlement(session.user.id, order.propertyId, 'MODULE_OPERATIONS'))) {
+      return errorResponse('PAYMENT_REQUIRED', 'An active Operations entitlement is required for Laundry.', 402);
+    }
     if (await isNightAuditTransactionLocked(order.propertyId)) {
       return errorResponse('NIGHT_AUDIT_IN_PROGRESS', 'Night audit cutover is in progress. Laundry billing resumes after the new business date is active.', 409);
     }

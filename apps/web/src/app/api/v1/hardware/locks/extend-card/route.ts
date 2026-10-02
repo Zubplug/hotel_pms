@@ -6,6 +6,7 @@ import { successResponse, errorResponse } from '@/lib/api-response';
 import { assertPropertyAccess } from '@/lib/property-access';
 import prisma from '@hotel-pms/db';
 import { lockOrchestrator } from '@/lib/locks/orchestrator';
+import { hasPropertyModuleEntitlement } from '@/lib/auth/service-entitlement';
 
 export async function POST(req: NextRequest) {
   try {
@@ -33,6 +34,9 @@ export async function POST(req: NextRequest) {
     if (!reservation) return errorResponse('NOT_FOUND', 'Reservation not found', 404);
 
     if (!(await requireOrganizationContext(session.user.id)).propertyIds.includes(reservation.propertyId)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    if (!(await hasPropertyModuleEntitlement(session.user.id, reservation.propertyId, 'MODULE_PMS'))) {
+      return errorResponse('PAYMENT_REQUIRED', 'An active PMS entitlement is required for Smart Access.', 402);
+    }
 
     const firstRoom = reservation.reservationRooms[0]?.room;
     if (!firstRoom) return errorResponse('BAD_REQUEST', 'No active room assigned to this reservation', 400);

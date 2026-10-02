@@ -5,6 +5,7 @@ import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
 import { requireOrganizationContext } from '@/lib/organization-access';
 import { hasPermission } from '@/lib/permissions';
+import { hasAnyPropertyModuleEntitlement, hasPropertyModuleEntitlement } from '@/lib/auth/service-entitlement';
 
 function codeToken(value: string) {
   return value.toUpperCase().replace(/[^A-Z0-9]+/g, '').slice(0, 8) || 'CORP';
@@ -32,6 +33,10 @@ export async function GET(req: NextRequest) {
     const { propertyIds } = await requireOrganizationContext((session.user as any).id);
     const { searchParams } = req.nextUrl;
     const propertyId = searchParams.get('propertyId');
+    const entitled = propertyId
+      ? await hasPropertyModuleEntitlement(session.user.id, propertyId, 'MODULE_OPERATIONS')
+      : await hasAnyPropertyModuleEntitlement(session.user.id, propertyIds, 'MODULE_OPERATIONS');
+    if (!entitled) return errorResponse('PAYMENT_REQUIRED', 'An active Operations entitlement is required for Corporate Accounts.', 402);
     
     const visiblePropertyIds = propertyId
       ? [propertyId]
@@ -87,6 +92,9 @@ export async function POST(req: NextRequest) {
     
     if (!body.propertyId || !propertyIds.includes(body.propertyId)) {
         return errorResponse('FORBIDDEN', 'Forbidden property access', 403);
+    }
+    if (!(await hasPropertyModuleEntitlement(session.user.id, body.propertyId, 'MODULE_OPERATIONS'))) {
+        return errorResponse('PAYMENT_REQUIRED', 'An active Operations entitlement is required for Corporate Accounts.', 402);
     }
 
     const canCreate = await hasPermission(session.user.id, body.propertyId, 'corporate_account:create');

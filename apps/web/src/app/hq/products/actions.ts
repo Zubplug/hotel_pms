@@ -18,6 +18,9 @@ export async function createBillingProduct(formData: FormData): Promise<ActionRe
     const name = String(formData.get('name') || '').trim();
     const type = String(formData.get('type') || 'ADDON');
     if (!/^[A-Z][A-Z0-9_]{2,63}$/.test(code) || !name || !['BASE', 'ADDON'].includes(type)) throw new Error('Invalid billing product');
+    if (code === 'ADDON_SMART_ACCESS' || code === 'SMART_ACCESS') {
+      throw new Error('Smart Access is included in MODULE_PMS and cannot be sold as a separate product.');
+    }
     await prisma.billingProduct.create({ data: { code, name, type } });
     revalidatePath('/hq/products');
     return { ok: true };
@@ -36,7 +39,11 @@ export async function createBillingPrice(formData: FormData): Promise<ActionResu
     const interval = String(formData.get('interval') || 'month') as 'month' | 'year';
     if (!productId || !Number.isFinite(amountMajor) || amountMajor <= 0 || !Number.isInteger(amountMajor) || !/^[a-z]{3}$/.test(currency) || !['month', 'year'].includes(interval)) throw new Error('Enter a valid whole-currency amount, such as 50000 for ₦50,000.');
     const amount = amountMajor * 100;
-    await prisma.billingProduct.findUniqueOrThrow({ where: { id: productId } });
+    const product = await prisma.billingProduct.findUniqueOrThrow({ where: { id: productId }, select: { active: true, code: true } });
+    if (!product.active) throw new Error('Prices can only be added to active catalogue products.');
+    if (product.code === 'ADDON_SMART_ACCESS' || product.code === 'SMART_ACCESS') {
+      throw new Error('Smart Access is included in MODULE_PMS and cannot have a separate price.');
+    }
     await prisma.billingPrice.create({ data: { productId, amount, currency, interval } });
     revalidatePath('/hq/products');
     return { ok: true };

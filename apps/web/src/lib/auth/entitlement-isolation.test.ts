@@ -23,8 +23,8 @@ describe('billing entitlement isolation', () => {
       },
     };
 
-    expect(await hasEntitlement(db, { organizationId: 'org-1', productCode: 'ADDON_SMART_ACCESS', propertyId: propertyA })).toBe(true);
-    expect(await hasEntitlement(db, { organizationId: 'org-1', productCode: 'ADDON_SMART_ACCESS', propertyId: propertyB })).toBe(false);
+    expect(await hasEntitlement(db, { organizationId: 'org-1', productCode: 'MODULE_PMS', propertyId: propertyA })).toBe(true);
+    expect(await hasEntitlement(db, { organizationId: 'org-1', productCode: 'MODULE_PMS', propertyId: propertyB })).toBe(false);
     expect(calls).toHaveLength(2);
   });
 
@@ -35,5 +35,20 @@ describe('billing entitlement isolation', () => {
       },
     };
     await expect(requireEntitlementCapacity(db, { organizationId: 'org-1', productCode: 'MODULE_PMS', propertyId: 'property-1', requestedQuantity: 31 })).rejects.toThrow('Usage limit exceeded');
+  });
+
+  it('separates PMS from Operations entitlements', async () => {
+    const db = {
+      entitlement: {
+        findFirst: async ({ where }: { where: Record<string, unknown> }) => {
+          const productCode = where.productCode;
+          return productCode === 'MODULE_PMS'
+            ? { status: 'ACTIVE', startsAt: new Date(0), expiresAt: null, quantity: null }
+            : null;
+        },
+      },
+    };
+    expect(await hasEntitlement(db, { organizationId: 'org-1', productCode: 'MODULE_PMS', propertyId: 'property-1' })).toBe(true);
+    expect(await hasEntitlement(db, { organizationId: 'org-1', productCode: 'MODULE_OPERATIONS', propertyId: 'property-1' })).toBe(false);
   });
 });

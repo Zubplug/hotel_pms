@@ -8,6 +8,7 @@ import { hasPermission } from '@/lib/rbac';
 import { assertPropertyAccess } from '@/lib/property-access';
 import { getPropertyBusinessDate } from '@/lib/kpi';
 import { activeOccupancyWhere } from '@/lib/room-occupancy';
+import { hasPropertyModuleEntitlement } from '@/lib/auth/service-entitlement';
 
 const VALID_TRANSITIONS: Record<string, string[]> = {
   'CLEANING': ['INSPECTED', 'MAINTENANCE_REQUIRED'],
@@ -40,6 +41,9 @@ export async function PATCH(
 
     if (!task) return errorResponse('NOT_FOUND', 'Task not found', 404);
     if (!(await requireOrganizationContext(session.user.id)).propertyIds.includes(task.propertyId)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    if (!(await hasPropertyModuleEntitlement(session.user.id, task.propertyId, 'MODULE_OPERATIONS'))) {
+      return errorResponse('PAYMENT_REQUIRED', 'An active Operations entitlement is required for Housekeeping.', 402);
+    }
 
     // Housekeeping task management is controlled by reception or management.
     const capabilities = (session.user as any).capabilities || [];

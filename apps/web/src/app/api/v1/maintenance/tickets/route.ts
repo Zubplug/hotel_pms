@@ -7,6 +7,7 @@ import { successResponse, errorResponse } from '@/lib/api-response';
 import { hasPermission } from '@/lib/rbac';
 import { assertPropertyAccess } from '@/lib/property-access';
 import crypto from 'crypto';
+import { hasPropertyModuleEntitlement } from '@/lib/auth/service-entitlement';
 
 export async function GET(req: NextRequest) {
   try {
@@ -18,6 +19,9 @@ export async function GET(req: NextRequest) {
     if (!propertyId) return errorResponse('BAD_REQUEST', 'Missing propertyId', 400);
 
     if (!(await requireOrganizationContext(session.user.id)).propertyIds.includes(propertyId)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    if (!(await hasPropertyModuleEntitlement(session.user.id, propertyId, 'MODULE_OPERATIONS'))) {
+      return errorResponse('PAYMENT_REQUIRED', 'An active Operations entitlement is required for Maintenance.', 402);
+    }
 
     const status = searchParams.get('status');
     const priority = searchParams.get('priority');
@@ -73,6 +77,9 @@ export async function POST(req: NextRequest) {
     }
 
     if (!(await requireOrganizationContext(session.user.id)).propertyIds.includes(propertyId)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    if (!(await hasPropertyModuleEntitlement(session.user.id, propertyId, 'MODULE_OPERATIONS'))) {
+      return errorResponse('PAYMENT_REQUIRED', 'An active Operations entitlement is required for Maintenance.', 402);
+    }
     
     // In production, require permission check
     const canCreate = await hasPermission(session.user.id, 'housekeeping', 'create', propertyId); // fallback permission check

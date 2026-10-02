@@ -5,6 +5,7 @@ import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
 import { requireOrganizationContext } from '@/lib/organization-access';
 import { hasPermission } from '@/lib/permissions';
+import { hasPropertyModuleEntitlement } from '@/lib/auth/service-entitlement';
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -20,6 +21,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
     if (!account || !propertyIds.includes(account.propertyId)) {
         return errorResponse('NOT_FOUND', 'Corporate account not found or access denied', 404);
+    }
+    if (!(await hasPropertyModuleEntitlement(session.user.id, account.propertyId, 'MODULE_OPERATIONS'))) {
+        return errorResponse('PAYMENT_REQUIRED', 'An active Operations entitlement is required for Corporate Accounts.', 402);
     }
     const body = await req.json();
 
@@ -126,6 +130,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     if (!account || !propertyIds.includes(account.propertyId)) {
         return errorResponse('NOT_FOUND', 'Corporate account not found or access denied', 404);
+    }
+    if (!(await hasPropertyModuleEntitlement(session.user.id, account.propertyId, 'MODULE_OPERATIONS'))) {
+        return errorResponse('PAYMENT_REQUIRED', 'An active Operations entitlement is required for Corporate Accounts.', 402);
     }
     if (!account.isActive) return errorResponse('CONFLICT', 'Corporate account is already inactive', 409);
 

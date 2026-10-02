@@ -11,12 +11,7 @@ const catalog = [
   { code: 'MODULE_PMS', name: 'Property Management System', type: 'BASE' },
   { code: 'MODULE_OPERATIONS', name: 'Professional Operations', type: 'BASE' },
   { code: 'MODULE_ENTERPRISE', name: 'Enterprise Platform', type: 'BASE' },
-  { code: 'ADDON_GROWTH', name: 'Growth Pack', type: 'ADDON' },
-  { code: 'ADDON_GUEST_EXPERIENCE', name: 'Guest Experience Pack', type: 'ADDON' },
-  { code: 'ADDON_INTELLIGENCE', name: 'Intelligence Pack', type: 'ADDON' },
-  { code: 'ADDON_ENTERPRISE_OPERATIONS', name: 'Enterprise Operations Pack', type: 'ADDON' },
   { code: 'ADDON_BEDS24', name: 'Beds24 Channel Integration', type: 'ADDON' },
-  { code: 'ADDON_SMART_ACCESS', name: 'Smart Access', type: 'ADDON' },
 ] as const
 
 const planPrices = [

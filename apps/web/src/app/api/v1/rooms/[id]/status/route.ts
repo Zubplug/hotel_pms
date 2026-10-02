@@ -10,6 +10,7 @@ import { roomStatusTransitionSchema } from '@hotel-pms/types';
 import { NotificationEngine } from '@/lib/notification-engine';
 import { requireOrganizationContext } from "@/lib/organization-access";
 import crypto from 'crypto';
+import { requireEntitlement } from '@/lib/auth/entitlement';
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -22,6 +23,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     const room = await prisma.room.findUnique({ where: { id } });
     if (!room || room.deletedAt) return errorResponse('NOT_FOUND', 'Room not found', 404);
     await assertPropertyAccess(session.user.id, room.propertyId);
+    await requireEntitlement(ctx.organizationId, 'MODULE_PMS', room.propertyId);
     const canChangeStatus = await hasPermission(session.user.id, 'room', 'change_status', room.propertyId);
     if (!canChangeStatus) return errorResponse('FORBIDDEN', 'Insufficient permissions', 403);
 
@@ -172,6 +174,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     return successResponse(updatedRoom);
   } catch (err) {
     if (err instanceof ForbiddenError) return errorResponse('FORBIDDEN', err.message, 403);
+    if (err instanceof Error && err.message.startsWith('Payment Required')) return errorResponse('PAYMENT_REQUIRED', err.message, 402);
     if (err instanceof Error && err.name === 'ZodError') return errorResponse('VALIDATION_ERROR', 'Invalid request data', 422);
     return errorResponse('INTERNAL_ERROR', 'An unexpected error occurred', 500);
   }

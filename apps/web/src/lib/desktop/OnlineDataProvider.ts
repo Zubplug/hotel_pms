@@ -265,19 +265,14 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
     encodeMasterCard: async () => {
       throw new Error('Master Card encoding is only supported on the Desktop Client with hardware connected.');
     },
-    encode: async (roomId, lockCode, reservationId) => {
-      return apiFetch(`/api/v1/hardware/keycards/encode`, {
-        method: 'POST',
-        body: JSON.stringify({ roomId, lockCode, reservationId })
-      });
+    encode: async () => {
+      throw new Error('Smart Access is available only in the offline LodgeCore Desktop Client.');
     },
     read: async () => {
-      return apiFetch(`/api/v1/hardware/keycards/read`);
+      throw new Error('Smart Access card reading is available only in the offline LodgeCore Desktop Client.');
     },
     cancel: async () => {
-      return apiFetch(`/api/v1/hardware/keycards/cancel`, {
-        method: 'POST'
-      });
+      throw new Error('Smart Access card cancellation is available only in the offline LodgeCore Desktop Client.');
     }
   },
   housekeeping: {

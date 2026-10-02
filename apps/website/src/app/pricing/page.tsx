@@ -11,7 +11,7 @@ const FAQS = [
   },
   {
     q: "Can I add modules later?",
-    a: "Yes. LodgeCore is fully modular — start with the core PMS and add F&B, Events, Housekeeping, Finance, or Access as your operation grows. There is no need to re-implement from scratch.",
+    a: "Yes. LodgeCore is modular — start with the core PMS and add Operations, Events, Finance and connectivity as your operation grows. Smart Access is included in the PMS/front-desk workflow.",
   },
   {
     q: "Is there a minimum property size?",
@@ -44,12 +44,16 @@ const COMPARE = [
   { feature: "Front Desk & Reservations",        starter: true,  professional: true,  business: true,  enterprise: true,  enterprisePlus: true },
   { feature: "Guest Profiles & Folios",          starter: true,  professional: true,  business: true,  enterprise: true,  enterprisePlus: true },
   { feature: "Night Audit & Reporting",          starter: true,  professional: true,  business: true,  enterprise: true,  enterprisePlus: true },
+  { feature: "Smart Access & Offline Front Desk", starter: true, professional: true, business: true, enterprise: true, enterprisePlus: true },
   { feature: "Offline-Ready Workflows",          starter: true,  professional: true,  business: true,  enterprise: true,  enterprisePlus: true },
   { feature: "Point of Sale (Outlets)",          starter: false, professional: true,  business: true,  enterprise: true,  enterprisePlus: true },
   { feature: "Housekeeping Module",              starter: false, professional: true,  business: true,  enterprise: true,  enterprisePlus: true },
   { feature: "Maintenance Module",              starter: false, professional: true,  business: true,  enterprise: true,  enterprisePlus: true },
   { feature: "Inventory & Procurement",          starter: false, professional: true,  business: true,  enterprise: true,  enterprisePlus: true },
-  { feature: "Booking Engine & OTA Sync",        starter: false, professional: true,  business: true,  enterprise: true,  enterprisePlus: true },
+  { feature: "Booking Engine",                   starter: false, professional: true,  business: true,  enterprise: true,  enterprisePlus: true },
+  { feature: "OTA / Channel Connectivity",       starter: false, professional: false, business: true,  enterprise: true,  enterprisePlus: true },
+  { feature: "Laundry Operations",               starter: false, professional: true,  business: true,  enterprise: true,  enterprisePlus: true },
+  { feature: "Corporate Accounts & City Ledger", starter: false, professional: true,  business: true,  enterprise: true,  enterprisePlus: true },
   { feature: "Events & Banqueting",              starter: false, professional: true,  business: true,  enterprise: true,  enterprisePlus: true },
   { feature: "Finance & Accounting",             starter: false, professional: true,  business: true,  enterprise: true,  enterprisePlus: true },
   { feature: "Multi-Property Control Plane",     starter: false, professional: false, business: true,  enterprise: true,  enterprisePlus: true },
@@ -61,8 +65,8 @@ const COMPARE = [
 ];
 
 const LIVE_PLAN_FEATURES: Record<string, string[]> = {
-  ESSENTIAL: ["PMS / Front Desk", "Reservations & folios", "Housekeeping", "Maintenance", "Basic reports", "Offline-ready workflows"],
-  PROFESSIONAL: ["Everything in Starter", "Full POS & KDS", "Inventory & procurement", "Accounting & cash management", "Events & banqueting", "Booking engine"],
+  ESSENTIAL: ["PMS / Front Desk", "Reservations & folios", "Smart Access", "Basic reports", "Offline-ready workflows"],
+  PROFESSIONAL: ["Everything in Starter", "Full POS & KDS", "Housekeeping & maintenance", "Inventory & procurement", "Laundry operations", "Corporate accounts, events & halls"],
   BUSINESS: ["Everything in Professional", "Multi-outlet operations", "Advanced accounting", "Channel Manager & OTA", "Multi-property reporting", "API integrations & analytics"],
   ENTERPRISE: ["Everything in Business", "Multi-property control plane", "Centralised user management", "Group reporting & analytics", "Dedicated account manager", "Priority SLA & support"],
   ENTERPRISE_PLUS: ["Everything in Enterprise", "Custom workflows", "Enterprise integrations", "On-site implementation", "Custom SLA", "Executive support"],

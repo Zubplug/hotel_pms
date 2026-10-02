@@ -7,6 +7,7 @@ import { successResponse, errorResponse } from '@/lib/api-response';
 import { hasPermission } from '@/lib/rbac';
 import { getPropertyBusinessDate } from '@/lib/kpi';
 import { activeOccupancyWhere } from '@/lib/room-occupancy';
+import { hasAnyPropertyModuleEntitlement, hasPropertyModuleEntitlement } from '@/lib/auth/service-entitlement';
 export async function GET(req: NextRequest) {
   try {
     const session = await auth();
@@ -24,6 +25,9 @@ export async function GET(req: NextRequest) {
     }
     const allowedProperties = (await requireOrganizationContext(session.user.id)).propertyIds as string[];
     if (!allowedProperties.length) return successResponse([]);
+    if (!(await hasAnyPropertyModuleEntitlement(session.user.id, propertyId ? [propertyId] : allowedProperties, 'MODULE_OPERATIONS'))) {
+      return errorResponse('PAYMENT_REQUIRED', 'An active Operations entitlement is required for Housekeeping.', 402);
+    }
     // Enforce role visibility
     let filterAssignedTo = assignedTo;
     const capabilities = (session.user as any).capabilities || [];
@@ -71,6 +75,9 @@ export async function POST(req: NextRequest) {
     if (action === 'RECONCILE' && roomId && targetStatus) {
       const room = await prisma.room.findUnique({ where: { id: roomId } });
       if (!room) return errorResponse('NOT_FOUND', 'Room not found', 404);
+      if (!(await hasPropertyModuleEntitlement(session.user.id, room.propertyId, 'MODULE_OPERATIONS'))) {
+        return errorResponse('PAYMENT_REQUIRED', 'An active Operations entitlement is required for Housekeeping.', 402);
+      }
       const isNightAuditor = String((session.user as any).role || '').toUpperCase() === 'NIGHT_AUDITOR' 
                           || String((session.user as any).role || '').toUpperCase() === 'MANAGER';
       const canManage = await hasPermission(session.user.id, 'housekeeping', 'create', room.propertyId);
@@ -88,6 +95,9 @@ export async function POST(req: NextRequest) {
     }
     if (!propertyId || !roomId || !type || !priority) {
       return errorResponse('BAD_REQUEST', 'Missing required fields', 400);
+    }
+    if (!(await hasPropertyModuleEntitlement(session.user.id, propertyId, 'MODULE_OPERATIONS'))) {
+      return errorResponse('PAYMENT_REQUIRED', 'An active Operations entitlement is required for Housekeeping.', 402);
     }
     const canManage = await hasPermission(session.user.id, 'housekeeping', 'create', propertyId);
     if (!canManage) return errorResponse('FORBIDDEN', 'Insufficient permissions', 403);

@@ -6,6 +6,7 @@ import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
 import { assertPropertyAccess } from '@/lib/property-access';
 import crypto from 'crypto';
+import { hasPropertyModuleEntitlement } from '@/lib/auth/service-entitlement';
 
 export async function PATCH(req: NextRequest, props: { params: Promise<{ id: string }> }) {
   try {
@@ -23,6 +24,9 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
 
     if (!ticket) return errorResponse('NOT_FOUND', 'Maintenance ticket not found', 404);
     if (!(await requireOrganizationContext(session.user.id)).propertyIds.includes(ticket.propertyId)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    if (!(await hasPropertyModuleEntitlement(session.user.id, ticket.propertyId, 'MODULE_OPERATIONS'))) {
+      return errorResponse('PAYMENT_REQUIRED', 'An active Operations entitlement is required for Maintenance.', 402);
+    }
 
     // Validate Transitions
     const allowedTransitions: Record<string, string[]> = {

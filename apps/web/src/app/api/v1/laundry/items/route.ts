@@ -5,6 +5,7 @@ import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
 import { hasPermission } from '@/lib/rbac';
+import { hasAnyPropertyModuleEntitlement, hasPropertyModuleEntitlement } from '@/lib/auth/service-entitlement';
 export async function GET(req: NextRequest) {
   try {
     const session = await auth();
@@ -17,6 +18,10 @@ export async function GET(req: NextRequest) {
     if (propertyId && !allowedProperties.includes(propertyId)) {
         return errorResponse('FORBIDDEN', 'Access denied to property', 403);
     }
+    const entitled = propertyId
+      ? await hasPropertyModuleEntitlement(session.user.id, propertyId, 'MODULE_OPERATIONS')
+      : await hasAnyPropertyModuleEntitlement(session.user.id, allowedProperties, 'MODULE_OPERATIONS');
+    if (!entitled) return errorResponse('PAYMENT_REQUIRED', 'An active Operations entitlement is required for Laundry.', 402);
     const items = await prisma.laundryItem.findMany({
       where: {
         propertyId: {
@@ -41,6 +46,9 @@ export async function POST(req: NextRequest) {
     const { propertyId, name, category, description, basePrice, currency, servicePricingRules } = body;
     if (!propertyId || !name || basePrice === undefined) {
       return errorResponse('BAD_REQUEST', 'Missing required fields', 400);
+    }
+    if (!(await hasPropertyModuleEntitlement(session.user.id, propertyId, 'MODULE_OPERATIONS'))) {
+      return errorResponse('PAYMENT_REQUIRED', 'An active Operations entitlement is required for Laundry.', 402);
     }
     const canManage = await hasPermission(session.user.id, 'laundry', 'create', propertyId);
     if (!canManage) return errorResponse('FORBIDDEN', 'Insufficient permissions', 403);
