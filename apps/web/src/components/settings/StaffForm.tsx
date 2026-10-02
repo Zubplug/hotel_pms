@@ -116,7 +116,7 @@ export function StaffForm({ staff, onClose, onSaved }: StaffFormProps) {
         </DialogHeader>
 
         <div className="grid gap-4 py-4">
-          <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="firstName">First Name *</Label>
               <Input
@@ -164,6 +164,9 @@ export function StaffForm({ staff, onClose, onSaved }: StaffFormProps) {
                 value={formData.position}
                 onChange={(e) => handleChange('position', e.target.value)}
               />
+              <p className="text-xs text-muted-foreground">
+                Operations roles such as Waiter, F&amp;B Manager, Housekeeper, Maintenance, Inventory, Laundry, and Events require the Professional plan or higher. PMS roles remain available on Starter.
+              </p>
             </div>
           </div>
 

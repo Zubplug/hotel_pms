@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { formatCurrency } from '@/lib/utils';
+import { useNavigationModules } from '@/lib/auth/useNavigationModules';
 
 interface PropertyDetail {
   id: string;
@@ -56,6 +57,8 @@ function PageControls({ meta, page, onPageChange }: { meta?: { total?: number; t
 
 export default function PropertyDetailPage() {
   const { propertyId } = useParams<{ propertyId: string }>();
+  const { data: enabledModules = [] } = useNavigationModules(propertyId);
+  const operationsEnabled = enabledModules.includes('MODULE_OPERATIONS');
   const [roomsPage, setRoomsPage] = useState(1);
   const [reservationsPage, setReservationsPage] = useState(1);
   const [guestsPage, setGuestsPage] = useState(1);
@@ -284,7 +287,7 @@ export default function PropertyDetailPage() {
         </TabsContent>
 
         <TabsContent value="operations" className="mt-0">
-          <Card className="border-muted/60 shadow-sm"><CardHeader><CardTitle>Operational Hub</CardTitle><CardDescription className="mt-1">Live housekeeping and maintenance workload for this property.</CardDescription></CardHeader><CardContent>{housekeepingLoading || maintenanceLoading ? <InlineLoading /> : <div className="grid gap-4 md:grid-cols-2"><Link href={`/housekeeping?propertyId=${propertyId}`} className="rounded-2xl border p-5 transition-colors hover:border-primary/40 hover:bg-muted/20"><div className="flex items-center justify-between"><div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100 text-amber-700"><ClipboardList className="h-5 w-5" /></div><ArrowRight className="h-4 w-4 text-muted-foreground" /></div><p className="mt-4 font-semibold">Housekeeping tasks</p><p className="mt-1 text-3xl font-bold">{housekeepingTasks.length}</p><p className="text-xs text-muted-foreground">Tasks on the current business date</p></Link><Link href={`/maintenance?propertyId=${propertyId}`} className="rounded-2xl border p-5 transition-colors hover:border-primary/40 hover:bg-muted/20"><div className="flex items-center justify-between"><div className="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-100 text-rose-700"><Wrench className="h-5 w-5" /></div><ArrowRight className="h-4 w-4 text-muted-foreground" /></div><p className="mt-4 font-semibold">Maintenance tickets</p><p className="mt-1 text-3xl font-bold">{maintenanceTickets.length}</p><p className="text-xs text-muted-foreground">Open work requiring attention</p></Link></div>}</CardContent></Card>
+          {operationsEnabled ? <Card className="border-muted/60 shadow-sm"><CardHeader><CardTitle>Operational Hub</CardTitle><CardDescription className="mt-1">Live housekeeping and maintenance workload for this property.</CardDescription></CardHeader><CardContent>{housekeepingLoading || maintenanceLoading ? <InlineLoading /> : <div className="grid gap-4 md:grid-cols-2"><Link href={`/housekeeping?propertyId=${propertyId}`} className="rounded-2xl border p-5 transition-colors hover:border-primary/40 hover:bg-muted/20"><div className="flex items-center justify-between"><div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100 text-amber-700"><ClipboardList className="h-5 w-5" /></div><ArrowRight className="h-4 w-4 text-muted-foreground" /></div><p className="mt-4 font-semibold">Housekeeping tasks</p><p className="mt-1 text-3xl font-bold">{housekeepingTasks.length}</p><p className="text-xs text-muted-foreground">Tasks on the current business date</p></Link><Link href={`/maintenance?propertyId=${propertyId}`} className="rounded-2xl border p-5 transition-colors hover:border-primary/40 hover:bg-muted/20"><div className="flex items-center justify-between"><div className="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-100 text-rose-700"><Wrench className="h-5 w-5" /></div><ArrowRight className="h-4 w-4 text-muted-foreground" /></div><p className="mt-4 font-semibold">Maintenance tickets</p><p className="mt-1 text-3xl font-bold">{maintenanceTickets.length}</p><p className="text-xs text-muted-foreground">Open work requiring attention</p></Link></div>}</CardContent></Card> : <EmptyTab icon={<Settings className="h-5 w-5" />} title="Operations is not included" description="Housekeeping and maintenance are available with the Professional plan." />}
         </TabsContent>
 
         <TabsContent value="financials" className="mt-0">

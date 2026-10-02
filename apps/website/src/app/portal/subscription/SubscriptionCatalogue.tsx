@@ -469,12 +469,14 @@ function AddOnCard({
   busy,
   onCheckout,
   onDetails,
+  canSubscribe,
 }: {
   product: Product;
   interval: "month" | "year";
   busy: string | null;
   onCheckout: (key: string, priceIds: string[]) => void;
   onDetails: () => void;
+  canSubscribe: boolean;
 }) {
   const price = product.prices.find(p => p.interval === interval);
   const key = `addon-${product.id}`;
@@ -525,10 +527,10 @@ function AddOnCard({
         <button
           className="btn btn-outline btn-sm sub-addon-cta"
           style={{ flex: 1 }}
-          disabled={busy !== null || !price}
+          disabled={busy !== null || !price || !canSubscribe}
           onClick={() => price && onCheckout(key, [price.id])}
         >
-          {busy === key ? "Opening…" : price ? "Add on →" : "Unavailable"}
+          {busy === key ? "Opening…" : !canSubscribe ? "Base plan required" : price ? "Add on →" : "Unavailable"}
         </button>
       </div>
     </div>
@@ -542,10 +544,12 @@ export default function SubscriptionCatalogue({
   plans,
   addOns,
   properties,
+  hasActiveBaseSubscription,
 }: {
   plans: Plan[];
   addOns: Product[];
   properties: { id: string; name: string }[];
+  hasActiveBaseSubscription: boolean;
 }) {
   const [interval, setInterval] = useState<"month" | "year">("month");
   const [propertyId, setPropertyId] = useState(properties[0]?.id ?? "");
@@ -670,6 +674,12 @@ export default function SubscriptionCatalogue({
             </div>
           </div>
 
+          {!hasActiveBaseSubscription && (
+            <div className="sub-error-banner portal-card" role="status" style={{ marginBottom: 20 }}>
+              Select and activate a base plan before purchasing capability add-ons. Add-ons cannot be subscribed to on their own.
+            </div>
+          )}
+
           <div className="sub-addons-grid">
             {addOns.map(product => (
               <AddOnCard
@@ -678,6 +688,7 @@ export default function SubscriptionCatalogue({
                 interval={interval}
                 busy={busy}
                 onCheckout={checkout}
+                canSubscribe={hasActiveBaseSubscription}
                 onDetails={() => setDetails({ kind: "addon", value: product })}
               />
             ))}

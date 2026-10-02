@@ -13,6 +13,8 @@ import {
   ReceiptText,
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { auth } from '@/lib/auth';
+import { getNavigationModules } from '@/lib/auth/navigation-entitlements';
 
 const settingsLinks = [
   {
@@ -21,7 +23,7 @@ const settingsLinks = [
     href: '/settings/financial-accounts',
     icon: Landmark,
     color: 'text-emerald-600',
-    bgColor: 'bg-emerald-500/10'
+    bgColor: 'bg-emerald-500/10', module: 'MODULE_OPERATIONS'
   },
   {
     title: 'Expense Configuration',
@@ -29,7 +31,7 @@ const settingsLinks = [
     href: '/settings/expense-configuration',
     icon: ReceiptText,
     color: 'text-indigo-600',
-    bgColor: 'bg-indigo-500/10'
+    bgColor: 'bg-indigo-500/10', module: 'MODULE_OPERATIONS'
   },
   {
     title: 'Approval Flows',
@@ -37,7 +39,7 @@ const settingsLinks = [
     href: '/settings/approval-flows',
     icon: GitMerge,
     color: 'text-pink-500',
-    bgColor: 'bg-pink-500/10'
+    bgColor: 'bg-pink-500/10', module: 'MODULE_OPERATIONS'
   },
   {
     title: 'Refund Workflow',
@@ -45,7 +47,7 @@ const settingsLinks = [
     href: '/settings/refund-workflow',
     icon: GitBranch,
     color: 'text-red-500',
-    bgColor: 'bg-red-500/10'
+    bgColor: 'bg-red-500/10', module: 'MODULE_PMS'
   },
   {
     title: 'No-Show Policy',
@@ -53,7 +55,7 @@ const settingsLinks = [
     href: '/settings/no-show-policy',
     icon: Clock3,
     color: 'text-amber-500',
-    bgColor: 'bg-amber-500/10'
+    bgColor: 'bg-amber-500/10', module: 'MODULE_PMS'
   },
   {
     title: 'General',
@@ -61,7 +63,7 @@ const settingsLinks = [
     href: '/settings/general',
     icon: Building2,
     color: 'text-blue-500',
-    bgColor: 'bg-blue-500/10'
+    bgColor: 'bg-blue-500/10', module: 'MODULE_PMS'
   },
   {
     title: 'Billing & Payments',
@@ -70,7 +72,7 @@ const settingsLinks = [
     icon: CreditCard,
     color: 'text-purple-500',
     bgColor: 'bg-purple-500/10',
-    comingSoon: true,
+    comingSoon: true, module: 'MODULE_PMS'
   },
   {
     title: 'Security',
@@ -79,7 +81,7 @@ const settingsLinks = [
     icon: ShieldCheck,
     color: 'text-rose-500',
     bgColor: 'bg-rose-500/10',
-    comingSoon: true,
+    comingSoon: true, module: 'MODULE_PMS'
   },
   {
     title: 'Notifications',
@@ -88,7 +90,7 @@ const settingsLinks = [
     icon: Bell,
     color: 'text-cyan-500',
     bgColor: 'bg-cyan-500/10',
-    comingSoon: true,
+    comingSoon: true, module: 'MODULE_PMS'
   },
   {
     title: 'Channel Integrations',
@@ -96,7 +98,7 @@ const settingsLinks = [
     href: '/settings/integrations/channels',
     icon: MonitorSmartphone,
     color: 'text-indigo-500',
-    bgColor: 'bg-indigo-500/10'
+    bgColor: 'bg-indigo-500/10', module: 'MODULE_OPERATIONS'
   },
   {
     title: 'POS Outlets',
@@ -104,11 +106,14 @@ const settingsLinks = [
     href: '/settings/pos',
     icon: Store,
     color: 'text-orange-500',
-    bgColor: 'bg-orange-500/10'
+    bgColor: 'bg-orange-500/10', module: 'MODULE_OPERATIONS'
   }
 ];
 
-export default function SettingsHubPage() {
+export default async function SettingsHubPage() {
+  const session = await auth();
+  const modules = session?.user ? await getNavigationModules(session.user.id, session.user.propertyId) : [];
+  const visibleSettings = settingsLinks.filter((setting) => modules.includes(setting.module as typeof modules[number]));
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-8">
       <div>
@@ -119,7 +124,7 @@ export default function SettingsHubPage() {
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {settingsLinks.map((setting) => {
+        {visibleSettings.map((setting) => {
           const Icon = setting.icon;
           const content = (
               <Card className="h-full hover:border-primary/50 hover:shadow-md transition-all duration-200 cursor-pointer group">

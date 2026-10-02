@@ -1,4 +1,5 @@
 export const ACTIVE_BILLING_STATUSES = ['ACTIVE', 'TRIALING', 'PAST_DUE'] as const;
+export const ADDON_ELIGIBLE_SUBSCRIPTION_STATUSES = ['ACTIVE', 'TRIALING'] as const;
 
 type EntitlementReader = {
   entitlement: {
@@ -112,6 +113,20 @@ export async function validateCheckoutSelection(
     const selectedProductIds = new Set(prices.map((price) => price.productId));
     const missingRequired = plan.items.filter((item) => item.required && !selectedProductIds.has(item.productId));
     if (missingRequired.length) throw new Error('Selected prices do not include every required plan product');
+  }
+  const isAddOnOnlyCheckout = !plan && prices.every((price) => price.product.type === 'ADDON');
+  if (isAddOnOnlyCheckout) {
+    const activeBaseSubscription = await db.subscription.findFirst({
+      where: {
+        organizationId: input.organizationId,
+        status: { in: [...ADDON_ELIGIBLE_SUBSCRIPTION_STATUSES] },
+        planId: { not: null },
+      },
+      select: { id: true },
+    });
+    if (!activeBaseSubscription) {
+      throw new Error('An active base-plan subscription is required before purchasing an add-on');
+    }
   }
   const propertyIds = subscriptionScope(input.propertyIds ?? []);
   if (propertyIds.length) {

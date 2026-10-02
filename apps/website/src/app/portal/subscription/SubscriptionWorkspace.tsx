@@ -85,6 +85,7 @@ type Props = {
   };
   plans: any[];
   addOns: any[];
+  hasActiveBaseSubscription: boolean;
   checkoutProperties: { id: string; name: string }[];
 };
 
@@ -228,7 +229,7 @@ function InvoiceStatusPip({ status }: { status: string }) {
 /* ─────────────────────────────────────────────────────────────
    MAIN WORKSPACE COMPONENT
 ───────────────────────────────────────────────────────────── */
-export default function SubscriptionWorkspace({ data, plans, addOns, checkoutProperties }: Props) {
+export default function SubscriptionWorkspace({ data, plans, addOns, hasActiveBaseSubscription, checkoutProperties }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"overview" | "modules" | "billing" | "catalogue">(
@@ -926,7 +927,7 @@ export default function SubscriptionWorkspace({ data, plans, addOns, checkoutPro
       ═══════════════════════════════════════════════════ */}
       {activeTab === "catalogue" && (
         <div className="sub-tab-panel">
-          <SubscriptionCatalogue plans={plans} addOns={addOns} properties={checkoutProperties} />
+          <SubscriptionCatalogue plans={plans} addOns={addOns} properties={checkoutProperties} hasActiveBaseSubscription={hasActiveBaseSubscription} />
         </div>
       )}
     </div>

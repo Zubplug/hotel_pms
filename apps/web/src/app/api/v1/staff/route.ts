@@ -3,6 +3,15 @@ import prisma from '@hotel-pms/db';
 import { auth } from '@/lib/auth';
 import { hash } from 'bcryptjs';
 import { requirePlanLimit } from '@/lib/auth/entitlement';
+import { requireModuleAccess } from '@/lib/auth/module-access';
+
+const OPERATIONS_POSITIONS = new Set([
+  'WAITER', 'WAITRESS', 'CASHIER', 'POS', 'POS_OPERATOR', 'POS_CASHIER',
+  'FNB_MANAGER', 'F&B_MANAGER', 'FB_MANAGER', 'RESTAURANT_MANAGER', 'BANQUET_MANAGER', 'EVENT_MANAGER',
+  'HOUSEKEEPER', 'HOUSEKEEPING', 'MAINTENANCE', 'MAINTENANCE_MANAGER',
+  'INVENTORY_MANAGER', 'STOCK_MANAGER', 'STOCK_KEEPER', 'PROCUREMENT_MANAGER',
+  'OUTLET_HEAD', 'LAUNDRY', 'LAUNDRY_MANAGER',
+]);
 
 export async function GET(req: NextRequest) {
   try {
@@ -44,7 +53,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const session = await auth();
-    if (!session?.user || !['SUPER_ADMIN', 'HOTEL_MANAGER', 'DIRECTOR'].includes(String(session.user.role || '').toUpperCase())) {
+    if (!session?.user || !['SUPER_ADMIN', 'ADMIN', 'CEO', 'HOTEL_MANAGER', 'GENERAL_MANAGER', 'MANAGER', 'DIRECTOR'].includes(String(session.user.role || '').toUpperCase())) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -63,6 +72,15 @@ export async function POST(req: NextRequest) {
     const organizationId = (session.user as any).organizationId;
     if (!organizationId) {
       return NextResponse.json({ error: 'Session is missing organizationId' }, { status: 403 });
+    }
+
+    const normalizedPosition = String(position || '').trim().toUpperCase().replace(/[ -]+/g, '_');
+    if (OPERATIONS_POSITIONS.has(normalizedPosition)) {
+      try {
+        await requireModuleAccess(session.user.id, 'MODULE_OPERATIONS', propertyId);
+      } catch {
+        return NextResponse.json({ error: `${normalizedPosition.replaceAll('_', ' ')} staff require the Professional plan or higher` }, { status: 402 });
+      }
     }
 
     const currentStaffCount = await prisma.staff.count({ where: { organizationId, isActive: true, deletedAt: null } });
@@ -103,6 +121,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ data: newStaff }, { status: 201 });
   } catch (error) {
     console.error('Failed to create staff:', error);
+    if (error instanceof Error && /limit exceeded|active subscription/i.test(error.message)) {
+      return NextResponse.json({ error: error.message }, { status: 402 });
+    }
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
