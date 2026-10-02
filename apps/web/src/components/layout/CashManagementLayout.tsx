@@ -36,7 +36,7 @@ const CASH_MANAGEMENT_NAV = [
       { name: 'Bank Deposits', href: '/deposits', roles: ['GENERAL_CASHIER', 'ACCOUNTANT', 'FINANCE_MANAGER', 'MANAGER', 'DIRECTOR', 'CEO', 'SUPER_ADMIN'] },
       { name: 'Cash Expenses', href: '/expenses', roles: ['GENERAL_CASHIER', 'ACCOUNTANT', 'FINANCE_MANAGER', 'MANAGER', 'DIRECTOR', 'CEO', 'SUPER_ADMIN'] },
       { name: 'Receivables', href: '/reports/receivables', roles: ['GENERAL_CASHIER', 'ACCOUNTANT', 'FINANCE_MANAGER', 'MANAGER', 'DIRECTOR', 'CEO', 'SUPER_ADMIN'] },
-      { name: 'Corporate Management', href: '/cashier/corporate', roles: ['GENERAL_CASHIER', 'ACCOUNTANT', 'ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'DIRECTOR', 'CEO', 'SUPER_ADMIN'] },
+      { name: 'Corporate Management', href: '/cashier/corporate', module: 'MODULE_OPERATIONS', roles: ['GENERAL_CASHIER', 'ACCOUNTANT', 'ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'DIRECTOR', 'CEO', 'SUPER_ADMIN'] },
       { name: 'Night Audit', href: '/cash-management/night-audit' },
       { name: 'Audit Reports', href: '/cash-management/night-audit/reports', roles: ['GENERAL_CASHIER', 'NIGHT_AUDITOR', 'ACCOUNTANT', 'FINANCE_MANAGER', 'MANAGER', 'DIRECTOR', 'CEO', 'SUPER_ADMIN'] },
       { name: 'Room Analysis', href: '/cash-management/room-analysis' },
@@ -48,16 +48,16 @@ const CASH_MANAGEMENT_NAV = [
     name: 'F&B Cost Control',
     icon: Activity,
     children: [
-      { name: 'Cost Dashboard', href: '/inventory/cost-control', roles: ['FNB_MANAGER', 'RESTAURANT_MANAGER', 'BANQUET_MANAGER', 'EVENT_MANAGER', 'GENERAL_MANAGER', 'HOTEL_MANAGER', 'MANAGER', 'DIRECTOR', 'ADMIN', 'CEO', 'SUPER_ADMIN'] },
-      { name: 'Recipes', href: '/inventory/cost-control/recipes', roles: ['FNB_MANAGER', 'RESTAURANT_MANAGER', 'BANQUET_MANAGER', 'EVENT_MANAGER', 'GENERAL_MANAGER', 'HOTEL_MANAGER', 'MANAGER', 'DIRECTOR', 'ADMIN', 'CEO', 'SUPER_ADMIN'] },
-      { name: 'Stocktakes', href: '/inventory/stocktakes' },
-      { name: 'Opening Stock', href: '/inventory/opening-stock', roles: ['GENERAL_CASHIER'] },
-      { name: 'GRNs', href: '/inventory/grns' },
+      { name: 'Cost Dashboard', href: '/inventory/cost-control', module: 'MODULE_OPERATIONS', roles: ['FNB_MANAGER', 'RESTAURANT_MANAGER', 'BANQUET_MANAGER', 'EVENT_MANAGER', 'GENERAL_MANAGER', 'HOTEL_MANAGER', 'MANAGER', 'DIRECTOR', 'ADMIN', 'CEO', 'SUPER_ADMIN'] },
+      { name: 'Recipes', href: '/inventory/cost-control/recipes', module: 'MODULE_OPERATIONS', roles: ['FNB_MANAGER', 'RESTAURANT_MANAGER', 'BANQUET_MANAGER', 'EVENT_MANAGER', 'GENERAL_MANAGER', 'HOTEL_MANAGER', 'MANAGER', 'DIRECTOR', 'ADMIN', 'CEO', 'SUPER_ADMIN'] },
+      { name: 'Stocktakes', href: '/inventory/stocktakes', module: 'MODULE_OPERATIONS' },
+      { name: 'Opening Stock', href: '/inventory/opening-stock', module: 'MODULE_OPERATIONS', roles: ['GENERAL_CASHIER'] },
+      { name: 'GRNs', href: '/inventory/grns', module: 'MODULE_OPERATIONS' },
     ],
   },
 ];
 
-export function CashManagementLayout({ children }: { children: React.ReactNode }) {
+export function CashManagementLayout({ children, enabledModules = [] }: { children: React.ReactNode; enabledModules?: readonly string[] }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [hasMultipleProperties, setHasMultipleProperties] = useState(false);
   const pathname = usePathname();
@@ -113,7 +113,14 @@ export function CashManagementLayout({ children }: { children: React.ReactNode }
 
       {/* Nav */}
       <div className="flex flex-1 flex-col gap-7 overflow-y-auto px-3 py-5">
-        {CASH_MANAGEMENT_NAV.map((section) => (
+        {CASH_MANAGEMENT_NAV.map((section) => {
+          const visibleItems = section.children.filter((item) => {
+            const role = String((session.user as any).role || '').toUpperCase();
+            return (!item.roles || item.roles.includes(role)) &&
+              (!item.module || enabledModules.includes(item.module));
+          });
+          if (visibleItems.length === 0) return null;
+          return (
           <div key={section.name} className="flex flex-col gap-1">
             <div className="mb-2 flex items-center gap-2 px-3">
               <span className="flex h-5 w-5 items-center justify-center rounded-md bg-white/[0.06]"><section.icon className="h-3 w-3 text-indigo-300" /></span>
@@ -121,10 +128,11 @@ export function CashManagementLayout({ children }: { children: React.ReactNode }
                 {section.name}
               </h3>
             </div>
-            {section.children.map((item) => {
+            {visibleItems.map((item) => {
               const isActive =
                 pathname === item.href || pathname?.startsWith(`${item.href}/`);
               if ((item as any).roles && !(item as any).roles.includes(String((session.user as any).role || '').toUpperCase())) return null;
+              if ((item as any).module && !enabledModules.includes((item as any).module)) return null;
               return (
                 <Link
                   key={item.name}
@@ -144,7 +152,8 @@ export function CashManagementLayout({ children }: { children: React.ReactNode }
               );
             })}
           </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* User footer */}

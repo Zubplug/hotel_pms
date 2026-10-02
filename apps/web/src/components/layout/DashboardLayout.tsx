@@ -58,6 +58,7 @@ type NavItem = {
   name: string;
   href: string;
   icon: LucideIcon;
+  module?: 'MODULE_PMS' | 'MODULE_OPERATIONS' | 'MODULE_ENTERPRISE';
   restrictedTo?: string[];
   children?: Array<{ name: string; href: string; restrictedTo?: string[] }>;
 };
@@ -68,9 +69,9 @@ const ALL_NAV: NavItem[] = [
   { section: 'Portfolio', name: 'Rooms', href: '/rooms', icon: BedDouble, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'DIRECTOR', 'RECEPTIONIST'] },
   { section: 'Portfolio', name: 'Room Types', href: '/room-types', icon: Layers, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'DIRECTOR'] },
   { section: 'Operations', name: 'Reservations', href: '/reservations', icon: CalendarDays },
-  { section: 'Operations', name: 'Laundry', href: '/general-manager/laundry', icon: Shirt, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'DIRECTOR'] },
-  { section: 'Operations', name: 'Maintenance', href: '/maintenance', icon: Wrench },
-  { section: 'Operations', name: 'Housekeeping', href: '/housekeeping', icon: Brush },
+  { section: 'Operations', name: 'Laundry', href: '/general-manager/laundry', icon: Shirt, module: 'MODULE_OPERATIONS', restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'DIRECTOR'] },
+  { section: 'Operations', name: 'Maintenance', href: '/maintenance', icon: Wrench, module: 'MODULE_OPERATIONS' },
+  { section: 'Operations', name: 'Housekeeping', href: '/housekeeping', icon: Brush, module: 'MODULE_OPERATIONS' },
   { section: 'Night Audit', name: 'Audit overview', href: '/general-manager/night-audit', icon: MoonStar, restrictedTo: ['ADMIN', 'CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'DIRECTOR'] },
   { section: 'Night Audit', name: 'Room & guest control', href: '/general-manager/night-audit/rooms', icon: BedDouble, restrictedTo: ['ADMIN', 'CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'DIRECTOR'] },
   { section: 'Night Audit', name: 'Revenue reconciliation', href: '/general-manager/night-audit/reconciliation', icon: Scale, restrictedTo: ['ADMIN', 'CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'DIRECTOR'] },
@@ -82,22 +83,22 @@ const ALL_NAV: NavItem[] = [
   { section: 'Cash Management', name: 'Cashier shifts', href: '/general-manager/cash-management/cashier-shifts', icon: BadgeDollarSign, restrictedTo: ['ADMIN', 'CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'DIRECTOR'] },
   { section: 'Cash Management', name: 'Receivables oversight', href: '/general-manager/cash-management/receivables', icon: CircleDollarSign, restrictedTo: ['ADMIN', 'CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'DIRECTOR'] },
   { section: 'Cash Management', name: 'Front desk settlement', href: '/general-manager/cash-management/frontdesk-settlement', icon: ArrowLeftRight, restrictedTo: ['ADMIN', 'CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'DIRECTOR'] },
-  { section: 'Accounting Management', name: 'Accounting control center', href: '/general-manager/accounting', icon: Scale, restrictedTo: ['ADMIN', 'CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'DIRECTOR'] },
-  { section: 'Accounting Management', name: 'Accounting reports', href: '/general-manager/accounting/reports', icon: FileText, restrictedTo: ['ADMIN', 'CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'DIRECTOR'] },
-  { section: 'Accounting Management', name: 'Receivables oversight', href: '/general-manager/accounting/receivables', icon: WalletCards, restrictedTo: ['ADMIN', 'CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'DIRECTOR'] },
-  { section: 'Accounting Management', name: 'City Ledger oversight', href: '/general-manager/accounting/city-ledger', icon: Building2, restrictedTo: ['ADMIN', 'CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'DIRECTOR'] },
-  { section: 'Accounting Management', name: 'Payables oversight', href: '/general-manager/accounting/payables', icon: FileText, restrictedTo: ['ADMIN', 'CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'DIRECTOR'] },
-  { section: 'Accounting Management', name: 'Tax position', href: '/general-manager/accounting/taxes', icon: Scale, restrictedTo: ['ADMIN', 'CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'DIRECTOR'] },
-  { section: 'Accounting Management', name: 'GL integrity', href: '/general-manager/accounting/gl', icon: Scale, restrictedTo: ['ADMIN', 'CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'DIRECTOR'] },
-  { section: 'Finance & Reports', name: 'Corporate Management', href: '/general-manager/corporate', icon: Building2, restrictedTo: ['ADMIN', 'CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'DIRECTOR'] },
+  { section: 'Accounting Management', name: 'Accounting control center', href: '/general-manager/accounting', icon: Scale, module: 'MODULE_OPERATIONS', restrictedTo: ['ADMIN', 'CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'DIRECTOR'] },
+  { section: 'Accounting Management', name: 'Accounting reports', href: '/general-manager/accounting/reports', icon: FileText, module: 'MODULE_OPERATIONS', restrictedTo: ['ADMIN', 'CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'DIRECTOR'] },
+  { section: 'Accounting Management', name: 'Receivables oversight', href: '/general-manager/accounting/receivables', icon: WalletCards, module: 'MODULE_OPERATIONS', restrictedTo: ['ADMIN', 'CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'DIRECTOR'] },
+  { section: 'Accounting Management', name: 'City Ledger oversight', href: '/general-manager/accounting/city-ledger', icon: Building2, module: 'MODULE_OPERATIONS', restrictedTo: ['ADMIN', 'CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'DIRECTOR'] },
+  { section: 'Accounting Management', name: 'Payables oversight', href: '/general-manager/accounting/payables', icon: FileText, module: 'MODULE_OPERATIONS', restrictedTo: ['ADMIN', 'CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'DIRECTOR'] },
+  { section: 'Accounting Management', name: 'Tax position', href: '/general-manager/accounting/taxes', icon: Scale, module: 'MODULE_OPERATIONS', restrictedTo: ['ADMIN', 'CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'DIRECTOR'] },
+  { section: 'Accounting Management', name: 'GL integrity', href: '/general-manager/accounting/gl', icon: Scale, module: 'MODULE_OPERATIONS', restrictedTo: ['ADMIN', 'CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'DIRECTOR'] },
+  { section: 'Finance & Reports', name: 'Corporate Management', href: '/general-manager/corporate', icon: Building2, module: 'MODULE_OPERATIONS', restrictedTo: ['ADMIN', 'CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'DIRECTOR'] },
   { section: 'Finance & Reports', name: 'Cash Management', href: '/cash-management', icon: HandCoins, restrictedTo: ['ACCOUNTANT', 'GENERAL_CASHIER', 'NIGHT_AUDITOR'] },
   { section: 'Finance & Reports', name: 'Approvals', href: '/general-manager/approvals', icon: ClipboardCheck, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'DIRECTOR'] },
   { section: 'Finance & Reports', name: 'Sync Center', href: '/sync-center', icon: RefreshCw, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'DIRECTOR'] },
 
-  { section: 'Administration', name: 'F&B Management', href: '/general-manager/fnb', icon: Utensils, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'DIRECTOR'] },
-  { section: 'Administration', name: 'F&B Management', href: '/fnb/dashboard', icon: Utensils, restrictedTo: ['FNB_MANAGER', 'EVENT_MANAGER', 'RESTAURANT_MANAGER', 'BANQUET_MANAGER'] },
+  { section: 'Administration', name: 'F&B Management', href: '/general-manager/fnb', icon: Utensils, module: 'MODULE_OPERATIONS', restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'DIRECTOR'] },
+  { section: 'Administration', name: 'F&B Management', href: '/fnb/dashboard', icon: Utensils, module: 'MODULE_OPERATIONS', restrictedTo: ['FNB_MANAGER', 'EVENT_MANAGER', 'RESTAURANT_MANAGER', 'BANQUET_MANAGER'] },
 
-  { section: 'Administration', name: 'People & Access', href: '/settings/team', icon: Users, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'DIRECTOR'] },
+  { section: 'Administration', name: 'People & Access', href: '/settings/team', icon: Users, module: 'MODULE_PMS', restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'DIRECTOR'] },
   { section: 'External Auditors', name: 'Auditor management', href: '/admin/external-auditors', icon: ShieldCheck, restrictedTo: ['ADMIN', 'CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'DIRECTOR'] },
   { section: 'External Auditors', name: 'Active engagements', href: '/admin/external-auditors/engagements', icon: ShieldCheck, restrictedTo: ['ADMIN', 'CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'DIRECTOR'] },
   { section: 'External Auditors', name: 'Invitations', href: '/admin/external-auditors/invite', icon: ShieldCheck, restrictedTo: ['ADMIN', 'CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'DIRECTOR'] },
@@ -107,7 +108,7 @@ const ALL_NAV: NavItem[] = [
   { section: 'Administration', name: 'Settings', href: '/settings', icon: Settings, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'DIRECTOR'] },
 ];
 
-export function DashboardLayout({ children }: { children: React.ReactNode }) {
+export function DashboardLayout({ children, enabledModules = [] }: { children: React.ReactNode; enabledModules?: readonly string[] }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const pathname = usePathname();
   const { data: session, status } = useLodgeCoreSession();
@@ -150,6 +151,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 
   const navigation = ALL_NAV
     .filter(item => {
+      if (item.module && !enabledModules.includes(item.module)) return false;
       if (item.restrictedTo) {
         if (isSuperAdmin) return true;
         return item.restrictedTo.includes(role);
@@ -189,11 +191,11 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   if (status === 'unauthenticated' || !session?.user) return null;
 
   if (role === 'GENERAL_CASHIER') {
-    return <CashManagementLayout>{children}</CashManagementLayout>;
+    return <CashManagementLayout enabledModules={enabledModules}>{children}</CashManagementLayout>;
   }
 
   if (role === 'ACCOUNTANT') {
-    return <AccountantLayout>{children}</AccountantLayout>;
+    return <AccountantLayout enabledModules={enabledModules}>{children}</AccountantLayout>;
   }
 
   const Sidebar = ({ onNavigate }: { onNavigate?: () => void }) => (

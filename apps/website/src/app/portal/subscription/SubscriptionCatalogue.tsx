@@ -349,6 +349,9 @@ function PlanCard({
   const features = planFeatures(plan).filter(f => f.included).slice(0, 6);
   const limits = planLimits(plan);
   const isPopular = plan.code.toUpperCase() === "PROFESSIONAL";
+  const isCustomPricing = plan.code.toUpperCase() === "ENTERPRISE_PLUS"
+    || (typeof plan.metadata === "object" && plan.metadata !== null && !Array.isArray(plan.metadata)
+      && (plan.metadata as Record<string, unknown>).customPricing === true);
 
   return (
     <div className={`sub-plan-card${isPopular ? " sub-plan-card--popular" : ""}`} style={{
@@ -375,7 +378,12 @@ function PlanCard({
 
       {/* Price */}
       <div className="sub-plan-price">
-        {complete ? (
+        {isCustomPricing ? (
+          <div>
+            <span className="sub-plan-price-pending">Custom pricing</span>
+            <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>Contact support for a tailored quote</div>
+          </div>
+        ) : complete ? (
           <>
             <span className="sub-plan-price-amount" style={{ color: tier.color }}>
               {money(total, prices[0]?.currency.toUpperCase() ?? "NGN")}
@@ -429,14 +437,24 @@ function PlanCard({
         <button className="btn btn-outline btn-sm" onClick={onDetails}>
           Full details
         </button>
-        <button
-          className="btn btn-sm sub-plan-cta"
-          style={{ flex: 1, background: tier.color, color: "#050c14", boxShadow: `0 4px 20px ${tier.glow}` }}
-          disabled={busy !== null || !complete}
-          onClick={() => onCheckout(`plan-${plan.id}`, prices.map(p => p.id), plan.id)}
-        >
-          {busy === `plan-${plan.id}` ? "Opening checkout…" : complete ? "Subscribe →" : "Price not available"}
-        </button>
+        {isCustomPricing ? (
+          <a
+            className="btn btn-sm sub-plan-cta"
+            style={{ flex: 1, background: tier.color, color: "#050c14", boxShadow: `0 4px 20px ${tier.glow}`, textAlign: "center" }}
+            href="/portal/support"
+          >
+            Contact support →
+          </a>
+        ) : (
+          <button
+            className="btn btn-sm sub-plan-cta"
+            style={{ flex: 1, background: tier.color, color: "#050c14", boxShadow: `0 4px 20px ${tier.glow}` }}
+            disabled={busy !== null || !complete}
+            onClick={() => onCheckout(`plan-${plan.id}`, prices.map(p => p.id), plan.id)}
+          >
+            {busy === `plan-${plan.id}` ? "Opening checkout…" : complete ? "Subscribe →" : "Price not available"}
+          </button>
+        )}
       </div>
     </div>
   );

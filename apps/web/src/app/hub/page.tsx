@@ -17,6 +17,7 @@ import {
   CheckCircle2
 } from 'lucide-react';
 import Link from 'next/link';
+import { getNavigationModules } from '@/lib/auth/navigation-entitlements';
 
 export const dynamic = 'force-dynamic';
 
@@ -98,6 +99,7 @@ export default async function HubPage() {
 
   const { id: userId, email, role, capabilities = [], propertyId, isLodgeCoreAdmin } = session.user as any;
   const userName = session.user.name || email?.split('@')[0] || 'User';
+  const enabledModules = await getNavigationModules(userId, propertyId);
 
   // Smart role-based redirect — single-purpose roles skip the hub entirely
   const directUrl = getDirectLandingUrl(role, capabilities, isLodgeCoreAdmin);
@@ -144,15 +146,15 @@ export default async function HubPage() {
   }
 
   const tiles = [
-    { cap: 'ACCESS_FRONT_DESK', label: 'FRONT DESK', icon: Building2, href: '/frontdesk', color: 'bg-indigo-600 hover:bg-indigo-700' },
-    { cap: 'ACCESS_POS', label: 'POINT OF SALE', icon: UtensilsCrossed, href: '/pos', color: 'bg-emerald-600 hover:bg-emerald-700' },
-    { cap: 'ACCESS_HOUSEKEEPING', label: 'HOUSEKEEPING', icon: Sparkles, href: '/housekeeping', color: 'bg-cyan-600 hover:bg-cyan-700' },
-    { cap: 'ACCESS_CASH_MANAGEMENT', label: 'CASH MANAGEMENT', icon: Banknote, href: '/cash-management', color: 'bg-green-600 hover:bg-green-700' },
-    { cap: 'ACCESS_INVENTORY', label: 'INVENTORY', icon: Package, href: '/inventory', color: 'bg-amber-600 hover:bg-amber-700' },
-    { cap: 'ACCESS_MAINTENANCE', label: 'MAINTENANCE', icon: Wrench, href: '/maintenance', color: 'bg-orange-600 hover:bg-orange-700' },
-    { cap: 'ACCESS_MANAGEMENT', label: 'MANAGEMENT', icon: BarChart3, href: '/general-manager', color: 'bg-slate-700 hover:bg-slate-600' },
-    { cap: 'ACCESS_NIGHT_AUDIT', label: 'NIGHT AUDIT', icon: Moon, href: '/night-audit', color: 'bg-purple-600 hover:bg-purple-700' },
-    { cap: 'ACCESS_SYNC_CENTER', label: 'SYNC CENTER', icon: RefreshCw, href: '/sync-center', color: 'bg-blue-600 hover:bg-blue-700' },
+    { cap: 'ACCESS_FRONT_DESK', module: 'MODULE_PMS', label: 'FRONT DESK', icon: Building2, href: '/frontdesk', color: 'bg-indigo-600 hover:bg-indigo-700' },
+    { cap: 'ACCESS_POS', module: 'MODULE_OPERATIONS', label: 'POINT OF SALE', icon: UtensilsCrossed, href: '/pos', color: 'bg-emerald-600 hover:bg-emerald-700' },
+    { cap: 'ACCESS_HOUSEKEEPING', module: 'MODULE_OPERATIONS', label: 'HOUSEKEEPING', icon: Sparkles, href: '/housekeeping', color: 'bg-cyan-600 hover:bg-cyan-700' },
+    { cap: 'ACCESS_CASH_MANAGEMENT', module: 'MODULE_PMS', label: 'CASH MANAGEMENT', icon: Banknote, href: '/cash-management', color: 'bg-green-600 hover:bg-green-700' },
+    { cap: 'ACCESS_INVENTORY', module: 'MODULE_OPERATIONS', label: 'INVENTORY', icon: Package, href: '/inventory', color: 'bg-amber-600 hover:bg-amber-700' },
+    { cap: 'ACCESS_MAINTENANCE', module: 'MODULE_OPERATIONS', label: 'MAINTENANCE', icon: Wrench, href: '/maintenance', color: 'bg-orange-600 hover:bg-orange-700' },
+    { cap: 'ACCESS_MANAGEMENT', module: 'MODULE_ENTERPRISE', label: 'MANAGEMENT', icon: BarChart3, href: '/general-manager', color: 'bg-slate-700 hover:bg-slate-600' },
+    { cap: 'ACCESS_NIGHT_AUDIT', module: 'MODULE_PMS', label: 'NIGHT AUDIT', icon: Moon, href: '/night-audit', color: 'bg-purple-600 hover:bg-purple-700' },
+    { cap: 'ACCESS_SYNC_CENTER', module: 'MODULE_PMS', label: 'SYNC CENTER', icon: RefreshCw, href: '/sync-center', color: 'bg-blue-600 hover:bg-blue-700' },
   ];
 
   return (
@@ -173,7 +175,7 @@ export default async function HubPage() {
           {/* Main Tiles Area - Takes up 8 columns */}
           <div className="md:col-span-8">
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-6">
-              {tiles.filter(t => capabilities.includes(t.cap)).map(tile => (
+              {tiles.filter(t => capabilities.includes(t.cap) && enabledModules.includes(t.module)).map(tile => (
                 <Link key={tile.cap} href={tile.href} className={`
                   ${tile.color} rounded-2xl p-6 flex flex-col items-center justify-center
                   shadow-lg transition-all duration-200 transform hover:scale-105 hover:shadow-xl

@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import React from 'react';
 import { CashManagementLayout } from '@/components/layout/CashManagementLayout';
 import { requireModuleAccess } from '@/lib/auth/module-access';
+import { getNavigationModules } from '@/lib/auth/navigation-entitlements';
 
 const ALLOWED = ['CEO', 'SUPER_ADMIN', 'MANAGER', 'DIRECTOR', 'GENERAL_CASHIER', 'ACCOUNTANT', 'FINANCE_MANAGER', 'HOTEL_MANAGER', 'NIGHT_AUDITOR'];
 
@@ -20,8 +21,10 @@ export default async function CashierRootLayout({ children }: { children: React.
     redirect('/settings/billing?required=MODULE_PMS');
   }
 
+  const navigationModules = await getNavigationModules(session.user.id, (session.user as any).propertyId);
+
   return (
-    <CashManagementLayout>
+    <CashManagementLayout enabledModules={navigationModules}>
       {children}
     </CashManagementLayout>
   );

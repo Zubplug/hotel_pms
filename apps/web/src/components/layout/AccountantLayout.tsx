@@ -63,7 +63,7 @@ const ACCOUNTANT_NAV = [
   },
 ];
 
-export function AccountantLayout({ children }: { children: React.ReactNode }) {
+export function AccountantLayout({ children, enabledModules = [] }: { children: React.ReactNode; enabledModules?: readonly string[] }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const pathname = usePathname();
   const { data: session, status } = useLodgeCoreSession();
@@ -117,7 +117,7 @@ export function AccountantLayout({ children }: { children: React.ReactNode }) {
 
       {/* Navigation */}
       <nav className="flex-1 space-y-8 overflow-y-auto p-4 custom-scrollbar">
-        {ACCOUNTANT_NAV.map((section, idx) => (
+        {enabledModules.includes('MODULE_OPERATIONS') && ACCOUNTANT_NAV.map((section, idx) => (
           <div key={idx}>
             <div className="mb-3 flex items-center gap-2 px-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
               <section.icon className="h-4 w-4" />

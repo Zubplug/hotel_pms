@@ -3,6 +3,7 @@ import React from 'react';
 import { auth } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import { requireModuleAccess } from '@/lib/auth/module-access';
+import { getNavigationModules } from '@/lib/auth/navigation-entitlements';
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
@@ -12,8 +13,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   } catch {
     redirect('/settings/billing?required=MODULE_PMS');
   }
+  const navigationModules = await getNavigationModules(session.user.id, session.user.propertyId);
   return (
-    <FrontDeskLayout>
+    <FrontDeskLayout enabledModules={navigationModules}>
       {children}
     </FrontDeskLayout>
   );

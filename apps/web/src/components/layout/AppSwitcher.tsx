@@ -21,10 +21,10 @@ import { useSession } from 'next-auth/react';
 import { useLock } from '@/components/auth/LockProvider';
 
 const TILES = [
-  { cap: ['ACCESS_FRONT_DESK'], label: 'Front Desk', icon: Building2, href: '/frontdesk' },
-  { cap: ['ACCESS_POS'], label: 'Point of Sale', icon: UtensilsCrossed, href: '/pos' },
-  { cap: ['ACCESS_HOUSEKEEPING'], label: 'Housekeeping', icon: Sparkles, href: '/housekeeping' },
-  { cap: ['ACCESS_CASH_MANAGEMENT'], label: 'Cash Management', icon: Banknote, href: '/cash-management' },
+  { cap: ['ACCESS_FRONT_DESK'], label: 'Front Desk', icon: Building2, href: '/frontdesk', module: 'MODULE_PMS' },
+  { cap: ['ACCESS_POS'], label: 'Point of Sale', icon: UtensilsCrossed, href: '/pos', module: 'MODULE_OPERATIONS' },
+  { cap: ['ACCESS_HOUSEKEEPING'], label: 'Housekeeping', icon: Sparkles, href: '/housekeeping', module: 'MODULE_OPERATIONS' },
+  { cap: ['ACCESS_CASH_MANAGEMENT'], label: 'Cash Management', icon: Banknote, href: '/cash-management', module: 'MODULE_PMS' },
   { 
     cap: [
       'ACCESS_INVENTORY', 
@@ -35,15 +35,16 @@ const TILES = [
     ], 
     label: 'Inventory', 
     icon: Package, 
-    href: '/inventory' 
+    href: '/inventory',
+    module: 'MODULE_OPERATIONS',
   },
-  { cap: ['ACCESS_MAINTENANCE'], label: 'Maintenance', icon: Wrench, href: '/maintenance' },
-  { cap: ['ACCESS_MANAGEMENT'], label: 'Management', icon: BarChart3, href: '/general-manager' },
-  { cap: ['ACCESS_NIGHT_AUDIT'], label: 'Night Audit', icon: Moon, href: '/night-audit' },
-  { cap: ['ACCESS_SYNC_CENTER'], label: 'Sync Center', icon: RefreshCw, href: '/sync-center' },
+  { cap: ['ACCESS_MAINTENANCE'], label: 'Maintenance', icon: Wrench, href: '/maintenance', module: 'MODULE_OPERATIONS' },
+  { cap: ['ACCESS_MANAGEMENT'], label: 'Management', icon: BarChart3, href: '/general-manager', module: 'MODULE_ENTERPRISE' },
+  { cap: ['ACCESS_NIGHT_AUDIT'], label: 'Night Audit', icon: Moon, href: '/night-audit', module: 'MODULE_PMS' },
+  { cap: ['ACCESS_SYNC_CENTER'], label: 'Sync Center', icon: RefreshCw, href: '/sync-center', module: 'MODULE_PMS' },
 ];
 
-export function AppSwitcher({ hideOperations }: { hideOperations?: boolean }) {
+export function AppSwitcher({ hideOperations, enabledModules = [] }: { hideOperations?: boolean; enabledModules?: readonly string[] }) {
   const [isOpen, setIsOpen] = useState(false);
   const { data: session } = useSession();
   const { lock } = useLock();
@@ -56,7 +57,8 @@ export function AppSwitcher({ hideOperations }: { hideOperations?: boolean }) {
     if (hideOperations && (t.href === '/housekeeping' || t.href === '/maintenance')) {
       return false;
     }
-    return isSuperAdmin || t.cap.some(c => capabilities.includes(c));
+    return (isSuperAdmin || t.cap.some(c => capabilities.includes(c))) &&
+      enabledModules.includes(t.module);
   });
 
   return (

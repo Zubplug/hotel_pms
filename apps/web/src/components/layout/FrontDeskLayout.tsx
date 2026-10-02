@@ -39,7 +39,7 @@ import { HardwareBridge } from '@/lib/desktop/HardwareBridge';
 import { toast } from 'sonner';
 import { FrontDeskMasterCardModal } from '@/components/frontdesk/FrontDeskMasterCardModal';
 
-export function FrontDeskLayout({ children }: { children: React.ReactNode }) {
+export function FrontDeskLayout({ children, enabledModules = [] }: { children: React.ReactNode; enabledModules?: readonly string[] }) {
   const { data: session, status } = useLodgeCoreSession();
   const { propertyId } = useProperty();
   const { provider, isOnline, isDesktopMode } = useLodgeCoreProvider();
@@ -108,8 +108,16 @@ export function FrontDeskLayout({ children }: { children: React.ReactNode }) {
   const navLinks = [
     { href: '/frontdesk/refunds', label: 'Refunds' },
     { href: '/frontdesk/cashier', label: 'Cashier Shift' },
-    { href: '/laundry', label: 'Laundry', icon: Shirt },
+    { href: '/laundry', label: 'Laundry', icon: Shirt, module: 'MODULE_OPERATIONS' },
   ];
+
+  // Laundry is an Operations workspace, not a Front Desk workspace. The
+  // separate dashboard remains available to entitled online users; it is not
+  // advertised in the offline Front Desk shell.
+  const visibleNavLinks = navLinks.filter((item) =>
+    (!item.module || enabledModules.includes(item.module)) &&
+    !(isDesktopApp && item.href === '/laundry'),
+  );
 
   return (
     <div className="frontdesk-dark-surface flex min-h-screen flex-col bg-[#080c18]">
@@ -120,7 +128,7 @@ export function FrontDeskLayout({ children }: { children: React.ReactNode }) {
 
         {/* Left: Switcher · Logo · Property · Nav */}
         <div className="flex items-center gap-4 lg:gap-5 flex-1 min-w-0">
-          {!isDesktop && <AppSwitcher hideOperations />}
+          {!isDesktop && <AppSwitcher hideOperations enabledModules={enabledModules} />}
 
           <Link href="/frontdesk" className="flex items-center gap-2.5 group shrink-0">
             <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-600 to-violet-600 shadow-[0_0_16px_-4px_rgba(99,102,241,0.6)] transition-all group-hover:shadow-[0_0_20px_-4px_rgba(99,102,241,0.8)] group-hover:scale-105">
@@ -151,7 +159,7 @@ export function FrontDeskLayout({ children }: { children: React.ReactNode }) {
 
           {/* Nav links */}
           <nav className="hidden md:flex items-center gap-1">
-            {navLinks.map(({ href, label, icon: Icon }) => (
+            {visibleNavLinks.map(({ href, label, icon: Icon }) => (
               <Link
                 key={href}
                 href={href}
