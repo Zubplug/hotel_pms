@@ -1431,6 +1431,18 @@ public class OfflinePMSInterop
             }
             if (string.IsNullOrWhiteSpace(res.CorporateAccountId)) res.CorporateAccountId = null;
 
+            if (res.CorporateAccountId != null)
+            {
+                var terminalStatus = await _terminalBootstrap.GetTerminalStatusAsync();
+                using var terminalDocument = JsonDocument.Parse(JsonSerializer.Serialize(terminalStatus));
+                var modulesEnabled = terminalDocument.RootElement.TryGetProperty("enabledModules", out var enabledModules)
+                    && enabledModules.ValueKind == JsonValueKind.Array
+                    && enabledModules.EnumerateArray().Any(module =>
+                        string.Equals(module.GetString(), "MODULE_OPERATIONS", StringComparison.OrdinalIgnoreCase));
+                if (!modulesEnabled)
+                    throw new InvalidOperationException("Corporate Client reservations require an active Operations entitlement.");
+            }
+
             if (root.TryGetProperty("companyId", out var companyId) ||
                 root.TryGetProperty("CompanyId", out companyId))
             {

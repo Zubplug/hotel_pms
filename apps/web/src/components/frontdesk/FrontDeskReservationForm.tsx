@@ -370,7 +370,7 @@ export function FrontDeskReservationForm({ isWalkIn = false, prefillGuestId }: F
   const { data: dashboardRes } = useQuery({
     queryKey: ['frontdesk', 'dashboard', propertyId],
     queryFn: () => provider.dashboard.get(propertyId),
-    enabled: !!propertyId && corporateAccessEnabled,
+    enabled: !!propertyId,
     staleTime: 60_000,
   });
 
@@ -481,7 +481,7 @@ export function FrontDeskReservationForm({ isWalkIn = false, prefillGuestId }: F
   const { data: corporateAccountsRes, isLoading: loadingCorporateAccounts } = useQuery({
     queryKey: ['corporate-accounts', propertyId],
     queryFn: async () => provider.corporateAccounts.list(propertyId),
-    enabled: !!propertyId,
+    enabled: !!propertyId && corporateAccessEnabled,
   });
   const corporateAccounts = (corporateAccountsRes as any)?.data || [];
 

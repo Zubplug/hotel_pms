@@ -6,6 +6,7 @@ import { requireOrganizationContext } from '@/lib/organization-access';
 import { NotificationEngine } from '@/lib/notification-engine';
 import { isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
 import { SharedReservationService } from '@/lib/services/reservation-service';
+import { hasPropertyModuleEntitlement } from '@/lib/auth/service-entitlement';
 
 
 export async function GET(req: NextRequest) {
@@ -154,6 +155,9 @@ export async function POST(req: NextRequest) {
     let ratePlanId = '';
 
     if (corporateAccountId) {
+      if (!(await hasPropertyModuleEntitlement(session.user.id, propertyId, 'MODULE_OPERATIONS'))) {
+        return errorResponse('PAYMENT_REQUIRED', 'An active Operations entitlement is required for Corporate Client reservations.', 402);
+      }
       const corporateAccount = await prisma.corporateAccount.findUnique({
         where: { id: corporateAccountId },
         include: { ratePlan: true }

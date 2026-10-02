@@ -26,7 +26,7 @@ export async function POST(
     const now = new Date();
     const entitlements = await prisma.entitlement.findMany({
       where: {
-        organizationId: terminal.organizationId,
+        organizationId: terminal.organisationId,
         OR: [{ propertyId: terminal.propertyId }, { propertyId: null }],
       },
       select: { productCode: true, status: true, startsAt: true, expiresAt: true, quantity: true },
@@ -42,7 +42,7 @@ export async function POST(
 
     return NextResponse.json({
       data: {
-        organizationId: terminal.organizationId,
+        organizationId: terminal.organisationId,
         propertyId: terminal.propertyId,
         capturedAt: now,
         enabledModules: NAVIGATION_MODULES.filter((module) => activeCodes.has(module)),

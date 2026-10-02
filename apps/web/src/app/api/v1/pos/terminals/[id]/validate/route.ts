@@ -31,7 +31,7 @@ export async function POST(
     const [subscription, pmsEntitlement] = await Promise.all([
       prisma.subscription.findFirst({
         where: {
-          organizationId: terminal.organizationId,
+          organizationId: terminal.organisationId,
           status: { in: ['ACTIVE', 'TRIALING', 'PAST_DUE'] },
           planId: { not: null },
           currentPeriodEnd: { gt: now },
@@ -41,7 +41,7 @@ export async function POST(
       }),
       prisma.entitlement.findFirst({
         where: {
-          organizationId: terminal.organizationId,
+          organizationId: terminal.organisationId,
           productCode: 'MODULE_PMS',
           status: 'ACTIVE',
           startsAt: { lte: now },
@@ -63,7 +63,7 @@ export async function POST(
       ? new Date(Math.min(...expiryCandidates.map((value) => value.getTime())))
       : null;
     const effectiveLicenseState = terminal.revokedAt
-      ? 'REVOKED'
+      ? 'RESTRICTED'
       : billingValid && terminal.licenseState !== 'RESTRICTED'
         ? 'VALID'
         : 'EXPIRED';
