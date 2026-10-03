@@ -25,7 +25,7 @@ function fmtCurrency(amount: number, currency: string) {
     currency,
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
-  }).format(amount / 100);
+  }).format(amount);
 }
 
 function fmtDate(d: string) {

@@ -22,7 +22,7 @@ export interface AvailabilityResult {
 // Single authority for room-type level availability queries.
 //
 // Formula:
-//   available = totalActiveRooms
+//   available = totalSellableRooms
 //             - blockedRooms    (RoomBlock on physical rooms, aggregated to type)
 //             - reservedRooms   (ReservationRoom with active Reservation)
 //             - activeHolds     (BookingHold — transient inventory locks)
@@ -57,13 +57,21 @@ export const AuthoritativeAvailabilityService = {
 
     const db = tx as any;
 
-    // 1. Total active rooms of this type
+    // 1. Count only rooms that are actually sellable. An active room record
+    //    is not necessarily bookable: occupied, reserved, dirty, cleaning,
+    //    blocked, out-of-order, out-of-service, and maintenance rooms must
+    //    never enter online inventory.
+    const sellableRoomWhere = {
+      propertyId,
+      roomTypeId,
+      isActive: true,
+      status: 'AVAILABLE',
+      housekeepingStatus: { in: ['CLEAN', 'INSPECTED'] },
+      maintenanceStatus: { in: ['NONE', 'COMPLETED'] },
+    };
+
     const totalRooms: number = await db.room.count({
-      where: {
-        propertyId,
-        roomTypeId,
-        isActive: true,
-      },
+      where: sellableRoomWhere,
     });
 
     // 2. Physically blocked rooms (RoomBlock on individual rooms, aggregated)
@@ -71,9 +79,7 @@ export const AuthoritativeAvailabilityService = {
     //    overlapping active block.
     const blockedRooms: number = await db.room.count({
       where: {
-        propertyId,
-        roomTypeId,
-        isActive: true,
+        ...sellableRoomWhere,
         roomBlocks: {
           some: {
             startDate: { lt: checkOut },
@@ -197,4 +203,3 @@ export const AuthoritativeAvailabilityService = {
 function fmtDate(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
-

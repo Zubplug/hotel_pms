@@ -2,6 +2,8 @@ import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import prisma from "@hotel-pms/db";
 import { ConfirmBookingPanel } from "./ConfirmBookingPanel";
+import { headers } from "next/headers";
+import { resolveBookingOrigin } from "@/lib/booking-engine/request-origin";
 
 export const dynamic = "force-dynamic";
 
@@ -63,27 +65,53 @@ export default async function ConfirmPage({
   ]);
   if (!roomType || !ratePlan) redirect(`/book/${slug}`);
 
-  // Re-quote from availability for latest pricing
-  const origin = process.env.NEXT_PUBLIC_WEBSITE_URL || "https://book.lodgecore.com";
-  const quoteRes = await fetch(
-    `${origin}/api/public/booking/${slug}/availability?checkIn=${checkIn}&checkOut=${checkOut}&adults=${adults}&children=${children}`,
-    { next: { revalidate: 0 } }
-  );
-
   let nightlyRate = 0;
   let totalAmount = 0;
   let currency = "NGN";
-  if (quoteRes.ok) {
-    const response = await quoteRes.json();
-    const data = response.data ?? response;
-    const rt = (data.roomTypes ?? []).find((r: any) => r.roomTypeId === roomTypeId);
-    const rp = rt?.rates?.find((r: any) => r.ratePlanId === ratePlanId);
-    if (rp) { nightlyRate = rp.avgNightlyRate; totalAmount = rp.subtotal; currency = rp.currency; }
+  let quoteError: string | null = null;
+  try {
+    // Re-quote from the active deployment for latest pricing.
+    const origin = resolveBookingOrigin(await headers(), process.env.NEXT_PUBLIC_WEBSITE_URL);
+    const quoteRes = await fetch(
+      `${origin}/api/public/booking/${slug}/availability?checkIn=${checkIn}&checkOut=${checkOut}&adults=${adults}&children=${children}`,
+      { cache: "no-store" }
+    );
+    const response = await quoteRes.json().catch(() => ({}));
+    if (!quoteRes.ok) {
+      quoteError = response.error?.message ?? response.error ?? response.message ?? "Unable to confirm the room price";
+    } else {
+      const data = response.data ?? response;
+      const rt = (data.roomTypes ?? []).find((r: any) => r.roomTypeId === roomTypeId);
+      const rp = rt?.rates?.find((r: any) => r.ratePlanId === ratePlanId);
+      if (rp) {
+        nightlyRate = rp.avgNightlyRate;
+        totalAmount = rp.subtotal;
+        currency = rp.currency;
+      } else {
+        quoteError = "This room or rate is no longer available. Please search again.";
+      }
+    }
+  } catch (error) {
+    console.error("[public-booking] confirmation quote request failed", { slug, roomTypeId, ratePlanId, error });
+    quoteError = "Pricing is temporarily unavailable. Please return to rooms and try again.";
   }
 
   const nights = Math.round(
     (new Date(checkOut).getTime() - new Date(checkIn).getTime()) / 86400000
   );
+
+  if (quoteError) {
+    return (
+      <div style={{ maxWidth: 620, margin: "48px auto", textAlign: "center", padding: "36px 28px", background: "var(--bk-surface)", border: "1px solid var(--bk-border)", borderRadius: "var(--bk-radius-lg)" }}>
+        <div style={{ fontSize: 34, marginBottom: 14 }}>⌁</div>
+        <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 24, color: "var(--bk-text)", marginBottom: 10 }}>We need to refresh this booking</h1>
+        <p style={{ color: "var(--bk-muted)", fontSize: 14, lineHeight: 1.6, marginBottom: 24 }}>{quoteError}</p>
+        <Link href={`/book/${slug}/rooms?checkIn=${checkIn}&checkOut=${checkOut}&adults=${adults}&children=${children}`} className="btn btn-primary">
+          ← Return to rooms
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <div>

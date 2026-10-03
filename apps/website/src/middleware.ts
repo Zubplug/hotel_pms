@@ -27,7 +27,9 @@ async function rewriteVerifiedCustomDomain(request: Request) {
   // A custom domain enters at / and is rewritten internally to the existing
   // property booking route. Once on /book/[slug], all existing booking pages,
   // forms, API calls, and confirmation links continue to work unchanged.
-  const lookupOrigin = process.env.NEXT_PUBLIC_BOOKING_URL || "https://book.lodgecore.com";
+  // Resolve the domain lookup on the active deployment first. This keeps
+  // preview/custom-domain traffic from depending on a stale canonical host.
+  const lookupOrigin = new URL(request.url).origin || process.env.NEXT_PUBLIC_BOOKING_URL || "https://book.lodgecore.com";
   try {
     const lookup = await fetch(
       `${lookupOrigin}/api/internal/booking-domain/resolve?domain=${encodeURIComponent(host)}`,

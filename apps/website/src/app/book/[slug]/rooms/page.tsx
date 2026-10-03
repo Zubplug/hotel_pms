@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import Link from "next/link";
 import prisma from "@hotel-pms/db";
 import { RoomCard } from "./RoomCard";
+import { resolveBookingOrigin } from "@/lib/booking-engine/request-origin";
 
 export const dynamic = "force-dynamic";
 
@@ -44,10 +45,7 @@ export default async function RoomsPage({
     // variable is preferred, but the request host keeps preview/custom-domain
     // deployments from accidentally calling a different booking site.
     const requestHeaders = await headers();
-    const forwardedHost = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host");
-    const forwardedProto = requestHeaders.get("x-forwarded-proto")?.split(",")[0] ?? "https";
-    const requestOrigin = forwardedHost ? `${forwardedProto}://${forwardedHost}` : null;
-    const origin = (requestOrigin || process.env.NEXT_PUBLIC_WEBSITE_URL || "https://getlodgecore.vercel.app").replace(/\/$/, "");
+    const origin = resolveBookingOrigin(requestHeaders, process.env.NEXT_PUBLIC_WEBSITE_URL);
     const availRes = await fetch(
       `${origin}/api/public/booking/${slug}/availability?checkIn=${checkIn}&checkOut=${checkOut}&adults=${adults}&children=${children}`,
       { cache: "no-store" }

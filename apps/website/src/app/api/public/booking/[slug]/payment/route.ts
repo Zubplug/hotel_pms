@@ -16,6 +16,7 @@ import {
 } from '@/lib/booking-engine/middleware';
 import { PaystackProvider } from '@/lib/payment-providers/paystack';
 import { getPaystackBookingAccount, resolveSecretRef } from '@/lib/payment-providers/booking-account';
+import { resolveBookingOrigin } from '@/lib/booking-engine/request-origin';
 
 export async function OPTIONS(req: NextRequest) {
   return corsPreflightResponse(req);
@@ -133,7 +134,7 @@ export async function POST(
     const account = await getPaystackBookingAccount(ctx.property.id);
     const secretKey = resolveSecretRef(account?.secretRef, 'PAYSTACK_SECRET_KEY');
     const paystack = new PaystackProvider(secretKey);
-    const callbackUrl = `${process.env.NEXT_PUBLIC_BOOKING_URL ?? 'https://book.lodgecore.com'}/book/${slug}/confirmation?token=${encodeURIComponent(String(reservationToken))}`;
+    const callbackUrl = `${resolveBookingOrigin(req.headers, process.env.NEXT_PUBLIC_BOOKING_URL)}/book/${slug}/confirmation?token=${encodeURIComponent(String(reservationToken))}`;
 
     const init = await paystack.initializeTransaction({
       amount: amountDue,
@@ -167,4 +168,3 @@ export async function POST(
     return res;
   }
 }
-

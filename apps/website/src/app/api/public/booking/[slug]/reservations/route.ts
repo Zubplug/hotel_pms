@@ -19,6 +19,7 @@ import { ReservationPricingService } from '@/lib/booking-engine/pricing-service'
 import { SharedReservationService } from '@/lib/services/reservation-service';
 import { NotificationEngine } from '@/lib/notification-engine';
 import { sendBookingConfirmationEmail } from '@/lib/email/booking-emails';
+import { resolveBookingOrigin } from '@/lib/booking-engine/request-origin';
 
 export async function OPTIONS(req: NextRequest) {
   return corsPreflightResponse(req);
@@ -255,7 +256,7 @@ export async function POST(
         roomTypeName: (hold.quoteSnapshot as any)?.roomTypeName ?? 'Room',
         total: Number((hold.quoteSnapshot as any)?.subtotal ?? 0),
         currency: (hold.quoteSnapshot as any)?.currency ?? ctx.property.currency,
-        manageUrl: `${process.env.NEXT_PUBLIC_BOOKING_URL ?? 'https://book.lodgecore.com'}/book/${slug}/confirmation?token=${newReservation.confirmToken}`,
+        manageUrl: `${resolveBookingOrigin(req.headers, process.env.NEXT_PUBLIC_BOOKING_URL)}/book/${slug}/confirmation?token=${newReservation.confirmToken}`,
       }).catch((e) => console.error('[Booking] confirmation email failed', e));
     }
 
@@ -294,5 +295,4 @@ export async function POST(
     return res;
   }
 }
-
 
