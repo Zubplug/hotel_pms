@@ -1519,6 +1519,7 @@ public class LocalRepository
                 // Reports use the guest-facing room number only (for example
                 // 203), not the hierarchical display label (1.2.203).
                 var rooms = reservation?.Rooms.Select(room => room.Room?.Number ?? room.Room?.DisplayName).Where(number => !string.IsNullOrWhiteSpace(number)).ToArray() ?? Array.Empty<string>();
+                var roomNumber = rooms.FirstOrDefault() ?? "—";
 
                 foreach (var item in items.EnumerateArray())
                 {
