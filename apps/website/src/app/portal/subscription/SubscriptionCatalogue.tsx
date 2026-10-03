@@ -81,7 +81,7 @@ function planFeatures(plan: Plan): { feature: string; included: boolean }[] {
 function planLimits(plan: Plan): { label: string; value: string }[] {
   if (!plan.metadata || typeof plan.metadata !== "object" || Array.isArray(plan.metadata)) return [];
   return Object.entries(plan.metadata as Record<string, unknown>)
-    .filter(([, v]) => v !== null && v !== undefined)
+    .filter(([key, v]) => key.toLowerCase() !== "version" && v !== null && v !== undefined)
     .map(([k, v]) => ({ label: labelify(k), value: String(v) === "null" ? "Unlimited" : String(v) }));
 }
 
@@ -347,8 +347,11 @@ function PlanCard({
   onCheckout: (key: string, priceIds: string[], planId: string) => void;
   onDetails: () => void;
 }) {
-  const prices = plan.items.filter(item => item.required).map(item => item.product.prices.find(p => p.interval === interval)).filter(Boolean) as Price[];
-  const complete = prices.length === plan.items.filter(i => i.required).length;
+  // Modules are bundled into a plan and intentionally have no standalone
+  // prices. Only the plan product itself contributes to the checkout total.
+  const billableItems = plan.items.filter(item => item.required && item.product.code.toUpperCase().startsWith("PLAN_"));
+  const prices = billableItems.map(item => item.product.prices.find(p => p.interval === interval)).filter(Boolean) as Price[];
+  const complete = prices.length === billableItems.length && billableItems.length > 0;
   const total = prices.reduce((s, p) => s + p.amount, 0);
   const tier = getPlanTier(plan.code);
   const features = planFeatures(plan).filter(f => f.included).slice(0, 6);

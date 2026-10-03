@@ -113,11 +113,13 @@ export async function validateCheckoutSelection(
   })) throw new Error('One or more selected catalogue products are not yet available for purchase');
   const intervals = new Set(prices.map((price) => price.interval));
   if (intervals.size > 1) throw new Error('Monthly and annual billing prices cannot be mixed');
-  const plan = input.planId ? await db.billingPlan.findUnique({ where: { id: input.planId }, include: { items: true } }) : null;
+  const plan = input.planId ? await db.billingPlan.findUnique({ where: { id: input.planId }, include: { items: { include: { product: { select: { code: true } } } } } }) : null;
   if (input.planId && !plan) throw new Error('Invalid billing plan');
   if (plan) {
     const selectedProductIds = new Set(prices.map((price) => price.productId));
-    const missingRequired = plan.items.filter((item) => item.required && !selectedProductIds.has(item.productId));
+    // Module products are included in the plan and do not have standalone
+    // prices. Only billable plan products must be present in checkout.
+    const missingRequired = plan.items.filter((item) => item.required && !item.product.code.toUpperCase().startsWith("MODULE_") && !selectedProductIds.has(item.productId));
     if (missingRequired.length) throw new Error('Selected prices do not include every required plan product');
   }
   const isAddOnOnlyCheckout = !plan && prices.every((price) => price.product.type === 'ADDON');
