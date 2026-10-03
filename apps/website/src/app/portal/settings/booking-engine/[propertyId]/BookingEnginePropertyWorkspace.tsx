@@ -1,6 +1,7 @@
 "use client";
 import { useRef, useState, useTransition } from "react";
 import { saveBookingEngineConfig, saveBookingSite, publishBookingSite, unpublishBookingSite } from "./actions";
+import { EnterpriseBookingSettings, type EnterpriseBookingSettingsProps } from "./EnterpriseBookingSettings";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -36,6 +37,7 @@ interface Props {
   config: Config | null;
   site: Site | null;
   ratePlans: RatePlan[];
+  enterpriseSettings: Omit<EnterpriseBookingSettingsProps, "section">;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -416,10 +418,17 @@ function BrandingForm({ propertyId, site }: { propertyId: string; site: Site | n
 // Root exported component
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function BookingEnginePropertyWorkspace({ propertyId, propertyName, entitled, config, site, ratePlans }: Props) {
-  const [tab, setTab] = useState<"engine" | "branding">("engine");
+export function BookingEnginePropertyWorkspace({ propertyId, propertyName, entitled, config, site, ratePlans, enterpriseSettings }: Props) {
+  const [tab, setTab] = useState<"engine" | "branding" | "content" | "payments" | "distribution">("engine");
   const isLive = config?.enabled && site?.status === "PUBLISHED";
   const bookingUrl = config?.publicSlug ? `https://book.lodgecore.com/book/${config.publicSlug}` : null;
+  const tabs = [
+    { id: "engine" as const, index: "01", label: "Engine", detail: "Availability & rates" },
+    { id: "branding" as const, index: "02", label: "Branding", detail: "Look & feel" },
+    { id: "content" as const, index: "03", label: "Guest experience", detail: "Content & policies" },
+    { id: "payments" as const, index: "04", label: "Payments", detail: "Checkout setup" },
+    { id: "distribution" as const, index: "05", label: "Distribution", detail: "Domain & growth" },
+  ];
 
   return (
     <div className="be-workspace">
@@ -472,16 +481,26 @@ export function BookingEnginePropertyWorkspace({ propertyId, propertyName, entit
       )}
 
       {/* Tab bar */}
-      <div className="be-tabs">
-        {(["engine", "branding"] as const).map(t => (
+      <div className="be-flow-intro">
+        <div>
+          <div className="be-flow-kicker">Booking site setup</div>
+          <strong>Build a direct booking experience that is ready to publish.</strong>
+        </div>
+        <span>{isLive ? "All systems live" : "Complete the setup in sequence"}</span>
+      </div>
+
+      <nav className="be-tabs" aria-label="Booking engine setup">
+        {tabs.map(t => (
           <button
-            key={t} type="button" onClick={() => setTab(t)}
-            className={tab === t ? "is-active" : ""}
+            key={t.id} type="button" onClick={() => setTab(t.id)}
+            className={tab === t.id ? "is-active" : ""}
+            aria-current={tab === t.id ? "page" : undefined}
           >
-            {t === "engine" ? "Engine Settings" : "Branding & Site"}
+            <span className="be-tab-index">{t.index}</span>
+            <span><strong>{t.label}</strong><small>{t.detail}</small></span>
           </button>
         ))}
-      </div>
+      </nav>
 
       {/* Tab content */}
       {tab === "engine" && (
@@ -490,6 +509,9 @@ export function BookingEnginePropertyWorkspace({ propertyId, propertyName, entit
       {tab === "branding" && (
         <BrandingForm propertyId={propertyId} site={site} />
       )}
+      {tab === "content" && <EnterpriseBookingSettings {...enterpriseSettings} section="content" />}
+      {tab === "payments" && <EnterpriseBookingSettings {...enterpriseSettings} section="payments" />}
+      {tab === "distribution" && <EnterpriseBookingSettings {...enterpriseSettings} section="distribution" />}
     </div>
   );
 }

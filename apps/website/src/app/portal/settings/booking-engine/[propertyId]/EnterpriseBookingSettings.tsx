@@ -96,19 +96,23 @@ function StatusPill({ status }: { status: string }) {
   return <span className={`be-status-pill ${tone}`}>{status.replaceAll("_", " ")}</span>;
 }
 
+export type EnterpriseBookingSettingsProps = {
+  propertyId: string;
+  site: Site | null;
+  account: Account;
+  domainRequest: RequestState;
+  websiteRequest: WebsiteState;
+  section?: "content" | "payments" | "distribution";
+};
+
 export function EnterpriseBookingSettings({
   propertyId,
   site,
   account,
   domainRequest,
   websiteRequest,
-}: {
-  propertyId: string;
-  site: Site | null;
-  account: Account;
-  domainRequest: RequestState;
-  websiteRequest: WebsiteState;
-}) {
+  section,
+}: EnterpriseBookingSettingsProps) {
   const content = site?.content ?? {};
   const [domainPending, startDomain] = useTransition();
   const [domainMessage, setDomainMessage] = useState<{ text: string; ok: boolean } | null>(null);
@@ -127,7 +131,8 @@ export function EnterpriseBookingSettings({
 
   return (
     <section className="be-enterprise-settings" aria-label="Advanced booking engine controls">
-      <div className="be-section-heading"><div><span className="be-section-index">03</span> Guest experience & operations</div><span>Production controls</span></div>
+      {(!section || section === "content") && <>
+      <div className="be-section-heading"><div><span className="be-section-index">03</span> Guest experience</div><span>Guest-facing content</span></div>
       <div className="be-control-grid">
         <FormCard eyebrow="Content layer" title="Guest-facing content" description="Shape the message guests see before they choose a room. Keep policies and contact details explicit to reduce booking friction." onSubmit={(form) => saveBookingContent(propertyId, new FormData(form))}>
           <div className="be-form-stack">
@@ -142,6 +147,12 @@ export function EnterpriseBookingSettings({
           </div>
         </FormCard>
 
+      </div>
+      </>}
+
+      {(!section || section === "payments") && <>
+      <div className="be-section-heading be-section-heading-spaced"><div><span className="be-section-index">04</span> Payments</div><span>Production controls</span></div>
+      <div className="be-control-grid">
         <FormCard eyebrow="Payments" title="Online payment account" description="Connect the live gateway used for deposits and full-payment bookings. Secrets remain environment references, never raw credentials." onSubmit={(form) => saveBookingPaymentAccount(propertyId, new FormData(form))}>
           <div className="be-form-stack">
             <input type="hidden" name="accountId" value={account?.id ?? "00000000-0000-0000-0000-000000000000"} readOnly />
@@ -157,8 +168,10 @@ export function EnterpriseBookingSettings({
           </div>
         </FormCard>
       </div>
+      </>}
 
-      <div className="be-section-heading be-section-heading-spaced"><div><span className="be-section-index">04</span> Distribution & growth</div><span>Optional services</span></div>
+      {(!section || section === "distribution") && <>
+      <div className="be-section-heading be-section-heading-spaced"><div><span className="be-section-index">05</span> Distribution & growth</div><span>Optional services</span></div>
       <div className="be-control-grid">
         <FormCard eyebrow="Custom domain" title="Own your booking address" description="Use a branded domain such as book.yourhotel.com. Domain activation is reviewed and provisioned by LodgeCore HQ." onSubmit={(form) => domainRequest ? saveBookingDomain(propertyId, new FormData(form)) : requestCustomDomain(propertyId, new FormData(form))}>
           <div className="be-domain-status">
@@ -178,6 +191,7 @@ export function EnterpriseBookingSettings({
           {websiteRequest ? <div className="be-request-summary"><StatusPill status={websiteRequest.status} /><p>{websiteRequest.brief ?? "Your custom website request is being reviewed."}</p></div> : <div className="be-form-stack"><Field label="Project brief" hint="Tell the team about your property, visual direction and must-have pages."><textarea name="brief" rows={6} minLength={20} placeholder="We want a calm, editorial site for…" required /></Field><button type="submit" className="btn btn-primary btn-sm">Send brief to LodgeCore</button></div>}
         </FormCard>
       </div>
+      </>}
 
     </section>
   );

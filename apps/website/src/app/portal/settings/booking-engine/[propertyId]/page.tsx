@@ -4,7 +4,6 @@ import { auth } from "@/auth";
 import prisma from "@hotel-pms/db";
 import { PortalShell } from "@/components/portal-shell";
 import { BookingEnginePropertyWorkspace } from "./BookingEnginePropertyWorkspace";
-import { EnterpriseBookingSettings } from "./EnterpriseBookingSettings";
 
 export const dynamic = "force-dynamic";
 
@@ -123,19 +122,19 @@ export default async function BookingEnginePropertyPage({
           content: site.content as { tagline?: string } | null,
         } : null}
         ratePlans={ratePlans}
-      />
-      <EnterpriseBookingSettings
-        propertyId={propertyId}
-        site={site ? {
-          siteName: site.siteName,
-          content: site.content as Record<string, any> | null,
-          customDomain: site.customDomain,
-          domainStatus: site.domainStatus,
-          verificationToken: site.verificationToken,
-        } : null}
-        account={paymentAccount}
-        domainRequest={domainRequest}
-        websiteRequest={websiteRequest}
+        enterpriseSettings={{
+          propertyId,
+          site: site ? {
+            siteName: site.siteName,
+            content: site.content as Record<string, any> | null,
+            customDomain: site.customDomain,
+            domainStatus: site.domainStatus,
+            verificationToken: site.verificationToken,
+          } : null,
+          account: paymentAccount,
+          domainRequest,
+          websiteRequest,
+        }}
       />
     </PortalShell>
   );
