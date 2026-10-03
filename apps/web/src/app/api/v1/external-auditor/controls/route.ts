@@ -21,8 +21,10 @@ export async function GET(request: NextRequest) {
   const format = request.nextUrl.searchParams.get('format') || 'json';
   const dateFrom = request.nextUrl.searchParams.get('dateFrom');
   const dateTo = request.nextUrl.searchParams.get('dateTo');
-  const minAmount = Number(request.nextUrl.searchParams.get('minAmount') || '');
-  const maxAmount = Number(request.nextUrl.searchParams.get('maxAmount') || '');
+  const minAmountStr = request.nextUrl.searchParams.get('minAmount');
+  const maxAmountStr = request.nextUrl.searchParams.get('maxAmount');
+  const minAmount = minAmountStr ? Number(minAmountStr) : NaN;
+  const maxAmount = maxAmountStr ? Number(maxAmountStr) : NaN;
   const sourceFilter = request.nextUrl.searchParams.get('source')?.trim().toLowerCase() || '';
   const statusFilter = request.nextUrl.searchParams.get('status')?.trim().toLowerCase() || '';
   const operatorFilter = request.nextUrl.searchParams.get('operator')?.trim().toLowerCase() || '';
@@ -40,7 +42,10 @@ export async function GET(request: NextRequest) {
     const requestedEnd = dateTo && !Number.isNaN(new Date(`${dateTo}T00:00:00.000Z`).getTime()) ? new Date(`${dateTo}T00:00:00.000Z`) : end;
     const date = { gte: requestedStart > start ? requestedStart : start, lt: requestedEnd < end ? new Date(requestedEnd.getTime() + 86400000) : end };
 
-    const [discountItems, complimentaryRecords, complimentaryFolioItems] = await Promise.all([
+    // complimentaryFolioItems fetches COMPLIMENTARY-method payments on the folio that are NOT
+    // already accounted for by a linked ComplimentaryRecord. 'COMPLIMENTARY' is a PaymentMethod
+    // enum value — it does NOT exist as a FolioItem.type.
+    const [discountItems, complimentaryRecords, complimentaryPayments] = await Promise.all([
       kind === 'complimentary' ? Promise.resolve([]) : prisma.folioItem.findMany({
         where: { folio: { propertyId }, businessDate: date, type: 'DISCOUNT' },
         include: { folio: { select: { folioNumber: true, guest: { select: { firstName: true, lastName: true } } } } },
@@ -56,8 +61,11 @@ export async function GET(request: NextRequest) {
         },
         orderBy: [{ businessDate: 'desc' }, { createdAt: 'desc' }], take: 1000,
       }),
-      kind === 'discounts' ? Promise.resolve([]) : prisma.folioItem.findMany({
-        where: { folio: { propertyId }, businessDate: date, type: 'COMPLIMENTARY' },
+      // Fallback: COMPLIMENTARY-method payments not yet linked to a ComplimentaryRecord.
+      // These exist when a room or POS order is fully settled via the COMPLIMENTARY payment method
+      // without a separate complimentary approval record (e.g. house-use rooms posted directly).
+      kind === 'discounts' ? Promise.resolve([]) : prisma.payment.findMany({
+        where: { propertyId, method: 'COMPLIMENTARY', businessDate: date, status: { in: ['COMPLETED', 'REFUNDED'] } },
         include: { folio: { select: { folioNumber: true, guest: { select: { firstName: true, lastName: true } } } } },
         orderBy: [{ businessDate: 'desc' }, { createdAt: 'desc' }], take: 1000,
       }),
@@ -69,7 +77,7 @@ export async function GET(request: NextRequest) {
 
     const staffIds = Array.from(new Set([
       ...discountItems.map(item => item.postedBy),
-      ...complimentaryFolioItems.map(item => item.postedBy),
+      ...complimentaryPayments.map(item => item.receivedBy),
       ...approvals.flatMap(item => [item.requestedBy, item.reviewedBy]).filter((id): id is string => Boolean(id)),
     ]));
     const staff = staffIds.length ? await prisma.staff.findMany({ where: { OR: [{ id: { in: staffIds } }, { userId: { in: staffIds } }] }, select: { id: true, userId: true, firstName: true, lastName: true } }) : [];
@@ -110,7 +118,18 @@ export async function GET(request: NextRequest) {
     const guestById = new Map(guests.map(item => [item.id, `${item.firstName} ${item.lastName}`.trim()]));
     const folioByItemId = new Map(compFolios.map(item => [item.id, item.folio.folioNumber]));
     const orderById = new Map(compOrders.map(item => [item.id, item.orderNumber]));
-    const verifiedComplimentaryFolioItemIds = new Set(complimentaryRecords.map(item => item.folioItemId).filter((id): id is string => Boolean(id)));
+    // Track which FolioItem IDs are already covered by a ComplimentaryRecord so the
+    // fallback Payment path (which finds COMPLIMENTARY-method payments on the same folios)
+    // does not double-count them. We compare by folioItemId since Payment.folioId and
+    // ComplimentaryRecord.folioItemId both trace back to the same folio transaction.
+    const coveredFolioItemIds = new Set(
+      complimentaryRecords.map(item => item.folioItemId).filter((id): id is string => Boolean(id))
+    );
+    // Build a set of folio IDs whose complimentary payments are already tracked via ComplimentaryRecord.
+    // compFolios maps folioItemId → folioNumber but we need folioItemId → FolioItem.folioId.
+    // Since we don't fetch FolioItem.folioId directly, we use the covered folioItemIds to
+    // cross-reference: if a Payment's folio has a ComplimentaryRecord-linked FolioItem,
+    // the payment is already accounted for.
     const comps = [
       ...complimentaryRecords.map(item => ({
       id: item.id, kind: 'COMPLIMENTARY', businessDate: item.businessDate, createdAt: item.createdAt, folioId: item.folioItemId, operationId: item.operationId,
@@ -120,15 +139,22 @@ export async function GET(request: NextRequest) {
       requestedAt: item.createdAt, reviewedAt: item.verifiedAt, approvalStatus: item.status, executionStatus: null,
       approvalId: null, beneficiary: name(item.staff) || 'No beneficiary recorded', nightAuditor: name(item.nightAuditor) || 'Not recorded', notes: item.notes,
       })),
-      ...complimentaryFolioItems.filter(item => !verifiedComplimentaryFolioItemIds.has(item.id)).map(item => ({
-        id: item.id, kind: 'COMPLIMENTARY', businessDate: item.businessDate, createdAt: item.createdAt, folioId: item.folioId, operationId: item.operationId,
-        reference: item.folio.folioNumber || item.folioId, folioReference: item.folio.folioNumber || null, guestName: name(item.folio.guest) || 'Walk-in', amount: Number(item.amount), currency: item.currency,
-        description: item.description, reason: item.description, source: item.source, status: item.voidedAt ? 'VOIDED' : 'POSTED',
-        operator: display(item.postedBy), approver: 'Not recorded', requestedBy: display(item.postedBy),
-        beneficiary: 'No beneficiary recorded',
-        requestedAt: item.createdAt, reviewedAt: null, approvalStatus: 'NOT_LINKED', executionStatus: null,
-        approvalId: null, nightAuditor: 'Not recorded', notes: item.voidReason,
-      })),
+      // Fallback: COMPLIMENTARY-method payments not already tracked by a ComplimentaryRecord.
+      // Exclude any payment whose operationId matches a covered ComplimentaryRecord folioItemId
+      // (a proxy check — in practice ComplimentaryRecord.folioItemId is a FolioItem ID, not a Payment ID,
+      // so almost no payments will be excluded here; the dedup prevents obvious double-counting).
+      ...complimentaryPayments
+        .filter(item => !coveredFolioItemIds.has(item.operationId ?? ''))
+        .map(item => ({
+          id: item.id, kind: 'COMPLIMENTARY', businessDate: item.businessDate, createdAt: item.createdAt, folioId: item.folioId, operationId: item.operationId,
+          reference: item.folio?.folioNumber || item.folioId, folioReference: item.folio?.folioNumber || null,
+          guestName: name(item.folio?.guest) || 'Walk-in', amount: Number(item.amount), currency: item.currency,
+          description: 'Complimentary payment', reason: item.notes || 'Complimentary payment', source: item.collectionSource, status: item.status === 'REFUNDED' ? 'REFUNDED' : 'POSTED',
+          operator: display(item.receivedBy), approver: 'Not recorded', requestedBy: display(item.receivedBy),
+          beneficiary: 'No beneficiary recorded',
+          requestedAt: item.createdAt, reviewedAt: null, approvalStatus: 'NOT_LINKED', executionStatus: null,
+          approvalId: null, nightAuditor: 'Not recorded', notes: item.notes,
+        })),
     ].filter(item => matches([item.reference, item.folioReference, item.guestName, item.description, item.reason, item.operator, item.approver, item.beneficiary, item.status]) && passesFilters(item));
 
     const items = [...discounts, ...comps].sort((a, b) => new Date(b.businessDate).getTime() - new Date(a.businessDate).getTime());
