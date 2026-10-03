@@ -12,6 +12,7 @@ import { applyAvailableFolioCredit } from "@/lib/finance/apply-folio-credit";
 import { applyAvailableGuestLedgerCredit } from "@/lib/finance/apply-guest-ledger-credit";
 import { isNightAuditCutoverActive } from "@/lib/night-audit-guard";
 import { getPropertyBusinessDate } from "@/lib/date-utils";
+import { getApprovedRoomDiscount } from "@/lib/finance/approved-room-discount";
 import { InventoryService } from "@/lib/inventory/InventoryService";
 import { routeFoliosToCityLedger } from "@/lib/finance/route-folio-to-city-ledger";
 import { FolioPaymentAccountingService } from "@/lib/services/folio-payment-accounting-service";
@@ -1326,7 +1327,7 @@ export async function POST(req: NextRequest) {
                 checkIn: true,
                 reservationRooms: {
                   where: { status: "ACTIVE" },
-                  select: { id: true, rateAmount: true, currency: true },
+                  select: { id: true, rateAmount: true, currency: true, discountType: true, discountAmount: true, discountPercent: true, discountApprovalId: true },
                 },
               },
             });
@@ -1359,10 +1360,11 @@ export async function POST(req: NextRequest) {
               });
 
               if (sameDayCheckout && !existingDayUseCharge) {
-                const dayUseAmount = reservation.reservationRooms.reduce(
-                  (sum: number, room: any) => sum + Number(room.rateAmount || 0),
-                  0,
-                );
+                const dayUseAmount = (await Promise.all(reservation.reservationRooms.map(async (room: any) => {
+                  const grossAmount = Number(room.rateAmount || 0);
+                  const discount = await getApprovedRoomDiscount(tx, room, grossAmount);
+                  return Math.max(0, grossAmount - discount);
+                }))).reduce((sum: number, amount: number) => sum + amount, 0);
                 if (dayUseAmount > 0.01) {
                   await tx.folioItem.create({
                     data: {

@@ -14,6 +14,7 @@ import { routeFoliosToCityLedger } from '@/lib/finance/route-folio-to-city-ledge
 import { applyAvailableFolioCredit } from '@/lib/finance/apply-folio-credit';
 import { applyAvailableGuestLedgerCredit } from '@/lib/finance/apply-guest-ledger-credit';
 import { getPropertyBusinessDate } from '@/lib/date-utils';
+import { getApprovedRoomDiscount } from '@/lib/finance/approved-room-discount';
 
 export async function POST(
   req: NextRequest,
@@ -107,7 +108,10 @@ export async function POST(
         if (!chargeAlreadyPosted) {
           const targetFolio = folios[0];
           for (const room of reservation.reservationRooms.filter((item: any) => item.status === 'ACTIVE')) {
-            const amount = Number(room.rateAmount || 0);
+            const grossAmount = Number(room.rateAmount || 0);
+            if (grossAmount <= 0) continue;
+            const discount = await getApprovedRoomDiscount(tx, room, grossAmount);
+            const amount = Math.max(0, grossAmount - discount);
             if (amount <= 0) continue;
             const operationId = `${auditKeyPrefix}${reservation.checkIn.toISOString().slice(0, 10)}:DAY_USE:${room.id}`;
             await tx.folioItem.create({
@@ -117,7 +121,7 @@ export async function POST(
                 type: 'CHARGE',
                 source: 'DAY_USE_ROOM_CHARGE',
                 revenueCategory: 'ROOM',
-                description: `Day-use room charge for ${operationalDate.toISOString().slice(0, 10)}`,
+                description: `Day-use room charge for ${operationalDate.toISOString().slice(0, 10)}${discount > 0 ? ` (discount ${discount})` : ''}`,
                 quantity: 1,
                 unitAmount: amount,
                 amount,

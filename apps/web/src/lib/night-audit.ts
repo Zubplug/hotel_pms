@@ -381,9 +381,15 @@ export async function executeNightAudit(
                 ? { operationId: roomChargeKey }
                 : {
                     folioId: mainFolio.id,
-                    source: 'ROOM_CHARGE',
-                    businessDate,
-                    nightAuditRunId: auditRun.id,
+                    // A day-use charge is the room charge for this stay date.
+                    // Older checkout/sync flows could post DAY_USE_ROOM_CHARGE
+                    // first and then Night Audit would add a second ROOM_CHARGE
+                    // for the same folio/date. Treat either source as the
+                    // idempotent charge so the guest is never billed twice.
+                    OR: [
+                      { source: 'ROOM_CHARGE', businessDate, nightAuditRunId: auditRun.id, voidedAt: null },
+                      { source: 'DAY_USE_ROOM_CHARGE', businessDate, voidedAt: null },
+                    ],
                 },
             });
 
