@@ -50,7 +50,22 @@ export async function POST(req: Request) {
   const rawBody = await req.text();
   const signature = req.headers.get('flutterwave-signature');
   const legacySignature = req.headers.get('verif-hash');
-  if (!verifyFlutterwaveWebhook(rawBody, signature, secretHash) && !verifyFlutterwaveLegacyWebhook(legacySignature, secretHash)) return NextResponse.json({ error: 'Webhook signature verification failed' }, { status: 400 });
+  const hmacValid = verifyFlutterwaveWebhook(rawBody, signature, secretHash);
+  const legacyValid = verifyFlutterwaveLegacyWebhook(legacySignature, secretHash);
+  if (!hmacValid && !legacyValid) {
+    console.warn('Flutterwave webhook signature rejected', {
+      hasFlutterwaveSignature: Boolean(signature),
+      flutterwaveSignatureLength: signature?.length ?? 0,
+      hasLegacySignature: Boolean(legacySignature),
+      legacySignatureLength: legacySignature?.length ?? 0,
+      configuredSecretHashLength: secretHash.length,
+      bodyLength: rawBody.length,
+      vercelRegion: process.env.VERCEL_REGION ?? null,
+      deployment: process.env.VERCEL_DEPLOYMENT_ID ?? process.env.VERCEL_GIT_COMMIT_SHA ?? null,
+      requestId: req.headers.get('x-vercel-id'),
+    });
+    return NextResponse.json({ error: 'Webhook signature verification failed' }, { status: 400 });
+  }
   let payload: any;
   try { payload = JSON.parse(rawBody); } catch { return NextResponse.json({ error: 'Invalid webhook payload' }, { status: 400 }); }
 
