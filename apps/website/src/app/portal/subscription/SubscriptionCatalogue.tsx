@@ -99,6 +99,11 @@ function getPlanTier(code: string) {
   return PLAN_TIER[c] || { badge: code, color: "var(--accent)", dim: "var(--accent-dim)", glow: "var(--accent-glow)", icon: "◎" };
 }
 
+function planRank(code: string) {
+  const ranks: Record<string, number> = { ESSENTIAL: 1, STARTER: 1, PROFESSIONAL: 2, BUSINESS: 3, ENTERPRISE: 4, ENTERPRISE_PLUS: 5 };
+  return ranks[code.toUpperCase()] ?? 0;
+}
+
 /* ─────────────────────────────────────────────────────────────
    DETAIL DRAWER
 ───────────────────────────────────────────────────────────── */
@@ -340,12 +345,16 @@ function PlanCard({
   busy,
   onCheckout,
   onDetails,
+  currentPlanCode,
+  isHighestPlan,
 }: {
   plan: Plan;
   interval: "month" | "year";
   busy: string | null;
   onCheckout: (key: string, priceIds: string[], planId: string) => void;
   onDetails: () => void;
+  currentPlanCode: string | null;
+  isHighestPlan: boolean;
 }) {
   // Modules are bundled into a plan and intentionally have no standalone
   // prices. Only the plan product itself contributes to the checkout total.
@@ -360,15 +369,26 @@ function PlanCard({
   const isCustomPricing = plan.code.toUpperCase() === "ENTERPRISE_PLUS"
     || (typeof plan.metadata === "object" && plan.metadata !== null && !Array.isArray(plan.metadata)
       && (plan.metadata as Record<string, unknown>).customPricing === true);
+  const currentRank = currentPlanCode ? planRank(currentPlanCode) : 0;
+  const thisRank = planRank(plan.code);
+  const isCurrent = Boolean(currentPlanCode && plan.code.toUpperCase() === currentPlanCode.toUpperCase());
+  const isLowerPlan = Boolean(currentRank && thisRank && thisRank < currentRank);
+  const isUpgrade = Boolean(currentRank && thisRank > currentRank);
+  const planLocked = isCurrent || isLowerPlan;
 
   return (
-    <div className={`sub-plan-card${isPopular ? " sub-plan-card--popular" : ""}`} style={{
+    <div className={`sub-plan-card${isPopular ? " sub-plan-card--popular" : ""}${isCurrent ? " sub-plan-card--current" : ""}${isLowerPlan ? " sub-plan-card--disabled" : ""}`} style={{
       "--plan-color": tier.color,
       "--plan-dim": tier.dim,
       "--plan-glow": tier.glow,
     } as React.CSSProperties}>
       {isPopular && (
         <div className="sub-plan-popular-badge">Most popular</div>
+      )}
+      {(isCurrent || isLowerPlan) && (
+        <div className={`sub-plan-state-badge${isCurrent ? " sub-plan-state-badge--current" : ""}`}>
+          {isCurrent ? "Current plan" : "Lower tier"}
+        </div>
       )}
 
       {/* Card header */}
@@ -456,11 +476,11 @@ function PlanCard({
         ) : (
           <button
             className="btn btn-sm sub-plan-cta"
-            style={{ flex: 1, background: tier.color, color: "#050c14", boxShadow: `0 4px 20px ${tier.glow}` }}
-            disabled={busy !== null || !complete}
+            style={{ flex: 1, background: planLocked ? "rgba(255,255,255,0.06)" : tier.color, color: planLocked ? "var(--text-muted)" : "#050c14", boxShadow: planLocked ? "none" : `0 4px 20px ${tier.glow}` }}
+            disabled={busy !== null || !complete || planLocked}
             onClick={() => onCheckout(`plan-${plan.id}`, prices.map(p => p.id), plan.id)}
           >
-            {busy === `plan-${plan.id}` ? "Opening checkout…" : complete ? "Subscribe →" : "Price not available"}
+            {busy === `plan-${plan.id}` ? "Opening checkout…" : !complete ? "Price not available" : isCurrent ? "Current plan" : isLowerPlan ? "Unavailable" : isUpgrade ? (isHighestPlan ? "Upgrade →" : "Update plan →") : "Subscribe →"}
           </button>
         )}
       </div>
@@ -552,11 +572,13 @@ export default function SubscriptionCatalogue({
   plans,
   addOns,
   properties,
+  currentPlanCode,
   hasActiveBaseSubscription,
 }: {
   plans: Plan[];
   addOns: Product[];
   properties: { id: string; name: string }[];
+  currentPlanCode: string | null;
   hasActiveBaseSubscription: boolean;
 }) {
   const [interval, setInterval] = useState<"month" | "year">("month");
@@ -658,6 +680,8 @@ export default function SubscriptionCatalogue({
             busy={busy}
             onCheckout={checkout}
             onDetails={() => setDetails({ kind: "plan", value: plan })}
+            currentPlanCode={currentPlanCode}
+            isHighestPlan={planRank(plan.code) === Math.max(...plans.map(candidate => planRank(candidate.code)))}
           />
         ))}
       </div>

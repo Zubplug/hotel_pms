@@ -958,7 +958,7 @@ export default function SubscriptionWorkspace({ data, plans, addOns, hasActiveBa
       ═══════════════════════════════════════════════════ */}
       {activeTab === "catalogue" && (
         <div className="sub-tab-panel">
-          <SubscriptionCatalogue plans={plans} addOns={addOns} properties={checkoutProperties} hasActiveBaseSubscription={hasActiveBaseSubscription} />
+          <SubscriptionCatalogue plans={plans} addOns={addOns} properties={checkoutProperties} currentPlanCode={data.subscription?.planCode ?? null} hasActiveBaseSubscription={hasActiveBaseSubscription} />
         </div>
       )}
     </div>

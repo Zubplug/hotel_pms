@@ -1,13 +1,8 @@
 import { NextResponse } from 'next/server';
-import { createHash } from 'node:crypto';
 import prisma, { Prisma } from '@hotel-pms/db';
 import { subscriptionScope, verifyFlutterwaveLegacyWebhook, verifyFlutterwaveTransaction, verifyFlutterwaveWebhook } from '@hotel-pms/db';
 
 const GRACE_PERIOD_MS = 3 * 24 * 60 * 60 * 1000;
-
-function fingerprint(value: string | null | undefined) {
-  return value ? createHash('sha256').update(value).digest('hex').slice(0, 16) : null;
-}
 
 function nextPeriod(interval: string, from: Date) {
   const end = new Date(from);
@@ -55,43 +50,16 @@ export async function POST(req: Request) {
   const rawBody = await req.text();
   const signature = req.headers.get('flutterwave-signature');
   const legacySignature = req.headers.get('verif-hash');
-  let diagnosticPayload: any = null;
-  try { diagnosticPayload = JSON.parse(rawBody); } catch { /* handled after signature verification */ }
-  const hmacValid = verifyFlutterwaveWebhook(rawBody, signature, secretHash);
-  const legacyValid = verifyFlutterwaveLegacyWebhook(legacySignature, secretHash);
-  if (!hmacValid && !legacyValid) {
-    const diagnosticData = diagnosticPayload?.data ?? diagnosticPayload;
-    console.warn('Flutterwave webhook signature rejected', {
-      hasFlutterwaveSignature: Boolean(signature),
-      flutterwaveSignatureLength: signature?.length ?? 0,
-      flutterwaveSignatureFingerprint: fingerprint(signature),
-      hasLegacySignature: Boolean(legacySignature),
-      legacySignatureLength: legacySignature?.length ?? 0,
-      legacySignatureFingerprint: fingerprint(legacySignature),
-      configuredSecretHashLength: secretHash.length,
-      configuredSecretHashFingerprint: fingerprint(secretHash),
-      bodyLength: rawBody.length,
-      event: diagnosticPayload?.event ?? diagnosticPayload?.type ?? null,
-      payloadKeys: diagnosticPayload && typeof diagnosticPayload === 'object' ? Object.keys(diagnosticPayload) : [],
-      dataKeys: diagnosticData && typeof diagnosticData === 'object' ? Object.keys(diagnosticData) : [],
-      transactionId: diagnosticData?.id ?? diagnosticData?.transaction_id ?? null,
-      transactionStatus: diagnosticData?.status ?? null,
-      transactionReference: diagnosticData?.tx_ref ?? null,
-      vercelRegion: process.env.VERCEL_REGION ?? null,
-      deployment: process.env.VERCEL_DEPLOYMENT_ID ?? process.env.VERCEL_GIT_COMMIT_SHA ?? null,
-      requestId: req.headers.get('x-vercel-id'),
-    });
-    return NextResponse.json({ error: 'Webhook signature verification failed' }, { status: 400 });
-  }
+  if (!verifyFlutterwaveWebhook(rawBody, signature, secretHash) && !verifyFlutterwaveLegacyWebhook(legacySignature, secretHash)) return NextResponse.json({ error: 'Webhook signature verification failed' }, { status: 400 });
   let payload: any;
-  try { payload = diagnosticPayload ?? JSON.parse(rawBody); } catch { return NextResponse.json({ error: 'Invalid webhook payload' }, { status: 400 }); }
+  try { payload = JSON.parse(rawBody); } catch { return NextResponse.json({ error: 'Invalid webhook payload' }, { status: 400 }); }
 
   try {
     const data = payload?.data ?? payload;
     const transactionId = String(data?.id ?? data?.transaction_id ?? '');
     if (!transactionId) return NextResponse.json({ received: true });
     const verified = await verifyFlutterwaveTransaction(transactionId);
-    const meta = verified.meta ?? data.meta;
+    const meta = verified.meta ?? data.meta ?? data.meta_data;
     const organizationId = metadataValue(meta, 'organizationId');
     if (!organizationId) throw new Error('Flutterwave transaction has no organization metadata');
     const txRef = verified.tx_ref || String(data.tx_ref || transactionId);
@@ -112,12 +80,15 @@ export async function POST(req: Request) {
       const prices = priceIds.length ? await tx.billingPrice.findMany({ where: { id: { in: priceIds } }, include: { product: true } }) : await tx.billingPrice.findMany({ where: { product: { code: { in: productCodes } }, interval: 'month' }, include: { product: true } });
       const isCustomWebsiteOneTime = productCodes.includes('ADDON_CUSTOM_WEBSITE_DESIGN') && productCodes.every((code) => code === 'ADDON_CUSTOM_WEBSITE_DESIGN');
       const interval = prices[0]?.interval || 'month';
-      const currentPeriodEnd = nextPeriod(interval, now);
+    const requestedPeriodEnd = metadataValue(meta, 'upgradePeriodEnd');
+    const parsedPeriodEnd = requestedPeriodEnd ? new Date(requestedPeriodEnd) : null;
+    const currentPeriodEnd = parsedPeriodEnd && !Number.isNaN(parsedPeriodEnd.getTime()) && parsedPeriodEnd > now ? parsedPeriodEnd : nextPeriod(interval, now);
       let subscriptionRef: string | null = null;
       if (!isCustomWebsiteOneTime) {
         const subscription = await tx.subscription.upsert({ where: { flutterwaveSubscriptionId: txRef }, create: { organizationId, planId, scopePropertyIds: propertyIds, flutterwaveSubscriptionId: txRef, status: successful ? 'ACTIVE' : 'PAST_DUE', currentPeriodStart: now, currentPeriodEnd, pastDueSince: successful ? null : now, cancelAtPeriodEnd: false }, update: { planId, scopePropertyIds: propertyIds, status: successful ? 'ACTIVE' : 'PAST_DUE', currentPeriodStart: now, currentPeriodEnd, pastDueSince: successful ? null : now } });
         subscriptionRef = subscription.flutterwaveSubscriptionId;
         for (const price of prices) await tx.subscriptionItem.upsert({ where: { subscriptionId_priceId: { subscriptionId: subscription.id, priceId: price.id } }, create: { subscriptionId: subscription.id, priceId: price.id, quantity: 1 }, update: { quantity: 1 } });
+        if (successful && planId) await tx.subscription.updateMany({ where: { organizationId, planId: { not: null }, status: { in: ['ACTIVE', 'TRIALING', 'PAST_DUE'] }, id: { not: subscription.id } }, data: { status: 'CANCELED', canceledAt: now, cancelAtPeriodEnd: false } });
         await reconcileEntitlements(tx, organizationId);
       }
       await tx.billingInvoice.upsert({ where: { flutterwaveInvoiceId: transactionId }, create: { organizationId, flutterwaveInvoiceId: transactionId, flutterwaveCustomerId: verified.customer?.email ?? null, flutterwaveSubscriptionId: subscriptionRef, status: successful ? 'paid' : 'failed', currency: verified.currency, subtotal: Math.round(verified.amount * 100), total: Math.round(verified.amount * 100), amountPaid: successful ? Math.round(verified.amount * 100) : 0, amountDue: successful ? 0 : Math.round(verified.amount * 100), periodStart: isCustomWebsiteOneTime ? null : now, periodEnd: isCustomWebsiteOneTime ? null : currentPeriodEnd, hostedInvoiceUrl: null, invoicePdf: null, payload: verified as unknown as Prisma.InputJsonValue }, update: { status: successful ? 'paid' : 'failed', amountPaid: successful ? Math.round(verified.amount * 100) : 0, amountDue: successful ? 0 : Math.round(verified.amount * 100), payload: verified as unknown as Prisma.InputJsonValue } });
