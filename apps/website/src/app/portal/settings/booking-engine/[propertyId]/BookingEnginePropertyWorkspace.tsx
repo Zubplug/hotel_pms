@@ -281,6 +281,9 @@ function BrandingForm({ propertyId, site }: { propertyId: string; site: Site | n
   const [error, setError] = useState<string | null>(null);
   const [pubPending, startPubTransition] = useTransition();
   const [pubError, setPubError] = useState<string | null>(null);
+  const [logoUrl, setLogoUrl] = useState(site?.logoUrl ?? "");
+  const [logoPending, setLogoPending] = useState(false);
+  const [logoError, setLogoError] = useState<string | null>(null);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault(); setError(null); setSaved(false);
@@ -303,6 +306,26 @@ function BrandingForm({ propertyId, site }: { propertyId: string; site: Site | n
       try { await unpublishBookingSite(propertyId); }
       catch (err: any) { setPubError(err.message ?? "Failed to unpublish"); }
     });
+  };
+
+  const handleLogoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setLogoPending(true);
+    setLogoError(null);
+    try {
+      const body = new FormData();
+      body.set("logo", file);
+      const response = await fetch(`/api/portal/booking-engine/${propertyId}/logo`, { method: "POST", body });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? "Logo upload failed");
+      setLogoUrl(result.url);
+    } catch (err: any) {
+      setLogoError(err.message ?? "Logo upload failed");
+    } finally {
+      setLogoPending(false);
+      event.target.value = "";
+    }
   };
 
   const isPublished = site?.status === "PUBLISHED";
@@ -349,7 +372,6 @@ function BrandingForm({ propertyId, site }: { propertyId: string; site: Site | n
             {[
               { label: "Site name", name: "siteName", val: site?.siteName ?? "", placeholder: "The Grand Horizon", required: true, type: "text" },
               { label: "Tagline", name: "tagline", val: (site?.content as any)?.tagline ?? "", placeholder: "Your perfect stay awaits", required: false, type: "text" },
-              { label: "Logo URL", name: "logoUrl", val: site?.logoUrl ?? "", placeholder: "https://...", required: false, type: "url" },
             ].map(f => (
               <div key={f.name}>
                 <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 5, fontFamily: "var(--font-mono)", letterSpacing: ".05em", textTransform: "uppercase" }}>{f.label}</div>
@@ -362,6 +384,24 @@ function BrandingForm({ propertyId, site }: { propertyId: string; site: Site | n
                 />
               </div>
             ))}
+            <div>
+              <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 5, fontFamily: "var(--font-mono)", letterSpacing: ".05em", textTransform: "uppercase" }}>Logo</div>
+              <input type="hidden" name="logoUrl" value={logoUrl} />
+              <div className="be-logo-upload">
+                <div className="be-logo-preview">
+                  {logoUrl ? <img src={logoUrl} alt="Booking site logo preview" /> : <span>LC</span>}
+                </div>
+                <div className="be-logo-upload-copy">
+                  <strong>{logoUrl ? "Logo uploaded" : "Upload your property logo"}</strong>
+                  <span>PNG, JPEG or WebP · maximum 2 MB</span>
+                  {logoError && <em>{logoError}</em>}
+                </div>
+                <label className="btn btn-outline btn-sm be-upload-button">
+                  {logoPending ? "Uploading…" : "Choose image"}
+                  <input type="file" accept="image/png,image/jpeg,image/webp" onChange={handleLogoUpload} disabled={logoPending} />
+                </label>
+              </div>
+            </div>
           </div>
         </div>
 

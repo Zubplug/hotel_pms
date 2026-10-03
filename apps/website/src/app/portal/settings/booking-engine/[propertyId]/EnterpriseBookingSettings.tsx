@@ -116,6 +116,7 @@ export function EnterpriseBookingSettings({
   const content = site?.content ?? {};
   const [domainPending, startDomain] = useTransition();
   const [domainMessage, setDomainMessage] = useState<{ text: string; ok: boolean } | null>(null);
+  const [paymentMode, setPaymentMode] = useState(account?.mode ?? "PLATFORM");
 
   const runDomainVerification = () => {
     setDomainMessage(null);
@@ -156,15 +157,33 @@ export function EnterpriseBookingSettings({
         <FormCard eyebrow="Payments" title="Online payment account" description="Connect the live gateway used for deposits and full-payment bookings. Secrets remain environment references, never raw credentials." onSubmit={(form) => saveBookingPaymentAccount(propertyId, new FormData(form))}>
           <div className="be-form-stack">
             <input type="hidden" name="accountId" value={account?.id ?? "00000000-0000-0000-0000-000000000000"} readOnly />
-            <div className="be-three-col">
-              <Field label="Provider"><select name="provider" defaultValue="PAYSTACK"><option value="PAYSTACK">Paystack</option></select></Field>
-              <Field label="Account mode"><select name="mode" defaultValue={account?.mode ?? "PLATFORM"}><option value="PLATFORM">LodgeCore platform</option><option value="CUSTOMER">Property account</option></select></Field>
-              <Field label="Currency"><input name="currency" defaultValue={account?.currency ?? "NGN"} /></Field>
-            </div>
-            <Field label="Public key"><input name="publicKey" defaultValue={account?.publicKey ?? ""} placeholder="pk_live_…" /></Field>
-            <Field label="Secret environment variable"><input name="secretRef" defaultValue={account?.secretRef ?? ""} placeholder="PAYSTACK_SECRET_KEY" /></Field>
-            <Field label="Webhook environment variable"><input name="webhookSecretRef" defaultValue={account?.webhookSecretRef ?? ""} placeholder="PAYSTACK_WEBHOOK_SECRET" /></Field>
-            <div className="be-security-note">⌁ Payment webhooks are verified server-side before a reservation is marked paid.</div>
+            <Field label="Payment account">
+              <select name="mode" value={paymentMode} onChange={(event) => setPaymentMode(event.target.value)}>
+                <option value="PLATFORM">LodgeCore manages payments</option>
+                <option value="CUSTOMER">Property manages payments</option>
+              </select>
+            </Field>
+            {paymentMode === "PLATFORM" ? <>
+              <input type="hidden" name="provider" value="PAYSTACK" readOnly />
+              <input type="hidden" name="currency" value={account?.currency ?? "NGN"} readOnly />
+              <div className="be-managed-payment">
+                <div className="be-managed-payment-icon">✓</div>
+                <div>
+                  <strong>Payments managed by LodgeCore</strong>
+                  <p>Online deposits and full-payment checkouts use LodgeCore’s secure Paystack connection. No gateway keys or technical credentials are required from your team.</p>
+                </div>
+                <span className="be-status-pill active">Paystack · {account?.currency ?? "NGN"}</span>
+              </div>
+            </> : <>
+              <div className="be-three-col">
+                <Field label="Provider"><select name="provider" defaultValue={account?.provider ?? "PAYSTACK"}><option value="PAYSTACK">Paystack</option></select></Field>
+                <Field label="Currency"><input name="currency" defaultValue={account?.currency ?? "NGN"} /></Field>
+              </div>
+              <Field label="Public key"><input name="publicKey" defaultValue={account?.publicKey ?? ""} placeholder="pk_live_…" /></Field>
+              <Field label="Secret environment variable"><input name="secretRef" defaultValue={account?.secretRef ?? ""} placeholder="PAYSTACK_SECRET_KEY" /></Field>
+              <Field label="Webhook environment variable"><input name="webhookSecretRef" defaultValue={account?.webhookSecretRef ?? ""} placeholder="PAYSTACK_WEBHOOK_SECRET" /></Field>
+              <div className="be-security-note">⌁ Payment webhooks are verified server-side before a reservation is marked paid.</div>
+            </>}
           </div>
         </FormCard>
       </div>
