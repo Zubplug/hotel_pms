@@ -1,8 +1,13 @@
 import { NextResponse } from 'next/server';
+import { createHash } from 'node:crypto';
 import prisma, { Prisma } from '@hotel-pms/db';
 import { subscriptionScope, verifyFlutterwaveLegacyWebhook, verifyFlutterwaveTransaction, verifyFlutterwaveWebhook } from '@hotel-pms/db';
 
 const GRACE_PERIOD_MS = 3 * 24 * 60 * 60 * 1000;
+
+function fingerprint(value: string | null | undefined) {
+  return value ? createHash('sha256').update(value).digest('hex').slice(0, 16) : null;
+}
 
 function nextPeriod(interval: string, from: Date) {
   const end = new Date(from);
@@ -50,16 +55,28 @@ export async function POST(req: Request) {
   const rawBody = await req.text();
   const signature = req.headers.get('flutterwave-signature');
   const legacySignature = req.headers.get('verif-hash');
+  let diagnosticPayload: any = null;
+  try { diagnosticPayload = JSON.parse(rawBody); } catch { /* handled after signature verification */ }
   const hmacValid = verifyFlutterwaveWebhook(rawBody, signature, secretHash);
   const legacyValid = verifyFlutterwaveLegacyWebhook(legacySignature, secretHash);
   if (!hmacValid && !legacyValid) {
+    const diagnosticData = diagnosticPayload?.data ?? diagnosticPayload;
     console.warn('Flutterwave webhook signature rejected', {
       hasFlutterwaveSignature: Boolean(signature),
       flutterwaveSignatureLength: signature?.length ?? 0,
+      flutterwaveSignatureFingerprint: fingerprint(signature),
       hasLegacySignature: Boolean(legacySignature),
       legacySignatureLength: legacySignature?.length ?? 0,
+      legacySignatureFingerprint: fingerprint(legacySignature),
       configuredSecretHashLength: secretHash.length,
+      configuredSecretHashFingerprint: fingerprint(secretHash),
       bodyLength: rawBody.length,
+      event: diagnosticPayload?.event ?? diagnosticPayload?.type ?? null,
+      payloadKeys: diagnosticPayload && typeof diagnosticPayload === 'object' ? Object.keys(diagnosticPayload) : [],
+      dataKeys: diagnosticData && typeof diagnosticData === 'object' ? Object.keys(diagnosticData) : [],
+      transactionId: diagnosticData?.id ?? diagnosticData?.transaction_id ?? null,
+      transactionStatus: diagnosticData?.status ?? null,
+      transactionReference: diagnosticData?.tx_ref ?? null,
       vercelRegion: process.env.VERCEL_REGION ?? null,
       deployment: process.env.VERCEL_DEPLOYMENT_ID ?? process.env.VERCEL_GIT_COMMIT_SHA ?? null,
       requestId: req.headers.get('x-vercel-id'),
@@ -67,7 +84,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Webhook signature verification failed' }, { status: 400 });
   }
   let payload: any;
-  try { payload = JSON.parse(rawBody); } catch { return NextResponse.json({ error: 'Invalid webhook payload' }, { status: 400 }); }
+  try { payload = diagnosticPayload ?? JSON.parse(rawBody); } catch { return NextResponse.json({ error: 'Invalid webhook payload' }, { status: 400 }); }
 
   try {
     const data = payload?.data ?? payload;
