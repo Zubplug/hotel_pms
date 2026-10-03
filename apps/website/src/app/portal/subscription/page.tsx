@@ -11,7 +11,7 @@ export default async function SubscriptionPage() {
   if (!user?.organizationId) redirect("/portal/login");
   const organizationId = user.organizationId;
   const [subscription, activeBaseSubscription, entitlements, plans, addOns, properties, invoices, projects] = await Promise.all([
-    prisma.subscription.findFirst({ where: { organizationId, status: { in: ["ACTIVE", "TRIALING", "PAST_DUE"] } }, orderBy: { createdAt: "desc" }, include: { plan: { include: { items: { include: { product: { include: { modules: { where: { active: true }, orderBy: { name: "asc" } } } } } } } } } }),
+    prisma.subscription.findFirst({ where: { organizationId, status: { in: ["ACTIVE", "TRIALING", "PAST_DUE"] }, planId: { not: null } }, orderBy: { createdAt: "desc" }, include: { plan: { include: { items: { include: { product: { include: { modules: { where: { active: true }, orderBy: { name: "asc" } } } } } } } } } }),
     prisma.subscription.findFirst({ where: { organizationId, status: { in: [...ADDON_ELIGIBLE_SUBSCRIPTION_STATUSES] }, planId: { not: null } }, select: { id: true } }),
     prisma.entitlement.findMany({ where: { organizationId, status: "ACTIVE" }, include: { product: true, property: { select: { name: true } } }, orderBy: [{ propertyId: "asc" }, { productCode: "asc" }] }),
     prisma.billingPlan.findMany({ where: { active: true }, orderBy: { displayOrder: "asc" }, include: { items: { include: { product: { include: { prices: { orderBy: { amount: "asc" } }, modules: { where: { active: true }, orderBy: { name: "asc" } } } } } } } }),

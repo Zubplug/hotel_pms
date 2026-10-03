@@ -51,7 +51,7 @@ export default async function PortalDashboard() {
     await Promise.all([
       prisma.organization.findUnique({ where: { id: organizationId }, select: { name: true, slug: true } }),
       prisma.subscription.findFirst({
-        where: { organizationId },
+        where: { organizationId, status: { in: ["ACTIVE", "TRIALING", "PAST_DUE"] }, planId: { not: null } },
         orderBy: { createdAt: "desc" },
         include: { plan: { select: { name: true } } },
       }),
