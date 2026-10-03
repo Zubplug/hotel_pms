@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
     const requestedEnd = dateTo && !Number.isNaN(new Date(`${dateTo}T00:00:00.000Z`).getTime()) ? new Date(`${dateTo}T00:00:00.000Z`) : end;
     const date = { gte: requestedStart > start ? requestedStart : start, lt: requestedEnd < end ? new Date(requestedEnd.getTime() + 86400000) : end };
 
-    const [discountItems, complimentaryRecords] = await Promise.all([
+    const [discountItems, complimentaryRecords, complimentaryFolioItems] = await Promise.all([
       kind === 'complimentary' ? Promise.resolve([]) : prisma.folioItem.findMany({
         where: { folio: { propertyId }, businessDate: date, type: 'DISCOUNT' },
         include: { folio: { select: { folioNumber: true, guest: { select: { firstName: true, lastName: true } } } } },
@@ -54,6 +54,11 @@ export async function GET(request: NextRequest) {
         },
         orderBy: [{ businessDate: 'desc' }, { createdAt: 'desc' }], take: 1000,
       }),
+      kind === 'discounts' ? Promise.resolve([]) : prisma.folioItem.findMany({
+        where: { folio: { propertyId }, businessDate: date, type: 'COMPLIMENTARY' },
+        include: { folio: { select: { folioNumber: true, guest: { select: { firstName: true, lastName: true } } } } },
+        orderBy: [{ businessDate: 'desc' }, { createdAt: 'desc' }], take: 1000,
+      }),
     ]);
 
     const approvalIds = discountItems.map(item => item.discountApprovalId?.replace(/^PENDING:/, '')).filter((id): id is string => Boolean(id));
@@ -62,6 +67,7 @@ export async function GET(request: NextRequest) {
 
     const staffIds = Array.from(new Set([
       ...discountItems.map(item => item.postedBy),
+      ...complimentaryFolioItems.map(item => item.postedBy),
       ...approvals.flatMap(item => [item.requestedBy, item.reviewedBy]).filter((id): id is string => Boolean(id)),
     ]));
     const staff = staffIds.length ? await prisma.staff.findMany({ where: { OR: [{ id: { in: staffIds } }, { userId: { in: staffIds } }] }, select: { id: true, userId: true, firstName: true, lastName: true } }) : [];
@@ -100,14 +106,25 @@ export async function GET(request: NextRequest) {
     const guestById = new Map(guests.map(item => [item.id, `${item.firstName} ${item.lastName}`.trim()]));
     const folioByItemId = new Map(compFolios.map(item => [item.id, item.folio.folioNumber]));
     const orderById = new Map(compOrders.map(item => [item.id, item.orderNumber]));
-    const comps = complimentaryRecords.map(item => ({
+    const verifiedComplimentaryFolioItemIds = new Set(complimentaryRecords.map(item => item.folioItemId).filter((id): id is string => Boolean(id)));
+    const comps = [
+      ...complimentaryRecords.map(item => ({
       id: item.id, kind: 'COMPLIMENTARY', businessDate: item.businessDate, createdAt: item.createdAt, folioId: item.folioItemId, operationId: item.operationId,
       reference: item.reference, folioReference: item.folioItemId ? folioByItemId.get(item.folioItemId) || null : item.posOrderId ? orderById.get(item.posOrderId) || null : null, guestName: item.guestId ? guestById.get(item.guestId) || 'Guest record' : 'Walk-in', amount: Number(item.complAmount), currency: scope.currency,
       description: item.complType, reason: item.reason, source: item.sourceModule, status: item.status,
       operator: name(item.operator), approver: name(item.approver) || 'Not recorded', requestedBy: name(item.operator),
       requestedAt: item.createdAt, reviewedAt: item.verifiedAt, approvalStatus: item.status, executionStatus: null,
       approvalId: null, nightAuditor: name(item.nightAuditor) || 'Not recorded', notes: item.notes,
-    })).filter(item => matches([item.reference, item.folioReference, item.guestName, item.description, item.reason, item.operator, item.approver, item.status]) && passesFilters(item));
+      })),
+      ...complimentaryFolioItems.filter(item => !verifiedComplimentaryFolioItemIds.has(item.id)).map(item => ({
+        id: item.id, kind: 'COMPLIMENTARY', businessDate: item.businessDate, createdAt: item.createdAt, folioId: item.folioId, operationId: item.operationId,
+        reference: item.folio.folioNumber || item.folioId, folioReference: item.folio.folioNumber || null, guestName: name(item.folio.guest) || 'Walk-in', amount: Number(item.amount), currency: item.currency,
+        description: item.description, reason: item.description, source: item.source, status: item.voidedAt ? 'VOIDED' : 'POSTED',
+        operator: display(item.postedBy), approver: 'Not recorded', requestedBy: display(item.postedBy),
+        requestedAt: item.createdAt, reviewedAt: null, approvalStatus: 'NOT_LINKED', executionStatus: null,
+        approvalId: null, nightAuditor: 'Not recorded', notes: item.voidReason,
+      })),
+    ].filter(item => matches([item.reference, item.folioReference, item.guestName, item.description, item.reason, item.operator, item.approver, item.status]) && passesFilters(item));
 
     const items = [...discounts, ...comps].sort((a, b) => new Date(b.businessDate).getTime() - new Date(a.businessDate).getTime());
     const itemIds = items.map(item => item.id);
