@@ -2010,6 +2010,7 @@ textarea.form-input { resize: vertical; min-height: 90px; }
 .be-flow-intro strong { display: block; color: var(--text-primary); font: 600 13px var(--font-display); }
 .be-flow-intro > span { color: var(--text-muted); font: 10px var(--font-mono); white-space: nowrap; }
 .be-flow-kicker { margin-bottom: 4px; color: var(--accent); font: 9px var(--font-mono); letter-spacing: .14em; text-transform: uppercase; }
+.be-publish-hint { margin: -8px 0 16px; padding: 10px 12px; border: 1px solid rgba(255,190,90,.22); border-radius: var(--radius-md); color: var(--amber); background: rgba(255,190,90,.06); font-size: 11px; }
 .be-workspace .portal-card { box-shadow: 0 8px 24px rgba(0,0,0,.08); }
 .be-enterprise-settings { margin-top: 34px; }
 .be-section-heading-spaced { margin-top: 30px; }

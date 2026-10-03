@@ -151,10 +151,10 @@ export async function publishBookingSite(propertyId: string) {
   await requireBookingEntitlement(user.organizationId, propertyId);
 
   const site = await prisma.bookingSite.findUnique({ where: { propertyId } });
-  if (!site) throw new Error("No site configured — fill in branding first");
+  if (!site) return { ok: false as const, error: "No site configured — complete Branding & Site first" };
 
   const config = await prisma.bookingEngineConfig.findUnique({ where: { propertyId } });
-  if (!config?.enabled) throw new Error("Enable the Booking Engine before publishing");
+  if (!config?.enabled) return { ok: false as const, error: "Enable the Booking Engine in Engine settings before publishing" };
 
   await prisma.bookingSite.update({
     where: { propertyId },
@@ -163,6 +163,7 @@ export async function publishBookingSite(propertyId: string) {
 
   revalidatePath(`/portal/settings/booking-engine/${propertyId}`);
   revalidatePath(`/book/${config.publicSlug}`);
+  return { ok: true as const };
 }
 
 export async function unpublishBookingSite(propertyId: string) {

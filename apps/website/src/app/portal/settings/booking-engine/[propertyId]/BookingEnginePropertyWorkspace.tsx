@@ -274,7 +274,7 @@ function EngineConfigForm({ propertyId, config, ratePlans }: { propertyId: strin
 // Branding Form
 // ─────────────────────────────────────────────────────────────────────────────
 
-function BrandingForm({ propertyId, site }: { propertyId: string; site: Site | null }) {
+function BrandingForm({ propertyId, site, engineEnabled }: { propertyId: string; site: Site | null; engineEnabled: boolean }) {
   const formRef = useRef<HTMLFormElement>(null);
   const [isPending, startTransition] = useTransition();
   const [saved, setSaved] = useState(false);
@@ -296,7 +296,10 @@ function BrandingForm({ propertyId, site }: { propertyId: string; site: Site | n
   const handlePublish = () => {
     setPubError(null);
     startPubTransition(async () => {
-      try { await publishBookingSite(propertyId); }
+      try {
+        const result = await publishBookingSite(propertyId);
+        if (!result.ok) throw new Error(result.error);
+      }
       catch (err: any) { setPubError(err.message ?? "Failed to publish"); }
     });
   };
@@ -347,7 +350,7 @@ function BrandingForm({ propertyId, site }: { propertyId: string; site: Site | n
         <div style={{ display: "flex", gap: 8 }}>
           {!isPublished && (
             <button
-              type="button" onClick={handlePublish} disabled={pubPending || !site}
+              type="button" onClick={handlePublish} disabled={pubPending || !site || !engineEnabled}
               className="btn btn-primary btn-sm" style={{ border: "none" }}
             >
               {pubPending ? "Publishing…" : "Publish →"}
@@ -363,6 +366,9 @@ function BrandingForm({ propertyId, site }: { propertyId: string; site: Site | n
           )}
         </div>
       </div>
+      {!isPublished && site && !engineEnabled && (
+        <div className="be-publish-hint">Enable the Booking Engine in the Engine tab before publishing this site.</div>
+      )}
       {pubError && <div className="portal-card" style={{ color: "var(--danger, #b42318)", fontSize: 13, marginBottom: 12 }}>{pubError}</div>}
 
       <form ref={formRef} onSubmit={handleSubmit}>
@@ -547,7 +553,7 @@ export function BookingEnginePropertyWorkspace({ propertyId, propertyName, entit
         <EngineConfigForm propertyId={propertyId} config={config} ratePlans={ratePlans} />
       )}
       {tab === "branding" && (
-        <BrandingForm propertyId={propertyId} site={site} />
+        <BrandingForm propertyId={propertyId} site={site} engineEnabled={Boolean(config?.enabled)} />
       )}
       {tab === "content" && <EnterpriseBookingSettings {...enterpriseSettings} section="content" />}
       {tab === "payments" && <EnterpriseBookingSettings {...enterpriseSettings} section="payments" />}
