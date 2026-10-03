@@ -15,13 +15,20 @@ interface Props {
 }
 
 function today() {
-  return new Date().toISOString().split("T")[0];
+  const date = new Date();
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function addDays(dateStr: string, n: number) {
   const d = new Date(dateStr);
   d.setDate(d.getDate() + n);
-  return d.toISOString().split("T")[0];
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function diffDays(a: string, b: string) {

@@ -4,6 +4,15 @@ import { DateSearchForm } from "./DateSearchForm";
 
 export const dynamic = "force-dynamic";
 
+function fmtCurrency(amount: number, currency: string) {
+  return new Intl.NumberFormat("en-NG", {
+    style: "currency",
+    currency,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(amount);
+}
+
 export default async function BookingLandingPage({
   params,
 }: {
@@ -39,6 +48,8 @@ export default async function BookingLandingPage({
         description: true,
         maxAdults: true,
         maxOccupancy: true,
+        baseRate: true,
+        currency: true,
         photos: true,
         amenities: true,
       },
@@ -209,8 +220,17 @@ export default async function BookingLandingPage({
                     </div>
 
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                      <span style={{ fontSize: 11, color: "var(--bk-muted)" }}>From</span>
-                      <span style={{ fontSize: 11, fontWeight: 600, color: "var(--bk-primary)" }}>Select dates to see pricing →</span>
+                      <div>
+                        <span style={{ display: "block", fontSize: 10, color: "var(--bk-muted)", textTransform: "uppercase", letterSpacing: ".1em", fontFamily: "var(--font-mono)" }}>From</span>
+                        {Number(rt.baseRate) > 0 ? (
+                          <span style={{ display: "block", marginTop: 3, fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 800, letterSpacing: "-.04em", color: "var(--bk-text)" }}>
+                            {fmtCurrency(Number(rt.baseRate), rt.currency)} <span style={{ fontSize: 11, fontWeight: 500, color: "var(--bk-muted)", letterSpacing: 0 }}>/ night</span>
+                          </span>
+                        ) : (
+                          <span style={{ display: "block", marginTop: 3, fontSize: 13, fontWeight: 700, color: "var(--bk-muted)" }}>Pricing on request</span>
+                        )}
+                      </div>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: "var(--bk-primary)", textAlign: "right" }}>Choose dates<br />for exact rate →</span>
                     </div>
                   </div>
                 </div>

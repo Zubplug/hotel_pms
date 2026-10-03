@@ -1,4 +1,5 @@
 import { notFound, redirect } from "next/navigation";
+import { headers } from "next/headers";
 import Link from "next/link";
 import prisma from "@hotel-pms/db";
 import { RoomCard } from "./RoomCard";
@@ -35,38 +36,48 @@ export default async function RoomsPage({
   });
   if (!config) notFound();
 
-  // Call our own public availability API
-  const origin = process.env.NEXT_PUBLIC_WEBSITE_URL || "https://book.lodgecore.com";
-  const availRes = await fetch(
-    `${origin}/api/public/booking/${slug}/availability?checkIn=${checkIn}&checkOut=${checkOut}&adults=${adults}&children=${children}`,
-    { next: { revalidate: 0 } }
-  );
-
   let availRooms: any[] = [];
   let availError: string | null = null;
 
-  if (!availRes.ok) {
+  try {
+    // Call the active deployment's public availability API. The environment
+    // variable is preferred, but the request host keeps preview/custom-domain
+    // deployments from accidentally calling a different booking site.
+    const requestHeaders = await headers();
+    const forwardedHost = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host");
+    const forwardedProto = requestHeaders.get("x-forwarded-proto")?.split(",")[0] ?? "https";
+    const requestOrigin = forwardedHost ? `${forwardedProto}://${forwardedHost}` : null;
+    const origin = (requestOrigin || process.env.NEXT_PUBLIC_WEBSITE_URL || "https://getlodgecore.vercel.app").replace(/\/$/, "");
+    const availRes = await fetch(
+      `${origin}/api/public/booking/${slug}/availability?checkIn=${checkIn}&checkOut=${checkOut}&adults=${adults}&children=${children}`,
+      { cache: "no-store" }
+    );
+
     const body = await availRes.json().catch(() => ({}));
-    availError = body.error ?? "Unable to fetch availability";
-  } else {
-    const response = await availRes.json();
-    const data = response.data ?? response;
-    availRooms = (data.roomTypes ?? []).map((room: any) => ({
-      roomTypeId: room.roomTypeId,
-      roomTypeName: room.name,
-      description: room.description,
-      images: room.photos ?? [],
-      maxOccupancy: room.maxOccupancy,
-      availableRooms: room.availability?.available ?? 0,
-      rates: (room.rates ?? []).map((rate: any) => ({
-        ratePlanId: rate.ratePlanId,
-        ratePlanName: rate.ratePlanName,
-        ratePlanCode: rate.ratePlanCode ?? "",
-        nightlyRate: rate.avgNightlyRate,
-        totalAmount: rate.subtotal,
-        currency: rate.currency,
-      })),
-    }));
+    if (!availRes.ok) {
+      availError = body.error ?? body.message ?? "Unable to fetch availability";
+    } else {
+      const data = body.data ?? body;
+      availRooms = (data.roomTypes ?? []).map((room: any) => ({
+        roomTypeId: room.roomTypeId,
+        roomTypeName: room.name,
+        description: room.description,
+        images: room.photos ?? [],
+        maxOccupancy: room.maxOccupancy,
+        availableRooms: room.availability?.available ?? 0,
+        rates: (room.rates ?? []).map((rate: any) => ({
+          ratePlanId: rate.ratePlanId,
+          ratePlanName: rate.ratePlanName,
+          ratePlanCode: rate.ratePlanCode ?? "",
+          nightlyRate: rate.avgNightlyRate,
+          totalAmount: rate.subtotal,
+          currency: rate.currency,
+        })),
+      }));
+    }
+  } catch (error) {
+    console.error("[public-booking] availability request failed", { slug, checkIn, checkOut, error });
+    availError = "Availability is temporarily unavailable. Please try again in a moment.";
   }
 
   const nights = Math.round(

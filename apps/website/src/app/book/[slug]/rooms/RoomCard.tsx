@@ -37,7 +37,7 @@ function fmtCurrency(amount: number, currency: string) {
     currency,
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
-  }).format(amount / 100);
+  }).format(amount);
 }
 
 export function RoomCard({ room, slug, checkIn, checkOut, adults, children, nights, paymentMode }: Props) {
