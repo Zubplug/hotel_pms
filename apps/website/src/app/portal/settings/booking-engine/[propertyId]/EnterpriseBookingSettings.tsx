@@ -1,12 +1,10 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
-import { saveBookingContent, saveBookingPaymentAccount, saveBookingDomain, verifyBookingDomain, requestCustomDomain, requestCustomWebsite } from "./actions";
+import { saveBookingContent, saveBookingPaymentAccount } from "./actions";
 
-type Site = { siteName: string; customDomain?: string | null; domainStatus?: string | null; verificationToken?: string | null; content?: Record<string, any> | null };
+type Site = { siteName: string; content?: Record<string, any> | null };
 type Account = { id: string; provider: string; mode: string; currency: string; publicKey: string | null; secretRef: string | null; webhookSecretRef: string | null } | null;
-type DomainRequest = { id: string; domain: string; status: string; amount: number; currency: string } | null;
-type WebsiteRequest = { id: string; status: string; amount: number; currency: string; brief: string | null } | null;
 
 function FormCard({ title, children, onSubmit }: { title: string; children: React.ReactNode; onSubmit: (form: HTMLFormElement) => Promise<void> }) {
   const ref = useRef<HTMLFormElement>(null); const [pending, start] = useTransition(); const [message, setMessage] = useState("");
@@ -15,15 +13,9 @@ function FormCard({ title, children, onSubmit }: { title: string; children: Reac
   </form>;
 }
 
-export function EnterpriseBookingSettings({ propertyId, site, account, customDomainRequest, customWebsiteRequest }: { propertyId: string; site: Site | null; account: Account; customDomainRequest: DomainRequest; customWebsiteRequest: WebsiteRequest }) {
+export function EnterpriseBookingSettings({ propertyId, site, account }: { propertyId: string; site: Site | null; account: Account }) {
   const content = site?.content ?? {};
   return <div style={{ display: "grid", gap: 16, marginTop: 16 }}>
-    <FormCard title="Custom website design service" onSubmit={(form) => requestCustomWebsite(propertyId, new FormData(form))}>
-      <div style={{ display: "grid", gap: 10, marginTop: 12 }}><label>Describe the website you want<textarea name="brief" rows={5} defaultValue={customWebsiteRequest?.brief ?? ""} placeholder="Describe your brand, pages, imagery, style, and special requirements…" disabled={!!customWebsiteRequest && !["REJECTED", "CANCELLED"].includes(customWebsiteRequest.status)} /></label><p style={{ fontSize: 12, color: "var(--text-muted)" }}>Status: <strong>{customWebsiteRequest?.status ?? "Not requested"}</strong>{customWebsiteRequest?.amount ? ` · ${customWebsiteRequest.currency.toUpperCase()} ${(customWebsiteRequest.amount / 100).toLocaleString()} one-time` : " · HQ will quote this service"}</p>{customWebsiteRequest?.status === "APPROVED" && <button type="button" className="portal-primary-button" onClick={async () => { const response = await fetch("/api/billing/checkout", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ customWebsiteRequestId: customWebsiteRequest.id, successUrl: window.location.href }) }); const data = await response.json(); if (!response.ok) return window.alert(data.error ?? "Unable to start payment"); window.location.href = data.url; }}>Pay design fee</button>}</div>
-    </FormCard>
-    <FormCard title="Custom domain service request" onSubmit={(form) => requestCustomDomain(propertyId, new FormData(form))}>
-      <div style={{ display: "grid", gap: 10, marginTop: 12 }}><label>Requested domain<input name="domain" type="text" defaultValue={customDomainRequest?.domain ?? ""} placeholder="book.example.com" disabled={!!customDomainRequest && customDomainRequest.status !== "REJECTED"} /></label><p style={{ fontSize: 12, color: "var(--text-muted)" }}>Status: <strong>{customDomainRequest?.status ?? "Not requested"}</strong>{customDomainRequest?.amount ? ` · ${customDomainRequest.currency.toUpperCase()} ${(customDomainRequest.amount / 100).toLocaleString()} / month` : ""}</p>{customDomainRequest?.status === "APPROVED" && <button type="button" className="portal-primary-button" onClick={async () => { const response = await fetch("/api/billing/checkout", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ customDomainRequestId: customDomainRequest.id, successUrl: window.location.href }) }); const data = await response.json(); if (!response.ok) return window.alert(data.error ?? "Unable to start payment"); window.location.href = data.url; }}>Pay custom-domain fee</button>}</div>
-    </FormCard>
     <FormCard title="Content, contact and guest policies" onSubmit={(form) => saveBookingContent(propertyId, new FormData(form))}>
       <div style={{ display: "grid", gap: 12, marginTop: 12 }}>
         <label>Hero title<input name="heroTitle" defaultValue={content.heroTitle ?? content.tagline ?? "Welcome"} /></label>
@@ -40,9 +32,6 @@ export function EnterpriseBookingSettings({ propertyId, site, account, customDom
         <label>Public key<input name="publicKey" defaultValue={account?.publicKey ?? ""} /></label><label>Secret environment variable name<input name="secretRef" defaultValue={account?.secretRef ?? ""} placeholder="PAYSTACK_SECRET_KEY" /></label><label>Webhook secret environment variable name<input name="webhookSecretRef" defaultValue={account?.webhookSecretRef ?? ""} /></label>
         <p style={{ fontSize: 11, color: "var(--text-muted)" }}>Raw provider secrets are never stored. Only environment-variable references are saved.</p>
       </div>
-    </FormCard>
-    <FormCard title="Custom domain and DNS verification" onSubmit={(form) => saveBookingDomain(propertyId, new FormData(form))}>
-      <div style={{ display: "grid", gap: 12, marginTop: 12 }}><label>Custom domain<input name="customDomain" defaultValue={site?.customDomain ?? ""} placeholder="book.example.com" /></label><p style={{ fontSize: 12, color: "var(--text-muted)" }}>Status: <strong>{site?.domainStatus ?? "Not configured"}</strong></p>{site?.verificationToken && site.customDomain && <div style={{ fontSize: 12, lineHeight: 1.6 }}><div>Add these DNS records at your domain provider:</div><code style={{ display: "block", marginTop: 6, wordBreak: "break-all" }}>TXT · Name: _lodgecore-booking · Value: {site.verificationToken}</code><code style={{ display: "block", marginTop: 6, wordBreak: "break-all" }}>CNAME · Name: {site.customDomain.split(".")[0]} · Target: cname.vercel-dns.com</code><div style={{ marginTop: 6, color: "var(--text-muted)" }}>After DNS propagates, verify here. LodgeCore attaches the hostname to the Vercel project and Vercel provisions SSL automatically when VERCEL_API_TOKEN and VERCEL_PROJECT_ID are configured.</div></div>}<button type="button" className="portal-secondary-button" onClick={async () => { try { await verifyBookingDomain(propertyId); window.location.reload(); } catch (e: any) { window.alert(e.message ?? "Verification failed"); } }}>Verify DNS now</button></div>
     </FormCard>
   </div>;
 }

@@ -306,7 +306,7 @@ function BrandingForm({ propertyId, site }: { propertyId: string; site: Site | n
   const isPublished = site?.status === "PUBLISHED";
 
   return (
-    <div>
+    <div className="be-workspace">
       {/* Publish control */}
       <div className="portal-card" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 12 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -422,29 +422,27 @@ export function BookingEnginePropertyWorkspace({ propertyId, propertyName, entit
   const bookingUrl = config?.publicSlug ? `https://book.lodgecore.com/book/${config.publicSlug}` : null;
 
   return (
-    <div>
+    <div className="be-workspace">
       {/* Header */}
-      <div style={{ marginBottom: 24 }}>
+      <div className="be-detail-hero">
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
           <div>
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: ".18em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 6 }}>
-              Booking Engine
-            </div>
+            <div className="be-eyebrow"><span>PROPERTY WORKSPACE</span><i /> {isLive ? "LIVE DISTRIBUTION" : "CONFIGURATION"}</div>
             <h1 style={{ fontFamily: "var(--font-display)", fontSize: "clamp(1.4rem,2.5vw,1.8rem)", fontWeight: 800, letterSpacing: "-.05em", color: "var(--text-primary)", marginBottom: 6 }}>
               {propertyName}
             </h1>
-            <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-              <span style={{ width: 7, height: 7, borderRadius: "50%", background: isLive ? "#3ef5a0" : "#4e6678", display: "inline-block" }} />
+            <div className="be-detail-links">
+              <span className={`be-live-dot ${isLive ? "is-live" : ""}`} />
               <span style={{ fontSize: 12, color: isLive ? "#3ef5a0" : "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
                 {isLive ? "Live" : "Not live"}
               </span>
               {bookingUrl && (
                 <a href={bookingUrl} target="_blank" rel="noopener noreferrer"
-                  style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--accent)", textDecoration: "none" }}>
+                  className="be-property-url">
                   {bookingUrl} ↗
                 </a>
               )}
-              <a href={`/portal/settings/booking-engine/${propertyId}/preview`} style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--accent)", textDecoration: "none" }}>Preview workspace ↗</a>
+                <a href={`/portal/settings/booking-engine/${propertyId}/preview`} className="be-preview-link">Preview site ↗</a>
             </div>
           </div>
         </div>
@@ -474,17 +472,11 @@ export function BookingEnginePropertyWorkspace({ propertyId, propertyName, entit
       )}
 
       {/* Tab bar */}
-      <div style={{ display: "flex", gap: 2, marginBottom: 20, borderBottom: "1px solid var(--border)", paddingBottom: 0 }}>
+      <div className="be-tabs">
         {(["engine", "branding"] as const).map(t => (
           <button
             key={t} type="button" onClick={() => setTab(t)}
-            style={{
-              padding: "8px 18px", fontSize: 12, fontFamily: "var(--font-display)", fontWeight: 700,
-              background: "none", border: "none", cursor: "pointer",
-              color: tab === t ? "var(--accent)" : "var(--text-muted)",
-              borderBottom: tab === t ? "2px solid var(--accent)" : "2px solid transparent",
-              marginBottom: -1, textTransform: "capitalize", letterSpacing: ".02em",
-            }}
+            className={tab === t ? "is-active" : ""}
           >
             {t === "engine" ? "Engine Settings" : "Branding & Site"}
           </button>

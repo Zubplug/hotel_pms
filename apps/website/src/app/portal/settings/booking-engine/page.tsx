@@ -54,26 +54,19 @@ export default async function BookingEngineOverviewPage() {
 
   return (
     <PortalShell orgName={undefined} userName={user.name ?? user.email ?? undefined}>
-      {/* ── PAGE HEADER ──────────────────────────────────── */}
-      <div className="portal-page-header">
+      <div className="be-page-hero">
         <div>
-          <div className="portal-page-kicker">Customer workspace</div>
+          <div className="portal-page-kicker">Distribution · Direct revenue</div>
           <h1 className="portal-page-title">Booking Engine</h1>
           <p className="portal-page-sub" style={{ marginBottom: 0 }}>
-            Configure your public online booking sites — one per property.
+            Manage direct booking experiences, rate visibility and publishing for every property.
           </p>
         </div>
+        <div className="be-hero-mark" aria-hidden="true"><span>↗</span></div>
       </div>
 
       {/* ── SUMMARY STRIP ──────────────────────────────── */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(3, 1fr)",
-          gap: 12,
-          marginBottom: 24,
-        }}
-      >
+      <div className="be-stat-grid">
         {[
           { label: "Total Properties", value: String(properties.length), color: "#00d4e8" },
           { label: "Addon Activated", value: String(propertyData.filter((p) => p.entitled).length), color: "#a78bfa" },
@@ -81,15 +74,8 @@ export default async function BookingEngineOverviewPage() {
         ].map((s) => (
           <div
             key={s.label}
-            className="portal-card"
-            style={{ padding: "16px 20px", position: "relative", overflow: "hidden" }}
+            className="portal-card be-stat-card"
           >
-            <div
-              style={{
-                position: "absolute", top: 0, left: 0, right: 0, height: 2,
-                background: s.color, opacity: 0.7,
-              }}
-            />
             <div
               style={{
                 fontFamily: "var(--font-display)", fontSize: "2rem",
@@ -107,13 +93,9 @@ export default async function BookingEngineOverviewPage() {
       </div>
 
       {/* ── PROPERTY LIST ──────────────────────────────── */}
-      <div
-        style={{
-          fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: ".18em",
-          textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 12,
-        }}
-      >
-        Properties
+      <div className="be-section-heading">
+        <div><span className="be-section-index">01</span> Properties</div>
+        <span>{propertyData.length} active properties</span>
       </div>
 
       {propertyData.length === 0 && (
@@ -131,7 +113,7 @@ export default async function BookingEngineOverviewPage() {
         </div>
       )}
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <div className="be-property-list">
         {propertyData.map((prop) => {
           const isLive = prop.config?.enabled && prop.site?.status === "PUBLISHED";
           const bookingUrl = prop.config?.publicSlug
@@ -141,27 +123,14 @@ export default async function BookingEngineOverviewPage() {
           return (
             <div
               key={prop.id}
-              className="portal-card"
-              style={{
-                display: "flex", alignItems: "center",
-                gap: 20, padding: "16px 20px", flexWrap: "wrap",
-              }}
+              className="portal-card be-property-card"
             >
-              {/* Status dot */}
-              <span
-                style={{
-                  width: 8, height: 8, borderRadius: "50%", flexShrink: 0,
-                  background: isLive ? "#3ef5a0" : prop.entitled ? "#ffbe5a" : "#4e6678",
-                }}
-              />
+              <div className={`be-property-status ${isLive ? "is-live" : prop.entitled ? "is-ready" : ""}`} />
 
               {/* Property name + url */}
-              <div style={{ flex: 1, minWidth: 0 }}>
+              <div className="be-property-main">
                 <div
-                  style={{
-                    fontFamily: "var(--font-display)", fontWeight: 700,
-                    color: "var(--text-primary)", fontSize: 14,
-                  }}
+                  className="be-property-name"
                 >
                   {prop.name}
                 </div>
@@ -170,22 +139,19 @@ export default async function BookingEngineOverviewPage() {
                     href={bookingUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    style={{
-                      fontFamily: "var(--font-mono)", fontSize: 11,
-                      color: "var(--accent)", textDecoration: "none",
-                    }}
+                      className="be-property-url"
                   >
                     {bookingUrl}
                   </a>
                 ) : (
-                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--text-muted)" }}>
+                  <span className="be-property-url muted">
                     Not configured
                   </span>
                 )}
               </div>
 
               {/* Badges */}
-              <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
+              <div className="be-property-meta">
                 {!prop.entitled && (
                   <span className="portal-badge badge-inactive">No addon</span>
                 )}
@@ -199,14 +165,7 @@ export default async function BookingEngineOverviewPage() {
                   <span className="portal-badge badge-active">Live</span>
                 )}
                 {prop.config?.paymentMode && (
-                  <span
-                    style={{
-                      fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: ".08em",
-                      textTransform: "uppercase", padding: "3px 8px",
-                      border: "1px solid var(--border)", borderRadius: 4,
-                      color: "var(--text-muted)", background: "var(--bg-overlay)",
-                    }}
-                  >
+                  <span className="be-payment-pill">
                     {prop.config.paymentMode.replace("_", " ")}
                   </span>
                 )}
@@ -221,12 +180,7 @@ export default async function BookingEngineOverviewPage() {
 
       {/* ── HELP STRIP ──────────────────────────────── */}
       <div
-        style={{
-          marginTop: 24, padding: "14px 20px",
-          border: "1px solid var(--border-card)", borderRadius: "var(--radius-lg)",
-          background: "var(--bg-overlay)", fontSize: 12, color: "var(--text-muted)",
-          display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap",
-        }}
+        className="be-help-strip"
       >
         <span>
           Each property gets its own booking page at{" "}

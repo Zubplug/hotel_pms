@@ -28,7 +28,7 @@ export default async function BookingEnginePropertyPage({
   });
   if (!property) notFound();
 
-  const [entitled, config, site, ratePlans, paymentAccount, customDomainRequest, customWebsiteRequest] = await Promise.all([
+  const [entitled, config, site, ratePlans, paymentAccount] = await Promise.all([
     prisma.entitlement.findFirst({
       where: {
         organizationId,
@@ -61,9 +61,6 @@ export default async function BookingEnginePropertyPage({
         templateKey: true,
         status: true,
         content: true,
-        customDomain: true,
-        domainStatus: true,
-        verificationToken: true,
       },
     }),
     prisma.ratePlan.findMany({
@@ -72,8 +69,6 @@ export default async function BookingEnginePropertyPage({
       orderBy: { name: "asc" },
     }),
     prisma.bookingPaymentAccount.findFirst({ where: { organizationId, propertyId, isActive: true }, select: { id: true, provider: true, mode: true, currency: true, publicKey: true, secretRef: true, webhookSecretRef: true } }),
-    prisma.customDomainRequest.findFirst({ where: { organizationId, propertyId }, orderBy: { createdAt: "desc" }, select: { id: true, domain: true, status: true, amount: true, currency: true } }),
-    prisma.customWebsiteRequest.findFirst({ where: { organizationId, propertyId }, orderBy: { createdAt: "desc" }, select: { id: true, status: true, amount: true, currency: true, brief: true } }),
   ]);
 
   return (
@@ -116,7 +111,7 @@ export default async function BookingEnginePropertyPage({
         } : null}
         ratePlans={ratePlans}
       />
-      <EnterpriseBookingSettings propertyId={propertyId} site={site ? { ...site, content: site.content as Record<string, any> | null } : null} account={paymentAccount} customDomainRequest={customDomainRequest} customWebsiteRequest={customWebsiteRequest} />
+      <EnterpriseBookingSettings propertyId={propertyId} site={site ? { siteName: site.siteName, content: site.content as Record<string, any> | null } : null} account={paymentAccount} />
     </PortalShell>
   );
 }
