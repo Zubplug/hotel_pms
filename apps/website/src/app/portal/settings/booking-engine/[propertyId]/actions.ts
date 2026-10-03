@@ -87,6 +87,10 @@ export async function saveBookingEngineConfig(propertyId: string, formData: Form
       allowedRatePlanIds,
     },
   });
+  await prisma.bookingSite.updateMany({
+    where: { propertyId },
+    data: { publicSlug },
+  });
 
   revalidatePath(`/portal/settings/booking-engine/${propertyId}`);
 }
@@ -129,6 +133,7 @@ export async function saveBookingSite(propertyId: string, formData: FormData) {
     },
     update: {
       siteName,
+      publicSlug: config.publicSlug,
       templateKey,
       primaryColor,
       secondaryColor,
