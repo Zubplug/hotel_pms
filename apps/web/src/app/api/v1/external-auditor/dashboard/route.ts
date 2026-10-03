@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
     assertAuditorAccess(scope, propertyId, scope.auditPeriodStart);
     const date = { gte: start, lt: end };
 
-    const [property, charges, cash, occupancy, latestClose, late, voids, discounts, journals, settlements, cashVariances, audits, revenueAccounts] = await Promise.all([
+    const [property, charges, cash, occupancy, latestClose, late, voids, discounts, discountAmount, complimentary, complimentaryAmount, journals, settlements, cashVariances, audits, revenueAccounts] = await Promise.all([
       prisma.property.findUnique({ where: { id: propertyId }, select: { id: true, name: true, baseCurrency: true } }),
       prisma.folioItem.aggregate({ where: { folio: { propertyId }, businessDate: date, type: 'CHARGE', voidedAt: null }, _sum: { amount: true } }),
       prisma.payment.aggregate({ where: { propertyId, businessDate: date, method: 'CASH', status: { in: ['COMPLETED', 'PARTIALLY_REFUNDED'] } }, _sum: { amount: true } }),
@@ -29,6 +29,9 @@ export async function GET(request: NextRequest) {
       prisma.folioItem.count({ where: { folio: { propertyId }, businessDate: date, isLatePosting: true } }),
       prisma.folioItem.count({ where: { folio: { propertyId }, businessDate: date, voidedAt: { not: null } } }),
       prisma.folioItem.count({ where: { folio: { propertyId }, businessDate: date, type: 'DISCOUNT' } }),
+      prisma.folioItem.aggregate({ where: { folio: { propertyId }, businessDate: date, type: 'DISCOUNT', voidedAt: null }, _sum: { amount: true } }),
+      prisma.complimentaryRecord.count({ where: { propertyId, businessDate: date } }),
+      prisma.complimentaryRecord.aggregate({ where: { propertyId, businessDate: date }, _sum: { complAmount: true } }),
       prisma.journalEntry.count({ where: { propertyId, entryDate: date, source: 'MANUAL' } }),
       prisma.posSettlement.count({ where: { propertyId, businessDate: date, status: { not: 'SETTLED' } } }),
       prisma.nightAuditFinancialSnapshot.count({ where: { nightAudit: { propertyId, businessDate: date }, cashVariance: { not: 0 } } }),
@@ -56,11 +59,13 @@ export async function GET(request: NextRequest) {
         return mix;
       }, {})).map(([category, value]) => ({ category, name: value.name, amount: value.amount })).filter(item => item.amount !== 0).sort((a, b) => b.amount - a.amount),
       review: { evidenceRecords: await prisma.folioItem.count({ where: { folio: { propertyId }, businessDate: date } }), journalEntries: journals, auditEvents: await prisma.auditLog.count({ where: { propertyId, createdAt: date } }) },
+      controls: { discountAmount: Math.abs(number(discountAmount._sum.amount)), complimentaryAmount: Math.abs(number(complimentaryAmount._sum.complAmount)) },
       exceptions: [
         { key: 'cash-variance', label: 'Cash Variances', count: cashVariances, risk: 'HIGH' },
         { key: 'late-posting', label: 'Backdated Transactions', count: late, risk: 'MEDIUM' },
         { key: 'voids', label: 'Voided Transactions', count: voids, risk: 'MEDIUM' },
-        { key: 'discounts', label: 'Discounts', count: discounts, risk: 'LOW' },
+        { key: 'discounts', label: 'Discounts', count: discounts, risk: 'MEDIUM' },
+        { key: 'complimentary', label: 'Complimentary', count: complimentary, risk: 'MEDIUM' },
         { key: 'manual-journals', label: 'Manual Journal Entries', count: journals, risk: 'LOW' },
         { key: 'pos-settlements', label: 'Unreconciled POS Batches', count: settlements, risk: 'MEDIUM' },
       ],

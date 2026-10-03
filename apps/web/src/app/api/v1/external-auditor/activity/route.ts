@@ -15,6 +15,7 @@ export async function GET(request: NextRequest) {
   const allowedProperties = scopes.map(scope => scope.propertyId);
   if (external && (!propertyId || !allowedProperties.includes(propertyId))) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   const organizationId = String((session.user as any).organizationId || '');
-  const logs = await prisma.auditLog.findMany({ where: { ...(organizationId ? { organizationId } : {}), ...(propertyId ? { propertyId } : external ? { propertyId: { in: allowedProperties } } : {}) }, select: { id: true, action: true, resource: true, resourceId: true, userEmail: true, userRole: true, requestId: true, ipAddress: true, createdAt: true }, orderBy: { createdAt: 'desc' }, take: 500 });
+  const scope = external && propertyId ? scopes.find(item => item.propertyId === propertyId) : null;
+  const logs = await prisma.auditLog.findMany({ where: { ...(organizationId ? { organizationId } : {}), ...(propertyId ? { propertyId } : external ? { propertyId: { in: allowedProperties } } : {}), ...(scope ? { createdAt: { gte: scope.auditPeriodStart, lte: scope.accessExpiresAt } } : {}) }, select: { id: true, action: true, resource: true, resourceId: true, userEmail: true, userRole: true, requestId: true, ipAddress: true, createdAt: true }, orderBy: { createdAt: 'desc' }, take: 500 });
   return NextResponse.json({ items: logs }, { headers: { 'Cache-Control': 'no-store' } });
 }

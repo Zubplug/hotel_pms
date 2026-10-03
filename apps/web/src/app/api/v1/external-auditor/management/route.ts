@@ -46,7 +46,8 @@ export async function GET(request: NextRequest) {
     if (resource === 'findings') return NextResponse.json({ items: await prisma.auditFinding.findMany({ where: { ...organizationFilter, ...propertyFilter, ...engagementFilter }, orderBy: [{ status: 'asc' }, { severity: 'asc' }, { dueDate: 'asc' }], take: 250 }) });
     if (resource === 'action-plans') return NextResponse.json({ items: await prisma.auditActionPlan.findMany({ where: { ...organizationFilter, ...propertyFilter, ...engagementFilter }, orderBy: { dueDate: 'asc' }, take: 250 }) });
     if (resource === 'final-packs') return NextResponse.json({ items: await prisma.auditFinalPack.findMany({ where: { ...organizationFilter, ...propertyFilter, ...engagementFilter }, orderBy: { createdAt: 'desc' }, take: 50 }) });
-    if (resource === 'activity') return NextResponse.json({ items: await prisma.auditLog.findMany({ where: { ...organizationFilter, ...propertyFilter }, select: { id: true, action: true, resource: true, resourceId: true, userEmail: true, userRole: true, requestId: true, ipAddress: true, createdAt: true }, orderBy: { createdAt: 'desc' }, take: 500 }) });
+    const activityScope = ctx.external && propertyId ? ctx.scopes.find(scope => scope.propertyId === propertyId) : null;
+    if (resource === 'activity') return NextResponse.json({ items: await prisma.auditLog.findMany({ where: { ...organizationFilter, ...propertyFilter, ...(activityScope ? { createdAt: { gte: activityScope.auditPeriodStart, lte: activityScope.accessExpiresAt } } : {}) }, select: { id: true, action: true, resource: true, resourceId: true, userEmail: true, userRole: true, requestId: true, ipAddress: true, createdAt: true }, orderBy: { createdAt: 'desc' }, take: 500 }) });
     const [engagements, requests, workpapers, findings, actionPlans] = await Promise.all([
       prisma.auditEngagement.count({ where: { ...organizationFilter, ...propertyFilter } }),
       prisma.auditEvidenceRequest.count({ where: { ...organizationFilter, ...propertyFilter, status: { not: 'CLOSED' } } }),
@@ -73,6 +74,10 @@ export async function POST(request: NextRequest) {
     const organizationId = String(body.organizationId || ctx.organizationId || ctx.scopes.find(scope => scope.propertyId === propertyId)?.organizationId || '');
     const engagementId = String(body.engagementId || '');
     if (!propertyId || !organizationId) throw new Error('Invalid audit scope');
+    if (resource !== 'engagement') {
+      const engagement = await prisma.auditEngagement.findFirst({ where: { id: engagementId, propertyId, organizationId }, select: { id: true } });
+      if (!engagement) throw new Error('403');
+    }
     let value: unknown;
     if (resource === 'engagement') {
       if (!isAdmin(session)) throw new Error('403');
@@ -86,8 +91,19 @@ export async function POST(request: NextRequest) {
     } else if (resource === 'action-plan') {
       value = await prisma.auditActionPlan.create({ data: { organizationId, propertyId, engagementId, findingId: String(body.findingId), ownerId: body.ownerId ? String(body.ownerId) : session.user.id, action: String(body.action), dueDate: new Date(body.dueDate), progress: body.progress == null ? 0 : Number(body.progress) } });
     } else if (resource === 'final-pack') {
-      const [requests, workpapers, findings] = await Promise.all([prisma.auditEvidenceRequest.count({ where: { engagementId } }), prisma.auditWorkpaper.count({ where: { engagementId } }), prisma.auditFinding.count({ where: { engagementId } })]);
-      const manifest = { engagementId, propertyId, requests, workpapers, findings, generatedAt: new Date().toISOString() };
+      const engagement = await prisma.auditEngagement.findFirst({ where: { id: engagementId, propertyId, organizationId }, select: { auditPeriodStart: true, auditPeriodEnd: true } });
+      if (!engagement) throw new Error('403');
+      const period = { gte: engagement.auditPeriodStart, lte: engagement.auditPeriodEnd };
+      const [requests, workpapers, findings, discounts, complimentary, discountRegister, complimentaryRegister] = await Promise.all([
+        prisma.auditEvidenceRequest.count({ where: { engagementId } }),
+        prisma.auditWorkpaper.count({ where: { engagementId } }),
+        prisma.auditFinding.count({ where: { engagementId } }),
+        prisma.folioItem.count({ where: { folio: { propertyId }, businessDate: period, type: 'DISCOUNT' } }),
+        prisma.complimentaryRecord.count({ where: { propertyId, businessDate: period } }),
+        prisma.folioItem.findMany({ where: { folio: { propertyId }, businessDate: period, type: 'DISCOUNT' }, select: { id: true, businessDate: true, createdAt: true, amount: true, currency: true, description: true, postedBy: true, discountApprovalId: true, voidedAt: true, folio: { select: { folioNumber: true, guestId: true } } }, orderBy: { businessDate: 'asc' } }),
+        prisma.complimentaryRecord.findMany({ where: { propertyId, businessDate: period }, select: { id: true, businessDate: true, createdAt: true, reference: true, sourceModule: true, folioItemId: true, posOrderId: true, guestId: true, grossAmount: true, discountAmount: true, complAmount: true, netAmount: true, complType: true, reason: true, notes: true, operatorId: true, approverId: true, nightAuditorId: true, status: true, verifiedAt: true }, orderBy: { businessDate: 'asc' } }),
+      ]);
+      const manifest = { engagementId, propertyId, requests, workpapers, findings, discounts, complimentary, registers: { discounts: discountRegister, complimentary: complimentaryRegister }, generatedAt: new Date().toISOString() };
       const packageHash = createHash('sha256').update(JSON.stringify(manifest)).digest('hex');
       value = await prisma.auditFinalPack.create({ data: { organizationId, propertyId, engagementId, packageHash, manifest, createdById: session.user.id } });
     } else throw new Error('Unsupported audit resource');
@@ -127,6 +143,8 @@ export async function PATCH(request: NextRequest) {
     else if (resource === 'finding') value = await prisma.auditFinding.update({ where: { id }, data: { status: status as any, managementResponse: body.managementResponse ? String(body.managementResponse) : undefined, validatedById: status === 'CLOSED' ? session.user.id : undefined, closedAt: status === 'CLOSED' ? new Date() : undefined } });
     else if (resource === 'action-plan') value = await prisma.auditActionPlan.update({ where: { id }, data: { status: status as any, progress: body.progress === undefined ? undefined : Number(body.progress), completionNote: body.completionNote ? String(body.completionNote) : undefined, completedAt: status === 'COMPLETED' ? new Date() : undefined } });
     else if (resource === 'engagement') value = await prisma.auditEngagement.update({ where: { id }, data: { status: status as any, closedAt: status === 'CLOSED' ? new Date() : undefined } });
+    else throw new Error('Unsupported audit resource');
+    await prisma.auditLog.create({ data: { organizationId: record.organizationId, propertyId: record.propertyId, userId: session.user.id, action: `AUDIT_${resource.toUpperCase()}_UPDATED`, resource: `Audit${resource[0].toUpperCase()}${resource.slice(1)}`, resourceId: id, requestId: randomUUID(), newValue: value as object } });
     return NextResponse.json({ value });
   } catch (error) {
     if (error instanceof Error && error.message === '403') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });

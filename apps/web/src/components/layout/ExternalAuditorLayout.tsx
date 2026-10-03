@@ -20,6 +20,9 @@ import {
   Activity,
   GitCompareArrows,
   Archive,
+  BadgePercent,
+  BarChart3,
+  ListChecks,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -39,10 +42,16 @@ type NavItem = {
 
 const AUDITOR_NAV: NavItem[] = [
   { section: 'Engagement', name: 'Command center', href: '/external-auditor', icon: LayoutDashboard },
+  { section: 'Engagement', name: 'Engagement scope', href: '/external-auditor/engagement', icon: FileText },
   { section: 'Engagement', name: 'Evidence explorer', href: '/external-auditor/evidence', icon: Search },
+  { section: 'Engagement', name: 'Revenue controls', href: '/external-auditor/controls', icon: BadgePercent },
   { section: 'Engagement', name: 'Audit operations', href: '/external-auditor/operations', icon: ClipboardCheck },
+  { section: 'Engagement', name: 'Evidence requests', href: '/external-auditor/requests', icon: ListChecks },
+  { section: 'Engagement', name: 'Workpapers', href: '/external-auditor/workpapers', icon: FileText },
+  { section: 'Engagement', name: 'Findings', href: '/external-auditor/findings', icon: ShieldCheck },
   { section: 'Engagement', name: 'Action plans', href: '/external-auditor/action-plans', icon: ClipboardCheck },
   { section: 'Engagement', name: 'Readiness & activity', href: '/external-auditor/readiness', icon: Activity },
+  { section: 'Engagement', name: 'Revenue analytics', href: '/external-auditor/analytics/revenue', icon: BarChart3 },
   { section: 'Deliverables', name: 'Reconciliation center', href: '/external-auditor/assurance', icon: GitCompareArrows },
   { section: 'Deliverables', name: 'Final audit pack', href: '/external-auditor/final-pack', icon: Archive },
   { section: 'Deliverables', name: 'Reports & exports', href: '/external-auditor/reports', icon: FileText },
