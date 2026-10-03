@@ -8,7 +8,15 @@ import dns from "dns/promises";
 import { attachVercelDomain } from "@/lib/custom-domain/vercel";
 
 async function requireBookingEntitlement(organizationId: string, propertyId: string) {
-  const entitlement = await prisma.entitlement.findFirst({ where: { organizationId, propertyId, productCode: "ADDON_BOOKING_ENGINE", status: "ACTIVE" }, select: { id: true } });
+  const entitlement = await prisma.entitlement.findFirst({
+    where: {
+      organizationId,
+      OR: [{ propertyId }, { propertyId: null }],
+      productCode: "ADDON_BOOKING_ENGINE",
+      status: "ACTIVE",
+    },
+    select: { id: true },
+  });
   if (!entitlement) throw new Error("Booking Engine entitlement is required");
 }
 
@@ -130,6 +138,7 @@ export async function saveBookingSite(propertyId: string, formData: FormData) {
   });
 
   revalidatePath(`/portal/settings/booking-engine/${propertyId}`);
+  revalidatePath(`/book/${config.publicSlug}`);
 }
 
 // ── Publish / unpublish ───────────────────────────────────────────────────
@@ -153,6 +162,7 @@ export async function publishBookingSite(propertyId: string) {
   });
 
   revalidatePath(`/portal/settings/booking-engine/${propertyId}`);
+  revalidatePath(`/book/${config.publicSlug}`);
 }
 
 export async function unpublishBookingSite(propertyId: string) {
@@ -168,6 +178,8 @@ export async function unpublishBookingSite(propertyId: string) {
   });
 
   revalidatePath(`/portal/settings/booking-engine/${propertyId}`);
+  const config = await prisma.bookingEngineConfig.findUnique({ where: { propertyId }, select: { publicSlug: true } });
+  if (config) revalidatePath(`/book/${config.publicSlug}`);
 }
 
 async function guardedPortalUser(propertyId: string) {

@@ -22,7 +22,12 @@ export async function POST(
   if (!property) return NextResponse.json({ error: "Property not found" }, { status: 404 });
 
   const entitlement = await prisma.entitlement.findFirst({
-    where: { organizationId: user.organizationId, propertyId, productCode: "ADDON_BOOKING_ENGINE", status: "ACTIVE" },
+    where: {
+      organizationId: user.organizationId,
+      OR: [{ propertyId }, { propertyId: null }],
+      productCode: "ADDON_BOOKING_ENGINE",
+      status: "ACTIVE",
+    },
     select: { id: true },
   });
   if (!entitlement) return NextResponse.json({ error: "Booking Engine entitlement is required" }, { status: 403 });
