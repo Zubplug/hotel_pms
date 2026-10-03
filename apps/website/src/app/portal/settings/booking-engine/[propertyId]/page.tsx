@@ -28,7 +28,7 @@ export default async function BookingEnginePropertyPage({
   });
   if (!property) notFound();
 
-  const [entitled, config, site, ratePlans, paymentAccount] = await Promise.all([
+  const [entitled, config, site, ratePlans, paymentAccount, domainRequest, websiteRequest] = await Promise.all([
     prisma.entitlement.findFirst({
       where: {
         organizationId,
@@ -61,6 +61,9 @@ export default async function BookingEnginePropertyPage({
         templateKey: true,
         status: true,
         content: true,
+        customDomain: true,
+        domainStatus: true,
+        verificationToken: true,
       },
     }),
     prisma.ratePlan.findMany({
@@ -69,6 +72,16 @@ export default async function BookingEnginePropertyPage({
       orderBy: { name: "asc" },
     }),
     prisma.bookingPaymentAccount.findFirst({ where: { organizationId, propertyId, isActive: true }, select: { id: true, provider: true, mode: true, currency: true, publicKey: true, secretRef: true, webhookSecretRef: true } }),
+    prisma.customDomainRequest.findFirst({
+      where: { organizationId, propertyId, status: { notIn: ["REJECTED", "CANCELLED"] } },
+      orderBy: { createdAt: "desc" },
+      select: { domain: true, status: true, notes: true },
+    }),
+    prisma.customWebsiteRequest.findFirst({
+      where: { organizationId, propertyId, status: { notIn: ["REJECTED", "CANCELLED"] } },
+      orderBy: { createdAt: "desc" },
+      select: { status: true, brief: true },
+    }),
   ]);
 
   return (
@@ -111,7 +124,19 @@ export default async function BookingEnginePropertyPage({
         } : null}
         ratePlans={ratePlans}
       />
-      <EnterpriseBookingSettings propertyId={propertyId} site={site ? { siteName: site.siteName, content: site.content as Record<string, any> | null } : null} account={paymentAccount} />
+      <EnterpriseBookingSettings
+        propertyId={propertyId}
+        site={site ? {
+          siteName: site.siteName,
+          content: site.content as Record<string, any> | null,
+          customDomain: site.customDomain,
+          domainStatus: site.domainStatus,
+          verificationToken: site.verificationToken,
+        } : null}
+        account={paymentAccount}
+        domainRequest={domainRequest}
+        websiteRequest={websiteRequest}
+      />
     </PortalShell>
   );
 }

@@ -1,37 +1,184 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
-import { saveBookingContent, saveBookingPaymentAccount } from "./actions";
+import {
+  requestCustomDomain,
+  requestCustomWebsite,
+  saveBookingContent,
+  saveBookingDomain,
+  saveBookingPaymentAccount,
+  verifyBookingDomain,
+} from "./actions";
 
-type Site = { siteName: string; content?: Record<string, any> | null };
-type Account = { id: string; provider: string; mode: string; currency: string; publicKey: string | null; secretRef: string | null; webhookSecretRef: string | null } | null;
+type Site = {
+  siteName: string;
+  content?: Record<string, any> | null;
+  customDomain?: string | null;
+  domainStatus?: string | null;
+  verificationToken?: string | null;
+};
+type Account = {
+  id: string;
+  provider: string;
+  mode: string;
+  currency: string;
+  publicKey: string | null;
+  secretRef: string | null;
+  webhookSecretRef: string | null;
+} | null;
+type RequestState = { domain: string; status: string; notes: string | null } | null;
+type WebsiteState = { status: string; brief: string | null } | null;
 
-function FormCard({ title, children, onSubmit }: { title: string; children: React.ReactNode; onSubmit: (form: HTMLFormElement) => Promise<void> }) {
-  const ref = useRef<HTMLFormElement>(null); const [pending, start] = useTransition(); const [message, setMessage] = useState("");
-  return <form ref={ref} className="portal-card" onSubmit={(e) => { e.preventDefault(); setMessage(""); start(async () => { try { await onSubmit(ref.current!); setMessage("Saved"); } catch (error: any) { setMessage(error.message ?? "Could not save"); } }); }}>
-    <div className="portal-card-title">{title}</div>{children}<div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 16 }}><button disabled={pending} type="submit" className="portal-primary-button">{pending ? "Saving…" : "Save changes"}</button>{message && <span style={{ fontSize: 12, color: message === "Saved" ? "#15803d" : "#b42318" }}>{message}</span>}</div>
-  </form>;
+function FormCard({
+  eyebrow,
+  title,
+  description,
+  children,
+  onSubmit,
+}: {
+  eyebrow: string;
+  title: string;
+  description: string;
+  children: React.ReactNode;
+  onSubmit: (form: HTMLFormElement) => Promise<void>;
+}) {
+  const ref = useRef<HTMLFormElement>(null);
+  const [pending, start] = useTransition();
+  const [message, setMessage] = useState<{ text: string; ok: boolean } | null>(null);
+
+  return (
+    <form
+      ref={ref}
+      className="portal-card be-control-card"
+      onSubmit={(event) => {
+        event.preventDefault();
+        setMessage(null);
+        start(async () => {
+          try {
+            await onSubmit(ref.current!);
+            setMessage({ text: "Saved", ok: true });
+          } catch (error: any) {
+            setMessage({ text: error.message ?? "Could not save", ok: false });
+          }
+        });
+      }}
+    >
+      <div className="be-card-heading">
+        <div>
+          <div className="be-card-eyebrow">{eyebrow}</div>
+          <div className="portal-card-title">{title}</div>
+          <p className="be-card-description">{description}</p>
+        </div>
+      </div>
+      {children}
+      <div className="be-form-footer">
+        <button disabled={pending} type="submit" className="btn btn-primary btn-sm">
+          {pending ? "Saving…" : "Save changes"}
+        </button>
+        {message && <span className={message.ok ? "be-save-ok" : "be-save-error"} role={message.ok ? "status" : "alert"}>{message.text}</span>}
+      </div>
+    </form>
+  );
 }
 
-export function EnterpriseBookingSettings({ propertyId, site, account }: { propertyId: string; site: Site | null; account: Account }) {
+function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+  return (
+    <label className="be-field">
+      <span className="be-field-label">{label}</span>
+      {children}
+      {hint && <span className="be-field-hint">{hint}</span>}
+    </label>
+  );
+}
+
+function StatusPill({ status }: { status: string }) {
+  const tone = ["ACTIVE", "PAID", "VERIFIED"].includes(status) ? "active" : status === "REJECTED" ? "danger" : "pending";
+  return <span className={`be-status-pill ${tone}`}>{status.replaceAll("_", " ")}</span>;
+}
+
+export function EnterpriseBookingSettings({
+  propertyId,
+  site,
+  account,
+  domainRequest,
+  websiteRequest,
+}: {
+  propertyId: string;
+  site: Site | null;
+  account: Account;
+  domainRequest: RequestState;
+  websiteRequest: WebsiteState;
+}) {
   const content = site?.content ?? {};
-  return <div style={{ display: "grid", gap: 16, marginTop: 16 }}>
-    <FormCard title="Content, contact and guest policies" onSubmit={(form) => saveBookingContent(propertyId, new FormData(form))}>
-      <div style={{ display: "grid", gap: 12, marginTop: 12 }}>
-        <label>Hero title<input name="heroTitle" defaultValue={content.heroTitle ?? content.tagline ?? "Welcome"} /></label>
-        <label>Hero subtitle<textarea name="heroSubtitle" defaultValue={content.heroSubtitle ?? "Book direct for the best available rate."} rows={3} /></label>
-        <label>Amenities <span style={{ fontWeight: 400 }}>(one per line)</span><textarea name="amenities" defaultValue={Array.isArray(content.amenities) ? content.amenities.join("\n") : ""} rows={4} /></label>
-        <label>Public cancellation policy<textarea name="cancellationText" defaultValue={content.cancellationText ?? "Cancellation policy applies according to the selected rate plan."} rows={3} /></label>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}><label>Contact phone<input name="contactPhone" defaultValue={content.contactPhone ?? ""} /></label><label>Contact email<input name="contactEmail" type="email" defaultValue={content.contactEmail ?? ""} /></label></div>
+  const [domainPending, startDomain] = useTransition();
+  const [domainMessage, setDomainMessage] = useState<{ text: string; ok: boolean } | null>(null);
+
+  const runDomainVerification = () => {
+    setDomainMessage(null);
+    startDomain(async () => {
+      try {
+        await verifyBookingDomain(propertyId);
+        setDomainMessage({ text: "Domain verified and connected", ok: true });
+      } catch (error: any) {
+        setDomainMessage({ text: error.message ?? "Verification failed", ok: false });
+      }
+    });
+  };
+
+  return (
+    <section className="be-enterprise-settings" aria-label="Advanced booking engine controls">
+      <div className="be-section-heading"><div><span className="be-section-index">03</span> Guest experience & operations</div><span>Production controls</span></div>
+      <div className="be-control-grid">
+        <FormCard eyebrow="Content layer" title="Guest-facing content" description="Shape the message guests see before they choose a room. Keep policies and contact details explicit to reduce booking friction." onSubmit={(form) => saveBookingContent(propertyId, new FormData(form))}>
+          <div className="be-form-stack">
+            <Field label="Hero title"><input name="heroTitle" defaultValue={content.heroTitle ?? content.tagline ?? "Welcome"} /></Field>
+            <Field label="Hero subtitle"><textarea name="heroSubtitle" defaultValue={content.heroSubtitle ?? "Book direct for the best available rate."} rows={3} /></Field>
+            <Field label="Amenities" hint="One amenity per line"><textarea name="amenities" defaultValue={Array.isArray(content.amenities) ? content.amenities.join("\n") : ""} rows={4} /></Field>
+            <Field label="Cancellation policy"><textarea name="cancellationText" defaultValue={content.cancellationText ?? "Cancellation policy applies according to the selected rate plan."} rows={3} /></Field>
+            <div className="be-two-col">
+              <Field label="Contact phone"><input name="contactPhone" defaultValue={content.contactPhone ?? ""} /></Field>
+              <Field label="Contact email"><input name="contactEmail" type="email" defaultValue={content.contactEmail ?? ""} /></Field>
+            </div>
+          </div>
+        </FormCard>
+
+        <FormCard eyebrow="Payments" title="Online payment account" description="Connect the live gateway used for deposits and full-payment bookings. Secrets remain environment references, never raw credentials." onSubmit={(form) => saveBookingPaymentAccount(propertyId, new FormData(form))}>
+          <div className="be-form-stack">
+            <input type="hidden" name="accountId" value={account?.id ?? "00000000-0000-0000-0000-000000000000"} readOnly />
+            <div className="be-three-col">
+              <Field label="Provider"><select name="provider" defaultValue="PAYSTACK"><option value="PAYSTACK">Paystack</option></select></Field>
+              <Field label="Account mode"><select name="mode" defaultValue={account?.mode ?? "PLATFORM"}><option value="PLATFORM">LodgeCore platform</option><option value="CUSTOMER">Property account</option></select></Field>
+              <Field label="Currency"><input name="currency" defaultValue={account?.currency ?? "NGN"} /></Field>
+            </div>
+            <Field label="Public key"><input name="publicKey" defaultValue={account?.publicKey ?? ""} placeholder="pk_live_…" /></Field>
+            <Field label="Secret environment variable"><input name="secretRef" defaultValue={account?.secretRef ?? ""} placeholder="PAYSTACK_SECRET_KEY" /></Field>
+            <Field label="Webhook environment variable"><input name="webhookSecretRef" defaultValue={account?.webhookSecretRef ?? ""} placeholder="PAYSTACK_WEBHOOK_SECRET" /></Field>
+            <div className="be-security-note">⌁ Payment webhooks are verified server-side before a reservation is marked paid.</div>
+          </div>
+        </FormCard>
       </div>
-    </FormCard>
-    <FormCard title="Payment provider account" onSubmit={(form) => saveBookingPaymentAccount(propertyId, new FormData(form))}>
-      <div style={{ display: "grid", gap: 12, marginTop: 12 }}>
-        <input type="hidden" name="accountId" value={account?.id ?? "00000000-0000-0000-0000-000000000000"} />
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}><label>Provider<select name="provider" defaultValue="PAYSTACK"><option>PAYSTACK</option></select></label><label>Mode<select name="mode" defaultValue={account?.mode ?? "PLATFORM"}><option>PLATFORM</option><option>CUSTOMER</option></select></label><label>Currency<input name="currency" defaultValue={account?.currency ?? "NGN"} /></label></div>
-        <label>Public key<input name="publicKey" defaultValue={account?.publicKey ?? ""} /></label><label>Secret environment variable name<input name="secretRef" defaultValue={account?.secretRef ?? ""} placeholder="PAYSTACK_SECRET_KEY" /></label><label>Webhook secret environment variable name<input name="webhookSecretRef" defaultValue={account?.webhookSecretRef ?? ""} /></label>
-        <p style={{ fontSize: 11, color: "var(--text-muted)" }}>Raw provider secrets are never stored. Only environment-variable references are saved.</p>
+
+      <div className="be-section-heading be-section-heading-spaced"><div><span className="be-section-index">04</span> Distribution & growth</div><span>Optional services</span></div>
+      <div className="be-control-grid">
+        <FormCard eyebrow="Custom domain" title="Own your booking address" description="Use a branded domain such as book.yourhotel.com. Domain activation is reviewed and provisioned by LodgeCore HQ." onSubmit={(form) => domainRequest ? saveBookingDomain(propertyId, new FormData(form)) : requestCustomDomain(propertyId, new FormData(form))}>
+          <div className="be-domain-status">
+            <div><span className="be-field-label">Current request</span><strong>{domainRequest?.domain ?? "No request yet"}</strong></div>
+            {domainRequest && <StatusPill status={domainRequest.status} />}
+          </div>
+          {!domainRequest || domainRequest.status === "REJECTED" ? (
+            <div className="be-form-stack"><Field label="Domain to request" hint="Example: book.yourhotel.com"><input name="domain" type="text" placeholder="book.yourhotel.com" required /></Field><div className="be-form-footer"><button disabled={domainPending} type="submit" className="btn btn-primary btn-sm">{domainPending ? "Requesting…" : "Request domain"}</button>{domainMessage && <span className={domainMessage.ok ? "be-save-ok" : "be-save-error"}>{domainMessage.text}</span>}</div></div>
+          ) : domainRequest.status !== "ACTIVE" ? (
+            <p className="be-field-hint">Your request is being handled by LodgeCore. Once it is activated, the DNS connection controls will appear here.</p>
+          ) : (
+            <div className="be-form-stack"><Field label="Activated domain"><input name="customDomain" defaultValue={site?.customDomain ?? domainRequest.domain} placeholder="book.yourhotel.com" /></Field><div className="be-domain-actions"><button disabled={domainPending} type="submit" className="btn btn-outline btn-sm">{domainPending ? "Saving…" : "Save domain"}</button>{site?.customDomain && <button type="button" disabled={domainPending} onClick={runDomainVerification} className="btn btn-primary btn-sm">{domainPending ? "Checking DNS…" : "Verify DNS"}</button>}</div>{site?.verificationToken && <p className="be-field-hint">Add this TXT value at your DNS host: <code>{site.verificationToken}</code></p>}{domainMessage && <span className={domainMessage.ok ? "be-save-ok" : "be-save-error"}>{domainMessage.text}</span>}</div>
+          )}
+        </FormCard>
+
+        <FormCard eyebrow="White-glove service" title="Request a custom website" description="Need a bespoke hotel site beyond the built-in templates? Send a brief to the LodgeCore web team and track the request here." onSubmit={(form) => requestCustomWebsite(propertyId, new FormData(form))}>
+          {websiteRequest ? <div className="be-request-summary"><StatusPill status={websiteRequest.status} /><p>{websiteRequest.brief ?? "Your custom website request is being reviewed."}</p></div> : <div className="be-form-stack"><Field label="Project brief" hint="Tell the team about your property, visual direction and must-have pages."><textarea name="brief" rows={6} minLength={20} placeholder="We want a calm, editorial site for…" required /></Field><button type="submit" className="btn btn-primary btn-sm">Send brief to LodgeCore</button></div>}
+        </FormCard>
       </div>
-    </FormCard>
-  </div>;
+
+    </section>
+  );
 }
