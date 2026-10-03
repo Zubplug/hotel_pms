@@ -32,7 +32,7 @@ export default async function BookingEnginePropertyPage({
     prisma.entitlement.findFirst({
       where: {
         organizationId,
-        propertyId,
+        OR: [{ propertyId }, { propertyId: null }],
         productCode: "ADDON_BOOKING_ENGINE",
         status: "ACTIVE",
       },

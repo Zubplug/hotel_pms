@@ -3,6 +3,7 @@ import Link from "next/link";
 import { auth } from "@/auth";
 import prisma from "@hotel-pms/db";
 import { PortalShell } from "@/components/portal-shell";
+import { BookingEngineSetupButton } from "./BookingEngineSetupButton";
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +29,7 @@ export default async function BookingEngineOverviewPage() {
         prisma.entitlement.findFirst({
           where: {
             organizationId,
-            propertyId: prop.id,
+            OR: [{ propertyId: prop.id }, { propertyId: null }],
             productCode: "ADDON_BOOKING_ENGINE",
             status: "ACTIVE",
           },
@@ -212,13 +213,7 @@ export default async function BookingEngineOverviewPage() {
               </div>
 
               {/* Configure CTA */}
-              <Link
-                href={`/portal/settings/booking-engine/${prop.id}`}
-                className="btn btn-outline btn-sm"
-                style={{ flexShrink: 0 }}
-              >
-                {prop.config ? "Configure →" : "Set up →"}
-              </Link>
+              <BookingEngineSetupButton propertyId={prop.id} entitled={prop.entitled} configured={Boolean(prop.config)} />
             </div>
           );
         })}
