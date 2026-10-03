@@ -5087,6 +5087,19 @@ textarea.form-input { resize: vertical; min-height: 90px; }
 .sub-modal-tier-badge { display: flex; align-items: center; gap: 14px; padding: 14px 18px; border-radius: var(--radius-md); margin-bottom: 24px; }
 .sub-modal-features { display: flex; flex-direction: column; gap: 9px; }
 .sub-modal-feature-row { display: flex; align-items: center; gap: 10px; }
+.payment-success-backdrop { position: fixed; inset: 0; z-index: 999; display: grid; place-items: center; padding: 20px; background: rgba(2,6,16,.78); backdrop-filter: blur(8px); animation: fade-in .25s var(--ease) both; }
+.payment-success-modal { position: relative; width: min(100%, 440px); padding: 36px 32px 30px; text-align: center; background: linear-gradient(145deg, var(--bg-raised), rgba(11,28,39,.98)); border: 1px solid rgba(62,245,160,.3); border-radius: var(--radius-xl); box-shadow: 0 24px 90px rgba(0,0,0,.55), 0 0 0 1px rgba(62,245,160,.04) inset; animation: fade-up .35s var(--ease-spring) both; }
+.payment-success-close { position: absolute; top: 14px; right: 14px; width: 30px; height: 30px; border: 1px solid var(--border); border-radius: 50%; background: rgba(255,255,255,.04); color: var(--text-muted); font-size: 20px; line-height: 1; cursor: pointer; }
+.payment-success-close:hover { color: var(--text-primary); background: rgba(255,255,255,.09); }
+.payment-success-icon { width: 70px; height: 70px; display: grid; place-items: center; margin: 0 auto 20px; border-radius: 50%; background: rgba(62,245,160,.1); border: 1px solid rgba(62,245,160,.35); box-shadow: 0 0 0 10px rgba(62,245,160,.035), 0 0 34px rgba(62,245,160,.18); animation: payment-success-pulse 1.8s ease-out both; }
+.payment-success-icon span { color: var(--mint); font-size: 34px; font-weight: 700; }
+.payment-success-kicker { justify-content: center; margin-bottom: 8px; color: var(--mint); }
+.payment-success-title { margin: 0; color: var(--text-primary); font-family: var(--font-display); font-size: 1.8rem; font-weight: 800; letter-spacing: -.06em; }
+.payment-success-copy { max-width: 350px; margin: 12px auto 0; color: var(--text-muted); font-size: 13px; line-height: 1.75; }
+.payment-success-status { display: inline-flex; align-items: center; gap: 8px; margin: 20px auto 24px; padding: 8px 12px; border: 1px solid rgba(62,245,160,.16); border-radius: 999px; background: rgba(62,245,160,.06); color: var(--mint); font-family: var(--font-mono); font-size: 10px; letter-spacing: .06em; text-transform: uppercase; }
+.payment-success-status span { width: 6px; height: 6px; border-radius: 50%; background: var(--mint); box-shadow: 0 0 8px var(--mint); }
+.payment-success-modal > .btn { min-width: 190px; }
+@keyframes payment-success-pulse { 0% { transform: scale(.75); opacity: .3; } 65% { transform: scale(1.06); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
 
 /* ══════════════════════════════════════════════════════════════
    RESPONSIVE — SUBSCRIPTION

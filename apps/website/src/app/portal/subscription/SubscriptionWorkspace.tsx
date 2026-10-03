@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import SubscriptionCatalogue from "./SubscriptionCatalogue";
 import {
   AnimatedCounter,
@@ -236,6 +236,15 @@ export default function SubscriptionWorkspace({ data, plans, addOns, hasActiveBa
     data.subscription ? "overview" : "catalogue"
   );
   const [expandedInvoice, setExpandedInvoice] = useState<string | null>(null);
+  const [paymentSuccess, setPaymentSuccess] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("success") === "true") {
+      setPaymentSuccess(true);
+      window.history.replaceState({}, "", `${window.location.pathname}${window.location.hash}`);
+    }
+  }, []);
 
   const daysRemaining = data.subscription
     ? Math.max(0, Math.ceil((new Date(data.subscription.periodEnd).getTime() - Date.now()) / 86400000))
@@ -264,6 +273,28 @@ export default function SubscriptionWorkspace({ data, plans, addOns, hasActiveBa
   /* ─── HERO HEADER ─────────────────────────────────────── */
   return (
     <div className="sub-workspace">
+
+      {paymentSuccess && (
+        <div
+          className="payment-success-backdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="payment-success-title"
+          onClick={() => setPaymentSuccess(false)}
+        >
+          <div className="payment-success-modal" onClick={(event) => event.stopPropagation()}>
+            <button type="button" className="payment-success-close" aria-label="Close" onClick={() => setPaymentSuccess(false)}>×</button>
+            <div className="payment-success-icon"><span>✓</span></div>
+            <div className="sub-section-kicker payment-success-kicker">Payment received</div>
+            <h2 id="payment-success-title" className="payment-success-title">You’re all set</h2>
+            <p className="payment-success-copy">
+              Your payment was received. Your subscription or add-on will become available as soon as Flutterwave confirms the payment webhook.
+            </p>
+            <div className="payment-success-status"><span /> Activating your access</div>
+            <button type="button" className="btn btn-primary" onClick={() => setPaymentSuccess(false)}>Continue to dashboard</button>
+          </div>
+        </div>
+      )}
 
       {/* ── HERO BANNER ─────────────────────────────────── */}
       <div className="sub-hero">
