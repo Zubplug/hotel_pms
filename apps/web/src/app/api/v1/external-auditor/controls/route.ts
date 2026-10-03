@@ -109,6 +109,7 @@ export async function GET(request: NextRequest) {
         reason: approval?.reason || item.description, source: item.source, status: item.voidedAt ? 'VOIDED' : approval?.status || 'APPLIED',
         operator: display(item.postedBy), approver: display(approval?.reviewedBy), requestedBy: display(approval?.requestedBy),
         beneficiary: 'Not applicable',
+        acknowledgedBy: display(approval?.reviewedBy), acknowledgedAt: approval?.reviewedAt || null,
         requestedAt: approval?.requestedAt || null, reviewedAt: approval?.reviewedAt || null,
         approvalStatus: approval?.status || 'NOT_LINKED', executionStatus: approval?.executionStatus || null, approvalId: approval?.id || null,
       };
@@ -132,6 +133,7 @@ export async function GET(request: NextRequest) {
       operator: name(item.operator), approver: name(item.approver) || 'Not recorded', requestedBy: name(item.operator),
       requestedAt: item.createdAt, reviewedAt: item.verifiedAt, approvalStatus: item.status, executionStatus: null,
       approvalId: null, beneficiary: name(item.staff) || 'No beneficiary recorded', nightAuditor: name(item.nightAuditor) || 'Not recorded', notes: item.notes,
+      acknowledgedBy: name(item.nightAuditor) || name(item.approver) || 'Not recorded', acknowledgedAt: item.verifiedAt,
       })),
       ...complimentaryFolioItems.filter(item => !verifiedComplimentaryFolioItemIds.has(item.id)).map(item => ({
         id: item.id, kind: 'COMPLIMENTARY', businessDate: item.businessDate, createdAt: item.createdAt, folioId: item.folioId, operationId: item.operationId,
@@ -141,6 +143,7 @@ export async function GET(request: NextRequest) {
         beneficiary: 'No beneficiary recorded',
         requestedAt: item.createdAt, reviewedAt: null, approvalStatus: 'NOT_LINKED', executionStatus: null,
         approvalId: null, nightAuditor: 'Not recorded', notes: item.voidReason,
+        acknowledgedBy: 'Not recorded', acknowledgedAt: null,
       })),
       ...posComplimentary.map(item => ({
         id: item.id, kind: 'COMPLIMENTARY', businessDate: item.businessDate, createdAt: item.createdAt, folioId: null, operationId: item.operationId,
@@ -148,6 +151,7 @@ export async function GET(request: NextRequest) {
         description: 'POS Complimentary', reason: 'Restaurant POS complimentary payment', source: 'POS', status: item.status,
         operator: display(item.processedById), approver: 'Not recorded', requestedBy: display(item.processedById),
         beneficiary: name(item.order.serverStaff) || 'No beneficiary recorded',
+        acknowledgedBy: display(item.processedById), acknowledgedAt: item.verifiedAt || item.paidAt || null,
         requestedAt: item.createdAt, reviewedAt: null, approvalStatus: 'NOT_LINKED', executionStatus: null,
         approvalId: null, nightAuditor: 'Not recorded', notes: null,
       })),
@@ -157,6 +161,7 @@ export async function GET(request: NextRequest) {
         description: 'Frontdesk Complimentary', reason: item.discountReason || 'Complimentary stay', source: 'FRONTDESK', status: item.status,
         operator: 'Not recorded', approver: 'Not recorded', requestedBy: 'Not recorded',
         beneficiary: 'No beneficiary recorded',
+        acknowledgedBy: 'Not recorded', acknowledgedAt: null,
         requestedAt: item.createdAt, reviewedAt: null, approvalStatus: 'NOT_LINKED', executionStatus: null,
         approvalId: null, nightAuditor: 'Not recorded', notes: null,
       })),
@@ -188,8 +193,8 @@ export async function GET(request: NextRequest) {
     }, {})).sort((a, b) => a.date.localeCompare(b.date));
     const analytics = { byBeneficiary: summarize('beneficiary').filter(item => item.label !== 'Not applicable'), bySource: summarize('source'), byStatus: summarize('status'), byDate };
     if (format === 'csv') {
-      const headers = ['Type', 'Business date', 'Reference', 'Guest', 'Beneficiary', 'Amount', 'Currency', 'Source', 'Status', 'Reason', 'Operator', 'Approver', 'Approval status', 'Requested at', 'Reviewed at'];
-      const rows = withLineage.map(item => [item.kind, item.businessDate.toISOString().slice(0, 10), item.reference, item.guestName, item.beneficiary, item.amount, item.currency, item.source, item.status, item.reason, item.operator, item.approver, item.approvalStatus, item.requestedAt, item.reviewedAt]);
+      const headers = ['Type', 'Business date', 'Reference', 'Guest', 'Beneficiary', 'Amount', 'Currency', 'Source', 'Status', 'Reason', 'Operator', 'Approver', 'Acknowledged by', 'Acknowledged at', 'Approval status', 'Requested at', 'Reviewed at'];
+      const rows = withLineage.map(item => [item.kind, item.businessDate.toISOString().slice(0, 10), item.reference, item.guestName, item.beneficiary, item.amount, item.currency, item.source, item.status, item.reason, item.operator, item.approver, item.acknowledgedBy, item.acknowledgedAt, item.approvalStatus, item.requestedAt, item.reviewedAt]);
       const body = [headers, ...rows].map(row => row.map(csvCell).join(',')).join('\n');
       return new NextResponse(`\ufeff${body}`, { headers: { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': 'attachment; filename="auditor-revenue-controls.csv"', 'Cache-Control': 'no-store' } });
     }
