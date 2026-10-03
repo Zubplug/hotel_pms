@@ -55,6 +55,7 @@ export default async function BookingLandingPage({
     <div>
       {/* ── HERO ──────────────────────────────────────────────── */}
       <div
+        className="bk-landing-hero"
         style={{
           textAlign: "center",
           padding: "60px 0 40px",

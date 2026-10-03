@@ -20,6 +20,6 @@ export default async function BookingLayout({ children, params }: { children: Re
   const primary = site.primaryColor ?? "#1a56db";
   const secondary = site.secondaryColor ?? "#0e9f6e";
   const tagline = (site.content as { tagline?: string } | null)?.tagline ?? null;
-  const cssVars = `:root { --bk-primary: ${primary}; --bk-primary-hover: color-mix(in srgb, ${primary} 85%, white); --bk-primary-dim: color-mix(in srgb, ${primary} 15%, transparent); --bk-secondary: ${secondary}; --bk-bg: #f8faff; --bk-surface: #fff; --bk-border: #e2e8f0; --bk-text: #0f172a; --bk-muted: #64748b; --bk-radius: 10px; --bk-radius-lg: 16px; --bk-shadow: 0 1px 3px rgba(0,0,0,.06), 0 8px 32px rgba(0,0,0,.06); } .bk-template-width { max-width: 1080px; margin: 0 auto; padding-left: 24px; padding-right: 24px; } @media (max-width: 720px) { .bk-template-width { padding-left: 16px; padding-right: 16px; } }`;
+  const cssVars = `:root { --bk-primary: ${primary}; --bk-primary-hover: color-mix(in srgb, ${primary} 82%, white); --bk-primary-dim: color-mix(in srgb, ${primary} 15%, transparent); --bk-secondary: ${secondary}; --bk-bg: #07111b; --bk-surface: #0d1b29; --bk-surface-raised: #112336; --bk-border: rgba(167, 205, 218, .15); --bk-text: #edf7fb; --bk-muted: #91a4b5; --bk-radius: 12px; --bk-radius-lg: 20px; --bk-shadow: 0 16px 44px rgba(0,0,0,.22); --bk-shadow-lg: 0 24px 70px rgba(0,0,0,.3); }`;
   return <><style>{cssVars}</style><BookingTemplate templateKey={site.templateKey} siteName={site.siteName} logoUrl={site.logoUrl} tagline={tagline}>{children}</BookingTemplate></>;
 }

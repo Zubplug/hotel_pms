@@ -10,45 +10,104 @@ type Props = {
   children: ReactNode;
 };
 
+const templateNames: Record<BookingTemplateKey, string> = {
+  CLASSIC_HOTEL: "Classic Hotel",
+  MODERN_BOUTIQUE: "Modern Boutique",
+  RESORT: "Resort",
+  BUSINESS_HOTEL: "Business Hotel",
+};
+
 function Brand({ siteName, logoUrl, compact = false }: { siteName: string; logoUrl: string | null; compact?: boolean }) {
-  return <div style={{ display: "flex", alignItems: "center", gap: compact ? 9 : 12 }}>
-    {logoUrl ? <img src={logoUrl} alt={siteName} style={{ height: compact ? 30 : 36, width: "auto", objectFit: "contain" }} /> : <div style={{ width: compact ? 30 : 36, height: compact ? 30 : 36, borderRadius: compact ? 6 : 8, background: "var(--bk-primary)", display: "grid", placeItems: "center", color: "#fff", fontWeight: 800, fontSize: compact ? 12 : 14 }}>{siteName.slice(0, 2).toUpperCase()}</div>}
-    <span style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: compact ? 15 : 16, letterSpacing: "-.04em" }}>{siteName}</span>
-  </div>;
+  return (
+    <div className={`bk-brand${compact ? " bk-brand-compact" : ""}`}>
+      {logoUrl ? <img src={logoUrl} alt={siteName} /> : <span className="bk-brand-mark">{siteName.slice(0, 2).toUpperCase()}</span>}
+      <span className="bk-brand-name">{siteName}</span>
+    </div>
+  );
+}
+
+function TrustBar() {
+  return (
+    <div className="bk-trust-bar" aria-label="Booking benefits">
+      <span><i>✦</i> Live availability</span>
+      <span><i>✓</i> Best direct rate</span>
+      <span><i>⌁</i> Secure checkout</span>
+    </div>
+  );
+}
+
+function Header({ siteName, logoUrl, tagline, compact = false }: Omit<Props, "children" | "templateKey"> & { compact?: boolean }) {
+  return (
+    <header className={`bk-header${compact ? " bk-header-compact" : ""}`}>
+      <div className="bk-header-inner">
+        <a className="bk-brand-link" href="#top" aria-label={`${siteName} booking home`}><Brand siteName={siteName} logoUrl={logoUrl} compact={compact} /></a>
+        <div className="bk-header-meta">
+          {tagline && <span className="bk-header-tagline">{tagline}</span>}
+          <span className="bk-secure-label"><span className="bk-secure-dot" /> Direct booking</span>
+        </div>
+      </div>
+    </header>
+  );
+}
+
+function Hero({ siteName, tagline, variant }: { siteName: string; tagline: string | null; variant: string }) {
+  return (
+    <section className={`bk-hero bk-hero-${variant}`} aria-labelledby="booking-hero-title">
+      <div className="bk-hero-glow" aria-hidden="true" />
+      <div className="bk-hero-content">
+        <div className="bk-kicker"><span className="bk-kicker-line" /> Direct reservations · {siteName}</div>
+        <h1 id="booking-hero-title">{tagline || (variant === "resort" ? "Arrive somewhere beautiful" : variant === "boutique" ? "Stay with intention" : variant === "business" ? "A better way to stay" : "Your stay, made simple")}</h1>
+        <p>Check live availability and secure your stay directly with {siteName}.</p>
+        <TrustBar />
+      </div>
+      <div className="bk-hero-orbit" aria-hidden="true"><span /> <span /> <span /></div>
+    </section>
+  );
 }
 
 function Footer({ siteName }: { siteName: string }) {
-  return <footer style={{ borderTop: "1px solid var(--bk-border)", background: "var(--bk-surface)", padding: "20px 24px", textAlign: "center", fontSize: 11, color: "var(--bk-muted)" }}>
-    <p>Secure booking powered by <strong>{siteName}</strong> · <span style={{ color: "var(--bk-primary)" }}>LodgeCore</span></p>
-  </footer>;
+  return (
+    <footer className="bk-footer">
+      <div className="bk-footer-inner">
+        <Brand siteName={siteName} logoUrl={null} compact />
+        <div><span>Secure direct reservations</span><span className="bk-footer-divider">·</span><span>Powered by LodgeCore</span></div>
+      </div>
+    </footer>
+  );
 }
 
-function ClassicHotel({ siteName, logoUrl, tagline, children }: Omit<Props, "templateKey">) {
-  return <Shell><header style={{ background: "var(--bk-surface)", borderBottom: "1px solid var(--bk-border)", position: "sticky", top: 0, zIndex: 50, boxShadow: "0 1px 0 rgba(0,0,0,.04)" }}><div className="bk-template-width" style={{ height: 62, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}><div><Brand siteName={siteName} logoUrl={logoUrl} />{tagline && <div style={{ fontSize: 11, color: "var(--bk-muted)", margin: "3px 0 0 48px" }}>{tagline}</div>}</div><Trust /></div></header><Content>{children}</Content><Footer siteName={siteName} /></Shell>;
+function Shell({ children, templateKey, siteName, logoUrl, tagline, compact = false }: Props & { compact?: boolean }) {
+  const key = ({ CLASSIC_HOTEL: "classic", MODERN_BOUTIQUE: "modern-boutique", RESORT: "resort", BUSINESS_HOTEL: "business" } as Record<string, string>)[templateKey] ?? "classic";
+  return (
+    <div id="top" className={`bk-site bk-site-${key}`} data-template={templateNames[templateKey as BookingTemplateKey] ?? templateKey}>
+      <Header siteName={siteName} logoUrl={logoUrl} tagline={tagline} compact={compact} />
+      {children}
+      <Footer siteName={siteName} />
+    </div>
+  );
 }
 
-function ModernBoutique({ siteName, logoUrl, tagline, children }: Omit<Props, "templateKey">) {
-  return <Shell><header style={{ background: "#111827", color: "#fff", position: "sticky", top: 0, zIndex: 50 }}><div className="bk-template-width" style={{ minHeight: 74, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}><div style={{ color: "#fff" }}><Brand siteName={siteName} logoUrl={logoUrl} /><div style={{ fontSize: 10, letterSpacing: ".16em", textTransform: "uppercase", opacity: .65, marginTop: 6 }}>{tagline ?? "Stay somewhere memorable"}</div></div><span style={{ fontSize: 11, letterSpacing: ".16em", textTransform: "uppercase", opacity: .7 }}>Direct booking</span></div></header><main style={{ background: "linear-gradient(180deg,#111827 0,#1f2937 180px,var(--bk-bg) 420px)", paddingTop: 1 }}><Content>{children}</Content></main><Footer siteName={siteName} /></Shell>;
+function ClassicHotel(props: Omit<Props, "templateKey">) {
+  return <Shell {...props} templateKey="CLASSIC_HOTEL"><main className="bk-template-width bk-content"><div className="bk-section-rule"><span>Reserve your stay</span></div>{props.children}</main></Shell>;
 }
 
-function Resort({ siteName, logoUrl, tagline, children }: Omit<Props, "templateKey">) {
-  return <Shell><header style={{ background: "linear-gradient(110deg,var(--bk-primary),var(--bk-secondary))", color: "#fff", position: "sticky", top: 0, zIndex: 50 }}><div className="bk-template-width" style={{ minHeight: 78, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}><div><Brand siteName={siteName} logoUrl={logoUrl} /><div style={{ fontSize: 11, marginTop: 5, opacity: .85 }}>{tagline ?? "Relax, reconnect, and stay awhile"}</div></div><span style={{ fontSize: 12, border: "1px solid rgba(255,255,255,.45)", borderRadius: 999, padding: "7px 12px" }}>Best available rate</span></div></header><Content>{children}</Content><Footer siteName={siteName} /></Shell>;
+function ModernBoutique(props: Omit<Props, "templateKey">) {
+  return <Shell {...props} templateKey="MODERN_BOUTIQUE"><main className="bk-template-width bk-content"><div className="bk-section-rule"><span>Find your room</span></div>{props.children}</main></Shell>;
 }
 
-function BusinessHotel({ siteName, logoUrl, tagline, children }: Omit<Props, "templateKey">) {
-  return <Shell><header style={{ background: "var(--bk-surface)", borderBottom: "3px solid var(--bk-primary)", position: "sticky", top: 0, zIndex: 50 }}><div className="bk-template-width" style={{ minHeight: 54, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}><div><Brand siteName={siteName} logoUrl={logoUrl} compact />{tagline && <span style={{ fontSize: 11, color: "var(--bk-muted)", marginLeft: 14 }}>{tagline}</span>}</div><span style={{ fontSize: 11, color: "var(--bk-muted)" }}>Secure reservations</span></div></header><Content>{children}</Content><Footer siteName={siteName} /></Shell>;
+function Resort(props: Omit<Props, "templateKey">) {
+  return <Shell {...props} templateKey="RESORT"><main className="bk-template-width bk-content"><div className="bk-section-rule"><span>Plan your escape</span></div>{props.children}</main></Shell>;
 }
 
-function Shell({ children }: { children: ReactNode }) { return <div style={{ minHeight: "100svh", background: "var(--bk-bg)", color: "var(--bk-text)", fontFamily: "var(--font-body)" }}>{children}</div>; }
-function Content({ children }: { children: ReactNode }) { return <main className="bk-template-width" style={{ padding: "32px 24px 80px" }}>{children}</main>; }
-function Trust() { return <div style={{ display: "flex", gap: 16, fontSize: 11, color: "var(--bk-muted)" }}><span>★ Best Rate Guaranteed</span><span>▣ Secure Booking</span><span>◷ Instant Confirmation</span></div>; }
+function BusinessHotel(props: Omit<Props, "templateKey">) {
+  return <Shell {...props} templateKey="BUSINESS_HOTEL" compact><main className="bk-template-width bk-content"><div className="bk-section-rule"><span>Book your stay</span></div>{props.children}</main></Shell>;
+}
 
 export function BookingTemplate(props: Props) {
-  const common = { siteName: props.siteName, logoUrl: props.logoUrl, tagline: props.tagline, children: props.children };
   switch (props.templateKey as BookingTemplateKey) {
-    case "MODERN_BOUTIQUE": return <ModernBoutique {...common} />;
-    case "RESORT": return <Resort {...common} />;
-    case "BUSINESS_HOTEL": return <BusinessHotel {...common} />;
-    default: return <ClassicHotel {...common} />;
+    case "MODERN_BOUTIQUE": return <ModernBoutique {...props} />;
+    case "RESORT": return <Resort {...props} />;
+    case "BUSINESS_HOTEL": return <BusinessHotel {...props} />;
+    default: return <ClassicHotel {...props} />;
   }
 }
