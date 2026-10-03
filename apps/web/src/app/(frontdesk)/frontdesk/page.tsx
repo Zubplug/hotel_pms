@@ -210,15 +210,16 @@ function PulseItem({ icon: Icon, label, value, tone = 'indigo', onClick }: {
   );
 }
 
-function GuestRow({ name, room, balance, availableCredit, roomStatus, status, checkOutTime, mode, onAction, onViewFolio }: {
+function GuestRow({ name, room, balance, availableCredit, roomStatus, status, checkOutTime, extensionCharge, amountDue, extensionNights, mode, onAction, onViewFolio }: {
   name: string; room: string; balance: number | null; availableCredit?: number;
-  roomStatus?: string; status: string; checkOutTime?: string;
-  mode: 'arrival' | 'departure';
+  roomStatus?: string; status: string; checkOutTime?: string; extensionCharge?: number; amountDue?: number; extensionNights?: number;
+  mode: 'arrival' | 'departure' | 'payment';
   onAction: () => void; onViewFolio: () => void;
 }) {
   const initials = name.split(' ').map((n: string) => n[0] ?? '').join('').substring(0, 2).toUpperCase();
   const isPaid = balance !== null && balance <= 0;
   const isArrival = mode === 'arrival';
+  const isPaymentRequired = mode === 'payment';
   const isRoomReady = roomStatus === 'AVAILABLE' || roomStatus === 'CLEAN';
   const canAct = isArrival
     ? isPaid && isRoomReady && status === 'CONFIRMED'
@@ -259,6 +260,13 @@ function GuestRow({ name, room, balance, availableCredit, roomStatus, status, ch
             <span className="text-[11px] text-indigo-400 font-semibold">{formatCurrency(Number(availableCredit))} Credit</span>
           )}
 
+          {isPaymentRequired && (
+            <span className="text-[11px] text-rose-400 flex items-center gap-1 font-semibold">
+              <AlertCircle className="w-3 h-3" />
+              {extensionNights} night extension · {formatCurrency(Number(amountDue || extensionCharge || 0))} required
+            </span>
+          )}
+
           {/* Room status (arrivals) */}
           {isArrival && roomStatus && (
             <span className={cn('text-[10px] font-bold px-2 py-0.5 rounded-full', STATUS_CLASSES[roomStatus] || 'bg-white/10 text-slate-400')}>
@@ -267,7 +275,7 @@ function GuestRow({ name, room, balance, availableCredit, roomStatus, status, ch
           )}
 
           {/* Checkout time (departures) */}
-          {!isArrival && checkOutTime && status === 'CHECKED_IN' && (
+          {!isArrival && !isPaymentRequired && checkOutTime && status === 'CHECKED_IN' && (
             <span className="text-[11px] text-amber-400 flex items-center gap-1 font-semibold"><Clock className="w-3 h-3" />By {checkOutTime}</span>
           )}
         </div>
@@ -275,7 +283,7 @@ function GuestRow({ name, room, balance, availableCredit, roomStatus, status, ch
 
       {/* Action */}
       <div className="shrink-0">
-        {(isArrival ? status === 'CONFIRMED' : status === 'CHECKED_IN') ? (
+        {!isPaymentRequired && (isArrival ? status === 'CONFIRMED' : status === 'CHECKED_IN') ? (
           <button
             onClick={isPaid ? onAction : onViewFolio}
             className={cn(
@@ -288,6 +296,13 @@ function GuestRow({ name, room, balance, availableCredit, roomStatus, status, ch
             )}
           >
             {isPaid ? (isArrival ? 'Check In' : 'Check Out') : 'View Folio'}
+          </button>
+        ) : isPaymentRequired ? (
+          <button
+            onClick={onViewFolio}
+            className="h-9 px-4 rounded-xl text-xs font-bold border border-rose-400/20 bg-rose-500/10 text-rose-300 hover:bg-rose-500/20 transition-all duration-200"
+          >
+            Post Payment
           </button>
         ) : status === 'CHECKED_OUT' ? (
           <span className="text-[11px] font-semibold text-slate-600 px-3 py-1.5 rounded-xl bg-white/5 border border-white/5">Departed</span>
@@ -325,7 +340,7 @@ export default function ReceptionistDashboardPage() {
   const [openingFloat, setOpeningFloat] = useState('0');
   const [startingShift, setStartingShift] = useState(false);
   const [shiftError, setShiftError] = useState('');
-  const [activeTab, setActiveTab] = useState<'arrivals' | 'departures'>('arrivals');
+  const [activeTab, setActiveTab] = useState<'arrivals' | 'departures' | 'paymentRequired'>('arrivals');
   const [searchQuery, setSearchQuery] = useState('');
 
   const { data: res, isLoading } = useQuery({
@@ -403,7 +418,7 @@ export default function ReceptionistDashboardPage() {
     );
   }
 
-  const { kpis, hardware, arrivals, departures, businessDate } = dashboardData;
+  const { kpis, hardware, arrivals, departures, paymentRequired = [], businessDate } = dashboardData;
   const bDate = new Date(businessDate);
   const firstName = session?.user?.name?.split(' ')[0] || session?.user?.email?.split('@')[0] || 'Staff';
   const greeting = new Date().getHours() < 12 ? 'Good Morning' : new Date().getHours() < 17 ? 'Good Afternoon' : 'Good Evening';
@@ -416,8 +431,14 @@ export default function ReceptionistDashboardPage() {
     d.guestName.toLowerCase().includes(searchQuery.toLowerCase()) ||
     formatRoomNumber(d.roomName).toLowerCase().includes(searchQuery.toLowerCase())
   );
+  const filteredPaymentRequired = paymentRequired.filter((item: any) =>
+    item.guestName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    formatRoomNumber(item.roomName).toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
-  const activeList = activeTab === 'arrivals' ? filteredArrivals : filteredDepartures;
+  const activeList = activeTab === 'arrivals'
+    ? filteredArrivals
+    : activeTab === 'departures' ? filteredDepartures : filteredPaymentRequired;
   const occupancyRate = kpis.roomsTotal > 0 ? (kpis.inHouse / kpis.roomsTotal) * 100 : 0;
   const readyRate = kpis.roomsTotal > 0 ? (kpis.roomsAvailable / kpis.roomsTotal) * 100 : 0;
   const unsettledArrivals = arrivals.filter((item: any) => item.balance !== null && Number(item.balance) > 0).length;
@@ -532,6 +553,21 @@ export default function ReceptionistDashboardPage() {
                 </span>
               </button>
               <button
+                onClick={() => setActiveTab('paymentRequired')}
+                className={cn(
+                  'flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all duration-200',
+                  activeTab === 'paymentRequired'
+                    ? 'bg-rose-600 text-white shadow-[0_0_20px_-5px_rgba(225,29,72,0.55)]'
+                    : 'text-slate-400 hover:text-slate-300',
+                )}
+              >
+                <CreditCard className="w-4 h-4" />
+                Payment required
+                <span className={cn('text-[10px] font-black px-1.5 py-0.5 rounded-full', activeTab === 'paymentRequired' ? 'bg-white/20' : 'bg-white/10 text-slate-500')}>
+                  {paymentRequired.length}
+                </span>
+              </button>
+              <button
                 onClick={() => setActiveTab('departures')}
                 className={cn(
                   'flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all duration-200',
@@ -566,7 +602,7 @@ export default function ReceptionistDashboardPage() {
               <div className="flex flex-col items-center justify-center h-64 gap-4 text-slate-600">
                 <Briefcase className="w-12 h-12 opacity-30" />
                 <p className="text-sm font-semibold">
-                  {searchQuery ? 'No results for your search.' : `No ${activeTab} today.`}
+                  {searchQuery ? 'No results for your search.' : activeTab === 'paymentRequired' ? 'No extended stays require payment.' : `No ${activeTab} today.`}
                 </p>
               </div>
             ) : (
@@ -580,11 +616,14 @@ export default function ReceptionistDashboardPage() {
                   roomStatus={item.roomStatus}
                   status={item.status}
                   checkOutTime={item.checkOutTime}
-                  mode={activeTab === 'arrivals' ? 'arrival' : 'departure'}
+                  extensionCharge={item.extensionCharge}
+                  amountDue={item.amountDue}
+                  extensionNights={item.extensionNights}
+                  mode={activeTab === 'arrivals' ? 'arrival' : activeTab === 'departures' ? 'departure' : 'payment'}
                   onAction={() => {
                     if (activeTab === 'arrivals') {
                       setCheckInReservationId(item.id);
-                    } else {
+                    } else if (activeTab === 'departures') {
                       setCheckOutReservation({ id: item.id, folios: [{ balance: item.balance }] });
                     }
                   }}
@@ -608,7 +647,7 @@ export default function ReceptionistDashboardPage() {
               <PulseItem icon={LogIn} label="Guests arriving" value={`${arrivals.length} scheduled today`} onClick={() => setActiveTab('arrivals')} />
               <PulseItem icon={LogOut} label="Guests departing" value={`${departures.length} due out`} tone="amber" onClick={() => setActiveTab('departures')} />
               <PulseItem icon={CheckCircle2} label="Rooms ready" value={`${kpis.roomsAvailable} of ${kpis.roomsTotal} sellable`} tone="emerald" onClick={() => router.push('/frontdesk/rooms')} />
-              <PulseItem icon={AlertCircle} label="Needs attention" value={`${roomsNeedingAttention + unsettledArrivals} open items`} tone={roomsNeedingAttention + unsettledArrivals > 0 ? 'rose' : 'emerald'} />
+              <PulseItem icon={AlertCircle} label="Needs attention" value={`${roomsNeedingAttention + unsettledArrivals + paymentRequired.length} open items`} tone={roomsNeedingAttention + unsettledArrivals + paymentRequired.length > 0 ? 'rose' : 'emerald'} />
             </div>
           </div>
 

@@ -795,8 +795,11 @@ public class LocalRepository
             Sequence = res.LocalSequence,
             PayloadJson = JsonSerializer.Serialize(new
             {
+                previousCheckOutDate = res.CheckOutDate.ToString("o"),
                 newCheckOutDate = newCheckOut.ToString("o"),
-                roomId = res.RoomId
+                roomId = res.RoomId,
+                additionalNights,
+                additionalCharge
             })
         });
 
@@ -1304,7 +1307,10 @@ public class LocalRepository
                 
                 var reservation = folio.Reservation;
                 var guestName = reservation?.Guest == null ? null : $"{reservation.Guest.FirstName} {reservation.Guest.LastName}".Trim();
-                var rooms = reservation?.Rooms.Select(room => room.Room?.DisplayName ?? room.Room?.Number).Where(number => !string.IsNullOrWhiteSpace(number)).ToArray() ?? Array.Empty<string>();
+                // Reports use the guest-facing room number only (for example
+                // 203), not the hierarchical display label (1.2.203).
+                var rooms = reservation?.Rooms.Select(room => room.Room?.Number ?? room.Room?.DisplayName).Where(number => !string.IsNullOrWhiteSpace(number)).ToArray() ?? Array.Empty<string>();
+                var roomNumber = rooms.FirstOrDefault() ?? "—";
 
                 // Only include transactions that belong to this session.
                 // Each item/payment/credit in TransactionsJson carries a frontdeskSessionId
@@ -1383,6 +1389,9 @@ public class LocalRepository
                             ["folioNumber"] = folio.Id,
                             ["confirmationNumber"] = reservation?.ConfirmationNumber,
                             ["guest"] = guestName,
+                            ["guestName"] = guestName,
+                            ["room"] = roomNumber,
+                            ["roomNumber"] = roomNumber,
                             ["rooms"] = rooms,
                         });
                     }
@@ -1482,7 +1491,11 @@ public class LocalRepository
                 ["direction"] = inflow ? "INFLOW" : "OUTFLOW",
                 ["amount"] = movement.Amount,
                 ["currency"] = movement.Currency,
-                ["method"] = "CASH",
+                // Cash movements are not folio payments. Leaving method null
+                // keeps the shift folio-payment table limited to guest
+                // deposits and prevents cash drops/paid-outs being listed as
+                // guest payments.
+                ["method"] = null,
                 ["type"] = movement.Type,
                 ["description"] = movement.Notes ?? movement.ReasonCode,
                 ["reference"] = movement.ReceiptReference ?? movement.OperationId,
@@ -1503,7 +1516,9 @@ public class LocalRepository
                 if (!document.RootElement.TryGetProperty("items", out var items) || items.ValueKind != JsonValueKind.Array) continue;
                 var reservation = folio.Reservation;
                 var guestName = reservation?.Guest == null ? null : $"{reservation.Guest.FirstName} {reservation.Guest.LastName}".Trim();
-                var rooms = reservation?.Rooms.Select(room => room.Room?.DisplayName ?? room.Room?.Number).Where(number => !string.IsNullOrWhiteSpace(number)).ToArray() ?? Array.Empty<string>();
+                // Reports use the guest-facing room number only (for example
+                // 203), not the hierarchical display label (1.2.203).
+                var rooms = reservation?.Rooms.Select(room => room.Room?.Number ?? room.Room?.DisplayName).Where(number => !string.IsNullOrWhiteSpace(number)).ToArray() ?? Array.Empty<string>();
 
                 foreach (var item in items.EnumerateArray())
                 {
@@ -1553,6 +1568,9 @@ public class LocalRepository
                             ["folioNumber"] = folio.Id,
                             ["confirmationNumber"] = reservation?.ConfirmationNumber,
                             ["guest"] = guestName,
+                            ["guestName"] = guestName,
+                            ["room"] = roomNumber,
+                            ["roomNumber"] = roomNumber,
                             ["rooms"] = rooms,
                         });
                     }
@@ -1594,7 +1612,7 @@ public class LocalRepository
                     catch (JsonException) { }
                 }
                 var room = reservation.Rooms.FirstOrDefault()?.Room;
-                var roomNumber = room?.DisplayName ?? room?.Number ?? reservation.RoomNumber ?? "—";
+                var roomNumber = room?.Number ?? room?.DisplayName ?? reservation.RoomNumber ?? "—";
                 var guestName = reservation.Guest == null ? "Guest" : $"{reservation.Guest.FirstName} {reservation.Guest.LastName}".Trim();
                 return new
                 {
@@ -3305,6 +3323,40 @@ public class LocalRepository
         var departuresRaw = reservations
             .Where(r => r.CheckOutDate.Date == today && r.Status == "CHECKED_IN")
             .ToList();
+
+        // Keep extension history available after the event has synced. The
+        // reservation only stores the latest checkout date, so the immutable
+        // EXTEND_STAY event is the source of truth for the added nights and
+        // charge that still need to be covered at the desk.
+        var extensionEvents = await _dbContext.OutboxEvents
+            .Where(e => e.PropertyId == propertyId
+                && e.AggregateType == "RESERVATION"
+                && e.EventType == "EXTEND_STAY")
+            .OrderByDescending(e => e.CreatedAt)
+            .ToListAsync();
+        var latestExtensionByReservation = extensionEvents
+            .GroupBy(e => e.AggregateId)
+            .ToDictionary(g => g.Key, g => g.First());
+
+        var extensionDetails = new Dictionary<string, (int nights, decimal charge)>();
+        foreach (var extensionEvent in latestExtensionByReservation.Values)
+        {
+            try
+            {
+                using var document = JsonDocument.Parse(extensionEvent.PayloadJson ?? "{}");
+                var root = document.RootElement;
+                var nights = root.TryGetProperty("additionalNights", out var nightsValue)
+                    && nightsValue.TryGetInt32(out var parsedNights) ? parsedNights : 0;
+                var charge = root.TryGetProperty("additionalCharge", out var chargeValue)
+                    && chargeValue.TryGetDecimal(out var parsedCharge) ? parsedCharge : 0m;
+                if (nights > 0 && charge > 0m)
+                    extensionDetails[extensionEvent.AggregateId] = (nights, charge);
+            }
+            catch (JsonException)
+            {
+                // Older extension events did not include financial metadata.
+            }
+        }
         var inHouseCount = reservations.Count(r => r.Status == "CHECKED_IN");
         var totalRooms = rooms.Count;
         var availableRooms = rooms.Count(r => r.Status == "AVAILABLE" || r.Status == "CLEAN");
@@ -3376,6 +3428,31 @@ public class LocalRepository
             };
         }).ToList();
 
+        var paymentRequired = reservations
+            .Where(r => r.Status == "CHECKED_IN"
+                && extensionDetails.TryGetValue(r.Id, out var extension)
+                && extension.charge > (r.Folio?.AvailableCredit ?? 0m))
+            .Select(r => {
+                var extension = extensionDetails[r.Id];
+                var room = r.RoomId != null && roomDict.ContainsKey(r.RoomId) ? roomDict[r.RoomId] : null;
+                var availableCredit = r.Folio?.AvailableCredit ?? 0m;
+                return new {
+                    id = r.Id,
+                    guestName = r.Guest != null ? $"{r.Guest.FirstName} {r.Guest.LastName}" : "Unknown",
+                    guestPhone = r.Guest?.Phone ?? "",
+                    confirmationNumber = r.ConfirmationNumber,
+                    roomName = room?.Number ?? "Unassigned",
+                    roomStatus = room?.Status ?? "UNKNOWN",
+                    balance = r.Folio?.OutstandingBalance,
+                    availableCredit,
+                    extensionNights = extension.nights,
+                    extensionCharge = extension.charge,
+                    amountDue = extension.charge - availableCredit,
+                    status = r.Status
+                };
+            })
+            .ToList();
+
         return new {
             property = property != null ? new { name = property.Name } : null,
             businessDate = today.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"),
@@ -3392,7 +3469,8 @@ public class LocalRepository
                 name = "Desktop Agent"
             },
             arrivals = arrivals,
-            departures = departures
+            departures = departures,
+            paymentRequired
         };
     }
 

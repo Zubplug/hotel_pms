@@ -109,6 +109,34 @@ export async function GET(req: NextRequest) {
       }
     });
 
+    // Payment-required is deliberately based on the extension audit trail,
+    // not only the current folio balance. An extension can change the stay
+    // dates before its incremental room charge is posted by the desk.
+    const inHouseReservations = await prisma.reservation.findMany({
+      where: { propertyId, status: 'CHECKED_IN' },
+      include: {
+        primaryGuest: true,
+        reservationRooms: { include: { room: true } },
+        folios: { include: { credits: true } }
+      }
+    });
+    const extensionAudits = await prisma.auditLog.findMany({
+      where: {
+        propertyId,
+        resource: 'Reservation',
+        action: 'RESERVATION_STAY_EXTENDED',
+        resourceId: { in: inHouseReservations.map(res => res.id) }
+      },
+      orderBy: { createdAt: 'desc' },
+      select: { resourceId: true, newValue: true }
+    });
+    const latestExtensionByReservation = new Map<string, any>();
+    for (const audit of extensionAudits) {
+      if (!latestExtensionByReservation.has(audit.resourceId)) {
+        latestExtensionByReservation.set(audit.resourceId, audit.newValue);
+      }
+    }
+
     const formatGuestList = (resList: any[]) => resList.map(res => {
       const folio = res.folios?.[0];
       const balance = folio ? Number(folio.balance || 0) : null;
@@ -152,6 +180,29 @@ export async function GET(req: NextRequest) {
       };
     });
 
+    const paymentRequired = inHouseReservations.flatMap(res => {
+      const extension = latestExtensionByReservation.get(res.id) as any;
+      const extensionCharge = Number(extension?.additionalCharge || 0);
+      const folio = res.folios?.[0];
+      const availableCredit = folio?.credits?.reduce((sum: number, credit: any) => sum + Math.max(0, Number(credit.remainingAmount || 0)), 0) || 0;
+      if (extensionCharge <= availableCredit) return [];
+      const room = res.reservationRooms?.[0]?.room;
+      return [{
+        id: res.id,
+        guestName: res.primaryGuest ? `${res.primaryGuest.firstName} ${res.primaryGuest.lastName}` : 'Unknown',
+        guestPhone: res.primaryGuest?.phone || '',
+        confirmationNumber: res.confirmationNumber,
+        roomName: room?.number || 'Unassigned',
+        roomStatus: room?.status || 'UNKNOWN',
+        balance: folio ? Number(folio.balance || 0) : null,
+        availableCredit,
+        extensionNights: Number(extension?.additionalNights || 0),
+        extensionCharge,
+        amountDue: extensionCharge - availableCredit,
+        status: res.status
+      }];
+    });
+
     return successResponse({
       property: {
         name: property.name,
@@ -170,7 +221,8 @@ export async function GET(req: NextRequest) {
         name: agentName
       },
       arrivals: formatGuestList(arrivals),
-      departures: formatGuestList(departures)
+      departures: formatGuestList(departures),
+      paymentRequired
     });
 
   } catch (err) {
