@@ -460,8 +460,14 @@ export function BookingEnginePropertyWorkspace({ propertyId, propertyName, entit
                 Booking Engine not activated for this property
               </div>
               <p style={{ fontSize: 12, color: "var(--text-muted)" }}>
-                The Booking Engine addon is not active for this property. Contact LodgeCore support to activate it.
+                Purchase the Booking Engine add-on before saving settings or publishing this property’s booking site.
               </p>
+              <a
+                href="/portal/subscription"
+                style={{ display: "inline-block", marginTop: 10, color: "var(--accent)", fontSize: 12, fontWeight: 700, textDecoration: "none" }}
+              >
+                Purchase Booking Engine add-on →
+              </a>
             </div>
           </div>
         </div>
