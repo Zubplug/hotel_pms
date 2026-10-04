@@ -13,7 +13,9 @@
     "CHANNEX_ENABLED",
     "OTA_RESERVATION_IMPORT",
     "OTA_AVAILABILITY_PUSH",
-    "OTA_RATE_PUSH"
+    "OTA_RATE_PUSH",
+    "FLW_SECRET_KEY",
+    "FLW_WEBHOOK_SECRET_HASH"
   ],
   "tasks": {
     "build": {
