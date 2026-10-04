@@ -3681,17 +3681,18 @@ export async function POST(req: NextRequest) {
                 // housekeeping is safely idempotent; there is no task left to
                 // update and no accounting or room state to reverse.
                 results.push({ id, status: "SYNCED", idempotencyKey, error: "HOUSEKEEPING_TASK_ALREADY_RESOLVED" });
-                continue;
-              }
-              await tx.housekeepingTask.update({
-                where: { id: task.id },
-                data: updateData,
-              });
-              task = await tx.housekeepingTask.findUnique({
-                where: { id: task.id },
-                include: { room: { select: { status: true } } }
-              });
-              if (task) {
+              } else {
+                await tx.housekeepingTask.update({
+                  where: { id: task.id },
+                  data: updateData,
+                });
+                task = await tx.housekeepingTask.findUnique({
+                  where: { id: task.id },
+                  include: { room: { select: { status: true } } }
+                });
+                if (!task) {
+                  throw new Error("Housekeeping task disappeared while applying status update");
+                }
                 let roomStatus =
                   currentStatus === "CLEANING"
                     ? "DIRTY"
