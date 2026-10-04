@@ -9,6 +9,7 @@ interface Props {
     roomTypeId: string;
     roomTypeName: string;
     description?: string | null;
+    amenities?: string[];
     images?: string[];
     maxOccupancy: number;
     availableRooms: number;
@@ -46,6 +47,7 @@ export function RoomCard({ room, slug, checkIn, checkOut, adults, children, nigh
   const [selectedRateIdx, setSelectedRateIdx] = useState(0);
 
   const images = room.images ?? [];
+  const amenities = room.amenities ?? [];
   const rates = room.rates ?? [];
   const selectedRate = rates[selectedRateIdx];
   const isBookable = room.availableRooms > 0 && Boolean(selectedRate);
@@ -111,6 +113,15 @@ export function RoomCard({ room, slug, checkIn, checkOut, adults, children, nigh
               <p style={{ fontSize: 13, color: "var(--bk-muted)", lineHeight: 1.6, maxWidth: 420, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
                 {room.description}
               </p>
+            )}
+            {amenities.length > 0 && (
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 }} aria-label="Room amenities">
+                {amenities.slice(0, 4).map((amenity) => (
+                  <span key={amenity} style={{ fontSize: 10, background: "rgba(255,255,255,.05)", border: "1px solid var(--bk-border)", borderRadius: 6, padding: "4px 8px", color: "var(--bk-muted)", fontWeight: 600 }}>
+                    {amenity}
+                  </span>
+                ))}
+              </div>
             )}
           </div>
           <div style={{ flexShrink: 0, textAlign: "right" }}>

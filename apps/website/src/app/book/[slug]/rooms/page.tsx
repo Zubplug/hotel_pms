@@ -61,6 +61,7 @@ export default async function RoomsPage({
         roomTypeId: room.roomTypeId,
         roomTypeName: room.name,
         description: room.description,
+        amenities: room.amenities ?? [],
         images: room.photos ?? [],
         maxOccupancy: room.maxOccupancy,
         availableRooms: room.availability?.available ?? 0,
@@ -81,6 +82,23 @@ export default async function RoomsPage({
 
   if (roomTypeId) {
     availRooms = availRooms.filter((room) => room.roomTypeId === roomTypeId);
+
+    const selectedRoom = availRooms[0];
+    const selectedRate = selectedRoom?.rates
+      ?.slice()
+      .sort((a: any, b: any) => a.nightlyRate - b.nightlyRate)[0];
+
+    if (selectedRoom?.availableRooms > 0 && selectedRate) {
+      const guestParams = new URLSearchParams({
+        checkIn,
+        checkOut,
+        adults,
+        children,
+        roomTypeId,
+        ratePlanId: selectedRate.ratePlanId,
+      });
+      redirect(`/book/${slug}/guest?${guestParams.toString()}`);
+    }
   }
 
   const nights = Math.round(
