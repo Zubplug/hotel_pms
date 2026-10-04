@@ -12,8 +12,9 @@ const BEDS24_API = "https://api.beds24.com/v2";
 export async function authenticateBeds24(inviteCode: string, webhookSecret: string) {
   try {
     const session = await auth();
-    if (!session?.user) return { success: false, error: "Unauthorized" };
-    const ctx = await requireOrganizationContext(session.user.id);
+    const userId = session?.user?.id;
+    if (!userId) return { success: false, error: "Unauthorized" };
+    const ctx = await requireOrganizationContext(userId);
     const propertyId = ctx.propertyIds[0];
     if (!propertyId || !(await hasEntitlement(ctx.organizationId, "ADDON_BEDS24", propertyId))) {
       return { success: false, error: "An active Beds24 add-on is required." };
@@ -35,8 +36,9 @@ export async function authenticateBeds24(inviteCode: string, webhookSecret: stri
 export async function connectBeds24(input: { externalPropertyId: string; refreshToken: string; webhookSecret: string }) {
   try {
     const session = await auth();
-    if (!session?.user) return { success: false, error: "Unauthorized" };
-    const ctx = await requireOrganizationContext(session.user.id);
+    const userId = session?.user?.id;
+    if (!userId) return { success: false, error: "Unauthorized" };
+    const ctx = await requireOrganizationContext(userId);
     const propertyId = ctx.propertyIds[0];
     if (!propertyId || !(await hasEntitlement(ctx.organizationId, "ADDON_BEDS24", propertyId))) return { success: false, error: "An active Beds24 add-on is required." };
     const validProperty = await prisma.property.findFirst({ where: { id: propertyId, organizationId: ctx.organizationId, isActive: true } });
