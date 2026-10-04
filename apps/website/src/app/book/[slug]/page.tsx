@@ -230,6 +230,17 @@ export default async function BookingLandingPage({
                 ? liveRoom.available > 0 ? `${liveRoom.available} available` : "Sold out"
                 : "Live availability on search";
 
+              const fallbacks = [
+                "/images/room-standard.png",
+                "/images/room-deluxe.png",
+                "/images/room-suite.png",
+                "/images/room-family.png",
+                "/images/room-view.png",
+                "/images/default-room.png"
+              ];
+              const sum = rt.id.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
+              const fallbackImage = fallbacks[sum % fallbacks.length];
+
               return (
                 <div
                   key={rt.id}
@@ -249,15 +260,12 @@ export default async function BookingLandingPage({
                       height: 180,
                       background: images[0]
                         ? `url(${images[0]}) center/cover no-repeat`
-                        : "linear-gradient(135deg, var(--bk-primary-dim), color-mix(in srgb, var(--bk-primary) 8%, transparent))",
+                        : `url(${fallbackImage}) center/cover no-repeat`,
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
                     }}
                   >
-                    {!images[0] && (
-                      <span style={{ fontSize: 36, opacity: 0.3 }}>🏨</span>
-                    )}
                   </div>
 
                   {/* Content */}

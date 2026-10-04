@@ -6,15 +6,30 @@ import { requirePlanLimit } from '@/lib/auth/entitlement';
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { email, password, propertyId, outletId, terminalName, terminalType } = body;
+    const { email, password, terminalType } = body;
+    // Provisioning is commonly done by pasting IDs from the admin UI. Trim
+    // those values before they reach Prisma's UUID columns; otherwise one
+    // leading space produces the opaque "invalid character" UUID error.
+    const normalizedEmail = typeof email === 'string' ? email.trim() : '';
+    const propertyId = typeof body.propertyId === 'string' ? body.propertyId.trim() : '';
+    const outletId = typeof body.outletId === 'string' ? body.outletId.trim() : '';
+    const terminalName = typeof body.terminalName === 'string' ? body.terminalName.trim() : '';
 
-    if (!email || !password || !propertyId || !outletId || !terminalName) {
+    if (!normalizedEmail || !password || !propertyId || !outletId || !terminalName) {
       return NextResponse.json({ success: false, error: 'Missing required fields' }, { status: 400 });
+    }
+
+    const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!uuidPattern.test(propertyId)) {
+      return NextResponse.json({ success: false, error: `Invalid Property ID: "${propertyId}" is not a UUID` }, { status: 400 });
+    }
+    if (!uuidPattern.test(outletId)) {
+      return NextResponse.json({ success: false, error: `Invalid Outlet ID: "${outletId}" is not a UUID` }, { status: 400 });
     }
 
     // 1. Authenticate Admin (Simplified for MVP, would normally use bcrypt on admin credentials)
     const adminUser = await prisma.user.findUnique({
-      where: { email }
+      where: { email: normalizedEmail }
     });
 
     if (!adminUser) {
