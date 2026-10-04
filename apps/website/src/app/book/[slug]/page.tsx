@@ -219,7 +219,7 @@ export default async function BookingLandingPage({
                       ))}
                     </div>
 
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
                       <div>
                         <span style={{ display: "block", fontSize: 10, color: "var(--bk-muted)", textTransform: "uppercase", letterSpacing: ".1em", fontFamily: "var(--font-mono)" }}>From</span>
                         {Number(rt.baseRate) > 0 ? (
@@ -230,7 +230,9 @@ export default async function BookingLandingPage({
                           <span style={{ display: "block", marginTop: 3, fontSize: 13, fontWeight: 700, color: "var(--bk-muted)" }}>Pricing on request</span>
                         )}
                       </div>
-                      <span style={{ fontSize: 11, fontWeight: 600, color: "var(--bk-primary)", textAlign: "right" }}>Choose dates<br />for exact rate →</span>
+                      <a href="#booking-search" style={{ fontSize: 11, fontWeight: 600, color: "var(--bk-primary)", textAlign: "right", textDecoration: "none" }}>
+                        Check availability<br />and book →
+                      </a>
                     </div>
                   </div>
                 </div>

@@ -209,8 +209,7 @@ export async function GET(
 
   const roomTypeResults = results
     .filter((r): r is PromiseFulfilledResult<any> => r.status === 'fulfilled')
-    .map((r) => r.value)
-    .filter((r) => r.rates.length > 0 && r.availability.isAvailable);
+    .map((r) => r.value);
 
   const res = successResponse({ roomTypes: roomTypeResults, checkIn: checkInStr, checkOut: checkOutStr, nights }, 200);
   Object.entries(corsHeaders(req)).forEach(([k, v]) => res.headers.set(k, v));
@@ -218,5 +217,4 @@ export async function GET(
   res.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=10');
   return res;
 }
-
 

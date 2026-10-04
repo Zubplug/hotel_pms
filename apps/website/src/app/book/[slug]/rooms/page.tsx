@@ -203,10 +203,10 @@ export default async function RoomsPage({
         <div>
           <div style={{ marginBottom: 18, display: "flex", alignItems: "baseline", gap: 10 }}>
             <h2 style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 18, letterSpacing: "-.04em", color: "var(--bk-text)" }}>
-              Available Rooms
+              Room availability
             </h2>
             <span style={{ fontSize: 13, color: "var(--bk-muted)" }}>
-              {availRooms.length} option{availRooms.length !== 1 ? "s" : ""}
+              {availRooms.length} room type{availRooms.length !== 1 ? "s" : ""}
             </span>
           </div>
 

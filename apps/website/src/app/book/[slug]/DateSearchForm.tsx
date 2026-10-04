@@ -63,7 +63,7 @@ export function DateSearchForm({ slug, config }: Props) {
   };
 
   return (
-    <div>
+    <div id="booking-search">
       <div
         style={{
           background: "var(--bk-surface)",
