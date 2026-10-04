@@ -3,7 +3,6 @@ import { notFound } from 'next/navigation';
 import { auth } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import { requireOrganizationContext } from '@/lib/organization-access';
-import { hasEntitlement } from '@/lib/auth/entitlement';
 import prisma from '@hotel-pms/db';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -22,15 +21,11 @@ export const metadata: Metadata = {
 export default async function ChannelProviderPage({ params }: { params: Promise<{ provider: string }> }) {
   const resolvedParams = await params;
   const providerSlug = resolvedParams.provider.toUpperCase();
+  if (providerSlug === 'BEDS24') notFound();
   const session = await auth();
   if (!session?.user) redirect('/login');
   const ctx = await requireOrganizationContext(session.user.id);
   const propertyId = ctx.propertyIds[0];
-
-  let isEntitled = true;
-  if (providerSlug === 'BEDS24') {
-    isEntitled = await hasEntitlement(ctx.organizationId, 'ADDON_BEDS24', propertyId);
-  }
 
   let connection;
   try {
@@ -73,24 +68,7 @@ export default async function ChannelProviderPage({ params }: { params: Promise<
         </div>
       </div>
 
-      {!isEntitled ? (
-        <Card className="border-orange-200 dark:border-orange-900 bg-orange-50 dark:bg-orange-950/20">
-          <CardHeader>
-            <CardTitle className="text-orange-800 dark:text-orange-400">Premium Add-on Required</CardTitle>
-            <CardDescription className="text-orange-700/80 dark:text-orange-400/80">
-              Your organization does not have an active subscription for the Beds24 Channel Manager integration.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-sm text-orange-800 dark:text-orange-300">
-              Beds24 is a Tier-1 PMS add-on. Subscribe to unlock real-time two-way synchronization for rates, availability, and reservations across 60+ OTAs.
-            </p>
-            <Button asChild className="bg-orange-600 hover:bg-orange-700 text-white">
-              <Link href="/settings/billing">Upgrade Subscription</Link>
-            </Button>
-          </CardContent>
-        </Card>
-      ) : !isConnected ? (
+      {!isConnected ? (
         <ChannelSetupForm provider={providerSlug} />
       ) : (
         <Tabs defaultValue="rooms" className="w-full">

@@ -33,6 +33,14 @@ export default async function SettingsPage() {
       </div>
 
       {/* Booking Engine */}
+      <div className="portal-card" style={{ border: "1px solid rgba(167,139,250,.28)", background: "linear-gradient(135deg, rgba(167,139,250,.08), rgba(15,23,42,.18))" }}>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 18, flexWrap: "wrap" }}>
+          <div><div className="portal-card-title">Beds24 channel integration</div><p style={{ fontSize: 13, color: "var(--text-muted)", lineHeight: 1.7, maxWidth: 620, marginTop: 8 }}>Connect Beds24, map rooms and rate plans, and synchronize reservations, rates and availability.</p></div>
+          <Link href="/portal/settings/integrations" className="btn btn-primary btn-sm" style={{ whiteSpace: "nowrap" }}>Configure Beds24 →</Link>
+        </div>
+      </div>
+
+      {/* Booking Engine */}
       <div className="portal-card" style={{ border: "1px solid rgba(0,212,232,.28)", background: "linear-gradient(135deg, rgba(0,212,232,.08), rgba(15,23,42,.18))" }}>
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 18, flexWrap: "wrap" }}>
           <div>

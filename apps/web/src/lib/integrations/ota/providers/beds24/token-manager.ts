@@ -18,8 +18,18 @@ interface SetupResponse {
 const tokenCache = new Map<string, { token: string; expiresAt: number }>();
 
 export class Beds24TokenManager {
+  private static getRefreshToken(encryptedRefreshToken: string): string {
+    const decrypted = decryptCredentials(encryptedRefreshToken);
+    try {
+      const credentials = JSON.parse(decrypted) as { refreshToken?: string };
+      return credentials.refreshToken || decrypted;
+    } catch {
+      return decrypted;
+    }
+  }
+
   static getAccountKey(encryptedRefreshToken: string): string {
-    const refreshToken = decryptCredentials(encryptedRefreshToken);
+    const refreshToken = this.getRefreshToken(encryptedRefreshToken);
     return crypto.createHash('sha256').update(refreshToken).digest('hex').slice(0, 32);
   }
   /**
@@ -54,7 +64,7 @@ export class Beds24TokenManager {
    * Otherwise, it exchanges the refresh token for a new access token.
    */
   static async getAccessToken(encryptedRefreshToken: string): Promise<string> {
-    const refreshToken = decryptCredentials(encryptedRefreshToken);
+    const refreshToken = this.getRefreshToken(encryptedRefreshToken);
     
     const cached = tokenCache.get(refreshToken);
     // Buffer of 5 minutes (300000ms) to ensure we don't return a token that's about to expire
@@ -94,7 +104,7 @@ export class Beds24TokenManager {
    */
   static async revokeRefreshToken(encryptedRefreshToken: string): Promise<void> {
     try {
-      const refreshToken = decryptCredentials(encryptedRefreshToken);
+      const refreshToken = this.getRefreshToken(encryptedRefreshToken);
       await fetch(`${BEDS24_API_URL}/authentication/token`, {
         method: 'DELETE',
         headers: {
