@@ -12,6 +12,7 @@ export const authConfig: NextAuthConfig = {
     authorized: ({ auth }) => Boolean(auth?.user),
     async jwt({ token, user }) {
       if (user) {
+        token.id = user.id;
         token.organizationId = (user as { organizationId?: string | null }).organizationId;
         token.isLodgeCoreAdmin = (user as { isLodgeCoreAdmin?: boolean }).isLodgeCoreAdmin;
         token.isSuperAdmin = (user as { isSuperAdmin?: boolean }).isSuperAdmin;
@@ -21,6 +22,7 @@ export const authConfig: NextAuthConfig = {
     async session({ session, token }) {
       if (session.user) {
         const websiteUser = session.user as { organizationId?: string | null; isLodgeCoreAdmin?: boolean; isSuperAdmin?: boolean };
+        (websiteUser as { id?: string }).id = (token.id ?? token.sub) as string;
         websiteUser.organizationId = token.organizationId as string | null;
         websiteUser.isLodgeCoreAdmin = token.isLodgeCoreAdmin as boolean;
         websiteUser.isSuperAdmin = token.isSuperAdmin as boolean;
