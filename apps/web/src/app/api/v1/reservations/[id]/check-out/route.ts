@@ -315,7 +315,7 @@ export async function POST(
 
           await tx.room.update({
             where: { id: rr.room.id },
-            data: { status: 'CLEANING', housekeepingStatus: 'CLEANING' },
+            data: { status: 'DIRTY', housekeepingStatus: 'CLEANING' },
           });
 
           // Idempotency: upsert by unique idempotencyKey
