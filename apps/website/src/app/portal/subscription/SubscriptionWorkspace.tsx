@@ -230,7 +230,7 @@ function InvoiceStatusPip({ status }: { status: string }) {
 /* ─────────────────────────────────────────────────────────────
    MAIN WORKSPACE COMPONENT
 ───────────────────────────────────────────────────────────── */
-export default function SubscriptionWorkspace({ data, plans, addOns, hasActiveBaseSubscription, checkoutProperties }: Props) {
+export default function SubscriptionWorkspace({ data, plans, addOns, activeAddonCodes, hasActiveBaseSubscription, checkoutProperties }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"overview" | "modules" | "billing" | "catalogue">(
