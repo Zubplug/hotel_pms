@@ -3653,18 +3653,48 @@ export async function POST(req: NextRequest) {
               } else if (currentStatus === "COMPLETED") {
                 updateData.completedAt = new Date();
               }
-              await tx.housekeepingTask.update({
+              // CREATE may have reconciled the local task into an existing
+              // open task with a different cloud ID. Resolve that task by
+              // room/type before failing, so a subsequent local status update
+              // cannot become a permanent RETRY_EXHAUSTED event.
+              let task = await tx.housekeepingTask.findUnique({
                 where: { id: aggregateId },
+                include: { room: { select: { status: true } } }
+              });
+              if (!task) {
+                const roomId = payload.RoomId || payload.roomId;
+                task = roomId
+                  ? await tx.housekeepingTask.findFirst({
+                      where: {
+                        propertyId,
+                        roomId,
+                        status: { notIn: ["INSPECTED", "CANCELLED"] },
+                        type: { in: ["STAYOVER", "CHECKOUT", "CLEANING"] },
+                      },
+                      orderBy: { createdAt: "desc" },
+                      include: { room: { select: { status: true } } },
+                    })
+                  : null;
+              }
+              if (!task) {
+                // A status update for a task already removed or superseded by
+                // housekeeping is safely idempotent; there is no task left to
+                // update and no accounting or room state to reverse.
+                results.push({ id, status: "SYNCED", idempotencyKey, error: "HOUSEKEEPING_TASK_ALREADY_RESOLVED" });
+                continue;
+              }
+              await tx.housekeepingTask.update({
+                where: { id: task.id },
                 data: updateData,
               });
-              const task = await tx.housekeepingTask.findUnique({
-                where: { id: aggregateId },
+              task = await tx.housekeepingTask.findUnique({
+                where: { id: task.id },
                 include: { room: { select: { status: true } } }
               });
               if (task) {
                 let roomStatus =
                   currentStatus === "CLEANING"
-                    ? "CLEANING"
+                    ? "DIRTY"
                     : currentStatus === "CLEAN"
                       ? "CLEAN"
                       : currentStatus === "INSPECTED"
@@ -4763,7 +4793,11 @@ export async function POST(req: NextRequest) {
           // A stale desktop checkout can submit a transfer after the cloud folio
           // has already settled. This is a safe no-op, not a financial conflict:
           // there is no credit to allocate and no balance to reconcile.
-          results.push({ id, status: "SYNCED", idempotencyKey });
+          // Preserve the reason in the per-event result.  The desktop uses
+          // this diagnostic to roll back its optimistic local credit mirror
+          // when the transfer was only a safe no-op (for example, because the
+          // authoritative cloud folio still had a positive balance).
+          results.push({ id, status: "SYNCED", idempotencyKey, error: err.message });
         } else if (
           aggregateType === "FOLIO" &&
           eventType === "GUEST_CREDIT_TRANSFER" &&

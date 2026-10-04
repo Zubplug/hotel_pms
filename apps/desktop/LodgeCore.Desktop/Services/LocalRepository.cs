@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using LodgeCore.Desktop.Data;
 using LodgeCore.Desktop.Data.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -2486,6 +2487,19 @@ public class LocalRepository
             }
         }
 
+        var previousCheckOutDate = res.CheckOutDate;
+        var previousRoomStates = res.Rooms
+            .Where(rr => !string.IsNullOrWhiteSpace(rr.RoomId))
+            .Select(rr => new
+            {
+                roomId = rr.RoomId,
+                checkOutDate = rr.CheckOutDate.ToString("O"),
+                status = rr.Room?.Status,
+                isOccupied = rr.Room?.IsOccupied,
+                housekeepingStatus = rr.Room?.HousekeepingStatus,
+            })
+            .ToArray();
+
         res.Status = "CHECKED_OUT";
         res.CheckOutDate = operationalDate;
         foreach (var rr in res.Rooms)
@@ -2508,7 +2522,12 @@ public class LocalRepository
             AggregateVersion = eventVersion,
             EventType = "CHECK_OUT",
             Sequence = res.LocalSequence,
-            PayloadJson = JsonSerializer.Serialize(new { roomId = res.RoomId })
+            PayloadJson = JsonSerializer.Serialize(new
+            {
+                roomId = res.RoomId,
+                previousCheckOutDate = previousCheckOutDate.ToString("O"),
+                previousRoomStates,
+            })
         });
         
         // Also auto-generate a cleaning task upon checkout
@@ -2520,11 +2539,12 @@ public class LocalRepository
                 ?? await _dbContext.Rooms.FirstOrDefaultAsync(r => r.Id == checkoutRoomId);
             if (room != null)
             {
-                // Checkout always places the room into the active cleaning
-                // workflow. It must not appear merely DIRTY while the
-                // checkout task is being serviced; housekeeping completion
-                // will move it to AVAILABLE after inspection.
-                room.Status = "CLEANING";
+                // Checkout/stayover creates a housekeeping task, but the
+                // operational room status remains DIRTY until housekeeping
+                // completes inspection. CLEANING is a task/housekeeping
+                // status, not a room status that Front Desk should manually
+                // clear before the room can be released.
+                room.Status = "DIRTY";
                 room.HousekeepingStatus = "CLEANING";
                 room.IsOccupied = false;
                 room.UpdatedAt = DateTime.UtcNow;
@@ -2580,6 +2600,112 @@ public class LocalRepository
         return true;
     }
 
+    /// <summary>
+    /// Reconciles an optimistic offline checkout when the cloud rejects the
+    /// authoritative checkout.  Offline checkout is intentionally optimistic,
+    /// but a rejected cloud payment validation must never leave the terminal
+    /// showing a checked-out reservation that is still checked in on the PMS.
+    /// </summary>
+    public async Task RevertRejectedOfflineCheckoutAsync(string reservationId, string checkoutPayloadJson, string reason)
+    {
+        var reservation = await _dbContext.Reservations
+            .Include(r => r.Folio)
+            .Include(r => r.Rooms).ThenInclude(rr => rr.Room)
+            .FirstOrDefaultAsync(r => r.Id == reservationId);
+        if (reservation == null) return;
+
+        DateTime? previousCheckOutDate = null;
+        var previousRoomStates = new Dictionary<string, (DateTime? checkOutDate, string? status, bool? isOccupied, string? housekeepingStatus)>();
+        try
+        {
+            using var document = JsonDocument.Parse(checkoutPayloadJson ?? "{}");
+            if (document.RootElement.TryGetProperty("previousCheckOutDate", out var previousDate)
+                && DateTime.TryParse(previousDate.GetString(), out var parsedDate))
+                previousCheckOutDate = parsedDate;
+
+            if (document.RootElement.TryGetProperty("previousRoomStates", out var roomStates)
+                && roomStates.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var state in roomStates.EnumerateArray())
+                {
+                    var roomId = state.TryGetProperty("roomId", out var roomIdValue) ? roomIdValue.GetString() : null;
+                    if (string.IsNullOrWhiteSpace(roomId)) continue;
+                    DateTime? roomCheckout = null;
+                    if (state.TryGetProperty("checkOutDate", out var roomDate)
+                        && DateTime.TryParse(roomDate.GetString(), out var parsedRoomDate))
+                        roomCheckout = parsedRoomDate;
+                    var status = state.TryGetProperty("status", out var statusValue) && statusValue.ValueKind != JsonValueKind.Null ? statusValue.GetString() : null;
+                    var occupied = state.TryGetProperty("isOccupied", out var occupiedValue) && occupiedValue.ValueKind != JsonValueKind.Null ? occupiedValue.GetBoolean() : (bool?)null;
+                    var housekeeping = state.TryGetProperty("housekeepingStatus", out var housekeepingValue) && housekeepingValue.ValueKind != JsonValueKind.Null ? housekeepingValue.GetString() : null;
+                    previousRoomStates[roomId] = (roomCheckout, status, occupied, housekeeping);
+                }
+            }
+        }
+        catch (JsonException)
+        {
+            // Older checkout payloads did not contain rollback metadata. The
+            // reservation status is still safely restored below.
+        }
+
+        reservation.Status = "CHECKED_IN";
+        if (previousCheckOutDate.HasValue) reservation.CheckOutDate = previousCheckOutDate.Value;
+        reservation.UpdatedAt = DateTime.UtcNow;
+        reservation.IsDirty = false;
+
+        foreach (var roomReservation in reservation.Rooms)
+        {
+            if (roomReservation.RoomId != null && previousRoomStates.TryGetValue(roomReservation.RoomId, out var state))
+            {
+                if (state.checkOutDate.HasValue) roomReservation.CheckOutDate = state.checkOutDate.Value;
+                if (roomReservation.Room != null)
+                {
+                    if (state.status != null) roomReservation.Room.Status = state.status;
+                    if (state.isOccupied.HasValue) roomReservation.Room.IsOccupied = state.isOccupied.Value;
+                    if (state.housekeepingStatus != null) roomReservation.Room.HousekeepingStatus = state.housekeepingStatus;
+                    roomReservation.Room.UpdatedAt = DateTime.UtcNow;
+                }
+            }
+        }
+
+        if (reservation.Folio != null)
+        {
+            var transferEvents = await _dbContext.OutboxEvents
+                .Where(e => e.AggregateType == "FOLIO"
+                    && e.AggregateId == reservation.Folio.Id
+                    && e.EventType == "GUEST_CREDIT_TRANSFER")
+                .ToListAsync();
+
+            foreach (var transferEvent in transferEvents)
+            {
+                if (string.IsNullOrWhiteSpace(transferEvent.LastError)
+                    || !transferEvent.LastError.StartsWith("GUEST_CREDIT_TRANSFER_IGNORED:", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                try
+                {
+                    using var transferDocument = JsonDocument.Parse(transferEvent.PayloadJson ?? "{}");
+                    if (!transferDocument.RootElement.TryGetProperty("reservationId", out var transferReservation)
+                        || transferReservation.GetString() != reservationId)
+                        continue;
+                    var amount = transferDocument.RootElement.TryGetProperty("amount", out var amountValue)
+                        && amountValue.TryGetDecimal(out var parsedAmount) ? parsedAmount : 0m;
+                    if (amount <= 0m) continue;
+
+                    reservation.Folio.TotalPayments = Math.Max(0m, reservation.Folio.TotalPayments - amount);
+                    RemoveFolioItemFromTransactionsJson(reservation.Folio, transferEvent.IdempotencyKey);
+                    reservation.Folio.IsDirty = false;
+                }
+                catch (JsonException)
+                {
+                    // Keep the checkout rollback safe even if a legacy transfer
+                    // payload cannot be parsed.
+                }
+            }
+        }
+
+        await _dbContext.SaveChangesAsync();
+    }
+
     public async Task<bool> UpdateHousekeepingTaskStatusAsync(string taskId, string status, string userId, string deviceId)
     {
         var task = await _dbContext.HousekeepingTasks.FindAsync(taskId);
@@ -2626,7 +2752,7 @@ public class LocalRepository
             AggregateVersion = eventVersion,
             EventType = "UPDATE_STATUS",
             Sequence = task.Version,
-            PayloadJson = JsonSerializer.Serialize(new { status = task.Status })
+            PayloadJson = JsonSerializer.Serialize(new { status = task.Status, taskType = task.TaskType, roomId = task.RoomId })
         });
 
         await _dbContext.SaveChangesAsync();
@@ -7698,6 +7824,27 @@ public class LocalRepository
         {
             // The accounting total is still corrected; malformed legacy JSON
             // must not prevent the conflict from being surfaced.
+        }
+    }
+
+    private void RemoveFolioItemFromTransactionsJson(LocalFolio folio, string idempotencyKey)
+    {
+        if (string.IsNullOrWhiteSpace(folio.TransactionsJson)) return;
+        try
+        {
+            var root = JsonNode.Parse(folio.TransactionsJson) as JsonObject;
+            if (root?["items"] is not JsonArray items) return;
+            for (var i = items.Count - 1; i >= 0; i--)
+            {
+                if (items[i] is JsonObject item && item["idempotencyKey"]?.GetValue<string>() == idempotencyKey)
+                    items.RemoveAt(i);
+            }
+            folio.TransactionsJson = root.ToJsonString();
+        }
+        catch
+        {
+            // The authoritative totals are corrected separately; malformed
+            // legacy transaction JSON must not prevent state reconciliation.
         }
     }
 

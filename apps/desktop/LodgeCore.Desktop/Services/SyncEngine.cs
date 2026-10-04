@@ -3386,6 +3386,25 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                             }
                         }
                     }
+
+                    // Apply checkout compensation only after every result in the
+                    // batch has been recorded. The matching credit-transfer
+                    // result may appear after CHECK_OUT in the response, and
+                    // its GUEST_CREDIT_TRANSFER_IGNORED diagnostic is needed to
+                    // remove the optimistic local transfer mirror safely.
+                    foreach (var evt in pendingEvents.Where(evt =>
+                        evt.EventType == "CHECK_OUT"
+                        && evt.Status == "DEAD_LETTER"
+                        && evt.LastError?.Contains("PAYMENT_REQUIRED", StringComparison.OrdinalIgnoreCase) == true))
+                    {
+                        using var innerScope = _serviceProvider.CreateScope();
+                        var repo = innerScope.ServiceProvider.GetRequiredService<LocalRepository>();
+                        await repo.RevertRejectedOfflineCheckoutAsync(
+                            evt.AggregateId,
+                            evt.PayloadJson,
+                            evt.LastError);
+                    }
+
                     foreach (var evt in pendingEvents.Where(evt => !resultIds.Contains(evt.Id)))
                     {
                         evt.Status = "FAILED";
