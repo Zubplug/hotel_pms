@@ -315,7 +315,7 @@ export default async function BookingLandingPage({
                         )}
                       </div>
                       <a href={`/book/${slug}/rooms?checkIn=${previewCheckIn}&checkOut=${previewCheckOut}&adults=2&children=0&roomTypeId=${encodeURIComponent(rt.id)}`} style={{ fontSize: 13, fontWeight: 700, color: "var(--bk-primary)", textAlign: "right", textDecoration: "none", fontFamily: "var(--font-display)" }}>
-                        View details →
+                        Book this room →
                       </a>
                     </div>
                   </div>
