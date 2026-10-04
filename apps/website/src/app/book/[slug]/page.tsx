@@ -290,14 +290,14 @@ export default async function BookingLandingPage({
 
                     {/* Occupancy + amenities */}
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
-                      <span style={{ fontSize: 11, background: "#f1f5f9", borderRadius: 6, padding: "3px 8px", color: "var(--bk-muted)", fontWeight: 600 }}>
+                      <span style={{ fontSize: 11, background: "var(--bk-surface-raised)", borderRadius: 6, padding: "3px 8px", color: "var(--bk-text)", fontWeight: 600 }}>
                         👤 Up to {rt.maxOccupancy} guests
                       </span>
-                      <span style={{ fontSize: 11, background: liveRoom?.available ? "rgba(90,240,174,.1)" : "rgba(248,113,113,.1)", borderRadius: 6, padding: "3px 8px", color: liveRoom?.available ? "#5af0ae" : liveRoom ? "#fca5a5" : "var(--bk-muted)", fontWeight: 700 }}>
+                      <span style={{ fontSize: 11, background: liveRoom?.available ? "rgba(74,222,128,0.15)" : "rgba(248,113,113,.15)", borderRadius: 6, padding: "3px 8px", color: liveRoom?.available ? "#4ade80" : liveRoom ? "#fca5a5" : "var(--bk-muted)", fontWeight: 700 }}>
                         {inventoryLabel}
                       </span>
                       {amenities.slice(0, 3).map((a) => (
-                        <span key={a} style={{ fontSize: 11, background: "#f1f5f9", borderRadius: 6, padding: "3px 8px", color: "var(--bk-muted)", fontWeight: 600 }}>
+                        <span key={a} style={{ fontSize: 11, background: "var(--bk-surface-raised)", borderRadius: 6, padding: "3px 8px", color: "var(--bk-text)", fontWeight: 600 }}>
                           {a}
                         </span>
                       ))}
@@ -314,8 +314,8 @@ export default async function BookingLandingPage({
                           <span style={{ display: "block", marginTop: 3, fontSize: 13, fontWeight: 700, color: "var(--bk-muted)" }}>Pricing on request</span>
                         )}
                       </div>
-                      <a href={`/book/${slug}/rooms?checkIn=${previewCheckIn}&checkOut=${previewCheckOut}&adults=2&children=0&roomTypeId=${encodeURIComponent(rt.id)}`} style={{ fontSize: 11, fontWeight: 600, color: "var(--bk-primary)", textAlign: "right", textDecoration: "none" }}>
-                        Book this room →
+                      <a href={`/book/${slug}/rooms?checkIn=${previewCheckIn}&checkOut=${previewCheckOut}&adults=2&children=0&roomTypeId=${encodeURIComponent(rt.id)}`} style={{ fontSize: 13, fontWeight: 700, color: "var(--bk-primary)", textAlign: "right", textDecoration: "none", fontFamily: "var(--font-display)" }}>
+                        View details →
                       </a>
                     </div>
                   </div>
