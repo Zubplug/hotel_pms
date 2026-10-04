@@ -145,9 +145,14 @@ export function RoomCard({ room, slug, checkIn, checkOut, adults, children, nigh
         <div className="bk-room-details">
           <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
             <div>
-              <h3 className="bk-room-title" onClick={() => setIsModalOpen(true)}>
-                {room.roomTypeName}
-              </h3>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 12 }}>
+                <h3 className="bk-room-title" onClick={() => setIsModalOpen(true)}>
+                  {room.roomTypeName}
+                </h3>
+                <button type="button" onClick={() => setIsModalOpen(true)} className="bk-view-details-text-btn">
+                  View Details →
+                </button>
+              </div>
               {room.description && (
                 <p className="bk-room-desc">
                   {room.description}
@@ -412,6 +417,20 @@ export function RoomCard({ room, slug, checkIn, checkOut, adults, children, nigh
         }
         .bk-room-title:hover {
           color: var(--bk-primary);
+        }
+        .bk-view-details-text-btn {
+          background: transparent;
+          border: none;
+          color: var(--bk-primary);
+          font-family: var(--font-display);
+          font-weight: 700;
+          font-size: 13px;
+          cursor: pointer;
+          padding: 0;
+          transition: color 0.2s, opacity 0.2s;
+        }
+        .bk-view-details-text-btn:hover {
+          opacity: 0.8;
         }
         .bk-room-desc {
           font-size: 14px;
