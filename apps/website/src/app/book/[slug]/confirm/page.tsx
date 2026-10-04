@@ -55,7 +55,7 @@ export default async function ConfirmPage({
 
   const [roomType, ratePlan] = await Promise.all([
     prisma.roomType.findFirst({
-      where: { id: roomTypeId, propertyId: config.propertyId },
+      where: { id: roomTypeId, propertyId: config.propertyId, isActive: true, deletedAt: null },
       select: { name: true },
     }),
     prisma.ratePlan.findFirst({

@@ -65,6 +65,7 @@ export const AuthoritativeAvailabilityService = {
       propertyId,
       roomTypeId,
       isActive: true,
+      roomType: { isActive: true, deletedAt: null },
       status: 'AVAILABLE',
       housekeepingStatus: { in: ['CLEAN', 'INSPECTED'] },
       maintenanceStatus: { in: ['NONE', 'COMPLETED'] },

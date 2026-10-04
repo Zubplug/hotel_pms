@@ -12,6 +12,7 @@ interface SearchParams {
   checkOut?: string;
   adults?: string;
   children?: string;
+  roomTypeId?: string;
 }
 
 export default async function RoomsPage({
@@ -24,7 +25,7 @@ export default async function RoomsPage({
   const { slug } = await params;
   const sp = await searchParams;
 
-  const { checkIn, checkOut, adults = "2", children = "0" } = sp;
+  const { checkIn, checkOut, adults = "2", children = "0", roomTypeId } = sp;
 
   if (!checkIn || !checkOut || checkIn >= checkOut) {
     redirect(`/book/${slug}`);
@@ -52,7 +53,7 @@ export default async function RoomsPage({
     );
 
     const body = await availRes.json().catch(() => ({}));
-    if (!availRes.ok) {
+  if (!availRes.ok) {
       availError = body.error ?? body.message ?? "Unable to fetch availability";
     } else {
       const data = body.data ?? body;
@@ -76,6 +77,10 @@ export default async function RoomsPage({
   } catch (error) {
     console.error("[public-booking] availability request failed", { slug, checkIn, checkOut, error });
     availError = "Availability is temporarily unavailable. Please try again in a moment.";
+  }
+
+  if (roomTypeId) {
+    availRooms = availRooms.filter((room) => room.roomTypeId === roomTypeId);
   }
 
   const nights = Math.round(

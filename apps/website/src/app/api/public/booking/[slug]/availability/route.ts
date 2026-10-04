@@ -109,7 +109,7 @@ export async function GET(
 
   // Load all active room types for this property
   const roomTypes = await prisma.roomType.findMany({
-    where: { propertyId: ctx.property.id, isActive: true },
+    where: { propertyId: ctx.property.id, isActive: true, deletedAt: null },
     select: {
       id: true,
       name: true,
@@ -217,4 +217,3 @@ export async function GET(
   res.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=10');
   return res;
 }
-

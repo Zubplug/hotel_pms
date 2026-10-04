@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
+import { headers } from "next/headers";
 import prisma from "@hotel-pms/db";
 import { DateSearchForm } from "./DateSearchForm";
+import { resolveBookingOrigin } from "@/lib/booking-engine/request-origin";
 
 export const dynamic = "force-dynamic";
 
@@ -13,12 +15,34 @@ function fmtCurrency(amount: number, currency: string) {
   }).format(amount);
 }
 
+function addDays(date: Date, days: number) {
+  const result = new Date(date);
+  result.setDate(result.getDate() + days);
+  return result.toISOString().slice(0, 10);
+}
+
+function today() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+interface SearchParams {
+  roomTypeId?: string;
+}
+
+interface LiveRoomPreview {
+  available: number;
+  rate?: { nightlyRate: number; currency: string };
+}
+
 export default async function BookingLandingPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<SearchParams>;
 }) {
   const { slug } = await params;
+  const { roomTypeId: selectedRoomTypeId } = await searchParams;
 
   const [config, site, roomTypes] = await Promise.all([
     prisma.bookingEngineConfig.findFirst({
@@ -41,6 +65,7 @@ export default async function BookingLandingPage({
       where: {
         property: { bookingEngineConfig: { publicSlug: slug, enabled: true } },
         isActive: true,
+        deletedAt: null,
       },
       select: {
         id: true,
@@ -59,6 +84,32 @@ export default async function BookingLandingPage({
   ]);
 
   if (!config || !site) notFound();
+
+  const previewCheckIn = addDays(new Date(`${today()}T00:00:00`), Math.ceil(config.bookingLeadTimeHours / 24));
+  const previewCheckOut = addDays(new Date(`${previewCheckIn}T00:00:00`), config.minStay);
+  const liveRooms = new Map<string, LiveRoomPreview>();
+
+  try {
+    const origin = resolveBookingOrigin(await headers(), process.env.NEXT_PUBLIC_WEBSITE_URL);
+    const inventoryRes = await fetch(
+      `${origin}/api/public/booking/${slug}/availability?checkIn=${previewCheckIn}&checkOut=${previewCheckOut}&adults=2&children=0`,
+      { cache: "no-store" }
+    );
+    const response = await inventoryRes.json().catch(() => ({}));
+    if (inventoryRes.ok) {
+      const data = response.data ?? response;
+      for (const room of data.roomTypes ?? []) {
+        const rates = (room.rates ?? []) as { avgNightlyRate: number; currency: string }[];
+        const lowestRate = [...rates].sort((a, b) => a.avgNightlyRate - b.avgNightlyRate)[0];
+        liveRooms.set(room.roomTypeId, {
+          available: room.availability?.available ?? 0,
+          rate: lowestRate ? { nightlyRate: lowestRate.avgNightlyRate, currency: lowestRate.currency } : undefined,
+        });
+      }
+    }
+  } catch (error) {
+    console.error("[public-booking] landing inventory request failed", { slug, error });
+  }
 
   const tagline = (site.content as { tagline?: string } | null)?.tagline ?? "Experience comfort and elegance";
 
@@ -115,6 +166,7 @@ export default async function BookingLandingPage({
       {/* ── SEARCH FORM ───────────────────────────────────────── */}
       <DateSearchForm
         slug={slug}
+        roomTypeId={selectedRoomTypeId}
         config={{
           minStay: config.minStay,
           maxStay: config.maxStay,
@@ -156,13 +208,18 @@ export default async function BookingLandingPage({
             {roomTypes.map((rt) => {
               const images = (rt.photos ?? []) as string[];
               const amenities = (rt.amenities ?? []) as string[];
+              const liveRoom = liveRooms.get(rt.id);
+              const displayRate = liveRoom?.rate ?? (Number(rt.baseRate) > 0 ? { nightlyRate: Number(rt.baseRate), currency: rt.currency } : undefined);
+              const inventoryLabel = liveRoom
+                ? liveRoom.available > 0 ? `${liveRoom.available} available` : "Sold out"
+                : "Live availability on search";
 
               return (
                 <div
                   key={rt.id}
                   style={{
                     background: "var(--bk-surface)",
-                    border: "1px solid var(--bk-border)",
+                    border: `1px solid ${selectedRoomTypeId === rt.id ? "var(--bk-primary)" : "var(--bk-border)"}`,
                     borderRadius: "var(--bk-radius-lg)",
                     overflow: "hidden",
                     boxShadow: "var(--bk-shadow)",
@@ -212,6 +269,9 @@ export default async function BookingLandingPage({
                       <span style={{ fontSize: 11, background: "#f1f5f9", borderRadius: 6, padding: "3px 8px", color: "var(--bk-muted)", fontWeight: 600 }}>
                         👤 Up to {rt.maxOccupancy} guests
                       </span>
+                      <span style={{ fontSize: 11, background: liveRoom?.available ? "rgba(90,240,174,.1)" : "rgba(248,113,113,.1)", borderRadius: 6, padding: "3px 8px", color: liveRoom?.available ? "#5af0ae" : liveRoom ? "#fca5a5" : "var(--bk-muted)", fontWeight: 700 }}>
+                        {inventoryLabel}
+                      </span>
                       {amenities.slice(0, 3).map((a) => (
                         <span key={a} style={{ fontSize: 11, background: "#f1f5f9", borderRadius: 6, padding: "3px 8px", color: "var(--bk-muted)", fontWeight: 600 }}>
                           {a}
@@ -222,16 +282,16 @@ export default async function BookingLandingPage({
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
                       <div>
                         <span style={{ display: "block", fontSize: 10, color: "var(--bk-muted)", textTransform: "uppercase", letterSpacing: ".1em", fontFamily: "var(--font-mono)" }}>From</span>
-                        {Number(rt.baseRate) > 0 ? (
+                        {displayRate ? (
                           <span style={{ display: "block", marginTop: 3, fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 800, letterSpacing: "-.04em", color: "var(--bk-text)" }}>
-                            {fmtCurrency(Number(rt.baseRate), rt.currency)} <span style={{ fontSize: 11, fontWeight: 500, color: "var(--bk-muted)", letterSpacing: 0 }}>/ night</span>
+                            {fmtCurrency(displayRate.nightlyRate, displayRate.currency)} <span style={{ fontSize: 11, fontWeight: 500, color: "var(--bk-muted)", letterSpacing: 0 }}>/ night</span>
                           </span>
                         ) : (
                           <span style={{ display: "block", marginTop: 3, fontSize: 13, fontWeight: 700, color: "var(--bk-muted)" }}>Pricing on request</span>
                         )}
                       </div>
-                      <a href="#booking-search" style={{ fontSize: 11, fontWeight: 600, color: "var(--bk-primary)", textAlign: "right", textDecoration: "none" }}>
-                        Check availability<br />and book →
+                      <a href={`/book/${slug}/rooms?checkIn=${previewCheckIn}&checkOut=${previewCheckOut}&adults=2&children=0&roomTypeId=${encodeURIComponent(rt.id)}`} style={{ fontSize: 11, fontWeight: 600, color: "var(--bk-primary)", textAlign: "right", textDecoration: "none" }}>
+                        Book this room →
                       </a>
                     </div>
                   </div>

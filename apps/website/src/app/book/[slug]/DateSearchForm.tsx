@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 
 interface Props {
   slug: string;
+  roomTypeId?: string;
   config: {
     minStay: number;
     maxStay: number | null;
@@ -35,7 +36,7 @@ function diffDays(a: string, b: string) {
   return Math.round((new Date(b).getTime() - new Date(a).getTime()) / 86400000);
 }
 
-export function DateSearchForm({ slug, config }: Props) {
+export function DateSearchForm({ slug, roomTypeId, config }: Props) {
   const router = useRouter();
   const [, startTransition] = useTransition();
 
@@ -57,9 +58,11 @@ export function DateSearchForm({ slug, config }: Props) {
     if (checkOut <= checkIn) { setError("Check-out must be after check-in"); return; }
     if (nights < config.minStay) { setError(`Minimum stay is ${config.minStay} night${config.minStay > 1 ? "s" : ""}`); return; }
     if (config.maxStay && nights > config.maxStay) { setError(`Maximum stay is ${config.maxStay} nights`); return; }
-    startTransition(() => {
-      router.push(`/book/${slug}/rooms?checkIn=${checkIn}&checkOut=${checkOut}&adults=${adults}&children=${children}`);
-    });
+      startTransition(() => {
+        const params = new URLSearchParams({ checkIn, checkOut, adults: String(adults), children: String(children) });
+        if (roomTypeId) params.set("roomTypeId", roomTypeId);
+        router.push(`/book/${slug}/rooms?${params.toString()}`);
+      });
   };
 
   return (
