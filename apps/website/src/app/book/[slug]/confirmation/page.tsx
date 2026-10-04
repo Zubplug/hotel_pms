@@ -14,7 +14,7 @@ function fmtCurrency(amount: number, currency: string) {
 
 function fmtDate(d: Date | string) {
   return new Date(d).toLocaleDateString("en-GB", {
-    weekday: "long", day: "numeric", month: "long", year: "numeric",
+    weekday: "short", day: "numeric", month: "long", year: "numeric",
   });
 }
 
@@ -64,162 +64,367 @@ export default async function ConfirmationPage({
   const latestPayment = folio?.payments?.[0];
   const isPaid = latestPayment?.status === "COMPLETED";
 
-
   return (
-    <div style={{ maxWidth: 680, margin: "0 auto", padding: "20px 0" }}>
+    <div style={{ maxWidth: 760, margin: "0 auto", padding: "40px 20px 80px" }} className="bk-success-page">
       {/* ── SUCCESS HEADER ─────────────────────────────────── */}
-      <div style={{ textAlign: "center", marginBottom: 36 }}>
+      <div style={{ textAlign: "center", marginBottom: 40 }}>
         <div
           style={{
-            width: 64, height: 64, borderRadius: "50%",
-            background: "#f0fdf4", border: "2px solid #86efac",
+            width: 80, height: 80, borderRadius: "50%",
+            background: "color-mix(in srgb, var(--bk-primary) 15%, transparent)",
+            border: "2px solid color-mix(in srgb, var(--bk-primary) 40%, transparent)",
             display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 28, margin: "0 auto 16px",
+            margin: "0 auto 24px", color: "var(--bk-primary)",
+            boxShadow: "0 0 40px color-mix(in srgb, var(--bk-primary) 20%, transparent)",
           }}
         >
-          ✓
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
         </div>
         <h1
           style={{
             fontFamily: "var(--font-display)",
-            fontWeight: 800, fontSize: "clamp(1.6rem, 4vw, 2.2rem)",
-            letterSpacing: "-.05em", color: "var(--bk-text)",
-            marginBottom: 10,
+            fontWeight: 800, fontSize: "clamp(2rem, 5vw, 2.8rem)",
+            letterSpacing: "-.04em", color: "var(--bk-text)",
+            marginBottom: 16,
           }}
         >
-          Booking Confirmed!
+          Booking Confirmed
         </h1>
-        <p style={{ fontSize: 15, color: "var(--bk-muted)" }}>
+        <p style={{ fontSize: 16, color: "var(--bk-muted)", lineHeight: 1.6, maxWidth: 480, margin: "0 auto" }}>
           Thank you, {reservation.primaryGuest?.firstName}. Your reservation is confirmed.
-          A confirmation has been sent to{" "}
+          A confirmation email has been sent to{" "}
           <strong style={{ color: "var(--bk-text)" }}>{reservation.primaryGuest?.email}</strong>.
         </p>
       </div>
 
-      {/* ── CONFIRMATION NUMBER ──────────────────────────────── */}
-      <div
-        style={{
-          background: "var(--bk-primary-dim)",
-          border: "1px solid color-mix(in srgb, var(--bk-primary) 30%, transparent)",
-          borderRadius: "var(--bk-radius-lg)",
-          padding: "20px 28px",
-          textAlign: "center",
-          marginBottom: 20,
-        }}
-      >
-        <div style={{ fontSize: 11, fontFamily: "var(--font-mono)", letterSpacing: ".16em", textTransform: "uppercase", color: "var(--bk-primary)", marginBottom: 8 }}>
-          Confirmation Number
+      <div className="bk-success-card">
+        {/* ── CONFIRMATION NUMBER ──────────────────────────────── */}
+        <div className="bk-ref-header">
+          <div className="bk-ref-label">Confirmation Number</div>
+          <div className="bk-ref-number">{reservation.confirmationNumber}</div>
         </div>
-        <div
-          style={{
-            fontFamily: "var(--font-mono)",
-            fontWeight: 800, fontSize: "2rem",
-            letterSpacing: ".08em", color: "var(--bk-text)",
-          }}
-        >
-          {reservation.confirmationNumber}
+
+        {/* ── BOOKING DETAILS ─────────────────────────────────── */}
+        <div className="bk-details-grid">
+          <div className="bk-detail-group">
+            <div className="bk-detail-label">Check-in</div>
+            <div className="bk-detail-value">{fmtDate(reservation.checkIn)}</div>
+            <div className="bk-detail-sub">After 14:00</div>
+          </div>
+          <div className="bk-detail-group">
+            <div className="bk-detail-label">Check-out</div>
+            <div className="bk-detail-value">{fmtDate(reservation.checkOut)}</div>
+            <div className="bk-detail-sub">Before 11:00</div>
+          </div>
+          <div className="bk-detail-group">
+            <div className="bk-detail-label">Guests</div>
+            <div className="bk-detail-value">
+              {reservation.adults} Adult{reservation.adults !== 1 ? "s" : ""}
+            </div>
+            {reservation.children > 0 && (
+              <div className="bk-detail-sub">{reservation.children} Child{reservation.children !== 1 ? "ren" : ""}</div>
+            )}
+          </div>
         </div>
-        <p style={{ fontSize: 12, color: "var(--bk-muted)", marginTop: 8 }}>
-          Keep this number — you'll need it to manage your booking.
-        </p>
+
+        <div className="bk-divider"></div>
+
+        {/* ── SUMMARY ─────────────────────────────────── */}
+        <div className="bk-summary-list">
+          <div className="bk-summary-row">
+            <span className="bk-summary-label">Property</span>
+            <span className="bk-summary-value">{reservation.property.name}</span>
+          </div>
+          <div className="bk-summary-row">
+            <span className="bk-summary-label">Room Type</span>
+            <span className="bk-summary-value">{reservation.ratePlanSnapshot?.roomTypeName ?? "—"}</span>
+          </div>
+          <div className="bk-summary-row">
+            <span className="bk-summary-label">Rate Plan</span>
+            <span className="bk-summary-value">{reservation.ratePlanSnapshot?.ratePlanName ?? "—"}</span>
+          </div>
+          <div className="bk-summary-row">
+            <span className="bk-summary-label">Guest Name</span>
+            <span className="bk-summary-value">{reservation.primaryGuest?.firstName} {reservation.primaryGuest?.lastName}</span>
+          </div>
+          <div className="bk-summary-row">
+            <span className="bk-summary-label">Payment Status</span>
+            <span className={`bk-summary-value bk-status-${isPaid ? 'paid' : 'unpaid'}`}>
+              {isPaid ? `Paid (${latestPayment?.method ?? ""})` : "Due at property"}
+            </span>
+          </div>
+          {folio && (
+            <div className="bk-summary-row bk-summary-total">
+              <span className="bk-summary-label">Total Amount</span>
+              <span className="bk-summary-value">{fmtCurrency(Number(folio.balance) + (latestPayment ? Number(latestPayment.amount) : 0), folio.currency ?? "NGN")}</span>
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* ── BOOKING DETAILS ─────────────────────────────────── */}
-      <div
-        style={{
-          background: "var(--bk-surface)",
-          border: "1px solid var(--bk-border)",
-          borderRadius: "var(--bk-radius-lg)",
-          overflow: "hidden",
-          marginBottom: 20,
-        }}
-      >
-        <div style={{ padding: "16px 24px", borderBottom: "1px solid var(--bk-border)", background: "#fafbfc" }}>
-          <h2 style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 14, letterSpacing: "-.03em", color: "var(--bk-text)" }}>
-            Booking Details
-          </h2>
-        </div>
-        <div style={{ padding: "20px 24px" }}>
-          {[
-            { label: "Property", value: reservation.property.name },
-            { label: "Room type", value: reservation.ratePlanSnapshot?.roomTypeName ?? "—" },
-            { label: "Rate plan", value: reservation.ratePlanSnapshot?.ratePlanName ?? "—" },
-            { label: "Check-in", value: fmtDate(reservation.checkIn) },
-            { label: "Check-out", value: fmtDate(reservation.checkOut) },
-            {
-              label: "Guests",
-              value: `${reservation.adults} adult${reservation.adults !== 1 ? "s" : ""}${reservation.children > 0 ? `, ${reservation.children} child${reservation.children !== 1 ? "ren" : ""}` : ""}`,
-            },
-            { label: "Status", value: reservation.status },
-            ...(folio ? [{ label: "Total", value: fmtCurrency(Number(folio.balance) + (latestPayment ? Number(latestPayment.amount) : 0), folio.currency ?? "NGN") }] : []),
-            ...(isPaid ? [{ label: "Payment", value: `Paid — ${latestPayment?.method ?? ""}` }] : [{ label: "Payment", value: "Due at property" }]),
-          ].map(row => (
-            <div key={row.label} style={{ display: "flex", justifyContent: "space-between", padding: "9px 0", borderBottom: "1px solid var(--bk-border)", gap: 12 }}>
-              <span style={{ fontSize: 13, color: "var(--bk-muted)" }}>{row.label}</span>
-              <span style={{ fontSize: 13, fontWeight: 600, color: "var(--bk-text)", textAlign: "right" }}>{row.value}</span>
-            </div>
-          ))}
-        </div>
+      {/* ── ACTIONS ─────────────────────────────────────────── */}
+      <div className="bk-actions-bar hide-print">
+        <Link
+          href={`/book/${slug}/manage?ref=${reservation.confirmationNumber}&email=${encodeURIComponent(reservation.primaryGuest?.email ?? "")}`}
+          className="bk-action-btn bk-btn-primary"
+        >
+          Manage Booking
+        </Link>
+        <button
+          type="button"
+          onClick={() => {
+            if (typeof window !== "undefined") window.print();
+          }}
+          className="bk-action-btn bk-btn-secondary"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{marginRight:8}}><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+          Print Receipt
+        </button>
       </div>
 
       {/* ── PROPERTY CONTACT ─────────────────────────────────── */}
       {(reservation.property.phone || reservation.property.email || reservation.property.address) && (
-        <div
-          style={{
-            background: "var(--bk-surface)",
-            border: "1px solid var(--bk-border)",
-            borderRadius: "var(--bk-radius-lg)",
-            padding: "20px 24px",
-            marginBottom: 20,
-            fontSize: 13,
-          }}
-        >
-          <div style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 14, color: "var(--bk-text)", marginBottom: 12 }}>
-            Property Contact
+        <div className="bk-contact-card hide-print">
+          <div className="bk-contact-title">Property Contact</div>
+          <div className="bk-contact-links">
+            {reservation.property.address && (
+              <span>📍 {reservation.property.address}</span>
+            )}
+            {reservation.property.phone && (
+              <span>📞 <a href={`tel:${reservation.property.phone}`}>{reservation.property.phone}</a></span>
+            )}
+            {reservation.property.email && (
+              <span>✉️ <a href={`mailto:${reservation.property.email}`}>{reservation.property.email}</a></span>
+            )}
           </div>
-          {reservation.property.address && (
-            <div style={{ color: "var(--bk-muted)", marginBottom: 6 }}>📍 {reservation.property.address}</div>
-          )}
-          {reservation.property.phone && (
-            <div style={{ color: "var(--bk-muted)", marginBottom: 6 }}>
-              📞 <a href={`tel:${reservation.property.phone}`} style={{ color: "var(--bk-primary)" }}>{reservation.property.phone}</a>
-            </div>
-          )}
-          {reservation.property.email && (
-            <div style={{ color: "var(--bk-muted)" }}>
-              ✉️ <a href={`mailto:${reservation.property.email}`} style={{ color: "var(--bk-primary)" }}>{reservation.property.email}</a>
-            </div>
-          )}
         </div>
       )}
 
-      {/* ── ACTIONS ─────────────────────────────────────────── */}
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-        <Link
-          href={`/book/${slug}/manage?ref=${reservation.confirmationNumber}&email=${encodeURIComponent(reservation.primaryGuest?.email ?? "")}`}
-          style={{
-            display: "inline-flex", alignItems: "center", gap: 6,
-            padding: "11px 20px", background: "var(--bk-surface)",
-            border: "1px solid var(--bk-border)", borderRadius: "var(--bk-radius)",
-            fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 13,
-            color: "var(--bk-text)", textDecoration: "none",
-          }}
-        >
-          Manage Booking →
-        </Link>
-        <Link
-          href={`/book/${slug}`}
-          style={{
-            display: "inline-flex", alignItems: "center", gap: 6,
-            padding: "11px 20px", background: "transparent",
-            border: "1px solid var(--bk-border)", borderRadius: "var(--bk-radius)",
-            fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 13,
-            color: "var(--bk-muted)", textDecoration: "none",
-          }}
-        >
-          Book another room
-        </Link>
-      </div>
+      <style>{`
+        .bk-success-card {
+          background: var(--bk-surface);
+          border: 1px solid var(--bk-border);
+          border-radius: var(--bk-radius-lg);
+          overflow: hidden;
+          box-shadow: var(--bk-shadow-lg);
+          margin-bottom: 24px;
+        }
+
+        .bk-ref-header {
+          background: color-mix(in srgb, var(--bk-primary) 8%, var(--bk-surface));
+          padding: 32px;
+          text-align: center;
+          border-bottom: 1px dashed var(--bk-border);
+        }
+        .bk-ref-label {
+          font-size: 11px;
+          font-family: var(--font-mono);
+          letter-spacing: .2em;
+          text-transform: uppercase;
+          color: var(--bk-primary);
+          margin-bottom: 8px;
+          font-weight: 700;
+        }
+        .bk-ref-number {
+          font-family: var(--font-mono);
+          font-weight: 800;
+          font-size: clamp(2rem, 6vw, 3rem);
+          letter-spacing: .1em;
+          color: var(--bk-text);
+        }
+
+        .bk-details-grid {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          padding: 32px;
+          gap: 24px;
+        }
+        .bk-detail-group {
+          display: flex;
+          flex-direction: column;
+        }
+        .bk-detail-label {
+          font-size: 11px;
+          font-family: var(--font-mono);
+          letter-spacing: .1em;
+          text-transform: uppercase;
+          color: var(--bk-muted);
+          margin-bottom: 8px;
+        }
+        .bk-detail-value {
+          font-family: var(--font-display);
+          font-size: 18px;
+          font-weight: 700;
+          color: var(--bk-text);
+          margin-bottom: 4px;
+        }
+        .bk-detail-sub {
+          font-size: 12px;
+          color: var(--bk-muted);
+        }
+
+        .bk-divider {
+          height: 1px;
+          background: var(--bk-border);
+          margin: 0 32px;
+        }
+
+        .bk-summary-list {
+          padding: 32px;
+          display: flex;
+          flex-direction: column;
+          gap: 16px;
+        }
+        .bk-summary-row {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+        }
+        .bk-summary-label {
+          font-size: 14px;
+          color: var(--bk-muted);
+        }
+        .bk-summary-value {
+          font-size: 15px;
+          font-weight: 600;
+          color: var(--bk-text);
+          text-align: right;
+        }
+        .bk-status-paid {
+          color: #4ade80;
+        }
+        .bk-status-unpaid {
+          color: var(--bk-primary);
+        }
+        .bk-summary-total {
+          margin-top: 8px;
+          padding-top: 16px;
+          border-top: 1px dashed var(--bk-border);
+        }
+        .bk-summary-total .bk-summary-label {
+          font-weight: 700;
+          color: var(--bk-text);
+        }
+        .bk-summary-total .bk-summary-value {
+          font-family: var(--font-display);
+          font-size: 24px;
+          font-weight: 800;
+          letter-spacing: -.03em;
+        }
+
+        .bk-actions-bar {
+          display: flex;
+          justify-content: center;
+          gap: 16px;
+          margin-bottom: 32px;
+          flex-wrap: wrap;
+        }
+        .bk-action-btn {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          height: 48px;
+          padding: 0 24px;
+          border-radius: var(--bk-radius);
+          font-family: var(--font-display);
+          font-weight: 700;
+          font-size: 14px;
+          text-decoration: none;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+        .bk-btn-primary {
+          background: var(--bk-primary);
+          color: #000;
+          border: none;
+        }
+        .bk-btn-primary:hover {
+          background: var(--bk-primary-hover);
+          transform: translateY(-2px);
+        }
+        .bk-btn-secondary {
+          background: transparent;
+          color: var(--bk-text);
+          border: 1px solid var(--bk-border);
+        }
+        .bk-btn-secondary:hover {
+          background: var(--bk-surface);
+        }
+
+        .bk-contact-card {
+          background: var(--bk-surface);
+          border: 1px solid var(--bk-border);
+          border-radius: var(--bk-radius-lg);
+          padding: 24px;
+          text-align: center;
+        }
+        .bk-contact-title {
+          font-family: var(--font-display);
+          font-weight: 700;
+          font-size: 14px;
+          color: var(--bk-text);
+          margin-bottom: 16px;
+        }
+        .bk-contact-links {
+          display: flex;
+          justify-content: center;
+          flex-wrap: wrap;
+          gap: 24px;
+          font-size: 13px;
+          color: var(--bk-muted);
+        }
+        .bk-contact-links a {
+          color: var(--bk-primary);
+          text-decoration: none;
+        }
+
+        @media (max-width: 640px) {
+          .bk-details-grid {
+            grid-template-columns: 1fr;
+            gap: 20px;
+          }
+          .bk-actions-bar {
+            flex-direction: column;
+          }
+          .bk-action-btn {
+            width: 100%;
+          }
+          .bk-contact-links {
+            flex-direction: column;
+            gap: 12px;
+          }
+        }
+
+        @media print {
+          body {
+            background: #fff !important;
+            color: #000 !important;
+          }
+          .hide-print {
+            display: none !important;
+          }
+          .bk-success-card {
+            border: 2px solid #000 !important;
+            box-shadow: none !important;
+            background: #fff !important;
+          }
+          .bk-ref-header {
+            background: #f8f8f8 !important;
+            border-bottom: 2px solid #000 !important;
+          }
+          .bk-ref-label, .bk-ref-number, .bk-detail-label, .bk-detail-value, .bk-detail-sub, .bk-summary-label, .bk-summary-value {
+            color: #000 !important;
+          }
+          .bk-divider {
+            background: #000 !important;
+          }
+          .bk-summary-total {
+            border-top: 2px dashed #000 !important;
+          }
+        }
+      `}</style>
     </div>
   );
 }

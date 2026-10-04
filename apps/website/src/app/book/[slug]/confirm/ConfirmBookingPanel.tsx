@@ -1,6 +1,7 @@
 "use client";
 import { useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { createPortal } from "react-dom";
 
 interface Props {
   slug: string;
@@ -34,6 +35,41 @@ function fmtDate(d: string) {
 }
 
 const HOLD_DURATION_SECS = 12 * 60; // 12-minute hold
+
+function ProcessingOverlay() {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  if (!mounted) return null;
+
+  return createPortal(
+    <div style={{
+      position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999,
+      display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+      background: "rgba(0,0,0,0.85)", backdropFilter: "blur(12px)",
+      animation: "fadeIn 0.3s ease-out"
+    }}>
+      <div className="bk-processing-spinner"></div>
+      <h2 style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 24, color: "#fff", marginTop: 32, letterSpacing: "-.02em" }}>
+        Confirming your reservation...
+      </h2>
+      <p style={{ color: "rgba(255,255,255,0.7)", marginTop: 12, fontSize: 15 }}>
+        Please do not close or refresh this page.
+      </p>
+      <style>{`
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .bk-processing-spinner {
+          width: 64px; height: 64px;
+          border: 4px solid rgba(255,255,255,0.1);
+          border-top-color: var(--bk-primary);
+          border-radius: 50%;
+          animation: spin 1s cubic-bezier(0.68, -0.55, 0.265, 1.55) infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+      `}</style>
+    </div>,
+    document.body
+  );
+}
 
 export function ConfirmBookingPanel({
   slug, holdToken, firstName, lastName, email,
@@ -107,149 +143,333 @@ export function ConfirmBookingPanel({
   };
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: 24, alignItems: "start" }} className="bk-confirm-grid">
+    <>
+      {loading && <ProcessingOverlay />}
+      <div className="bk-confirm-grid">
 
-      {/* ── LEFT: Summary ─────────────────────────────────── */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-        {/* Hold timer */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 14,
-            padding: "14px 20px",
-            background: holdExpired ? "#fef2f2" : timeLeft < 120 ? "#fffbeb" : "#f0fdf4",
-            border: `1px solid ${holdExpired ? "#fecaca" : timeLeft < 120 ? "#fde68a" : "#bbf7d0"}`,
-            borderRadius: "var(--bk-radius)",
-          }}
-        >
-          <div style={{ fontSize: 24, flexShrink: 0 }}>⏱</div>
-          <div>
-            {holdExpired ? (
-              <>
-                <div style={{ fontWeight: 700, fontSize: 13, color: "#dc2626", fontFamily: "var(--font-display)" }}>Hold expired</div>
-                <p style={{ fontSize: 12, color: "#dc2626" }}>Please search again to find available rooms.</p>
-              </>
-            ) : (
-              <>
-                <div style={{ fontWeight: 700, fontSize: 13, color: timeLeft < 120 ? "#92400e" : "#15803d", fontFamily: "var(--font-display)" }}>
-                  Room held for you — {mins}:{secs} remaining
-                </div>
-                <p style={{ fontSize: 12, color: timeLeft < 120 ? "#92400e" : "#15803d" }}>
-                  Complete your booking before the hold expires.
-                </p>
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* Booking review */}
-        <div style={{ background: "var(--bk-surface)", border: "1px solid var(--bk-border)", borderRadius: "var(--bk-radius-lg)", padding: "24px 28px" }}>
-          <h2 style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 16, letterSpacing: "-.04em", color: "var(--bk-text)", marginBottom: 20 }}>
-            Review Your Booking
-          </h2>
-
-          {[
-            { label: "Guest", value: `${firstName} ${lastName}` },
-            { label: "Email", value: email },
-            { label: "Room", value: roomTypeName },
-            { label: "Rate plan", value: ratePlanName },
-            { label: "Check-in", value: fmtDate(checkIn) },
-            { label: "Check-out", value: fmtDate(checkOut) },
-            { label: "Nights", value: String(nights) },
-            { label: "Guests", value: `${adults} adult${adults !== 1 ? "s" : ""}${children > 0 ? `, ${children} child${children !== 1 ? "ren" : ""}` : ""}` },
-            ...(specialRequests ? [{ label: "Requests", value: specialRequests }] : []),
-            ...(eta ? [{ label: "Arrival", value: eta }] : []),
-          ].map(row => (
-            <div key={row.label} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid var(--bk-border)", gap: 12, flexWrap: "wrap" }}>
-              <span style={{ fontSize: 13, color: "var(--bk-muted)", flexShrink: 0 }}>{row.label}</span>
-              <span style={{ fontSize: 13, fontWeight: 600, color: "var(--bk-text)", textAlign: "right" }}>{row.value}</span>
+        {/* ── LEFT: Summary ─────────────────────────────────── */}
+        <div className="bk-confirm-content">
+          {/* Hold timer */}
+          <div className={`bk-hold-timer ${holdExpired ? 'expired' : timeLeft < 120 ? 'warning' : 'active'}`}>
+            <div className="bk-hold-icon">⏱</div>
+            <div>
+              {holdExpired ? (
+                <>
+                  <div className="bk-hold-title">Hold expired</div>
+                  <p className="bk-hold-desc">Please search again to find available rooms.</p>
+                </>
+              ) : (
+                <>
+                  <div className="bk-hold-title">
+                    Room held for you — <span className="bk-countdown">{mins}:{secs}</span> remaining
+                  </div>
+                  <p className="bk-hold-desc">
+                    Complete your booking before the hold expires.
+                  </p>
+                </>
+              )}
             </div>
-          ))}
+          </div>
+
+          {/* Booking review */}
+          <div className="bk-card">
+            <h2 className="bk-card-title">
+              Review Your Booking
+            </h2>
+
+            <div className="bk-review-list">
+              {[
+                { label: "Guest", value: `${firstName} ${lastName}` },
+                { label: "Email", value: email },
+                { label: "Room", value: roomTypeName },
+                { label: "Rate plan", value: ratePlanName },
+                { label: "Check-in", value: fmtDate(checkIn) },
+                { label: "Check-out", value: fmtDate(checkOut) },
+                { label: "Nights", value: String(nights) },
+                { label: "Guests", value: `${adults} adult${adults !== 1 ? "s" : ""}${children > 0 ? `, ${children} child${children !== 1 ? "ren" : ""}` : ""}` },
+                ...(specialRequests ? [{ label: "Requests", value: specialRequests }] : []),
+                ...(eta ? [{ label: "Arrival", value: eta }] : []),
+              ].map(row => (
+                <div key={row.label} className="bk-review-row">
+                  <span className="bk-review-label">{row.label}</span>
+                  <span className="bk-review-value">{row.value}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {error && (
+            <div className="bk-error-alert">
+              {error}
+            </div>
+          )}
+
+          {/* CTA */}
+          <button
+            type="button"
+            onClick={handleConfirm}
+            disabled={loading || holdExpired}
+            className={`bk-confirm-btn ${loading || holdExpired ? 'disabled' : ''}`}
+          >
+            {holdExpired
+              ? "Hold expired"
+              : paymentMode === "PAY_LATER"
+              ? "Confirm Booking (No payment now) →"
+              : `Pay ${fmtCurrency(totalAmount, currency)} & Confirm →`
+            }
+          </button>
+
+          <p className="bk-policy-note">
+            By confirming, you agree to our cancellation and booking policies.
+          </p>
         </div>
 
-        {error && (
-          <div style={{ padding: "12px 16px", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "var(--bk-radius)", fontSize: 13, color: "#dc2626" }}>
-            {error}
-          </div>
-        )}
+        {/* ── RIGHT: Price breakdown ─────────────────────────── */}
+        <div className="bk-summary-card">
+          <h3 className="bk-card-title">
+            Price Summary
+          </h3>
 
-        {/* CTA */}
-        <button
-          type="button"
-          onClick={handleConfirm}
-          disabled={loading || holdExpired}
-          style={{
-            padding: "16px 28px",
-            background: holdExpired ? "var(--bk-border)" : "var(--bk-primary)",
-            color: holdExpired ? "var(--bk-muted)" : "#fff",
-            border: "none", borderRadius: "var(--bk-radius)",
-            fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 16,
-            cursor: loading || holdExpired ? "not-allowed" : "pointer",
-            opacity: loading ? 0.7 : 1, transition: "background .2s",
-          }}
-        >
-          {loading
-            ? (paymentMode === "PAY_LATER" ? "Confirming…" : "Processing payment…")
-            : holdExpired
-            ? "Hold expired"
-            : paymentMode === "PAY_LATER"
-            ? "Confirm Booking (No payment now) →"
-            : `Pay ${fmtCurrency(totalAmount, currency)} & Confirm →`
+          <div className="bk-summary-section">
+            <div className="bk-price-row">
+              <span>{fmtCurrency(nightlyRate, currency)} × {nights} night{nights !== 1 ? "s" : ""}</span>
+              <span>{fmtCurrency(totalAmount, currency)}</span>
+            </div>
+          </div>
+
+          <div className="bk-summary-section" style={{ borderBottom: "none", paddingBottom: 0 }}>
+            <div className="bk-price-total-row">
+              <span>Total</span>
+              <span>{fmtCurrency(totalAmount, currency)}</span>
+            </div>
+
+            {/* Payment mode badge */}
+            <div className={`bk-payment-mode-badge ${paymentMode === "PAY_LATER" ? 'success' : 'highlight'}`}>
+              {paymentMode === "PAY_LATER" && "✓ No payment required today"}
+              {paymentMode === "DEPOSIT" && "Deposit required · balance at property"}
+              {paymentMode === "FULL" && "Full payment due now"}
+            </div>
+
+            <div className="bk-confirmation-note">
+              Confirmation will be sent to <strong>{email}</strong>
+            </div>
+          </div>
+        </div>
+
+        <style>{`
+          .bk-confirm-grid {
+            display: grid;
+            grid-template-columns: 1fr 380px;
+            gap: 32px;
+            align-items: start;
           }
-        </button>
+          .bk-confirm-content {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+          }
 
-        <p style={{ fontSize: 11, color: "var(--bk-muted)", textAlign: "center" }}>
-          By confirming, you agree to our cancellation and booking policies.
-        </p>
+          .bk-card {
+            background: var(--bk-surface);
+            border: 1px solid var(--bk-border);
+            border-radius: var(--bk-radius-lg);
+            padding: 32px;
+            box-shadow: var(--bk-shadow);
+          }
+          .bk-card-title {
+            font-family: var(--font-display);
+            font-weight: 700;
+            font-size: 18px;
+            letter-spacing: -.03em;
+            color: var(--bk-text);
+            margin-bottom: 24px;
+          }
+
+          .bk-hold-timer {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 20px 24px;
+            border-radius: var(--bk-radius-lg);
+            border: 1px solid transparent;
+            transition: all 0.3s ease;
+          }
+          .bk-hold-timer.active {
+            background: color-mix(in srgb, var(--bk-primary) 10%, var(--bk-surface));
+            border-color: color-mix(in srgb, var(--bk-primary) 30%, transparent);
+          }
+          .bk-hold-timer.warning {
+            background: rgba(251,191,36,0.1);
+            border-color: rgba(251,191,36,0.3);
+          }
+          .bk-hold-timer.expired {
+            background: rgba(239,68,68,0.1);
+            border-color: rgba(239,68,68,0.3);
+          }
+          .bk-hold-icon {
+            font-size: 28px;
+            flex-shrink: 0;
+            animation: pulse 2s infinite;
+          }
+          @keyframes pulse { 0% { opacity: 1; transform: scale(1); } 50% { opacity: 0.7; transform: scale(0.95); } 100% { opacity: 1; transform: scale(1); } }
+          
+          .bk-hold-title {
+            font-weight: 700;
+            font-size: 14px;
+            font-family: var(--font-display);
+            margin-bottom: 4px;
+          }
+          .bk-hold-timer.active .bk-hold-title { color: var(--bk-primary); }
+          .bk-hold-timer.warning .bk-hold-title { color: #fbbf24; }
+          .bk-hold-timer.expired .bk-hold-title { color: #ef4444; }
+          .bk-countdown {
+            font-family: var(--font-mono);
+            font-size: 16px;
+            letter-spacing: .05em;
+          }
+          .bk-hold-desc {
+            font-size: 13px;
+          }
+          .bk-hold-timer.active .bk-hold-desc { color: color-mix(in srgb, var(--bk-primary) 70%, transparent); }
+          .bk-hold-timer.warning .bk-hold-desc { color: rgba(251,191,36,0.8); }
+          .bk-hold-timer.expired .bk-hold-desc { color: rgba(239,68,68,0.8); }
+
+          .bk-review-list {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+          }
+          .bk-review-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            padding-bottom: 16px;
+            border-bottom: 1px dashed var(--bk-border);
+            gap: 16px;
+          }
+          .bk-review-row:last-child {
+            border-bottom: none;
+            padding-bottom: 0;
+          }
+          .bk-review-label {
+            font-size: 13px;
+            color: var(--bk-muted);
+            flex-shrink: 0;
+          }
+          .bk-review-value {
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--bk-text);
+            text-align: right;
+            word-break: break-word;
+          }
+
+          .bk-confirm-btn {
+            padding: 0 40px;
+            height: 64px;
+            background: var(--bk-primary);
+            color: #000;
+            border: none;
+            border-radius: var(--bk-radius);
+            font-family: var(--font-display);
+            font-weight: 800;
+            font-size: 16px;
+            letter-spacing: -.01em;
+            cursor: pointer;
+            transition: transform 0.2s, background 0.2s, box-shadow 0.2s;
+            box-shadow: 0 8px 24px var(--bk-primary-dim);
+            width: 100%;
+          }
+          .bk-confirm-btn:hover:not(.disabled) {
+            background: var(--bk-primary-hover);
+            transform: translateY(-2px);
+            box-shadow: 0 12px 32px var(--bk-primary-dim);
+          }
+          .bk-confirm-btn:active:not(.disabled) {
+            transform: translateY(0);
+          }
+          .bk-confirm-btn.disabled {
+            background: var(--bk-surface-raised);
+            color: var(--bk-muted);
+            cursor: not-allowed;
+            box-shadow: none;
+          }
+
+          .bk-policy-note {
+            font-size: 12px;
+            color: var(--bk-muted);
+            text-align: center;
+          }
+
+          .bk-summary-card {
+            background: var(--bk-surface);
+            border: 1px solid var(--bk-border);
+            border-radius: var(--bk-radius-lg);
+            padding: 32px;
+            position: sticky;
+            top: 100px;
+            box-shadow: var(--bk-shadow);
+          }
+          .bk-summary-section {
+            padding: 20px 0;
+            border-bottom: 1px solid var(--bk-border);
+          }
+          .bk-summary-section:first-of-type {
+            padding-top: 0;
+          }
+          
+          .bk-price-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 15px;
+            color: var(--bk-muted);
+          }
+          .bk-price-total-row {
+            display: flex;
+            justify-content: space-between;
+            font-family: var(--font-display);
+            font-weight: 800;
+            font-size: 24px;
+            letter-spacing: -.03em;
+            color: var(--bk-text);
+          }
+
+          .bk-payment-mode-badge {
+            margin-top: 24px;
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            text-align: center;
+          }
+          .bk-payment-mode-badge.success {
+            background: rgba(74, 222, 128, 0.1);
+            color: #4ade80;
+            border: 1px solid rgba(74, 222, 128, 0.2);
+          }
+          .bk-payment-mode-badge.highlight {
+            background: var(--bk-primary-dim);
+            color: var(--bk-primary);
+            border: 1px solid color-mix(in srgb, var(--bk-primary) 30%, transparent);
+          }
+
+          .bk-confirmation-note {
+            margin-top: 20px;
+            font-size: 12px;
+            color: var(--bk-muted);
+            text-align: center;
+            line-height: 1.6;
+          }
+          .bk-confirmation-note strong {
+            color: var(--bk-text);
+          }
+
+          @media (max-width: 900px) {
+            .bk-confirm-grid { grid-template-columns: 1fr; gap: 24px; }
+            .bk-summary-card { position: static; }
+          }
+        `}</style>
       </div>
-
-      {/* ── RIGHT: Price breakdown ─────────────────────────── */}
-      <div
-        style={{
-          background: "var(--bk-surface)",
-          border: "1px solid var(--bk-border)",
-          borderRadius: "var(--bk-radius-lg)",
-          padding: "24px",
-          position: "sticky",
-          top: 80,
-        }}
-      >
-        <h3 style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 15, letterSpacing: "-.04em", color: "var(--bk-text)", marginBottom: 16 }}>
-          Price Summary
-        </h3>
-
-        <div style={{ padding: "12px 0", borderBottom: "1px solid var(--bk-border)" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: "var(--bk-muted)" }}>
-            <span>{fmtCurrency(nightlyRate, currency)} × {nights} night{nights !== 1 ? "s" : ""}</span>
-            <span>{fmtCurrency(totalAmount, currency)}</span>
-          </div>
-        </div>
-
-        <div style={{ paddingTop: 14 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 22, letterSpacing: "-.05em", color: "var(--bk-text)" }}>
-            <span>Total</span>
-            <span>{fmtCurrency(totalAmount, currency)}</span>
-          </div>
-        </div>
-
-        {/* Payment mode badge */}
-        <div style={{ marginTop: 16, padding: "10px 14px", borderRadius: 8, background: paymentMode === "PAY_LATER" ? "#f0fdf4" : "#eff6ff", fontSize: 12, fontWeight: 600, color: paymentMode === "PAY_LATER" ? "#16a34a" : "var(--bk-primary)" }}>
-          {paymentMode === "PAY_LATER" && "✓ No payment required today"}
-          {paymentMode === "DEPOSIT" && "Deposit required · balance at property"}
-          {paymentMode === "FULL" && "Full payment due now"}
-        </div>
-
-        <div style={{ marginTop: 16, fontSize: 11, color: "var(--bk-muted)", lineHeight: 1.6 }}>
-          Confirmation will be sent to <strong style={{ color: "var(--bk-text)" }}>{email}</strong>
-        </div>
-      </div>
-
-      <style>{`
-        @media (max-width: 768px) {
-          .bk-confirm-grid { grid-template-columns: 1fr !important; }
-        }
-      `}</style>
-    </div>
+    </>
   );
 }

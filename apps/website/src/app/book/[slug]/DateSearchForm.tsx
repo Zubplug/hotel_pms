@@ -2,7 +2,6 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
-
 interface Props {
   slug: string;
   roomTypeId?: string;
@@ -66,26 +65,10 @@ export function DateSearchForm({ slug, roomTypeId, config }: Props) {
   };
 
   return (
-    <div id="booking-search">
-      <div
-        style={{
-          background: "var(--bk-surface)",
-          borderRadius: "var(--bk-radius-lg)",
-          boxShadow: "var(--bk-shadow-lg)",
-          border: "1px solid var(--bk-border)",
-          padding: "32px",
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr 1fr 1fr auto",
-          gap: 12,
-          alignItems: "end",
-        }}
-        className="bk-search-grid"
-      >
-        {/* Check-in */}
-        <div>
-          <label style={{ fontSize: 11, fontWeight: 700, color: "var(--bk-muted)", letterSpacing: ".06em", textTransform: "uppercase", display: "block", marginBottom: 6 }}>
-            Check-in
-          </label>
+    <div id="booking-search" style={{ width: "100%", maxWidth: "1160px", margin: "0 auto" }}>
+      <div className="bk-search-container">
+        <div className="bk-search-item">
+          <label className="bk-search-label">Check-in</label>
           <input
             type="date"
             value={checkIn}
@@ -94,89 +77,58 @@ export function DateSearchForm({ slug, roomTypeId, config }: Props) {
               setCheckIn(e.target.value);
               if (e.target.value >= checkOut) setCheckOut(addDays(e.target.value, config.minStay));
             }}
-            style={{
-              width: "100%", padding: "12px 14px", fontSize: 15, fontWeight: 600,
-              border: "1px solid var(--bk-border)", borderRadius: "var(--bk-radius)",
-              background: "var(--bk-bg)", color: "var(--bk-text)", outline: "none",
-              cursor: "pointer", fontFamily: "var(--font-body)",
-            }}
+            className="bk-search-input"
           />
         </div>
+        
+        <div className="bk-search-divider" />
 
-        {/* Check-out */}
-        <div>
-          <label style={{ fontSize: 11, fontWeight: 700, color: "var(--bk-muted)", letterSpacing: ".06em", textTransform: "uppercase", display: "block", marginBottom: 6 }}>
-            Check-out
-          </label>
+        <div className="bk-search-item">
+          <label className="bk-search-label">Check-out</label>
           <input
             type="date"
             value={checkOut}
             min={addDays(checkIn, config.minStay)}
             onChange={(e) => setCheckOut(e.target.value)}
-            style={{
-              width: "100%", padding: "12px 14px", fontSize: 15, fontWeight: 600,
-              border: "1px solid var(--bk-border)", borderRadius: "var(--bk-radius)",
-              background: "var(--bk-bg)", color: "var(--bk-text)", outline: "none",
-              cursor: "pointer", fontFamily: "var(--font-body)",
-            }}
+            className="bk-search-input"
           />
         </div>
 
-        {/* Adults */}
-        <div>
-          <label style={{ fontSize: 11, fontWeight: 700, color: "var(--bk-muted)", letterSpacing: ".06em", textTransform: "uppercase", display: "block", marginBottom: 6 }}>
-            Adults
-          </label>
-          <div style={{ display: "flex", alignItems: "center", border: "1px solid var(--bk-border)", borderRadius: "var(--bk-radius)", background: "var(--bk-bg)", overflow: "hidden" }}>
-            <button type="button" onClick={() => setAdults(Math.max(1, adults - 1))}
-              style={{ width: 44, height: 48, fontSize: 20, color: "var(--bk-muted)", background: "none", border: "none", cursor: "pointer", flexShrink: 0 }}>−</button>
-            <span style={{ flex: 1, textAlign: "center", fontWeight: 700, fontSize: 16, color: "var(--bk-text)" }}>{adults}</span>
-            <button type="button" onClick={() => setAdults(adults + 1)}
-              style={{ width: 44, height: 48, fontSize: 20, color: "var(--bk-muted)", background: "none", border: "none", cursor: "pointer", flexShrink: 0 }}>+</button>
+        <div className="bk-search-divider" />
+
+        <div className="bk-search-item" style={{ flex: 1.2 }}>
+          <label className="bk-search-label">Guests</label>
+          <div style={{ display: "flex", gap: "16px", alignItems: "center", marginTop: "2px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <span style={{ fontSize: "13px", color: "var(--bk-muted)" }}>Adults</span>
+              <button type="button" onClick={() => setAdults(Math.max(1, adults - 1))} className="bk-counter-btn">−</button>
+              <span style={{ fontWeight: 600, fontSize: "15px", color: "var(--bk-text)", minWidth: "16px", textAlign: "center", fontFamily: "var(--font-display)" }}>{adults}</span>
+              <button type="button" onClick={() => setAdults(adults + 1)} className="bk-counter-btn">+</button>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <span style={{ fontSize: "13px", color: "var(--bk-muted)" }}>Children</span>
+              <button type="button" onClick={() => setChildren(Math.max(0, children - 1))} className="bk-counter-btn">−</button>
+              <span style={{ fontWeight: 600, fontSize: "15px", color: "var(--bk-text)", minWidth: "16px", textAlign: "center", fontFamily: "var(--font-display)" }}>{children}</span>
+              <button type="button" onClick={() => setChildren(children + 1)} className="bk-counter-btn">+</button>
+            </div>
           </div>
         </div>
 
-        {/* Children */}
-        <div>
-          <label style={{ fontSize: 11, fontWeight: 700, color: "var(--bk-muted)", letterSpacing: ".06em", textTransform: "uppercase", display: "block", marginBottom: 6 }}>
-            Children
-          </label>
-          <div style={{ display: "flex", alignItems: "center", border: "1px solid var(--bk-border)", borderRadius: "var(--bk-radius)", background: "var(--bk-bg)", overflow: "hidden" }}>
-            <button type="button" onClick={() => setChildren(Math.max(0, children - 1))}
-              style={{ width: 44, height: 48, fontSize: 20, color: "var(--bk-muted)", background: "none", border: "none", cursor: "pointer", flexShrink: 0 }}>−</button>
-            <span style={{ flex: 1, textAlign: "center", fontWeight: 700, fontSize: 16, color: "var(--bk-text)" }}>{children}</span>
-            <button type="button" onClick={() => setChildren(children + 1)}
-              style={{ width: 44, height: 48, fontSize: 20, color: "var(--bk-muted)", background: "none", border: "none", cursor: "pointer", flexShrink: 0 }}>+</button>
-          </div>
-        </div>
-
-        {/* Search CTA */}
-        <button
-          type="button"
-          onClick={handleSearch}
-          style={{
-            padding: "0 28px", height: 50, borderRadius: "var(--bk-radius)",
-            background: "var(--bk-primary)", color: "#fff", border: "none",
-            fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 15,
-            cursor: "pointer", whiteSpace: "nowrap",
-            transition: "background .2s, box-shadow .2s",
-          }}
-          onMouseOver={e => (e.currentTarget.style.background = "var(--bk-primary-hover)")}
-          onMouseOut={e => (e.currentTarget.style.background = "var(--bk-primary)")}
-        >
-          Search Rooms →
+        <button type="button" onClick={handleSearch} className="bk-search-btn">
+          Search Rooms
         </button>
       </div>
 
-      {/* Stay summary chip */}
       {nights > 0 && !error && (
-        <div style={{ marginTop: 12, display: "flex", gap: 8, alignItems: "center" }}>
+        <div style={{ marginTop: 16, display: "flex", justifyContent: "center" }}>
           <span style={{
             display: "inline-flex", alignItems: "center", gap: 6,
-            background: "var(--bk-primary-dim)", color: "var(--bk-primary)",
-            border: "1px solid color-mix(in srgb, var(--bk-primary) 30%, transparent)",
-            borderRadius: 999, padding: "4px 12px", fontSize: 12, fontWeight: 700,
+            background: "var(--bk-primary-dim)", color: "var(--bk-text)",
+            border: "1px solid var(--bk-primary-dim)",
+            borderRadius: 999, padding: "6px 16px", fontSize: 11, fontWeight: 600,
+            letterSpacing: ".02em",
           }}>
+            <span style={{ color: "var(--bk-primary)" }}>✦</span>
             {nights} night{nights !== 1 ? "s" : ""} · {adults} adult{adults !== 1 ? "s" : ""}
             {children > 0 ? ` · ${children} child${children !== 1 ? "ren" : ""}` : ""}
           </span>
@@ -184,18 +136,120 @@ export function DateSearchForm({ slug, roomTypeId, config }: Props) {
       )}
 
       {error && (
-        <div style={{ marginTop: 10, padding: "10px 16px", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "var(--bk-radius)", fontSize: 13, color: "#dc2626" }}>
+        <div style={{ marginTop: 12, padding: "10px 16px", background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: "var(--bk-radius)", fontSize: 13, color: "#ef4444", textAlign: "center" }}>
           {error}
         </div>
       )}
 
       <style>{`
-        @media (max-width: 768px) {
-          .bk-search-grid { grid-template-columns: 1fr 1fr !important; }
-          .bk-search-grid > *:last-child { grid-column: 1 / -1; }
+        .bk-search-container {
+          background: var(--bk-surface);
+          border: 1px solid var(--bk-border);
+          border-radius: 100px;
+          padding: 10px;
+          display: flex;
+          align-items: center;
+          box-shadow: 0 16px 40px rgba(0,0,0,0.3);
+          position: relative;
+          z-index: 10;
         }
-        @media (max-width: 480px) {
-          .bk-search-grid { grid-template-columns: 1fr !important; }
+        .bk-search-item {
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          padding: 8px 24px;
+          min-width: 0;
+        }
+        .bk-search-divider {
+          width: 1px;
+          height: 44px;
+          background: var(--bk-border);
+        }
+        .bk-search-label {
+          font-size: 10px;
+          font-weight: 700;
+          color: var(--bk-muted);
+          text-transform: uppercase;
+          letter-spacing: .08em;
+          margin-bottom: 6px;
+          font-family: var(--font-mono);
+        }
+        .bk-search-input {
+          width: 100%;
+          background: transparent;
+          border: none;
+          color: var(--bk-text);
+          font-family: var(--font-display);
+          font-size: 16px;
+          font-weight: 600;
+          outline: none;
+          cursor: pointer;
+        }
+        .bk-search-input::-webkit-calendar-picker-indicator {
+          filter: invert(1) opacity(0.5);
+          cursor: pointer;
+        }
+        .bk-counter-btn {
+          width: 26px;
+          height: 26px;
+          border-radius: 50%;
+          border: 1px solid var(--bk-border);
+          background: rgba(255,255,255,0.03);
+          color: var(--bk-text);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          font-size: 16px;
+          transition: background 0.2s, border-color 0.2s;
+        }
+        .bk-counter-btn:hover {
+          background: rgba(255,255,255,0.08);
+          border-color: var(--bk-muted);
+        }
+        .bk-search-btn {
+          padding: 0 40px;
+          height: 56px;
+          border-radius: 100px;
+          background: var(--bk-primary);
+          color: #000;
+          border: none;
+          font-family: var(--font-display);
+          font-weight: 800;
+          font-size: 15px;
+          letter-spacing: -.02em;
+          cursor: pointer;
+          white-space: nowrap;
+          transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), background 0.2s;
+        }
+        .bk-search-btn:hover {
+          background: var(--bk-primary-hover);
+          transform: scale(1.02);
+        }
+        .bk-search-btn:active {
+          transform: scale(0.98);
+        }
+
+        @media (max-width: 900px) {
+          .bk-search-container {
+            flex-direction: column;
+            border-radius: var(--bk-radius-lg);
+            padding: 16px;
+            gap: 16px;
+          }
+          .bk-search-divider {
+            width: 100%;
+            height: 1px;
+            margin: 0;
+          }
+          .bk-search-item {
+            width: 100%;
+            padding: 0;
+          }
+          .bk-search-btn {
+            width: 100%;
+            border-radius: var(--bk-radius);
+          }
         }
       `}</style>
     </div>
