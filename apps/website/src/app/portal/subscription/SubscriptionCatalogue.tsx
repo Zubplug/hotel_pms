@@ -498,6 +498,7 @@ function AddOnCard({
   onCheckout,
   onDetails,
   canSubscribe,
+  isActive,
 }: {
   product: Product;
   interval: "month" | "year";
@@ -505,13 +506,14 @@ function AddOnCard({
   onCheckout: (key: string, priceIds: string[]) => void;
   onDetails: () => void;
   canSubscribe: boolean;
+  isActive: boolean;
 }) {
   const price = product.prices.find(p => p.interval === interval) ?? product.prices.find(p => p.interval === "one_time") ?? product.prices[0];
   const key = `addon-${product.id}`;
   const features = addOnFeatures(product);
 
   return (
-    <div className="sub-addon-card">
+    <div className={`sub-addon-card${isActive ? " sub-addon-card--active" : ""}`}>
       <div className="sub-addon-header">
         <div className="sub-addon-icon">
           <span style={{ fontSize: 18 }}>
@@ -524,6 +526,7 @@ function AddOnCard({
         </div>
         <div>
           <div className="sub-addon-name">{product.name}</div>
+          {isActive && <span className="sub-addon-status">Active</span>}
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--accent)", letterSpacing: "0.12em", marginTop: 2 }}>
             {product.code}
           </div>
@@ -555,10 +558,10 @@ function AddOnCard({
         <button
           className="btn btn-outline btn-sm sub-addon-cta"
           style={{ flex: 1 }}
-          disabled={busy !== null || !price || !canSubscribe}
+          disabled={busy !== null || !price || !canSubscribe || isActive}
           onClick={() => price && onCheckout(key, [price.id])}
         >
-          {busy === key ? "Opening…" : !canSubscribe ? "Base plan required" : price ? "Add on →" : "Unavailable"}
+          {busy === key ? "Opening…" : isActive ? "Active add-on" : !canSubscribe ? "Base plan required" : price ? "Add on →" : "Unavailable"}
         </button>
       </div>
     </div>
@@ -572,12 +575,14 @@ export default function SubscriptionCatalogue({
   plans,
   addOns,
   properties,
+  activeAddonCodes,
   currentPlanCode,
   hasActiveBaseSubscription,
 }: {
   plans: Plan[];
   addOns: Product[];
   properties: { id: string; name: string }[];
+  activeAddonCodes: string[];
   currentPlanCode: string | null;
   hasActiveBaseSubscription: boolean;
 }) {
@@ -721,6 +726,7 @@ export default function SubscriptionCatalogue({
                 busy={busy}
                 onCheckout={checkout}
                 canSubscribe={hasActiveBaseSubscription}
+                isActive={activeAddonCodes.includes(product.code)}
                 onDetails={() => setDetails({ kind: "addon", value: product })}
               />
             ))}
