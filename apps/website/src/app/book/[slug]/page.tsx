@@ -34,6 +34,16 @@ interface LiveRoomPreview {
   rate?: { nightlyRate: number; currency: string };
 }
 
+interface BookingContent {
+  tagline?: string;
+  heroTitle?: string;
+  heroSubtitle?: string;
+  amenities?: string[];
+  cancellationText?: string;
+  contactPhone?: string;
+  contactEmail?: string;
+}
+
 export default async function BookingLandingPage({
   params,
   searchParams,
@@ -111,7 +121,13 @@ export default async function BookingLandingPage({
     console.error("[public-booking] landing inventory request failed", { slug, error });
   }
 
-  const tagline = (site.content as { tagline?: string } | null)?.tagline ?? "Experience comfort and elegance";
+  const content = (site.content && typeof site.content === "object" ? site.content : {}) as BookingContent;
+  const heroTitle = content.heroTitle?.trim() || content.tagline?.trim() || "Experience comfort and elegance";
+  const heroSubtitle = content.heroSubtitle?.trim() || "Book directly with us for the best rates and a personalised experience.";
+  const propertyAmenities = Array.isArray(content.amenities) ? content.amenities.filter((amenity): amenity is string => typeof amenity === "string" && amenity.trim().length > 0) : [];
+  const cancellationText = content.cancellationText?.trim();
+  const contactPhone = content.contactPhone?.trim();
+  const contactEmail = content.contactEmail?.trim();
 
   return (
     <div>
@@ -156,10 +172,10 @@ export default async function BookingLandingPage({
             marginBottom: 14,
           }}
         >
-          {tagline}
+          {heroTitle}
         </h1>
         <p style={{ fontSize: 16, color: "var(--bk-muted)", maxWidth: 480, margin: "0 auto 36px" }}>
-          Book directly with us for the best rates and a personalised experience.
+          {heroSubtitle}
         </p>
       </div>
 
@@ -332,6 +348,42 @@ export default async function BookingLandingPage({
           ))}
         </div>
       </section>
+
+      {(propertyAmenities.length > 0 || cancellationText || contactPhone || contactEmail) && (
+        <section style={{ marginTop: 24, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 20 }}>
+          {propertyAmenities.length > 0 && (
+            <div style={{ padding: "28px", background: "var(--bk-surface)", borderRadius: "var(--bk-radius-lg)", border: "1px solid var(--bk-border)" }}>
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, letterSpacing: ".16em", textTransform: "uppercase", color: "var(--bk-primary)", marginBottom: 8 }}>At your stay</div>
+              <h2 style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 20, letterSpacing: "-.04em", color: "var(--bk-text)", marginBottom: 18 }}>Thoughtful essentials</h2>
+              <div style={{ display: "grid", gap: 10 }}>
+                {propertyAmenities.map((amenity) => (
+                  <div key={amenity} style={{ display: "flex", alignItems: "center", gap: 10, color: "var(--bk-muted)", fontSize: 13 }}>
+                    <span style={{ display: "inline-flex", width: 22, height: 22, alignItems: "center", justifyContent: "center", borderRadius: "50%", background: "var(--bk-primary-dim)", color: "var(--bk-primary)", fontSize: 12 }}>✓</span>
+                    {amenity}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {(cancellationText || contactPhone || contactEmail) && (
+            <div style={{ padding: "28px", background: "var(--bk-surface)", borderRadius: "var(--bk-radius-lg)", border: "1px solid var(--bk-border)" }}>
+              {cancellationText && <>
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, letterSpacing: ".16em", textTransform: "uppercase", color: "var(--bk-primary)", marginBottom: 8 }}>Before you book</div>
+                <h2 style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 20, letterSpacing: "-.04em", color: "var(--bk-text)", marginBottom: 10 }}>Cancellation policy</h2>
+                <p style={{ color: "var(--bk-muted)", fontSize: 13, lineHeight: 1.65, marginBottom: contactPhone || contactEmail ? 20 : 0 }}>{cancellationText}</p>
+              </>}
+              {(contactPhone || contactEmail) && <div style={{ borderTop: cancellationText ? "1px solid var(--bk-border)" : undefined, paddingTop: cancellationText ? 18 : 0 }}>
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, letterSpacing: ".16em", textTransform: "uppercase", color: "var(--bk-primary)", marginBottom: 8 }}>Need help?</div>
+                <div style={{ display: "grid", gap: 6, fontSize: 13 }}>
+                  {contactPhone && <a href={`tel:${contactPhone}`} style={{ color: "var(--bk-text)", textDecoration: "none" }}>{contactPhone}</a>}
+                  {contactEmail && <a href={`mailto:${contactEmail}`} style={{ color: "var(--bk-text)", textDecoration: "none" }}>{contactEmail}</a>}
+                </div>
+              </div>}
+            </div>
+          )}
+        </section>
+      )}
 
       <style>{`
         .bk-room-card:hover { transform: translateY(-3px); box-shadow: 0 12px 40px rgba(0,0,0,.1); }
