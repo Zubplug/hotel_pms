@@ -36,11 +36,13 @@ export class Beds24AccountApiScheduler {
 
         const token = await Beds24TokenManager.getAccessToken(encryptedRefreshToken);
 
-        const headers = {
+        const headers: Record<string, string> = {
           'token': token,
           'Content-Type': 'application/json',
           ...options.headers,
         };
+        const organizationToken = Beds24TokenManager.getOrganizationToken(encryptedRefreshToken);
+        if (organizationToken) headers['organisation'] = organizationToken;
 
         const response = await fetch(`${BEDS24_API_URL}${endpoint}`, {
           ...options,

@@ -1,4 +1,5 @@
 import { encryptCredentials, decryptCredentials } from '../../crypto';
+import { decrypt } from '@hotel-pms/db';
 import crypto from 'crypto';
 
 const BEDS24_API_URL = 'https://api.beds24.com/v2';
@@ -14,21 +15,50 @@ interface SetupResponse {
   expiresIn: number;
 }
 
+interface StoredCredentials {
+  mode?: 'RESELLER';
+  propertyId?: string;
+  refreshToken?: string;
+  webhookSecret?: string;
+}
+
 // In-memory cache for access tokens: refreshToken -> { token, expiresAt }
 const tokenCache = new Map<string, { token: string; expiresAt: number }>();
 
 export class Beds24TokenManager {
-  private static getRefreshToken(encryptedRefreshToken: string): string {
-    const decrypted = decryptCredentials(encryptedRefreshToken);
+  private static getCredentials(encryptedCredentials: string): StoredCredentials {
     try {
-      const credentials = JSON.parse(decrypted) as { refreshToken?: string };
-      return credentials.refreshToken || decrypted;
+      const payload = JSON.parse(encryptedCredentials);
+      if (payload?.iv && payload?.content && payload?.authTag) {
+        return JSON.parse(decrypt(payload)) as StoredCredentials;
+      }
     } catch {
-      return decrypted;
+      // Fall through to the legacy OTA_ENCRYPTION_KEY format.
     }
+    const decrypted = decryptCredentials(encryptedCredentials);
+    try { return JSON.parse(decrypted) as StoredCredentials; } catch { return { refreshToken: decrypted }; }
+  }
+
+  static isResellerConnection(encryptedCredentials: string): boolean {
+    return this.getCredentials(encryptedCredentials).mode === 'RESELLER';
+  }
+
+  static getOrganizationToken(encryptedCredentials: string): string | undefined {
+    if (!this.isResellerConnection(encryptedCredentials)) return undefined;
+    return process.env.BEDS24_ORGANIZATION_TOKEN;
+  }
+
+  private static getRefreshToken(encryptedRefreshToken: string): string {
+    const credentials = this.getCredentials(encryptedRefreshToken);
+    if (credentials.mode === 'RESELLER') throw new Error('Reseller connections do not use refresh tokens.');
+    return credentials.refreshToken || decryptCredentials(encryptedRefreshToken);
   }
 
   static getAccountKey(encryptedRefreshToken: string): string {
+    const credentials = this.getCredentials(encryptedRefreshToken);
+    if (credentials.mode === 'RESELLER' && credentials.propertyId) {
+      return crypto.createHash('sha256').update(`BEDS24_RESELLER:${credentials.propertyId}`).digest('hex').slice(0, 32);
+    }
     const refreshToken = this.getRefreshToken(encryptedRefreshToken);
     return crypto.createHash('sha256').update(refreshToken).digest('hex').slice(0, 32);
   }
@@ -64,6 +94,12 @@ export class Beds24TokenManager {
    * Otherwise, it exchanges the refresh token for a new access token.
    */
   static async getAccessToken(encryptedRefreshToken: string): Promise<string> {
+    const credentials = this.getCredentials(encryptedRefreshToken);
+    if (credentials.mode === 'RESELLER') {
+      const accessToken = process.env.BEDS24_ACCESS_TOKEN;
+      if (!accessToken || !credentials.propertyId) throw new Error('Beds24 reseller access is not configured for this property.');
+      return `${accessToken}:p${credentials.propertyId}`;
+    }
     const refreshToken = this.getRefreshToken(encryptedRefreshToken);
     
     const cached = tokenCache.get(refreshToken);
