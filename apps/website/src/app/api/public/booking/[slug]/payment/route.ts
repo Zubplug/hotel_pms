@@ -17,6 +17,7 @@ import {
 import { PaystackProvider } from '@/lib/payment-providers/paystack';
 import { getPaystackBookingAccount, resolveSecretRef } from '@/lib/payment-providers/booking-account';
 import { resolveBookingOrigin } from '@/lib/booking-engine/request-origin';
+import { sendBookingPaymentFailedEmail } from '@/lib/email/booking-emails';
 
 export async function OPTIONS(req: NextRequest) {
   return corsPreflightResponse(req);
@@ -64,7 +65,7 @@ export async function POST(
       guestConfirmationTokenHash: reservationTokenHash,
     },
     include: {
-      primaryGuest: { select: { email: true } },
+    primaryGuest: { select: { email: true } },
       folios: {
         where: { type: 'ROOM', status: 'OPEN' },
         orderBy: { createdAt: 'asc' },
@@ -164,6 +165,17 @@ export async function POST(
       where: { id: bpt.id },
       data: { status: 'FAILED', metadata: { error: err.message } as any },
     }).catch(() => null);
+
+    if (reservation.primaryGuest.email) {
+      sendBookingPaymentFailedEmail({
+        to: reservation.primaryGuest.email,
+        propertyName: ctx.property.name,
+        confirmationNumber: reservation.confirmationNumber,
+        amount: amountDue,
+        currency: reservation.currency,
+        manageUrl: `${resolveBookingOrigin(req.headers, process.env.NEXT_PUBLIC_BOOKING_URL)}/book/${slug}/confirmation?token=${encodeURIComponent(String(reservationToken))}`,
+      }).catch((emailError) => console.error('[Booking Payment] failure email failed', emailError));
+    }
 
     console.error('[Booking Payment POST]', err);
     const res = errorResponse('BAD_GATEWAY', 'Failed to initialize payment with provider', 502);

@@ -9,6 +9,7 @@ import crypto from 'crypto';
 import { getOrCreateBookingSystemActor } from '@/lib/booking-engine/system-actor';
 import { getPropertyBusinessDate } from '@/lib/date-utils';
 import { sendPaymentReceiptEmail } from '@/lib/email/booking-emails';
+import { sendBookingPaymentFailedEmail } from '@/lib/email/booking-emails';
 import { getPaystackBookingAccount, resolveSecretRef } from '@/lib/payment-providers/booking-account';
 import { postBookingAdvanceDeposit } from '@/lib/booking-engine/financial-service';
 
@@ -48,6 +49,22 @@ export async function POST(
     return new NextResponse('OK', { status: 200 });
   }
 
+  const notifyPaymentFailure = async (amount: number, currency: string) => {
+    if (!bpt.reservationId) return;
+    const failedReservation = await prisma.reservation.findUnique({
+      where: { id: bpt.reservationId },
+      include: { primaryGuest: { select: { email: true } } },
+    });
+    if (!failedReservation?.primaryGuest.email) return;
+    sendBookingPaymentFailedEmail({
+      to: failedReservation.primaryGuest.email,
+      propertyName: (await prisma.property.findUnique({ where: { id: bpt.propertyId }, select: { name: true } }))?.name ?? 'the property',
+      confirmationNumber: failedReservation.confirmationNumber,
+      amount,
+      currency,
+    }).catch((emailError) => console.error('[Booking Webhook] failure email failed', emailError));
+  };
+
   const account = await getPaystackBookingAccount(bpt.propertyId);
   let providerSecret: string;
   let webhookSecret: string;
@@ -86,6 +103,7 @@ export async function POST(
         where: { id: bpt.id },
         data: { status: 'FAILED', webhookVerified: true, webhookPayload: event },
       });
+      await notifyPaymentFailure(Number(bpt.amount), bpt.currency);
       return new NextResponse('OK', { status: 200 });
     }
     verifiedAmount = verifyData.data.amount / 100; // Convert from kobo
@@ -96,6 +114,7 @@ export async function POST(
         where: { id: bpt.id },
         data: { status: 'FAILED', webhookVerified: true, webhookPayload: event, metadata: { reason: 'AMOUNT_OR_CURRENCY_MISMATCH', verifiedAmount, verifiedCurrency } as any },
       });
+      await notifyPaymentFailure(verifiedAmount, verifiedCurrency);
       return new NextResponse('OK', { status: 200 });
     }
   } catch (err) {
@@ -192,10 +211,10 @@ export async function POST(
 
     const paidReservation = await prisma.reservation.findUnique({
       where: { id: bpt.reservationId! },
-      select: { confirmationNumber: true, currency: true, property: { select: { name: true } }, primaryGuest: { select: { email: true } } },
+      select: { confirmationNumber: true, currency: true, property: { select: { name: true } }, primaryGuest: { select: { email: true } }, reservationRooms: { where: { status: 'ACTIVE' }, include: { room: { select: { number: true } } } } },
     });
     if (paidReservation?.primaryGuest.email) {
-      sendPaymentReceiptEmail({ to: paidReservation.primaryGuest.email, propertyName: paidReservation.property.name, confirmationNumber: paidReservation.confirmationNumber, amount: verifiedAmount, currency: verifiedCurrency }).catch((e) => console.error('[Booking Webhook] receipt email failed', e));
+      sendPaymentReceiptEmail({ to: paidReservation.primaryGuest.email, propertyName: paidReservation.property.name, confirmationNumber: paidReservation.confirmationNumber, amount: verifiedAmount, currency: verifiedCurrency, roomNumber: paidReservation.reservationRooms[0]?.room?.number }).catch((e) => console.error('[Booking Webhook] receipt email failed', e));
     }
 
     return new NextResponse('OK', { status: 200 });
@@ -210,6 +229,7 @@ export async function POST(
         metadata: { error: err.message } as any,
       },
     }).catch(() => null);
+    await notifyPaymentFailure(Number(bpt.amount), bpt.currency);
 
     // Still return 200 to Paystack — we'll handle it offline
     return new NextResponse('OK', { status: 200 });

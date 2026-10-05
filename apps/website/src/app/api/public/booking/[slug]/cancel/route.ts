@@ -206,12 +206,15 @@ export async function POST(
   });
 
   if (reservation.primaryGuest.email) {
+    const refundableAmount = refundRequests.reduce((sum: number, request: any) => sum + Number(request.requestedAmount || 0), 0);
     sendBookingCancellationEmail({
       to: reservation.primaryGuest.email,
       propertyName: ctx.property.name,
       confirmationNumber: reservation.confirmationNumber,
       penaltyAmount,
       currency: reservation.currency,
+      refundAmount: refundableAmount,
+      refundPending: refundableAmount > 0,
     }).catch((e) => console.error('[Booking Cancel] guest email failed', e));
   }
 

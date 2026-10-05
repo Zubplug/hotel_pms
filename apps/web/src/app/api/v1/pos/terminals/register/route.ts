@@ -20,7 +20,11 @@ export async function POST(req: NextRequest) {
         if (reqPropertyId && !ctx.propertyIds.includes(reqPropertyId)) return NextResponse.json({ error: 'Forbidden property' }, { status: 403 });
         let reqOutletId = body?.outletId;
         if (reqOutletId && !ctx.outletIds.includes(reqOutletId)) return NextResponse.json({ error: 'Forbidden outlet' }, { status: 403 });
-    const { terminalCode, name, terminalType, propertyId, outletId } = body;
+    const terminalCode = typeof body?.terminalCode === 'string' ? body.terminalCode.trim() : '';
+    const name = typeof body?.name === 'string' ? body.name.trim() : '';
+    const terminalType = typeof body?.terminalType === 'string' ? body.terminalType.trim() : '';
+    const propertyId = typeof body?.propertyId === 'string' ? body.propertyId.trim() : '';
+    const outletId = typeof body?.outletId === 'string' ? body.outletId.trim() : '';
 
     if (!terminalCode || !name || !terminalType || !propertyId || !outletId) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -40,27 +44,45 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid outlet or property' }, { status: 400 });
     }
 
-    const terminalCount = await prisma.posTerminal.count({
-      where: { organisationId: outlet.property.organizationId, registrationState: { not: 'REVOKED' } },
-    });
-    await requirePlanLimit(outlet.property.organizationId, 'maxTerminals', terminalCount);
-
     // Generate a secure random device token
     const deviceToken = crypto.randomBytes(32).toString('hex');
     const deviceTokenHash = await hash(deviceToken, 10);
 
-    const terminal = await prisma.posTerminal.create({
-      data: {
-        terminalCode,
-        name,
-        terminalType,
-        organisationId: outlet.property.organizationId,
-        propertyId,
-        outletId,
-        deviceCredentialHash: deviceTokenHash,
-        registrationState: 'REGISTERED',
-        licenseState: 'VALID',
+    const terminal = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "Organization" WHERE id = ${outlet.property.organizationId} FOR UPDATE`;
+
+      const duplicate = await tx.posTerminal.findFirst({
+        where: {
+          organisationId: outlet.property.organizationId,
+          propertyId,
+          outletId,
+          name,
+          registrationState: { not: 'REVOKED' },
+        },
+        select: { id: true },
+      });
+      if (duplicate) {
+        throw new Error('An active terminal with this name already exists for this outlet. Reuse it or revoke it before registering again.');
       }
+
+      const terminalCount = await tx.posTerminal.count({
+        where: { organisationId: outlet.property.organizationId, registrationState: { not: 'REVOKED' } },
+      });
+      await requirePlanLimit(outlet.property.organizationId, 'maxTerminals', terminalCount);
+
+      return tx.posTerminal.create({
+        data: {
+          terminalCode,
+          name,
+          terminalType,
+          organisationId: outlet.property.organizationId,
+          propertyId,
+          outletId,
+          deviceCredentialHash: deviceTokenHash,
+          registrationState: 'REGISTERED',
+          licenseState: 'VALID',
+        },
+      });
     });
 
     return NextResponse.json({
@@ -79,6 +101,9 @@ export async function POST(req: NextRequest) {
     });
   } catch (error: any) {
     console.error('Terminal Registration Error:', error);
+    if (typeof error?.message === 'string' && error.message.startsWith('An active terminal with this name')) {
+      return NextResponse.json({ error: error.message }, { status: 409 });
+    }
     // Handle unique constraint violation for terminalCode
     if (error.code === 'P2002') {
       return NextResponse.json({ error: 'Terminal code already exists' }, { status: 409 });

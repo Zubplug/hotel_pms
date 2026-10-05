@@ -270,6 +270,8 @@ export async function POST(
         roomTypeName: (hold.quoteSnapshot as any)?.roomTypeName ?? 'Room',
         total: Number((hold.quoteSnapshot as any)?.subtotal ?? 0),
         currency: (hold.quoteSnapshot as any)?.currency ?? ctx.property.currency,
+        roomNumber: newReservation.assignedRoomNumber,
+        paymentRequired: ctx.config.paymentMode !== 'PAY_LATER',
         manageUrl: `${resolveBookingOrigin(req.headers, process.env.NEXT_PUBLIC_BOOKING_URL)}/book/${slug}/confirmation?token=${newReservation.confirmToken}`,
       }).catch((e) => console.error('[Booking] confirmation email failed', e));
     }

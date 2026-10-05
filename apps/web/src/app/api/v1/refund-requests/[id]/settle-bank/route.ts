@@ -6,6 +6,7 @@ import { resolveUser } from '@/lib/resolve-user';
 import { applyRefundToFolio } from '@/lib/refunds/settle-refund';
 import { isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
 import { CityLedgerAccountingService } from '@/lib/services/city-ledger-accounting-service';
+import { sendBookingRefundCompletedEmail } from '@/lib/email/booking-refund-email';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -17,7 +18,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (!reference) return errorResponse('BAD_REQUEST', 'A bank transfer reference is required', 400);
     const { id } = await params;
     const result = await prisma.$transaction(async tx => {
-      const request = await tx.refundRequest.findUnique({ where: { id }, include: { payment: true, folio: true } });
+      const request = await tx.refundRequest.findUnique({ where: { id }, include: { payment: true, folio: true, reservation: { include: { primaryGuest: true, property: { select: { name: true } } } } } });
       if (!request) throw new Error('NOT_FOUND');
       if (!user.allowedProperties.includes(request.propertyId)) throw new Error('FORBIDDEN');
       if (await isNightAuditTransactionLocked(request.propertyId)) throw new Error('NIGHT_AUDIT_IN_PROGRESS');
@@ -35,6 +36,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       }
       await tx.refundRequest.update({ where: { id: request.id }, data: { status: 'COMPLETED' } });
       await tx.auditLog.create({ data: { organizationId: property?.organizationId || '', propertyId: request.propertyId, userId: user.id, action: 'SETTLE_BANK_REFUND', resource: 'RefundRequest', resourceId: request.id, newValue: { amount, refundId: refund.id, reference }, ipAddress: req.headers.get('x-forwarded-for') || '', userAgent: req.headers.get('user-agent') || '', requestId: crypto.randomUUID() } });
+      if (request.reservation?.primaryGuest?.email) {
+        sendBookingRefundCompletedEmail({
+          to: request.reservation.primaryGuest.email,
+          propertyName: request.reservation.property.name,
+          confirmationNumber: request.reservation.confirmationNumber,
+          amount,
+          currency: request.currency,
+          method: 'BANK_TRANSFER',
+        }).catch((error) => console.error('[Bank Refund] guest email failed', error));
+      }
       return refund;
     });
     return successResponse({ status: 'COMPLETED', refundId: result.id, refundRequestId: id }, 200);

@@ -54,29 +54,47 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'Invalid Property ID: Property not found' }, { status: 400 });
     }
 
-    const terminalCount = await prisma.posTerminal.count({
-      where: { organisationId: adminStaff.organizationId, registrationState: { not: 'REVOKED' } },
-    });
-    await requirePlanLimit(adminStaff.organizationId, 'maxTerminals', terminalCount);
-    
-    // 2. Register Terminal
+    // Serialize entitlement count + terminal creation at organization scope.
+    // Without this lock, two retries can both observe capacity and create
+    // duplicate terminals before either transaction is visible to the other.
     const deviceCredential = randomBytes(32).toString('hex');
     const deviceCredentialHash = createHash('sha256').update(deviceCredential).digest('hex');
-    const terminalCode = `TERM-${Math.floor(1000 + Math.random() * 9000)}`;
+    const terminal = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "Organization" WHERE id = ${adminStaff.organizationId} FOR UPDATE`;
 
-    const terminal = await prisma.posTerminal.create({
-      data: {
-        terminalCode,
-        name: terminalName,
-        terminalType: (terminalType === 'STATIONARY' || !terminalType) ? 'RESTAURANT_POS' : terminalType,
-        organisationId: adminStaff.organizationId,
-        propertyId,
-        outletId,
-        deviceCredentialHash,
-        registrationState: 'REGISTERED',
-        licenseState: 'VALID',
-        licenseExpiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // 1 year
+      const duplicate = await tx.posTerminal.findFirst({
+        where: {
+          organisationId: adminStaff.organizationId,
+          propertyId,
+          outletId,
+          name: terminalName,
+          registrationState: { not: 'REVOKED' },
+        },
+        select: { id: true },
+      });
+      if (duplicate) {
+        throw new Error('An active terminal with this name already exists for this outlet. Reuse it or revoke it before provisioning again.');
       }
+
+      const terminalCount = await tx.posTerminal.count({
+        where: { organisationId: adminStaff.organizationId, registrationState: { not: 'REVOKED' } },
+      });
+      await requirePlanLimit(adminStaff.organizationId, 'maxTerminals', terminalCount);
+
+      return tx.posTerminal.create({
+        data: {
+          terminalCode: `TERM-${Math.floor(1000 + Math.random() * 9000)}`,
+          name: terminalName,
+          terminalType: (terminalType === 'STATIONARY' || !terminalType) ? 'RESTAURANT_POS' : terminalType,
+          organisationId: adminStaff.organizationId,
+          propertyId,
+          outletId,
+          deviceCredentialHash,
+          registrationState: 'REGISTERED',
+          licenseState: 'VALID',
+          licenseExpiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // 1 year
+        },
+      });
     });
 
     // 3. Snapshot datasets
@@ -136,6 +154,9 @@ export async function POST(req: NextRequest) {
     });
   } catch (error: unknown) {
     console.error('Provisioning error:', error);
+    if (error instanceof Error && error.message.startsWith('An active terminal with this name')) {
+      return NextResponse.json({ success: false, error: error.message }, { status: 409 });
+    }
     return NextResponse.json({ success: false, error: error instanceof Error ? error.message : 'Internal Server Error' }, { status: 500 });
   }
 }
