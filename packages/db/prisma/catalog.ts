@@ -53,6 +53,10 @@ export const oneTimePrices = [
   { code: 'ADDON_CUSTOM_WEBSITE_DESIGN', amount: 35000000, currency: 'ngn' }, // ₦350,000
 ] as const;
 
+export const addOnPrices = [
+  { code: 'ADDON_BEDS24', month: 2500000, year: 25000000, currency: 'ngn' }, // ₦25,000/month or ₦250,000/year per property
+] as const;
+
 export const catalogPlans: CatalogPlan[] = [
   { code: 'ESSENTIAL', name: 'Starter', description: 'Essential hotel operations for independent properties with 1–20 rooms.', displayOrder: 1, metadata: { maxProperties: 1, maxRooms: 20, maxUsers: 10, maxOutlets: 1, maxIntegrations: 0, maxTerminals: 1, version: CATALOG_VERSION }, products: [{ code: 'PLAN_STARTER', quantity: 20, required: true }, { code: 'MODULE_PMS', quantity: 20, required: true }] },
   { code: 'PROFESSIONAL', name: 'Professional', description: 'PMS, operations, commerce and finance for growing properties.', displayOrder: 2, metadata: { maxProperties: 1, maxRooms: 50, maxUsers: 30, maxOutlets: 5, maxIntegrations: 3, maxTerminals: 3, version: CATALOG_VERSION }, products: [{ code: 'PLAN_PROFESSIONAL', quantity: 50, required: true }, { code: 'MODULE_PMS', quantity: 50, required: true }, { code: 'MODULE_OPERATIONS', quantity: 5, required: true }] },

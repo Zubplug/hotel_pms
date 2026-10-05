@@ -41,6 +41,10 @@ function addOnFeatures(product: Product): string[] {
   return mapped[code] || product.modules?.map(m => m.name) || ["Extended capability module"];
 }
 
+function isPropertyScoped(product: Product) {
+  return product.metadata && typeof product.metadata === "object" && !Array.isArray(product.metadata) && (product.metadata as Record<string, unknown>).unit === "PROPERTY";
+}
+
 function planFeatures(plan: Plan): { feature: string; included: boolean }[] {
   const code = plan.code.toUpperCase();
   const isStarter = code === "ESSENTIAL" || code === "STARTER";
@@ -498,6 +502,7 @@ function AddOnCard({
   onCheckout,
   onDetails,
   canSubscribe,
+  scopeReady,
   isActive,
 }: {
   product: Product;
@@ -506,9 +511,11 @@ function AddOnCard({
   onCheckout: (key: string, priceIds: string[]) => void;
   onDetails: () => void;
   canSubscribe: boolean;
+  scopeReady: boolean;
   isActive: boolean;
 }) {
   const price = product.prices.find(p => p.interval === interval) ?? product.prices.find(p => p.interval === "one_time") ?? product.prices[0];
+  const isPropertyPriced = product.metadata && typeof product.metadata === "object" && !Array.isArray(product.metadata) && (product.metadata as Record<string, unknown>).unit === "PROPERTY";
   const key = `addon-${product.id}`;
   const features = addOnFeatures(product);
 
@@ -546,7 +553,7 @@ function AddOnCard({
         {price ? (
           <>
             <span className="sub-addon-price-amount">{money(price.amount, price.currency.toUpperCase())}</span>
-            <span className="sub-addon-price-interval">{price.interval === "one_time" ? "one-time" : `/ ${price.interval}`}</span>
+            <span className="sub-addon-price-interval">{price.interval === "one_time" ? "one-time" : isPropertyPriced ? `/ property / ${price.interval}` : `/ ${price.interval}`}</span>
           </>
         ) : (
           <span style={{ color: "var(--text-muted)", fontSize: 13 }}>Price pending</span>
@@ -558,10 +565,10 @@ function AddOnCard({
         <button
           className="btn btn-outline btn-sm sub-addon-cta"
           style={{ flex: 1 }}
-          disabled={busy !== null || !price || !canSubscribe || isActive}
+          disabled={busy !== null || !price || !canSubscribe || !scopeReady || isActive}
           onClick={() => price && onCheckout(key, [price.id])}
         >
-          {busy === key ? "Opening…" : isActive ? "Active add-on" : !canSubscribe ? "Base plan required" : price ? "Add on →" : "Unavailable"}
+          {busy === key ? "Opening…" : isActive ? "Active add-on" : !canSubscribe ? "Base plan required" : !scopeReady ? "Select property" : price ? "Add on →" : "Unavailable"}
         </button>
       </div>
     </div>
@@ -576,6 +583,7 @@ export default function SubscriptionCatalogue({
   addOns,
   properties,
   activeAddonCodes,
+  activeAddonPropertyIds,
   currentPlanCode,
   hasActiveBaseSubscription,
 }: {
@@ -583,16 +591,18 @@ export default function SubscriptionCatalogue({
   addOns: Product[];
   properties: { id: string; name: string }[];
   activeAddonCodes: string[];
+  activeAddonPropertyIds: Record<string, string[]>;
   currentPlanCode: string | null;
   hasActiveBaseSubscription: boolean;
 }) {
   const [interval, setInterval] = useState<"month" | "year">("month");
-  const [propertyId, setPropertyId] = useState(properties[0]?.id ?? "");
+  const [selectedPropertyIds, setSelectedPropertyIds] = useState<string[]>(properties[0]?.id ? [properties[0].id] : []);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [details, setDetails] = useState<{ kind: "plan" | "addon"; value: Plan | Product } | null>(null);
+  const beds24Price = addOns.find(product => product.code === "ADDON_BEDS24")?.prices.find(price => price.interval === interval);
 
-  async function checkout(key: string, priceIds: string[], planId?: string) {
+  async function checkout(key: string, priceIds: string[], planId?: string, requestedPropertyIds = selectedPropertyIds.slice(0, 1)) {
     if (!priceIds.length) return setError("This option does not have a published price for the selected billing interval yet.");
     setBusy(key);
     setError(null);
@@ -603,7 +613,7 @@ export default function SubscriptionCatalogue({
         body: JSON.stringify({
           priceIds,
           planId,
-          propertyIds: propertyId ? [propertyId] : [],
+          propertyIds: requestedPropertyIds,
           successUrl: `${window.location.origin}/portal/subscription?success=true`,
           cancelUrl: `${window.location.origin}/portal/subscription?cancelled=true`,
         }),
@@ -628,19 +638,15 @@ export default function SubscriptionCatalogue({
             Select a plan and pay the resulting invoice through Flutterwave. Contact billing support for custom arrangements or multi-property pricing.
           </p>
         </div>
-        <div className="sub-catalogue-controls">
+          <div className="sub-catalogue-controls">
           {/* Property scope */}
           <div className="sub-catalogue-control-group">
             <label style={{ fontSize: 11, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>Property scope</label>
-            <select
-              value={propertyId}
-              onChange={e => setPropertyId(e.target.value)}
-              className="sub-scope-select"
-              aria-label="Property scope"
-            >
-              <option value="">Organisation-wide</option>
-              {properties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
+            <div className="sub-property-scope-list" aria-label="Properties for add-on billing">
+              {properties.map(property => <label key={property.id} className="sub-property-scope-option"><input type="checkbox" checked={selectedPropertyIds.includes(property.id)} onChange={() => setSelectedPropertyIds(current => current.includes(property.id) ? current.filter(id => id !== property.id) : [...current, property.id])} /><span>{property.name}</span></label>)}
+              {!properties.length && <span style={{ color: "var(--text-muted)", fontSize: 12 }}>No active properties</span>}
+            </div>
+            <button type="button" className="sub-scope-select-all" onClick={() => setSelectedPropertyIds(selectedPropertyIds.length === properties.length ? [] : properties.map(property => property.id))}>{selectedPropertyIds.length === properties.length ? "Clear all" : "Select all"}</button>
           </div>
 
           {/* Billing interval toggle */}
@@ -661,6 +667,9 @@ export default function SubscriptionCatalogue({
                 <span className="sub-interval-save">Save 17%</span>
               </button>
             </div>
+          </div>
+          <div style={{ marginTop: 14, color: "var(--text-muted)", fontSize: 11 }}>
+            {selectedPropertyIds.length ? <><strong style={{ color: "var(--text-secondary)" }}>{selectedPropertyIds.length}</strong> propert{selectedPropertyIds.length === 1 ? "y" : "ies"} selected for property-scoped add-ons. {beds24Price ? <>Beds24: <strong style={{ color: "var(--text-secondary)" }}>{money(beds24Price.amount, beds24Price.currency.toUpperCase())} per property/{interval}</strong>.</> : "Beds24 pricing is currently unavailable for this interval."}</> : "Select at least one property to purchase Beds24 connectivity."}
           </div>
         </div>
       </div>
@@ -724,9 +733,10 @@ export default function SubscriptionCatalogue({
                 product={product}
                 interval={interval}
                 busy={busy}
-                onCheckout={checkout}
+                onCheckout={(key, priceIds) => checkout(key, priceIds, undefined, selectedPropertyIds)}
                 canSubscribe={hasActiveBaseSubscription}
-                isActive={activeAddonCodes.includes(product.code)}
+                scopeReady={selectedPropertyIds.length > 0}
+                isActive={isPropertyScoped(product) ? selectedPropertyIds.length > 0 && selectedPropertyIds.every(propertyId => (activeAddonPropertyIds[product.code] ?? []).includes(propertyId)) : activeAddonCodes.includes(product.code)}
                 onDetails={() => setDetails({ kind: "addon", value: product })}
               />
             ))}
@@ -742,6 +752,7 @@ export default function SubscriptionCatalogue({
           onClose={() => setDetails(null)}
         />
       )}
+      <style>{`.sub-property-scope-list{display:grid;gap:7px;min-width:220px;max-height:150px;overflow:auto;padding:10px;border:1px solid var(--border);border-radius:10px;background:rgba(255,255,255,.025)}.sub-property-scope-option{display:flex;align-items:center;gap:8px;color:var(--text-secondary);font-size:12px;cursor:pointer}.sub-property-scope-option input{accent-color:var(--accent)}.sub-scope-select-all{border:0;background:none;color:var(--accent);font-size:10px;padding:5px 0;cursor:pointer;text-align:left}`}</style>
     </div>
   );
 }

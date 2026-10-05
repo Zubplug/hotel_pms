@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import { auth } from "@/auth";
 import prisma from "@hotel-pms/db";
-import { billingMetadata, billingPriceIds, createFlutterwaveCheckout, validateCheckoutSelection } from "@hotel-pms/db";
+import { billingMetadata, billingPriceIds, billingTotal, createFlutterwaveCheckout, validateCheckoutSelection } from "@hotel-pms/db";
 
 function sameOrigin(value: unknown, fallback: string) { try { const url = new URL(String(value || fallback)); if (url.origin !== new URL(process.env.NEXT_PUBLIC_SITE_URL || fallback).origin) return fallback; return url.toString(); } catch { return fallback; } }
 function planRank(code: string) { return ({ ESSENTIAL: 1, STARTER: 1, PROFESSIONAL: 2, BUSINESS: 3, ENTERPRISE: 4, ENTERPRISE_PLUS: 5 } as Record<string, number>)[code.toUpperCase()] ?? 0; }
@@ -58,6 +58,7 @@ export async function POST(request: NextRequest) {
   const metadata = billingMetadata({ organizationId, planId: plan?.id, propertyIds, productCodes: prices.map((price) => price.product.code), priceIds: prices.map((price) => price.id), customDomainRequestId, customWebsiteRequestId, upgradeCredit: upgrade?.upgradeCredit, upgradePeriodEnd: upgrade?.periodEnd });
   const email = sessionUser?.email;
   if (!email) return NextResponse.json({ error: "A billing email is required" }, { status: 400 });
-  const checkout = await createFlutterwaveCheckout({ amount: Math.round((upgrade?.chargeAmount ?? prices.reduce((sum, price) => sum + price.amount, 0)) / 100), currency: prices[0]?.currency || "NGN", txRef: `lodgecore-${organizationId}-${randomUUID()}`, redirectUrl: sameOrigin(body.successUrl, `${site}/portal/subscription?success=true`), customer: { email, name: organization.name }, meta: metadata });
+  const checkoutTotal = billingTotal(prices, propertyIds);
+  const checkout = await createFlutterwaveCheckout({ amount: Math.round((upgrade?.chargeAmount ?? checkoutTotal) / 100), currency: prices[0]?.currency || "NGN", txRef: `lodgecore-${organizationId}-${randomUUID()}`, redirectUrl: sameOrigin(body.successUrl, `${site}/portal/subscription?success=true`), customer: { email, name: organization.name }, meta: metadata });
   return NextResponse.json({ url: checkout.link });
 }

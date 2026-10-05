@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { randomUUID } from 'node:crypto';
-import prisma, { billingMetadata, billingPriceIds, createFlutterwaveCheckout } from '@hotel-pms/db';
+import prisma, { billingMetadata, billingPriceIds, billingTotal, createFlutterwaveCheckout } from '@hotel-pms/db';
 import { auth } from '@/lib/auth';
 import { validateCheckoutSelection } from '@hotel-pms/db';
 
@@ -69,7 +69,7 @@ export async function POST(req: Request) {
 
     const metadata = billingMetadata({ organizationId, planId: plan?.id, propertyIds: scopedPropertyIds, productCodes: prices.map((price) => price.product.code), priceIds: prices.map((price) => price.id), customDomainRequestId, customWebsiteRequestId });
     if (!session.user.email) return NextResponse.json({ error: 'A billing email is required' }, { status: 400 });
-    const checkout = await createFlutterwaveCheckout({ amount: Math.round(prices.reduce((sum, price) => sum + price.amount, 0) / 100), currency: prices[0]?.currency || 'NGN', txRef: `lodgecore-${organizationId}-${requestId || randomUUID()}`, redirectUrl: safeReturnUrl(successUrl, `${process.env.NEXT_PUBLIC_APP_URL}/settings/billing?success=true`), customer: { email: session.user.email, name: organization.name }, meta: metadata });
+    const checkout = await createFlutterwaveCheckout({ amount: Math.round(billingTotal(prices, scopedPropertyIds) / 100), currency: prices[0]?.currency || 'NGN', txRef: `lodgecore-${organizationId}-${requestId || randomUUID()}`, redirectUrl: safeReturnUrl(successUrl, `${process.env.NEXT_PUBLIC_APP_URL}/settings/billing?success=true`), customer: { email: session.user.email, name: organization.name }, meta: metadata });
     return NextResponse.json({ url: checkout.link });
 
   } catch (error: any) {

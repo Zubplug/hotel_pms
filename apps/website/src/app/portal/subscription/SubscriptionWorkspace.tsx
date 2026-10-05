@@ -39,6 +39,7 @@ type Invoice = {
   periodEnd: string | null;
   hostedInvoiceUrl: string | null;
   invoicePdf: string | null;
+  billingDescription: string | null;
   createdAt: string;
 };
 
@@ -54,6 +55,7 @@ type Entitlement = {
   id: string;
   name: string;
   code: string;
+  propertyId: string | null;
   propertyName: string;
   expiresAt: string | null;
 };
@@ -86,6 +88,7 @@ type Props = {
   plans: any[];
   addOns: any[];
   activeAddonCodes: string[];
+  activeAddonPropertyIds: Record<string, string[]>;
   hasActiveBaseSubscription: boolean;
   checkoutProperties: { id: string; name: string }[];
 };
@@ -230,7 +233,7 @@ function InvoiceStatusPip({ status }: { status: string }) {
 /* ─────────────────────────────────────────────────────────────
    MAIN WORKSPACE COMPONENT
 ───────────────────────────────────────────────────────────── */
-export default function SubscriptionWorkspace({ data, plans, addOns, activeAddonCodes, hasActiveBaseSubscription, checkoutProperties }: Props) {
+export default function SubscriptionWorkspace({ data, plans, addOns, activeAddonCodes, activeAddonPropertyIds, hasActiveBaseSubscription, checkoutProperties }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"overview" | "modules" | "billing" | "catalogue">(
@@ -838,6 +841,7 @@ export default function SubscriptionWorkspace({ data, plans, addOns, activeAddon
                         <div style={{ color: "var(--text-primary)", fontWeight: 600, fontSize: 13 }}>
                           {new Date(invoice.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
                         </div>
+                        {invoice.billingDescription && <div style={{ maxWidth: 260, marginTop: 3, color: "var(--text-secondary)", fontSize: 11 }}>{invoice.billingDescription}</div>}
                         {invoice.periodEnd && (
                           <div style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
                             Period: {invoice.periodEnd ? new Date(invoice.periodEnd).toLocaleDateString("en-GB", { month: "short", year: "2-digit" }) : "—"}
@@ -959,7 +963,7 @@ export default function SubscriptionWorkspace({ data, plans, addOns, activeAddon
       ═══════════════════════════════════════════════════ */}
       {activeTab === "catalogue" && (
         <div className="sub-tab-panel">
-          <SubscriptionCatalogue plans={plans} addOns={addOns} properties={checkoutProperties} activeAddonCodes={activeAddonCodes} currentPlanCode={data.subscription?.planCode ?? null} hasActiveBaseSubscription={hasActiveBaseSubscription} />
+          <SubscriptionCatalogue plans={plans} addOns={addOns} properties={checkoutProperties} activeAddonCodes={activeAddonCodes} activeAddonPropertyIds={activeAddonPropertyIds} currentPlanCode={data.subscription?.planCode ?? null} hasActiveBaseSubscription={hasActiveBaseSubscription} />
         </div>
       )}
     </div>

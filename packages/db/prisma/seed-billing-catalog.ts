@@ -1,5 +1,5 @@
 import { PrismaClient, Prisma } from '@prisma/client';
-import { catalogPlans, catalogProducts, CATALOG_VERSION, planPrices } from './catalog';
+import { addOnPrices, catalogPlans, catalogProducts, CATALOG_VERSION, planPrices } from './catalog';
 
 const prisma = new PrismaClient();
 
@@ -43,6 +43,15 @@ async function main() {
         const existing = await tx.billingPrice.findFirst({ where: { productId: product.id, interval, catalogVersion: CATALOG_VERSION } });
         if (existing) await tx.billingPrice.update({ where: { id: existing.id }, data: { amount, currency: 'ngn' } });
         else await tx.billingPrice.create({ data: { productId: product.id, interval, amount, currency: 'ngn', catalogVersion: CATALOG_VERSION } });
+      }
+    }
+    for (const price of addOnPrices) {
+      const product = products.get(price.code);
+      if (!product) throw new Error(`Missing catalogue product ${price.code}`);
+      for (const [interval, amount] of [['month', price.month], ['year', price.year]] as const) {
+        const existing = await tx.billingPrice.findFirst({ where: { productId: product.id, interval, catalogVersion: CATALOG_VERSION } });
+        if (existing) await tx.billingPrice.update({ where: { id: existing.id }, data: { amount, currency: price.currency } });
+        else await tx.billingPrice.create({ data: { productId: product.id, interval, amount, currency: price.currency, catalogVersion: CATALOG_VERSION } });
       }
     }
   });

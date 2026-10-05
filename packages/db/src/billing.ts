@@ -94,11 +94,25 @@ export function billingMetadata(input: { organizationId: string; planId?: string
     propertyIds: input.propertyIds.join(','),
     productCodes: input.productCodes.join(','),
     priceIds: (input.priceIds ?? []).join(','),
+    propertyCount: String(input.propertyIds.length),
+    billingDescription: input.productCodes.length === 1 && input.productCodes[0] === 'ADDON_BEDS24'
+      ? `Beds24 Channel Integration x ${input.propertyIds.length} propert${input.propertyIds.length === 1 ? 'y' : 'ies'}`
+      : input.productCodes.join(', '),
     customDomainRequestId: input.customDomainRequestId ?? '',
     customWebsiteRequestId: input.customWebsiteRequestId ?? '',
     upgradeCredit: input.upgradeCredit == null ? '' : String(input.upgradeCredit),
     upgradePeriodEnd: input.upgradePeriodEnd ?? '',
   };
+}
+
+export function billingTotal(prices: Array<{ amount: number; product: { metadata: unknown } }>, propertyIds: readonly string[]) {
+  return prices.reduce((total, price) => {
+    const metadata = price.product.metadata;
+    const unit = metadata && typeof metadata === 'object' && !Array.isArray(metadata)
+      ? (metadata as Record<string, unknown>).unit
+      : undefined;
+    return total + price.amount * (unit === 'PROPERTY' ? Math.max(propertyIds.length, 1) : 1);
+  }, 0);
 }
 
 export async function validateCheckoutSelection(
@@ -142,6 +156,30 @@ export async function validateCheckoutSelection(
   if (propertyIds.length) {
     const validProperties = await db.property.count({ where: { organizationId: input.organizationId, id: { in: propertyIds }, isActive: true } });
     if (validProperties !== propertyIds.length) throw new Error('One or more selected properties are invalid');
+  }
+  const propertyScopedAddOns = prices.filter((price) => {
+    const metadata = price.product.metadata;
+    return metadata && typeof metadata === 'object' && !Array.isArray(metadata) && (metadata as Record<string, unknown>).unit === 'PROPERTY';
+  });
+  if (propertyScopedAddOns.length && !propertyIds.length) throw new Error('Select at least one property for this add-on');
+  if (propertyScopedAddOns.length) {
+    const activeEntitlements = await db.entitlement.findMany({
+      where: {
+        organizationId: input.organizationId,
+        productCode: { in: propertyScopedAddOns.map((price) => price.product.code) },
+        status: 'ACTIVE',
+        AND: [
+          { OR: [{ propertyId: { in: propertyIds } }, { propertyId: null }] },
+          { startsAt: { lte: new Date() } },
+          { OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] },
+        ],
+      },
+      select: { productCode: true, propertyId: true },
+    });
+    if (activeEntitlements.length) {
+      const alreadyActive = new Set(activeEntitlements.map((item) => item.propertyId));
+      throw new Error(`Beds24 is already active for ${alreadyActive.size} selected propert${alreadyActive.size === 1 ? 'y' : 'ies'}`);
+    }
   }
   return { prices, plan, propertyIds };
 }
