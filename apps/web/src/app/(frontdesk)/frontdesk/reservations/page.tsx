@@ -79,7 +79,9 @@ export default function FrontDeskReservationsPage() {
         ...(debouncedSearch ? { search: debouncedSearch } : {}),
         ...(status ? { status } : {}),
       };
-      return await provider.reservations.list(propertyId, params);
+      return await (activeFilter === 'ALL'
+        ? provider.reservations.history(propertyId, params)
+        : provider.reservations.list(propertyId, params));
     },
   });
 

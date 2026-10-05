@@ -58,6 +58,7 @@ export async function GET(
         include: {
           // @ts-ignore — roomType relation exists
           roomType: { select: { name: true } },
+          room: { select: { number: true } },
         },
       },
     },
@@ -85,6 +86,7 @@ export async function GET(
       children: reservation.children,
       guest: reservation.primaryGuest,
       roomType: (resRoom as any)?.roomType?.name ?? null,
+      roomNumber: (resRoom as any)?.room?.number ?? null,
       pricing: {
         currency: reservation.currency,
         subtotal: snapshot?.subtotal ?? null,
@@ -101,5 +103,4 @@ export async function GET(
   res.headers.set('Cache-Control', 'no-store');
   return res;
 }
-
 

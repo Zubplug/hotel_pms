@@ -16,6 +16,12 @@ export interface AvailabilityResult {
   isAvailable: boolean;
 }
 
+export interface AssignableRoom {
+  id: string;
+  number: string;
+  roomTypeId: string;
+}
+
 // ---------------------------------------------------------------------------
 // AuthoritativeAvailabilityService
 //
@@ -35,6 +41,40 @@ export interface AvailabilityResult {
 // ---------------------------------------------------------------------------
 
 export const AuthoritativeAvailabilityService = {
+  /** Select one eligible physical room inside the booking transaction. */
+  async findAssignableRoom(
+    tx: TxClient,
+    opts: { propertyId: string; roomTypeId: string; checkIn: Date; checkOut: Date }
+  ): Promise<AssignableRoom | null> {
+    const db = tx as any;
+    return db.room.findFirst({
+      where: {
+        propertyId: opts.propertyId,
+        roomTypeId: opts.roomTypeId,
+        isActive: true,
+        status: 'AVAILABLE',
+        housekeepingStatus: { in: ['CLEAN', 'INSPECTED'] },
+        maintenanceStatus: { in: ['NONE', 'COMPLETED'] },
+        roomType: { isActive: true, deletedAt: null },
+        roomBlocks: { none: { startDate: { lt: opts.checkOut }, endDate: { gt: opts.checkIn } } },
+        reservationRooms: {
+          none: {
+            status: 'ACTIVE',
+            checkIn: { lt: opts.checkOut },
+            checkOut: { gt: opts.checkIn },
+            reservation: {
+              propertyId: opts.propertyId,
+              status: { in: ['CONFIRMED', 'CHECKED_IN', 'PENDING'] },
+              deletedAt: null,
+            },
+          },
+        },
+      },
+      select: { id: true, number: true, roomTypeId: true },
+      orderBy: [{ number: 'asc' }, { id: 'asc' }],
+    });
+  },
+
   /**
    * Check availability for a single room type over a date range.
    *

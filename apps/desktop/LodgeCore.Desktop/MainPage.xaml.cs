@@ -403,6 +403,9 @@ public partial class MainPage : ContentPage
                 case "reservations.list":
                     responseData = await pmsInterop.GetActiveReservationsAsync();
                     break;
+                case "reservations.history":
+                    responseData = await pmsInterop.GetActiveReservationsAsync(includeCancelled: true);
+                    break;
                 case "guestCredits.list":
                     responseData = await pmsInterop.GetGuestCreditsAsync();
                     break;

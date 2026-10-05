@@ -99,8 +99,6 @@ export async function POST(
 
   // Server-generated idempotency key — prevents duplicate Paystack transactions
   // for the same reservation + amount combination
-  const idempotencyKey = `BK_PAY_${reservation.id}_${Math.round(amountDue * 100)}`;
-
   // Check for an existing pending transaction for this reservation
   const existingTx = await prisma.bookingPaymentTransaction.findFirst({
     where: { reservationId: reservation.id, status: { in: ['PENDING', 'SUCCESS'] } },
@@ -108,6 +106,11 @@ export async function POST(
   if (existingTx?.status === 'SUCCESS') {
     return errorResponse('CONFLICT', 'Payment already completed for this reservation', 409);
   }
+  if (existingTx?.status === 'PENDING') {
+    return errorResponse('CONFLICT', 'A payment is already awaiting confirmation for this reservation', 409);
+  }
+
+  const idempotencyKey = `BK_PAY_${reservation.id}_${Math.round(amountDue * 100)}_${crypto.randomBytes(8).toString('hex')}`;
 
   // Generate a Paystack reference
   const providerRef = `BK-${reservation.id.substring(0, 8)}-${crypto.randomBytes(5).toString('hex').toUpperCase()}`;

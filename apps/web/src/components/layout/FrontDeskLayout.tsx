@@ -12,6 +12,7 @@ import {
   Key,
   AlertCircle,
   Shirt,
+  CalendarDays,
   Printer,
   RefreshCw,
   Wifi,
@@ -152,15 +153,12 @@ export function FrontDeskLayout({ children, enabledModules = [], licenseSnapshot
   const navLinks = [
     { href: '/frontdesk/refunds', label: 'Refunds' },
     { href: '/frontdesk/cashier', label: 'Cashier Shift' },
+    { href: '/frontdesk/events', label: 'Events & Halls', icon: CalendarDays, module: 'MODULE_OPERATIONS' },
     { href: '/laundry', label: 'Laundry', icon: Shirt, module: 'MODULE_OPERATIONS' },
   ];
 
-  // Laundry is an Operations workspace, not a Front Desk workspace. The
-  // separate dashboard remains available to entitled online users; it is not
-  // advertised in the offline Front Desk shell.
   const visibleNavLinks = navLinks.filter((item) =>
-    (!item.module || visibleModules.includes(item.module)) &&
-    !(isDesktopApp && item.href === '/laundry'),
+    !item.module || visibleModules.includes(item.module),
   );
 
   return (

@@ -192,19 +192,38 @@ export async function GET(req: NextRequest) {
       ]
     };
 
-    const reservations = await prisma.reservation.findMany({
+    const reservationInclude = {
+      primaryGuest: true,
+      reservationGuests: { include: { guest: true } },
+      reservationRooms: { where: { status: 'ACTIVE' }, include: { room: true } },
+      folios: { include: { items: true, payments: true, credits: true } },
+      lockCredentials: true,
+      lockOperations: { orderBy: { requestedAt: 'desc' as const }, take: 20 },
+    } as const;
+
+    const operationalReservations = await prisma.reservation.findMany({
       where: buildWhere(resBaseWhere),
-      include: {
-        primaryGuest: true,
-        reservationGuests: { include: { guest: true } },
-        reservationRooms: { where: { status: 'ACTIVE' }, include: { room: true } },
-        folios: { include: { items: true, payments: true, credits: true } },
-        lockCredentials: true,
-        lockOperations: { orderBy: { requestedAt: 'desc' }, take: 20 }
-      },
+      include: reservationInclude,
       take: limit,
       orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
     });
+
+    // A clean desktop install also needs cancelled online reservations so it
+    // cannot recreate them from an old booking snapshot. Incremental pulls
+    // already include every changed reservation through buildWhere(); this
+    // supplemental query is only needed for the initial operational snapshot.
+    const initiallyCancelledReservations = since
+      ? []
+      : await prisma.reservation.findMany({
+          where: { propertyId, deletedAt: null, status: 'CANCELLED', updatedAt: { lte: watermark } },
+          include: reservationInclude,
+          take: limit,
+          orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+        });
+
+    const reservations = Array.from(
+      new Map([...operationalReservations, ...initiallyCancelledReservations].map((reservation) => [reservation.id, reservation])).values(),
+    );
 
     // A folio can change without its reservation.updatedAt changing (for
     // example, a payment, room charge, or credit application). Pull folios as
@@ -651,6 +670,7 @@ export async function GET(req: NextRequest) {
         // different from the physical Room.id and is required by follow-up
         // offline events such as discount and complimentary requests.
         reservationRoomId: reservationRoom?.id ?? null,
+        reservationRoomStatus: reservationRoom?.status ?? null,
         discountType: reservationRoom?.discountType ?? null,
         discountAmount: reservationRoom?.discountAmount ?? null,
         discountPercent: reservationRoom?.discountPercent ?? null,

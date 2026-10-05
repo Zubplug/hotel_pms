@@ -17,6 +17,7 @@ import {
 import { getOrCreateBookingSystemActor } from '@/lib/booking-engine/system-actor';
 import { NotificationEngine } from '@/lib/notification-engine';
 import { sendBookingCancellationEmail } from '@/lib/email/booking-emails';
+import { queueBookingRefundRequests } from '@/lib/booking-engine/refund-service';
 
 export async function OPTIONS(req: NextRequest) {
   return corsPreflightResponse(req);
@@ -59,12 +60,14 @@ export async function POST(
     },
     include: {
       primaryGuest: { select: { firstName: true, lastName: true, email: true } },
+      reservationRooms: true,
       cancellationPolicy: true,
       folios: {
         where: { type: 'ROOM', status: 'OPEN' },
         take: 1,
-        select: { id: true, balance: true, currency: true },
+        include: { payments: { include: { refunds: true } } },
       },
+      property: { select: { id: true, organizationId: true, businessDate: true, timezone: true } },
     },
   });
 
@@ -135,7 +138,7 @@ export async function POST(
   );
 
   // Perform cancellation in a transaction
-  await prisma.$transaction(async (tx) => {
+  const refundRequests = await prisma.$transaction(async (tx) => {
     // Update reservation
     await (tx as any).reservation.update({
       where: { id: reservation.id },
@@ -151,6 +154,29 @@ export async function POST(
     await (tx as any).reservationRoom.updateMany({
       where: { reservationId: reservation.id },
       data: { status: 'CANCELLED' },
+    });
+
+    for (const reservationRoom of reservation.reservationRooms) {
+      if (!reservationRoom.roomId) continue;
+      const otherActive = await (tx as any).reservationRoom.findFirst({
+        where: {
+          roomId: reservationRoom.roomId,
+          status: 'ACTIVE',
+          reservationId: { not: reservation.id },
+          checkIn: { lt: reservation.checkOut },
+          checkOut: { gt: reservation.checkIn },
+        },
+      });
+      if (!otherActive) await (tx as any).room.update({ where: { id: reservationRoom.roomId }, data: { status: 'AVAILABLE' } });
+    }
+
+    const queuedRefundRequests = await queueBookingRefundRequests({
+      tx,
+      reservation,
+      property: reservation.property,
+      totalPaid: reservation.folios.reduce((sum: number, folio: any) => sum + folio.payments.reduce((inner: number, payment: any) => inner + Number(payment.amount), 0), 0),
+      cancellationPenalty: penaltyAmount,
+      reason: `${reason || 'Guest self-service cancellation'}${penaltyAmount > 0 ? `; cancellation policy penalty applied: ${penaltyAmount.toFixed(2)}` : ''}`,
     });
 
     // Audit log
@@ -175,6 +201,8 @@ export async function POST(
         requestId: crypto.randomUUID(),
       },
     });
+
+    return queuedRefundRequests;
   });
 
   if (reservation.primaryGuest.email) {
@@ -208,17 +236,21 @@ export async function POST(
       confirmationNumber: reservation.confirmationNumber,
       penaltyAmount,
       penaltyDescription,
-      // If a penalty applies and there was a payment, staff must handle the refund
-      // through the standard RefundRequest workflow in the PMS.
+      refundRequestsQueued: refundRequests.map((request: any) => ({
+        id: request.id,
+        amount: Number(request.requestedAmount),
+        currency: request.currency,
+        status: request.status,
+      })),
       refundNote:
-        penaltyAmount > 0
-          ? 'Any eligible refund will be processed by the property within 5-7 business days'
-          : 'No penalty applies — full refund will be processed within 5-7 business days',
+        refundRequests.length > 0
+          ? 'A refund request has been submitted for property approval and processing.'
+          : penaltyAmount > 0
+            ? 'The cancellation charge covers the eligible payment; no refund request was created.'
+            : 'No refundable online payment was found for this reservation.',
     },
     200
   );
   Object.entries(corsHeaders(req)).forEach(([k, v]) => res.headers.set(k, v));
   return res;
 }
-
-

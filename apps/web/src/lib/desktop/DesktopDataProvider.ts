@@ -164,6 +164,9 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
     list: async (propertyId: string, params?: any) => {
       return invokeDesktop('reservations.list', { propertyId, params });
     },
+    history: async (propertyId: string, params?: any) => {
+      return invokeDesktop('reservations.history', { propertyId, params });
+    },
     get: async (id: string) => {
       return invokeDesktop('reservations.get', { id });
     },

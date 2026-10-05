@@ -1436,7 +1436,15 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                             ReservationId = id,
                             RoomId = flattenedRoomId,
                             RoomTypeId = el.TryGetProperty("roomTypeId", out var rtid) && rtid.ValueKind != System.Text.Json.JsonValueKind.Null ? rtid.GetString() ?? "" : "",
-                            Status = "PENDING"
+                            // Preserve the cloud reservation-room lifecycle.
+                            // Online bookings arrive with ACTIVE assignments;
+                            // forcing every row to PENDING makes the desktop
+                            // treat a valid assigned room as unassigned.
+                            Status = el.TryGetProperty("reservationRoomStatus", out var reservationRoomStatus) &&
+                                     reservationRoomStatus.ValueKind != System.Text.Json.JsonValueKind.Null &&
+                                     !string.IsNullOrWhiteSpace(reservationRoomStatus.GetString())
+                                ? reservationRoomStatus.GetString()!
+                                : "ACTIVE"
                         };
                         
                         if (el.TryGetProperty("checkIn", out var rci) && rci.ValueKind != System.Text.Json.JsonValueKind.Null && DateTime.TryParse(rci.GetString(), out var rcid)) rr.CheckInDate = rcid;
@@ -2999,16 +3007,9 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
             }
         }
         
-        // Clean up stale reservations locally (that fell out of the active window)
-        var threeDaysAgo = DateTime.UtcNow.AddDays(-3);
-        var oldReservations = await dbContext.Reservations
-            .Where(r => !r.IsDirty && (r.CheckOutDate < threeDaysAgo || r.Status == "CANCELLED" || r.Status == "NO_SHOW"))
-            .ToListAsync(stoppingToken);
-        if (oldReservations.Any())
-        {
-            dbContext.Reservations.RemoveRange(oldReservations);
-            await dbContext.SaveChangesAsync(stoppingToken);
-        }
+        // Reservation history is retained locally. The operational Front Desk
+        // list filters to active stays, while the reservation history view
+        // remains searchable after checkout, cancellation, or no-show.
     }
 
     private async Task RefreshTerminalLicenseAsync(

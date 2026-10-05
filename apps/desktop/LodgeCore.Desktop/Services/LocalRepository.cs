@@ -347,15 +347,16 @@ public class LocalRepository
             .ToListAsync();
     }
     
-    public async Task<List<LocalReservation>> GetActiveReservationsAsync()
+    public async Task<List<LocalReservation>> GetActiveReservationsAsync(bool includeCancelled = false)
     {
-        return await _dbContext.Reservations
+        var query = _dbContext.Reservations
             .Include(r => r.Guest)
             .Include(r => r.CorporateAccount).ThenInclude(c => c.CorporateFolio)
             .Include(r => r.Folio)
             .Include(r => r.Rooms).ThenInclude(rr => rr.Room)
-            .Where(r => r.Status != "CANCELLED")
-            .ToListAsync();
+            .Where(r => includeCancelled || r.Status != "CANCELLED");
+
+        return await query.OrderByDescending(r => r.UpdatedAt).ToListAsync();
     }
 
     public async Task<LocalReservation?> GetReservationAsync(string id)

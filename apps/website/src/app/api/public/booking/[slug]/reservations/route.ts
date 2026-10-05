@@ -134,6 +134,18 @@ export async function POST(
           excludeHoldId: hold.id,
         });
 
+        const assignedRoom = await AuthoritativeAvailabilityService.findAssignableRoom(tx as any, {
+          propertyId: ctx.property.id,
+          roomTypeId: hold.roomTypeId,
+          checkIn: hold.checkIn,
+          checkOut: hold.checkOut,
+        });
+        if (!assignedRoom) {
+          const unavailable = new Error('No physical room is available for the selected dates');
+          (unavailable as any).code = 'BOOKING_UNAVAILABLE';
+          throw unavailable;
+        }
+
         // 2. Verify snapshot is still valid (detect rate drift)
         const snapshot = hold.quoteSnapshot as any;
         const stillValid = await ReservationPricingService.isSnapshotStillValid(tx as any, snapshot, {
@@ -181,6 +193,7 @@ export async function POST(
           checkIn: hold.checkIn,
           checkOut: hold.checkOut,
           roomTypeId: hold.roomTypeId,
+          roomId: assignedRoom.id,
           adults: body.adults ?? 1,
           children: body.children ?? 0,
           ratePlanId: finalSnapshot.ratePlanId,
@@ -217,12 +230,13 @@ export async function POST(
 
         return {
           reservation: res,
+          assignedRoomNumber: assignedRoom.number,
           confirmToken: rawConfirmToken,
           cancelToken: rawCancelToken,
           priceValid: stillValid,
         };
       },
-      { isolationLevel: 'RepeatableRead' }
+      { isolationLevel: 'Serializable' }
     );
 
     reservationId = newReservation.reservation.id;
@@ -263,6 +277,7 @@ export async function POST(
     const res = successResponse(
       {
         confirmationNumber,
+        roomNumber: newReservation.assignedRoomNumber,
         status: ctx.config.paymentMode === 'PAY_LATER' ? 'CONFIRMED' : 'PENDING',
         confirmationToken: newReservation.confirmToken,
         cancellationToken: newReservation.cancelToken,
@@ -295,4 +310,3 @@ export async function POST(
     return res;
   }
 }
-

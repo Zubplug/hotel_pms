@@ -7,10 +7,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
 import crypto from 'crypto';
 import { getOrCreateBookingSystemActor } from '@/lib/booking-engine/system-actor';
-import { FolioPaymentAccountingService } from '@/lib/services/folio-payment-accounting-service';
 import { getPropertyBusinessDate } from '@/lib/date-utils';
 import { sendPaymentReceiptEmail } from '@/lib/email/booking-emails';
 import { getPaystackBookingAccount, resolveSecretRef } from '@/lib/payment-providers/booking-account';
+import { postBookingAdvanceDeposit } from '@/lib/booking-engine/financial-service';
 
 export async function POST(
   req: NextRequest,
@@ -133,46 +133,17 @@ export async function POST(
         property.organizationId
       );
 
-      // Create the native Payment record (feeds into the existing accounting pipeline)
-      const payment = await (tx as any).payment.create({
-        data: {
-          folioId: folio.id,
-          reservationId: reservation.id,
-          propertyId: bpt.propertyId,
-          method: 'PAYMENT_GATEWAY',
-          provider: 'PAYSTACK',
-          providerRef,
-          providerTransactionId: providerTxId,
-          amount: verifiedAmount,
-          currency: verifiedCurrency,
-          baseAmount: verifiedAmount,
-          status: 'COMPLETED',
-          businessDate,
-          idempotencyKey: `BK_WEBHOOK_${providerRef}`,
-          collectionSource: 'BOOKING_ENGINE',
-          receivedBy: systemActorId,
-          notes: `Booking Engine payment via Paystack. Ref: ${providerRef}`,
-        },
-      });
-
-      // Post double-entry accounting
-      await FolioPaymentAccountingService.processPaymentAccounting(
+      const payment = await postBookingAdvanceDeposit({
         tx,
-        payment,
-        bpt.propertyId,
-        property.organizationId,
-        null // No staff actor — system-generated payment
-      );
-
-      // Update folio balances
-      const newTotalPayments = Number(folio.totalPayments) + verifiedAmount;
-      const newBalance = Number(folio.totalCharges) - newTotalPayments;
-      await (tx as any).folio.update({
-        where: { id: folio.id },
-        data: {
-          totalPayments: newTotalPayments,
-          balance: newBalance,
-        },
+        folio,
+        reservation,
+        property,
+        amount: verifiedAmount,
+        currency: verifiedCurrency,
+        providerRef,
+        providerTransactionId: providerTxId,
+        businessDate,
+        systemActorId,
       });
 
       // Confirm the reservation

@@ -618,11 +618,11 @@ public class OfflinePMSInterop
         }
     }
 
-    public async Task<string> GetActiveReservationsAsync()
+    public async Task<string> GetActiveReservationsAsync(bool includeCancelled = false)
     {
         try
         {
-            var res = await _repo.GetActiveReservationsAsync();
+            var res = await _repo.GetActiveReservationsAsync(includeCancelled);
             var roomTypes = (await _repo.GetRoomTypesAsync(string.Empty))
                 .GroupBy(roomType => roomType.Id)
                 .ToDictionary(group => group.Key, group => group.First().Name);

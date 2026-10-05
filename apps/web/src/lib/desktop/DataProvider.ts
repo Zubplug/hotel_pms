@@ -57,6 +57,7 @@ export interface LodgeCoreDataProvider {
   };
   reservations: {
     list(propertyId: string, params?: any): Promise<any>;
+    history(propertyId: string, params?: any): Promise<any>;
     get(id: string): Promise<any>;
     lookupByRoom(roomNo: string, propertyId: string): Promise<any>;
     create(data: any): Promise<any>;

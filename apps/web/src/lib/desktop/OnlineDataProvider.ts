@@ -127,6 +127,10 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
       const query = new URLSearchParams({ propertyId, ...params });
       return apiFetch(`/api/v1/reservations?${query.toString()}`);
     },
+    history: async (propertyId, params) => {
+      const query = new URLSearchParams({ propertyId, ...params });
+      return apiFetch(`/api/v1/reservations?${query.toString()}`);
+    },
     async get(id: string) {
       return apiFetch(`/api/v1/reservations/${id}`);
     },
