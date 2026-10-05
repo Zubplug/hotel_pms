@@ -66,6 +66,22 @@ public partial class MainPage : ContentPage
                 catch { }
             });
         };
+
+        LodgeCore.Desktop.Services.SyncEngine.OnCheckoutRestored += (reservationId, reason) =>
+        {
+            var evtJson = JsonSerializer.Serialize(new
+            {
+                @event = "checkout.restored",
+                reservationId,
+                reason
+            });
+
+            MainThread.BeginInvokeOnMainThread(() =>
+            {
+                try { webView2.CoreWebView2.PostWebMessageAsString(evtJson); }
+                catch { }
+            });
+        };
     }
 
     private void CoreWebView2_WebResourceRequested(object sender, Microsoft.Web.WebView2.Core.CoreWebView2WebResourceRequestedEventArgs e)

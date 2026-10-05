@@ -81,6 +81,8 @@ export function DataProviderWrapper({ children }: { children: React.ReactNode })
             setIsOnline(navigator.onLine);
             void queryClient.invalidateQueries({ refetchType: 'active' });
           }
+        } else if (data.event === 'checkout.restored') {
+          window.dispatchEvent(new CustomEvent('checkout.restored', { detail: data }));
         }
       };
       (window as any).chrome.webview.addEventListener('message', handleMessage);

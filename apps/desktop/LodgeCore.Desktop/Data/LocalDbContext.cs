@@ -315,6 +315,12 @@ public class LocalDbContext : DbContext
         catch (Microsoft.Data.Sqlite.SqliteException ex) when (ex.SqliteErrorCode == 1 && ex.Message.Contains("duplicate column", StringComparison.OrdinalIgnoreCase)) { }
     }
 
+    public async Task ApplyFolioBalanceSchemaAsync()
+    {
+        try { await Database.ExecuteSqlRawAsync("ALTER TABLE Folios ADD COLUMN CloudBalance TEXT NULL"); }
+        catch (Microsoft.Data.Sqlite.SqliteException ex) when (ex.SqliteErrorCode == 1 && ex.Message.Contains("duplicate column", StringComparison.OrdinalIgnoreCase)) { }
+    }
+
     /// <summary>
     /// Creates the CityLedgerAllocations table if it does not already exist.
     /// Call this during app start alongside other schema upgrade methods.

@@ -50,6 +50,8 @@ public class SyncEngine : BackgroundService
     }
 
     public static event Action<SyncHealthInfo>? OnSyncHealthChanged;
+
+    public static event Action<string, string>? OnCheckoutRestored;
     
     public static SyncEngine? Instance { get; private set; }
 
@@ -1699,6 +1701,13 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                     folio.Status = el.TryGetProperty("status", out var st) && st.ValueKind != System.Text.Json.JsonValueKind.Null ? st.GetString() ?? "" : "";
                     folio.TotalCharges = el.TryGetProperty("totalCharges", out var tc) && tc.ValueKind != System.Text.Json.JsonValueKind.Null && decimal.TryParse(tc.GetString(), out var tcd) ? tcd : 0m;
                     folio.TotalPayments = el.TryGetProperty("totalPayments", out var tp) && tp.ValueKind != System.Text.Json.JsonValueKind.Null && decimal.TryParse(tp.GetString(), out var tpd) ? tpd : 0m;
+                    folio.CloudBalance = el.TryGetProperty("balance", out var cloudBalance) && cloudBalance.ValueKind != System.Text.Json.JsonValueKind.Null
+                        ? cloudBalance.ValueKind == System.Text.Json.JsonValueKind.Number && cloudBalance.TryGetDecimal(out var balanceNumber)
+                            ? balanceNumber
+                            : cloudBalance.ValueKind == System.Text.Json.JsonValueKind.String && decimal.TryParse(cloudBalance.GetString(), out var balanceText)
+                                ? balanceText
+                                : folio.CloudBalance
+                        : folio.CloudBalance;
                     folio.Version = el.TryGetProperty("version", out var folioVersion) && folioVersion.TryGetInt32(out var serverFolioVersion)
                         ? serverFolioVersion
                         : folio.Version;
@@ -3403,6 +3412,9 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                             evt.AggregateId,
                             evt.PayloadJson,
                             evt.LastError);
+                        OnCheckoutRestored?.Invoke(
+                            evt.AggregateId,
+                            "Cloud checkout validation required payment, so the reservation was restored to checked-in status.");
                     }
 
                     foreach (var evt in pendingEvents.Where(evt => !resultIds.Contains(evt.Id)))

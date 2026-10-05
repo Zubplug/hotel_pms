@@ -16,6 +16,10 @@ public class LocalFolio
     public decimal TotalCharges { get; set; }
     public decimal TotalPayments { get; set; }
     public decimal AvailableCredit { get; set; }
+    // Authoritative balance from the cloud folio. The offline transaction
+    // snapshot can be incomplete while a device is catching up, so retain
+    // this value for debt display after a successful sync.
+    public decimal? CloudBalance { get; set; }
     public decimal AppliedCreditAmount
     {
         get
@@ -77,7 +81,7 @@ public class LocalFolio
     }
 
     public decimal NetBalance => TotalCharges - TotalPayments - AppliedCreditAdjustmentAmount;
-    public decimal OutstandingBalance => Math.Max(0m, NetBalance);
+    public decimal OutstandingBalance => Math.Max(0m, !IsDirty && CloudBalance.HasValue ? CloudBalance.Value : NetBalance);
     public string? Currency { get; set; }
 
     // Storing transactions as JSON string for simplicity offline, or we could make a separate table

@@ -2955,6 +2955,7 @@ public class LocalRepository
         }
         catch (Microsoft.Data.Sqlite.SqliteException ex) when (ex.SqliteErrorCode == 1 && ex.Message.Contains("duplicate column", StringComparison.OrdinalIgnoreCase)) { }
         await _dbContext.ApplyPosRoutingSchemaAsync();
+        await _dbContext.ApplyFolioBalanceSchemaAsync();
         
         // Seed Stanzel Grand Resort for the pilot if it doesn't exist
         if (!await _dbContext.Properties.AnyAsync())
@@ -3557,12 +3558,15 @@ public class LocalRepository
 
         var paymentRequired = reservations
             .Where(r => r.Status == "CHECKED_IN"
-                && extensionDetails.TryGetValue(r.Id, out var extension)
-                && extension.charge > (r.Folio?.AvailableCredit ?? 0m))
+                && ((extensionDetails.TryGetValue(r.Id, out var extension)
+                     && extension.charge > (r.Folio?.AvailableCredit ?? 0m))
+                    || (r.Folio?.OutstandingBalance ?? 0m) > 0.01m))
             .Select(r => {
-                var extension = extensionDetails[r.Id];
+                var hasExtensionShortfall = extensionDetails.TryGetValue(r.Id, out var extension)
+                    && extension.charge > (r.Folio?.AvailableCredit ?? 0m);
                 var room = r.RoomId != null && roomDict.ContainsKey(r.RoomId) ? roomDict[r.RoomId] : null;
                 var availableCredit = r.Folio?.AvailableCredit ?? 0m;
+                var balance = r.Folio?.OutstandingBalance ?? 0m;
                 return new {
                     id = r.Id,
                     guestName = r.Guest != null ? $"{r.Guest.FirstName} {r.Guest.LastName}" : "Unknown",
@@ -3570,11 +3574,11 @@ public class LocalRepository
                     confirmationNumber = r.ConfirmationNumber,
                     roomName = room?.Number ?? "Unassigned",
                     roomStatus = room?.Status ?? "UNKNOWN",
-                    balance = r.Folio?.OutstandingBalance,
+                    balance,
                     availableCredit,
-                    extensionNights = extension.nights,
-                    extensionCharge = extension.charge,
-                    amountDue = extension.charge - availableCredit,
+                    extensionNights = hasExtensionShortfall ? extension.nights : 0,
+                    extensionCharge = hasExtensionShortfall ? extension.charge : 0m,
+                    amountDue = hasExtensionShortfall ? extension.charge - availableCredit : balance,
                     status = r.Status
                 };
             })

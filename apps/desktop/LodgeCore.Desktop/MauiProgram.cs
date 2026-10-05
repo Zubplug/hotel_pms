@@ -108,6 +108,7 @@ public static class MauiProgram
             db.ApplyPosRoutingSchemaAsync().GetAwaiter().GetResult();   // was defined but never called
             db.ApplyDiscountSchemaAsync().GetAwaiter().GetResult();
             db.ApplyCorporateFolioSchemaAsync().GetAwaiter().GetResult();
+            db.ApplyFolioBalanceSchemaAsync().GetAwaiter().GetResult();
             db.ApplySettlementSchemaAsync().GetAwaiter().GetResult();   // fixes shift-submit DbUpdateException
             db.ApplyGuestCreditAllocationSchemaAsync().GetAwaiter().GetResult(); // offline credit allocation table
             db.ApplyEventInvoiceSchemaAsync().GetAwaiter().GetResult();

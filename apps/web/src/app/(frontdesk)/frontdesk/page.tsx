@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
 import { AmountInput } from '@/components/ui/amount-input';
@@ -263,7 +263,9 @@ function GuestRow({ name, room, balance, availableCredit, roomStatus, status, ch
           {isPaymentRequired && (
             <span className="text-[11px] text-rose-400 flex items-center gap-1 font-semibold">
               <AlertCircle className="w-3 h-3" />
-              {extensionNights} night extension · {formatCurrency(Number(amountDue || extensionCharge || 0))} required
+              {extensionNights
+                ? `Extension payment pending · ${extensionNights} additional ${extensionNights === 1 ? 'night' : 'nights'} · ${formatCurrency(Number(amountDue || extensionCharge || 0))} outstanding`
+                : `Outstanding folio balance · ${formatCurrency(Number(amountDue || extensionCharge || 0))} required`}
             </span>
           )}
 
@@ -328,6 +330,7 @@ export default function ReceptionistDashboardPage() {
   const operationsEnabled = enabledModules.includes('MODULE_OPERATIONS');
   const { data: session } = useLodgeCoreSession();
   const { provider, syncStatus } = useLodgeCoreProvider();
+  const queryClient = useQueryClient();
 
   const [checkInReservationId, setCheckInReservationId] = useState<string | null>(null);
   const [checkOutReservation, setCheckOutReservation] = useState<any | null>(null);
@@ -335,6 +338,7 @@ export default function ReceptionistDashboardPage() {
   const [reencodeCardOpen, setReencodeCardOpen] = useState(false);
   const [readCardOpen, setReadCardOpen] = useState(false);
   const [showStartShift, setShowStartShift] = useState(false);
+  const [restoredCheckout, setRestoredCheckout] = useState<{ reservationId: string; reason: string } | null>(null);
   const [cashAccounts, setCashAccounts] = useState<any[]>([]);
   const [cashAccountId, setCashAccountId] = useState('');
   const [openingFloat, setOpeningFloat] = useState('0');
@@ -375,6 +379,20 @@ export default function ReceptionistDashboardPage() {
       setCashAccountId(v => v || accounts[0]?.id || '');
     }).catch(e => setShiftError(e instanceof Error ? e.message : 'Unable to load tills'));
   }, [showStartShift, propertyId, provider.frontdesk]);
+
+  useEffect(() => {
+    const handleCheckoutRestored = (event: Event) => {
+      const detail = (event as CustomEvent<{ reservationId?: string; reason?: string }>).detail;
+      if (!detail?.reservationId) return;
+      setRestoredCheckout({
+        reservationId: detail.reservationId,
+        reason: detail.reason || 'The cloud could not approve the checkout because payment validation was not satisfied.',
+      });
+      void queryClient.invalidateQueries({ refetchType: 'active' });
+    };
+    window.addEventListener('checkout.restored', handleCheckoutRestored);
+    return () => window.removeEventListener('checkout.restored', handleCheckoutRestored);
+  }, [queryClient]);
 
   const startShift = async () => {
     if (!propertyId || !cashAccountId) return;
@@ -480,6 +498,28 @@ export default function ReceptionistDashboardPage() {
             <Button onClick={startShift} disabled={startingShift || !cashAccountId} className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl">
               {startingShift ? 'Starting…' : 'Start Shift'}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(restoredCheckout)} onOpenChange={open => !open && setRestoredCheckout(null)}>
+        <DialogContent className="sm:max-w-lg rounded-2xl border-amber-400/20 bg-[#0d1424] text-slate-200 shadow-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-xl text-amber-300">
+              <AlertCircle className="h-5 w-5" /> Checkout restored
+            </DialogTitle>
+            <DialogDescription className="pt-2 text-slate-300">
+              This reservation remains checked in because the cloud could not approve the checkout.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="rounded-xl border border-amber-400/20 bg-amber-400/[.07] p-4 text-sm leading-6 text-slate-300">
+            <p className="font-semibold text-amber-200">Reason</p>
+            <p className="mt-1">{restoredCheckout?.reason}</p>
+            <p className="mt-3 text-slate-400">Please review the guest folio, collect or post the outstanding payment, and retry checkout after the balance is settled.</p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRestoredCheckout(null)} className="border-white/10 bg-white/5 text-slate-200 hover:bg-white/10">Acknowledge</Button>
+            <Button onClick={() => { const id = restoredCheckout?.reservationId; setRestoredCheckout(null); if (id) router.push(`/frontdesk/reservations/detail?id=${id}`); }} className="bg-amber-600 text-white hover:bg-amber-500">Review folio</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
