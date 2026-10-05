@@ -327,6 +327,92 @@ function DetailDrawer({
   );
 }
 
+function PropertyScopeDialog({
+  product,
+  price,
+  properties,
+  selectedPropertyIds,
+  onToggle,
+  onClose,
+  onContinue,
+}: {
+  product: Product;
+  price: Price;
+  properties: { id: string; name: string }[];
+  selectedPropertyIds: string[];
+  onToggle: (propertyId: string) => void;
+  onClose: () => void;
+  onContinue: () => void;
+}) {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = ""; };
+  }, []);
+
+  if (!mounted) return null;
+  const total = price.amount * selectedPropertyIds.length;
+
+  return createPortal(
+    <div className="sub-modal-backdrop" onClick={onClose} role="dialog" aria-modal="true" aria-labelledby="property-scope-title">
+      <div className="sub-modal sub-property-scope-modal" onClick={event => event.stopPropagation()}>
+        <div className="sub-modal-header">
+          <div>
+            <div className="sub-section-kicker">Add-on activation</div>
+            <h2 id="property-scope-title" className="sub-modal-title">Choose properties</h2>
+            <p style={{ color: "var(--text-muted)", fontSize: 12, marginTop: 6, lineHeight: 1.5 }}>
+              Select where {product.name} should be activated. Each selected property is billed separately.
+            </p>
+          </div>
+          <button className="sub-modal-close" onClick={onClose} aria-label="Close property selection">
+            <svg viewBox="0 0 14 14" fill="none" width="14"><path d="M1 1l12 12M13 1L1 13" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /></svg>
+          </button>
+        </div>
+        <div className="sub-modal-body">
+          <div className="sub-scope-summary">
+            <div>
+              <div className="sub-scope-summary-label">Billing frequency</div>
+              <div className="sub-scope-summary-value">{price.interval === "year" ? "Annual" : "Monthly"}</div>
+            </div>
+            <div>
+              <div className="sub-scope-summary-label">Rate per property</div>
+              <div className="sub-scope-summary-value">{money(price.amount, price.currency.toUpperCase())} / {price.interval}</div>
+            </div>
+            <div>
+              <div className="sub-scope-summary-label">Selected total</div>
+              <div className="sub-scope-summary-value sub-scope-summary-total">{money(total, price.currency.toUpperCase())}</div>
+            </div>
+          </div>
+
+          <div className="sub-scope-dialog-heading">
+            <span>Properties</span>
+            <span>{selectedPropertyIds.length} of {properties.length} selected</span>
+          </div>
+          <div className="sub-scope-dialog-list">
+            {properties.map(property => (
+              <label key={property.id} className={`sub-scope-dialog-option${selectedPropertyIds.includes(property.id) ? " selected" : ""}`}>
+                <input type="checkbox" checked={selectedPropertyIds.includes(property.id)} onChange={() => onToggle(property.id)} />
+                <span className="sub-scope-dialog-check">{selectedPropertyIds.includes(property.id) ? "✓" : ""}</span>
+                <span>{property.name}</span>
+              </label>
+            ))}
+          </div>
+          <div className="sub-scope-dialog-note">You will review and complete payment securely through Flutterwave.</div>
+          <div className="sub-modal-actions">
+            <button className="btn btn-outline btn-sm" onClick={onClose}>Cancel</button>
+            <button className="btn btn-sm sub-plan-cta" disabled={!selectedPropertyIds.length} onClick={onContinue}>
+              Continue to payment <span aria-hidden="true">→</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
 function DrawerSection({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section style={{ marginBottom: 24 }}>
@@ -568,7 +654,7 @@ function AddOnCard({
           disabled={busy !== null || !price || !canSubscribe || !scopeReady || isActive}
           onClick={() => price && onCheckout(key, [price.id])}
         >
-          {busy === key ? "Opening…" : isActive ? "Active add-on" : !canSubscribe ? "Base plan required" : !scopeReady ? "Select property" : price ? "Add on →" : "Unavailable"}
+          {busy === key ? "Opening…" : isActive ? "Active add-on" : !canSubscribe ? "Base plan required" : !scopeReady ? "No property available" : price ? "Add on →" : "Unavailable"}
         </button>
       </div>
     </div>
@@ -596,11 +682,11 @@ export default function SubscriptionCatalogue({
   hasActiveBaseSubscription: boolean;
 }) {
   const [interval, setInterval] = useState<"month" | "year">("month");
-  const [selectedPropertyIds, setSelectedPropertyIds] = useState<string[]>(properties[0]?.id ? [properties[0].id] : []);
+  const [selectedPropertyIds, setSelectedPropertyIds] = useState<string[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [details, setDetails] = useState<{ kind: "plan" | "addon"; value: Plan | Product } | null>(null);
-  const beds24Price = addOns.find(product => product.code === "ADDON_BEDS24")?.prices.find(price => price.interval === interval);
+  const [scopeProduct, setScopeProduct] = useState<{ product: Product; key: string; priceIds: string[] } | null>(null);
 
   async function checkout(key: string, priceIds: string[], planId?: string, requestedPropertyIds = selectedPropertyIds.slice(0, 1)) {
     if (!priceIds.length) return setError("This option does not have a published price for the selected billing interval yet.");
@@ -627,6 +713,17 @@ export default function SubscriptionCatalogue({
     }
   }
 
+  function startAddonCheckout(product: Product, key: string, priceIds: string[]) {
+    const propertyPriced = isPropertyScoped(product);
+    if (!propertyPriced) return checkout(key, priceIds, undefined, []);
+    if (!properties.length) return setError("Add a property before purchasing this add-on.");
+    if (properties.length === 1) return checkout(key, priceIds, undefined, [properties[0].id]);
+    const activeProperties = new Set(activeAddonPropertyIds[product.code] ?? []);
+    const availableProperties = properties.filter(property => !activeProperties.has(property.id));
+    setSelectedPropertyIds((availableProperties.length ? availableProperties : properties).map(property => property.id));
+    setScopeProduct({ product, key, priceIds });
+  }
+
   return (
     <div>
       {/* Catalogue header */}
@@ -638,17 +735,7 @@ export default function SubscriptionCatalogue({
             Select a plan and pay the resulting invoice through Flutterwave. Contact billing support for custom arrangements or multi-property pricing.
           </p>
         </div>
-          <div className="sub-catalogue-controls">
-          {/* Property scope */}
-          <div className="sub-catalogue-control-group">
-            <label style={{ fontSize: 11, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>Property scope</label>
-            <div className="sub-property-scope-list" aria-label="Properties for add-on billing">
-              {properties.map(property => <label key={property.id} className="sub-property-scope-option"><input type="checkbox" checked={selectedPropertyIds.includes(property.id)} onChange={() => setSelectedPropertyIds(current => current.includes(property.id) ? current.filter(id => id !== property.id) : [...current, property.id])} /><span>{property.name}</span></label>)}
-              {!properties.length && <span style={{ color: "var(--text-muted)", fontSize: 12 }}>No active properties</span>}
-            </div>
-            <button type="button" className="sub-scope-select-all" onClick={() => setSelectedPropertyIds(selectedPropertyIds.length === properties.length ? [] : properties.map(property => property.id))}>{selectedPropertyIds.length === properties.length ? "Clear all" : "Select all"}</button>
-          </div>
-
+        <div className="sub-catalogue-controls">
           {/* Billing interval toggle */}
           <div className="sub-catalogue-control-group">
             <label style={{ fontSize: 11, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>Billing interval</label>
@@ -667,9 +754,6 @@ export default function SubscriptionCatalogue({
                 <span className="sub-interval-save">Save 17%</span>
               </button>
             </div>
-          </div>
-          <div style={{ marginTop: 14, color: "var(--text-muted)", fontSize: 11 }}>
-            {selectedPropertyIds.length ? <><strong style={{ color: "var(--text-secondary)" }}>{selectedPropertyIds.length}</strong> propert{selectedPropertyIds.length === 1 ? "y" : "ies"} selected for property-scoped add-ons. {beds24Price ? <>Beds24: <strong style={{ color: "var(--text-secondary)" }}>{money(beds24Price.amount, beds24Price.currency.toUpperCase())} per property/{interval}</strong>.</> : "Beds24 pricing is currently unavailable for this interval."}</> : "Select at least one property to purchase Beds24 connectivity."}
           </div>
         </div>
       </div>
@@ -733,10 +817,10 @@ export default function SubscriptionCatalogue({
                 product={product}
                 interval={interval}
                 busy={busy}
-                onCheckout={(key, priceIds) => checkout(key, priceIds, undefined, selectedPropertyIds)}
+                onCheckout={(key, priceIds) => startAddonCheckout(product, key, priceIds)}
                 canSubscribe={hasActiveBaseSubscription}
-                scopeReady={selectedPropertyIds.length > 0}
-                isActive={isPropertyScoped(product) ? selectedPropertyIds.length > 0 && selectedPropertyIds.every(propertyId => (activeAddonPropertyIds[product.code] ?? []).includes(propertyId)) : activeAddonCodes.includes(product.code)}
+                scopeReady={!isPropertyScoped(product) || properties.length > 0}
+                isActive={isPropertyScoped(product) ? properties.length > 0 && properties.every(property => (activeAddonPropertyIds[product.code] ?? []).includes(property.id)) : activeAddonCodes.includes(product.code)}
                 onDetails={() => setDetails({ kind: "addon", value: product })}
               />
             ))}
@@ -752,7 +836,18 @@ export default function SubscriptionCatalogue({
           onClose={() => setDetails(null)}
         />
       )}
-      <style>{`.sub-property-scope-list{display:grid;gap:7px;min-width:220px;max-height:150px;overflow:auto;padding:10px;border:1px solid var(--border);border-radius:10px;background:rgba(255,255,255,.025)}.sub-property-scope-option{display:flex;align-items:center;gap:8px;color:var(--text-secondary);font-size:12px;cursor:pointer}.sub-property-scope-option input{accent-color:var(--accent)}.sub-scope-select-all{border:0;background:none;color:var(--accent);font-size:10px;padding:5px 0;cursor:pointer;text-align:left}`}</style>
+      {scopeProduct && (
+        <PropertyScopeDialog
+          product={scopeProduct.product}
+          price={scopeProduct.product.prices.find(price => price.id === scopeProduct.priceIds[0]) ?? scopeProduct.product.prices[0]!}
+          properties={properties}
+          selectedPropertyIds={selectedPropertyIds}
+          onToggle={propertyId => setSelectedPropertyIds(current => current.includes(propertyId) ? current.filter(id => id !== propertyId) : [...current, propertyId])}
+          onClose={() => setScopeProduct(null)}
+          onContinue={() => { const selection = scopeProduct; setScopeProduct(null); void checkout(selection.key, selection.priceIds, undefined, selectedPropertyIds); }}
+        />
+      )}
+      <style>{`.sub-property-scope-modal{max-width:520px}.sub-scope-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:14px;border:1px solid var(--border);border-radius:12px;background:rgba(255,255,255,.025);margin-bottom:24px}.sub-scope-summary-label{font:10px var(--font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted)}.sub-scope-summary-value{margin-top:6px;color:var(--text-primary);font-size:13px;font-weight:650}.sub-scope-summary-total{color:var(--accent)}.sub-scope-dialog-heading{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;color:var(--text-secondary);font-size:12px;font-weight:650}.sub-scope-dialog-heading span+span{color:var(--text-muted);font:10px var(--font-mono)}.sub-scope-dialog-list{display:grid;gap:8px;max-height:260px;overflow:auto}.sub-scope-dialog-option{display:flex;align-items:center;gap:10px;padding:13px 14px;border:1px solid var(--border);border-radius:10px;background:rgba(255,255,255,.018);color:var(--text-secondary);font-size:13px;cursor:pointer;transition:border-color .2s,background .2s}.sub-scope-dialog-option:hover,.sub-scope-dialog-option.selected{border-color:rgba(0,212,232,.42);background:rgba(0,212,232,.07)}.sub-scope-dialog-option input{position:absolute;opacity:0;pointer-events:none}.sub-scope-dialog-check{display:flex;align-items:center;justify-content:center;width:18px;height:18px;border:1px solid rgba(255,255,255,.18);border-radius:5px;color:#06121c;background:transparent;font-size:11px;font-weight:800}.sub-scope-dialog-option.selected .sub-scope-dialog-check{border-color:var(--accent);background:var(--accent)}.sub-scope-dialog-note{margin-top:16px;color:var(--text-muted);font-size:11px;line-height:1.5}.sub-modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:22px;padding-top:18px;border-top:1px solid var(--border)}@media (max-width:600px){.sub-scope-summary{grid-template-columns:1fr}.sub-modal-actions{flex-direction:column-reverse}.sub-modal-actions .btn{width:100%}}`}</style>
     </div>
   );
 }
