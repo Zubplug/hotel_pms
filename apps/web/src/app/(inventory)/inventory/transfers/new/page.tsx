@@ -155,15 +155,6 @@ export default function NewTransferPage() {
         </div>
       </div>
     );
-    if (isStockStaff) return (
-      <div className="flex gap-3 rounded-xl border border-emerald-400/20 bg-emerald-400/[0.07] p-4">
-        <Info className="mt-0.5 h-4 w-4 shrink-0 text-emerald-300" />
-        <div>
-          <p className="text-sm font-semibold text-emerald-200">Stock Manager — transfer options</p>
-          <p className="mt-1 text-xs leading-5 text-slate-400">You can issue stock directly to an outlet (it will be marked as issued and top management will confirm receipt), or create a pending transfer request.</p>
-        </div>
-      </div>
-    );
     return null;
   };
 
@@ -171,7 +162,6 @@ export default function NewTransferPage() {
   const submitLabel = () => {
     if (isSubmitting) return <><Loader2 className="h-4 w-4 animate-spin" />Processing…</>;
     if (isFnbMgr)     return <><Send className="h-4 w-4" />Submit request</>;
-    if (selfIssue)    return <><Send className="h-4 w-4" />Issue stock now</>;
     return <><ArrowRight className="h-4 w-4" />Create transfer</>;
   };
 
@@ -237,24 +227,6 @@ export default function NewTransferPage() {
               <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} placeholder="Optional reason or transfer note…"
                 className="w-full resize-none rounded-xl border border-white/10 bg-[#0d1832] px-3.5 py-2.5 text-sm text-white outline-none placeholder:text-slate-600 transition-all focus:border-emerald-400/60 focus:shadow-[0_0_0_3px_rgba(52,211,153,0.10)]" />
             </div>
-
-            {/* Flow B toggle — Stock Manager only */}
-            {isStockStaff && (
-              <div className="flex items-center gap-3 rounded-xl border border-white/[0.07] bg-white/[0.03] px-4 py-3">
-                <button type="button" onClick={() => setSelfIssue(v => !v)}
-                  className={['relative h-5 w-9 rounded-full transition-colors', selfIssue ? 'bg-emerald-500' : 'bg-white/10'].join(' ')}>
-                  <span className={['absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform', selfIssue ? 'translate-x-4' : 'translate-x-0.5'].join(' ')} />
-                </button>
-                <div>
-                  <p className="text-sm font-semibold text-slate-200">{selfIssue ? 'Direct issue (Flow B)' : 'Create request (Flow A)'}</p>
-                  <p className="text-[11px] text-slate-500">
-                    {selfIssue
-                      ? 'Stock will be deducted and marked as issued. Top management will confirm receipt.'
-                      : 'Transfer will be created in PENDING_APPROVAL for standard review.'}
-                  </p>
-                </div>
-              </div>
-            )}
           </div>
 
           {/* line items */}

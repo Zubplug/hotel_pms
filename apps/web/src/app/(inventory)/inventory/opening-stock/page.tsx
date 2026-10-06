@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle, ArrowRight, Boxes, CheckCircle2, ChevronDown,
-  ClipboardCheck, Info, Loader2, PackagePlus, RefreshCw,
+  ClipboardCheck, Edit2, Info, Loader2, PackagePlus, RefreshCw,
   Search, ShieldCheck, Trash2, Warehouse, X,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -125,7 +125,7 @@ function ComboBox({ label, placeholder, value, onChange, options, disabled, requ
 }
 
 /* ─── pending row ─────────────────────────────────────────────────────────── */
-function PendingRow({ p, onRemove }: { p: Pending; onRemove: () => void }) {
+function PendingRow({ p, onRemove, onEdit }: { p: Pending; onRemove: () => void; onEdit: () => void }) {
   return (
     <div className="flex items-start gap-4 rounded-xl border border-white/[0.07] bg-[#0d1832] px-4 py-3 transition-all hover:border-white/[0.12]">
       <div className="min-w-0 flex-1">
@@ -142,14 +142,24 @@ function PendingRow({ p, onRemove }: { p: Pending; onRemove: () => void }) {
         </div>
         {p.notes && <p className="mt-1 text-[11px] text-slate-600 italic truncate">{p.notes}</p>}
       </div>
-      <button
-        type="button"
-        onClick={onRemove}
-        className="shrink-0 rounded-lg p-1.5 text-slate-600 transition-colors hover:bg-rose-500/10 hover:text-rose-400"
-        title="Remove this entry"
-      >
-        <Trash2 className="h-4 w-4" />
-      </button>
+      <div className="flex gap-1 shrink-0">
+        <button
+          type="button"
+          onClick={onEdit}
+          className="rounded-lg p-1.5 text-slate-600 transition-colors hover:bg-cyan-500/10 hover:text-cyan-400"
+          title="Edit this entry"
+        >
+          <Edit2 className="h-4 w-4" />
+        </button>
+        <button
+          type="button"
+          onClick={onRemove}
+          className="rounded-lg p-1.5 text-slate-600 transition-colors hover:bg-rose-500/10 hover:text-rose-400"
+          title="Remove this entry"
+        >
+          <Trash2 className="h-4 w-4" />
+        </button>
+      </div>
     </div>
   );
 }
@@ -236,6 +246,20 @@ export default function OpeningStockPage() {
     setPending(prev => [...prev, entry]);
     setQuantity(''); setUnitCost(''); setNotes('');
     setMessage({});
+  }
+
+  /* edit pending item */
+  function handleEditPending(p: Pending) {
+    setWarehouseId(p.warehouse.id);
+    setStockItemId(p.item.id);
+    setQuantity(String(p.quantity));
+    setUnitCost(String(p.unitCost));
+    setInputUnit(p.inputUnit);
+    setUnitsInBase(String(p.unitsInBase));
+    setNotes(p.notes);
+    setPending(prev => prev.filter(x => x.id !== p.id));
+    setMessage({});
+    // Scroll up to form slightly if needed, but for now just updating state works
   }
 
   /* post one */
@@ -546,7 +570,7 @@ export default function OpeningStockPage() {
 
                 <div className="space-y-2.5">
                   {pending.map(p => (
-                    <PendingRow key={p.id} p={p} onRemove={() => setPending(prev => prev.filter(x => x.id !== p.id))} />
+                    <PendingRow key={p.id} p={p} onRemove={() => setPending(prev => prev.filter(x => x.id !== p.id))} onEdit={() => handleEditPending(p)} />
                   ))}
                 </div>
 
