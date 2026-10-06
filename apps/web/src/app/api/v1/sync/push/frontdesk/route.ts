@@ -1327,7 +1327,7 @@ export async function POST(req: NextRequest) {
                 checkIn: true,
                 reservationRooms: {
                   where: { status: "ACTIVE" },
-                  select: { id: true, rateAmount: true, currency: true, discountType: true, discountAmount: true, discountPercent: true, discountApprovalId: true },
+                  select: { id: true, roomId: true, rateAmount: true, currency: true, discountType: true, discountAmount: true, discountPercent: true, discountApprovalId: true },
                 },
               },
             });
@@ -1512,10 +1512,21 @@ export async function POST(req: NextRequest) {
               where: { reservationId: aggregateId },
               data: { checkOut: today },
             });
-            if (payload.roomId) {
-              await tx.room.update({
-                where: { id: payload.roomId },
-                data: { status: "AVAILABLE" },
+            // Checkout never makes a room immediately sellable. Every physical
+            // room assigned to this reservation is released from occupancy and
+            // enters the housekeeping workflow. This is authoritative for
+            // multi-room reservations as well as older payloads containing only
+            // one roomId. Availability is restored only after housekeeping.
+            const assignedRoomIds = Array.from(new Set([
+              ...reservation.reservationRooms
+                .map((room: any) => room.roomId)
+                .filter((roomId: any): roomId is string => typeof roomId === "string" && roomId.length > 0),
+              ...(typeof payload.roomId === "string" ? [payload.roomId] : []),
+            ]));
+            if (assignedRoomIds.length) {
+              await tx.room.updateMany({
+                where: { id: { in: assignedRoomIds }, propertyId },
+                data: { status: "DIRTY", housekeepingStatus: "CLEANING" },
               });
             }
           } else if (aggregateType === "RESERVATION" && eventType === "ROOM_CREDIT") {
@@ -3166,7 +3177,7 @@ export async function POST(req: NextRequest) {
               reason: payload.reason || "Offline reservation cancellation",
             });
           } else if (aggregateType === "RESERVATION" && eventType === "REASSIGN_ROOM") {
-            const { newRoomId, oldRoomId, newRoomNumber } = payload;
+            const { newRoomId, oldRoomId, newRoomNumber, reservationRoomId } = payload;
             if (!newRoomId)
               throw new Error("newRoomId is required for REASSIGN_ROOM");
 
@@ -3206,18 +3217,28 @@ export async function POST(req: NextRequest) {
                 "New room is already assigned to another active reservation",
               );
 
-            // Deactivate all current active room assignments for this reservation.
+            // LodgeCore reservations have exactly one active physical room.
+            // Deactivate every stale active assignment before creating the one
+            // replacement. Historical rows remain inactive for audit.
             // Room reassignment is operational state only. It must not create a
             // folio charge or credit here: Night Audit prices the active room
             // for each unposted business date, which prevents double posting
             // and preserves already-posted nights at their original rate.
+            const assignmentToReplace = reservationRoomId
+              ? res.reservationRooms.find((assignment: any) => assignment.id === reservationRoomId)
+              : res.reservationRooms.find((assignment: any) => assignment.roomId === oldRoomId)
+                || res.reservationRooms[0];
+            if (!assignmentToReplace)
+              throw new Error("Active room assignment not found for reassignment");
+            const previousRoomId = oldRoomId || assignmentToReplace.roomId;
+
             await tx.reservationRoom.updateMany({
               where: { reservationId: aggregateId, status: "ACTIVE" },
               data: { status: "INACTIVE" },
             });
 
             // Create new assignment
-            const activeRoom = res.reservationRooms[0];
+            const activeRoom = assignmentToReplace;
             const newRoomType = await tx.roomType.findUnique({
               where: { id: newRoom.roomTypeId },
               select: { baseRate: true },
@@ -3249,22 +3270,35 @@ export async function POST(req: NextRequest) {
             // the business date. The active ReservationRoom rate is the input
             // used by the next Night Audit run.
 
-            // Release old room if it was this reservation's room
-            if (oldRoomId && oldRoomId !== newRoomId) {
-              const stillOwned = await tx.reservationRoom.findFirst({
+            // Release the old physical room. Checked-in guests require
+            // housekeeping before the room becomes sellable; future arrivals
+            // can release it directly back to inventory.
+            const oldRoomIds = Array.from(new Set([
+              ...res.reservationRooms
+                .map((assignment: any) => assignment.roomId)
+                .filter((roomId: any): roomId is string => typeof roomId === "string" && roomId.length > 0),
+              ...(previousRoomId ? [previousRoomId] : []),
+            ])).filter((roomId) => roomId !== newRoomId);
+            if (oldRoomIds.length) {
+              const stillOwned = await tx.reservationRoom.findMany({
                 where: {
-                  roomId: oldRoomId,
+                  roomId: { in: oldRoomIds },
                   status: "ACTIVE",
-                  reservationId: { not: aggregateId },
                   reservation: {
                     status: { notIn: ["CHECKED_OUT", "CANCELLED", "NO_SHOW"] },
                   },
                 },
+                select: { roomId: true },
               });
-              if (!stillOwned) {
-                await tx.room.update({
-                  where: { id: oldRoomId },
-                  data: { status: "AVAILABLE" },
+              const stillOwnedIds = new Set(stillOwned.map((assignment: any) => assignment.roomId));
+              const releasableRoomIds = oldRoomIds.filter((roomId) => !stillOwnedIds.has(roomId));
+              if (releasableRoomIds.length) {
+                await tx.room.updateMany({
+                  where: { id: { in: releasableRoomIds }, propertyId },
+                  data: {
+                    status: res.status === "CHECKED_IN" ? "DIRTY" : "AVAILABLE",
+                    housekeepingStatus: res.status === "CHECKED_IN" ? "CLEANING" : undefined,
+                  },
                 });
               }
             }

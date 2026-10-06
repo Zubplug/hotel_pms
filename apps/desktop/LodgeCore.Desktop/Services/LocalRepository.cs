@@ -708,13 +708,18 @@ public class LocalRepository
         res = await _dbContext.Reservations
             .Include(r => r.Folio)
             .Include(r => r.Rooms)
+                .ThenInclude(rr => rr.Room)
             .FirstOrDefaultAsync(r => r.Id == reservationId);
         if (res == null) return false;
 
         var room = await _dbContext.Rooms.FindAsync(roomId);
         if (room == null) throw new InvalidOperationException("Target room not found locally.");
 
-        var currentRoom = res.Rooms.FirstOrDefault();
+        var currentRoom = res.Rooms
+            .Where(rr => rr.Status == "ACTIVE")
+            .FirstOrDefault(rr => rr.RoomId == res.RoomId)
+            ?? res.Rooms.FirstOrDefault(rr => rr.Status == "ACTIVE")
+            ?? res.Rooms.FirstOrDefault();
         var isSameDayStay = res.CheckInDate.Date == res.CheckOutDate.Date;
         var availabilityStart = isSameDayStay
             ? res.CheckInDate.Date
@@ -744,8 +749,46 @@ public class LocalRepository
         if (roomConflict)
             throw new InvalidOperationException("The selected room is not available for the remaining stay.");
 
-        var oldRoomId = res.RoomId;
+        var oldRoomId = currentRoom?.RoomId ?? res.RoomId;
         var effectiveRoomTypeId = roomTypeId ?? room.RoomTypeId;
+
+        if (oldRoomId == roomId)
+            return true;
+
+        // LodgeCore reservations have exactly one active physical room. Keep
+        // old assignment rows for audit, but deactivate and release every
+        // active assignment before creating the replacement.
+        foreach (var activeRoom in res.Rooms.Where(rr => rr.Status == "ACTIVE"))
+        {
+            activeRoom.Status = "INACTIVE";
+            if (activeRoom.Room != null)
+            {
+                activeRoom.Room.Status = res.Status == "CHECKED_IN" ? "DIRTY" : "AVAILABLE";
+                activeRoom.Room.HousekeepingStatus = res.Status == "CHECKED_IN" ? "CLEANING" : activeRoom.Room.HousekeepingStatus;
+                activeRoom.Room.IsOccupied = false;
+                activeRoom.Room.UpdatedAt = DateTime.UtcNow;
+            }
+        }
+
+        var replacement = new LocalReservationRoom
+        {
+            Id = Guid.NewGuid().ToString(),
+            ReservationId = res.Id,
+            RoomTypeId = effectiveRoomTypeId,
+            RoomId = roomId,
+            CheckInDate = currentRoom?.CheckInDate ?? res.CheckInDate,
+            CheckOutDate = currentRoom?.CheckOutDate ?? res.CheckOutDate,
+            Adults = currentRoom?.Adults ?? res.Adults,
+            Children = currentRoom?.Children ?? res.Children,
+            DiscountType = currentRoom?.DiscountType,
+            DiscountAmount = currentRoom?.DiscountAmount,
+            DiscountPercent = currentRoom?.DiscountPercent,
+            DiscountReason = currentRoom?.DiscountReason,
+            DiscountApprovalId = currentRoom?.DiscountApprovalId,
+            DiscountApprovingManagerId = currentRoom?.DiscountApprovingManagerId,
+            Status = "ACTIVE",
+        };
+        _dbContext.ReservationRooms.Add(replacement);
 
         res.RoomId = roomId;
         res.RoomNumber = room.Number;
@@ -771,9 +814,14 @@ public class LocalRepository
             {
                 newRoomId = roomId,
                 oldRoomId,
-                roomTypeId = effectiveRoomTypeId
+                roomTypeId = effectiveRoomTypeId,
+                reservationRoomId = currentRoom?.Id,
             })
         });
+
+        room.Status = res.Status == "CHECKED_IN" ? "OCCUPIED" : "RESERVED";
+        room.IsOccupied = res.Status == "CHECKED_IN";
+        room.UpdatedAt = DateTime.UtcNow;
 
         await _dbContext.SaveChangesAsync();
 
@@ -2327,7 +2375,24 @@ public class LocalRepository
             .Include(r => r.Rooms)
                 .ThenInclude(rr => rr.Room)
             .FirstOrDefaultAsync(r => r.Id == reservationId);
-        if (res == null || res.Status != "CHECKED_IN") return false;
+        if (res == null) return false;
+
+        // Checkout is a reservation-level operation. A second click, retry, or
+        // stale UI must reuse the existing event rather than create another
+        // checkout/housekeeping chain.
+        var existingCheckout = await _dbContext.OutboxEvents
+            .Where(e => e.AggregateType == "RESERVATION"
+                && e.AggregateId == reservationId
+                && e.EventType == "CHECK_OUT")
+            .OrderByDescending(e => e.CreatedAt)
+            .FirstOrDefaultAsync();
+        if (existingCheckout != null)
+        {
+            if (existingCheckout.Status == "SYNCED" || res.Status == "CHECKED_OUT") return true;
+            throw new InvalidOperationException(
+                $"Checkout is already queued ({existingCheckout.Status}). Sync the existing checkout before trying again.");
+        }
+        if (res.Status != "CHECKED_IN") return false;
         await AssertNightAuditAllowsAsync(res.PropertyId);
 
         if (res.CorporateAccountId != null && res.Folio == null)
@@ -2611,6 +2676,7 @@ public class LocalRepository
             AggregateVersion = eventVersion,
             EventType = "CHECK_OUT",
             Sequence = res.LocalSequence,
+            IdempotencyKey = $"CHECK_OUT_{res.Id}_{operationalDate:yyyy-MM-dd}",
             PayloadJson = JsonSerializer.Serialize(new
             {
                 roomId = res.RoomId,

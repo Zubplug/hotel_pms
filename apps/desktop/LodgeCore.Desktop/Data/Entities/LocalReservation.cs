@@ -25,10 +25,13 @@ public class LocalReservation
     [System.ComponentModel.DataAnnotations.Schema.NotMapped]
     public string? RoomId 
     { 
-        get => _tempRoomId ?? Rooms.FirstOrDefault()?.RoomId; 
+        get => _tempRoomId
+            ?? Rooms.FirstOrDefault(room => room.Status == "ACTIVE")?.RoomId
+            ?? Rooms.FirstOrDefault()?.RoomId;
         set {
             _tempRoomId = value;
-            var room = Rooms.FirstOrDefault();
+            var room = Rooms.FirstOrDefault(candidate => candidate.Status == "ACTIVE")
+                ?? Rooms.FirstOrDefault();
             if (room != null) room.RoomId = value ?? string.Empty;
             else Rooms.Add(new LocalReservationRoom { Id = Guid.NewGuid().ToString(), ReservationId = this.Id, RoomId = value ?? string.Empty });
         }
@@ -38,7 +41,9 @@ public class LocalReservation
     [System.ComponentModel.DataAnnotations.Schema.NotMapped]
     public string? RoomNumber 
     { 
-        get => _tempRoomNumber ?? Rooms.FirstOrDefault()?.Room?.Number; 
+        get => _tempRoomNumber
+            ?? Rooms.FirstOrDefault(room => room.Status == "ACTIVE")?.Room?.Number
+            ?? Rooms.FirstOrDefault()?.Room?.Number;
         set => _tempRoomNumber = value;
     }
 
@@ -46,10 +51,13 @@ public class LocalReservation
     [System.ComponentModel.DataAnnotations.Schema.NotMapped]
     public string? RoomTypeId 
     { 
-        get => _tempRoomTypeId ?? Rooms.FirstOrDefault()?.RoomTypeId; 
+        get => _tempRoomTypeId
+            ?? Rooms.FirstOrDefault(room => room.Status == "ACTIVE")?.RoomTypeId
+            ?? Rooms.FirstOrDefault()?.RoomTypeId;
         set {
             _tempRoomTypeId = value;
-            var room = Rooms.FirstOrDefault();
+            var room = Rooms.FirstOrDefault(candidate => candidate.Status == "ACTIVE")
+                ?? Rooms.FirstOrDefault();
             if (room != null) room.RoomTypeId = value ?? string.Empty;
             else Rooms.Add(new LocalReservationRoom { Id = Guid.NewGuid().ToString(), ReservationId = this.Id, RoomTypeId = value ?? string.Empty });
         }

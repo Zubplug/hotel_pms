@@ -3172,7 +3172,12 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
         }
 
         var allPending = await dbContext.OutboxEvents
-            .Where(e => e.Status == "PENDING" || e.Status == "FAILED" || e.Status == "RETRY_EXHAUSTED" || e.Status == "CONFLICT")
+            .Where(e => e.Status == "PENDING" || e.Status == "FAILED" || e.Status == "RETRY_EXHAUSTED" || e.Status == "CONFLICT"
+                || (e.Status == "DEAD_LETTER"
+                    && e.EventType == "CHECK_OUT"
+                    && (e.LastError != null
+                        && (e.LastError.Contains("PAYMENT_REQUIRED", StringComparison.OrdinalIgnoreCase)
+                            || e.LastError.Contains("REFUND_REQUIRED", StringComparison.OrdinalIgnoreCase)))))
             .ToListAsync(stoppingToken);
 
         // These CITY_LEDGER operations are append-only and older clients
@@ -3404,7 +3409,8 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                     foreach (var evt in pendingEvents.Where(evt =>
                         evt.EventType == "CHECK_OUT"
                         && evt.Status == "DEAD_LETTER"
-                        && evt.LastError?.Contains("PAYMENT_REQUIRED", StringComparison.OrdinalIgnoreCase) == true))
+                        && (evt.LastError?.Contains("PAYMENT_REQUIRED", StringComparison.OrdinalIgnoreCase) == true
+                            || evt.LastError?.Contains("REFUND_REQUIRED", StringComparison.OrdinalIgnoreCase) == true)))
                     {
                         using var innerScope = _serviceProvider.CreateScope();
                         var repo = innerScope.ServiceProvider.GetRequiredService<LocalRepository>();
@@ -3412,9 +3418,12 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                             evt.AggregateId,
                             evt.PayloadJson,
                             evt.LastError);
+                        var requiresRefund = evt.LastError?.Contains("REFUND_REQUIRED", StringComparison.OrdinalIgnoreCase) == true;
                         OnCheckoutRestored?.Invoke(
                             evt.AggregateId,
-                            "Cloud checkout validation required payment, so the reservation was restored to checked-in status.");
+                            requiresRefund
+                                ? "Cloud checkout found a guest credit requiring refund approval, so the reservation was restored to checked-in status. Process the refund, then retry checkout."
+                                : "Cloud checkout validation required payment, so the reservation was restored to checked-in status. Settle the folio, then retry checkout.");
                     }
 
                     foreach (var evt in pendingEvents.Where(evt => !resultIds.Contains(evt.Id)))
