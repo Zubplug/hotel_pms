@@ -6,6 +6,7 @@ import {
   ClipboardCheck, Edit2, Info, Loader2, PackagePlus, RefreshCw,
   Save, Search, ShieldCheck, Trash2, Warehouse, X,
 } from 'lucide-react';
+import Link from 'next/link';
 import { INVENTORY_UNITS, formatUnit } from '@/lib/inventory/units';
 
 /* ─── types ─────────────────────────────────────────────────────────────── */
