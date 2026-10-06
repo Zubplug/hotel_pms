@@ -289,7 +289,7 @@ export async function GET(req: NextRequest) {
     // Warehouse-only stock (assets, cleaning supplies, housekeeping items, etc.)
     // must remain available to inventory users without being synced to tills.
     const recipes = await prisma.recipe.findMany({
-      where: { propertyId, isActive: true },
+      where: buildWhere({ propertyId, isActive: true }),
       include: {
         versions: {
           where: { isActive: true },
@@ -312,14 +312,18 @@ export async function GET(req: NextRequest) {
     // Inventory quantities are restricted to recipe-mapped items. On an
     // incremental pull, returning the mapped set also covers a newly-created
     // recipe link whose stock item itself has an older updatedAt timestamp.
-    const stockWhere = since
-      ? { propertyId, OR: [{ id: { in: posMappedStockItemIds } }, { warehouseId: { in: outletWarehouseIds } }] }
-      : { ...buildWhere({ propertyId }), OR: [{ id: { in: posMappedStockItemIds } }, { warehouseId: { in: outletWarehouseIds } }] };
+    const stockWhere = buildWhere({ propertyId, warehouseId: { in: outletWarehouseIds } });
     const stockItems = await prisma.stockItem.findMany({
       where: stockWhere,
       take: limit,
       orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
     });
+
+    const mappedStockItems = posMappedStockItemIds.length > 0 
+      ? await prisma.stockItem.findMany({
+          where: { propertyId, id: { in: posMappedStockItemIds } },
+        })
+      : [];
 
     const posFloorPlans = await prisma.posFloorPlan.findMany({
       where: buildOutletWhere({ outletId: { in: outletIds }, isActive: true }),
@@ -553,6 +557,13 @@ export async function GET(req: NextRequest) {
     const finalPosOrders = allEntities.filter(e => e.type === 'PosOrder').map(e => e.data);
     const finalRecipes = allEntities.filter(e => e.type === 'Recipe').map(e => e.data);
     const finalStockItems = allEntities.filter(e => e.type === 'StockItem').map(e => e.data);
+    
+    // Merge mapped stock items that might have older updated_at timestamps
+    const finalStockItemIds = new Set(finalStockItems.map(s => s.id));
+    mappedStockItems.forEach(s => {
+      if (!finalStockItemIds.has(s.id)) finalStockItems.push(s);
+    });
+
     const finalHousekeepingTasks = allEntities.filter(e => e.type === 'HousekeepingTask').map(e => e.data);
     const finalMaintenanceTickets = allEntities.filter(e => e.type === 'MaintenanceTicket').map(e => e.data);
     const finalLaundryItems = allEntities.filter(e => e.type === 'LaundryItem').map(e => e.data);
