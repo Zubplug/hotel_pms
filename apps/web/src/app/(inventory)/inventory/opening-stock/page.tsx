@@ -4,9 +4,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle, ArrowRight, Boxes, CheckCircle2, ChevronDown,
   ClipboardCheck, Edit2, Info, Loader2, PackagePlus, RefreshCw,
-  Search, ShieldCheck, Trash2, Warehouse, X,
+  Save, Search, ShieldCheck, Trash2, Warehouse, X,
 } from 'lucide-react';
-import Link from 'next/link';
 import { INVENTORY_UNITS, formatUnit } from '@/lib/inventory/units';
 
 /* ─── types ─────────────────────────────────────────────────────────────── */
@@ -124,6 +123,211 @@ function ComboBox({ label, placeholder, value, onChange, options, disabled, requ
   );
 }
 
+/* ─── edit pending modal ──────────────────────────────────────────────────── */
+function EditPendingModal({
+  p,
+  onClose,
+  onSave,
+}: {
+  p: Pending;
+  onClose: () => void;
+  onSave: (updated: Pending) => void;
+}) {
+  const [quantity, setQuantity]     = useState(String(p.quantity));
+  const [inputUnit, setInputUnit]   = useState(p.inputUnit);
+  const [unitsInBase, setUnitsInBase] = useState(String(p.unitsInBase));
+  const [unitCost, setUnitCost]     = useState(String(p.unitCost));
+  const [notes, setNotes]           = useState(p.notes);
+
+  const unitOpts = [
+    { value: p.item.baseUnit, label: formatUnit(p.item.baseUnit), sub: 'Base unit' },
+    ...INVENTORY_UNITS
+      .filter(u => u !== p.item.baseUnit)
+      .map(u => {
+        const conv = p.item.stockUnits?.find(c => c.unit === u);
+        return {
+          value: u,
+          label: formatUnit(u),
+          sub: conv ? `${conv.unitsInBase} ${formatUnit(p.item.baseUnit)}` : undefined,
+        };
+      }),
+  ];
+
+  const conversionNum  = inputUnit === p.item.baseUnit ? 1 : Number(unitsInBase || 0);
+  const quantityNum    = Number(quantity || 0);
+  const costNum        = Number(unitCost || 0);
+  const baseQty        = quantityNum * conversionNum;
+  const total          = quantityNum * costNum;
+  const canSave        = quantityNum > 0 && costNum >= 0 && conversionNum > 0;
+
+  function handleUnitChange(u: string) {
+    setInputUnit(u);
+    if (u === p.item.baseUnit) {
+      setUnitsInBase('1');
+    } else {
+      const conv = p.item.stockUnits?.find(c => c.unit === u);
+      setUnitsInBase(conv ? String(conv.unitsInBase) : '');
+    }
+  }
+
+  function handleSave() {
+    if (!canSave) return;
+    onSave({
+      ...p,
+      quantity: quantityNum,
+      inputUnit,
+      unitsInBase: conversionNum,
+      unitCost: costNum,
+      notes,
+      baseQty,
+      total,
+    });
+    onClose();
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      onClick={e => e.target === e.currentTarget && onClose()}
+    >
+      {/* backdrop */}
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+
+      {/* panel */}
+      <div className="relative z-10 w-full max-w-md rounded-2xl border border-white/[0.1] bg-[#111c2e] shadow-[0_24px_80px_rgba(0,0,0,0.8)] overflow-hidden">
+
+        {/* header */}
+        <div className="flex items-start justify-between gap-4 border-b border-white/[0.07] px-6 py-5">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.15em] text-cyan-400">Edit batch entry</p>
+            <h2 className="mt-1 text-lg font-semibold text-white">{p.item.name}</h2>
+            <p className="mt-0.5 text-xs text-slate-500">{p.warehouse.name} · base unit: {formatUnit(p.item.baseUnit)}</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg p-1.5 text-slate-500 hover:bg-white/[0.06] hover:text-slate-200 transition-colors"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        {/* body */}
+        <div className="space-y-4 px-6 py-5">
+
+          {/* quantity + unit */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="mb-2 block text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">
+                Quantity<span className="text-cyan-400">*</span>
+              </label>
+              <input
+                type="number" min="0.0001" step="0.0001"
+                value={quantity}
+                onChange={e => setQuantity(e.target.value)}
+                className="h-11 w-full rounded-xl border border-white/10 bg-[#0d1832] px-3.5 text-sm text-white outline-none placeholder:text-slate-600 focus:border-cyan-400/60 focus:shadow-[0_0_0_3px_rgba(34,211,238,0.10)] transition-all"
+                autoFocus
+              />
+            </div>
+
+            <div>
+              <label className="mb-2 block text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">
+                Unit<span className="text-cyan-400">*</span>
+              </label>
+              <select
+                value={inputUnit}
+                onChange={e => handleUnitChange(e.target.value)}
+                className="h-11 w-full rounded-xl border border-white/10 bg-[#0d1832] px-3.5 text-sm text-white outline-none focus:border-cyan-400/60 focus:shadow-[0_0_0_3px_rgba(34,211,238,0.10)] transition-all"
+              >
+                {unitOpts.map(u => (
+                  <option key={u.value} value={u.value}>{u.label}{u.sub ? ` (${u.sub})` : ''}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* units in base — only when not base unit */}
+          {inputUnit !== p.item.baseUnit && (
+            <div>
+              <label className="mb-2 block text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">
+                {formatUnit(inputUnit)} → how many {formatUnit(p.item.baseUnit)}?
+              </label>
+              <input
+                type="number" min="0.000001" step="0.000001"
+                value={unitsInBase}
+                onChange={e => setUnitsInBase(e.target.value)}
+                placeholder="e.g. 24 for a crate of 24 bottles"
+                className="h-11 w-full rounded-xl border border-white/10 bg-[#0d1832] px-3.5 text-sm text-white outline-none placeholder:text-slate-600 focus:border-cyan-400/60 focus:shadow-[0_0_0_3px_rgba(34,211,238,0.10)] transition-all"
+              />
+            </div>
+          )}
+
+          {/* cost */}
+          <div>
+            <label className="mb-2 block text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">
+              Cost per {formatUnit(inputUnit)} (₦)<span className="text-cyan-400">*</span>
+            </label>
+            <input
+              type="number" min="0" step="0.01"
+              value={unitCost}
+              onChange={e => setUnitCost(e.target.value)}
+              className="h-11 w-full rounded-xl border border-white/10 bg-[#0d1832] px-3.5 text-sm text-white outline-none placeholder:text-slate-600 focus:border-cyan-400/60 focus:shadow-[0_0_0_3px_rgba(34,211,238,0.10)] transition-all"
+            />
+          </div>
+
+          {/* notes */}
+          <div>
+            <label className="mb-2 block text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">
+              Reason / evidence
+            </label>
+            <textarea
+              value={notes}
+              onChange={e => setNotes(e.target.value)}
+              placeholder="e.g. verified opening count from legacy system"
+              rows={2}
+              className="w-full resize-none rounded-xl border border-white/10 bg-[#0d1832] px-3.5 py-2.5 text-sm text-white outline-none placeholder:text-slate-600 focus:border-cyan-400/60 focus:shadow-[0_0_0_3px_rgba(34,211,238,0.10)] transition-all"
+            />
+          </div>
+
+          {/* live preview */}
+          {canSave && (
+            <div className="rounded-xl border border-cyan-400/15 bg-cyan-400/[.05] px-4 py-3">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-cyan-200">Base qty after edit:</span>
+                <strong className="text-white">{baseQty.toFixed(2)} {formatUnit(p.item.baseUnit)}</strong>
+              </div>
+              <div className="mt-1 flex items-center justify-between text-xs">
+                <span className="text-cyan-200">Line value:</span>
+                <strong className="text-emerald-300">{money(total)}</strong>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* footer */}
+        <div className="flex items-center justify-between border-t border-white/[0.07] px-6 py-4">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl border border-white/10 px-4 py-2.5 text-sm font-medium text-slate-400 hover:bg-white/[.04] hover:text-slate-200 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={!canSave}
+            className="flex items-center gap-2 rounded-xl bg-cyan-500 px-5 py-2.5 text-sm font-semibold text-slate-950 hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-40 transition-colors"
+          >
+            <Save className="h-4 w-4" />
+            Save changes
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ─── pending row ─────────────────────────────────────────────────────────── */
 function PendingRow({ p, onRemove, onEdit }: { p: Pending; onRemove: () => void; onEdit: () => void }) {
   return (
@@ -146,7 +350,7 @@ function PendingRow({ p, onRemove, onEdit }: { p: Pending; onRemove: () => void;
         <button
           type="button"
           onClick={onEdit}
-          className="rounded-lg p-1.5 text-slate-600 transition-colors hover:bg-cyan-500/10 hover:text-cyan-400"
+          className="rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-cyan-500/10 hover:text-cyan-400"
           title="Edit this entry"
         >
           <Edit2 className="h-4 w-4" />
@@ -154,7 +358,7 @@ function PendingRow({ p, onRemove, onEdit }: { p: Pending; onRemove: () => void;
         <button
           type="button"
           onClick={onRemove}
-          className="rounded-lg p-1.5 text-slate-600 transition-colors hover:bg-rose-500/10 hover:text-rose-400"
+          className="rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-rose-500/10 hover:text-rose-400"
           title="Remove this entry"
         >
           <Trash2 className="h-4 w-4" />
@@ -177,6 +381,7 @@ export default function OpeningStockPage() {
   const [loading, setLoading]         = useState(true);
   const [saving, setSaving]           = useState(false);
   const [message, setMessage]         = useState<{ ok?: string; error?: string }>({});
+  const [editingPending, setEditingPending] = useState<Pending | null>(null);
   const [pending, setPending]         = useState<Pending[]>([]);
 
   /* load */
@@ -248,18 +453,14 @@ export default function OpeningStockPage() {
     setMessage({});
   }
 
-  /* edit pending item */
+  /* edit pending item — open modal */
   function handleEditPending(p: Pending) {
-    setWarehouseId(p.warehouse.id);
-    setStockItemId(p.item.id);
-    setQuantity(String(p.quantity));
-    setUnitCost(String(p.unitCost));
-    setInputUnit(p.inputUnit);
-    setUnitsInBase(String(p.unitsInBase));
-    setNotes(p.notes);
-    setPending(prev => prev.filter(x => x.id !== p.id));
-    setMessage({});
-    // Scroll up to form slightly if needed, but for now just updating state works
+    setEditingPending(p);
+  }
+
+  function handleSavePendingEdit(updated: Pending) {
+    setPending(prev => prev.map(x => x.id === updated.id ? updated : x));
+    setEditingPending(null);
   }
 
   /* post one */
@@ -313,6 +514,14 @@ export default function OpeningStockPage() {
   /* ── render ─────────────────────────────────────────────────────────── */
   return (
     <div className="min-h-full bg-[#08111f] text-slate-100">
+      {/* ── edit modal ───────────────────────────────────────────────── */}
+      {editingPending && (
+        <EditPendingModal
+          p={editingPending}
+          onClose={() => setEditingPending(null)}
+          onSave={handleSavePendingEdit}
+        />
+      )}
       {/* ── header ──────────────────────────────────────────────────── */}
       <section className="border-b border-white/[0.07] bg-[radial-gradient(circle_at_top_right,_rgba(16,185,129,0.15),_transparent_34%),linear-gradient(135deg,#0b1728,#08111f)] px-5 py-8 sm:px-8">
         <div className="mx-auto max-w-[1500px]">
