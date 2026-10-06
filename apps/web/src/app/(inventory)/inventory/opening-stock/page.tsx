@@ -61,7 +61,7 @@ function ComboBox({ label, placeholder, value, onChange, options, disabled, requ
 
   return (
     <div ref={ref} className="relative">
-      <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">{label}{required && <span className="ml-0.5 text-emerald-400">*</span>}</p>
+      {label && <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">{label}{required && <span className="ml-0.5 text-emerald-400">*</span>}</p>}
       {/* trigger */}
       <button
         type="button"
@@ -433,22 +433,32 @@ export default function OpeningStockPage() {
                   />
 
                   {/* stock item */}
-                  <ComboBox
-                    label="Stock item"
-                    placeholder="Choose an item…"
-                    value={stockItemId}
-                    onChange={v => {
-                      setStockItemId(v);
-                      const sel = items.find(it => it.id === v);
-                      const pu  = sel?.stockUnits?.find(u => u.isPurchaseUnit);
-                      const next = pu?.unit || sel?.baseUnit || '';
-                      setInputUnit(next);
-                      setUnitsInBase(next === sel?.baseUnit ? '1' : String(pu?.unitsInBase || ''));
-                    }}
-                    options={itemOptions}
-                    disabled={!warehouseId}
-                    required
-                  />
+                  <div className="relative">
+                    <div className="mb-2 flex items-center justify-between">
+                      <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Stock item<span className="ml-0.5 text-emerald-400">*</span></p>
+                      <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-widest text-cyan-400">
+                        {stockItemId ? (
+                          <Link href={`/inventory/stock-items/${stockItemId}/edit`} className="hover:text-cyan-300 transition-colors">Edit item</Link>
+                        ) : null}
+                        <Link href="/inventory/stock-items/new" className="hover:text-cyan-300 transition-colors">New item</Link>
+                      </div>
+                    </div>
+                    <ComboBox
+                      label=""
+                      placeholder="Choose an item…"
+                      value={stockItemId}
+                      onChange={v => {
+                        setStockItemId(v);
+                        const sel = items.find(it => it.id === v);
+                        const pu  = sel?.stockUnits?.find(u => u.isPurchaseUnit);
+                        const next = pu?.unit || sel?.baseUnit || '';
+                        setInputUnit(next);
+                        setUnitsInBase(next === sel?.baseUnit ? '1' : String(pu?.unitsInBase || ''));
+                      }}
+                      options={itemOptions}
+                      disabled={!warehouseId}
+                    />
+                  </div>
 
                   {/* quantity + unit + base + cost */}
                   <div className="grid gap-4 sm:grid-cols-4">
@@ -507,10 +517,18 @@ export default function OpeningStockPage() {
                   </div>
 
                   {/* preview */}
-                  {item && selectedConversion > 0 && (
-                    <div className="rounded-xl border border-cyan-400/15 bg-cyan-400/[.05] p-3 text-xs leading-5 text-cyan-100">
-                      Preview: <strong>{baseQuantity.toFixed(2)} {formatUnit(item.baseUnit)}</strong> at <strong>{money(total)}</strong> incoming value.
-                      Weighted on-hand cost will be recalculated.
+                  {item && (
+                    <div className="rounded-xl border border-cyan-400/15 bg-cyan-400/[.05] p-4 space-y-2">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-cyan-200">Current on-hand in warehouse:</span>
+                        <strong className="text-white">{Number(item.quantityOnHand).toFixed(2)} {formatUnit(item.baseUnit)}</strong>
+                      </div>
+                      {selectedConversion > 0 && quantityNum > 0 && (
+                        <div className="border-t border-cyan-400/10 pt-2 text-xs leading-5 text-cyan-100">
+                          Incoming: <strong>{baseQuantity.toFixed(2)} {formatUnit(item.baseUnit)}</strong> at <strong>{money(total)}</strong> value.<br/>
+                          Total after posting: <strong>{(Number(item.quantityOnHand) + baseQuantity).toFixed(2)} {formatUnit(item.baseUnit)}</strong>
+                        </div>
+                      )}
                     </div>
                   )}
 
