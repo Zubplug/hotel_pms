@@ -585,7 +585,7 @@ export async function POST(req: NextRequest) {
               const orderId = payload.OrderId || payload.orderId || event.aggregateId;
               const order = await tx.posOrder.findUnique({ 
                 where: { id: orderId }, 
-                select: { id: true, total: true, status: true, businessDate: true, sessionId: true, propertyId: true, property: { select: { organizationId: true } } } 
+                select: { id: true, total: true, status: true, businessDate: true, sessionId: true, folioId: true, reservationId: true, propertyId: true, property: { select: { organizationId: true } } }
               });
               if (!order) {
                   // A payment cannot be applied safely until ORDER_CREATED has
@@ -1048,15 +1048,8 @@ export async function POST(req: NextRequest) {
                   await tx.posOperatorSession.update({
                       where: { id: session.id },
                       data: {
-                          status: 'CLOSED',
-                          // Closing is a submission for finance review; it is
-                          // not an approval or reconciliation decision.
-                          controlStatus: 'SUBMITTED',
-                          expectedCash,
-                          actualCash: declaredCash,
-                          variance: calculatedVariance,
-                          closedAt: payload.SettledAt ? new Date(payload.SettledAt) : new Date(event.occurredAt),
-                          closedBy: isUuid(payload.OperatorId || payload.operatorId) ? (payload.OperatorId || payload.operatorId) : operatorId,
+                          status: 'ENDED',
+                          endedAt: payload.SettledAt ? new Date(payload.SettledAt) : new Date(event.occurredAt),
                       }
                   });
 
@@ -1123,8 +1116,7 @@ export async function POST(req: NextRequest) {
                 where: { id: sessionId },
                 data: {
                   ...(opStatus ? { status: opStatus } : {}),
-                  ...(closedAt ? { closedAt: new Date(closedAt) } : {}),
-                  closedBy: operatorId
+                  ...(closedAt ? { endedAt: new Date(closedAt) } : {})
                 }
               });
               await tx.posSession.updateMany({
@@ -1144,11 +1136,18 @@ export async function POST(req: NextRequest) {
                   where: { operationId }
               });
               if (!existing) {
+                  const sessionId = payload.PosSessionId || payload.posSessionId || payload.SessionId || payload.sessionId;
                   const session = await tx.posOperatorSession.findUnique({
-                      where: { id: payload.PosSessionId || payload.posSessionId }
+                      where: { id: sessionId }
                   });
                   if (!session) {
-                      throw new Error(`RETRYABLE_SESSION_NOT_FOUND: POS session ${payload.PosSessionId || payload.posSessionId} has not reached the cloud yet`);
+                      throw new Error(`RETRYABLE_SESSION_NOT_FOUND: POS session ${sessionId} has not reached the cloud yet`);
+                  }
+
+                  const sourceAccountId = payload.SourceAccountId || payload.sourceAccountId;
+                  const destinationAccountId = payload.DestinationAccountId || payload.destinationAccountId;
+                  if (!isUuid(sourceAccountId) || !isUuid(destinationAccountId)) {
+                      throw new Error(`INVALID_CASH_MOVEMENT: source and destination cash accounts are required for operation ${operationId}`);
                   }
 
                   await tx.posCashMovement.create({
@@ -1160,7 +1159,12 @@ export async function POST(req: NextRequest) {
                           userId: isUuid(payload.UserId || payload.userId) ? (payload.UserId || payload.userId) : operatorId,
                           amount: Number(payload.Amount ?? payload.amount ?? 0),
                           type: payload.Type || payload.type || 'CASH_IN',
+                          sourceAccountId,
+                          destinationAccountId,
                           reasonCode: payload.ReasonCode || payload.reasonCode || 'MANUAL',
+                          notes: payload.Notes || payload.notes || null,
+                          receiptReference: payload.ReceiptReference || payload.receiptReference || null,
+                          businessDate: payload.BusinessDate || payload.businessDate ? new Date(payload.BusinessDate || payload.businessDate) : null,
                           operationId,
                           authorizedBy: isUuid(payload.AuthorizedBy || payload.authorizedBy) ? (payload.AuthorizedBy || payload.authorizedBy) : null,
                       }
@@ -1210,6 +1214,55 @@ export async function POST(req: NextRequest) {
         
         // 5. Post-transaction notifications for mobile parity
         // Emit only after successful DB commit
+        if (event.eventType === 'PAYMENT_RECORDED') {
+            try {
+                const syncedPayload = typeof event.payloadJson === 'string' ? JSON.parse(event.payloadJson || '{}') : (event.payloadJson || {});
+                const method = String(syncedPayload.Method || syncedPayload.method || '').toUpperCase();
+                const orderId = syncedPayload.OrderId || syncedPayload.orderId || event.aggregateId;
+                if (method === 'ROOM_CHARGE') {
+                    const roomChargeOrder = await prisma.posOrder.findUnique({
+                        where: { id: orderId },
+                        select: {
+                            folioId: true,
+                            reservationId: true,
+                            propertyId: true,
+                            property: { select: { organizationId: true } },
+                        }
+                    });
+                    const reservation = roomChargeOrder?.reservationId ? await prisma.reservation.findUnique({
+                        where: { id: roomChargeOrder.reservationId },
+                        select: {
+                            primaryGuest: { select: { firstName: true, lastName: true } },
+                            reservationRooms: { select: { room: { select: { roomNumber: true } } }, take: 1 },
+                        },
+                    }) : null;
+                    if (roomChargeOrder?.folioId && roomChargeOrder.property.organizationId) {
+                        const guest = reservation?.primaryGuest;
+                        const guestName = guest ? `${guest.firstName} ${guest.lastName}`.trim() : 'Guest';
+                        const roomNumber = reservation?.reservationRooms?.[0]?.room?.roomNumber || '—';
+                        await NotificationEngine.emit({
+                            type: 'POS_ROOM_CHARGE_POSTED',
+                            organizationId: roomChargeOrder.property.organizationId,
+                            propertyId: roomChargeOrder.propertyId,
+                            entityType: 'folio',
+                            entityId: roomChargeOrder.folioId,
+                            metadata: {
+                                notificationType: 'POS_ROOM_CHARGE_POSTED',
+                                guestName,
+                                roomNumber,
+                                amount: Number(syncedPayload.Amount || syncedPayload.amount || 0),
+                                currency: syncedPayload.Currency || syncedPayload.currency || 'NGN',
+                                orderId,
+                                folioId: roomChargeOrder.folioId,
+                            },
+                            idempotencyKey: `sync_POS_ROOM_CHARGE_${event.idempotencyKey || event.id}`,
+                        });
+                    }
+                }
+            } catch (notifErr) {
+                console.error(`[POS Sync] Failed to emit room charge notification for ${event.eventType}:`, notifErr);
+            }
+        }
         if (event.aggregateType === 'POS_ORDER' && (event.eventType === 'ORDER_CLOSED' || event.eventType === 'ORDER_COMPLETED' || event.eventType === 'ORDER_CREATED')) {
             try {
                 let operatorName = "Sync Service";

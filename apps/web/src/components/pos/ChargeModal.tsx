@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { formatCurrency } from '@/lib/utils';
 import {
   CreditCard, Banknote, Building2, User, Loader2, Gift, ArrowLeft,
-  Search, Hotel, CheckCircle2, Printer, ShieldCheck, X,
+  Search, Hotel, CheckCircle2, Printer, X,
 } from 'lucide-react';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -31,7 +31,7 @@ interface ChargeModalProps {
   isOpen: boolean;
   onClose: () => void;
   total: number;
-  onCharge: (method: string, reference?: string, roomChargeData?: { folioId: string; reservationId: string; supervisorPin: string }) => Promise<void>;
+  onCharge: (method: string, reference?: string, roomChargeData?: { folioId: string; reservationId: string; guestName: string; roomNumber: string }) => Promise<void>;
   onPrintReceipt: () => Promise<void>;
   isProcessing: boolean;
   posSessionId?: string | null;
@@ -68,8 +68,6 @@ export function ChargeModal({
   const [guestResults, setGuestResults] = useState<InHouseGuest[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [selectedGuest, setSelectedGuest] = useState<InHouseGuest | null>(null);
-  const [supervisorPin, setSupervisorPin] = useState('');
-  const [isPinVisible, setIsPinVisible] = useState(false);
   const searchRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Reset on open/close ────────────────────────────────────────────
@@ -80,8 +78,6 @@ export function ChargeModal({
       setGuestQuery('');
       setGuestResults([]);
       setSelectedGuest(null);
-      setSupervisorPin('');
-      setIsPinVisible(false);
       setSelectedStaffId('');
       setActiveStaff([]);
     }
@@ -152,12 +148,12 @@ export function ChargeModal({
 
   const handleRoomChargeConfirm = async () => {
     if (!selectedGuest) { setErrorMsg('Please select a guest.'); return; }
-    if (!supervisorPin.trim()) { setErrorMsg('A supervisor PIN is required to post a room charge.'); return; }
     setErrorMsg(null);
     await onCharge('ROOM_CHARGE', undefined, {
       folioId: selectedGuest.folioId,
       reservationId: selectedGuest.reservationId,
-      supervisorPin: supervisorPin.trim(),
+      guestName: selectedGuest.guestName,
+      roomNumber: displayRoomNumber(selectedGuest.roomNumber),
     });
   };
 
@@ -297,10 +293,10 @@ export function ChargeModal({
             </div>
           )}
 
-          {/* ── Room Charge: confirmation + supervisor PIN ── */}
+          {/* ── Room Charge: confirmation ── */}
           {view === 'roomCharge' && selectedGuest && (
             <div className="animate-in fade-in slide-in-from-right-4 duration-300">
-              <BackButton onClick={() => { setSelectedGuest(null); setSupervisorPin(''); setErrorMsg(null); }} label="Change Guest" />
+              <BackButton onClick={() => { setSelectedGuest(null); setErrorMsg(null); }} label="Change Guest" />
 
               {/* Selected guest summary */}
               <div className="mb-5 p-4 rounded-2xl bg-indigo-50 border border-indigo-200">
@@ -342,41 +338,11 @@ export function ChargeModal({
                 </div>
               </div>
 
-              {/* Supervisor PIN */}
-              <div className="mb-5">
-                <label htmlFor="pos-supervisor-pin" className="block text-xs font-bold text-slate-600 mb-2 flex items-center gap-1.5">
-                  <ShieldCheck className="w-3.5 h-3.5 text-indigo-500" />
-                  Supervisor PIN Required
-                </label>
-                <div className="relative">
-                  <input
-                    id="pos-supervisor-pin"
-                    type={isPinVisible ? 'text' : 'password'}
-                    inputMode="numeric"
-                    autoFocus
-                    placeholder="Enter supervisor PIN…"
-                    value={supervisorPin}
-                    onChange={(e) => { setSupervisorPin(e.target.value); setErrorMsg(null); }}
-                    onKeyDown={(e) => { if (e.key === 'Enter' && supervisorPin) handleRoomChargeConfirm(); }}
-                    className="w-full h-12 px-4 pr-12 rounded-xl bg-white border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-400 text-sm font-medium tracking-widest"
-                    maxLength={8}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setIsPinVisible(!isPinVisible)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs font-bold"
-                    tabIndex={-1}
-                  >
-                    {isPinVisible ? 'HIDE' : 'SHOW'}
-                  </button>
-                </div>
-              </div>
-
               {/* Confirm button */}
               <button
                 id="pos-room-charge-confirm"
                 onClick={handleRoomChargeConfirm}
-                disabled={isProcessing || !supervisorPin.trim()}
+                disabled={isProcessing}
                 className="w-full h-14 rounded-xl font-black text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 transition-colors shadow-md shadow-indigo-500/20 flex items-center justify-center gap-2"
               >
                 {isProcessing

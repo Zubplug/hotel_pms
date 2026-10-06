@@ -42,16 +42,17 @@ export const NotificationEngine = {
       }
 
       const policy = await fetchPolicy(event.propertyId);
-      if (!policy) return;
+      if (!policy && event.type !== 'POS_ROOM_CHARGE_POSTED') return;
 
       // 1. Evaluate Policy and format notification payload
-      const payload = await evaluateEvent(event, policy);
+      const payload = await evaluateEvent(event, policy || {});
       if (!payload) return; // Event did not meet threshold or criteria
 
       // 2. Resolve Recipients
       const recipientIds = await resolveRecipients(
         event.organizationId,
         event.propertyId,
+        event.type,
       );
       if (recipientIds.length === 0) return;
 
@@ -110,8 +111,11 @@ export const NotificationEngine = {
 async function resolveRecipients(
   organizationId: string,
   propertyId?: string,
+  eventType?: string,
 ): Promise<string[]> {
-  const targetRoles = ["EXECUTIVE", "MANAGER", "GENERAL_MANAGER", "DIRECTOR"];
+  const targetRoles = eventType === 'POS_ROOM_CHARGE_POSTED'
+    ? ["RECEPTIONIST", "FRONT_DESK", "FRONT_DESK_MANAGER", "GENERAL_CASHIER", "CASHIER", "NIGHT_AUDITOR", "MANAGER", "GENERAL_MANAGER", "DIRECTOR"]
+    : ["EXECUTIVE", "MANAGER", "GENERAL_MANAGER", "DIRECTOR"];
 
   const whereClause: any = {
     role: {
@@ -234,6 +238,18 @@ async function evaluateEvent(
   };
 
   switch (event.type) {
+    case 'POS_ROOM_CHARGE_POSTED': {
+      const guestName = String(event.metadata?.guestName || 'Guest');
+      const roomNumber = String(event.metadata?.roomNumber || '—');
+      const amount = Number(event.metadata?.amount || 0);
+      const currency = String(event.metadata?.currency || 'NGN');
+      return {
+        subject: `Room charge posted — ${guestName}`,
+        body: `${currency} ${amount.toLocaleString()} posted to Room ${roomNumber} from POS.`,
+        category: 'Operations',
+        priority: 'Normal',
+      };
+    }
     case "PAYMENT_RECEIVED": {
       if (!policy.notifyOnPayment) return null;
 

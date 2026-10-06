@@ -18,6 +18,8 @@ import {
   Wifi,
   WifiOff,
   ChevronDown,
+  Bell,
+  X,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -30,7 +32,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useProperty } from '@/components/PropertyProvider';
-import { cn } from '@/lib/utils';
+import { cn, formatCurrency } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 import { SyncIndicator } from '@/components/frontdesk/SyncIndicator';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
@@ -43,6 +45,17 @@ import { writeOfflineNavigationSnapshot } from '@/lib/auth/offline-navigation-sn
 import type { OfflineLicenseSnapshot } from '@/lib/auth/offline-navigation-snapshot';
 import { useOfflineLicenseGuard } from '@/lib/auth/useOfflineLicenseGuard';
 import { useNavigationModules } from '@/lib/auth/useNavigationModules';
+interface FrontDeskRoomChargeNotification {
+  id: string;
+  type: 'POS_ROOM_CHARGE';
+  guestName: string;
+  roomNumber: string;
+  amount: number;
+  currency: string;
+  folioId: string;
+  createdAt: string;
+  offline: boolean;
+}
 
 export function FrontDeskLayout({ children, enabledModules = [], licenseSnapshot }: {
   children: React.ReactNode;
@@ -58,6 +71,7 @@ export function FrontDeskLayout({ children, enabledModules = [], licenseSnapshot
   const router = useRouter();
   const [time, setTime] = useState<Date | null>(null);
   const [showMasterCardModal, setShowMasterCardModal] = useState(false);
+  const [roomChargeNotification, setRoomChargeNotification] = useState<FrontDeskRoomChargeNotification | null>(null);
 
   const isDesktop = process.env.NEXT_PUBLIC_IS_DESKTOP === 'true';
   const visibleModules = isDesktop || isDesktopMode ? cachedModules : enabledModules;
@@ -86,6 +100,49 @@ export function FrontDeskLayout({ children, enabledModules = [], licenseSnapshot
       writeOfflineNavigationSnapshot(enabledModules, null, licenseSnapshot);
     }
   }, [enabledModules, licenseSnapshot, propertyId]);
+
+  const dismissRoomChargeNotification = () => {
+    if (roomChargeNotification) {
+      void fetch('/api/v1/frontdesk/notifications', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notificationId: roomChargeNotification.id }),
+      });
+    }
+    setRoomChargeNotification(null);
+  };
+
+  useEffect(() => {
+    if (!isOnline || !propertyId || status !== 'authenticated') return;
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const response = await fetch(`/api/v1/frontdesk/notifications?propertyId=${encodeURIComponent(propertyId)}`, { cache: 'no-store' });
+        if (!response.ok) return;
+        const result = await response.json();
+        const next = result.data?.[0];
+        if (!cancelled && next) {
+          const metadata = next.metadata || {};
+          setRoomChargeNotification({
+            id: next.id,
+            type: 'POS_ROOM_CHARGE',
+            guestName: metadata.guestName || 'Guest',
+            roomNumber: metadata.roomNumber || '—',
+            amount: Number(metadata.amount || 0),
+            currency: metadata.currency || 'NGN',
+            folioId: metadata.folioId || '',
+            createdAt: next.createdAt,
+            offline: true,
+          });
+        }
+      } catch {
+        // The offline UI remains usable when the notification endpoint is unavailable.
+      }
+    };
+    void poll();
+    const timer = window.setInterval(() => void poll(), 10000);
+    return () => { cancelled = true; window.clearInterval(timer); };
+  }, [isOnline, propertyId, status]);
 
   const { data: res } = useQuery({
     queryKey: ['frontdesk', 'dashboard', propertyId],
@@ -133,6 +190,7 @@ export function FrontDeskLayout({ children, enabledModules = [], licenseSnapshot
     );
   }
 
+
   const cloudHardware = res?.data?.hardware;
   const businessDate = res?.data?.businessDate ? new Date(res.data.businessDate) : null;
   const isDesktopApp = HardwareBridge.isAvailable();
@@ -164,6 +222,40 @@ export function FrontDeskLayout({ children, enabledModules = [], licenseSnapshot
   return (
     <div className="frontdesk-dark-surface flex min-h-screen flex-col bg-[#080c18]">
       <FrontDeskMasterCardModal isOpen={showMasterCardModal} onClose={() => setShowMasterCardModal(false)} />
+
+      {roomChargeNotification && (
+        <div className="fixed right-5 top-[76px] z-[120] w-[min(390px,calc(100vw-2rem))] animate-in slide-in-from-right-5 fade-in duration-300">
+          <div className="overflow-hidden rounded-2xl border border-indigo-400/25 bg-[#111a2d] shadow-2xl shadow-black/40 ring-1 ring-white/5">
+            <div className="flex items-start gap-3 border-b border-white/[0.07] bg-indigo-500/[0.12] px-4 py-3">
+              <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-400/15 text-emerald-300">
+                <Bell className="h-4 w-4" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-indigo-300">POS room charge</p>
+                <h3 className="mt-1 text-sm font-bold text-white">New charge posted to guest folio</h3>
+              </div>
+              <button onClick={dismissRoomChargeNotification} className="rounded-lg p-1 text-slate-500 hover:bg-white/10 hover:text-white" aria-label="Dismiss notification">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="space-y-3 px-4 py-4">
+              <div>
+                <p className="truncate text-base font-bold text-white">{roomChargeNotification.guestName}</p>
+                <p className="mt-0.5 text-xs text-slate-400">Room {roomChargeNotification.roomNumber}</p>
+              </div>
+              <div className="flex items-center justify-between rounded-xl border border-white/[0.07] bg-white/[0.04] px-3 py-2.5">
+                <span className="text-xs text-slate-400">Charge amount</span>
+                <span className="text-sm font-black text-emerald-300">{formatCurrency(roomChargeNotification.amount, roomChargeNotification.currency)}</span>
+              </div>
+              <div className={cn('flex items-center gap-2 rounded-xl px-3 py-2 text-[11px] font-semibold', roomChargeNotification.offline ? 'bg-amber-400/10 text-amber-300' : 'bg-emerald-400/10 text-emerald-300')}>
+                <span className={cn('h-2 w-2 rounded-full', roomChargeNotification.offline ? 'bg-amber-400' : 'bg-emerald-400')} />
+                {roomChargeNotification.offline ? 'Saved offline · will sync automatically' : 'Posted and synchronized'}
+              </div>
+              <button onClick={dismissRoomChargeNotification} className="w-full rounded-xl bg-indigo-500 px-3 py-2.5 text-xs font-bold text-white transition hover:bg-indigo-400">Acknowledge</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Top App Bar ──────────────────────────────────────────────────── */}
       <header className="sticky top-0 z-40 w-full flex items-center h-[60px] px-4 md:px-6 bg-[#080c18]/90 backdrop-blur-xl border-b border-white/[0.06]">

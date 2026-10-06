@@ -2115,19 +2115,11 @@ public class OfflinePMSInterop
             string? folioId = paymentData.ContainsKey("folioId") ? paymentData["folioId"]?.ToString() : null;
             string? reservationId = paymentData.ContainsKey("reservationId") ? paymentData["reservationId"]?.ToString() : null;
 
-            // ── ROOM_CHARGE: supervisor PIN is MANDATORY ──────────────────────────────
-            // Validate the PIN BEFORE any database mutation. A failure here means
-            // zero changes to payments, folio, or outbox.
+            // Room charges are regular offline POS payments. The folio is still
+            // required and validated below, but no manager approval is needed.
             string? authorizerId = null;
             if (string.Equals(method, "ROOM_CHARGE", StringComparison.OrdinalIgnoreCase))
             {
-                if (string.IsNullOrWhiteSpace(supervisorPin))
-                    return JsonSerializer.Serialize(new
-                    {
-                        success = false,
-                        error = "A supervisor PIN is required to post a room charge."
-                    }, _jsonOptions);
-
                 if (string.IsNullOrEmpty(folioId))
                     return JsonSerializer.Serialize(new
                     {
@@ -2135,15 +2127,6 @@ public class OfflinePMSInterop
                         error = "A guest folio must be selected before posting a room charge."
                     }, _jsonOptions);
 
-                var authorizer = await _repo.ValidateSupervisorPinAsync(supervisorPin, posCtx.PropertyId);
-                if (authorizer == null)
-                    return JsonSerializer.Serialize(new
-                    {
-                        success = false,
-                        error = "Invalid supervisor PIN. Room charge was not posted."
-                    }, _jsonOptions);
-
-                authorizerId = authorizer.Id;
             }
             else if (!string.IsNullOrWhiteSpace(supervisorPin))
             {

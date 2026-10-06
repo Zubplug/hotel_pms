@@ -123,7 +123,13 @@ export default function PosApp() {
   // ── Modals ────────────────────────────────────────────────────────
   const [modifierTarget, setModifierTarget] = useState<any | null>(null);
   const [showSplitModal, setShowSplitModal] = useState(false);
-  const [successDialog, setSuccessDialog] = useState<{isOpen: boolean, title: string, message: string} | null>(null);
+  const [successDialog, setSuccessDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    meta?: Array<{ label: string; value: string }>;
+    statusText?: string;
+  } | null>(null);
 
   // ── Orders ────────────────────────────────────────────────────────
   const [myActiveOrders, setMyActiveOrders] = useState<any[]>([]);
@@ -667,7 +673,7 @@ export default function PosApp() {
   // ─────────────────────────────────────────────────────────────────
   // CHARGE — process payment on existing order
   // ─────────────────────────────────────────────────────────────────
-  const handleCharge = async (method: string, reference?: string, roomChargeData?: { folioId: string; reservationId: string; supervisorPin: string }) => {
+  const handleCharge = async (method: string, reference?: string, roomChargeData?: { folioId: string; reservationId: string; guestName: string; roomNumber: string }) => {
     if (!operatorToken) { toast.error('No operator authenticated'); return; }
     if (!currentOrderId) { toast.error('No active order to charge'); return; }
     setIsProcessing(true);
@@ -680,12 +686,11 @@ export default function PosApp() {
         reference,
       };
 
-      // For ROOM_CHARGE, include the folio/reservation and supervisor PIN
-      // so the backend can validate + post the charge atomically.
+      // For ROOM_CHARGE, include the folio/reservation so the backend can
+      // validate + post the charge atomically.
       if (method === 'ROOM_CHARGE' && roomChargeData) {
         paymentData.folioId = roomChargeData.folioId;
         paymentData.reservationId = roomChargeData.reservationId;
-        paymentData.supervisorPin = roomChargeData.supervisorPin;
       }
 
       const res = await provider.pos.payOrder(currentOrderId, paymentData, operatorToken);
@@ -711,13 +716,22 @@ export default function PosApp() {
         setActiveOrderType('TABLE');
         setActiveDisplayName('');
         setShowChargeModal(false);
-        setSuccessDialog({
-          isOpen: true,
-          title: 'Payment Successful!',
-          message: method === 'ROOM_CHARGE'
-            ? `${formatCurrency(total)} posted to Room Charge successfully.`
-            : `Payment of ${formatCurrency(total)} via ${method} has been processed successfully.`
-        });
+        setSuccessDialog(method === 'ROOM_CHARGE' && roomChargeData
+          ? {
+              isOpen: true,
+              title: 'Room charge posted',
+              message: `${roomChargeData.guestName} · Room ${roomChargeData.roomNumber}`,
+              meta: [
+                { label: 'Amount', value: formatCurrency(total) },
+                { label: 'Folio', value: 'Updated successfully' },
+              ],
+              statusText: isOnline ? undefined : 'Saved offline · will sync automatically',
+            }
+          : {
+              isOpen: true,
+              title: 'Payment Successful!',
+              message: `Payment of ${formatCurrency(total)} via ${method} has been processed successfully.`,
+            });
         setTableRefreshTrigger(Date.now());
       } else {
         throw new Error(res.error);
@@ -1533,6 +1547,8 @@ export default function PosApp() {
           isOpen={successDialog.isOpen}
           title={successDialog.title}
           message={successDialog.message}
+          meta={successDialog.meta}
+          statusText={successDialog.statusText}
           onClose={() => setSuccessDialog(null)}
           autoCloseMs={3500}
         />

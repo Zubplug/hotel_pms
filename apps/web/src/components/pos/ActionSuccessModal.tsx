@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { CheckCircle2, X } from 'lucide-react';
+import { CheckCircle2 } from 'lucide-react';
 
 interface ActionSuccessModalProps {
   isOpen: boolean;
@@ -9,6 +9,8 @@ interface ActionSuccessModalProps {
   actionLabel?: string;
   onAction?: () => void;
   autoCloseMs?: number;
+  meta?: Array<{ label: string; value: string }>;
+  statusText?: string;
 }
 
 export function ActionSuccessModal({
@@ -19,6 +21,8 @@ export function ActionSuccessModal({
   actionLabel = 'Continue',
   onAction,
   autoCloseMs,
+  meta,
+  statusText,
 }: ActionSuccessModalProps) {
   useEffect(() => {
     if (isOpen && autoCloseMs) {
@@ -40,9 +44,27 @@ export function ActionSuccessModal({
           </div>
           
           <h2 className="text-2xl font-black text-slate-800 mb-2">{title}</h2>
-          <p className="text-slate-500 font-medium leading-relaxed mb-8">
+          <p className="text-slate-500 font-medium leading-relaxed mb-5">
             {message}
           </p>
+
+          {meta && meta.length > 0 && (
+            <div className="w-full rounded-2xl border border-slate-100 bg-slate-50 p-3 mb-4 text-left">
+              {meta.map((item) => (
+                <div key={item.label} className="flex items-center justify-between gap-4 py-1.5 text-sm">
+                  <span className="text-slate-500">{item.label}</span>
+                  <span className="font-bold text-slate-800 text-right">{item.value}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {statusText && (
+            <div className="w-full flex items-center justify-center gap-2 rounded-xl bg-amber-50 border border-amber-100 px-3 py-2.5 mb-6 text-xs font-bold text-amber-700">
+              <span className="h-2 w-2 rounded-full bg-amber-500" />
+              {statusText}
+            </div>
+          )}
           
           <button
             onClick={() => {
