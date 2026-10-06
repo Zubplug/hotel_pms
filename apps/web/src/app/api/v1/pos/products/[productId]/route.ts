@@ -32,12 +32,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ pr
   data.updatedBy = user.id;
   const updated = await prisma.$transaction(async (tx) => {
     const saved = await tx.posProduct.update({ where: { id: productId }, data });
-    if (body.name !== undefined) {
-      await tx.stockItem.updateMany({
-        where: { propertyId: product.propertyId, posProductId: productId, warehouse: { posOutletId: null, isActive: true } },
-        data: { name: String(body.name).trim() },
-      });
-    }
+
     return saved;
   });
   return successResponse(updated);

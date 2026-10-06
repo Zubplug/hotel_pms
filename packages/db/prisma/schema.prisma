@@ -2901,9 +2901,6 @@ model StockItem {
   warehouseId String    @db.Uuid
   warehouse   Warehouse @relation(fields: [warehouseId], references: [id])
 
-  posProductId String?     @db.Uuid
-  posProduct   PosProduct? @relation(fields: [posProductId], references: [id])
-
   categoryId        String?            @db.Uuid
   inventoryCategory InventoryCategory? @relation(fields: [categoryId], references: [id])
 
@@ -2935,7 +2932,6 @@ model StockItem {
   updatedBy String?  @db.Uuid
 
   @@unique([propertyId, barcode])
-  @@unique([posProductId, warehouseId])
 }
 
 /// Item-specific packaging conversions, e.g. 1 CARTON = 12 BOTTLE.
@@ -3307,7 +3303,6 @@ model PosProduct {
 
   recipe     Recipe?
   modifiers  PosProductModifier[]
-  stockItems StockItem[]
 
   createdAt           DateTime             @default(now()) @db.Timestamptz
   updatedAt           DateTime             @updatedAt @db.Timestamptz

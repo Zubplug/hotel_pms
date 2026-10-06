@@ -2043,7 +2043,6 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                     item.QuantityOnHand = ReadDecimal(el, "quantityOnHand");
                     item.ReorderLevel = el.TryGetProperty("reorderLevel", out var reorderEl) && reorderEl.ValueKind != JsonValueKind.Null ? ReadDecimal(reorderEl) : null;
                     item.IsActive = !el.TryGetProperty("isActive", out var activeEl) || activeEl.ValueKind == JsonValueKind.True;
-                    item.PosProductId = el.TryGetProperty("posProductId", out var ppi) && ppi.ValueKind != JsonValueKind.Null ? ppi.GetString() : null;
                     item.WarehouseId = el.TryGetProperty("warehouseId", out var whi) && whi.ValueKind != JsonValueKind.Null ? whi.GetString() : null;
                     item.UpdatedAt = el.TryGetProperty("updatedAt", out var updatedEl) && DateTime.TryParse(updatedEl.GetString(), out var updatedAt) ? updatedAt : DateTime.UtcNow;
                 }

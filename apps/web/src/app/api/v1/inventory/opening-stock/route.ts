@@ -71,11 +71,9 @@ export async function POST(request: Request) {
         throw new Error(`Enter a valid conversion for 1 ${inputUnit} in ${item.baseUnit}.`);
       }
 
-      const itemIdentity = item.posProductId
-        ? { posProductId: item.posProductId }
-        : item.sku
-          ? { sku: item.sku }
-          : { name: { equals: item.name, mode: 'insensitive' as const } };
+      const itemIdentity = item.sku
+        ? { sku: item.sku }
+        : { name: { equals: item.name, mode: 'insensitive' as const } };
       const relatedItems = await tx.stockItem.findMany({
         where: { propertyId, isActive: true, ...itemIdentity },
         include: { stockUnits: true, warehouse: { select: { posOutletId: true } } },

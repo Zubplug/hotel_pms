@@ -4491,19 +4491,8 @@ public class LocalRepository
             product.HasInventoryMapping = ingredients.Count > 0;
             if (!product.HasInventoryMapping)
             {
-                var directStock = await _dbContext.StockItems
-                    .Where(s => s.PosProductId == product.Id && s.IsActive)
-                    .OrderBy(s => s.Id)
-                    .FirstOrDefaultAsync();
-                product.HasInventoryMapping = directStock != null;
-                if (directStock == null)
-                {
-                    product.StockStatus = "UNMAPPED";
-                    product.AvailableStock = 0;
-                    continue;
-                }
-                product.AvailableStock = Math.Max(0m, directStock.QuantityOnHand);
-                product.StockStatus = directStock.QuantityOnHand <= 0m ? "OUT_OF_STOCK" : directStock.QuantityOnHand <= 5m ? "LOW_STOCK" : "IN_STOCK";
+                product.StockStatus = "UNMAPPED";
+                product.AvailableStock = 0;
                 continue;
             }
 
@@ -5191,9 +5180,7 @@ public class LocalRepository
                 var ingredients = await _dbContext.RecipeIngredients.Where(i => i.ProductId == product.Id).ToListAsync();
                 if (ingredients.Count == 0)
                 {
-                    var directStock = await _dbContext.StockItems.FirstOrDefaultAsync(s => s.PosProductId == product.Id && s.IsActive);
-                    if (directStock == null) throw new Exception($"Inventory mapping is missing for {product.Name}");
-                    requirements[directStock.Id] = requirements.GetValueOrDefault(directStock.Id) + orderItem.Quantity;
+                    throw new Exception($"Item {product.Name} has inventory mode STOCK but no active recipe.");
                 }
                 else
                 {
@@ -5220,8 +5207,7 @@ public class LocalRepository
             var template = templateItems.FirstOrDefault(item => item.Id == entry.Key);
             if (template == null) throw new Exception($"Inventory mapping is missing for stock item {entry.Key}");
             var target = outletItems.FirstOrDefault(item =>
-                (!string.IsNullOrWhiteSpace(template.PosProductId) && item.PosProductId == template.PosProductId)
-                || (!string.IsNullOrWhiteSpace(template.Barcode) && item.Barcode == template.Barcode)
+                (!string.IsNullOrWhiteSpace(template.Barcode) && item.Barcode == template.Barcode)
                 || (!string.IsNullOrWhiteSpace(template.Sku) && item.Sku == template.Sku)
                 || string.Equals(item.Name.Trim(), template.Name.Trim(), StringComparison.OrdinalIgnoreCase));
             if (target == null)

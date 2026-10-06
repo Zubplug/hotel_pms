@@ -436,12 +436,6 @@ export default function OpeningStockPage() {
                   <div className="relative">
                     <div className="mb-2 flex items-center justify-between">
                       <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Stock item<span className="ml-0.5 text-emerald-400">*</span></p>
-                      <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-widest text-cyan-400">
-                        {stockItemId ? (
-                          <Link href={`/inventory/stock-items/${stockItemId}/edit`} className="hover:text-cyan-300 transition-colors">Edit item</Link>
-                        ) : null}
-                        <Link href="/inventory/stock-items/new" className="hover:text-cyan-300 transition-colors">New item</Link>
-                      </div>
                     </div>
                     <ComboBox
                       label=""

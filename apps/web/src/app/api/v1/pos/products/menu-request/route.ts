@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
   let stockItemId: string | null = null;
   if (body.inventoryMode === 'STOCK' && !body.stockItemId) return errorResponse('BAD_REQUEST', 'A main-warehouse inventory item is required for stock-controlled products', 400);
   if (body.stockItemId) {
-    const stockItem = await prisma.stockItem.findFirst({ where: { id: String(body.stockItemId), propertyId: category.outlet.propertyId, isActive: true, posProductId: null, warehouse: { isActive: true, posOutletId: null } }, select: { id: true } });
+    const stockItem = await prisma.stockItem.findFirst({ where: { id: String(body.stockItemId), propertyId: category.outlet.propertyId, isActive: true, warehouse: { isActive: true, posOutletId: null } }, select: { id: true } });
     if (!stockItem) return errorResponse('BAD_REQUEST', 'Select an available unlinked stock item', 400);
     stockItemId = stockItem.id;
   }

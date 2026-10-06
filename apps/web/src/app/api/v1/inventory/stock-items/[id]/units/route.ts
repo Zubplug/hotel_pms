@@ -14,7 +14,7 @@ async function getContext(id: string, permission: 'inventory.read' | 'inventory.
   if (!hasInventoryPermission(role, permission, isSuperAdmin)) return { error: NextResponse.json({ error: 'Forbidden', data: null }, { status: 403 }) };
   const item = await prisma.stockItem.findFirst({
     where: { id, propertyId: ctx.propertyIds[0] },
-    select: { id: true, propertyId: true, warehouseId: true, baseUnit: true, name: true, sku: true, posProductId: true },
+    select: { id: true, propertyId: true, warehouseId: true, baseUnit: true, name: true, sku: true },
   });
   if (!item) return { error: NextResponse.json({ error: 'Stock item not found', data: null }, { status: 404 }) };
   return { item };
@@ -49,11 +49,9 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
     const isPurchaseUnit = Boolean(body.isPurchaseUnit);
     const isIssueUnit = Boolean(body.isIssueUnit);
 
-    const itemIdentity = context.item.posProductId
-      ? { posProductId: context.item.posProductId }
-      : context.item.sku
-        ? { sku: context.item.sku }
-        : { name: { equals: context.item.name, mode: 'insensitive' as const } };
+    const itemIdentity = context.item.sku
+      ? { sku: context.item.sku }
+      : { name: { equals: context.item.name, mode: 'insensitive' as const } };
 
     const saved = await prisma.$transaction(async (tx) => {
       const relatedItems = await tx.stockItem.findMany({

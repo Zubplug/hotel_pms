@@ -39,8 +39,7 @@ export async function GET(req: NextRequest) {
           select: { id: true, name: true, productionStation: true, outlet: { select: { id: true, name: true } } },
         },
         modifiers: { select: { id: true, name: true, price: true, isActive: true, quantity: true, unitOfMeasure: true, groupName: true, groupRequired: true, groupMaxSelect: true } },
-        stockItems: { where: { isActive: true, ...(outletWarehouse ? { warehouseId: outletWarehouse.id } : {}) }, select: { id: true, name: true, sku: true, barcode: true, posProductId: true, quantityOnHand: true, baseUnit: true, isActive: true } },
-        recipe: { include: { versions: { where: { isActive: true }, include: { ingredients: { include: { stockItem: { select: { id: true, name: true, sku: true, barcode: true, posProductId: true, quantityOnHand: true, isActive: true } } } } } } } },
+        recipe: { include: { versions: { where: { isActive: true }, include: { ingredients: { include: { stockItem: { select: { id: true, name: true, sku: true, barcode: true, quantityOnHand: true, isActive: true } } } } } } } },
       },
     });
 
@@ -48,21 +47,14 @@ export async function GET(req: NextRequest) {
     const enriched = products.map((p: any) => {
       const isStockControlled = p.inventoryMode === 'STOCK';
       const ingredients = p.recipe?.versions?.[0]?.ingredients || [];
-      const directStock = p.stockItems?.[0];
-      const hasInventoryMapping = ingredients.length > 0 || Boolean(directStock);
+      const hasInventoryMapping = ingredients.length > 0;
       const availableStock = isStockControlled && ingredients.length > 0
         ? Math.min(...ingredients.map((ingredient: any) => {
           const template = ingredient.stockItem;
-          const outletItem = outletWarehouse && template
-            ? (p.stockItems || []).find((item: any) => item.id === template.id ||
-              (template.posProductId && item.posProductId === template.posProductId) ||
-              (template.barcode && item.barcode === template.barcode) ||
-              (template.sku && item.sku === template.sku) ||
-              item.name?.trim().toLowerCase() === template.name?.trim().toLowerCase())
-            : null;
-          return Number((outletItem || template)?.quantityOnHand || 0) / Number(ingredient.quantity || 1);
+          // Without p.stockItems, we default to the template's quantity in the main warehouse.
+          return Number(template?.quantityOnHand || 0) / Number(ingredient.quantity || 1);
         }))
-        : isStockControlled && directStock ? Number(directStock.quantityOnHand) : null;
+        : null;
       const outOfStock = isStockControlled && (!hasInventoryMapping || availableStock! <= 0 || ingredients.some((ingredient: any) => !ingredient.stockItem?.isActive));
       return {
       ...p,

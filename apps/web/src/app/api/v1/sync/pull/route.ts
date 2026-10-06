@@ -280,7 +280,7 @@ export async function GET(req: NextRequest) {
 
     const posProducts = await prisma.posProduct.findMany({
       where: buildWhere(posProductsWhere),
-      include: { modifiers: true, stockItems: { where: { isActive: true } } },
+      include: { modifiers: true },
       take: limit,
       orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
     });
@@ -305,7 +305,6 @@ export async function GET(req: NextRequest) {
       )).filter(Boolean)
     ));
     const posDirectStockItemIds = posProducts.flatMap((product: any) => [
-      ...(product.stockItems || []).map((item: any) => item.id),
       ...(product.modifiers || []).map((modifier: any) => modifier.stockItemId),
     ]).filter(Boolean);
     const posMappedStockItemIds = Array.from(new Set([...posRecipeStockItemIds, ...posDirectStockItemIds]));

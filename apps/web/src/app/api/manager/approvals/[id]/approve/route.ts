@@ -69,8 +69,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           products.push(await tx.posProduct.create({ data: { propertyId: approval.propertyId, categoryId: category.id, name: details.name, price: Number(details.price), taxRate: Number(details.taxRate || 0), inventoryMode: details.inventoryMode === 'STOCK' ? 'STOCK' : 'NON_STOCK', productionStation: details.productionStation || null, createdBy: user.id } }));
         }
         if (details.stockItemId) {
-          const linked = await tx.stockItem.updateMany({ where: { id: details.stockItemId, propertyId: approval.propertyId, isActive: true, posProductId: null }, data: { posProductId: products[0].id } });
-          if (linked.count !== 1) throw new Error('STOCK_ITEM_ALREADY_LINKED');
+          const stock = await tx.stockItem.findUnique({ where: { id: details.stockItemId } });
+          if (!stock) throw new Error('STOCK_ITEM_NOT_FOUND');
+          
+          const recipe = await tx.recipe.create({
+            data: { propertyId: approval.propertyId, posProductId: products[0].id, targetMargin: 70, isActive: true }
+          });
+          const version = await tx.recipeVersion.create({
+            data: { recipeId: recipe.id, versionName: 'v1.0 (Auto-linked)', isActive: true }
+          });
+          await tx.recipeIngredient.create({
+            data: { recipeVersionId: version.id, stockItemId: stock.id, quantity: 1, unitOfMeasure: stock.baseUnit }
+          });
         }
         const updated = await tx.approvalRequest.update({ where: { id: approval.id }, data: { status: 'APPROVED', reviewedBy: user.id, reviewedAt: new Date(), details: { ...details, stage: 'LIVE', managerApprovedBy: user.id, managerApprovedAt: new Date().toISOString(), productIds: products.map((product) => product.id), productId: products[0].id } } });
         return { status: 'EXECUTED', approval: updated, productIds: products.map((product) => product.id) };

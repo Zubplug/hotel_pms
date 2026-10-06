@@ -57,7 +57,6 @@ export class InventoryService {
                   },
                 },
                 modifiers: true,
-                stockItems: { where: { isActive: true }, select: { id: true, quantityOnHand: true, baseUnit: true, stockUnits: true } },
               },
             },
           },
@@ -71,9 +70,7 @@ export class InventoryService {
       if (item.product?.inventoryMode === 'STOCK') {
         const ingredients = item.product.recipe?.versions?.[0]?.ingredients || [];
         if (!ingredients.length) {
-          const directStock = item.product.stockItems?.[0];
-          if (!directStock) throw new Error(`Inventory mapping is missing for ${item.productName}`);
-          requirements.set(directStock.id, (requirements.get(directStock.id) || 0) + Number(item.quantity));
+          throw new Error(`Item ${item.productName} requires an active Recipe because its inventoryMode is STOCK. No recipe found.`);
         }
         for (const recipe of ingredients) {
           const conversion = recipe.unitOfMeasure === recipe.stockItem?.baseUnit
@@ -105,18 +102,17 @@ export class InventoryService {
     // selling outlet warehouse before changing quantity.
     const templateItems = await tx.stockItem.findMany({
       where: { id: { in: [...requirements.keys()] }, propertyId: order.propertyId },
-      select: { id: true, name: true, sku: true, barcode: true, posProductId: true },
+      select: { id: true, name: true, sku: true, barcode: true },
     });
     const outletItems = await tx.stockItem.findMany({
       where: { propertyId: order.propertyId, warehouseId: outletWarehouse.id, isActive: true },
-      select: { id: true, name: true, sku: true, barcode: true, posProductId: true },
+      select: { id: true, name: true, sku: true, barcode: true },
     });
     const resolvedRequirements = new Map<string, number>();
     for (const [templateId, required] of requirements) {
       const template = templateItems.find((item: any) => item.id === templateId);
       if (!template) throw new Error(`Inventory mapping is missing for stock item ${templateId}`);
       const target = outletItems.find((item: any) =>
-        (template.posProductId && item.posProductId === template.posProductId) ||
         (template.barcode && item.barcode === template.barcode) ||
         (template.sku && item.sku === template.sku) ||
         item.name.trim().toLowerCase() === template.name.trim().toLowerCase()

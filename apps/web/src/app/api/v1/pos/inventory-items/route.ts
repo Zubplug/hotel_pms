@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
   if (!propertyId || (!ctx.propertyIds.includes(propertyId) && !user.isSuperAdmin)) return errorResponse('FORBIDDEN', 'No access to this property', 403);
 
   const items = await prisma.stockItem.findMany({
-    where: { propertyId, isActive: true, posProductId: null, warehouse: { isActive: true, posOutletId: null } },
+    where: { propertyId, isActive: true, warehouse: { isActive: true, posOutletId: null } },
     select: { id: true, name: true, sku: true, baseUnit: true, quantityOnHand: true, warehouse: { select: { id: true, name: true } } },
     orderBy: { name: 'asc' },
   });

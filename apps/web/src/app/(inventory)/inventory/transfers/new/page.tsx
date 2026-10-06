@@ -104,14 +104,8 @@ export default function NewTransferPage() {
     fetch('/api/v1/inventory/stock-items?limit=500').then(r => r.json()).then(r => setStockItems(r.data?.items || []));
   }, []);
 
-  // Source warehouses: restricted roles can only use main (non-outlet) warehouses
-  const mainWarehouses    = warehouses.filter(w => !w.posOutlet);
-  const outletWarehouses  = warehouses.filter(w => w.posOutlet);
-  const mustUseMain       = isFnbMgr || isStockStaff;
-  const sourceWarehouses  = mustUseMain ? mainWarehouses : warehouses;
-  const destWarehouses    = isFnbMgr
-    ? outletWarehouses.filter(w => w.id !== fromWarehouseId)
-    : warehouses.filter(w => w.id !== fromWarehouseId);
+  const sourceWarehouses  = warehouses;
+  const destWarehouses    = warehouses.filter(w => w.id !== fromWarehouseId);
 
   const fromItems = stockItems.filter(i => !fromWarehouseId || i.warehouseId === fromWarehouseId);
 

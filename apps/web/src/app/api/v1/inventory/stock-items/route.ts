@@ -37,12 +37,7 @@ export async function GET(request: Request) {
         
         const andConditions = [];
         if (categoryId) {
-            andConditions.push({
-                OR: [
-                    { categoryId: categoryId },
-                    { posProduct: { categoryId: categoryId } }
-                ]
-            });
+            andConditions.push({ categoryId: categoryId });
         }
         if (search) {
             andConditions.push({
@@ -65,7 +60,7 @@ export async function GET(request: Request) {
                 include: { 
                     warehouse: true,
                     stockUnits: { orderBy: { unit: 'asc' } },
-                    posProduct: { include: { category: true } },
+
                     inventoryCategory: true
                 },
             }),

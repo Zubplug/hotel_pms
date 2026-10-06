@@ -45,8 +45,7 @@ export async function GET(request: Request) {
     const stockItems = await prisma.stockItem.findMany({
       where: { warehouseId, isActive: true },
       include: {
-        inventoryCategory: true,
-        posProduct: { include: { category: true } }
+        inventoryCategory: true
       },
       orderBy: { name: 'asc' }
     });
@@ -110,7 +109,7 @@ export async function GET(request: Request) {
         stockItemId: item.id,
         itemCode: item.sku || item.id.slice(0, 8).toUpperCase(),
         name: item.name,
-        category: item.inventoryCategory?.name || item.posProduct?.category?.name || 'Uncategorized',
+        category: item.inventoryCategory?.name || 'Uncategorized',
         unit: item.baseUnit,
         bookQuantity,
         physicalQuantity,

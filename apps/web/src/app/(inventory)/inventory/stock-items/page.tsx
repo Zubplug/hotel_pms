@@ -39,7 +39,7 @@ export default async function StockItemsPage({ searchParams }: { searchParams: P
   const [stockItems, recentTransactions] = await Promise.all([
     prisma.stockItem.findMany({
       where: { propertyId, isActive: true, warehouse: { posOutletId: null }, ...(selectedType ? { stockType: selectedType as any } : {}) },
-      include: { warehouse: { select: { name: true } }, inventoryCategory: { select: { name: true } }, posProduct: { select: { category: { select: { name: true } } } } },
+      include: { warehouse: { select: { name: true } }, inventoryCategory: { select: { name: true } } },
       orderBy: { name: 'asc' },
     }),
     prisma.stockTransaction.findMany({
@@ -73,7 +73,7 @@ export default async function StockItemsPage({ searchParams }: { searchParams: P
   const receipts30d = recentTransactions.filter((transaction) => Number(transaction.quantity) > 0).reduce((sum, transaction) => sum + Math.abs(Number(transaction.totalValue || 0)), 0);
   const issues30d = recentTransactions.filter((transaction) => Number(transaction.quantity) < 0).reduce((sum, transaction) => sum + Math.abs(Number(transaction.totalValue || 0)), 0);
   const categoryStats = Object.values(stockItems.reduce<Record<string, { name: string; count: number; value: number; critical: number }>>((result, item) => {
-    const name = item.inventoryCategory?.name || item.posProduct?.category?.name || 'Uncategorized';
+    const name = item.inventoryCategory?.name || 'Uncategorized';
     const row = result[name] || { name, count: 0, value: 0, critical: 0 };
     const itemStatus = status(Number(item.quantityOnHand), item.reorderLevel === null ? null : Number(item.reorderLevel));
     row.count += 1; row.value += Number(item.quantityOnHand) * Number(item.costPrice); if (itemStatus.tone !== 'emerald') row.critical += 1;

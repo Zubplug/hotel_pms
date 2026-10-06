@@ -60,7 +60,6 @@ public class LocalStockItem
 {
     [Key] public string Id { get; set; } = string.Empty;
     public string PropertyId { get; set; } = string.Empty;
-    public string? PosProductId { get; set; }
     public string? WarehouseId { get; set; }
     public string Name { get; set; } = string.Empty;
     public string? Sku { get; set; }

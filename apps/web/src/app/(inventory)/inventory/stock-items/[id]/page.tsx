@@ -14,8 +14,7 @@ export default async function StockItemDetailPage(props: { params: Promise<{ id:
     where: { id: params.id, propertyId: session.user.propertyId },
     include: {
       warehouse: true,
-      inventoryCategory: true,
-      posProduct: { select: { category: { select: { name: true } } } }
+      inventoryCategory: true
     }
   });
 
@@ -29,7 +28,7 @@ export default async function StockItemDetailPage(props: { params: Promise<{ id:
     take: 50,
   });
 
-  const categoryName = item.inventoryCategory?.name || item.posProduct?.category?.name || 'Uncategorized';
+  const categoryName = item.inventoryCategory?.name || 'Uncategorized';
   const stockTypeLabel = item.stockType.replace('_', ' ');
   const totalValue = Number(item.quantityOnHand) * Number(item.costPrice);
 
