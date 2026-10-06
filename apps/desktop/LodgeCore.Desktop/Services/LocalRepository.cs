@@ -41,6 +41,94 @@ public class LocalRepository
     }
 
     /// <summary>
+    /// Repairs an order left on a stale local shift after a terminal reinstall.
+    /// The repair is deliberately narrow: the replacement shift must be open,
+    /// belong to the same property/outlet and have the same business date.
+    /// Pending sync envelopes are moved with the order so the cloud receives
+    /// the repaired shift ID as well.
+    /// </summary>
+    public async Task<bool> RebindOrderToOpenSessionAsync(string orderId, string? targetSessionId)
+    {
+        if (string.IsNullOrWhiteSpace(targetSessionId)) return false;
+
+        var order = await _dbContext.PosOrders.FirstOrDefaultAsync(o => o.Id == orderId);
+        if (order == null) throw new InvalidOperationException("Order not found");
+
+        if (string.Equals(order.SessionId, targetSessionId, StringComparison.OrdinalIgnoreCase))
+        {
+            await AssertPosSessionOpenAsync(targetSessionId);
+            return false;
+        }
+
+        var target = await _dbContext.PosSessions.FirstOrDefaultAsync(s => s.Id == targetSessionId);
+        if (target == null) throw new InvalidOperationException("The selected POS shift is not available offline.");
+        await AssertPosSessionOpenAsync(target.Id);
+
+        if (!string.Equals(order.PropertyId, target.PropertyId, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(order.OutletId, target.OutletId, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("The order and selected POS shift belong to different outlets.");
+
+        if (order.BusinessDate.Date != target.BusinessDate.Date)
+            throw new InvalidOperationException("This order belongs to a different business date and cannot be moved to the current shift.");
+
+        var oldSessionId = order.SessionId;
+        order.SessionId = target.Id;
+        order.UpdatedAt = DateTime.UtcNow;
+
+        var pendingEvents = await _dbContext.SyncEvents
+            .Where(e => e.EntityId == orderId && e.Status != "SYNCED")
+            .ToListAsync();
+
+        foreach (var syncEvent in pendingEvents)
+        {
+            syncEvent.SessionId = target.Id;
+            if (string.IsNullOrWhiteSpace(syncEvent.PayloadJson)) continue;
+
+            try
+            {
+                var payload = JsonNode.Parse(syncEvent.PayloadJson);
+                ReplaceSessionIds(payload, target.Id);
+                syncEvent.PayloadJson = payload?.ToJsonString() ?? syncEvent.PayloadJson;
+                var hashBytes = System.Security.Cryptography.SHA256.HashData(
+                    System.Text.Encoding.UTF8.GetBytes(syncEvent.PayloadJson));
+                syncEvent.PayloadHash = BitConverter.ToString(hashBytes).Replace("-", "").ToLowerInvariant();
+            }
+            catch (JsonException)
+            {
+                // The envelope can still be sent with the corrected header;
+                // do not prevent the cashier from completing the local sale.
+            }
+        }
+
+        await _dbContext.SaveChangesAsync();
+        SyncEngine.Instance?.TriggerManualSync();
+        return !string.Equals(oldSessionId, target.Id, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static void ReplaceSessionIds(JsonNode? node, string sessionId)
+    {
+        if (node is JsonObject obj)
+        {
+            foreach (var property in obj.ToList())
+            {
+                if (property.Key.Equals("SessionId", StringComparison.OrdinalIgnoreCase) ||
+                    property.Key.Equals("PosSessionId", StringComparison.OrdinalIgnoreCase))
+                {
+                    obj[property.Key] = sessionId;
+                }
+                else
+                {
+                    ReplaceSessionIds(property.Value, sessionId);
+                }
+            }
+        }
+        else if (node is JsonArray array)
+        {
+            foreach (var item in array) ReplaceSessionIds(item, sessionId);
+        }
+    }
+
+    /// <summary>
     /// Validates that a folio can receive a POS room charge:
     /// - Folio must exist and belong to the correct property
     /// - Folio must be OPEN (not closed or voided)

@@ -1928,6 +1928,7 @@ public class OfflinePMSInterop
         try
         {
             var posCtx = await _sessionManager.GetActiveContextAsync();
+            await _repo.RebindOrderToOpenSessionAsync(orderId, posCtx.SessionId);
             var res = await _repo.SplitCheckAsync(orderId, itemIds, posCtx.StaffId, posCtx.DeviceId);
             return JsonSerializer.Serialize(new { success = true, data = res }, _jsonOptions);
         }
@@ -1958,6 +1959,7 @@ public class OfflinePMSInterop
         try
         {
             var posCtx = await _sessionManager.GetActiveContextAsync();
+            await _repo.RebindOrderToOpenSessionAsync(orderId, posCtx.SessionId);
             var res = await _repo.FireKotAsync(orderId, itemIds, posCtx.StaffId, posCtx.DeviceId);
             return JsonSerializer.Serialize(new { success = true, data = res }, _jsonOptions);
         }
@@ -1975,6 +1977,7 @@ public class OfflinePMSInterop
             if (items == null || !items.Any()) throw new Exception("No items to fire");
 
             var posCtx = await _sessionManager.GetActiveContextAsync();
+            await _repo.RebindOrderToOpenSessionAsync(orderId, posCtx.SessionId);
             var (order, kots) = await _repo.FireItemsAsync(orderId, items, posCtx.StaffId, posCtx.DeviceId);
             var waiter = await _repo.GetStaffByIdAsync(order.ServerStaffId ?? posCtx.StaffId);
             var waiterName = waiter == null ? "Unknown waiter" : $"{waiter.FirstName} {waiter.LastName}".Trim();
@@ -2085,6 +2088,7 @@ public class OfflinePMSInterop
         try
         {
             var posCtx = await _sessionManager.GetActiveContextAsync();
+            await _repo.RebindOrderToOpenSessionAsync(orderId, posCtx.SessionId);
             var res = await _repo.UpdateOrderStatusAsync(orderId, status, reason, posCtx.StaffId, posCtx.DeviceId);
             return JsonSerializer.Serialize(new { success = true, data = res }, _jsonOptions);
         }
@@ -2102,6 +2106,7 @@ public class OfflinePMSInterop
             if (paymentData == null) throw new Exception("Invalid payment data");
 
             var posCtx = await _sessionManager.GetActiveContextAsync();
+            await _repo.RebindOrderToOpenSessionAsync(orderId, posCtx.SessionId);
             var property = await _repo.GetPropertyAsync(posCtx.PropertyId);
             string fallbackCurrency = property?.Currency ?? "NGN";
 
@@ -2302,6 +2307,7 @@ public class OfflinePMSInterop
         try
         {
             var posCtx = await _sessionManager.GetActiveContextAsync();
+            await _repo.RebindOrderToOpenSessionAsync(orderId, posCtx.SessionId);
             string authorizerId;
 
             if (isBarOrder)
@@ -2335,6 +2341,7 @@ public class OfflinePMSInterop
         try
         {
             var posCtx = await _sessionManager.GetActiveContextAsync();
+            await _repo.RebindOrderToOpenSessionAsync(orderId, posCtx.SessionId);
             
             // SECURITY: C# handles authorization, bypassing any UI-level tampering
             var authorizer = await _repo.ValidateSupervisorPinAsync(supervisorPin, posCtx.PropertyId);
@@ -2357,6 +2364,7 @@ public class OfflinePMSInterop
         try
         {
             var posCtx = await _sessionManager.GetActiveContextAsync();
+            await _repo.RebindOrderToOpenSessionAsync(orderId, posCtx.SessionId);
             
             // SECURITY: Refund authorization
             var authorizer = await _repo.ValidateSupervisorPinAsync(supervisorPin, posCtx.PropertyId);

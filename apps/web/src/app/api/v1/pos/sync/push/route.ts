@@ -166,6 +166,13 @@ export async function POST(req: NextRequest) {
             if (alias) {
               payload.SessionId = alias.canonicalSessionId;
               event.sessionId = alias.canonicalSessionId;
+              // Session lifecycle events use the local session ID as their
+              // aggregate ID. Translate that ID too, otherwise transactions
+              // can sync successfully but the later offline close/submission
+              // cannot find the canonical server session.
+              if (event.aggregateType === 'POS_SESSION' || event.aggregateType === 'POS_OPERATOR_SESSION') {
+                event.aggregateId = alias.canonicalSessionId;
+              }
             }
           }
 
