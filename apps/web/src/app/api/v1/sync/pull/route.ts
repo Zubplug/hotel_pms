@@ -471,6 +471,8 @@ export async function GET(req: NextRequest) {
     posTables.forEach(s => allEntities.push({ type: 'PosTable', updatedAt: s.updatedAt, data: s }));
     reconciledPosSessions.forEach(s => allEntities.push({ type: 'PosSession', updatedAt: s.updatedAt, data: s }));
     posOrders.forEach(s => allEntities.push({ type: 'PosOrder', updatedAt: s.updatedAt, data: s }));
+    recipes.forEach(s => allEntities.push({ type: 'Recipe', updatedAt: s.updatedAt, data: s }));
+    stockItems.forEach(s => allEntities.push({ type: 'StockItem', updatedAt: s.updatedAt, data: s }));
     housekeepingTasks.forEach(s => allEntities.push({ type: 'HousekeepingTask', updatedAt: s.updatedAt, data: s }));
     maintenanceTickets.forEach(s => allEntities.push({ type: 'MaintenanceTicket', updatedAt: s.updatedAt, data: s }));
     laundryItems.forEach(s => allEntities.push({ type: 'LaundryItem', updatedAt: s.updatedAt, data: s }));
@@ -549,6 +551,8 @@ export async function GET(req: NextRequest) {
     const finalTables = allEntities.filter(e => e.type === 'PosTable').map(e => e.data);
     const finalPosSessions = allEntities.filter(e => e.type === 'PosSession').map(e => e.data);
     const finalPosOrders = allEntities.filter(e => e.type === 'PosOrder').map(e => e.data);
+    const finalRecipes = allEntities.filter(e => e.type === 'Recipe').map(e => e.data);
+    const finalStockItems = allEntities.filter(e => e.type === 'StockItem').map(e => e.data);
     const finalHousekeepingTasks = allEntities.filter(e => e.type === 'HousekeepingTask').map(e => e.data);
     const finalMaintenanceTickets = allEntities.filter(e => e.type === 'MaintenanceTicket').map(e => e.data);
     const finalLaundryItems = allEntities.filter(e => e.type === 'LaundryItem').map(e => e.data);
@@ -836,8 +840,8 @@ export async function GET(req: NextRequest) {
       posOutlets: finalOutlets,
       posCategories: finalCategories,
       posProducts: finalProducts,
-      stockItems,
-      recipes,
+      stockItems: finalStockItems,
+      recipes: finalRecipes,
       posFloorPlans: finalFloorPlans,
       posTables:  finalTables,
       posSessions: finalPosSessions,
