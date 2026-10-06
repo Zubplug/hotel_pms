@@ -1229,17 +1229,18 @@ export async function POST(req: NextRequest) {
                             property: { select: { organizationId: true } },
                         }
                     });
-                    const reservation = roomChargeOrder?.reservationId ? await prisma.reservation.findUnique({
-                        where: { id: roomChargeOrder.reservationId },
-                        select: {
-                            primaryGuest: { select: { firstName: true, lastName: true } },
-                            reservationRooms: { select: { room: { select: { roomNumber: true } } }, take: 1 },
-                        },
-                    }) : null;
+                    const reservation = roomChargeOrder?.reservationId
+                      ? await prisma.reservation.findUnique({ where: { id: roomChargeOrder.reservationId }, select: { primaryGuestId: true } })
+                      : null;
+                    const guest = reservation?.primaryGuestId
+                      ? await prisma.guest.findUnique({ where: { id: reservation.primaryGuestId }, select: { firstName: true, lastName: true } })
+                      : null;
+                    const reservationRoom = roomChargeOrder?.reservationId
+                      ? await prisma.reservationRoom.findFirst({ where: { reservationId: roomChargeOrder.reservationId }, select: { room: { select: { number: true } } } })
+                      : null;
                     if (roomChargeOrder?.folioId && roomChargeOrder.property.organizationId) {
-                        const guest = reservation?.primaryGuest;
                         const guestName = guest ? `${guest.firstName} ${guest.lastName}`.trim() : 'Guest';
-                        const roomNumber = reservation?.reservationRooms?.[0]?.room?.roomNumber || '—';
+                        const roomNumber = reservationRoom?.room?.number || '—';
                         await NotificationEngine.emit({
                             type: 'POS_ROOM_CHARGE_POSTED',
                             organizationId: roomChargeOrder.property.organizationId,
