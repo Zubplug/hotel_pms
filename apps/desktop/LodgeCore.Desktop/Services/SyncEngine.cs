@@ -3174,11 +3174,19 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
         var allPending = await dbContext.OutboxEvents
             .Where(e => e.Status == "PENDING" || e.Status == "FAILED" || e.Status == "RETRY_EXHAUSTED" || e.Status == "CONFLICT"
                 || (e.Status == "DEAD_LETTER"
-                    && e.EventType == "CHECK_OUT"
-                    && (e.LastError != null
-                        && (e.LastError.Contains("PAYMENT_REQUIRED", StringComparison.OrdinalIgnoreCase)
-                            || e.LastError.Contains("REFUND_REQUIRED", StringComparison.OrdinalIgnoreCase)))))
+                    && e.EventType == "CHECK_OUT"))
             .ToListAsync(stoppingToken);
+
+        // SQLite cannot translate the StringComparison overload of Contains
+        // inside an EF query. Keep the database predicate simple, then apply
+        // the narrowly scoped recovery filter in memory. A translation error
+        // here would prevent every Front Desk event from being pushed.
+        allPending = allPending
+            .Where(e => e.Status != "DEAD_LETTER"
+                || (e.EventType == "CHECK_OUT"
+                    && (e.LastError?.Contains("PAYMENT_REQUIRED", StringComparison.OrdinalIgnoreCase) == true
+                        || e.LastError?.Contains("REFUND_REQUIRED", StringComparison.OrdinalIgnoreCase) == true)))
+            .ToList();
 
         // These CITY_LEDGER operations are append-only and older clients
         // emitted every event with aggregateVersion=1. They could be recorded
