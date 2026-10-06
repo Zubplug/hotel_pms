@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
     const deviceCredential = randomBytes(32).toString('hex');
     const deviceCredentialHash = createHash('sha256').update(deviceCredential).digest('hex');
     const terminal = await prisma.$transaction(async (tx) => {
-      await tx.$queryRaw`SELECT id FROM "Organization" WHERE id = ${adminStaff.organizationId} FOR UPDATE`;
+      await tx.$queryRaw`SELECT id FROM "Organization" WHERE id = ${adminStaff.organizationId}::uuid FOR UPDATE`;
 
       const duplicate = await tx.posTerminal.findFirst({
         where: {
