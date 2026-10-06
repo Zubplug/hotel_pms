@@ -439,7 +439,7 @@ export default function MenuManagerPage() {
       const stockJson = await stockRes.json();
       if (catJson.data) setCategories(catJson.data);
       if (prodJson.data) setProducts(prodJson.data);
-      if (stockJson.data) setStockItems(stockJson.data.filter((item: any) => !item.posProductId));
+      if (stockJson.data) setStockItems(stockJson.data);
     } catch (err) {
       console.error('Failed to load menu data', err);
       showToast('Failed to load menu data', 'error');
