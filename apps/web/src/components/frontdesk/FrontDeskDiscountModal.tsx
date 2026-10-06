@@ -150,7 +150,8 @@ export function FrontDeskDiscountModal({ isOpen, targetType, targetId, targetTot
                   {type === 'percent' ? '%' : '₦'}
                 </div>
                 <input
-                  type="number"
+                  type={type === 'amount' ? 'text' : 'number'}
+                  inputMode={type === 'amount' ? 'decimal' : 'numeric'}
                   min="0"
                   step={type === 'percent' ? "1" : "0.01"}
                   value={type === 'amount' ? formatAmountInput(value) : value}
@@ -161,7 +162,7 @@ export function FrontDeskDiscountModal({ isOpen, targetType, targetId, targetTot
               </div>
             </div>
 
-            {type === 'amount' && targetTotal && Number(value) >= Number(targetTotal) * 0.5 && (
+            {type === 'amount' && targetTotal && numericAmount(value) >= Number(targetTotal) * 0.5 && (
               <label className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
                 <input
                   type="checkbox"
