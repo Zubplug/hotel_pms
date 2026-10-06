@@ -29,6 +29,7 @@ function requestSubtitle(request: ApprovalRequest) {
   const details = request.details || {};
   if (request.type.startsWith('POS_')) return String(details.productName || details.name || 'POS catalogue request');
   if (request.type === 'REFUND') return 'Refund request';
+  if (request.type === 'STOCK_TRANSFER') return details.isOutletBound ? 'Outlet Transfer Request' : 'Warehouse Transfer Request';
   return labelFor(request.type);
 }
 
@@ -65,14 +66,31 @@ export default function GeneralManagerApprovalsPage() {
     setBusyId(request.id);
     setMessage(null);
     try {
-      const response = await fetch(`/api/manager/approvals/${request.id}/${action}`, {
+      let endpoint = `/api/manager/approvals/${request.id}/${action}`;
+      let successMessage = action === 'approve' ? 'Request approved successfully.' : 'Request rejected successfully.';
+      
+      if (request.type === 'STOCK_TRANSFER') {
+        const originalStatus = request.details?.originalStatus;
+        if (action === 'approve') {
+           if (originalStatus === 'ISSUED') {
+             endpoint = `/api/v1/inventory/transfers/${request.id}/receive`;
+             successMessage = 'Transfer receipt confirmed successfully.';
+           } else {
+             endpoint = `/api/v1/inventory/transfers/${request.id}/approve`;
+           }
+        } else {
+           endpoint = `/api/v1/inventory/transfers/${request.id}/reject`;
+        }
+      }
+
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(action === 'reject' ? { comment } : {}),
+        body: JSON.stringify(action === 'reject' ? { comment, reason: comment } : {}),
       });
       const body = await response.json();
-      if (!response.ok) throw new Error(body.error?.message || 'Unable to process approval');
-      setMessage({ text: action === 'approve' ? 'Request approved successfully.' : 'Request rejected successfully.' });
+      if (!response.ok) throw new Error(body.error?.message || body.error || 'Unable to process approval');
+      setMessage({ text: successMessage });
       await load();
     } catch (error) {
       setMessage({ text: error instanceof Error ? error.message : 'Unable to process approval', error: true });

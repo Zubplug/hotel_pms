@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
     select: { roleId: true },
   });
   const userRoleIds = new Set(userRoles.map((role) => role.roleId));
-  const [priceApprovalsRaw, refunds, refundApprovals, eventInvoicesRaw] = await Promise.all([
+  const [priceApprovalsRaw, refunds, refundApprovals, eventInvoicesRaw, stockTransfers] = await Promise.all([
     prisma.approvalRequest.findMany({
       where: { ...propertyFilter, type: { in: ['POS_PRICE_CHANGE', 'POS_MENU_CREATE', 'POS_MODIFIER_CREATE', 'POS_MODIFIER_UPDATE'] }, status: { not: 'CANCELLED' } },
       orderBy: { createdAt: 'desc' }, take: 200,
@@ -32,6 +32,14 @@ export async function GET(req: NextRequest) {
       where: { OR: [{ event: { propertyId: { in: user.allowedProperties } } }, { propertyId: { in: user.allowedProperties } }], workflowStatus: { in: ['SUBMITTED', 'IN_REVIEW', 'APPROVED', 'REJECTED'] } },
       include: { event: { include: { guest: true, corporateAccount: true } }, cityLedgerAccount: true, leaseBillingSchedule: { include: { leaseContract: { include: { hall: true, corporateAccount: true } } } }, items: true },
       orderBy: { updatedAt: 'desc' }, take: 200,
+    }),
+    prisma.stockTransfer.findMany({
+      where: { 
+        propertyId: { in: user.allowedProperties },
+        OR: [{ status: 'PENDING_APPROVAL' }, { status: 'ISSUED' }]
+      },
+      include: { fromWarehouse: { select: { name: true } }, toWarehouse: { select: { name: true, posOutletId: true } }, items: { include: { stockItem: true } } },
+      orderBy: { createdAt: 'desc' }, take: 200,
     }),
   ]);
 
@@ -64,6 +72,7 @@ export async function GET(req: NextRequest) {
       priceApprovals,
       refunds: scopedRefunds.map((item) => ({ ...item, requestedAmount: Number(item.requestedAmount), approvedAmount: item.approvedAmount == null ? null : Number(item.approvedAmount), approval: refundApprovalByRequest.get(item.id) || null })),
       eventInvoices,
+      stockTransfers,
       role: user.role,
     },
   });

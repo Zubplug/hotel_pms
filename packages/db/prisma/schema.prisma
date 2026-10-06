@@ -56,6 +56,7 @@ model Organization {
   installedIntegrations  InstalledIntegration[]
   portalApiKeys          PortalApiKey[]
   usageRecords           Usage[]
+  posActivationKeys      PosActivationKey[]
 
   // Booking Engine
   bookingEngineConfigs   BookingEngineConfig[]
@@ -72,6 +73,7 @@ model Property {
   id             String       @id @default(uuid()) @db.Uuid
   organizationId String       @db.Uuid
   organization   Organization @relation(fields: [organizationId], references: [id])
+  posActivationKeys PosActivationKey[]
 
   corporateAccounts CorporateAccount[]
 
@@ -3229,6 +3231,7 @@ model PosOutlet {
 
   devices      PosDevice[]
   terminals    PosTerminal[]
+  posActivationKeys PosActivationKey[]
   staffAccess  StaffPosOutletAccess[]
   floorPlans   PosFloorPlan[]
   CashAccount  CashAccount[]
@@ -4201,8 +4204,35 @@ model PosTerminal {
   menuVersion          Int @default(0)
 
   operatorSessions PosOperatorSession[]
+  activationKey    PosActivationKey?
 
   @@map("pos_terminals")
+}
+
+// One-time bootstrap credentials for Desktop/POS terminal activation. The raw
+// key is never persisted; it is shown to an administrator exactly once.
+model PosActivationKey {
+  id                 String      @id @default(uuid()) @db.Uuid
+  keyHash            String      @unique
+  organizationId     String      @db.Uuid
+  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  propertyId         String?     @db.Uuid
+  property           Property?   @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  outletId           String?     @db.Uuid
+  outlet             PosOutlet?  @relation(fields: [outletId], references: [id], onDelete: Cascade)
+  activatedTerminalId String?    @unique @db.Uuid
+  activatedTerminal  PosTerminal? @relation(fields: [activatedTerminalId], references: [id], onDelete: SetNull)
+  status             String      @default("ACTIVE") // ACTIVE | USED | REVOKED | EXPIRED
+  expiresAt          DateTime?   @db.Timestamptz
+  createdBy          String?     @db.Uuid
+  activatedAt        DateTime?   @db.Timestamptz
+  revokedAt          DateTime?   @db.Timestamptz
+  createdAt          DateTime    @default(now()) @db.Timestamptz
+  updatedAt          DateTime    @updatedAt @db.Timestamptz
+
+  @@index([organizationId, status])
+  @@index([propertyId, status])
+  @@map("pos_activation_keys")
 }
 
 enum PosOperatorSessionStatus {

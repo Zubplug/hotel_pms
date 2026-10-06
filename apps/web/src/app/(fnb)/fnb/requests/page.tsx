@@ -7,15 +7,30 @@ import Link from 'next/link';
 
 export default function FnbRequestsPage() {
   const [requests, setRequests] = useState<any[]>([]);
+  const [stockTransfers, setStockTransfers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
   
   const load = async () => { 
     setLoading(true);
-    const response = await fetch('/api/v1/pos/price-approvals?mine=true'); 
-    const body = await response.json(); 
-    if (response.ok) setRequests(body.data || []); 
-    else setMessage(body.error || 'Unable to load requests'); 
+    try {
+      const [posRes, transferRes] = await Promise.all([
+        fetch('/api/v1/pos/price-approvals?mine=true'),
+        fetch('/api/v1/inventory/transfers?view=outlet-requests')
+      ]);
+      const posBody = await posRes.json();
+      const transferBody = await transferRes.json();
+      
+      if (posRes.ok) setRequests(posBody.data || []); 
+      else setMessage(posBody.error || 'Unable to load POS requests'); 
+
+      if (transferRes.ok) {
+        // filter to just the requests made by them (or bound to their outlet)
+        setStockTransfers(transferBody.data || []);
+      }
+    } catch (e: any) {
+      setMessage('Failed to load requests');
+    }
     setLoading(false);
   };
   
@@ -39,6 +54,9 @@ export default function FnbRequestsPage() {
           <div className="flex flex-wrap items-center gap-3">
             <Button variant="outline" onClick={load} className="border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:text-slate-900 shadow-sm transition-all duration-200">
               Refresh
+            </Button>
+            <Button onClick={() => window.location.href = '/inventory/transfers/new'} className="bg-emerald-600 text-white shadow-sm hover:bg-emerald-700 transition-colors">
+              New Stock Request
             </Button>
           </div>
         </div>
@@ -135,6 +153,107 @@ export default function FnbRequestsPage() {
                       <div className="flex flex-col items-center justify-center text-slate-500">
                         <Loader2 className="h-8 w-8 mb-3 animate-spin text-emerald-500" />
                         <p className="text-sm">Loading your requests...</p>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Stock Transfer Requests Table */}
+        <h2 className="text-xl font-semibold tracking-tight text-slate-900 mt-8 mb-4">Stock Transfer Requests</h2>
+        <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm text-left">
+              <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-medium">
+                <tr>
+                  <th className="px-6 py-4 rounded-tl-2xl">Transfer Reference</th>
+                  <th className="px-6 py-4">From Warehouse</th>
+                  <th className="px-6 py-4">Items Count</th>
+                  <th className="px-6 py-4">Date</th>
+                  <th className="px-6 py-4 rounded-tr-2xl">Status</th>
+                  <th className="px-6 py-4"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {stockTransfers.map((transfer) => { 
+                  const isApproved = transfer.status === 'APPROVED';
+                  const isRejected = transfer.status === 'REJECTED';
+                  const isPending = transfer.status === 'PENDING_APPROVAL';
+                  const isIssued = transfer.status === 'ISSUED';
+                  const isCompleted = ['COMPLETED', 'RECEIVED'].includes(transfer.status);
+
+                  return (
+                    <tr key={transfer.id} className="transition-colors duration-150 hover:bg-slate-50/80">
+                      <td className="px-6 py-4 align-top">
+                        <div className="flex flex-col">
+                          <Link href={`/inventory/transfers/${transfer.id}`} className="font-medium text-emerald-600 hover:underline">{transfer.transferRef}</Link>
+                          <span className="text-xs text-slate-500 mt-1">{transfer.notes || 'No notes'}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 align-top text-slate-500">
+                        {transfer.fromWarehouse?.name}
+                      </td>
+                      <td className="px-6 py-4 align-top font-medium text-slate-900">
+                        {transfer._count?.items || 0} items
+                      </td>
+                      <td className="px-6 py-4 align-top text-slate-500">
+                        {new Date(transfer.createdAt).toLocaleDateString()}
+                      </td>
+                      <td className="px-6 py-4 align-top">
+                        <div className="flex flex-col gap-1">
+                          {isPending && (
+                            <span className="inline-flex items-center w-fit px-2.5 py-1 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200 shadow-sm">
+                              <Clock className="mr-1 h-3 w-3" /> Pending
+                            </span>
+                          )}
+                          {isApproved && (
+                            <span className="inline-flex items-center w-fit px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-sm">
+                              <CheckCircle2 className="mr-1 h-3 w-3" /> Approved
+                            </span>
+                          )}
+                          {isIssued && (
+                            <span className="inline-flex items-center w-fit px-2.5 py-1 rounded-full text-xs font-medium bg-violet-50 text-violet-700 border border-violet-200 shadow-sm">
+                              <Clock className="mr-1 h-3 w-3" /> In Transit
+                            </span>
+                          )}
+                          {isCompleted && (
+                            <span className="inline-flex items-center w-fit px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-sm">
+                              <CheckCircle2 className="mr-1 h-3 w-3" /> Completed
+                            </span>
+                          )}
+                          {isRejected && (
+                            <span className="inline-flex items-center w-fit px-2.5 py-1 rounded-full text-xs font-medium bg-red-50 text-red-700 border border-red-200 shadow-sm">
+                              <XCircle className="mr-1 h-3 w-3" /> Rejected
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 align-top text-right">
+                        <Link href={`/inventory/transfers/${transfer.id}`} className="text-sm font-semibold text-emerald-600 hover:text-emerald-700">View →</Link>
+                      </td>
+                    </tr>
+                  ); 
+                })}
+                
+                {!stockTransfers.length && !loading && (
+                  <tr>
+                    <td colSpan={6} className="px-6 py-16 text-center">
+                      <div className="flex flex-col items-center justify-center text-slate-500">
+                        <ShieldCheck className="h-8 w-8 mb-3 text-slate-300" />
+                        <p className="text-base font-medium text-slate-700">No stock transfer requests.</p>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+                {loading && (
+                  <tr>
+                    <td colSpan={6} className="px-6 py-16 text-center">
+                      <div className="flex flex-col items-center justify-center text-slate-500">
+                        <Loader2 className="h-8 w-8 mb-3 animate-spin text-emerald-500" />
+                        <p className="text-sm">Loading...</p>
                       </div>
                     </td>
                   </tr>

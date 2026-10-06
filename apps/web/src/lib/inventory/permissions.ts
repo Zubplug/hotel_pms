@@ -45,14 +45,25 @@ export const INVENTORY_PERMISSIONS = {
   // Reversing a posted GRN (exceptional operation)
   'inventory.reverse': ['CEO', 'SUPER_ADMIN', 'DIRECTOR'],
 
-  // Creating a stock transfer
-  'inventory.transfer': ['CEO', 'SUPER_ADMIN', 'MANAGER', 'DIRECTOR', 'INVENTORY_MANAGER', 'OUTLET_HEAD', 'STOCK_KEEPER', 'STOCK_MANAGER'],
+  // Creating a stock transfer.
+  // FNB_MANAGER can raise a stock request (main → their outlet); Stock Manager can create direct pushes.
+  'inventory.transfer': ['CEO', 'SUPER_ADMIN', 'MANAGER', 'DIRECTOR', 'INVENTORY_MANAGER', 'OUTLET_HEAD', 'STOCK_KEEPER', 'STOCK_MANAGER', 'FNB_MANAGER'],
 
-  // Approving a stock transfer
-  'inventory.transfer.approve': ['CEO', 'SUPER_ADMIN', 'MANAGER', 'DIRECTOR'],
+  // Approving a stock transfer.
+  // STOCK_MANAGER / STOCK_KEEPER approve F&B-requested transfers and fulfil them.
+  // Senior management approve other inter-warehouse transfers.
+  'inventory.transfer.approve': ['CEO', 'SUPER_ADMIN', 'MANAGER', 'DIRECTOR', 'STOCK_MANAGER', 'STOCK_KEEPER'],
 
   // Issuing approved stock to an outlet is performed by stock control staff.
   'inventory.transfer.issue': ['CEO', 'SUPER_ADMIN', 'MANAGER', 'DIRECTOR', 'STOCK_KEEPER', 'STOCK_MANAGER'],
+
+  // Receiving / confirming receipt of an issued transfer.
+  // Flow A: FNB_MANAGER is the receiver for their own outlet requests.
+  // Flow B: Top management receive/confirm Stock-Manager-initiated pushes.
+  'inventory.transfer.receive': ['CEO', 'SUPER_ADMIN', 'MANAGER', 'DIRECTOR', 'FNB_MANAGER', 'ACCOUNTANT', 'GENERAL_MANAGER', 'GENERAL_CASHIER'],
+
+  // Completing / closing a transfer (used as a management sign-off on Flow B).
+  'inventory.transfer.complete': ['CEO', 'SUPER_ADMIN', 'MANAGER', 'DIRECTOR', 'ACCOUNTANT', 'GENERAL_MANAGER', 'GENERAL_CASHIER'],
 
   // Creating/managing a stocktake worksheet
   'inventory.stocktake': ['CEO', 'SUPER_ADMIN', 'MANAGER', 'DIRECTOR', 'INVENTORY_MANAGER', 'STOCK_MANAGER', 'STOCK_KEEPER', 'FNB_MANAGER', 'OUTLET_HEAD'],

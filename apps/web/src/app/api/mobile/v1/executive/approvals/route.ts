@@ -22,20 +22,66 @@ export async function GET(req: NextRequest) {
     }
 
 
-    const pendingApprovals = await prisma.approvalRequest.findMany({
-      where: {
-        propertyId: { in: targetProperties },
-        status: 'PENDING'
-      },
-      include: {
-        property: { select: { name: true } },
-      },
+    const [pendingApprovals, stockTransfers] = await Promise.all([
+      prisma.approvalRequest.findMany({
+        where: {
+          propertyId: { in: targetProperties },
+          status: 'PENDING'
+        },
+        include: {
+          property: { select: { name: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 100
+      }),
+      prisma.stockTransfer.findMany({
+        where: {
+          propertyId: { in: targetProperties },
+          OR: [
+            { status: 'PENDING_APPROVAL' }, // Waiting for approval (could be top mgmt or stock mgmt)
+            { status: 'ISSUED' }, // Waiting for confirmation receipt
+          ]
+        },
+        include: {
+          property: { select: { name: true } },
+          fromWarehouse: { select: { name: true } },
+          toWarehouse: { select: { name: true, posOutletId: true } },
+          items: {
+            include: { stockItem: true }
+          }
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 100
+      })
+    ]);
 
-      orderBy: { createdAt: 'desc' },
-      take: 100
+    // Format stock transfers to match the ApprovalRequest shape for the UI
+    const mappedTransfers = stockTransfers.map(st => {
+      const totalValue = st.items.reduce((sum, i) => sum + Number(i.quantity) * Number(i.stockItem.costPrice || 0), 0);
+      return {
+        id: st.id,
+        propertyId: st.propertyId,
+        property: st.property,
+        type: 'STOCK_TRANSFER',
+        status: 'PENDING', // Mapped visually to 'Pending' in UI
+        amount: totalValue,
+        currency: 'NGN',
+        reason: st.notes || 'No reason provided',
+        details: {
+          reference: st.transferRef,
+          productName: `Transfer: ${st.fromWarehouse.name} to ${st.toWarehouse.name}`,
+          isOutletBound: Boolean(st.toWarehouse.posOutletId),
+          originalStatus: st.status, // PENDING_APPROVAL or ISSUED
+        },
+        requestedAt: st.createdAt.toISOString()
+      };
     });
 
-    return successResponse(pendingApprovals, 200);
+    const combined = [...pendingApprovals, ...mappedTransfers]
+      .sort((a, b) => new Date(b.requestedAt).getTime() - new Date(a.requestedAt).getTime())
+      .slice(0, 100);
+
+    return successResponse(combined, 200);
 
   } catch (err: any) {
     console.error('[Mobile Executive Approvals GET]', err);

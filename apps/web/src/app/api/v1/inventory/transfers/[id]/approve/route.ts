@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
-import { canApprove } from '@/lib/approval-config';
-import { requireOrganizationContext } from "@/lib/organization-access";
+import { hasInventoryPermission } from '@/lib/inventory/permissions';
+import { requireOrganizationContext } from '@/lib/organization-access';
+
+const STOCK_STAFF_ROLES = new Set(['STOCK_MANAGER', 'STOCK_KEEPER']);
 
 export async function POST(request: Request, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
@@ -13,61 +15,56 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
     }
 
     const { role, isSuperAdmin, id: userId } = session.user as any;
-    const ctx = await requireOrganizationContext(session.user.id);
-    
-    const transferCheck = await prisma.stockTransfer.findUnique({
+    const ctx             = await requireOrganizationContext(session.user.id);
+    const normalizedRole  = String(role || '').toUpperCase();
+
+    // Load the transfer with destination context
+    const transfer = await prisma.stockTransfer.findUnique({
       where: { id: params.id },
-      select: { propertyId: true, requestedBy: true }
+      select: {
+        propertyId: true,
+        requestedBy: true,
+        status: true,
+        toWarehouse: { select: { posOutletId: true } },
+      },
     });
-    
-    if (!transferCheck) {
+
+    if (!transfer) {
       return NextResponse.json({ data: null, error: 'Transfer not found' }, { status: 404 });
     }
+    if (transfer.propertyId !== ctx.propertyIds[0]) {
+      return NextResponse.json({ data: null, error: 'Not found' }, { status: 404 });
+    }
+    if (transfer.status !== 'PENDING_APPROVAL') {
+      return NextResponse.json({ data: null, error: 'Transfer is not pending approval' }, { status: 400 });
+    }
 
-    const transferDetails = await prisma.stockTransfer.findUnique({
-      where: { id: params.id },
-      include: { toWarehouse: { select: { posOutletId: true } } },
-    });
-    const isOutletIssue = Boolean(transferDetails?.toWarehouse.posOutletId);
-    const isStockIssuer = ['STOCK_KEEPER', 'STOCK_MANAGER'].includes(String(role).toUpperCase());
-    if (isOutletIssue && isStockIssuer) {
-      const updated = await prisma.stockTransfer.updateMany({
-        where: { id: params.id, propertyId: ctx.propertyIds[0], status: 'PENDING_APPROVAL' },
+    const isOutletBound = Boolean(transfer.toWarehouse.posOutletId);
+
+    // ── Flow A: Stock Manager/Keeper approves an FNB-requested outlet transfer ──
+    // Stock staff can approve transfers that are going TO an outlet warehouse.
+    if (isOutletBound && STOCK_STAFF_ROLES.has(normalizedRole)) {
+      await prisma.stockTransfer.update({
+        where: { id: params.id },
         data: { status: 'APPROVED', approvedBy: userId, approvedAt: new Date() },
       });
-      if (!updated.count) return NextResponse.json({ data: null, error: 'Transfer is not pending approval' }, { status: 400 });
       return NextResponse.json({ data: { success: true }, error: null });
     }
 
-    const guard = await canApprove({
-      flowType: 'STOCK_TRANSFER',
-      propertyId: transferCheck.propertyId,
-      approverRole: role,
-      approverIsSuperAdmin: isSuperAdmin,
-      requesterId: transferCheck.requestedBy || undefined,
-      approverId: userId,
-    });
-
-    if (!guard.allowed) {
-      return NextResponse.json({ data: null, error: guard.reason || 'Forbidden' }, { status: 403 });
+    // ── All other transfers: standard management approval ──────────────────
+    if (!hasInventoryPermission(role, 'inventory.transfer.approve', isSuperAdmin)) {
+      return NextResponse.json({ data: null, error: 'Forbidden — you do not have transfer approval rights' }, { status: 403 });
     }
 
-    const transfer = await prisma.stockTransfer.updateMany({
-      where: { 
-        id: params.id, 
-        propertyId: ctx.propertyIds[0],
-        status: 'PENDING_APPROVAL'
-      },
-      data: {
-        status: 'APPROVED',
-        approvedBy: userId,
-        approvedAt: new Date()
-      }
-    });
-
-    if (transfer.count === 0) {
-      return NextResponse.json({ data: null, error: 'Transfer not found or not in PENDING_APPROVAL status' }, { status: 400 });
+    // Prevent self-approval
+    if (transfer.requestedBy === userId && !isSuperAdmin) {
+      return NextResponse.json({ data: null, error: 'You cannot approve your own transfer request' }, { status: 403 });
     }
+
+    await prisma.stockTransfer.update({
+      where: { id: params.id },
+      data: { status: 'APPROVED', approvedBy: userId, approvedAt: new Date() },
+    });
 
     return NextResponse.json({ data: { success: true }, error: null });
   } catch (error: any) {

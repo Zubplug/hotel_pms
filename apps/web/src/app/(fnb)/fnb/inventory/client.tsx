@@ -164,6 +164,12 @@ export function FnbInventoryClient() {
             >
               <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} /> Refresh
             </Button>
+            <Button
+              onClick={() => window.location.href = '/inventory/transfers/new'}
+              className="bg-emerald-600 text-white shadow-sm hover:bg-emerald-700 transition-colors"
+            >
+              Request Stock
+            </Button>
           </div>
         }
       />
