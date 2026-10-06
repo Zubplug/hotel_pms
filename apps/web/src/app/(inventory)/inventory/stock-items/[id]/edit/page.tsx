@@ -57,8 +57,6 @@ export default function EditStockItemPage(props: { params: Promise<{ id: string 
     const fd = new FormData(e.currentTarget);
     const data = {
       name:         fd.get('name'),
-      sku:          fd.get('sku'),
-      barcode:      fd.get('barcode'),
       stockType:    fd.get('stockType'),
       reorderLevel: fd.get('reorderLevel') ? parseFloat(fd.get('reorderLevel') as string) : null,
       isActive:     fd.get('isActive') === 'on',
@@ -181,18 +179,18 @@ export default function EditStockItemPage(props: { params: Promise<{ id: string 
 
               {/* SKU */}
               <div>
-                <label htmlFor="sku" className={labelCls}>
+                <label className={labelCls}>
                   <span className="flex items-center gap-1.5"><Hash className="h-3 w-3" />SKU</span>
                 </label>
-                <input id="sku" name="sku" type="text" defaultValue={item.sku || ''} placeholder="Auto-generated if blank" className={inputCls} />
+                <div className={disabledCls}>{item.sku || '—'}</div>
               </div>
 
               {/* barcode */}
               <div>
-                <label htmlFor="barcode" className={labelCls}>
+                <label className={labelCls}>
                   <span className="flex items-center gap-1.5"><Scan className="h-3 w-3" />Barcode</span>
                 </label>
-                <input id="barcode" name="barcode" type="text" defaultValue={item.barcode || ''} placeholder="Auto-generated if blank" className={inputCls} />
+                <div className={disabledCls}>{item.barcode || '—'}</div>
               </div>
 
               {/* stock type */}
