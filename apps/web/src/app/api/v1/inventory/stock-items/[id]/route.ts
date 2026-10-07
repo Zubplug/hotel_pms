@@ -49,7 +49,10 @@ export async function PATCH(request: Request, props: { params: Promise<{ id: str
         if (!hasInventoryPermission(role, 'inventory.manage', isSuperAdmin)) return NextResponse.json({ error: 'Forbidden', data: null }, { status: 403 });
 
         const body = await request.json();
-        const { name, sku, barcode, stockType, reorderLevel, isActive } = body;
+        const { name, sku, barcode, stockType, reorderLevel, isActive, quantityOnHand, costPrice } = body;
+
+        if (quantityOnHand !== undefined && (!Number.isFinite(Number(quantityOnHand)) || Number(quantityOnHand) < 0)) return NextResponse.json({ error: 'Quantity must be zero or greater', data: null }, { status: 400 });
+        if (costPrice !== undefined && (!Number.isFinite(Number(costPrice)) || Number(costPrice) < 0)) return NextResponse.json({ error: 'Cost per unit must be zero or greater', data: null }, { status: 400 });
 
         if (stockType !== undefined && !STOCK_ITEM_TYPES.includes(stockType)) {
             return NextResponse.json({ error: 'Invalid stock type', data: null }, { status: 400 });
@@ -68,7 +71,9 @@ export async function PATCH(request: Request, props: { params: Promise<{ id: str
                 ...(sku !== undefined && { sku }),
                 ...(barcode !== undefined && { barcode }),
                 ...(stockType !== undefined && { stockType }),
-                ...(reorderLevel !== undefined && { reorderLevel: parseFloat(reorderLevel) }),
+                ...(reorderLevel !== undefined && { reorderLevel: reorderLevel === null || reorderLevel === '' ? null : parseFloat(String(reorderLevel)) }),
+                ...(quantityOnHand !== undefined && { quantityOnHand: Number(quantityOnHand) }),
+                ...(costPrice !== undefined && { costPrice: Number(costPrice) }),
                 ...(isActive !== undefined && { isActive }),
             },
         });
