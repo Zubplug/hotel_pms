@@ -5339,14 +5339,7 @@ public class LocalRepository
                 var ingredients = await _dbContext.RecipeIngredients.Where(i => i.ProductId == product.Id).ToListAsync();
                 if (ingredients.Count == 0)
                 {
-                    if (!string.IsNullOrWhiteSpace(product.StockItemId))
-                    {
-                        requirements[product.StockItemId] = requirements.GetValueOrDefault(product.StockItemId) + orderItem.Quantity;
-                    }
-                    else
-                    {
-                        throw new Exception($"Item {product.Name} has inventory mode STOCK but no active recipe or direct stock mapping.");
-                    }
+                    throw new Exception($"Item {product.Name} has inventory mode STOCK but no active recipe.");
                 }
                 else
                 {
