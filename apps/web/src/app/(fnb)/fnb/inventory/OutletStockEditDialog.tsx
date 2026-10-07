@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Edit2, Loader2, X } from 'lucide-react';
 import { formatUnit } from '@/lib/inventory/units';
+import { formatCurrency } from '@/lib/utils';
 
 type Props = {
   stockItemId: string;
@@ -43,7 +44,8 @@ export function OutletStockEditDialog({ stockItemId, warehouseName, mainStock, o
       setUnitsInBase(String(mainStock.unitsInBase));
       // F&B counts in the base/selling unit, such as bottles—not purchase units.
       setQuantity(String(Number(body.data.quantityOnHand)));
-      setCost(String(mainStock.costPrice * Number(mainStock.unitsInBase || 1)));
+      const purchaseCost = Number(mainStock.costPrice) * Number(mainStock.unitsInBase || 1);
+      setCost(String(purchaseCost));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not load outlet stock');
     } finally {
@@ -96,13 +98,13 @@ export function OutletStockEditDialog({ stockItemId, warehouseName, mainStock, o
             {loading ? <div className="flex justify-center p-10"><Loader2 className="h-6 w-6 animate-spin text-orange-600" /></div> : (
               <div className="space-y-4 p-6">
                 {error && <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}
-                <div className="rounded-xl bg-[#fff8f2] p-3 text-xs text-[#6f5d53]">Stock-manager setup: <strong>{formatUnit(purchaseUnit)}</strong> · {unitsInBase} {baseUnit} per purchase unit · <strong>₦{Number(cost).toLocaleString()}</strong> / purchase unit</div>
+                <div className="rounded-xl bg-[#fff8f2] p-3 text-xs text-[#6f5d53]">Stock-manager setup: <strong>{formatUnit(purchaseUnit)}</strong> · {unitsInBase} {baseUnit} per purchase unit · <strong>{formatCurrency(Number(cost))}</strong> / purchase unit</div>
                 <div className="grid grid-cols-2 gap-3">
                   <label className="text-xs font-semibold text-[#6f5d53]">Quantity* ({baseUnit})<input type="number" min="0" step="1" value={quantity} onChange={event => setQuantity(event.target.value)} className="mt-1.5 h-10 w-full rounded-lg border border-[#eadfd8] px-3 text-sm" /></label>
                   <label className="text-xs font-semibold text-[#6f5d53]">Count unit<input readOnly value={baseUnit} className="mt-1.5 h-10 w-full rounded-lg border border-[#eadfd8] bg-slate-100 px-3 text-sm text-slate-600" /></label>
                   <label className="text-xs font-semibold text-[#6f5d53]">Purchase unit<input readOnly value={formatUnit(purchaseUnit)} className="mt-1.5 h-10 w-full rounded-lg border border-[#eadfd8] bg-slate-100 px-3 text-sm text-slate-600" /></label>
                   <label className="text-xs font-semibold text-[#6f5d53]">Units in base<input readOnly value={unitsInBase} className="mt-1.5 h-10 w-full rounded-lg border border-[#eadfd8] bg-slate-100 px-3 text-sm text-slate-600" /></label>
-                  <label className="text-xs font-semibold text-[#6f5d53]">Cost / unit<input readOnly value={cost} className="mt-1.5 h-10 w-full rounded-lg border border-[#eadfd8] bg-slate-100 px-3 text-sm text-slate-600" /></label>
+                  <label className="text-xs font-semibold text-[#6f5d53]">Cost / purchase unit<input readOnly value={formatCurrency(Number(cost))} className="mt-1.5 h-10 w-full rounded-lg border border-[#eadfd8] bg-slate-100 px-3 text-sm text-slate-600" /></label>
                 </div>
                 <p className="text-xs text-[#927b70]">Enter the outlet count in {baseUnit}. Purchase unit, conversion, and cost are controlled by the main stock manager.</p>
                 <div className="flex justify-end gap-2 border-t border-[#f0e6e0] pt-4"><button type="button" onClick={() => setOpen(false)} disabled={saving} className="rounded-lg border border-[#eadfd8] px-4 py-2 text-sm font-semibold text-[#6f5d53]">Cancel</button><button type="button" onClick={() => void save()} disabled={saving || !item || !Number.isFinite(Number(quantity)) || Number(quantity) < 0} className="inline-flex items-center gap-2 rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{saving && <Loader2 className="h-4 w-4 animate-spin" />}Save outlet quantity</button></div>
