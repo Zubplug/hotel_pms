@@ -4,7 +4,7 @@ import Link from 'next/link';
 import type { LucideIcon } from 'lucide-react';
 import {
   AlertTriangle, ArrowRight, BadgeCheck, Building2, CheckCircle2, ClipboardCheck,
-  FileText, Mail, PackageCheck, Phone, Plus, Receipt, ShieldCheck, ShoppingCart,
+  Mail, PackageCheck, Phone, Plus, Receipt, ShieldCheck, ShoppingCart,
   Truck, Users, WalletCards,
 } from 'lucide-react';
 import { AddSupplierDialog } from './AddSupplierDialog';
@@ -69,7 +69,7 @@ export default async function SuppliersPage() {
       <div className="mx-auto max-w-[1500px]">
         <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
           <div><div className="mb-3 flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.2em] text-cyan-300"><Building2 className="h-4 w-4" /> Supplier command centre</div><h1 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">Suppliers</h1><p className="mt-3 max-w-3xl text-sm leading-6 text-slate-400">Protect purchasing quality from supplier onboarding through PO commitment, receipt confirmation, invoice matching, and payment readiness.</p></div>
-          <div className="flex flex-wrap gap-2"><AddSupplierDialog /><Link href="/inventory/purchase-orders/new" className="inline-flex items-center gap-2 rounded-xl border border-cyan-400/30 bg-cyan-400/15 px-4 py-2.5 text-sm font-semibold text-cyan-200 hover:bg-cyan-400/25"><Plus className="h-4 w-4" /> New purchase order</Link><Link href="/accountant/payables" className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm font-semibold text-slate-300 hover:bg-white/[0.08]"><FileText className="h-4 w-4" /> AP register</Link></div>
+          <div className="flex flex-wrap gap-2"><AddSupplierDialog /><Link href="/inventory/purchase-orders/new" className="inline-flex items-center gap-2 rounded-xl border border-cyan-400/30 bg-cyan-400/15 px-4 py-2.5 text-sm font-semibold text-cyan-200 hover:bg-cyan-400/25"><Plus className="h-4 w-4" /> New purchase order</Link></div>
         </div>
         <div className="mt-7 flex flex-wrap gap-x-5 gap-y-2 text-xs text-slate-500"><span className="inline-flex items-center gap-2"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />Live property supplier register</span><span>As at {dateLabel(now)}</span><span>Three-way control: PO · receipt · invoice</span></div>
       </div>

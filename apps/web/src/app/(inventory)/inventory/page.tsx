@@ -102,7 +102,6 @@ export default async function InventoryDashboardPage() {
   const actions: { label: string; href: string; icon: LucideIcon; tone: 'emerald' | 'cyan' | 'violet' }[] = [
     { label: 'New purchase order', href: '/inventory/purchase-orders/new', icon: Plus, tone: 'emerald' },
     { label: 'Receive goods', href: '/inventory/grns/new', icon: Truck, tone: 'cyan' },
-    { label: 'Start stocktake', href: '/inventory/stocktakes/new', icon: ClipboardCheck, tone: 'violet' },
   ];
 
   const kpiCards: { label: string; value: string; sub: string; icon: LucideIcon; tone: 'emerald' | 'rose' | 'cyan' | 'violet' | 'amber' }[] = [

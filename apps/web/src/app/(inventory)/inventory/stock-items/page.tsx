@@ -8,7 +8,6 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { formatUnit } from '@/lib/inventory/units';
-import { StockItemQuickEditButton } from './StockItemQuickEditButton';
 
 const STOCK_TYPE_FILTERS = [
   { value: '', label: 'All types' },
@@ -111,12 +110,6 @@ export default async function StockItemsPage({ searchParams }: { searchParams: P
       </section>
 
       <main className="mx-auto max-w-[1500px] space-y-6 px-5 py-6 sm:px-8">
-        <section className="rounded-2xl border border-cyan-400/15 bg-cyan-400/[0.04] p-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div><p className="text-sm font-semibold text-cyan-100">Temporary stock edits</p><p className="mt-1 text-xs text-slate-500">Quickly correct a newly added stock item without opening another page.</p></div>
-            <div className="flex flex-wrap gap-2">{stockItems.slice(0, 8).map((item) => { const purchase = item.stockUnits.find((unit) => unit.isPurchaseUnit); return <StockItemQuickEditButton key={item.id} item={{ id: item.id, name: item.name, sku: item.sku, barcode: item.barcode, baseUnit: item.baseUnit, stockType: item.stockType, reorderLevel: item.reorderLevel === null ? null : Number(item.reorderLevel), isActive: item.isActive, quantityOnHand: Number(item.quantityOnHand), costPrice: Number(item.costPrice), purchaseUnit: purchase?.unit || item.baseUnit, unitsInBase: purchase ? Number(purchase.unitsInBase) : 1, purchaseCost: purchase?.purchaseCost == null ? null : Number(purchase.purchaseCost), warehouseName: item.warehouse?.name || 'Unassigned' }} />; })}</div>
-          </div>
-        </section>
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">{kpiCards.map(({ label, value, sub, icon: Icon, tone }) => <div key={label} className="rounded-2xl border border-white/[0.08] bg-[#111c2e] p-5 shadow-2xl shadow-black/10"><div className="flex items-start justify-between"><p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">{label}</p><div className={`rounded-xl p-2 ${tone === 'emerald' ? 'bg-emerald-400/10 text-emerald-300' : tone === 'cyan' ? 'bg-cyan-400/10 text-cyan-300' : tone === 'rose' ? 'bg-rose-400/10 text-rose-300' : tone === 'violet' ? 'bg-violet-400/10 text-violet-300' : 'bg-amber-400/10 text-amber-300'}`}><Icon className="h-4 w-4" /></div></div><p className="mt-5 text-2xl font-semibold tracking-tight text-white">{value}</p><p className="mt-1 text-xs text-slate-500">{sub}</p></div>)}</div>
 
         <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
