@@ -351,13 +351,17 @@ function EditSystemStockModal({
   const conversion = inputUnit === item.baseUnit ? 1 : Number(unitsInBase || 0);
   const baseQuantity = Number(quantity || 0) * conversion;
   const baseCost = conversion > 0 ? Number(unitCost || 0) / conversion : 0;
+  const quantityValue = Number(quantity);
+  const costValue = Number(unitCost);
+  const canSaveSystemStock = quantity.trim() !== '' && Number.isFinite(quantityValue) && quantityValue >= 0
+    && unitCost.trim() !== '' && Number.isFinite(costValue) && costValue >= 0 && conversion > 0;
   const unitOptions = [item.baseUnit, ...INVENTORY_UNITS.filter(unit => unit !== item.baseUnit)].map(unit => ({
     unit,
     conversion: unit === item.baseUnit ? 1 : Number(item.stockUnits?.find(stockUnit => stockUnit.unit === unit)?.unitsInBase || 0),
   }));
 
   async function save() {
-    if (!Number.isFinite(baseQuantity) || baseQuantity < 0 || !Number.isFinite(Number(unitCost)) || Number(unitCost) < 0 || conversion <= 0) return;
+    if (!canSaveSystemStock) return;
     setSaving(true);
     setError('');
     try {
@@ -401,7 +405,7 @@ function EditSystemStockModal({
           </div>
           <div className="rounded-xl border border-cyan-400/15 bg-cyan-400/[.05] p-3 text-xs text-cyan-100">System will save <strong>{baseQuantity.toLocaleString()} {formatUnit(item.baseUnit)}</strong> at <strong>{money(baseCost)} / {formatUnit(item.baseUnit)}</strong>. Zero quantity is allowed.</div>
         </div>
-        <div className="flex justify-between border-t border-white/[0.07] px-6 py-4"><button type="button" onClick={onClose} disabled={saving} className="rounded-xl border border-white/10 px-4 py-2.5 text-sm font-medium text-slate-400">Cancel</button><button type="button" onClick={() => void save()} disabled={saving || !Number.isFinite(baseQuantity) || baseQuantity < 0 || conversion <= 0} className="rounded-xl bg-cyan-500 px-5 py-2.5 text-sm font-semibold text-slate-950 disabled:opacity-40">{saving ? 'Saving…' : 'Save stock balance'}</button></div>
+        <div className="flex justify-between border-t border-white/[0.07] px-6 py-4"><button type="button" onClick={onClose} disabled={saving} className="rounded-xl border border-white/10 px-4 py-2.5 text-sm font-medium text-slate-400">Cancel</button><button type="button" onClick={() => void save()} disabled={saving || !canSaveSystemStock} className="rounded-xl bg-cyan-500 px-5 py-2.5 text-sm font-semibold text-slate-950 disabled:opacity-40">{saving ? 'Saving…' : 'Save stock balance'}</button></div>
       </div>
     </div>
   );
