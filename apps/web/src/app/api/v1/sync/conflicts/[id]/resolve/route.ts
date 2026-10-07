@@ -47,7 +47,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const userRole = ctx.role;
+    const userRole = String((session.user as any)?.role || ctx.role).toUpperCase();
     const isNightAuditor = userRole === 'NIGHT_AUDITOR';
     
     if (!['MANAGER', 'ADMIN', 'OWNER', 'SUPER_ADMIN', 'CEO', 'FINANCE_MANAGER', 'HOTEL_MANAGER', 'ACCOUNTANT', 'DIRECTOR', 'GENERAL_CASHIER', 'NIGHT_AUDITOR'].includes(userRole)) {
