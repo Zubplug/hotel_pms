@@ -327,6 +327,86 @@ function EditPendingModal({
   );
 }
 
+function EditSystemStockModal({
+  warehouse,
+  item,
+  onClose,
+  onSaved,
+}: {
+  warehouse: WarehouseT;
+  item: Item;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const currentPurchase = item.stockUnits?.find(unit => unit.isPurchaseUnit);
+  const initialUnit = currentPurchase?.unit || item.baseUnit;
+  const initialConversion = initialUnit === item.baseUnit ? 1 : Number(currentPurchase?.unitsInBase || 1);
+  const [quantity, setQuantity] = useState(String(Number(item.quantityOnHand) / initialConversion));
+  const [inputUnit, setInputUnit] = useState(initialUnit);
+  const [unitsInBase, setUnitsInBase] = useState(String(initialConversion));
+  const [unitCost, setUnitCost] = useState(String(Number(item.costPrice) * initialConversion));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const conversion = inputUnit === item.baseUnit ? 1 : Number(unitsInBase || 0);
+  const baseQuantity = Number(quantity || 0) * conversion;
+  const baseCost = conversion > 0 ? Number(unitCost || 0) / conversion : 0;
+  const unitOptions = [item.baseUnit, ...INVENTORY_UNITS.filter(unit => unit !== item.baseUnit)].map(unit => ({
+    unit,
+    conversion: unit === item.baseUnit ? 1 : Number(item.stockUnits?.find(stockUnit => stockUnit.unit === unit)?.unitsInBase || 0),
+  }));
+
+  async function save() {
+    if (!Number.isFinite(baseQuantity) || baseQuantity < 0 || !Number.isFinite(Number(unitCost)) || Number(unitCost) < 0 || conversion <= 0) return;
+    setSaving(true);
+    setError('');
+    try {
+      const response = await fetch(`/api/v1/inventory/stock-items/${item.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ quantityOnHand: baseQuantity, costPrice: baseCost }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Could not update stock balance');
+
+      if (inputUnit !== item.baseUnit) {
+        const unitResponse = await fetch(`/api/v1/inventory/stock-items/${item.id}/units`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ unit: inputUnit, unitsInBase: conversion, isPurchaseUnit: true }),
+        });
+        const unitResult = await unitResponse.json();
+        if (!unitResponse.ok) throw new Error(unitResult.error || 'Could not update purchase unit');
+      }
+      onSaved();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not update stock balance');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={event => event.target === event.currentTarget && !saving && onClose()}>
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => !saving && onClose()} />
+      <div className="relative z-10 w-full max-w-lg overflow-hidden rounded-2xl border border-white/[0.1] bg-[#111c2e] shadow-[0_24px_80px_rgba(0,0,0,0.8)]">
+        <div className="border-b border-white/[0.07] px-6 py-5"><p className="text-xs font-bold uppercase tracking-[0.15em] text-cyan-400">Edit live stock</p><h2 className="mt-1 text-lg font-semibold text-white">{item.name}</h2><p className="mt-0.5 text-xs text-slate-500">{warehouse.name} · current balance: {Number(item.quantityOnHand).toLocaleString()} {formatUnit(item.baseUnit)}</p></div>
+        <div className="space-y-4 px-6 py-5">
+          {error && <div className="rounded-xl border border-rose-400/20 bg-rose-400/[.07] p-3 text-sm text-rose-200">{error}</div>}
+          <div className="grid grid-cols-2 gap-3">
+            <label className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Quantity*<input type="number" min="0" step="0.0001" value={quantity} onChange={event => setQuantity(event.target.value)} className="mt-2 h-11 w-full rounded-xl border border-white/10 bg-[#0d1832] px-3.5 text-sm normal-case tracking-normal text-white outline-none focus:border-cyan-400/60" /></label>
+            <label className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Purchase unit*<select value={inputUnit} onChange={event => { const next = event.target.value; setInputUnit(next); const option = unitOptions.find(unit => unit.unit === next); setUnitsInBase(String(option?.conversion || (next === item.baseUnit ? 1 : ''))); }} className="mt-2 h-11 w-full rounded-xl border border-white/10 bg-[#0d1832] px-3.5 text-sm normal-case tracking-normal text-white outline-none focus:border-cyan-400/60">{unitOptions.map(option => <option key={option.unit} value={option.unit}>{formatUnit(option.unit)}</option>)}</select></label>
+            <label className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Units in base<input type="number" min="0.000001" step="0.000001" value={unitsInBase} onChange={event => setUnitsInBase(event.target.value)} disabled={inputUnit === item.baseUnit} className="mt-2 h-11 w-full rounded-xl border border-white/10 bg-[#0d1832] px-3.5 text-sm normal-case tracking-normal text-white outline-none disabled:opacity-40 focus:border-cyan-400/60" /></label>
+            <label className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Cost / unit* (₦)<input type="number" min="0" step="0.01" value={unitCost} onChange={event => setUnitCost(event.target.value)} className="mt-2 h-11 w-full rounded-xl border border-white/10 bg-[#0d1832] px-3.5 text-sm normal-case tracking-normal text-white outline-none focus:border-cyan-400/60" /></label>
+          </div>
+          <div className="rounded-xl border border-cyan-400/15 bg-cyan-400/[.05] p-3 text-xs text-cyan-100">System will save <strong>{baseQuantity.toLocaleString()} {formatUnit(item.baseUnit)}</strong> at <strong>{money(baseCost)} / {formatUnit(item.baseUnit)}</strong>. Zero quantity is allowed.</div>
+        </div>
+        <div className="flex justify-between border-t border-white/[0.07] px-6 py-4"><button type="button" onClick={onClose} disabled={saving} className="rounded-xl border border-white/10 px-4 py-2.5 text-sm font-medium text-slate-400">Cancel</button><button type="button" onClick={() => void save()} disabled={saving || !Number.isFinite(baseQuantity) || baseQuantity < 0 || conversion <= 0} className="rounded-xl bg-cyan-500 px-5 py-2.5 text-sm font-semibold text-slate-950 disabled:opacity-40">{saving ? 'Saving…' : 'Save stock balance'}</button></div>
+      </div>
+    </div>
+  );
+}
+
 /* ─── pending row ─────────────────────────────────────────────────────────── */
 function PendingRow({ p, onRemove, onEdit }: { p: Pending; onRemove: () => void; onEdit: () => void }) {
   return (
@@ -381,6 +461,7 @@ export default function OpeningStockPage() {
   const [saving, setSaving]           = useState(false);
   const [message, setMessage]         = useState<{ ok?: string; error?: string }>({});
   const [editingPending, setEditingPending] = useState<Pending | null>(null);
+  const [editingSystemItem, setEditingSystemItem] = useState<{ warehouse: WarehouseT; item: Item } | null>(null);
   const [pending, setPending]         = useState<Pending[]>([]);
 
   /* load */
@@ -402,7 +483,6 @@ export default function OpeningStockPage() {
   const warehouse   = warehouses.find(w => w.id === warehouseId);
   const items       = warehouse?.stockItems || [];
   const item        = items.find(s => s.id === stockItemId);
-  const pendingForSelectedItem = pending.find(p => p.item.id === stockItemId && p.warehouse.id === warehouseId);
   const quantityNum = Number(quantity || 0);
   const costNum     = Number(unitCost || 0);
   const unitOptions = item
@@ -474,25 +554,7 @@ export default function OpeningStockPage() {
 
   function handleEditSelectedItem() {
     if (!warehouse || !item) return;
-    if (pendingForSelectedItem) {
-      setEditingPending(pendingForSelectedItem);
-      return;
-    }
-    const draftQuantity = quantityNum > 0 ? quantityNum : 1;
-    const draftConversion = selectedConversion > 0 ? selectedConversion : 1;
-    const draftCost = costNum >= 0 ? costNum : 0;
-    setEditingPending({
-      id: `draft-${item.id}`,
-      warehouse,
-      item,
-      inputUnit: inputUnit || item.baseUnit,
-      quantity: draftQuantity,
-      unitsInBase: draftConversion,
-      unitCost: draftCost,
-      notes,
-      baseQty: draftQuantity * draftConversion,
-      total: draftQuantity * draftCost,
-    });
+    setEditingSystemItem({ warehouse, item });
   }
 
   /* post one */
@@ -552,6 +614,14 @@ export default function OpeningStockPage() {
           p={editingPending}
           onClose={() => setEditingPending(null)}
           onSave={handleSavePendingEdit}
+        />
+      )}
+      {editingSystemItem && (
+        <EditSystemStockModal
+          warehouse={editingSystemItem.warehouse}
+          item={editingSystemItem.item}
+          onClose={() => setEditingSystemItem(null)}
+          onSaved={() => { setEditingSystemItem(null); void load(); }}
         />
       )}
       {/* ── header ──────────────────────────────────────────────────── */}
