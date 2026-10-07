@@ -336,10 +336,10 @@ function PendingRow({ p, onRemove, onEdit }: { p: Pending; onRemove: () => void;
         <button
           type="button"
           onClick={onEdit}
-          className="rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-cyan-500/10 hover:text-cyan-400"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-cyan-400/20 bg-cyan-400/[0.06] px-2.5 py-1.5 text-xs font-semibold text-cyan-300 transition-colors hover:bg-cyan-500/10 hover:text-cyan-200"
           title="Edit this entry"
         >
-          <Edit2 className="h-4 w-4" />
+          <Edit2 className="h-3.5 w-3.5" /> Edit temporary stock
         </button>
         <button
           type="button"
@@ -446,8 +446,40 @@ export default function OpeningStockPage() {
   }
 
   function handleSavePendingEdit(updated: Pending) {
+    if (updated.id.startsWith('draft-')) {
+      setQuantity(String(updated.quantity));
+      setInputUnit(updated.inputUnit);
+      setUnitsInBase(String(updated.unitsInBase));
+      setUnitCost(String(updated.unitCost));
+      setNotes(updated.notes);
+      setEditingPending(null);
+      return;
+    }
     setPending(prev => prev.map(x => x.id === updated.id ? updated : x));
     setEditingPending(null);
+  }
+
+  function handleEditSelectedItem() {
+    if (!warehouse || !item) return;
+    if (pendingForSelectedItem) {
+      setEditingPending(pendingForSelectedItem);
+      return;
+    }
+    const draftQuantity = quantityNum > 0 ? quantityNum : 1;
+    const draftConversion = selectedConversion > 0 ? selectedConversion : 1;
+    const draftCost = costNum >= 0 ? costNum : 0;
+    setEditingPending({
+      id: `draft-${item.id}`,
+      warehouse,
+      item,
+      inputUnit: inputUnit || item.baseUnit,
+      quantity: draftQuantity,
+      unitsInBase: draftConversion,
+      unitCost: draftCost,
+      notes,
+      baseQty: draftQuantity * draftConversion,
+      total: draftQuantity * draftCost,
+    });
   }
 
   /* post one */
@@ -632,10 +664,10 @@ export default function OpeningStockPage() {
                   <div className="relative">
                     <div className="mb-2 flex items-center justify-between">
                       <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Stock item<span className="ml-0.5 text-emerald-400">*</span></p>
-                      {pendingForSelectedItem && (
+                      {item && (
                         <button
                           type="button"
-                          onClick={() => setEditingPending(pendingForSelectedItem)}
+                          onClick={handleEditSelectedItem}
                           className="inline-flex items-center gap-1 rounded-lg border border-cyan-400/20 bg-cyan-400/[0.06] px-2.5 py-1 text-[11px] font-semibold text-cyan-300 transition-colors hover:bg-cyan-400/[0.12] hover:text-cyan-200"
                         >
                           <Edit2 className="h-3 w-3" /> Edit temporary stock
