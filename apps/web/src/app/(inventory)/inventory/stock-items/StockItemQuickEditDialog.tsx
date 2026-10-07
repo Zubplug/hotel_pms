@@ -71,7 +71,7 @@ export function StockItemQuickEditDialog({
     setBaseUnit(item.baseUnit);
     setPurchaseUnit(item.purchaseUnit || item.baseUnit);
     setUnitsInBase(String(item.unitsInBase || 1));
-    setCostPerUnit(String(item.costPrice));
+    setCostPerUnit(String(Number(item.costPrice) * Number(item.unitsInBase || 1)));
     setError('');
   }, [item]);
 
@@ -83,6 +83,12 @@ export function StockItemQuickEditDialog({
     setError('');
     const baseUnitChanged = baseUnit !== item.baseUnit;
     const baseConversion = baseUnitChanged && purchaseUnit === item.baseUnit ? Number(unitsInBase || 0) : 0;
+    const purchaseConversion = purchaseUnit === item.baseUnit ? 1 : Number(unitsInBase || 0);
+    if (!Number.isFinite(purchaseConversion) || purchaseConversion <= 0) {
+      setError('Enter a valid units-in-base conversion before saving.');
+      setSaving(false);
+      return;
+    }
     if (baseUnitChanged && (!Number.isFinite(baseConversion) || baseConversion <= 0)) {
       setError(`To change the base unit, enter how many ${baseUnit.toLowerCase()} make one ${item.baseUnit.toLowerCase()}.`);
       setSaving(false);
@@ -95,7 +101,7 @@ export function StockItemQuickEditDialog({
         body: JSON.stringify({
           name: name.trim(),
           quantityOnHand: Number(quantity),
-          costPrice: Number(costPerUnit),
+          costPrice: Number(costPerUnit) / purchaseConversion,
           baseUnit,
           baseConversion,
           stockType,
@@ -155,8 +161,8 @@ export function StockItemQuickEditDialog({
               <label><span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Reorder level</span><input type="number" min="0" step="0.01" value={reorderLevel} onChange={(event) => setReorderLevel(event.target.value)} placeholder="No alert threshold" className="h-11 w-full rounded-xl border border-white/10 bg-[#0d1832] px-3 text-sm text-white outline-none focus:border-cyan-400/60" /></label>
               <label><span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Quantity <em className="text-cyan-300">*</em></span><input required type="number" min="0" step="0.01" value={quantity} onChange={(event) => setQuantity(event.target.value)} className="h-11 w-full rounded-xl border border-white/10 bg-[#0d1832] px-3 text-sm text-white outline-none focus:border-cyan-400/60" /></label>
               <label><span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Base unit <em className="text-cyan-300">*</em></span><select required value={baseUnit} onChange={(event) => setBaseUnit(event.target.value)} className="h-11 w-full rounded-xl border border-white/10 bg-[#0d1832] px-3 text-sm text-white outline-none focus:border-cyan-400/60">{INVENTORY_UNITS.map((unit) => <option key={unit} value={unit}>{unit.charAt(0) + unit.slice(1).toLowerCase()}</option>)}</select></label>
-              <label><span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Cost / {item.baseUnit.toLowerCase()} <em className="text-cyan-300">*</em></span><input required type="number" min="0" step="0.01" value={costPerUnit} onChange={(event) => setCostPerUnit(event.target.value)} className="h-11 w-full rounded-xl border border-white/10 bg-[#0d1832] px-3 text-sm text-white outline-none focus:border-cyan-400/60" /><span className="mt-1 block text-[11px] text-slate-600">Stored valuation cost per base unit.</span></label>
-              <label><span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Purchase unit <em className="text-cyan-300">*</em></span><select required value={purchaseUnit} onChange={(event) => setPurchaseUnit(event.target.value)} className="h-11 w-full rounded-xl border border-white/10 bg-[#0d1832] px-3 text-sm text-white outline-none focus:border-cyan-400/60">{[item.baseUnit, ...INVENTORY_UNITS].filter((unit, index, all) => all.indexOf(unit) === index).map((unit) => <option key={unit} value={unit}>{unit.charAt(0) + unit.slice(1).toLowerCase()}</option>)}</select></label>
+              <label><span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Cost / {purchaseUnit ? purchaseUnit.toLowerCase() : 'purchase unit'} <em className="text-cyan-300">*</em></span><input required type="number" min="0" step="0.01" value={costPerUnit} onChange={(event) => setCostPerUnit(event.target.value)} className="h-11 w-full rounded-xl border border-white/10 bg-[#0d1832] px-3 text-sm text-white outline-none focus:border-cyan-400/60" /><span className="mt-1 block text-[11px] text-slate-600">Converted and stored per {item.baseUnit.toLowerCase()}.</span></label>
+              <label><span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Purchase unit <em className="text-cyan-300">*</em></span><select required value={purchaseUnit} onChange={(event) => { const next = event.target.value; setPurchaseUnit(next); if (next === baseUnit) setUnitsInBase('1'); else if (next !== item.purchaseUnit) setUnitsInBase(''); }} className="h-11 w-full rounded-xl border border-white/10 bg-[#0d1832] px-3 text-sm text-white outline-none focus:border-cyan-400/60">{[item.baseUnit, ...INVENTORY_UNITS].filter((unit, index, all) => all.indexOf(unit) === index).map((unit) => <option key={unit} value={unit}>{unit.charAt(0) + unit.slice(1).toLowerCase()}</option>)}</select></label>
               <label><span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Units in base <em className="text-cyan-300">*</em></span><input required type="number" min="0.000001" step="0.000001" value={unitsInBase} onChange={(event) => setUnitsInBase(event.target.value)} disabled={purchaseUnit === baseUnit} className="h-11 w-full rounded-xl border border-white/10 bg-[#0d1832] px-3 text-sm text-white outline-none focus:border-cyan-400/60 disabled:cursor-not-allowed disabled:opacity-50" /><span className="mt-1 block text-[11px] text-slate-600">How many base units are in one purchase unit.</span></label>
             </div>
 
