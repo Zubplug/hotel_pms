@@ -73,6 +73,12 @@ function getDirectLandingUrl(
     return '/fnb/dashboard';
   }
 
+  // Kitchen staff → Kitchen workspace
+  if (['KITCHEN_STAFF', 'CHEF', 'HEAD_CHEF', 'KITCHEN_MANAGER'].includes(role) ||
+      capabilities.includes('ACCESS_KITCHEN')) {
+    return '/fnb/kitchen';
+  }
+
   // Single-capability staff (e.g. housekeeping-only, POS-only)
   if (capabilities.length === 1) {
     const singleCapMap: Record<string, string> = {

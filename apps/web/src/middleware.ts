@@ -47,6 +47,7 @@ const POS_ROLES = ['WAITER', 'WAITRESS', 'CASHIER', 'POS', 'POS_OPERATOR'];
 const FRONT_DESK_ROLES = ['RECEPTIONIST', 'FRONT_DESK'];
 const INVENTORY_ROLES = ['STOCK_MANAGER', 'STOCK_KEEPER', 'PROCUREMENT_MANAGER', 'OUTLET_HEAD'];
 const FNB_ROLES = ['FNB_MANAGER', 'RESTAURANT_MANAGER', 'BANQUET_MANAGER', 'EVENT_MANAGER', ...MANAGEMENT_ROLES];
+const KITCHEN_ROLES = ['KITCHEN_STAFF', 'CHEF', 'HEAD_CHEF', 'KITCHEN_MANAGER'];
 
 function hasModuleAccess(req: any, pathname: string): { allowed: boolean; redirectTo?: string } {
   const user = req.auth?.user as any;
@@ -99,6 +100,11 @@ function hasModuleAccess(req: any, pathname: string): { allowed: boolean; redire
       ? { allowed: true } : { allowed: false, redirectTo: '/hub' };
   }
   if (pathname === '/fnb' || pathname.startsWith('/fnb/')) {
+    if (pathname === '/fnb/kitchen' || pathname.startsWith('/fnb/kitchen/')) {
+      return can('ACCESS_KITCHEN', [...KITCHEN_ROLES, ...MANAGEMENT_ROLES]) ||
+        capabilities.some((value: string) => value === 'ACCESS_KITCHEN' || value.startsWith('kitchen.'))
+        ? { allowed: true } : { allowed: false, redirectTo: '/hub' };
+    }
     return can('ACCESS_FNB', FNB_ROLES) || capabilities.some((value: string) => value.startsWith('fnb.'))
       ? { allowed: true } : { allowed: false, redirectTo: '/hub' };
   }

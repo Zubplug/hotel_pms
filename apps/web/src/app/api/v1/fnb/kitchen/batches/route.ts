@@ -1,11 +1,18 @@
 import { NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
+import { auth } from '@/lib/auth';
+
+const KITCHEN_ROLES = ['KITCHEN_STAFF', 'CHEF', 'HEAD_CHEF', 'KITCHEN_MANAGER', 'CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'ADMIN', 'DIRECTOR'];
 
 export async function GET(req: Request) {
   try {
+    const session = await auth();
+    const user = session?.user as any;
+    if (!user || (!KITCHEN_ROLES.includes(String(user.role || '').toUpperCase()) && !(user.capabilities || []).some((value: string) => value === 'ACCESS_KITCHEN' || value.startsWith('kitchen.')))) {
+      return NextResponse.json({ success: false, error: { message: 'Kitchen access required' } }, { status: 403 });
+    }
     const { searchParams } = new URL(req.url);
     const propertyId = searchParams.get('propertyId');
-    const station = searchParams.get('station');
 
     if (!propertyId) {
       return NextResponse.json({ success: false, error: { message: 'Missing propertyId' } }, { status: 400 });
@@ -16,9 +23,8 @@ export async function GET(req: Request) {
       status: { not: 'COMPLETED' }, // By default, fetch active batches only
     };
 
-    if (station && station !== 'ALL') {
-      where.station = station.toUpperCase();
-    }
+    // This endpoint belongs to the kitchen workspace and must never expose bar tickets.
+    where.station = 'KITCHEN';
 
     const batches = await prisma.posProductionBatch.findMany({
       where,

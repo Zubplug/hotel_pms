@@ -12,8 +12,6 @@ import {
   Utensils,
   LayoutDashboard,
   ClipboardList,
-  ReceiptText,
-  ArrowLeftRight,
   Users,
   CalendarDays,
   CalendarRange,
@@ -25,9 +23,6 @@ import {
   Settings,
   Menu,
   X,
-  ChefHat,
-  ShoppingCart,
-  Truck,
   ShieldCheck,
   Repeat2,
 } from 'lucide-react';
@@ -49,19 +44,7 @@ const FNB_NAV = [
     children: [
       { name: 'Sales & Analytics', href: '/fnb/dashboard', icon: LayoutDashboard },
       { name: 'Live Orders', href: '/fnb/orders', icon: ClipboardList },
-      { name: 'Kitchen (KDS)', href: '/fnb/kitchen', icon: ChefHat },
       { name: 'Menu', href: '/fnb/menu', icon: Utensils },
-    ],
-  },
-  {
-    name: 'Inventory & Procurement',
-    icon: ReceiptText,
-    children: [
-      { name: 'Inventory & AvT', href: '/fnb/inventory', icon: ReceiptText },
-      { name: 'Purchasing (POs)', href: '/fnb/purchasing', icon: ShoppingCart },
-      { name: 'Receiving (GRN)', href: '/fnb/purchasing/receiving', icon: Truck },
-      { name: 'Requisitions', href: '/fnb/requisitions', icon: ArrowLeftRight },
-      { name: 'Waste Log', href: '/fnb/inventory/waste', icon: ClipboardList },
     ],
   },
   {

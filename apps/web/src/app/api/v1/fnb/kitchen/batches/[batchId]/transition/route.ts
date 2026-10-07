@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
 import prisma, { PosProductionBatchStatus } from '@hotel-pms/db';
+import { auth } from '@/lib/auth';
+
+const KITCHEN_ROLES = ['KITCHEN_STAFF', 'CHEF', 'HEAD_CHEF', 'KITCHEN_MANAGER', 'CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'ADMIN', 'DIRECTOR'];
 
 const ALLOWED_TRANSITIONS: Record<PosProductionBatchStatus, PosProductionBatchStatus[]> = {
   PENDING: ['PREPARING', 'COMPLETED'],
@@ -12,8 +15,13 @@ const ALLOWED_TRANSITIONS: Record<PosProductionBatchStatus, PosProductionBatchSt
 
 export async function POST(req: Request, { params }: { params: Promise<{ batchId: string }> }) {
   try {
+    const session = await auth();
+    const user = session?.user as any;
+    if (!user || (!KITCHEN_ROLES.includes(String(user.role || '').toUpperCase()) && !(user.capabilities || []).some((value: string) => value === 'ACCESS_KITCHEN' || value.startsWith('kitchen.')))) {
+      return NextResponse.json({ success: false, error: { message: 'Kitchen access required' } }, { status: 403 });
+    }
     const resolvedParams = await params;
-    const { status: targetStatus, actorId } = await req.json();
+    const { status: targetStatus, actorId = user.id } = await req.json();
     
     if (!targetStatus) {
       return NextResponse.json({ success: false, error: { message: 'Missing target status' } }, { status: 400 });
@@ -25,6 +33,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ batchId
       });
 
       if (!batch) throw new Error('Batch not found');
+      if (batch.station !== 'KITCHEN') throw new Error('Only kitchen batches can be updated here');
       
       const currentStatus = batch.status;
       

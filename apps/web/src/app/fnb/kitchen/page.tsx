@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useProperty } from '@/components/PropertyProvider';
-import { Loader2, Clock, ChefHat, Play, Check, X, Maximize2 } from 'lucide-react';
+import { Loader2, Clock, ChefHat, Play, Check, X, Maximize2, AlertTriangle, PackageCheck } from 'lucide-react';
 import { formatDistanceToNowStrict, differenceInMinutes } from 'date-fns';
 
 type PosProductionBatchStatus = 'PENDING' | 'PREPARING' | 'READY' | 'COMPLETED' | 'ACKNOWLEDGED';
@@ -153,7 +153,6 @@ function BatchCard({ batch, onTransition }: { batch: Batch, onTransition: (id: s
 
 export default function KitchenDisplaySystem() {
   const { propertyId } = useProperty();
-  const [station, setStation] = useState('ALL');
   const [batches, setBatches] = useState<Batch[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -161,7 +160,7 @@ export default function KitchenDisplaySystem() {
   const fetchBatches = useCallback(async () => {
     if (!propertyId || document.hidden) return; // Save cost when tab is inactive
     try {
-      const res = await fetch(`/api/v1/fnb/kitchen/batches?propertyId=${propertyId}&station=${station}`);
+      const res = await fetch(`/api/v1/fnb/kitchen/batches?propertyId=${propertyId}`);
       const body = await res.json();
       if (!res.ok) throw new Error(body.error?.message || 'Failed to fetch batches');
       setBatches(body.data);
@@ -171,7 +170,7 @@ export default function KitchenDisplaySystem() {
     } finally {
       setLoading(false);
     }
-  }, [propertyId, station]);
+  }, [propertyId]);
 
   useEffect(() => {
     fetchBatches();
@@ -213,14 +212,6 @@ export default function KitchenDisplaySystem() {
   const preparing = batches.filter(b => b.status === 'PREPARING');
   const ready = batches.filter(b => b.status === 'READY');
 
-  const availableStations = useMemo(() => {
-    const s = new Set<string>();
-    batches.forEach(b => s.add(b.station));
-    // Default stations if none present
-    if (s.size === 0) return ['KITCHEN', 'BAR'];
-    return Array.from(s);
-  }, [batches]);
-
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
       document.documentElement.requestFullscreen().catch(err => console.log(err));
@@ -246,23 +237,13 @@ export default function KitchenDisplaySystem() {
             <ChefHat className="h-6 w-6" />
           </div>
           <div>
-            <h1 className="text-xl font-bold tracking-tight text-slate-100">Kitchen Display System</h1>
+            <h1 className="text-xl font-bold tracking-tight text-slate-100">Kitchen Dashboard</h1>
             {error && <p className="text-xs font-medium text-red-400">{error}</p>}
           </div>
         </div>
 
         <div className="flex items-center gap-4">
-          <select 
-            value={station} 
-            onChange={e => setStation(e.target.value)}
-            className="h-11 rounded-xl border border-slate-700 bg-slate-900 px-4 text-sm font-bold text-slate-200 outline-none hover:bg-slate-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-colors appearance-none cursor-pointer pr-10 relative"
-            style={{ backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%2394a3b8' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`, backgroundPosition: `right 0.5rem center`, backgroundRepeat: `no-repeat`, backgroundSize: `1.5em 1.5em` }}
-          >
-            <option value="ALL">All Stations</option>
-            {availableStations.map(s => (
-              <option key={s} value={s}>{s}</option>
-            ))}
-          </select>
+          <span className="rounded-xl border border-orange-500/30 bg-orange-500/10 px-4 py-3 text-sm font-bold text-orange-300">Kitchen orders only</span>
           <button 
             onClick={toggleFullscreen} 
             className="flex h-11 px-4 items-center gap-2 rounded-xl border border-slate-700 bg-slate-900 text-sm font-bold text-slate-300 transition-colors hover:bg-slate-800 hover:text-white focus:outline-none focus:ring-2 focus:ring-slate-700"
@@ -273,8 +254,14 @@ export default function KitchenDisplaySystem() {
         </div>
       </header>
 
-      {/* KDS Grid */}
+      {/* Kitchen overview and production queue */}
       <main className="flex-1 overflow-x-auto p-4 sm:p-6">
+        <div className="mx-auto mb-6 grid max-w-[1600px] grid-cols-2 gap-3 md:grid-cols-4">
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4"><p className="text-xs font-bold uppercase tracking-widest text-slate-500">Open tickets</p><p className="mt-2 text-3xl font-black text-white">{batches.length}</p><p className="mt-1 text-xs text-slate-500">Live kitchen queue</p></div>
+          <div className="rounded-2xl border border-amber-500/20 bg-amber-950/10 p-4"><p className="text-xs font-bold uppercase tracking-widest text-amber-400">In preparation</p><p className="mt-2 flex items-center gap-2 text-3xl font-black text-amber-300"><Clock className="h-6 w-6" />{preparing.length}</p><p className="mt-1 text-xs text-slate-500">Currently being worked</p></div>
+          <div className="rounded-2xl border border-red-500/20 bg-red-950/10 p-4"><p className="text-xs font-bold uppercase tracking-widest text-red-400">Attention</p><p className="mt-2 flex items-center gap-2 text-3xl font-black text-red-300"><AlertTriangle className="h-6 w-6" />{batches.filter(b => differenceInMinutes(new Date(), new Date(b.firedAt)) >= SLA_CRITICAL_MINUTES && ['PENDING', 'PREPARING'].includes(b.status)).length}</p><p className="mt-1 text-xs text-slate-500">Tickets over {SLA_CRITICAL_MINUTES} minutes</p></div>
+          <div className="rounded-2xl border border-emerald-500/20 bg-emerald-950/10 p-4"><p className="text-xs font-bold uppercase tracking-widest text-emerald-400">Ready for service</p><p className="mt-2 flex items-center gap-2 text-3xl font-black text-emerald-300"><PackageCheck className="h-6 w-6" />{ready.length}</p><p className="mt-1 text-xs text-slate-500">Waiting to be bumped</p></div>
+        </div>
         <div className="grid min-w-[1024px] grid-cols-3 gap-6 h-[calc(100vh-7rem)]">
           
           {/* Column 1: Pending */}
