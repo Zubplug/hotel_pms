@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth';
 import { redirect, notFound } from 'next/navigation';
 import prisma from '@hotel-pms/db';
 import TransferActionBar from './TransferActionBar';
+import TransferQuantityEditor from './TransferQuantityEditor';
 import { hasInventoryPermission } from '@/lib/inventory/permissions';
 import {
   ArrowLeftRight, ArrowRight, Boxes, CheckCircle2,
@@ -71,6 +72,7 @@ export default async function TransferDetailPage({ params }: { params: Promise<{
   // Can receive (confirm receipt):
   // FNB Manager for their own requests; top management for Stock-Manager-initiated transfers
   const canReceive = hasInventoryPermission(role, 'inventory.transfer.receive', isSuperAdmin);
+  const canReduceRequest = isOutletBound && canApprove && ['PENDING_APPROVAL', 'APPROVED'].includes(transfer.status);
 
   const totalValue = transfer.items.reduce(
     (sum, item) => sum + Number(item.quantity) * Number(item.stockItem.costPrice ?? 0), 0,
@@ -158,6 +160,8 @@ export default async function TransferDetailPage({ params }: { params: Promise<{
             </div>
           </div>
         )}
+
+        {canReduceRequest && <TransferQuantityEditor transferId={transfer.id} items={transfer.items.map(item => ({ id: item.id, name: item.stockItem.name, quantity: Number(item.quantity), unit: item.unitOfMeasure }))} />}
 
         {/* line items */}
         <section className="overflow-hidden rounded-2xl border border-white/[0.08] bg-[#111c2e]">
