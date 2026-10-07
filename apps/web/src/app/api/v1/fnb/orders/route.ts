@@ -27,7 +27,12 @@ export async function GET(req: NextRequest) {
       where: {
         propertyId: { in: propertyIdsToQuery as string[] },
         ...(requestedOutletId ? { outletId: requestedOutletId } : {}),
-        status: { in: ['SUBMITTED', 'IN_SERVICE'] }
+        // The live service board must never expose financially completed
+        // orders. Keep the payment guard in addition to the operational
+        // status guard so a stale/malformed status cannot make a paid order
+        // appear as an active submitted order.
+        status: { in: ['SUBMITTED', 'IN_SERVICE'] },
+        paymentStatus: { not: 'PAID' }
       },
       include: {
         table: true,

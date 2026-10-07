@@ -34,6 +34,7 @@ interface PosOrder {
   id: string;
   orderNumber: string;
   status: OrderStatus;
+  paymentStatus?: string;
   createdAt: string;
   total: number;
   table?: { name: string };
@@ -157,7 +158,13 @@ export function FnbOrdersClient() {
       const response = await fetch('/api/v1/fnb/orders', { cache: 'no-store' });
       const payload = await response.json();
       if (!response.ok || payload?.success === false) throw new Error(payload?.error?.message || 'Unable to load live orders');
-      setOrders(payload?.data?.orders || []);
+      // Do not let a stale response or an older API projection put a closed
+      // or paid order back on the live service board as "Submitted".
+      const liveOrders = (payload?.data?.orders || []).filter((order: PosOrder) =>
+        ['SUBMITTED', 'IN_SERVICE'].includes(String(order.status).toUpperCase()) &&
+        String(order.paymentStatus || '').toUpperCase() !== 'PAID'
+      );
+      setOrders(liveOrders);
       setBusinessDate(payload?.data?.businessDate || new Date().toISOString().slice(0, 10));
       setError('');
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Unable to load live orders'); }
