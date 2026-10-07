@@ -138,7 +138,6 @@ function EditPendingModal({
   const [inputUnit, setInputUnit]   = useState(p.inputUnit);
   const [unitsInBase, setUnitsInBase] = useState(String(p.unitsInBase));
   const [unitCost, setUnitCost]     = useState(String(p.unitCost));
-  const [notes, setNotes]           = useState(p.notes);
 
   const unitOpts = [
     { value: p.item.baseUnit, label: formatUnit(p.item.baseUnit), sub: 'Base unit' },
@@ -179,7 +178,7 @@ function EditPendingModal({
       inputUnit,
       unitsInBase: conversionNum,
       unitCost: costNum,
-      notes,
+      notes: p.notes,
       baseQty,
       total,
     });
@@ -233,7 +232,7 @@ function EditPendingModal({
 
             <div>
               <label className="mb-2 block text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">
-                Unit<span className="text-cyan-400">*</span>
+                Purchase unit<span className="text-cyan-400">*</span>
               </label>
               <select
                 value={inputUnit}
@@ -266,27 +265,13 @@ function EditPendingModal({
           {/* cost */}
           <div>
             <label className="mb-2 block text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">
-              Cost per {formatUnit(inputUnit)} (₦)<span className="text-cyan-400">*</span>
+              Cost / unit (₦)<span className="text-cyan-400">*</span>
             </label>
             <input
               type="number" min="0" step="0.01"
               value={unitCost}
               onChange={e => setUnitCost(e.target.value)}
               className="h-11 w-full rounded-xl border border-white/10 bg-[#0d1832] px-3.5 text-sm text-white outline-none placeholder:text-slate-600 focus:border-cyan-400/60 focus:shadow-[0_0_0_3px_rgba(34,211,238,0.10)] transition-all"
-            />
-          </div>
-
-          {/* notes */}
-          <div>
-            <label className="mb-2 block text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">
-              Reason / evidence
-            </label>
-            <textarea
-              value={notes}
-              onChange={e => setNotes(e.target.value)}
-              placeholder="e.g. verified opening count from legacy system"
-              rows={2}
-              className="w-full resize-none rounded-xl border border-white/10 bg-[#0d1832] px-3.5 py-2.5 text-sm text-white outline-none placeholder:text-slate-600 focus:border-cyan-400/60 focus:shadow-[0_0_0_3px_rgba(34,211,238,0.10)] transition-all"
             />
           </div>
 
@@ -404,6 +389,7 @@ export default function OpeningStockPage() {
   const warehouse   = warehouses.find(w => w.id === warehouseId);
   const items       = warehouse?.stockItems || [];
   const item        = items.find(s => s.id === stockItemId);
+  const pendingForSelectedItem = pending.find(p => p.item.id === stockItemId && p.warehouse.id === warehouseId);
   const quantityNum = Number(quantity || 0);
   const costNum     = Number(unitCost || 0);
   const unitOptions = item
@@ -646,13 +632,14 @@ export default function OpeningStockPage() {
                   <div className="relative">
                     <div className="mb-2 flex items-center justify-between">
                       <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Stock item<span className="ml-0.5 text-emerald-400">*</span></p>
-                      {item && (
-                        <Link
-                          href={`/inventory/stock-items/${item.id}/edit`}
+                      {pendingForSelectedItem && (
+                        <button
+                          type="button"
+                          onClick={() => setEditingPending(pendingForSelectedItem)}
                           className="inline-flex items-center gap-1 rounded-lg border border-cyan-400/20 bg-cyan-400/[0.06] px-2.5 py-1 text-[11px] font-semibold text-cyan-300 transition-colors hover:bg-cyan-400/[0.12] hover:text-cyan-200"
                         >
-                          <Edit2 className="h-3 w-3" /> Edit stock item
-                        </Link>
+                          <Edit2 className="h-3 w-3" /> Edit temporary stock
+                        </button>
                       )}
                     </div>
                     <ComboBox
