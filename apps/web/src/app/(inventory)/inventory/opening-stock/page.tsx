@@ -159,6 +159,7 @@ function EditPendingModal({
   const baseQty        = quantityNum * conversionNum;
   const total          = quantityNum * costNum;
   const canSave        = quantityNum > 0 && costNum >= 0 && conversionNum > 0;
+  const currentPurchaseUnit = p.item.stockUnits?.find(u => u.isPurchaseUnit);
 
   function handleUnitChange(u: string) {
     setInputUnit(u);
@@ -214,6 +215,18 @@ function EditPendingModal({
 
         {/* body */}
         <div className="space-y-4 px-6 py-5">
+
+          {/* current stock context */}
+          <div className="rounded-xl border border-cyan-400/15 bg-cyan-400/[.05] p-4">
+            <p className="mb-3 text-[11px] font-bold uppercase tracking-[0.12em] text-cyan-300">Current stock reference</p>
+            <div className="grid grid-cols-2 gap-3 text-xs sm:grid-cols-4">
+              <div><p className="text-slate-500">On hand</p><p className="mt-1 font-semibold text-white">{Number(p.item.quantityOnHand).toLocaleString()} {formatUnit(p.item.baseUnit)}</p></div>
+              <div><p className="text-slate-500">Current cost</p><p className="mt-1 font-semibold text-white">{money(Number(p.item.costPrice))} / {formatUnit(p.item.baseUnit)}</p></div>
+              <div><p className="text-slate-500">Base unit</p><p className="mt-1 font-semibold text-white">{formatUnit(p.item.baseUnit)}</p></div>
+              <div><p className="text-slate-500">Purchase setup</p><p className="mt-1 font-semibold text-white">{currentPurchaseUnit ? `${formatUnit(currentPurchaseUnit.unit)} × ${currentPurchaseUnit.unitsInBase}` : 'Base unit'}</p></div>
+            </div>
+            <p className="mt-3 border-t border-cyan-400/10 pt-3 text-[11px] leading-5 text-cyan-100">The quantity below is the incoming opening stock and will be added to the current on-hand balance.</p>
+          </div>
 
           {/* quantity + unit */}
           <div className="grid grid-cols-2 gap-3">
