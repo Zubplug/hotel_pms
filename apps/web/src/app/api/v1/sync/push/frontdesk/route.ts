@@ -1500,8 +1500,98 @@ export async function POST(req: NextRequest) {
                 createdBy: actorId,
                 keepFolioOpen: true,
               });
-            } else if (totalBalance > 0.01) throw new Error("PAYMENT_REQUIRED");
-            else if (totalBalance < -0.01) throw new Error("REFUND_REQUIRED");
+            } else if (totalBalance > 0.01) {
+              throw new Error("PAYMENT_REQUIRED");
+            } else if (totalBalance < -0.01) {
+              // Auto-route guest credit to City Ledger to avoid checkout sync deadlocks
+              const propRes = await tx.$queryRaw<any[]>`SELECT id, "organizationId" FROM "Property" WHERE id = ${propertyId}::uuid FOR UPDATE`;
+              const orgId = propRes[0].organizationId;
+              
+              let guestLedgerAccount = await tx.cityLedgerAccount.findFirst({
+                where: { propertyId, type: 'REFUND_PAYABLE', name: 'Pending Guest Refunds', status: 'ACTIVE' }
+              });
+              
+              if (!guestLedgerAccount) {
+                guestLedgerAccount = await tx.cityLedgerAccount.create({
+                  data: {
+                    organizationId: orgId,
+                    propertyId,
+                    name: 'Pending Guest Refunds',
+                    type: 'REFUND_PAYABLE',
+                    currency: checkoutFolios[0]?.currency || 'NGN'
+                  }
+                });
+              }
+
+              for (const folio of checkoutFolios) {
+                const amount = Number(folio.balance);
+                if (amount >= -0.01) continue;
+                
+                const creditAmount = Math.abs(amount);
+                const refKey = `CR_SYNC_AUTO_${aggregateId}_${folio.id}`;
+                
+                await tx.cityLedgerEntry.create({
+                  data: {
+                    accountId: guestLedgerAccount.id,
+                    propertyId,
+                    guestId: reservation.primaryGuestId,
+                    reservationId: aggregateId,
+                    folioId: folio.id,
+                    amount: creditAmount,
+                    currency: folio.currency || 'NGN',
+                    type: 'REFUND_OWED',
+                    status: 'OPEN',
+                    reason: 'Auto-routed guest credit to Guest Ledger upon checkout',
+                    reference: refKey,
+                    createdBy: actorId,
+                  }
+                });
+
+                await tx.cityLedgerAccount.update({
+                  where: { id: guestLedgerAccount.id },
+                  data: { balance: { increment: creditAmount } }
+                });
+
+                await tx.folioItem.create({
+                  data: {
+                    folioId: folio.id,
+                    businessDate: postingBusinessDate,
+                    type: "CHARGE",
+                    source: "CITY_LEDGER",
+                    description: "City Ledger credit at checkout",
+                    quantity: 1,
+                    unitAmount: creditAmount,
+                    amount: creditAmount,
+                    currency: folio.currency || "NGN",
+                    baseAmount: creditAmount,
+                    postedBy: actorId,
+                    deviceId: device.id,
+                    isLatePosting: true,
+                    posTransactionId: refKey,
+                  },
+                });
+
+                await tx.folio.update({
+                  where: { id: folio.id },
+                  data: {
+                    totalCharges: { increment: creditAmount },
+                    balance: { increment: creditAmount },
+                  },
+                });
+
+                await CityLedgerAccountingService.processCityLedgerRouting(
+                  tx,
+                  propertyId,
+                  orgId,
+                  actorId,
+                  -creditAmount,
+                  folio.id,
+                  refKey,
+                  `cl_sync_auto_${aggregateId}_${folio.id}`,
+                  postingBusinessDate
+                );
+              }
+            }
 
             const today = new Date(new Date().setHours(0, 0, 0, 0));
             await tx.reservation.update({
