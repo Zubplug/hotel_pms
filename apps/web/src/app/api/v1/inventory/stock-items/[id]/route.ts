@@ -78,6 +78,25 @@ export async function PATCH(request: Request, props: { params: Promise<{ id: str
             return NextResponse.json({ error: 'Live stock edits are restricted to the main stock manager warehouse', data: null }, { status: 400 });
         }
 
+        if (body.outletStockOnly === true) {
+            const outletEditFields = new Set(['outletStockOnly', 'quantityOnHand']);
+            const unsupportedFields = Object.keys(body).filter((field) => !outletEditFields.has(field));
+            if (unsupportedFields.length > 0) {
+                return NextResponse.json({ error: 'Outlet stock edits may only change quantityOnHand', data: null }, { status: 400 });
+            }
+            if (quantityOnHand === undefined) {
+                return NextResponse.json({ error: 'Outlet stock edits require quantityOnHand', data: null }, { status: 400 });
+            }
+
+            // Outlet edits are intentionally isolated to this warehouse row. Do not
+            // run the main-stock conversion/propagation logic for this request.
+            const updatedOutlet = await prisma.stockItem.update({
+                where: { id: params.id },
+                data: { quantityOnHand: Number(quantityOnHand) },
+            });
+            return NextResponse.json({ data: updatedOutlet, error: null });
+        }
+
         const baseUnitChanged = requestedBaseUnit !== undefined && requestedBaseUnit !== existing.baseUnit;
         const conversion = Number(baseConversion);
         if (baseUnitChanged && (!canManageInventory || existing.warehouse.posOutletId !== null)) {
