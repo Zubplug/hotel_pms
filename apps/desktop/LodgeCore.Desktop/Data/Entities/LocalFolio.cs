@@ -80,8 +80,12 @@ public class LocalFolio
         return value.ValueKind == JsonValueKind.String && decimal.TryParse(value.GetString(), out var text) ? text : 0m;
     }
 
+    // The balance used for checkout decisions. CloudBalance is the latest
+    // server-authoritative value; NetBalance is the offline fallback when no
+    // cloud snapshot has been received yet.
+    public decimal CheckoutBalance => CloudBalance ?? NetBalance;
     public decimal NetBalance => TotalCharges - TotalPayments - AppliedCreditAdjustmentAmount;
-    public decimal OutstandingBalance => Math.Max(0m, !IsDirty && CloudBalance.HasValue ? CloudBalance.Value : NetBalance);
+    public decimal OutstandingBalance => Math.Max(0m, CheckoutBalance);
     public string? Currency { get; set; }
 
     // Storing transactions as JSON string for simplicity offline, or we could make a separate table

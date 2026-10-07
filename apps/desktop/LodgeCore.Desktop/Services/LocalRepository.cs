@@ -193,7 +193,7 @@ public class LocalRepository
                 folioId = r.Folio?.Id,
                 // Keep the signed folio position for POS display:
                 // positive = amount due (debit), negative = guest credit.
-                folioBalance = r.Folio?.NetBalance ?? 0m,
+                folioBalance = r.Folio?.CheckoutBalance ?? 0m,
                 outstandingBalance = r.Folio?.OutstandingBalance ?? 0m,
                 availableCredit = r.Folio?.AvailableCredit ?? 0m,
                 currency = r.Folio?.Currency ?? "NGN",
@@ -2330,14 +2330,14 @@ public class LocalRepository
                 }
             }
             
-            decimal currentBalance = res.Folio?.NetBalance ?? 0m;
+            decimal currentBalance = res.Folio?.CheckoutBalance ?? 0m;
             if (currentBalance + projectedCharges > res.CorporateAccount.CreditLimit && !res.CorporateAccount.ExemptFromHighBalance)
             {
                 throw new InvalidOperationException("CREDIT_LIMIT_EXCEEDED: The projected charges exceed the corporate account's credit limit.");
             }
         }
 
-        if (res.CorporateAccountId == null && res.Folio != null && res.Folio.NetBalance > 0.01m)
+        if (res.CorporateAccountId == null && res.Folio != null && res.Folio.CheckoutBalance > 0.01m)
             throw new InvalidOperationException("Cannot check in with an outstanding balance. Settle the folio first.");
 
         res.Status = "CHECKED_IN";
@@ -2583,16 +2583,21 @@ public class LocalRepository
             // balance. A shared folio may still have other reservations open.
             corporateReservationBalance = GetReservationCorporateBalance(res.Folio!, res.Id);
         }
-        if ((res.CorporateAccountId == null && res.Folio != null && res.Folio.NetBalance > 0.01m) ||
+        // CloudBalance is the server-authoritative value when available;
+        // CheckoutBalance falls back to local arithmetic only when no cloud
+        // snapshot has been received yet.
+        var checkoutBalance = res.Folio?.CheckoutBalance ?? 0m;
+
+        if ((res.CorporateAccountId == null && res.Folio != null && checkoutBalance > 0.01m) ||
             (res.CorporateAccountId != null && corporateReservationBalance > 0.01m))
         {
-            var balance = res.CorporateAccountId != null ? corporateReservationBalance : res.Folio!.NetBalance;
+            var balance = res.CorporateAccountId != null ? corporateReservationBalance : checkoutBalance;
             throw new InvalidOperationException($"Cannot check out with an outstanding balance of {balance:N2}. Settle the folio first.");
         }
 
-        if (res.CorporateAccountId == null && res.Folio != null && res.Folio.NetBalance < -0.01m)
+        if (res.CorporateAccountId == null && res.Folio != null && checkoutBalance < -0.01m)
         {
-            var creditAmount = Math.Abs(res.Folio.NetBalance);
+            var creditAmount = Math.Abs(checkoutBalance);
             var idempotencyKey = $"checkout_cr_routing_{res.Id}_{DateTime.UtcNow.Ticks}";
             
             if (!CheckFolioIdempotency(res.Folio, idempotencyKey))
@@ -3409,7 +3414,7 @@ public class LocalRepository
             checkIn = reservation.CheckInDate,
             checkOut = reservation.CheckOutDate,
             folioId = reservation.Folio?.Id,
-            folioBalance = reservation.Folio?.NetBalance ?? 0,
+            folioBalance = reservation.Folio?.CheckoutBalance ?? 0,
             currency = property?.Currency ?? "NGN",
             room = new { number = room.Number },
             guest = reservation.Guest != null ? new
@@ -5334,7 +5339,14 @@ public class LocalRepository
                 var ingredients = await _dbContext.RecipeIngredients.Where(i => i.ProductId == product.Id).ToListAsync();
                 if (ingredients.Count == 0)
                 {
-                    throw new Exception($"Item {product.Name} has inventory mode STOCK but no active recipe.");
+                    if (!string.IsNullOrWhiteSpace(product.StockItemId))
+                    {
+                        requirements[product.StockItemId] = requirements.GetValueOrDefault(product.StockItemId) + orderItem.Quantity;
+                    }
+                    else
+                    {
+                        throw new Exception($"Item {product.Name} has inventory mode STOCK but no active recipe or direct stock mapping.");
+                    }
                 }
                 else
                 {

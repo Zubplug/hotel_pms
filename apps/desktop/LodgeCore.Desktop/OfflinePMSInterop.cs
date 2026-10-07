@@ -660,7 +660,7 @@ public class OfflinePMSInterop
                         ? new { id = r.Guest.Id, firstName = r.Guest.FirstName, lastName = r.Guest.LastName, phone = r.Guest.Phone } 
                         : new { id = "unknown", firstName = "Unknown", lastName = "Guest", phone = (string?)"" },
                     reservationRooms = new[] { new { roomId = roomId, room = new { id = roomId, number = roomNumber, status = assignedRoom?.Room?.Status ?? "AVAILABLE" }, roomType = new { name = roomTypeName }, checkIn = r.CheckInDate, checkOut = r.CheckOutDate } },
-                    folio = new { balance = (r.CorporateAccount?.CorporateFolio ?? r.Folio)?.OutstandingBalance ?? 0, netBalance = (r.CorporateAccount?.CorporateFolio ?? r.Folio)?.NetBalance ?? 0, currency = (r.CorporateAccount?.CorporateFolio ?? r.Folio)?.Currency ?? r.Currency ?? "NGN" },
+                    folio = new { balance = (r.CorporateAccount?.CorporateFolio ?? r.Folio)?.CheckoutBalance ?? 0, netBalance = (r.CorporateAccount?.CorporateFolio ?? r.Folio)?.CheckoutBalance ?? 0, currency = (r.CorporateAccount?.CorporateFolio ?? r.Folio)?.Currency ?? r.Currency ?? "NGN" },
                     isDirty = r.IsDirty
                 };
             });
@@ -1193,8 +1193,8 @@ public class OfflinePMSInterop
                         id = f?.Id,
                         type = f?.Type ?? "ROOM",
                         status = f?.Status ?? "OPEN",
-                        balance = f?.OutstandingBalance ?? 0,
-                        netBalance = f?.NetBalance ?? 0,
+                        balance = f?.CheckoutBalance ?? 0,
+                        netBalance = f?.CheckoutBalance ?? 0,
                         totalCharges = f?.TotalCharges ?? 0,
                         totalPayments = f?.TotalPayments ?? 0,
                         availableCredit = f?.AvailableCredit ?? 0,
@@ -1714,7 +1714,7 @@ public class OfflinePMSInterop
                 { "status", data.Status },
                 { "totalCharges", data.TotalCharges },
                 { "totalPayments", data.TotalPayments },
-                { "balance", data.OutstandingBalance },
+                { "balance", Math.Max(0m, data.CheckoutBalance) },
                 { "availableCredit", data.AvailableCredit },
                 { "createdAt", data.CreatedAt },
                 { "updatedAt", data.UpdatedAt },
