@@ -45,6 +45,7 @@ const FNB_NAV = [
       { name: 'Sales & Analytics', href: '/fnb/dashboard', icon: LayoutDashboard },
       { name: 'Live Orders', href: '/fnb/orders', icon: ClipboardList },
       { name: 'Menu', href: '/fnb/menu', icon: Utensils },
+      { name: 'Outlet Stock', href: '/fnb/inventory', icon: Package },
     ],
   },
   {
