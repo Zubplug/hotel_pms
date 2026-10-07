@@ -153,15 +153,13 @@ export async function POST(request: Request) {
       const before = overrideBaseUnit && inputUnit !== item.baseUnit
         ? Number(item.quantityOnHand) / Number(unitsInBase)
         : Number(item.quantityOnHand);
-      const existingValue = before * (overrideBaseUnit && inputUnit !== item.baseUnit
-        ? Number(item.costPrice) * Number(unitsInBase)
-        : Number(item.costPrice));
       const incomingValue = baseQuantity * baseUnitCost;
-      const after = before + baseQuantity;
-      const weightedCost = after > 0 ? (existingValue + incomingValue) / after : baseUnitCost;
       const updated = await tx.stockItem.update({
         where: { id: item.id },
-        data: { quantityOnHand: { increment: baseQuantity }, costPrice: weightedCost },
+        // Opening stock is a controlled balance/setup operation. The manager's
+        // entered cost becomes the current cost; moving-average costing is
+        // reserved for GRN/receipt posting in InventoryService.
+        data: { quantityOnHand: { increment: baseQuantity }, costPrice: baseUnitCost },
       });
       return tx.stockTransaction.create({
         data: {

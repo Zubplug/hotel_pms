@@ -278,7 +278,7 @@ function EditPendingModal({
           {/* cost */}
           <div>
             <label className="mb-2 block text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">
-              Cost / unit (₦)<span className="text-cyan-400">*</span>
+              Cost / {formatUnit(p.inputUnit)} (₦)<span className="text-cyan-400">*</span>
             </label>
             <input
               type="number" min="0" step="0.01"
@@ -342,6 +342,7 @@ function EditSystemStockModal({
   const initialUnit = currentPurchase?.unit || item.baseUnit;
   const initialConversion = initialUnit === item.baseUnit ? 1 : Number(currentPurchase?.unitsInBase || 1);
   const [quantity, setQuantity] = useState(String(Number(item.quantityOnHand) / initialConversion));
+  const [baseUnit, setBaseUnit] = useState(item.baseUnit);
   const [inputUnit, setInputUnit] = useState(initialUnit);
   const [unitsInBase, setUnitsInBase] = useState(String(initialConversion));
   const [unitCost, setUnitCost] = useState(String(Number(item.costPrice) * initialConversion));
@@ -351,6 +352,10 @@ function EditSystemStockModal({
   const conversion = inputUnit === item.baseUnit ? 1 : Number(unitsInBase || 0);
   const baseQuantity = Number(quantity || 0) * conversion;
   const baseCost = conversion > 0 ? Number(unitCost || 0) / conversion : 0;
+  const baseUnitChanged = baseUnit !== item.baseUnit;
+  const baseConversion = baseUnitChanged && inputUnit === item.baseUnit ? Number(unitsInBase || 0) : 0;
+  const savedQuantity = baseUnitChanged && baseConversion > 0 ? baseQuantity * baseConversion : baseQuantity;
+  const savedCost = baseUnitChanged && baseConversion > 0 ? baseCost / baseConversion : baseCost;
   const quantityValue = Number(quantity);
   const costValue = Number(unitCost);
   const canSaveSystemStock = quantity.trim() !== '' && Number.isFinite(quantityValue) && quantityValue >= 0
@@ -362,18 +367,22 @@ function EditSystemStockModal({
 
   async function save() {
     if (!canSaveSystemStock) return;
+    if (baseUnitChanged && (!Number.isFinite(baseConversion) || baseConversion <= 0)) {
+      setError(`To change the base unit, enter how many ${formatUnit(baseUnit)} make one ${formatUnit(item.baseUnit)}.`);
+      return;
+    }
     setSaving(true);
     setError('');
     try {
       const response = await fetch(`/api/v1/inventory/stock-items/${item.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ quantityOnHand: baseQuantity, costPrice: baseCost, mainWarehouseOnly: true }),
+        body: JSON.stringify({ quantityOnHand: baseQuantity, costPrice: baseCost, baseUnit, baseConversion, mainWarehouseOnly: true }),
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'Could not update stock balance');
 
-      if (inputUnit !== item.baseUnit) {
+      if (inputUnit !== baseUnit) {
         const unitResponse = await fetch(`/api/v1/inventory/stock-items/${item.id}/units`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -398,12 +407,13 @@ function EditSystemStockModal({
         <div className="space-y-4 px-6 py-5">
           {error && <div className="rounded-xl border border-rose-400/20 bg-rose-400/[.07] p-3 text-sm text-rose-200">{error}</div>}
           <div className="grid grid-cols-2 gap-3">
-            <label className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Quantity*<input type="number" min="0" step="0.0001" value={quantity} onChange={event => setQuantity(event.target.value)} className="mt-2 h-11 w-full rounded-xl border border-white/10 bg-[#0d1832] px-3.5 text-sm normal-case tracking-normal text-white outline-none focus:border-cyan-400/60" /></label>
+            <label className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Quantity ({formatUnit(item.baseUnit)})*<input type="number" min="0" step="0.0001" value={quantity} onChange={event => setQuantity(event.target.value)} className="mt-2 h-11 w-full rounded-xl border border-white/10 bg-[#0d1832] px-3.5 text-sm normal-case tracking-normal text-white outline-none focus:border-cyan-400/60" /></label>
+            <label className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Base unit*<select value={baseUnit} onChange={event => setBaseUnit(event.target.value)} className="mt-2 h-11 w-full rounded-xl border border-white/10 bg-[#0d1832] px-3.5 text-sm normal-case tracking-normal text-white outline-none focus:border-cyan-400/60">{INVENTORY_UNITS.map(unit => <option key={unit} value={unit}>{formatUnit(unit)}</option>)}</select></label>
             <label className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Purchase unit*<select value={inputUnit} onChange={event => { const next = event.target.value; setInputUnit(next); const option = unitOptions.find(unit => unit.unit === next); setUnitsInBase(String(option?.conversion || (next === item.baseUnit ? 1 : ''))); }} className="mt-2 h-11 w-full rounded-xl border border-white/10 bg-[#0d1832] px-3.5 text-sm normal-case tracking-normal text-white outline-none focus:border-cyan-400/60">{unitOptions.map(option => <option key={option.unit} value={option.unit}>{formatUnit(option.unit)}</option>)}</select></label>
             <label className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Units in base<input type="number" min="0.000001" step="0.000001" value={unitsInBase} onChange={event => setUnitsInBase(event.target.value)} disabled={inputUnit === item.baseUnit} className="mt-2 h-11 w-full rounded-xl border border-white/10 bg-[#0d1832] px-3.5 text-sm normal-case tracking-normal text-white outline-none disabled:opacity-40 focus:border-cyan-400/60" /></label>
-            <label className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Cost / unit* (₦)<input type="number" min="0" step="0.01" value={unitCost} onChange={event => setUnitCost(event.target.value)} className="mt-2 h-11 w-full rounded-xl border border-white/10 bg-[#0d1832] px-3.5 text-sm normal-case tracking-normal text-white outline-none focus:border-cyan-400/60" /></label>
+            <label className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Cost / {inputUnit ? formatUnit(inputUnit) : 'purchase unit'}* (₦)<input type="number" min="0" step="0.01" value={unitCost} onChange={event => setUnitCost(event.target.value)} className="mt-2 h-11 w-full rounded-xl border border-white/10 bg-[#0d1832] px-3.5 text-sm normal-case tracking-normal text-white outline-none focus:border-cyan-400/60" /></label>
           </div>
-          <div className="rounded-xl border border-cyan-400/15 bg-cyan-400/[.05] p-3 text-xs text-cyan-100">System will save <strong>{baseQuantity.toLocaleString()} {formatUnit(item.baseUnit)}</strong> at <strong>{money(baseCost)} / {formatUnit(item.baseUnit)}</strong>. Zero quantity is allowed.</div>
+          <div className="rounded-xl border border-cyan-400/15 bg-cyan-400/[.05] p-3 text-xs text-cyan-100">System will save <strong>{savedQuantity.toLocaleString()} {formatUnit(baseUnit)}</strong> at <strong>{money(savedCost)} / {formatUnit(baseUnit)}</strong>. {baseUnitChanged ? `Existing stock will be converted from ${formatUnit(item.baseUnit)} to ${formatUnit(baseUnit)}.` : 'Zero quantity is allowed.'}</div>
         </div>
         <div className="flex justify-between border-t border-white/[0.07] px-6 py-4"><button type="button" onClick={onClose} disabled={saving} className="rounded-xl border border-white/10 px-4 py-2.5 text-sm font-medium text-slate-400">Cancel</button><button type="button" onClick={() => void save()} disabled={saving || !canSaveSystemStock} className="rounded-xl bg-cyan-500 px-5 py-2.5 text-sm font-semibold text-slate-950 disabled:opacity-40">{saving ? 'Saving…' : 'Save stock balance'}</button></div>
       </div>
@@ -638,7 +648,7 @@ export default function OpeningStockPage() {
               </div>
               <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">Opening stock</h1>
               <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-400">
-                Post verified legacy inventory into an active main warehouse with unit conversion, weighted cost, idempotency, and a traceable opening-balance transaction.
+                Post verified legacy inventory into an active main warehouse with unit conversion, explicit entered cost, idempotency, and a traceable opening-balance transaction.
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -822,7 +832,7 @@ export default function OpeningStockPage() {
 
                     <div>
                       <label className="block text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400 mb-2">
-                        Cost / unit<span className="text-emerald-400">*</span>
+                        Cost / {inputUnit ? formatUnit(inputUnit) : 'purchase unit'}<span className="text-emerald-400">*</span>
                       </label>
                       <input
                         type="number" min="0" step="0.01"

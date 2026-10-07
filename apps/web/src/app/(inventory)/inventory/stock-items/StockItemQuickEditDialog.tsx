@@ -54,6 +54,7 @@ export function StockItemQuickEditDialog({
   const [reorderLevel, setReorderLevel] = useState('');
   const [isActive, setIsActive] = useState(true);
   const [quantity, setQuantity] = useState('');
+  const [baseUnit, setBaseUnit] = useState('');
   const [purchaseUnit, setPurchaseUnit] = useState('');
   const [unitsInBase, setUnitsInBase] = useState('1');
   const [costPerUnit, setCostPerUnit] = useState('');
@@ -67,6 +68,7 @@ export function StockItemQuickEditDialog({
     setReorderLevel(item.reorderLevel === null ? '' : String(item.reorderLevel));
     setIsActive(item.isActive);
     setQuantity(String(item.quantityOnHand));
+    setBaseUnit(item.baseUnit);
     setPurchaseUnit(item.purchaseUnit || item.baseUnit);
     setUnitsInBase(String(item.unitsInBase || 1));
     setCostPerUnit(String(item.costPrice));
@@ -79,6 +81,13 @@ export function StockItemQuickEditDialog({
 
     setSaving(true);
     setError('');
+    const baseUnitChanged = baseUnit !== item.baseUnit;
+    const baseConversion = baseUnitChanged && purchaseUnit === item.baseUnit ? Number(unitsInBase || 0) : 0;
+    if (baseUnitChanged && (!Number.isFinite(baseConversion) || baseConversion <= 0)) {
+      setError(`To change the base unit, enter how many ${baseUnit.toLowerCase()} make one ${item.baseUnit.toLowerCase()}.`);
+      setSaving(false);
+      return;
+    }
     try {
       const response = await fetch(`/api/v1/inventory/stock-items/${item.id}`, {
         method: 'PATCH',
@@ -87,6 +96,8 @@ export function StockItemQuickEditDialog({
           name: name.trim(),
           quantityOnHand: Number(quantity),
           costPrice: Number(costPerUnit),
+          baseUnit,
+          baseConversion,
           stockType,
           reorderLevel: reorderLevel.trim() === '' ? null : Number(reorderLevel),
           isActive,
@@ -95,7 +106,7 @@ export function StockItemQuickEditDialog({
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'Could not update stock item');
 
-      if (purchaseUnit !== item.baseUnit) {
+      if (purchaseUnit !== baseUnit) {
         const unitResponse = await fetch(`/api/v1/inventory/stock-items/${item.id}/units`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -143,7 +154,8 @@ export function StockItemQuickEditDialog({
               <label><span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Stock type</span><select value={stockType} onChange={(event) => setStockType(event.target.value)} className="h-11 w-full rounded-xl border border-white/10 bg-[#0d1832] px-3 text-sm text-white outline-none focus:border-cyan-400/60">{STOCK_TYPES.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}</select></label>
               <label><span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Reorder level</span><input type="number" min="0" step="0.01" value={reorderLevel} onChange={(event) => setReorderLevel(event.target.value)} placeholder="No alert threshold" className="h-11 w-full rounded-xl border border-white/10 bg-[#0d1832] px-3 text-sm text-white outline-none focus:border-cyan-400/60" /></label>
               <label><span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Quantity <em className="text-cyan-300">*</em></span><input required type="number" min="0" step="0.01" value={quantity} onChange={(event) => setQuantity(event.target.value)} className="h-11 w-full rounded-xl border border-white/10 bg-[#0d1832] px-3 text-sm text-white outline-none focus:border-cyan-400/60" /></label>
-              <label><span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Cost / unit <em className="text-cyan-300">*</em></span><input required type="number" min="0" step="0.01" value={costPerUnit} onChange={(event) => setCostPerUnit(event.target.value)} className="h-11 w-full rounded-xl border border-white/10 bg-[#0d1832] px-3 text-sm text-white outline-none focus:border-cyan-400/60" /></label>
+              <label><span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Base unit <em className="text-cyan-300">*</em></span><select required value={baseUnit} onChange={(event) => setBaseUnit(event.target.value)} className="h-11 w-full rounded-xl border border-white/10 bg-[#0d1832] px-3 text-sm text-white outline-none focus:border-cyan-400/60">{INVENTORY_UNITS.map((unit) => <option key={unit} value={unit}>{unit.charAt(0) + unit.slice(1).toLowerCase()}</option>)}</select></label>
+              <label><span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Cost / {item.baseUnit.toLowerCase()} <em className="text-cyan-300">*</em></span><input required type="number" min="0" step="0.01" value={costPerUnit} onChange={(event) => setCostPerUnit(event.target.value)} className="h-11 w-full rounded-xl border border-white/10 bg-[#0d1832] px-3 text-sm text-white outline-none focus:border-cyan-400/60" /><span className="mt-1 block text-[11px] text-slate-600">Stored valuation cost per base unit.</span></label>
               <label><span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Purchase unit <em className="text-cyan-300">*</em></span><select required value={purchaseUnit} onChange={(event) => setPurchaseUnit(event.target.value)} className="h-11 w-full rounded-xl border border-white/10 bg-[#0d1832] px-3 text-sm text-white outline-none focus:border-cyan-400/60">{[item.baseUnit, ...INVENTORY_UNITS].filter((unit, index, all) => all.indexOf(unit) === index).map((unit) => <option key={unit} value={unit}>{unit.charAt(0) + unit.slice(1).toLowerCase()}</option>)}</select></label>
               <label><span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Units in base <em className="text-cyan-300">*</em></span><input required type="number" min="0.000001" step="0.000001" value={unitsInBase} onChange={(event) => setUnitsInBase(event.target.value)} disabled={purchaseUnit === item.baseUnit} className="h-11 w-full rounded-xl border border-white/10 bg-[#0d1832] px-3 text-sm text-white outline-none focus:border-cyan-400/60 disabled:cursor-not-allowed disabled:opacity-50" /><span className="mt-1 block text-[11px] text-slate-600">How many base units are in one purchase unit.</span></label>
             </div>
