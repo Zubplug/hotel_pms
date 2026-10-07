@@ -348,6 +348,7 @@ function EditSystemStockModal({
   const [inputUnit, setInputUnit] = useState(initialUnit);
   const [unitsInBase, setUnitsInBase] = useState(String(initialConversion));
   const [baseConversionInput, setBaseConversionInput] = useState('');
+  const [convertExistingStock, setConvertExistingStock] = useState(false);
   const [unitCost, setUnitCost] = useState(String(
     currentPurchase?.purchaseCost == null
       ? roundCurrency(Number(item.costPrice) * initialConversion)
@@ -360,7 +361,7 @@ function EditSystemStockModal({
   const baseQuantity = Number(quantity || 0) * conversion;
   const baseCost = conversion > 0 ? Number(unitCost || 0) / conversion : 0;
   const baseUnitChanged = baseUnit !== item.baseUnit;
-  const baseConversion = baseUnitChanged ? Number(baseConversionInput || 0) : 1;
+  const baseConversion = baseUnitChanged && convertExistingStock ? Number(baseConversionInput || 0) : 1;
   // The PATCH endpoint accepts quantity/cost in the old base unit when the
   // base unit changes, then applies baseConversion itself.
   const requestQuantity = baseUnitChanged && baseConversion > 0 ? baseQuantity / baseConversion : baseQuantity;
@@ -369,7 +370,7 @@ function EditSystemStockModal({
   const costValue = Number(unitCost);
   const canSaveSystemStock = quantity.trim() !== '' && Number.isFinite(quantityValue) && quantityValue >= 0
     && unitCost.trim() !== '' && Number.isFinite(costValue) && costValue >= 0 && conversion > 0
-    && (!baseUnitChanged || (Number.isFinite(baseConversion) && baseConversion > 0));
+    && (!baseUnitChanged || !convertExistingStock || (Number.isFinite(baseConversion) && baseConversion > 0));
   const unitOptions = [item.baseUnit, ...INVENTORY_UNITS.filter(unit => unit !== item.baseUnit)].map(unit => ({
     unit,
     conversion: unit === item.baseUnit ? 1 : Number(item.stockUnits?.find(stockUnit => stockUnit.unit === unit)?.unitsInBase || 0),
@@ -377,7 +378,7 @@ function EditSystemStockModal({
 
   async function save() {
     if (!canSaveSystemStock) return;
-    if (baseUnitChanged && (!Number.isFinite(baseConversion) || baseConversion <= 0)) {
+    if (baseUnitChanged && convertExistingStock && (!Number.isFinite(baseConversion) || baseConversion <= 0)) {
       setError(`To change the base unit, enter how many ${formatUnit(baseUnit)} make one ${formatUnit(item.baseUnit)}.`);
       return;
     }
@@ -418,13 +419,14 @@ function EditSystemStockModal({
           {error && <div className="rounded-xl border border-rose-400/20 bg-rose-400/[.07] p-3 text-sm text-rose-200">{error}</div>}
           <div className="grid grid-cols-2 gap-3">
             <label className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Quantity ({formatUnit(inputUnit)})*<input type="number" min="0" step="0.0001" value={quantity} onChange={event => setQuantity(event.target.value)} className="mt-2 h-11 w-full rounded-xl border border-white/10 bg-[#0d1832] px-3.5 text-sm normal-case tracking-normal text-white outline-none focus:border-cyan-400/60" /></label>
-            <label className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Base unit*<select value={baseUnit} onChange={event => { setBaseUnit(event.target.value); setBaseConversionInput(''); }} className="mt-2 h-11 w-full rounded-xl border border-white/10 bg-[#0d1832] px-3.5 text-sm normal-case tracking-normal text-white outline-none focus:border-cyan-400/60">{INVENTORY_UNITS.map(unit => <option key={unit} value={unit}>{formatUnit(unit)}</option>)}</select></label>
+            <label className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Base unit*<select value={baseUnit} onChange={event => { setBaseUnit(event.target.value); setBaseConversionInput(''); setConvertExistingStock(false); }} className="mt-2 h-11 w-full rounded-xl border border-white/10 bg-[#0d1832] px-3.5 text-sm normal-case tracking-normal text-white outline-none focus:border-cyan-400/60">{INVENTORY_UNITS.map(unit => <option key={unit} value={unit}>{formatUnit(unit)}</option>)}</select></label>
             <label className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Purchase unit*<select value={inputUnit} onChange={event => { const next = event.target.value; setInputUnit(next); const option = unitOptions.find(unit => unit.unit === next); setUnitsInBase(String(option?.conversion || (next === baseUnit ? 1 : ''))); }} className="mt-2 h-11 w-full rounded-xl border border-white/10 bg-[#0d1832] px-3.5 text-sm normal-case tracking-normal text-white outline-none focus:border-cyan-400/60">{unitOptions.map(option => <option key={option.unit} value={option.unit}>{formatUnit(option.unit)}</option>)}</select></label>
             <label className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Units in base<input type="number" min="0.000001" step="0.000001" value={unitsInBase} onChange={event => setUnitsInBase(event.target.value)} disabled={inputUnit === baseUnit} className="mt-2 h-11 w-full rounded-xl border border-white/10 bg-[#0d1832] px-3.5 text-sm normal-case tracking-normal text-white outline-none disabled:opacity-40 focus:border-cyan-400/60" /></label>
-            {baseUnitChanged && <label className="col-span-2 text-[11px] font-bold uppercase tracking-[0.12em] text-amber-300">{formatUnit(baseUnit)} per {formatUnit(item.baseUnit)}*<input type="number" min="0.000001" step="0.000001" value={baseConversionInput} onChange={event => setBaseConversionInput(event.target.value)} placeholder={`e.g. 0.083333 for 1 ${formatUnit(item.baseUnit)} = 0.083333 ${formatUnit(baseUnit)}`} className="mt-2 h-11 w-full rounded-xl border border-amber-400/30 bg-[#0d1832] px-3.5 text-sm normal-case tracking-normal text-white outline-none focus:border-amber-400/60" /><span className="mt-1 block text-[10px] font-normal normal-case tracking-normal text-slate-500">How many new base units equal one existing {formatUnit(item.baseUnit)}.</span></label>}
+            {baseUnitChanged && <label className="col-span-2 flex cursor-pointer items-start gap-2 rounded-xl border border-white/10 bg-white/[0.02] p-3 text-[11px] font-semibold normal-case tracking-normal text-slate-300"><input type="checkbox" checked={convertExistingStock} onChange={event => setConvertExistingStock(event.target.checked)} className="mt-0.5 h-4 w-4 accent-amber-400" /><span><span className="block">Convert existing stock from {formatUnit(item.baseUnit)} to {formatUnit(baseUnit)}</span><span className="mt-0.5 block text-[10px] font-normal text-slate-500">Leave this off when the previous base unit was entered incorrectly and only the label needs correction.</span></span></label>}
+            {baseUnitChanged && convertExistingStock && <label className="col-span-2 text-[11px] font-bold uppercase tracking-[0.12em] text-amber-300">{formatUnit(baseUnit)} per {formatUnit(item.baseUnit)}*<input type="number" min="0.000001" step="0.000001" value={baseConversionInput} onChange={event => setBaseConversionInput(event.target.value)} placeholder={`e.g. 0.083333 for 1 ${formatUnit(item.baseUnit)} = 0.083333 ${formatUnit(baseUnit)}`} className="mt-2 h-11 w-full rounded-xl border border-amber-400/30 bg-[#0d1832] px-3.5 text-sm normal-case tracking-normal text-white outline-none focus:border-amber-400/60" /><span className="mt-1 block text-[10px] font-normal normal-case tracking-normal text-slate-500">How many new base units equal one existing {formatUnit(item.baseUnit)}.</span></label>}
             <label className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Cost / {inputUnit ? formatUnit(inputUnit) : 'purchase unit'}* (₦)<input type="number" min="0" step="0.01" value={unitCost} onChange={event => setUnitCost(event.target.value)} className="mt-2 h-11 w-full rounded-xl border border-white/10 bg-[#0d1832] px-3.5 text-sm normal-case tracking-normal text-white outline-none focus:border-cyan-400/60" /></label>
           </div>
-          <div className="rounded-xl border border-cyan-400/15 bg-cyan-400/[.05] p-3 text-xs text-cyan-100">System will save <strong>{baseQuantity.toLocaleString()} {formatUnit(baseUnit)}</strong> at <strong>{money(baseCost)} / {formatUnit(baseUnit)}</strong>. {baseUnitChanged ? `Existing stock will be converted from ${formatUnit(item.baseUnit)} to ${formatUnit(baseUnit)}.` : 'Zero quantity is allowed.'}</div>
+          <div className="rounded-xl border border-cyan-400/15 bg-cyan-400/[.05] p-3 text-xs text-cyan-100">System will save <strong>{baseQuantity.toLocaleString()} {formatUnit(baseUnit)}</strong> at <strong>{money(baseCost)} / {formatUnit(baseUnit)}</strong>. {baseUnitChanged ? (convertExistingStock ? `Existing stock will be converted from ${formatUnit(item.baseUnit)} to ${formatUnit(baseUnit)}.` : `Existing stock will be re-labelled from ${formatUnit(item.baseUnit)} to ${formatUnit(baseUnit)} without conversion.`) : 'Zero quantity is allowed.'}</div>
         </div>
         <div className="flex justify-between border-t border-white/[0.07] px-6 py-4"><button type="button" onClick={onClose} disabled={saving} className="rounded-xl border border-white/10 px-4 py-2.5 text-sm font-medium text-slate-400">Cancel</button><button type="button" onClick={() => void save()} disabled={saving || !canSaveSystemStock} className="rounded-xl bg-cyan-500 px-5 py-2.5 text-sm font-semibold text-slate-950 disabled:opacity-40">{saving ? 'Saving…' : 'Save stock balance'}</button></div>
       </div>
