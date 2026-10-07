@@ -368,7 +368,7 @@ function EditSystemStockModal({
       const response = await fetch(`/api/v1/inventory/stock-items/${item.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ quantityOnHand: baseQuantity, costPrice: baseCost }),
+        body: JSON.stringify({ quantityOnHand: baseQuantity, costPrice: baseCost, mainWarehouseOnly: true }),
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'Could not update stock balance');
@@ -377,7 +377,7 @@ function EditSystemStockModal({
         const unitResponse = await fetch(`/api/v1/inventory/stock-items/${item.id}/units`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ unit: inputUnit, unitsInBase: conversion, isPurchaseUnit: true }),
+          body: JSON.stringify({ unit: inputUnit, unitsInBase: conversion, isPurchaseUnit: true, propagate: true }),
         });
         const unitResult = await unitResponse.json();
         if (!unitResponse.ok) throw new Error(unitResult.error || 'Could not update purchase unit');
@@ -572,7 +572,7 @@ export default function OpeningStockPage() {
         quantity: p.quantity,
         inputUnit: p.inputUnit,
         unitsInBase: p.unitsInBase,
-        overrideBaseUnit: true,
+        overrideBaseUnit: false,
         unitCost: p.unitCost,
         notes: p.notes,
         operationId: crypto.randomUUID(),

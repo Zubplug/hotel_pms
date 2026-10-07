@@ -60,9 +60,13 @@ export async function PATCH(request: Request, props: { params: Promise<{ id: str
 
         const existing = await prisma.stockItem.findFirst({
             where: { id: params.id, propertyId: ctx.propertyIds[0] },
+            include: { warehouse: { select: { posOutletId: true } } },
         });
 
         if (!existing) return NextResponse.json({ error: 'Stock item not found', data: null }, { status: 404 });
+        if (body.mainWarehouseOnly === true && existing.warehouse.posOutletId !== null) {
+            return NextResponse.json({ error: 'Live stock edits are restricted to the main stock manager warehouse', data: null }, { status: 400 });
+        }
 
         const updated = await prisma.stockItem.update({
             where: { id: params.id },

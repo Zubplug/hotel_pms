@@ -14,7 +14,7 @@ async function getContext(id: string, permission: 'inventory.read' | 'inventory.
   if (!hasInventoryPermission(role, permission, isSuperAdmin)) return { error: NextResponse.json({ error: 'Forbidden', data: null }, { status: 403 }) };
   const item = await prisma.stockItem.findFirst({
     where: { id, propertyId: ctx.propertyIds[0] },
-    select: { id: true, propertyId: true, warehouseId: true, baseUnit: true, name: true, sku: true },
+    select: { id: true, propertyId: true, warehouseId: true, baseUnit: true, name: true, sku: true, warehouse: { select: { posOutletId: true } } },
   });
   if (!item) return { error: NextResponse.json({ error: 'Stock item not found', data: null }, { status: 404 }) };
   return { item };
@@ -38,6 +38,9 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
     const context = await getContext(id, 'inventory.manage');
     if ('error' in context) return context.error;
     const body = await request.json();
+    if (body.propagate === false && context.item.warehouse.posOutletId !== null) {
+      return NextResponse.json({ error: 'Purchase-unit edits are restricted to the main stock manager warehouse', data: null }, { status: 400 });
+    }
     const unit = String(body.unit || '').toUpperCase() as UnitOfMeasure;
     const unitsInBase = Number(body.unitsInBase);
     if (!Object.values(UnitOfMeasure).includes(unit) || !Number.isFinite(unitsInBase) || unitsInBase <= 0) {
@@ -54,9 +57,11 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       : { name: { equals: context.item.name, mode: 'insensitive' as const } };
 
     const saved = await prisma.$transaction(async (tx) => {
-      const relatedItems = await tx.stockItem.findMany({
+      const relatedItems = body.propagate === false
+        ? [await tx.stockItem.findUniqueOrThrow({ where: { id: context.item.id }, include: { stockUnits: true, warehouse: { select: { posOutletId: true } } } })]
+        : await tx.stockItem.findMany({
         where: { propertyId: context.item.propertyId, isActive: true, ...itemIdentity },
-        select: { id: true },
+        include: { stockUnits: true, warehouse: { select: { posOutletId: true } } },
       });
       const relatedIds = relatedItems.map((related) => related.id);
 
