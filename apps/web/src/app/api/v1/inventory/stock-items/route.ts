@@ -96,6 +96,9 @@ export async function POST(request: Request) {
         if (!warehouse) {
             return NextResponse.json({ error: 'Warehouse not found or unauthorized', data: null }, { status: 404 });
         }
+        if (warehouse.posOutletId !== null) {
+            return NextResponse.json({ error: 'New stock items must be created in a main warehouse', data: null }, { status: 400 });
+        }
 
         const seed = randomUUID();
         const generatedSku = String(sku || '').trim() || generateStockSku(seed);
@@ -110,19 +113,57 @@ export async function POST(request: Request) {
         }
         if (!generatedBarcode) return NextResponse.json({ error: 'Could not generate a unique barcode', data: null }, { status: 409 });
 
-        const item = await prisma.stockItem.create({
-            data: {
-                propertyId: ctx.propertyIds[0],
-                warehouseId,
-                name,
-                sku: generatedSku,
-                barcode: generatedBarcode,
-                baseUnit,
-                stockType,
-                costPrice: 0, // Default to 0, MAC computes actual cost on first GRN
-                reorderLevel: reorderLevel ? parseFloat(reorderLevel) : null,
-                isActive,
-            },
+        const item = await prisma.$transaction(async (tx) => {
+            const mainItem = await tx.stockItem.create({
+                data: {
+                    propertyId: ctx.propertyIds[0],
+                    warehouseId,
+                    name,
+                    sku: generatedSku,
+                    barcode: generatedBarcode,
+                    baseUnit,
+                    stockType,
+                    costPrice: 0, // Default to 0, MAC computes actual cost on first GRN
+                    reorderLevel: reorderLevel ? parseFloat(reorderLevel) : null,
+                    isActive,
+                },
+            });
+
+            const outletWarehouses = await tx.warehouse.findMany({
+                where: { propertyId: ctx.propertyIds[0], posOutletId: { not: null }, isActive: true },
+                select: { id: true },
+            });
+
+            for (const outletWarehouse of outletWarehouses) {
+                const existingOutletItem = await tx.stockItem.findFirst({
+                    where: {
+                        propertyId: ctx.propertyIds[0],
+                        warehouseId: outletWarehouse.id,
+                        ...(generatedSku ? { sku: generatedSku } : { name }),
+                    },
+                    select: { id: true },
+                });
+                if (existingOutletItem) continue;
+
+                await tx.stockItem.create({
+                    data: {
+                        propertyId: ctx.propertyIds[0],
+                        warehouseId: outletWarehouse.id,
+                        name,
+                        sku: generatedSku,
+                        // The main barcode is property-unique; outlet rows resolve by SKU/name.
+                        barcode: null,
+                        baseUnit,
+                        stockType,
+                        costPrice: 0,
+                        quantityOnHand: 0,
+                        reorderLevel: reorderLevel ? parseFloat(reorderLevel) : null,
+                        isActive,
+                    },
+                });
+            }
+
+            return mainItem;
         });
 
         return NextResponse.json({ data: item, error: null }, { status: 201 });

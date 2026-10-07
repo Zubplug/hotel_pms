@@ -14,7 +14,7 @@ export default function NewStockItemPage() {
   useEffect(() => {
     fetch('/api/v1/inventory/warehouses')
       .then((res) => res.json())
-      .then((data) => setWarehouses(data.data || []))
+      .then((data) => setWarehouses((data.data || []).filter((warehouse: any) => warehouse.posOutletId == null)))
       .catch((err) => console.error('Failed to fetch warehouses', err));
   }, []);
 
@@ -76,9 +76,9 @@ export default function NewStockItemPage() {
             </div>
 
             <div className="space-y-2 col-span-2 md:col-span-1">
-              <label htmlFor="warehouseId" className="text-sm font-medium text-slate-800">Warehouse *</label>
+              <label htmlFor="warehouseId" className="text-sm font-medium text-slate-800">Main Warehouse *</label>
               <select required id="warehouseId" name="warehouseId" className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                <option value="">Select Warehouse</option>
+                <option value="">Select Main Warehouse</option>
                 {warehouses.map(w => (
                   <option key={w.id} value={w.id}>{w.name}</option>
                 ))}
