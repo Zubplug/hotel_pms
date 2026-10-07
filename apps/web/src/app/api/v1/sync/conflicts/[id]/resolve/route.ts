@@ -50,10 +50,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const userRole = String((session.user as any)?.role || ctx.role).toUpperCase();
     const isNightAuditor = userRole === 'NIGHT_AUDITOR';
     
-    if (!['MANAGER', 'ADMIN', 'OWNER', 'SUPER_ADMIN', 'CEO', 'FINANCE_MANAGER', 'HOTEL_MANAGER', 'ACCOUNTANT', 'DIRECTOR', 'GENERAL_CASHIER', 'NIGHT_AUDITOR'].includes(userRole)) {
+    if (!['MANAGER', 'ADMIN', 'OWNER', 'SUPER_ADMIN', 'CEO', 'FINANCE_MANAGER', 'HOTEL_MANAGER', 'ACCOUNTANT', 'DIRECTOR', 'GENERAL_CASHIER', 'NIGHT_AUDITOR', 'CASHIER', 'FRONT_DESK_CASHIER', 'FRONT_DESK_MANAGER'].includes(userRole)) {
         return NextResponse.json({ error: 'Insufficient permissions. Requires RESOLVE_SYNC_CONFLICT.' }, { status: 403 });
     }
-    if (isFinancial && !['ADMIN', 'OWNER', 'SUPER_ADMIN', 'CEO', 'FINANCE_MANAGER', 'HOTEL_MANAGER', 'ACCOUNTANT', 'DIRECTOR', 'GENERAL_CASHIER', 'NIGHT_AUDITOR'].includes(userRole)) {
+    if (isFinancial && !['ADMIN', 'OWNER', 'SUPER_ADMIN', 'CEO', 'FINANCE_MANAGER', 'HOTEL_MANAGER', 'ACCOUNTANT', 'DIRECTOR', 'GENERAL_CASHIER', 'NIGHT_AUDITOR', 'CASHIER', 'FRONT_DESK_CASHIER', 'FRONT_DESK_MANAGER'].includes(userRole)) {
         return NextResponse.json({ error: 'Financial conflicts require FORCE_SYNC_RESOLUTION capability.' }, { status: 403 });
     }
 
