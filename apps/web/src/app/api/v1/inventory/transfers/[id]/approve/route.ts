@@ -39,16 +39,28 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       return NextResponse.json({ data: null, error: 'Transfer is not pending approval' }, { status: 400 });
     }
 
+    const requesterRoles = transfer.requestedBy
+      ? await prisma.userRole.findMany({ where: { userId: transfer.requestedBy }, select: { role: { select: { name: true } } } })
+      : [];
+    const requesterIsStockStaff = requesterRoles.some(({ role: requesterRole }) =>
+      STOCK_STAFF_ROLES.has(String(requesterRole.name || '').toUpperCase()),
+    );
+
     const isOutletBound = Boolean(transfer.toWarehouse.posOutletId);
 
     // ── Flow A: Stock Manager/Keeper approves an FNB-requested outlet transfer ──
-    // Stock staff can approve transfers that are going TO an outlet warehouse.
-    if (isOutletBound && STOCK_STAFF_ROLES.has(normalizedRole)) {
+    // Stock staff can approve FNB requests, but cannot approve a request made
+    // by stock staff on behalf of F&B. Those requests require management.
+    if (isOutletBound && STOCK_STAFF_ROLES.has(normalizedRole) && !requesterIsStockStaff) {
       await prisma.stockTransfer.update({
         where: { id: params.id },
         data: { status: 'APPROVED', approvedBy: userId, approvedAt: new Date() },
       });
       return NextResponse.json({ data: { success: true }, error: null });
+    }
+
+    if (requesterIsStockStaff && STOCK_STAFF_ROLES.has(normalizedRole)) {
+      return NextResponse.json({ data: null, error: 'A management staff member must approve stock-control requests made for F&B' }, { status: 403 });
     }
 
     // ── All other transfers: standard management approval ──────────────────

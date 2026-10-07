@@ -138,11 +138,14 @@ export async function POST(request: Request) {
     }
 
     // ── Determine initial status ───────────────────────────────────────────
-    // Flow B: Stock Manager self-issues directly → ISSUED (top-management confirms later)
+    // Flow B: management may self-issue a direct push. A Stock Manager acting
+    // for F&B must still create a pending request for management approval.
     const isStockStaff   = STOCK_STAFF_ROLES.has(normalizedRole);
     const isTopMgmt      = TOP_MANAGEMENT_ROLES.has(normalizedRole) || isSuperAdmin;
-    const isSelfIssue    = selfIssue && (isStockStaff || isTopMgmt);
-    // Flow A: FNB_MANAGER requests → PENDING_APPROVAL; Stock Manager will approve & issue
+    const isStockStaffSelfIssue = selfIssue && isStockStaff;
+    const isSelfIssue    = selfIssue && !isStockStaffSelfIssue && isTopMgmt;
+    // Flow A: FNB_MANAGER or Stock Manager requests → PENDING_APPROVAL.
+    // Stock Manager requests require a management approval before issue.
     // Draft/submit flow for all other users
     const initialStatus  = isSelfIssue ? 'ISSUED' : 'PENDING_APPROVAL';
 
