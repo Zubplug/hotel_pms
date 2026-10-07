@@ -12,6 +12,8 @@ import {
   Utensils,
   LayoutDashboard,
   ClipboardList,
+  ReceiptText,
+  ArrowLeftRight,
   Users,
   CalendarDays,
   CalendarRange,
@@ -46,6 +48,15 @@ const FNB_NAV = [
       { name: 'Live Orders', href: '/fnb/orders', icon: ClipboardList },
       { name: 'Menu', href: '/fnb/menu', icon: Utensils },
       { name: 'Outlet Stock', href: '/fnb/inventory', icon: Package },
+    ],
+  },
+  {
+    name: 'Outlet Inventory',
+    icon: ReceiptText,
+    children: [
+      { name: 'Inventory & AvT', href: '/fnb/inventory', icon: ReceiptText },
+      { name: 'Stock Requisitions', href: '/fnb/requisitions', icon: ArrowLeftRight },
+      { name: 'Waste Log', href: '/fnb/inventory/waste', icon: ClipboardList },
     ],
   },
   {
