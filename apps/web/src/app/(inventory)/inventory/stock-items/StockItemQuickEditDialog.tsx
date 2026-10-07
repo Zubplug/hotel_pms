@@ -67,7 +67,7 @@ export function StockItemQuickEditDialog({
     setStockType(item.stockType || 'CONSUMABLE');
     setReorderLevel(item.reorderLevel === null ? '' : String(item.reorderLevel));
     setIsActive(item.isActive);
-    setQuantity(String(item.quantityOnHand));
+    setQuantity(String(Number(item.quantityOnHand) / Number(item.unitsInBase || 1)));
     setBaseUnit(item.baseUnit);
     setPurchaseUnit(item.purchaseUnit || item.baseUnit);
     setUnitsInBase(String(item.unitsInBase || 1));
@@ -100,7 +100,7 @@ export function StockItemQuickEditDialog({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: name.trim(),
-          quantityOnHand: Number(quantity),
+          quantityOnHand: Number(quantity) * purchaseConversion,
           costPrice: Number(costPerUnit) / purchaseConversion,
           baseUnit,
           baseConversion,
@@ -152,14 +152,14 @@ export function StockItemQuickEditDialog({
 
             <div className="flex items-center gap-3 rounded-xl border border-white/[0.07] bg-white/[0.025] p-3">
               <Package className="h-4 w-4 text-cyan-300" />
-              <div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-slate-200">{item.name}</p><p className="text-xs text-slate-500">{item.warehouseName} · {item.quantityOnHand.toLocaleString()} {item.baseUnit} on hand</p></div>
+              <div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-slate-200">{item.name}</p><p className="text-xs text-slate-500">{item.warehouseName} · {(Number(item.quantityOnHand) / Number(item.unitsInBase || 1)).toLocaleString()} {item.purchaseUnit || item.baseUnit} on hand</p></div>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="sm:col-span-2"><span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Item name</span><input required value={name} onChange={(event) => setName(event.target.value)} className="h-11 w-full rounded-xl border border-white/10 bg-[#0d1832] px-3 text-sm text-white outline-none focus:border-cyan-400/60" /></label>
               <label><span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Stock type</span><select value={stockType} onChange={(event) => setStockType(event.target.value)} className="h-11 w-full rounded-xl border border-white/10 bg-[#0d1832] px-3 text-sm text-white outline-none focus:border-cyan-400/60">{STOCK_TYPES.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}</select></label>
               <label><span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Reorder level</span><input type="number" min="0" step="0.01" value={reorderLevel} onChange={(event) => setReorderLevel(event.target.value)} placeholder="No alert threshold" className="h-11 w-full rounded-xl border border-white/10 bg-[#0d1832] px-3 text-sm text-white outline-none focus:border-cyan-400/60" /></label>
-              <label><span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Quantity <em className="text-cyan-300">*</em></span><input required type="number" min="0" step="0.01" value={quantity} onChange={(event) => setQuantity(event.target.value)} className="h-11 w-full rounded-xl border border-white/10 bg-[#0d1832] px-3 text-sm text-white outline-none focus:border-cyan-400/60" /></label>
+              <label><span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Quantity / {(item.purchaseUnit || item.baseUnit).toLowerCase()} <em className="text-cyan-300">*</em></span><input required type="number" min="0" step="0.01" value={quantity} onChange={(event) => setQuantity(event.target.value)} className="h-11 w-full rounded-xl border border-white/10 bg-[#0d1832] px-3 text-sm text-white outline-none focus:border-cyan-400/60" /></label>
               <label><span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Base unit <em className="text-cyan-300">*</em></span><select required value={baseUnit} onChange={(event) => setBaseUnit(event.target.value)} className="h-11 w-full rounded-xl border border-white/10 bg-[#0d1832] px-3 text-sm text-white outline-none focus:border-cyan-400/60">{INVENTORY_UNITS.map((unit) => <option key={unit} value={unit}>{unit.charAt(0) + unit.slice(1).toLowerCase()}</option>)}</select></label>
               <label><span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Cost / {purchaseUnit ? purchaseUnit.toLowerCase() : 'purchase unit'} <em className="text-cyan-300">*</em></span><input required type="number" min="0" step="0.01" value={costPerUnit} onChange={(event) => setCostPerUnit(event.target.value)} className="h-11 w-full rounded-xl border border-white/10 bg-[#0d1832] px-3 text-sm text-white outline-none focus:border-cyan-400/60" /><span className="mt-1 block text-[11px] text-slate-600">Converted and stored per {item.baseUnit.toLowerCase()}.</span></label>
               <label><span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Purchase unit <em className="text-cyan-300">*</em></span><select required value={purchaseUnit} onChange={(event) => { const next = event.target.value; setPurchaseUnit(next); if (next === baseUnit) setUnitsInBase('1'); else if (next !== item.purchaseUnit) setUnitsInBase(''); }} className="h-11 w-full rounded-xl border border-white/10 bg-[#0d1832] px-3 text-sm text-white outline-none focus:border-cyan-400/60">{[item.baseUnit, ...INVENTORY_UNITS].filter((unit, index, all) => all.indexOf(unit) === index).map((unit) => <option key={unit} value={unit}>{unit.charAt(0) + unit.slice(1).toLowerCase()}</option>)}</select></label>

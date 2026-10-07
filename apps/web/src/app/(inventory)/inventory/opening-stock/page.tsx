@@ -13,7 +13,7 @@ import { INVENTORY_UNITS, formatUnit } from '@/lib/inventory/units';
 type Unit      = { unit: string; unitsInBase: number | string; isPurchaseUnit?: boolean };
 type Item      = { id: string; name: string; sku?: string | null; baseUnit: string; quantityOnHand: number | string; costPrice: number | string; stockUnits?: Unit[] };
 type WarehouseT = { id: string; name: string; stockItems: Item[] };
-type Pending   = { id: string; warehouse: WarehouseT; item: Item; inputUnit: string; quantity: number; unitsInBase: number; unitCost: number; notes: string; baseQty: number; total: number };
+type Pending   = { id: string; warehouse: WarehouseT; item: Item; baseUnit: string; inputUnit: string; quantity: number; unitsInBase: number; unitCost: number; notes: string; baseQty: number; total: number };
 
 const money = (v: number) =>
   new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', maximumFractionDigits: 0 }).format(v);
@@ -153,7 +153,9 @@ function EditPendingModal({
       }),
   ];
 
-  const conversionNum  = inputUnit === p.item.baseUnit ? 1 : Number(unitsInBase || 0);
+  const conversionNum  = inputUnit === p.item.baseUnit
+    ? (p.baseUnit === p.item.baseUnit ? 1 : Number(unitsInBase || 0))
+    : Number(unitsInBase || 0);
   const quantityNum    = Number(quantity || 0);
   const costNum        = Number(unitCost || 0);
   const baseQty        = quantityNum * conversionNum;
@@ -232,7 +234,7 @@ function EditPendingModal({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="mb-2 block text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">
-                Quantity<span className="text-cyan-400">*</span>
+                Quantity ({formatUnit(inputUnit)})<span className="text-cyan-400">*</span>
               </label>
               <input
                 type="number" min="0.0001" step="0.0001"
@@ -293,7 +295,7 @@ function EditPendingModal({
             <div className="rounded-xl border border-cyan-400/15 bg-cyan-400/[.05] px-4 py-3">
               <div className="flex items-center justify-between text-xs">
                 <span className="text-cyan-200">Base qty after edit:</span>
-                <strong className="text-white">{baseQty.toFixed(2)} {formatUnit(p.item.baseUnit)}</strong>
+                <strong className="text-white">{baseQty.toFixed(2)} {formatUnit(p.baseUnit)}</strong>
               </div>
               <div className="mt-1 flex items-center justify-between text-xs">
                 <span className="text-cyan-200">Line value:</span>
@@ -407,7 +409,7 @@ function EditSystemStockModal({
         <div className="space-y-4 px-6 py-5">
           {error && <div className="rounded-xl border border-rose-400/20 bg-rose-400/[.07] p-3 text-sm text-rose-200">{error}</div>}
           <div className="grid grid-cols-2 gap-3">
-            <label className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Quantity ({formatUnit(item.baseUnit)})*<input type="number" min="0" step="0.0001" value={quantity} onChange={event => setQuantity(event.target.value)} className="mt-2 h-11 w-full rounded-xl border border-white/10 bg-[#0d1832] px-3.5 text-sm normal-case tracking-normal text-white outline-none focus:border-cyan-400/60" /></label>
+            <label className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Quantity ({formatUnit(inputUnit)})*<input type="number" min="0" step="0.0001" value={quantity} onChange={event => setQuantity(event.target.value)} className="mt-2 h-11 w-full rounded-xl border border-white/10 bg-[#0d1832] px-3.5 text-sm normal-case tracking-normal text-white outline-none focus:border-cyan-400/60" /></label>
             <label className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Base unit*<select value={baseUnit} onChange={event => setBaseUnit(event.target.value)} className="mt-2 h-11 w-full rounded-xl border border-white/10 bg-[#0d1832] px-3.5 text-sm normal-case tracking-normal text-white outline-none focus:border-cyan-400/60">{INVENTORY_UNITS.map(unit => <option key={unit} value={unit}>{formatUnit(unit)}</option>)}</select></label>
             <label className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Purchase unit*<select value={inputUnit} onChange={event => { const next = event.target.value; setInputUnit(next); const option = unitOptions.find(unit => unit.unit === next); setUnitsInBase(String(option?.conversion || (next === baseUnit ? 1 : ''))); }} className="mt-2 h-11 w-full rounded-xl border border-white/10 bg-[#0d1832] px-3.5 text-sm normal-case tracking-normal text-white outline-none focus:border-cyan-400/60">{unitOptions.map(option => <option key={option.unit} value={option.unit}>{formatUnit(option.unit)}</option>)}</select></label>
             <label className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Units in base<input type="number" min="0.000001" step="0.000001" value={unitsInBase} onChange={event => setUnitsInBase(event.target.value)} disabled={inputUnit === baseUnit} className="mt-2 h-11 w-full rounded-xl border border-white/10 bg-[#0d1832] px-3.5 text-sm normal-case tracking-normal text-white outline-none disabled:opacity-40 focus:border-cyan-400/60" /></label>
@@ -433,7 +435,7 @@ function PendingRow({ p, onRemove, onEdit }: { p: Pending; onRemove: () => void;
         <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500">
           <span>{p.warehouse.name}</span>
           <span>·</span>
-          <span className="text-cyan-300">{p.quantity} {formatUnit(p.inputUnit)} → {p.baseQty.toFixed(2)} {formatUnit(p.item.baseUnit)}</span>
+          <span className="text-cyan-300">{p.quantity} {formatUnit(p.inputUnit)} → {p.baseQty.toFixed(2)} {formatUnit(p.baseUnit)}</span>
           <span>·</span>
           <span className="text-emerald-300 font-medium">{money(p.total)}</span>
         </div>
@@ -468,6 +470,7 @@ export default function OpeningStockPage() {
   const [stockItemId, setStockItemId] = useState('');
   const [quantity, setQuantity]       = useState('');
   const [unitCost, setUnitCost]       = useState('');
+  const [baseUnit, setBaseUnit]       = useState('');
   const [inputUnit, setInputUnit]     = useState('');
   const [unitsInBase, setUnitsInBase] = useState('');
   const [notes, setNotes]             = useState('');
@@ -508,13 +511,17 @@ export default function OpeningStockPage() {
         })),
       ]
     : [];
-  const selectedConversion = inputUnit === item?.baseUnit ? 1 : Number(unitsInBase || 0);
+  const selectedConversion = inputUnit === baseUnit ? 1 : Number(unitsInBase || 0);
   const baseQuantity       = quantityNum * selectedConversion;
+  const existingAtSelectedBase = item && baseUnit !== item.baseUnit && inputUnit === item.baseUnit
+    ? Number(item.quantityOnHand) * selectedConversion
+    : Number(item?.quantityOnHand || 0);
   const total              = useMemo(() => quantityNum * costNum, [quantityNum, costNum]);
   const itemCount          = warehouses.reduce((s, w) => s + w.stockItems.length, 0);
   const onHandValue        = warehouses.reduce((s, w) => s + w.stockItems.reduce((sub, st) => sub + Number(st.quantityOnHand) * Number(st.costPrice || 0), 0), 0);
   const pendingTotal       = pending.reduce((s, p) => s + p.total, 0);
-  const canAdd             = !saving && !!warehouse && !!item && !!inputUnit && selectedConversion > 0 && quantityNum > 0 && costNum >= 0;
+  const baseUnitChangeNeedsCurrentBase = !!item && baseUnit !== item.baseUnit && inputUnit !== item.baseUnit;
+  const canAdd             = !saving && !!warehouse && !!item && !!baseUnit && !!inputUnit && !baseUnitChangeNeedsCurrentBase && selectedConversion > 0 && quantityNum > 0 && costNum >= 0;
 
   /* combobox options */
   const warehouseOptions = warehouses.map(w => ({ value: w.id, label: w.name }));
@@ -534,7 +541,7 @@ export default function OpeningStockPage() {
     if (!warehouse || !item || !inputUnit || selectedConversion <= 0 || quantityNum <= 0 || costNum < 0) return;
     const entry: Pending = {
       id: crypto.randomUUID(),
-      warehouse, item, inputUnit,
+      warehouse, item, baseUnit, inputUnit,
       quantity: quantityNum,
       unitsInBase: selectedConversion,
       unitCost: costNum,
@@ -573,6 +580,24 @@ export default function OpeningStockPage() {
 
   /* post one */
   async function postOne(p: Pending): Promise<{ ok: boolean; msg: string }> {
+    if (p.baseUnit !== p.item.baseUnit) {
+      if (p.inputUnit !== p.item.baseUnit || p.unitsInBase <= 0) {
+        return { ok: false, msg: `Changing the base unit requires ${formatUnit(p.item.baseUnit)} as the purchase unit and a valid conversion.` };
+      }
+      const conversionResponse = await fetch(`/api/v1/inventory/stock-items/${p.item.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          quantityOnHand: Number(p.item.quantityOnHand),
+          costPrice: Number(p.item.costPrice),
+          baseUnit: p.baseUnit,
+          baseConversion: p.unitsInBase,
+          mainWarehouseOnly: true,
+        }),
+      });
+      const conversionBody = await conversionResponse.json();
+      if (!conversionResponse.ok) return { ok: false, msg: conversionBody.error || 'Could not convert the item base unit' };
+    }
     const r    = await fetch('/api/v1/inventory/opening-stock', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -752,7 +777,7 @@ export default function OpeningStockPage() {
                     label="Main warehouse"
                     placeholder="Choose a warehouse…"
                     value={warehouseId}
-                    onChange={v => { setWarehouseId(v); setStockItemId(''); setInputUnit(''); setUnitsInBase(''); }}
+                  onChange={v => { setWarehouseId(v); setStockItemId(''); setBaseUnit(''); setInputUnit(''); setUnitsInBase(''); }}
                     options={warehouseOptions}
                     required
                   />
@@ -780,6 +805,7 @@ export default function OpeningStockPage() {
                         const sel = items.find(it => it.id === v);
                         const pu  = sel?.stockUnits?.find(u => u.isPurchaseUnit);
                         const next = pu?.unit || sel?.baseUnit || '';
+                        setBaseUnit(sel?.baseUnit || '');
                         setInputUnit(next);
                         setUnitsInBase(next === sel?.baseUnit ? '1' : String(pu?.unitsInBase || ''));
                       }}
@@ -789,10 +815,10 @@ export default function OpeningStockPage() {
                   </div>
 
                   {/* quantity + unit + base + cost */}
-                  <div className="grid gap-4 sm:grid-cols-4">
+                  <div className="grid gap-4 sm:grid-cols-5">
                     <div>
                       <label className="block text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400 mb-2">
-                        Quantity<span className="text-emerald-400">*</span>
+                        Quantity ({inputUnit ? formatUnit(inputUnit) : 'purchase unit'})<span className="text-emerald-400">*</span>
                       </label>
                       <input
                         type="number" min="0.0001" step="0.0001"
@@ -803,13 +829,32 @@ export default function OpeningStockPage() {
                       />
                     </div>
 
+                    <div>
+                      <label className="block text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400 mb-2">
+                        Base unit<span className="text-emerald-400">*</span>
+                      </label>
+                      <select
+                        value={baseUnit}
+                        onChange={e => {
+                          const next = e.target.value;
+                          setBaseUnit(next);
+                          if (next === inputUnit) setUnitsInBase('1');
+                          else if (inputUnit === item?.baseUnit) setUnitsInBase('');
+                        }}
+                        disabled={!item}
+                        className="h-11 w-full rounded-xl border border-white/10 bg-[#0d1832] px-3.5 text-sm text-white outline-none transition-all focus:border-emerald-400/60 disabled:opacity-40"
+                      >
+                        {INVENTORY_UNITS.map(unit => <option key={unit} value={unit}>{formatUnit(unit)}</option>)}
+                      </select>
+                    </div>
+
                     <ComboBox
                       label="Purchase unit"
                       placeholder="Unit…"
                       value={inputUnit}
                       onChange={v => {
                         setInputUnit(v);
-                        setUnitsInBase(v === item?.baseUnit ? '1' : String(item?.stockUnits?.find(u => u.unit === v)?.unitsInBase || ''));
+                        setUnitsInBase(v === baseUnit ? '1' : String(item?.stockUnits?.find(u => u.unit === v)?.unitsInBase || ''));
                       }}
                       options={unitOpts}
                       disabled={!item}
@@ -824,7 +869,7 @@ export default function OpeningStockPage() {
                         type="number" min="0.000001" step="0.000001"
                         value={unitsInBase}
                         onChange={e => setUnitsInBase(e.target.value)}
-                        disabled={!item || inputUnit === item?.baseUnit}
+                        disabled={!item || inputUnit === baseUnit}
                         placeholder="1"
                         className="h-11 w-full rounded-xl border border-white/10 bg-[#0d1832] px-3.5 text-sm text-white outline-none placeholder:text-slate-600 transition-all focus:border-emerald-400/60 focus:shadow-[0_0_0_3px_rgba(52,211,153,0.10)] disabled:opacity-40 disabled:cursor-not-allowed"
                       />
@@ -853,8 +898,8 @@ export default function OpeningStockPage() {
                       </div>
                       {selectedConversion > 0 && quantityNum > 0 && (
                         <div className="border-t border-cyan-400/10 pt-2 text-xs leading-5 text-cyan-100">
-                          Incoming: <strong>{baseQuantity.toFixed(2)} {formatUnit(item.baseUnit)}</strong> at <strong>{money(total)}</strong> value.<br/>
-                          Total after posting: <strong>{(Number(item.quantityOnHand) + baseQuantity).toFixed(2)} {formatUnit(item.baseUnit)}</strong>
+                          Incoming: <strong>{baseQuantity.toFixed(2)} {formatUnit(baseUnit)}</strong> at <strong>{money(total)}</strong> value.<br/>
+                          Total after posting: <strong>{(existingAtSelectedBase + baseQuantity).toFixed(2)} {formatUnit(baseUnit)}</strong>
                         </div>
                       )}
                     </div>

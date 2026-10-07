@@ -2,7 +2,7 @@ import prisma from '@hotel-pms/db';
 import { auth } from '@/lib/auth';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
-import { formatUnit } from '@/lib/inventory/units';
+import { formatUnit, purchaseSetup, toPurchaseCost, toPurchaseQuantity } from '@/lib/inventory/units';
 import {
   Package, ArrowLeft, Tag, BarChart2, Building2, Edit3,
   Hash, Scan, FolderOpen, AlertTriangle, CheckCircle2,
@@ -56,6 +56,10 @@ export default async function StockItemDetailPage(props: { params: Promise<{ id:
   /* derived */
   const qty          = Number(item.quantityOnHand);
   const cost         = Number(item.costPrice);
+  const purchase     = purchaseSetup(item.baseUnit, item.stockUnits);
+  const purchaseQty  = toPurchaseQuantity(qty, item.baseUnit, item.stockUnits);
+  const purchaseCost = toPurchaseCost(cost, item.baseUnit, item.stockUnits);
+  const purchaseReorder = item.reorderLevel === null ? null : toPurchaseQuantity(item.reorderLevel, item.baseUnit, item.stockUnits);
   const totalValue   = qty * cost;
   const reorder      = item.reorderLevel ? Number(item.reorderLevel) : null;
   const isLow        = reorder !== null && qty <= reorder;
@@ -71,8 +75,8 @@ export default async function StockItemDetailPage(props: { params: Promise<{ id:
   const StatusIcon   = isOut ? ShieldAlert : isLow ? AlertTriangle : CheckCircle2;
 
   /* tx stats */
-  const inflow  = transactions.filter(t => Number(t.quantity) > 0).reduce((s, t) => s + Number(t.quantity), 0);
-  const outflow = transactions.filter(t => Number(t.quantity) < 0).reduce((s, t) => s + Math.abs(Number(t.quantity)), 0);
+  const inflow  = transactions.filter(t => Number(t.quantity) > 0).reduce((s, t) => s + Number(t.quantity) / purchase.unitsInBase, 0);
+  const outflow = transactions.filter(t => Number(t.quantity) < 0).reduce((s, t) => s + Math.abs(Number(t.quantity)) / purchase.unitsInBase, 0);
 
   return (
     <div className="min-h-full bg-[#08111f] text-slate-100">
@@ -109,7 +113,7 @@ export default async function StockItemDetailPage(props: { params: Promise<{ id:
                   {item.inventoryCategory && (
                     <span className="flex items-center gap-1.5"><FolderOpen className="h-3.5 w-3.5" />{item.inventoryCategory.name}</span>
                   )}
-                  <span className="flex items-center gap-1.5"><Scale className="h-3.5 w-3.5" />{formatUnit(item.baseUnit)} base unit</span>
+                  <span className="flex items-center gap-1.5"><Scale className="h-3.5 w-3.5" />{formatUnit(purchase.unit)} purchase unit</span>
                 </div>
               </div>
             </div>
@@ -146,8 +150,8 @@ export default async function StockItemDetailPage(props: { params: Promise<{ id:
               <p className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Qty On Hand</p>
               <div className="rounded-xl bg-indigo-400/10 p-2 text-indigo-300"><Package className="h-4 w-4" /></div>
             </div>
-            <p className="mt-4 text-3xl font-bold text-white tabular-nums">{qty.toFixed(2)}</p>
-            <p className="mt-0.5 text-xs text-slate-500">{formatUnit(item.baseUnit)}</p>
+            <p className="mt-4 text-3xl font-bold text-white tabular-nums">{purchaseQty.toFixed(2)}</p>
+            <p className="mt-0.5 text-xs text-slate-500">{formatUnit(purchase.unit)}</p>
             {/* reorder gauge */}
             {stockPct !== null && (
               <div className="mt-3">
@@ -157,7 +161,7 @@ export default async function StockItemDetailPage(props: { params: Promise<{ id:
                     style={{ width: `${stockPct}%` }}
                   />
                 </div>
-                <p className="mt-1 text-[10px] text-slate-600">Reorder at {reorder?.toFixed(2)} {formatUnit(item.baseUnit)}</p>
+                <p className="mt-1 text-[10px] text-slate-600">Reorder at {purchaseReorder?.toFixed(2)} {formatUnit(purchase.unit)}</p>
               </div>
             )}
           </div>
@@ -178,8 +182,8 @@ export default async function StockItemDetailPage(props: { params: Promise<{ id:
               <p className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Cost Price</p>
               <div className="rounded-xl bg-amber-400/10 p-2 text-amber-300"><Tag className="h-4 w-4" /></div>
             </div>
-            <p className="mt-4 text-3xl font-bold text-white">{money(cost)}</p>
-            <p className="mt-0.5 text-xs text-slate-500">per {formatUnit(item.baseUnit)}</p>
+            <p className="mt-4 text-3xl font-bold text-white">{money(purchaseCost)}</p>
+            <p className="mt-0.5 text-xs text-slate-500">per {formatUnit(purchase.unit)}</p>
           </div>
 
           {/* tx summary */}
@@ -216,7 +220,7 @@ export default async function StockItemDetailPage(props: { params: Promise<{ id:
                   { label: 'Barcode',      icon: <Scan className="h-3.5 w-3.5" />,   value: item.barcode  || '—' },
                   { label: 'Category',     icon: <FolderOpen className="h-3.5 w-3.5" />, value: item.inventoryCategory?.name || 'Uncategorized' },
                   { label: 'Stock Type',   icon: <Tag className="h-3.5 w-3.5" />,    value: item.stockType.replace(/_/g, ' ') },
-                  { label: 'Reorder At',   icon: <AlertTriangle className="h-3.5 w-3.5" />, value: reorder ? `${reorder.toFixed(2)} ${formatUnit(item.baseUnit)}` : 'Not set' },
+                  { label: 'Reorder At',   icon: <AlertTriangle className="h-3.5 w-3.5" />, value: purchaseReorder ? `${purchaseReorder.toFixed(2)} ${formatUnit(purchase.unit)}` : 'Not set' },
                   { label: 'Status',       icon: <CheckCircle2 className="h-3.5 w-3.5" />, value: item.isActive ? 'Active' : 'Inactive' },
                 ].map(row => (
                   <div key={row.label} className="flex items-start justify-between gap-3 border-b border-white/[0.05] pb-3 last:border-none last:pb-0">
@@ -300,13 +304,13 @@ export default async function StockItemDetailPage(props: { params: Promise<{ id:
                           <td className="px-5 py-3.5 text-right">
                             <span className={`inline-flex items-center gap-0.5 font-semibold tabular-nums ${positive ? 'text-emerald-300' : zero ? 'text-slate-500' : 'text-rose-300'}`}>
                               {positive ? <TrendingUp className="h-3.5 w-3.5" /> : zero ? <Minus className="h-3.5 w-3.5" /> : <TrendingDown className="h-3.5 w-3.5" />}
-                              {positive ? '+' : ''}{qtyNum.toFixed(2)}
+                              {positive ? '+' : ''}{(qtyNum / purchase.unitsInBase).toFixed(2)}
                             </span>
                           </td>
 
                           {/* balance after */}
                           <td className="px-5 py-3.5 text-right font-semibold text-slate-200 tabular-nums">
-                            {Number(tx.quantityAfter).toFixed(2)}
+                            {(Number(tx.quantityAfter) / purchase.unitsInBase).toFixed(2)}
                           </td>
 
                           {/* reference */}
