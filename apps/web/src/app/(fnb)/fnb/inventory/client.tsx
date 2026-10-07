@@ -351,7 +351,7 @@ export function FnbInventoryClient() {
                         {hasCount ? formatCurrency(item.varianceValue) : '--'}
                       </span>
                   </TableCell>
-                  <TableCell className="pr-6 text-right py-3">{data?.warehouse?.posOutletId && <OutletStockEditDialog stockItemId={item.stockItemId} warehouseName={data?.warehouse?.name || 'Selected outlet'} onSaved={fetchReport} />}</TableCell>
+                  <TableCell className="pr-6 text-right py-3">{data?.warehouse?.posOutletId && <OutletStockEditDialog stockItemId={item.stockItemId} warehouseName={data?.warehouse?.name || 'Selected outlet'} mainStock={item.mainStock} onSaved={fetchReport} />}</TableCell>
                   </TableRow>
                 );
               })}

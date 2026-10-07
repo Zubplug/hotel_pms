@@ -49,6 +49,10 @@ export async function GET(request: Request) {
       },
       orderBy: { name: 'asc' }
     });
+    const mainStockItems = await prisma.stockItem.findMany({
+      where: { propertyId: warehouse.propertyId, warehouse: { posOutletId: null }, isActive: true },
+      include: { stockUnits: true },
+    });
 
     // 3. Fetch the LATEST COMPLETED stocktake for this warehouse to prevent N+1 queries
     const latestStocktake = await prisma.stocktake.findFirst({
@@ -118,6 +122,21 @@ export async function GET(request: Request) {
         costPrice,
         varianceValue,
         lastStocktakeAt
+        ,mainStock: (() => {
+          const main = mainStockItems.find(candidate =>
+            (item.sku && candidate.sku === item.sku) ||
+            (item.barcode && candidate.barcode === item.barcode) ||
+            candidate.name.trim().toLowerCase() === item.name.trim().toLowerCase()
+          );
+          if (!main) return null;
+          const purchase = main.stockUnits.find(unit => unit.isPurchaseUnit);
+          return {
+            baseUnit: main.baseUnit,
+            costPrice: Number(main.costPrice || 0),
+            purchaseUnit: purchase?.unit || main.baseUnit,
+            unitsInBase: purchase ? Number(purchase.unitsInBase) : 1,
+          };
+        })()
       };
     });
 
