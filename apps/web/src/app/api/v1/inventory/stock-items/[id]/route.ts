@@ -46,7 +46,9 @@ export async function PATCH(request: Request, props: { params: Promise<{ id: str
         const { role, isSuperAdmin } = session.user as any;
     const ctx = await requireOrganizationContext(session.user.id);
         await requireEntitlement(ctx.organizationId, 'MODULE_OPERATIONS', ctx.propertyIds[0]);
-        if (!hasInventoryPermission(role, 'inventory.manage', isSuperAdmin)) return NextResponse.json({ error: 'Forbidden', data: null }, { status: 403 });
+        const canManageInventory = hasInventoryPermission(role, 'inventory.manage', isSuperAdmin);
+        const canManageOutletStock = hasInventoryPermission(role, 'inventory.outlet.manage', isSuperAdmin);
+        if (!canManageInventory && !canManageOutletStock) return NextResponse.json({ error: 'Forbidden', data: null }, { status: 403 });
 
         const body = await request.json();
         const { name, sku, barcode, stockType, reorderLevel, isActive, quantityOnHand, costPrice } = body;
@@ -64,6 +66,10 @@ export async function PATCH(request: Request, props: { params: Promise<{ id: str
         });
 
         if (!existing) return NextResponse.json({ error: 'Stock item not found', data: null }, { status: 404 });
+        if (!canManageInventory && body.outletStockOnly !== true) return NextResponse.json({ error: 'Outlet stock edits require outlet scope', data: null }, { status: 403 });
+        if (body.outletStockOnly === true && (!existing.warehouse.posOutletId || (!isSuperAdmin && !(ctx.outletIds as string[]).includes(existing.warehouse.posOutletId)))) {
+            return NextResponse.json({ error: 'You can only edit stock in your assigned outlet warehouse', data: null }, { status: 403 });
+        }
         if (body.mainWarehouseOnly === true && existing.warehouse.posOutletId !== null) {
             return NextResponse.json({ error: 'Live stock edits are restricted to the main stock manager warehouse', data: null }, { status: 400 });
         }

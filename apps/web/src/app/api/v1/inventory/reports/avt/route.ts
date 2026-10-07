@@ -123,9 +123,10 @@ export async function GET(request: Request) {
 
     const responsePayload = {
       warehouse: {
-        id: warehouse.id,
-        name: warehouse.name,
-        parentWarehouseId: warehouse.parentWarehouseId
+      id: warehouse.id,
+      name: warehouse.name,
+      parentWarehouseId: warehouse.parentWarehouseId,
+      posOutletId: warehouse.posOutletId
       },
       summary: {
         totalItems,

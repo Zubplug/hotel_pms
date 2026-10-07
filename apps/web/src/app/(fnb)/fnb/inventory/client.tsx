@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { format } from 'date-fns';
+import { OutletStockEditDialog } from './OutletStockEditDialog';
 
 function formatCurrency(amount: number) {
   return new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(amount);
@@ -73,7 +74,7 @@ export function FnbInventoryClient() {
   useEffect(() => {
     async function loadWarehouses() {
       try {
-        const res = await fetch('/api/v1/inventory/warehouses');
+        const res = await fetch('/api/v1/inventory/warehouses?scope=outlet');
         if (res.ok) {
           const json = await res.json();
           const items = json.data?.items || json.data || [];
@@ -278,6 +279,7 @@ export function FnbInventoryClient() {
                 <TableHead className="font-semibold text-slate-600 dark:text-slate-300 h-11 text-right">Var Qty</TableHead>
                 <TableHead className="font-semibold text-slate-600 dark:text-slate-300 h-11 text-right">Var %</TableHead>
                 <TableHead className="pr-6 font-semibold text-slate-600 dark:text-slate-300 h-11 text-right">Var Value</TableHead>
+                <TableHead className="pr-6 font-semibold text-slate-600 dark:text-slate-300 h-11 text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -344,11 +346,12 @@ export function FnbInventoryClient() {
                       </span>
                     </TableCell>
                     
-                    <TableCell className="pr-6 text-right py-3">
+                  <TableCell className="text-right py-3">
                       <span className={`text-sm font-medium ${isShortage ? 'text-red-600 dark:text-red-400' : isOverage ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-600 dark:text-slate-300'}`}>
                         {hasCount ? formatCurrency(item.varianceValue) : '--'}
                       </span>
-                    </TableCell>
+                  </TableCell>
+                  <TableCell className="pr-6 text-right py-3">{data?.warehouse?.posOutletId && <OutletStockEditDialog stockItemId={item.stockItemId} warehouseName={data?.warehouse?.name || 'Selected outlet'} onSaved={fetchReport} />}</TableCell>
                   </TableRow>
                 );
               })}

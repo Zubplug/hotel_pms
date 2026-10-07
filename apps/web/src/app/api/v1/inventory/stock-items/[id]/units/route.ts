@@ -9,9 +9,11 @@ export const dynamic = 'force-dynamic';
 async function getContext(id: string, permission: 'inventory.read' | 'inventory.manage') {
   const session = await auth();
   if (!session?.user) return { error: NextResponse.json({ error: 'Unauthorized', data: null }, { status: 401 }) };
-  const { role, isSuperAdmin } = session.user as any;
+    const { role, isSuperAdmin } = session.user as any;
     const ctx = await requireOrganizationContext(session.user.id);
-  if (!hasInventoryPermission(role, permission, isSuperAdmin)) return { error: NextResponse.json({ error: 'Forbidden', data: null }, { status: 403 }) };
+  const canReadOrManage = hasInventoryPermission(role, permission, isSuperAdmin)
+    || (permission === 'inventory.manage' && hasInventoryPermission(role, 'inventory.outlet.manage', isSuperAdmin));
+  if (!canReadOrManage) return { error: NextResponse.json({ error: 'Forbidden', data: null }, { status: 403 }) };
   const item = await prisma.stockItem.findFirst({
     where: { id, propertyId: ctx.propertyIds[0] },
     select: { id: true, propertyId: true, warehouseId: true, baseUnit: true, name: true, sku: true, warehouse: { select: { posOutletId: true } } },
@@ -38,6 +40,12 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
     const context = await getContext(id, 'inventory.manage');
     if ('error' in context) return context.error;
     const body = await request.json();
+    const { role, isSuperAdmin } = (await auth())!.user as any;
+    const canManageInventory = hasInventoryPermission(role, 'inventory.manage', isSuperAdmin);
+    if (!canManageInventory && body.outletStockOnly !== true) return NextResponse.json({ error: 'Outlet stock edits require outlet scope', data: null }, { status: 403 });
+    if (body.outletStockOnly === true && (!context.item.warehouse.posOutletId || (!isSuperAdmin && !(await requireOrganizationContext((await auth())!.user.id)).outletIds.includes(context.item.warehouse.posOutletId)))) {
+      return NextResponse.json({ error: 'You can only edit purchase units in your assigned outlet warehouse', data: null }, { status: 403 });
+    }
     if (body.propagate === false && context.item.warehouse.posOutletId !== null) {
       return NextResponse.json({ error: 'Purchase-unit edits are restricted to the main stock manager warehouse', data: null }, { status: 400 });
     }

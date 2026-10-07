@@ -16,8 +16,11 @@ export async function GET(request: Request) {
         if (!hasInventoryPermission(role, 'inventory.read', isSuperAdmin)) return NextResponse.json({ error: 'Forbidden', data: null }, { status: 403 });
 
         const where: any = { propertyId: { in: ctx.propertyIds as string[] } };
+        const scope = new URL(request.url).searchParams.get('scope');
         // Restrict to assigned outlets + main warehouses unless the user is a high-level admin or stock manager
-        if (!['SUPER_ADMIN', 'ADMIN', 'OWNER', 'MANAGER', 'GENERAL_MANAGER', 'GENERAL_CASHIER', 'STOCK_MANAGER', 'STOCK_KEEPER'].includes(role)) {
+        if (scope === 'outlet' && !['SUPER_ADMIN', 'ADMIN', 'OWNER', 'MANAGER', 'GENERAL_MANAGER', 'GENERAL_CASHIER', 'STOCK_MANAGER', 'STOCK_KEEPER'].includes(role)) {
+            where.posOutletId = { in: ctx.outletIds as string[] };
+        } else if (!['SUPER_ADMIN', 'ADMIN', 'OWNER', 'MANAGER', 'GENERAL_MANAGER', 'GENERAL_CASHIER', 'STOCK_MANAGER', 'STOCK_KEEPER'].includes(role)) {
             where.OR = [
                 { posOutletId: { in: ctx.outletIds as string[] } },
                 { posOutletId: null }

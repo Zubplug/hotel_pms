@@ -12,6 +12,8 @@ export const INVENTORY_PERMISSIONS = {
 
   // Managing stock items, warehouses, and general inventory master data
   'inventory.manage': ['CEO', 'SUPER_ADMIN', 'MANAGER', 'DIRECTOR', 'STOCK_MANAGER'],
+  // F&B managers may correct live balances in their assigned outlet warehouse only.
+  'inventory.outlet.manage': ['CEO', 'SUPER_ADMIN', 'MANAGER', 'DIRECTOR', 'FNB_MANAGER', 'OUTLET_HEAD'],
 
   'inventory.alert.resolve': ['CEO', 'SUPER_ADMIN', 'MANAGER', 'DIRECTOR', 'INVENTORY_MANAGER', 'STOCK_KEEPER', 'STOCK_MANAGER'],
 
