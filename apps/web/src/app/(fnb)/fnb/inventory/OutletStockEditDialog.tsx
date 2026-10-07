@@ -11,9 +11,15 @@ type Props = {
   onSaved: () => void;
 };
 
+type OutletStockItem = {
+  id: string;
+  name: string;
+  quantityOnHand: number | string;
+};
+
 export function OutletStockEditDialog({ stockItemId, warehouseName, mainStock, onSaved }: Props) {
   const [open, setOpen] = useState(false);
-  const [item, setItem] = useState<any>(null);
+  const [item, setItem] = useState<OutletStockItem | null>(null);
   const [quantity, setQuantity] = useState('');
   const [purchaseUnit, setPurchaseUnit] = useState('');
   const [unitsInBase, setUnitsInBase] = useState('1');
