@@ -83,6 +83,15 @@ export default function TransferActionBar({ transferId, status, canApprove, canI
           </>
         )}
 
+        {/* ── APPROVED → Reject before issue or post stock ──────────────── */}
+        {status === 'APPROVED' && canApprove && (
+          <ActionBtn label="Reject" icon={<XCircle className="h-4 w-4" />} tone="rose"
+            onClick={() => {
+              const reason = window.prompt('Enter reason for rejecting this approved transfer:');
+              if (reason) callAction('reject', 'Reject', { reason });
+            }} />
+        )}
+
         {/* ── APPROVED → Issue (Stock Manager posts stock) ──────────────── */}
         {status === 'APPROVED' && canIssue && (
           <ActionBtn label="Issue stock" icon={<Truck className="h-4 w-4" />} tone="violet"

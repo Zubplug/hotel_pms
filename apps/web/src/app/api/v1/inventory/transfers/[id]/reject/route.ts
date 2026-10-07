@@ -45,7 +45,7 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
     if (transfer.propertyId !== ctx.propertyIds[0]) {
       return NextResponse.json({ data: null, error: 'Not found' }, { status: 404 });
     }
-    if (transfer.status !== 'PENDING_APPROVAL') {
+    if (!['PENDING_APPROVAL', 'APPROVED'].includes(transfer.status)) {
       return NextResponse.json({
         data: null,
         error: `Transfer cannot be rejected — current status is ${transfer.status}.`,

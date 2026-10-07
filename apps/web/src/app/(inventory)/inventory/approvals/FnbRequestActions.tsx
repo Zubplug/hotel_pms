@@ -63,6 +63,7 @@ export default function FnbRequestActions({ transferId, status }: { transferId: 
 
   if (status === 'APPROVED') {
     return <div className="flex flex-wrap justify-end gap-2">
+      <button disabled={!!busy} onClick={() => { const reason = window.prompt('Reason for rejecting this approved request:')?.trim(); if (reason) void call('reject', 'Reject', { reason }); }} className="inline-flex items-center gap-1.5 rounded-lg border border-rose-400/25 px-3 py-2 text-xs font-semibold text-rose-200 hover:bg-rose-400/10 disabled:opacity-50"><XCircle className="h-3.5 w-3.5" />Reject</button>
       <button disabled={!!busy} onClick={() => void call('post', 'Issue', { operationId: crypto.randomUUID() })} className="inline-flex items-center gap-1.5 rounded-lg border border-violet-400/25 bg-violet-400/10 px-3 py-2 text-xs font-semibold text-violet-200 hover:bg-violet-400/20 disabled:opacity-50">{busy === 'Issue' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}Issue stock</button>
       {error && <span className="basis-full text-right text-[11px] text-rose-300">{error}</span>}
     </div>;
