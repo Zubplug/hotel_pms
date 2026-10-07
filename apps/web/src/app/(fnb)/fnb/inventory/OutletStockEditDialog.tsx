@@ -2,13 +2,13 @@
 
 import { useState } from 'react';
 import { Edit2, Loader2, X } from 'lucide-react';
-import { formatUnit } from '@/lib/inventory/units';
+import { formatUnit, roundCurrency } from '@/lib/inventory/units';
 import { formatCurrency } from '@/lib/utils';
 
 type Props = {
   stockItemId: string;
   warehouseName: string;
-  mainStock: { baseUnit: string; costPrice: number; purchaseUnit: string; unitsInBase: number } | null;
+  mainStock: { baseUnit: string; costPrice: number; purchaseCost: number | null; purchaseUnit: string; unitsInBase: number } | null;
   onSaved: () => void;
 };
 
@@ -44,7 +44,9 @@ export function OutletStockEditDialog({ stockItemId, warehouseName, mainStock, o
       setUnitsInBase(String(mainStock.unitsInBase));
       // F&B counts in the base/selling unit, such as bottles—not purchase units.
       setQuantity(String(Number(body.data.quantityOnHand)));
-      const purchaseCost = Number(mainStock.costPrice) * Number(mainStock.unitsInBase || 1);
+      const purchaseCost = mainStock.purchaseCost == null
+        ? roundCurrency(Number(mainStock.costPrice) * Number(mainStock.unitsInBase || 1))
+        : Number(mainStock.purchaseCost);
       setCost(String(purchaseCost));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not load outlet stock');

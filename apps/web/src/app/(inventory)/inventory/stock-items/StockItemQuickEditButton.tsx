@@ -7,7 +7,7 @@ import { StockItemQuickEditDialog } from './StockItemQuickEditDialog';
 type StockItemForEdit = {
   id: string; name: string; sku: string | null; barcode: string | null;
   baseUnit: string; stockType: string; reorderLevel: number | null;
-  isActive: boolean; quantityOnHand: number; costPrice: number; purchaseUnit: string; unitsInBase: number; warehouseName: string;
+  isActive: boolean; quantityOnHand: number; costPrice: number; purchaseUnit: string; unitsInBase: number; purchaseCost: number | null; warehouseName: string;
 };
 
 export function StockItemQuickEditButton({ item }: { item: StockItemForEdit }) {

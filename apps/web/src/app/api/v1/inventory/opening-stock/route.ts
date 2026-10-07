@@ -134,8 +134,8 @@ export async function POST(request: Request) {
         for (const relatedId of relatedIds) {
           await tx.stockItemUnit.upsert({
             where: { stockItemId_unit: { stockItemId: relatedId, unit: inputUnit as UnitOfMeasure } },
-            create: { stockItemId: relatedId, unit: inputUnit as UnitOfMeasure, unitsInBase, isPurchaseUnit: true },
-            update: { unitsInBase, isPurchaseUnit: true },
+            create: { stockItemId: relatedId, unit: inputUnit as UnitOfMeasure, unitsInBase, purchaseCost: unitCost, isPurchaseUnit: true },
+            update: { unitsInBase, purchaseCost: unitCost, isPurchaseUnit: true },
           });
         }
       }

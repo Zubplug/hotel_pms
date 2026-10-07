@@ -59,6 +59,10 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
     }
     const isPurchaseUnit = Boolean(body.isPurchaseUnit);
     const isIssueUnit = Boolean(body.isIssueUnit);
+    const purchaseCost = body.purchaseCost == null || body.purchaseCost === '' ? null : Number(body.purchaseCost);
+    if (isPurchaseUnit && (purchaseCost === null || !Number.isFinite(purchaseCost) || purchaseCost < 0)) {
+      return NextResponse.json({ error: 'A valid purchase-unit cost is required', data: null }, { status: 400 });
+    }
 
     const itemIdentity = context.item.sku
       ? { sku: context.item.sku }
@@ -86,8 +90,8 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
       for (const relatedId of relatedIds) {
         const related = await tx.stockItemUnit.upsert({
           where: { stockItemId_unit: { stockItemId: relatedId, unit } },
-          create: { stockItemId: relatedId, unit, unitsInBase, barcode: body.barcode || null, isPurchaseUnit, isIssueUnit },
-          update: { unitsInBase, barcode: body.barcode || null, isPurchaseUnit, isIssueUnit },
+          create: { stockItemId: relatedId, unit, unitsInBase, purchaseCost: isPurchaseUnit ? purchaseCost : null, barcode: body.barcode || null, isPurchaseUnit, isIssueUnit },
+          update: { unitsInBase, purchaseCost: isPurchaseUnit ? purchaseCost : null, barcode: body.barcode || null, isPurchaseUnit, isIssueUnit },
         });
         if (relatedId === context.item.id) firstSaved = related;
       }

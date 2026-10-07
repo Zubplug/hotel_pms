@@ -2941,6 +2941,8 @@ model StockItemUnit {
   stockItem      StockItem     @relation(fields: [stockItemId], references: [id], onDelete: Cascade)
   unit           UnitOfMeasure
   unitsInBase    Decimal       @db.Decimal(18, 6)
+  /// Price of one purchase unit in the property's currency, when this is the purchase unit.
+  purchaseCost   Decimal?      @db.Decimal(18, 2)
   barcode        String?
   isPurchaseUnit Boolean       @default(false)
   isIssueUnit    Boolean       @default(false)

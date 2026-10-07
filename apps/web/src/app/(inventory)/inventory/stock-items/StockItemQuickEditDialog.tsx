@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { AlertTriangle, CheckCircle2, Edit3, Loader2, Package } from 'lucide-react';
-import { INVENTORY_UNITS } from '@/lib/inventory/units';
+import { INVENTORY_UNITS, roundCurrency } from '@/lib/inventory/units';
 import {
   Dialog,
   DialogContent,
@@ -36,6 +36,7 @@ type StockItemForEdit = {
   costPrice: number;
   purchaseUnit: string;
   unitsInBase: number;
+  purchaseCost: number | null;
   warehouseName: string;
 };
 
@@ -71,7 +72,9 @@ export function StockItemQuickEditDialog({
     setBaseUnit(item.baseUnit);
     setPurchaseUnit(item.purchaseUnit || item.baseUnit);
     setUnitsInBase(String(item.unitsInBase || 1));
-    setCostPerUnit(String(Number(item.costPrice) * Number(item.unitsInBase || 1)));
+    setCostPerUnit(String(item.purchaseCost == null
+      ? roundCurrency(Number(item.costPrice) * Number(item.unitsInBase || 1))
+      : item.purchaseCost));
     setError('');
   }, [item]);
 
@@ -116,7 +119,7 @@ export function StockItemQuickEditDialog({
         const unitResponse = await fetch(`/api/v1/inventory/stock-items/${item.id}/units`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ unit: purchaseUnit, unitsInBase: Number(unitsInBase), isPurchaseUnit: true }),
+          body: JSON.stringify({ unit: purchaseUnit, unitsInBase: Number(unitsInBase), purchaseCost: Number(costPerUnit), isPurchaseUnit: true }),
         });
         const unitResult = await unitResponse.json();
         if (!unitResponse.ok) throw new Error(unitResult.error || 'Could not save purchase unit');

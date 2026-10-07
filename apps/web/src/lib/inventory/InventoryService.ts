@@ -316,6 +316,19 @@ export class InventoryService {
           }
         });
 
+        // Keep the entered procurement price on the configured purchase-unit
+        // row. StockItem.costPrice remains the base-unit MAC used for costing.
+        if (poItem?.unitOfMeasure && conversionToBase > 0) {
+          await tx.stockItemUnit.updateMany({
+            where: {
+              stockItemId: item.stockItemId,
+              unit: poItem.unitOfMeasure,
+              isPurchaseUnit: true,
+            },
+            data: { purchaseCost: receivedCost },
+          });
+        }
+
         // 2. Create StockTransaction audit ledger
         await tx.stockTransaction.create({
           data: {
@@ -680,4 +693,3 @@ export class InventoryService {
     });
   }
 }
-

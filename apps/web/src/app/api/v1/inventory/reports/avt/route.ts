@@ -133,6 +133,7 @@ export async function GET(request: Request) {
           return {
             baseUnit: main.baseUnit,
             costPrice: Number(main.costPrice || 0),
+            purchaseCost: purchase?.purchaseCost == null ? null : Number(purchase.purchaseCost),
             purchaseUnit: purchase?.unit || main.baseUnit,
             unitsInBase: purchase ? Number(purchase.unitsInBase) : 1,
           };
