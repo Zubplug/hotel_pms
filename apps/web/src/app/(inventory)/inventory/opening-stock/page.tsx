@@ -646,6 +646,14 @@ export default function OpeningStockPage() {
                   <div className="relative">
                     <div className="mb-2 flex items-center justify-between">
                       <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Stock item<span className="ml-0.5 text-emerald-400">*</span></p>
+                      {item && (
+                        <Link
+                          href={`/inventory/stock-items/${item.id}/edit`}
+                          className="inline-flex items-center gap-1 rounded-lg border border-cyan-400/20 bg-cyan-400/[0.06] px-2.5 py-1 text-[11px] font-semibold text-cyan-300 transition-colors hover:bg-cyan-400/[0.12] hover:text-cyan-200"
+                        >
+                          <Edit2 className="h-3 w-3" /> Edit stock item
+                        </Link>
+                      )}
                     </div>
                     <ComboBox
                       label=""
