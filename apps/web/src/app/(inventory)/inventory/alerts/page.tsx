@@ -5,6 +5,7 @@ import type { LucideIcon } from 'lucide-react';
 import { AlertCircle, AlertTriangle, ArrowRight, Bell, Boxes, CheckCircle2, ClipboardCheck, PackagePlus, RefreshCw, ShieldAlert, Truck } from 'lucide-react';
 import AlertClientActions from './AlertClientActions';
 import { InventoryAlertService } from '@/lib/inventory/InventoryAlertService';
+import { purchaseSetup } from '@/lib/inventory/units';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,11 +25,23 @@ export default async function InventoryAlertsPage() {
 
   try { await InventoryAlertService.sync(propertyId); } catch (error) { console.error('[Inventory Alerts] Failed to sync alert snapshot', error); }
 
-  const [alerts, items, openOrders] = await Promise.all([
-    prisma.inventoryAlert.findMany({ where: { propertyId, status: { in: ['OPEN', 'ACKNOWLEDGED'] } }, select: { id: true, stockItemId: true, type: true, message: true, status: true, createdAt: true, stockItem: { select: { name: true, stockType: true, quantityOnHand: true, reorderLevel: true, costPrice: true, baseUnit: true, warehouse: { select: { id: true, name: true } } } } }, orderBy: { createdAt: 'desc' } }),
+  const [rawAlerts, items, openOrders] = await Promise.all([
+    prisma.inventoryAlert.findMany({ where: { propertyId, status: { in: ['OPEN', 'ACKNOWLEDGED'] } }, select: { id: true, stockItemId: true, type: true, message: true, status: true, createdAt: true, stockItem: { select: { name: true, stockType: true, quantityOnHand: true, reorderLevel: true, costPrice: true, baseUnit: true, stockUnits: true, warehouse: { select: { id: true, name: true } } } } }, orderBy: { createdAt: 'desc' } }),
     prisma.stockItem.findMany({ where: { propertyId, isActive: true }, select: { id: true, name: true, quantityOnHand: true, reorderLevel: true, costPrice: true, warehouse: { select: { id: true, name: true } } } }),
     prisma.purchaseOrder.findMany({ where: { propertyId, status: { in: ['SUBMITTED', 'APPROVED', 'PARTIALLY_RECEIVED'] } }, select: { id: true, expectedDate: true, items: { select: { stockItemId: true, quantity: true, receivedQty: true } } } }),
   ]);
+  const alerts = rawAlerts.map((alert) => {
+    const purchase = purchaseSetup(alert.stockItem.baseUnit, alert.stockItem.stockUnits);
+    return {
+      ...alert,
+      stockItem: {
+        ...alert.stockItem,
+        quantityOnHand: Number(alert.stockItem.quantityOnHand) / purchase.unitsInBase,
+        reorderLevel: alert.stockItem.reorderLevel === null ? null : Number(alert.stockItem.reorderLevel) / purchase.unitsInBase,
+        baseUnit: purchase.unit,
+      },
+    };
+  });
   const now = new Date();
   const openCount = alerts.filter((alert) => alert.status === 'OPEN').length;
   const critical = alerts.filter((alert) => alert.type === 'NEGATIVE_STOCK');
