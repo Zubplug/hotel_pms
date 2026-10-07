@@ -50,10 +50,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const userRole = ctx.role;
     const isNightAuditor = userRole === 'NIGHT_AUDITOR';
     
-    if (userRole !== 'MANAGER' && userRole !== 'ADMIN' && userRole !== 'OWNER' && userRole !== 'SUPER_ADMIN' && userRole !== 'CEO' && userRole !== 'FINANCE_MANAGER' && !isNightAuditor) {
+    if (!['MANAGER', 'ADMIN', 'OWNER', 'SUPER_ADMIN', 'CEO', 'FINANCE_MANAGER', 'HOTEL_MANAGER', 'ACCOUNTANT', 'DIRECTOR', 'GENERAL_CASHIER', 'NIGHT_AUDITOR'].includes(userRole)) {
         return NextResponse.json({ error: 'Insufficient permissions. Requires RESOLVE_SYNC_CONFLICT.' }, { status: 403 });
     }
-    if (isFinancial && userRole !== 'ADMIN' && userRole !== 'OWNER' && userRole !== 'SUPER_ADMIN' && userRole !== 'CEO' && userRole !== 'FINANCE_MANAGER' && !isNightAuditor) {
+    if (isFinancial && !['ADMIN', 'OWNER', 'SUPER_ADMIN', 'CEO', 'FINANCE_MANAGER', 'HOTEL_MANAGER', 'ACCOUNTANT', 'DIRECTOR', 'GENERAL_CASHIER', 'NIGHT_AUDITOR'].includes(userRole)) {
         return NextResponse.json({ error: 'Financial conflicts require FORCE_SYNC_RESOLUTION capability.' }, { status: 403 });
     }
 
