@@ -61,7 +61,10 @@ function EmptyState({ title, detail, icon: Icon = ClipboardCheck }: { title: str
 export default function ManagerOperationsView({ mode }: { mode: ViewMode }) {
   const { data: session } = useLodgeCoreSession();
   const { propertyId: selectedPropertyId } = useProperty();
-  const propertyId = selectedPropertyId || session?.user?.propertyId;
+  // This workspace is property-scoped by the manager's role. Do not let the
+  // organization-wide property selector replace the property assigned to the
+  // authenticated housekeeping manager.
+  const propertyId = session?.user?.propertyId || selectedPropertyId;
   const [tasks, setTasks] = useState<HousekeepingTask[]>([]);
   const [tickets, setTickets] = useState<MaintenanceTicket[]>([]);
   const [rooms, setRooms] = useState<OperationalRoom[]>([]);

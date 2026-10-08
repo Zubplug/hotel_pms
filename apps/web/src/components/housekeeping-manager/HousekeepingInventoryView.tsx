@@ -19,7 +19,7 @@ const formatDate = (value: string) => new Date(value).toLocaleDateString('en-GB'
 export default function HousekeepingInventoryView() {
   const { data: session } = useLodgeCoreSession();
   const { propertyId: selectedPropertyId } = useProperty();
-  const propertyId = selectedPropertyId || session?.user?.propertyId;
+  const propertyId = session?.user?.propertyId || selectedPropertyId;
   const [data, setData] = useState<InventoryData | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
