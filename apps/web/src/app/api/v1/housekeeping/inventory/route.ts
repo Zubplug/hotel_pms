@@ -13,6 +13,10 @@ function isDepartmentWarehouse(name: string) {
   return /housekeeping|laundry|linen|uniform|\bhk\b/i.test(name);
 }
 
+function isHousekeepingCategory(name?: string | null) {
+  return /housekeeping|laundry|linen/i.test(name || '');
+}
+
 async function context() {
   const session = await auth();
   if (!session?.user) throw new Error('UNAUTHORIZED');
@@ -45,7 +49,7 @@ export async function GET() {
     const departmentIds = departmentWarehouses.map((warehouse) => warehouse.id);
     const mainIds = mainWarehouses.map((warehouse) => warehouse.id);
 
-    const [stock, requests, issues, staff] = await Promise.all([
+    const [stock, requests, issues] = await Promise.all([
       prisma.stockItem.findMany({
         where: { propertyId, warehouseId: { in: [...departmentIds, ...mainIds] }, isActive: true },
         include: { warehouse: { select: { id: true, name: true } }, inventoryCategory: { select: { name: true } } },
@@ -61,13 +65,9 @@ export async function GET() {
         include: { stockItem: { select: { name: true, baseUnit: true } }, warehouse: { select: { name: true } } },
         orderBy: { timestamp: 'desc' }, take: 40,
       }),
-      prisma.staff.findMany({
-        where: { propertyAccess: { has: propertyId }, isActive: true, deletedAt: null, department: { in: ['HOUSEKEEPING', 'LAUNDRY', 'OPERATIONS'] } },
-        select: { id: true, firstName: true, lastName: true, department: true, position: true },
-        orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
-      }),
     ]);
-    return NextResponse.json({ data: { warehouses: departmentWarehouses, mainWarehouses, stock, requests, issues, staff } });
+    const mainStock = stock.filter((item) => mainIds.includes(item.warehouse.id) && isHousekeepingCategory(item.inventoryCategory?.name));
+    return NextResponse.json({ data: { warehouses: departmentWarehouses, mainWarehouses, mainStock, stock, requests, issues } });
   } catch (error) {
     return responseError(error);
   }
@@ -95,10 +95,10 @@ export async function POST(request: Request) {
         const sourceItem = sourceById.get(item.stockItemId);
         const quantity = Number(item.quantity);
         if (!sourceItem || !Number.isFinite(quantity) || quantity <= 0) return NextResponse.json({ data: null, error: 'Every request line must contain a valid main-warehouse item and quantity' }, { status: 400 });
-        const unit = item.unitOfMeasure || sourceItem.baseUnit;
-        const conversion = unit === sourceItem.baseUnit ? 1 : Number(sourceItem.stockUnits.find((stockUnit) => stockUnit.unit === unit)?.unitsInBase || 0);
-        if (!conversion || quantity * conversion > Number(sourceItem.quantityOnHand)) return NextResponse.json({ data: null, error: `Insufficient stock for ${sourceItem.name}` }, { status: 400 });
-        transferItems.push({ stockItemId: sourceItem.id, quantity, unitOfMeasure: unit, baseQuantity: quantity * conversion });
+        const category = await prisma.inventoryCategory.findFirst({ where: { id: sourceItem.categoryId || '' }, select: { name: true } });
+        if (!isHousekeepingCategory(category?.name)) return NextResponse.json({ data: null, error: `${sourceItem.name} is not assigned to a Housekeeping or Laundry category` }, { status: 400 });
+        if (quantity > Number(sourceItem.quantityOnHand)) return NextResponse.json({ data: null, error: `Insufficient stock for ${sourceItem.name}` }, { status: 400 });
+        transferItems.push({ stockItemId: sourceItem.id, quantity, unitOfMeasure: sourceItem.baseUnit, baseQuantity: quantity });
       }
       const transfer = await prisma.stockTransfer.create({
         data: { propertyId, fromWarehouseId: source.id, toWarehouseId: destination.id, transferRef: `HK-${randomUUID().slice(0, 8).toUpperCase()}`, status: 'PENDING_APPROVAL', requestedBy: session.user.id, notes: `HOUSEKEEPING_REQUISITION${notes ? ` · ${String(notes).trim()}` : ''}`, items: { create: transferItems } },
@@ -108,17 +108,17 @@ export async function POST(request: Request) {
     }
 
     if (action === 'ISSUE') {
-      const { warehouseId, stockItemId, quantity, staffId, staffName, notes } = body;
+      const { warehouseId, stockItemId, quantity, notes } = body;
       const amount = Number(quantity);
       const warehouse = await prisma.warehouse.findFirst({ where: { id: warehouseId, propertyId, isActive: true } });
       if (!warehouse || !isDepartmentWarehouse(warehouse.name)) return NextResponse.json({ data: null, error: 'Choose a housekeeping or laundry outlet warehouse' }, { status: 400 });
-      if (!staffId || !staffName || !Number.isFinite(amount) || amount <= 0) return NextResponse.json({ data: null, error: 'Staff member and a positive issue quantity are required' }, { status: 400 });
+      if (!Number.isFinite(amount) || amount <= 0) return NextResponse.json({ data: null, error: 'A positive issue quantity is required' }, { status: 400 });
       const issue = await prisma.$transaction(async (tx) => {
         const item = await tx.stockItem.findFirst({ where: { id: stockItemId, propertyId, warehouseId, isActive: true } });
         if (!item) throw new Error('Stock item not found in the selected outlet warehouse');
         if (Number(item.quantityOnHand) < amount) throw new Error(`Insufficient ${item.name}; only ${item.quantityOnHand} ${item.baseUnit} available`);
         const updated = await tx.stockItem.update({ where: { id: item.id }, data: { quantityOnHand: { decrement: amount } } });
-        return tx.stockTransaction.create({ data: { propertyId, stockItemId: item.id, warehouseId, source: 'ADJUSTMENT', reason: 'OTHER', quantity: -amount, unitCost: item.costPrice, quantityBefore: item.quantityOnHand, quantityAfter: updated.quantityOnHand, totalValue: -amount * Number(item.costPrice), reference: `HOUSEKEEPING_ISSUE_${randomUUID()}`, notes: `Issued to ${staffName} (${staffId})${notes ? ` · ${String(notes).trim()}` : ''}`, operationId: randomUUID(), userId: session.user.id, businessDate: new Date() } });
+        return tx.stockTransaction.create({ data: { propertyId, stockItemId: item.id, warehouseId, source: 'ADJUSTMENT', reason: 'OTHER', quantity: -amount, unitCost: item.costPrice, quantityBefore: item.quantityOnHand, quantityAfter: updated.quantityOnHand, totalValue: -amount * Number(item.costPrice), reference: `HOUSEKEEPING_ISSUE_${randomUUID()}`, notes: `Issued for housekeeping/laundry operational use${notes ? ` · ${String(notes).trim()}` : ''}`, operationId: randomUUID(), userId: session.user.id, businessDate: new Date() } });
       });
       return NextResponse.json({ data: issue }, { status: 201 });
     }
