@@ -57,7 +57,7 @@ export const INVENTORY_PERMISSIONS = {
   // Approving a stock transfer.
   // STOCK_MANAGER / STOCK_KEEPER approve F&B-requested transfers and fulfil them.
   // Senior management approve other inter-warehouse transfers.
-  'inventory.transfer.approve': ['CEO', 'SUPER_ADMIN', 'MANAGER', 'DIRECTOR', 'STOCK_MANAGER', 'STOCK_KEEPER'],
+  'inventory.transfer.approve': ['CEO', 'SUPER_ADMIN', 'MANAGER', 'DIRECTOR', 'ACCOUNTANT', 'FINANCE_MANAGER', 'GENERAL_CASHIER', 'GENERAL_MANAGER', 'HOTEL_MANAGER', 'STOCK_MANAGER', 'STOCK_KEEPER'],
 
   // Issuing approved stock to an outlet is performed by stock control staff.
   'inventory.transfer.issue': ['CEO', 'SUPER_ADMIN', 'MANAGER', 'DIRECTOR', 'STOCK_KEEPER', 'STOCK_MANAGER'],

@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import type { ElementType } from 'react';
-import Link from 'next/link';
 import { AlertCircle, ArrowUpRight, CheckCircle2, Clock3, FileCheck2, RefreshCw, Search, ShieldCheck, WalletCards, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -37,6 +36,7 @@ export function ApprovalControlCenter({ audience }: ApprovalCenterProps) {
   const [reason, setReason] = useState('');
   const [lineDiscounts, setLineDiscounts] = useState<Record<string, string>>({});
   const [lineReasons, setLineReasons] = useState<Record<string, string>>({});
+  const [transferQuantities, setTransferQuantities] = useState<Record<string, string>>({});
 
   const openItem = (item: Item) => {
     setSelectedState(item);
@@ -44,6 +44,9 @@ export function ApprovalControlCenter({ audience }: ApprovalCenterProps) {
     if (item.kind === 'EVENT_INVOICE') {
       setLineDiscounts(Object.fromEntries((item.value.items || []).map((line: any) => [line.id, String(line.requestedDiscount ?? line.discountAmount ?? 0)])));
       setLineReasons(Object.fromEntries((item.value.items || []).map((line: any) => [line.id, line.discountReason || ''])));
+    }
+    if (item.kind === 'STOCK_TRANSFER') {
+      setTransferQuantities(Object.fromEntries((item.value.items || []).map((line: any) => [line.id, String(line.quantity ?? '')])));
     }
   };
   const setSelected = (item: Item | null) => item ? openItem(item) : setSelectedState(null);
@@ -75,7 +78,7 @@ export function ApprovalControlCenter({ audience }: ApprovalCenterProps) {
   const canAct = (item: Item) => {
     if (item.kind === 'EVENT_INVOICE') return audience === 'ACCOUNTING' ? ['SUBMITTED', 'IN_REVIEW'].includes(item.value.workflowStatus) : item.value.workflowStatus === 'APPROVED';
     if (item.kind === 'REFUND') return audience === 'ACCOUNTING' && item.value.status === 'PENDING_APPROVAL' && item.value.approval?.status === 'PENDING';
-    if (item.kind === 'STOCK_TRANSFER') return audience === 'ACCOUNTING'; // Accountants review stock transfers
+    if (item.kind === 'STOCK_TRANSFER') return audience === 'ACCOUNTING' || audience === 'CASHIER'; // Management and General Cashier review stock transfers
     const stage = item.value.details?.stage;
     return audience === 'CASHIER' ? stage === 'GENERAL_CASHIER_REVIEW' : stage === 'ACCOUNTANT_REVIEW';
   };
@@ -114,6 +117,38 @@ export function ApprovalControlCenter({ audience }: ApprovalCenterProps) {
     finally { setBusy(false); }
   };
 
+  const saveTransferAdjustment = async () => {
+    if (!selected || selected.kind !== 'STOCK_TRANSFER') return;
+    const originalItems = selected.value.items || [];
+    const items = originalItems
+      .map((item: any) => ({ id: item.id, quantity: Number(transferQuantities[item.id]) }))
+      .filter((item: any, index: number) => Number.isFinite(item.quantity) && item.quantity > 0 && item.quantity < Number(originalItems[index].quantity));
+    if (!items.length) {
+      toast.error('Enter a lower quantity for at least one item before saving.');
+      return;
+    }
+    setBusy(true);
+    try {
+      const response = await fetch(`/api/v1/inventory/transfers/${selected.value.id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Unable to save the adjustment');
+      const updatedItems = originalItems.map((item: any) => {
+        const revised = items.find((candidate: any) => candidate.id === item.id);
+        if (!revised) return item;
+        const ratio = revised.quantity / Number(item.quantity);
+        return { ...item, quantity: revised.quantity, baseQuantity: Number(item.baseQuantity || 0) * ratio };
+      });
+      const updatedTransfer = { ...selected.value, items: updatedItems };
+      setSelectedState({ kind: 'STOCK_TRANSFER', value: updatedTransfer });
+      setTransferQuantities(Object.fromEntries(updatedItems.map((item: any) => [item.id, String(item.quantity)])));
+      setData((current: any) => ({ ...current, stockTransfers: (current.stockTransfers || []).map((transfer: any) => transfer.id === updatedTransfer.id ? updatedTransfer : transfer) }));
+      toast.success('Request quantities adjusted');
+    } catch (error) { toast.error(error instanceof Error ? error.message : 'Unable to save the adjustment'); }
+    finally { setBusy(false); }
+  };
+
   return <main className="min-h-full bg-[#07111f] px-4 py-6 text-slate-200 sm:px-6 lg:px-8 lg:py-8"><div className="mx-auto max-w-[1480px] space-y-6">
     <header className="relative overflow-hidden rounded-3xl border border-white/[.08] bg-gradient-to-br from-[#142746] via-[#101a2d] to-[#09111f] p-6 shadow-2xl sm:p-8"><div className="pointer-events-none absolute -right-20 -top-24 h-72 w-72 rounded-full bg-cyan-400/10 blur-3xl" /><div className="relative flex flex-col justify-between gap-5 lg:flex-row lg:items-end"><div><p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[.22em] text-cyan-300"><ShieldCheck className="h-4 w-4" />Controlled approvals</p><h1 className="mt-3 text-3xl font-semibold tracking-[-.04em] text-white sm:text-4xl">Approval Control Center</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">One decision queue for event invoices, refunds, and F&amp;B pricing. Open each request in its dedicated review model and record an auditable decision.</p></div><Button variant="outline" onClick={() => void load()} disabled={loading} className="border-white/10 bg-white/[.05] text-white hover:bg-white/[.1] hover:text-white"><RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />Refresh queue</Button></div><div className="relative mt-7 grid gap-3 sm:grid-cols-3"><Metric label="Awaiting my action" value={String(items.filter(canAct).length)} icon={Clock3} /><Metric label="Open requests" value={String(pending.length)} icon={FileCheck2} /><Metric label="Control scope" value={audience === 'ACCOUNTING' ? 'Finance review' : 'Cashier review'} icon={WalletCards} /></div></header>
     <section className="overflow-hidden rounded-2xl border border-white/[.08] bg-[#101a2d]/90 shadow-xl"><div className="flex flex-col gap-3 border-b border-white/[.07] p-5 lg:flex-row lg:items-center lg:justify-between"><div><h2 className="font-semibold text-white">Approval register</h2><p className="mt-1 text-xs text-slate-500">{items.length} request{items.length === 1 ? '' : 's'} in this view</p></div><div className="flex flex-col gap-2 sm:flex-row"><div className="relative"><Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-500" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search approval, guest, event…" className="h-9 w-full rounded-lg border border-white/10 bg-white/[.04] pl-9 pr-3 text-xs text-white outline-none placeholder:text-slate-600 sm:w-72" /></div><div className="flex rounded-lg border border-white/10 bg-white/[.03] p-1">{([['ALL', 'All'], ['EVENT_INVOICE', 'Events'], ['REFUND', 'Refunds'], ['POS', 'F&B pricing'], ['STOCK_TRANSFER', 'Stock']] as const).map(([value, text]) => <button key={value} onClick={() => setTab(value)} className={`rounded-md px-3 py-2 text-xs font-semibold ${tab === value ? 'bg-cyan-400 text-slate-950' : 'text-slate-400 hover:text-white'}`}>{text}</button>)}</div></div></div>{loading ? <div className="p-16 text-center"><RefreshCw className="mx-auto h-6 w-6 animate-spin text-cyan-300" /></div> : !items.length ? <div className="p-16 text-center"><CheckCircle2 className="mx-auto h-9 w-9 text-emerald-300" /><p className="mt-3 font-medium text-white">Approval queue is clear</p><p className="mt-1 text-sm text-slate-500">No requests match the current control scope.</p></div> : <div className="overflow-x-auto"><table className="w-full min-w-[980px] text-sm"><thead className="bg-slate-950/30 text-[10px] uppercase tracking-[.14em] text-slate-500"><tr><th className="px-5 py-3 text-left">Request</th><th className="px-5 py-3 text-left">Amount / value</th><th className="px-5 py-3 text-left">Workflow</th><th className="px-5 py-3 text-left">Created</th><th className="px-5 py-3 text-right">Action</th></tr></thead><tbody className="divide-y divide-white/[.07]">{items.map((item) => { const value = item.value; const title = item.kind === 'EVENT_INVOICE' ? eventName(value) : item.kind === 'REFUND' ? label(value.category) : item.kind === 'STOCK_TRANSFER' ? `Transfer: ${value.fromWarehouse?.name} to ${value.toWarehouse?.name}` : value.details?.productName || value.details?.name || 'F&B price request'; const status = item.kind === 'EVENT_INVOICE' ? value.workflowStatus : item.kind === 'REFUND' || item.kind === 'STOCK_TRANSFER' ? value.status : `${value.status} · ${value.details?.stage || 'WORKFLOW'}`; const amount = item.kind === 'EVENT_INVOICE' ? money(value.totalAmount, value.currency) : item.kind === 'REFUND' ? money(value.approvedAmount || value.requestedAmount, value.currency) : item.kind === 'STOCK_TRANSFER' ? money((value.items || []).reduce((sum: number, i: any) => sum + (Number(i.quantity) * Number(i.stockItem?.costPrice || 0)), 0), 'NGN') : money(value.details?.newPrice ?? value.details?.price); return <tr key={`${item.kind}-${value.id}`} className="transition hover:bg-white/[.025]"><td className="px-5 py-4"><div className="flex items-center gap-3"><span className={`flex h-9 w-9 items-center justify-center rounded-xl ${item.kind === 'EVENT_INVOICE' ? 'bg-cyan-400/10 text-cyan-300' : item.kind === 'REFUND' ? 'bg-violet-400/10 text-violet-300' : item.kind === 'STOCK_TRANSFER' ? 'bg-emerald-400/10 text-emerald-300' : 'bg-orange-400/10 text-orange-300'}`}>{item.kind === 'EVENT_INVOICE' ? <FileCheck2 className="h-4 w-4" /> : item.kind === 'REFUND' ? <WalletCards className="h-4 w-4" /> : <ArrowUpRight className="h-4 w-4" />}</span><div><p className="font-medium text-slate-200">{title}</p><p className="mt-1 text-xs text-slate-500">{item.kind === 'EVENT_INVOICE' ? 'Event invoice' : item.kind === 'REFUND' ? value.reason : item.kind === 'STOCK_TRANSFER' ? value.notes || 'Stock Transfer' : label(value.type)}</p></div></div></td><td className="px-5 py-4 font-semibold text-white">{amount}</td><td className="px-5 py-4"><Badge variant="outline" className="border-white/10 bg-white/[.03] text-slate-300">{status}</Badge></td><td className="px-5 py-4 text-xs text-slate-500">{new Date(value.createdAt).toLocaleString()}</td><td className="px-5 py-4 text-right"><Button size="sm" variant="outline" onClick={() => setSelected(item)} className="gap-1.5 border-white/10 bg-transparent text-slate-200 hover:bg-white/[.08]">Open review <ArrowUpRight className="h-3.5 w-3.5" /></Button></td></tr>; })}</tbody></table></div>}</section>
@@ -145,7 +180,7 @@ function ApprovalReviewDialog({ selected, audience, busy, reason, setReason, lin
         <section className="rounded-xl border border-emerald-400/15 bg-emerald-400/[.06] p-5">
           <p className="text-xs uppercase tracking-wider text-emerald-300">STOCK TRANSFER • {selected.value.transferRef}</p>
           <p className="mt-2 text-xl font-semibold text-white">{selected.value.fromWarehouse?.name} → {selected.value.toWarehouse?.name}</p>
-          <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm text-slate-300">{selected.value.items?.length || 0} item{selected.value.items?.length === 1 ? '' : 's'} requested · Total value: {money((selected.value.items || []).reduce((sum: number, i: any) => sum + (Number(i.quantity) * Number(i.stockItem?.costPrice || 0)), 0), 'NGN')}</p><Link href={`/inventory/transfers/${selected.value.id}`} className="inline-flex shrink-0 items-center justify-center rounded-lg border border-emerald-300/25 px-3 py-2 text-xs font-semibold text-emerald-200 hover:bg-emerald-300/10">Open transfer to adjust</Link></div>
+          <p className="mt-2 text-sm text-slate-300">{selected.value.items?.length || 0} item{selected.value.items?.length === 1 ? '' : 's'} requested · Total value: {money((selected.value.items || []).reduce((sum: number, i: any) => sum + (Number(i.quantity) * Number(i.stockItem?.costPrice || 0)), 0), 'NGN')}</p>
           {selected.value.notes && <p className="mt-3 border-t border-white/10 pt-3 text-xs leading-5 text-slate-400">Request note: {selected.value.notes}</p>}
         </section>
         <section className="overflow-hidden rounded-xl border border-white/10">
@@ -161,7 +196,7 @@ function ApprovalReviewDialog({ selected, audience, busy, reason, setReason, lin
               <tbody className="divide-y divide-white/10">
                 {(selected.value.items || []).map((item: any) => <tr key={item.id}>
                   <td className="px-5 py-4"><p className="font-medium text-white">{item.stockItem?.name || 'Stock item'}</p><p className="mt-1 text-xs text-slate-500">Base unit: {label(String(item.stockItem?.baseUnit || 'UNIT'))}</p></td>
-                  <td className="px-5 py-4 font-semibold text-emerald-200">{Number(item.quantity).toLocaleString()} {label(String(item.unitOfMeasure || item.stockItem?.baseUnit || 'UNIT'))}</td>
+                  <td className="px-5 py-4"><input type="number" min="0.0001" max={Number(item.quantity)} step="0.0001" value={transferQuantities[item.id] ?? String(item.quantity)} onChange={(event) => setTransferQuantities({ ...transferQuantities, [item.id]: event.target.value })} disabled={!canAct || busy} className="h-9 w-28 rounded-lg border border-white/10 bg-white/[.05] px-2 text-sm font-semibold text-emerald-200 outline-none focus:border-emerald-300/50 disabled:opacity-60" /><span className="ml-2 text-xs text-slate-400">{label(String(item.unitOfMeasure || item.stockItem?.baseUnit || 'UNIT'))}</span></td>
                   <td className="px-5 py-4 text-slate-300">{Number(item.baseQuantity || 0).toLocaleString()} {label(String(item.stockItem?.baseUnit || 'UNIT'))}</td>
                   <td className="px-5 py-4 text-xs text-slate-400">{item.notes || '—'}</td>
                 </tr>)}
@@ -169,6 +204,7 @@ function ApprovalReviewDialog({ selected, audience, busy, reason, setReason, lin
             </table>
           </div>
         </section>
+        {canAct && <div className="flex justify-end"><Button variant="outline" onClick={() => void saveTransferAdjustment()} disabled={busy} className="border-amber-300/30 text-amber-200 hover:bg-amber-300/10">Save quantity adjustment</Button></div>}
         <label className="block text-sm text-slate-300">Approval/Rejection note<textarea value={reason} onChange={(event) => setReason(event.target.value)} className="mt-2 min-h-24 w-full rounded-lg border border-white/10 bg-white/[.05] p-3 text-white" /></label>
       </div>}
     </div>
