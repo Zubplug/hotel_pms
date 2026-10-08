@@ -3,7 +3,7 @@ import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
 import { requireOrganizationContext } from "@/lib/organization-access";
-import { isCentralKitchenStock, kitchenServiceOutletId } from '@/lib/inventory/kitchen-routing';
+import { isKitchenProductionStation, kitchenServiceOutletId } from '@/lib/inventory/kitchen-routing';
 
 export async function GET(req: NextRequest) {
   try {
@@ -59,13 +59,14 @@ export async function GET(req: NextRequest) {
       const isStockControlled = p.inventoryMode === 'STOCK';
       const ingredients = p.recipe?.versions?.[0]?.ingredients || [];
       const hasInventoryMapping = ingredients.length > 0;
+      const resolvedStation = p.productionStation ?? p.category?.productionStation ?? 'KITCHEN';
       const availableStock = isStockControlled && ingredients.length > 0
         ? Math.min(...ingredients.map((ingredient: any) => {
           const template = ingredient.stockItem;
           const property = properties.find(candidate => candidate.id === p.propertyId);
           const kitchenOutletId = property ? kitchenServiceOutletId(property.settings) : null;
           const kitchenWarehouseId = kitchenWarehouses.find(warehouse => warehouse.posOutletId === kitchenOutletId)?.id;
-          const targetWarehouseId = isCentralKitchenStock(template?.stockType) ? kitchenWarehouseId : outletWarehouse?.id;
+          const targetWarehouseId = isKitchenProductionStation(resolvedStation) ? kitchenWarehouseId : outletWarehouse?.id;
           const target = targetStockItems.find(item => item.warehouseId === targetWarehouseId &&
             ((template?.barcode && item.barcode === template.barcode) ||
              (template?.sku && item.sku === template.sku) ||
@@ -82,7 +83,7 @@ export async function GET(req: NextRequest) {
       availableStock: availableStock === null ? null : Math.max(0, Math.floor(availableStock)),
       stockStatus: !isStockControlled ? 'NON_STOCK' : !hasInventoryMapping ? 'UNMAPPED' : outOfStock ? 'OUT_OF_STOCK' : availableStock! <= 5 ? 'LOW_STOCK' : 'IN_STOCK',
       // Product-level override wins; fall back to category default
-      resolvedStation: p.productionStation ?? p.category?.productionStation ?? 'KITCHEN',
+      resolvedStation,
       // Keep modifier details available to the menu-management screen. POS
       // clients already receive the same product projection and use these
       // fields when building modifier choices.

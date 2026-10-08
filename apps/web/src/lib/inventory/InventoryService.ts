@@ -2,7 +2,7 @@ import prisma, { StockTransactionSource } from '@hotel-pms/db';
 import { assertNightAuditAllowsTransaction } from '@/lib/night-audit-guard';
 import { GRN_STATUS, TRANSFER_STATUS, PO_STATUS } from '@/lib/inventory/types';
 import { TenantContext } from '../organization-access';
-import { isCentralKitchenStock, kitchenServiceOutletId } from './kitchen-routing';
+import { isKitchenProductionStation, kitchenServiceOutletId } from './kitchen-routing';
 
 export class InventoryService {
   /** Restore every committed ingredient for a cancelled/voided order. */
@@ -57,6 +57,7 @@ export class InventoryService {
                     },
                   },
                 },
+                category: { select: { productionStation: true } },
                 modifiers: true,
               },
             },
@@ -67,6 +68,9 @@ export class InventoryService {
     if (!order) throw new Error('POS Order not found');
 
     const requirements = new Map<string, { quantity: number; centralKitchen: boolean }>();
+    const productUsesKitchen = (product: any) => isKitchenProductionStation(
+      product?.productionStation ?? product?.category?.productionStation,
+    );
     const addRequirement = (stockItemId: string, quantity: number, centralKitchen: boolean) => {
       const current = requirements.get(stockItemId);
       requirements.set(stockItemId, {
@@ -85,7 +89,7 @@ export class InventoryService {
             ? 1
             : Number(recipe.stockItem?.stockUnits?.find((unit: any) => unit.unit === recipe.unitOfMeasure)?.unitsInBase || 0);
           if (conversion <= 0) throw new Error(`No conversion configured from ${recipe.unitOfMeasure} to ${recipe.stockItem?.baseUnit || 'base unit'} for ${item.productName}`);
-          addRequirement(recipe.stockItemId, Number(recipe.quantity) * conversion * Number(item.quantity), isCentralKitchenStock(recipe.stockItem?.stockType));
+          addRequirement(recipe.stockItemId, Number(recipe.quantity) * conversion * Number(item.quantity), productUsesKitchen(item.product));
         }
       }
       for (const modifier of item.modifiers || []) {
@@ -95,7 +99,7 @@ export class InventoryService {
           ? 1
           : Number(stock?.stockUnits?.find((unit: any) => unit.unit === modifier.unitOfMeasure)?.unitsInBase || 0);
         if (conversion <= 0) throw new Error(`No conversion configured for modifier ${modifier.name}`);
-        addRequirement(modifier.stockItemId, Number(modifier.quantity) * conversion * Number(item.quantity), isCentralKitchenStock(stock?.stockType));
+        addRequirement(modifier.stockItemId, Number(modifier.quantity) * conversion * Number(item.quantity), productUsesKitchen(item.product));
       }
     }
 

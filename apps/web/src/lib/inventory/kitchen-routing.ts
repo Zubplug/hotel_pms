@@ -13,3 +13,12 @@ export function kitchenServiceOutletId(settings: PropertySettings) {
 export function isCentralKitchenStock(stockType: string | null | undefined) {
   return CENTRAL_KITCHEN_STOCK_TYPES.has(String(stockType || '').toUpperCase());
 }
+
+/**
+ * POS stock belongs to the production station that consumes it. Do not infer
+ * this from the inventory classification: kitchen ingredients are commonly
+ * stored as CONSUMABLE as well as RAW_MATERIAL.
+ */
+export function isKitchenProductionStation(station: string | null | undefined) {
+  return String(station || 'KITCHEN').trim().toUpperCase() === 'KITCHEN';
+}

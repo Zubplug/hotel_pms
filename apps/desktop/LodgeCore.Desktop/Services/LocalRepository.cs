@@ -4720,7 +4720,7 @@ public class LocalRepository
             var available = ingredients
                 .GroupBy(i => i.StockItemId)
                 .Select(group => stock.TryGetValue(group.Key, out var template)
-                    ? (template.StockType.Equals("RAW_MATERIAL", StringComparison.OrdinalIgnoreCase)
+                    ? (string.Equals(product.ResolvedStation, "KITCHEN", StringComparison.OrdinalIgnoreCase)
                         ? targetStock.FirstOrDefault(item => item.WarehouseId == kitchenWarehouseId &&
                             ((!string.IsNullOrWhiteSpace(template.Sku) && item.Sku == template.Sku) ||
                              string.Equals(item.Name.Trim(), template.Name.Trim(), StringComparison.OrdinalIgnoreCase)))
@@ -5395,17 +5395,28 @@ public class LocalRepository
             throw new Exception("POS outlet has no stock warehouse configured. Sync the outlet setup before completing this sale.");
 
         var productIds = order.Items.Where(i => !string.IsNullOrWhiteSpace(i.ProductId)).Select(i => i.ProductId!).Distinct().ToList();
-        var stockProducts = await _dbContext.PosProducts.Where(p => productIds.Contains(p.Id) && p.InventoryMode == "STOCK").ToListAsync();
+        var products = await _dbContext.PosProducts.Where(p => productIds.Contains(p.Id)).ToListAsync();
+        var categoryIds = products.Select(p => p.CategoryId).Where(id => !string.IsNullOrWhiteSpace(id)).Distinct().ToList();
+        var categoryStations = await _dbContext.ProductCategories
+            .Where(c => categoryIds.Contains(c.Id))
+            .ToDictionaryAsync(c => c.Id, c => c.ProductionStation);
         var requirements = new Dictionary<string, (decimal Quantity, bool CentralKitchen)>();
         void AddRequirement(string stockItemId, decimal quantity, bool centralKitchen)
         {
             requirements.TryGetValue(stockItemId, out var current);
             requirements[stockItemId] = (current.Quantity + quantity, current.CentralKitchen || centralKitchen);
         }
+        bool ProductUsesKitchen(LocalPosProduct? product)
+        {
+            var station = product?.ProductionStation;
+            if (string.IsNullOrWhiteSpace(station) && product != null && categoryStations.TryGetValue(product.CategoryId, out var categoryStation))
+                station = categoryStation;
+            return string.Equals(station ?? "KITCHEN", "KITCHEN", StringComparison.OrdinalIgnoreCase);
+        }
         foreach (var orderItem in order.Items)
         {
-            var product = stockProducts.FirstOrDefault(p => p.Id == orderItem.ProductId);
-            if (product != null)
+            var product = products.FirstOrDefault(p => p.Id == orderItem.ProductId);
+            if (product?.InventoryMode == "STOCK")
             {
                 var ingredients = await _dbContext.RecipeIngredients.Where(i => i.ProductId == product.Id).ToListAsync();
                 if (ingredients.Count == 0)
@@ -5415,27 +5426,19 @@ public class LocalRepository
                 else
                 {
                     foreach (var ingredient in ingredients)
-                        AddRequirement(ingredient.StockItemId, ingredient.Quantity * orderItem.Quantity, false);
+                        AddRequirement(ingredient.StockItemId, ingredient.Quantity * orderItem.Quantity, ProductUsesKitchen(product));
                 }
             }
             foreach (var modifier in orderItem.Modifiers)
             {
                 if (!string.IsNullOrWhiteSpace(modifier.StockItemId) && modifier.Quantity > 0)
-                    AddRequirement(modifier.StockItemId, modifier.Quantity * orderItem.Quantity, false);
+                    AddRequirement(modifier.StockItemId, modifier.Quantity * orderItem.Quantity, ProductUsesKitchen(product));
             }
         }
 
         var templateItems = await _dbContext.StockItems
             .Where(s => requirements.Keys.Contains(s.Id) && s.PropertyId == order.PropertyId)
             .ToListAsync();
-        foreach (var key in requirements.Keys.ToList())
-        {
-            if (templateItems.FirstOrDefault(item => item.Id == key)?.StockType.Equals("RAW_MATERIAL", StringComparison.OrdinalIgnoreCase) == true)
-            {
-                var current = requirements[key];
-                requirements[key] = (current.Quantity, true);
-            }
-        }
         var property = await _dbContext.Properties.FirstOrDefaultAsync(p => p.Id == order.PropertyId);
         var kitchenWarehouseId = !string.IsNullOrWhiteSpace(property?.KitchenServiceOutletId)
             ? await _dbContext.PosOutlets.Where(o => o.Id == property.KitchenServiceOutletId).Select(o => o.WarehouseId).FirstOrDefaultAsync()
