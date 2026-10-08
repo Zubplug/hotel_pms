@@ -14,6 +14,9 @@ const dirsToHide = [
   // The kitchen display uses a server-authenticated layout and cannot be
   // prerendered as part of the desktop static export.
   { src: path.join(process.cwd(), 'src/app/fnb/kitchen'), dest: path.join(process.cwd(), 'src/app/_fnb_kitchen') },
+  // The housekeeping manager owns its own authenticated shell and must not be
+  // prerendered into the desktop static shell.
+  { src: path.join(process.cwd(), 'src/app/housekeeping-manager'), dest: path.join(process.cwd(), 'src/app/_housekeeping-manager') },
   { src: path.join(process.cwd(), 'src/app/admin'), dest: path.join(process.cwd(), 'src/app/_admin') },
   { src: path.join(process.cwd(), 'src/app/night-audit'), dest: path.join(process.cwd(), 'src/app/_night-audit') },
   { src: path.join(process.cwd(), 'src/app/(external-auditor)'), dest: path.join(process.cwd(), 'src/app/_external-auditor_group') },
