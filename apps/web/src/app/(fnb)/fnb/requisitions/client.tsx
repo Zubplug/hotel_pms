@@ -16,7 +16,13 @@ const statusStyle: Record<string, string> = {
   REJECTED: 'border-rose-300/25 bg-rose-300/10 text-rose-200',
 };
 
-export default function RequisitionsClient() {
+export default function RequisitionsClient({
+  title = 'Stock requisitions',
+  description = 'Request ingredients, beverages, and operating stock from the main warehouse for your outlet. Every request follows approval and dispatch control.',
+}: {
+  title?: string;
+  description?: string;
+}) {
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [stockItems, setStockItems] = useState<StockItem[]>([]);
   const [requisitions, setRequisitions] = useState<Requisition[]>([]);
@@ -83,7 +89,7 @@ export default function RequisitionsClient() {
   return (
     <div className="min-h-screen bg-[#07101d] text-slate-100">
       <header className="border-b border-white/[0.07] bg-[radial-gradient(circle_at_80%_-10%,rgba(249,115,22,.2),transparent_35%),linear-gradient(135deg,#101d30,#07101d)] px-5 py-8 sm:px-8">
-        <div className="mx-auto max-w-7xl"><div className="mb-3 text-[10px] font-bold uppercase tracking-[0.2em] text-orange-300">F&B operations / stock control</div><div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between"><div><h1 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">Stock requisitions</h1><p className="mt-3 max-w-2xl text-sm leading-6 text-slate-400">Request ingredients, beverages, and operating stock from the main warehouse for your outlet. Every request follows approval and dispatch control.</p></div><button onClick={() => { setOpen(true); setError(''); }} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-orange-500 px-4 text-sm font-bold text-white shadow-lg shadow-orange-950/30 hover:bg-orange-400"><Plus className="h-4 w-4" />New requisition</button></div></div>
+        <div className="mx-auto max-w-7xl"><div className="mb-3 text-[10px] font-bold uppercase tracking-[0.2em] text-orange-300">F&B operations / stock control</div><div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between"><div><h1 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">{title}</h1><p className="mt-3 max-w-2xl text-sm leading-6 text-slate-400">{description}</p></div><button onClick={() => { setOpen(true); setError(''); }} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-orange-500 px-4 text-sm font-bold text-white shadow-lg shadow-orange-950/30 hover:bg-orange-400"><Plus className="h-4 w-4" />New requisition</button></div></div>
       </header>
       <main className="mx-auto max-w-7xl space-y-5 px-5 py-6 sm:px-8">
         {error && <div className="flex items-center gap-2 rounded-xl border border-rose-300/20 bg-rose-300/10 p-3 text-sm text-rose-200"><AlertCircle className="h-4 w-4" />{error}<button className="ml-auto" onClick={() => setError('')}><X className="h-4 w-4" /></button></div>}

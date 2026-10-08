@@ -112,8 +112,21 @@ export default function NewTransferPage() {
         if (mainWarehouse) setFrom(mainWarehouse.id);
       }
     });
-    fetch('/api/v1/inventory/stock-items?limit=500').then(r => r.json()).then(r => setStockItems(r.data?.items || []));
   }, [issueToOutlet]);
+
+  // Load only the selected source warehouse. The previous broad 500-row
+  // request could omit valid mother-warehouse items before the browser
+  // filtered the response, especially for properties with many stock rows.
+  useEffect(() => {
+    if (!fromWarehouseId) {
+      setStockItems([]);
+      return;
+    }
+    fetch(`/api/v1/inventory/stock-items?warehouseId=${encodeURIComponent(fromWarehouseId)}&limit=500`)
+      .then(r => r.json())
+      .then(r => setStockItems(r.data?.items || []))
+      .catch(() => setStockItems([]));
+  }, [fromWarehouseId]);
 
   const sourceWarehouses  = warehouses.filter(w => !w.posOutlet);
   const destWarehouses    = warehouses.filter(w => w.id !== fromWarehouseId && (issueToOutlet ? Boolean(w.posOutlet) : !w.posOutlet));

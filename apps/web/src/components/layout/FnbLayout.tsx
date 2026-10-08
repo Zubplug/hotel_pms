@@ -55,7 +55,7 @@ const FNB_NAV = [
       children: [
         { name: 'Inventory & AvT', href: '/fnb/inventory', icon: ReceiptText },
         { name: 'Recipe Management', href: '/fnb/recipes', icon: ChefHat },
-        { name: 'Approval Control Center', href: '/inventory/approvals', icon: ShieldCheck },
+        { name: 'Approval Control Center', href: '/fnb/approval-control-center', icon: ShieldCheck },
       ],
   },
   {
