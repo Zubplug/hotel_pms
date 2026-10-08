@@ -35,16 +35,30 @@ export async function GET(req: NextRequest) {
     const userRole = String((session.user as any).role || '').toUpperCase();
     const isReceptionist = userRole === 'RECEPTIONIST' || userRole === 'FRONT_DESK';
     const isBasicHousekeeper = !isReceptionist && capabilities.includes('ACCESS_HOUSEKEEPING') && !capabilities.includes('ACCESS_MANAGEMENT');
+    const isHousekeepingManagementView = [
+      'HOUSEKEEPING_MAINTENANCE_MANAGER',
+      'HOUSEKEEPING_MANAGER',
+      'MAINTENANCE_MANAGER',
+      'MANAGER',
+      'GENERAL_MANAGER',
+      'HOTEL_MANAGER',
+      'DIRECTOR',
+      'CEO',
+      'SUPER_ADMIN',
+    ].includes(userRole) || capabilities.includes('ACCESS_MANAGEMENT');
     if (isBasicHousekeeper) {
       // Basic housekeepers can only see their own tasks
       filterAssignedTo = session.user.id;
     }
+    const businessDateFilter = businessDateStr || !isHousekeepingManagementView
+      ? { businessDate }
+      : {};
     const tasks = await prisma.housekeepingTask.findMany({
       where: {
         propertyId: {
           in: propertyId && allowedProperties.includes(propertyId) ? [propertyId] : allowedProperties
         },
-        businessDate: businessDate,
+        ...businessDateFilter,
         ...(status ? { status: status as any } : {}),
         ...(filterAssignedTo ? { assignedTo: filterAssignedTo } : {})
       },
