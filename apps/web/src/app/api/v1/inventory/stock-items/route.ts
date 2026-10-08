@@ -6,6 +6,7 @@ import { hasInventoryPermission } from '@/lib/inventory/permissions';
 import { requireOrganizationContext } from "@/lib/organization-access";
 import { generateStockBarcode, generateStockSku } from '@/lib/inventory/identifiers';
 import { requireEntitlement } from '@/lib/auth/entitlement';
+import { isCentralKitchenStock, kitchenServiceOutletId } from '@/lib/inventory/kitchen-routing';
 
 const STOCK_ITEM_TYPES = ['SELLABLE', 'RAW_MATERIAL', 'CONSUMABLE', 'CLEANING', 'HOUSEKEEPING', 'ASSET', 'PACKAGING'] as const;
 
@@ -129,7 +130,21 @@ export async function POST(request: Request) {
                 },
             });
 
-            const outletWarehouses = await tx.warehouse.findMany({
+            const property = await tx.property.findUnique({
+                where: { id: ctx.propertyIds[0] },
+                select: { settings: true },
+            });
+            const kitchenOutletId = isCentralKitchenStock(stockType)
+                ? kitchenServiceOutletId(property?.settings)
+                : null;
+            const outletWarehouses = kitchenOutletId
+                ? await tx.warehouse.findMany({
+                    where: { propertyId: ctx.propertyIds[0], posOutletId: kitchenOutletId, isActive: true },
+                    select: { id: true },
+                })
+                : isCentralKitchenStock(stockType)
+                    ? []
+                    : await tx.warehouse.findMany({
                 where: { propertyId: ctx.propertyIds[0], posOutletId: { not: null }, isActive: true },
                 select: { id: true },
             });

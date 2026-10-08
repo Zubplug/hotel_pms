@@ -477,7 +477,10 @@ export class InventoryService {
               warehouseId: transfer.toWarehouseId,
               name: sourceItem.name,
               sku: sourceItem.sku,
-              barcode: sourceItem.barcode,
+              // Barcodes are unique at property level. Outlet stock rows are
+              // mapped by SKU/name and must not copy the main-warehouse
+              // barcode into another StockItem record.
+              barcode: null,
               baseUnit: sourceItem.baseUnit,
               stockType: sourceItem.stockType,
               costPrice: sourceItem.costPrice,

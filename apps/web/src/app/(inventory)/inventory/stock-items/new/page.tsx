@@ -115,7 +115,7 @@ export default function NewStockItemPage() {
                 <option value="ASSET">Asset / Durable Equipment</option>
                 <option value="PACKAGING">Packaging</option>
               </select>
-              <p className="text-xs text-slate-500">Use this for reporting and stock-purpose tracking.</p>
+              <p className="text-xs text-slate-500">Raw materials are provisioned only to the configured Kitchen Service outlet. Other stock types are provisioned to active outlet warehouses.</p>
             </div>
 
             <div className="space-y-2">
