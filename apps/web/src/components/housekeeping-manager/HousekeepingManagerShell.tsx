@@ -7,7 +7,7 @@ import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
 import { useLogout } from '@/hooks/useLogout';
 import { cn } from '@/lib/utils';
 import {
-  BarChart3, Bell, ClipboardList, DoorOpen, LayoutDashboard,
+  BarChart3, Bell, ClipboardList, DoorOpen, LayoutDashboard, Package,
   LogOut, Menu, Sparkles, Wrench, X,
 } from 'lucide-react';
 
@@ -16,6 +16,7 @@ const NAVIGATION = [
   { label: 'Room operations', href: '/housekeeping-manager/tasks', icon: ClipboardList },
   { label: 'Maintenance control', href: '/housekeeping-manager/maintenance', icon: Wrench },
   { label: 'Room readiness', href: '/housekeeping-manager/rooms', icon: DoorOpen },
+  { label: 'Housekeeping inventory', href: '/housekeeping-manager/inventory', icon: Package },
   { label: 'Performance reports', href: '/housekeeping-manager/reports', icon: BarChart3 },
 ];
 
@@ -51,10 +52,6 @@ export function HousekeepingManagerShell({ children }: { children: React.ReactNo
             const active = pathname === href || (href !== '/housekeeping-manager' && pathname.startsWith(`${href}/`));
             return <Link key={href} href={href} onClick={() => setMobileOpen(false)} className={cn('group flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition', active ? 'bg-cyan-300/10 text-cyan-200 ring-1 ring-cyan-300/15' : 'text-slate-400 hover:bg-white/[0.045] hover:text-white')}><Icon className={cn('h-4 w-4', active ? 'text-cyan-300' : 'text-slate-600 group-hover:text-slate-300')} />{label}{active && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-cyan-300" />}</Link>;
           })}
-          <div className="my-6 border-t border-white/[0.07]" />
-          <p className="mb-3 px-3 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-600">Quick access</p>
-          <Link href="/housekeeping" className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium text-slate-400 transition hover:bg-white/[0.045] hover:text-white"><Sparkles className="h-4 w-4 text-slate-600" />Housekeeping view</Link>
-          <Link href="/maintenance" className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium text-slate-400 transition hover:bg-white/[0.045] hover:text-white"><Wrench className="h-4 w-4 text-slate-600" />Maintenance view</Link>
         </nav>
 
         <div className="border-t border-white/[0.08] p-4">

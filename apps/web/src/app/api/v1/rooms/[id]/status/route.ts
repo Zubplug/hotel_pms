@@ -62,6 +62,7 @@ export async function POST(req: NextRequest, { params }: Params) {
         data: {
           status: newStatus,
           ...(newStatus === 'DIRTY' ? { housekeepingStatus: 'CLEANING' } : {}),
+          ...(['MAINTENANCE', 'OUT_OF_ORDER'].includes(newStatus) ? { maintenanceStatus: 'IN_PROGRESS' } : {}),
         },
         include: { roomType: true, building: true, floor: true },
       });
@@ -149,6 +150,40 @@ export async function POST(req: NextRequest, { params }: Params) {
             notes: reason || 'Room marked Dirty and requires housekeeping attention.',
           },
         });
+      }
+      if (['MAINTENANCE', 'OUT_OF_ORDER'].includes(newStatus)) {
+        const activeTicket = await tx.maintenanceTicket.findFirst({
+          where: {
+            roomId: room.id,
+            status: { in: ['OPEN', 'ASSIGNED', 'IN_PROGRESS', 'WAITING_PARTS'] },
+          },
+          orderBy: { createdAt: 'desc' },
+        });
+
+        if (!activeTicket) {
+          let category = await tx.maintenanceCategory.findFirst({
+            where: { propertyId: room.propertyId, name: 'General' },
+          });
+          if (!category) {
+            category = await tx.maintenanceCategory.create({
+              data: { propertyId: room.propertyId, name: 'General', description: 'General Maintenance' },
+            });
+          }
+          await tx.maintenanceTicket.create({
+            data: {
+              propertyId: room.propertyId,
+              roomId: room.id,
+              location: room.number,
+              categoryId: category.id,
+              priority: newStatus === 'OUT_OF_ORDER' ? 'CRITICAL' : 'HIGH',
+              status: 'OPEN',
+              title: `Room ${room.number} placed ${newStatus.replaceAll('_', ' ')}`,
+              description: reason || `Front Desk placed room ${room.number} into ${newStatus.replaceAll('_', ' ')} status. Engineering review is required before the room can return to inventory.`,
+              photos: [],
+              reportedBy: session.user.id,
+            },
+          });
+        }
       }
       return updated;
     });

@@ -99,34 +99,48 @@ export async function POST(req: NextRequest) {
     if (!(await hasPropertyModuleEntitlement(session.user.id, propertyId, 'MODULE_OPERATIONS'))) {
       return errorResponse('PAYMENT_REQUIRED', 'An active Operations entitlement is required for Housekeeping.', 402);
     }
-    const canManage = await hasPermission(session.user.id, 'housekeeping', 'create', propertyId);
+    const userRole = String((session.user as any).role || '').toUpperCase();
+    const capabilities = ((session.user as any).capabilities || []) as string[];
+    const canManage = userRole === 'HOUSEKEEPING_MAINTENANCE_MANAGER'
+      || capabilities.includes('ACCESS_MANAGEMENT')
+      || (capabilities.includes('ACCESS_HOUSEKEEPING') && capabilities.includes('ACCESS_MAINTENANCE'))
+      || await hasPermission(session.user.id, 'housekeeping', 'create', propertyId);
     if (!canManage) return errorResponse('FORBIDDEN', 'Insufficient permissions', 403);
     const businessDate = await getPropertyBusinessDate(propertyId);
     const occupiedAssignment = await prisma.reservationRoom.findFirst({
       where: { ...activeOccupancyWhere(propertyId), roomId },
       select: { id: true },
     });
-    const task = await prisma.housekeepingTask.create({
-      data: {
-        propertyId,
-        roomId,
-        type,
-        priority,
-        status: 'CLEANING',
-        assignedTo,
-        businessDate,
-        notes,
-        idempotencyKey: `MANUAL_${crypto.randomUUID()}`
-      }
-    });
-    // Sync room housekeeping status
-    await prisma.room.update({
-      where: { id: roomId },
-      data: {
-        housekeepingStatus: 'CLEANING',
-        // Stayover housekeeping never makes an occupied room vacant.
-        status: occupiedAssignment ? 'OCCUPIED' : 'CLEANING',
-      }
+    const task = await prisma.$transaction(async (tx) => {
+      const createdTask = await tx.housekeepingTask.create({
+        data: {
+          propertyId,
+          roomId,
+          type,
+          priority,
+          status: 'CLEANING',
+          assignedTo,
+          businessDate,
+          notes,
+          idempotencyKey: `MANUAL_${crypto.randomUUID()}`
+        }
+      });
+
+      // Keep task and room state atomic so a failed room update cannot leave
+      // the manager with a task that is not reflected in Front Desk.
+      await tx.room.update({
+        where: { id: roomId },
+        data: {
+          housekeepingStatus: 'CLEANING',
+          // Keep non-occupied rooms DIRTY until housekeeping completes and a
+          // supervisor inspects them. CLEANING is the housekeeping workflow
+          // state; DIRTY is the PMS sellability state used by Front Desk and
+          // the offline desktop workflow.
+          status: occupiedAssignment ? 'OCCUPIED' : 'DIRTY',
+        }
+      });
+
+      return createdTask;
     });
     return successResponse(task, 201);
   } catch (err) {

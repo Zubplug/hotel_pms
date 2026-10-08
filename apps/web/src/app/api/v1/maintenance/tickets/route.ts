@@ -81,8 +81,14 @@ export async function POST(req: NextRequest) {
       return errorResponse('PAYMENT_REQUIRED', 'An active Operations entitlement is required for Maintenance.', 402);
     }
     
-    // In production, require permission check
-    const canCreate = await hasPermission(session.user.id, 'housekeeping', 'create', propertyId); // fallback permission check
+    const userRole = String((session.user as any).role || '').toUpperCase();
+    const capabilities = ((session.user as any).capabilities || []) as string[];
+    const canCreate = userRole === 'HOUSEKEEPING_MAINTENANCE_MANAGER'
+      || userRole === 'MAINTENANCE'
+      || capabilities.includes('ACCESS_MANAGEMENT')
+      || capabilities.includes('ACCESS_MAINTENANCE')
+      || (capabilities.includes('ACCESS_HOUSEKEEPING') && capabilities.includes('ACCESS_MAINTENANCE'))
+      || await hasPermission(session.user.id, 'housekeeping', 'create', propertyId);
     if (!canCreate) return errorResponse('FORBIDDEN', 'Insufficient permissions', 403);
 
     const property = await prisma.property.findUnique({ where: { id: propertyId } });

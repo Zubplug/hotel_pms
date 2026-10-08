@@ -3746,7 +3746,7 @@ export async function POST(req: NextRequest) {
               // housekeeping is pending. Only skip this if the room is already
               // OCCUPIED (checked-in guest with a stayover task) — in that case
               // keep OCCUPIED but still record the housekeepingStatus.
-              if (taskType === "CLEANING" || taskType === "STAYOVER") {
+              if (taskType === "CLEANING" || taskType === "STAYOVER" || taskType === "INSPECTION") {
                 const checkedInAssignment = await tx.reservationRoom.findFirst({
                   where: {
                     roomId,
@@ -3864,6 +3864,8 @@ export async function POST(req: NextRequest) {
                   },
                 });
               }
+              const issueDescription = payload.IssueDescription || payload.issueDescription || "Maintenance issue reported from Front Desk.";
+              const issueTitle = payload.Title || payload.title || issueDescription.slice(0, 120);
               await tx.maintenanceTicket.create({
                 data: {
                   id: aggregateId,
@@ -3875,19 +3877,77 @@ export async function POST(req: NextRequest) {
                     payload.priority ||
                     "NORMAL") as any,
                   status: (payload.Status || payload.status || "OPEN") as any,
-                  title: "Desktop Maintenance Ticket",
-                  description:
-                    payload.IssueDescription || payload.issueDescription || "",
+                  title: issueTitle,
+                  description: issueDescription,
                   reportedBy: isUuid(payload.ReportedBy || payload.reportedBy)
                     ? payload.ReportedBy || payload.reportedBy
                     : actorId,
                 },
               });
+
+              const requiresRoomRestriction = Boolean(
+                payload.RequiresRoomRestriction ?? payload.requiresRoomRestriction,
+              ) || String(payload.Priority || payload.priority || "NORMAL").toUpperCase() === "CRITICAL";
+              const maintenanceRoomId = payload.RoomId || payload.roomId;
+              if (requiresRoomRestriction && maintenanceRoomId) {
+                await tx.room.updateMany({
+                  where: { id: maintenanceRoomId, propertyId },
+                  data: { status: "OUT_OF_ORDER" },
+                });
+              }
             } else if (eventType === "RESOLVE") {
-              await tx.maintenanceTicket.update({
+              const resolvedTicket = await tx.maintenanceTicket.update({
                 where: { id: aggregateId },
                 data: { status: "RESOLVED" },
               });
+
+              if (resolvedTicket.roomId) {
+                const activeTicketCount = await tx.maintenanceTicket.count({
+                  where: {
+                    roomId: resolvedTicket.roomId,
+                    status: { in: ["OPEN", "ASSIGNED", "IN_PROGRESS", "WAITING_PARTS"] },
+                    id: { not: resolvedTicket.id },
+                  },
+                });
+
+                if (activeTicketCount === 0) {
+                  await tx.room.updateMany({
+                    where: { id: resolvedTicket.roomId, propertyId },
+                    data: { status: "DIRTY", housekeepingStatus: "CLEANING" },
+                  });
+
+                  // The offline client normally sends a companion task CREATE
+                  // event. Keep this fallback idempotent for clients that
+                  // sync the ticket resolution before that companion event.
+                  const existingTask = await tx.housekeepingTask.findFirst({
+                    where: {
+                      propertyId,
+                      roomId: resolvedTicket.roomId,
+                      status: { notIn: ["INSPECTED", "CANCELLED"] },
+                    },
+                    orderBy: { createdAt: "desc" },
+                  });
+                  if (existingTask) {
+                    await tx.housekeepingTask.update({
+                      where: { id: existingTask.id },
+                      data: { status: "CLEANING" },
+                    });
+                  } else {
+                    await tx.housekeepingTask.create({
+                      data: {
+                        propertyId,
+                        roomId: resolvedTicket.roomId,
+                        type: "INSPECTION",
+                        priority: "HIGH",
+                        status: "CLEANING",
+                        businessDate: postingBusinessDate,
+                        notes: "Maintenance resolved; housekeeping must clean and inspect the room before release.",
+                        idempotencyKey: `MAINTENANCE_${resolvedTicket.id}`,
+                      },
+                    });
+                  }
+                }
+              }
             }
           } else if (aggregateType === "LAUNDRY_ORDER") {
             if (eventType === "LAUNDRY_ORDER_CREATED") {

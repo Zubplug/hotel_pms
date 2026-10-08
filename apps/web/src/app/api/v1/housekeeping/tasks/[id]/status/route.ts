@@ -49,9 +49,12 @@ export async function PATCH(
     const capabilities = (session.user as any).capabilities || [];
     const userRole = String((session.user as any).role || '').toUpperCase();
     const isReceptionist = userRole === 'RECEPTIONIST' || userRole === 'FRONT_DESK';
-    const canManage = isReceptionist
-      || capabilities.includes('ACCESS_HOUSEKEEPING')
+    const isOperationsManager = userRole === 'HOUSEKEEPING_MAINTENANCE_MANAGER'
       || capabilities.includes('ACCESS_MANAGEMENT')
+      || (capabilities.includes('ACCESS_HOUSEKEEPING') && capabilities.includes('ACCESS_MAINTENANCE'));
+    const canManage = isReceptionist
+      || isOperationsManager
+      || capabilities.includes('ACCESS_HOUSEKEEPING')
       || await hasPermission(session.user.id, 'housekeeping', 'update', task.propertyId);
     if (!canManage) return errorResponse('FORBIDDEN', 'Housekeeping staff, reception, or management can update housekeeping tasks', 403);
 
@@ -93,7 +96,9 @@ export async function PATCH(
       if (roomIsOccupied) {
         roomStatusUpdate = 'OCCUPIED';
       } else if (targetStatus === 'CLEANING') {
-        roomStatusUpdate = 'CLEANING';
+        // CLEANING is the housekeeping workflow state. Front Desk should
+        // continue to see the room as DIRTY until inspection releases it.
+        roomStatusUpdate = 'DIRTY';
       } else if (targetStatus === 'INSPECTED') {
         roomStatusUpdate = 'AVAILABLE';
       }

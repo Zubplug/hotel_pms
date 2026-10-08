@@ -2967,11 +2967,15 @@ public class LocalRepository
         if (!string.IsNullOrWhiteSpace(ticket.RoomId))
         {
             var room = await _dbContext.Rooms.FirstOrDefaultAsync(r => r.Id == ticket.RoomId);
-            if (room != null && room.Status == "MAINTENANCE")
+            if (room != null && (room.Status == "MAINTENANCE" || room.Status == "OUT_OF_ORDER"))
             {
                 room.Status = "DIRTY";
                 room.MaintenanceStatus = "RESOLVED";
-                room.HousekeepingStatus = "PENDING";
+                // A resolved maintenance issue returns the room to the same
+                // cleaning pipeline used by the online workflow. The room is
+                // still DIRTY until housekeeping completes and inspection
+                // releases it.
+                room.HousekeepingStatus = "CLEANING";
                 room.UpdatedAt = DateTime.UtcNow;
 
                 var housekeepingTask = new LocalHousekeepingTask
@@ -2980,7 +2984,7 @@ public class LocalRepository
                     RoomId = room.Id,
                     RoomNumber = room.Number,
                     TaskType = "INSPECTION",
-                    Status = "PENDING",
+                    Status = "CLEANING",
                     Notes = "Maintenance resolved; housekeeping must clean and inspect the room before release."
                 };
                 _dbContext.HousekeepingTasks.Add(housekeepingTask);
@@ -3451,6 +3455,51 @@ public class LocalRepository
         // If it's CLEAN or DIRTY, also update HousekeepingStatus to match cloud behavior if necessary.
         if (newStatus == "CLEAN" || newStatus == "DIRTY") {
             room.HousekeepingStatus = newStatus == "DIRTY" ? "PENDING" : newStatus;
+        }
+
+        // A manual maintenance restriction must create an actionable ticket,
+        // not only change the room colour on the Front Desk board. Reuse an
+        // existing open ticket when one already exists so repeated status
+        // changes do not create duplicate work for the managers.
+        if (newStatus == "MAINTENANCE" || newStatus == "OUT_OF_ORDER")
+        {
+            room.MaintenanceStatus = "OPEN";
+            var activeMaintenanceTicket = await _dbContext.MaintenanceTickets
+                .Where(ticket => ticket.RoomId == room.Id
+                    && ticket.Status != "RESOLVED"
+                    && ticket.Status != "CLOSED"
+                    && ticket.Status != "CANCELLED")
+                .OrderByDescending(ticket => ticket.CreatedAt)
+                .FirstOrDefaultAsync();
+
+            if (activeMaintenanceTicket == null)
+            {
+                var maintenanceTicket = new LocalMaintenanceTicket
+                {
+                    PropertyId = room.PropertyId,
+                    RoomId = room.Id,
+                    RoomNumber = room.Number,
+                    IssueDescription = $"Room {room.Number} was placed {newStatus.Replace("_", " ")} from Front Desk.",
+                    Priority = newStatus == "OUT_OF_ORDER" ? "CRITICAL" : "HIGH",
+                    Status = "OPEN",
+                    RequiresRoomRestriction = true,
+                };
+                _dbContext.MaintenanceTickets.Add(maintenanceTicket);
+                _dbContext.OutboxEvents.Add(new LocalOutboxEvent
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    PropertyId = maintenanceTicket.PropertyId,
+                    DeviceId = "System",
+                    OperatorId = "System",
+                    AggregateType = "MAINTENANCE_TICKET",
+                    AggregateId = maintenanceTicket.Id,
+                    AggregateVersion = maintenanceTicket.Version,
+                    EventType = "CREATE",
+                    Sequence = 1,
+                    PayloadJson = JsonSerializer.Serialize(maintenanceTicket),
+                    CreatedAt = DateTime.UtcNow,
+                });
+            }
         }
 
         if (newStatus == "DIRTY")
