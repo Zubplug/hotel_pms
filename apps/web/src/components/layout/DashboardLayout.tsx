@@ -92,7 +92,7 @@ const ALL_NAV: NavItem[] = [
   { section: 'Accounting Management', name: 'GL integrity', href: '/general-manager/accounting/gl', icon: Scale, module: 'MODULE_OPERATIONS', restrictedTo: ['ADMIN', 'CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'DIRECTOR'] },
   { section: 'Finance & Reports', name: 'Corporate Management', href: '/general-manager/corporate', icon: Building2, module: 'MODULE_OPERATIONS', restrictedTo: ['ADMIN', 'CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'DIRECTOR'] },
   { section: 'Finance & Reports', name: 'Cash Management', href: '/cash-management', icon: HandCoins, restrictedTo: ['ACCOUNTANT', 'GENERAL_CASHIER', 'NIGHT_AUDITOR'] },
-  { section: 'Finance & Reports', name: 'Approvals', href: '/general-manager/approvals', icon: ClipboardCheck, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'DIRECTOR'] },
+  { section: 'Finance & Reports', name: 'Approval Control Centre', href: '/general-manager/approvals', icon: ClipboardCheck, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'DIRECTOR'] },
   { section: 'Finance & Reports', name: 'Sync Center', href: '/sync-center', icon: RefreshCw, restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'DIRECTOR'] },
 
   { section: 'Administration', name: 'F&B Management', href: '/general-manager/fnb', icon: Utensils, module: 'MODULE_OPERATIONS', restrictedTo: ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'DIRECTOR'] },
