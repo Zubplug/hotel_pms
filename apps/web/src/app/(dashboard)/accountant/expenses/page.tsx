@@ -46,7 +46,7 @@ export default async function AccountantExpensesPage() {
     prisma.property.findUnique({ where: { id: propertyId }, select: { name: true, baseCurrency: true, businessDate: true } }),
     prisma.cashExpense.findMany({
       where: { propertyId },
-      include: { journal: true, cashAccount: { select: { name: true } } },
+      include: { journal: true, cashAccount: { select: { name: true } }, lineItems: { orderBy: { createdAt: 'asc' } } },
       orderBy: { createdAt: 'desc' },
       take: 500,
     }),
@@ -122,6 +122,7 @@ export default async function AccountantExpensesPage() {
     receiptUrl: item.receiptUrl,
     costCenter: item.costCenter,
     createdAt: item.createdAt.toISOString(),
+    lineItems: item.lineItems.map(line => ({ description: line.description, unit: line.unit, quantity: Number(line.quantity), unitPrice: Number(line.unitPrice), total: Number(line.total) })),
   }));
 
   return <main className="min-h-full bg-[#08111f] px-4 py-6 text-slate-200 sm:px-6 lg:px-8 lg:py-8">

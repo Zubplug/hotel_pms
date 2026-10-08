@@ -50,7 +50,7 @@ export class CashExpenseService {
     return prisma.cashExpense.findMany({
       where: { propertyId: { in: scopedIds as string[] } },
       orderBy: { createdAt: 'desc' },
-      include: { journal: true, approvals: { orderBy: { createdAt: 'asc' } }, cashAccount: true, audits: { orderBy: { createdAt: 'desc' }, take: 5 } },
+      include: { journal: true, approvals: { orderBy: { createdAt: 'asc' } }, lineItems: { orderBy: { createdAt: 'asc' } }, cashAccount: true, audits: { orderBy: { createdAt: 'desc' }, take: 5 } },
     });
   }
 
