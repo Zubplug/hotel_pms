@@ -1,14 +1,14 @@
 import { NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
 import { auth } from '@/lib/auth';
-import prisma from '@hotel-pms/db';
+import prisma, { StockItemType } from '@hotel-pms/db';
 import { hasInventoryPermission } from '@/lib/inventory/permissions';
 import { requireOrganizationContext } from "@/lib/organization-access";
 import { generateStockBarcode, generateStockSku } from '@/lib/inventory/identifiers';
 import { requireEntitlement } from '@/lib/auth/entitlement';
 import { isCentralKitchenStock, kitchenServiceOutletId } from '@/lib/inventory/kitchen-routing';
 
-const STOCK_ITEM_TYPES = ['SELLABLE', 'RAW_MATERIAL', 'CONSUMABLE', 'CLEANING', 'HOUSEKEEPING', 'ASSET', 'PACKAGING'] as const;
+const STOCK_ITEM_TYPES = Object.values(StockItemType) as StockItemType[];
 
 export const dynamic = 'force-dynamic';
 
@@ -34,7 +34,7 @@ export async function GET(request: Request) {
 
         const where: any = { propertyId: { in: ctx.propertyIds as string[] }, isActive };
         if (warehouseId) where.warehouseId = warehouseId;
-        if (stockType && STOCK_ITEM_TYPES.includes(stockType as typeof STOCK_ITEM_TYPES[number])) where.stockType = stockType;
+        if (stockType && STOCK_ITEM_TYPES.includes(stockType as StockItemType)) where.stockType = stockType;
         
         const andConditions = [];
         if (categoryId) {

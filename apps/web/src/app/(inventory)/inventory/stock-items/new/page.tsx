@@ -10,12 +10,21 @@ export default function NewStockItemPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [warehouses, setWarehouses] = useState<any[]>([]);
+  const [stockTypes, setStockTypes] = useState<{ value: string; label: string }[]>([]);
 
   useEffect(() => {
     fetch('/api/v1/inventory/warehouses')
       .then((res) => res.json())
       .then((data) => setWarehouses((data.data || []).filter((warehouse: any) => warehouse.posOutletId == null)))
       .catch((err) => console.error('Failed to fetch warehouses', err));
+
+    fetch('/api/v1/inventory/stock-types')
+      .then((res) => res.json())
+      .then((data) => {
+        if (!data.data?.length) throw new Error('No stock types returned');
+        setStockTypes(data.data);
+      })
+      .catch(() => setError('Failed to load stock types'));
   }, []);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -106,16 +115,13 @@ export default function NewStockItemPage() {
 
             <div className="space-y-2">
               <label htmlFor="stockType" className="text-sm font-medium text-slate-800">Stock Type *</label>
-              <select required id="stockType" name="stockType" defaultValue="CONSUMABLE" className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                <option value="SELLABLE">Sellable / Resale</option>
-                <option value="RAW_MATERIAL">Raw Material / Production</option>
-                <option value="CONSUMABLE">General Consumable</option>
-                <option value="CLEANING">Cleaning</option>
-                <option value="HOUSEKEEPING">Housekeeping</option>
-                <option value="ASSET">Asset / Durable Equipment</option>
-                <option value="PACKAGING">Packaging</option>
+              <select required disabled={!stockTypes.length} id="stockType" name="stockType" defaultValue="CONSUMABLE" className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:cursor-wait disabled:opacity-60">
+                {!stockTypes.length && <option value="">Loading stock types…</option>}
+                {stockTypes.map((type) => (
+                  <option key={type.value} value={type.value}>{type.label}</option>
+                ))}
               </select>
-              <p className="text-xs text-slate-500">Raw materials are provisioned only to the configured Kitchen Service outlet. Other stock types are provisioned to active outlet warehouses.</p>
+              <p className="text-xs text-slate-500">Stock types are loaded from the database schema. Raw materials are provisioned only to the configured Kitchen Service outlet; other types are provisioned to active outlet warehouses.</p>
             </div>
 
             <div className="space-y-2">
