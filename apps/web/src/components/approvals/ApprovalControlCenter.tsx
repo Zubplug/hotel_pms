@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import type { ElementType } from 'react';
+import Link from 'next/link';
 import { AlertCircle, ArrowUpRight, CheckCircle2, Clock3, FileCheck2, RefreshCw, Search, ShieldCheck, WalletCards, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -140,7 +141,36 @@ function ApprovalReviewDialog({ selected, audience, busy, reason, setReason, lin
       </div>}
       {selected.kind === 'REFUND' && <div className="rounded-xl border border-violet-400/15 bg-violet-400/[.06] p-5"><p className="text-xs uppercase tracking-wider text-violet-300">{label(selected.value.category)}</p><p className="mt-2 text-2xl font-semibold text-white">{money(selected.value.requestedAmount, selected.value.currency)}</p><p className="mt-2 text-sm text-slate-300">{selected.value.reason}</p><p className="mt-2 text-xs text-slate-500">Requested settlement: {label(selected.value.requestedMethod || 'ORIGINAL_PAYMENT')}</p></div>}
       {selected.kind === 'POS' && <div className="rounded-xl border border-orange-400/15 bg-orange-400/[.06] p-5"><p className="text-xs uppercase tracking-wider text-orange-300">{label(selected.value.type)}</p><p className="mt-2 text-2xl font-semibold text-white">{selected.value.details?.productName || selected.value.details?.name || 'F&B item'}</p><p className="mt-2 text-sm text-slate-300">{money(selected.value.details?.newPrice ?? selected.value.details?.price)} requested price</p><label className="mt-5 block text-sm text-slate-300">Approval note<textarea value={reason} onChange={(event) => setReason(event.target.value)} className="mt-2 min-h-24 w-full rounded-lg border border-white/10 bg-white/[.05] p-3 text-white" /></label></div>}
-      {selected.kind === 'STOCK_TRANSFER' && <div className="rounded-xl border border-emerald-400/15 bg-emerald-400/[.06] p-5"><p className="text-xs uppercase tracking-wider text-emerald-300">STOCK TRANSFER • {selected.value.transferRef}</p><p className="mt-2 text-xl font-semibold text-white">{selected.value.fromWarehouse?.name} → {selected.value.toWarehouse?.name}</p><p className="mt-2 text-sm text-slate-300">{selected.value.items?.length || 0} items requested. Total Value: {money((selected.value.items || []).reduce((sum: number, i: any) => sum + (Number(i.quantity) * Number(i.stockItem?.costPrice || 0)), 0), 'NGN')}</p><label className="mt-5 block text-sm text-slate-300">Approval/Rejection note<textarea value={reason} onChange={(event) => setReason(event.target.value)} className="mt-2 min-h-24 w-full rounded-lg border border-white/10 bg-white/[.05] p-3 text-white" /></label></div>}
+      {selected.kind === 'STOCK_TRANSFER' && <div className="space-y-5">
+        <section className="rounded-xl border border-emerald-400/15 bg-emerald-400/[.06] p-5">
+          <p className="text-xs uppercase tracking-wider text-emerald-300">STOCK TRANSFER • {selected.value.transferRef}</p>
+          <p className="mt-2 text-xl font-semibold text-white">{selected.value.fromWarehouse?.name} → {selected.value.toWarehouse?.name}</p>
+          <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm text-slate-300">{selected.value.items?.length || 0} item{selected.value.items?.length === 1 ? '' : 's'} requested · Total value: {money((selected.value.items || []).reduce((sum: number, i: any) => sum + (Number(i.quantity) * Number(i.stockItem?.costPrice || 0)), 0), 'NGN')}</p><Link href={`/inventory/transfers/${selected.value.id}`} className="inline-flex shrink-0 items-center justify-center rounded-lg border border-emerald-300/25 px-3 py-2 text-xs font-semibold text-emerald-200 hover:bg-emerald-300/10">Open transfer to adjust</Link></div>
+          {selected.value.notes && <p className="mt-3 border-t border-white/10 pt-3 text-xs leading-5 text-slate-400">Request note: {selected.value.notes}</p>}
+        </section>
+        <section className="overflow-hidden rounded-xl border border-white/10">
+          <div className="border-b border-white/10 bg-white/[.03] px-5 py-4">
+            <h3 className="font-semibold text-white">Requested stock items</h3>
+            <p className="mt-1 text-xs text-slate-400">Review the requested issue unit and its base-unit equivalent before making a decision.</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[680px] text-sm">
+              <thead className="bg-slate-950/30 text-left text-[10px] uppercase tracking-[.14em] text-slate-500">
+                <tr><th className="px-5 py-3">Item</th><th className="px-5 py-3">Requested quantity</th><th className="px-5 py-3">Base quantity</th><th className="px-5 py-3">Notes</th></tr>
+              </thead>
+              <tbody className="divide-y divide-white/10">
+                {(selected.value.items || []).map((item: any) => <tr key={item.id}>
+                  <td className="px-5 py-4"><p className="font-medium text-white">{item.stockItem?.name || 'Stock item'}</p><p className="mt-1 text-xs text-slate-500">Base unit: {label(String(item.stockItem?.baseUnit || 'UNIT'))}</p></td>
+                  <td className="px-5 py-4 font-semibold text-emerald-200">{Number(item.quantity).toLocaleString()} {label(String(item.unitOfMeasure || item.stockItem?.baseUnit || 'UNIT'))}</td>
+                  <td className="px-5 py-4 text-slate-300">{Number(item.baseQuantity || 0).toLocaleString()} {label(String(item.stockItem?.baseUnit || 'UNIT'))}</td>
+                  <td className="px-5 py-4 text-xs text-slate-400">{item.notes || '—'}</td>
+                </tr>)}
+              </tbody>
+            </table>
+          </div>
+        </section>
+        <label className="block text-sm text-slate-300">Approval/Rejection note<textarea value={reason} onChange={(event) => setReason(event.target.value)} className="mt-2 min-h-24 w-full rounded-lg border border-white/10 bg-white/[.05] p-3 text-white" /></label>
+      </div>}
     </div>
     <DialogFooter className="shrink-0 !mx-0 !mb-0 rounded-none border-white/10 bg-[#0c1728] px-6 py-4"><Button variant="outline" onClick={onClose} disabled={busy} className="border-white/10 bg-transparent text-slate-200">Close</Button>{canAct && <>{selected.kind !== 'EVENT_INVOICE' || audience === 'ACCOUNTING' ? <Button variant="outline" onClick={() => void onAction('reject')} disabled={busy || (!reason.trim() && selected.kind === 'STOCK_TRANSFER')} className="border-rose-400/30 text-rose-200 hover:bg-rose-400/10"><X className="mr-2 h-4 w-4" />Reject</Button> : null}<Button onClick={() => void onAction(selected.kind === 'EVENT_INVOICE' ? audience === 'CASHIER' ? 'issue' : 'approve' : 'approve')} disabled={busy} className="bg-emerald-500 text-slate-950 hover:bg-emerald-400">{busy ? 'Recording…' : selected.kind === 'EVENT_INVOICE' && audience === 'CASHIER' ? 'Issue invoice' : selected.kind === 'STOCK_TRANSFER' && selected.value.status === 'ISSUED' ? 'Confirm Receipt' : 'Approve'}</Button></>}</DialogFooter>
   </DialogContent></Dialog>;
