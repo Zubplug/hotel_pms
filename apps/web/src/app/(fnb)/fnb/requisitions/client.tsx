@@ -1,11 +1,14 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { AlertCircle, ArrowRight, CheckCircle2, Clock3, Loader2, Plus, Search, Send, X } from 'lucide-react';
+import { AlertCircle, ArrowRight, CheckCircle2, Loader2, Plus, Search, Send, X } from 'lucide-react';
+import { formatUnit, purchaseSetup, toPurchaseQuantity } from '@/lib/inventory/units';
 
 type Warehouse = { id: string; name: string; propertyId: string; posOutletId?: string | null };
-type StockItem = { id: string; name: string; sku?: string | null; baseUnit: string; quantityOnHand: number | string; warehouseId: string };
+type StockUnit = { unit: string; unitsInBase: number | string; isPurchaseUnit?: boolean };
+type StockItem = { id: string; name: string; sku?: string | null; baseUnit: string; quantityOnHand: number | string; warehouseId: string; stockUnits?: StockUnit[] };
 type Requisition = { id: string; transferRef: string; status: string; createdAt: string; fromWarehouse?: Warehouse; toWarehouse?: Warehouse; items?: { id: string }[]; requestedBy?: string };
+type SelectedLine = { id: string; quantity: string; unit: string };
 
 const statusStyle: Record<string, string> = {
   DRAFT: 'border-slate-400/20 bg-slate-400/10 text-slate-300',
@@ -19,16 +22,13 @@ const statusStyle: Record<string, string> = {
 export default function RequisitionsClient({
   title = 'Stock requisitions',
   description = 'Request ingredients, beverages, and operating stock from the main warehouse for your outlet. Every request follows approval and dispatch control.',
-}: {
-  title?: string;
-  description?: string;
-}) {
+}: { title?: string; description?: string }) {
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [stockItems, setStockItems] = useState<StockItem[]>([]);
   const [requisitions, setRequisitions] = useState<Requisition[]>([]);
   const [sourceId, setSourceId] = useState('');
   const [destinationId, setDestinationId] = useState('');
-  const [selected, setSelected] = useState<{ id: string; quantity: string }[]>([]);
+  const [selected, setSelected] = useState<SelectedLine[]>([]);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('ALL');
   const [open, setOpen] = useState(false);
@@ -36,23 +36,27 @@ export default function RequisitionsClient({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
+  const mainWarehouses = useMemo(() => warehouses.filter((item) => !item.posOutletId), [warehouses]);
+  const outletWarehouses = useMemo(() => warehouses.filter((item) => item.posOutletId), [warehouses]);
+  const source = mainWarehouses.find((item) => item.id === sourceId);
+  const destination = outletWarehouses.find((item) => item.id === destinationId);
+  const selectedIds = new Set(selected.map((item) => item.id));
+
   async function load() {
     setLoading(true);
     try {
-      const [warehouseResponse, stockResponse, requisitionResponse] = await Promise.all([
+      const [warehouseResponse, requisitionResponse] = await Promise.all([
         fetch('/api/v1/inventory/warehouses?scope=outlet'),
-        fetch('/api/v1/inventory/stock-items?limit=500'),
         fetch('/api/v1/fnb/inventory/requisitions'),
       ]);
       const warehouseBody = await warehouseResponse.json();
-      const stockBody = await stockResponse.json();
       const requisitionBody = await requisitionResponse.json();
-      const loadedWarehouses = warehouseBody.data?.items || warehouseBody.data || [];
-      setWarehouses(loadedWarehouses);
-      setStockItems(stockBody.data?.items || stockBody.data || []);
+      const loaded = warehouseBody.data?.items || warehouseBody.data || [];
+      const mains = loaded.filter((item: Warehouse) => !item.posOutletId);
+      setWarehouses(loaded);
       setRequisitions(requisitionBody.data?.requisitions || []);
-      setSourceId((current) => current || loadedWarehouses.find((item: Warehouse) => !item.posOutletId)?.id || '');
-      setDestinationId((current) => current || loadedWarehouses.find((item: Warehouse) => item.posOutletId)?.id || '');
+      setSourceId((current) => current && mains.some((item: Warehouse) => item.id === current) ? current : mains.length === 1 ? mains[0].id : '');
+      setDestinationId((current) => current || loaded.find((item: Warehouse) => item.posOutletId)?.id || '');
     } catch {
       setError('Unable to load requisition workspace.');
     } finally {
@@ -62,28 +66,60 @@ export default function RequisitionsClient({
 
   useEffect(() => { void load(); }, []);
 
-  const sourceItems = useMemo(() => stockItems.filter((item) => item.warehouseId === sourceId && Number(item.quantityOnHand) > 0 && item.name.toLowerCase().includes(search.toLowerCase())), [stockItems, sourceId, search]);
+  useEffect(() => {
+    if (!sourceId) {
+      setStockItems([]);
+      return;
+    }
+    fetch(`/api/v1/inventory/stock-items?warehouseId=${encodeURIComponent(sourceId)}&limit=500`)
+      .then((response) => response.json())
+      .then((body) => setStockItems(body.data?.items || body.data || []))
+      .catch(() => setStockItems([]));
+  }, [sourceId]);
+
+  const itemUnits = (item: StockItem) => {
+    const purchase = purchaseSetup(item.baseUnit, item.stockUnits || []);
+    return { purchaseUnit: purchase.unit, unitsInBase: Number(purchase.unitsInBase || 1) };
+  };
+
+  const availableItems = useMemo(() => stockItems
+    .filter((item) => Number(item.quantityOnHand) > 0)
+    .filter((item) => item.name.toLowerCase().includes(search.toLowerCase())), [stockItems, search]);
   const filtered = requisitions.filter((item) => filter === 'ALL' || item.status === filter);
   const pendingCount = requisitions.filter((item) => item.status === 'PENDING_APPROVAL').length;
-  const selectedIds = new Set(selected.map((item) => item.id));
 
   function addItem(id: string) {
-    if (!selectedIds.has(id)) setSelected((current) => [...current, { id, quantity: '1' }]);
+    const item = stockItems.find((candidate) => candidate.id === id);
+    if (!item || selectedIds.has(id)) return;
+    setSelected((current) => [...current, { id, quantity: '1', unit: itemUnits(item).purchaseUnit }]);
+  }
+
+  function updateLine(id: string, patch: Partial<SelectedLine>) {
+    setSelected((current) => current.map((line) => line.id === id ? { ...line, ...patch } : line));
   }
 
   async function submit(action: 'DRAFT' | 'SUBMIT') {
-    const source = warehouses.find((item) => item.id === sourceId);
-    const destination = warehouses.find((item) => item.id === destinationId);
-    if (!sourceId || !destinationId || !source || source.posOutletId || !destination?.posOutletId) return setError('Choose a main warehouse and your outlet.');
-    if (!selected.length) return setError('Add at least one stock item.');
+    if (!source || !destination) return setError('Select the supplying mother warehouse and requesting outlet.');
+    if (!selected.length) return setError('Select at least one stock item.');
     if (selected.some((item) => Number(item.quantity) <= 0)) return setError('Every requested quantity must be greater than zero.');
     setSaving(true); setError('');
     try {
-      const response = await fetch('/api/v1/fnb/inventory/requisitions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ propertyId: source.propertyId, fromWarehouseId: sourceId, toWarehouseId: destinationId, items: selected.map((item) => ({ itemId: item.id, quantity: Number(item.quantity) })), action, requestId: crypto.randomUUID() }) });
+      const response = await fetch('/api/v1/fnb/inventory/requisitions', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          propertyId: source.propertyId,
+          fromWarehouseId: source.id,
+          toWarehouseId: destination.id,
+          items: selected.map((item) => ({ itemId: item.id, quantity: Number(item.quantity), unitOfMeasure: item.unit })),
+          action, requestId: crypto.randomUUID(),
+        }),
+      });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error || 'Unable to submit requisition.');
       setOpen(false); setSelected([]); await load();
-    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Unable to submit requisition.'); } finally { setSaving(false); }
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Unable to submit requisition.');
+    } finally { setSaving(false); }
   }
 
   return (
@@ -93,10 +129,15 @@ export default function RequisitionsClient({
       </header>
       <main className="mx-auto max-w-7xl space-y-5 px-5 py-6 sm:px-8">
         {error && <div className="flex items-center gap-2 rounded-xl border border-rose-300/20 bg-rose-300/10 p-3 text-sm text-rose-200"><AlertCircle className="h-4 w-4" />{error}<button className="ml-auto" onClick={() => setError('')}><X className="h-4 w-4" /></button></div>}
-        <div className="grid gap-4 sm:grid-cols-3"><div className="rounded-2xl border border-white/[0.08] bg-[#111c2e] p-5"><p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">Total requests</p><p className="mt-3 text-2xl font-bold text-white">{requisitions.length}</p><p className="mt-1 text-xs text-slate-500">F&B requisitions in this workspace</p></div><div className="rounded-2xl border border-amber-300/15 bg-amber-300/[0.05] p-5"><p className="text-[10px] font-bold uppercase tracking-[0.14em] text-amber-200/70">Awaiting approval</p><p className="mt-3 text-2xl font-bold text-amber-200">{pendingCount}</p><p className="mt-1 text-xs text-slate-500">Requests pending stock control</p></div><div className="rounded-2xl border border-emerald-300/15 bg-emerald-300/[0.05] p-5"><p className="text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-200/70">Operating rule</p><p className="mt-3 text-sm font-bold text-emerald-200">Main warehouse supply</p><p className="mt-1 text-xs text-slate-500">Outlet stock is not used as a requisition source</p></div></div>
+        <div className="grid gap-4 sm:grid-cols-3"><div className="rounded-2xl border border-white/[0.08] bg-[#111c2e] p-5"><p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">Total requests</p><p className="mt-3 text-2xl font-bold text-white">{requisitions.length}</p><p className="mt-1 text-xs text-slate-500">F&B requisitions in this workspace</p></div><div className="rounded-2xl border border-amber-300/15 bg-amber-300/[0.05] p-5"><p className="text-[10px] font-bold uppercase tracking-[0.14em] text-amber-200/70">Awaiting approval</p><p className="mt-3 text-2xl font-bold text-amber-200">{pendingCount}</p><p className="mt-1 text-xs text-slate-500">Requests pending stock control</p></div><div className="rounded-2xl border border-emerald-300/15 bg-emerald-300/[0.05] p-5"><p className="text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-200/70">Operating rule</p><p className="mt-3 text-sm font-bold text-emerald-200">Mother warehouse supply</p><p className="mt-1 text-xs text-slate-500">Outlet stock is not used as a requisition source</p></div></div>
         <section className="overflow-hidden rounded-2xl border border-white/[0.08] bg-[#111c2e]"><div className="flex flex-col gap-3 border-b border-white/[0.07] p-5 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="font-semibold text-white">Request history</h2><p className="mt-1 text-xs text-slate-500">Track approval, dispatch, and completion.</p></div><div className="flex flex-wrap gap-2">{['ALL', 'DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'ISSUED', 'COMPLETED'].map((value) => <button key={value} onClick={() => setFilter(value)} className={`rounded-lg border px-3 py-1.5 text-[11px] font-semibold ${filter === value ? 'border-orange-300/30 bg-orange-300/15 text-orange-200' : 'border-white/[0.08] text-slate-500 hover:text-slate-300'}`}>{value === 'ALL' ? 'All' : value.replace('_', ' ')}</button>)}</div></div><div className="overflow-x-auto"><table className="w-full min-w-[850px] text-sm"><thead className="bg-white/[0.02] text-left text-[10px] uppercase tracking-[0.12em] text-slate-500"><tr><th className="px-5 py-3">Reference</th><th className="px-5 py-3">Route</th><th className="px-5 py-3">Items</th><th className="px-5 py-3">Requested</th><th className="px-5 py-3">Status</th></tr></thead><tbody className="divide-y divide-white/[0.06]">{loading ? <tr><td colSpan={5} className="py-16 text-center text-slate-500"><Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin text-orange-300" />Loading requisitions…</td></tr> : !filtered.length ? <tr><td colSpan={5} className="py-16 text-center text-slate-500">No requisitions in this view.</td></tr> : filtered.map((item) => <tr key={item.id} className="hover:bg-white/[0.025]"><td className="px-5 py-4 font-mono text-xs font-bold text-orange-200">{item.transferRef}</td><td className="px-5 py-4 text-xs text-slate-300"><span>{item.fromWarehouse?.name}</span><ArrowRight className="mx-2 inline h-3 w-3 text-slate-600" /><span>{item.toWarehouse?.name}</span></td><td className="px-5 py-4 text-xs text-slate-400">{item.items?.length || 0} item lines</td><td className="px-5 py-4 text-xs text-slate-500">{new Date(item.createdAt).toLocaleDateString('en-GB')}</td><td className="px-5 py-4"><span className={`rounded-lg border px-2.5 py-1 text-[10px] font-bold uppercase ${statusStyle[item.status] || statusStyle.DRAFT}`}>{item.status.replace('_', ' ')}</span></td></tr>)}</tbody></table></div></section>
       </main>
-      {open && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-sm"><div className="w-full max-w-3xl overflow-hidden rounded-2xl border border-white/[0.1] bg-[#101c2e] shadow-2xl"><div className="flex items-start justify-between border-b border-white/[0.08] px-6 py-5"><div><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-orange-300">F&B stock request</p><h2 className="mt-1 text-xl font-semibold text-white">Create requisition</h2><p className="mt-1 text-xs text-slate-500">Choose the supplying main warehouse, your outlet, and required items.</p></div><button onClick={() => !saving && setOpen(false)} className="text-slate-500 hover:text-white"><X className="h-5 w-5" /></button></div><div className="space-y-5 p-6"><div className="grid gap-4 sm:grid-cols-2"><label className="text-xs font-semibold text-slate-400">Supply from<select value={sourceId} onChange={(event) => { setSourceId(event.target.value); setSelected([]); }} className="mt-2 h-11 w-full rounded-xl border border-white/10 bg-[#0b1728] px-3 text-sm text-slate-200"><option value="">Select main warehouse</option>{warehouses.filter((item) => !item.posOutletId).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><label className="text-xs font-semibold text-slate-400">Requesting outlet<select value={destinationId} onChange={(event) => setDestinationId(event.target.value)} className="mt-2 h-11 w-full rounded-xl border border-white/10 bg-[#0b1728] px-3 text-sm text-slate-200"><option value="">Select outlet</option>{warehouses.filter((item) => item.posOutletId).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label></div><div><div className="mb-2 flex items-center justify-between"><p className="text-xs font-semibold text-slate-400">Add stock items</p><span className="text-[11px] text-slate-600">{selected.length} selected</span></div><div className="relative mb-3"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search available main-warehouse stock…" className="h-10 w-full rounded-xl border border-white/10 bg-[#0b1728] pl-9 pr-3 text-sm text-white outline-none focus:border-orange-300/40" /></div><div className="max-h-44 space-y-1 overflow-y-auto rounded-xl border border-white/[0.07] bg-[#0b1728] p-2">{sourceItems.slice(0, 50).map((item) => <button key={item.id} disabled={selectedIds.has(item.id)} onClick={() => addItem(item.id)} className="flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-left hover:bg-white/[0.05] disabled:opacity-40"><span><span className="block text-sm text-slate-200">{item.name}</span><span className="text-[11px] text-slate-500">{item.quantityOnHand} {item.baseUnit} available</span></span><Plus className="h-4 w-4 text-orange-300" /></button>)}{!sourceItems.length && <p className="p-4 text-center text-xs text-slate-600">Select a main warehouse to see available stock.</p>}</div></div>{selected.length > 0 && <div className="space-y-2">{selected.map((line) => { const item = stockItems.find((candidate) => candidate.id === line.id); return <div key={line.id} className="flex items-center gap-3 rounded-xl border border-white/[0.07] bg-white/[0.025] p-3"><span className="min-w-0 flex-1 truncate text-sm text-slate-200">{item?.name}</span><input type="number" min="0.01" step="any" value={line.quantity} onChange={(event) => setSelected((current) => current.map((entry) => entry.id === line.id ? { ...entry, quantity: event.target.value } : entry))} className="h-9 w-28 rounded-lg border border-white/10 bg-[#0b1728] px-2 text-right text-sm text-white" /><span className="w-16 text-xs text-slate-500">{item?.baseUnit}</span><button onClick={() => setSelected((current) => current.filter((entry) => entry.id !== line.id))} className="text-slate-600 hover:text-rose-300"><X className="h-4 w-4" /></button></div>; })}</div>}<div className="flex justify-end gap-2 border-t border-white/[0.08] pt-4"><button onClick={() => setOpen(false)} disabled={saving} className="rounded-xl border border-white/10 px-4 py-2.5 text-sm font-semibold text-slate-400">Cancel</button><button onClick={() => void submit('SUBMIT')} disabled={saving || !selected.length} className="inline-flex items-center gap-2 rounded-xl bg-orange-500 px-5 py-2.5 text-sm font-bold text-white hover:bg-orange-400 disabled:opacity-50">{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}Submit for approval</button></div></div></div></div>}
+
+      {open && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm"><div className="w-full max-w-5xl overflow-hidden rounded-2xl border border-white/[0.1] bg-[#101c2e] shadow-2xl"><div className="flex items-start justify-between border-b border-white/[0.08] px-6 py-5"><div><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-orange-300">F&B stock request</p><h2 className="mt-1 text-xl font-semibold text-white">Create requisition</h2><p className="mt-1 text-xs text-slate-500">Stock is requested from the mother warehouse and delivered to your outlet.</p></div><button onClick={() => !saving && setOpen(false)} className="text-slate-500 hover:text-white"><X className="h-5 w-5" /></button></div><div className="space-y-5 p-6">
+        <div className="grid gap-4 sm:grid-cols-2"><div className="rounded-xl border border-cyan-300/15 bg-cyan-300/[0.05] p-4"><p className="text-[10px] font-bold uppercase tracking-[0.14em] text-cyan-200/70">Supply from</p>{mainWarehouses.length > 1 ? <select value={sourceId} onChange={(event) => { setSourceId(event.target.value); setSelected([]); }} className="mt-2 h-10 w-full rounded-lg border border-white/10 bg-[#0b1728] px-3 text-sm text-white"><option value="">Select mother warehouse</option>{mainWarehouses.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select> : <p className="mt-2 text-sm font-semibold text-white">{source?.name || 'Loading mother warehouse…'}<span className="mt-1 block text-[11px] font-normal text-cyan-200/60">Selected automatically</span></p>}</div><div className="rounded-xl border border-emerald-300/15 bg-emerald-300/[0.05] p-4"><p className="text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-200/70">Requesting outlet</p><select value={destinationId} onChange={(event) => setDestinationId(event.target.value)} className="mt-2 h-10 w-full rounded-lg border border-white/10 bg-[#0b1728] px-3 text-sm text-white"><option value="">Select outlet</option>{outletWarehouses.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></div></div>
+        <div className="rounded-xl border border-white/[0.08] bg-[#0b1728] p-4"><div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-sm font-semibold text-white">Select stock items</p><p className="mt-1 text-xs text-slate-500">Enter the request in purchase units or base units.</p></div><div className="relative w-full sm:w-72"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search mother-warehouse stock…" className="h-9 w-full rounded-lg border border-white/10 bg-[#101c2e] pl-9 pr-3 text-sm text-white outline-none focus:border-orange-300/40" /></div></div><div className="overflow-x-auto"><table className="w-full min-w-[760px] text-sm"><thead className="border-y border-white/[0.07] text-left text-[10px] uppercase tracking-[0.12em] text-slate-500"><tr><th className="w-12 px-3 py-3">Add</th><th className="px-3 py-3">Item</th><th className="px-3 py-3">Available</th><th className="w-44 px-3 py-3">Request quantity</th><th className="w-36 px-3 py-3">Unit</th></tr></thead><tbody className="divide-y divide-white/[0.06]">{!sourceId ? <tr><td colSpan={5} className="py-10 text-center text-slate-600">{mainWarehouses.length > 1 ? 'Select a mother warehouse to see stock.' : 'Loading mother warehouse stock…'}</td></tr> : !availableItems.length ? <tr><td colSpan={5} className="py-10 text-center text-slate-600">No active stock with a positive balance was found.</td></tr> : availableItems.slice(0, 100).map((item) => { const units = itemUnits(item); const line = selected.find((entry) => entry.id === item.id); const availablePurchase = toPurchaseQuantity(item.quantityOnHand, item.baseUnit, item.stockUnits || []); return <tr key={item.id} className={line ? 'bg-orange-300/[0.05]' : 'hover:bg-white/[0.025]'}><td className="px-3 py-3"><button type="button" onClick={() => line ? setSelected((current) => current.filter((entry) => entry.id !== item.id)) : addItem(item.id)} className={`flex h-7 w-7 items-center justify-center rounded-lg border ${line ? 'border-orange-300/40 bg-orange-300/15 text-orange-200' : 'border-white/10 text-slate-600 hover:border-orange-300/30 hover:text-orange-200'}`}>{line ? <CheckCircle2 className="h-4 w-4" /> : <Plus className="h-4 w-4" />}</button></td><td className="px-3 py-3"><p className="font-medium text-slate-200">{item.name}</p><p className="text-[11px] text-slate-600">{item.sku || 'No SKU'}</p></td><td className="px-3 py-3 text-xs text-slate-400">{availablePurchase.toLocaleString()} {formatUnit(units.purchaseUnit)}<span className="block text-[11px] text-slate-600">{Number(item.quantityOnHand).toLocaleString()} {formatUnit(item.baseUnit)} base</span></td><td className="px-3 py-3">{line ? <input type="number" min="0.01" step="any" value={line.quantity} onChange={(event) => updateLine(item.id, { quantity: event.target.value })} className="h-9 w-full rounded-lg border border-white/10 bg-[#101c2e] px-2 text-right text-sm text-white outline-none focus:border-orange-300/40" /> : <span className="text-xs text-slate-700">Select item</span>}</td><td className="px-3 py-3">{line ? <select value={line.unit} onChange={(event) => updateLine(item.id, { unit: event.target.value })} className="h-9 w-full rounded-lg border border-white/10 bg-[#101c2e] px-2 text-xs text-white"><option value={units.purchaseUnit}>{formatUnit(units.purchaseUnit)} (purchase)</option><option value={item.baseUnit}>{formatUnit(item.baseUnit)} (base)</option></select> : <span className="text-xs text-slate-600">—</span>}</td></tr>; })}</tbody></table></div><p className="mt-3 text-[11px] text-slate-600">{selected.length} item{selected.length === 1 ? '' : 's'} selected · Purchase quantities are converted to base units during approval processing.</p></div>
+        <div className="flex justify-end gap-2 border-t border-white/[0.08] pt-4"><button onClick={() => setOpen(false)} disabled={saving} className="rounded-xl border border-white/10 px-4 py-2.5 text-sm font-semibold text-slate-400">Cancel</button><button onClick={() => void submit('SUBMIT')} disabled={saving || !selected.length} className="inline-flex items-center gap-2 rounded-xl bg-orange-500 px-5 py-2.5 text-sm font-bold text-white hover:bg-orange-400 disabled:opacity-50">{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}Submit for approval</button></div>
+      </div></div></div>}
     </div>
   );
 }

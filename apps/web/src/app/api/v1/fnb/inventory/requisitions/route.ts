@@ -74,11 +74,18 @@ export async function POST(req: NextRequest) {
         return errorResponse('BAD_REQUEST', `Invalid quantity for item ${item.itemId}`, 400);
       }
       const stockItem = await prisma.stockItem.findFirst({
-        where: { id: item.itemId, propertyId, warehouseId: fromWarehouseId, isActive: true }
+        where: { id: item.itemId, propertyId, warehouseId: fromWarehouseId, isActive: true },
+        include: { stockUnits: true }
       });
       if (!stockItem) return errorResponse('BAD_REQUEST', `Stock item ${item.itemId} is not available in the selected main warehouse`, 400);
-      item.unitOfMeasure = stockItem.baseUnit;
-      item.baseQuantity = Number(item.quantity);
+      const requestedUnit = item.unitOfMeasure || stockItem.baseUnit;
+      const conversion = requestedUnit === stockItem.baseUnit
+        ? 1
+        : Number(stockItem.stockUnits.find((unit) => unit.unit === requestedUnit)?.unitsInBase || 0);
+      if (conversion <= 0) return errorResponse('BAD_REQUEST', `No conversion is configured from ${requestedUnit} to ${stockItem.baseUnit} for ${stockItem.name}`, 400);
+      item.unitOfMeasure = requestedUnit;
+      item.baseQuantity = Number(item.quantity) * conversion;
+      if (item.baseQuantity > Number(stockItem.quantityOnHand)) return errorResponse('BAD_REQUEST', `Insufficient ${stockItem.name} in the selected main warehouse`, 400);
     }
 
     const targetStatus = action === 'SUBMIT' ? 'PENDING_APPROVAL' : 'DRAFT';
