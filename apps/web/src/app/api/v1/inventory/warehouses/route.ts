@@ -19,7 +19,13 @@ export async function GET(request: Request) {
         const scope = new URL(request.url).searchParams.get('scope');
         // Restrict to assigned outlets + main warehouses unless the user is a high-level admin or stock manager
         if (scope === 'outlet' && !['SUPER_ADMIN', 'ADMIN', 'OWNER', 'MANAGER', 'GENERAL_MANAGER', 'GENERAL_CASHIER', 'STOCK_MANAGER', 'STOCK_KEEPER'].includes(role)) {
-            where.posOutletId = { in: ctx.outletIds as string[] };
+            // F&B requisitions need both the assigned outlet(s) and the
+            // property's mother warehouse(s) so the request can choose its
+            // source while still hiding other operational outlets.
+            where.OR = [
+                { posOutletId: { in: ctx.outletIds as string[] } },
+                { posOutletId: null },
+            ];
         } else if (!['SUPER_ADMIN', 'ADMIN', 'OWNER', 'MANAGER', 'GENERAL_MANAGER', 'GENERAL_CASHIER', 'STOCK_MANAGER', 'STOCK_KEEPER'].includes(role)) {
             where.OR = [
                 { posOutletId: { in: ctx.outletIds as string[] } },
