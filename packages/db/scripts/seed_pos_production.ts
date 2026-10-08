@@ -65,19 +65,19 @@ async function main() {
 
   // 4. Create POS Outlet
   let outlet = await prisma.posOutlet.findFirst({
-    where: { propertyId: property.id, name: 'LodgeCore Main Restaurant' }
+    where: { propertyId: property.id, name: 'Stanzel Main Kitchen Store' }
   });
 
   if (!outlet) {
     outlet = await prisma.posOutlet.create({
       data: {
         propertyId: property.id,
-        name: 'LodgeCore Main Restaurant',
+        name: 'Stanzel Main Kitchen Store',
         type: 'RESTAURANT',
         isActive: true
       }
     });
-    console.log('Created LodgeCore Main Restaurant outlet.');
+    console.log('Created Stanzel Main Kitchen Store outlet.');
   }
 
   // 5. Create Floor Plan & Tables

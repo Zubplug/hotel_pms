@@ -46,6 +46,10 @@ export async function POST(req: NextRequest) {
     });
     if (!sourceWarehouse) return errorResponse('NOT_FOUND', 'Source warehouse not found', 404);
 
+    if (sourceWarehouse.posOutletId !== null) {
+      return errorResponse('BAD_REQUEST', 'F&B requisitions must be supplied by a main warehouse, not an outlet warehouse.', 400);
+    }
+
     // Security: Is it a Main Store? (posOutletId is null). If not, is the user authorized?
     // In a strict setup, F&B managers shouldn't request from other operational outlets unless authorized.
     if (!isGlobalAdmin && sourceWarehouse.posOutletId !== null && !ctx.outletIds.includes(sourceWarehouse.posOutletId)) {
@@ -70,9 +74,11 @@ export async function POST(req: NextRequest) {
         return errorResponse('BAD_REQUEST', `Invalid quantity for item ${item.itemId}`, 400);
       }
       const stockItem = await prisma.stockItem.findFirst({
-        where: { id: item.itemId, propertyId }
+        where: { id: item.itemId, propertyId, warehouseId: fromWarehouseId, isActive: true }
       });
-      if (!stockItem) return errorResponse('BAD_REQUEST', `Stock item ${item.itemId} not found in this property`, 400);
+      if (!stockItem) return errorResponse('BAD_REQUEST', `Stock item ${item.itemId} is not available in the selected main warehouse`, 400);
+      item.unitOfMeasure = stockItem.baseUnit;
+      item.baseQuantity = Number(item.quantity);
     }
 
     const targetStatus = action === 'SUBMIT' ? 'PENDING_APPROVAL' : 'DRAFT';
@@ -90,7 +96,8 @@ export async function POST(req: NextRequest) {
           create: items.map((item: any) => ({
             stockItemId: item.itemId,
             quantity: Number(item.quantity),
-            unitOfMeasure: item.unitOfMeasure || 'UNIT',
+            unitOfMeasure: item.unitOfMeasure,
+            baseQuantity: item.baseQuantity,
           }))
         }
       },

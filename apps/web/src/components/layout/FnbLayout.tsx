@@ -13,7 +13,6 @@ import {
   LayoutDashboard,
   ClipboardList,
   ReceiptText,
-  ArrowLeftRight,
   Users,
   CalendarDays,
   CalendarRange,
@@ -50,13 +49,12 @@ const FNB_NAV = [
     ],
   },
   {
-    name: 'Outlet Inventory',
-    icon: ReceiptText,
-    children: [
-      { name: 'Inventory & AvT', href: '/fnb/inventory', icon: ReceiptText },
-      { name: 'Stock Requisitions', href: '/fnb/requisitions', icon: ArrowLeftRight },
-      { name: 'Waste Log', href: '/fnb/inventory/waste', icon: ClipboardList },
-    ],
+      name: 'Outlet Inventory',
+      icon: ReceiptText,
+      children: [
+        { name: 'Inventory & AvT', href: '/fnb/inventory', icon: ReceiptText },
+        { name: 'Approval Control Center', href: '/inventory/approvals', icon: ShieldCheck },
+      ],
   },
   {
     name: 'Hall Management',

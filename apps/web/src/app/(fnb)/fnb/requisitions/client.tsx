@@ -1,346 +1,96 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Search, Plus, Filter, MoreHorizontal, ArrowRight, Save, Send, Trash, Loader2 } from 'lucide-react';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { toast } from 'sonner';
+import { useEffect, useMemo, useState } from 'react';
+import { AlertCircle, ArrowRight, CheckCircle2, Clock3, Loader2, Plus, Search, Send, X } from 'lucide-react';
+
+type Warehouse = { id: string; name: string; propertyId: string; posOutletId?: string | null };
+type StockItem = { id: string; name: string; sku?: string | null; baseUnit: string; quantityOnHand: number | string; warehouseId: string };
+type Requisition = { id: string; transferRef: string; status: string; createdAt: string; fromWarehouse?: Warehouse; toWarehouse?: Warehouse; items?: { id: string }[]; requestedBy?: string };
+
+const statusStyle: Record<string, string> = {
+  DRAFT: 'border-slate-400/20 bg-slate-400/10 text-slate-300',
+  PENDING_APPROVAL: 'border-amber-300/25 bg-amber-300/10 text-amber-200',
+  APPROVED: 'border-cyan-300/25 bg-cyan-300/10 text-cyan-200',
+  ISSUED: 'border-violet-300/25 bg-violet-300/10 text-violet-200',
+  COMPLETED: 'border-emerald-300/25 bg-emerald-300/10 text-emerald-200',
+  REJECTED: 'border-rose-300/25 bg-rose-300/10 text-rose-200',
+};
 
 export default function RequisitionsClient() {
-  const [requisitions, setRequisitions] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+  const [stockItems, setStockItems] = useState<StockItem[]>([]);
+  const [requisitions, setRequisitions] = useState<Requisition[]>([]);
+  const [sourceId, setSourceId] = useState('');
+  const [destinationId, setDestinationId] = useState('');
+  const [selected, setSelected] = useState<{ id: string; quantity: string }[]>([]);
+  const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('ALL');
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
-  const [isNewOpen, setIsNewOpen] = useState(false);
-  const [warehouses, setWarehouses] = useState<any[]>([]);
-  const [stockItems, setStockItems] = useState<any[]>([]);
-  
-  // New Requisition Form State
-  const [fromWarehouseId, setFromWarehouseId] = useState('');
-  const [toWarehouseId, setToWarehouseId] = useState('');
-  const [selectedItems, setSelectedItems] = useState<{itemId: string, name: string, quantity: string}[]>([]);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Derive propertyId from the first warehouse or stock item for the POST request
-  const inferredPropertyId = warehouses[0]?.propertyId || stockItems[0]?.propertyId || '';
-
-  useEffect(() => {
-    fetchRequisitions();
-    fetchWarehouses();
-    fetchStockItems();
-  }, []);
-
-  const fetchRequisitions = async () => {
+  async function load() {
+    setLoading(true);
     try {
-      const res = await fetch(`/api/v1/fnb/inventory/requisitions`);
-      if (res.ok) {
-        const json = await res.json();
-        setRequisitions(json.data.requisitions);
-      }
-    } catch (error) {
-      console.error('Failed to fetch requisitions', error);
+      const [warehouseResponse, stockResponse, requisitionResponse] = await Promise.all([
+        fetch('/api/v1/inventory/warehouses?scope=outlet'),
+        fetch('/api/v1/inventory/stock-items?limit=500'),
+        fetch('/api/v1/fnb/inventory/requisitions'),
+      ]);
+      const warehouseBody = await warehouseResponse.json();
+      const stockBody = await stockResponse.json();
+      const requisitionBody = await requisitionResponse.json();
+      const loadedWarehouses = warehouseBody.data?.items || warehouseBody.data || [];
+      setWarehouses(loadedWarehouses);
+      setStockItems(stockBody.data?.items || stockBody.data || []);
+      setRequisitions(requisitionBody.data?.requisitions || []);
+      setSourceId((current) => current || loadedWarehouses.find((item: Warehouse) => !item.posOutletId)?.id || '');
+      setDestinationId((current) => current || loadedWarehouses.find((item: Warehouse) => item.posOutletId)?.id || '');
+    } catch {
+      setError('Unable to load requisition workspace.');
     } finally {
       setLoading(false);
     }
-  };
+  }
 
-  const fetchWarehouses = async () => {
+  useEffect(() => { void load(); }, []);
+
+  const sourceItems = useMemo(() => stockItems.filter((item) => item.warehouseId === sourceId && Number(item.quantityOnHand) > 0 && item.name.toLowerCase().includes(search.toLowerCase())), [stockItems, sourceId, search]);
+  const filtered = requisitions.filter((item) => filter === 'ALL' || item.status === filter);
+  const pendingCount = requisitions.filter((item) => item.status === 'PENDING_APPROVAL').length;
+  const selectedIds = new Set(selected.map((item) => item.id));
+
+  function addItem(id: string) {
+    if (!selectedIds.has(id)) setSelected((current) => [...current, { id, quantity: '1' }]);
+  }
+
+  async function submit(action: 'DRAFT' | 'SUBMIT') {
+    const source = warehouses.find((item) => item.id === sourceId);
+    const destination = warehouses.find((item) => item.id === destinationId);
+    if (!sourceId || !destinationId || !source || source.posOutletId || !destination?.posOutletId) return setError('Choose a main warehouse and your outlet.');
+    if (!selected.length) return setError('Add at least one stock item.');
+    if (selected.some((item) => Number(item.quantity) <= 0)) return setError('Every requested quantity must be greater than zero.');
+    setSaving(true); setError('');
     try {
-      const res = await fetch(`/api/v1/inventory/warehouses`);
-      if (res.ok) {
-        const json = await res.json();
-        setWarehouses(json.data || json.data?.items || []);
-      }
-    } catch (error) {
-      console.error('Failed to fetch warehouses', error);
-    }
-  };
-
-  const fetchStockItems = async () => {
-    try {
-      const res = await fetch(`/api/v1/inventory/items`);
-      if (res.ok) {
-        const json = await res.json();
-        setStockItems(json.data || json.data?.items || []);
-      }
-    } catch (error) {
-      console.error('Failed to fetch stock items', error);
-    }
-  };
-
-  const filteredRequisitions = requisitions.filter(req => {
-    if (filter === 'ALL') return true;
-    if (filter === 'DRAFT' && req.status === 'DRAFT') return true;
-    if (filter === 'PENDING' && req.status === 'PENDING_APPROVAL') return true;
-    if (filter === 'ISSUED' && req.status === 'ISSUED') return true;
-    return false;
-  });
-
-  const addItem = (itemId: string) => {
-    const item = stockItems.find(i => i.id === itemId);
-    if (!item) return;
-    if (selectedItems.find(i => i.itemId === itemId)) return;
-    setSelectedItems([...selectedItems, { itemId: item.id, name: item.name, quantity: '1' }]);
-  };
-
-  const updateQuantity = (itemId: string, qty: string) => {
-    setSelectedItems(selectedItems.map(i => i.itemId === itemId ? { ...i, quantity: qty } : i));
-  };
-
-  const removeItem = (itemId: string) => {
-    setSelectedItems(selectedItems.filter(i => i.itemId !== itemId));
-  };
-
-  const handleSubmit = async (action: 'DRAFT' | 'SUBMIT') => {
-    if (!fromWarehouseId || !toWarehouseId) {
-      toast.error('Please select source and destination warehouses');
-      return;
-    }
-    if (selectedItems.length === 0) {
-      toast.error('Please add at least one item');
-      return;
-    }
-    for (const item of selectedItems) {
-      if (!item.quantity || Number(item.quantity) <= 0) {
-        toast.error('All quantities must be greater than 0');
-        return;
-      }
-    }
-
-    setIsSubmitting(true);
-    try {
-      const requestId = crypto.randomUUID();
-      const res = await fetch('/api/v1/fnb/inventory/requisitions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          propertyId: inferredPropertyId,
-          fromWarehouseId,
-          toWarehouseId,
-          items: selectedItems,
-          action,
-          requestId
-        })
-      });
-
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Failed to create requisition');
-
-      toast.success(action === 'DRAFT' ? 'Draft saved!' : 'Requisition submitted for approval!');
-      setIsNewOpen(false);
-      setFromWarehouseId('');
-      setToWarehouseId('');
-      setSelectedItems([]);
-      fetchRequisitions();
-    } catch (error: any) {
-      toast.error(error.message);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+      const response = await fetch('/api/v1/fnb/inventory/requisitions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ propertyId: source.propertyId, fromWarehouseId: sourceId, toWarehouseId: destinationId, items: selected.map((item) => ({ itemId: item.id, quantity: Number(item.quantity) })), action, requestId: crypto.randomUUID() }) });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error || 'Unable to submit requisition.');
+      setOpen(false); setSelected([]); await load();
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Unable to submit requisition.'); } finally { setSaving(false); }
+  }
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Stock Requisitions</h1>
-          <p className="text-muted-foreground mt-1">Manage internal stock transfers and requests.</p>
-        </div>
-        
-        <Button onClick={() => setIsNewOpen(true)}><Plus className="mr-2 h-4 w-4" /> New Requisition</Button>
-        
-        <Dialog open={isNewOpen} onOpenChange={setIsNewOpen}>
-          <DialogContent className="max-w-3xl">
-            <DialogHeader>
-              <DialogTitle>Create Stock Requisition</DialogTitle>
-            </DialogHeader>
-            <div className="grid grid-cols-2 gap-4 py-4">
-              <div className="space-y-2">
-                <Label>Destination (Requesting For)</Label>
-                <Select value={toWarehouseId} onValueChange={(v) => setToWarehouseId(v || '')}>
-                  <SelectTrigger><SelectValue placeholder="Select your outlet..." /></SelectTrigger>
-                  <SelectContent>
-                    {warehouses.map(w => (
-                      <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Source (Requesting From)</Label>
-                <Select value={fromWarehouseId} onValueChange={(v) => setFromWarehouseId(v || '')}>
-                  <SelectTrigger><SelectValue placeholder="Select source store..." /></SelectTrigger>
-                  <SelectContent>
-                    {warehouses.map(w => (
-                      <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <Label>Request Items</Label>
-              <Select onValueChange={(v) => v && addItem(v)} value="">
-                <SelectTrigger><SelectValue placeholder="Add an item..." /></SelectTrigger>
-                <SelectContent>
-                  {stockItems.map(item => (
-                    <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              {selectedItems.length > 0 && (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Item</TableHead>
-                      <TableHead className="w-[150px]">Quantity</TableHead>
-                      <TableHead className="w-[50px]"></TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {selectedItems.map(item => (
-                      <TableRow key={item.itemId}>
-                        <TableCell>{item.name}</TableCell>
-                        <TableCell>
-                          <Input 
-                            type="number" 
-                            min="0.1" 
-                            step="any"
-                            value={item.quantity} 
-                            onChange={(e) => updateQuantity(item.itemId, e.target.value)} 
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Button variant="ghost" size="icon" onClick={() => removeItem(item.itemId)}>
-                            <Trash className="h-4 w-4 text-red-500" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </div>
-
-            <DialogFooter className="mt-6 flex justify-between sm:justify-between">
-              <Button variant="outline" onClick={() => setIsNewOpen(false)}>Cancel</Button>
-              <div className="flex gap-2">
-                <Button variant="secondary" disabled={isSubmitting} onClick={() => handleSubmit('DRAFT')}>
-                  {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                  Save Draft
-                </Button>
-                <Button disabled={isSubmitting} onClick={() => handleSubmit('SUBMIT')}>
-                  {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-                  Submit for Approval
-                </Button>
-              </div>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </div>
-
-      <div className="flex space-x-2 pb-2">
-        <Badge variant={filter === 'ALL' ? 'default' : 'outline'} className="px-3 py-1 text-sm cursor-pointer" onClick={() => setFilter('ALL')}>All</Badge>
-        <Badge variant={filter === 'DRAFT' ? 'default' : 'outline'} className="px-3 py-1 text-sm cursor-pointer" onClick={() => setFilter('DRAFT')}>Drafts</Badge>
-        <Badge variant={filter === 'PENDING' ? 'default' : 'outline'} className={`px-3 py-1 text-sm cursor-pointer ${filter !== 'PENDING' ? 'border-yellow-500 text-yellow-600 bg-yellow-50' : ''}`} onClick={() => setFilter('PENDING')}>Pending Approval</Badge>
-        <Badge variant={filter === 'ISSUED' ? 'default' : 'outline'} className={`px-3 py-1 text-sm cursor-pointer ${filter !== 'ISSUED' ? 'border-blue-500 text-blue-600 bg-blue-50' : ''}`} onClick={() => setFilter('ISSUED')}>Issued (Awaiting Receipt)</Badge>
-      </div>
-
-      <Card>
-        <CardHeader className="py-4">
-          <div className="flex justify-between items-center">
-            <div className="flex items-center space-x-2">
-              <div className="relative w-64">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input placeholder="Search requisitions..." className="pl-8" />
-              </div>
-              <Button variant="outline" size="icon"><Filter className="h-4 w-4" /></Button>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="pl-6">Requisition ID</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead>Destination</TableHead>
-                <TableHead>Source</TableHead>
-                <TableHead>Items</TableHead>
-                <TableHead>Requested By</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="w-[50px]"></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
-                <TableRow>
-                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Loading requisitions...</TableCell>
-                </TableRow>
-              ) : filteredRequisitions.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">No requisitions found.</TableCell>
-                </TableRow>
-              ) : filteredRequisitions.map((req) => (
-                <TableRow key={req.id}>
-                  <TableCell className="pl-6 font-semibold">{req.transferRef}</TableCell>
-                  <TableCell className="text-muted-foreground">{new Date(req.createdAt).toLocaleDateString()} {new Date(req.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</TableCell>
-                  <TableCell className="font-medium text-sm">{req.toWarehouse?.name}</TableCell>
-                  <TableCell className="text-muted-foreground text-sm">{req.fromWarehouse?.name}</TableCell>
-                  <TableCell>{req.items?.length || 0} items</TableCell>
-                  <TableCell className="text-sm text-muted-foreground">{/* Need requested by name, just show ID or leave blank for now */ req.requestedBy?.substring(0, 8)}</TableCell>
-                  <TableCell>
-                    <Badge 
-                      variant={
-                        req.status === 'COMPLETED' ? 'default' : 
-                        req.status === 'REJECTED' ? 'destructive' :
-                        req.status === 'PENDING_APPROVAL' ? 'secondary' : 'outline'
-                      }
-                      className={
-                        req.status === 'PENDING_APPROVAL' ? 'bg-yellow-100 text-yellow-800 hover:bg-yellow-100' :
-                        req.status === 'ISSUED' ? 'border-blue-200 bg-blue-50 text-blue-700' : ''
-                      }
-                    >
-                      {req.status.replace('_', ' ')}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+    <div className="min-h-screen bg-[#07101d] text-slate-100">
+      <header className="border-b border-white/[0.07] bg-[radial-gradient(circle_at_80%_-10%,rgba(249,115,22,.2),transparent_35%),linear-gradient(135deg,#101d30,#07101d)] px-5 py-8 sm:px-8">
+        <div className="mx-auto max-w-7xl"><div className="mb-3 text-[10px] font-bold uppercase tracking-[0.2em] text-orange-300">F&B operations / stock control</div><div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between"><div><h1 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">Stock requisitions</h1><p className="mt-3 max-w-2xl text-sm leading-6 text-slate-400">Request ingredients, beverages, and operating stock from the main warehouse for your outlet. Every request follows approval and dispatch control.</p></div><button onClick={() => { setOpen(true); setError(''); }} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-orange-500 px-4 text-sm font-bold text-white shadow-lg shadow-orange-950/30 hover:bg-orange-400"><Plus className="h-4 w-4" />New requisition</button></div></div>
+      </header>
+      <main className="mx-auto max-w-7xl space-y-5 px-5 py-6 sm:px-8">
+        {error && <div className="flex items-center gap-2 rounded-xl border border-rose-300/20 bg-rose-300/10 p-3 text-sm text-rose-200"><AlertCircle className="h-4 w-4" />{error}<button className="ml-auto" onClick={() => setError('')}><X className="h-4 w-4" /></button></div>}
+        <div className="grid gap-4 sm:grid-cols-3"><div className="rounded-2xl border border-white/[0.08] bg-[#111c2e] p-5"><p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">Total requests</p><p className="mt-3 text-2xl font-bold text-white">{requisitions.length}</p><p className="mt-1 text-xs text-slate-500">F&B requisitions in this workspace</p></div><div className="rounded-2xl border border-amber-300/15 bg-amber-300/[0.05] p-5"><p className="text-[10px] font-bold uppercase tracking-[0.14em] text-amber-200/70">Awaiting approval</p><p className="mt-3 text-2xl font-bold text-amber-200">{pendingCount}</p><p className="mt-1 text-xs text-slate-500">Requests pending stock control</p></div><div className="rounded-2xl border border-emerald-300/15 bg-emerald-300/[0.05] p-5"><p className="text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-200/70">Operating rule</p><p className="mt-3 text-sm font-bold text-emerald-200">Main warehouse supply</p><p className="mt-1 text-xs text-slate-500">Outlet stock is not used as a requisition source</p></div></div>
+        <section className="overflow-hidden rounded-2xl border border-white/[0.08] bg-[#111c2e]"><div className="flex flex-col gap-3 border-b border-white/[0.07] p-5 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="font-semibold text-white">Request history</h2><p className="mt-1 text-xs text-slate-500">Track approval, dispatch, and completion.</p></div><div className="flex flex-wrap gap-2">{['ALL', 'DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'ISSUED', 'COMPLETED'].map((value) => <button key={value} onClick={() => setFilter(value)} className={`rounded-lg border px-3 py-1.5 text-[11px] font-semibold ${filter === value ? 'border-orange-300/30 bg-orange-300/15 text-orange-200' : 'border-white/[0.08] text-slate-500 hover:text-slate-300'}`}>{value === 'ALL' ? 'All' : value.replace('_', ' ')}</button>)}</div></div><div className="overflow-x-auto"><table className="w-full min-w-[850px] text-sm"><thead className="bg-white/[0.02] text-left text-[10px] uppercase tracking-[0.12em] text-slate-500"><tr><th className="px-5 py-3">Reference</th><th className="px-5 py-3">Route</th><th className="px-5 py-3">Items</th><th className="px-5 py-3">Requested</th><th className="px-5 py-3">Status</th></tr></thead><tbody className="divide-y divide-white/[0.06]">{loading ? <tr><td colSpan={5} className="py-16 text-center text-slate-500"><Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin text-orange-300" />Loading requisitions…</td></tr> : !filtered.length ? <tr><td colSpan={5} className="py-16 text-center text-slate-500">No requisitions in this view.</td></tr> : filtered.map((item) => <tr key={item.id} className="hover:bg-white/[0.025]"><td className="px-5 py-4 font-mono text-xs font-bold text-orange-200">{item.transferRef}</td><td className="px-5 py-4 text-xs text-slate-300"><span>{item.fromWarehouse?.name}</span><ArrowRight className="mx-2 inline h-3 w-3 text-slate-600" /><span>{item.toWarehouse?.name}</span></td><td className="px-5 py-4 text-xs text-slate-400">{item.items?.length || 0} item lines</td><td className="px-5 py-4 text-xs text-slate-500">{new Date(item.createdAt).toLocaleDateString('en-GB')}</td><td className="px-5 py-4"><span className={`rounded-lg border px-2.5 py-1 text-[10px] font-bold uppercase ${statusStyle[item.status] || statusStyle.DRAFT}`}>{item.status.replace('_', ' ')}</span></td></tr>)}</tbody></table></div></section>
+      </main>
+      {open && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-sm"><div className="w-full max-w-3xl overflow-hidden rounded-2xl border border-white/[0.1] bg-[#101c2e] shadow-2xl"><div className="flex items-start justify-between border-b border-white/[0.08] px-6 py-5"><div><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-orange-300">F&B stock request</p><h2 className="mt-1 text-xl font-semibold text-white">Create requisition</h2><p className="mt-1 text-xs text-slate-500">Choose the supplying main warehouse, your outlet, and required items.</p></div><button onClick={() => !saving && setOpen(false)} className="text-slate-500 hover:text-white"><X className="h-5 w-5" /></button></div><div className="space-y-5 p-6"><div className="grid gap-4 sm:grid-cols-2"><label className="text-xs font-semibold text-slate-400">Supply from<select value={sourceId} onChange={(event) => { setSourceId(event.target.value); setSelected([]); }} className="mt-2 h-11 w-full rounded-xl border border-white/10 bg-[#0b1728] px-3 text-sm text-slate-200"><option value="">Select main warehouse</option>{warehouses.filter((item) => !item.posOutletId).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><label className="text-xs font-semibold text-slate-400">Requesting outlet<select value={destinationId} onChange={(event) => setDestinationId(event.target.value)} className="mt-2 h-11 w-full rounded-xl border border-white/10 bg-[#0b1728] px-3 text-sm text-slate-200"><option value="">Select outlet</option>{warehouses.filter((item) => item.posOutletId).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label></div><div><div className="mb-2 flex items-center justify-between"><p className="text-xs font-semibold text-slate-400">Add stock items</p><span className="text-[11px] text-slate-600">{selected.length} selected</span></div><div className="relative mb-3"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-600" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search available main-warehouse stock…" className="h-10 w-full rounded-xl border border-white/10 bg-[#0b1728] pl-9 pr-3 text-sm text-white outline-none focus:border-orange-300/40" /></div><div className="max-h-44 space-y-1 overflow-y-auto rounded-xl border border-white/[0.07] bg-[#0b1728] p-2">{sourceItems.slice(0, 50).map((item) => <button key={item.id} disabled={selectedIds.has(item.id)} onClick={() => addItem(item.id)} className="flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-left hover:bg-white/[0.05] disabled:opacity-40"><span><span className="block text-sm text-slate-200">{item.name}</span><span className="text-[11px] text-slate-500">{item.quantityOnHand} {item.baseUnit} available</span></span><Plus className="h-4 w-4 text-orange-300" /></button>)}{!sourceItems.length && <p className="p-4 text-center text-xs text-slate-600">Select a main warehouse to see available stock.</p>}</div></div>{selected.length > 0 && <div className="space-y-2">{selected.map((line) => { const item = stockItems.find((candidate) => candidate.id === line.id); return <div key={line.id} className="flex items-center gap-3 rounded-xl border border-white/[0.07] bg-white/[0.025] p-3"><span className="min-w-0 flex-1 truncate text-sm text-slate-200">{item?.name}</span><input type="number" min="0.01" step="any" value={line.quantity} onChange={(event) => setSelected((current) => current.map((entry) => entry.id === line.id ? { ...entry, quantity: event.target.value } : entry))} className="h-9 w-28 rounded-lg border border-white/10 bg-[#0b1728] px-2 text-right text-sm text-white" /><span className="w-16 text-xs text-slate-500">{item?.baseUnit}</span><button onClick={() => setSelected((current) => current.filter((entry) => entry.id !== line.id))} className="text-slate-600 hover:text-rose-300"><X className="h-4 w-4" /></button></div>; })}</div>}<div className="flex justify-end gap-2 border-t border-white/[0.08] pt-4"><button onClick={() => setOpen(false)} disabled={saving} className="rounded-xl border border-white/10 px-4 py-2.5 text-sm font-semibold text-slate-400">Cancel</button><button onClick={() => void submit('SUBMIT')} disabled={saving || !selected.length} className="inline-flex items-center gap-2 rounded-xl bg-orange-500 px-5 py-2.5 text-sm font-bold text-white hover:bg-orange-400 disabled:opacity-50">{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}Submit for approval</button></div></div></div></div>}
     </div>
   );
 }
