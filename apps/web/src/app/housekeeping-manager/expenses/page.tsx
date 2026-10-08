@@ -15,7 +15,7 @@ export default async function HousekeepingManagerExpensesPage() {
     prisma.property.findUnique({ where: { id: propertyId }, select: { name: true, baseCurrency: true } }),
     prisma.cashExpense.findMany({
       where: { propertyId, requestedBy: session.user.id }, orderBy: { createdAt: 'desc' }, take: 100,
-      include: { approvals: { orderBy: { createdAt: 'asc' } } },
+      include: { approvals: { orderBy: { createdAt: 'asc' } }, lineItems: { orderBy: { createdAt: 'asc' } } },
     }),
     prisma.expenseCategory.findMany({ where: { propertyId, isActive: true }, orderBy: { name: 'asc' }, select: { id: true, code: true, name: true } }),
     prisma.costCenter.findMany({ where: { propertyId, isActive: true }, orderBy: { name: 'asc' }, select: { id: true, code: true, name: true } }),
@@ -34,6 +34,7 @@ export default async function HousekeepingManagerExpensesPage() {
     costCenter: expense.costCenter,
     createdAt: expense.createdAt.toISOString(),
     approvals: expense.approvals.map(approval => ({ stage: approval.stage, status: approval.status, actedAt: approval.actedAt?.toISOString() || null })),
+    lineItems: expense.lineItems.map(item => ({ description: item.description, unit: item.unit, quantity: Number(item.quantity), unitPrice: Number(item.unitPrice), total: Number(item.total) })),
   }));
 
   return <HousekeepingExpenseRequestView

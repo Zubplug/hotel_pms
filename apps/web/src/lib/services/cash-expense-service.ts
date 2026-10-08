@@ -16,6 +16,7 @@ type ExpenseInput = {
   payee: string;
   receiptUrl?: string;
   costCenterId?: string;
+  items?: Array<{ description: string; unit?: string; quantity: number; unitPrice: number }>;
 };
 
 export const EXPENSE_APPROVAL_STAGES = ['GENERAL_CASHIER', 'ACCOUNTANT', 'GENERAL_MANAGER'] as const;
@@ -60,6 +61,12 @@ export class CashExpenseService {
     if (!Number.isFinite(input.amount) || input.amount <= 0) {
       throw new ShiftControlError('Expense amount must be greater than zero.', 'BAD_REQUEST');
     }
+    const items = (input.items || []).map(item => ({ description: item.description.trim(), unit: item.unit?.trim() || null, quantity: Number(item.quantity), unitPrice: Number(item.unitPrice), total: Number(item.quantity) * Number(item.unitPrice) }));
+    if (items.length > 0) {
+      if (items.some(item => !item.description || !Number.isFinite(item.quantity) || item.quantity <= 0 || !Number.isFinite(item.unitPrice) || item.unitPrice < 0)) throw new ShiftControlError('Every invoice line must have a description, positive quantity, and valid unit price.', 'BAD_REQUEST');
+      const itemTotal = items.reduce((sum, item) => sum + item.total, 0);
+      if (Math.abs(itemTotal - input.amount) > 0.01) throw new ShiftControlError('The expense total must equal the sum of invoice line items.', 'BAD_REQUEST');
+    }
     for (const [label, value] of Object.entries({ categoryId: input.categoryId, description: input.description, payee: input.payee })) {
       if (!value?.trim()) throw new ShiftControlError(`${label} is required.`, 'BAD_REQUEST');
     }
@@ -93,6 +100,7 @@ export class CashExpenseService {
       await tx.cashExpenseApproval.createMany({
         data: EXPENSE_APPROVAL_STAGES.map(stage => ({ expenseId: expense.id, stage, status: 'PENDING' })),
       });
+      if (items.length > 0) await tx.cashExpenseLineItem.createMany({ data: items.map(item => ({ expenseId: expense.id, ...item })) });
       await this.audit(tx, expense.id, ctx.userId, 'SUBMITTED', 'Expense submitted for approval');
       return expense;
     });

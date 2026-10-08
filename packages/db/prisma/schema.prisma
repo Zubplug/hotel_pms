@@ -3548,9 +3548,24 @@ model CashExpense {
   journal         CashExpenseJournal?
   audits          CashExpenseAudit[]
   approvals       CashExpenseApproval[]
+  lineItems       CashExpenseLineItem[]
 
   @@index([propertyId, status])
   @@index([propertyId, createdAt])
+}
+
+model CashExpenseLineItem {
+  id          String      @id @default(uuid()) @db.Uuid
+  expenseId   String      @db.Uuid
+  expense     CashExpense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  description String
+  unit        String?
+  quantity    Decimal     @db.Decimal(18, 4)
+  unitPrice   Decimal     @db.Decimal(18, 4)
+  total       Decimal     @db.Decimal(18, 4)
+  createdAt   DateTime    @default(now()) @db.Timestamptz
+
+  @@index([expenseId])
 }
 
 // Segregated approval chain for controlled operating expenses.
