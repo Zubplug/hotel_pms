@@ -93,10 +93,10 @@ export async function POST(req: Request) {
       }
       await tx.billingInvoice.upsert({ where: { flutterwaveInvoiceId: transactionId }, create: { organizationId, flutterwaveInvoiceId: transactionId, flutterwaveCustomerId: verified.customer?.email ?? null, flutterwaveSubscriptionId: subscriptionRef, status: successful ? 'paid' : 'failed', currency: verified.currency, subtotal: Math.round(verified.amount * 100), total: Math.round(verified.amount * 100), amountPaid: successful ? Math.round(verified.amount * 100) : 0, amountDue: successful ? 0 : Math.round(verified.amount * 100), periodStart: isCustomWebsiteOneTime ? null : now, periodEnd: isCustomWebsiteOneTime ? null : currentPeriodEnd, hostedInvoiceUrl: null, invoicePdf: null, payload: verified as unknown as Prisma.InputJsonValue }, update: { status: successful ? 'paid' : 'failed', amountPaid: successful ? Math.round(verified.amount * 100) : 0, amountDue: successful ? 0 : Math.round(verified.amount * 100), payload: verified as unknown as Prisma.InputJsonValue } });
       if (customDomainRequestId && successful) {
-        await tx.customDomainRequest.updateMany({ where: { id: customDomainRequestId, organizationId, status: 'APPROVED' }, data: { status: 'PAID', paidAt: now, checkoutRef: txRef } });
+        await tx.customDomainRequest.updateMany({ where: { id: customDomainRequestId, organizationId, status: { in: ['REQUESTED', 'PAYMENT_PENDING'] } }, data: { status: 'PAID', paidAt: now, checkoutRef: txRef } });
       }
       if (customWebsiteRequestId && successful) {
-        await tx.customWebsiteRequest.updateMany({ where: { id: customWebsiteRequestId, organizationId, status: 'APPROVED' }, data: { status: 'PAID', paidAt: now, checkoutRef: txRef } });
+        await tx.customWebsiteRequest.updateMany({ where: { id: customWebsiteRequestId, organizationId, status: { in: ['REQUESTED', 'PAYMENT_PENDING'] } }, data: { status: 'PAID', paidAt: now, checkoutRef: txRef } });
       }
     }, { timeout: 30000 });
     return NextResponse.json({ received: true });

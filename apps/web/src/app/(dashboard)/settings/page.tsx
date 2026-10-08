@@ -72,7 +72,7 @@ const settingsLinks = [
     icon: CreditCard,
     color: 'text-purple-500',
     bgColor: 'bg-purple-500/10',
-    comingSoon: true, module: 'MODULE_PMS'
+    module: 'MODULE_PMS'
   },
   {
     title: 'Security',
