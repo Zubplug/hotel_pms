@@ -9,7 +9,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const user = session.user as any;
   const ctx = await requireOrganizationContext(session.user.id);
-  if (!hasInventoryPermission(user.role, 'inventory.manage', user.isSuperAdmin)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  if (!hasInventoryPermission(user.role, 'inventory.recipe.manage', user.isSuperAdmin)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   const { id } = await params;
   const body = await request.json();
   const recipe = await prisma.recipe.findFirst({ where: { id, propertyId: { in: ctx.propertyIds as string[] }, isActive: true } });
@@ -23,4 +23,3 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
   });
   return NextResponse.json({ data: saved });
 }
-

@@ -16,6 +16,7 @@ import {
   Users,
   CalendarDays,
   CalendarRange,
+  ChefHat,
   FileCheck2,
   LayoutGrid,
   MapPinned,
@@ -53,6 +54,7 @@ const FNB_NAV = [
       icon: ReceiptText,
       children: [
         { name: 'Inventory & AvT', href: '/fnb/inventory', icon: ReceiptText },
+        { name: 'Recipe Management', href: '/fnb/recipes', icon: ChefHat },
         { name: 'Approval Control Center', href: '/inventory/approvals', icon: ShieldCheck },
       ],
   },

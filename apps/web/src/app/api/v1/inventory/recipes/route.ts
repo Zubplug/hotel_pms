@@ -7,7 +7,7 @@ import { requireInventoryAccess } from '@/lib/auth/inventory-access';
 
 export const dynamic = 'force-dynamic';
 
-async function getContext(permission?: 'inventory.manage') {
+async function getContext(permission?: 'inventory.recipe.manage') {
   const session = await auth();
   if (!session?.user) return { response: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
   const user = session.user as any;
@@ -29,7 +29,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const context = await getContext('inventory.manage');
+  const context = await getContext('inventory.recipe.manage');
   if ('response' in context) return context.response;
   const ctx = context.ctx!;
   try {

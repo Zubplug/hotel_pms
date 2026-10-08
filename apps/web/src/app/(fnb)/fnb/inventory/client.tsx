@@ -123,10 +123,14 @@ export function FnbInventoryClient() {
 
       {error && <div className="mb-5 flex items-center gap-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"><AlertTriangle className="h-4 w-4" />{error}</div>}
 
-      <div className="mb-5 rounded-2xl border border-orange-200/80 bg-gradient-to-r from-orange-50 to-white p-5 shadow-[0_8px_24px_rgba(65,32,19,0.04)]">
+      <div className="mb-5 overflow-hidden rounded-2xl border border-slate-700/80 bg-gradient-to-br from-[#17243a] via-[#101b2d] to-[#0b1424] p-5 text-white shadow-[0_12px_30px_rgba(15,23,42,0.16)]">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div><p className="text-[11px] font-bold uppercase tracking-[0.14em] text-orange-700">Live F&B stock control</p><h2 className="mt-1 text-lg font-bold text-[#24130d]">{warehouseName || 'Select an inventory location'}</h2><p className="mt-1 max-w-2xl text-sm leading-6 text-[#7c665b]">This view follows system stock movements automatically. It is not a physical stocktake screen.</p></div>
-          <div className="rounded-xl border border-orange-200 bg-white px-3 py-2 text-xs font-semibold text-orange-800">{isOutlet ? 'Outlet operations' : 'Main warehouse view'}</div>
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-orange-300">Live F&amp;B stock control</p>
+            <h2 className="mt-1 text-lg font-semibold">{warehouseName || 'Select an inventory location'}</h2>
+            <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-400">Balances update automatically from approved receipts, stock transfers, POS sales, recipe consumption, and recorded waste. Use this workspace to monitor operational availability and value.</p>
+          </div>
+          <div className="rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2 text-xs font-semibold text-slate-300">{isOutlet ? 'Outlet operations' : 'Main warehouse view'}</div>
         </div>
       </div>
 
