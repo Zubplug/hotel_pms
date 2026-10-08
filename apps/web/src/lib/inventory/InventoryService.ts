@@ -449,11 +449,29 @@ export class InventoryService {
       const currency = property?.baseCurrency || 'NGN';
 
       for (const item of transfer.items) {
-        const transferQuantity = Number(item.baseQuantity || item.quantity);
         // Need the destination stock item (usually mapped by barcode/SKU in destination warehouse)
         // For simplicity, assuming stockItem in transfer is the source. We must find/create the dest stock item.
         const sourceItem = await tx.stockItem.findUnique({ where: { id: item.stockItemId }, include: { stockUnits: true } });
         if (!sourceItem) continue;
+
+        // Recalculate from the current source item definition. A transfer line
+        // may have been created against an older item identity/unit setup (for
+        // example, after a duplicate stock item was consolidated). Never trust
+        // a stale baseQuantity in that case, or a valid transfer can report a
+        // false insufficient-stock error.
+        const conversion = item.unitOfMeasure === sourceItem.baseUnit
+          ? 1
+          : Number(sourceItem.stockUnits.find((unit: any) => unit.unit === item.unitOfMeasure)?.unitsInBase || 0);
+        if (conversion <= 0) {
+          throw new Error(`No conversion configured from ${item.unitOfMeasure} to ${sourceItem.baseUnit} for ${sourceItem.name}`);
+        }
+        const transferQuantity = Number(item.quantity) * conversion;
+        if (Number(item.baseQuantity) !== transferQuantity) {
+          await tx.stockTransferItem.update({
+            where: { id: item.id },
+            data: { baseQuantity: transferQuantity },
+          });
+        }
 
         if (sourceItem.quantityOnHand.lt(transferQuantity)) {
           throw new Error(`Insufficient stock for transfer on item: ${sourceItem.name}`);
