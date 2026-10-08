@@ -10,7 +10,6 @@ import { requireInventoryAccess } from '@/lib/auth/inventory-access';
 export const dynamic = 'force-dynamic';
 
 /* ─── helper ──────────────────────────────────────────────────────────────── */
-const MAIN_WAREHOUSE_ROLES = new Set(['STOCK_MANAGER', 'STOCK_KEEPER', 'FNB_MANAGER', 'OUTLET_HEAD']);
 const STOCK_STAFF_ROLES    = new Set(['STOCK_MANAGER', 'STOCK_KEEPER']);
 const TOP_MANAGEMENT_ROLES = new Set(['CEO', 'SUPER_ADMIN', 'MANAGER', 'DIRECTOR', 'GENERAL_MANAGER', 'ACCOUNTANT', 'GENERAL_CASHIER']);
 
@@ -105,12 +104,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ data: null, error: 'Source and destination must be different' }, { status: 400 });
     }
 
-    // ── Access rule: STOCK_MANAGER, STOCK_KEEPER, FNB_MANAGER and OUTLET_HEAD
-    //    may ONLY use a main (non-outlet) warehouse as the source. ───────────
-    if (MAIN_WAREHOUSE_ROLES.has(normalizedRole) && sourceWarehouse.posOutlet) {
+    // Transfers are always issued from the controlled main warehouse. Outlet
+    // warehouses are destinations, not source stock locations.
+    if (sourceWarehouse.posOutlet) {
       return NextResponse.json({
         data: null,
-        error: 'Stock can only be transferred FROM a main warehouse. Outlet warehouses cannot be used as a source.',
+        error: 'Stock can only be transferred from a main warehouse. Outlet warehouses cannot be used as a source.',
       }, { status: 403 });
     }
 

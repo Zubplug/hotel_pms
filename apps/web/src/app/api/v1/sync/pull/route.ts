@@ -257,6 +257,21 @@ export async function GET(req: NextRequest) {
       select: { id: true },
     });
     const outletWarehouseIds = outletWarehouses.map((warehouse) => warehouse.id);
+    const propertySettings = (property.settings as Record<string, unknown>) ?? {};
+    const inventorySettings = (propertySettings.inventory as Record<string, unknown>) ?? {};
+    const kitchenServiceOutletId = typeof inventorySettings.kitchenServiceOutletId === 'string'
+      ? inventorySettings.kitchenServiceOutletId
+      : null;
+    const kitchenWarehouse = kitchenServiceOutletId
+      ? await prisma.warehouse.findUnique({
+          where: { posOutletId: kitchenServiceOutletId },
+          select: { id: true },
+        })
+      : null;
+    const posStockWarehouseIds = Array.from(new Set([
+      ...outletWarehouseIds,
+      kitchenWarehouse?.id,
+    ].filter(Boolean) as string[]));
     // A POS terminal can sell kitchen items even when its physical outlet is
     // assigned to the bar. Sync all active production categories for the
     // property to offline tills; the assigned outlet is still used for
@@ -312,7 +327,7 @@ export async function GET(req: NextRequest) {
     // Inventory quantities are restricted to recipe-mapped items. On an
     // incremental pull, returning the mapped set also covers a newly-created
     // recipe link whose stock item itself has an older updatedAt timestamp.
-    const stockWhere = buildWhere({ propertyId, warehouseId: { in: outletWarehouseIds } });
+    const stockWhere = buildWhere({ propertyId, warehouseId: { in: posStockWarehouseIds } });
     const stockItems = await prisma.stockItem.findMany({
       where: stockWhere,
       take: limit,
@@ -813,6 +828,7 @@ export async function GET(req: NextRequest) {
       businessDate: property.businessDate,
       auditStatus: property.auditStatus,
       isActive: property.isActive,
+      kitchenServiceOutletId,
       earlyCheckinWindowHours: (settings.earlyCheckinWindowHours as number) ?? 2,
       bankingModel: ((settings.pos as any)?.bankingModel as string) ?? 'CENTRAL_CASHIER',
       depositApprovalThreshold: Number(financialControls.depositApprovalThreshold ?? 250000),

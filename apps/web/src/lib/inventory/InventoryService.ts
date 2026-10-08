@@ -2,6 +2,7 @@ import prisma, { StockTransactionSource } from '@hotel-pms/db';
 import { assertNightAuditAllowsTransaction } from '@/lib/night-audit-guard';
 import { GRN_STATUS, TRANSFER_STATUS, PO_STATUS } from '@/lib/inventory/types';
 import { TenantContext } from '../organization-access';
+import { isCentralKitchenStock, kitchenServiceOutletId } from './kitchen-routing';
 
 export class InventoryService {
   /** Restore every committed ingredient for a cancelled/voided order. */
@@ -50,7 +51,7 @@ export class InventoryService {
                       where: { isActive: true },
                       include: {
                         ingredients: {
-                          include: { stockItem: { select: { id: true, baseUnit: true, stockUnits: true } } },
+                          include: { stockItem: { select: { id: true, baseUnit: true, stockType: true, stockUnits: true } } },
                         },
                       },
                     },
@@ -65,7 +66,14 @@ export class InventoryService {
     });
     if (!order) throw new Error('POS Order not found');
 
-    const requirements = new Map<string, number>();
+    const requirements = new Map<string, { quantity: number; centralKitchen: boolean }>();
+    const addRequirement = (stockItemId: string, quantity: number, centralKitchen: boolean) => {
+      const current = requirements.get(stockItemId);
+      requirements.set(stockItemId, {
+        quantity: (current?.quantity || 0) + quantity,
+        centralKitchen: Boolean(current?.centralKitchen || centralKitchen),
+      });
+    };
     for (const item of order.items) {
       if (item.product?.inventoryMode === 'STOCK') {
         const ingredients = item.product.recipe?.versions?.[0]?.ingredients || [];
@@ -77,19 +85,22 @@ export class InventoryService {
             ? 1
             : Number(recipe.stockItem?.stockUnits?.find((unit: any) => unit.unit === recipe.unitOfMeasure)?.unitsInBase || 0);
           if (conversion <= 0) throw new Error(`No conversion configured from ${recipe.unitOfMeasure} to ${recipe.stockItem?.baseUnit || 'base unit'} for ${item.productName}`);
-          requirements.set(recipe.stockItemId, (requirements.get(recipe.stockItemId) || 0) + Number(recipe.quantity) * conversion * Number(item.quantity));
+          addRequirement(recipe.stockItemId, Number(recipe.quantity) * conversion * Number(item.quantity), isCentralKitchenStock(recipe.stockItem?.stockType));
         }
       }
       for (const modifier of item.modifiers || []) {
         if (!modifier.stockItemId || Number(modifier.quantity) <= 0) continue;
-        const stock = await tx.stockItem.findUnique({ where: { id: modifier.stockItemId }, select: { baseUnit: true, stockUnits: true } });
+        const stock = await tx.stockItem.findUnique({ where: { id: modifier.stockItemId }, select: { baseUnit: true, stockType: true, stockUnits: true } });
         const conversion = !modifier.unitOfMeasure || modifier.unitOfMeasure === stock?.baseUnit
           ? 1
           : Number(stock?.stockUnits?.find((unit: any) => unit.unit === modifier.unitOfMeasure)?.unitsInBase || 0);
         if (conversion <= 0) throw new Error(`No conversion configured for modifier ${modifier.name}`);
-        requirements.set(modifier.stockItemId, (requirements.get(modifier.stockItemId) || 0) + Number(modifier.quantity) * conversion * Number(item.quantity));
+        addRequirement(modifier.stockItemId, Number(modifier.quantity) * conversion * Number(item.quantity), isCentralKitchenStock(stock?.stockType));
       }
     }
+
+    const property = await tx.property.findUnique({ where: { id: order.propertyId }, select: { baseCurrency: true, settings: true } });
+    if (!property) throw new Error('POS property is unavailable');
 
     const outletWarehouse = await tx.warehouse.findUnique({
       where: { posOutletId: order.outletId },
@@ -97,31 +108,41 @@ export class InventoryService {
     });
     if (!outletWarehouse) throw new Error(`POS outlet has no stock warehouse configured: ${order.outletId}`);
 
+    const needsKitchenStock = [...requirements.values()].some((entry) => entry.centralKitchen);
+    const kitchenOutletId = kitchenServiceOutletId(property.settings);
+    const kitchenWarehouse = needsKitchenStock && kitchenOutletId
+      ? await tx.warehouse.findUnique({ where: { posOutletId: kitchenOutletId }, select: { id: true, name: true } })
+      : null;
+    if (needsKitchenStock && !kitchenWarehouse) {
+      throw new Error('Kitchen-serving outlet is not configured for this property. POS kitchen stock cannot be consumed safely.');
+    }
+
     // Recipe and modifier mappings can point to a template stock item in the
     // main warehouse. Resolve every requirement to the matching item in the
     // selling outlet warehouse before changing quantity.
     const templateItems = await tx.stockItem.findMany({
       where: { id: { in: [...requirements.keys()] }, propertyId: order.propertyId },
-      select: { id: true, name: true, sku: true, barcode: true },
+      select: { id: true, name: true, sku: true, barcode: true, stockType: true },
     });
+    const targetWarehouseIds = [...new Set([outletWarehouse.id, kitchenWarehouse?.id].filter(Boolean) as string[])];
     const outletItems = await tx.stockItem.findMany({
-      where: { propertyId: order.propertyId, warehouseId: outletWarehouse.id, isActive: true },
-      select: { id: true, name: true, sku: true, barcode: true },
+      where: { propertyId: order.propertyId, warehouseId: { in: targetWarehouseIds }, isActive: true },
+      select: { id: true, name: true, sku: true, barcode: true, warehouseId: true },
     });
     const resolvedRequirements = new Map<string, number>();
-    for (const [templateId, required] of requirements) {
+    for (const [templateId, requirement] of requirements) {
       const template = templateItems.find((item: any) => item.id === templateId);
       if (!template) throw new Error(`Inventory mapping is missing for stock item ${templateId}`);
-      const target = outletItems.find((item: any) =>
+      const targetWarehouseId = requirement.centralKitchen ? kitchenWarehouse?.id : outletWarehouse.id;
+      const target = outletItems.find((item: any) => item.warehouseId === targetWarehouseId && (
         (template.barcode && item.barcode === template.barcode) ||
         (template.sku && item.sku === template.sku) ||
         item.name.trim().toLowerCase() === template.name.trim().toLowerCase()
-      );
-      if (!target) throw new Error(`${template.name} is not provisioned in outlet warehouse ${outletWarehouse.name}`);
-      resolvedRequirements.set(target.id, (resolvedRequirements.get(target.id) || 0) + required);
+      ));
+      if (!target) throw new Error(`${template.name} is not provisioned in ${requirement.centralKitchen ? kitchenWarehouse?.name : outletWarehouse.name}`);
+      resolvedRequirements.set(target.id, (resolvedRequirements.get(target.id) || 0) + requirement.quantity);
     }
 
-    const property = await tx.property.findUnique({ where: { id: order.propertyId } });
     const currency = property?.baseCurrency || 'NGN';
     for (const [stockItemId, required] of resolvedRequirements) {
       const stock = await tx.stockItem.findUnique({ where: { id: stockItemId } });
@@ -442,7 +463,9 @@ export class InventoryService {
           where: {
             propertyId: transfer.propertyId,
             warehouseId: transfer.toWarehouseId,
-            barcode: sourceItem.barcode
+            ...(sourceItem.sku
+              ? { sku: sourceItem.sku }
+              : { name: { equals: sourceItem.name, mode: 'insensitive' as const } }),
           }
         });
 

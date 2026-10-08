@@ -11,6 +11,7 @@ public class LocalProperty
     public DateTime BusinessDate { get; set; }
     public string AuditStatus { get; set; } = "OPEN";
     public bool IsActive { get; set; }
+    public string? KitchenServiceOutletId { get; set; }
 
     /// <summary>
     /// How many hours before midnight of the CheckInDate a keycard may be issued

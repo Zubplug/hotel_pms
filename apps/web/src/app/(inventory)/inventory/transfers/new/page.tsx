@@ -104,7 +104,7 @@ export default function NewTransferPage() {
     fetch('/api/v1/inventory/stock-items?limit=500').then(r => r.json()).then(r => setStockItems(r.data?.items || []));
   }, []);
 
-  const sourceWarehouses  = warehouses;
+  const sourceWarehouses  = warehouses.filter(w => !w.posOutlet);
   const destWarehouses    = warehouses.filter(w => w.id !== fromWarehouseId);
 
   const fromItems = stockItems.filter(i => !fromWarehouseId || i.warehouseId === fromWarehouseId);
@@ -241,21 +241,24 @@ export default function NewTransferPage() {
             <div className="space-y-2.5">
               {lines.map((line, i) => (
                 <div key={i} className="grid grid-cols-12 gap-2 items-center rounded-xl border border-white/[0.07] bg-[#0d1832] p-3">
-                  {/* item combobox-lite via select (inline for grid layout) */}
+                  {/* searchable item combobox */}
                   <div className="col-span-5">
-                    <select value={line.stockItemId}
-                      onChange={e => {
-                        const sel = fromItems.find(item => item.id === e.target.value);
+                    <ComboBox
+                      label=""
+                      placeholder="Select item…"
+                      value={line.stockItemId}
+                      onChange={value => {
+                        const sel = fromItems.find(item => item.id === value);
                         const purchase = itemPurchaseUnit(sel);
-                        setLines(cur => cur.map((ln, idx) => idx === i ? { ...ln, stockItemId: e.target.value, unitOfMeasure: purchase.unit } : ln));
+                        setLines(cur => cur.map((ln, idx) => idx === i ? { ...ln, stockItemId: value, unitOfMeasure: purchase.unit } : ln));
                       }}
                       required
-                      className="h-10 w-full rounded-lg border border-white/10 bg-[#08111f] px-2.5 text-sm text-slate-200 outline-none focus:border-emerald-400/60">
-                      <option value="">Select item…</option>
-                      {fromItems.map(item => (
-                        <option key={item.id} value={item.id}>{item.name} · {toPurchaseQuantity(item.quantityOnHand, item.baseUnit, item.stockUnits || []).toFixed(2)} {formatUnit(itemPurchaseUnit(item).unit)} available</option>
-                      ))}
-                    </select>
+                      options={fromItems.map(item => ({
+                        value: item.id,
+                        label: item.name,
+                        sub: `${toPurchaseQuantity(item.quantityOnHand, item.baseUnit, item.stockUnits || []).toFixed(2)} ${formatUnit(itemPurchaseUnit(item).unit)} available · ${formatUnit(item.baseUnit)} base`,
+                      }))}
+                    />
                   </div>
                   <div className="col-span-2">
                     <input type="number" step="0.001" min="0.001" value={line.quantity}

@@ -4659,10 +4659,27 @@ public class LocalRepository
             var stock = await _dbContext.StockItems
                 .Where(s => stockIds.Contains(s.Id))
                 .ToDictionaryAsync(s => s.Id);
+            var property = await _dbContext.Properties.FirstOrDefaultAsync(p => p.Id == product.PropertyId);
+            var kitchenWarehouseId = !string.IsNullOrWhiteSpace(property?.KitchenServiceOutletId)
+                ? await _dbContext.PosOutlets.Where(o => o.Id == property.KitchenServiceOutletId).Select(o => o.WarehouseId).FirstOrDefaultAsync()
+                : null;
+            var currentOutletWarehouseId = await _dbContext.PosOutlets.Where(o => o.Id == outletId).Select(o => o.WarehouseId).FirstOrDefaultAsync();
+            var targetWarehouseIds = new[] { currentOutletWarehouseId, kitchenWarehouseId }.Where(id => !string.IsNullOrWhiteSpace(id)).Distinct().ToList();
+            var targetStock = await _dbContext.StockItems
+                .Where(s => s.PropertyId == product.PropertyId && s.WarehouseId != null && targetWarehouseIds.Contains(s.WarehouseId) && s.IsActive)
+                .ToListAsync();
             var available = ingredients
                 .GroupBy(i => i.StockItemId)
-                .Select(group => stock.TryGetValue(group.Key, out var item)
-                    ? item.QuantityOnHand / group.Sum(i => i.Quantity)
+                .Select(group => stock.TryGetValue(group.Key, out var template)
+                    ? (template.StockType.Equals("RAW_MATERIAL", StringComparison.OrdinalIgnoreCase)
+                        ? targetStock.FirstOrDefault(item => item.WarehouseId == kitchenWarehouseId &&
+                            ((!string.IsNullOrWhiteSpace(template.Sku) && item.Sku == template.Sku) ||
+                             string.Equals(item.Name.Trim(), template.Name.Trim(), StringComparison.OrdinalIgnoreCase)))
+                        : targetStock.FirstOrDefault(item => item.WarehouseId == currentOutletWarehouseId &&
+                            ((!string.IsNullOrWhiteSpace(template.Sku) && item.Sku == template.Sku) ||
+                             string.Equals(item.Name.Trim(), template.Name.Trim(), StringComparison.OrdinalIgnoreCase)))) is { } item
+                        ? item.QuantityOnHand / group.Sum(i => i.Quantity)
+                        : 0m
                     : 0m)
                 .DefaultIfEmpty(0m)
                 .Min();
@@ -5330,7 +5347,12 @@ public class LocalRepository
 
         var productIds = order.Items.Where(i => !string.IsNullOrWhiteSpace(i.ProductId)).Select(i => i.ProductId!).Distinct().ToList();
         var stockProducts = await _dbContext.PosProducts.Where(p => productIds.Contains(p.Id) && p.InventoryMode == "STOCK").ToListAsync();
-        var requirements = new Dictionary<string, decimal>();
+        var requirements = new Dictionary<string, (decimal Quantity, bool CentralKitchen)>();
+        void AddRequirement(string stockItemId, decimal quantity, bool centralKitchen)
+        {
+            requirements.TryGetValue(stockItemId, out var current);
+            requirements[stockItemId] = (current.Quantity + quantity, current.CentralKitchen || centralKitchen);
+        }
         foreach (var orderItem in order.Items)
         {
             var product = stockProducts.FirstOrDefault(p => p.Id == orderItem.ProductId);
@@ -5344,34 +5366,51 @@ public class LocalRepository
                 else
                 {
                     foreach (var ingredient in ingredients)
-                        requirements[ingredient.StockItemId] = requirements.GetValueOrDefault(ingredient.StockItemId) + ingredient.Quantity * orderItem.Quantity;
+                        AddRequirement(ingredient.StockItemId, ingredient.Quantity * orderItem.Quantity, false);
                 }
             }
             foreach (var modifier in orderItem.Modifiers)
             {
                 if (!string.IsNullOrWhiteSpace(modifier.StockItemId) && modifier.Quantity > 0)
-                    requirements[modifier.StockItemId] = requirements.GetValueOrDefault(modifier.StockItemId) + modifier.Quantity * orderItem.Quantity;
+                    AddRequirement(modifier.StockItemId, modifier.Quantity * orderItem.Quantity, false);
             }
         }
 
         var templateItems = await _dbContext.StockItems
             .Where(s => requirements.Keys.Contains(s.Id) && s.PropertyId == order.PropertyId)
             .ToListAsync();
+        foreach (var key in requirements.Keys.ToList())
+        {
+            if (templateItems.FirstOrDefault(item => item.Id == key)?.StockType.Equals("RAW_MATERIAL", StringComparison.OrdinalIgnoreCase) == true)
+            {
+                var current = requirements[key];
+                requirements[key] = (current.Quantity, true);
+            }
+        }
+        var property = await _dbContext.Properties.FirstOrDefaultAsync(p => p.Id == order.PropertyId);
+        var kitchenWarehouseId = !string.IsNullOrWhiteSpace(property?.KitchenServiceOutletId)
+            ? await _dbContext.PosOutlets.Where(o => o.Id == property.KitchenServiceOutletId).Select(o => o.WarehouseId).FirstOrDefaultAsync()
+            : null;
+        if (requirements.Values.Any(entry => entry.CentralKitchen) && string.IsNullOrWhiteSpace(kitchenWarehouseId))
+            throw new Exception("Kitchen-serving outlet is not configured for this property. POS kitchen stock cannot be consumed safely.");
+        var targetWarehouseIds = new[] { outletWarehouseId, kitchenWarehouseId }.Where(id => !string.IsNullOrWhiteSpace(id)).Distinct().ToList();
         var outletItems = await _dbContext.StockItems
-            .Where(s => s.PropertyId == order.PropertyId && s.WarehouseId == outletWarehouseId && s.IsActive)
+            .Where(s => s.PropertyId == order.PropertyId && s.WarehouseId != null && targetWarehouseIds.Contains(s.WarehouseId) && s.IsActive)
             .ToListAsync();
         var resolvedRequirements = new Dictionary<string, decimal>();
         foreach (var entry in requirements)
         {
             var template = templateItems.FirstOrDefault(item => item.Id == entry.Key);
             if (template == null) throw new Exception($"Inventory mapping is missing for stock item {entry.Key}");
+            var targetWarehouseId = entry.Value.CentralKitchen ? kitchenWarehouseId : outletWarehouseId;
             var target = outletItems.FirstOrDefault(item =>
-                (!string.IsNullOrWhiteSpace(template.Barcode) && item.Barcode == template.Barcode)
+                item.WarehouseId == targetWarehouseId &&
+                ((!string.IsNullOrWhiteSpace(template.Barcode) && item.Barcode == template.Barcode)
                 || (!string.IsNullOrWhiteSpace(template.Sku) && item.Sku == template.Sku)
-                || string.Equals(item.Name.Trim(), template.Name.Trim(), StringComparison.OrdinalIgnoreCase));
+                || string.Equals(item.Name.Trim(), template.Name.Trim(), StringComparison.OrdinalIgnoreCase)));
             if (target == null)
-                throw new Exception($"{template.Name} is not provisioned in the outlet stock warehouse.");
-            resolvedRequirements[target.Id] = resolvedRequirements.GetValueOrDefault(target.Id) + entry.Value;
+                throw new Exception($"{template.Name} is not provisioned in the {(entry.Value.CentralKitchen ? "kitchen-serving" : "outlet")} stock warehouse.");
+            resolvedRequirements[target.Id] = resolvedRequirements.GetValueOrDefault(target.Id) + entry.Value.Quantity;
         }
         foreach (var entry in resolvedRequirements)
         {

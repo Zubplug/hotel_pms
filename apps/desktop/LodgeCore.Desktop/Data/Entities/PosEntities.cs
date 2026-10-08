@@ -64,6 +64,7 @@ public class LocalStockItem
     public string Name { get; set; } = string.Empty;
     public string? Sku { get; set; }
     public string? Barcode { get; set; }
+    public string StockType { get; set; } = "CONSUMABLE";
     public string BaseUnit { get; set; } = string.Empty;
     public decimal CostPrice { get; set; }
     public decimal QuantityOnHand { get; set; }

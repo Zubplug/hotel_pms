@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
 import { requireOrganizationContext } from "@/lib/organization-access";
+import { isCentralKitchenStock, kitchenServiceOutletId } from '@/lib/inventory/kitchen-routing';
 
 export async function GET(req: NextRequest) {
   try {
@@ -39,9 +40,19 @@ export async function GET(req: NextRequest) {
           select: { id: true, name: true, productionStation: true, outlet: { select: { id: true, name: true } } },
         },
         modifiers: { select: { id: true, name: true, price: true, isActive: true, quantity: true, unitOfMeasure: true, groupName: true, groupRequired: true, groupMaxSelect: true } },
-        recipe: { include: { versions: { where: { isActive: true }, include: { ingredients: { include: { stockItem: { select: { id: true, name: true, sku: true, barcode: true, quantityOnHand: true, isActive: true } } } } } } } },
+        recipe: { include: { versions: { where: { isActive: true }, include: { ingredients: { include: { stockItem: { select: { id: true, name: true, sku: true, barcode: true, stockType: true, quantityOnHand: true, isActive: true } } } } } } } },
       },
     });
+
+    const properties = await prisma.property.findMany({ where: { id: { in: propertyIdsToQuery } }, select: { id: true, settings: true } });
+    const kitchenOutletIds = properties.map(property => kitchenServiceOutletId(property.settings)).filter(Boolean) as string[];
+    const kitchenWarehouses = kitchenOutletIds.length
+      ? await prisma.warehouse.findMany({ where: { posOutletId: { in: kitchenOutletIds } }, select: { id: true, posOutletId: true } })
+      : [];
+    const targetWarehouseIds = [outletWarehouse?.id, ...kitchenWarehouses.map(warehouse => warehouse.id)].filter(Boolean) as string[];
+    const targetStockItems = targetWarehouseIds.length
+      ? await prisma.stockItem.findMany({ where: { propertyId: { in: propertyIdsToQuery }, warehouseId: { in: targetWarehouseIds }, isActive: true }, select: { name: true, sku: true, barcode: true, warehouseId: true, quantityOnHand: true } })
+      : [];
 
     // Compute resolved productionStation + hasModifiers so the UI doesn't need extra calls
     const enriched = products.map((p: any) => {
@@ -51,8 +62,15 @@ export async function GET(req: NextRequest) {
       const availableStock = isStockControlled && ingredients.length > 0
         ? Math.min(...ingredients.map((ingredient: any) => {
           const template = ingredient.stockItem;
-          // Without p.stockItems, we default to the template's quantity in the main warehouse.
-          return Number(template?.quantityOnHand || 0) / Number(ingredient.quantity || 1);
+          const property = properties.find(candidate => candidate.id === p.propertyId);
+          const kitchenOutletId = property ? kitchenServiceOutletId(property.settings) : null;
+          const kitchenWarehouseId = kitchenWarehouses.find(warehouse => warehouse.posOutletId === kitchenOutletId)?.id;
+          const targetWarehouseId = isCentralKitchenStock(template?.stockType) ? kitchenWarehouseId : outletWarehouse?.id;
+          const target = targetStockItems.find(item => item.warehouseId === targetWarehouseId &&
+            ((template?.barcode && item.barcode === template.barcode) ||
+             (template?.sku && item.sku === template.sku) ||
+             item.name.trim().toLowerCase() === template?.name?.trim().toLowerCase()));
+          return Number(target?.quantityOnHand || 0) / Number(ingredient.quantity || 1);
         }))
         : null;
       const outOfStock = isStockControlled && (!hasInventoryMapping || availableStock! <= 0 || ingredients.some((ingredient: any) => !ingredient.stockItem?.isActive));

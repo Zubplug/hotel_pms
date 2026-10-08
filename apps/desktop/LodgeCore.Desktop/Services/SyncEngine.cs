@@ -912,6 +912,8 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                         localProp.BusinessDate = parsedDate;
                     if (propEl.TryGetProperty("auditStatus", out var auditStatus) && auditStatus.ValueKind != System.Text.Json.JsonValueKind.Null)
                         localProp.AuditStatus = auditStatus.GetString() ?? localProp.AuditStatus;
+                    if (propEl.TryGetProperty("kitchenServiceOutletId", out var kitchenOutlet) && kitchenOutlet.ValueKind != System.Text.Json.JsonValueKind.Null)
+                        localProp.KitchenServiceOutletId = kitchenOutlet.GetString();
                 }
                 else
                 {
@@ -937,6 +939,7 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                         NoShowRefundableUnusedNights = !propEl.TryGetProperty("noShowRefundableUnusedNights", out var nsr2) || nsr2.ValueKind == System.Text.Json.JsonValueKind.True,
                         NoShowAllowReinstatement = !propEl.TryGetProperty("noShowAllowReinstatement", out var nsa2) || nsa2.ValueKind == System.Text.Json.JsonValueKind.True,
                         NoShowReinstatementRequiresApproval = !propEl.TryGetProperty("noShowReinstatementRequiresApproval", out var nsra2) || nsra2.ValueKind == System.Text.Json.JsonValueKind.True,
+                        KitchenServiceOutletId = propEl.TryGetProperty("kitchenServiceOutletId", out var kitchenOutlet2) && kitchenOutlet2.ValueKind != System.Text.Json.JsonValueKind.Null ? kitchenOutlet2.GetString() : null,
                         AuditStatus = propEl.TryGetProperty("auditStatus", out var auditStatus2) && auditStatus2.ValueKind != System.Text.Json.JsonValueKind.Null ? auditStatus2.GetString() ?? "OPEN" : "OPEN",
                         BusinessDate = propEl.TryGetProperty("businessDate", out var bd2) && bd2.ValueKind != System.Text.Json.JsonValueKind.Null && DateTime.TryParse(bd2.GetString(), out var parsedDate2) ? parsedDate2 : DateTime.UtcNow.Date
                     };
@@ -2038,6 +2041,7 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                     item.Name = el.TryGetProperty("name", out var nameEl) ? nameEl.GetString() ?? "" : "";
                     item.Sku = el.TryGetProperty("sku", out var skuEl) && skuEl.ValueKind != JsonValueKind.Null ? skuEl.GetString() : null;
                     item.Barcode = el.TryGetProperty("barcode", out var barcodeEl) && barcodeEl.ValueKind != JsonValueKind.Null ? barcodeEl.GetString() : null;
+                    item.StockType = el.TryGetProperty("stockType", out var stockTypeEl) && stockTypeEl.ValueKind != JsonValueKind.Null ? stockTypeEl.GetString() ?? "CONSUMABLE" : "CONSUMABLE";
                     item.BaseUnit = el.TryGetProperty("baseUnit", out var unitEl) ? unitEl.GetString() ?? "" : "";
                     item.CostPrice = ReadDecimal(el, "costPrice");
                     item.QuantityOnHand = ReadDecimal(el, "quantityOnHand");
