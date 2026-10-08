@@ -7,7 +7,7 @@ import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
 import { useLogout } from '@/hooks/useLogout';
 import { cn } from '@/lib/utils';
 import {
-  BarChart3, Bell, ClipboardList, DoorOpen, LayoutDashboard, Package,
+  BarChart3, Bell, ClipboardList, DoorOpen, LayoutDashboard, Package, ReceiptText,
   LogOut, Menu, Sparkles, Wrench, X,
 } from 'lucide-react';
 
@@ -17,6 +17,7 @@ const NAVIGATION = [
   { label: 'Maintenance control', href: '/housekeeping-manager/maintenance', icon: Wrench },
   { label: 'Room readiness', href: '/housekeeping-manager/rooms', icon: DoorOpen },
   { label: 'Housekeeping inventory', href: '/housekeeping-manager/inventory', icon: Package },
+  { label: 'Expense requests', href: '/housekeeping-manager/expenses', icon: ReceiptText },
   { label: 'Performance reports', href: '/housekeeping-manager/reports', icon: BarChart3 },
 ];
 

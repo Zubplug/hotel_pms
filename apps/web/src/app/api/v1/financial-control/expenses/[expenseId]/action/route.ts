@@ -4,7 +4,7 @@ import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { CashExpenseService } from '@/lib/services/cash-expense-service';
 import { isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
-const APPROVERS = ['MANAGER', 'FINANCE_MANAGER', 'ACCOUNTANT', 'CEO', 'SUPER_ADMIN'];
+const APPROVERS = ['GENERAL_CASHIER', 'ACCOUNTANT', 'FINANCE_MANAGER', 'GENERAL_MANAGER', 'HOTEL_MANAGER', 'CEO', 'SUPER_ADMIN'];
 export async function POST(request: NextRequest, context: { params: Promise<{ expenseId: string }> }) {
   try {
     const session = await auth();
@@ -22,11 +22,12 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ex
       if (await isNightAuditTransactionLocked(expense.propertyId)) {
         return NextResponse.json({ error: 'Expense payment cannot be processed while Night Audit is posting.', code: 'NIGHT_AUDIT_IN_PROGRESS' }, { status: 409 });
       }
-      return NextResponse.json({ data: await CashExpenseService.pay(await requireOrganizationContext(session.user.id), expenseId) });
+      return NextResponse.json({ data: await CashExpenseService.pay(await requireOrganizationContext(session.user.id), expenseId, { method: body.method, bankAccountId: body.bankAccountId, paymentReference: body.paymentReference }) });
     }
     if (!APPROVERS.includes(role)) return NextResponse.json({ error: 'Expense approval access denied' }, { status: 403 });
-    if (action === 'approve') return NextResponse.json({ data: await CashExpenseService.approve(await requireOrganizationContext(session.user.id), expenseId, body.notes) });
-    if (action === 'reject') return NextResponse.json({ data: await CashExpenseService.reject(await requireOrganizationContext(session.user.id), expenseId, String(body.reason || '')) });
+    if (!APPROVERS.includes(role)) return NextResponse.json({ error: 'Expense approval access denied' }, { status: 403 });
+    if (action === 'approve') return NextResponse.json({ data: await CashExpenseService.approve(await requireOrganizationContext(session.user.id), expenseId, role, body.notes) });
+    if (action === 'reject') return NextResponse.json({ data: await CashExpenseService.reject(await requireOrganizationContext(session.user.id), expenseId, role, String(body.reason || '')) });
     return NextResponse.json({ error: 'Action must be approve, reject, or pay' }, { status: 400 });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Unable to update expense' }, { status: error.status || 500 });

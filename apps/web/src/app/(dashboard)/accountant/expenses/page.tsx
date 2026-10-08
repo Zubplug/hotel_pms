@@ -65,7 +65,7 @@ export default async function AccountantExpensesPage() {
     prisma.expenseCategory.findMany({ where: { propertyId, isActive: true }, orderBy: { name: 'asc' } }),
     prisma.costCenter.findMany({ where: { propertyId, isActive: true }, orderBy: { name: 'asc' } }),
     prisma.supplier.findMany({ where: { propertyId, isActive: true }, select: { id: true, name: true }, orderBy: { name: 'asc' } }),
-    prisma.cashAccount.findMany({ where: { propertyId, isActive: true, type: 'SAFE' }, select: { id: true, name: true, balance: true, glAccount: { select: { code: true, name: true } } } }),
+    prisma.cashAccount.findMany({ where: { propertyId, isActive: true, type: { in: ['SAFE', 'BANK_ACCOUNT'] } }, select: { id: true, name: true, type: true, bankName: true, accountNumber: true, balance: true, glAccount: { select: { code: true, name: true } } } }),
   ]);
 
   const currency = property?.baseCurrency || cashExpenses[0]?.currency || 'NGN';
@@ -181,7 +181,7 @@ export default async function AccountantExpensesPage() {
 
       <section className="rounded-2xl border border-white/[.08] bg-[#111a2b]/75 p-5 sm:p-6">
         <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end"><div><div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[.16em] text-rose-300"><ReceiptText className="h-4 w-4" />Live cash expense register</div><h2 className="mt-1 text-lg font-semibold text-white">Requests, approvals, and payment control</h2><p className="mt-1 text-xs text-slate-500">Operational actions remain in the controlled workspace; this register is backed by the production cash-expense subledger.</p></div><Link href="/accountant/cash-bank/expenses" className="inline-flex items-center gap-2 text-xs font-semibold text-cyan-300">Open full register <ArrowRight className="h-3.5 w-3.5" /></Link></div>
-        <div className="mt-5"><ExpenseWorkspace propertyId={propertyId} expenses={serializedExpenses} categories={categories.map(item => ({ id: item.id, code: item.code, name: item.name }))} costCenters={costCenters.map(item => ({ id: item.id, code: item.code, name: item.name }))} role={String((session.user as any).role || '').toUpperCase()} /></div>
+        <div className="mt-5"><ExpenseWorkspace propertyId={propertyId} expenses={serializedExpenses} categories={categories.map(item => ({ id: item.id, code: item.code, name: item.name }))} costCenters={costCenters.map(item => ({ id: item.id, code: item.code, name: item.name }))} bankAccounts={cashAccounts.filter(account => account.type === 'BANK_ACCOUNT').map(account => ({ id: account.id, name: account.name, bankName: account.bankName, accountNumber: account.accountNumber, balance: Number(account.balance) }))} role={String((session.user as any).role || '').toUpperCase()} /></div>
       </section>
     </div>
   </main>;

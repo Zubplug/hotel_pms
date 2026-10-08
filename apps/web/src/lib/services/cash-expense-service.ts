@@ -18,6 +18,24 @@ type ExpenseInput = {
   costCenterId?: string;
 };
 
+export const EXPENSE_APPROVAL_STAGES = ['GENERAL_CASHIER', 'ACCOUNTANT', 'GENERAL_MANAGER'] as const;
+export type ExpenseApprovalStage = typeof EXPENSE_APPROVAL_STAGES[number];
+export type ExpensePaymentMethod = 'CASH' | 'BANK_TRANSFER';
+
+const nextStatus: Record<ExpenseApprovalStage, string> = {
+  GENERAL_CASHIER: 'AWAITING_ACCOUNTANT_APPROVAL',
+  ACCOUNTANT: 'AWAITING_GENERAL_MANAGER_APPROVAL',
+  GENERAL_MANAGER: 'APPROVED',
+};
+
+function stageForRole(role: string): ExpenseApprovalStage | null {
+  const normalized = role.toUpperCase();
+  if (normalized === 'GENERAL_CASHIER') return 'GENERAL_CASHIER';
+  if (normalized === 'ACCOUNTANT' || normalized === 'FINANCE_MANAGER') return 'ACCOUNTANT';
+  if (normalized === 'GENERAL_MANAGER' || normalized === 'HOTEL_MANAGER' || normalized === 'CEO') return 'GENERAL_MANAGER';
+  return null;
+}
+
 export class CashExpenseService {
   static async list(ctx: TenantContext, propertyIds?: string[]) {
     // If specific propertyIds provided, restrict them to authorized scope.
@@ -31,7 +49,7 @@ export class CashExpenseService {
     return prisma.cashExpense.findMany({
       where: { propertyId: { in: scopedIds as string[] } },
       orderBy: { createdAt: 'desc' },
-      include: { journal: true, audits: { orderBy: { createdAt: 'desc' }, take: 5 } },
+      include: { journal: true, approvals: { orderBy: { createdAt: 'asc' } }, cashAccount: true, audits: { orderBy: { createdAt: 'desc' }, take: 5 } },
     });
   }
 
@@ -69,64 +87,88 @@ export class CashExpenseService {
           costCenter: costCenter?.name || null,
           costCenterId: costCenter?.id || null,
           requestedBy: ctx.userId,
+          currentApprovalStage: 'GENERAL_CASHIER',
         },
+      });
+      await tx.cashExpenseApproval.createMany({
+        data: EXPENSE_APPROVAL_STAGES.map(stage => ({ expenseId: expense.id, stage, status: 'PENDING' })),
       });
       await this.audit(tx, expense.id, ctx.userId, 'SUBMITTED', 'Expense submitted for approval');
       return expense;
     });
   }
 
-  static async approve(ctx: TenantContext, expenseId: string, notes?: string) {
+  static async approve(ctx: TenantContext, expenseId: string, role: string, notes?: string) {
+    const stage = stageForRole(role);
+    if (!stage && role !== 'SUPER_ADMIN') throw new ShiftControlError('This role cannot approve controlled expenses.', 'FORBIDDEN', 403);
     return prisma.$transaction(async (tx) => {
-      // ENFORCE OWNERSHIP PATH
-      const expense = await tx.cashExpense.findUnique({ where: { id: expenseId } });
+      const expense = await tx.cashExpense.findUnique({ where: { id: expenseId }, include: { approvals: true } });
       if (!expense || !ctx.propertyIds.includes(expense.propertyId)) throw new ShiftControlError('Expense not found or access denied', 'NOT_FOUND', 404);
-      if (expense.status !== 'PENDING_APPROVAL') throw new ShiftControlError(`Expense is already ${expense.status}.`, 'BAD_REQUEST');
-      const updated = await tx.cashExpense.update({ where: { id: expenseId }, data: { status: 'APPROVED', approvedBy: ctx.userId, approvedAt: new Date(), approvalNotes: notes?.trim() || null } });
-      await this.audit(tx, expense.id, ctx.userId, 'APPROVED', notes);
+      const currentStage = (expense.currentApprovalStage || EXPENSE_APPROVAL_STAGES.find(candidate => expense.approvals.find(item => item.stage === candidate)?.status === 'PENDING')) as ExpenseApprovalStage | undefined;
+      if (!currentStage || !EXPENSE_APPROVAL_STAGES.includes(currentStage)) throw new ShiftControlError(`Expense is already ${expense.status}.`, 'BAD_REQUEST');
+      if (role !== 'SUPER_ADMIN' && stage !== currentStage) throw new ShiftControlError(`This expense is awaiting ${currentStage.replaceAll('_', ' ').toLowerCase()}.`, 'BAD_REQUEST');
+      const approval = expense.approvals.find(item => item.stage === currentStage);
+      if (!approval || approval.status !== 'PENDING') throw new ShiftControlError(`The ${currentStage.replaceAll('_', ' ')} approval has already been completed.`, 'BAD_REQUEST');
+      const now = new Date();
+      await tx.cashExpenseApproval.update({ where: { id: approval.id }, data: { status: 'APPROVED', approverId: ctx.userId, actedAt: now, notes: notes?.trim() || null } });
+      const updated = await tx.cashExpense.update({ where: { id: expenseId }, data: { status: nextStatus[currentStage], currentApprovalStage: currentStage === 'GENERAL_MANAGER' ? null : nextStatus[currentStage].replace('AWAITING_', '').replace('_APPROVAL', ''), approvedBy: currentStage === 'GENERAL_MANAGER' ? ctx.userId : expense.approvedBy, approvedAt: currentStage === 'GENERAL_MANAGER' ? now : expense.approvedAt, approvalNotes: notes?.trim() || expense.approvalNotes } });
+      await this.audit(tx, expense.id, ctx.userId, `${currentStage}_APPROVED`, notes || `${currentStage.replaceAll('_', ' ')} approval completed`);
       return updated;
     });
   }
 
-  static async reject(ctx: TenantContext, expenseId: string, reason: string) {
+  static async reject(ctx: TenantContext, expenseId: string, role: string, reason: string) {
     if (!reason?.trim()) throw new ShiftControlError('A rejection reason is required.', 'BAD_REQUEST');
+    const stage = stageForRole(role);
+    if (!stage && role !== 'SUPER_ADMIN') throw new ShiftControlError('This role cannot reject controlled expenses.', 'FORBIDDEN', 403);
     return prisma.$transaction(async (tx) => {
-      // ENFORCE OWNERSHIP PATH
-      const expense = await tx.cashExpense.findUnique({ where: { id: expenseId } });
+      const expense = await tx.cashExpense.findUnique({ where: { id: expenseId }, include: { approvals: true } });
       if (!expense || !ctx.propertyIds.includes(expense.propertyId)) throw new ShiftControlError('Expense not found or access denied', 'NOT_FOUND', 404);
-      if (expense.status !== 'PENDING_APPROVAL') throw new ShiftControlError(`Expense is already ${expense.status}.`, 'BAD_REQUEST');
+      const currentStage = (expense.currentApprovalStage || EXPENSE_APPROVAL_STAGES.find(candidate => expense.approvals.find(item => item.stage === candidate)?.status === 'PENDING')) as ExpenseApprovalStage | undefined;
+      if (!currentStage || (role !== 'SUPER_ADMIN' && stage !== currentStage)) throw new ShiftControlError('This expense is not awaiting your approval stage.', 'BAD_REQUEST');
+      const approval = expense.approvals.find(item => item.stage === currentStage);
+      if (!approval || approval.status !== 'PENDING') throw new ShiftControlError('This approval stage is already complete.', 'BAD_REQUEST');
+      await tx.cashExpenseApproval.update({ where: { id: approval.id }, data: { status: 'REJECTED', approverId: ctx.userId, actedAt: new Date(), notes: reason.trim() } });
       const updated = await tx.cashExpense.update({ where: { id: expenseId }, data: { status: 'REJECTED', rejectionReason: reason.trim(), rejectedAt: new Date() } });
-      await this.audit(tx, expense.id, ctx.userId, 'REJECTED', reason.trim());
+      await this.audit(tx, expense.id, ctx.userId, `${currentStage}_REJECTED`, reason.trim());
       return updated;
     });
   }
 
-  static async pay(ctx: TenantContext, expenseId: string) {
+  static async pay(ctx: TenantContext, expenseId: string, input: { method: ExpensePaymentMethod; bankAccountId?: string; paymentReference?: string }) {
     return prisma.$transaction(async (tx) => {
       // ENFORCE OWNERSHIP PATH
       const expense = await tx.cashExpense.findUnique({ where: { id: expenseId } });
       if (!expense || !ctx.propertyIds.includes(expense.propertyId)) throw new ShiftControlError('Expense not found or access denied', 'NOT_FOUND', 404);
-      if (expense.status !== 'APPROVED') throw new ShiftControlError(`Only approved expenses can be paid. Current status: ${expense.status}.`, 'BAD_REQUEST');
-      
+      if (expense.status !== 'APPROVED' || expense.currentApprovalStage) throw new ShiftControlError(`Only expenses approved by all three control roles can be released. Current status: ${expense.status}.`, 'BAD_REQUEST');
+
       const accounts = await ensureCashierControlAccountsForClient(ctx, tx, expense.propertyId);
       const safe = accounts.find((account: any) => account.type === 'SAFE');
       if (!safe) throw new ShiftControlError('General Cashier Safe account is unavailable.', 'INTERNAL_ERROR', 500);
       const clearing = await ensureExpenseCounterpartyForClient(ctx, tx, expense.propertyId);
       const amount = Number(expense.amount);
 
-      if (Number(safe.balance) < amount) {
-        throw new ShiftControlError('Insufficient balance in the General Cashier Safe.', 'BAD_REQUEST');
+      const method = input.method === 'BANK_TRANSFER' ? 'BANK_TRANSFER' : input.method === 'CASH' ? 'CASH' : null;
+      if (!method) throw new ShiftControlError('Select CASH or BANK_TRANSFER as the release method.', 'BAD_REQUEST');
+      if (method === 'BANK_TRANSFER' && !input.paymentReference?.trim()) throw new ShiftControlError('A bank transfer reference is required.', 'BAD_REQUEST');
+      const source = method === 'CASH'
+        ? safe
+        : await tx.cashAccount.findFirst({ where: { id: input.bankAccountId, propertyId: expense.propertyId, type: 'BANK_ACCOUNT', isActive: true } });
+      if (!source) throw new ShiftControlError('Select an active bank account for this transfer.', 'BAD_REQUEST');
+
+      if (Number(source.balance) < amount) {
+        throw new ShiftControlError(`Insufficient balance in ${source.name}.`, 'BAD_REQUEST');
       }
 
       // Pending deposits are created automatically after handover. An expense
       // paid before banking must reduce the amount still expected at the bank;
       // otherwise the hotel could submit more cash than it holds.
-      let remainingExpense = amount;
-      const pendingDeposits = await tx.bankDeposit.findMany({
+      let remainingExpense = method === 'CASH' ? amount : 0;
+      const pendingDeposits = method === 'CASH' ? await tx.bankDeposit.findMany({
         where: { propertyId: expense.propertyId, status: 'PENDING_HANDOVER', expectedAmount: { gt: 0 } },
         orderBy: { createdAt: 'asc' },
         select: { id: true, depositReference: true, expectedAmount: true, notes: true },
-      });
+      }) : [];
       for (const deposit of pendingDeposits) {
         if (remainingExpense <= 0) break;
         const reduction = Math.min(remainingExpense, Number(deposit.expectedAmount));
@@ -135,9 +177,9 @@ export class CashExpenseService {
         remainingExpense -= reduction;
       }
 
-      await tx.cashAccount.update({ where: { id: safe.id }, data: { balance: { decrement: amount } } });
+      await tx.cashAccount.update({ where: { id: source.id }, data: { balance: { decrement: amount } } });
       await tx.cashAccount.update({ where: { id: clearing.id }, data: { balance: { increment: amount } } });
-      const updated = await tx.cashExpense.update({ where: { id: expense.id }, data: { status: 'PAID', paidBy: ctx.userId, paidAt: new Date(), cashAccountId: safe.id } });
+      const updated = await tx.cashExpense.update({ where: { id: expense.id }, data: { status: 'PAID', paidBy: ctx.userId, paidAt: new Date(), cashAccountId: source.id, paymentMethod: method, paymentReference: input.paymentReference?.trim() || null } });
       await tx.posCashMovement.create({
         data: {
           propertyId: expense.propertyId,
@@ -145,7 +187,7 @@ export class CashExpenseService {
           userId: ctx.userId,
           amount,
           type: 'CASH_TRANSFER_OUT',
-          sourceAccountId: safe.id,
+          sourceAccountId: source.id,
           destinationAccountId: clearing.id,
           reasonCode: 'CASH_EXPENSE_PAID',
           receiptReference: expense.expenseReference,
@@ -160,9 +202,9 @@ export class CashExpenseService {
       });
 
       if (!expenseGlAccount) throw new ShiftControlError(`Expense category is mapped to GL Account Code ${category.debitAccount}, but that account is missing or inactive.`, 'BAD_REQUEST', 400);
-      if (!safe.glAccountId) throw new ShiftControlError(`The General Cashier Safe account (${safe.name}) must be mapped to a GL Chart of Account.`, 'BAD_REQUEST', 400);
+      if (!source.glAccountId) throw new ShiftControlError(`The release account (${source.name}) must be mapped to a GL Chart of Account.`, 'BAD_REQUEST', 400);
 
-      await tx.cashExpenseJournal.create({ data: { expenseId: expense.id, debitAccount: category.debitAccount, creditAccount: 'CASH:GENERAL_CASHIER_SAFE', amount, currency: expense.currency, postedBy: ctx.userId } });
+      await tx.cashExpenseJournal.create({ data: { expenseId: expense.id, debitAccount: category.debitAccount, creditAccount: `CASH:${source.name}`, amount, currency: expense.currency, postedBy: ctx.userId } });
 
       await GeneralLedgerService.postJournal(ctx, {
           propertyId: expense.propertyId,
@@ -172,10 +214,10 @@ export class CashExpenseService {
           sourceModule: 'CASH_MANAGEMENT',
           lines: [
             { accountId: expenseGlAccount.id, debit: amount, credit: 0, description: `Cash Expense - ${category.name}`, sourceType: 'CASH_EXPENSE', sourceId: expense.id },
-            { accountId: safe.glAccountId, debit: 0, credit: amount, description: `Cash Expense Paid`, sourceType: 'CASH_EXPENSE', sourceId: expense.id }
+            { accountId: source.glAccountId, debit: 0, credit: amount, description: `${method === 'CASH' ? 'Cash' : 'Bank transfer'} expense release`, sourceType: 'CASH_EXPENSE', sourceId: expense.id }
           ]
       }, tx);
-      await this.audit(tx, expense.id, ctx.userId, 'PAID', `Paid from ${safe.name}`);
+      await this.audit(tx, expense.id, ctx.userId, 'PAID', `Released by ${method === 'CASH' ? safe.name : source.name}`, { method, paymentReference: input.paymentReference || null });
       return updated;
     });
   }

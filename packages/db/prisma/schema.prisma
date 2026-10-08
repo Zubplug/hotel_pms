@@ -3536,6 +3536,9 @@ model CashExpense {
   approvedAt       DateTime? @db.Timestamptz
   rejectedAt       DateTime? @db.Timestamptz
   paidAt           DateTime? @db.Timestamptz
+  currentApprovalStage String?
+  paymentMethod    String?   // CASH | BANK_TRANSFER
+  paymentReference String?
   createdAt        DateTime  @default(now()) @db.Timestamptz
   updatedAt        DateTime  @updatedAt @db.Timestamptz
 
@@ -3544,9 +3547,28 @@ model CashExpense {
   costCenterRef   CostCenter?         @relation(fields: [costCenterId], references: [id])
   journal         CashExpenseJournal?
   audits          CashExpenseAudit[]
+  approvals       CashExpenseApproval[]
 
   @@index([propertyId, status])
   @@index([propertyId, createdAt])
+}
+
+// Segregated approval chain for controlled operating expenses.
+model CashExpenseApproval {
+  id          String      @id @default(uuid()) @db.Uuid
+  expenseId   String      @db.Uuid
+  expense     CashExpense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  stage       String      // GENERAL_CASHIER | ACCOUNTANT | GENERAL_MANAGER
+  status      String      @default("PENDING") // PENDING | APPROVED | REJECTED
+  approverId  String?     @db.Uuid
+  notes       String?
+  actedAt     DateTime?   @db.Timestamptz
+  createdAt   DateTime    @default(now()) @db.Timestamptz
+  updatedAt   DateTime    @updatedAt @db.Timestamptz
+
+  @@unique([expenseId, stage])
+  @@index([expenseId, status])
+  @@index([stage, status])
 }
 
 model ExpenseCategory {
