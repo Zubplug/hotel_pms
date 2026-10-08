@@ -55,9 +55,8 @@ export async function PATCH(request: Request, props: { params: Promise<{ id: str
 
     const { role, isSuperAdmin } = session.user as any;
     const ctx = await requireOrganizationContext(session.user.id);
-    if (!hasInventoryPermission(role, 'inventory.transfer.approve', isSuperAdmin)) {
-      return NextResponse.json({ data: null, error: 'Only stock control can reduce a submitted request' }, { status: 403 });
-    }
+    const normalizedRole = String(role || '').toUpperCase();
+    const isStockStaff = ['STOCK_MANAGER', 'STOCK_KEEPER'].includes(normalizedRole);
 
     const body = await request.json();
     if (!Array.isArray(body.items) || body.items.length === 0) {
@@ -72,6 +71,19 @@ export async function PATCH(request: Request, props: { params: Promise<{ id: str
     if (!transfer.toWarehouse.posOutletId) return NextResponse.json({ data: null, error: 'Only outlet F&B requests can be reduced here' }, { status: 400 });
     if (!['PENDING_APPROVAL', 'APPROVED'].includes(transfer.status)) {
       return NextResponse.json({ data: null, error: 'Requests can only be reduced before stock is issued' }, { status: 400 });
+    }
+
+    const requesterRoles = transfer.requestedBy
+      ? await prisma.userRole.findMany({ where: { userId: transfer.requestedBy }, select: { role: { select: { name: true } } } })
+      : [];
+    const requesterIsStockStaff = requesterRoles.some(({ role: requesterRole }) =>
+      ['STOCK_MANAGER', 'STOCK_KEEPER'].includes(String(requesterRole.name || '').toUpperCase()),
+    );
+    if (requesterIsStockStaff && isStockStaff) {
+      return NextResponse.json({ data: null, error: 'Management approval is required before adjusting a stock-control transfer' }, { status: 403 });
+    }
+    if (!hasInventoryPermission(role, 'inventory.transfer.approve', isSuperAdmin)) {
+      return NextResponse.json({ data: null, error: 'Only authorized management or stock control can reduce a submitted request' }, { status: 403 });
     }
 
     const requestedById = new Map<string, number>();

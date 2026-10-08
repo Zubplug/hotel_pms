@@ -63,8 +63,19 @@ export default async function TransferDetailPage({ params }: { params: Promise<{
   const isFnbMgr       = normalizedRole === 'FNB_MANAGER';
   const isTopMgmt      = hasInventoryPermission(role, 'inventory.transfer.approve', isSuperAdmin) && !isStockStaff;
 
-  // Can approve: Stock Manager approves outlet-bound requests; management approves general transfers
-  const canApprove = isStockStaff || isTopMgmt || isSuperAdmin;
+  const requesterRoles = transfer.requestedBy
+    ? await prisma.userRole.findMany({ where: { userId: transfer.requestedBy }, select: { role: { select: { name: true } } } })
+    : [];
+  const requesterIsStockStaff = requesterRoles.some(({ role: requesterRole }) =>
+    ['STOCK_MANAGER', 'STOCK_KEEPER'].includes(String(requesterRole.name || '').toUpperCase()),
+  );
+  const requiresManagementApproval = isOutletBound && requesterIsStockStaff;
+
+  // Stock staff approve F&B-submitted outlet requests. A transfer initiated
+  // by stock staff themselves must remain a management approval item.
+  const canApprove = requiresManagementApproval
+    ? isTopMgmt || isSuperAdmin
+    : isStockStaff || isTopMgmt || isSuperAdmin;
 
   // Can issue / post stock (after approval)
   const canIssue = hasInventoryPermission(role, 'inventory.transfer.issue', isSuperAdmin);
@@ -110,6 +121,7 @@ export default async function TransferDetailPage({ params }: { params: Promise<{
               canReceive={canReceive}
               isOutletBound={isOutletBound}
               isFnbMgr={isFnbMgr}
+              requiresManagementApproval={requiresManagementApproval}
             />
           </div>
         </div>

@@ -14,9 +14,10 @@ interface Props {
   canReceive:   boolean;
   isOutletBound: boolean;
   isFnbMgr:    boolean;
+  requiresManagementApproval: boolean;
 }
 
-export default function TransferActionBar({ transferId, status, canApprove, canIssue, canReceive, isOutletBound, isFnbMgr }: Props) {
+export default function TransferActionBar({ transferId, status, canApprove, canIssue, canReceive, isOutletBound, isFnbMgr, requiresManagementApproval }: Props) {
   const router               = useRouter();
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError]    = useState('');
@@ -73,12 +74,12 @@ export default function TransferActionBar({ transferId, status, canApprove, canI
                 const reason = window.prompt('Enter reason for rejecting this transfer:');
                 if (reason) callAction('reject', 'Reject', { reason });
               }} />
-            {isOutletBound
+            {isOutletBound && !requiresManagementApproval
               ? <ActionBtn label="Approve & Issue" icon={<Send className="h-4 w-4" />} tone="emerald"
                   onClick={() => callAction('approve', 'Approve & Issue').then(() =>
                     callAction('post', 'Approve & Issue', { operationId: crypto.randomUUID() }))} />
-              : <ActionBtn label="Approve" icon={<CheckCircle2 className="h-4 w-4" />} tone="cyan"
-                  onClick={() => callAction('approve', 'Approve')} />
+              : <ActionBtn label={requiresManagementApproval ? 'Management approve' : 'Approve'} icon={<CheckCircle2 className="h-4 w-4" />} tone="cyan"
+                  onClick={() => callAction('approve', requiresManagementApproval ? 'Management approve' : 'Approve')} />
             }
           </>
         )}
@@ -118,7 +119,7 @@ export default function TransferActionBar({ transferId, status, canApprove, canI
 
       {/* role hint */}
       {status === 'PENDING_APPROVAL' && !canApprove && (
-        <p className="text-[11px] text-slate-600">Awaiting approval by stock management</p>
+        <p className="text-[11px] text-slate-600">Awaiting approval by {requiresManagementApproval ? 'management staff' : 'stock management'}</p>
       )}
       {status === 'ISSUED' && !canReceive && (
         <p className="text-[11px] text-slate-600">Awaiting receipt confirmation</p>
