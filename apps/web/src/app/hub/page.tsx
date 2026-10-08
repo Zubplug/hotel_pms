@@ -68,6 +68,12 @@ function getDirectLandingUrl(
     return '/cash-management';
   }
 
+  // Combined housekeeping and maintenance managers get a dedicated operating shell.
+  if (role === 'HOUSEKEEPING_MAINTENANCE_MANAGER' ||
+      (capabilities.includes('ACCESS_HOUSEKEEPING') && capabilities.includes('ACCESS_MAINTENANCE'))) {
+    return '/housekeeping-manager';
+  }
+
   // F&B Roles → F&B Dashboard
   if (['FNB_MANAGER', 'RESTAURANT_MANAGER', 'BANQUET_MANAGER', 'EVENT_MANAGER'].includes(role)) {
     return '/fnb/dashboard';

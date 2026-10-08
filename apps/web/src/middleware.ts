@@ -147,6 +147,11 @@ function hasModuleAccess(req: any, pathname: string): { allowed: boolean; redire
     return can('ACCESS_MAINTENANCE', ['MAINTENANCE', ...FRONT_DESK_ROLES, ...MANAGEMENT_ROLES])
       ? { allowed: true } : { allowed: false, redirectTo: '/hub' };
   }
+  if (pathname === '/housekeeping-manager' || pathname.startsWith('/housekeeping-manager/')) {
+    return (capabilities.includes('ACCESS_HOUSEKEEPING') && capabilities.includes('ACCESS_MAINTENANCE')) ||
+      role === 'HOUSEKEEPING_MAINTENANCE_MANAGER'
+      ? { allowed: true } : { allowed: false, redirectTo: '/hub' };
+  }
   return { allowed: true };
 }
 

@@ -42,6 +42,7 @@ const buildTimeImportBridges = [
   path.join(process.cwd(), 'src/app/(cash-management)/cash-management/night-audit/reports/print/room-charge-detail/page.tsx'),
   path.join(process.cwd(), 'src/app/(cash-management)/cash-management/night-audit/reports/print/transaction-journal/page.tsx'),
   path.join(process.cwd(), 'src/app/(cash-management)/cash-management/night-audit/reports/print/trial-balance/page.tsx'),
+  path.join(process.cwd(), 'src/app/(fnb)/fnb/recipes/page.tsx'),
   path.join(process.cwd(), 'src/app/night-audit/handovers/page.tsx'),
   path.join(process.cwd(), 'src/app/(dashboard)/general-manager/cash-management/page.tsx'),
   path.join(process.cwd(), 'src/app/(dashboard)/general-manager/fnb/page.tsx'),
@@ -85,6 +86,7 @@ try {
     let bridgedContents = contents.replaceAll("@/app/(admin)/admin/pos/", "@/app/_admin_group/admin/pos/");
     bridgedContents = bridgedContents.replaceAll("@/app/(cash-management)/", "@/app/_cash-management/");
     bridgedContents = bridgedContents.replaceAll("@/app/(fnb)/", "@/app/_fnb/");
+    bridgedContents = bridgedContents.replaceAll("@/app/(inventory)/", "@/app/_inventory/");
     bridgedContents = bridgedContents.replaceAll("@/app/night-audit/", "@/app/_night-audit/");
     bridgedContents = bridgedContents.replaceAll("@/app/(dashboard)/", "@/app/_dashboard/");
     
@@ -92,6 +94,7 @@ try {
     buildFile = buildFile.replace(`${path.sep}app${path.sep}(cash-management)${path.sep}`, `${path.sep}app${path.sep}_cash-management${path.sep}`);
     buildFile = buildFile.replace(`${path.sep}app${path.sep}night-audit${path.sep}`, `${path.sep}app${path.sep}_night-audit${path.sep}`);
     buildFile = buildFile.replace(`${path.sep}app${path.sep}(dashboard)${path.sep}`, `${path.sep}app${path.sep}_dashboard${path.sep}`);
+    buildFile = buildFile.replace(`${path.sep}app${path.sep}(fnb)${path.sep}`, `${path.sep}app${path.sep}_fnb${path.sep}`);
     
     if (bridgedContents !== contents) fs.writeFileSync(buildFile, bridgedContents);
   }
