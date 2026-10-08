@@ -164,8 +164,8 @@ export async function POST(request: Request) {
       if (!sourceItem || seenItemIds.has(item.stockItemId)) {
         return NextResponse.json({ data: null, error: 'Each item must be an active item from the source warehouse, with no duplicates' }, { status: 400 });
       }
-      if (!Number.isFinite(quantity) || quantity <= 0 || quantity > Number(sourceItem.quantityOnHand)) {
-        return NextResponse.json({ data: null, error: `Invalid quantity for ${sourceItem.name}; available stock is ${sourceItem.quantityOnHand}` }, { status: 400 });
+      if (!Number.isFinite(quantity) || quantity <= 0) {
+        return NextResponse.json({ data: null, error: `Invalid quantity for ${sourceItem.name}` }, { status: 400 });
       }
       if (!Object.values(UnitOfMeasure).includes(item.unitOfMeasure)) {
         return NextResponse.json({ data: null, error: `Invalid unit for ${sourceItem.name}` }, { status: 400 });

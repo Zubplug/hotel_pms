@@ -33,10 +33,10 @@ export default async function TransfersPage({ searchParams }: { searchParams: Pr
   const statusFilter = view === 'outlet-requests' ? { status: 'PENDING_APPROVAL' as const } : {};
   const transfers = await prisma.stockTransfer.findMany({
     where: { propertyId, ...toWarehouseFilter, ...statusFilter },
-    include: { fromWarehouse: { select: { name: true } }, toWarehouse: { select: { name: true, posOutlet: { select: { name: true } } } }, items: { select: { quantity: true, stockItem: { select: { costPrice: true } } } }, _count: { select: { items: true } } },
+    include: { fromWarehouse: { select: { name: true } }, toWarehouse: { select: { name: true, posOutlet: { select: { name: true } } } }, items: { select: { quantity: true, baseQuantity: true, stockItem: { select: { costPrice: true } } } }, _count: { select: { items: true } } },
     orderBy: { createdAt: 'desc' }, take: 100,
   });
-  const valueOf = (transfer: typeof transfers[number]) => transfer.items.reduce((sum, item) => sum + Number(item.quantity) * Number(item.stockItem.costPrice), 0);
+  const valueOf = (transfer: typeof transfers[number]) => transfer.items.reduce((sum, item) => sum + Number(item.baseQuantity ?? item.quantity) * Number(item.stockItem.costPrice), 0);
   const pending = transfers.filter((transfer) => transfer.status === 'PENDING_APPROVAL');
   const inTransit = transfers.filter((transfer) => transfer.status === 'ISSUED');
   const completed = transfers.filter((transfer) => ['RECEIVED', 'COMPLETED'].includes(transfer.status));

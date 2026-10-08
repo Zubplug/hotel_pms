@@ -50,7 +50,7 @@ export default async function TransferDetailPage({ params }: { params: Promise<{
       toWarehouse:   { select: { name: true, posOutlet: { select: { name: true } } } },
       items: {
         include: {
-          stockItem: { select: { name: true, stockType: true, baseUnit: true, quantityOnHand: true, costPrice: true } },
+          stockItem: { select: { name: true, stockType: true, baseUnit: true, quantityOnHand: true, costPrice: true, stockUnits: { where: { isPurchaseUnit: true }, select: { unit: true, unitsInBase: true } } } },
         },
       },
     },
@@ -75,7 +75,7 @@ export default async function TransferDetailPage({ params }: { params: Promise<{
   const canReduceRequest = isOutletBound && canApprove && ['PENDING_APPROVAL', 'APPROVED'].includes(transfer.status);
 
   const totalValue = transfer.items.reduce(
-    (sum, item) => sum + Number(item.quantity) * Number(item.stockItem.costPrice ?? 0), 0,
+    (sum, item) => sum + Number(item.baseQuantity || item.quantity) * Number(item.stockItem.costPrice ?? 0), 0,
   );
 
   const meta = STATUS_META[transfer.status] || STATUS_META.DRAFT;
@@ -183,9 +183,9 @@ export default async function TransferDetailPage({ params }: { params: Promise<{
                   <tr key={item.id} className="hover:bg-white/[0.02]">
                     <td className="px-5 py-4 font-medium text-slate-200">{item.stockItem.name}</td>
                     <td className="px-5 py-4 text-xs capitalize text-slate-500">{(item.stockItem.stockType || 'CONSUMABLE').replace('_', ' ').toLowerCase()}</td>
-                    <td className="px-5 py-4 text-slate-400">{Number(item.stockItem.quantityOnHand).toFixed(2)}</td>
+                    <td className="px-5 py-4 text-slate-400">{Number(item.stockItem.quantityOnHand).toFixed(2)} {item.stockItem.baseUnit}</td>
                     <td className="px-5 py-4 font-semibold text-violet-300">{Number(item.quantity).toFixed(2)}</td>
-                    <td className="px-5 py-4 text-slate-500">{item.unitOfMeasure}</td>
+                    <td className="px-5 py-4 text-slate-500">{item.unitOfMeasure}{item.stockItem.stockUnits[0] && <span className="block text-[11px] text-slate-600">1 {item.stockItem.stockUnits[0].unit} = {Number(item.stockItem.stockUnits[0].unitsInBase)} {item.stockItem.baseUnit}</span>}</td>
                     <td className="px-5 py-4 text-slate-500">{item.notes || '—'}</td>
                   </tr>
                 ))}

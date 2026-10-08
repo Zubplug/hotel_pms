@@ -7,11 +7,11 @@ import {
   ChevronDown, Info, Loader2, Plus, Search, Send, Trash2, X,
 } from 'lucide-react';
 import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
-import { INVENTORY_UNITS, formatUnit } from '@/lib/inventory/units';
+import { INVENTORY_UNITS, formatUnit, purchaseSetup, toPurchaseQuantity } from '@/lib/inventory/units';
 
 /* ─── types ──────────────────────────────────────────────────────────────── */
 interface Warehouse { id: string; name: string; posOutlet?: { id: string; name: string } | null }
-interface StockItem { id: string; name: string; stockType?: string; baseUnit: string; quantityOnHand: number; warehouseId: string; stockUnits?: { unit: string }[] }
+interface StockItem { id: string; name: string; stockType?: string; baseUnit: string; quantityOnHand: number; warehouseId: string; stockUnits?: { unit: string; unitsInBase: number | string; isPurchaseUnit?: boolean }[] }
 
 /* ─── constants ──────────────────────────────────────────────────────────── */
 const STOCK_STAFF    = new Set(['STOCK_MANAGER', 'STOCK_KEEPER']);
@@ -109,10 +109,13 @@ export default function NewTransferPage() {
 
   const fromItems = stockItems.filter(i => !fromWarehouseId || i.warehouseId === fromWarehouseId);
 
+  const itemPurchaseUnit = (item?: StockItem) => item ? purchaseSetup(item.baseUnit, item.stockUnits || []) : { unit: 'PIECE', unitsInBase: 1 };
+
   const unitsForItem = (stockItemId: string) => {
     const item = stockItems.find(i => i.id === stockItemId);
     if (!item) return INVENTORY_UNITS as readonly string[];
-    return [item.baseUnit, ...(item.stockUnits?.map(u => u.unit).filter(u => u !== item.baseUnit) || [])];
+    const purchase = itemPurchaseUnit(item).unit;
+    return [purchase, item.baseUnit, ...(item.stockUnits?.map(u => u.unit).filter(u => u !== item.baseUnit && u !== purchase) || [])];
   };
 
   const addLine    = () => setLines(l => [...l, { stockItemId: '', quantity: '', unitOfMeasure: 'PIECE', notes: '' }]);
@@ -243,13 +246,14 @@ export default function NewTransferPage() {
                     <select value={line.stockItemId}
                       onChange={e => {
                         const sel = fromItems.find(item => item.id === e.target.value);
-                        setLines(cur => cur.map((ln, idx) => idx === i ? { ...ln, stockItemId: e.target.value, unitOfMeasure: sel?.baseUnit || ln.unitOfMeasure } : ln));
+                        const purchase = itemPurchaseUnit(sel);
+                        setLines(cur => cur.map((ln, idx) => idx === i ? { ...ln, stockItemId: e.target.value, unitOfMeasure: purchase.unit } : ln));
                       }}
                       required
                       className="h-10 w-full rounded-lg border border-white/10 bg-[#08111f] px-2.5 text-sm text-slate-200 outline-none focus:border-emerald-400/60">
                       <option value="">Select item…</option>
                       {fromItems.map(item => (
-                        <option key={item.id} value={item.id}>{item.name} · {Number(item.quantityOnHand).toFixed(2)} {formatUnit(item.baseUnit)}</option>
+                        <option key={item.id} value={item.id}>{item.name} · {toPurchaseQuantity(item.quantityOnHand, item.baseUnit, item.stockUnits || []).toFixed(2)} {formatUnit(itemPurchaseUnit(item).unit)} available</option>
                       ))}
                     </select>
                   </div>
