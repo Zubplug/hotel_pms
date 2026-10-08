@@ -26,7 +26,9 @@ export default async function InventoryApprovalsPage() {
   if (!propertyId || (!hasInventoryPermission(role, 'inventory.transfer.approve', user.isSuperAdmin) && !hasInventoryPermission(role, 'inventory.transfer.issue', user.isSuperAdmin))) redirect('/inventory');
 
   const requests = await prisma.stockTransfer.findMany({
-    where: { propertyId, toWarehouse: { posOutletId: { not: null } }, status: { notIn: ['DRAFT', 'CANCELLED'] } },
+    // This page is the decision queue, not the transfer history. Approved,
+    // issued, and completed movements belong in the transfer register.
+    where: { propertyId, toWarehouse: { posOutletId: { not: null } }, status: 'PENDING_APPROVAL' },
     include: {
       fromWarehouse: { select: { name: true } },
       toWarehouse: { select: { name: true, posOutlet: { select: { name: true } } } },

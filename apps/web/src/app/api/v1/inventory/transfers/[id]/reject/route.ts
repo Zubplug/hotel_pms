@@ -13,6 +13,8 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
     }
 
     const { role, isSuperAdmin, id: userId } = session.user as any;
+    const normalizedRole = String(role || '').toUpperCase();
+    const isStockStaff = ['STOCK_MANAGER', 'STOCK_KEEPER'].includes(normalizedRole);
     const ctx = await requireOrganizationContext(session.user.id);
 
     // Permission gate: Anyone who can approve a transfer can reject it.
@@ -36,6 +38,7 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
         status: true,
         notes: true,
         requestedBy: true,
+        toWarehouse: { select: { posOutletId: true } },
       },
     });
 
@@ -44,6 +47,18 @@ export async function POST(request: Request, props: { params: Promise<{ id: stri
     }
     if (transfer.propertyId !== ctx.propertyIds[0]) {
       return NextResponse.json({ data: null, error: 'Not found' }, { status: 404 });
+    }
+
+    // Stock-control requests sent to an outlet require management to decide
+    // both approval and rejection. Do not rely on the UI for this rule.
+    const requesterRoles = transfer.requestedBy
+      ? await prisma.userRole.findMany({ where: { userId: transfer.requestedBy }, select: { role: { select: { name: true } } } })
+      : [];
+    const requesterIsStockStaff = requesterRoles.some(({ role: requesterRole }) =>
+      ['STOCK_MANAGER', 'STOCK_KEEPER'].includes(String(requesterRole.name || '').toUpperCase()),
+    );
+    if (transfer.toWarehouse.posOutletId && requesterIsStockStaff && isStockStaff) {
+      return NextResponse.json({ data: null, error: 'A management staff member must approve or reject stock-control requests made for F&B' }, { status: 403 });
     }
     if (!['PENDING_APPROVAL', 'APPROVED'].includes(transfer.status)) {
       return NextResponse.json({

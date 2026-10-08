@@ -41,7 +41,14 @@ export async function GET(request: Request, props: { params: Promise<{ id: strin
       return NextResponse.json({ data: null, error: 'Not Found' }, { status: 404 });
     }
 
-    return NextResponse.json({ data: transfer, error: null });
+    const requesterRoles = transfer.requestedBy
+      ? await prisma.userRole.findMany({ where: { userId: transfer.requestedBy }, select: { role: { select: { name: true } } } })
+      : [];
+    const requesterIsStockStaff = requesterRoles.some(({ role: requesterRole }) =>
+      ['STOCK_MANAGER', 'STOCK_KEEPER'].includes(String(requesterRole.name || '').toUpperCase()),
+    );
+
+    return NextResponse.json({ data: { ...transfer, requesterIsStockStaff }, error: null });
   } catch (error: any) {
     return NextResponse.json({ data: null, error: error.message || 'Internal Error' }, { status: 500 });
   }
