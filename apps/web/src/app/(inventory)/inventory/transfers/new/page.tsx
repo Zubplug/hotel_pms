@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   AlertTriangle, ArrowLeftRight, ArrowRight, CheckCircle2,
   ChevronDown, Info, Loader2, Plus, Search, Send, Trash2, X,
@@ -81,6 +81,7 @@ function ComboBox({ label, placeholder, value, onChange, options, disabled, requ
 /* ─── main ───────────────────────────────────────────────────────────────── */
 export default function NewTransferPage() {
   const router                            = useRouter();
+  const searchParams                      = useSearchParams();
   const { data: session }                 = useLodgeCoreSession();
   const [warehouses, setWarehouses]       = useState<Warehouse[]>([]);
   const [stockItems, setStockItems]       = useState<StockItem[]>([]);
@@ -92,6 +93,7 @@ export default function NewTransferPage() {
   const [isSubmitting, setIsSubmitting]   = useState(false);
   const [error, setError]                 = useState('');
   const [success, setSuccess]             = useState('');
+  const issueToOutlet                     = searchParams.get('issue') === 'outlet';
 
   const userRole    = String(session?.user?.role || '').toUpperCase();
   const isFnbMgr    = userRole === 'FNB_MANAGER';
@@ -100,14 +102,24 @@ export default function NewTransferPage() {
   const isSuperAdmin = (session?.user as any)?.isSuperAdmin;
 
   useEffect(() => {
-    fetch('/api/v1/inventory/warehouses').then(r => r.json()).then(r => setWarehouses(r.data?.warehouses || r.data || []));
+    fetch('/api/v1/inventory/warehouses').then(r => r.json()).then(r => {
+      const loaded = r.data?.warehouses || r.data || [];
+      setWarehouses(loaded);
+      if (issueToOutlet) {
+        const mainWarehouse = loaded.find((warehouse: Warehouse) => !warehouse.posOutlet);
+        if (mainWarehouse) setFrom(mainWarehouse.id);
+      }
+    });
     fetch('/api/v1/inventory/stock-items?limit=500').then(r => r.json()).then(r => setStockItems(r.data?.items || []));
-  }, []);
+  }, [issueToOutlet]);
 
   const sourceWarehouses  = warehouses.filter(w => !w.posOutlet);
-  const destWarehouses    = warehouses.filter(w => w.id !== fromWarehouseId);
+  const destWarehouses    = warehouses.filter(w => w.id !== fromWarehouseId && (!issueToOutlet || Boolean(w.posOutlet)));
 
-  const fromItems = stockItems.filter(i => !fromWarehouseId || i.warehouseId === fromWarehouseId);
+  // Never expose the combined stock-item feed before a source is selected.
+  // For an outlet issue, this guarantees that item availability comes only
+  // from the selected main warehouse, never from an outlet warehouse.
+  const fromItems = fromWarehouseId ? stockItems.filter(i => i.warehouseId === fromWarehouseId && Number(i.quantityOnHand) > 0) : [];
 
   const itemPurchaseUnit = (item?: StockItem) => item ? purchaseSetup(item.baseUnit, item.stockUnits || []) : { unit: 'PIECE', unitsInBase: 1 };
 
