@@ -34,7 +34,14 @@ export async function GET(request: Request) {
 
     // 1. Authorize Warehouse
     const warehouse = await prisma.warehouse.findFirst({
-      where
+      where,
+      select: {
+        id: true,
+        name: true,
+        propertyId: true,
+        parentWarehouseId: true,
+        posOutletId: true,
+      },
     });
 
     if (!warehouse) {
@@ -49,8 +56,23 @@ export async function GET(request: Request) {
       },
       orderBy: { name: 'asc' }
     });
+    // Purchase setup is controlled by the supplying main warehouse. Prefer the
+    // selected outlet's parent warehouse so duplicate item names in another
+    // main warehouse cannot leak into this outlet's F&B view.
+    const parentWarehouse = warehouse.parentWarehouseId
+      ? await prisma.warehouse.findFirst({
+          where: { id: warehouse.parentWarehouseId, propertyId: warehouse.propertyId, posOutletId: null, isActive: true },
+          select: { id: true },
+        })
+      : null;
+    const sourceWarehouseIds = parentWarehouse
+      ? [parentWarehouse.id]
+      : (await prisma.warehouse.findMany({
+          where: { propertyId: warehouse.propertyId, posOutletId: null, isActive: true },
+          select: { id: true },
+        })).map((source) => source.id);
     const mainStockItems = await prisma.stockItem.findMany({
-      where: { propertyId: warehouse.propertyId, warehouse: { posOutletId: null }, isActive: true },
+      where: { propertyId: warehouse.propertyId, warehouseId: { in: sourceWarehouseIds }, isActive: true },
       include: { stockUnits: true },
     });
 
@@ -123,11 +145,10 @@ export async function GET(request: Request) {
         varianceValue,
         lastStocktakeAt
         ,mainStock: (() => {
-          const main = mainStockItems.find(candidate =>
-            (item.sku && candidate.sku === item.sku) ||
-            (item.barcode && candidate.barcode === item.barcode) ||
-            candidate.name.trim().toLowerCase() === item.name.trim().toLowerCase()
-          );
+          const sameName = mainStockItems.filter(candidate => candidate.name.trim().toLowerCase() === item.name.trim().toLowerCase());
+          const main = (item.sku && mainStockItems.find(candidate => candidate.sku === item.sku))
+            || (item.barcode && mainStockItems.find(candidate => candidate.barcode === item.barcode))
+            || (sameName.length === 1 ? sameName[0] : sameName.find(candidate => candidate.stockType === item.stockType));
           if (!main) return null;
           const purchase = main.stockUnits.find(unit => unit.isPurchaseUnit);
           return {
