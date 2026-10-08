@@ -69,7 +69,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { fromWarehouseId, toWarehouseId, notes, items, selfIssue = false } = body;
+    const { fromWarehouseId, toWarehouseId, notes, items, selfIssue = false, outletIssue = false } = body;
 
     if (!fromWarehouseId || !toWarehouseId || !Array.isArray(items) || items.length === 0) {
       return NextResponse.json({ data: null, error: 'Source, destination, and at least one item are required' }, { status: 400 });
@@ -110,6 +110,17 @@ export async function POST(request: Request) {
       return NextResponse.json({
         data: null,
         error: 'Stock can only be transferred from a main warehouse. Outlet warehouses cannot be used as a source.',
+      }, { status: 403 });
+    }
+
+    // The generic transfer screen is for main-warehouse to main-warehouse
+    // movement. Outlet issuance must use the explicit ?issue=outlet flow.
+    if (Boolean(destinationWarehouse.posOutlet) !== Boolean(outletIssue)) {
+      return NextResponse.json({
+        data: null,
+        error: outletIssue
+          ? 'Outlet issue transfers must have an outlet warehouse as the destination.'
+          : 'This transfer route is limited to main warehouses. Use the outlet issue flow to issue stock to an outlet.',
       }, { status: 403 });
     }
 
