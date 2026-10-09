@@ -11,10 +11,10 @@ export default async function HQCustomDomainsPage() {
   });
 
   return (
-    <main className="min-h-screen bg-[#FAFAFA] p-6 lg:p-12 relative overflow-hidden">
+    <main className="min-h-screen bg-[#0B0F19] p-6 lg:p-12 relative overflow-hidden">
       {/* Decorative gradient background elements */}
-      <div className="absolute top-0 left-0 w-[500px] h-[500px] bg-indigo-500/10 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2 pointer-events-none" />
-      <div className="absolute bottom-0 right-0 w-[600px] h-[600px] bg-blue-500/5 rounded-full blur-3xl translate-x-1/3 translate-y-1/3 pointer-events-none" />
+      <div className="absolute top-0 left-0 w-[600px] h-[600px] bg-indigo-600/15 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2 pointer-events-none" />
+      <div className="absolute bottom-0 right-0 w-[700px] h-[700px] bg-emerald-600/10 rounded-full blur-3xl translate-x-1/3 translate-y-1/3 pointer-events-none" />
 
       <style>{`
         @keyframes slideUp {
@@ -26,7 +26,7 @@ export default async function HQCustomDomainsPage() {
           animation: slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
         }
         .glass-header {
-          background: rgba(255, 255, 255, 0.7);
+          background: rgba(15, 23, 42, 0.7);
           backdrop-filter: blur(12px);
           -webkit-backdrop-filter: blur(12px);
         }
@@ -34,17 +34,17 @@ export default async function HQCustomDomainsPage() {
 
       <div className="max-w-6xl mx-auto relative z-10">
         <header className="mb-10 animate-row" style={{ animationDelay: '0s' }}>
-          <h1 className="text-3xl font-extrabold tracking-tight text-slate-900">Custom Domains</h1>
-          <p className="mt-3 text-base text-slate-500 max-w-2xl leading-relaxed">
+          <h1 className="text-3xl font-extrabold tracking-tight text-white">Custom Domains</h1>
+          <p className="mt-3 text-base text-slate-400 max-w-2xl leading-relaxed">
             Manage and activate branded guest experiences. Customers pay for available domains first; HQ configuration staff provisions and activates them here.
           </p>
         </header>
 
-        <div className="bg-white/80 backdrop-blur-md rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100/50 overflow-hidden animate-row" style={{ animationDelay: '0.1s' }}>
+        <div className="bg-slate-900/50 backdrop-blur-md rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.2)] border border-slate-700/50 overflow-hidden animate-row" style={{ animationDelay: '0.1s' }}>
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="glass-header border-b border-slate-100 text-xs uppercase tracking-wider text-slate-400 font-semibold sticky top-0 z-10">
+                <tr className="glass-header border-b border-slate-700/80 text-xs uppercase tracking-wider text-slate-400 font-semibold sticky top-0 z-10">
                   <th className="px-6 py-5">Customer Details</th>
                   <th className="px-6 py-5">Domain</th>
                   <th className="px-6 py-5">Status</th>
@@ -52,12 +52,12 @@ export default async function HQCustomDomainsPage() {
                   <th className="px-6 py-5 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-50">
+              <tbody className="divide-y divide-slate-800/50">
                 {requests.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-6 py-16 text-center text-slate-400">
+                    <td colSpan={5} className="px-6 py-16 text-center text-slate-500">
                       <div className="flex flex-col items-center justify-center space-y-3">
-                        <svg className="w-10 h-10 text-slate-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <svg className="w-10 h-10 text-slate-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
                         </svg>
                         <p>No active domain requests found.</p>
@@ -68,40 +68,40 @@ export default async function HQCustomDomainsPage() {
                   requests.map((request, idx) => (
                     <tr 
                       key={request.id} 
-                      className="animate-row group hover:bg-slate-50/80 transition-colors duration-200"
+                      className="animate-row group hover:bg-slate-800/60 transition-colors duration-200"
                       style={{ animationDelay: `${0.15 + (idx * 0.05)}s` }}
                     >
                       <td className="px-6 py-5">
-                        <div className="font-medium text-slate-900">{request.organization.name}</div>
-                        <div className="text-sm text-slate-500 mt-1">{request.property.name}</div>
+                        <div className="font-medium text-slate-200">{request.organization.name}</div>
+                        <div className="text-sm text-slate-400 mt-1">{request.property.name}</div>
                       </td>
                       <td className="px-6 py-5">
-                        <div className="inline-flex items-center px-3 py-1 rounded-md bg-slate-100/80 text-slate-700 font-mono text-sm border border-slate-200/50 shadow-sm">
+                        <div className="inline-flex items-center px-3 py-1 rounded-md bg-slate-800/80 text-slate-300 font-mono text-sm border border-slate-700/60 shadow-sm">
                           {request.domain}
                         </div>
                       </td>
                       <td className="px-6 py-5">
                         <div className="flex items-center">
                           {request.status === 'PAID' ? (
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-semibold ring-1 ring-inset ring-emerald-600/20">
-                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-950/50 text-emerald-400 text-xs font-semibold ring-1 ring-inset ring-emerald-500/30">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
                               Awaiting Config
                             </span>
                           ) : request.status === 'ACTIVE' ? (
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 text-xs font-semibold ring-1 ring-inset ring-blue-600/20">
-                              <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-950/50 text-blue-400 text-xs font-semibold ring-1 ring-inset ring-blue-500/30">
+                              <span className="w-1.5 h-1.5 rounded-full bg-blue-400"></span>
                               Active
                             </span>
                           ) : (
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 text-xs font-semibold ring-1 ring-inset ring-amber-600/20">
-                              <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-800 text-slate-300 text-xs font-semibold ring-1 ring-inset ring-slate-600/40">
+                              <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
                               {request.status}
                             </span>
                           )}
                         </div>
                       </td>
                       <td className="px-6 py-5">
-                        <div className="text-sm font-medium text-slate-700">
+                        <div className="text-sm font-medium text-slate-300">
                           {request.currency.toUpperCase()} {(request.amount / 100).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                         </div>
                       </td>
@@ -111,12 +111,12 @@ export default async function HQCustomDomainsPage() {
                             'use server'; 
                             await activateCustomDomainRequest(request.id); 
                           }}>
-                            <button className="relative inline-flex items-center justify-center px-4 py-2 text-sm font-medium text-white transition-all duration-200 bg-indigo-600 border border-transparent rounded-lg shadow-sm hover:bg-indigo-700 hover:shadow hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-600 active:translate-y-0">
+                            <button className="relative inline-flex items-center justify-center px-4 py-2 text-sm font-medium text-white transition-all duration-200 bg-indigo-600 border border-transparent rounded-lg shadow-sm hover:bg-indigo-500 hover:shadow-lg hover:shadow-indigo-500/20 hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 focus:ring-indigo-500 active:translate-y-0">
                               Configure &amp; Activate
                             </button>
                           </form>
                         ) : (
-                          <span className="text-sm text-slate-400 italic">No action needed</span>
+                          <span className="text-sm text-slate-500 italic">No action needed</span>
                         )}
                       </td>
                     </tr>
