@@ -66,7 +66,7 @@ export async function GET() {
         orderBy: { timestamp: 'desc' }, take: 40,
       }),
     ]);
-    const mainStock = stock.filter((item) => mainIds.includes(item.warehouse.id) && isHousekeepingCategory(item.inventoryCategory?.name));
+    const mainStock = stock.filter((item) => mainIds.includes(item.warehouse.id));
     return NextResponse.json({ data: { warehouses: departmentWarehouses, mainWarehouses, mainStock, stock, requests, issues } });
   } catch (error) {
     return responseError(error);
@@ -96,7 +96,6 @@ export async function POST(request: Request) {
         const quantity = Number(item.quantity);
         if (!sourceItem || !Number.isFinite(quantity) || quantity <= 0) return NextResponse.json({ data: null, error: 'Every request line must contain a valid main-warehouse item and quantity' }, { status: 400 });
         const category = await prisma.inventoryCategory.findFirst({ where: { id: sourceItem.categoryId || '' }, select: { name: true } });
-        if (!isHousekeepingCategory(category?.name)) return NextResponse.json({ data: null, error: `${sourceItem.name} is not assigned to a Housekeeping or Laundry category` }, { status: 400 });
         if (quantity > Number(sourceItem.quantityOnHand)) return NextResponse.json({ data: null, error: `Insufficient stock for ${sourceItem.name}` }, { status: 400 });
         transferItems.push({ stockItemId: sourceItem.id, quantity, unitOfMeasure: sourceItem.baseUnit, baseQuantity: quantity });
       }
