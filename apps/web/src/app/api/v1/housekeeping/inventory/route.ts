@@ -95,7 +95,6 @@ export async function POST(request: Request) {
         const sourceItem = sourceById.get(item.stockItemId);
         const quantity = Number(item.quantity);
         if (!sourceItem || !Number.isFinite(quantity) || quantity <= 0) return NextResponse.json({ data: null, error: 'Every request line must contain a valid main-warehouse item and quantity' }, { status: 400 });
-        const category = await prisma.inventoryCategory.findFirst({ where: { id: sourceItem.categoryId || '' }, select: { name: true } });
         if (quantity > Number(sourceItem.quantityOnHand)) return NextResponse.json({ data: null, error: `Insufficient stock for ${sourceItem.name}` }, { status: 400 });
         transferItems.push({ stockItemId: sourceItem.id, quantity, unitOfMeasure: sourceItem.baseUnit, baseQuantity: quantity });
       }
