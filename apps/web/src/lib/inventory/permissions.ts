@@ -87,10 +87,10 @@ export const INVENTORY_PERMISSIONS = {
   'procurement.po.create': ['CEO', 'SUPER_ADMIN', 'MANAGER', 'DIRECTOR', 'INVENTORY_MANAGER', 'STOCK_MANAGER', 'STOCK_KEEPER', 'PROCUREMENT_MANAGER'],
 
   // Approving a PO - explicitly excludes PROCUREMENT_MANAGER for separation of duties
-  'procurement.po.approve': ['CEO', 'SUPER_ADMIN', 'MANAGER', 'DIRECTOR', 'GENERAL_CASHIER'],
+  'procurement.po.approve': ['ACCOUNTANT', 'GENERAL_MANAGER', 'SUPER_ADMIN'],
 
   // Stage-1 reviewers may correct submitted PO lines before approval.
-  'procurement.po.adjust': ['CEO', 'SUPER_ADMIN', 'MANAGER', 'DIRECTOR', 'GENERAL_CASHIER'],
+  'procurement.po.adjust': ['ACCOUNTANT', 'GENERAL_MANAGER', 'SUPER_ADMIN'],
 
   // Cancelling an approved PO
   'procurement.po.cancel': ['CEO', 'SUPER_ADMIN', 'MANAGER', 'DIRECTOR'],

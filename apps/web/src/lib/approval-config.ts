@@ -51,8 +51,8 @@ export interface PropertyApprovalFlows {
 export const DEFAULT_APPROVAL_FLOWS: PropertyApprovalFlows = {
   PURCHASE_ORDER: {
     enabled: true,
-    approverRoles: ['CEO', 'SUPER_ADMIN', 'MANAGER', 'GENERAL_CASHIER'],
-    steps: 1,
+    approverRoles: ['ACCOUNTANT', 'GENERAL_MANAGER', 'SUPER_ADMIN'],
+    steps: 2,
     minAmount: 0,
     selfApproveBlocked: true,
   },

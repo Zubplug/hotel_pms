@@ -45,7 +45,11 @@ export default async function PurchaseOrderDetailPage({ params }: { params: Prom
   // Check if user has PO approval permission
   const userRole = (session.user as any)?.role || '';
   const isSuperAdmin = (session.user as any)?.isSuperAdmin;
-  const canApprove = hasInventoryPermission(userRole, 'procurement.po.approve', isSuperAdmin);
+  const normalizedRole = String(userRole).toUpperCase();
+  const canApprove = hasInventoryPermission(userRole, 'procurement.po.approve', isSuperAdmin)
+    && (Boolean(isSuperAdmin)
+      || (po.approvalStage === 'ACCOUNTANT' && normalizedRole === 'ACCOUNTANT')
+      || (po.approvalStage === 'GENERAL_MANAGER' && normalizedRole === 'GENERAL_MANAGER'));
   const canAdjust = po.status === 'SUBMITTED' && hasInventoryPermission(userRole, 'procurement.po.adjust', isSuperAdmin);
   const editorItems = po.items.map((item: any) => ({
     id: item.id,
@@ -76,7 +80,7 @@ export default async function PurchaseOrderDetailPage({ params }: { params: Prom
             <Building2 className="w-4 h-4" /> {po.supplier?.name} &bull; Created {new Date(po.createdAt).toLocaleDateString()}
           </p>
         </div>
-        <POActionBar id={po.id} status={po.status} canApprove={canApprove} />
+        <POActionBar id={po.id} status={po.status} approvalStage={po.approvalStage} canApprove={canApprove} />
       </div>
 
       {/* Info Row */}

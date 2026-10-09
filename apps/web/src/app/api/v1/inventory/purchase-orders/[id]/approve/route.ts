@@ -35,7 +35,7 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
       return NextResponse.json({ error: guard.reason || 'Forbidden' }, { status: 403 });
     }
 
-    const data = await ProcurementService.approvePO(params.id, userId);
+    const data = await ProcurementService.approvePO(params.id, userId, role, isSuperAdmin);
 
     return NextResponse.json({ data });
   } catch (error: any) {

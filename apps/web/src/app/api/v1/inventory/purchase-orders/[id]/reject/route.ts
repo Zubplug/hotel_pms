@@ -23,7 +23,7 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
       return NextResponse.json({ error: 'Reason is required for rejection' }, { status: 400 });
     }
 
-    const data = await ProcurementService.rejectPO(params.id, userId, reason);
+    const data = await ProcurementService.rejectPO(params.id, userId, reason, role, isSuperAdmin);
 
     return NextResponse.json({ data });
   } catch (error: any) {

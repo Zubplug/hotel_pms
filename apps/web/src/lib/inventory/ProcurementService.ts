@@ -81,6 +81,7 @@ export class ProcurementService {
       where: { id: poId },
       data: {
         status: PO_STATUS.SUBMITTED,
+        approvalStage: 'ACCOUNTANT',
         updatedBy: actorId,
         updatedAt: new Date(),
       }
@@ -91,15 +92,25 @@ export class ProcurementService {
    * Approve a PO. 
    * Note: Permissions should be validated in the API route before calling this.
    */
-  static async approvePO(poId: string, actorId: string) {
+  static async approvePO(poId: string, actorId: string, actorRole: string, isSuperAdmin = false) {
     const po = await prisma.purchaseOrder.findUnique({ where: { id: poId } });
     if (!po) throw new Error('Purchase Order not found');
     if (po.status !== PO_STATUS.SUBMITTED) throw new Error('Only SUBMITTED POs can be approved');
 
+    const stage = po.approvalStage || 'ACCOUNTANT';
+    const role = String(actorRole || '').toUpperCase();
+    const expectedRole = stage === 'ACCOUNTANT' ? 'ACCOUNTANT' : stage === 'GENERAL_MANAGER' ? 'GENERAL_MANAGER' : null;
+    if (!expectedRole) throw new Error('Purchase Order approval stage is invalid');
+    if (!isSuperAdmin && role !== expectedRole) throw new Error(`This purchase order is awaiting ${expectedRole.replace('_', ' ')} approval`);
+
     return await prisma.purchaseOrder.update({
       where: { id: poId },
       data: {
-        status: PO_STATUS.APPROVED,
+        status: stage === 'GENERAL_MANAGER' ? PO_STATUS.APPROVED : PO_STATUS.SUBMITTED,
+        approvalStage: stage === 'GENERAL_MANAGER' ? null : 'GENERAL_MANAGER',
+        ...(stage === 'GENERAL_MANAGER'
+          ? { generalManagerApprovedBy: actorId, generalManagerApprovedAt: new Date() }
+          : { accountantApprovedBy: actorId, accountantApprovedAt: new Date() }),
         updatedBy: actorId,
         updatedAt: new Date(),
       }
@@ -109,10 +120,15 @@ export class ProcurementService {
   /**
    * Reject a PO.
    */
-  static async rejectPO(poId: string, actorId: string, reason: string) {
+  static async rejectPO(poId: string, actorId: string, reason: string, actorRole: string, isSuperAdmin = false) {
     const po = await prisma.purchaseOrder.findUnique({ where: { id: poId } });
     if (!po) throw new Error('Purchase Order not found');
     if (po.status !== PO_STATUS.SUBMITTED) throw new Error('Only SUBMITTED POs can be rejected');
+    const stage = po.approvalStage || 'ACCOUNTANT';
+    const role = String(actorRole || '').toUpperCase();
+    const expectedRole = stage === 'ACCOUNTANT' ? 'ACCOUNTANT' : stage === 'GENERAL_MANAGER' ? 'GENERAL_MANAGER' : null;
+    if (!expectedRole) throw new Error('Purchase Order approval stage is invalid');
+    if (!isSuperAdmin && role !== expectedRole) throw new Error(`This purchase order is awaiting ${expectedRole.replace('_', ' ')} approval`);
 
     return await prisma.purchaseOrder.update({
       where: { id: poId },

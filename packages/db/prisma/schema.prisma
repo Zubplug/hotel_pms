@@ -3084,6 +3084,8 @@ model PurchaseOrder {
 
   poNumber     String              @unique
   status       PurchaseOrderStatus @default(DRAFT)
+  /// ACCOUNTANT while awaiting first approval; GENERAL_MANAGER while awaiting final approval.
+  approvalStage String?           @default("ACCOUNTANT")
   expectedDate DateTime?           @db.Date
   totalAmount  Decimal             @default(0) @db.Decimal(18, 4)
   notes        String?
@@ -3092,6 +3094,10 @@ model PurchaseOrder {
   rejectedBy     String?   @db.Uuid
   rejectedAt     DateTime? @db.Timestamptz
   rejectedReason String?
+  accountantApprovedBy String?   @db.Uuid
+  accountantApprovedAt DateTime? @db.Timestamptz
+  generalManagerApprovedBy String?   @db.Uuid
+  generalManagerApprovedAt DateTime? @db.Timestamptz
   cancelledBy    String?   @db.Uuid
   cancelledAt    DateTime? @db.Timestamptz
 
