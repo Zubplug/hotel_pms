@@ -56,8 +56,9 @@ export function FnbInventoryClient() {
       .then((response) => response.json())
       .then((body) => {
         const hierarchy = buildHierarchy(body.data?.items || body.data || []);
-        setWarehouses(hierarchy);
-        if (hierarchy.length) setWarehouseId(hierarchy[0].id);
+        const filteredHierarchy = hierarchy.filter(w => w.posOutletId != null);
+        setWarehouses(filteredHierarchy);
+        if (filteredHierarchy.length) setWarehouseId(filteredHierarchy[0].id);
       })
       .catch(() => setError('Unable to load your inventory locations.'));
   }, []);
