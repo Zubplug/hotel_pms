@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { AmountInput } from '@/components/ui/amount-input';
 import { Label } from '@/components/ui/label';
 
-export function SchedulePaymentDialog({ invoiceId, amount, currency = 'NGN' }: { invoiceId: string; amount: number; currency?: string }) {
+export function SchedulePaymentDialog({ invoiceId, amount, currency = 'NGN', isPurchaseOrder = false }: { invoiceId: string; amount: number; currency?: string; isPurchaseOrder?: boolean }) {
   const [open, setOpen] = useState(false);
   const [scheduledDate, setScheduledDate] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('BANK_TRANSFER');
@@ -21,10 +21,15 @@ export function SchedulePaymentDialog({ invoiceId, amount, currency = 'NGN' }: {
     e.preventDefault();
     setIsSubmitting(true);
     try {
-      const res = await fetch(`/api/v1/accountant/payables/${invoiceId}/payment`, {
+      const url = isPurchaseOrder ? `/api/v1/inventory/purchase-orders/${invoiceId}/payments` : `/api/v1/accountant/payables/${invoiceId}/payment`;
+      const payload = isPurchaseOrder
+        ? { amount, paymentDate: new Date(`${scheduledDate}T12:00:00`).toISOString(), paymentMethod, bankReference: bankReference || undefined }
+        : { payment: { amount, paymentDate: new Date(`${scheduledDate}T12:00:00`).toISOString(), paymentMethod, bankReference: bankReference || undefined } };
+
+      const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ payment: { amount, paymentDate: new Date(`${scheduledDate}T12:00:00`).toISOString(), paymentMethod, bankReference: bankReference || undefined } })
+        body: JSON.stringify(payload)
       });
       if (!res.ok) throw new Error('Failed to schedule payment');
       
@@ -41,11 +46,11 @@ export function SchedulePaymentDialog({ invoiceId, amount, currency = 'NGN' }: {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger className="px-3 py-1 bg-amber-600/10 hover:bg-amber-600/20 text-amber-400 rounded-lg text-sm transition-colors border border-amber-500/20">
-        Schedule Payment
+        {isPurchaseOrder ? 'Advance Payment' : 'Schedule Payment'}
       </DialogTrigger>
       <DialogContent className="bg-slate-900 border-white/10 text-slate-50 max-w-sm">
         <DialogHeader>
-          <DialogTitle>Schedule Invoice Payment</DialogTitle>
+          <DialogTitle>{isPurchaseOrder ? 'Record Advance Payment' : 'Schedule Invoice Payment'}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSchedule} className="space-y-4 mt-4">
           <div className="space-y-2">

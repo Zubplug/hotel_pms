@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
 import { errorResponse } from '@/lib/api-response';
 import { resolveUser } from '@/lib/resolve-user';
+import { requireOrganizationContext } from '@/lib/organization-access';
+import { requireStockUnitConversion } from '@/lib/inventory/UnitConversionService';
 
 export async function GET(
   _req: NextRequest,
@@ -36,6 +38,15 @@ export async function POST(
     const quantity = Number(body.quantity ?? 1);
     if (!name || !Number.isFinite(price) || price < 0 || !Number.isFinite(quantity) || quantity <= 0) return errorResponse('BAD_REQUEST', 'Modifier name, valid price, and quantity are required', 400);
 
+    const product = await prisma.posProduct.findUnique({ where: { id: productId }, select: { propertyId: true } });
+    if (!product) return errorResponse('NOT_FOUND', 'Product not found', 404);
+    const allowed = (await requireOrganizationContext(user.id)).propertyIds;
+    if (!allowed.includes(product.propertyId) && !user.isSuperAdmin) return errorResponse('FORBIDDEN', 'No access to this property', 403);
+    const groupName = body.groupName ? String(body.groupName).trim() : null;
+    const groupMaxSelect = body.groupMaxSelect == null ? null : Number(body.groupMaxSelect);
+    if (groupMaxSelect !== null && (!Number.isInteger(groupMaxSelect) || groupMaxSelect < 1)) return errorResponse('BAD_REQUEST', 'Maximum selection must be a positive whole number', 400);
+    if (body.groupRequired === true && !groupName) return errorResponse('BAD_REQUEST', 'Required modifiers must belong to a group', 400);
+    if (body.stockItemId) await requireStockUnitConversion(prisma, String(body.stockItemId), body.unitOfMeasure || '');
     const modifier = await prisma.posProductModifier.create({
       data: {
         productId,
@@ -45,9 +56,9 @@ export async function POST(
         stockItemId: body.stockItemId || null,
         quantity,
         unitOfMeasure: body.unitOfMeasure || null,
-        groupName: body.groupName ? String(body.groupName).trim() : null,
+        groupName,
         groupRequired: body.groupRequired === true,
-        groupMaxSelect: body.groupMaxSelect == null ? null : Number(body.groupMaxSelect),
+        groupMaxSelect,
       },
     });
     // Desktop incremental sync watches the parent product watermark because

@@ -330,6 +330,7 @@ export async function GET(req: NextRequest) {
     const stockWhere = buildWhere({ propertyId, warehouseId: { in: posStockWarehouseIds } });
     const stockItems = await prisma.stockItem.findMany({
       where: stockWhere,
+      include: { stockUnits: true },
       take: limit,
       orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
     });
@@ -337,6 +338,7 @@ export async function GET(req: NextRequest) {
     const mappedStockItems = posMappedStockItemIds.length > 0 
       ? await prisma.stockItem.findMany({
           where: { propertyId, id: { in: posMappedStockItemIds } },
+          include: { stockUnits: true },
         })
       : [];
 

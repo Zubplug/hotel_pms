@@ -55,6 +55,8 @@ model Organization {
   integrationDefinitions IntegrationDefinition[]
   installedIntegrations  InstalledIntegration[]
   portalApiKeys          PortalApiKey[]
+  propertyIntegrations   PropertyIntegration[]
+  websiteProjects        WebsiteProject[]
   usageRecords           Usage[]
   posActivationKeys      PosActivationKey[]
 
@@ -144,6 +146,8 @@ model Property {
   entitlements             Entitlement[]
   installedIntegrations    InstalledIntegration[]
   hardwareAgents           HardwareAgent[]
+  propertyIntegrations     PropertyIntegration[]
+  websiteProjects          WebsiteProject[]
   lockOperations           LockOperation[]
   lockEvents               LockEvent[]
   integrationConfigs       IntegrationConfig[]
@@ -3088,6 +3092,8 @@ model PurchaseOrder {
   approvalStage String?           @default("ACCOUNTANT")
   expectedDate DateTime?           @db.Date
   totalAmount  Decimal             @default(0) @db.Decimal(18, 4)
+  paidAmount   Decimal             @default(0) @db.Decimal(18, 4)
+  paymentStatus String             @default("UNPAID") // UNPAID, PARTIAL, PAID
   notes        String?
 
   currency       String    @default("NGN")
@@ -3104,6 +3110,7 @@ model PurchaseOrder {
   items            PurchaseOrderItem[]
   grns             GoodsReceivedNote[]
   supplierInvoices SupplierInvoice[]
+  payments         SupplierPayment[]
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
@@ -5518,10 +5525,12 @@ model SupplierInvoiceItem {
 model SupplierPayment {
   id         String @id @default(uuid()) @db.Uuid
   propertyId String @db.Uuid
-  invoiceId  String @db.Uuid
-  supplierId String @db.Uuid
+  invoiceId       String? @db.Uuid
+  supplierId      String @db.Uuid
+  purchaseOrderId String? @db.Uuid
 
-  invoice SupplierInvoice @relation(fields: [invoiceId], references: [id])
+  invoice       SupplierInvoice? @relation(fields: [invoiceId], references: [id])
+  purchaseOrder PurchaseOrder?   @relation(fields: [purchaseOrderId], references: [id])
 
   amount           Decimal  @db.Decimal(18, 4)
   currency         String   @default("NGN")
@@ -6537,6 +6546,158 @@ model InstalledIntegration {
 
   @@unique([organizationId, definitionId, propertyId])
   @@index([organizationId, status])
+}
+
+model PropertyIntegration {
+  id             String          @id @default(uuid()) @db.Uuid
+  organizationId String          @db.Uuid
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  propertyId     String          @db.Uuid
+  property       Property        @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  name           String          // e.g. "Main Website", "Partner Booking Widget"
+  provider       String          @default("LODGECORE_CMS") // e.g. LODGECORE_CMS, CUSTOM_WEBSITE, WIDGET
+  status         String          @default("ACTIVE") // ACTIVE, SUSPENDED
+
+  publishableKeys PublishableKey[]
+
+  createdAt      DateTime        @default(now()) @db.Timestamptz
+  updatedAt      DateTime        @updatedAt @db.Timestamptz
+
+  @@index([propertyId])
+  @@index([organizationId])
+}
+
+model PublishableKey {
+  id             String          @id @default(uuid()) @db.Uuid
+  integrationId  String          @db.Uuid
+  integration    PropertyIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+
+  key            String          @unique // e.g. "pk_live_..."
+  environment    String          @default("LIVE") // TEST, LIVE
+  status         String          @default("ACTIVE") // ACTIVE, REVOKED
+  allowedOrigins String[]        @default([]) // e.g. ["https://myhotel.com", "https://*.myhotel.com"]
+
+  lastUsedAt     DateTime?       @db.Timestamptz
+  revokedAt      DateTime?       @db.Timestamptz
+  createdAt      DateTime        @default(now()) @db.Timestamptz
+  updatedAt      DateTime        @updatedAt @db.Timestamptz
+
+  @@index([key])
+  @@index([integrationId, status])
+}
+
+model WebsiteProject {
+  id               String           @id @default(uuid()) @db.Uuid
+  organizationId   String           @db.Uuid
+  organization     Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  propertyId       String           @db.Uuid
+  property         Property         @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  status           String           @default("DRAFT") // DRAFT, PUBLISHED, SUSPENDED
+  name             String
+  customDomain     String?          @unique
+  customDomainVerifiedAt DateTime?  @db.Timestamptz
+  customDomainVerificationToken String? @unique
+
+  primaryColor     String?
+  secondaryColor   String?
+  logoUrl          String?
+  faviconUrl       String?
+
+  contactEmail     String?
+  contactPhone     String?
+  socialLinks      Json?            // { facebook, instagram, twitter, etc }
+  seoMetadata      Json?            // { defaultTitleFormat, defaultDescription }
+
+  activeRevisionId String?          @db.Uuid
+  activeRevision   WebsiteRevision? @relation("ActiveRevision", fields: [activeRevisionId], references: [id])
+  previewRevisionId String?         @db.Uuid
+  previewRevision  WebsiteRevision? @relation("PreviewRevision", fields: [previewRevisionId], references: [id])
+
+  revisions        WebsiteRevision[] @relation("ProjectRevisions")
+  assets           WebsiteAsset[]
+
+  createdAt        DateTime         @default(now()) @db.Timestamptz
+  updatedAt        DateTime         @updatedAt @db.Timestamptz
+
+  @@index([propertyId])
+  @@index([organizationId])
+  @@index([customDomain])
+}
+
+model WebsiteRevision {
+  id               String           @id @default(uuid()) @db.Uuid
+  projectId        String           @db.Uuid
+  project          WebsiteProject   @relation("ProjectRevisions", fields: [projectId], references: [id], onDelete: Cascade)
+
+  status           String           @default("DRAFT") // DRAFT, PUBLISHED, ARCHIVED
+  versionName      String           // e.g. "Summer 2026 Update"
+
+  publishedAt      DateTime?        @db.Timestamptz
+  createdBy        String           @db.Uuid
+
+  pages            WebsitePage[]
+
+  activeFor        WebsiteProject[] @relation("ActiveRevision")
+  previewFor       WebsiteProject[] @relation("PreviewRevision")
+
+  createdAt        DateTime         @default(now()) @db.Timestamptz
+  updatedAt        DateTime         @updatedAt @db.Timestamptz
+
+  @@index([projectId, status])
+}
+
+model WebsitePage {
+  id               String           @id @default(uuid()) @db.Uuid
+  revisionId       String           @db.Uuid
+  revision         WebsiteRevision  @relation(fields: [revisionId], references: [id], onDelete: Cascade)
+
+  slug             String           // e.g. "/", "/about", "/rooms"
+  title            String
+  seoTitle         String?
+  seoDescription   String?
+
+  status           String           @default("PUBLISHED") // PUBLISHED, DRAFT
+
+  sections         WebsiteSection[]
+
+  createdAt        DateTime         @default(now()) @db.Timestamptz
+  updatedAt        DateTime         @updatedAt @db.Timestamptz
+
+  @@unique([revisionId, slug])
+}
+
+model WebsiteSection {
+  id               String           @id @default(uuid()) @db.Uuid
+  pageId           String           @db.Uuid
+  page             WebsitePage      @relation(fields: [pageId], references: [id], onDelete: Cascade)
+
+  type             String           // HERO, GALLERY, TEXT_IMAGE, ROOM_LIST, AMENITIES, CONTACT, HTML
+  sortOrder        Int              @default(0)
+
+  content          Json             // Zod validated content payload
+
+  createdAt        DateTime         @default(now()) @db.Timestamptz
+  updatedAt        DateTime         @updatedAt @db.Timestamptz
+
+  @@index([pageId, sortOrder])
+}
+
+model WebsiteAsset {
+  id               String           @id @default(uuid()) @db.Uuid
+  projectId        String           @db.Uuid
+  project          WebsiteProject   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  url              String
+  type             String           // IMAGE, VIDEO, DOCUMENT
+  altText          String?
+  fileSize         Int?
+
+  createdAt        DateTime         @default(now()) @db.Timestamptz
+  updatedAt        DateTime         @updatedAt @db.Timestamptz
+
+  @@index([projectId])
 }
 
 model PortalApiKey {

@@ -8,6 +8,7 @@ import { applyRefundToFolio } from '@/lib/refunds/settle-refund';
 import { CityLedgerAccountingService } from '@/lib/services/city-ledger-accounting-service';
 import { InventoryService } from '@/lib/inventory/InventoryService';
 import { applyAvailableFolioCredit } from '@/lib/finance/apply-folio-credit';
+import { requireStockUnitConversion } from '@/lib/inventory/UnitConversionService';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -93,9 +94,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         if (!details.accountantApprovedBy) throw new Error('ACCOUNTANT_APPROVAL_REQUIRED');
         const product = await tx.posProduct.findFirst({ where: { id: details.productId, propertyId: approval.propertyId, isActive: true } });
         if (!product || !details.name || !Number.isFinite(Number(details.price))) throw new Error('INVALID_MODIFIER_REQUEST');
+        const groupName = details.groupName ? String(details.groupName).trim() : null;
+        const groupMaxSelect = details.groupMaxSelect == null ? null : Number(details.groupMaxSelect);
+        if (details.groupRequired === true && !groupName) throw new Error('REQUIRED_MODIFIER_GROUP_MISSING');
+        if (groupMaxSelect !== null && (!Number.isInteger(groupMaxSelect) || groupMaxSelect < 1)) throw new Error('INVALID_MODIFIER_GROUP_LIMIT');
+        if (details.stockItemId) {
+          const stock = await tx.stockItem.findFirst({ where: { id: details.stockItemId, propertyId: approval.propertyId, isActive: true }, select: { id: true, baseUnit: true } });
+          if (!stock) throw new Error('STOCK_ITEM_NOT_FOUND');
+          await requireStockUnitConversion(tx, stock.id, details.unitOfMeasure || stock.baseUnit);
+        }
         const modifier = details.modifierId
-          ? await tx.posProductModifier.update({ where: { id: details.modifierId }, data: { name: details.name, price: Number(details.price), stockItemId: details.stockItemId || null, quantity: Number(details.quantity || 1), unitOfMeasure: details.unitOfMeasure || null } })
-          : await tx.posProductModifier.create({ data: { productId: product.id, name: details.name, price: Number(details.price), isActive: true, stockItemId: details.stockItemId || null, quantity: Number(details.quantity || 1), unitOfMeasure: details.unitOfMeasure || null } });
+          ? await tx.posProductModifier.update({ where: { id: details.modifierId }, data: { name: details.name, price: Number(details.price), stockItemId: details.stockItemId || null, quantity: Number(details.quantity || 1), unitOfMeasure: details.unitOfMeasure || null, groupName, groupRequired: details.groupRequired === true, groupMaxSelect } })
+          : await tx.posProductModifier.create({ data: { productId: product.id, name: details.name, price: Number(details.price), isActive: true, stockItemId: details.stockItemId || null, quantity: Number(details.quantity || 1), unitOfMeasure: details.unitOfMeasure || null, groupName, groupRequired: details.groupRequired === true, groupMaxSelect } });
         // Modifier changes are delivered through the parent product projection
         // during desktop incremental sync. Touch the product so offline tills
         // receive newly approved/edited modifiers without a full resync.

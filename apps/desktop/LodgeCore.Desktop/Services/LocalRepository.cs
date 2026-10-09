@@ -14,6 +14,12 @@ public class LocalRepository
     private static readonly SemaphoreSlim PosShiftOpenLock = new(1, 1);
     private readonly LocalDbContext _dbContext;
 
+    private sealed class LocalStockUnit
+    {
+        public string? Unit { get; set; }
+        public JsonElement UnitsInBase { get; set; }
+    }
+
     public LocalRepository(LocalDbContext dbContext)
     {
         _dbContext = dbContext;
@@ -5413,6 +5419,51 @@ public class LocalRepository
                 station = categoryStation;
             return string.Equals(station ?? "KITCHEN", "KITCHEN", StringComparison.OrdinalIgnoreCase);
         }
+
+        var stockItemCache = new Dictionary<string, LocalStockItem>();
+        async Task<LocalStockItem> GetStockItemForConversionAsync(string stockItemId)
+        {
+            if (stockItemCache.TryGetValue(stockItemId, out var cached)) return cached;
+            var item = await _dbContext.StockItems.FirstOrDefaultAsync(s => s.Id == stockItemId && s.PropertyId == order.PropertyId)
+                ?? throw new Exception($"Inventory mapping is missing for stock item {stockItemId}");
+            stockItemCache[stockItemId] = item;
+            return item;
+        }
+        async Task<decimal> ConvertToBaseQuantityAsync(string stockItemId, decimal quantity, string? issueUnit)
+        {
+            if (quantity <= 0) return quantity;
+            var item = await GetStockItemForConversionAsync(stockItemId);
+            var requestedUnit = (issueUnit ?? string.Empty).Trim().ToUpperInvariant();
+            var baseUnit = (item.BaseUnit ?? string.Empty).Trim().ToUpperInvariant();
+            if (string.IsNullOrWhiteSpace(requestedUnit) || string.IsNullOrWhiteSpace(baseUnit) || requestedUnit == baseUnit)
+                return quantity;
+            if (new[] { "UNIT", "EACH", "PIECE" }.Contains(requestedUnit) && new[] { "UNIT", "EACH", "PIECE" }.Contains(baseUnit))
+                return quantity;
+
+            List<LocalStockUnit>? units = null;
+            if (!string.IsNullOrWhiteSpace(item.StockUnitsJson))
+            {
+                try
+                {
+                    units = JsonSerializer.Deserialize<List<LocalStockUnit>>(
+                        item.StockUnitsJson,
+                        new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                }
+                catch (JsonException) { units = null; }
+            }
+            var conversion = units?.FirstOrDefault(u => string.Equals((u.Unit ?? string.Empty).Trim(), requestedUnit, StringComparison.OrdinalIgnoreCase));
+            var multiplier = 0m;
+            if (conversion != null)
+            {
+                if (conversion.UnitsInBase.ValueKind == JsonValueKind.Number)
+                    conversion.UnitsInBase.TryGetDecimal(out multiplier);
+                else if (conversion.UnitsInBase.ValueKind == JsonValueKind.String)
+                    decimal.TryParse(conversion.UnitsInBase.GetString(), out multiplier);
+            }
+            if (conversion == null || multiplier <= 0)
+                throw new Exception($"Offline unit conversion is missing for {item.Name}: {requestedUnit} to {baseUnit}. Sync inventory setup before completing this sale.");
+            return quantity * multiplier;
+        }
         foreach (var orderItem in order.Items)
         {
             var product = products.FirstOrDefault(p => p.Id == orderItem.ProductId);
@@ -5426,13 +5477,19 @@ public class LocalRepository
                 else
                 {
                     foreach (var ingredient in ingredients)
-                        AddRequirement(ingredient.StockItemId, ingredient.Quantity * orderItem.Quantity, ProductUsesKitchen(product));
+                    {
+                        var baseQuantity = await ConvertToBaseQuantityAsync(ingredient.StockItemId, ingredient.Quantity, ingredient.UnitOfMeasure);
+                        AddRequirement(ingredient.StockItemId, baseQuantity * orderItem.Quantity, ProductUsesKitchen(product));
+                    }
                 }
             }
             foreach (var modifier in orderItem.Modifiers)
             {
                 if (!string.IsNullOrWhiteSpace(modifier.StockItemId) && modifier.Quantity > 0)
-                    AddRequirement(modifier.StockItemId, modifier.Quantity * orderItem.Quantity, ProductUsesKitchen(product));
+                {
+                    var baseQuantity = await ConvertToBaseQuantityAsync(modifier.StockItemId, modifier.Quantity, modifier.UnitOfMeasure);
+                    AddRequirement(modifier.StockItemId, baseQuantity * orderItem.Quantity, ProductUsesKitchen(product));
+                }
             }
         }
 

@@ -11,6 +11,19 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ found: false }, { status: 400 });
   }
 
+  const project = await (prisma.websiteProject.findFirst as any)({
+    where: {
+      customDomain: domain,
+      status: "PUBLISHED",
+      customDomainVerifiedAt: { not: null },
+    },
+    select: { id: true },
+  });
+
+  if (project) {
+    return NextResponse.json({ found: true, projectId: project.id }, { headers: { "Cache-Control": "private, max-age=30" } });
+  }
+
   const site = await prisma.bookingSite.findFirst({
     where: {
       customDomain: domain,

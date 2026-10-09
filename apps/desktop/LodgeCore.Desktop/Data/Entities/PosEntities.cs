@@ -66,6 +66,10 @@ public class LocalStockItem
     public string? Barcode { get; set; }
     public string StockType { get; set; } = "CONSUMABLE";
     public string BaseUnit { get; set; } = string.Empty;
+    // JSON array of StockItemUnit records received from cloud sync. Keeping
+    // this lightweight avoids introducing another offline table while still
+    // allowing POS deductions to use the same conversions as the cloud path.
+    public string? StockUnitsJson { get; set; }
     public decimal CostPrice { get; set; }
     public decimal QuantityOnHand { get; set; }
     public decimal? ReorderLevel { get; set; }

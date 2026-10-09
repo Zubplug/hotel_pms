@@ -168,6 +168,7 @@ export class SupplierInvoiceService {
       throw new Error(`Unauthorized access to property ${grn.propertyId}`);
     if (!grn.purchaseOrder)
       throw new Error(`GRN ${grnId} must be linked to a PurchaseOrder to determine supplier`);
+    const purchaseOrderId = grn.purchaseOrder.id;
 
     const subtotal = grn.items.reduce((sum, item) => sum + Number(item.totalCost), 0);
 
@@ -191,6 +192,35 @@ export class SupplierInvoiceService {
     });
 
     await this.linkGRN(ctx, invoice.id, grn.id, Number(invoice.totalAmount));
+
+    // Apply any advance payments from the PO to this new invoice
+    const advancePayments = await prisma.supplierPayment.findMany({
+      where: { purchaseOrderId, invoiceId: null },
+    });
+
+    if (advancePayments.length > 0) {
+      const totalAdvance = advancePayments.reduce((sum, p) => sum + Number(p.amount), 0);
+      const newPaid = totalAdvance;
+      const newOutstanding = Math.max(0, Number(invoice.totalAmount) - totalAdvance);
+      const newStatus = newOutstanding <= 0 ? 'PAID' : (totalAdvance > 0 ? 'PARTIAL' : invoice.status);
+
+      await prisma.$transaction(async (tx) => {
+        await tx.supplierPayment.updateMany({
+          where: { purchaseOrderId, invoiceId: null },
+          data: { invoiceId: invoice.id },
+        });
+
+        await tx.supplierInvoice.update({
+          where: { id: invoice.id },
+          data: {
+            paidAmount: newPaid,
+            outstandingAmount: newOutstanding,
+            status: newStatus,
+          },
+        });
+      });
+    }
+
     return invoice;
   }
 

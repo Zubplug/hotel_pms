@@ -7,27 +7,41 @@ import { hasEntitlement } from '@/lib/auth/entitlement';
 // CORS
 // ---------------------------------------------------------------------------
 
-const ALLOWED_ORIGINS = [
-  'https://book.lodgecore.com',
-  ...(process.env.NODE_ENV === 'development'
-    ? ['http://localhost:3001', 'http://localhost:3000']
-    : []),
-];
+export function originMatches(origin: string, allowedOrigins: string[]): boolean {
+  let parsed: URL;
+  try { parsed = new URL(origin); } catch { return false; }
+  if (!['http:', 'https:'].includes(parsed.protocol) || (parsed.pathname !== '/' && parsed.pathname !== '')) return false;
+  return allowedOrigins.some((allowed) => {
+    if (allowed === origin) return true;
+    const match = allowed.match(/^(?:(https?):\/\/)?\*\.([^/]+)\/?$/i);
+    if (!match) return false;
+    const protocol = match[1]?.toLowerCase();
+    const wildcardHost = match[2].toLowerCase();
+    return (!protocol || parsed.protocol === `${protocol}:`) &&
+      parsed.hostname !== wildcardHost && parsed.hostname.endsWith(`.${wildcardHost}`);
+  });
+}
 
-export function corsHeaders(req: NextRequest): Record<string, string> {
+export function corsHeaders(req: NextRequest, allowedOrigins: string[] = []): Record<string, string> {
   const origin = req.headers.get('origin') ?? '';
-  const allowed = ALLOWED_ORIGINS.includes(origin) ? origin : '';
+  const allowed = originMatches(origin, allowedOrigins) ? origin : '';
   return {
     'Access-Control-Allow-Origin': allowed,
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, X-Idempotency-Key',
+    'Access-Control-Allow-Headers': 'Content-Type, X-Publishable-Key, X-Idempotency-Key',
     'Access-Control-Max-Age': '86400',
     'Vary': 'Origin',
   };
 }
 
-export function corsPreflightResponse(req: NextRequest): NextResponse {
-  return new NextResponse(null, { status: 204, headers: corsHeaders(req) });
+export async function corsPreflightResponse(req: NextRequest): Promise<NextResponse> {
+  const key = req.headers.get('x-publishable-key');
+  if (!key) return new NextResponse(null, { status: 401, headers: corsHeaders(req, []) });
+  const pk = await prisma.publishableKey.findUnique({ where: { key }, select: { status: true, allowedOrigins: true } });
+  if (!pk || pk.status !== 'ACTIVE' || !originMatches(req.headers.get('origin') ?? '', pk.allowedOrigins)) {
+    return new NextResponse(null, { status: 403, headers: corsHeaders(req, []) });
+  }
+  return new NextResponse(null, { status: 204, headers: corsHeaders(req, pk.allowedOrigins) });
 }
 
 export function withCors(res: NextResponse, req: NextRequest): NextResponse {
@@ -37,19 +51,32 @@ export function withCors(res: NextResponse, req: NextRequest): NextResponse {
 }
 
 // ---------------------------------------------------------------------------
-// Rate limiting (simple in-memory sliding window — replace with Redis in prod)
+// Rate limiting uses Upstash Redis and fails closed when it is unavailable.
 // ---------------------------------------------------------------------------
 
-const ipWindows = new Map<string, number[]>();
+async function redisIncrement(key: string): Promise<number> {
+  const url = process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  if (!url || !token) throw new Error('Redis rate limiter is not configured');
+  const response = await fetch(`${url}/incr/${encodeURIComponent(key)}`, { headers: { Authorization: `Bearer ${token}` } });
+  if (!response.ok) throw new Error(`Redis returned ${response.status}`);
+  const value = await response.json() as { result?: number };
+  if (value.result === 1) {
+    await fetch(`${url}/expire/${encodeURIComponent(key)}/60`, { headers: { Authorization: `Bearer ${token}` } });
+  }
+  return value.result ?? 0;
+}
 const RATE_LIMIT = 30;        // requests
 const RATE_WINDOW_MS = 60_000; // per 60 seconds
 
-export function checkRateLimit(ip: string): boolean {
-  const now = Date.now();
-  const window = (ipWindows.get(ip) ?? []).filter(t => now - t < RATE_WINDOW_MS);
-  window.push(now);
-  ipWindows.set(ip, window);
-  return window.length <= RATE_LIMIT;
+export async function checkRateLimit(ip: string, scope = 'public'): Promise<boolean> {
+  if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) return false;
+  try {
+    const bucket = `lodgecore:rate:${scope}:${ip}:${Math.floor(Date.now() / RATE_WINDOW_MS)}`;
+    return (await redisIncrement(bucket)) <= RATE_LIMIT;
+  } catch {
+    return false;
+  }
 }
 
 export function clientIp(req: NextRequest): string {
@@ -167,3 +194,68 @@ export function isErrorResponse(v: unknown): v is NextResponse {
   return v instanceof NextResponse;
 }
 
+export interface IntegrationContext {
+  organizationId: string;
+  propertyId: string;
+  publishableKey: string;
+  environment: string;
+  allowedOrigins: string[];
+}
+
+/**
+ * Resolves a public integration context from the X-Publishable-Key header.
+ * Validates the origin against the key's allowed origins list.
+ */
+export async function resolvePublicApiContext(req: NextRequest): Promise<IntegrationContext | NextResponse> {
+  const key = req.headers.get('x-publishable-key');
+  if (!key) {
+    return errorResponse('UNAUTHORIZED', 'Missing X-Publishable-Key header', 401);
+  }
+
+  const pk = await prisma.publishableKey.findUnique({
+    where: { key },
+    include: {
+      integration: {
+        select: {
+          organizationId: true,
+          propertyId: true,
+          status: true,
+          property: { select: { isActive: true, suspendedAt: true, organizationId: true } }
+        }
+      }
+    }
+  });
+
+  if (!pk || pk.status !== 'ACTIVE' || pk.integration.status !== 'ACTIVE' || pk.integration.organizationId !== pk.integration.property.organizationId) {
+    return errorResponse('UNAUTHORIZED', 'Invalid or inactive publishable key', 401);
+  }
+
+  const origin = req.headers.get('origin');
+  if (pk.allowedOrigins.length > 0 && origin) {
+    // Wildcard prefix match or exact match
+    const isAllowed = originMatches(origin, pk.allowedOrigins);
+    if (!isAllowed) {
+      return errorResponse('FORBIDDEN', 'Origin not allowed for this integration', 403);
+    }
+  } else if (pk.allowedOrigins.length === 0) {
+    return errorResponse('FORBIDDEN', 'No origins configured for this integration', 403);
+  }
+
+  if (!pk.integration.property.isActive || pk.integration.property.suspendedAt) {
+    return errorResponse('GONE', 'This property is not currently active', 410);
+  }
+
+  // Update last used asynchronously
+  prisma.publishableKey.update({
+    where: { id: pk.id },
+    data: { lastUsedAt: new Date() }
+  }).catch(() => null);
+
+  return {
+    organizationId: pk.integration.organizationId,
+    propertyId: pk.integration.propertyId,
+    publishableKey: pk.key,
+    environment: pk.environment,
+    allowedOrigins: pk.allowedOrigins,
+  };
+}

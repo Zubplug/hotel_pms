@@ -36,11 +36,18 @@ async function rewriteVerifiedCustomDomain(request: Request) {
       { cache: "no-store", headers: { "x-booking-domain-host": host } }
     );
     if (!lookup.ok) return null;
-    const result = await lookup.json() as { found?: boolean; slug?: string };
-    if (!result.found || !result.slug) return null;
+    const result = await lookup.json() as { found?: boolean; slug?: string, projectId?: string };
+    if (!result.found) return null;
 
     const target = new URL(request.url);
-    target.pathname = `/book/${result.slug}${url.pathname === "/" ? "" : url.pathname}`;
+    if (result.projectId) {
+      target.pathname = `/cms/${result.projectId}${url.pathname === "/" ? "" : url.pathname}`;
+    } else if (result.slug) {
+      target.pathname = `/book/${result.slug}${url.pathname === "/" ? "" : url.pathname}`;
+    } else {
+      return null;
+    }
+
     return target;
   } catch {
     // Unknown/unavailable domain lookup must not break the main website.

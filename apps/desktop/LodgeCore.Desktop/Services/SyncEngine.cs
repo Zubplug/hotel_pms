@@ -2043,6 +2043,9 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                     item.Barcode = el.TryGetProperty("barcode", out var barcodeEl) && barcodeEl.ValueKind != JsonValueKind.Null ? barcodeEl.GetString() : null;
                     item.StockType = el.TryGetProperty("stockType", out var stockTypeEl) && stockTypeEl.ValueKind != JsonValueKind.Null ? stockTypeEl.GetString() ?? "CONSUMABLE" : "CONSUMABLE";
                     item.BaseUnit = el.TryGetProperty("baseUnit", out var unitEl) ? unitEl.GetString() ?? "" : "";
+                    item.StockUnitsJson = el.TryGetProperty("stockUnits", out var stockUnitsEl) && stockUnitsEl.ValueKind == JsonValueKind.Array
+                        ? stockUnitsEl.GetRawText()
+                        : null;
                     item.CostPrice = ReadDecimal(el, "costPrice");
                     item.QuantityOnHand = ReadDecimal(el, "quantityOnHand");
                     item.ReorderLevel = el.TryGetProperty("reorderLevel", out var reorderEl) && reorderEl.ValueKind != JsonValueKind.Null ? ReadDecimal(reorderEl) : null;

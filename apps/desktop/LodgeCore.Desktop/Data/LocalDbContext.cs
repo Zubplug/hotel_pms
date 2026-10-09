@@ -275,6 +275,7 @@ public class LocalDbContext : DbContext
             ,"ALTER TABLE StockItems ADD COLUMN Sku TEXT NULL"
             ,"ALTER TABLE StockItems ADD COLUMN Barcode TEXT NULL"
             ,"ALTER TABLE StockItems ADD COLUMN StockType TEXT NOT NULL DEFAULT 'CONSUMABLE'"
+            ,"ALTER TABLE StockItems ADD COLUMN StockUnitsJson TEXT NULL"
             ,"ALTER TABLE PosProductModifiers ADD COLUMN StockItemId TEXT NULL"
             ,"ALTER TABLE PosProductModifiers ADD COLUMN Quantity TEXT NOT NULL DEFAULT '1'"
             ,"ALTER TABLE PosProductModifiers ADD COLUMN UnitOfMeasure TEXT NULL"

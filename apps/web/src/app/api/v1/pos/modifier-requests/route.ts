@@ -3,6 +3,7 @@ import prisma from '@hotel-pms/db';
 import { errorResponse, successResponse } from '@/lib/api-response';
 import { resolveUser } from '@/lib/resolve-user';
 import { requireOrganizationContext } from '@/lib/organization-access';
+import { requireStockUnitConversion } from '@/lib/inventory/UnitConversionService';
 
 const REQUEST_ROLES = ['FNB_MANAGER', 'RESTAURANT_MANAGER', 'BANQUET_MANAGER', 'EVENT_MANAGER', 'GENERAL_CASHIER', 'CASHIER', 'FRONT_DESK_CASHIER'];
 
@@ -34,9 +35,15 @@ export async function POST(req: NextRequest) {
   if (body.stockItemId) {
     stockItem = await prisma.stockItem.findFirst({ where: { id: String(body.stockItemId), propertyId: product.propertyId, isActive: true }, select: { id: true, baseUnit: true } });
     if (!stockItem) return errorResponse('BAD_REQUEST', 'Select a valid active stock item', 400);
+    try { await requireStockUnitConversion(prisma, stockItem.id, body.unitOfMeasure || stockItem.baseUnit); }
+    catch (error: any) { return errorResponse('BAD_REQUEST', error.message, 400); }
   }
+  const groupName = body.groupName ? String(body.groupName).trim() : null;
+  const groupMaxSelect = body.groupMaxSelect == null ? null : Number(body.groupMaxSelect);
+  if (groupMaxSelect !== null && (!Number.isInteger(groupMaxSelect) || groupMaxSelect < 1)) return errorResponse('BAD_REQUEST', 'Maximum selection must be a positive whole number', 400);
+  if (body.groupRequired === true && !groupName) return errorResponse('BAD_REQUEST', 'Required modifiers must belong to a group', 400);
   const pending = await prisma.approvalRequest.findFirst({ where: { propertyId: product.propertyId, type: { in: ['POS_MODIFIER_CREATE', 'POS_MODIFIER_UPDATE'] }, status: 'PENDING', details: modifierId ? { path: ['modifierId'], equals: modifierId } : { path: ['name'], equals: name } } });
   if (pending) return errorResponse('CONFLICT', 'This product already has a pending modifier request', 409);
-  const approval = await prisma.approvalRequest.create({ data: { propertyId: product.propertyId, type: modifierId ? 'POS_MODIFIER_UPDATE' : 'POS_MODIFIER_CREATE', status: 'PENDING', requestedBy: user.id, amount: price, currency: 'NGN', reason: String(body.reason || `${modifierId ? 'Modifier update' : 'New modifier'} requested: ${name}`), details: { stage: 'GENERAL_CASHIER_REVIEW', productId, productName: product.name, modifierId, name, price, stockItemId: stockItem?.id || null, quantity, unitOfMeasure: body.unitOfMeasure || stockItem?.baseUnit || null } } });
+  const approval = await prisma.approvalRequest.create({ data: { propertyId: product.propertyId, type: modifierId ? 'POS_MODIFIER_UPDATE' : 'POS_MODIFIER_CREATE', status: 'PENDING', requestedBy: user.id, amount: price, currency: 'NGN', reason: String(body.reason || `${modifierId ? 'Modifier update' : 'New modifier'} requested: ${name}`), details: { stage: 'GENERAL_CASHIER_REVIEW', productId, productName: product.name, modifierId, name, price, stockItemId: stockItem?.id || null, quantity, unitOfMeasure: body.unitOfMeasure || stockItem?.baseUnit || null, groupName, groupRequired: body.groupRequired === true, groupMaxSelect } } });
   return successResponse(approval, 201);
 }

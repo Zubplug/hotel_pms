@@ -1,7 +1,7 @@
 import { Metadata } from 'next';
 import prisma from '@hotel-pms/db';
-import { ChefHat, TrendingUp, AlertTriangle, ArrowUpRight, ArrowDownRight, Target } from 'lucide-react';
-import Link from 'next/link';
+import { ChefHat, ArrowUpRight, ArrowDownRight, Target } from 'lucide-react';
+import { calculateRecipeCost } from '@/lib/inventory/recipe-costing';
 
 export const metadata: Metadata = {
   title: 'Menu Engineering | F&B Controls',
@@ -34,7 +34,8 @@ export default async function MenuEngineeringPage() {
             }
           }
         }
-      }
+      },
+      modifiers: { where: { isActive: true }, include: { stockItem: { select: { name: true, baseUnit: true, costPrice: true, stockUnits: true } } } }
     }
   });
 
@@ -42,28 +43,21 @@ export default async function MenuEngineeringPage() {
   const engineeringData = products.map(product => {
     const activeVersion = product.recipe?.versions?.[0];
     let theoreticalCost = 0;
-
-    if (activeVersion && activeVersion.ingredients) {
-      theoreticalCost = activeVersion.ingredients.reduce((sum, ing) => {
-        // Basic calculation: assumes ingredient quantity is in stockItem baseUnit for simplicity.
-        // In a full implementation, unit conversions would apply here.
-        const cost = Number(ing.stockItem?.costPrice || 0) * Number(ing.quantity);
-        return sum + cost;
-      }, 0);
-    } else {
-      // Fallback for direct stock items (e.g., bottled water) if they have no recipe
-      // (Requires fetching product.stockItems, skipped for this MVP)
-    }
+    let costError: string | null = null;
+    try { theoreticalCost = activeVersion ? calculateRecipeCost(product.recipe, product.modifiers).cost : 0; }
+    catch (error) { costError = error instanceof Error ? error.message : 'Recipe cost is not configured'; }
 
     const price = Number(product.price || 0);
     const margin = price - theoreticalCost;
     const foodCostPct = price > 0 ? (theoreticalCost / price) * 100 : 0;
 
-    let performanceClass = 'DOG'; // Low Margin, Low Volume
+    let performanceClass = costError ? 'UNMAPPED' : 'DOG'; // Low Margin, Low Volume
     // Simplified classification (would typically depend on actual sales volume)
-    if (foodCostPct > 0 && foodCostPct < 25) performanceClass = 'STAR';
-    else if (foodCostPct >= 25 && foodCostPct < 35) performanceClass = 'WORKHORSE';
-    else if (foodCostPct >= 35) performanceClass = 'PUZZLE';
+    if (!costError) {
+      if (foodCostPct > 0 && foodCostPct < 25) performanceClass = 'STAR';
+      else if (foodCostPct >= 25 && foodCostPct < 35) performanceClass = 'WORKHORSE';
+      else if (foodCostPct >= 35) performanceClass = 'PUZZLE';
+    }
 
     return {
       id: product.id,
@@ -74,6 +68,7 @@ export default async function MenuEngineeringPage() {
       margin,
       foodCostPct,
       performanceClass,
+      costError,
       hasRecipe: !!activeVersion
     };
   }).filter(p => p.hasRecipe).sort((a, b) => b.margin - a.margin); // Only show items with recipes configured
@@ -147,22 +142,21 @@ export default async function MenuEngineeringPage() {
                       {money(item.price, currency)}
                     </td>
                     <td className="px-6 py-4 text-right font-mono font-medium text-slate-600">
-                      {money(item.theoreticalCost, currency)}
+                      {item.costError ? <span className="text-amber-600" title={item.costError}>Not configured</span> : money(item.theoreticalCost, currency)}
                     </td>
                     <td className="px-6 py-4 text-right font-mono font-bold text-emerald-600">
-                      {money(item.margin, currency)}
+                      {item.costError ? '—' : money(item.margin, currency)}
                     </td>
                     <td className="px-6 py-4 text-center">
                       <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-bold tabular-nums ${
                         isHighCost ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'
                       }`}>
-                        {item.foodCostPct.toFixed(1)}%
-                        {isHighCost ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
+                        {item.costError ? 'N/A' : <>{item.foodCostPct.toFixed(1)}%{isHighCost ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}</>}
                       </span>
                     </td>
                     <td className="px-6 py-4">
                       <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-md ${
-                        item.performanceClass === 'STAR' ? 'bg-emerald-100 text-emerald-700' :
+                        item.performanceClass === 'UNMAPPED' ? 'bg-slate-100 text-slate-600' : item.performanceClass === 'STAR' ? 'bg-emerald-100 text-emerald-700' :
                         item.performanceClass === 'WORKHORSE' ? 'bg-amber-100 text-amber-700' :
                         'bg-rose-100 text-rose-700'
                       }`}>

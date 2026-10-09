@@ -37,7 +37,7 @@ export class ReceivablesService {
 
   static async getSupplierRemittance(propertyId: string, startDate: Date, endDate: Date) {
     const payments = await prisma.supplierPayment.findMany({ where: { propertyId, paymentDate: { gte: startDate, lte: endDate } }, include: { invoice: { include: { supplier: { select: { name: true } } } } }, orderBy: { paymentDate: 'asc' } });
-    const rows = payments.map(payment => ({ paymentDate: payment.paymentDate, paymentReference: payment.paymentReference, invoiceNumber: payment.invoice.invoiceNumber, supplierName: payment.invoice.supplier.name, amount: Number(payment.amount), currency: payment.currency, paymentMethod: payment.paymentMethod, bankReference: payment.bankReference || '', journalEntryId: payment.journalEntryId || '' }));
+    const rows = payments.filter(payment => payment.invoice).map(payment => ({ paymentDate: payment.paymentDate, paymentReference: payment.paymentReference, invoiceNumber: payment.invoice!.invoiceNumber, supplierName: payment.invoice!.supplier.name, amount: Number(payment.amount), currency: payment.currency, paymentMethod: payment.paymentMethod, bankReference: payment.bankReference || '', journalEntryId: payment.journalEntryId || '' }));
     return { rows, summary: { paymentDate: null, paymentReference: 'TOTAL', invoiceNumber: '', supplierName: '', amount: rows.reduce((sum, row) => sum + row.amount, 0), currency: '', paymentMethod: '', bankReference: '', journalEntryId: '' } };
   }
 

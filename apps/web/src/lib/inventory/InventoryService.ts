@@ -85,7 +85,8 @@ export class InventoryService {
           throw new Error(`Item ${item.productName} requires an active Recipe because its inventoryMode is STOCK. No recipe found.`);
         }
         for (const recipe of ingredients) {
-          const conversion = recipe.unitOfMeasure === recipe.stockItem?.baseUnit
+          const conversion = recipe.unitOfMeasure === recipe.stockItem?.baseUnit ||
+            (['UNIT', 'EACH', 'PIECE'].includes(recipe.unitOfMeasure) && ['UNIT', 'EACH', 'PIECE'].includes(recipe.stockItem?.baseUnit || ''))
             ? 1
             : Number(recipe.stockItem?.stockUnits?.find((unit: any) => unit.unit === recipe.unitOfMeasure)?.unitsInBase || 0);
           if (conversion <= 0) throw new Error(`No conversion configured from ${recipe.unitOfMeasure} to ${recipe.stockItem?.baseUnit || 'base unit'} for ${item.productName}`);
@@ -95,7 +96,8 @@ export class InventoryService {
       for (const modifier of item.modifiers || []) {
         if (!modifier.stockItemId || Number(modifier.quantity) <= 0) continue;
         const stock = await tx.stockItem.findUnique({ where: { id: modifier.stockItemId }, select: { baseUnit: true, stockType: true, stockUnits: true } });
-        const conversion = !modifier.unitOfMeasure || modifier.unitOfMeasure === stock?.baseUnit
+        const conversion = !modifier.unitOfMeasure || modifier.unitOfMeasure === stock?.baseUnit ||
+          (['UNIT', 'EACH', 'PIECE'].includes(modifier.unitOfMeasure) && ['UNIT', 'EACH', 'PIECE'].includes(stock?.baseUnit || ''))
           ? 1
           : Number(stock?.stockUnits?.find((unit: any) => unit.unit === modifier.unitOfMeasure)?.unitsInBase || 0);
         if (conversion <= 0) throw new Error(`No conversion configured for modifier ${modifier.name}`);

@@ -5,3 +5,5 @@ export * from './room-type.schema';
 export * from './room.schema';
 export * from './amenity.schema';
 export * from './room-block.schema';
+export * from './public-api.schema';
+export * from './cms.schema';

@@ -2,8 +2,8 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { hasInventoryPermission } from '@/lib/inventory/permissions';
-import { requireOrganizationContext } from "@/lib/organization-access";
 import { requireInventoryAccess } from '@/lib/auth/inventory-access';
+import { requireStockUnitConversion } from '@/lib/inventory/UnitConversionService';
 
 export const dynamic = 'force-dynamic';
 
@@ -38,13 +38,18 @@ export async function POST(request: Request) {
     if (!product) return NextResponse.json({ error: 'POS product not found or forbidden' }, { status: 404 });
     const ingredients = Array.isArray(body.ingredients) ? body.ingredients : [];
     if (!ingredients.length) return NextResponse.json({ error: 'At least one ingredient is required' }, { status: 400 });
+    const ingredientIds = ingredients.map((item: any) => String(item.stockItemId || ''));
+    if (ingredientIds.some((id: string) => !id) || new Set(ingredientIds).size !== ingredientIds.length) return NextResponse.json({ error: 'Ingredients must be unique and valid' }, { status: 400 });
     const stock = await prisma.stockItem.findMany({ where: { propertyId: product.propertyId, id: { in: ingredients.map((item: any) => item.stockItemId) }, isActive: true } });
-    if (stock.length !== ingredients.length || ingredients.some((item: any) => !Number.isFinite(Number(item.quantity)) || Number(item.quantity) <= 0)) return NextResponse.json({ error: 'Invalid or unavailable ingredient' }, { status: 400 });
+    if (stock.length !== ingredients.length || ingredients.some((item: any) => !Number.isFinite(Number(item.quantity)) || Number(item.quantity) <= 0 || !item.unitOfMeasure)) return NextResponse.json({ error: 'Invalid ingredient quantity or unit' }, { status: 400 });
+    for (const item of ingredients) await requireStockUnitConversion(prisma, item.stockItemId, item.unitOfMeasure);
+    const targetMargin = Number(body.targetMargin ?? 70);
+    if (!Number.isFinite(targetMargin) || targetMargin < 0 || targetMargin > 100) return NextResponse.json({ error: 'Target margin must be between 0 and 100' }, { status: 400 });
     const recipe = await prisma.$transaction(async (tx) => {
       const existing = await tx.recipe.findUnique({ where: { posProductId: product.id } });
       if (existing) await tx.recipeVersion.updateMany({ where: { recipeId: existing.id, isActive: true }, data: { isActive: false } });
-      const saved = existing || await tx.recipe.create({ data: { propertyId: product.propertyId, posProductId: product.id, targetMargin: Number(body.targetMargin ?? 70) } });
-      if (existing) await tx.recipe.update({ where: { id: existing.id }, data: { targetMargin: Number(body.targetMargin ?? existing.targetMargin) } });
+      const saved = existing || await tx.recipe.create({ data: { propertyId: product.propertyId, posProductId: product.id, targetMargin } });
+      if (existing) await tx.recipe.update({ where: { id: existing.id }, data: { targetMargin } });
       return tx.recipeVersion.create({ data: { recipeId: saved.id, versionName: String(body.versionName || `Version ${Date.now()}`), ingredients: { create: ingredients.map((item: any) => ({ stockItemId: item.stockItemId, quantity: Number(item.quantity), unitOfMeasure: item.unitOfMeasure })) } }, include: { ingredients: true } });
     });
     return NextResponse.json({ data: recipe }, { status: 201 });

@@ -19,10 +19,11 @@ export default async function PayablesPage() {
   const propertyId = session.user.propertyId;
   if (!propertyId) return <EmptyState title="No property assigned" />;
 
-  const [property, invoices, suppliers] = await Promise.all([
+  const [property, invoices, suppliers, pos] = await Promise.all([
     prisma.property.findUnique({ where: { id: propertyId }, select: { name: true, baseCurrency: true, businessDate: true } }),
     prisma.supplierInvoice.findMany({ where: { propertyId }, include: { supplier: { select: { id: true, name: true } }, payments: { select: { amount: true, paymentDate: true } } }, orderBy: [{ dueDate: 'asc' }, { createdAt: 'desc' }] }),
     prisma.supplier.findMany({ where: { propertyId, isActive: true }, select: { id: true, name: true }, orderBy: { name: 'asc' } }),
+    prisma.purchaseOrder.findMany({ where: { propertyId, status: { in: ['APPROVED', 'PARTIALLY_RECEIVED'] }, paymentStatus: { not: 'PAID' } }, include: { supplier: { select: { id: true, name: true } } } }),
   ]);
 
   const currency = property?.baseCurrency || invoices[0]?.currency || 'NGN';
@@ -44,7 +45,10 @@ export default async function PayablesPage() {
   ];
   const maxAging = Math.max(...aging.map(item => item.amount), 1);
   const supplierExposure = Array.from(open.reduce((map, invoice) => map.set(invoice.supplier.name, (map.get(invoice.supplier.name) || 0) + Number(invoice.outstandingAmount)), new Map<string, number>()).entries()).sort((a, b) => b[1] - a[1]).slice(0, 5);
-  const rows: PayablesRow[] = invoices.map(invoice => ({ id: invoice.id, invoiceNumber: invoice.invoiceNumber, supplierName: invoice.supplier.name, supplierId: invoice.supplier.id, invoiceDate: invoice.invoiceDate.toISOString(), dueDate: invoice.dueDate.toISOString(), totalAmount: Number(invoice.totalAmount), outstandingAmount: Number(invoice.outstandingAmount), currency: invoice.currency || currency, status: invoice.status, daysPastDue: Math.max(0, daysBetween(invoice.dueDate, asOf)), hasGrn: false }));
+  const rows: PayablesRow[] = [
+    ...invoices.map(invoice => ({ id: invoice.id, invoiceNumber: invoice.invoiceNumber, supplierName: invoice.supplier.name, supplierId: invoice.supplier.id, invoiceDate: invoice.invoiceDate.toISOString(), dueDate: invoice.dueDate.toISOString(), totalAmount: Number(invoice.totalAmount), outstandingAmount: Number(invoice.outstandingAmount), currency: invoice.currency || currency, status: invoice.status, daysPastDue: Math.max(0, daysBetween(invoice.dueDate, asOf)), hasGrn: false })),
+    ...pos.map(po => ({ id: po.id, invoiceNumber: `${po.poNumber} (PO Advance)`, supplierName: po.supplier.name, supplierId: po.supplier.id, invoiceDate: po.createdAt.toISOString(), dueDate: po.expectedDate ? po.expectedDate.toISOString() : po.createdAt.toISOString(), totalAmount: Number(po.totalAmount), outstandingAmount: Number(po.totalAmount) - Number(po.paidAmount), currency: po.currency || currency, status: po.status === 'APPROVED' ? 'APPROVED' : 'PARTIAL', daysPastDue: 0, hasGrn: false, isPurchaseOrder: true }))
+  ];
 
   return <main className="min-h-full bg-[#09111f] px-4 py-6 text-slate-200 sm:px-6 lg:px-8 lg:py-8"><div className="mx-auto max-w-[1500px] space-y-6">
     <header className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end"><div><div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[.2em] text-emerald-300"><Landmark className="h-4 w-4" />Accounts payable control room</div><h1 className="text-3xl font-semibold tracking-[-.04em] text-white sm:text-4xl">Supplier liabilities, in control.</h1><p className="mt-2 max-w-3xl text-sm text-slate-400">Live invoice exposure, due-date pressure, approval queue, and payment readiness for {property?.name || 'this property'}.</p></div><div className="flex flex-wrap items-center gap-2"><span className="rounded-xl border border-white/10 bg-white/[.04] px-3 py-2 text-xs text-slate-400">Business date <strong className="ml-1 text-slate-200">{date(asOf)}</strong></span><RecordSupplierBillModal propertyId={propertyId} suppliers={suppliers} /></div></header>
