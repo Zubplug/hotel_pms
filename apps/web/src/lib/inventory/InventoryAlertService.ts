@@ -3,7 +3,9 @@ import prisma from '@hotel-pms/db';
 export class InventoryAlertService {
   static async sync(propertyId: string) {
     const items = await prisma.stockItem.findMany({
-      where: { propertyId, isActive: true },
+      // Inventory alerts are a central-stock control. Outlet warehouses have
+      // their own operating flows and must not enter this exception register.
+      where: { propertyId, isActive: true, warehouse: { posOutletId: null } },
       select: { id: true, name: true, quantityOnHand: true, reorderLevel: true, warehouse: { select: { name: true } } },
     });
 

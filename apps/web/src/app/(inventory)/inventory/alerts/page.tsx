@@ -26,8 +26,8 @@ export default async function InventoryAlertsPage() {
   try { await InventoryAlertService.sync(propertyId); } catch (error) { console.error('[Inventory Alerts] Failed to sync alert snapshot', error); }
 
   const [rawAlerts, items, openOrders] = await Promise.all([
-    prisma.inventoryAlert.findMany({ where: { propertyId, status: { in: ['OPEN', 'ACKNOWLEDGED'] } }, select: { id: true, stockItemId: true, type: true, message: true, status: true, createdAt: true, stockItem: { select: { name: true, stockType: true, quantityOnHand: true, reorderLevel: true, costPrice: true, baseUnit: true, stockUnits: true, warehouse: { select: { id: true, name: true } } } } }, orderBy: { createdAt: 'desc' } }),
-    prisma.stockItem.findMany({ where: { propertyId, isActive: true }, select: { id: true, name: true, quantityOnHand: true, reorderLevel: true, costPrice: true, warehouse: { select: { id: true, name: true } } } }),
+    prisma.inventoryAlert.findMany({ where: { propertyId, status: { in: ['OPEN', 'ACKNOWLEDGED'] }, stockItem: { warehouse: { posOutletId: null } } }, select: { id: true, stockItemId: true, type: true, message: true, status: true, createdAt: true, stockItem: { select: { name: true, stockType: true, quantityOnHand: true, reorderLevel: true, costPrice: true, baseUnit: true, stockUnits: true, warehouse: { select: { id: true, name: true } } } } }, orderBy: { createdAt: 'desc' } }),
+    prisma.stockItem.findMany({ where: { propertyId, isActive: true, warehouse: { posOutletId: null } }, select: { id: true, name: true, quantityOnHand: true, reorderLevel: true, costPrice: true, warehouse: { select: { id: true, name: true } } } }),
     prisma.purchaseOrder.findMany({ where: { propertyId, status: { in: ['SUBMITTED', 'APPROVED', 'PARTIALLY_RECEIVED'] } }, select: { id: true, expectedDate: true, items: { select: { stockItemId: true, quantity: true, receivedQty: true } } } }),
   ]);
   const alerts = rawAlerts.map((alert) => {

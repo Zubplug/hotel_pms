@@ -28,7 +28,7 @@ export async function GET(request: Request) {
     const status = searchParams.get('status') || 'OPEN';
     const type = searchParams.get('type');
 
-    const where: any = { propertyId: ctx.propertyIds[0], status };
+    const where: any = { propertyId: ctx.propertyIds[0], status, stockItem: { warehouse: { posOutletId: null } } };
     if (type) where.type = type;
 
     const alerts = await prisma.inventoryAlert.findMany({
