@@ -39,7 +39,7 @@ const NAV_LINKS = [
   { name: 'Purchase Orders',  href: '/inventory/purchase-orders',      icon: ShoppingCart,   roles: ['CEO','SUPER_ADMIN','MANAGER','DIRECTOR','ACCOUNTANT','GENERAL_MANAGER','INVENTORY_MANAGER','PROCUREMENT_MANAGER','STOCK_MANAGER'] },
   { name: 'Goods Received',   href: '/inventory/grns',                 icon: Truck,          roles: ['CEO','SUPER_ADMIN','MANAGER','DIRECTOR','GENERAL_CASHIER','STOCK_MANAGER','PROCUREMENT_MANAGER'] },
   { name: 'Transfers',        href: '/inventory/transfers',            icon: ArrowRightLeft, roles: ['CEO','SUPER_ADMIN','MANAGER','DIRECTOR','INVENTORY_MANAGER','OUTLET_HEAD','STOCK_KEEPER','STOCK_MANAGER'] },
-  { name: 'Approval Control Center', href: '/inventory/approvals',             icon: ClipboardList,  roles: ['CEO','SUPER_ADMIN','MANAGER','DIRECTOR','INVENTORY_MANAGER','STOCK_KEEPER','STOCK_MANAGER'] },
+  { name: 'Approval Control Center', href: '/inventory/approvals',             icon: ClipboardList,  roles: ['ACCOUNTANT','GENERAL_MANAGER','CEO','SUPER_ADMIN','INVENTORY_MANAGER','STOCK_MANAGER'] },
   { name: 'Suppliers',        href: '/inventory/suppliers',            icon: Users,          roles: ['CEO','SUPER_ADMIN','MANAGER','DIRECTOR','PROCUREMENT_MANAGER','STOCK_MANAGER'] },
   { name: 'Alerts',           href: '/inventory/alerts',               icon: Bell },
   { name: 'Stocktakes',       href: '/inventory/stocktakes',           icon: ClipboardList,  roles: ['CEO','SUPER_ADMIN','MANAGER','DIRECTOR','GENERAL_CASHIER','INVENTORY_MANAGER','STOCK_KEEPER','STOCK_MANAGER'] },
