@@ -5,12 +5,25 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { INVENTORY_UNITS, formatUnit } from '@/lib/inventory/units';
 
+type StockSuggestion = {
+  id: string;
+  name: string;
+  baseUnit: string;
+  stockType: string;
+};
+
 export default function NewStockItemPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [warehouses, setWarehouses] = useState<any[]>([]);
   const [stockTypes, setStockTypes] = useState<{ value: string; label: string }[]>([]);
+  const [name, setName] = useState('');
+  const [warehouseId, setWarehouseId] = useState('');
+  const [baseUnit, setBaseUnit] = useState(INVENTORY_UNITS[0] || 'UNIT');
+  const [stockType, setStockType] = useState('CONSUMABLE');
+  const [suggestions, setSuggestions] = useState<StockSuggestion[]>([]);
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
 
   useEffect(() => {
     fetch('/api/v1/inventory/warehouses')
@@ -27,6 +40,28 @@ export default function NewStockItemPage() {
       .catch(() => setError('Failed to load stock types'));
   }, []);
 
+  useEffect(() => {
+    const query = name.trim();
+    if (!warehouseId || query.length < 2) {
+      return;
+    }
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      setSuggestionsLoading(true);
+      try {
+        const response = await fetch(`/api/v1/inventory/stock-items?warehouseId=${encodeURIComponent(warehouseId)}&search=${encodeURIComponent(query)}&limit=8`, { signal: controller.signal });
+        const body = await response.json();
+        setSuggestions(body.data?.items || []);
+      } catch (error: unknown) {
+        if (error instanceof DOMException && error.name === 'AbortError') return;
+        setSuggestions([]);
+      } finally {
+        if (!controller.signal.aborted) setSuggestionsLoading(false);
+      }
+    }, 350);
+    return () => { window.clearTimeout(timer); controller.abort(); };
+  }, [name, warehouseId]);
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
@@ -34,12 +69,12 @@ export default function NewStockItemPage() {
 
     const formData = new FormData(e.currentTarget);
     const data = {
-      name: formData.get('name'),
-      warehouseId: formData.get('warehouseId'),
+      name,
+      warehouseId,
       sku: formData.get('sku'),
       barcode: formData.get('barcode'),
-      baseUnit: formData.get('baseUnit'),
-      stockType: formData.get('stockType'),
+      baseUnit,
+      stockType,
       reorderLevel: formData.get('reorderLevel') ? parseInt(formData.get('reorderLevel') as string) : null,
     };
 
@@ -52,7 +87,7 @@ export default function NewStockItemPage() {
 
       if (!res.ok) {
         const result = await res.json();
-        throw new Error(result.message || 'Failed to create item');
+        throw new Error(result.error || result.message || 'Failed to create item');
       }
 
       router.push('/inventory/stock-items');
@@ -81,12 +116,25 @@ export default function NewStockItemPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-2 col-span-2 md:col-span-1">
               <label htmlFor="name" className="text-sm font-medium text-slate-800">Name *</label>
-              <input required id="name" name="name" type="text" className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="e.g. Premium Towel" />
+              <div className="relative">
+                <input required id="name" name="name" type="text" value={name} onChange={(event) => { const value = event.target.value; setName(value); if (!warehouseId || value.trim().length < 2) { setSuggestions([]); setSuggestionsLoading(false); } }} autoComplete="off" className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="e.g. Premium Towel" />
+                {(suggestionsLoading || suggestions.length > 0) && (
+                  <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-md border border-slate-200 bg-white shadow-lg">
+                    {suggestionsLoading && <p className="px-3 py-2 text-xs text-slate-500">Checking existing stock…</p>}
+                    {suggestions.map((item) => (
+                      <button key={item.id} type="button" onClick={() => { setName(item.name); setBaseUnit(item.baseUnit); setStockType(item.stockType); setSuggestions([]); }} className="block w-full border-b border-slate-100 px-3 py-2 text-left last:border-0 hover:bg-indigo-50">
+                        <span className="block text-sm font-medium text-slate-800">{item.name}</span>
+                        <span className="block text-xs text-slate-500">{item.baseUnit} · {item.stockType?.replace(/_/g, ' ')}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="space-y-2 col-span-2 md:col-span-1">
               <label htmlFor="warehouseId" className="text-sm font-medium text-slate-800">Main Warehouse *</label>
-              <select required id="warehouseId" name="warehouseId" className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+              <select required id="warehouseId" name="warehouseId" value={warehouseId} onChange={(event) => { setWarehouseId(event.target.value); setSuggestions([]); }} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500">
                 <option value="">Select Main Warehouse</option>
                 {warehouses.map(w => (
                   <option key={w.id} value={w.id}>{w.name}</option>
@@ -106,7 +154,7 @@ export default function NewStockItemPage() {
 
             <div className="space-y-2">
               <label htmlFor="baseUnit" className="text-sm font-medium text-slate-800">Base Unit *</label>
-              <select required id="baseUnit" name="baseUnit" className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+              <select required id="baseUnit" name="baseUnit" value={baseUnit} onChange={(event) => setBaseUnit(event.target.value)} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500">
                 {INVENTORY_UNITS.map(unit => (
                   <option key={unit} value={unit}>{formatUnit(unit)}</option>
                 ))}
@@ -115,13 +163,13 @@ export default function NewStockItemPage() {
 
             <div className="space-y-2">
               <label htmlFor="stockType" className="text-sm font-medium text-slate-800">Stock Type *</label>
-              <select required disabled={!stockTypes.length} id="stockType" name="stockType" defaultValue="CONSUMABLE" className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:cursor-wait disabled:opacity-60">
+              <select required disabled={!stockTypes.length} id="stockType" name="stockType" value={stockType} onChange={(event) => setStockType(event.target.value)} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-md text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:cursor-wait disabled:opacity-60">
                 {!stockTypes.length && <option value="">Loading stock types…</option>}
                 {stockTypes.map((type) => (
                   <option key={type.value} value={type.value}>{type.label}</option>
                 ))}
               </select>
-              <p className="text-xs text-slate-500">Stock types are loaded from the database schema. Raw materials are provisioned only to the configured Kitchen Service outlet; other types are provisioned to active outlet warehouses.</p>
+              <p className="text-xs text-slate-500">Stock types are loaded from the database schema. This creates one item in the selected main warehouse; an outlet item is created only when stock is transferred there.</p>
             </div>
 
             <div className="space-y-2">

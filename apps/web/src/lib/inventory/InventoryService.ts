@@ -4,6 +4,10 @@ import { GRN_STATUS, TRANSFER_STATUS, PO_STATUS } from '@/lib/inventory/types';
 import { TenantContext } from '../organization-access';
 import { isKitchenProductionStation, kitchenServiceOutletId } from './kitchen-routing';
 
+function normalizeStockName(value: string) {
+  return value.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
 export class InventoryService {
   /** Restore every committed ingredient for a cancelled/voided order. */
   static async restoreSale(posOrderId: string, actorId: string, operationId: string, txOverride?: any) {
@@ -483,15 +487,35 @@ export class InventoryService {
           throw new Error(`Insufficient stock for transfer on item: ${sourceItem.name}`);
         }
 
-        let destItem = await tx.stockItem.findFirst({
+        const destinationCandidates = await tx.stockItem.findMany({
           where: {
             propertyId: transfer.propertyId,
             warehouseId: transfer.toWarehouseId,
-            ...(sourceItem.sku
-              ? { sku: sourceItem.sku }
-              : { name: { equals: sourceItem.name, mode: 'insensitive' as const } }),
-          }
+            isActive: true,
+            OR: [
+              ...(sourceItem.sku ? [{ sku: sourceItem.sku }] : []),
+              { name: { equals: sourceItem.name, mode: 'insensitive' as const } },
+            ],
+          },
+          orderBy: { updatedAt: 'desc' },
         });
+        const skuMatches = sourceItem.sku
+          ? destinationCandidates.filter((candidate: any) => candidate.sku === sourceItem.sku)
+          : [];
+        const nameMatches = destinationCandidates.filter((candidate: any) =>
+          normalizeStockName(candidate.name) === normalizeStockName(sourceItem.name)
+          && candidate.baseUnit === sourceItem.baseUnit,
+        );
+        let destItem = skuMatches.length === 1
+          ? skuMatches[0]
+          : skuMatches.length > 1
+            ? null
+            : nameMatches.length === 1
+              ? nameMatches[0]
+              : null;
+        if (skuMatches.length > 1 || (!skuMatches.length && nameMatches.length > 1)) {
+          throw new Error(`Ambiguous destination stock mapping for ${sourceItem.name}. Consolidate active destination stock records before posting this transfer.`);
+        }
 
         // Auto-create destination item if it doesn't exist
         if (!destItem) {
