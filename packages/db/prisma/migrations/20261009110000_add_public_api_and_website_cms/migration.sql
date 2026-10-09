@@ -77,8 +77,42 @@ CREATE TABLE IF NOT EXISTS "WebsiteRevision" (
   CONSTRAINT "WebsiteRevision_status_check" CHECK ("status" IN ('DRAFT', 'PUBLISHED', 'ARCHIVED'))
 );
 CREATE INDEX IF NOT EXISTS "WebsiteRevision_projectId_status_idx" ON "WebsiteRevision"("projectId", "status");
-ALTER TABLE "WebsiteProject" ADD CONSTRAINT "WebsiteProject_activeRevisionId_fkey" FOREIGN KEY ("activeRevisionId") REFERENCES "WebsiteRevision"("id") ON DELETE SET NULL;
-ALTER TABLE "WebsiteProject" ADD CONSTRAINT "WebsiteProject_previewRevisionId_fkey" FOREIGN KEY ("previewRevisionId") REFERENCES "WebsiteRevision"("id") ON DELETE SET NULL;
+-- PostgreSQL has no `ADD CONSTRAINT IF NOT EXISTS`. The migration can be
+-- resumed after a partial application, so guard these deferred foreign keys
+-- explicitly instead of failing with SQLSTATE 42710.
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'WebsiteProject_activeRevisionId_fkey'
+      AND conrelid = '"WebsiteProject"'::regclass
+  ) THEN
+    ALTER TABLE "WebsiteProject"
+      ADD CONSTRAINT "WebsiteProject_activeRevisionId_fkey"
+      FOREIGN KEY ("activeRevisionId")
+      REFERENCES "WebsiteRevision"("id")
+      ON DELETE SET NULL;
+  END IF;
+END
+$$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'WebsiteProject_previewRevisionId_fkey'
+      AND conrelid = '"WebsiteProject"'::regclass
+  ) THEN
+    ALTER TABLE "WebsiteProject"
+      ADD CONSTRAINT "WebsiteProject_previewRevisionId_fkey"
+      FOREIGN KEY ("previewRevisionId")
+      REFERENCES "WebsiteRevision"("id")
+      ON DELETE SET NULL;
+  END IF;
+END
+$$;
 
 CREATE TABLE IF NOT EXISTS "WebsitePage" (
   "id" UUID NOT NULL DEFAULT gen_random_uuid(),
