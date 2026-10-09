@@ -1098,6 +1098,7 @@ export async function POST(req: NextRequest) {
           else if (event.eventType === 'POS_SESSION_UPDATED') {
               const sessionId = event.aggregateId;
               const status = payload.Status || payload.status;
+              const controlStatus = payload.ControlStatus || payload.controlStatus;
               const closedAt = payload.ClosedAt || payload.closedAt;
               const currentSession = await tx.posSession.findUnique({
                 where: { id: event.aggregateId },
@@ -1130,6 +1131,7 @@ export async function POST(req: NextRequest) {
                 where: { id: sessionId },
                 data: {
                   ...(status ? { status } : {}),
+                  ...(controlStatus ? { controlStatus } : {}),
                   ...(closedAt ? { closedAt: new Date(closedAt) } : {}),
                   closedBy: operatorId,
                   updatedAt: new Date(event.occurredAt || Date.now())
