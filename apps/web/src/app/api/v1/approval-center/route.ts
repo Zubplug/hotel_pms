@@ -70,6 +70,13 @@ export async function GET(req: NextRequest) {
     (isAccountant && ['SUBMITTED', 'IN_REVIEW'].includes(invoice.workflowStatus)) ||
     (isCashier && invoice.workflowStatus === 'APPROVED')
   );
+  const stockItemIds = [...new Set(purchaseOrders.flatMap((purchaseOrder) => purchaseOrder.items.map((item) => item.stockItemId).filter((id): id is string => Boolean(id))))];
+  const stockItems = stockItemIds.length ? await prisma.stockItem.findMany({ where: { id: { in: stockItemIds } }, select: { id: true, name: true, baseUnit: true } }) : [];
+  const stockItemById = new Map(stockItems.map((item) => [item.id, item]));
+  const purchaseOrdersWithStockItems = purchaseOrders.map((purchaseOrder) => ({
+    ...purchaseOrder,
+    items: purchaseOrder.items.map((item) => ({ ...item, stockItem: item.stockItemId ? stockItemById.get(item.stockItemId) || null : null })),
+  }));
   const refundApprovalByRequest = new Map(refundApprovals.map((approval) => [String((approval.details as { refundRequestId?: string } | null)?.refundRequestId || ''), approval]));
   const scopedRefunds = refunds.filter((refund) => {
     const approval = refundApprovalByRequest.get(refund.id);
@@ -90,7 +97,7 @@ export async function GET(req: NextRequest) {
       refunds: scopedRefunds.map((item) => ({ ...item, requestedAmount: Number(item.requestedAmount), approvedAmount: item.approvedAmount == null ? null : Number(item.approvedAmount), approval: refundApprovalByRequest.get(item.id) || null })),
       eventInvoices,
       stockTransfers,
-      purchaseOrders,
+      purchaseOrders: purchaseOrdersWithStockItems,
       role: user.role,
     },
   });

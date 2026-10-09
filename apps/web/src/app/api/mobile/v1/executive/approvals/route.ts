@@ -96,6 +96,9 @@ export async function GET(req: NextRequest) {
       };
     });
 
+    const stockItemIds = [...new Set(purchaseOrders.flatMap((purchaseOrder) => purchaseOrder.items.map((item) => item.stockItemId).filter((id): id is string => Boolean(id))))];
+    const stockItems = stockItemIds.length ? await prisma.stockItem.findMany({ where: { id: { in: stockItemIds } }, select: { id: true, name: true, baseUnit: true } }) : [];
+    const stockItemById = new Map(stockItems.map((item) => [item.id, item]));
     const mappedPurchaseOrders = purchaseOrders.map((po) => ({
       id: po.id,
       propertyId: po.propertyId,
@@ -112,7 +115,7 @@ export async function GET(req: NextRequest) {
         productName: `Purchase order ${po.poNumber}`,
         approvalStage: po.approvalStage || 'ACCOUNTANT',
         supplier: po.supplier,
-        items: po.items,
+        items: po.items.map((item) => ({ ...item, stockItem: item.stockItemId ? stockItemById.get(item.stockItemId) || null : null })),
         totalAmount: po.totalAmount,
       },
     }));
