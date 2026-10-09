@@ -2,6 +2,7 @@ import { auth } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import prisma from '@hotel-pms/db';
+import { requireOrganizationContext } from '@/lib/organization-access';
 import { ArrowRight, CheckCircle2, ClipboardCheck, Clock3, DollarSign, Package, ShieldCheck, Truck } from 'lucide-react';
 import FnbRequestActions from './FnbRequestActions';
 import { POActionBar } from '../purchase-orders/[id]/ActionBar';
@@ -12,19 +13,19 @@ export default async function InventoryApprovalsPage() {
   const session = await auth();
   if (!session?.user) redirect('/login');
 
-  const user = session.user as { propertyId?: string; role?: string; isSuperAdmin?: boolean };
-  const propertyId = user.propertyId;
+  const user = session.user as { role?: string; isSuperAdmin?: boolean };
+  const propertyIds = (await requireOrganizationContext(session.user.id)).propertyIds;
   const role = String(user.role || '').toUpperCase();
   const isSuperAdmin = Boolean(user.isSuperAdmin);
   const canViewTransfers = role === 'STOCK_MANAGER' || isSuperAdmin;
   const canViewPurchaseOrders = ['ACCOUNTANT', 'GENERAL_MANAGER'].includes(role) || isSuperAdmin;
 
-  if (!propertyId || (!canViewTransfers && !canViewPurchaseOrders)) redirect('/inventory');
+  if (!propertyIds.length || (!canViewTransfers && !canViewPurchaseOrders)) redirect('/inventory');
 
   // Department requisitions are deliberately restricted to Stock Manager. They
   // are operational custody requests, not Accountant/General Manager queues.
   const requests = canViewTransfers ? await prisma.stockTransfer.findMany({
-    where: { propertyId, status: 'PENDING_APPROVAL' },
+    where: { propertyId: { in: propertyIds }, status: 'PENDING_APPROVAL' },
     include: {
       fromWarehouse: { select: { name: true } },
       toWarehouse: { select: { name: true, posOutlet: { select: { name: true } } } },
@@ -36,9 +37,11 @@ export default async function InventoryApprovalsPage() {
 
   const purchaseOrders = canViewPurchaseOrders ? await prisma.purchaseOrder.findMany({
     where: {
-      propertyId,
+      propertyId: { in: propertyIds },
       status: 'SUBMITTED',
-      ...(isSuperAdmin ? {} : { approvalStage: role }),
+      ...(isSuperAdmin ? {} : role === 'ACCOUNTANT'
+        ? { OR: [{ approvalStage: 'ACCOUNTANT' }, { approvalStage: null }] }
+        : { approvalStage: 'GENERAL_MANAGER' }),
     },
     include: {
       supplier: { select: { name: true, contactName: true, phone: true, email: true } },
