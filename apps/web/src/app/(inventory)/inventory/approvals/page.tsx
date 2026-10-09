@@ -28,7 +28,7 @@ export default async function InventoryApprovalsPage() {
     include: {
       fromWarehouse: { select: { name: true } },
       toWarehouse: { select: { name: true, posOutlet: { select: { name: true } } } },
-      items: true,
+      items: { include: { stockItem: { select: { name: true, baseUnit: true } } } },
     },
     orderBy: { createdAt: 'desc' },
     take: 200,
@@ -43,7 +43,7 @@ export default async function InventoryApprovalsPage() {
     include: {
       supplier: { select: { name: true, contactName: true, phone: true, email: true } },
       property: { select: { baseCurrency: true } },
-      items: { include: { stockItem: { select: { name: true, baseUnit: true } } } },
+      items: true,
     },
     orderBy: { createdAt: 'asc' },
     take: 200,
