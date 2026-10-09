@@ -34,6 +34,7 @@ function requestTitle(request: ApprovalRequest) {
 function requestSubtitle(request: ApprovalRequest) {
   const details = request.details || {};
   if (request.type.startsWith('POS_')) return String(details.productName || details.name || 'POS catalogue request');
+  if (request.type === 'PURCHASE_ORDER') return `${details.supplier?.name || 'Supplier'} · ${details.approvalStage === 'GENERAL_MANAGER' ? 'General Manager approval' : 'Accountant approval'}`;
   if (request.type === 'REFUND') return 'Refund request';
   if (request.type === 'STOCK_TRANSFER') return details.isOutletBound ? 'Outlet transfer request' : 'Warehouse transfer request';
   return labelFor(request.type);
@@ -41,6 +42,7 @@ function requestSubtitle(request: ApprovalRequest) {
 
 function requestTypeLabel(request: ApprovalRequest) {
   if (request.type === 'STOCK_TRANSFER') return 'Stock transfer';
+  if (request.type === 'PURCHASE_ORDER') return 'Purchase order';
   if (request.type.startsWith('POS_')) return 'F&B catalogue';
   return labelFor(request.type);
 }
@@ -84,6 +86,10 @@ export default function GeneralManagerApprovalsPage() {
     try {
       let endpoint = `/api/manager/approvals/${request.id}/${action}`;
       let successMessage = action === 'approve' ? 'Request approved successfully.' : 'Request rejected successfully.';
+      if (request.type === 'PURCHASE_ORDER') {
+        endpoint = `/api/v1/inventory/purchase-orders/${request.id}/${action}`;
+        successMessage = action === 'approve' ? 'Purchase order approved successfully.' : 'Purchase order rejected successfully.';
+      }
       if (request.type === 'STOCK_TRANSFER') {
         if (action === 'approve') {
           if (request.details?.originalStatus === 'ISSUED') {

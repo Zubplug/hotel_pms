@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { toast } from 'sonner';
 
 type ApprovalCenterProps = { audience: 'ACCOUNTING' | 'CASHIER' };
-type Item = { kind: 'EVENT_INVOICE' | 'REFUND' | 'POS' | 'STOCK_TRANSFER' | 'EXPENSE'; value: any };
+type Item = { kind: 'EVENT_INVOICE' | 'REFUND' | 'POS' | 'STOCK_TRANSFER' | 'PURCHASE_ORDER' | 'EXPENSE'; value: any };
 
 const money = (value: unknown, currency = 'NGN') => new Intl.NumberFormat('en-NG', { style: 'currency', currency, maximumFractionDigits: 0 }).format(Number(value || 0));
 const label = (value: string) => value.replaceAll('_', ' ');
@@ -27,7 +27,7 @@ function hasDiscountRequest(invoice: any) {
 }
 
 export function ApprovalControlCenter({ audience }: ApprovalCenterProps) {
-  const [data, setData] = useState<any>({ priceApprovals: [], refunds: [], eventInvoices: [], stockTransfers: [], expenses: [] });
+  const [data, setData] = useState<any>({ priceApprovals: [], refunds: [], eventInvoices: [], stockTransfers: [], purchaseOrders: [], expenses: [] });
   const [tab, setTab] = useState<'ALL' | Item['kind']>('ALL');
   const [search, setSearch] = useState('');
   const [selected, setSelectedState] = useState<Item | null>(null);
@@ -74,6 +74,7 @@ export function ApprovalControlCenter({ audience }: ApprovalCenterProps) {
     ...data.refunds.map((value: any) => ({ kind: 'REFUND' as const, value })),
     ...data.priceApprovals.map((value: any) => ({ kind: 'POS' as const, value })),
     ...(data.stockTransfers || []).map((value: any) => ({ kind: 'STOCK_TRANSFER' as const, value })),
+    ...(data.purchaseOrders || []).map((value: any) => ({ kind: 'POS' as const, value: { ...value, type: 'PURCHASE_ORDER', details: { ...(value.details || {}), targetType: 'PURCHASE_ORDER', newPrice: value.amount, stage: 'ACCOUNTANT_REVIEW' } } })),
     ...(data.expenses || []).map((value: any) => ({ kind: 'EXPENSE' as const, value })),
   ].filter((item) => {
     if (tab !== 'ALL' && item.kind !== tab) return false;
@@ -86,7 +87,9 @@ export function ApprovalControlCenter({ audience }: ApprovalCenterProps) {
     if (item.kind === 'EVENT_INVOICE') return audience === 'ACCOUNTING' ? ['SUBMITTED', 'IN_REVIEW'].includes(item.value.workflowStatus) : item.value.workflowStatus === 'APPROVED';
     if (item.kind === 'REFUND') return audience === 'ACCOUNTING' && item.value.status === 'PENDING_APPROVAL' && item.value.approval?.status === 'PENDING';
     if (item.kind === 'STOCK_TRANSFER') return audience === 'ACCOUNTING' || audience === 'CASHIER'; // Management and General Cashier review stock transfers
+    if (item.kind === 'PURCHASE_ORDER') return audience === 'ACCOUNTING';
     if (item.kind === 'EXPENSE') return true;
+    if (item.value.type === 'PURCHASE_ORDER') return audience === 'ACCOUNTING';
     const stage = item.value.details?.stage;
     return audience === 'CASHIER' ? stage === 'GENERAL_CASHIER_REVIEW' : stage === 'ACCOUNTANT_REVIEW';
   };
@@ -101,8 +104,13 @@ export function ApprovalControlCenter({ audience }: ApprovalCenterProps) {
         body = { action, discountReason: reason, lineDiscounts: Object.fromEntries(Object.entries(lineDiscounts).map(([id, value]) => [id, Number(value || 0)])), lineReasons };
       } else if (selected.kind === 'POS') {
         const stage = selected.value.details?.stage;
-        url = stage === 'GENERAL_CASHIER_REVIEW' ? `/api/v1/pos/price-approvals/${selected.value.id}/cashier` : `/api/v1/pos/price-approvals/${selected.value.id}/accountant`;
-        body = { notes: reason };
+        if (selected.value.type === 'PURCHASE_ORDER') {
+          url = `/api/v1/inventory/purchase-orders/${selected.value.id}/${action}`;
+          body = action === 'reject' ? { reason } : {};
+        } else {
+          url = stage === 'GENERAL_CASHIER_REVIEW' ? `/api/v1/pos/price-approvals/${selected.value.id}/cashier` : `/api/v1/pos/price-approvals/${selected.value.id}/accountant`;
+          body = { notes: reason };
+        }
       } else if (selected.kind === 'STOCK_TRANSFER') {
         if (action === 'approve') {
           url = selected.value.status === 'ISSUED' 
@@ -111,6 +119,9 @@ export function ApprovalControlCenter({ audience }: ApprovalCenterProps) {
         } else {
           url = `/api/v1/inventory/transfers/${selected.value.id}/reject`;
         }
+        body = action === 'reject' ? { reason } : {};
+      } else if (selected.kind === 'PURCHASE_ORDER') {
+        url = `/api/v1/inventory/purchase-orders/${selected.value.id}/${action}`;
         body = action === 'reject' ? { reason } : {};
       } else if (selected.kind === 'EXPENSE') {
         url = `/api/v1/financial-control/expenses/${selected.value.id}/action`;

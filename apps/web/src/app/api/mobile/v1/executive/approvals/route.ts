@@ -13,6 +13,7 @@ export async function GET(req: NextRequest) {
       return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
     }
     const ctx = await requireOrganizationContext(user.id);
+    const role = String(user.role || '').toUpperCase();
     const propertyId = req.nextUrl.searchParams.get('propertyId') || 'ALL_AUTHORIZED';
     const allowedPropertyIds = ctx.propertyIds;
     const targetProperties = propertyId === 'ALL_AUTHORIZED' ? [...allowedPropertyIds] : [propertyId];
@@ -22,7 +23,7 @@ export async function GET(req: NextRequest) {
     }
 
 
-    const [pendingApprovals, stockTransfers] = await Promise.all([
+    const [pendingApprovals, stockTransfers, purchaseOrders] = await Promise.all([
       prisma.approvalRequest.findMany({
         where: {
           propertyId: { in: targetProperties },
@@ -52,6 +53,24 @@ export async function GET(req: NextRequest) {
         },
         orderBy: { createdAt: 'desc' },
         take: 100
+      }),
+      prisma.purchaseOrder.findMany({
+        where: {
+          propertyId: { in: targetProperties },
+          status: 'SUBMITTED',
+          ...(user.isSuperAdmin ? {} : role === 'ACCOUNTANT'
+            ? { OR: [{ approvalStage: 'ACCOUNTANT' }, { approvalStage: null }] }
+            : role === 'GENERAL_MANAGER'
+              ? { approvalStage: 'GENERAL_MANAGER' }
+              : { propertyId: { in: [] } }),
+        },
+        include: {
+          property: { select: { name: true } },
+          supplier: { select: { name: true, contactName: true, phone: true, email: true } },
+          items: true,
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 100,
       })
     ]);
 
@@ -76,6 +95,27 @@ export async function GET(req: NextRequest) {
         requestedAt: st.createdAt.toISOString()
       };
     });
+
+    const mappedPurchaseOrders = purchaseOrders.map((po) => ({
+      id: po.id,
+      propertyId: po.propertyId,
+      property: po.property,
+      type: 'PURCHASE_ORDER',
+      status: 'PENDING',
+      amount: po.totalAmount,
+      currency: po.currency,
+      reason: po.notes || 'Purchase order awaiting approval',
+      requestedBy: po.createdBy,
+      requestedAt: po.createdAt.toISOString(),
+      details: {
+        reference: po.poNumber,
+        productName: `Purchase order ${po.poNumber}`,
+        approvalStage: po.approvalStage || 'ACCOUNTANT',
+        supplier: po.supplier,
+        items: po.items,
+        totalAmount: po.totalAmount,
+      },
+    }));
 
     const discountRoomIds = pendingApprovals
       .filter((approval) => approval.type === 'DISCOUNT')
@@ -123,7 +163,7 @@ export async function GET(req: NextRequest) {
       return { ...approval, details: { ...details, review: reviewRoom || null } };
     });
 
-    const combined = [...enrichedApprovals, ...mappedTransfers]
+    const combined = [...enrichedApprovals, ...mappedTransfers, ...mappedPurchaseOrders]
       .sort((a, b) => new Date(b.requestedAt).getTime() - new Date(a.requestedAt).getTime())
       .slice(0, 100);
 

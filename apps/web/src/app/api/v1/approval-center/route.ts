@@ -4,7 +4,7 @@ import { resolveUser } from '@/lib/resolve-user';
 
 export const dynamic = 'force-dynamic';
 
-const ACCESS_ROLES = new Set(['ACCOUNTANT', 'FINANCE_MANAGER', 'GENERAL_CASHIER', 'CASHIER', 'FRONT_DESK_CASHIER', 'MANAGER', 'DIRECTOR', 'HOTEL_MANAGER', 'CEO', 'SUPER_ADMIN', 'ADMIN']);
+const ACCESS_ROLES = new Set(['ACCOUNTANT', 'GENERAL_MANAGER', 'FINANCE_MANAGER', 'GENERAL_CASHIER', 'CASHIER', 'FRONT_DESK_CASHIER', 'MANAGER', 'DIRECTOR', 'HOTEL_MANAGER', 'CEO', 'SUPER_ADMIN', 'ADMIN']);
 
 export async function GET(req: NextRequest) {
   const user = await resolveUser(req);
@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
     select: { roleId: true },
   });
   const userRoleIds = new Set(userRoles.map((role) => role.roleId));
-  const [priceApprovalsRaw, refunds, refundApprovals, eventInvoicesRaw, stockTransfers] = await Promise.all([
+  const [priceApprovalsRaw, refunds, refundApprovals, eventInvoicesRaw, stockTransfers, purchaseOrders] = await Promise.all([
     prisma.approvalRequest.findMany({
       where: { ...propertyFilter, type: { in: ['POS_PRICE_CHANGE', 'POS_MENU_CREATE', 'POS_MODIFIER_CREATE', 'POS_MODIFIER_UPDATE'] }, status: { not: 'CANCELLED' } },
       orderBy: { createdAt: 'desc' }, take: 200,
@@ -39,6 +39,23 @@ export async function GET(req: NextRequest) {
         OR: [{ status: 'PENDING_APPROVAL' }, { status: 'ISSUED' }]
       },
       include: { fromWarehouse: { select: { name: true } }, toWarehouse: { select: { name: true, posOutletId: true } }, items: { include: { stockItem: true } } },
+      orderBy: { createdAt: 'desc' }, take: 200,
+    }),
+    prisma.purchaseOrder.findMany({
+      where: {
+        ...propertyFilter,
+        status: 'SUBMITTED',
+        ...(user.isSuperAdmin ? {} : user.role === 'ACCOUNTANT'
+          ? { OR: [{ approvalStage: 'ACCOUNTANT' }, { approvalStage: null }] }
+          : user.role === 'GENERAL_MANAGER'
+            ? { approvalStage: 'GENERAL_MANAGER' }
+            : { propertyId: { in: [] } }),
+      },
+      include: {
+        property: { select: { name: true } },
+        supplier: { select: { name: true, contactName: true, phone: true, email: true } },
+        items: true,
+      },
       orderBy: { createdAt: 'desc' }, take: 200,
     }),
   ]);
@@ -73,6 +90,7 @@ export async function GET(req: NextRequest) {
       refunds: scopedRefunds.map((item) => ({ ...item, requestedAmount: Number(item.requestedAmount), approvedAmount: item.approvedAmount == null ? null : Number(item.approvedAmount), approval: refundApprovalByRequest.get(item.id) || null })),
       eventInvoices,
       stockTransfers,
+      purchaseOrders,
       role: user.role,
     },
   });
