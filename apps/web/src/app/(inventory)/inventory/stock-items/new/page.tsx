@@ -20,7 +20,7 @@ export default function NewStockItemPage() {
   const [stockTypes, setStockTypes] = useState<{ value: string; label: string }[]>([]);
   const [name, setName] = useState('');
   const [warehouseId, setWarehouseId] = useState('');
-  const [baseUnit, setBaseUnit] = useState(INVENTORY_UNITS[0] || 'UNIT');
+  const [baseUnit, setBaseUnit] = useState<string>(INVENTORY_UNITS[0] || 'UNIT');
   const [stockType, setStockType] = useState('CONSUMABLE');
   const [suggestions, setSuggestions] = useState<StockSuggestion[]>([]);
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
