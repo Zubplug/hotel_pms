@@ -77,7 +77,53 @@ export async function GET(req: NextRequest) {
       };
     });
 
-    const combined = [...pendingApprovals, ...mappedTransfers]
+    const discountRoomIds = pendingApprovals
+      .filter((approval) => approval.type === 'DISCOUNT')
+      .map((approval) => {
+        const snapshot = (approval.snapshot || {}) as Record<string, unknown>;
+        const details = (approval.details || {}) as Record<string, unknown>;
+        return String(snapshot.reservationRoomId || details.reservationRoomId || '');
+      })
+      .filter(Boolean);
+    const reviewRooms = discountRoomIds.length ? await prisma.reservationRoom.findMany({
+      where: { id: { in: discountRoomIds } },
+      select: {
+        id: true,
+        reservationId: true,
+        checkIn: true,
+        checkOut: true,
+        adults: true,
+        children: true,
+        rateAmount: true,
+        currency: true,
+        status: true,
+        room: { select: { number: true, name: true, roomType: { select: { name: true, code: true } } } },
+        reservation: {
+          select: {
+            confirmationNumber: true,
+            checkIn: true,
+            checkOut: true,
+            status: true,
+            source: true,
+            adults: true,
+            children: true,
+            specialRequests: true,
+            primaryGuest: { select: { firstName: true, lastName: true, email: true, phone: true, companyName: true, isVip: true, vipLevel: true } },
+          },
+        },
+      },
+    }) : [];
+    const reviewRoomById = new Map(reviewRooms.map((room) => [room.id, room]));
+    const enrichedApprovals = pendingApprovals.map((approval) => {
+      if (approval.type !== 'DISCOUNT') return approval;
+      const snapshot = (approval.snapshot || {}) as Record<string, unknown>;
+      const details = (approval.details || {}) as Record<string, unknown>;
+      const roomId = String(snapshot.reservationRoomId || details.reservationRoomId || '');
+      const reviewRoom = reviewRoomById.get(roomId);
+      return { ...approval, details: { ...details, review: reviewRoom || null } };
+    });
+
+    const combined = [...enrichedApprovals, ...mappedTransfers]
       .sort((a, b) => new Date(b.requestedAt).getTime() - new Date(a.requestedAt).getTime())
       .slice(0, 100);
 
