@@ -14,6 +14,7 @@ export async function GET(req: NextRequest) {
     }
     const ctx = await requireOrganizationContext(user.id);
     const role = String(user.role || '').toUpperCase();
+    const canViewStockTransfers = user.isSuperAdmin || role === 'STOCK_MANAGER';
     const propertyId = req.nextUrl.searchParams.get('propertyId') || 'ALL_AUTHORIZED';
     const allowedPropertyIds = ctx.propertyIds;
     const targetProperties = propertyId === 'ALL_AUTHORIZED' ? [...allowedPropertyIds] : [propertyId];
@@ -38,10 +39,12 @@ export async function GET(req: NextRequest) {
       prisma.stockTransfer.findMany({
         where: {
           propertyId: { in: targetProperties },
-          OR: [
-            { status: 'PENDING_APPROVAL' }, // Waiting for approval (could be top mgmt or stock mgmt)
-            { status: 'ISSUED' }, // Waiting for confirmation receipt
-          ]
+          ...(canViewStockTransfers ? {
+            OR: [
+              { status: 'PENDING_APPROVAL' },
+              { status: 'ISSUED' },
+            ]
+          } : { id: { in: [] } }),
         },
         include: {
           property: { select: { name: true } },
