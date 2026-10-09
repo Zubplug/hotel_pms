@@ -25,7 +25,7 @@ export default async function InventoryApprovalsPage() {
   // Department requisitions are deliberately restricted to Stock Manager. They
   // are operational custody requests, not Accountant/General Manager queues.
   const requests = canViewTransfers ? await prisma.stockTransfer.findMany({
-    where: { propertyId: { in: propertyIds }, status: 'PENDING_APPROVAL' },
+    where: { propertyId: { in: [...propertyIds] }, status: 'PENDING_APPROVAL' },
     include: {
       fromWarehouse: { select: { name: true } },
       toWarehouse: { select: { name: true, posOutlet: { select: { name: true } } } },
@@ -37,7 +37,7 @@ export default async function InventoryApprovalsPage() {
 
   const purchaseOrders = canViewPurchaseOrders ? await prisma.purchaseOrder.findMany({
     where: {
-      propertyId: { in: propertyIds },
+      propertyId: { in: [...propertyIds] },
       status: 'SUBMITTED',
       ...(isSuperAdmin ? {} : role === 'ACCOUNTANT'
         ? { OR: [{ approvalStage: 'ACCOUNTANT' }, { approvalStage: null }] }
