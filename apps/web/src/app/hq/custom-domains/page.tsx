@@ -112,7 +112,7 @@ export default async function HQCustomDomainsPage() {
                             await activateCustomDomainRequest(request.id); 
                           }}>
                             <button className="relative inline-flex items-center justify-center px-4 py-2 text-sm font-medium text-white transition-all duration-200 bg-indigo-600 border border-transparent rounded-lg shadow-sm hover:bg-indigo-700 hover:shadow hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-600 active:translate-y-0">
-                              Configure & Activate
+                              Configure &amp; Activate
                             </button>
                           </form>
                         ) : (
