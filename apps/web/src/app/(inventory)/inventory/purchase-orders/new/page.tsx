@@ -121,6 +121,7 @@ export default function NewPurchaseOrderPage() {
   });
 
   const [items, setItems] = useState([{ id: crypto.randomUUID(), stockItemId: '', description: '', quantity: 1, uom: '', unitPrice: 0 }]);
+  const [showPreview, setShowPreview] = useState(false);
 
   useEffect(() => {
     fetch('/api/v1/inventory/suppliers').then(r => r.json()).then(r => setSuppliers(r.data || []));
@@ -388,14 +389,10 @@ export default function NewPurchaseOrderPage() {
                   </button>
                   <button
                     disabled={loading || items.length === 0 || !items.every(i => i.stockItemId && i.uom)}
-                    onClick={handleSubmit}
+                    onClick={() => setShowPreview(true)}
                     className="flex-1 sm:flex-none flex justify-center items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-8 py-2.5 rounded-xl transition-colors text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_20px_rgba(52,211,153,0.2)]"
                   >
-                    {loading ? (
-                      'Saving...'
-                    ) : (
-                      <>Save Draft PO <CheckCircle2 className="h-4 w-4" /></>
-                    )}
+                    Preview PO <ArrowRight className="h-4 w-4" />
                   </button>
                 </div>
               </div>
@@ -403,6 +400,87 @@ export default function NewPurchaseOrderPage() {
           )}
         </div>
       </main>
+
+      {/* ── preview modal ────────────────────────────────────────────────── */}
+      {showPreview && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 bg-[#08111f]/80 backdrop-blur-sm">
+          <div className="w-full max-w-3xl max-h-[90vh] flex flex-col rounded-2xl border border-white/10 bg-[#0d1832] shadow-2xl overflow-hidden">
+            <div className="flex items-center justify-between border-b border-white/10 px-6 py-4 bg-[#111c2e]">
+              <div>
+                <h3 className="text-lg font-semibold text-white">Purchase Order Preview</h3>
+                <p className="text-sm text-slate-400 mt-0.5">Please review the details before saving.</p>
+              </div>
+              <button onClick={() => setShowPreview(false)} className="text-slate-400 hover:text-white p-2 rounded-lg hover:bg-white/[0.05] transition-colors">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              <div className="grid grid-cols-2 gap-6 p-5 rounded-xl bg-white/[0.02] border border-white/[0.05]">
+                <div>
+                  <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500 mb-1">Supplier</p>
+                  <p className="text-sm font-medium text-slate-200">{suppliers.find(s => s.id === poData.supplierId)?.name || 'N/A'}</p>
+                </div>
+                <div>
+                  <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500 mb-1">Expected Delivery</p>
+                  <p className="text-sm font-medium text-slate-200">{poData.expectedDate ? new Date(poData.expectedDate).toLocaleDateString() : 'N/A'}</p>
+                </div>
+                {poData.notes && (
+                  <div className="col-span-2">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500 mb-1">Notes</p>
+                    <p className="text-sm text-slate-300">{poData.notes}</p>
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <h4 className="text-sm font-semibold text-slate-200 mb-4 border-b border-white/10 pb-2">Line Items</h4>
+                <div className="space-y-3">
+                  {items.map((item, idx) => {
+                    const stockItem = stockItems.find(si => si.id === item.stockItemId);
+                    const lineTotal = item.quantity * item.unitPrice;
+                    return (
+                      <div key={item.id} className="flex justify-between items-center p-3 rounded-lg bg-white/[0.02] border border-white/[0.03]">
+                        <div>
+                          <p className="text-sm font-medium text-slate-200">{stockItem?.name || 'Unknown Item'}</p>
+                          <p className="text-xs text-slate-500 mt-0.5">
+                            {item.quantity} {formatUnit(item.uom)} @ {money(item.unitPrice)}
+                          </p>
+                        </div>
+                        <div className="text-sm font-semibold text-emerald-300">
+                          {money(lineTotal)}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between border-t border-white/10 px-6 py-4 bg-[#111c2e]">
+              <div>
+                <p className="text-xs text-slate-400">Total Purchase Value</p>
+                <p className="text-xl font-bold text-white">{money(total)}</p>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowPreview(false)}
+                  className="px-5 py-2 rounded-xl border border-white/10 text-sm font-medium text-slate-300 hover:bg-white/[0.04] transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  disabled={loading}
+                  onClick={handleSubmit}
+                  className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-6 py-2 rounded-xl transition-colors text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {loading ? 'Saving...' : <>Confirm & Save PO <CheckCircle2 className="h-4 w-4" /></>}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
