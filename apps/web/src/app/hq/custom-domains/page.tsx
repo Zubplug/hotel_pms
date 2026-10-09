@@ -69,7 +69,7 @@ export default async function HQCustomDomainsPage() {
                     <tr 
                       key={request.id} 
                       className="animate-row group hover:bg-slate-50/80 transition-colors duration-200"
-                      style={{ animationDelay: \`\${0.15 + (idx * 0.05)}s\` }}
+                      style={{ animationDelay: `${0.15 + (idx * 0.05)}s` }}
                     >
                       <td className="px-6 py-5">
                         <div className="font-medium text-slate-900">{request.organization.name}</div>
