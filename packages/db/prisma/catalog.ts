@@ -30,7 +30,9 @@ export const catalogProducts: CatalogProduct[] = [
   { code: 'ADDON_CHANNEL_MANAGER', name: 'Channel Manager', type: 'ADDON', active: false, metadata: { family: 'CONNECTIVITY', unit: 'PROPERTY', sellable: false, offlineCapable: false, version: CATALOG_VERSION } },
   { code: 'ADDON_BOOKING_ENGINE', name: 'Booking Engine', type: 'ADDON', active: true, metadata: { family: 'CONNECTIVITY', unit: 'PROPERTY', sellable: true, offlineCapable: false, version: CATALOG_VERSION } },
   { code: 'ADDON_CUSTOM_DOMAIN', name: 'Custom Booking Domain', type: 'ADDON', active: true, metadata: { family: 'CONNECTIVITY', unit: 'PROPERTY', sellable: true, offlineCapable: false, requiresApproval: true, version: CATALOG_VERSION } },
-  { code: 'ADDON_CUSTOM_WEBSITE_DESIGN', name: 'Custom Website Design Service', type: 'ADDON', active: true, metadata: { family: 'SERVICES', unit: 'PROJECT', sellable: true, offlineCapable: false, requiresApproval: true, oneTime: true, version: CATALOG_VERSION } },
+  { code: 'ADDON_CUSTOM_WEBSITE_DESIGN', name: 'Custom Website Design Service (legacy)', type: 'ADDON', active: false, metadata: { family: 'SERVICES', unit: 'PROJECT', sellable: false, offlineCapable: false, oneTime: true, retired: true, version: CATALOG_VERSION } },
+  { code: 'ADDON_CUSTOM_WEBSITE_API', name: 'Standalone API Website Development', type: 'ADDON', active: true, metadata: { family: 'SERVICES', mode: 'STANDALONE_API', unit: 'PROJECT', sellable: true, offlineCapable: false, requiresApproval: true, oneTime: true, version: CATALOG_VERSION } },
+  { code: 'ADDON_CUSTOM_WEBSITE_PMS', name: 'PMS-Connected Website Development', type: 'ADDON', active: true, metadata: { family: 'SERVICES', mode: 'PMS_CONNECTED', unit: 'PROJECT', sellable: true, offlineCapable: false, requiresApproval: true, oneTime: true, version: CATALOG_VERSION } },
   { code: 'ADDON_WHATSAPP', name: 'WhatsApp Guest Messaging', type: 'ADDON', active: false, metadata: { family: 'CONNECTIVITY', unit: 'USAGE', sellable: false, offlineCapable: false, version: CATALOG_VERSION } },
   { code: 'ADDON_SMS', name: 'SMS Notifications', type: 'ADDON', active: false, metadata: { family: 'CONNECTIVITY', unit: 'USAGE', sellable: false, offlineCapable: false, version: CATALOG_VERSION } },
   { code: 'ADDON_API', name: 'API and Integrations', type: 'ADDON', active: false, metadata: { family: 'CONNECTIVITY', unit: 'FLAT', sellable: false, offlineCapable: false, version: CATALOG_VERSION } },
@@ -50,7 +52,8 @@ export const planPrices = [
 
 // One-time professional services are kept separate from recurring plan prices.
 export const oneTimePrices = [
-  { code: 'ADDON_CUSTOM_WEBSITE_DESIGN', amount: 35000000, currency: 'ngn' }, // ₦350,000
+  { code: 'ADDON_CUSTOM_WEBSITE_API', amount: 120000000, currency: 'ngn' }, // ₦1,200,000
+  { code: 'ADDON_CUSTOM_WEBSITE_PMS', amount: 250000000, currency: 'ngn' }, // ₦2,500,000
 ] as const;
 
 export const addOnPrices = [

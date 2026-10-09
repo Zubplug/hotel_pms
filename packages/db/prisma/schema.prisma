@@ -6786,6 +6786,9 @@ model CustomWebsiteRequest {
   id               String    @id @default(uuid()) @db.Uuid
   organizationId   String    @db.Uuid
   propertyId       String    @db.Uuid
+  /// STANDALONE_API uses LodgeCore's public API without PMS website hosting;
+  /// PMS_CONNECTED is delivered as a LodgeCore-managed PMS website.
+  developmentMode  String    @default("PMS_CONNECTED")
   status           String    @default("REQUESTED") // REQUESTED | APPROVED | PAID | IN_PROGRESS | DELIVERED | REJECTED | CANCELLED
   currency         String    @default("NGN")
   amount           Int       @default(0)

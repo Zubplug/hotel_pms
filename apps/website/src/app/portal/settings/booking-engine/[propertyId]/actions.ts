@@ -278,8 +278,8 @@ export async function requestCustomWebsite(propertyId: string, formData: FormDat
   if (existing) throw new Error("This property already has an open custom website request");
   const brief = String(formData.get("brief") ?? "").trim();
   if (brief.length < 20) throw new Error("Please describe the website you want in at least 20 characters");
-  const price = await prisma.billingPrice.findFirst({ where: { product: { code: "ADDON_CUSTOM_WEBSITE_DESIGN", active: true }, interval: "one_time" }, orderBy: { amount: "asc" }, select: { id: true, amount: true, currency: true } });
-  await prisma.customWebsiteRequest.create({ data: { organizationId: user.organizationId, propertyId, requestedByEmail: user.email ?? null, brief, billingPriceId: price?.id ?? null, amount: price?.amount ?? 0, currency: price?.currency ?? "NGN", status: "REQUESTED" } });
+  const price = await prisma.billingPrice.findFirst({ where: { product: { code: "ADDON_CUSTOM_WEBSITE_PMS", active: true }, interval: "one_time" }, orderBy: { amount: "asc" }, select: { id: true, amount: true, currency: true } });
+  await prisma.customWebsiteRequest.create({ data: { organizationId: user.organizationId, propertyId, developmentMode: "PMS_CONNECTED", requestedByEmail: user.email ?? null, brief, billingPriceId: price?.id ?? null, amount: price?.amount ?? 0, currency: price?.currency ?? "NGN", status: "REQUESTED" } });
   revalidatePath(`/portal/settings/booking-engine/${propertyId}`);
 }
 

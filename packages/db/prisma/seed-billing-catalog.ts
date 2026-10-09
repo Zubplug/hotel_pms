@@ -1,5 +1,5 @@
 import { PrismaClient, Prisma } from '@prisma/client';
-import { addOnPrices, catalogPlans, catalogProducts, CATALOG_VERSION, planPrices } from './catalog';
+import { addOnPrices, catalogPlans, catalogProducts, CATALOG_VERSION, oneTimePrices, planPrices } from './catalog';
 
 const prisma = new PrismaClient();
 
@@ -53,6 +53,13 @@ async function main() {
         if (existing) await tx.billingPrice.update({ where: { id: existing.id }, data: { amount, currency: price.currency } });
         else await tx.billingPrice.create({ data: { productId: product.id, interval, amount, currency: price.currency, catalogVersion: CATALOG_VERSION } });
       }
+    }
+    for (const price of oneTimePrices) {
+      const product = products.get(price.code);
+      if (!product) throw new Error(`Missing pricing product ${price.code}`);
+      const existing = await tx.billingPrice.findFirst({ where: { productId: product.id, interval: 'one_time', catalogVersion: CATALOG_VERSION } });
+      if (existing) await tx.billingPrice.update({ where: { id: existing.id }, data: { amount: price.amount, currency: price.currency } });
+      else await tx.billingPrice.create({ data: { productId: product.id, interval: 'one_time', amount: price.amount, currency: price.currency, catalogVersion: CATALOG_VERSION } });
     }
   });
   console.log(`Seeded ${catalogProducts.length} products and ${catalogPlans.length} plans.`);
