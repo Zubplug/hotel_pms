@@ -27,6 +27,7 @@ export async function GET(request: Request) {
         const stockType = searchParams.get('stockType');
         const search = searchParams.get('search');
         const isActiveStr = searchParams.get('isActive');
+        const isMainWarehouseStr = searchParams.get('isMainWarehouse');
         const isActive = isActiveStr === 'false' ? false : true;
         const page = parseInt(searchParams.get('page') || '1', 10);
         const limit = parseInt(searchParams.get('limit') || '50', 10);
@@ -34,6 +35,11 @@ export async function GET(request: Request) {
 
         const where: any = { propertyId: { in: ctx.propertyIds as string[] }, isActive };
         if (warehouseId) where.warehouseId = warehouseId;
+        if (isMainWarehouseStr === 'true') {
+            where.warehouse = { posOutletId: null };
+        } else if (isMainWarehouseStr === 'false') {
+            where.warehouse = { posOutletId: { not: null } };
+        }
         if (stockType && STOCK_ITEM_TYPES.includes(stockType as StockItemType)) where.stockType = stockType;
         
         const andConditions = [];
