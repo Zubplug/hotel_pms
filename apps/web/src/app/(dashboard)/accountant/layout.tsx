@@ -9,7 +9,7 @@ export default async function AccountantLayout({ children }: { children: React.R
   try {
     await requireModuleAccess(session.user.id, 'MODULE_OPERATIONS', session.user.propertyId);
   } catch {
-    redirect('/settings/billing?required=MODULE_OPERATIONS');
+    redirect(`${process.env.NEXT_PUBLIC_WEBSITE_URL || 'https://getlodgecore.vercel.app'}/portal/subscription?required=MODULE_OPERATIONS`);
   }
   return children;
 }

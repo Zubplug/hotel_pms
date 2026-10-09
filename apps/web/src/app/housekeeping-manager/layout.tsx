@@ -9,6 +9,6 @@ export default async function HousekeepingManagerLayout({ children }: { children
   const role = String((session.user as any).role || '').toUpperCase();
   const capabilities = ((session.user as any).capabilities || []) as string[];
   if (role !== 'HOUSEKEEPING_MAINTENANCE_MANAGER' && !(capabilities.includes('ACCESS_HOUSEKEEPING') && capabilities.includes('ACCESS_MAINTENANCE'))) redirect('/hub');
-  try { await requireModuleAccess(session.user.id, 'MODULE_OPERATIONS', (session.user as any).propertyId); } catch { redirect('/settings/billing?required=MODULE_OPERATIONS'); }
+  try { await requireModuleAccess(session.user.id, 'MODULE_OPERATIONS', (session.user as any).propertyId); } catch { redirect(`${process.env.NEXT_PUBLIC_WEBSITE_URL || 'https://getlodgecore.vercel.app'}/portal/subscription?required=MODULE_OPERATIONS`); }
   return <HousekeepingManagerShell>{children}</HousekeepingManagerShell>;
 }

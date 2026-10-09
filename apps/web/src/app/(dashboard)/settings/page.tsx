@@ -1,7 +1,6 @@
 import Link from 'next/link';
 import { 
   Building2,
-  CreditCard,
   Bell,
   MonitorSmartphone,
   ShieldCheck,
@@ -64,15 +63,6 @@ const settingsLinks = [
     icon: Building2,
     color: 'text-blue-500',
     bgColor: 'bg-blue-500/10', module: 'MODULE_PMS'
-  },
-  {
-    title: 'Billing & Payments',
-    description: 'Configure payment gateways, invoices, and deposit policies.',
-    href: '/settings/billing',
-    icon: CreditCard,
-    color: 'text-purple-500',
-    bgColor: 'bg-purple-500/10',
-    module: 'MODULE_PMS'
   },
   {
     title: 'Security',

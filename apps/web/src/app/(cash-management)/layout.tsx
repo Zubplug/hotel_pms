@@ -18,7 +18,7 @@ export default async function CashierRootLayout({ children }: { children: React.
   try {
     await requireModuleAccess(session.user.id, 'MODULE_PMS', (session.user as any).propertyId);
   } catch {
-    redirect('/settings/billing?required=MODULE_PMS');
+    redirect(`${process.env.NEXT_PUBLIC_WEBSITE_URL || 'https://getlodgecore.vercel.app'}/portal/subscription?required=MODULE_PMS`);
   }
 
   const navigationModules = await getNavigationModules(session.user.id, (session.user as any).propertyId);

@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
+import CustomWebsiteAddonModal from "./CustomWebsiteAddonModal";
+import CustomDomainAddonModal from "./CustomDomainAddonModal";
 
 /* ─────────────────────────────────────────────────────────────
    TYPES
@@ -586,6 +588,7 @@ function AddOnCard({
   interval,
   busy,
   onCheckout,
+  onSpecialAddon,
   onDetails,
   canSubscribe,
   scopeReady,
@@ -595,6 +598,7 @@ function AddOnCard({
   interval: "month" | "year";
   busy: string | null;
   onCheckout: (key: string, priceIds: string[]) => void;
+  onSpecialAddon?: () => void;
   onDetails: () => void;
   canSubscribe: boolean;
   scopeReady: boolean;
@@ -652,9 +656,9 @@ function AddOnCard({
           className="btn btn-outline btn-sm sub-addon-cta"
           style={{ flex: 1 }}
           disabled={busy !== null || !price || !canSubscribe || !scopeReady || isActive}
-          onClick={() => price && onCheckout(key, [price.id])}
+          onClick={() => price && (onSpecialAddon ? onSpecialAddon() : onCheckout(key, [price.id]))}
         >
-          {busy === key ? "Opening…" : isActive ? "Active add-on" : !canSubscribe ? "Base plan required" : !scopeReady ? "No property available" : price ? "Add on →" : "Unavailable"}
+          {busy === key ? "Opening…" : isActive ? "Active add-on" : !canSubscribe ? "Base plan required" : !scopeReady ? "No property available" : price ? product.code === "ADDON_CUSTOM_WEBSITE_DESIGN" ? "Design my website →" : product.code === "ADDON_CUSTOM_DOMAIN" ? "Check domain →" : "Add on →" : "Unavailable"}
         </button>
       </div>
     </div>
@@ -687,6 +691,8 @@ export default function SubscriptionCatalogue({
   const [error, setError] = useState<string | null>(null);
   const [details, setDetails] = useState<{ kind: "plan" | "addon"; value: Plan | Product } | null>(null);
   const [scopeProduct, setScopeProduct] = useState<{ product: Product; key: string; priceIds: string[] } | null>(null);
+  const [websiteModalOpen, setWebsiteModalOpen] = useState(false);
+  const [domainModalOpen, setDomainModalOpen] = useState(false);
 
   async function checkout(key: string, priceIds: string[], planId?: string, requestedPropertyIds = selectedPropertyIds.slice(0, 1)) {
     if (!priceIds.length) return setError("This option does not have a published price for the selected billing interval yet.");
@@ -818,6 +824,7 @@ export default function SubscriptionCatalogue({
                 interval={interval}
                 busy={busy}
                 onCheckout={(key, priceIds) => startAddonCheckout(product, key, priceIds)}
+                onSpecialAddon={product.code === "ADDON_CUSTOM_WEBSITE_DESIGN" ? () => setWebsiteModalOpen(true) : product.code === "ADDON_CUSTOM_DOMAIN" ? () => setDomainModalOpen(true) : undefined}
                 canSubscribe={hasActiveBaseSubscription}
                 scopeReady={!isPropertyScoped(product) || properties.length > 0}
                 isActive={isPropertyScoped(product) ? properties.length > 0 && properties.every(property => (activeAddonPropertyIds[product.code] ?? []).includes(property.id)) : activeAddonCodes.includes(product.code)}
@@ -847,6 +854,8 @@ export default function SubscriptionCatalogue({
           onContinue={() => { const selection = scopeProduct; setScopeProduct(null); void checkout(selection.key, selection.priceIds, undefined, selectedPropertyIds); }}
         />
       )}
+      {websiteModalOpen && <CustomWebsiteAddonModal properties={properties} websitePrice={addOns.find(product => product.code === "ADDON_CUSTOM_WEBSITE_DESIGN")?.prices.find(price => price.interval === "one_time")} domainPrice={addOns.find(product => product.code === "ADDON_CUSTOM_DOMAIN")?.prices.find(price => price.interval === "month")} onError={message => setError(message || null)} initiallyOpen onClose={() => setWebsiteModalOpen(false)} />}
+      {domainModalOpen && <CustomDomainAddonModal properties={properties} domainPrice={addOns.find(product => product.code === "ADDON_CUSTOM_DOMAIN")?.prices.find(price => price.interval === "month")} onError={message => setError(message || null)} onClose={() => setDomainModalOpen(false)} />}
       <style>{`.sub-property-scope-modal{max-width:520px}.sub-scope-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:14px;border:1px solid var(--border);border-radius:12px;background:rgba(255,255,255,.025);margin-bottom:24px}.sub-scope-summary-label{font:10px var(--font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted)}.sub-scope-summary-value{margin-top:6px;color:var(--text-primary);font-size:13px;font-weight:650}.sub-scope-summary-total{color:var(--accent)}.sub-scope-dialog-heading{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;color:var(--text-secondary);font-size:12px;font-weight:650}.sub-scope-dialog-heading span+span{color:var(--text-muted);font:10px var(--font-mono)}.sub-scope-dialog-list{display:grid;gap:8px;max-height:260px;overflow:auto}.sub-scope-dialog-option{display:flex;align-items:center;gap:10px;padding:13px 14px;border:1px solid var(--border);border-radius:10px;background:rgba(255,255,255,.018);color:var(--text-secondary);font-size:13px;cursor:pointer;transition:border-color .2s,background .2s}.sub-scope-dialog-option:hover,.sub-scope-dialog-option.selected{border-color:rgba(0,212,232,.42);background:rgba(0,212,232,.07)}.sub-scope-dialog-option input{position:absolute;opacity:0;pointer-events:none}.sub-scope-dialog-check{display:flex;align-items:center;justify-content:center;width:18px;height:18px;border:1px solid rgba(255,255,255,.18);border-radius:5px;color:#06121c;background:transparent;font-size:11px;font-weight:800}.sub-scope-dialog-option.selected .sub-scope-dialog-check{border-color:var(--accent);background:var(--accent)}.sub-scope-dialog-note{margin-top:16px;color:var(--text-muted);font-size:11px;line-height:1.5}.sub-modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:22px;padding-top:18px;border-top:1px solid var(--border)}@media (max-width:600px){.sub-scope-summary{grid-template-columns:1fr}.sub-modal-actions{flex-direction:column-reverse}.sub-modal-actions .btn{width:100%}}`}</style>
     </div>
   );

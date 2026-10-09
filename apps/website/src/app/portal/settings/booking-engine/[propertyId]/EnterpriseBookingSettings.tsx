@@ -2,8 +2,6 @@
 
 import { useRef, useState, useTransition } from "react";
 import {
-  requestCustomDomain,
-  requestCustomWebsite,
   saveBookingContent,
   saveBookingDomain,
   saveBookingPaymentAccount,
@@ -192,13 +190,13 @@ export function EnterpriseBookingSettings({
       {(!section || section === "distribution") && <>
       <div className="be-section-heading be-section-heading-spaced"><div><span className="be-section-index">05</span> Distribution & growth</div><span>Optional services</span></div>
       <div className="be-control-grid">
-        <FormCard eyebrow="Custom domain" title="Own your booking address" description="Use a branded domain such as book.yourhotel.com. Domain activation is reviewed and provisioned by LodgeCore HQ." onSubmit={(form) => domainRequest ? saveBookingDomain(propertyId, new FormData(form)) : requestCustomDomain(propertyId, new FormData(form))}>
+        <FormCard eyebrow="Custom domain" title="Own your booking address" description="Use a branded domain such as book.yourhotel.com. Domain activation is configured by LodgeCore HQ after payment." onSubmit={(form) => domainRequest ? saveBookingDomain(propertyId, new FormData(form)) : Promise.resolve()}>
           <div className="be-domain-status">
             <div><span className="be-field-label">Current request</span><strong>{domainRequest?.domain ?? "No request yet"}</strong></div>
             {domainRequest && <StatusPill status={domainRequest.status} />}
           </div>
           {!domainRequest || domainRequest.status === "REJECTED" ? (
-            <div className="be-form-stack"><Field label="Domain to request" hint="Example: book.yourhotel.com"><input name="domain" type="text" placeholder="book.yourhotel.com" required /></Field><div className="be-form-footer"><button disabled={domainPending} type="submit" className="btn btn-primary btn-sm">{domainPending ? "Requesting…" : "Request domain"}</button>{domainMessage && <span className={domainMessage.ok ? "be-save-ok" : "be-save-error"}>{domainMessage.text}</span>}</div></div>
+            <div className="be-form-stack"><p className="be-field-hint">Check availability and pay for a custom domain from the Subscription add-ons flow. Booking Engine will be included automatically when required.</p><a href="/portal/subscription" className="btn btn-primary btn-sm">Open subscription add-ons →</a></div>
           ) : domainRequest.status !== "ACTIVE" ? (
             <p className="be-field-hint">Your request is being handled by LodgeCore. Once it is activated, the DNS connection controls will appear here.</p>
           ) : (
@@ -206,8 +204,8 @@ export function EnterpriseBookingSettings({
           )}
         </FormCard>
 
-        <FormCard eyebrow="White-glove service" title="Request a custom website" description="Need a bespoke hotel site beyond the built-in templates? Send a brief to the LodgeCore web team and track the request here." onSubmit={(form) => requestCustomWebsite(propertyId, new FormData(form))}>
-          {websiteRequest ? <div className="be-request-summary"><StatusPill status={websiteRequest.status} /><p>{websiteRequest.brief ?? "Your custom website request is being reviewed."}</p></div> : <div className="be-form-stack"><Field label="Project brief" hint="Tell the team about your property, visual direction and must-have pages."><textarea name="brief" rows={6} minLength={20} placeholder="We want a calm, editorial site for…" required /></Field><button type="submit" className="btn btn-primary btn-sm">Send brief to LodgeCore</button></div>}
+        <FormCard eyebrow="White-glove service" title="Custom website design" description="Website briefs, domain availability, Booking Engine bundling and payment are handled from the subscription portal." onSubmit={() => Promise.resolve()}>
+          {websiteRequest ? <div className="be-request-summary"><StatusPill status={websiteRequest.status} /><p>{websiteRequest.brief ?? "Your custom website request is being processed."}</p></div> : <div className="be-form-stack"><p className="be-field-hint">Open Subscription → Add-ons to start the professional website brief and checkout flow.</p><a href="/portal/subscription" className="btn btn-primary btn-sm">Open subscription add-ons →</a></div>}
         </FormCard>
       </div>
       </>}

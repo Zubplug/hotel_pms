@@ -16,14 +16,14 @@ export async function POST(request: NextRequest) {
   const customDomainRequestId = typeof body.customDomainRequestId === "string" ? body.customDomainRequestId : null;
   const customWebsiteRequestId = typeof body.customWebsiteRequestId === "string" ? body.customWebsiteRequestId : null;
   if (customDomainRequestId) {
-    const domainRequest = await prisma.customDomainRequest.findFirst({ where: { id: customDomainRequestId, organizationId, status: "APPROVED" }, select: { id: true, propertyId: true, amount: true, currency: true, billingPriceId: true } });
-    if (!domainRequest) return NextResponse.json({ error: "Custom-domain request is not approved for payment" }, { status: 409 });
+    const domainRequest = await prisma.customDomainRequest.findFirst({ where: { id: customDomainRequestId, organizationId, status: { in: ["REQUESTED", "PAYMENT_PENDING"] } }, select: { id: true, propertyId: true, amount: true, currency: true, billingPriceId: true } });
+    if (!domainRequest) return NextResponse.json({ error: "Custom-domain request is not ready for payment" }, { status: 409 });
     if (!requestedPriceIds.length && domainRequest.billingPriceId) requestedPriceIds.push(domainRequest.billingPriceId);
     body.propertyIds = [domainRequest.propertyId];
   }
   if (customWebsiteRequestId) {
-    const websiteRequest = await prisma.customWebsiteRequest.findFirst({ where: { id: customWebsiteRequestId, organizationId, status: "APPROVED" }, select: { propertyId: true, billingPriceId: true } });
-    if (!websiteRequest) return NextResponse.json({ error: "Custom website request is not approved for payment" }, { status: 409 });
+    const websiteRequest = await prisma.customWebsiteRequest.findFirst({ where: { id: customWebsiteRequestId, organizationId, status: { in: ["REQUESTED", "PAYMENT_PENDING"] } }, select: { propertyId: true, billingPriceId: true } });
+    if (!websiteRequest) return NextResponse.json({ error: "Custom website request is not ready for payment" }, { status: 409 });
     if (!requestedPriceIds.length && websiteRequest.billingPriceId) requestedPriceIds.push(websiteRequest.billingPriceId);
     body.propertyIds = [websiteRequest.propertyId];
   }
