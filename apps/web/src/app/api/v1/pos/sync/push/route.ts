@@ -286,21 +286,40 @@ export async function POST(req: NextRequest) {
           if (event.eventType === 'POS_SESSION_STARTED') {
              const existingSession = await tx.posSession.findUnique({ where: { id: event.aggregateId }});
              if (!existingSession) {
-                 const sessionBusinessDate = new Date(payload.BusinessDate || payload.businessDate || payload.OpenedAt || event.occurredAt);
+                 const sessionOpenedAt = new Date(payload.OpenedAt || event.occurredAt);
+                 const sessionBusinessDate = new Date(payload.BusinessDate || payload.businessDate || sessionOpenedAt);
                  const sessionBankType = payload.BankType || payload.bankType || 'SERVER';
                  const sessionBankingModel = payload.BankingModel || payload.bankingModel || 'SERVER_BANKING';
                  const sessionPropertyId = payload.PropertyId || payload.propertyId || terminal.propertyId;
                  const sessionOutletId = payload.OutletId || payload.outletId || terminal.outletId;
+                 const sessionPrimaryOperatorId = isUuid(payload.PrimaryOperatorId) ? payload.PrimaryOperatorId : operatorId;
+
+                 // The partial unique index protects the database, but a
+                 // read-then-create sequence can still race when two offline
+                 // terminals reconnect together. Serialize this exact shift
+                 // key so the second event can alias to the first session.
+                 const sessionLockKey = [
+                   sessionPropertyId,
+                   sessionOutletId,
+                   sessionPrimaryOperatorId || 'none',
+                   sessionBusinessDate.toISOString().slice(0, 10),
+                   sessionBankType,
+                 ].join(':');
+                 await tx.$executeRawUnsafe(
+                   'SELECT pg_advisory_xact_lock(hashtext($1))',
+                   sessionLockKey,
+                 );
+
                  const existingOpenSession = await tx.posSession.findFirst({
                    where: sessionBankType === 'SERVER'
                      ? {
                          propertyId: sessionPropertyId,
                          outletId: sessionOutletId,
-                         primaryOperatorId: isUuid(payload.PrimaryOperatorId) ? payload.PrimaryOperatorId : operatorId,
+                         primaryOperatorId: sessionPrimaryOperatorId,
                          businessDate: sessionBusinessDate,
                          bankType: 'SERVER',
                          status: 'OPEN',
-                         controlStatus: 'OPEN',
+                         OR: [{ controlStatus: 'OPEN' }, { controlStatus: null }],
                        }
                      : {
                          propertyId: sessionPropertyId,
@@ -309,7 +328,7 @@ export async function POST(req: NextRequest) {
                          bankType: 'CENTRAL',
                          bankingModel: 'CENTRAL_CASHIER',
                          status: 'OPEN',
-                         controlStatus: 'OPEN',
+                         OR: [{ controlStatus: 'OPEN' }, { controlStatus: null }],
                        },
                    orderBy: { openedAt: 'asc' },
                  });
@@ -352,18 +371,18 @@ export async function POST(req: NextRequest) {
                  await tx.posSession.create({
                      data: {
                          id: event.aggregateId,
-                         propertyId: payload.PropertyId || terminal.propertyId,
-                         outletId: payload.OutletId || terminal.outletId,
+                         propertyId: sessionPropertyId,
+                         outletId: sessionOutletId,
                          deviceId: resolvedDeviceId,
-                         bankingModel: payload.BankingModel || 'SERVER_BANKING',
-                         bankType: payload.BankType || 'SERVER',
-                         primaryOperatorId: isUuid(payload.PrimaryOperatorId) ? payload.PrimaryOperatorId : operatorId,
+                         bankingModel: sessionBankingModel,
+                         bankType: sessionBankType,
+                         primaryOperatorId: sessionPrimaryOperatorId,
                          openedBy: isUuid(payload.UserId) ? payload.UserId : operatorId,
                          status: payload.Status || 'OPEN',
-                         businessDate: new Date(payload.OpenedAt || event.occurredAt),
+                         businessDate: sessionBusinessDate,
                          openingCash: payload.OpeningCash || 0,
                          expectedCash: payload.OpeningCash || 0,
-                         openedAt: new Date(payload.OpenedAt || event.occurredAt)
+                         openedAt: sessionOpenedAt
                      }
                  });
                  }
