@@ -26,7 +26,7 @@ export async function POST(request: Request) {
       if (!availability.available) return NextResponse.json({ error: availability.message, suggestions: availability.suggestions }, { status: availability.status === 'UNKNOWN' ? 503 : 409 });
       const existing = await prisma.customDomainRequest.findFirst({ where: { domain }, select: { id: true } });
       if (existing) return NextResponse.json({ error: 'A request for this domain already exists.' }, { status: 409 });
-      domainPrice = await prisma.billingPrice.findFirst({ where: { product: { code: 'ADDON_CUSTOM_DOMAIN', active: true }, interval: 'month' }, orderBy: { amount: 'asc' }, select: { id: true, amount: true, currency: true } });
+      domainPrice = await prisma.billingPrice.findFirst({ where: { product: { code: 'ADDON_CUSTOM_DOMAIN', active: true }, interval: 'month' }, select: { id: true, amount: true, currency: true } }) ?? await prisma.billingPrice.findFirst({ where: { product: { code: 'ADDON_CUSTOM_DOMAIN', active: true }, interval: 'year' }, select: { id: true, amount: true, currency: true } });
       if (!domainPrice) return NextResponse.json({ error: 'Custom-domain pricing is not configured.' }, { status: 503 });
       const bookingEngine = await prisma.entitlement.findFirst({ where: { organizationId: user.organizationId, productCode: 'ADDON_BOOKING_ENGINE', status: 'ACTIVE', OR: [{ propertyId }, { propertyId: null }] }, select: { id: true } });
       if (!bookingEngine) {
