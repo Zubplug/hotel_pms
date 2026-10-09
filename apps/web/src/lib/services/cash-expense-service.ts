@@ -17,6 +17,7 @@ type ExpenseInput = {
   receiptUrl?: string;
   costCenterId?: string;
   items?: Array<{ description: string; unit?: string; quantity: number; unitPrice: number }>;
+  role?: string;
 };
 
 export const EXPENSE_APPROVAL_STAGES = ['GENERAL_CASHIER', 'ACCOUNTANT', 'GENERAL_MANAGER'] as const;
@@ -79,6 +80,9 @@ export class CashExpenseService {
         costCenter = await tx.costCenter.findFirst({ where: { id: input.costCenterId, propertyId: input.propertyId, isActive: true }, select: { id: true, name: true } });
         if (!costCenter) throw new ShiftControlError('Select an active cost centre configured for this property.', 'BAD_REQUEST');
       }
+      const isAutoApproved = input.role === 'GENERAL_CASHIER' || input.role === 'SUPER_ADMIN';
+      const initialStage = isAutoApproved ? 'ACCOUNTANT' : 'GENERAL_CASHIER';
+
       const expense = await tx.cashExpense.create({
         data: {
           propertyId: input.propertyId,
@@ -94,14 +98,27 @@ export class CashExpenseService {
           costCenter: costCenter?.name || null,
           costCenterId: costCenter?.id || null,
           requestedBy: ctx.userId,
-          currentApprovalStage: 'GENERAL_CASHIER',
+          currentApprovalStage: initialStage,
         },
       });
       await tx.cashExpenseApproval.createMany({
-        data: EXPENSE_APPROVAL_STAGES.map(stage => ({ expenseId: expense.id, stage, status: 'PENDING' })),
+        data: EXPENSE_APPROVAL_STAGES.map(stage => {
+          const isThisStageAutoApproved = isAutoApproved && stage === 'GENERAL_CASHIER';
+          return { 
+            expenseId: expense.id, 
+            stage, 
+            status: isThisStageAutoApproved ? 'APPROVED' : 'PENDING',
+            approverId: isThisStageAutoApproved ? ctx.userId : null,
+            actedAt: isThisStageAutoApproved ? new Date() : null,
+            notes: isThisStageAutoApproved ? 'Auto-approved by requester (General Cashier)' : null,
+          };
+        }),
       });
       if (items.length > 0) await tx.cashExpenseLineItem.createMany({ data: items.map(item => ({ expenseId: expense.id, ...item })) });
       await this.audit(tx, expense.id, ctx.userId, 'SUBMITTED', 'Expense submitted for approval');
+      if (isAutoApproved) {
+        await this.audit(tx, expense.id, ctx.userId, 'GENERAL_CASHIER_APPROVED', 'Auto-approved by requester (General Cashier)');
+      }
       return expense;
     });
   }

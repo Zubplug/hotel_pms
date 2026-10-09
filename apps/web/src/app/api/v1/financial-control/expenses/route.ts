@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
       // Override reason is appended to the expense description for auditability
       body.description = `${body.description || ''} [Night Audit Override: ${overrideReason}]`.trim();
     }
-    const expense = await CashExpenseService.create(actor.ctx, { propertyId: body.propertyId, amount: Number(body.amount), currency: body.currency, categoryId: String(body.categoryId || ''), description: String(body.description || ''), payee: String(body.payee || ''), receiptUrl: body.receiptUrl, costCenterId: body.costCenterId ? String(body.costCenterId) : undefined, items: Array.isArray(body.items) ? body.items : undefined });
+    const expense = await CashExpenseService.create(actor.ctx, { propertyId: body.propertyId, amount: Number(body.amount), currency: body.currency, categoryId: String(body.categoryId || ''), description: String(body.description || ''), payee: String(body.payee || ''), receiptUrl: body.receiptUrl, costCenterId: body.costCenterId ? String(body.costCenterId) : undefined, items: Array.isArray(body.items) ? body.items : undefined, role: actor.role });
     return NextResponse.json({ data: expense }, { status: 201 });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Unable to create expense' }, { status: error.status || 500 });
