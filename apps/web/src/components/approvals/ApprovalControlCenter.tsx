@@ -74,7 +74,7 @@ export function ApprovalControlCenter({ audience }: ApprovalCenterProps) {
     ...data.refunds.map((value: any) => ({ kind: 'REFUND' as const, value })),
     ...data.priceApprovals.map((value: any) => ({ kind: 'POS' as const, value })),
     ...(data.stockTransfers || []).map((value: any) => ({ kind: 'STOCK_TRANSFER' as const, value })),
-    ...(data.purchaseOrders || []).map((value: any) => ({ kind: 'POS' as const, value: { ...value, type: 'PURCHASE_ORDER', details: { ...(value.details || {}), targetType: 'PURCHASE_ORDER', newPrice: value.amount, stage: 'ACCOUNTANT_REVIEW' } } })),
+    ...(data.purchaseOrders || []).map((value: any) => ({ kind: 'POS' as const, value: { ...value, type: 'PURCHASE_ORDER', details: { ...(value.details || {}), targetType: 'PURCHASE_ORDER', productName: `Purchase order ${value.poNumber}`, newPrice: value.totalAmount, stage: value.approvalStage === 'GENERAL_MANAGER' ? 'GENERAL_MANAGER_REVIEW' : 'ACCOUNTANT_REVIEW' } } })),
     ...(data.expenses || []).map((value: any) => ({ kind: 'EXPENSE' as const, value })),
   ].filter((item) => {
     if (tab !== 'ALL' && item.kind !== tab) return false;
@@ -89,7 +89,7 @@ export function ApprovalControlCenter({ audience }: ApprovalCenterProps) {
     if (item.kind === 'STOCK_TRANSFER') return audience === 'ACCOUNTING' || audience === 'CASHIER'; // Management and General Cashier review stock transfers
     if (item.kind === 'PURCHASE_ORDER') return audience === 'ACCOUNTING';
     if (item.kind === 'EXPENSE') return true;
-    if (item.value.type === 'PURCHASE_ORDER') return audience === 'ACCOUNTING';
+    if (item.value.type === 'PURCHASE_ORDER') return audience === 'ACCOUNTING' && (item.value.approvalStage === 'ACCOUNTANT' || item.value.approvalStage == null);
     const stage = item.value.details?.stage;
     return audience === 'CASHIER' ? stage === 'GENERAL_CASHIER_REVIEW' : stage === 'ACCOUNTANT_REVIEW';
   };
