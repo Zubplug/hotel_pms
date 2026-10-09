@@ -117,6 +117,7 @@ export default function RecipesPage() {
   const [targetMargin, setTargetMargin] = useState('70');
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const load = async () => { 
     const response = await fetch('/api/v1/inventory/recipes'); 
@@ -179,6 +180,11 @@ export default function RecipesPage() {
   const money = (v: number) =>
     new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', maximumFractionDigits: 2 }).format(v);
 
+  const filteredRecipes = data.recipes.filter((recipe: any) => 
+    recipe.posProduct?.name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    recipe.versions?.[0]?.versionName?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   return (
     <div className="min-h-full bg-[#08111f] text-slate-100 pb-16">
       {/* ── header ──────────────────────────────────────────────────── */}
@@ -223,23 +229,42 @@ export default function RecipesPage() {
             <h2 className="font-semibold text-white flex items-center gap-2">
               <BookOpen className="h-5 w-5 text-indigo-400" /> Active Recipes
             </h2>
-            <div className="rounded-full bg-white/[0.05] border border-white/[0.1] px-3 py-1 text-xs font-medium text-slate-300">
-              {data.recipes.length} configured
+            <div className="flex items-center gap-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+                <input 
+                  type="text" 
+                  placeholder="Search recipes..." 
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  className="h-9 w-64 rounded-lg border border-white/10 bg-[#0d1832] pl-9 pr-3 text-sm text-white outline-none placeholder:text-slate-500 focus:border-indigo-500/50 focus:shadow-[0_0_0_2px_rgba(99,102,241,0.1)] transition-all"
+                />
+                {searchQuery && (
+                  <button onClick={() => setSearchQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+              <div className="rounded-full bg-white/[0.05] border border-white/[0.1] px-3 py-1 text-xs font-medium text-slate-300">
+                {filteredRecipes.length} configured
+              </div>
             </div>
           </div>
           
           <div className="divide-y divide-white/[0.05]">
-            {data.recipes.length === 0 ? (
+            {filteredRecipes.length === 0 ? (
               <div className="px-6 py-16 flex flex-col items-center justify-center text-slate-500">
                 <ChefHat className="h-12 w-12 mb-4 opacity-20" />
-                <p>No recipes configured yet.</p>
-                <button onClick={newRecipe} className="mt-4 text-sm font-semibold text-indigo-400 hover:text-indigo-300">
-                  Create your first recipe
-                </button>
+                <p>{searchQuery ? 'No recipes match your search.' : 'No recipes configured yet.'}</p>
+                {!searchQuery && (
+                  <button onClick={newRecipe} className="mt-4 text-sm font-semibold text-indigo-400 hover:text-indigo-300">
+                    Create your first recipe
+                  </button>
+                )}
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-6 bg-white/[0.01]">
-                {data.recipes.map((recipe: any) => { 
+                {filteredRecipes.map((recipe: any) => { 
                   const version = recipe.versions?.[0]; 
                   const mapped = Boolean(version?.ingredients?.length); 
                   const currentCost = costFor(version, stockById);
