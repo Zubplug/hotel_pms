@@ -77,6 +77,30 @@ function RoomCard({ room, checkIn, checkOut, adults, children }: {
 
       <div style={{ padding: 'var(--space-6)' }}>
         <h2 style={{ fontSize: 'var(--text-xl)', marginBottom: 'var(--space-2)' }}>{room.name}</h2>
+        <div style={{ marginBottom: 'var(--space-4)' }}>
+          {room.availability.isAvailable ? (
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              padding: '5px 10px', borderRadius: '999px',
+              background: room.availability.available <= 3 ? 'rgba(185, 122, 35, 0.12)' : 'rgba(42, 108, 82, 0.1)',
+              color: room.availability.available <= 3 ? 'var(--color-gold-dark)' : 'var(--color-green)',
+              fontSize: 'var(--text-xs)', fontWeight: 700,
+            }}>
+              <span aria-hidden="true">●</span>
+              {room.availability.available <= 3
+                ? `Only ${room.availability.available} left for these dates`
+                : `${room.availability.available} rooms available for these dates`}
+            </span>
+          ) : (
+            <span style={{
+              display: 'inline-flex', padding: '5px 10px', borderRadius: '999px',
+              background: 'rgba(120, 120, 120, 0.1)', color: 'var(--text-muted)',
+              fontSize: 'var(--text-xs)', fontWeight: 700,
+            }}>
+              Sold out for these dates
+            </span>
+          )}
+        </div>
         {room.description && (
           <p style={{ fontSize: 'var(--text-sm)', marginBottom: 'var(--space-4)', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
             {room.description}
@@ -164,6 +188,7 @@ function RoomsPageContent() {
   const nights = availability?.nights ?? 0;
   const availableRooms = availability?.data.filter(r => r.availability.isAvailable) ?? [];
   const unavailableRooms = availability?.data.filter(r => !r.availability.isAvailable) ?? [];
+  const availableInventory = availableRooms.reduce((total, room) => total + room.availability.available, 0);
 
   return (
     <>
@@ -229,10 +254,14 @@ function RoomsPageContent() {
           {!loading && !error && availability && (
             <>
               <h1 style={{ fontSize: 'var(--text-3xl)', marginBottom: 'var(--space-3)' }}>
-                {availableRooms.length > 0 ? `${availableRooms.length} Room${availableRooms.length > 1 ? 's' : ''} Available` : 'No Rooms Available'}
+                {availableRooms.length > 0
+                  ? `${availableInventory} room${availableInventory === 1 ? '' : 's'} available`
+                  : 'No Rooms Available'}
               </h1>
               <p style={{ color: 'var(--text-muted)', marginBottom: 'var(--space-10)' }}>
-                {availableRooms.length > 0 ? 'Select your preferred room and rate plan to continue.' : 'No rooms match your criteria. Try different dates or occupancy.'}
+                {availableRooms.length > 0
+                  ? `${availableRooms.length} room type${availableRooms.length === 1 ? '' : 's'} available for your dates. Select your preferred room and rate plan to continue.`
+                  : 'No rooms match your criteria. Try different dates or occupancy.'}
               </p>
 
               {availableRooms.length === 0 && (
