@@ -16,7 +16,7 @@ export default function AboutPage() {
       <main id="main-content">
         {/* Hero */}
         <section style={{ position: 'relative', height: '500px', display: 'flex', alignItems: 'flex-end' }}>
-          <Image src="/images/lobby.jpg" alt="Stanzel Grand Resort lobby" fill priority style={{ objectFit: 'cover', objectPosition: 'center 30%' }} sizes="100vw" />
+          <Image src="/images/hero-entrance.jpg" alt="Stanzel Grand Resort — Gwarinpa, Abuja" fill priority style={{ objectFit: 'cover', objectPosition: 'center 35%' }} sizes="100vw" />
           <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(16,38,32,0.9) 0%, rgba(16,38,32,0.2) 55%)' }} />
           <div className="container" style={{ position: 'relative', zIndex: 2, paddingBottom: 'var(--space-16)' }}>
             <p className="eyebrow" style={{ color: 'var(--color-gold)', marginBottom: 'var(--space-3)' }}>Our Story</p>
@@ -43,7 +43,7 @@ export default function AboutPage() {
                 </p>
               </div>
               <div style={{ position: 'relative', height: '480px', borderRadius: 'var(--radius-2xl)', overflow: 'hidden' }}>
-                <Image src="/images/aerial.jpg" alt="Stanzel Grand Resort grounds" fill style={{ objectFit: 'cover' }} sizes="(max-width: 768px) 100vw, 50vw" />
+                <Image src="/images/entrance-gate.jpg" alt="Stanzel Grand Resort entrance gate" fill style={{ objectFit: 'cover', objectPosition: 'center 40%' }} sizes="(max-width: 768px) 100vw, 50vw" />
               </div>
             </div>
           </div>
