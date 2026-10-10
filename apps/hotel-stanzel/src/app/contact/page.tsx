@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import type { Metadata } from 'next';
+import { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
@@ -15,11 +15,22 @@ const ENQUIRY_TYPES = [
   { value: 'other', label: 'Other' },
 ];
 
+const VALID_TYPES = ENQUIRY_TYPES.map(t => t.value);
+
 export default function ContactPage() {
-  const [form, setForm] = useState({ type: 'general', name: '', email: '', phone: '', message: '', honeypot: '' });
+  const searchParams = useSearchParams();
+  const initialType = VALID_TYPES.includes(searchParams.get('type') ?? '') ? (searchParams.get('type') as string) : 'general';
+
+  const [form, setForm] = useState({ type: initialType, name: '', email: '', phone: '', message: '', honeypot: '' });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [status, setStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
   const [errorMsg, setErrorMsg] = useState('');
+
+  // Sync type if URL param changes after mount (e.g. back navigation)
+  useEffect(() => {
+    const t = searchParams.get('type');
+    if (t && VALID_TYPES.includes(t)) setForm(f => ({ ...f, type: t }));
+  }, [searchParams]);
 
   function validate() {
     const e: Record<string, string> = {};
