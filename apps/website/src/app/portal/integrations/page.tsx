@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { PortalShell } from "@/components/portal-shell";
+import { IntegrationSetupModal } from "./IntegrationSetupModal";
 
 const INTEGRATIONS = [
   { id: "paystack",    name: "Paystack",     type: "Payments",         icon: "💳", status: "not-connected", desc: "Legacy reservation payment provider." },
@@ -24,6 +25,7 @@ const statusClass: Record<string, string> = {
 
 export default function PortalIntegrationsPage() {
   const [requesting, setRequesting] = useState<string | null>(null);
+  const [setupOpen, setSetupOpen] = useState(false);
 
   return (
     <PortalShell>
@@ -94,7 +96,7 @@ export default function PortalIntegrationsPage() {
                 </td>
                 <td>
                   {int.id === "flutterwave" ? (
-                    <Link href="/portal/settings/booking-engine" className="btn btn-outline btn-sm" style={{ fontSize: 10, padding: "4px 10px" }}>Configure</Link>
+                    <button type="button" onClick={() => setSetupOpen(true)} className="btn btn-outline btn-sm" style={{ fontSize: 10, padding: "4px 10px" }}>Configure</button>
                   ) : int.status === "live" ? (
                     <Link href="/portal/support" className="btn btn-outline btn-sm" style={{ fontSize: 10, padding: "4px 10px" }}>Manage</Link>
                   ) : (
@@ -120,6 +122,7 @@ export default function PortalIntegrationsPage() {
         </p>
         <Link href="/portal/support" className="btn btn-outline btn-sm" style={{ marginTop: 14 }}>Request custom integration →</Link>
       </div>
+      {setupOpen && <IntegrationSetupModal onClose={() => setSetupOpen(false)} />}
     </PortalShell>
   );
 }

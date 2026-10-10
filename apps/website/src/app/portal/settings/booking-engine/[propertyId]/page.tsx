@@ -32,7 +32,7 @@ export default async function BookingEnginePropertyPage({
       where: {
         organizationId,
         OR: [{ propertyId }, { propertyId: null }],
-        productCode: { in: ["ADDON_BOOKING_ENGINE", "ADDON_CUSTOM_WEBSITE_API"] },
+        productCode: { in: ["ADDON_BOOKING_ENGINE", "ADDON_CUSTOM_WEBSITE_API", "ADDON_CUSTOM_WEBSITE_PMS"] },
         status: "ACTIVE",
       },
       select: { id: true },
@@ -70,7 +70,7 @@ export default async function BookingEnginePropertyPage({
       select: { id: true, name: true, code: true },
       orderBy: { name: "asc" },
     }),
-    prisma.bookingPaymentAccount.findFirst({ where: { organizationId, propertyId, isActive: true }, select: { id: true, provider: true, mode: true, currency: true, publicKey: true, secretRef: true, webhookSecretRef: true, secretCiphertext: true, webhookSecretCiphertext: true } }),
+    prisma.bookingPaymentAccount.findFirst({ where: { organizationId, propertyId, isActive: true }, select: { id: true, provider: true, mode: true, target: true, currency: true, publicKey: true, secretRef: true, webhookSecretRef: true, secretCiphertext: true, webhookSecretCiphertext: true } }),
     prisma.customDomainRequest.findFirst({
       where: { organizationId, propertyId, status: { notIn: ["REJECTED", "CANCELLED"] } },
       orderBy: { createdAt: "desc" },

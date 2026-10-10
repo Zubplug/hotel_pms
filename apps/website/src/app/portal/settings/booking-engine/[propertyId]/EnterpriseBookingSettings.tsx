@@ -19,6 +19,7 @@ type Account = {
   id: string;
   provider: string;
   mode: string;
+  target: string;
   currency: string;
   publicKey: string | null;
   secretRef: string | null;
@@ -157,6 +158,7 @@ export function EnterpriseBookingSettings({
         <FormCard eyebrow="Payments" title="Online payment account" description="Connect the live gateway used for deposits and full-payment bookings. Secrets remain environment references, never raw credentials." onSubmit={(form) => saveBookingPaymentAccount(propertyId, new FormData(form))}>
           <div className="be-form-stack">
             <input type="hidden" name="accountId" value={account?.id ?? "00000000-0000-0000-0000-000000000000"} readOnly />
+            <input type="hidden" name="target" value={account?.target ?? "BOOKING_ENGINE"} readOnly />
             <Field label="Payment account">
               <select name="mode" value={paymentMode} onChange={(event) => setPaymentMode(event.target.value)}>
                 <option value="PLATFORM">LodgeCore manages payments</option>

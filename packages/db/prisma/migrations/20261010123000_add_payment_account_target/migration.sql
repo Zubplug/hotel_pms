@@ -1,0 +1,2 @@
+ALTER TABLE "BookingPaymentAccount"
+  ADD COLUMN "target" TEXT NOT NULL DEFAULT 'BOOKING_ENGINE';

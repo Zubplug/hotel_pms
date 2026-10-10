@@ -6997,6 +6997,8 @@ model BookingPaymentAccount {
 
   /// PAYSTACK | FLUTTERWAVE
   provider String
+  /// BOOKING_ENGINE | STANDALONE_API
+  target   String   @default("BOOKING_ENGINE")
   /// PLATFORM = LodgeCore's own account; CUSTOMER = hotel's own merchant account
   mode     String
 

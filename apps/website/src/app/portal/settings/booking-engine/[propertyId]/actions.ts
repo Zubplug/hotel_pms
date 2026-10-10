@@ -13,12 +13,12 @@ async function requireBookingEntitlement(organizationId: string, propertyId: str
     where: {
       organizationId,
       OR: [{ propertyId }, { propertyId: null }],
-      productCode: { in: ["ADDON_BOOKING_ENGINE", "ADDON_CUSTOM_WEBSITE_API"] },
+      productCode: { in: ["ADDON_BOOKING_ENGINE", "ADDON_CUSTOM_WEBSITE_API", "ADDON_CUSTOM_WEBSITE_PMS"] },
       status: "ACTIVE",
     },
     select: { id: true },
   });
-  if (!entitlement) throw new Error("Booking Engine or Standalone API entitlement is required");
+  if (!entitlement) throw new Error("Booking Engine, Standalone API, or PMS Website entitlement is required");
 }
 
 // ── Guard ─────────────────────────────────────────────────────────────────
@@ -224,8 +224,9 @@ export async function saveBookingPaymentAccount(propertyId: string, formData: Fo
   const organizationId = await guardedPortalUser(propertyId);
   const provider = String(formData.get("provider") ?? "PAYSTACK").toUpperCase();
   const mode = String(formData.get("mode") ?? "PLATFORM").toUpperCase();
+  const target = String(formData.get("target") ?? "BOOKING_ENGINE").toUpperCase();
   const currency = String(formData.get("currency") ?? "NGN").toUpperCase();
-  if (!["PAYSTACK", "FLUTTERWAVE"].includes(provider) || !["PLATFORM", "CUSTOMER"].includes(mode)) throw new Error("Invalid payment provider configuration");
+  if (!["PAYSTACK", "FLUTTERWAVE"].includes(provider) || !["PLATFORM", "CUSTOMER"].includes(mode) || !["BOOKING_ENGINE", "STANDALONE_API", "PMS_WEBSITE"].includes(target)) throw new Error("Invalid payment provider configuration");
   const accountId = String(formData.get("accountId") ?? "00000000-0000-0000-0000-000000000000");
   const existing = await prisma.bookingPaymentAccount.findUnique({ where: { id: accountId }, select: { secretCiphertext: true, webhookSecretCiphertext: true } });
   const customerSecret = String(formData.get("customerSecret") ?? "").trim();
@@ -235,8 +236,8 @@ export async function saveBookingPaymentAccount(propertyId: string, formData: Fo
   await prisma.bookingPaymentAccount.updateMany({ where: { organizationId, propertyId }, data: { isActive: false } });
   await prisma.bookingPaymentAccount.upsert({
     where: { id: accountId },
-    create: { organizationId, propertyId, provider, mode, currency, publicKey: String(formData.get("publicKey") ?? "").trim() || null, secretRef: String(formData.get("secretRef") ?? "").trim() || null, webhookSecretRef: String(formData.get("webhookSecretRef") ?? "").trim() || null, secretCiphertext: customerSecret ? encryptPaymentCredential(customerSecret) : null, webhookSecretCiphertext: customerWebhookSecret ? encryptPaymentCredential(customerWebhookSecret) : null, isActive: true },
-    update: { provider, mode, currency, publicKey: String(formData.get("publicKey") ?? "").trim() || null, secretRef: String(formData.get("secretRef") ?? "").trim() || null, webhookSecretRef: String(formData.get("webhookSecretRef") ?? "").trim() || null, ...(customerSecret ? { secretCiphertext: encryptPaymentCredential(customerSecret) } : {}), ...(customerWebhookSecret ? { webhookSecretCiphertext: encryptPaymentCredential(customerWebhookSecret) } : {}), isActive: true },
+    create: { organizationId, propertyId, provider, mode, target, currency, publicKey: String(formData.get("publicKey") ?? "").trim() || null, secretRef: String(formData.get("secretRef") ?? "").trim() || null, webhookSecretRef: String(formData.get("webhookSecretRef") ?? "").trim() || null, secretCiphertext: customerSecret ? encryptPaymentCredential(customerSecret) : null, webhookSecretCiphertext: customerWebhookSecret ? encryptPaymentCredential(customerWebhookSecret) : null, isActive: true },
+    update: { provider, mode, target, currency, publicKey: String(formData.get("publicKey") ?? "").trim() || null, secretRef: String(formData.get("secretRef") ?? "").trim() || null, webhookSecretRef: String(formData.get("webhookSecretRef") ?? "").trim() || null, ...(customerSecret ? { secretCiphertext: encryptPaymentCredential(customerSecret) } : {}), ...(customerWebhookSecret ? { webhookSecretCiphertext: encryptPaymentCredential(customerWebhookSecret) } : {}), isActive: true },
   });
   revalidatePath(`/portal/settings/booking-engine/${propertyId}`);
 }
