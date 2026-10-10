@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
-import prisma from '@hotel-pms/db';
+import prisma, { AuthoritativeAvailabilityService } from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
 import { requireOrganizationContext } from '@/lib/organization-access';
 
@@ -31,36 +31,25 @@ export async function GET(req: NextRequest) {
       return errorResponse('BAD_REQUEST', 'Invalid date range', 400);
     }
 
-    // Overlap logic: checkIn < existingCheckOut AND checkOut > existingCheckIn
-    const availableRooms = await prisma.room.findMany({
-      where: {
+    const roomTypeIds = roomTypeId
+      ? [roomTypeId]
+      : (await prisma.roomType.findMany({
+          where: { propertyId, isActive: true, deletedAt: null },
+          select: { id: true },
+        })).map((roomType) => roomType.id);
+
+    const availableRoomIds = (await Promise.all(roomTypeIds.map(async (id) => {
+      const rooms = await AuthoritativeAvailabilityService.findAssignableRooms(prisma as any, {
         propertyId,
-        isActive: true,
-        ...(roomTypeId ? { roomTypeId } : {}),
-        // RESERVED is date-scoped. A room reserved for a future stay remains
-        // sellable today; reservationRooms below enforces the actual overlap.
-        status: { in: ['AVAILABLE', 'CLEAN', 'INSPECTED', 'RESERVED'] },
-        reservationRooms: {
-          none: {
-            reservation: {
-              status: { in: ['CONFIRMED', 'CHECKED_IN'] },
-            },
-            status: { notIn: ['CANCELLED', 'NO_SHOW'] },
-            AND: [
-              { checkIn: { lt: checkOutDate } },
-              { checkOut: { gt: checkInDate } },
-            ],
-          },
-        },
-        roomBlocks: {
-          none: {
-            AND: [
-              { startDate: { lt: checkOutDate } },
-              { endDate: { gt: checkInDate } },
-            ],
-          },
-        },
-      },
+        roomTypeId: id,
+        checkIn: checkInDate,
+        checkOut: checkOutDate,
+      });
+      return rooms.map((room) => room.id);
+    }))).flat();
+
+    const availableRooms = await prisma.room.findMany({
+      where: { id: { in: availableRoomIds } },
       include: { roomType: { select: { id: true, name: true, baseRate: true, currency: true } } },
       orderBy: { number: 'asc' },
     });
