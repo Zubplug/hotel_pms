@@ -4,6 +4,8 @@ import { errorResponse } from '@/lib/api-response';
 import { resolveUser } from '@/lib/resolve-user';
 import { requireOrganizationContext } from '@/lib/organization-access';
 import { requireStockUnitConversion } from '@/lib/inventory/UnitConversionService';
+import { getUnitConversionToBase } from '@/lib/inventory/units';
+import { isKitchenProductionStation, kitchenServiceOutletId } from '@/lib/inventory/kitchen-routing';
 
 export async function GET(
   _req: NextRequest,
@@ -12,12 +14,55 @@ export async function GET(
   try {
     const { productId } = await params;
 
+    const product = await prisma.posProduct.findUnique({
+      where: { id: productId },
+      select: {
+        propertyId: true,
+        productionStation: true,
+        category: { select: { outletId: true, productionStation: true } },
+      },
+    });
+    if (!product) return NextResponse.json({ data: [], error: 'Product not found' }, { status: 404 });
+
+    const property = await prisma.property.findUnique({ where: { id: product.propertyId }, select: { settings: true } });
+    const station = product.productionStation ?? product.category?.productionStation ?? 'KITCHEN';
+    const kitchenOutletId = property ? kitchenServiceOutletId(property.settings) : null;
+    const targetOutletId = isKitchenProductionStation(station) ? kitchenOutletId : product.category?.outletId;
+    const targetWarehouse = targetOutletId
+      ? await prisma.warehouse.findUnique({ where: { posOutletId: targetOutletId }, select: { id: true } })
+      : null;
+
     const modifiers = await prisma.posProductModifier.findMany({
       where: { productId, isActive: true },
       orderBy: { name: 'asc' },
+      include: { stockItem: { select: { id: true, name: true, sku: true, barcode: true, baseUnit: true, stockUnits: true } } },
     });
 
-    return NextResponse.json({ data: modifiers, error: null });
+    const targetItems = targetWarehouse
+      ? await prisma.stockItem.findMany({ where: { warehouseId: targetWarehouse.id, isActive: true }, select: { name: true, sku: true, barcode: true, quantityOnHand: true } })
+      : [];
+    const enriched = modifiers.map((modifier) => {
+      const stockItem = modifier.stockItem;
+      if (!modifier.stockItemId || !stockItem) return { ...modifier, stockStatus: 'NON_STOCK', availableQuantity: null, availabilityIssue: null, stockItem: undefined };
+      const target = targetItems.find((item) =>
+        (stockItem.barcode && item.barcode === stockItem.barcode) ||
+        (stockItem.sku && item.sku === stockItem.sku) ||
+        item.name.trim().toLowerCase() === stockItem.name.trim().toLowerCase());
+      const conversion = getUnitConversionToBase(modifier.unitOfMeasure, stockItem.baseUnit, stockItem.stockUnits || []);
+      const required = Number(modifier.quantity || 0) * conversion;
+      const availableQuantity = target ? Number(target.quantityOnHand || 0) : 0;
+      const available = required > 0 ? availableQuantity / required : 0;
+      const availabilityIssue = conversion <= 0 ? 'MISSING_CONVERSION' : !target ? 'MISSING_TARGET_STOCK' : availableQuantity <= 0 ? 'ZERO_STOCK' : available < 1 ? 'INSUFFICIENT_STOCK' : null;
+      return {
+        ...modifier,
+        stockStatus: availabilityIssue ? 'OUT_OF_STOCK' : 'IN_STOCK',
+        availableQuantity,
+        availabilityIssue,
+        stockItem: undefined,
+      };
+    });
+
+    return NextResponse.json({ data: enriched, error: null });
   } catch (err: any) {
     return NextResponse.json({ data: [], error: err.message }, { status: 500 });
   }

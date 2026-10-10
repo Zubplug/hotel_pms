@@ -57,6 +57,7 @@ export function ModifierSelectionModal({ isOpen, onClose, product, onConfirm }: 
 
   const toggleModifier = (modId: string) => {
     const modifier = modifiers.find((mod) => mod.id === modId);
+    if (!modifier || modifier.stockStatus === 'OUT_OF_STOCK') return;
     setSelectedModifiers((prev) => {
       const next = new Set(prev);
       if (!modifier?.groupName) {
@@ -88,7 +89,8 @@ export function ModifierSelectionModal({ isOpen, onClose, product, onConfirm }: 
     modifiers: modifiers.filter((mod) => (mod.groupName || '__ungrouped__') === key),
   }));
   const missingRequiredGroups = modifierGroups.filter((group) =>
-    group.modifiers.some((mod) => mod.groupRequired) && !group.modifiers.some((mod) => selectedModifiers.has(mod.id))
+    group.modifiers.some((mod) => mod.groupRequired) &&
+    !group.modifiers.some((mod) => mod.stockStatus !== 'OUT_OF_STOCK' && selectedModifiers.has(mod.id))
   );
 
   const handleConfirm = () => {
@@ -148,13 +150,15 @@ export function ModifierSelectionModal({ isOpen, onClose, product, onConfirm }: 
                     </div>
                     {group.modifiers.map((mod) => {
                       const selected = selectedModifiers.has(mod.id);
+                      const unavailable = mod.stockStatus === 'OUT_OF_STOCK';
                       const singleChoice = Number(mod.groupMaxSelect) === 1;
                       return (
                         <button
                           key={mod.id}
                           onClick={() => toggleModifier(mod.id)}
+                          disabled={unavailable}
                           className={'w-full flex items-center justify-between p-4 rounded-xl border-2 transition-all touch-manipulation ' +
-                            (selected ? 'border-indigo-600 bg-indigo-50 text-indigo-900' : 'border-slate-200 bg-white hover:border-slate-300 text-slate-700')}
+                            (unavailable ? 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed' : selected ? 'border-indigo-600 bg-indigo-50 text-indigo-900' : 'border-slate-200 bg-white hover:border-slate-300 text-slate-700')}
                         >
                           <div className="flex items-center gap-3">
                             <div className={'w-5 h-5 flex items-center justify-center ' +
@@ -163,7 +167,7 @@ export function ModifierSelectionModal({ isOpen, onClose, product, onConfirm }: 
                             >
                               {selected && <Check className="w-3 h-3" />}
                             </div>
-                            <span className="font-medium">{mod.name}</span>
+                            <span className="font-medium">{mod.name}{unavailable && <span className="ml-2 text-xs font-semibold text-rose-500">Out of stock</span>}</span>
                           </div>
                           {Number(mod.price) > 0 && <span className="font-semibold">+{formatCurrency(Number(mod.price))}</span>}
                         </button>

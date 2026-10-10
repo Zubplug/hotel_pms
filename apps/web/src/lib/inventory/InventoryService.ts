@@ -3,6 +3,7 @@ import { assertNightAuditAllowsTransaction } from '@/lib/night-audit-guard';
 import { GRN_STATUS, TRANSFER_STATUS, PO_STATUS } from '@/lib/inventory/types';
 import { TenantContext } from '../organization-access';
 import { isKitchenProductionStation, kitchenServiceOutletId } from './kitchen-routing';
+import { getUnitConversionToBase } from './units';
 
 function normalizeStockName(value: string) {
   return value.trim().toLowerCase().replace(/\s+/g, ' ');
@@ -89,10 +90,7 @@ export class InventoryService {
           throw new Error(`Item ${item.productName} requires an active Recipe because its inventoryMode is STOCK. No recipe found.`);
         }
         for (const recipe of ingredients) {
-          const conversion = recipe.unitOfMeasure === recipe.stockItem?.baseUnit ||
-            (['UNIT', 'EACH', 'PIECE'].includes(recipe.unitOfMeasure) && ['UNIT', 'EACH', 'PIECE'].includes(recipe.stockItem?.baseUnit || ''))
-            ? 1
-            : Number(recipe.stockItem?.stockUnits?.find((unit: any) => unit.unit === recipe.unitOfMeasure)?.unitsInBase || 0);
+          const conversion = getUnitConversionToBase(recipe.unitOfMeasure, recipe.stockItem?.baseUnit, recipe.stockItem?.stockUnits || []);
           if (conversion <= 0) throw new Error(`No conversion configured from ${recipe.unitOfMeasure} to ${recipe.stockItem?.baseUnit || 'base unit'} for ${item.productName}`);
           addRequirement(recipe.stockItemId, Number(recipe.quantity) * conversion * Number(item.quantity), productUsesKitchen(item.product));
         }
@@ -100,10 +98,7 @@ export class InventoryService {
       for (const modifier of item.modifiers || []) {
         if (!modifier.stockItemId || Number(modifier.quantity) <= 0) continue;
         const stock = await tx.stockItem.findUnique({ where: { id: modifier.stockItemId }, select: { baseUnit: true, stockType: true, stockUnits: true } });
-        const conversion = !modifier.unitOfMeasure || modifier.unitOfMeasure === stock?.baseUnit ||
-          (['UNIT', 'EACH', 'PIECE'].includes(modifier.unitOfMeasure) && ['UNIT', 'EACH', 'PIECE'].includes(stock?.baseUnit || ''))
-          ? 1
-          : Number(stock?.stockUnits?.find((unit: any) => unit.unit === modifier.unitOfMeasure)?.unitsInBase || 0);
+        const conversion = getUnitConversionToBase(modifier.unitOfMeasure, stock?.baseUnit, stock?.stockUnits || []);
         if (conversion <= 0) throw new Error(`No conversion configured for modifier ${modifier.name}`);
         addRequirement(modifier.stockItemId, Number(modifier.quantity) * conversion * Number(item.quantity), productUsesKitchen(item.product));
       }

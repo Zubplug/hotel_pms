@@ -54,6 +54,8 @@ public class LocalPosProduct
     public decimal? AvailableStock { get; set; }
     [System.ComponentModel.DataAnnotations.Schema.NotMapped]
     public bool HasInventoryMapping { get; set; }
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
+    public List<Dictionary<string, object?>> AvailabilityIssues { get; set; } = new();
 }
 
 public class LocalStockItem
@@ -500,6 +502,12 @@ public class LocalPosProductModifier
     public bool GroupRequired { get; set; }
     public int? GroupMaxSelect { get; set; }
     public DateTime CreatedAt { get; set; }
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
+    public string StockStatus { get; set; } = "NON_STOCK";
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
+    public decimal? AvailableQuantity { get; set; }
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
+    public string? AvailabilityIssue { get; set; }
 }
 
 public class LocalPosOrderItemModifier

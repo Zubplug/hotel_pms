@@ -12,6 +12,23 @@ export function formatUnit(unit: string) {
 
 export type PurchaseUnitLike = { unit: string; unitsInBase: unknown; purchaseCost?: unknown; isPurchaseUnit?: boolean };
 
+const DISCRETE_UNITS = new Set(['UNIT', 'EACH', 'PIECE']);
+
+/** Discrete stock units are aliases in the POS and inventory ledger. */
+export function areEquivalentDiscreteUnits(from: string | null | undefined, to: string | null | undefined) {
+  return Boolean(from && to && DISCRETE_UNITS.has(from) && DISCRETE_UNITS.has(to));
+}
+
+/** Return the number of base units represented by one recipe/modifier unit. */
+export function getUnitConversionToBase(
+  unit: string | null | undefined,
+  baseUnit: string | null | undefined,
+  stockUnits: Array<{ unit: string; unitsInBase: unknown }> = [],
+) {
+  if (!unit || !baseUnit || unit === baseUnit || areEquivalentDiscreteUnits(unit, baseUnit)) return 1;
+  return Number(stockUnits.find((candidate) => candidate.unit === unit)?.unitsInBase || 0);
+}
+
 /** Monetary values entered as purchase prices are currency values, not raw floats. */
 export function roundCurrency(value: number) {
   return Math.round((Number(value) + Number.EPSILON) * 100) / 100;

@@ -4662,6 +4662,45 @@ public class LocalRepository
         return newCheck;
     }
 
+    private static bool IsDiscreteUnit(string unit)
+        => new[] { "UNIT", "EACH", "PIECE" }.Contains(unit);
+
+    private static decimal ConvertToBaseQuantity(LocalStockItem item, decimal quantity, string? issueUnit, out string? error)
+    {
+        error = null;
+        if (quantity <= 0m) return quantity;
+        var requestedUnit = (issueUnit ?? string.Empty).Trim().ToUpperInvariant();
+        var baseUnit = (item.BaseUnit ?? string.Empty).Trim().ToUpperInvariant();
+        if (string.IsNullOrWhiteSpace(requestedUnit) || string.IsNullOrWhiteSpace(baseUnit) || requestedUnit == baseUnit || IsDiscreteUnit(requestedUnit) && IsDiscreteUnit(baseUnit)) return quantity;
+        if (string.IsNullOrWhiteSpace(item.StockUnitsJson))
+        {
+            error = $"Missing conversion from {requestedUnit} to {baseUnit}";
+            return 0m;
+        }
+        List<LocalStockUnit>? units;
+        try { units = JsonSerializer.Deserialize<List<LocalStockUnit>>(item.StockUnitsJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }); }
+        catch (JsonException) { units = null; }
+        var conversion = units?.FirstOrDefault(u => string.Equals((u.Unit ?? string.Empty).Trim(), requestedUnit, StringComparison.OrdinalIgnoreCase));
+        var multiplier = 0m;
+        if (conversion != null)
+        {
+            if (conversion.UnitsInBase.ValueKind == JsonValueKind.Number) conversion.UnitsInBase.TryGetDecimal(out multiplier);
+            else if (conversion.UnitsInBase.ValueKind == JsonValueKind.String) decimal.TryParse(conversion.UnitsInBase.GetString(), out multiplier);
+        }
+        if (conversion == null || multiplier <= 0m)
+        {
+            error = $"Missing conversion from {requestedUnit} to {baseUnit}";
+            return 0m;
+        }
+        return quantity * multiplier;
+    }
+
+    private static LocalStockItem? FindMatchingStock(IEnumerable<LocalStockItem> items, LocalStockItem template, string? warehouseId)
+        => items.FirstOrDefault(item => item.WarehouseId == warehouseId &&
+            ((!string.IsNullOrWhiteSpace(template.Barcode) && item.Barcode == template.Barcode) ||
+             (!string.IsNullOrWhiteSpace(template.Sku) && item.Sku == template.Sku) ||
+             string.Equals(item.Name.Trim(), template.Name.Trim(), StringComparison.OrdinalIgnoreCase)));
+
     public async Task<List<LocalPosProduct>> GetPosProductsAsync(string propertyId, string outletId = "")
     {
         var query = _dbContext.PosProducts
@@ -4723,23 +4762,51 @@ public class LocalRepository
             var targetStock = await _dbContext.StockItems
                 .Where(s => s.PropertyId == product.PropertyId && s.WarehouseId != null && targetWarehouseIds.Contains(s.WarehouseId) && s.IsActive)
                 .ToListAsync();
-            var available = ingredients
-                .GroupBy(i => i.StockItemId)
-                .Select(group => stock.TryGetValue(group.Key, out var template)
-                    ? (string.Equals(product.ResolvedStation, "KITCHEN", StringComparison.OrdinalIgnoreCase)
-                        ? targetStock.FirstOrDefault(item => item.WarehouseId == kitchenWarehouseId &&
-                            ((!string.IsNullOrWhiteSpace(template.Sku) && item.Sku == template.Sku) ||
-                             string.Equals(item.Name.Trim(), template.Name.Trim(), StringComparison.OrdinalIgnoreCase)))
-                        : targetStock.FirstOrDefault(item => item.WarehouseId == currentOutletWarehouseId &&
-                            ((!string.IsNullOrWhiteSpace(template.Sku) && item.Sku == template.Sku) ||
-                             string.Equals(item.Name.Trim(), template.Name.Trim(), StringComparison.OrdinalIgnoreCase)))) is { } item
-                        ? item.QuantityOnHand / group.Sum(i => i.Quantity)
-                        : 0m
-                    : 0m)
-                .DefaultIfEmpty(0m)
-                .Min();
+            product.AvailabilityIssues = new();
+            var availabilityValues = new List<decimal>();
+            var targetWarehouseId = string.Equals(product.ResolvedStation, "KITCHEN", StringComparison.OrdinalIgnoreCase)
+                ? kitchenWarehouseId
+                : currentOutletWarehouseId;
+            foreach (var ingredient in ingredients)
+            {
+                if (!stock.TryGetValue(ingredient.StockItemId, out var template))
+                {
+                    product.AvailabilityIssues.Add(new Dictionary<string, object?> { ["code"] = "MISSING_STOCK_DEFINITION", ["name"] = ingredient.StockItemId });
+                    availabilityValues.Add(0m);
+                    continue;
+                }
+                if (!template.IsActive)
+                {
+                    product.AvailabilityIssues.Add(new Dictionary<string, object?> { ["code"] = "INACTIVE_STOCK_DEFINITION", ["name"] = template.Name });
+                    availabilityValues.Add(0m);
+                    continue;
+                }
+                var conversion = ConvertToBaseQuantity(template, 1m, ingredient.UnitOfMeasure, out var conversionError);
+                if (conversionError != null)
+                {
+                    product.AvailabilityIssues.Add(new Dictionary<string, object?> { ["code"] = "MISSING_CONVERSION", ["name"] = template.Name, ["fromUnit"] = ingredient.UnitOfMeasure, ["toUnit"] = template.BaseUnit });
+                    availabilityValues.Add(0m);
+                    continue;
+                }
+                var target = FindMatchingStock(targetStock, template, targetWarehouseId);
+                if (target == null)
+                {
+                    product.AvailabilityIssues.Add(new Dictionary<string, object?> { ["code"] = "MISSING_TARGET_STOCK", ["name"] = template.Name, ["warehouseId"] = targetWarehouseId });
+                    availabilityValues.Add(0m);
+                    continue;
+                }
+                var required = ingredient.Quantity * conversion;
+                var availableForIngredient = required > 0m ? target.QuantityOnHand / required : 0m;
+                if (target.QuantityOnHand <= 0m)
+                    product.AvailabilityIssues.Add(new Dictionary<string, object?> { ["code"] = "ZERO_STOCK", ["name"] = template.Name, ["warehouseId"] = targetWarehouseId });
+                else if (availableForIngredient < 1m)
+                    product.AvailabilityIssues.Add(new Dictionary<string, object?> { ["code"] = "INSUFFICIENT_STOCK", ["name"] = template.Name, ["warehouseId"] = targetWarehouseId, ["availableServings"] = Math.Max(0m, Math.Floor(availableForIngredient)) });
+                availabilityValues.Add(availableForIngredient);
+            }
+            var available = availabilityValues.DefaultIfEmpty(0m).Min();
             product.AvailableStock = Math.Max(0m, available);
-            product.StockStatus = available <= 0m ? "OUT_OF_STOCK" :
+            var mappingIssue = product.AvailabilityIssues.Any(issue => new[] { "MISSING_STOCK_DEFINITION", "INACTIVE_STOCK_DEFINITION", "MISSING_TARGET_STOCK", "MISSING_CONVERSION" }.Contains(issue["code"]?.ToString()));
+            product.StockStatus = mappingIssue ? "UNMAPPED" : available <= 0m ? "OUT_OF_STOCK" :
                 available <= 5m ? "LOW_STOCK" : "IN_STOCK";
         }
 
@@ -6717,11 +6784,68 @@ public class LocalRepository
 
     public async Task<List<LocalPosProductModifier>> GetProductModifiersAsync(string productId)
     {
-        return await _dbContext.PosProductModifiers
+        var modifiers = await _dbContext.PosProductModifiers
             .Where(m => m.ProductId == productId && m.IsActive)
             .OrderBy(m => m.Name)
             .ThenBy(m => m.Id)
             .ToListAsync();
+        var product = await _dbContext.PosProducts.FirstOrDefaultAsync(p => p.Id == productId);
+        if (product == null) return modifiers;
+        var category = await _dbContext.ProductCategories.FirstOrDefaultAsync(c => c.Id == product.CategoryId);
+        var property = await _dbContext.Properties.FirstOrDefaultAsync(p => p.Id == product.PropertyId);
+        var station = string.IsNullOrWhiteSpace(product.ProductionStation) ? category?.ProductionStation : product.ProductionStation;
+        var kitchenOutletId = property?.KitchenServiceOutletId;
+        var targetOutletId = string.Equals(station ?? "KITCHEN", "KITCHEN", StringComparison.OrdinalIgnoreCase) ? kitchenOutletId : category?.OutletId;
+        var targetWarehouseId = string.IsNullOrWhiteSpace(targetOutletId)
+            ? null
+            : await _dbContext.PosOutlets.Where(o => o.Id == targetOutletId).Select(o => o.WarehouseId).FirstOrDefaultAsync();
+        var targetStock = string.IsNullOrWhiteSpace(targetWarehouseId)
+            ? new List<LocalStockItem>()
+            : await _dbContext.StockItems.Where(s => s.PropertyId == product.PropertyId && s.WarehouseId == targetWarehouseId && s.IsActive).ToListAsync();
+
+        foreach (var modifier in modifiers)
+        {
+            modifier.StockStatus = "NON_STOCK";
+            modifier.AvailableQuantity = null;
+            modifier.AvailabilityIssue = null;
+            if (string.IsNullOrWhiteSpace(modifier.StockItemId)) continue;
+            var template = await _dbContext.StockItems.FirstOrDefaultAsync(s => s.Id == modifier.StockItemId && s.PropertyId == product.PropertyId);
+            if (template == null || !template.IsActive)
+            {
+                modifier.StockStatus = "OUT_OF_STOCK";
+                modifier.AvailableQuantity = 0m;
+                modifier.AvailabilityIssue = template == null ? "MISSING_STOCK_DEFINITION" : "INACTIVE_STOCK_DEFINITION";
+                continue;
+            }
+            var conversion = ConvertToBaseQuantity(template, 1m, modifier.UnitOfMeasure, out var conversionError);
+            if (conversionError != null)
+            {
+                modifier.StockStatus = "OUT_OF_STOCK";
+                modifier.AvailableQuantity = 0m;
+                modifier.AvailabilityIssue = "MISSING_CONVERSION";
+                continue;
+            }
+            var target = FindMatchingStock(targetStock, template, targetWarehouseId);
+            if (target == null)
+            {
+                modifier.StockStatus = "OUT_OF_STOCK";
+                modifier.AvailableQuantity = 0m;
+                modifier.AvailabilityIssue = "MISSING_TARGET_STOCK";
+                continue;
+            }
+            modifier.AvailableQuantity = target.QuantityOnHand;
+            var available = modifier.Quantity * conversion > 0m ? target.QuantityOnHand / (modifier.Quantity * conversion) : 0m;
+            if (available < 1m)
+            {
+                modifier.StockStatus = "OUT_OF_STOCK";
+                modifier.AvailabilityIssue = target.QuantityOnHand <= 0m ? "ZERO_STOCK" : "INSUFFICIENT_STOCK";
+            }
+            else
+            {
+                modifier.StockStatus = "IN_STOCK";
+            }
+        }
+        return modifiers;
     }
 
     /// <summary>
