@@ -216,25 +216,26 @@ export function CashManagementLayout({ children, enabledModules = [] }: { childr
 
       {/* Main */}
       <main className="relative flex-1 flex flex-col h-screen overflow-hidden min-w-0">
-        {/* Property switcher header is only useful when the user can switch properties. */}
-        {hasMultipleProperties && (
-          <header className="h-14 shrink-0 border-b border-white/[0.08] bg-[#0a0c22]/95 backdrop-blur flex items-center justify-end px-4 sticky top-0 z-30 shadow-sm">
-            <PropertySelector onMultiplePropertiesChange={setHasMultipleProperties} />
-          </header>
-        )}
-
-        {/* Keep navigation available on mobile when there is no property switcher header. */}
-        {!hasMultipleProperties && (
+        <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between border-b border-white/[0.08] bg-[#0a0c22]/95 px-3 shadow-sm backdrop-blur sm:px-4 lg:justify-end">
           <Button
             variant="outline"
             size="icon"
-            className="fixed left-4 top-4 z-30 h-9 w-9 border-white/[0.08] bg-white/[0.03] text-white shadow-sm hover:bg-white/[0.08] lg:hidden"
+            className="h-10 w-10 border-white/[0.1] bg-white/[0.04] text-white hover:bg-white/[0.1] lg:hidden"
             onClick={() => setSidebarOpen(true)}
-            aria-label="Open navigation"
+            aria-label="Open cash management navigation"
           >
             <Menu className="h-4 w-4" />
           </Button>
-        )}
+          <div className="flex items-center gap-2 lg:hidden">
+            <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-indigo-300">Cash operations</span>
+            {hasMultipleProperties && <PropertySelector onMultiplePropertiesChange={setHasMultipleProperties} />}
+          </div>
+          {hasMultipleProperties && (
+            <div className="hidden lg:block">
+              <PropertySelector onMultiplePropertiesChange={setHasMultipleProperties} />
+            </div>
+          )}
+        </header>
 
         {/* Page content */}
         <div className="flex-1 overflow-y-auto bg-transparent">

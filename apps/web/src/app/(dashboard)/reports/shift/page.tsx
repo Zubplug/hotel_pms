@@ -322,7 +322,7 @@ export default function ShiftReportPage({ readOnly = false, managementBasePath =
   return (
     <div className="cashier-dark-surface min-h-screen bg-[#07111f]">
       {/* ─── Hero Header ─── */}
-      <div className="relative overflow-hidden bg-gradient-to-r from-[#0b1120] via-[#101d34] to-[#0b1120] px-6 py-8 print:hidden sm:px-8">
+      <div className="relative overflow-hidden bg-gradient-to-r from-[#0b1120] via-[#101d34] to-[#0b1120] px-3 py-5 print:hidden sm:px-8 sm:py-8">
         <div className="pointer-events-none absolute -right-20 -top-28 h-72 w-72 rounded-full bg-indigo-500/20 blur-3xl" />
         <div className="relative z-10 max-w-[1400px] mx-auto flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6">
           <div>
@@ -340,7 +340,7 @@ export default function ShiftReportPage({ readOnly = false, managementBasePath =
         </div>
       </div>
 
-      <div className="mx-auto max-w-[1400px] space-y-6 px-5 py-7 sm:px-8">
+      <div className="mx-auto max-w-[1400px] space-y-4 px-3 py-4 sm:space-y-6 sm:px-8 sm:py-7">
         {!isDetailView && !pageLoading && !pageError && (
           <section className="overflow-hidden rounded-2xl border border-slate-800 bg-[#0d172b] text-white shadow-[0_18px_50px_rgba(8,17,31,.18)] print:hidden">
             <div className="flex flex-col gap-3 border-b border-white/[.08] px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6"><div><div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[.16em] text-indigo-300"><ShieldCheck className="h-4 w-4" />General cashier decision board</div><h2 className="mt-1 text-lg font-semibold">Shift close readiness</h2><p className="mt-1 text-xs text-slate-400">A live control view of open custody, review exposure, and declared cash integrity.</p></div><span className={`inline-flex w-fit items-center rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-wider ${closeReadiness === 'READY' ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300' : 'border-amber-400/20 bg-amber-400/10 text-amber-300'}`}>{closeReadiness === 'READY' ? 'Ready for close' : 'Action required'}</span></div>
