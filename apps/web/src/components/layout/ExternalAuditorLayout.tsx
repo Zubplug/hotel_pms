@@ -63,20 +63,21 @@ export function ExternalAuditorLayout({ children }: { children: React.ReactNode 
   const { data: session, status } = useLodgeCoreSession();
   const router = useRouter();
   const logout = useLogout();
+  const isInvitationRoute = Boolean(pathname?.startsWith('/external-auditor/invite/'));
   const [scope, setScope] = useState<{ propertyName: string; auditPeriodStart: string; auditPeriodEnd: string; accessExpiresAt: string } | null>(null);
 
   useEffect(() => {
-    if (status === 'unauthenticated') {
+    if (!isInvitationRoute && status === 'unauthenticated') {
       router.replace('/login');
     }
-  }, [status, router]);
+  }, [isInvitationRoute, status, router]);
 
   useEffect(() => {
-    if (status !== 'authenticated') return;
+    if (isInvitationRoute || status !== 'authenticated') return;
     void fetch('/api/v1/external-auditor/context').then((response) => response.json()).then((value) => {
       if (value.scopes?.[0]) setScope(value.scopes[0]);
     }).catch(() => undefined);
-  }, [status]);
+  }, [isInvitationRoute, status]);
 
   const userDisplayName = session?.user?.name?.trim() || session?.user?.email || 'External Auditor';
   const userInitials = userDisplayName
@@ -87,6 +88,8 @@ export function ExternalAuditorLayout({ children }: { children: React.ReactNode 
     .join('')
     .toUpperCase() || 'EA';
   const activePage = AUDITOR_NAV.find((item) => pathname === item.href || (item.href !== '/external-auditor' && pathname?.startsWith(item.href)))?.name || 'Command center';
+
+  if (isInvitationRoute) return <>{children}</>;
 
   if (status === 'loading') {
     return (
