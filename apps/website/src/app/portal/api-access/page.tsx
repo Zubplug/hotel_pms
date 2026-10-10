@@ -8,6 +8,100 @@ export const dynamic = "force-dynamic";
 
 const API_BASE = "https://api.lodgecore.com/v1/public";
 
+const API_EXAMPLES = [
+  {
+    title: "1. Discover rooms and rates",
+    request: `curl "${API_BASE}/availability?checkIn=2026-12-20&checkOut=2026-12-22&adults=2&children=0" \\
+  -H "X-Publishable-Key: pk_live_your_key"`,
+    response: `{
+  "success": true,
+  "data": {
+    "checkIn": "2026-12-20",
+    "checkOut": "2026-12-22",
+    "nights": 2,
+    "occupancy": { "adults": 2, "children": 0 },
+    "data": [{
+      "roomTypeId": "room-type-uuid",
+      "name": "Deluxe King",
+      "availability": { "available": 3, "isAvailable": true },
+      "rates": [{ "ratePlanId": "rate-plan-uuid", "subtotal": 240000 }]
+    }]
+  }
+}`,
+  },
+  {
+    title: "2. Hold a selected room",
+    request: `curl -X POST "${API_BASE}/hold" \\
+  -H "Content-Type: application/json" \\
+  -H "X-Publishable-Key: pk_live_your_key" \\
+  -d '{
+    "roomTypeId": "room-type-uuid",
+    "ratePlanId": "rate-plan-uuid",
+    "checkIn": "2026-12-20",
+    "checkOut": "2026-12-22"
+  }'`,
+    response: `{
+  "success": true,
+  "data": {
+    "holdToken": "opaque-hold-token",
+    "expiresAt": "2026-12-20T12:12:00.000Z",
+    "expiresInSeconds": 720,
+    "pricing": { "nights": 2, "currency": "NGN", "subtotal": 240000 }
+  }
+}`,
+  },
+  {
+    title: "3. Create a reservation",
+    request: `curl -X POST "${API_BASE}/reservations" \\
+  -H "Content-Type: application/json" \\
+  -H "X-Publishable-Key: pk_live_your_key" \\
+  -H "X-Idempotency-Key: booking-20261220-000001" \\
+  -d '{
+    "holdToken": "opaque-hold-token",
+    "guest": {
+      "firstName": "Ada",
+      "lastName": "Lodge",
+      "email": "ada@example.com",
+      "phone": "+2348000000000",
+      "country": "NG"
+    },
+    "adults": 2,
+    "children": 0
+  }'`,
+    response: `{
+  "success": true,
+  "data": {
+    "confirmationNumber": "LC-123456",
+    "status": "PENDING",
+    "confirmationToken": "reservation-token",
+    "cancellationToken": "cancellation-token",
+    "paymentRequired": true,
+    "depositAmount": 120000
+  }
+}`,
+  },
+  {
+    title: "4. Start payment when required",
+    request: `curl -X POST "${API_BASE}/payment/intent" \\
+  -H "Content-Type: application/json" \\
+  -H "X-Publishable-Key: pk_live_your_key" \\
+  -H "X-Idempotency-Key: payment-20261220-000001" \\
+  -d '{
+    "reservationToken": "reservation-token",
+    "guestEmail": "ada@example.com"
+  }'`,
+    response: `{
+  "success": true,
+  "data": {
+    "providerRef": "BK-12345678-ABC123",
+    "authorizationUrl": "https://paystack.com/pay/…",
+    "amount": 120000,
+    "currency": "NGN"
+  }
+}`,
+  },
+];
+
 export default async function ApiAccessPage() {
   const session = await auth();
   const user = session?.user as { organizationId?: string; name?: string | null; email?: string | null } | undefined;
@@ -87,6 +181,29 @@ export default async function ApiAccessPage() {
                       <div key={`${method}-${path}`} style={{ display: "grid", gridTemplateColumns: "52px minmax(0, 1fr)", gap: 10, padding: "10px 12px", background: "var(--bg-overlay)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)" }}>
                         <strong style={{ color: method === "GET" ? "var(--mint)" : "var(--accent)", fontFamily: "var(--font-mono)", fontSize: 10 }}>{method}</strong>
                         <div><code style={{ color: "var(--text-primary)", fontSize: 11, overflowWrap: "anywhere" }}>{API_BASE}{path}</code><div style={{ color: "var(--text-muted)", fontSize: 11, marginTop: 3 }}>{description}</div></div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div style={{ marginTop: 22 }}>
+                  <div className="portal-stat-label">Called and received examples</div>
+                  <p style={{ color: "var(--text-muted)", fontSize: 12, lineHeight: 1.6, margin: "8px 0 12px" }}>
+                    Replace the sample UUIDs and key with values from your property. All responses use the <code>success</code> and <code>data</code> envelope.
+                  </p>
+                  <div style={{ display: "grid", gap: 14 }}>
+                    {API_EXAMPLES.map((example) => (
+                      <div key={example.title} style={{ border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", overflow: "hidden" }}>
+                        <div style={{ padding: "10px 12px", color: "var(--text-primary)", fontSize: 12, fontWeight: 700, background: "var(--bg-overlay)" }}>{example.title}</div>
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 1, background: "var(--border)" }}>
+                          <div style={{ minWidth: 0, padding: 12, background: "var(--bg-card)" }}>
+                            <div className="portal-stat-label" style={{ marginBottom: 7 }}>Call</div>
+                            <pre style={{ margin: 0, whiteSpace: "pre-wrap", overflowWrap: "anywhere", color: "var(--text-secondary)", fontFamily: "var(--font-mono)", fontSize: 10, lineHeight: 1.65 }}>{example.request}</pre>
+                          </div>
+                          <div style={{ minWidth: 0, padding: 12, background: "var(--bg-card)" }}>
+                            <div className="portal-stat-label" style={{ marginBottom: 7 }}>Received</div>
+                            <pre style={{ margin: 0, whiteSpace: "pre-wrap", overflowWrap: "anywhere", color: "var(--mint)", fontFamily: "var(--font-mono)", fontSize: 10, lineHeight: 1.65 }}>{example.response}</pre>
+                          </div>
+                        </div>
                       </div>
                     ))}
                   </div>
