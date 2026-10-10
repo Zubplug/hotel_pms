@@ -6,7 +6,7 @@ import { PortalShell } from "@/components/portal-shell";
 
 export const dynamic = "force-dynamic";
 
-const API_BASE = "https://api.lodgecore.com/v1/public";
+const API_BASE = process.env.NEXT_PUBLIC_PUBLIC_API_URL ?? "https://getlodgecore.vercel.app/api/v1/public";
 
 const API_EXAMPLES = [
   {
@@ -177,6 +177,7 @@ export default async function ApiAccessPage() {
                       ["POST", "/hold", "Temporarily hold a selected room and rate."],
                       ["POST", "/reservations", "Create a reservation from an active hold."],
                       ["POST", "/payment/intent", "Create a payment intent when payment is required."],
+                      ["POST", "/cancel", "Cancel a reservation with its cancellation token."],
                     ].map(([method, path, description]) => (
                       <div key={`${method}-${path}`} style={{ display: "grid", gridTemplateColumns: "52px minmax(0, 1fr)", gap: 10, padding: "10px 12px", background: "var(--bg-overlay)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)" }}>
                         <strong style={{ color: method === "GET" ? "var(--mint)" : "var(--accent)", fontFamily: "var(--font-mono)", fontSize: 10 }}>{method}</strong>

@@ -59,7 +59,8 @@ export async function activateCustomDomainRequest(id: string, selectedTarget?: s
       await prisma.bookingSite.update({ where: { id: site.id }, data: { customDomain: request.domain, domainStatus: 'PENDING', verificationToken: `lodgecore-booking-${crypto.randomUUID()}`, verifiedAt: null } });
     }
 
-    await prisma.customDomainRequest.update({ where: { id }, data: { status: 'ACTIVE', activatedAt: new Date(), reviewedBy: admin.email } });
+    const existingMetadata = request.metadata && typeof request.metadata === 'object' && !Array.isArray(request.metadata) ? request.metadata as Record<string, unknown> : {};
+    await prisma.customDomainRequest.update({ where: { id }, data: { status: 'ACTIVE', activatedAt: new Date(), reviewedBy: admin.email, metadata: { ...existingMetadata, domainTarget: target, configuredAt: new Date().toISOString() } } });
     revalidatePath('/hq/custom-domains');
     revalidatePath(`/portal/settings/booking-engine/${request.propertyId}`);
     return { ok: true };

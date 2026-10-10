@@ -18,10 +18,11 @@ import type {
   ReservationResponse,
   CancelRequest,
   CancelResponse,
-  LCError,
+  PaymentIntentRequest,
+  PaymentIntentResponse,
 } from './types';
 
-const LC_API = process.env.LC_API_URL ?? 'https://lodgecore.vercel.app/api/v1/public';
+const LC_API = process.env.LC_API_URL ?? 'https://getlodgecore.vercel.app/api/v1/public';
 
 function getPublishableKey(): string {
   const key = process.env.LC_PUBLISHABLE_KEY;
@@ -55,15 +56,21 @@ async function lcFetch<T>(
   const data = await response.json();
 
   if (!response.ok) {
-    const err = data as LCError;
+    const envelope = data as { error?: unknown; message?: string; details?: unknown };
+    const errorObject = envelope.error && typeof envelope.error === 'object' ? envelope.error as { code?: string; message?: string; details?: unknown } : null;
     throw new LodgeCoreApiError(
-      err.message ?? err.error ?? 'API request failed',
+      errorObject?.message ?? envelope.message ?? (typeof envelope.error === 'string' ? envelope.error : 'API request failed'),
       response.status,
-      err.error ?? 'UNKNOWN',
-      err.details
+      errorObject?.code ?? (typeof envelope.error === 'string' ? envelope.error : 'UNKNOWN'),
+      errorObject?.details ?? envelope.details
     );
   }
 
+  // The public API returns { success: true, data: ... }. Keep the rest of
+  // the standalone site typed against the endpoint payload itself.
+  if (data && typeof data === 'object' && 'success' in data && (data as { success?: boolean }).success === true && 'data' in data) {
+    return (data as { data: T }).data;
+  }
   return data as T;
 }
 
@@ -152,6 +159,19 @@ export async function cancelReservation(
   idempotencyKey: string
 ): Promise<CancelResponse> {
   return lcFetch<CancelResponse>('/cancel', {
+    method: 'POST',
+    body: JSON.stringify(body),
+    idempotencyKey,
+    cache: 'no-store',
+  });
+}
+
+/** Start payment for a pending reservation. */
+export async function createPaymentIntent(
+  body: PaymentIntentRequest,
+  idempotencyKey: string
+): Promise<PaymentIntentResponse> {
+  return lcFetch<PaymentIntentResponse>('/payment/intent', {
     method: 'POST',
     body: JSON.stringify(body),
     idempotencyKey,

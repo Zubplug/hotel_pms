@@ -67,7 +67,7 @@ export default function ConfirmPage() {
       if (data.paymentRequired && data.confirmationToken) {
         // Initiate payment intent then redirect to Paystack
         try {
-          const piRes = await fetch(`https://lodgecore.vercel.app/api/v1/public/payment/intent`, {
+          const piRes = await fetch('/api/payment/intent', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-Idempotency-Key': `pi-${idempotencyKey.current}` },
             body: JSON.stringify({ reservationToken: data.confirmationToken, guestEmail: guest.email }),

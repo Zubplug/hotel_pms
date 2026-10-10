@@ -1,6 +1,7 @@
 import prisma from '@hotel-pms/db';
 import { requireHQAdmin } from '@/lib/auth/hq';
 import { activateCustomDomainRequest } from './actions';
+import ConfirmActivationButton from './ConfirmActivationButton';
 
 export default async function HQCustomDomainsPage() {
   await requireHQAdmin();
@@ -123,9 +124,7 @@ export default async function HQCustomDomainsPage() {
                                 <option value="LODGECORE_WEBSITE">LodgeCore website</option>
                                 <option value="BOOKING_ENGINE">Booking Engine</option>
                               </select>
-                              <button type="submit" className="relative inline-flex items-center justify-center px-4 py-2 text-sm font-medium text-white transition-all duration-200 bg-indigo-600 border border-transparent rounded-lg shadow-sm hover:bg-indigo-500 hover:shadow-lg hover:shadow-indigo-500/20 hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 focus:ring-indigo-500 active:translate-y-0">
-                                Configure &amp; Activate
-                              </button>
+                              <ConfirmActivationButton />
                             </div>
                           </form>
                         ) : (
