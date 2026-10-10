@@ -12,6 +12,7 @@ const NAV_ITEMS = [
   { href: "/portal/implementation",   icon: "🚀", label: "Implementation",   badge: null },
   { href: "/portal/hardware",         icon: "🔧", label: "Hardware",         badge: null },
   { href: "/portal/integrations",     icon: "⟳",  label: "Integrations",    badge: null },
+  { href: "/portal/api-access",       icon: "⌘",  label: "API access",      badge: null },
   { href: "/portal/support",          icon: "◎",  label: "Support",          badge: null },
   { href: "/portal/billing",          icon: "◇",  label: "Billing",          badge: null },
   { href: "/portal/settings",         icon: "⚙",  label: "Settings",         badge: null },

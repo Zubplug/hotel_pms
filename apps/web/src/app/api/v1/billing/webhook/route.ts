@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import crypto from 'node:crypto';
 import prisma, { Prisma } from '@hotel-pms/db';
 import { subscriptionScope, verifyFlutterwaveLegacyWebhook, verifyFlutterwaveTransaction, verifyFlutterwaveWebhook } from '@hotel-pms/db';
 
@@ -15,6 +16,18 @@ function metadataValue(meta: unknown, key: string) {
   return meta && typeof meta === 'object' && !Array.isArray(meta) && typeof (meta as Record<string, unknown>)[key] === 'string'
     ? String((meta as Record<string, unknown>)[key])
     : '';
+}
+
+function createPublishableKey() {
+  return `pk_live_${crypto.randomBytes(24).toString('base64url')}`;
+}
+
+function websiteOrigins(metadata: unknown) {
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return [];
+  const domain = (metadata as Record<string, unknown>).domain;
+  if (typeof domain !== 'string' || !domain.trim()) return [];
+  const hostname = domain.trim().replace(/^https?:\/\//i, '').replace(/\/.*$/, '');
+  return hostname ? [`https://${hostname}`, `https://www.${hostname}`] : [];
 }
 
 async function reconcileEntitlements(tx: Prisma.TransactionClient, organizationId: string) {
@@ -96,7 +109,41 @@ export async function POST(req: Request) {
         await tx.customDomainRequest.updateMany({ where: { id: customDomainRequestId, organizationId, status: { in: ['REQUESTED', 'PAYMENT_PENDING'] } }, data: { status: 'PAID', paidAt: now, checkoutRef: txRef } });
       }
       if (customWebsiteRequestId && successful) {
+        const websiteRequest = await tx.customWebsiteRequest.findFirst({
+          where: { id: customWebsiteRequestId, organizationId },
+          select: { propertyId: true, developmentMode: true, metadata: true },
+        });
         await tx.customWebsiteRequest.updateMany({ where: { id: customWebsiteRequestId, organizationId, status: { in: ['REQUESTED', 'PAYMENT_PENDING'] } }, data: { status: 'PAID', paidAt: now, checkoutRef: txRef } });
+
+        // A standalone API purchase gets its public credential immediately. The
+        // lookup-before-create makes webhook retries idempotent.
+        if (websiteRequest?.developmentMode === 'STANDALONE_API') {
+          const integration = await tx.propertyIntegration.findFirst({
+            where: { organizationId, propertyId: websiteRequest.propertyId, provider: 'CUSTOM_WEBSITE' },
+            select: { id: true },
+          }) ?? await tx.propertyIntegration.create({
+            data: {
+              organizationId,
+              propertyId: websiteRequest.propertyId,
+              name: 'Standalone website API',
+              provider: 'CUSTOM_WEBSITE',
+              status: 'ACTIVE',
+            },
+            select: { id: true },
+          });
+          const existingKey = await tx.publishableKey.findFirst({ where: { integrationId: integration.id, environment: 'LIVE', status: 'ACTIVE' } });
+          if (!existingKey) {
+            await tx.publishableKey.create({
+              data: {
+                integrationId: integration.id,
+                key: createPublishableKey(),
+                environment: 'LIVE',
+                status: 'ACTIVE',
+                allowedOrigins: websiteOrigins(websiteRequest.metadata),
+              },
+            });
+          }
+        }
       }
     }, { timeout: 30000 });
     return NextResponse.json({ received: true });
