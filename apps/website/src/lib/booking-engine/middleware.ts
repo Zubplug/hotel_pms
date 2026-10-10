@@ -52,7 +52,8 @@ export function withCors(res: NextResponse, req: NextRequest): NextResponse {
 }
 
 // ---------------------------------------------------------------------------
-// Rate limiting uses Upstash Redis and fails closed when it is unavailable.
+// Rate limiting uses Upstash Redis. API authentication remains mandatory even
+// when the optional rate-limit service is unavailable.
 // ---------------------------------------------------------------------------
 
 async function redisIncrement(key: string): Promise<number> {
@@ -71,12 +72,19 @@ const RATE_LIMIT = 30;        // requests
 const RATE_WINDOW_MS = 60_000; // per 60 seconds
 
 export async function checkRateLimit(ip: string, scope = 'public'): Promise<boolean> {
-  if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) return false;
+  // Do not take the public catalogue or booking API offline just because the
+  // rate-limit service has not been configured in a deployment. The request
+  // still has to pass resolvePublicApiContext(), which validates the active
+  // publishable key and property integration.
+  if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) return true;
   try {
     const bucket = `lodgecore:rate:${scope}:${ip}:${Math.floor(Date.now() / RATE_WINDOW_MS)}`;
     return (await redisIncrement(bucket)) <= RATE_LIMIT;
   } catch {
-    return false;
+    // Redis is a protective control, not the authorization layer. Keep the
+    // API available during a transient Redis outage and let the next request
+    // recover rate limiting when Redis is healthy again.
+    return true;
   }
 }
 
