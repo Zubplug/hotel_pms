@@ -47,6 +47,7 @@ export default async function HQCustomDomainsPage() {
                 <tr className="glass-header border-b border-slate-700/80 text-xs uppercase tracking-wider text-slate-400 font-semibold sticky top-0 z-10">
                   <th className="px-6 py-5">Customer Details</th>
                   <th className="px-6 py-5">Domain</th>
+                  <th className="px-6 py-5">Target</th>
                   <th className="px-6 py-5">Status</th>
                   <th className="px-6 py-5">Amount</th>
                   <th className="px-6 py-5 text-right">Actions</th>
@@ -55,7 +56,7 @@ export default async function HQCustomDomainsPage() {
               <tbody className="divide-y divide-slate-800/50">
                 {requests.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-6 py-16 text-center text-slate-500">
+                    <td colSpan={6} className="px-6 py-16 text-center text-slate-500">
                       <div className="flex flex-col items-center justify-center space-y-3">
                         <svg className="w-10 h-10 text-slate-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
@@ -79,6 +80,11 @@ export default async function HQCustomDomainsPage() {
                         <div className="inline-flex items-center px-3 py-1 rounded-md bg-slate-800/80 text-slate-300 font-mono text-sm border border-slate-700/60 shadow-sm">
                           {request.domain}
                         </div>
+                      </td>
+                      <td className="px-6 py-5 text-xs text-slate-400">
+                        {request.metadata && typeof request.metadata === 'object' && !Array.isArray(request.metadata) && typeof (request.metadata as Record<string, unknown>).domainTarget === 'string'
+                          ? String((request.metadata as Record<string, unknown>).domainTarget).replaceAll('_', ' ')
+                          : 'BOOKING ENGINE'}
                       </td>
                       <td className="px-6 py-5">
                         <div className="flex items-center">
@@ -107,13 +113,20 @@ export default async function HQCustomDomainsPage() {
                       </td>
                       <td className="px-6 py-5 text-right">
                         {request.status === 'PAID' ? (
-                          <form action={async () => { 
-                            'use server'; 
-                            await activateCustomDomainRequest(request.id); 
+                          <form action={async (formData: FormData) => {
+                            'use server';
+                            await activateCustomDomainRequest(request.id, String(formData.get('target') ?? ''));
                           }}>
-                            <button className="relative inline-flex items-center justify-center px-4 py-2 text-sm font-medium text-white transition-all duration-200 bg-indigo-600 border border-transparent rounded-lg shadow-sm hover:bg-indigo-500 hover:shadow-lg hover:shadow-indigo-500/20 hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 focus:ring-indigo-500 active:translate-y-0">
-                              Configure &amp; Activate
-                            </button>
+                            <div className="flex items-center justify-end gap-2">
+                              <select name="target" defaultValue={request.metadata && typeof request.metadata === 'object' && !Array.isArray(request.metadata) && typeof (request.metadata as Record<string, unknown>).domainTarget === 'string' ? String((request.metadata as Record<string, unknown>).domainTarget) : 'BOOKING_ENGINE'} className="rounded-lg border border-slate-700 bg-slate-800 px-2 py-2 text-xs text-slate-200">
+                                <option value="STANDALONE_API">Standalone API</option>
+                                <option value="LODGECORE_WEBSITE">LodgeCore website</option>
+                                <option value="BOOKING_ENGINE">Booking Engine</option>
+                              </select>
+                              <button type="submit" className="relative inline-flex items-center justify-center px-4 py-2 text-sm font-medium text-white transition-all duration-200 bg-indigo-600 border border-transparent rounded-lg shadow-sm hover:bg-indigo-500 hover:shadow-lg hover:shadow-indigo-500/20 hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 focus:ring-indigo-500 active:translate-y-0">
+                                Configure &amp; Activate
+                              </button>
+                            </div>
                           </form>
                         ) : (
                           <span className="text-sm text-slate-500 italic">No action needed</span>

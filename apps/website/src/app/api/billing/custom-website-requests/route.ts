@@ -41,7 +41,7 @@ export async function POST(request: Request) {
     }
     const created = await prisma.$transaction(async (tx) => {
       const websiteRequest = await tx.customWebsiteRequest.create({ data: { organizationId: user.organizationId!, propertyId, developmentMode, status: 'REQUESTED', currency: websitePrice.currency, amount: websitePrice.amount, billingPriceId: websitePrice.id, requestedByEmail: user.email ?? null, brief: JSON.stringify(brief), metadata: { source: 'portal_subscription', domain, bookingEngineIncluded: Boolean(bookingEnginePriceId), developmentMode } }, select: { id: true, propertyId: true, developmentMode: true } });
-      const domainRequest = domain && domainPrice ? await tx.customDomainRequest.create({ data: { organizationId: user.organizationId!, propertyId, domain, status: 'REQUESTED', currency: domainPrice.currency, amount: domainPrice.amount, billingPriceId: domainPrice.id, requestedByEmail: user.email ?? null, metadata: { source: 'custom_website_addon' } }, select: { id: true } }) : null;
+      const domainRequest = domain && domainPrice ? await tx.customDomainRequest.create({ data: { organizationId: user.organizationId!, propertyId, domain, status: 'REQUESTED', currency: domainPrice.currency, amount: domainPrice.amount, billingPriceId: domainPrice.id, requestedByEmail: user.email ?? null, metadata: { source: 'custom_website_addon', domainTarget: developmentMode === 'STANDALONE_API' ? 'STANDALONE_API' : 'LODGECORE_WEBSITE', developmentMode } }, select: { id: true } }) : null;
       return { websiteRequest, domainRequest };
     });
     return NextResponse.json({ ...created, websitePriceId: websitePrice.id, domainPriceId: domainPrice?.id ?? null, bookingEnginePriceId }, { status: 201 });
