@@ -128,7 +128,7 @@ export default function ContactPage() {
                       </select>
                     </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-5)', marginBottom: 'var(--space-5)' }}>
+                    <div className="contact-name-email-grid">
                       {F('name', 'Full Name', 'text', true)}
                       {F('email', 'Email Address', 'email', true)}
                     </div>

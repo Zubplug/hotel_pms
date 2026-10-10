@@ -104,7 +104,7 @@ function RoomCard({ room, checkIn, checkOut, adults, children }: {
         )}
 
         {selectedRate && (
-          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
+          <div className="room-price-row" style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
             <div>
               <p style={{ fontFamily: 'var(--font-serif)', fontSize: 'var(--text-2xl)', color: 'var(--color-green)', margin: 0, lineHeight: 1 }}>
                 {formatCurrency(selectedRate.subtotal, selectedRate.currency)}
@@ -171,7 +171,8 @@ export default function BookingRoomsPage() {
       <main id="main-content" style={{ paddingTop: 'var(--nav-height)', minHeight: '80vh' }}>
         {/* Steps bar */}
         <div style={{ background: 'var(--color-green)', padding: 'var(--space-4) 0' }}>
-          <div className="container" style={{ display: 'flex', gap: 'var(--space-8)', alignItems: 'center' }}>
+          <div className="container">
+            <div className="booking-steps" style={{ display: 'flex', gap: 'var(--space-8)', alignItems: 'center' }}>
             {['Search', 'Choose Room', 'Your Details', 'Confirm'].map((step, i) => (
               <div key={step} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
                 <span style={{
@@ -184,6 +185,7 @@ export default function BookingRoomsPage() {
                   className="step-label">{step}</span>
               </div>
             ))}
+            </div>
           </div>
         </div>
 

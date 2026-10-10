@@ -133,7 +133,7 @@ export default async function HomePage() {
             </div>
 
             {/* Booking widget */}
-            <div className="animate-fade-in-up delay-400" style={{ marginTop: 'var(--space-16)', maxWidth: '860px' }}>
+            <div className="animate-fade-in-up delay-400" style={{ marginTop: 'var(--space-12)', maxWidth: '860px' }}>
               <DateSearchWidget />
             </div>
           </div>
@@ -360,22 +360,16 @@ export default async function HomePage() {
               <h2 id="gallery-heading">The Resort in Pictures</h2>
               <span className="gold-divider gold-divider-center" />
             </div>
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: '2fr 1fr 1fr',
-              gridTemplateRows: '240px 240px',
-              gap: 'var(--space-4)',
-              borderRadius: 'var(--radius-xl)',
-              overflow: 'hidden',
-            }}>
+            <div className="home-gallery-grid">
               {GALLERY_IMAGES.map(({ src, alt }, i) => (
                 <div key={i} style={{
                   position: 'relative',
                   gridRow: i === 0 ? 'span 2' : 'span 1',
                   overflow: 'hidden',
-                }}>
+                }}
+                >
                   <Image src={src} alt={alt} fill style={{ objectFit: 'cover', transition: 'transform var(--duration-lg) var(--ease)' }}
-                    sizes="(max-width: 768px) 100vw, 33vw" />
+                    sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, 33vw" />
                 </div>
               ))}
             </div>
