@@ -46,3 +46,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Unable to send invitation' }, { status: 400 });
   }
 }
+
+export async function GET() {
+  const session = await auth();
+  if (!session?.user?.id) return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+  if (!canAdminister(session)) return NextResponse.json({ error: 'Auditor administration required' }, { status: 403 });
+  const organizationId = String(session.user.organizationId || '');
+  if (!organizationId && !session.user.isSuperAdmin) return NextResponse.json({ error: 'Organization context is required' }, { status: 400 });
+  const invitations = await prisma.externalAuditorInvitation.findMany({
+    where: organizationId ? { organizationId } : undefined,
+    select: { id: true, email: true, expiresAt: true, acceptedAt: true, createdAt: true },
+    orderBy: { createdAt: 'desc' }, take: 250,
+  });
+  return NextResponse.json({ invitations }, { headers: { 'Cache-Control': 'no-store' } });
+}
