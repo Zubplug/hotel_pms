@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import { Header } from '@/components/layout/Header';
@@ -17,7 +17,7 @@ const ENQUIRY_TYPES = [
 
 const VALID_TYPES = ENQUIRY_TYPES.map(t => t.value);
 
-export default function ContactPage() {
+function ContactPageContent() {
   const searchParams = useSearchParams();
   const initialType = VALID_TYPES.includes(searchParams.get('type') ?? '') ? (searchParams.get('type') as string) : 'general';
 
@@ -169,5 +169,18 @@ export default function ContactPage() {
       </main>
       <Footer />
     </>
+  );
+}
+
+export default function ContactPage() {
+  return (
+    <Suspense fallback={
+      <div style={{ paddingTop: 'calc(var(--nav-height) + 4rem)', textAlign: 'center', minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ width: 40, height: 40, border: '3px solid var(--border)', borderTopColor: 'var(--color-green)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    }>
+      <ContactPageContent />
+    </Suspense>
   );
 }

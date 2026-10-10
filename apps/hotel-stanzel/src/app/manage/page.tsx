@@ -1,12 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
 
-export default function ManagePage() {
+function ManagePageContent() {
   const params = useSearchParams();
   const tokenFromUrl = params.get('token') ?? '';
   const [cancelToken, setCancelToken] = useState(tokenFromUrl);
@@ -150,5 +150,18 @@ export default function ManagePage() {
       <Footer />
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </>
+  );
+}
+
+export default function ManagePage() {
+  return (
+    <Suspense fallback={
+      <div style={{ paddingTop: 'calc(var(--nav-height) + 4rem)', textAlign: 'center', minHeight: '60vh' }}>
+        <div style={{ width: 40, height: 40, border: '3px solid var(--border)', borderTopColor: 'var(--color-green)', borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto' }} />
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    }>
+      <ManagePageContent />
+    </Suspense>
   );
 }

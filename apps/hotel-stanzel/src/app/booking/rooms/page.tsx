@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -131,7 +131,7 @@ function RoomCard({ room, checkIn, checkOut, adults, children }: {
   );
 }
 
-export default function BookingRoomsPage() {
+function RoomsPageContent() {
   const params = useSearchParams();
   const router = useRouter();
   const checkIn = params.get('checkIn') ?? '';
@@ -277,5 +277,19 @@ export default function BookingRoomsPage() {
         @media (min-width: 600px) { .step-label { display: block !important; } }
       `}</style>
     </>
+  );
+}
+
+export default function BookingRoomsPage() {
+  return (
+    <Suspense fallback={
+      <div style={{ paddingTop: 'calc(var(--nav-height) + 4rem)', textAlign: 'center', minHeight: '60vh' }}>
+        <div style={{ width: 48, height: 48, border: '3px solid var(--border)', borderTopColor: 'var(--color-green)', borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto var(--space-4)' }} />
+        <p style={{ color: 'var(--text-muted)' }}>Loading availability…</p>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    }>
+      <RoomsPageContent />
+    </Suspense>
   );
 }
