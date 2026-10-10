@@ -218,8 +218,8 @@ export default function TermsPage() {
                     <strong>Stanzel Grand Resort</strong><br />
                     Plot C103, A Close, off 1st Avenue<br />
                     Gwarinpa Estate, Abuja, FCT, Nigeria<br />
-                    <a href="mailto:info@stanzelgrandresort.com" style={{ color: 'var(--color-green)', textDecoration: 'underline' }}>
-                      info@stanzelgrandresort.com
+                    <a href="mailto:info@stanzelgrandresort.org" style={{ color: 'var(--color-green)', textDecoration: 'underline' }}>
+                      info@stanzelgrandresort.org
                     </a>
                   </address>
                 </Section>

@@ -60,8 +60,8 @@ export default function PrivacyPage() {
               <p>
                 Stanzel Grand Resort is a luxury hospitality property located at Plot C103, A Close, off 1st Avenue, Gwarinpa Estate, Abuja, Federal Capital Territory, Nigeria.
                 We operate this website and manage all reservations and guest communications. For privacy enquiries, contact us at{' '}
-                <a href="mailto:info@stanzelgrandresort.com" style={{ color: 'var(--color-green)', textDecoration: 'underline' }}>
-                  info@stanzelgrandresort.com
+                <a href="mailto:info@stanzelgrandresort.org" style={{ color: 'var(--color-green)', textDecoration: 'underline' }}>
+                  info@stanzelgrandresort.org
                 </a>.
               </p>
             </Section>
@@ -148,8 +148,8 @@ export default function PrivacyPage() {
               </ul>
               <p style={{ marginTop: 'var(--space-4)' }}>
                 To exercise any of these rights, please contact us at{' '}
-                <a href="mailto:info@stanzelgrandresort.com" style={{ color: 'var(--color-green)', textDecoration: 'underline' }}>
-                  info@stanzelgrandresort.com
+                <a href="mailto:info@stanzelgrandresort.org" style={{ color: 'var(--color-green)', textDecoration: 'underline' }}>
+                  info@stanzelgrandresort.org
                 </a>. We will respond within 30 days.
               </p>
             </Section>
@@ -182,8 +182,8 @@ export default function PrivacyPage() {
                 <strong>Stanzel Grand Resort</strong><br />
                 Plot C103, A Close, off 1st Avenue<br />
                 Gwarinpa Estate, Abuja, FCT, Nigeria<br />
-                <a href="mailto:info@stanzelgrandresort.com" style={{ color: 'var(--color-green)', textDecoration: 'underline' }}>
-                  info@stanzelgrandresort.com
+                <a href="mailto:info@stanzelgrandresort.org" style={{ color: 'var(--color-green)', textDecoration: 'underline' }}>
+                  info@stanzelgrandresort.org
                 </a>
               </address>
             </Section>

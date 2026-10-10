@@ -98,7 +98,7 @@ function ContactPageContent() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)', marginBottom: 'var(--space-10)' }}>
                   {[
                     { icon: '📍', label: 'Address', value: 'Plot C103, A Close, off 1st Avenue\nGwarinpa Estate, Abuja, FCT\nNigeria' },
-                    { icon: '📧', label: 'Email', value: 'info@stanzelgrandresort.com' },
+                    { icon: '📧', label: 'Email', value: 'info@stanzelgrandresort.org' },
                   ].map(({ icon, label, value }) => (
                     <div key={label} style={{ display: 'flex', gap: 'var(--space-4)' }}>
                       <span style={{ fontSize: '1.3rem', lineHeight: 1, flexShrink: 0 }}>{icon}</span>

@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
   const html = `
     <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px;border:1px solid #e4ddd3;border-radius:12px;">
       <h2 style="color:#1a3c34;margin-bottom:4px;">New Enquiry — Stanzel Grand Resort</h2>
-      <p style="color:#6b6b6b;font-size:13px;margin-bottom:24px;">Received via stanzelgrandresort.com</p>
+      <p style="color:#6b6b6b;font-size:13px;margin-bottom:24px;">Received via stanzelgrandresort.org</p>
       <table style="width:100%;border-collapse:collapse;">
         <tr><td style="padding:8px 0;border-bottom:1px solid #f0ece4;color:#6b6b6b;font-size:13px;width:120px;">Type</td><td style="padding:8px 0;border-bottom:1px solid #f0ece4;font-weight:600;">${type}</td></tr>
         <tr><td style="padding:8px 0;border-bottom:1px solid #f0ece4;color:#6b6b6b;font-size:13px;">Name</td><td style="padding:8px 0;border-bottom:1px solid #f0ece4;font-weight:600;">${name}</td></tr>
@@ -68,8 +68,8 @@ export async function POST(req: NextRequest) {
     </div>
   `;
 
-  const toEmail = process.env.CONTACT_EMAIL_TO ?? 'info@stanzelgrandresort.com';
-  const fromEmail = process.env.CONTACT_EMAIL_FROM ?? 'noreply@stanzelgrandresort.com';
+  const toEmail = process.env.CONTACT_EMAIL_TO ?? 'info@stanzelgrandresort.org';
+  const fromEmail = process.env.CONTACT_EMAIL_FROM ?? 'noreply@stanzelgrandresort.org';
   const resendKey = process.env.RESEND_API_KEY;
 
   if (resendKey && resendKey !== 're_REPLACE_ME') {

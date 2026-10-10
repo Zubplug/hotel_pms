@@ -10,7 +10,7 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'https://stanzelgrandresort.com'),
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'https://stanzelgrandresort.org'),
   title: {
     default: 'Stanzel Grand Resort — Luxury Hospitality in Nigeria',
     template: '%s | Stanzel Grand Resort',
