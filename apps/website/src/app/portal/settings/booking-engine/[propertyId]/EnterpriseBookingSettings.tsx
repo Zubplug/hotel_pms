@@ -23,6 +23,8 @@ type Account = {
   publicKey: string | null;
   secretRef: string | null;
   webhookSecretRef: string | null;
+  hasCustomerSecret: boolean;
+  hasCustomerWebhookSecret: boolean;
 } | null;
 type RequestState = { domain: string; status: string; notes: string | null } | null;
 type WebsiteState = { status: string; brief: string | null } | null;
@@ -174,13 +176,13 @@ export function EnterpriseBookingSettings({
               </div>
             </> : <>
               <div className="be-three-col">
-                <Field label="Provider"><select name="provider" defaultValue={account?.provider ?? "PAYSTACK"}><option value="PAYSTACK">Paystack</option></select></Field>
+                <Field label="Provider"><select name="provider" defaultValue={account?.provider ?? "FLUTTERWAVE"}><option value="FLUTTERWAVE">Flutterwave</option><option value="PAYSTACK">Paystack (legacy)</option></select></Field>
                 <Field label="Currency"><input name="currency" defaultValue={account?.currency ?? "NGN"} /></Field>
               </div>
               <Field label="Public key"><input name="publicKey" defaultValue={account?.publicKey ?? ""} placeholder="pk_live_…" /></Field>
-              <Field label="Secret environment variable"><input name="secretRef" defaultValue={account?.secretRef ?? ""} placeholder="PAYSTACK_SECRET_KEY" /></Field>
-              <Field label="Webhook environment variable"><input name="webhookSecretRef" defaultValue={account?.webhookSecretRef ?? ""} placeholder="PAYSTACK_WEBHOOK_SECRET" /></Field>
-              <div className="be-security-note">⌁ Payment webhooks are verified server-side before a reservation is marked paid.</div>
+              <Field label="Flutterwave secret key" hint={account?.hasCustomerSecret ? "A secret key is already saved. Leave blank to keep it." : "Stored encrypted and never shown again."}><input name="customerSecret" type="password" autoComplete="new-password" placeholder={account?.hasCustomerSecret ? "••••••••••••" : "FLWSECK-…"} /></Field>
+              <Field label="Flutterwave webhook secret" hint={account?.hasCustomerWebhookSecret ? "A webhook secret is already saved. Leave blank to keep it." : "Use the secret hash configured in Flutterwave."}><input name="customerWebhookSecret" type="password" autoComplete="new-password" placeholder={account?.hasCustomerWebhookSecret ? "••••••••••••" : "Webhook secret hash"} /></Field>
+              <div className="be-security-note">⌁ Customer-owned Flutterwave credentials are encrypted at rest. Webhooks are verified server-side before a reservation is marked paid.</div>
             </>}
           </div>
         </FormCard>

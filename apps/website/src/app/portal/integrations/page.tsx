@@ -5,8 +5,8 @@ import { useState } from "react";
 import { PortalShell } from "@/components/portal-shell";
 
 const INTEGRATIONS = [
-  { id: "paystack",    name: "Paystack",     type: "Payments",         icon: "💳", status: "live",         desc: "Payments posted to guest folio." },
-  { id: "flutterwave", name: "Flutterwave",  type: "Payments",         icon: "🔄", status: "not-connected", desc: "Multi-currency payment processing." },
+  { id: "paystack",    name: "Paystack",     type: "Payments",         icon: "💳", status: "not-connected", desc: "Legacy reservation payment provider." },
+  { id: "flutterwave", name: "Flutterwave",  type: "Payments",         icon: "🔄", status: "available",     desc: "Connect your own Flutterwave account for reservation payments." },
   { id: "booking-com", name: "Booking.com",  type: "Distribution",     icon: "🌐", status: "not-connected", desc: "Two-way channel sync." },
   { id: "expedia",     name: "Expedia",      type: "Distribution",     icon: "✈️", status: "not-connected", desc: "Expedia Group network." },
   { id: "whatsapp",    name: "WhatsApp",     type: "Communications",   icon: "💬", status: "not-connected", desc: "Automated guest messaging." },
@@ -18,6 +18,7 @@ const INTEGRATIONS = [
 const statusClass: Record<string, string> = {
   live: "badge-active",
   pending: "badge-pending",
+  available: "badge-pending",
   "not-connected": "badge-inactive",
 };
 
@@ -47,18 +48,18 @@ export default function PortalIntegrationsPage() {
           <div>
             <div className="portal-stat-label">API base URL</div>
             <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--accent)", marginTop: 6, padding: "8px 12px", background: "var(--bg-overlay)", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)" }}>
-              https://api.lodgecore.com/v1
+              https://getlodgecore.vercel.app/api/v1/public
             </div>
           </div>
           <div>
             <div className="portal-stat-label">Authentication</div>
             <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--text-secondary)", marginTop: 6, padding: "8px 12px", background: "var(--bg-overlay)", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)" }}>
-              OAuth 2.0 · Bearer token
+              X-Publishable-Key header
             </div>
           </div>
         </div>
         <div style={{ marginTop: 14, display: "flex", gap: 10 }}>
-          <Link href="/portal/support" className="btn btn-outline btn-sm">Request API credentials →</Link>
+          <Link href="/portal/api-access" className="btn btn-outline btn-sm">View API credentials →</Link>
           <a href="/api" target="_blank" rel="noopener noreferrer" className="btn btn-outline btn-sm">View documentation ↗</a>
         </div>
       </div>
@@ -88,11 +89,13 @@ export default function PortalIntegrationsPage() {
                 <td style={{ fontSize: 12 }}>{int.desc}</td>
                 <td>
                   <span className={`portal-badge ${statusClass[int.status]}`}>
-                    {int.status === "not-connected" ? "Not connected" : int.status}
+                  {int.status === "not-connected" ? "Not connected" : int.status === "available" ? "Available" : int.status}
                   </span>
                 </td>
                 <td>
-                  {int.status === "live" ? (
+                  {int.id === "flutterwave" ? (
+                    <Link href="/portal/settings/booking-engine" className="btn btn-outline btn-sm" style={{ fontSize: 10, padding: "4px 10px" }}>Configure</Link>
+                  ) : int.status === "live" ? (
                     <Link href="/portal/support" className="btn btn-outline btn-sm" style={{ fontSize: 10, padding: "4px 10px" }}>Manage</Link>
                   ) : (
                     <button

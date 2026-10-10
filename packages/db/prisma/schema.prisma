@@ -6986,8 +6986,8 @@ model BookingRequest {
 /// Payment provider account configuration for the Booking Engine.
 /// Supports both LodgeCore platform accounts (PLATFORM mode) and
 /// customer-owned merchant accounts (CUSTOMER mode).
-/// Secret keys are stored as environment variable name references only —
-/// the raw key is NEVER persisted to the database.
+/// Customer credentials are encrypted at rest; platform credentials continue
+/// to use environment-variable references.
 model BookingPaymentAccount {
   id             String    @id @default(uuid()) @db.Uuid
   organizationId String    @db.Uuid
@@ -7005,6 +7005,10 @@ model BookingPaymentAccount {
   secretRef        String?
   /// Name of the environment variable that holds the webhook secret.
   webhookSecretRef String?
+  /// Encrypted customer-owned provider credentials. Never expose these fields
+  /// to portal clients or API responses.
+  secretCiphertext        String?
+  webhookSecretCiphertext String?
 
   currency String
   isActive Boolean @default(false)

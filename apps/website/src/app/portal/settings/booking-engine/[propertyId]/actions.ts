@@ -6,18 +6,19 @@ import prisma from "@hotel-pms/db";
 import crypto from "crypto";
 import dns from "dns/promises";
 import { attachVercelDomain } from "@/lib/custom-domain/vercel";
+import { encryptPaymentCredential } from "@/lib/payment-providers/credentials";
 
 async function requireBookingEntitlement(organizationId: string, propertyId: string) {
   const entitlement = await prisma.entitlement.findFirst({
     where: {
       organizationId,
       OR: [{ propertyId }, { propertyId: null }],
-      productCode: "ADDON_BOOKING_ENGINE",
+      productCode: { in: ["ADDON_BOOKING_ENGINE", "ADDON_CUSTOM_WEBSITE_API"] },
       status: "ACTIVE",
     },
     select: { id: true },
   });
-  if (!entitlement) throw new Error("Booking Engine entitlement is required");
+  if (!entitlement) throw new Error("Booking Engine or Standalone API entitlement is required");
 }
 
 // ── Guard ─────────────────────────────────────────────────────────────────
@@ -224,14 +225,18 @@ export async function saveBookingPaymentAccount(propertyId: string, formData: Fo
   const provider = String(formData.get("provider") ?? "PAYSTACK").toUpperCase();
   const mode = String(formData.get("mode") ?? "PLATFORM").toUpperCase();
   const currency = String(formData.get("currency") ?? "NGN").toUpperCase();
-  // Flutterwave booking checkout is not enabled until its webhook and provider
-  // adapter are deployed; do not allow saving a configuration the API cannot use.
-  if (provider !== "PAYSTACK" || !["PLATFORM", "CUSTOMER"].includes(mode)) throw new Error("Only Paystack is currently available for online booking payments");
+  if (!["PAYSTACK", "FLUTTERWAVE"].includes(provider) || !["PLATFORM", "CUSTOMER"].includes(mode)) throw new Error("Invalid payment provider configuration");
+  const accountId = String(formData.get("accountId") ?? "00000000-0000-0000-0000-000000000000");
+  const existing = await prisma.bookingPaymentAccount.findUnique({ where: { id: accountId }, select: { secretCiphertext: true, webhookSecretCiphertext: true } });
+  const customerSecret = String(formData.get("customerSecret") ?? "").trim();
+  const customerWebhookSecret = String(formData.get("customerWebhookSecret") ?? "").trim();
+  if (provider === "FLUTTERWAVE" && mode === "CUSTOMER" && !customerSecret && !existing?.secretCiphertext) throw new Error("Flutterwave secret key is required");
+  if (provider === "FLUTTERWAVE" && mode === "CUSTOMER" && !customerWebhookSecret && !existing?.webhookSecretCiphertext) throw new Error("Flutterwave webhook secret is required");
   await prisma.bookingPaymentAccount.updateMany({ where: { organizationId, propertyId }, data: { isActive: false } });
   await prisma.bookingPaymentAccount.upsert({
-    where: { id: String(formData.get("accountId") ?? "00000000-0000-0000-0000-000000000000") },
-    create: { organizationId, propertyId, provider, mode, currency, publicKey: String(formData.get("publicKey") ?? "").trim() || null, secretRef: String(formData.get("secretRef") ?? "").trim() || null, webhookSecretRef: String(formData.get("webhookSecretRef") ?? "").trim() || null, isActive: true },
-    update: { provider, mode, currency, publicKey: String(formData.get("publicKey") ?? "").trim() || null, secretRef: String(formData.get("secretRef") ?? "").trim() || null, webhookSecretRef: String(formData.get("webhookSecretRef") ?? "").trim() || null, isActive: true },
+    where: { id: accountId },
+    create: { organizationId, propertyId, provider, mode, currency, publicKey: String(formData.get("publicKey") ?? "").trim() || null, secretRef: String(formData.get("secretRef") ?? "").trim() || null, webhookSecretRef: String(formData.get("webhookSecretRef") ?? "").trim() || null, secretCiphertext: customerSecret ? encryptPaymentCredential(customerSecret) : null, webhookSecretCiphertext: customerWebhookSecret ? encryptPaymentCredential(customerWebhookSecret) : null, isActive: true },
+    update: { provider, mode, currency, publicKey: String(formData.get("publicKey") ?? "").trim() || null, secretRef: String(formData.get("secretRef") ?? "").trim() || null, webhookSecretRef: String(formData.get("webhookSecretRef") ?? "").trim() || null, ...(customerSecret ? { secretCiphertext: encryptPaymentCredential(customerSecret) } : {}), ...(customerWebhookSecret ? { webhookSecretCiphertext: encryptPaymentCredential(customerWebhookSecret) } : {}), isActive: true },
   });
   revalidatePath(`/portal/settings/booking-engine/${propertyId}`);
 }

@@ -11,7 +11,8 @@ import {
   rateLimitIdentity,
 } from '@/lib/booking-engine/middleware';
 import { PaystackProvider } from '@/lib/payment-providers/paystack';
-import { getPaystackBookingAccount, resolveSecretRef } from '@/lib/payment-providers/booking-account';
+import { FlutterwaveProvider } from '@/lib/payment-providers/flutterwave';
+import { getBookingPaymentAccount, resolveSecretRef } from '@/lib/payment-providers/booking-account';
 import { resolveBookingOrigin } from '@/lib/booking-engine/request-origin';
 import { sendBookingPaymentFailedEmail } from '@/lib/email/booking-emails';
 import { CreatePaymentIntentRequestSchema } from '@hotel-pms/types';
@@ -133,7 +134,7 @@ export async function POST(req: NextRequest) {
       propertyId: ctx.propertyId,
       reservationId: reservation.id,
       holdId: reservation.bookingChannelRef ?? null,
-      provider: 'PAYSTACK',
+      provider: 'PENDING',
       providerRef,
       amount: amountDue,
       currency: reservation.currency,
@@ -147,12 +148,16 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const account = await getPaystackBookingAccount(ctx.propertyId);
-    const secretKey = resolveSecretRef(account?.secretRef, 'PAYSTACK_SECRET_KEY');
-    const paystack = new PaystackProvider(secretKey);
+    const account = await getBookingPaymentAccount(ctx.propertyId);
+    if (!account) throw new Error('No reservation payment account is configured');
+    const secretKey = account.secret ?? resolveSecretRef(account.secretRef, account.provider === 'FLUTTERWAVE' ? 'FLW_SECRET_KEY' : 'PAYSTACK_SECRET_KEY');
+    const provider = account.provider === 'FLUTTERWAVE'
+      ? new FlutterwaveProvider(secretKey, account.webhookSecret ?? resolveSecretRef(account.webhookSecretRef, 'FLW_WEBHOOK_SECRET_HASH'))
+      : new PaystackProvider(secretKey);
+    await prisma.bookingPaymentTransaction.update({ where: { id: bpt.id }, data: { provider: account.provider } });
     const callbackUrl = `${resolveBookingOrigin(req.headers, process.env.NEXT_PUBLIC_BOOKING_URL)}/reservation?token=${encodeURIComponent(String(reservationToken))}`;
 
-    const init = await paystack.initializeTransaction({
+    const init = await provider.initializeTransaction({
       amount: amountDue,
       currency: reservation.currency,
       email: guestEmail,

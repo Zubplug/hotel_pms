@@ -30,7 +30,7 @@ export default async function BookingEngineOverviewPage() {
           where: {
             organizationId,
             OR: [{ propertyId: prop.id }, { propertyId: null }],
-            productCode: "ADDON_BOOKING_ENGINE",
+            productCode: { in: ["ADDON_BOOKING_ENGINE", "ADDON_CUSTOM_WEBSITE_API"] },
             status: "ACTIVE",
           },
           select: { id: true },
