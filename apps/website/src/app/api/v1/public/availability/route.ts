@@ -7,7 +7,7 @@ import {
   resolvePublicApiContext,
   isErrorResponse,
   checkRateLimit,
-  clientIp,
+  rateLimitIdentity,
 } from '@/lib/booking-engine/middleware';
 import { AuthoritativeAvailabilityService } from '@/lib/booking-engine/availability-service';
 import { ReservationPricingService } from '@/lib/booking-engine/pricing-service';
@@ -18,7 +18,7 @@ export async function OPTIONS(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
-  const ip = clientIp(req);
+  const ip = rateLimitIdentity(req);
   if (!(await checkRateLimit(ip, 'availability'))) {
     return new Response(JSON.stringify({ error: 'TOO_MANY_REQUESTS' }), {
       status: 429,

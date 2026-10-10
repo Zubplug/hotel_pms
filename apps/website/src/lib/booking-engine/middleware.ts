@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import crypto from 'node:crypto';
 import prisma from '@hotel-pms/db';
 import { errorResponse } from '@/lib/api-response';
 import { hasEntitlement } from '@/lib/auth/entitlement';
@@ -81,6 +82,18 @@ export async function checkRateLimit(ip: string, scope = 'public'): Promise<bool
 
 export function clientIp(req: NextRequest): string {
   return req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? '127.0.0.1';
+}
+
+/**
+ * Server-to-server consumers do not have a browser IP. Include a short hash
+ * of their publishable key so one property's SSR traffic cannot consume the
+ * shared 127.0.0.1 bucket for every other property.
+ */
+export function rateLimitIdentity(req: NextRequest): string {
+  const ip = clientIp(req);
+  const key = req.headers.get('x-publishable-key');
+  if (!key) return ip;
+  return `${ip}:key:${crypto.createHash('sha256').update(key).digest('hex').slice(0, 16)}`;
 }
 
 // ---------------------------------------------------------------------------

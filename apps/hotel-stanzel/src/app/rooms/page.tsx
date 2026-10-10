@@ -10,11 +10,19 @@ export const metadata: Metadata = {
   description: 'Explore premium rooms and suites at Stanzel Grand Resort in Gwarinpa, Abuja. Each room is thoughtfully appointed with modern amenities and warm Nigerian character.',
 };
 
-export const revalidate = 3600;
+// This page must fetch at runtime so the property's server-only key and the
+// latest room catalogue are available after deployment. The API response is
+// still cached for one hour inside getRoomTypes().
+export const dynamic = 'force-dynamic';
 
 export default async function RoomsPage() {
   let rooms: Awaited<ReturnType<typeof getRoomTypes>>['data'] = [];
-  try { const { data } = await getRoomTypes(); rooms = data; } catch { /* graceful degradation */ }
+  try {
+    const { data } = await getRoomTypes();
+    rooms = data;
+  } catch (error) {
+    console.error('[Stanzel /rooms] LodgeCore public API request failed', error);
+  }
 
   return (
     <>

@@ -7,7 +7,7 @@ import {
   resolvePublicApiContext,
   isErrorResponse,
   checkRateLimit,
-  clientIp,
+  rateLimitIdentity,
 } from '@/lib/booking-engine/middleware';
 
 export async function OPTIONS(req: NextRequest) {
@@ -15,7 +15,7 @@ export async function OPTIONS(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
-  const ip = clientIp(req);
+  const ip = rateLimitIdentity(req);
   if (!(await checkRateLimit(ip, 'rooms'))) {
     return new Response(JSON.stringify({ error: 'TOO_MANY_REQUESTS' }), {
       status: 429,

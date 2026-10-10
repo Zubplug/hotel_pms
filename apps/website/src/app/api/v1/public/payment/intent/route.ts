@@ -8,7 +8,7 @@ import {
   resolvePublicApiContext,
   isErrorResponse,
   checkRateLimit,
-  clientIp,
+  rateLimitIdentity,
 } from '@/lib/booking-engine/middleware';
 import { PaystackProvider } from '@/lib/payment-providers/paystack';
 import { getPaystackBookingAccount, resolveSecretRef } from '@/lib/payment-providers/booking-account';
@@ -21,7 +21,7 @@ export async function OPTIONS(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const ip = clientIp(req);
+  const ip = rateLimitIdentity(req);
   if (!(await checkRateLimit(ip, 'payment-intent'))) {
     return new Response(JSON.stringify({ error: 'TOO_MANY_REQUESTS' }), {
       status: 429,
