@@ -305,9 +305,15 @@ export function NightAuditLayout({ children }: { children: React.ReactNode }) {
             <Menu className="h-4 w-4" />
           </button>
 
-          <div className="flex items-center gap-3 ml-auto">
+          <div className="flex min-w-0 items-center gap-2">
+            <div className="min-w-0 lg:hidden">
+              <p className="truncate text-[10px] font-bold uppercase tracking-[0.16em] text-indigo-300">Night Audit</p>
+              <p className="truncate text-xs font-medium capitalize text-slate-300">{pathname === '/night-audit' ? 'Audit overview' : pathname.split('/').filter(Boolean).slice(-1)[0]?.replaceAll('-', ' ') || 'Workspace'}</p>
+            </div>
+          </div>
+          <div className="ml-auto flex items-center gap-2 sm:gap-3">
             {hasMultipleProperties !== false && (
-              <PropertySelector onMultiplePropertiesChange={setHasMultipleProperties} />
+              <PropertySelector className="max-w-[150px] sm:max-w-[240px]" onMultiplePropertiesChange={setHasMultipleProperties} />
             )}
           </div>
         </header>

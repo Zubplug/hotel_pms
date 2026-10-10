@@ -244,7 +244,7 @@ export default function FnbAnalyticsClient() {
         </div>
       </div>
 
-      <main className="mx-auto max-w-[1600px] space-y-6 px-4 py-6 sm:px-6 lg:px-8">
+      <main className="mx-auto max-w-[1600px] space-y-5 px-3 py-5 sm:space-y-6 sm:px-6 lg:px-8">
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <MetricCard label="Gross revenue" value={money(summary.grossRevenue, currency)} detail="Before discounts and adjustments" icon={DollarSign} />
           <MetricCard label="Net revenue" value={money(summary.netRevenue, currency)} detail={`${number(summary.orders)} orders processed`} icon={TrendingUp} tone="brown" />

@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 
 export default function FnbSettingsPage() {
   return (
-    <div className="p-6 space-y-6 max-w-4xl">
+    <div className="max-w-4xl space-y-5 p-3 sm:space-y-6 sm:p-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">F&B Settings</h1>

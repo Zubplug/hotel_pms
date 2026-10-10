@@ -125,8 +125,8 @@ export default async function AccountantExpensesPage() {
     lineItems: item.lineItems.map(line => ({ description: line.description, unit: line.unit, quantity: Number(line.quantity), unitPrice: Number(line.unitPrice), total: Number(line.total) })),
   }));
 
-  return <main className="min-h-full bg-[#08111f] px-4 py-6 text-slate-200 sm:px-6 lg:px-8 lg:py-8">
-    <div className="mx-auto max-w-[1540px] space-y-6">
+  return <main className="min-h-full bg-[#08111f] px-3 py-5 text-slate-200 sm:px-6 sm:py-6 lg:px-8 lg:py-8">
+    <div className="mx-auto max-w-[1540px] space-y-5 sm:space-y-6">
       <header className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
         <div>
           <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[.2em] text-rose-300"><ReceiptText className="h-4 w-4" />Expense control room</div>

@@ -11,8 +11,8 @@ const sections = [
 export default function AccountantCashBankLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-full bg-[#08111f]">
-      <div className="border-b border-white/10 bg-[#0b1628]/95 px-4 py-3 text-slate-200 sm:px-6 lg:px-8">
-        <div className="mx-auto flex max-w-[1540px] flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+      <div className="border-b border-white/10 bg-[#0b1628]/95 px-3 py-3 text-slate-200 sm:px-6 lg:px-8">
+        <div className="mx-auto flex max-w-[1540px] flex-col gap-2 sm:gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-3">
             <Link href="/accountant/cash-bank" className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 text-slate-400 transition hover:bg-white/[.08] hover:text-white" aria-label="Back to cash and bank overview">
               <ArrowLeft className="h-4 w-4" />

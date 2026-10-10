@@ -87,7 +87,7 @@ export function InventorySidebar({ onNavigate }: InventorySidebarProps) {
       </div>
 
       {/* Nav */}
-      <div className="flex flex-1 flex-col overflow-y-auto px-3 py-5 gap-1">
+      <div className="flex flex-1 flex-col gap-1 overflow-y-auto px-3 py-5">
         {NAV_LINKS.map((link) => {
           if (link.roles && role && !link.roles.includes(role)) return null;
           const isActive =
@@ -100,7 +100,7 @@ export function InventorySidebar({ onNavigate }: InventorySidebarProps) {
               href={link.href}
               onClick={onNavigate}
               className={cn(
-                'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150',
+                'flex min-h-11 items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-150',
                 isActive
                   ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-900/40'
                   : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'

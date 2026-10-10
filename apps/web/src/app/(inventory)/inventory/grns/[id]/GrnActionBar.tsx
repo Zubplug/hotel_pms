@@ -88,7 +88,7 @@ export function GrnActionBar({ id, status, itemCount, warehouseName, canReceive,
       )}
 
       {modalType && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/40 p-0 backdrop-blur-sm sm:items-center sm:p-4">
           <div className="bg-white rounded-2xl shadow-xl border border-slate-200/60 max-w-md w-full p-6 animate-in fade-in zoom-in-95 duration-200">
             {modalType === 'POST' ? (
               <>

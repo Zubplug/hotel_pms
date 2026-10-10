@@ -216,7 +216,7 @@ export default function AuditHistoryPage() {
   /* ────────────────────────────────────────────────────────── Render ────── */
   return (
     <div
-      className="min-h-full px-4 pb-16 pt-6 sm:px-6 sm:pt-8 md:px-8"
+      className="min-h-full px-3 pb-16 pt-4 sm:px-6 sm:pt-8 md:px-8"
       style={{ background: 'linear-gradient(160deg, #060b18 0%, #080e1f 60%, #0a0c22 100%)' }}
     >
       <div className="mx-auto max-w-[1540px] space-y-6">

@@ -86,6 +86,7 @@ export function ExternalAuditorLayout({ children }: { children: React.ReactNode 
     .map((part: string) => part[0])
     .join('')
     .toUpperCase() || 'EA';
+  const activePage = AUDITOR_NAV.find((item) => pathname === item.href || (item.href !== '/external-auditor' && pathname?.startsWith(item.href)))?.name || 'Command center';
 
   if (status === 'loading') {
     return (
@@ -120,18 +121,13 @@ export function ExternalAuditorLayout({ children }: { children: React.ReactNode 
         <AuditorSidebar {...sidebarProps} />
       </div>
 
-      <div className="relative flex flex-1 flex-col lg:pl-64 min-w-0">
+      <div className="relative flex min-w-0 flex-1 flex-col lg:pl-64">
+        <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between border-b border-slate-800 bg-slate-950/95 px-3 backdrop-blur-xl sm:px-6">
+          <div className="flex min-w-0 items-center gap-2.5 sm:gap-3"><Button aria-label="Open auditor navigation" variant="ghost" size="icon" className="h-10 w-10 shrink-0 rounded-xl border border-white/10 text-slate-300 hover:bg-white/10 hover:text-white lg:hidden" onClick={() => setSidebarOpen(true)}><Menu className="h-5 w-5" /></Button><div className="min-w-0"><p className="truncate text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-300 sm:tracking-[0.2em]">External audit</p><p className="truncate text-sm font-semibold capitalize text-white">{activePage}</p></div></div>
+          <div className="flex shrink-0 items-center gap-2"><span className="hidden items-center gap-2 rounded-full border border-emerald-300/15 bg-emerald-300/[.06] px-3 py-1.5 text-xs font-semibold text-emerald-300 sm:flex"><LockKeyhole className="h-3.5 w-3.5" />Read-only scope</span></div>
+        </header>
         <main className="relative flex-1 overflow-y-auto pb-10 custom-scrollbar">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="fixed left-4 top-4 z-40 bg-slate-900/90 text-slate-400 shadow-lg ring-1 ring-white/10 hover:bg-slate-800 hover:text-slate-200 lg:hidden"
-            onClick={() => setSidebarOpen(true)}
-            aria-label="Open auditor navigation"
-          >
-            <Menu className="h-5 w-5" />
-          </Button>
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
+          <div className="mx-auto max-w-7xl px-3 py-5 sm:px-6 sm:py-8 lg:px-8">
             {children}
           </div>
         </main>
@@ -173,7 +169,7 @@ function AuditorSidebar({ pathname, userDisplayName, userInitials, logout, scope
                 href={item.href}
                 onClick={onNavigate}
                 className={cn(
-                  'group flex items-center rounded-lg px-3 py-2.5 text-sm font-medium transition-all',
+                  'group flex min-h-11 items-center rounded-xl px-3 py-2.5 text-sm font-medium transition-all',
                   isActive
                     ? 'bg-white/[.09] text-white shadow-sm ring-1 ring-white/[.06]'
                     : 'text-slate-400 hover:bg-white/[.05] hover:text-slate-200'

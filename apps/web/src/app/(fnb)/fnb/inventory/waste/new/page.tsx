@@ -70,7 +70,7 @@ export default function NewWasteEntryPage() {
   const selectedItem = stockItems.find(i => i.id === formData.stockItemId);
 
   return (
-    <div className="p-6 md:p-8 space-y-8 bg-slate-50/50 dark:bg-slate-950/20 min-h-screen">
+    <div className="min-h-screen space-y-6 bg-slate-50/50 p-3 dark:bg-slate-950/20 sm:space-y-8 sm:p-6 md:p-8">
       <div className="max-w-3xl mx-auto space-y-6">
         <Link href="/fnb/inventory/waste" className="inline-flex items-center text-sm font-medium text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 transition-colors">
           <ArrowLeft className="mr-2 h-4 w-4" /> Back to Waste Log
@@ -112,7 +112,7 @@ export default function NewWasteEntryPage() {
                 </Select>
               </div>
 
-              <div className="grid grid-cols-2 gap-6">
+              <div className="grid gap-4 sm:grid-cols-2 sm:gap-6">
                 <div className="space-y-2.5">
                   <Label>Quantity</Label>
                   <Input

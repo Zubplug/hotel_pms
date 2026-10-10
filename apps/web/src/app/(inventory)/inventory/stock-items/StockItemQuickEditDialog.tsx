@@ -136,7 +136,7 @@ export function StockItemQuickEditDialog({
 
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => !saving && onOpenChange(nextOpen)}>
-      <DialogContent className="border-white/[0.08] bg-[#111c2e] p-0 text-slate-100 sm:max-w-lg">
+      <DialogContent className="max-h-[92vh] w-[calc(100%-1.5rem)] overflow-y-auto border-white/[0.08] bg-[#111c2e] p-0 text-slate-100 sm:max-w-lg">
         <DialogHeader className="border-b border-white/[0.07] px-6 py-5">
           <div className="flex items-center gap-3">
             <div className="rounded-xl border border-cyan-400/20 bg-cyan-400/10 p-2.5 text-cyan-300">

@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
 import { useLogout } from '@/hooks/useLogout';
 import { cn } from '@/lib/utils';
+import { PropertySelector } from '@/components/properties/PropertySelector';
 import {
   BarChart3, Bell, ClipboardList, DoorOpen, LayoutDashboard, Package, ReceiptText,
   LogOut, Menu, Sparkles, Wrench, X, FileSearch
@@ -29,6 +30,7 @@ export function HousekeepingManagerShell({ children }: { children: React.ReactNo
   const [mobileOpen, setMobileOpen] = useState(false);
   const displayName = session?.user?.name || session?.user?.email || 'Operations manager';
   const initials = displayName.split(/\s+/).filter(Boolean).slice(0, 2).map((part: string) => part[0]).join('').toUpperCase();
+  const activePage = NAVIGATION.find(({ href }) => pathname === href || (href !== '/housekeeping-manager' && pathname.startsWith(`${href}/`)))?.label || 'Command center';
 
   return (
     <div className="flex min-h-screen bg-[#07111f] text-slate-100">
@@ -63,11 +65,11 @@ export function HousekeepingManagerShell({ children }: { children: React.ReactNo
       </aside>
 
       <main className="min-w-0 flex-1">
-        <header className="sticky top-0 z-30 flex h-[78px] items-center justify-between border-b border-white/[0.08] bg-[#07111f]/90 px-4 backdrop-blur-xl sm:px-8">
-          <div className="flex items-center gap-3"><button className="rounded-xl border border-white/[0.08] p-2 text-slate-400 hover:text-white lg:hidden" onClick={() => setMobileOpen(true)}><Menu className="h-5 w-5" /></button><div><p className="text-[10px] font-bold uppercase tracking-[0.2em] text-cyan-300">Stanzel Grand Resort</p><p className="mt-1 text-sm font-semibold text-white">Rooms &amp; care command center</p></div></div>
-          <div className="flex items-center gap-3"><span className="hidden items-center gap-2 rounded-full border border-emerald-300/15 bg-emerald-300/[0.06] px-3 py-1.5 text-xs font-semibold text-emerald-300 sm:flex"><span className="h-1.5 w-1.5 rounded-full bg-emerald-300" />Live operations</span><button className="rounded-xl border border-white/[0.08] p-2 text-slate-500 hover:text-white" aria-label="Notifications"><Bell className="h-4 w-4" /></button></div>
+        <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-white/[0.08] bg-[#07111f]/90 px-3 backdrop-blur-xl sm:px-6">
+          <div className="flex min-w-0 items-center gap-2.5 sm:gap-3"><button aria-label="Open navigation" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/[0.08] text-slate-400 hover:text-white lg:hidden" onClick={() => setMobileOpen(true)}><Menu className="h-5 w-5" /></button><div className="min-w-0"><p className="truncate text-[10px] font-bold uppercase tracking-[0.16em] text-cyan-300 sm:tracking-[0.2em]">Housekeeping manager</p><p className="truncate text-sm font-semibold text-white">{activePage}</p></div></div>
+          <div className="flex shrink-0 items-center gap-2 sm:gap-3"><span className="hidden items-center gap-2 rounded-full border border-emerald-300/15 bg-emerald-300/[0.06] px-3 py-1.5 text-xs font-semibold text-emerald-300 sm:flex"><span className="h-1.5 w-1.5 rounded-full bg-emerald-300" />Live operations</span><div className="hidden sm:block"><PropertySelector className="max-w-[150px] sm:max-w-[220px]" /></div><button className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/[0.08] text-slate-500 hover:text-white" aria-label="Notifications"><Bell className="h-4 w-4" /></button></div>
         </header>
-        <div className="min-h-[calc(100vh-78px)] bg-[radial-gradient(circle_at_top_right,rgba(34,211,238,0.08),transparent_34%),#07111f]">{children}</div>
+        <div className="min-h-[calc(100vh-4rem)] bg-[radial-gradient(circle_at_top_right,rgba(34,211,238,0.08),transparent_34%),#07111f]">{children}</div>
       </main>
     </div>
   );

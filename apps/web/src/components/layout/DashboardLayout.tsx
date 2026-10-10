@@ -42,9 +42,11 @@ import {
   Utensils,
   RefreshCw,
   ShieldCheck,
+  X,
   type LucideIcon,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { PropertySelector } from '@/components/properties/PropertySelector';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -306,18 +308,6 @@ export function DashboardLayout({ children, enabledModules = [] }: { children: R
 
   return (
     <div className={cn('flex h-screen overflow-hidden bg-muted/30', isDarkWorkspace && 'pms-dark-shell')}>
-      <Button
-        variant="ghost"
-        size="icon"
-        className={cn(
-          'fixed left-4 top-4 z-50 text-slate-300 hover:bg-white/[.08] hover:text-white lg:hidden',
-          isDarkWorkspace ? 'bg-[#0d1b2a]/80' : 'bg-background/80'
-        )}
-        onClick={() => setSidebarOpen(true)}
-        aria-label="Open navigation"
-      >
-        <Menu className="h-5 w-5" />
-      </Button>
       {/* Mobile sidebar overlay */}
       {sidebarOpen && (
         <div className="fixed inset-0 z-50 lg:hidden">
@@ -326,6 +316,15 @@ export function DashboardLayout({ children, enabledModules = [] }: { children: R
             onClick={() => setSidebarOpen(false)}
           />
           <div className="fixed inset-y-0 left-0 w-64 bg-background border-r shadow-xl flex flex-col">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute right-3 top-3 z-10 text-muted-foreground hover:bg-muted/70 hover:text-foreground"
+              onClick={() => setSidebarOpen(false)}
+              aria-label="Close navigation"
+            >
+              <X className="h-5 w-5" />
+            </Button>
             <Sidebar onNavigate={() => setSidebarOpen(false)} />
           </div>
         </div>
@@ -338,9 +337,35 @@ export function DashboardLayout({ children, enabledModules = [] }: { children: R
 
       {/* Main content area */}
       <div className="flex flex-1 flex-col lg:pl-64 min-w-0">
+        <header className={cn(
+          'sticky top-0 z-40 flex h-14 shrink-0 items-center justify-between border-b px-3 backdrop-blur lg:hidden sm:px-4',
+          isDarkWorkspace ? 'border-white/[.10] bg-[#07111f]/95 text-white' : 'border-border/70 bg-background/95'
+        )}>
+          <div className="flex min-w-0 items-center gap-2">
+            <Button
+              variant="outline"
+              size="icon"
+              className={cn(
+                'h-10 w-10 shrink-0',
+                isDarkWorkspace && 'border-white/[.12] bg-white/[.04] text-white hover:bg-white/[.10]'
+              )}
+              onClick={() => setSidebarOpen(true)}
+              aria-label="Open general manager navigation"
+            >
+              <Menu className="h-4 w-4" />
+            </Button>
+            <div className="min-w-0">
+              <p className={cn('truncate text-[10px] font-bold uppercase tracking-[.16em]', isDarkWorkspace ? 'text-emerald-300' : 'text-primary')}>General Manager</p>
+              <p className={cn('truncate text-xs font-medium', isDarkWorkspace ? 'text-slate-300' : 'text-muted-foreground')}>
+                {pathname === '/general-manager' ? 'Executive overview' : pathname?.split('/').filter(Boolean).slice(-1)[0]?.replaceAll('-', ' ') || 'Workspace'}
+              </p>
+            </div>
+          </div>
+          <PropertySelector className={cn('max-w-[150px] sm:max-w-[220px]', isDarkWorkspace && 'border-white/[.12] bg-white/[.04] text-white hover:bg-white/[.10]')} />
+        </header>
         {/* Page content */}
         <main className="flex-1 overflow-y-auto pb-10">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
+          <div className="mx-auto max-w-7xl px-3 py-5 sm:px-6 sm:py-8 lg:px-8">
             {children}
           </div>
         </main>

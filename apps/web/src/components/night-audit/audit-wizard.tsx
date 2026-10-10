@@ -157,7 +157,7 @@ export function AuditWizard({ open, onOpenChange, data, onExecute, executing, on
         >
           {/* ── Header ── */}
           <div
-            className="relative shrink-0 overflow-hidden px-7 py-6"
+            className="relative shrink-0 overflow-hidden px-4 py-4 sm:px-7 sm:py-6"
             style={{ background: '#07090f', borderBottom: '1px solid rgba(255,255,255,0.06)' }}
           >
             {/* Ambient glow */}
@@ -287,7 +287,7 @@ export function AuditWizard({ open, onOpenChange, data, onExecute, executing, on
             <div className="flex min-w-0 flex-col overflow-hidden" style={{ background: '#060b18' }}>
               {/* Step header */}
               <div
-                className="shrink-0 border-b border-white/[0.05] px-8 py-6"
+                className="shrink-0 border-b border-white/[0.05] px-4 py-4 sm:px-8 sm:py-6"
                 style={{ background: 'rgba(255,255,255,0.015)' }}
               >
                 <div className="flex items-center gap-3">
@@ -304,9 +304,9 @@ export function AuditWizard({ open, onOpenChange, data, onExecute, executing, on
               </div>
 
               {/* Step content */}
-              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-7 md:p-8 pb-12">
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3 pb-10 sm:p-7 sm:pb-12 md:p-8">
                 <div
-                  className="min-h-full rounded-2xl border border-white/[0.06] p-6 md:p-8"
+                  className="min-h-full rounded-2xl border border-white/[0.06] p-4 sm:p-6 md:p-8"
                   style={{ background: 'rgba(255,255,255,0.02)' }}
                 >
                   {renderStepContent()}
@@ -315,7 +315,7 @@ export function AuditWizard({ open, onOpenChange, data, onExecute, executing, on
 
               {/* Footer navigation */}
               <div
-                className="flex shrink-0 items-center justify-between border-t border-white/[0.05] px-8 py-5"
+                className="flex shrink-0 items-center justify-between gap-2 border-t border-white/[0.05] px-4 py-4 sm:px-8 sm:py-5"
                 style={{ background: 'rgba(255,255,255,0.015)' }}
               >
                 <button

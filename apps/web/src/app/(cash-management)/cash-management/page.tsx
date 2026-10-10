@@ -393,10 +393,10 @@ export default async function GeneralCashierDashboardPage() {
   return (
     <div className="cashier-dark-surface min-h-full">
       {/* Executive header */}
-      <div className="relative overflow-hidden bg-[#0b1120] px-6 py-9 sm:px-8">
+      <div className="relative overflow-hidden bg-[#0b1120] px-3 py-5 sm:px-8 sm:py-9">
         <div className="pointer-events-none absolute -right-16 -top-28 h-72 w-72 rounded-full bg-indigo-500/20 blur-3xl" />
         <div className="pointer-events-none absolute bottom-0 left-1/2 h-24 w-96 -translate-x-1/2 bg-emerald-500/10 blur-3xl" />
-        <div className="relative mx-auto flex max-w-[1440px] flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+        <div className="relative mx-auto flex max-w-[1440px] flex-col gap-4 sm:gap-6 lg:flex-row lg:items-end lg:justify-between">
           <div className="relative">
             <div className="mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-indigo-300">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_0_4px_rgba(52,211,153,0.12)]" />
@@ -420,7 +420,7 @@ export default async function GeneralCashierDashboardPage() {
         </div>
       </div>
 
-      <div className="mx-auto max-w-[1440px] space-y-7 px-5 py-7 sm:px-8">
+      <div className="mx-auto max-w-[1440px] space-y-5 px-3 py-5 sm:space-y-7 sm:px-8 sm:py-7">
         {/* KPI Cards */}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
           {kpiCards.map((card) => {

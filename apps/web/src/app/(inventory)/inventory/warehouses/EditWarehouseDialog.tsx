@@ -51,7 +51,7 @@ export default function EditWarehouseDialog({ warehouse }: { warehouse: { id: st
 
       {isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-[#111c2e] border border-white/10 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+          <div className="max-h-[92vh] w-[calc(100%-1.5rem)] overflow-y-auto rounded-2xl border border-white/10 bg-[#111c2e] shadow-2xl animate-in fade-in zoom-in-95 duration-200 sm:max-w-md">
             <div className="flex justify-between items-center p-5 border-b border-white/[0.07]">
               <h2 className="text-lg font-semibold text-white">Edit Warehouse</h2>
               <button onClick={() => setIsOpen(false)} className="text-slate-500 hover:text-white transition-colors">

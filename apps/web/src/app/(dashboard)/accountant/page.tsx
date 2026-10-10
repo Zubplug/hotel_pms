@@ -139,8 +139,8 @@ export default function AccountantOverviewPage() {
   ].filter(item => Number(item.count || 0) > 0);
 
   return (
-    <div className="min-h-full bg-[#09111f] px-4 py-6 text-slate-200 sm:px-6 lg:px-8 lg:py-8">
-      <div className="mx-auto max-w-[1480px] space-y-6">
+    <div className="min-h-full bg-[#09111f] px-3 py-5 text-slate-200 sm:px-6 sm:py-6 lg:px-8 lg:py-8">
+      <div className="mx-auto max-w-[1480px] space-y-5 sm:space-y-6">
         <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
           <div>
             <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[.18em] text-emerald-300"><Sparkles className="h-3.5 w-3.5" /> Finance command centre</div>

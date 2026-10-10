@@ -196,19 +196,6 @@ export function AccountantLayout({ children, enabledModules = [] }: { children: 
         <Sidebar />
       </aside>
 
-      {/* Mobile Header & Sidebar */}
-      <div className="lg:hidden flex h-16 shrink-0 items-center justify-between border-b border-white/5 bg-[#0b1120] px-4 absolute top-0 left-0 right-0 z-20">
-        <div className="flex items-center gap-2">
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500 shadow-sm shadow-emerald-500/20">
-            <Hotel className="h-4 w-4 text-white" />
-          </div>
-          <span className="font-semibold tracking-wide text-white">Finance</span>
-        </div>
-        <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(true)} className="text-slate-400">
-          <Menu className="h-5 w-5" />
-        </Button>
-      </div>
-
       {sidebarOpen && (
         <div className="fixed inset-0 z-50 lg:hidden">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setSidebarOpen(false)} />
@@ -227,12 +214,18 @@ export function AccountantLayout({ children, enabledModules = [] }: { children: 
       )}
 
       {/* Main Content Area */}
-      <div className="flex flex-1 flex-col overflow-hidden pt-16 lg:pt-0">
-        <header className="flex h-16 shrink-0 items-center justify-between border-b border-white/5 bg-slate-950 px-6">
-          <h1 className="text-sm font-medium text-slate-400 hidden lg:block">Finance & Accounting Workspace</h1>
-          <div className="flex items-center gap-4 ml-auto lg:ml-0">
-            <PropertySelector />
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <header className="sticky top-0 z-40 flex h-14 shrink-0 items-center justify-between border-b border-white/5 bg-[#07111f]/95 px-3 backdrop-blur sm:px-6 lg:h-16">
+          <div className="flex min-w-0 items-center gap-2">
+            <Button variant="outline" size="icon" onClick={() => setSidebarOpen(true)} className="h-10 w-10 shrink-0 border-white/10 bg-white/[.04] text-slate-300 hover:bg-white/[.1] lg:hidden" aria-label="Open finance navigation">
+              <Menu className="h-4 w-4" />
+            </Button>
+            <div className="min-w-0">
+              <p className="truncate text-[10px] font-bold uppercase tracking-[.16em] text-emerald-400">Finance &amp; Accounting</p>
+              <h1 className="truncate text-xs font-medium capitalize text-slate-300 lg:text-sm">{pathname === '/accountant' ? 'Overview' : pathname.split('/').filter(Boolean).slice(-1)[0]?.replaceAll('-', ' ') || 'Workspace'}</h1>
+            </div>
           </div>
+          <PropertySelector className="max-w-[150px] sm:max-w-[240px]" />
         </header>
 
         <main className="flex-1 overflow-auto bg-slate-950">

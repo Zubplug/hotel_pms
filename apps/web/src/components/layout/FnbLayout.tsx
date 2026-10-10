@@ -126,6 +126,11 @@ export function FnbLayout({ children }: { children: React.ReactNode }) {
     .map((part: string) => part[0])
     .join('')
     .toUpperCase() || 'ST';
+  const activePage = FNB_NAV.flatMap((section) => section.children).find((item) => {
+    if (item.activeWhen === 'timeline') return pathname === '/fnb/events/bookings' && timelineView;
+    if (item.activeWhen === 'register') return pathname === '/fnb/events/bookings' && !timelineView;
+    return pathname === item.href || pathname?.startsWith(`${item.href}/`);
+  })?.name || 'F&B Operations';
 
   if (status === 'loading') {
     return (
@@ -178,7 +183,7 @@ export function FnbLayout({ children }: { children: React.ReactNode }) {
                   href={item.href}
                   onClick={onNavigate}
                   className={cn(
-                    'group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150',
+                    'group flex min-h-11 items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-150',
                     isActive
                       ? 'bg-orange-600 text-white shadow-sm shadow-orange-900/50'
                       : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
@@ -257,44 +262,14 @@ export function FnbLayout({ children }: { children: React.ReactNode }) {
 
       {/* Main */}
       <main className="flex-1 flex flex-col h-screen overflow-hidden min-w-0">
-        {/* Top header - Conditionally hidden for single property to improve UI */}
-        {hasMultipleProperties ? (
-          <header className="h-14 shrink-0 border-b border-white/[0.08] bg-[#0b1628] flex items-center px-4 justify-between sticky top-0 z-30 shadow-sm shadow-black/20">
-            <div className="flex items-center gap-3">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="lg:hidden h-8 w-8 border-white/10 text-slate-300 hover:bg-white/10 hover:text-white"
-                onClick={() => setSidebarOpen(true)}
-              >
-                <Menu className="h-4 w-4" />
-              </Button>
-            </div>
-            <div className="flex items-center gap-3">
-              <PropertySelector onMultiplePropertiesChange={setHasMultipleProperties} />
-            </div>
-          </header>
-        ) : (
-          <div className="lg:hidden h-14 shrink-0 flex items-center px-4 sticky top-0 z-30 bg-[#07111f]">
-            {/* Mobile menu button when header is hidden */}
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-8 w-8 border-white/10 bg-[#101b2f] text-slate-300 backdrop-blur-sm hover:bg-white/10 hover:text-white"
-              onClick={() => setSidebarOpen(true)}
-            >
-              <Menu className="h-4 w-4" />
-            </Button>
-            {/* We still mount PropertySelector hidden so it fires onMultiplePropertiesChange */}
-            <div className="hidden">
-              <PropertySelector onMultiplePropertiesChange={setHasMultipleProperties} />
-            </div>
-          </div>
-        )}
+        <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between border-b border-white/[0.08] bg-[#0b1628]/95 px-3 shadow-sm shadow-black/20 backdrop-blur-xl sm:px-6">
+          <div className="flex min-w-0 items-center gap-2.5 sm:gap-3"><Button aria-label="Open F&B navigation" variant="ghost" size="icon" className="h-10 w-10 shrink-0 rounded-xl border border-white/10 text-slate-300 hover:bg-white/10 hover:text-white lg:hidden" onClick={() => setSidebarOpen(true)}><Menu className="h-5 w-5" /></Button><div className="min-w-0"><p className="truncate text-[10px] font-bold uppercase tracking-[0.16em] text-orange-300 sm:tracking-[0.2em]">Food &amp; beverage</p><p className="truncate text-sm font-semibold capitalize text-white">{activePage}</p></div></div>
+          <div className="flex shrink-0 items-center gap-2 sm:gap-3"><span className="hidden items-center gap-2 rounded-full border border-orange-300/15 bg-orange-300/[0.06] px-3 py-1.5 text-xs font-semibold text-orange-200 sm:flex"><span className="h-1.5 w-1.5 rounded-full bg-orange-300" />Live service</span>{hasMultipleProperties && <div className="hidden sm:block"><PropertySelector className="max-w-[150px] sm:max-w-[220px]" onMultiplePropertiesChange={setHasMultipleProperties} /></div>}</div>
+        </header>
 
         {/* Page content */}
         <div className="flex-1 overflow-y-auto bg-[#07111f]">
-          <div className="p-6 max-w-7xl mx-auto min-h-full">
+          <div className="mx-auto min-h-full max-w-7xl p-3 sm:p-6">
             {children}
           </div>
         </div>

@@ -132,7 +132,7 @@ export default async function InventoryDashboardPage() {
         </div>
       </section>
 
-      <main className="mx-auto max-w-[1500px] space-y-6 px-5 py-6 sm:px-8">
+      <main className="mx-auto max-w-[1500px] space-y-5 px-3 py-5 sm:space-y-6 sm:px-8">
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
           {kpiCards.map(({ label, value, sub, icon: Icon, tone }) => (
             <div key={String(label)} className="rounded-2xl border border-white/[0.08] bg-[#111c2e] p-5 shadow-2xl shadow-black/10">

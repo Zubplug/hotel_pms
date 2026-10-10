@@ -95,7 +95,7 @@ export default function ReconciliationPage() {
   ];
 
   return (
-    <div className="min-h-full px-4 pb-16 pt-6 sm:px-6 sm:pt-8 md:px-8" style={PAGE_BG}>
+    <div className="min-h-full px-3 pb-16 pt-4 sm:px-6 sm:pt-8 md:px-8" style={PAGE_BG}>
       <div className="mx-auto max-w-[1540px] space-y-6">
 
         {/* ── Header ── */}

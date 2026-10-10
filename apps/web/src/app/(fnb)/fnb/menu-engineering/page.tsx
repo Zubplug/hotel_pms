@@ -74,7 +74,7 @@ export default async function MenuEngineeringPage() {
   }).filter(p => p.hasRecipe).sort((a, b) => b.margin - a.margin); // Only show items with recipes configured
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6 sm:p-8 font-sans">
+    <div className="min-h-screen bg-slate-50 p-3 font-sans sm:p-8">
       <header className="mb-8 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-indigo-600 mb-3">
