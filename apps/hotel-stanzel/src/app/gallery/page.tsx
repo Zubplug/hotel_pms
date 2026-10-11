@@ -14,7 +14,7 @@ const GALLERY = [
   { src: '/images/lobby.jpg', alt: 'Grand hotel lobby with chandelier', caption: 'The Grand Lobby' },
   { src: '/images/room-suite.jpg', alt: 'Stanzel Grand Resort premium bedroom with king bed', caption: 'Premium Room' },
   { src: '/images/bathroom.jpg', alt: 'Luxury marble bathroom with soaking tub', caption: 'Private Bathroom' },
-  { src: '/images/restaurant.jpg', alt: 'Stanzel restaurant and bar interior', caption: 'The Restaurant' },
+  { src: '/images/restaurant.jpg', alt: 'Stanzel Grand Resort restaurant dining room', caption: 'The Restaurant' },
   { src: '/images/bar.jpg', alt: 'Stanzel cocktail bar', caption: 'The Bar' },
   { src: '/images/pool-evening.jpg', alt: 'Stanzel Grand Resort pool terrace and outdoor dining area', caption: 'Pool & Terrace' },
   { src: '/images/aerial.jpg', alt: 'Aerial view of resort grounds', caption: 'Resort Grounds' },

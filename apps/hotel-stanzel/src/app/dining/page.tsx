@@ -26,7 +26,7 @@ export default function DiningPage() {
       <main id="main-content">
         {/* Hero */}
         <section style={{ position: 'relative', height: '520px', display: 'flex', alignItems: 'flex-end' }}>
-          <Image src="/images/restaurant.jpg" alt="Stanzel Grand Resort restaurant and bar" fill priority style={{ objectFit: 'cover', objectPosition: 'center' }} sizes="100vw" />
+          <Image src="/images/restaurant.jpg" alt="Stanzel Grand Resort restaurant dining room" fill priority style={{ objectFit: 'cover', objectPosition: 'center 40%' }} sizes="100vw" />
           <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(16,38,32,0.88) 0%, rgba(16,38,32,0.2) 55%)' }} />
           <div className="container" style={{ position: 'relative', zIndex: 2, paddingBottom: 'var(--space-16)' }}>
             <p className="eyebrow" style={{ color: 'var(--color-gold)', marginBottom: 'var(--space-3)' }}>Culinary Experience</p>
@@ -54,7 +54,7 @@ export default function DiningPage() {
                 <Link href="/booking" className="btn btn-secondary">Reserve a Table via Booking</Link>
               </div>
               <div style={{ position: 'relative', height: '460px', borderRadius: 'var(--radius-2xl)', overflow: 'hidden' }}>
-                <Image src="/images/bar.jpg" alt="Stanzel Grand Resort bar" fill style={{ objectFit: 'cover' }} sizes="(max-width: 768px) 100vw, 50vw" />
+                <Image src="/images/restaurant.jpg" alt="Stanzel Grand Resort restaurant dining room" fill style={{ objectFit: 'cover', objectPosition: 'center 45%' }} sizes="(max-width: 768px) 100vw, 50vw" />
               </div>
             </div>
           </div>
@@ -85,7 +85,7 @@ export default function DiningPage() {
           <div className="container">
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 'var(--space-16)', alignItems: 'center' }}>
               <div style={{ position: 'relative', height: '460px', borderRadius: 'var(--radius-2xl)', overflow: 'hidden' }}>
-                <Image src="/images/restaurant.jpg" alt="Stanzel Grand Resort restaurant interior" fill style={{ objectFit: 'cover' }} sizes="(max-width: 768px) 100vw, 50vw" />
+                <Image src="/images/bar.jpg" alt="Stanzel Grand Resort cocktail bar" fill style={{ objectFit: 'cover' }} sizes="(max-width: 768px) 100vw, 50vw" />
               </div>
               <div>
                 <p className="eyebrow">The Bar</p>

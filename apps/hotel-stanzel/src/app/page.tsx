@@ -48,7 +48,7 @@ const CONFIRMED_FACILITIES = [
 const GALLERY_IMAGES = [
   { src: '/images/hero-entrance.jpg', alt: 'Stanzel Grand Resort entrance' },
   { src: '/images/room-suite.jpg', alt: 'Stanzel Grand Resort premium guest room with king bed' },
-  { src: '/images/restaurant.jpg', alt: 'Restaurant and bar' },
+  { src: '/images/restaurant.jpg', alt: 'Stanzel Grand Resort restaurant dining room' },
   { src: '/images/pool-evening.jpg', alt: 'Resort swimming pool at dusk' },
 ];
 
@@ -277,7 +277,7 @@ export default async function HomePage() {
                       fill
                       style={{
                         objectFit: 'cover',
-                        objectPosition: id === 'pool' ? 'center 35%' : id === 'rooms' ? 'center 45%' : 'center',
+                        objectPosition: id === 'pool' ? 'center 35%' : id === 'rooms' ? 'center 45%' : id === 'restaurant' ? 'center 40%' : 'center',
                         transition: 'transform var(--duration-lg) var(--ease)',
                       }}
                       sizes="(max-width: 768px) 100vw, 33vw"
@@ -345,9 +345,9 @@ export default async function HomePage() {
               <div style={{ position: 'relative', height: '480px', borderRadius: 'var(--radius-2xl)', overflow: 'hidden' }}>
                 <Image
                   src="/images/restaurant.jpg"
-                  alt="Stanzel Grand Resort restaurant and bar"
+                  alt="Stanzel Grand Resort restaurant dining room"
                   fill
-                  style={{ objectFit: 'cover' }}
+                  style={{ objectFit: 'cover', objectPosition: 'center 40%' }}
                   sizes="(max-width: 768px) 100vw, 50vw"
                 />
               </div>

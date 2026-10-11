@@ -26,7 +26,7 @@ const FACILITIES = [
       'From a relaxed breakfast to a formal dinner, our full-service restaurant and well-stocked bar cater to every culinary mood. Nigerian and continental cuisine, premium spirits, wines, and craft cocktails are all part of the experience.',
     features: ['Full-service restaurant', 'Premium cocktail bar', 'Nigerian & continental menu', 'Wine and champagne selection'],
     image: '/images/restaurant.jpg',
-    imageAlt: 'Stanzel Grand Resort restaurant interior',
+    imageAlt: 'Stanzel Grand Resort restaurant dining room with elegant table settings',
   },
   {
     id: 'lobby',
@@ -76,7 +76,7 @@ export default function FacilitiesPage() {
                 }}>
                   <div style={{ order: i % 2 === 0 ? 0 : 1 }}>
                     <div style={{ position: 'relative', height: '400px', borderRadius: 'var(--radius-2xl)', overflow: 'hidden' }}>
-                      <Image src={image} alt={imageAlt} fill style={{ objectFit: 'cover', objectPosition: id === 'rooms' ? 'center 45%' : id === 'pool' ? 'center 35%' : 'center' }} sizes="(max-width: 768px) 100vw, 50vw" />
+                      <Image src={image} alt={imageAlt} fill style={{ objectFit: 'cover', objectPosition: id === 'rooms' ? 'center 45%' : id === 'pool' ? 'center 35%' : id === 'restaurant' ? 'center 40%' : 'center' }} sizes="(max-width: 768px) 100vw, 50vw" />
                     </div>
                   </div>
                   <div style={{ order: i % 2 === 0 ? 1 : 0 }}>
