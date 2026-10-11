@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import crypto from 'crypto';
-import prisma from '@hotel-pms/db';
+import prisma, { ReservationStatus } from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
 import { corsHeaders, corsPreflightResponse, resolvePublicApiContext, isErrorResponse, checkRateLimit, rateLimitIdentity } from '@/lib/booking-engine/middleware';
 
@@ -20,7 +20,11 @@ export async function GET(req: NextRequest) {
   // The guest dashboard is for currently active stays only. Historical
   // cancelled, checked-out, no-show, and expired reservations must not be
   // reopened through a token, email, or confirmation-number lookup.
-  const activeStatuses = ['PENDING', 'CONFIRMED', 'CHECKED_IN'] as const;
+  const activeStatuses: ReservationStatus[] = [
+    ReservationStatus.PENDING,
+    ReservationStatus.CONFIRMED,
+    ReservationStatus.CHECKED_IN,
+  ];
   const where = token
     ? { propertyId: ctx.propertyId, status: { in: activeStatuses }, guestCancellationTokenHash: crypto.createHash('sha256').update(token).digest('hex') }
     : email
