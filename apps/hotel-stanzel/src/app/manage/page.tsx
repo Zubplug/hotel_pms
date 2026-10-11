@@ -47,12 +47,14 @@ function ManagePageContent() {
   async function cancelReservation() {
     setLoading(true); setError('');
     try {
-      const value = (token || accessDetails).trim();
-      const body = token
-        ? { cancelToken: value }
-        : value.includes('@')
-        ? { guestEmail: value, reason: cancelReason.trim() || undefined }
-        : { confirmationNumber: value, reason: cancelReason.trim() || undefined };
+      // Use the reservation currently displayed on the dashboard. Reusing a
+      // stale URL token here can resolve to a different historical booking
+      // and produce a misleading CANCELLED status for the visible booking.
+      const body = {
+        confirmationNumber: reservation.confirmationNumber,
+        guestEmail: reservation.guest?.email,
+        reason: cancelReason.trim() || undefined,
+      };
       const response = await fetch('/api/cancel', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       const data = await response.json();
       if (!response.ok) throw new Error(data.message ?? 'Could not cancel this reservation.');
@@ -64,8 +66,12 @@ function ManagePageContent() {
   async function openCancellation() {
     setCancellationLoading(true); setError('');
     try {
-      const value = (token || accessDetails).trim();
-      const body = token ? { cancelToken: value } : value.includes('@') ? { guestEmail: value } : { confirmationNumber: value };
+      // Quote the exact reservation loaded above, rather than trusting an old
+      // token that may belong to a cancelled or replaced reservation.
+      const body = {
+        confirmationNumber: reservation.confirmationNumber,
+        guestEmail: reservation.guest?.email,
+      };
       const response = await fetch('/api/cancel', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, preview: true }) });
       const data = await response.json();
       if (!response.ok) throw new Error(data.message ?? 'Cancellation quote is unavailable.');
