@@ -16,7 +16,7 @@ const GALLERY = [
   { src: '/images/bathroom.jpg', alt: 'Luxury marble bathroom with soaking tub', caption: 'Private Bathroom' },
   { src: '/images/restaurant.jpg', alt: 'Stanzel restaurant and bar interior', caption: 'The Restaurant' },
   { src: '/images/bar.jpg', alt: 'Stanzel cocktail bar', caption: 'The Bar' },
-  { src: '/images/pool-evening.jpg', alt: 'Resort swimming pool at dusk', caption: 'The Pool at Sunset' },
+  { src: '/images/pool-evening.jpg', alt: 'Stanzel Grand Resort pool terrace and outdoor dining area', caption: 'Pool & Terrace' },
   { src: '/images/aerial.jpg', alt: 'Aerial view of resort grounds', caption: 'Resort Grounds' },
 ];
 

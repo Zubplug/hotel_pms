@@ -12,12 +12,12 @@ export const metadata: Metadata = {
 const FACILITIES = [
   {
     id: 'pool',
-    title: 'Swimming Pool',
+    title: 'Swimming Pool & Terrace',
     description:
-      'Our resort swimming pool is the centrepiece of our outdoor leisure area. Surrounded by manicured tropical gardens and shaded seating, it is the perfect place to unwind, cool off, or simply soak in the lush Abuja surroundings.',
-    features: ['Outdoor pool', 'Pool deck seating', 'Towel service', 'Garden surrounds'],
+      'The heart of outdoor life at Stanzel Grand Resort. Our sparkling swimming pool is flanked by a spacious terrace with rattan dining sets, tropical palm arrangements, and warm timber decking — perfect for a leisurely afternoon or an alfresco dinner. The poolside bar pavilion is steps away, serving cocktails, fresh juices and light bites throughout the day.',
+    features: ['Outdoor swimming pool', 'Terrace dining & seating', 'Poolside bar pavilion', 'Tropical garden surrounds', 'Towel service'],
     image: '/images/pool-evening.jpg',
-    imageAlt: 'Resort swimming pool at dusk',
+    imageAlt: 'Stanzel Grand Resort outdoor pool terrace with dining tables and bar pavilion',
   },
   {
     id: 'restaurant',
@@ -55,7 +55,7 @@ export default function FacilitiesPage() {
       <main id="main-content">
         {/* Hero */}
         <section style={{ position: 'relative', height: '480px', display: 'flex', alignItems: 'flex-end' }}>
-          <Image src="/images/aerial.jpg" alt="Stanzel Grand Resort aerial view" fill priority style={{ objectFit: 'cover', objectPosition: 'center' }} sizes="100vw" />
+          <Image src="/images/pool-evening.jpg" alt="Stanzel Grand Resort pool terrace and outdoor dining" fill priority style={{ objectFit: 'cover', objectPosition: 'center 40%' }} sizes="100vw" />
           <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(16,38,32,0.88) 0%, rgba(16,38,32,0.25) 55%)' }} />
           <div className="container" style={{ position: 'relative', zIndex: 2, paddingBottom: 'var(--space-16)' }}>
             <p className="eyebrow" style={{ color: 'var(--color-gold)', marginBottom: 'var(--space-3)' }}>Resort Facilities</p>
@@ -76,7 +76,7 @@ export default function FacilitiesPage() {
                 }}>
                   <div style={{ order: i % 2 === 0 ? 0 : 1 }}>
                     <div style={{ position: 'relative', height: '400px', borderRadius: 'var(--radius-2xl)', overflow: 'hidden' }}>
-                      <Image src={image} alt={imageAlt} fill style={{ objectFit: 'cover' }} sizes="(max-width: 768px) 100vw, 50vw" />
+                      <Image src={image} alt={imageAlt} fill style={{ objectFit: 'cover', objectPosition: id === 'pool' ? 'center 35%' : 'center' }} sizes="(max-width: 768px) 100vw, 50vw" />
                     </div>
                   </div>
                   <div style={{ order: i % 2 === 0 ? 1 : 0 }}>
