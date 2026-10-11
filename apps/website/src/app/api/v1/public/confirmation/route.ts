@@ -43,8 +43,7 @@ export async function GET(req: NextRequest) {
       reservationRooms: {
         where: { status: 'ACTIVE' },
         include: {
-          roomType: { select: { name: true } },
-          room: { select: { number: true } },
+          room: { select: { number: true, roomType: { select: { name: true } } } },
         },
       },
     },
@@ -65,7 +64,7 @@ export async function GET(req: NextRequest) {
     adults: reservation.adults,
     children: reservation.children,
     guest: reservation.primaryGuest,
-    roomType: room?.roomType?.name ?? null,
+    roomType: room?.room?.roomType?.name ?? null,
     roomNumber: room?.room?.number ?? null,
     pricing: {
       currency: reservation.currency,
