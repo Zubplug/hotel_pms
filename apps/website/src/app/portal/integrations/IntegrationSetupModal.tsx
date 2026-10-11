@@ -10,7 +10,7 @@ type Property = {
   account: { id: string; provider: string; mode: string; target: string; currency: string; configured: boolean } | null;
 };
 
-export function IntegrationSetupModal({ onClose }: { onClose: () => void }) {
+export function IntegrationSetupModal({ onClose, onSaved }: { onClose: () => void; onSaved?: () => void }) {
   const [properties, setProperties] = useState<Property[]>([]);
   const [propertyId, setPropertyId] = useState("");
   const [target, setTarget] = useState("STANDALONE_API");
@@ -60,6 +60,7 @@ export function IntegrationSetupModal({ onClose }: { onClose: () => void }) {
       setStatus("Flutterwave payment settings saved securely.");
       setSecret("");
       setWebhookSecret("");
+      onSaved?.();
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Could not save payment settings");
     } finally {

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { PortalShell } from "@/components/portal-shell";
 import { IntegrationSetupModal } from "./IntegrationSetupModal";
 
@@ -23,9 +23,39 @@ const statusClass: Record<string, string> = {
   "not-connected": "badge-inactive",
 };
 
+type IntegrationProperty = {
+  id: string;
+  name: string;
+  account: {
+    provider: string;
+    mode: string;
+    target: string;
+    currency: string;
+    configured: boolean;
+  } | null;
+};
+
 export default function PortalIntegrationsPage() {
   const [requesting, setRequesting] = useState<string | null>(null);
   const [setupOpen, setSetupOpen] = useState(false);
+  const [properties, setProperties] = useState<IntegrationProperty[]>([]);
+
+  const loadIntegrationProperties = () => {
+    fetch("/api/portal/integrations/properties")
+      .then((response) => response.ok ? response.json() : Promise.reject(new Error("Could not load integration status")))
+      .then((payload) => setProperties(payload.properties ?? []))
+      .catch(() => setProperties([]));
+  };
+
+  useEffect(() => {
+    loadIntegrationProperties();
+  }, []);
+
+  const configuredFlutterwaveProperties = useMemo(
+    () => properties.filter((property) => property.account?.provider === "FLUTTERWAVE" && property.account.configured),
+    [properties]
+  );
+  const flutterwaveConfigured = configuredFlutterwaveProperties.length > 0;
 
   return (
     <PortalShell>
@@ -88,15 +118,19 @@ export default function PortalIntegrationsPage() {
                   </div>
                 </td>
                 <td><span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-muted)" }}>{int.type}</span></td>
-                <td style={{ fontSize: 12 }}>{int.desc}</td>
+                <td style={{ fontSize: 12 }}>
+                  {int.id === "flutterwave" && flutterwaveConfigured
+                    ? <>{int.desc}<div style={{ marginTop: 5, color: "var(--success)", fontSize: 11 }}>Configured for {configuredFlutterwaveProperties.length} {configuredFlutterwaveProperties.length === 1 ? "property" : "properties"}</div></>
+                    : int.desc}
+                </td>
                 <td>
-                  <span className={`portal-badge ${statusClass[int.status]}`}>
-                  {int.status === "not-connected" ? "Not connected" : int.status === "available" ? "Available" : int.status}
+                  <span className={`portal-badge ${statusClass[int.id === "flutterwave" && flutterwaveConfigured ? "live" : int.status]}`}>
+                  {int.id === "flutterwave" && flutterwaveConfigured ? "Connected" : int.status === "not-connected" ? "Not connected" : int.status === "available" ? "Available" : int.status}
                   </span>
                 </td>
                 <td>
                   {int.id === "flutterwave" ? (
-                    <button type="button" onClick={() => setSetupOpen(true)} className="btn btn-outline btn-sm" style={{ fontSize: 10, padding: "4px 10px" }}>Configure</button>
+                    <button type="button" onClick={() => setSetupOpen(true)} className={`btn btn-${flutterwaveConfigured ? "outline" : "primary"} btn-sm`} style={{ fontSize: 10, padding: "4px 10px" }}>{flutterwaveConfigured ? "Edit configuration" : "Configure"}</button>
                   ) : int.status === "live" ? (
                     <Link href="/portal/support" className="btn btn-outline btn-sm" style={{ fontSize: 10, padding: "4px 10px" }}>Manage</Link>
                   ) : (
@@ -122,7 +156,23 @@ export default function PortalIntegrationsPage() {
         </p>
         <Link href="/portal/support" className="btn btn-outline btn-sm" style={{ marginTop: 14 }}>Request custom integration →</Link>
       </div>
-      {setupOpen && <IntegrationSetupModal onClose={() => setSetupOpen(false)} />}
+      {flutterwaveConfigured && (
+        <div className="portal-card" style={{ marginTop: 16, borderColor: "color-mix(in srgb, var(--success) 35%, var(--border))" }}>
+          <div className="portal-card-title" style={{ marginBottom: 8 }}>Flutterwave connection</div>
+          <p style={{ fontSize: 13, color: "var(--text-muted)", margin: 0 }}>
+            Customer-owned payments are connected. Credentials are encrypted and are never displayed again.
+          </p>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
+            {configuredFlutterwaveProperties.map((property) => (
+              <span key={property.id} className="portal-badge badge-active">
+                {property.name} · {property.account?.target === "STANDALONE_API" ? "Standalone API" : property.account?.target === "PMS_WEBSITE" ? "PMS Website" : "Booking Engine"}
+              </span>
+            ))}
+          </div>
+          <button type="button" onClick={() => setSetupOpen(true)} className="btn btn-outline btn-sm" style={{ marginTop: 14 }}>Edit Flutterwave settings →</button>
+        </div>
+      )}
+      {setupOpen && <IntegrationSetupModal onClose={() => setSetupOpen(false)} onSaved={loadIntegrationProperties} />}
     </PortalShell>
   );
 }

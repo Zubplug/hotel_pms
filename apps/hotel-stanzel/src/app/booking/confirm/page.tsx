@@ -45,7 +45,8 @@ export default function ConfirmPage() {
         body: JSON.stringify({
           holdToken: hold.holdToken,
           guest: { firstName: guest.firstName, lastName: guest.lastName, email: guest.email, phone: guest.phone || undefined, country: guest.country || undefined },
-          adults: hold.adults, children: hold.children,
+          adults: Number.isInteger(hold.adults) && hold.adults > 0 ? hold.adults : 1,
+          children: Number.isInteger(hold.children) && hold.children >= 0 ? hold.children : 0,
           specialRequests: guest.specialRequests || undefined,
         }),
       });

@@ -12,7 +12,9 @@ export const ReservationGuestSchema = z.object({
   lastName: z.string().trim().min(1).max(100),
   email: z.string().trim().email().max(320),
   phone: z.string().trim().max(40).optional(),
-  country: z.string().trim().max(3).optional(),
+  // Accept country names (for example, "Nigeria") as entered by guest forms.
+  // ISO alpha-2/alpha-3 codes remain valid as well.
+  country: z.string().trim().max(100).optional(),
 }).strict();
 
 export const CreateReservationRequestSchema = z.object({

@@ -152,6 +152,7 @@ export async function POST(req: NextRequest) {
         property,
         amount: verifiedAmount,
         currency: verifiedCurrency,
+        provider: bpt.provider as 'PAYSTACK' | 'FLUTTERWAVE',
         providerRef,
         providerTransactionId: providerTxId,
         businessDate,

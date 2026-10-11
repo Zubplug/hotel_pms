@@ -13,6 +13,7 @@ export async function postBookingAdvanceDeposit(input: {
   property: any;
   amount: number;
   currency: string;
+  provider: 'PAYSTACK' | 'FLUTTERWAVE';
   providerRef: string;
   providerTransactionId: string;
   businessDate: Date;
@@ -28,7 +29,7 @@ export async function postBookingAdvanceDeposit(input: {
       reservationId: input.reservation.id,
       propertyId: input.folio.propertyId,
       method: 'PAYMENT_GATEWAY',
-      provider: 'PAYSTACK',
+      provider: input.provider,
       providerRef: input.providerRef,
       providerTransactionId: input.providerTransactionId,
       amount: input.amount,
@@ -39,7 +40,7 @@ export async function postBookingAdvanceDeposit(input: {
       idempotencyKey: paymentIdempotencyKey,
       collectionSource: 'BOOKING_ENGINE',
       receivedBy: input.systemActorId,
-      notes: `Booking Engine advance deposit via Paystack. Ref: ${input.providerRef}`,
+      notes: `Booking Engine advance deposit via ${input.provider}. Ref: ${input.providerRef}`,
     },
   });
 
