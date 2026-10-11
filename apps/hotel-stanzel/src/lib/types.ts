@@ -136,7 +136,9 @@ export interface ConfirmationResponse {
 
 // ── /cancel ───────────────────────────────────────────────────
 export interface CancelRequest {
-  cancelToken: string; // = cancellationToken from ReservationResponse
+  cancelToken?: string; // = cancellationToken from ReservationResponse
+  confirmationNumber?: string;
+  guestEmail?: string;
   reason?: string;
 }
 
