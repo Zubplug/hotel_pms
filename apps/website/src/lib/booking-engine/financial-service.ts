@@ -68,7 +68,7 @@ export async function postBookingAdvanceDeposit(input: {
     payment,
     input.folio.propertyId,
     input.property.organizationId,
-    null,
+    input.systemActorId,
   );
 
   await input.tx.folio.update({
