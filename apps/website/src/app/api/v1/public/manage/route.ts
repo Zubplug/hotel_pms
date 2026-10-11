@@ -36,7 +36,10 @@ export async function GET(req: NextRequest) {
 
   const snapshot = (reservation.ratePlanSnapshot as any) ?? {};
   const room = reservation.reservationRooms[0]?.room;
-  const paid = reservation.folios.flatMap((folio: any) => folio.payments).filter((payment: any) => payment.status === 'SUCCESS').reduce((sum: number, payment: any) => sum + Number(payment.amount), 0);
+  const paid = reservation.folios
+    .flatMap((folio: any) => folio.payments)
+    .filter((payment: any) => ['COMPLETED', 'SUCCESS', 'PAID'].includes(String(payment.status).toUpperCase()))
+    .reduce((sum: number, payment: any) => sum + Number(payment.amount), 0);
   const result = {
     confirmationNumber: reservation.confirmationNumber,
     status: reservation.status,
