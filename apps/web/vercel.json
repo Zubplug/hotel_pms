@@ -6,7 +6,7 @@
     },
     {
       "path": "/api/v1/refund-requests/escalate",
-      "schedule": "0 */6 * * *"
+      "schedule": "0 5 * * *"
     }
   ]
 }
