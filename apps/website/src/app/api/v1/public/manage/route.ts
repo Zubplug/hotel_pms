@@ -15,13 +15,16 @@ export async function GET(req: NextRequest) {
   const token = params.get('token')?.trim();
   const confirmationNumber = params.get('confirmationNumber')?.trim();
   const email = params.get('email')?.trim().toLowerCase();
-  if (!token && (!confirmationNumber || !email)) return errorResponse('BAD_REQUEST', 'Provide a cancellation token or confirmation number and guest email', 400);
+  if (!token && !confirmationNumber && !email) return errorResponse('BAD_REQUEST', 'Provide a cancellation token, reservation number, or guest email', 400);
 
   const where = token
     ? { propertyId: ctx.propertyId, guestCancellationTokenHash: crypto.createHash('sha256').update(token).digest('hex') }
-    : { propertyId: ctx.propertyId, confirmationNumber, primaryGuest: { email: { equals: email, mode: 'insensitive' as const } } };
+    : email
+      ? { propertyId: ctx.propertyId, primaryGuest: { email: { equals: email, mode: 'insensitive' as const } } }
+      : { propertyId: ctx.propertyId, confirmationNumber };
   const reservation = await prisma.reservation.findFirst({
     where,
+    orderBy: { createdAt: 'desc' },
     include: {
       primaryGuest: { select: { firstName: true, lastName: true, email: true, phone: true } },
       property: { select: { name: true, phone: true, email: true, address: true, timezone: true } },

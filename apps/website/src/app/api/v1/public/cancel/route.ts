@@ -48,7 +48,9 @@ export async function POST(req: NextRequest) {
   const reservation = await prisma.reservation.findFirst({
     where: tokenHash
       ? { propertyId: ctx.propertyId, guestCancellationTokenHash: tokenHash }
-      : { propertyId: ctx.propertyId, confirmationNumber, primaryGuest: { email: { equals: guestEmail, mode: 'insensitive' as const } } },
+      : guestEmail
+        ? { propertyId: ctx.propertyId, ...(confirmationNumber ? { confirmationNumber } : {}), primaryGuest: { email: { equals: guestEmail, mode: 'insensitive' as const } } }
+        : { propertyId: ctx.propertyId, confirmationNumber },
     include: {
       primaryGuest: { select: { firstName: true, lastName: true, email: true } },
       reservationRooms: true,
