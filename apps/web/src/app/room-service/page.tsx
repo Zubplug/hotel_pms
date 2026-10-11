@@ -358,7 +358,7 @@ function RoomServicePageInner() {
     }
     const load = async () => {
       try {
-        // Build room-info URL — prefer signed token, fall back to legacy IDs
+        // 1. Fetch room info first (we need the real propertyId from the verified token)
         const roomInfoParams = new URLSearchParams();
         if (qrToken) {
           roomInfoParams.set('t', qrToken);
@@ -367,28 +367,36 @@ function RoomServicePageInner() {
           if (roomId) roomInfoParams.set('roomId', roomId);
           if (roomNo) roomInfoParams.set('roomNo', roomNo);
         }
-        if (roomNo) roomInfoParams.set('rn', roomNo); // always pass rn for display
+        if (roomNo) roomInfoParams.set('rn', roomNo);
 
-        // Resolve propertyId for menu from token (API validates it)
-        const resolvedPropertyId = propertyId || 'unknown';
-        const [roomRes, menuRes] = await Promise.all([
-          fetch(`/api/v1/room-service/room-info?${roomInfoParams.toString()}`),
-          fetch(`/api/v1/room-service/menu?propertyId=${resolvedPropertyId}`),
-        ]);
+        const roomRes  = await fetch(`/api/v1/room-service/room-info?${roomInfoParams.toString()}`);
         const roomJson = await roomRes.json();
-        const menuJson = await menuRes.json();
+
         if (!roomRes.ok) {
           setLoadError(roomJson?.error?.message || 'Room not found. Please contact the front desk.');
           setIsLoading(false);
           return;
         }
-        setRoomInfo(roomJson?.data);
+
+        const roomData = roomJson?.data;
+        setRoomInfo(roomData);
+
+        // 2. Now we have the verified propertyId from the server — use it for the menu call
+        const verifiedPropertyId = roomData?.property?.id || propertyId;
+        if (!verifiedPropertyId) {
+          setIsLoading(false);
+          return; // no menu, but room info loaded fine
+        }
+
+        const menuRes  = await fetch(`/api/v1/room-service/menu?propertyId=${verifiedPropertyId}`);
+        const menuJson = await menuRes.json();
         const menuData = menuJson?.data;
         setCategories(menuData?.categories || []);
         setAmenities(menuData?.amenities || []);
         setPreferredOutletId(menuData?.preferredOutletId || '');
+
         // Default payment to ROOM_CHARGE only if guest is checked in
-        if (!roomJson?.data?.stay?.isCheckedIn) setPaymentMethod('PAY_ON_DELIVERY');
+        if (!roomData?.stay?.isCheckedIn) setPaymentMethod('PAY_ON_DELIVERY');
       } catch {
         setLoadError('Could not load menu. Please check your connection and try again.');
       } finally {
@@ -396,6 +404,7 @@ function RoomServicePageInner() {
       }
     };
     load();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [qrToken, propertyId, roomId, roomNo, hasToken, hasLegacy]);
 
   // ── Cart Operations ─────────────────────────────────────────────────
@@ -491,6 +500,14 @@ function RoomServicePageInner() {
     ? allProducts
     : categories.find(c => c.id === activeCategory)?.products.map(p => ({ ...p, _cat: '' })) || [];
 
+  // Strip building/floor prefix from room number: "1.3.302" → "302"
+  const formatRoomNo = (raw: string) => {
+    if (!raw) return '';
+    const parts = raw.split('.');
+    return parts.length > 1 ? parts[parts.length - 1] : raw;
+  };
+  const displayRoomNo = formatRoomNo(roomInfo?.room?.number || roomNo);
+
   // ── Loading / Error State ───────────────────────────────────────────
   if (isLoading) {
     return (
@@ -536,36 +553,39 @@ function RoomServicePageInner() {
 
   // ── Main Layout ─────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-[#0d0d1a] text-white font-sans flex flex-col max-w-[480px] mx-auto relative">
-      {/* Gradient Top */}
-      <div className="absolute top-0 left-0 right-0 h-64 bg-gradient-to-b from-amber-500/10 via-purple-500/5 to-transparent pointer-events-none" />
+    // Full-screen dark shell — fills edge-to-edge on any screen width,
+    // preventing the white gap visible on non-mobile viewports.
+    <div className="min-h-screen w-full bg-[#0d0d1a]">
+      <div className="min-h-screen bg-[#0d0d1a] text-white font-sans flex flex-col max-w-[480px] mx-auto relative">
+        {/* Gradient Top */}
+        <div className="absolute top-0 left-0 right-0 h-64 bg-gradient-to-b from-amber-500/10 via-purple-500/5 to-transparent pointer-events-none" />
 
-      {/* ── Header ──────────────────────────────────────────────────── */}
-      <header className="relative z-10 px-5 pt-8 pb-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-xs font-bold text-amber-400/70 uppercase tracking-widest mb-0.5">Room Service</p>
-            <h1 className="text-2xl font-black text-white">
-              Room {roomInfo?.roomNumber || roomNo}
-            </h1>
-            {roomInfo?.stay?.guestName && (
-              <p className="text-white/40 text-sm mt-0.5">Welcome, {roomInfo.stay.guestName.split(' ')[0]}</p>
-            )}
-          </div>
-          <div className="flex flex-col items-end gap-1">
-            <div className="w-12 h-12 rounded-2xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center">
-              <Hotel className="w-6 h-6 text-amber-400" />
+        {/* ── Header ──────────────────────────────────────────────────── */}
+        <header className="relative z-10 px-5 pt-8 pb-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-bold text-amber-400/70 uppercase tracking-widest mb-0.5">Room Service</p>
+              <h1 className="text-2xl font-black text-white">
+                Room {displayRoomNo}
+              </h1>
+              {roomInfo?.stay?.guestName && (
+                <p className="text-white/40 text-sm mt-0.5">Welcome, {roomInfo.stay.guestName.split(' ')[0]}</p>
+              )}
             </div>
-            {roomInfo?.stay?.isCheckedIn && (
-              <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">In-house</span>
-            )}
+            <div className="flex flex-col items-end gap-1">
+              <div className="w-12 h-12 rounded-2xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center">
+                <Hotel className="w-6 h-6 text-amber-400" />
+              </div>
+              {roomInfo?.stay?.isCheckedIn && (
+                <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">In-house</span>
+              )}
+            </div>
           </div>
-        </div>
-        <div className="flex items-center gap-2 mt-3 text-xs text-white/30">
-          <Clock className="w-3.5 h-3.5" />
-          <span>Delivery in 25–40 mins · Room delivery available 24/7</span>
-        </div>
-      </header>
+          <div className="flex items-center gap-2 mt-3 text-xs text-white/30">
+            <Clock className="w-3.5 h-3.5" />
+            <span>Delivery in 25–40 mins · Room delivery available 24/7</span>
+          </div>
+        </header>
 
       {/* ── Category Bar ──────────────────────────────────────────────── */}
       {view === 'menu' && (
@@ -915,9 +935,11 @@ function RoomServicePageInner() {
           onCancel={() => setModifierTarget(null)}
         />
       )}
-    </div>
+      </div>{/* end max-w content column */}
+    </div>{/* end full-screen dark shell */}
   );
 }
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Exported Page — wraps inner in Suspense for useSearchParams

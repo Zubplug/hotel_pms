@@ -8,14 +8,23 @@ import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { goBack } from '@/lib/frontdesk-navigation';
 import {
   ArrowLeft, QrCode, Printer, Search, Hotel, CheckCircle2,
-  Download, RefreshCw, Grid3X3, LayoutList, Eye, Loader2,
+  RefreshCw, Grid3X3, LayoutList, Eye, Loader2,
   Smartphone, Wifi, Star,
 } from 'lucide-react';
-import { QRCodeSVG } from 'qrcode.react';
+import { QRCodeSVG, QRCodeCanvas } from 'qrcode.react';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// URL builder — uses signed token, not raw IDs
+// Helpers
 // ─────────────────────────────────────────────────────────────────────────────
+
+/** Strip building/floor prefix: "1.3.302" → "302" */
+function formatRoomNo(raw: string): string {
+  if (!raw) return '';
+  const parts = raw.split('.');
+  return parts.length > 1 ? parts[parts.length - 1] : raw;
+}
+
+/** Build the signed room-service URL (token carries propertyId+roomId in HMAC). */
 function buildRoomServiceUrl(token: string, roomNo: string): string {
   const base =
     process.env.NEXT_PUBLIC_WEBSITE_URL ||
@@ -24,7 +33,7 @@ function buildRoomServiceUrl(token: string, roomNo: string): string {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Tent Card Component (screen preview — uses QRCodeSVG, fully offline)
+// Tent Card — screen preview (QRCodeSVG = inline SVG, fully offline)
 // ─────────────────────────────────────────────────────────────────────────────
 function TentCard({ room, token, propertyName }: {
   room: { id: string; number: string; name?: string; roomType?: { name: string } };
@@ -32,6 +41,7 @@ function TentCard({ room, token, propertyName }: {
   propertyName: string;
 }) {
   const url = token ? buildRoomServiceUrl(token, room.number) : '';
+  const displayNo = formatRoomNo(room.number);
   return (
     <div
       className="tent-card bg-white rounded-2xl overflow-hidden shadow-xl border border-slate-200 w-[320px] shrink-0"
@@ -60,7 +70,7 @@ function TentCard({ room, token, propertyName }: {
           }
         </div>
         <div className="text-center">
-          <div className="text-3xl font-black text-slate-900 tracking-tight">Room {room.number}</div>
+          <div className="text-3xl font-black text-slate-900 tracking-tight">Room {displayNo}</div>
           {room.roomType?.name && (
             <div className="text-xs text-slate-400 font-medium mt-0.5">{room.roomType.name}</div>
           )}
@@ -102,7 +112,7 @@ export default function QrRoomServicePage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [previewRoom, setPreviewRoom] = useState<any | null>(null);
   const [isPrinting, setIsPrinting] = useState(false);
-  // roomId → signed HMAC token (fetched from /api/v1/room-service/room-tokens)
+  /** roomId → signed HMAC token */
   const [tokenMap, setTokenMap] = useState<Record<string, string>>({});
   const printFrameRef = useRef<HTMLIFrameElement>(null);
 
@@ -125,8 +135,6 @@ export default function QrRoomServicePage() {
   const rawRooms: any[] = Array.isArray(data) ? data : ((data as any)?.data ?? []);
 
   // ── Fetch signed tokens once rooms are loaded ─────────────────────
-  // Tokens are signed server-side with HMAC-SHA256.  Staff auth (session
-  // cookie) is required so unauthenticated callers cannot enumerate tokens.
   useEffect(() => {
     if (!rawRooms.length || !propertyId) return;
     const roomIds = rawRooms.map(r => r.id);
@@ -144,14 +152,19 @@ export default function QrRoomServicePage() {
         });
         setTokenMap(map);
       })
-      .catch(() => {}); // QR shows "Generating…" placeholder on failure
+      .catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rawRooms.length, propertyId]);
 
   const filteredRooms = rawRooms.filter(r => {
     if (!search) return true;
     const q = search.toLowerCase();
-    return r.number?.toLowerCase().includes(q) || r.roomType?.name?.toLowerCase().includes(q) || r.floor?.number?.toString().includes(q);
+    return (
+      r.number?.toLowerCase().includes(q) ||
+      formatRoomNo(r.number)?.toLowerCase().includes(q) ||
+      r.roomType?.name?.toLowerCase().includes(q) ||
+      r.floor?.number?.toString().includes(q)
+    );
   });
 
   // ── Selection helpers ─────────────────────────────────────────────
@@ -168,33 +181,59 @@ export default function QrRoomServicePage() {
   const selectedRooms = filteredRooms.filter(r => selectedIds.has(r.id));
 
   // ── Print engine ──────────────────────────────────────────────────
-  // QR codes are generated as inline SVG using qrcode.react (no external
-  // network call — works 100% offline and in air-gapped environments).
+  // Uses QRCodeCanvas → hidden DOM canvas → toDataURL('image/png').
+  // 100% browser-side, no react-dom/server, no external services.
   const handlePrint = useCallback(async (rooms: any[]) => {
     if (!rooms.length) return;
     setIsPrinting(true);
 
-    // Dynamically import to avoid SSR issues
-    const { QRCodeSVG: QrSvg } = await import('qrcode.react');
-    const { renderToStaticMarkup } = await import('react-dom/server');
-    const React = (await import('react')).default;
+    // Mount hidden canvases, wait for paint, then read data URLs
+    const { createRoot } = await import('react-dom/client');
+    const holder = document.createElement('div');
+    holder.style.cssText = 'position:fixed;left:-9999px;top:-9999px;visibility:hidden;pointer-events:none';
+    document.body.appendChild(holder);
 
-    const toSvgString = (url: string): string => {
-      try {
-        return renderToStaticMarkup(
-          React.createElement(QrSvg as any, { value: url, size: 180, level: 'M', includeMargin: false })
-        );
-      } catch {
-        return '<rect width="180" height="180" fill="#f1f5f9"/><text x="90" y="95" text-anchor="middle" font-size="10" fill="#94a3b8">QR unavailable</text>';
-      }
-    };
+    const qrDataUrls: Record<string, string> = {};
+
+    await new Promise<void>(resolve => {
+      const root = createRoot(holder);
+      root.render(
+        React.createElement(
+          React.Fragment,
+          null,
+          ...rooms.map(room =>
+            React.createElement(
+              'div',
+              { key: room.id, id: `qr-holder-${room.id}` },
+              React.createElement(QRCodeCanvas as any, {
+                value: tokenMap[room.id]
+                  ? buildRoomServiceUrl(tokenMap[room.id], room.number)
+                  : 'https://getlodgecore.com',
+                size: 200,
+                level: 'M',
+                includeMargin: false,
+              })
+            )
+          )
+        )
+      );
+      setTimeout(() => {
+        rooms.forEach(room => {
+          const wrapper = holder.querySelector(`#qr-holder-${room.id}`);
+          const canvas = wrapper?.querySelector('canvas') as HTMLCanvasElement | null;
+          if (canvas) qrDataUrls[room.id] = canvas.toDataURL('image/png');
+        });
+        root.unmount();
+        document.body.removeChild(holder);
+        resolve();
+      }, 250);
+    });
 
     const cards = rooms.map(room => {
-      const token = tokenMap[room.id] || '';
-      const url = token ? buildRoomServiceUrl(token, room.number) : '';
-      const svgInner = url
-        ? toSvgString(url)
-        : '<rect width="180" height="180" fill="#f1f5f9"/>';
+      const displayNo = formatRoomNo(room.number);
+      const qrImg = qrDataUrls[room.id]
+        ? `<img src="${qrDataUrls[room.id]}" width="180" height="180" alt="Room ${displayNo} QR" />`
+        : `<div style="width:180px;height:180px;background:#f1f5f9;border-radius:6pt"></div>`;
       return `
         <div class="card">
           <div class="card-header">
@@ -203,10 +242,8 @@ export default function QrRoomServicePage() {
             <div class="sub">Room Service · Available 24/7</div>
           </div>
           <div class="card-body">
-            <div class="qr-wrap">
-              <svg xmlns="http://www.w3.org/2000/svg" width="180" height="180" viewBox="0 0 180 180">${svgInner}</svg>
-            </div>
-            <div class="room-number">Room ${room.number}</div>
+            <div class="qr-wrap">${qrImg}</div>
+            <div class="room-number">Room ${displayNo}</div>
             ${room.roomType?.name ? `<div class="room-type">${room.roomType.name}</div>` : ''}
           </div>
           <div class="card-instructions">
@@ -218,8 +255,7 @@ export default function QrRoomServicePage() {
             </ol>
           </div>
           <div class="card-footer">Connect to hotel Wi-Fi · Dial 0 for assistance</div>
-        </div>
-      `;
+        </div>`;
     }).join('');
 
     const html = `<!DOCTYPE html>
@@ -232,25 +268,26 @@ export default function QrRoomServicePage() {
     @page { size: A6 portrait; margin: 6mm; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #fff; }
     .cards-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8mm; }
-    .card { break-inside: avoid; page-break-inside: avoid; border: 1.5pt solid #e2e8f0; border-radius: 12pt; overflow: hidden; box-shadow: 0 2pt 8pt rgba(0,0,0,0.08); }
+    .card { break-inside: avoid; page-break-inside: avoid; border: 1.5pt solid #e2e8f0; border-radius: 12pt; overflow: hidden; }
     .card-header { background: #09152d; color: #fff; padding: 14pt 16pt 10pt; text-align: center; }
-    .property-badge { font-size: 7pt; font-weight: 800; color: #f59e0b; letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 3pt; }
-    .property-name { font-size: 13pt; font-weight: 900; letter-spacing: -0.03em; }
+    .property-badge { font-size: 7pt; font-weight: 800; color: #f59e0b; letter-spacing: .12em; text-transform: uppercase; margin-bottom: 3pt; }
+    .property-name { font-size: 13pt; font-weight: 900; letter-spacing: -.03em; }
     .sub { font-size: 7pt; color: #94a3b8; margin-top: 2pt; }
     .card-body { background: #fff; padding: 14pt 16pt 10pt; display: flex; flex-direction: column; align-items: center; gap: 8pt; }
     .qr-wrap { border: 2pt solid #fcd34d; border-radius: 8pt; padding: 6pt; background: #fefce8; }
-    .room-number { font-size: 22pt; font-weight: 900; color: #0f172a; letter-spacing: -0.04em; }
+    .qr-wrap img { display: block; border-radius: 4pt; }
+    .room-number { font-size: 22pt; font-weight: 900; color: #0f172a; letter-spacing: -.04em; }
     .room-type { font-size: 8pt; color: #94a3b8; font-weight: 500; }
     .card-instructions { background: #fffbeb; border-top: 1pt solid #fde68a; padding: 10pt 16pt; }
     .how-title { font-size: 8pt; font-weight: 800; color: #92400e; margin-bottom: 5pt; }
     ol { padding-left: 14pt; color: #78350f; font-size: 7.5pt; line-height: 1.6; }
-    .card-footer { background: rgba(15,23,45,0.04); border-top: 1pt solid #f1f5f9; padding: 6pt 16pt; text-align: center; font-size: 7pt; color: #94a3b8; }
+    .card-footer { background: rgba(15,23,45,.04); border-top: 1pt solid #f1f5f9; padding: 6pt 16pt; text-align: center; font-size: 7pt; color: #94a3b8; }
     @media print { .cards-grid { grid-template-columns: 1fr 1fr; } .card { break-inside: avoid; } }
   </style>
 </head>
 <body>
   <div class="cards-grid">${cards}</div>
-  <script>window.onload = () => { window.print(); window.close(); }<\/script>
+  <script>window.onload=()=>{window.print();window.close();}<\/script>
 </body>
 </html>`;
 
@@ -261,27 +298,23 @@ export default function QrRoomServicePage() {
       const iframe = printFrameRef.current;
       if (iframe) {
         iframe.src = blobUrl;
-        iframe.onload = () => {
-          setTimeout(() => { iframe.contentWindow?.print(); setIsPrinting(false); }, 300);
-        };
+        iframe.onload = () => setTimeout(() => { iframe.contentWindow?.print(); setIsPrinting(false); }, 300);
         return;
       }
     }
     setIsPrinting(false);
   }, [propertyName, tokenMap]);
 
-  // ── Stats ─────────────────────────────────────────────────────────
   const totalRooms = rawRooms.length;
 
   return (
     <div className="min-h-screen bg-[radial-gradient(ellipse_at_top_right,rgba(79,70,229,0.08),transparent_55%),linear-gradient(180deg,#f0f4fa_0%,#e8eef7_100%)] pb-24">
 
-      {/* ── Page Header ─────────────────────────────────────────────── */}
+      {/* ── Page Header */}
       <div className="relative overflow-hidden bg-[#09152d] px-5 py-8 text-white sm:px-8 lg:px-10">
         <div className="pointer-events-none absolute -right-24 -top-32 h-80 w-80 rounded-full bg-amber-500/15 blur-[80px]" />
         <div className="pointer-events-none absolute -left-12 bottom-0 h-48 w-48 rounded-full bg-cyan-500/10 blur-[60px]" />
         <div className="relative mx-auto max-w-[1440px]">
-          {/* Breadcrumb */}
           <div className="mb-7 flex items-center gap-3">
             <button
               onClick={() => goBack(router, '/frontdesk')}
@@ -304,17 +337,10 @@ export default function QrRoomServicePage() {
                 Tent Card Manager
               </div>
               <h1 className="text-3xl font-semibold tracking-[-0.045em] sm:text-4xl">QR Room Service Cards</h1>
-              <p className="mt-2 text-sm text-slate-400">
-                Generate and print QR tent cards for guest rooms. Guests scan to order food and amenities directly from their phones.
-              </p>
+              <p className="mt-2 text-sm text-slate-400">Generate and print QR tent cards for guest rooms.</p>
             </div>
-
-            {/* Quick stats */}
             <div className="flex gap-3">
-              {[
-                { label: 'Total Rooms', value: totalRooms, color: 'text-white' },
-                { label: 'Selected', value: selectedIds.size, color: 'text-amber-300' },
-              ].map(stat => (
+              {[{ label: 'Total Rooms', value: totalRooms, color: 'text-white' }, { label: 'Selected', value: selectedIds.size, color: 'text-amber-300' }].map(stat => (
                 <div key={stat.label} className="flex min-w-[80px] flex-col items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-center">
                   <span className={`text-2xl font-black ${stat.color}`}>{stat.value}</span>
                   <span className="text-[9px] font-bold uppercase tracking-wider text-slate-500">{stat.label}</span>
@@ -325,10 +351,9 @@ export default function QrRoomServicePage() {
         </div>
       </div>
 
-      {/* ── Toolbar ──────────────────────────────────────────────────── */}
+      {/* ── Toolbar */}
       <div className="mx-auto max-w-[1440px] px-4 pt-6 sm:px-6 lg:px-8">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between rounded-[24px] border border-white/70 bg-white/90 p-4 shadow-lg backdrop-blur">
-          {/* Search */}
           <div className="relative flex-1 max-w-sm">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
             <input
@@ -339,52 +364,21 @@ export default function QrRoomServicePage() {
               className="w-full pl-10 pr-4 py-2.5 text-sm font-medium rounded-xl border border-slate-200 bg-slate-50 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/10 transition placeholder:text-slate-400"
             />
           </div>
-
-          {/* Actions */}
           <div className="flex items-center gap-2 flex-wrap">
-            {/* View toggles */}
             <div className="flex rounded-xl border border-slate-200 overflow-hidden">
-              <button
-                onClick={() => setViewMode('grid')}
-                className={`px-3 py-2 transition ${viewMode === 'grid' ? 'bg-indigo-600 text-white' : 'bg-white text-slate-500 hover:bg-slate-50'}`}
-              >
-                <Grid3X3 className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => setViewMode('list')}
-                className={`px-3 py-2 transition ${viewMode === 'list' ? 'bg-indigo-600 text-white' : 'bg-white text-slate-500 hover:bg-slate-50'}`}
-              >
-                <LayoutList className="w-4 h-4" />
-              </button>
+              <button onClick={() => setViewMode('grid')} className={`px-3 py-2 transition ${viewMode === 'grid' ? 'bg-indigo-600 text-white' : 'bg-white text-slate-500 hover:bg-slate-50'}`}><Grid3X3 className="w-4 h-4" /></button>
+              <button onClick={() => setViewMode('list')} className={`px-3 py-2 transition ${viewMode === 'list' ? 'bg-indigo-600 text-white' : 'bg-white text-slate-500 hover:bg-slate-50'}`}><LayoutList className="w-4 h-4" /></button>
             </div>
-
-            <button
-              onClick={() => refetch()}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-sm font-medium transition"
-            >
-              <RefreshCw className="w-4 h-4" />
-              <span className="hidden sm:inline">Refresh</span>
+            <button onClick={() => refetch()} className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-sm font-medium transition">
+              <RefreshCw className="w-4 h-4" /><span className="hidden sm:inline">Refresh</span>
             </button>
-
-            {selectedIds.size === 0 ? (
-              <button
-                onClick={selectAll}
-                className="px-4 py-2 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 text-sm font-semibold transition"
-              >
-                Select All
-              </button>
-            ) : (
-              <button
-                onClick={clearSelection}
-                className="px-4 py-2 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 text-sm font-medium transition"
-              >
-                Clear ({selectedIds.size})
-              </button>
-            )}
-
+            {selectedIds.size === 0
+              ? <button onClick={selectAll} className="px-4 py-2 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 text-sm font-semibold transition">Select All</button>
+              : <button onClick={clearSelection} className="px-4 py-2 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50 text-sm font-medium transition">Clear ({selectedIds.size})</button>
+            }
             <button
               onClick={() => handlePrint(selectedIds.size > 0 ? selectedRooms : filteredRooms)}
-              disabled={isPrinting || (filteredRooms.length === 0)}
+              disabled={isPrinting || filteredRooms.length === 0}
               className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 text-slate-950 font-bold text-sm shadow-md shadow-amber-500/20 transition disabled:opacity-50"
             >
               {isPrinting
@@ -396,7 +390,7 @@ export default function QrRoomServicePage() {
         </div>
       </div>
 
-      {/* ── Instruction Banner ────────────────────────────────────────── */}
+      {/* ── Info Banner */}
       <div className="mx-auto max-w-[1440px] px-4 pt-4 sm:px-6 lg:px-8">
         <div className="flex items-start gap-3 p-4 rounded-2xl bg-indigo-50 border border-indigo-100">
           <div className="w-8 h-8 rounded-xl bg-indigo-100 flex items-center justify-center shrink-0 mt-0.5">
@@ -406,14 +400,13 @@ export default function QrRoomServicePage() {
             <p className="text-sm font-bold text-indigo-900">How it works</p>
             <p className="text-xs text-indigo-600/80 mt-0.5">
               Each QR code is cryptographically signed and unique to the room. Print and place the tent card on the room desk.
-              Guests scan with any smartphone camera — no app needed. Orders arrive instantly in the POS with an audio chime.
-              <span className="font-bold"> Room charge requires an active checked-in reservation.</span>
+              Guests scan with any smartphone — no app needed. Orders arrive instantly in the POS with an audio chime.
             </p>
           </div>
         </div>
       </div>
 
-      {/* ── Room Grid / List ──────────────────────────────────────────── */}
+      {/* ── Room Grid / List */}
       <div className="mx-auto max-w-[1440px] px-4 pt-6 sm:px-6 lg:px-8">
         {isLoading ? (
           <div className="flex flex-col items-center justify-center py-20 gap-3">
@@ -432,115 +425,64 @@ export default function QrRoomServicePage() {
               const isSelected = selectedIds.has(room.id);
               const token = tokenMap[room.id] || '';
               const url = token ? buildRoomServiceUrl(token, room.number) : '';
+              const displayNo = formatRoomNo(room.number);
               return (
-                <div
-                  key={room.id}
-                  className={`group relative bg-white rounded-2xl border-2 shadow-sm hover:shadow-xl transition-all cursor-pointer hover:-translate-y-0.5 ${
-                    isSelected ? 'border-amber-400 shadow-amber-100' : 'border-slate-200 hover:border-indigo-300'
-                  }`}
-                >
-                  {/* Selection checkbox */}
-                  <button
-                    onClick={() => toggleSelect(room.id)}
-                    className="absolute top-2 left-2 z-10"
-                  >
-                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
-                      isSelected ? 'bg-amber-500 border-amber-500' : 'bg-white border-slate-300 group-hover:border-indigo-300'
-                    }`}>
+                <div key={room.id} className={`group relative bg-white rounded-2xl border-2 shadow-sm hover:shadow-xl transition-all cursor-pointer hover:-translate-y-0.5 ${isSelected ? 'border-amber-400 shadow-amber-100' : 'border-slate-200 hover:border-indigo-300'}`}>
+                  <button onClick={() => toggleSelect(room.id)} className="absolute top-2 left-2 z-10">
+                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${isSelected ? 'bg-amber-500 border-amber-500' : 'bg-white border-slate-300 group-hover:border-indigo-300'}`}>
                       {isSelected && <CheckCircle2 className="w-3.5 h-3.5 text-white" />}
                     </div>
                   </button>
-
-                  {/* Card body */}
                   <div className="p-4 pt-8 flex flex-col items-center gap-2 text-center">
-                    {/* Mini QR preview — inline SVG */}
-                    <div className={`w-14 h-14 rounded-xl overflow-hidden border flex items-center justify-center ${
-                      isSelected ? 'border-amber-300 bg-amber-50' : 'border-slate-100 bg-slate-50'
-                    }`}>
-                      {url
-                        ? <QRCodeSVG value={url} size={56} level="L" includeMargin={false} />
-                        : <QrCode className="w-6 h-6 text-slate-300" />
-                      }
+                    <div className={`w-14 h-14 rounded-xl overflow-hidden border flex items-center justify-center ${isSelected ? 'border-amber-300 bg-amber-50' : 'border-slate-100 bg-slate-50'}`}>
+                      {url ? <QRCodeSVG value={url} size={56} level="L" includeMargin={false} /> : <QrCode className="w-6 h-6 text-slate-300" />}
                     </div>
-                    <div className="text-2xl font-black text-slate-900">{room.number}</div>
+                    <div className="text-2xl font-black text-slate-900">{displayNo}</div>
                     <div className="text-[10px] text-slate-400 font-medium leading-tight">{room.roomType?.name || 'Room'}</div>
-                    {room.floor?.number && (
-                      <div className="text-[10px] text-slate-300">Floor {room.floor.number}</div>
-                    )}
+                    {room.floor?.number && <div className="text-[10px] text-slate-300">Floor {room.floor.number}</div>}
                   </div>
-
-                  {/* Hover actions */}
                   <div className={`absolute bottom-0 inset-x-0 flex gap-1 p-2 opacity-0 group-hover:opacity-100 transition-opacity ${isSelected ? 'opacity-100' : ''}`}>
-                    <button
-                      onClick={() => setPreviewRoom(room)}
-                      title="Preview card"
-                      className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-500 hover:bg-indigo-50 hover:text-indigo-600 text-[10px] font-semibold transition"
-                    >
+                    <button onClick={() => setPreviewRoom(room)} className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-500 hover:bg-indigo-50 hover:text-indigo-600 text-[10px] font-semibold transition">
                       <Eye className="w-3 h-3" /> Preview
                     </button>
-                    <button
-                      onClick={() => handlePrint([room])}
-                      title="Print this card"
-                      className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-100 text-[10px] font-semibold transition"
-                    >
+                    <button onClick={() => handlePrint([room])} className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-100 text-[10px] font-semibold transition">
                       <Printer className="w-3 h-3" /> Print
                     </button>
                   </div>
-                  {/* spacer for hover actions */}
                   <div className="h-8" />
                 </div>
               );
             })}
           </div>
         ) : (
-          /* List view */
           <div className="space-y-2 animate-in fade-in duration-500">
             {filteredRooms.map(room => {
               const isSelected = selectedIds.has(room.id);
               const token = tokenMap[room.id] || '';
               const url = token ? buildRoomServiceUrl(token, room.number) : '';
+              const displayNo = formatRoomNo(room.number);
               return (
-                <div
-                  key={room.id}
-                  className={`flex items-center gap-4 bg-white rounded-2xl border-2 p-4 shadow-sm transition-all ${
-                    isSelected ? 'border-amber-400 shadow-amber-50' : 'border-slate-200 hover:border-indigo-200 hover:shadow-md'
-                  }`}
-                >
+                <div key={room.id} className={`flex items-center gap-4 bg-white rounded-2xl border-2 p-4 shadow-sm transition-all ${isSelected ? 'border-amber-400 shadow-amber-50' : 'border-slate-200 hover:border-indigo-200 hover:shadow-md'}`}>
                   <button onClick={() => toggleSelect(room.id)}>
-                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
-                      isSelected ? 'bg-amber-500 border-amber-500' : 'border-slate-300'
-                    }`}>
+                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${isSelected ? 'bg-amber-500 border-amber-500' : 'border-slate-300'}`}>
                       {isSelected && <CheckCircle2 className="w-3.5 h-3.5 text-white" />}
                     </div>
                   </button>
-
-                  {/* Mini QR — inline SVG */}
                   <div className="w-10 h-10 rounded-lg border border-slate-100 overflow-hidden shrink-0 flex items-center justify-center bg-slate-50">
-                    {url
-                      ? <QRCodeSVG value={url} size={40} level="L" includeMargin={false} />
-                      : <QrCode className="w-5 h-5 text-slate-300" />
-                    }
+                    {url ? <QRCodeSVG value={url} size={40} level="L" includeMargin={false} /> : <QrCode className="w-5 h-5 text-slate-300" />}
                   </div>
-
                   <div className="flex-1 min-w-0">
-                    <div className="font-bold text-slate-900">Room {room.number}</div>
+                    <div className="font-bold text-slate-900">Room {displayNo}</div>
                     <div className="text-xs text-slate-400">
                       {room.roomType?.name || 'Standard'}{room.floor?.number ? ` · Floor ${room.floor.number}` : ''}
                       {room.building?.name ? ` · ${room.building.name}` : ''}
                     </div>
                   </div>
-
                   <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => setPreviewRoom(room)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-indigo-50 hover:text-indigo-600 text-xs font-semibold transition"
-                    >
+                    <button onClick={() => setPreviewRoom(room)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-indigo-50 hover:text-indigo-600 text-xs font-semibold transition">
                       <Eye className="w-3.5 h-3.5" /> Preview
                     </button>
-                    <button
-                      onClick={() => handlePrint([room])}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-100 text-xs font-semibold transition"
-                    >
+                    <button onClick={() => handlePrint([room])} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-100 text-xs font-semibold transition">
                       <Printer className="w-3.5 h-3.5" /> Print
                     </button>
                   </div>
@@ -551,45 +493,30 @@ export default function QrRoomServicePage() {
         )}
       </div>
 
-      {/* ── Preview Modal ─────────────────────────────────────────────── */}
+      {/* ── Preview Modal */}
       {previewRoom && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="bg-white rounded-3xl shadow-2xl overflow-hidden max-w-sm w-full">
-            {/* Modal header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
               <div>
                 <h3 className="font-bold text-slate-900">Tent Card Preview</h3>
-                <p className="text-xs text-slate-500">Room {previewRoom.number}</p>
+                <p className="text-xs text-slate-500">Room {formatRoomNo(previewRoom.number)}</p>
               </div>
               <div className="flex items-center gap-2">
-                <button
-                  onClick={() => handlePrint([previewRoom])}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-sm transition"
-                >
+                <button onClick={() => handlePrint([previewRoom])} className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-sm transition">
                   <Printer className="w-4 h-4" /> Print
                 </button>
-                <button
-                  onClick={() => setPreviewRoom(null)}
-                  className="w-9 h-9 rounded-xl border border-slate-200 flex items-center justify-center text-slate-400 hover:bg-slate-50 transition"
-                >
-                  ✕
-                </button>
+                <button onClick={() => setPreviewRoom(null)} className="w-9 h-9 rounded-xl border border-slate-200 flex items-center justify-center text-slate-400 hover:bg-slate-50 transition">✕</button>
               </div>
             </div>
-
-            {/* Tent card preview */}
             <div className="p-6 flex justify-center bg-slate-50">
-              <TentCard
-                room={previewRoom}
-                token={tokenMap[previewRoom.id] || ''}
-                propertyName={propertyName}
-              />
+              <TentCard room={previewRoom} token={tokenMap[previewRoom.id] || ''} propertyName={propertyName} />
             </div>
           </div>
         </div>
       )}
 
-      {/* Hidden print iframe */}
+      {/* Hidden print iframe fallback */}
       <iframe ref={printFrameRef} className="hidden" title="print-frame" />
     </div>
   );
