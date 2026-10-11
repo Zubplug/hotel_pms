@@ -11,8 +11,8 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { cancelToken, confirmationNumber, guestEmail, reason, preview } = body ?? {};
 
-    if ((!cancelToken || typeof cancelToken !== 'string' || cancelToken.length < 32) && (!confirmationNumber || !guestEmail)) {
-      return NextResponse.json({ error: 'A cancellation token or confirmation number and guest email are required' }, { status: 400 });
+    if ((!cancelToken || typeof cancelToken !== 'string' || cancelToken.length < 32) && !confirmationNumber && !guestEmail) {
+      return NextResponse.json({ error: 'A cancellation token, reservation number, or guest email is required' }, { status: 400 });
     }
 
     // Generate a server-side idempotency key for cancellation to prevent duplicate cancellations

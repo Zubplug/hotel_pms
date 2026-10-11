@@ -28,7 +28,8 @@ function ManagePageContent() {
     event?.preventDefault(); setLoading(true); setError('');
     const value = (token || accessDetails).trim();
     const query = new URLSearchParams();
-    if (value.includes('|') || value.includes(',')) setError('Enter one reservation number or one guest email, not both.');
+    if (token) query.set('token', value);
+    else if (value.includes('|') || value.includes(',')) setError('Enter one reservation number or one guest email, not both.');
     else if (value.includes('@')) query.set('email', value);
     else query.set('confirmationNumber', value);
     if (!query.toString()) { setLoading(false); return; }
@@ -47,7 +48,9 @@ function ManagePageContent() {
     setLoading(true); setError('');
     try {
       const value = (token || accessDetails).trim();
-      const body = value.includes('@')
+      const body = token
+        ? { cancelToken: value }
+        : value.includes('@')
         ? { guestEmail: value, reason: cancelReason.trim() || undefined }
         : { confirmationNumber: value, reason: cancelReason.trim() || undefined };
       const response = await fetch('/api/cancel', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -62,7 +65,7 @@ function ManagePageContent() {
     setCancellationLoading(true); setError('');
     try {
       const value = (token || accessDetails).trim();
-      const body = value.includes('@') ? { guestEmail: value } : { confirmationNumber: value };
+      const body = token ? { cancelToken: value } : value.includes('@') ? { guestEmail: value } : { confirmationNumber: value };
       const response = await fetch('/api/cancel', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, preview: true }) });
       const data = await response.json();
       if (!response.ok) throw new Error(data.message ?? 'Cancellation quote is unavailable.');
