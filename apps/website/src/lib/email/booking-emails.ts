@@ -84,6 +84,10 @@ export async function sendBookingCancellationEmail(input: { to: string; property
   await send(input.to, `Booking cancelled — ${input.confirmationNumber}`, `<p>Your booking <strong>${esc(input.confirmationNumber)}</strong> at ${esc(input.propertyName)} has been cancelled.</p><p>Cancellation charge: ${esc(input.currency)} ${input.penaltyAmount.toFixed(2)}</p>${refund}`);
 }
 
+export async function sendBookingExpiredEmail(input: { to: string; propertyName: string; confirmationNumber: string }) {
+  await send(input.to, `Reservation expired — ${input.confirmationNumber}`, `<p>Your reservation <strong>${esc(input.confirmationNumber)}</strong> at <strong>${esc(input.propertyName)}</strong> expired because payment was not completed within the payment window.</p><p>No payment was captured and the room hold has been released. Please make a new reservation if you would still like to stay with us.</p>`);
+}
+
 export async function sendBookingRefundCompletedEmail(input: { to: string; propertyName: string; confirmationNumber: string; amount: number; currency: string; method: string }) {
   await send(input.to, `Refund completed — ${input.confirmationNumber}`, `<p>Your refund for booking <strong>${esc(input.confirmationNumber)}</strong> at ${esc(input.propertyName)} has been completed.</p><p>Refund amount: <strong>${esc(input.currency)} ${input.amount.toFixed(2)}</strong></p><p>Method: ${esc(input.method.replaceAll('_', ' '))}</p>`);
 }

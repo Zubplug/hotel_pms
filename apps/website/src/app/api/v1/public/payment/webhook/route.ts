@@ -153,6 +153,18 @@ export async function POST(req: NextRequest) {
       const businessDate =
         property.businessDate ?? getPropertyBusinessDate(property.timezone ?? 'UTC');
 
+      const extension = (bpt.metadata as any)?.type === 'EXTENSION' ? (bpt.metadata as any) : null;
+      if (!extension && !['PENDING', 'CONFIRMED'].includes(reservation.status)) {
+        throw new Error(`Reservation is no longer payable: ${reservation.status}`);
+      }
+      // Claim a pending reservation before creating its payment. The expiry
+      // cron uses the same conditional state transition, preventing a late
+      // payment from confirming an already-expired reservation.
+      if (!extension && reservation.status === 'PENDING') {
+        const claimed = await (tx as any).reservation.updateMany({ where: { id: reservation.id, status: 'PENDING' }, data: { status: 'CONFIRMED' } });
+        if (claimed.count !== 1) throw new Error('Reservation confirmation race');
+      }
+
       const systemActorId = await getOrCreateBookingSystemActor(
         prisma as any,
         property.organizationId
@@ -172,7 +184,6 @@ export async function POST(req: NextRequest) {
         systemActorId,
       });
 
-      const extension = (bpt.metadata as any)?.type === 'EXTENSION' ? (bpt.metadata as any) : null;
       if (extension) {
         const newCheckOut = new Date(`${extension.newCheckOut}T00:00:00Z`);
         if (newCheckOut <= new Date(reservation.checkOut)) throw new Error('Extension check-out is no longer valid');
