@@ -52,10 +52,25 @@ export class FlutterwaveProvider implements PaymentProvider {
       }),
     });
     const status = String(data.status || '').toLowerCase();
+    const completed = ['completed-bank-transfer', 'completed-momo', 'completed-mpgs', 'completed-offline', 'completed-preauth', 'successful', 'succeeded'].includes(status);
+    const failed = ['failed', 'cancelled', 'canceled'].includes(status);
     return {
-      status: status === 'completed' || status === 'successful' ? 'COMPLETED' : status === 'failed' ? 'FAILED' : 'PROCESSING',
+      // Flutterwave documents `completed` as initiated/pending disbursement;
+      // the completed-* statuses represent the final payout state.
+      status: completed ? 'COMPLETED' : failed ? 'FAILED' : 'PROCESSING',
       providerRefundId: data.flw_ref || (data.id == null ? undefined : String(data.id)),
       message: `Flutterwave refund ${status || 'initiated'}`,
+    };
+  }
+
+  async fetchRefund(providerRefundId: string): Promise<{ providerRefundId: string; status: string; amount: number } | null> {
+    const payload = await this.request<Array<{ id?: number; flw_ref?: string; status?: string; amount_refunded?: number }>>(`/refunds?flw_ref=${encodeURIComponent(providerRefundId)}`);
+    const match = payload.find((refund) => String(refund.flw_ref ?? refund.id ?? '') === providerRefundId) ?? payload[0];
+    if (!match) return null;
+    return {
+      providerRefundId: String(match.flw_ref ?? match.id ?? providerRefundId),
+      status: String(match.status ?? '').toLowerCase(),
+      amount: Number(match.amount_refunded ?? 0),
     };
   }
 

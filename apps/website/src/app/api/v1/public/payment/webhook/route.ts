@@ -8,6 +8,7 @@ import { sendBookingPaymentFailedEmail } from '@/lib/email/booking-emails';
 import { getBookingPaymentAccount, resolveSecretRef } from '@/lib/payment-providers/booking-account';
 import { FlutterwaveProvider } from '@/lib/payment-providers/flutterwave';
 import { postBookingAdvanceDeposit } from '@/lib/booking-engine/financial-service';
+import { reconcileFlutterwaveRefund } from '@/lib/booking-engine/flutterwave-refund-reconciliation';
 
 export async function POST(req: NextRequest) {
   const rawBody = await req.text();
@@ -17,6 +18,10 @@ export async function POST(req: NextRequest) {
     event = JSON.parse(rawBody);
   } catch {
     return new NextResponse('Bad Request', { status: 400 });
+  }
+
+  if (isFlutterwaveRefundEvent(event)) {
+    return handleFlutterwaveRefundWebhook(req, rawBody, event);
   }
 
   if (event.event !== 'charge.success' && event.event !== 'charge.completed') {
@@ -281,4 +286,55 @@ export async function POST(req: NextRequest) {
     await notifyPaymentFailure(Number(bpt.amount), bpt.currency);
     return new NextResponse('OK', { status: 200 });
   }
+}
+
+function isFlutterwaveRefundEvent(event: any): boolean {
+  const data = event?.data || {};
+  const eventName = String(event?.event || event?.type || '').toLowerCase();
+  const status = String(data.status || '').toLowerCase();
+  return eventName.includes('refund') || data.amount_refunded != null || data.AmountRefunded != null
+    || (data.flw_ref && status && !['successful', 'success'].includes(status) && !data.tx_ref && !data.reference);
+}
+
+async function handleFlutterwaveRefundWebhook(req: NextRequest, rawBody: string, event: any) {
+  const data = event?.data || {};
+  const candidates = [data.flw_ref, data.FlwRef, data.id, data.refund_id].filter((value) => value != null).map(String);
+  if (!candidates.length) return new NextResponse('OK', { status: 200 });
+
+  // The refund ID is stored when the refund is initiated. It lets us resolve
+  // the property account before checking the customer-specific webhook secret.
+  const refund = await prisma.refund.findFirst({
+    where: { providerRefundId: { in: candidates } },
+    select: { providerRefundId: true, propertyId: true },
+  });
+  if (!refund?.providerRefundId) return new NextResponse('OK', { status: 200 });
+
+  const account = await getBookingPaymentAccount(refund.propertyId);
+  if (!account || account.provider !== 'FLUTTERWAVE') return new NextResponse('OK', { status: 200 });
+  let secret: string;
+  try {
+    secret = account.webhookSecret ?? resolveSecretRef(account.webhookSecretRef, 'FLW_WEBHOOK_SECRET_HASH');
+  } catch {
+    return new NextResponse('Webhook secret is not configured', { status: 503 });
+  }
+  let providerSecret: string;
+  try {
+    providerSecret = account.secret ?? resolveSecretRef(account.secretRef, 'FLW_SECRET_KEY');
+  } catch {
+    return new NextResponse('Payment provider is not configured', { status: 503 });
+  }
+  const provider = new FlutterwaveProvider(providerSecret, secret);
+  const signature = req.headers.get('flutterwave-signature')?.trim() || '';
+  const legacySignature = req.headers.get('verif-hash')?.trim() || '';
+  if (!provider.validateWebhookSignature(rawBody, signature) && !provider.validateWebhookSignature(rawBody, legacySignature)) {
+    return new NextResponse('Forbidden', { status: 403 });
+  }
+
+  await reconcileFlutterwaveRefund({
+    providerRefundId: refund.providerRefundId,
+    status: String(data.status || data.refund_status || ''),
+    source: 'WEBHOOK',
+    payload: event,
+  });
+  return new NextResponse('OK', { status: 200 });
 }

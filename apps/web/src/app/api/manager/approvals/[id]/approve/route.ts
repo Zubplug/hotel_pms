@@ -4,6 +4,8 @@ import crypto from 'crypto';
 import { successResponse, errorResponse } from '@/lib/api-response';
 import { resolveUser } from '@/lib/resolve-user';
 import { PaystackProvider } from '@/lib/payment-providers/paystack';
+import { FlutterwaveProvider } from '@/lib/payment-providers/flutterwave';
+import { decryptPaymentCredential } from '@/lib/payment-providers/credentials';
 import { applyRefundToFolio } from '@/lib/refunds/settle-refund';
 import { CityLedgerAccountingService } from '@/lib/services/city-ledger-accounting-service';
 import { InventoryService } from '@/lib/inventory/InventoryService';
@@ -225,6 +227,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           amount,
           method: settlementMethod,
           providerTransactionId: refundRequest.payment.providerTransactionId,
+          provider: refundRequest.payment.provider,
           requestedBy: user.id,
           committedRefunded: Number(committed._sum.amount || 0),
           requestApprovalId: approval.id
@@ -595,9 +598,22 @@ async function executeGatewayRefund(refund: {
   amount: number;
   currency: string;
   reason: string;
+  provider?: string | null;
+  propertyId: string;
 }): Promise<{ status: 'PROCESSING' | 'COMPLETED' | 'FAILED'; providerRefundId?: string; message?: string }> {
   if (!refund.providerTransactionId) return { status: 'FAILED', message: 'Payment provider transaction is missing.' };
   try {
+    if (String(refund.provider).toUpperCase() === 'FLUTTERWAVE') {
+      const account = await prisma.bookingPaymentAccount.findFirst({
+        where: { propertyId: refund.propertyId, provider: 'FLUTTERWAVE', isActive: true },
+        select: { secretRef: true, secretCiphertext: true },
+      });
+      const secret = account?.secretCiphertext
+        ? decryptPaymentCredential(account.secretCiphertext)
+        : process.env[(account?.secretRef || 'FLW_SECRET_KEY')];
+      if (!secret) return { status: 'FAILED', message: 'Flutterwave secret key is not configured.' };
+      return await new FlutterwaveProvider(secret).refundTransaction(refund.providerTransactionId, refund.amount, refund.currency, refund.reason);
+    }
     return await new PaystackProvider().refundTransaction(refund.providerTransactionId, refund.amount, refund.currency, refund.reason);
   } catch (error: any) {
     return { status: 'PROCESSING' as const, message: error.message };

@@ -6,6 +6,10 @@
     {
       "path": "/api/v1/cron/expire-booking-holds",
       "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/v1/cron/reconcile-flutterwave-refunds",
+      "schedule": "*/15 * * * *"
     }
   ]
 }
