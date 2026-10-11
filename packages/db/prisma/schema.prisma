@@ -4174,6 +4174,10 @@ model PosProductionBatch {
   items          PosProductionBatchItem[]
   events         PosProductionBatchEvent[]
   createdAt      DateTime                  @default(now()) @db.Timestamptz
+
+  // Populated only for room-service acknowledgement KOTs. Normal POS orders
+  // may legitimately have multiple batches for the same order and station.
+  roomServiceOperationId String? @unique
 }
 
 model PosProductionBatchEvent {

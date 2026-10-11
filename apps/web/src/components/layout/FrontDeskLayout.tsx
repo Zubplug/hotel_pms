@@ -20,6 +20,7 @@ import {
   ChevronDown,
   Bell,
   X,
+  QrCode,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -212,6 +213,7 @@ export function FrontDeskLayout({ children, enabledModules = [], licenseSnapshot
     { href: '/frontdesk/refunds', label: 'Refunds' },
     { href: '/frontdesk/cashier', label: 'Cashier Shift' },
     { href: '/frontdesk/events', label: 'Events & Halls', icon: CalendarDays, module: 'MODULE_OPERATIONS' },
+    { href: '/frontdesk/qr-room-service', label: 'QR Room Service', icon: QrCode, module: 'MODULE_OPERATIONS' },
     { href: '/laundry', label: 'Laundry', icon: Shirt, module: 'MODULE_OPERATIONS' },
   ];
 

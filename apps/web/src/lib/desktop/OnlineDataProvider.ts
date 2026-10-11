@@ -418,6 +418,22 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
         body: JSON.stringify({ status, reason })
       });
     },
+    acknowledgeRoomServiceOrder: async (orderId: string, operatorToken?: string) => {
+      const headers = operatorToken ? { Authorization: `Bearer ${operatorToken}` } : undefined;
+      return apiFetchResult(`/api/v1/room-service/orders/${orderId}/acknowledge`, {
+        method: 'POST',
+        headers
+      });
+    },
+    rejectRoomServiceOrder: async (orderId: string, reason: string, operatorToken?: string) => {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (operatorToken) headers['Authorization'] = `Bearer ${operatorToken}`;
+      return apiFetchResult(`/api/v1/room-service/orders/${orderId}/reject`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ reason }),
+      });
+    },
     payOrder: async (orderId: string, paymentData: any, operatorToken: string) => {
       return apiFetchResult(`/api/v1/pos/orders/${orderId}/pay`, {
         method: 'POST',

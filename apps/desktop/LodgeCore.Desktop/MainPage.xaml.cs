@@ -602,6 +602,15 @@ public partial class MainPage : ContentPage
                         parameters?["status"]?.ToString() ?? "",
                         parameters?["reason"]?.ToString() ?? "");
                     break;
+                case "pos.acknowledgeRoomServiceOrder":
+                    responseData = await pmsInterop.AcknowledgeRoomServiceOrderAsync(
+                        parameters?["orderId"]?.ToString() ?? "");
+                    break;
+                case "pos.rejectRoomServiceOrder":
+                    responseData = await pmsInterop.RejectRoomServiceOrderAsync(
+                        parameters?["orderId"]?.ToString() ?? "",
+                        parameters?["reason"]?.ToString() ?? "Order declined by kitchen staff.");
+                    break;
                 case "approvals.requestItemModification":
                     responseData = await pmsInterop.RequestItemModificationAsync(parameters?.ToJsonString() ?? "{}");
                     break;

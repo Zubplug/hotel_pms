@@ -2098,6 +2098,35 @@ public class OfflinePMSInterop
         }
     }
 
+    public async Task<string> AcknowledgeRoomServiceOrderAsync(string orderId)
+    {
+        try
+        {
+            var posCtx = await _sessionManager.GetActiveContextAsync();
+            var res = await _repo.AcknowledgeRoomServiceOrderAsync(orderId, posCtx.SessionId, posCtx.StaffId, posCtx.DeviceId);
+            return JsonSerializer.Serialize(new { success = true, data = res }, _jsonOptions);
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
+        }
+    }
+
+    public async Task<string> RejectRoomServiceOrderAsync(string orderId, string reason)
+    {
+        try
+        {
+            var posCtx = await _sessionManager.GetActiveContextAsync();
+            var res = await _repo.RejectRoomServiceOrderAsync(
+                orderId, reason, posCtx.StaffId, posCtx.DeviceId);
+            return JsonSerializer.Serialize(new { success = true, data = res }, _jsonOptions);
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
+        }
+    }
+
     public async Task<string> PayOrderAsync(string orderId, string paymentDataJson)
     {
         try

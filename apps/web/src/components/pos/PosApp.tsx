@@ -37,6 +37,8 @@ import { PrinterSettingsView } from '@/components/pos/PrinterSettingsView';
 import { SyncCenterPanel } from '@/components/sync/SyncCenterPanel';
 import FiredItemActionsModal from '@/components/pos/FiredItemActionsModal';
 import { ManagerOverrideModal } from '@/components/pos/ManagerOverrideModal';
+import { RoomServiceAlertModal } from '@/components/pos/RoomServiceAlertModal';
+import { playRoomServiceChime, unlockAudio } from '@/lib/pos/soundEffects';
 
 import { usePosOnlineStatus } from '@/lib/pos/usePosOnlineStatus';
 import { useLicenseGuard } from '@/lib/pos/useLicenseGuard';
@@ -130,6 +132,61 @@ export default function PosApp() {
     meta?: Array<{ label: string; value: string }>;
     statusText?: string;
   } | null>(null);
+
+  // ── Room Service Notifications ───────────────────────────────────
+  const [pendingRoomServiceOrders, setPendingRoomServiceOrders] = useState<any[]>([]);
+  const [showRoomServiceAlert, setShowRoomServiceAlert] = useState(false);
+  const seenRoomServiceIds = useRef<Set<string>>(new Set());
+
+  const pollRoomServiceOrders = useCallback(async () => {
+    try {
+      let orders: any[] = [];
+
+      if (isDesktopMode) {
+        // Desktop POS must remain fully usable without the cloud. The bridge
+        // reads the synced room-service orders from SQLite and acknowledgement
+        // writes the local KOT/outbox transaction through the same provider.
+        const localResult = await provider.pos.getActiveOrders(
+          posSessionId || '',
+          operatorToken || '',
+          'room_service'
+        );
+        if (localResult.error) return;
+        orders = (localResult.data || []).filter(
+          (order: any) => order.orderType === 'ROOM_SERVICE' && order.status === 'SUBMITTED'
+        );
+      } else {
+        // Browser POS uses the authenticated cloud endpoint. property scope is
+        // taken from the verified operator token on the server.
+        if (!operatorToken) return;
+        const res = await fetch(
+          `/api/v1/room-service/orders?status=SUBMITTED`,
+          { headers: { Authorization: `Bearer ${operatorToken}` } }
+        );
+        if (!res.ok) return;
+        const json = await res.json();
+        orders = json?.data?.orders || [];
+      }
+
+      // Detect genuinely new arrivals (not yet seen)
+      const newOrders = orders.filter(o => !seenRoomServiceIds.current.has(o.id));
+      if (newOrders.length > 0) {
+        newOrders.forEach(o => seenRoomServiceIds.current.add(o.id));
+        // Fire audio chime for each new order (browser may ignore if AudioContext suspended)
+        void unlockAudio().then(() => playRoomServiceChime()).catch(() => {});
+        setShowRoomServiceAlert(true);
+      }
+      setPendingRoomServiceOrders(orders);
+    } catch {
+      // Polling errors are non-critical — suppress silently
+    }
+  }, [isDesktopMode, operatorToken, posSessionId, provider.pos]);
+
+  useEffect(() => {
+    pollRoomServiceOrders();
+    const interval = setInterval(pollRoomServiceOrders, 20_000);
+    return () => clearInterval(interval);
+  }, [pollRoomServiceOrders]);
 
   // ── Orders ────────────────────────────────────────────────────────
   const [myActiveOrders, setMyActiveOrders] = useState<any[]>([]);
@@ -922,6 +979,8 @@ export default function PosApp() {
           syncPending={syncPending}
           activeOperator={activeOperator}
           isDesktop={isDesktopMode}
+          pendingRoomServiceCount={pendingRoomServiceOrders.length}
+          onOpenRoomService={() => setShowRoomServiceAlert(true)}
         />
 
         {/* Restricted mode overlay */}
@@ -1719,6 +1778,38 @@ export default function PosApp() {
           />
         );
       })()}
+
+      {/* ── Room Service Incoming Order Alert ──────────────────────── */}
+      <RoomServiceAlertModal
+        isOpen={showRoomServiceAlert && pendingRoomServiceOrders.length > 0}
+        orders={pendingRoomServiceOrders}
+        onClose={() => setShowRoomServiceAlert(false)}
+        onAcknowledge={async (orderId: string) => {
+          const result = await provider.pos.acknowledgeRoomServiceOrder(orderId, operatorToken ?? undefined);
+          if (result?.error) {
+            toast.error(`Could not acknowledge order: ${result.error}`);
+            throw new Error(result.error);
+          }
+          // Remove from pending list and refresh all-orders panel
+          setPendingRoomServiceOrders(prev => prev.filter(o => o.id !== orderId));
+          await refreshActiveOrders();
+        }}
+        onReject={async (orderId: string, reason: string) => {
+          const result = await provider.pos.rejectRoomServiceOrder(orderId, reason, operatorToken ?? undefined);
+          if (result?.error) {
+            toast.error(`Could not decline order: ${result.error}`);
+            return;
+          }
+          toast.warning('Room service order declined. Guest has been notified.');
+          setPendingRoomServiceOrders(prev => prev.filter(o => o.id !== orderId));
+        }}
+        onSelectOrder={(order: any) => {
+          // Future: load the room service order directly into the cart
+          toast.info(`Room Service Order ${order.orderNumber} — open in All Orders panel.`);
+          setShowActiveOrders(true);
+        }}
+        currency={(session?.user as any)?.currency || 'NGN'}
+      />
 
     </div>
     </AutoLockScreen>

@@ -4549,6 +4549,169 @@ public class LocalRepository
         return order;
     }
 
+    public async Task<LocalPosOrder> AcknowledgeRoomServiceOrderAsync(string orderId, string sessionId, string staffId, string deviceId)
+    {
+        var order = await _dbContext.PosOrders
+            .Include(o => o.Items)
+            .FirstOrDefaultAsync(o => o.Id == orderId);
+        if (order == null) throw new Exception("Order not found");
+        await AssertNightAuditAllowsAsync(order.PropertyId, order.BusinessDate);
+        await AssertPosSessionOpenAsync(sessionId);
+
+        order.SessionId = sessionId;
+        order.ServerStaffId = staffId;
+        order.Status = "IN_SERVICE";
+        order.UpdatedAt = DateTime.UtcNow;
+
+        // ── Idempotent KOT creation — only if no KOTs exist yet for this order ──
+        var existingKotCount = await _dbContext.PosKots.CountAsync(k => k.OrderId == order.Id);
+        if (existingKotCount == 0 && order.Items.Any())
+        {
+            // Resolve production station for each item via product → category fallback,
+            // identical to FireItemsAsync so the same printer routing rules apply.
+            var productIds = order.Items
+                .Where(i => !string.IsNullOrWhiteSpace(i.ProductId))
+                .Select(i => i.ProductId!)
+                .Distinct()
+                .ToList();
+
+            var products = productIds.Count > 0
+                ? await _dbContext.PosProducts.Where(p => productIds.Contains(p.Id)).ToListAsync()
+                : new List<LocalPosProduct>();
+
+            var categoryIds = products.Select(p => p.CategoryId).Distinct().ToList();
+            var categories = categoryIds.Count > 0
+                ? await _dbContext.ProductCategories
+                    .Where(c => categoryIds.Contains(c.Id))
+                    .ToDictionaryAsync(c => c.Id)
+                : new Dictionary<string, LocalProductCategory>();
+
+            var productMap = products.ToDictionary(p => p.Id);
+
+            string ResolveStation(LocalPosOrderItem item)
+            {
+                if (item.ProductId != null && productMap.TryGetValue(item.ProductId, out var product))
+                {
+                    var st = product.ProductionStation;
+                    if (string.IsNullOrWhiteSpace(st) && categories.TryGetValue(product.CategoryId, out var cat))
+                        st = cat.ProductionStation;
+                    if (!string.IsNullOrWhiteSpace(st)) return st.Trim().ToUpperInvariant();
+                }
+                return "KITCHEN";
+            }
+
+            var firedAt = DateTime.UtcNow;
+            var newKots = new List<LocalPosKot>();
+
+            foreach (var stationGroup in order.Items.GroupBy(ResolveStation))
+            {
+                var station = stationGroup.Key;
+
+                // DIRECT / NONE items need no ticket — mark them sent and move on
+                if (station is "DIRECT" or "NONE")
+                {
+                    foreach (var item in stationGroup)
+                    {
+                        item.KitchenStatus = "DIRECT";
+                        item.SentToKitchenAt = firedAt;
+                    }
+                    continue;
+                }
+
+                var kot = new LocalPosKot
+                {
+                    Id            = Guid.NewGuid().ToString(),
+                    OrderId       = order.Id,
+                    OutletId      = order.OutletId,
+                    DeviceId      = deviceId,
+                    CreatedBy     = staffId,
+                    OrderNumber   = order.OrderNumber,
+                    KotNumber     = $"{order.OrderNumber}-{station}-{Guid.NewGuid().ToString("N").Substring(0, 4)}",
+                    TableNumber   = order.TableNumber,       // e.g. "Room 101"
+                    ServerName    = staffId,
+                    Status        = "PENDING",
+                    ProductionStation = station,
+                    PrintStatus   = "QUEUED",               // KotPrintService picks this up within 5 s
+                    OperationId   = order.OrderType == "ROOM_SERVICE"
+                        ? $"kot_{order.Id}_{station}"
+                        : null,
+                    BusinessDate  = order.BusinessDate == default ? DateTime.UtcNow.Date : order.BusinessDate,
+                    FiredAt       = firedAt,
+                    CreatedAt     = firedAt,
+                    ItemIdsJson   = System.Text.Json.JsonSerializer.Serialize(stationGroup.Select(i => i.Id)),
+                };
+
+                foreach (var item in stationGroup)
+                {
+                    item.KotId          = kot.Id;
+                    item.KitchenStatus  = "PENDING";
+                    item.SentToKitchenAt = firedAt;
+                }
+
+                _dbContext.PosKots.Add(kot);
+                newKots.Add(kot);
+                AppendSyncEvent("POS_KOT", kot.Id, "KOT_CREATED", kot, deviceId, order.OutletId, sessionId, staffId);
+            }
+        }
+
+        AppendSyncEvent("POS_ORDER", order.Id, "ORDER_UPDATED", new {
+            status       = order.Status,
+            sessionId    = order.SessionId,
+            serverStaffId = order.ServerStaffId,
+            updatedAt    = order.UpdatedAt
+        }, deviceId, order.OutletId, sessionId, staffId);
+
+        await _dbContext.SaveChangesAsync();
+        return order;
+    }
+
+    /// <summary>
+    /// Rejects (cancels) a SUBMITTED room service order that has not yet been
+    /// acknowledged by any POS session.
+    ///
+    /// Offline safety:
+    ///   • Writes CANCELLED status to local SQLite immediately — no network needed.
+    ///   • Appends an ORDER_CANCELLED outbox event so the Sync Engine pushes the
+    ///     change to the cloud the next time connectivity is available.
+    ///   • The guest tracker polls the cloud status endpoint; once the outbox flushes
+    ///     the guest will see the rejection reason within one poll cycle (≤15 s).
+    ///
+    /// Guards:
+    ///   • Only SUBMITTED orders may be rejected — an IN_SERVICE or CLOSED order
+    ///     has already entered the kitchen and cannot be undone here.
+    ///   • Night-audit lock is respected.
+    /// </summary>
+    public async Task<LocalPosOrder> RejectRoomServiceOrderAsync(
+        string orderId, string reason, string staffId, string deviceId)
+    {
+        var order = await _dbContext.PosOrders
+            .Include(o => o.Items)
+            .FirstOrDefaultAsync(o => o.Id == orderId);
+
+        if (order == null) throw new Exception("Order not found.");
+        await AssertNightAuditAllowsAsync(order.PropertyId, order.BusinessDate);
+
+        if (order.Status != "SUBMITTED")
+            throw new Exception(
+                $"Cannot reject an order that is already '{order.Status}'. " +
+                "Only SUBMITTED orders may be declined.");
+
+        // Stamp cancellation — embed the reason in Notes so the cloud API
+        // can surface it to the guest tracker without a separate column.
+        order.Status    = "CANCELLED";
+        order.Notes     = $"[REJECTED by staff {staffId}]: {reason}";
+        order.UpdatedAt = DateTime.UtcNow;
+
+        // Queue the change for cloud sync (outbox pattern — works 100% offline)
+        AppendSyncEvent("POS_ORDER", order.Id, "ORDER_CANCELLED", new {
+            status    = order.Status,
+            notes     = order.Notes,
+            updatedAt = order.UpdatedAt,
+        }, deviceId, order.OutletId, null, staffId);
+
+        await _dbContext.SaveChangesAsync();
+        return order;
+    }
 
     public async Task<LocalPosKot> FireKotAsync(string orderId, List<string> itemIds, string userId, string deviceId)
     {
@@ -4964,7 +5127,11 @@ public class LocalRepository
 
         if (filter == "my_orders" && !string.IsNullOrEmpty(staffId))
         {
-            query = query.Where(o => o.ServerStaffId == staffId);
+            query = query.Where(o => o.ServerStaffId == staffId || (o.OrderType == "ROOM_SERVICE" && string.IsNullOrEmpty(o.ServerStaffId)));
+        }
+        else if (filter == "room_service")
+        {
+            query = query.Where(o => o.OrderType == "ROOM_SERVICE");
         }
 
         var orders = await query.OrderByDescending(o => o.CreatedAt).ToListAsync();
@@ -4988,13 +5155,27 @@ public class LocalRepository
                 orderNumber = o.OrderNumber,
                 orderType = o.OrderType,
                 tableName = o.TableNumber,
+                tableNumber = o.TableNumber,
                 displayName = o.DisplayName,
+                folioId = o.FolioId,
+                notes = o.Notes,
                 status = o.Status,
                 paymentStatus = o.PaymentStatus,
                 itemCount,
                 total = o.Total != 0m ? o.Total : calculatedTotal,
                 waiterName = !string.IsNullOrEmpty(o.ServerStaffId) && staffDict.ContainsKey(o.ServerStaffId) ? staffDict[o.ServerStaffId] : "Unknown",
-                createdAt = o.CreatedAt == default ? o.UpdatedAt : o.CreatedAt
+                createdAt = o.CreatedAt == default ? o.UpdatedAt : o.CreatedAt,
+                items = (o.Items ?? new List<LocalPosOrderItem>()).Select(item => new {
+                    id = item.Id,
+                    productName = item.ProductName,
+                    quantity = item.Quantity,
+                    unitPrice = item.UnitPrice,
+                    total = item.Total,
+                    modifiers = (item.Modifiers ?? new List<LocalPosOrderItemModifier>()).Select(modifier => new {
+                        name = modifier.Name,
+                        price = modifier.Price,
+                    }).ToList(),
+                }).ToList(),
             });
         }
         

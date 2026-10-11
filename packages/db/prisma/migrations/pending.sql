@@ -98,3 +98,15 @@ ALTER TABLE "StockTransferItem" ADD CONSTRAINT "StockTransferItem_transferId_fke
 -- AddForeignKey
 ALTER TABLE "StockTransferItem" ADD CONSTRAINT "StockTransferItem_stockItemId_fkey" FOREIGN KEY ("stockItemId") REFERENCES "StockItem"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
+
+-- Room-service-only KOT idempotency. Do not enforce uniqueness on
+-- (orderId, station): normal TABLE orders can legitimately have multiple
+-- KITCHEN/BAR batches when additional items are fired.
+ALTER TABLE "PosProductionBatch"
+  DROP CONSTRAINT IF EXISTS "PosProductionBatch_orderId_station_key";
+
+ALTER TABLE "PosProductionBatch"
+  ADD COLUMN IF NOT EXISTS "roomServiceOperationId" TEXT;
+
+CREATE UNIQUE INDEX IF NOT EXISTS "PosProductionBatch_roomServiceOperationId_key"
+  ON "PosProductionBatch" ("roomServiceOperationId");

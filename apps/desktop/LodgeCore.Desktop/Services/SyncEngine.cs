@@ -2530,6 +2530,8 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                     order.PaymentStatus = el.TryGetProperty("paymentStatus", out var ps) && ps.ValueKind != System.Text.Json.JsonValueKind.Null ? ps.GetString() ?? "UNPAID" : "UNPAID";
                     order.Discount = ReadDecimal(el, "discount");
                     order.DisplayName = el.TryGetProperty("displayName", out var dn) && dn.ValueKind != System.Text.Json.JsonValueKind.Null ? dn.GetString() ?? "" : "";
+                    order.RoomId = el.TryGetProperty("roomId", out var rmid) && rmid.ValueKind != System.Text.Json.JsonValueKind.Null ? rmid.GetString() : null;
+                    order.ReservationId = el.TryGetProperty("reservationId", out var resid) && resid.ValueKind != System.Text.Json.JsonValueKind.Null ? resid.GetString() : null;
                     if (el.TryGetProperty("closedAt", out var ca) && ca.ValueKind != System.Text.Json.JsonValueKind.Null) order.ClosedAt = ca.GetDateTime();
                     if (el.TryGetProperty("createdAt", out var crt) && crt.ValueKind != System.Text.Json.JsonValueKind.Null) order.CreatedAt = crt.GetDateTime();
                     order.UpdatedAt = incomingUpdatedAt;

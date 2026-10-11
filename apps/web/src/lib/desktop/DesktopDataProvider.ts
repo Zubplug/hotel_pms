@@ -507,6 +507,14 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
     updateOrderStatus: async (orderId: string, status: string, reason?: string) => {
       return invokeDesktop('pos.updateOrderStatus', { orderId, status, reason });
     },
+    acknowledgeRoomServiceOrder: async (orderId: string) => {
+      return invokeDesktop('pos.acknowledgeRoomServiceOrder', { orderId });
+    },
+    rejectRoomServiceOrder: async (orderId: string, reason: string) => {
+      // Fully offline: writes to local SQLite + queues outbox event.
+      // The Sync Engine pushes the cancellation to the cloud on next connection.
+      return invokeDesktop('pos.rejectRoomServiceOrder', { orderId, reason });
+    },
     payOrder: async (orderId: string, paymentData: any, operatorToken: string) => {
       return invokeDesktop('pos.payOrder', { orderId, paymentData, operatorToken });
     },

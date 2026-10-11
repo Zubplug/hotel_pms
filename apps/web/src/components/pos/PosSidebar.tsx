@@ -5,7 +5,7 @@ import Image from 'next/image';
 import {
   LayoutGrid, MapPin, Receipt, TrendingUp, ChefHat, Wallet,
   Monitor, Lock, UserCircle, RefreshCw, Wifi, WifiOff, Printer,
-  AlertTriangle, ChevronLeft, ChevronRight, ArrowRightLeft,
+  AlertTriangle, ChevronLeft, ChevronRight, ArrowRightLeft, Hotel,
 } from 'lucide-react';
 
 interface PosSidebarProps {
@@ -17,12 +17,14 @@ interface PosSidebarProps {
   onOpenKitchen: () => void;
   onOpenPrinterSettings: () => void;
   onOpenSyncCenter: () => void;
+  onOpenRoomService?: () => void;
   onLock: () => void;
   onEmergencyOverride?: () => void;
   isOnline: boolean;
   syncPending: number;
   activeOperator: any | null;
   isDesktop?: boolean;
+  pendingRoomServiceCount?: number;
 }
 
 export function PosSidebar({
@@ -34,12 +36,14 @@ export function PosSidebar({
   onOpenKitchen,
   onOpenPrinterSettings,
   onOpenSyncCenter,
+  onOpenRoomService,
   onLock,
   onEmergencyOverride,
   isOnline,
   syncPending,
   activeOperator,
   isDesktop = false,
+  pendingRoomServiceCount = 0,
 }: PosSidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
 
@@ -154,6 +158,14 @@ export function PosSidebar({
         <NavItem icon={Wallet}     label="Shift Bank"   onClick={onOpenShiftBank} />
 
         <NavItem icon={ChefHat}    label="Kitchen"      onClick={onOpenKitchen} />
+        {pendingRoomServiceCount > 0 && (
+          <NavItem
+            icon={Hotel}
+            label="Room Service"
+            badge={pendingRoomServiceCount}
+            onClick={() => onOpenRoomService?.()}
+          />
+        )}
         {isDesktop && (
           <NavItem icon={Printer}    label="Printers"     onClick={onOpenPrinterSettings} />
         )}

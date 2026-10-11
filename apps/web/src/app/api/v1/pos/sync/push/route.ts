@@ -923,29 +923,45 @@ export async function POST(req: NextRequest) {
               const station = String(kot.productionStation || kot.ProductionStation
                   || payload.station || payload.Station || 'KITCHEN').toUpperCase();
               const kotOrderId = kot.orderId || kot.OrderId || event.aggregateId;
-              const kotOrder = await tx.posOrder.findUnique({ where: { id: kotOrderId }, select: { id: true } });
+              const kotOrder = await tx.posOrder.findUnique({ where: { id: kotOrderId }, select: { id: true, orderType: true } });
               if (!kotOrder) {
                   throw new Error(`RETRYABLE_ORDER_NOT_FOUND: POS order ${kotOrderId} has not reached the cloud yet`);
               }
-              await tx.posProductionBatch.create({
-                  data: {
-                      id: kot.id || kot.Id || crypto.randomUUID(),
-                      orderId: kotOrderId,
-                      batchNumber: Number(kot.batchNumber || kot.BatchNumber || 1),
-                      station,
-                      firedAt: new Date(event.occurredAt),
-                      firedByStaffId: operatorId,
-                      items: {
-                          create: rawItems.map((item: any) => ({
-                              id: item.id || item.Id || crypto.randomUUID(),
-                              orderItemId: item.orderItemId || item.OrderItemId,
-                              productName: item.productName || item.ProductName,
-                              quantity: item.quantity || item.Quantity,
-                              course: item.course || item.Course
-                          }))
-                      }
+              const roomServiceOperationId =
+                  kot.roomServiceOperationId || kot.RoomServiceOperationId ||
+                  (kotOrder.orderType === 'ROOM_SERVICE' && String(kot.operationId || kot.OperationId || '').startsWith('kot_')
+                      ? (kot.operationId || kot.OperationId)
+                      : null);
+              const batchData = {
+                  id: kot.id || kot.Id || crypto.randomUUID(),
+                  orderId: kotOrderId,
+                  ...(roomServiceOperationId ? { roomServiceOperationId } : {}),
+                  batchNumber: Number(kot.batchNumber || kot.BatchNumber || 1),
+                  station: station as any,
+                  firedAt: new Date(event.occurredAt),
+                  firedByStaffId: operatorId,
+                  items: {
+                      create: rawItems.map((item: any) => ({
+                          id: item.id || item.Id || crypto.randomUUID(),
+                          orderItemId: item.orderItemId || item.OrderItemId,
+                          productName: item.productName || item.ProductName,
+                          quantity: item.quantity || item.Quantity,
+                          course: item.course || item.Course
+                      }))
                   }
-              });
+              };
+
+              if (roomServiceOperationId) {
+                  // Replayed/offline room-service KOTs become harmless updates.
+                  await tx.posProductionBatch.upsert({
+                      where: { roomServiceOperationId },
+                      create: batchData,
+                      update: {},
+                  });
+              } else {
+                  // Normal POS refires are intentionally not deduplicated.
+                  await tx.posProductionBatch.create({ data: batchData });
+              }
           }
           else if (event.eventType === 'POS_VOID' || (event.aggregateType === 'POS_VOID' && event.eventType === 'CREATE')) {
               const operationId = payload.OperationId || payload.operationId || event.idempotencyKey;
