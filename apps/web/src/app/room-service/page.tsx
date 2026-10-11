@@ -935,10 +935,11 @@ function RoomServicePageInner() {
           onCancel={() => setModifierTarget(null)}
         />
       )}
-      </div>{/* end max-w content column */}
-    </div>{/* end full-screen dark shell */}
+      </div>
+    </div>
   );
 }
+
 
 
 // ─────────────────────────────────────────────────────────────────────────────
