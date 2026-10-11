@@ -17,11 +17,15 @@ export async function GET(req: NextRequest) {
   const email = params.get('email')?.trim().toLowerCase();
   if (!token && !confirmationNumber && !email) return errorResponse('BAD_REQUEST', 'Provide a cancellation token, reservation number, or guest email', 400);
 
+  // The guest dashboard is for currently active stays only. Historical
+  // cancelled, checked-out, no-show, and expired reservations must not be
+  // reopened through a token, email, or confirmation-number lookup.
+  const activeStatuses = ['PENDING', 'CONFIRMED', 'CHECKED_IN'] as const;
   const where = token
-    ? { propertyId: ctx.propertyId, guestCancellationTokenHash: crypto.createHash('sha256').update(token).digest('hex') }
+    ? { propertyId: ctx.propertyId, status: { in: activeStatuses }, guestCancellationTokenHash: crypto.createHash('sha256').update(token).digest('hex') }
     : email
-      ? { propertyId: ctx.propertyId, primaryGuest: { email: { equals: email, mode: 'insensitive' as const } } }
-      : { propertyId: ctx.propertyId, confirmationNumber };
+      ? { propertyId: ctx.propertyId, status: { in: activeStatuses }, primaryGuest: { email: { equals: email, mode: 'insensitive' as const } } }
+      : { propertyId: ctx.propertyId, status: { in: activeStatuses }, confirmationNumber };
   const reservation = await prisma.reservation.findFirst({
     where,
     orderBy: { createdAt: 'desc' },
