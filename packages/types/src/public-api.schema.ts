@@ -47,6 +47,7 @@ export const CancelReservationRequestSchema = z.object({
   confirmationNumber: z.string().trim().min(3).max(100).optional(),
   guestEmail: z.string().trim().email().max(320).optional(),
   reason: z.string().trim().max(1000).optional(),
+  preview: z.boolean().optional(),
 }).strict().refine((value) => Boolean(value.cancelToken || value.confirmationNumber || value.guestEmail), { message: 'A cancellation token, confirmation number, or guest email is required' });
 
 export const AvailabilityQuerySchema = z.object({
