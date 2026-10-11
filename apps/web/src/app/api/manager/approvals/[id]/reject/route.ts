@@ -4,11 +4,17 @@ import crypto from 'crypto';
 import { errorResponse, successResponse } from '@/lib/api-response';
 import { resolveUser } from '@/lib/resolve-user';
 
+const REFUND_STAGE_ROLES = {
+  GENERAL_CASHIER_REVIEW: ['GENERAL_CASHIER', 'CASHIER', 'FRONT_DESK_CASHIER'],
+  ACCOUNTANT_REVIEW: ['ACCOUNTANT', 'FINANCE_MANAGER'],
+  MANAGEMENT_REVIEW: ['GENERAL_MANAGER', 'HOTEL_MANAGER', 'MANAGER', 'DIRECTOR', 'CEO', 'ADMIN', 'SUPER_ADMIN'],
+} as const;
+
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const user = await resolveUser(req);
     if (!user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
-    if (!['NIGHT_AUDITOR', 'GENERAL_MANAGER', 'GENERAL_CASHIER', 'FRONT_DESK_MANAGER', 'MANAGER', 'FINANCE_MANAGER', 'ACCOUNTANT', 'ADMIN', 'SUPER_ADMIN'].includes(user.role) && !user.isSuperAdmin) {
+    if (!['NIGHT_AUDITOR', 'GENERAL_MANAGER', 'GENERAL_CASHIER', 'CASHIER', 'FRONT_DESK_CASHIER', 'FRONT_DESK_MANAGER', 'MANAGER', 'FINANCE_MANAGER', 'ACCOUNTANT', 'ADMIN', 'SUPER_ADMIN'].includes(user.role) && !user.isSuperAdmin) {
       return errorResponse('FORBIDDEN', 'Approval access required', 403);
     }
     const { id } = await params;
@@ -20,9 +26,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       const approval = await tx.approvalRequest.findUnique({ where: { id } });
       if (!approval || approval.status !== 'PENDING') throw new Error('CONFLICT');
       if (!user.allowedProperties.includes(approval.propertyId)) throw new Error('FORBIDDEN');
-      const details = (approval.details || {}) as { refundRequestId?: string; approverId?: string; approverRoleId?: string };
-      if (details.approverId && details.approverId !== user.id) throw new Error('ASSIGNED_APPROVER_REQUIRED');
-      if (details.approverRoleId && !await tx.userRole.findFirst({ where: { userId: user.id, roleId: details.approverRoleId, OR: [{ propertyId: approval.propertyId }, { propertyId: null }] } })) throw new Error('ASSIGNED_ROLE_REQUIRED');
+      const details = (approval.details || {}) as { refundRequestId?: string; approverId?: string; approverRoleId?: string; stage?: string };
+      if (approval.type === 'REFUND' && details.refundRequestId && !user.isSuperAdmin) {
+        const refundRequest = await tx.refundRequest.findUnique({ where: { id: details.refundRequestId }, select: { currentApprovalStep: true } });
+        const stage = details.stage || ((refundRequest?.currentApprovalStep || 1) <= 1 ? 'GENERAL_CASHIER_REVIEW' : refundRequest?.currentApprovalStep === 2 ? 'ACCOUNTANT_REVIEW' : 'MANAGEMENT_REVIEW');
+        if (!REFUND_STAGE_ROLES[stage as keyof typeof REFUND_STAGE_ROLES]?.includes(String(user.role).toUpperCase() as never)) throw new Error('REFUND_STAGE_ROLE_REQUIRED');
+      }
+      if (details.stage && details.approverId && details.approverId !== user.id) throw new Error('ASSIGNED_APPROVER_REQUIRED');
+      if (details.stage && details.approverRoleId && !await tx.userRole.findFirst({ where: { userId: user.id, roleId: details.approverRoleId, OR: [{ propertyId: approval.propertyId }, { propertyId: null }] } })) throw new Error('ASSIGNED_ROLE_REQUIRED');
       if (details.refundRequestId) {
         await tx.refundRequest.update({ where: { id: details.refundRequestId, status: 'PENDING_APPROVAL' }, data: { status: 'REJECTED' } });
         await tx.refundApproval.create({ data: { refundRequestId: details.refundRequestId, approverId: user.id, decision: 'REJECTED', comments: comment } });
@@ -50,6 +61,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (error.message === 'FORBIDDEN') return errorResponse('FORBIDDEN', 'Access denied', 403);
     if (error.message === 'ASSIGNED_APPROVER_REQUIRED') return errorResponse('FORBIDDEN', 'This request is assigned to another approver.', 403);
     if (error.message === 'ASSIGNED_ROLE_REQUIRED') return errorResponse('FORBIDDEN', 'You do not hold the approval role assigned to this refund.', 403);
+    if (error.message === 'REFUND_STAGE_ROLE_REQUIRED') return errorResponse('FORBIDDEN', 'This refund is not at your approval stage.', 403);
     if (error.message === 'CONFLICT') return errorResponse('CONFLICT', 'Approval is no longer pending.', 409);
     console.error('[Manager Reject API]', error);
     return errorResponse('INTERNAL_ERROR', 'Unable to reject approval', 500);

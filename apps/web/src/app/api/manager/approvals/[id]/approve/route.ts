@@ -13,11 +13,32 @@ import { applyAvailableFolioCredit } from '@/lib/finance/apply-folio-credit';
 import { requireStockUnitConversion } from '@/lib/inventory/UnitConversionService';
 import { sendBookingRefundCompletedEmail } from '@/lib/email/booking-refund-email';
 
+const REFUND_STAGE_ROLES = {
+  GENERAL_CASHIER_REVIEW: ['GENERAL_CASHIER', 'CASHIER', 'FRONT_DESK_CASHIER'],
+  ACCOUNTANT_REVIEW: ['ACCOUNTANT', 'FINANCE_MANAGER'],
+  MANAGEMENT_REVIEW: ['GENERAL_MANAGER', 'HOTEL_MANAGER', 'MANAGER', 'DIRECTOR', 'CEO', 'ADMIN', 'SUPER_ADMIN'],
+} as const;
+
+function refundStage(details: { stage?: string } | null | undefined, currentApprovalStep: number) {
+  return details?.stage || (currentApprovalStep <= 1 ? 'GENERAL_CASHIER_REVIEW' : currentApprovalStep === 2 ? 'ACCOUNTANT_REVIEW' : 'MANAGEMENT_REVIEW');
+}
+
+async function resolveRefundStageOwner(tx: any, propertyId: string, organizationId: string, requestedById: string, roles: readonly string[]) {
+  const role = await tx.role.findFirst({ where: { organizationId, name: { in: [...roles] } } });
+  const candidate = role
+    ? await tx.userRole.findFirst({
+        where: { roleId: role.id, userId: { not: requestedById }, OR: [{ propertyId }, { propertyId: null }] },
+        select: { userId: true },
+      })
+    : null;
+  return { role, candidate };
+}
+
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const user = await resolveUser(req);
     if (!user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
-    if (!['NIGHT_AUDITOR', 'GENERAL_MANAGER', 'GENERAL_CASHIER', 'FRONT_DESK_MANAGER', 'MANAGER', 'FINANCE_MANAGER', 'ACCOUNTANT', 'ADMIN', 'SUPER_ADMIN'].includes(user.role) && !user.isSuperAdmin) {
+    if (!['NIGHT_AUDITOR', 'GENERAL_MANAGER', 'GENERAL_CASHIER', 'CASHIER', 'FRONT_DESK_CASHIER', 'FRONT_DESK_MANAGER', 'MANAGER', 'FINANCE_MANAGER', 'ACCOUNTANT', 'ADMIN', 'SUPER_ADMIN'].includes(user.role) && !user.isSuperAdmin) {
       return errorResponse('FORBIDDEN', 'Manager access required', 403);
     }
     const body = await req.json().catch(() => ({}));
@@ -119,11 +140,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
       if (approval.type === 'REFUND') {
         if (approval.status !== 'PENDING') throw new Error('CONFLICT');
-          const details = (approval.details || {}) as { refundRequestId?: string; approverId?: string; approverRoleId?: string; posRefund?: boolean; orderId?: string; amount?: number; method?: string; stage?: string; accountantApprovedBy?: string };
-        if (details.approverId && details.approverId !== user.id) {
+          const details = (approval.details || {}) as { refundRequestId?: string; approverId?: string; approverRoleId?: string; posRefund?: boolean; orderId?: string; amount?: number; method?: string; stage?: string; stepOrder?: number; accountantApprovedBy?: string };
+        const refundRequestForStage = details.refundRequestId
+          ? await tx.refundRequest.findUnique({ where: { id: details.refundRequestId }, select: { currentApprovalStep: true } })
+          : null;
+        const currentStage = refundStage(details, refundRequestForStage?.currentApprovalStep || Number(details.stepOrder || 1));
+        if (!details.posRefund && !user.isSuperAdmin && !REFUND_STAGE_ROLES[currentStage as keyof typeof REFUND_STAGE_ROLES]?.includes(String(user.role).toUpperCase() as never)) {
+          throw new Error('REFUND_STAGE_ROLE_REQUIRED');
+        }
+        if (details.stage && details.approverId && details.approverId !== user.id) {
           throw new Error('ASSIGNED_APPROVER_REQUIRED');
         }
-        if (details.approverRoleId && !await tx.userRole.findFirst({ where: { userId: user.id, roleId: details.approverRoleId, OR: [{ propertyId: approval.propertyId }, { propertyId: null }] } })) {
+        if (details.stage && details.approverRoleId && !await tx.userRole.findFirst({ where: { userId: user.id, roleId: details.approverRoleId, OR: [{ propertyId: approval.propertyId }, { propertyId: null }] } })) {
           throw new Error('ASSIGNED_ROLE_REQUIRED');
         }
         if (details.posRefund) {
@@ -156,6 +184,28 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         if (!refundRequest || refundRequest.status !== 'PENDING_APPROVAL') throw new Error('CONFLICT');
         if (refundRequest.requestedById === user.id) throw new Error('SELF_APPROVAL');
 
+        // Reservation refunds always pass through the three controlled roles.
+        // A cashier and accountant approval only advances the request; gateway
+        // processing is reserved for the final management approval.
+        if (currentStage === 'GENERAL_CASHIER_REVIEW' || currentStage === 'ACCOUNTANT_REVIEW') {
+          const nextStage = currentStage === 'GENERAL_CASHIER_REVIEW' ? 'ACCOUNTANT_REVIEW' : 'MANAGEMENT_REVIEW';
+          const nextStep = currentStage === 'GENERAL_CASHIER_REVIEW' ? 2 : 3;
+          const property = await tx.property.findUnique({ where: { id: refundRequest.propertyId }, select: { organizationId: true } });
+          const nextOwner = await resolveRefundStageOwner(tx, refundRequest.propertyId, property?.organizationId || '', refundRequest.requestedById, REFUND_STAGE_ROLES[nextStage]);
+          const nextDetails = {
+            ...details,
+            stage: nextStage,
+            stepOrder: nextStep,
+            approverRoleId: nextOwner.role?.id || null,
+            approverId: nextOwner.candidate?.userId || null,
+          };
+          await tx.refundRequest.update({ where: { id: refundRequest.id }, data: { currentApprovalStep: nextStep, currentApproverId: nextOwner.candidate?.userId || null, approvalRoleId: nextOwner.role?.id || null } });
+          await tx.refundApproval.create({ data: { refundRequestId: refundRequest.id, approverId: user.id, decision: 'APPROVED', stepOrder: currentStage === 'GENERAL_CASHIER_REVIEW' ? 1 : 2 } });
+          await tx.approvalRequest.update({ where: { id: approval.id }, data: { status: 'APPROVED', reviewedBy: user.id, reviewedAt: new Date(), details: nextDetails } });
+          await tx.approvalRequest.create({ data: { propertyId: refundRequest.propertyId, type: 'REFUND', status: 'PENDING', requestedBy: approval.requestedBy, amount: refundRequest.requestedAmount, currency: refundRequest.currency, reason: refundRequest.reason, expiresAt: refundRequest.expiresAt, details: { refundRequestId: refundRequest.id, category: refundRequest.category, requestedAmount: Number(refundRequest.requestedAmount), requestedMethod: refundRequest.requestedMethod, ...nextDetails }, idempotencyKey: `approval:refund:${refundRequest.id}:step:${nextStep}`, } });
+          return { status: 'PENDING_APPROVAL', refundRequestId: refundRequest.id, nextApprovalStep: nextStep, nextStage };
+        }
+
         // Standalone guest-credit refunds require a mandatory accountant
         // review before the manager receives the second approval task.
         if (details.stage === 'ACCOUNTANT_REVIEW') {
@@ -187,7 +237,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
         const workflowRules = await tx.refundApprovalRule.findMany({ where: { propertyId: refundRequest.propertyId, isActive: true }, orderBy: { stepOrder: 'asc' } }) as Array<{ minAmount: number | string | null; maxAmount: number | string | null; stepOrder: number; roleId: string | null; approverId: string | null }>;
         const matchingRules = workflowRules.filter(rule => (rule.minAmount == null || Number(refundRequest.requestedAmount) >= Number(rule.minAmount)) && (rule.maxAmount == null || Number(refundRequest.requestedAmount) <= Number(rule.maxAmount)));
-        const nextRule = matchingRules.find(rule => rule.stepOrder > refundRequest.currentApprovalStep);
+        const nextRule = currentStage === 'MANAGEMENT_REVIEW' ? null : matchingRules.find(rule => rule.stepOrder > refundRequest.currentApprovalStep);
         if (nextRule) {
           const nextRole = nextRule.roleId ? await tx.role.findUnique({ where: { id: nextRule.roleId } }) : null;
           const nextApprover = nextRule.approverId ? { userId: nextRule.approverId } : nextRole ? await tx.userRole.findFirst({ where: { roleId: nextRole.id, userId: { not: refundRequest.requestedById }, OR: [{ propertyId: refundRequest.propertyId }, { propertyId: null }] }, select: { userId: true } }) : null;
@@ -581,6 +631,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (err.message === 'FORBIDDEN') return errorResponse('FORBIDDEN', 'Access denied to this property', 403);
     if (err.message === 'ASSIGNED_APPROVER_REQUIRED') return errorResponse('FORBIDDEN', 'This refund is assigned to another approver.', 403);
     if (err.message === 'ASSIGNED_ROLE_REQUIRED') return errorResponse('FORBIDDEN', 'You do not hold the approval role assigned to this refund.', 403);
+    if (err.message === 'REFUND_STAGE_ROLE_REQUIRED') return errorResponse('FORBIDDEN', 'This refund is not at your approval stage.', 403);
     if (err.message === 'SELF_APPROVAL') return errorResponse('FORBIDDEN', 'The requester cannot approve their own refund.', 403);
     if (err.message === 'REFUND_LIMIT_EXCEEDED') return errorResponse('CONFLICT', 'The refundable amount changed; this request cannot be approved.', 409);
     if (err.message === 'REFUND_REQUIRES_CANCELLED_RESERVATION') return errorResponse('BAD_REQUEST', 'The reservation is no longer cancelled.', 400);

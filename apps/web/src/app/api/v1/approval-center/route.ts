@@ -24,10 +24,25 @@ export async function GET(req: NextRequest) {
     }),
     prisma.refundRequest.findMany({
       where: { ...propertyFilter, status: { not: 'CANCELLED' } },
-      select: { id: true, propertyId: true, requestedById: true, requestedAmount: true, approvedAmount: true, currency: true, category: true, reason: true, status: true, createdAt: true, requestedMethod: true, approvedMethod: true },
+      select: {
+        id: true, propertyId: true, requestedById: true, requestedAmount: true, approvedAmount: true,
+        currency: true, category: true, reason: true, status: true, createdAt: true, updatedAt: true,
+        requestedMethod: true, approvedMethod: true, currentApprovalStep: true, currentApproverId: true,
+        approvalRoleId: true,
+        reservation: {
+          select: {
+            confirmationNumber: true, status: true, checkIn: true, checkOut: true, adults: true, children: true,
+            currency: true, ratePlanSnapshot: true,
+            primaryGuest: { select: { firstName: true, lastName: true, email: true, phone: true } },
+            property: { select: { name: true, code: true } },
+            reservationRooms: { where: { status: { not: 'CANCELLED' } }, select: { room: { select: { number: true, roomType: { select: { name: true } } } } } },
+          },
+        },
+        payment: { select: { amount: true, status: true, provider: true, providerTransactionId: true, method: true, currency: true } },
+      },
       orderBy: { createdAt: 'desc' }, take: 200,
     }),
-    prisma.approvalRequest.findMany({ where: { ...propertyFilter, type: 'REFUND' }, select: { id: true, status: true, details: true } }),
+    prisma.approvalRequest.findMany({ where: { ...propertyFilter, type: 'REFUND' }, select: { id: true, status: true, details: true, createdAt: true } }),
     prisma.eventInvoice.findMany({
       where: { OR: [{ event: { propertyId: { in: user.allowedProperties } } }, { propertyId: { in: user.allowedProperties } }], workflowStatus: { in: ['SUBMITTED', 'IN_REVIEW', 'APPROVED', 'REJECTED'] } },
       include: { event: { include: { guest: true, corporateAccount: true } }, cityLedgerAccount: true, leaseBillingSchedule: { include: { leaseContract: { include: { hall: true, corporateAccount: true } } } }, items: true },
@@ -62,6 +77,7 @@ export async function GET(req: NextRequest) {
 
   const isAccountant = ['ACCOUNTANT', 'FINANCE_MANAGER'].includes(user.role) || user.isSuperAdmin;
   const isCashier = ['GENERAL_CASHIER', 'CASHIER', 'FRONT_DESK_CASHIER'].includes(user.role);
+  const isManagement = ['GENERAL_MANAGER', 'HOTEL_MANAGER', 'MANAGER', 'DIRECTOR', 'CEO', 'ADMIN'].includes(user.role) || user.isSuperAdmin;
   const priceApprovals = priceApprovalsRaw.filter((approval) => {
     const stage = (approval.details as { stage?: string } | null)?.stage;
     return (isAccountant && stage === 'ACCOUNTANT_REVIEW') || (isCashier && stage === 'GENERAL_CASHIER_REVIEW');
@@ -77,24 +93,41 @@ export async function GET(req: NextRequest) {
     ...purchaseOrder,
     items: purchaseOrder.items.map((item) => ({ ...item, stockItem: item.stockItemId ? stockItemById.get(item.stockItemId) || null : null })),
   }));
-  const refundApprovalByRequest = new Map(refundApprovals.map((approval) => [String((approval.details as { refundRequestId?: string } | null)?.refundRequestId || ''), approval]));
+  const refundApprovalByRequest = new Map<string, (typeof refundApprovals)[number]>();
+  for (const approval of refundApprovals.sort((a, b) => Number(b.status === 'PENDING') - Number(a.status === 'PENDING') || b.createdAt.getTime() - a.createdAt.getTime())) {
+    const refundRequestId = String((approval.details as { refundRequestId?: string } | null)?.refundRequestId || '');
+    if (refundRequestId && !refundApprovalByRequest.has(refundRequestId)) refundApprovalByRequest.set(refundRequestId, approval);
+  }
   const scopedRefunds = refunds.filter((refund) => {
     const approval = refundApprovalByRequest.get(refund.id);
-    const details = (approval?.details || {}) as { approverId?: string; approverRoleId?: string };
-    // Unassigned requests remain visible to the qualified accounting queue;
-    // named assignments are visible only to that staff member or assigned role.
-    return isAccountant && (
-      refund.requestedById === user.id ||
-      !details.approverId && !details.approverRoleId ||
-      details.approverId === user.id ||
-      Boolean(details.approverRoleId && userRoleIds.has(details.approverRoleId))
-    );
+    const details = (approval?.details || {}) as { approverId?: string; approverRoleId?: string; stage?: string; stepOrder?: number };
+    const stage = details.stage || (refund.currentApprovalStep <= 1 ? 'GENERAL_CASHIER_REVIEW' : refund.currentApprovalStep === 2 ? 'ACCOUNTANT_REVIEW' : 'MANAGEMENT_REVIEW');
+    const stageRole = stage === 'GENERAL_CASHIER_REVIEW' ? isCashier : stage === 'ACCOUNTANT_REVIEW' ? isAccountant : isManagement;
+    // Older refund requests were created before the three-stage routing was
+    // introduced and may contain a legacy manager assignment at step 1. Treat
+    // those requests as unassigned cashier-stage work so they are not stranded.
+    const assigned = !details.stage || (!details.approverId && !details.approverRoleId)
+      || details.approverId === user.id
+      || Boolean(details.approverRoleId && userRoleIds.has(details.approverRoleId));
+    return stageRole && assigned;
   });
 
   return NextResponse.json({
     data: {
       priceApprovals,
-      refunds: scopedRefunds.map((item) => ({ ...item, requestedAmount: Number(item.requestedAmount), approvedAmount: item.approvedAmount == null ? null : Number(item.approvedAmount), approval: refundApprovalByRequest.get(item.id) || null })),
+      refunds: scopedRefunds.map((item) => {
+        const approval = refundApprovalByRequest.get(item.id);
+        const details = (approval?.details || {}) as { stage?: string };
+        const approvalStage = details.stage || (item.currentApprovalStep <= 1 ? 'GENERAL_CASHIER_REVIEW' : item.currentApprovalStep === 2 ? 'ACCOUNTANT_REVIEW' : 'MANAGEMENT_REVIEW');
+        return {
+          ...item,
+          requestedAmount: Number(item.requestedAmount),
+          approvedAmount: item.approvedAmount == null ? null : Number(item.approvedAmount),
+          payment: item.payment ? { ...item.payment, amount: Number(item.payment.amount) } : null,
+          approvalStage,
+          approval: approval || null,
+        };
+      }),
       eventInvoices,
       stockTransfers,
       purchaseOrders: purchaseOrdersWithStockItems,

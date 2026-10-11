@@ -1,27 +1,14 @@
 import { getOrCreateBookingSystemActor, getOrCreateBookingSystemUser } from './system-actor';
 
-async function resolveApprovalOwner(tx: any, propertyId: string, organizationId: string, requestedById: string, amount: number) {
-  const rules = await tx.refundApprovalRule.findMany({
-    where: { propertyId, isActive: true },
-    orderBy: { stepOrder: 'asc' },
-  });
-  const matchingRule = rules.find((rule: any) =>
-    (rule.minAmount == null || amount >= Number(rule.minAmount)) &&
-    (rule.maxAmount == null || amount <= Number(rule.maxAmount)),
-  );
-  const fallbackRoleName = amount > 250000 ? 'FINANCE_MANAGER' : amount > 50000 ? 'MANAGER' : 'FRONT_DESK_MANAGER';
-  const role = matchingRule?.roleId
-    ? await tx.role.findUnique({ where: { id: matchingRule.roleId } })
-    : await tx.role.findFirst({ where: { organizationId, name: fallbackRoleName } });
-  const candidate = matchingRule?.approverId
-    ? { userId: matchingRule.approverId }
-    : role
-      ? await tx.userRole.findFirst({
-          where: { roleId: role.id, userId: { not: requestedById }, OR: [{ propertyId }, { propertyId: null }] },
-          select: { userId: true },
-        })
-      : null;
-  return { matchingRule, role, candidate };
+async function resolveCashierOwner(tx: any, propertyId: string, organizationId: string, requestedById: string) {
+  const role = await tx.role.findFirst({ where: { organizationId, name: 'GENERAL_CASHIER' } });
+  const candidate = role
+    ? await tx.userRole.findFirst({
+        where: { roleId: role.id, userId: { not: requestedById }, OR: [{ propertyId }, { propertyId: null }] },
+        select: { userId: true },
+      })
+    : null;
+  return { role, candidate };
 }
 
 /** Queues native refund requests for successful online booking payments. */
@@ -58,12 +45,11 @@ export async function queueBookingRefundRequests(input: {
       }
 
       const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-      const { matchingRule, role, candidate } = await resolveApprovalOwner(
+      const { role, candidate } = await resolveCashierOwner(
         input.tx,
         input.property.id,
         input.property.organizationId,
         requestedById,
-        amount,
       );
       const request = await input.tx.refundRequest.create({
         data: {
@@ -81,7 +67,7 @@ export async function queueBookingRefundRequests(input: {
           requestedById,
           currentApproverId: candidate?.userId,
           approvalRoleId: role?.id,
-          currentApprovalStep: matchingRule?.stepOrder || 1,
+          currentApprovalStep: 1,
           idempotencyKey,
           expiresAt,
         },
@@ -101,9 +87,10 @@ export async function queueBookingRefundRequests(input: {
             category: 'RESERVATION_CANCELLED',
             requestedAmount: amount,
             requestedMethod: 'ORIGINAL_PAYMENT',
+            stage: 'GENERAL_CASHIER_REVIEW',
+            stepOrder: 1,
             approverRoleId: role?.id,
             approverId: candidate?.userId,
-            stepOrder: matchingRule?.stepOrder || 1,
           },
           idempotencyKey: `approval:booking-refund:${request.id}`,
           expiresAt,
