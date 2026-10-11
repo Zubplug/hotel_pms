@@ -60,12 +60,20 @@ export async function POST(req: NextRequest) {
     return new NextResponse('Payment provider is not configured', { status: 503 });
   }
 
-  const signature = bpt.provider === 'FLUTTERWAVE'
-    ? (req.headers.get('flutterwave-signature') ?? req.headers.get('verif-hash') ?? '')
-    : (req.headers.get('x-paystack-signature') ?? '');
+  const flutterwaveSignature = req.headers.get('flutterwave-signature')?.trim() ?? '';
+  const flutterwaveLegacySignature = req.headers.get('verif-hash')?.trim() ?? '';
   const validSignature = bpt.provider === 'FLUTTERWAVE'
-    ? new FlutterwaveProvider(providerSecret, webhookSecret).validateWebhookSignature(rawBody, signature)
+    ? (() => {
+      const provider = new FlutterwaveProvider(providerSecret, webhookSecret);
+      // Flutterwave currently supports HMAC-SHA256 (`flutterwave-signature`)
+      // and the legacy plain secret hash (`verif-hash`). Accept either valid
+      // header independently because some dashboard/manual deliveries include
+      // both headers.
+      return provider.validateWebhookSignature(rawBody, flutterwaveSignature)
+        || provider.validateWebhookSignature(rawBody, flutterwaveLegacySignature);
+    })()
     : (() => {
+      const signature = req.headers.get('x-paystack-signature') ?? '';
       const expected = crypto.createHmac('sha512', webhookSecret).update(rawBody).digest('hex');
       return signature.length === expected.length && crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
     })();
