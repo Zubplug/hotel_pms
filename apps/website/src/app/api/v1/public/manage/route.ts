@@ -40,6 +40,10 @@ export async function GET(req: NextRequest) {
     .flatMap((folio: any) => folio.payments)
     .filter((payment: any) => ['COMPLETED', 'SUCCESS', 'PAID'].includes(String(payment.status).toUpperCase()))
     .reduce((sum: number, payment: any) => sum + Number(payment.amount), 0);
+  // `total` is the guest-facing reservation amount, including the final
+  // persisted rate-plan calculation. `subtotal` is retained only for older
+  // records that predate the total snapshot field.
+  const reservationTotal = Number(snapshot.total ?? snapshot.subtotal ?? 0);
   const result = {
     confirmationNumber: reservation.confirmationNumber,
     status: reservation.status,
@@ -52,11 +56,11 @@ export async function GET(req: NextRequest) {
     roomType: room?.roomType?.name ?? snapshot.roomTypeName ?? null,
     roomNumber: room?.number ?? null,
     roomStatus: room?.status ?? null,
-    total: Number(snapshot.subtotal ?? 0),
+    total: reservationTotal,
     currency: reservation.currency,
     paidAmount: paid,
-    balance: Math.max(0, Number(snapshot.subtotal ?? 0) - paid),
-    paymentStatus: paid >= Number(snapshot.subtotal ?? 0) ? 'PAID' : paid > 0 ? 'PARTIALLY_PAID' : 'UNPAID',
+    balance: Math.max(0, reservationTotal - paid),
+    paymentStatus: paid >= reservationTotal ? 'PAID' : paid > 0 ? 'PARTIALLY_PAID' : 'UNPAID',
     canCancel: ['PENDING', 'CONFIRMED'].includes(reservation.status),
     canRequestRoomAssignment: !room && ['PENDING', 'CONFIRMED'].includes(reservation.status),
     canExtend: ['PENDING', 'CONFIRMED', 'CHECKED_IN'].includes(reservation.status),
