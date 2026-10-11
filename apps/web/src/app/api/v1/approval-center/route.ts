@@ -12,18 +12,16 @@ export async function GET(req: NextRequest) {
   if (!user.isSuperAdmin && !ACCESS_ROLES.has(user.role)) return NextResponse.json({ error: 'Approval center access required' }, { status: 403 });
 
   const propertyFilter = { propertyId: { in: user.allowedProperties } };
-  const userRoles = await prisma.userRole.findMany({
-    where: { userId: user.id, OR: [{ propertyId: { in: user.allowedProperties } }, { propertyId: null }] },
-    select: { roleId: true },
-  });
-  const userRoleIds = new Set(userRoles.map((role) => role.roleId));
   const [priceApprovalsRaw, refunds, refundApprovals, eventInvoicesRaw, stockTransfers, purchaseOrders] = await Promise.all([
     prisma.approvalRequest.findMany({
       where: { ...propertyFilter, type: { in: ['POS_PRICE_CHANGE', 'POS_MENU_CREATE', 'POS_MODIFIER_CREATE', 'POS_MODIFIER_UPDATE'] }, status: { not: 'CANCELLED' } },
       orderBy: { createdAt: 'desc' }, take: 200,
     }),
     prisma.refundRequest.findMany({
-      where: { ...propertyFilter, status: { not: 'CANCELLED' } },
+      // The approval center is only for refunds that still require a decision.
+      // Completed/failed/rejected refunds remain in refund history and must not
+      // reappear as actionable approval work.
+      where: { ...propertyFilter, status: 'PENDING_APPROVAL' },
       select: {
         id: true, propertyId: true, requestedById: true, requestedAmount: true, approvedAmount: true,
         currency: true, category: true, reason: true, status: true, createdAt: true, updatedAt: true,
@@ -106,9 +104,7 @@ export async function GET(req: NextRequest) {
     // Older refund requests were created before the three-stage routing was
     // introduced and may contain a legacy manager assignment at step 1. Treat
     // those requests as unassigned cashier-stage work so they are not stranded.
-    const assigned = !details.stage || (!details.approverId && !details.approverRoleId)
-      || details.approverId === user.id
-      || Boolean(details.approverRoleId && userRoleIds.has(details.approverRoleId));
+    const assigned = stage === 'MANAGEMENT_REVIEW' || stage === 'MANAGER_REVIEW' || !details.stage || !details.approverId || details.approverId === user.id;
     return stageRole && assigned;
   });
 

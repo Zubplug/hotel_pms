@@ -8,6 +8,7 @@ const REFUND_STAGE_ROLES = {
   GENERAL_CASHIER_REVIEW: ['GENERAL_CASHIER', 'CASHIER', 'FRONT_DESK_CASHIER'],
   ACCOUNTANT_REVIEW: ['ACCOUNTANT', 'FINANCE_MANAGER'],
   MANAGEMENT_REVIEW: ['GENERAL_MANAGER', 'HOTEL_MANAGER', 'MANAGER', 'DIRECTOR', 'CEO', 'ADMIN', 'SUPER_ADMIN'],
+  MANAGER_REVIEW: ['GENERAL_MANAGER', 'HOTEL_MANAGER', 'MANAGER', 'DIRECTOR', 'CEO', 'ADMIN', 'SUPER_ADMIN'],
 } as const;
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -27,13 +28,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       if (!approval || approval.status !== 'PENDING') throw new Error('CONFLICT');
       if (!user.allowedProperties.includes(approval.propertyId)) throw new Error('FORBIDDEN');
       const details = (approval.details || {}) as { refundRequestId?: string; approverId?: string; approverRoleId?: string; stage?: string };
+      let refundStage: string | undefined;
       if (approval.type === 'REFUND' && details.refundRequestId && !user.isSuperAdmin) {
         const refundRequest = await tx.refundRequest.findUnique({ where: { id: details.refundRequestId }, select: { currentApprovalStep: true } });
-        const stage = details.stage || ((refundRequest?.currentApprovalStep || 1) <= 1 ? 'GENERAL_CASHIER_REVIEW' : refundRequest?.currentApprovalStep === 2 ? 'ACCOUNTANT_REVIEW' : 'MANAGEMENT_REVIEW');
-        if (!REFUND_STAGE_ROLES[stage as keyof typeof REFUND_STAGE_ROLES]?.includes(String(user.role).toUpperCase() as never)) throw new Error('REFUND_STAGE_ROLE_REQUIRED');
+        refundStage = details.stage || ((refundRequest?.currentApprovalStep || 1) <= 1 ? 'GENERAL_CASHIER_REVIEW' : refundRequest?.currentApprovalStep === 2 ? 'ACCOUNTANT_REVIEW' : 'MANAGEMENT_REVIEW');
+        if (!REFUND_STAGE_ROLES[refundStage as keyof typeof REFUND_STAGE_ROLES]?.includes(String(user.role).toUpperCase() as never)) throw new Error('REFUND_STAGE_ROLE_REQUIRED');
       }
-      if (details.stage && details.approverId && details.approverId !== user.id) throw new Error('ASSIGNED_APPROVER_REQUIRED');
-      if (details.stage && details.approverRoleId && !await tx.userRole.findFirst({ where: { userId: user.id, roleId: details.approverRoleId, OR: [{ propertyId: approval.propertyId }, { propertyId: null }] } })) throw new Error('ASSIGNED_ROLE_REQUIRED');
+      if (details.stage && details.approverId && details.approverId !== user.id && refundStage !== 'MANAGEMENT_REVIEW' && refundStage !== 'MANAGER_REVIEW') throw new Error('ASSIGNED_APPROVER_REQUIRED');
+      if (details.stage && details.approverRoleId && !await tx.userRole.findFirst({ where: { userId: user.id, roleId: details.approverRoleId, OR: [{ propertyId: approval.propertyId }, { propertyId: null }] } })) {
+        const stage = details.stage;
+        const stageRoles = REFUND_STAGE_ROLES[stage as keyof typeof REFUND_STAGE_ROLES] || [];
+        if (!stageRoles.includes(String(user.role).toUpperCase() as never)) throw new Error('ASSIGNED_ROLE_REQUIRED');
+      }
       if (details.refundRequestId) {
         await tx.refundRequest.update({ where: { id: details.refundRequestId, status: 'PENDING_APPROVAL' }, data: { status: 'REJECTED' } });
         await tx.refundApproval.create({ data: { refundRequestId: details.refundRequestId, approverId: user.id, decision: 'REJECTED', comments: comment } });

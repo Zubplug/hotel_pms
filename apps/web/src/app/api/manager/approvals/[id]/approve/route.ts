@@ -17,6 +17,7 @@ const REFUND_STAGE_ROLES = {
   GENERAL_CASHIER_REVIEW: ['GENERAL_CASHIER', 'CASHIER', 'FRONT_DESK_CASHIER'],
   ACCOUNTANT_REVIEW: ['ACCOUNTANT', 'FINANCE_MANAGER'],
   MANAGEMENT_REVIEW: ['GENERAL_MANAGER', 'HOTEL_MANAGER', 'MANAGER', 'DIRECTOR', 'CEO', 'ADMIN', 'SUPER_ADMIN'],
+  MANAGER_REVIEW: ['GENERAL_MANAGER', 'HOTEL_MANAGER', 'MANAGER', 'DIRECTOR', 'CEO', 'ADMIN', 'SUPER_ADMIN'],
 } as const;
 
 function refundStage(details: { stage?: string } | null | undefined, currentApprovalStep: number) {
@@ -148,10 +149,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         if (!details.posRefund && !user.isSuperAdmin && !REFUND_STAGE_ROLES[currentStage as keyof typeof REFUND_STAGE_ROLES]?.includes(String(user.role).toUpperCase() as never)) {
           throw new Error('REFUND_STAGE_ROLE_REQUIRED');
         }
-        if (details.stage && details.approverId && details.approverId !== user.id) {
+        if (details.stage && details.approverId && details.approverId !== user.id && currentStage !== 'MANAGEMENT_REVIEW' && currentStage !== 'MANAGER_REVIEW') {
           throw new Error('ASSIGNED_APPROVER_REQUIRED');
         }
-        if (details.stage && details.approverRoleId && !await tx.userRole.findFirst({ where: { userId: user.id, roleId: details.approverRoleId, OR: [{ propertyId: approval.propertyId }, { propertyId: null }] } })) {
+        if (!details.posRefund && details.stage && details.approverRoleId && !await tx.userRole.findFirst({ where: { userId: user.id, roleId: details.approverRoleId, OR: [{ propertyId: approval.propertyId }, { propertyId: null }] } }) && !REFUND_STAGE_ROLES[currentStage as keyof typeof REFUND_STAGE_ROLES]?.includes(String(user.role).toUpperCase() as never)) {
           throw new Error('ASSIGNED_ROLE_REQUIRED');
         }
         if (details.posRefund) {
