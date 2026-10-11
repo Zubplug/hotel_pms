@@ -55,7 +55,6 @@ export async function GET(req: NextRequest) {
       where: {
         propertyId,
         ...(roomId ? { id: roomId } : {}),
-        ...(roomNo ? { OR: [{ number: roomNo }, { code: roomNo }] } : {}),
       },
       include: {
         roomType: {
