@@ -4,13 +4,18 @@ function esc(value: unknown): string {
 
 async function send(to: string, subject: string, body: string) {
   const key = process.env.RESEND_API_KEY;
-  if (!key) { console.warn('[BookingEmail] RESEND_API_KEY is not configured'); return; }
+  const from = process.env.RESEND_FROM_EMAIL;
+  if (!key) throw new Error('RESEND_API_KEY is not configured');
+  if (!from) throw new Error('RESEND_FROM_EMAIL is not configured');
   const response = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ from: process.env.RESEND_FROM_EMAIL ?? 'no-reply@lodgecore.com', to: [to], subject, html: `<main style="font-family:Arial,sans-serif;max-width:640px;margin:auto"><h2>${esc(subject)}</h2>${body}</main>` }),
+    body: JSON.stringify({ from, to: [to], subject, html: `<main style="font-family:Arial,sans-serif;max-width:640px;margin:auto"><h2>${esc(subject)}</h2>${body}</main>` }),
   });
-  if (!response.ok) throw new Error(`Resend failed: ${response.status}`);
+  if (!response.ok) {
+    const details = await response.text().catch(() => '');
+    throw new Error(`Resend failed: ${response.status}${details ? ` — ${details.slice(0, 500)}` : ''}`);
+  }
 }
 
 export async function sendBookingConfirmationEmail(input: {

@@ -38,6 +38,7 @@ export const ReservationResponseSchema = z.object({
 export const CreatePaymentIntentRequestSchema = z.object({
   reservationToken: z.string().trim().min(32).max(512),
   guestEmail: z.string().trim().email().max(320),
+  returnUrl: z.string().url().max(2048).optional(),
 }).strict();
 
 export const CancelReservationRequestSchema = z.object({

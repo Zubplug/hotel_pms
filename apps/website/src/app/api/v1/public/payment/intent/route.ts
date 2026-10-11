@@ -5,6 +5,7 @@ import { successResponse, errorResponse } from '@/lib/api-response';
 import {
   corsHeaders,
   corsPreflightResponse,
+  originMatches,
   resolvePublicApiContext,
   isErrorResponse,
   checkRateLimit,
@@ -60,7 +61,20 @@ export async function POST(req: NextRequest) {
 
   const parsedBody = CreatePaymentIntentRequestSchema.safeParse(body);
   if (!parsedBody.success) return errorResponse('BAD_REQUEST', 'Invalid payment payload', 400, parsedBody.error.flatten());
-  const { reservationToken, guestEmail } = parsedBody.data;
+  const { reservationToken, guestEmail, returnUrl } = parsedBody.data;
+
+  let validatedReturnUrl: string | null = null;
+  if (returnUrl) {
+    try {
+      const parsedReturnUrl = new URL(returnUrl);
+      if (parsedReturnUrl.protocol !== 'https:' || !originMatches(parsedReturnUrl.origin, ctx.allowedOrigins)) {
+        return errorResponse('BAD_REQUEST', 'returnUrl must use an allowed HTTPS origin', 400);
+      }
+      validatedReturnUrl = parsedReturnUrl.toString();
+    } catch {
+      return errorResponse('BAD_REQUEST', 'returnUrl must be a valid URL', 400);
+    }
+  }
 
   const reservationTokenHash = crypto.createHash('sha256').update(String(reservationToken)).digest('hex');
 
@@ -155,7 +169,8 @@ export async function POST(req: NextRequest) {
       ? new FlutterwaveProvider(secretKey, account.webhookSecret ?? resolveSecretRef(account.webhookSecretRef, 'FLW_WEBHOOK_SECRET_HASH'))
       : new PaystackProvider(secretKey);
     await prisma.bookingPaymentTransaction.update({ where: { id: bpt.id }, data: { provider: account.provider } });
-    const callbackUrl = `${resolveBookingOrigin(req.headers, process.env.NEXT_PUBLIC_BOOKING_URL)}/reservation?token=${encodeURIComponent(String(reservationToken))}`;
+    const callbackUrl = validatedReturnUrl
+      ?? `${resolveBookingOrigin(req.headers, process.env.NEXT_PUBLIC_BOOKING_URL)}/reservation?token=${encodeURIComponent(String(reservationToken))}`;
 
     const init = await provider.initializeTransaction({
       amount: amountDue,
@@ -188,7 +203,7 @@ export async function POST(req: NextRequest) {
     }).catch(() => null);
 
     if (reservation.primaryGuest.email) {
-      sendBookingPaymentFailedEmail({
+      await sendBookingPaymentFailedEmail({
         to: reservation.primaryGuest.email,
         propertyName: config.property.name,
         confirmationNumber: reservation.confirmationNumber,

@@ -242,7 +242,7 @@ export async function POST(req: NextRequest) {
     }).catch((e: any) => console.error('[Booking] Notification failed:', e));
 
     if (guestInput.email) {
-      sendBookingConfirmationEmail({
+      await sendBookingConfirmationEmail({
         to: guestInput.email,
         firstName: guestInput.firstName,
         propertyName: property.name,

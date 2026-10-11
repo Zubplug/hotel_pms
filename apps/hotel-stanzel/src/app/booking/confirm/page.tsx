@@ -71,7 +71,11 @@ export default function ConfirmPage() {
           const piRes = await fetch('/api/payment/intent', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-Idempotency-Key': `pi-${idempotencyKey.current}` },
-            body: JSON.stringify({ reservationToken: data.confirmationToken, guestEmail: guest.email }),
+            body: JSON.stringify({
+              reservationToken: data.confirmationToken,
+              guestEmail: guest.email,
+              returnUrl: `${window.location.origin}/reservation?token=${encodeURIComponent(data.confirmationToken)}`,
+            }),
           });
           const piData = await piRes.json();
           if (piRes.ok && piData.authorizationUrl) {

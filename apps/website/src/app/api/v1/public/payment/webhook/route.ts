@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
       include: { primaryGuest: { select: { email: true } } },
     });
     if (!failedReservation?.primaryGuest.email) return;
-    sendBookingPaymentFailedEmail({
+    await sendBookingPaymentFailedEmail({
       to: failedReservation.primaryGuest.email,
       propertyName: (await prisma.property.findUnique({ where: { id: bpt.propertyId }, select: { name: true } }))?.name ?? 'the property',
       confirmationNumber: failedReservation.confirmationNumber,
@@ -213,7 +213,7 @@ export async function POST(req: NextRequest) {
       select: { confirmationNumber: true, currency: true, property: { select: { name: true } }, primaryGuest: { select: { email: true } }, reservationRooms: { where: { status: 'ACTIVE' }, include: { room: { select: { number: true } } } } },
     });
     if (paidReservation?.primaryGuest.email) {
-      sendPaymentReceiptEmail({ to: paidReservation.primaryGuest.email, propertyName: paidReservation.property.name, confirmationNumber: paidReservation.confirmationNumber, amount: verifiedAmount, currency: verifiedCurrency, roomNumber: paidReservation.reservationRooms[0]?.room?.number }).catch((e) => console.error('[Booking Webhook] receipt email failed', e));
+      await sendPaymentReceiptEmail({ to: paidReservation.primaryGuest.email, propertyName: paidReservation.property.name, confirmationNumber: paidReservation.confirmationNumber, amount: verifiedAmount, currency: verifiedCurrency, roomNumber: paidReservation.reservationRooms[0]?.room?.number }).catch((e) => console.error('[Booking Webhook] receipt email failed', e));
     }
 
     return new NextResponse('OK', { status: 200 });

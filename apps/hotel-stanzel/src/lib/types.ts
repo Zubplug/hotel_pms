@@ -108,6 +108,7 @@ export interface ReservationResponse {
 export interface PaymentIntentRequest {
   reservationToken: string; // = confirmationToken from ReservationResponse
   guestEmail: string;
+  returnUrl?: string;
 }
 
 export interface PaymentIntentResponse {
