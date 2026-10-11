@@ -8,6 +8,32 @@ export const dynamic = "force-dynamic";
 
 const API_BASE = process.env.NEXT_PUBLIC_PUBLIC_API_URL ?? "https://getlodgecore.vercel.app/api/v1/public";
 
+type ApiEndpoint = {
+  method: "GET" | "POST";
+  path: string;
+  description: string;
+  auth: "key" | "webhook";
+  note?: string;
+};
+
+// Keep this list aligned with apps/website/src/app/api/v1/public. OPTIONS is
+// CORS plumbing and is intentionally not shown as a customer operation.
+const API_ENDPOINTS: ApiEndpoint[] = [
+  { method: "GET", path: "/rooms", description: "List active room types, photos, amenities, occupancy and base rates.", auth: "key" },
+  { method: "GET", path: "/availability?checkIn=YYYY-MM-DD&checkOut=YYYY-MM-DD&adults=2&children=0", description: "Check live room availability and rates for a stay.", auth: "key" },
+  { method: "POST", path: "/hold", description: "Place a short-lived hold on a room type and rate.", auth: "key", note: "Hold expires after 12 minutes." },
+  { method: "POST", path: "/reservations", description: "Create a reservation from an active hold.", auth: "key", note: "Requires X-Idempotency-Key (16–255 characters)." },
+  { method: "GET", path: "/confirmation?token=…", description: "Read a reservation confirmation using its guest confirmation token.", auth: "key" },
+  { method: "GET", path: "/manage?token=…", description: "Retrieve an active reservation for the guest management view.", auth: "key" },
+  { method: "POST", path: "/extend", description: "Request an extension for an eligible reservation.", auth: "key" },
+  { method: "POST", path: "/cancel", description: "Cancel an eligible reservation with its cancellation token.", auth: "key" },
+  { method: "GET", path: "/refund-status?query=…", description: "Look up refund workflow status by confirmation number or guest email.", auth: "key" },
+  { method: "POST", path: "/payment/intent", description: "Create a payment intent when the property requires online payment.", auth: "key", note: "Requires X-Idempotency-Key (16–255 characters)." },
+  { method: "POST", path: "/payments/intent", description: "Compatibility alias for /payment/intent.", auth: "key", note: "Use /payment/intent for new integrations." },
+  { method: "POST", path: "/payment/webhook", description: "Receive signed Paystack or Flutterwave payment events.", auth: "webhook", note: "Configure this URL with your payment provider; do not send a publishable key." },
+  { method: "POST", path: "/payments/webhook", description: "Compatibility alias for /payment/webhook.", auth: "webhook", note: "Use /payment/webhook for new provider configuration." },
+];
+
 const API_EXAMPLES = [
   {
     title: "1. Discover rooms and rates",
@@ -98,7 +124,116 @@ const API_EXAMPLES = [
     "amount": 120000,
     "currency": "NGN"
   }
+  }`,
+  },
+  {
+    title: "5. Read rooms and a confirmation",
+    request: `curl "${API_BASE}/rooms" \\
+  -H "X-Publishable-Key: pk_live_your_key"
+
+curl "${API_BASE}/confirmation?token=reservation-token" \\
+  -H "X-Publishable-Key: pk_live_your_key"`,
+    response: `{
+  "success": true,
+  "data": [{
+    "id": "room-type-uuid",
+    "name": "Deluxe King",
+    "maxOccupancy": 2,
+    "currency": "NGN",
+    "amenities": ["Wi-Fi", "Breakfast"]
+  }]
+
+{
+  "success": true,
+  "data": {
+    "confirmationNumber": "LC-123456",
+    "status": "CONFIRMED",
+    "checkIn": "2026-12-20T00:00:00.000Z",
+    "checkOut": "2026-12-22T00:00:00.000Z",
+    "guest": { "firstName": "Ada", "lastName": "Lodge" }
+  }
 }`,
+  },
+  {
+    title: "6. Manage or extend a reservation",
+    request: `curl "${API_BASE}/manage?token=cancellation-token" \\
+  -H "X-Publishable-Key: pk_live_your_key"
+
+curl -X POST "${API_BASE}/extend" \\
+  -H "Content-Type: application/json" \\
+  -H "X-Publishable-Key: pk_live_your_key" \\
+  -d '{
+    "confirmationNumber": "LC-123456",
+    "guestEmail": "ada@example.com",
+    "newCheckOut": "2026-12-23",
+    "idempotencyKey": "extend-20261220-000001"
+  }'`,
+    response: `{
+  "success": true,
+  "data": {
+    "confirmationNumber": "LC-123456",
+    "status": "CONFIRMED",
+    "canCancel": true
+  }
+
+{
+  "success": true,
+  "data": {
+    "newCheckOut": "2026-12-23",
+    "additionalNights": 1,
+    "amount": 120000,
+    "currency": "NGN",
+    "authorizationUrl": "https://paystack.com/pay/…"
+  }
+}`,
+  },
+  {
+    title: "7. Cancel and check a refund",
+    request: `curl -X POST "${API_BASE}/cancel" \\
+  -H "Content-Type: application/json" \\
+  -H "X-Publishable-Key: pk_live_your_key" \\
+  -d '{
+    "cancelToken": "cancellation-token",
+    "reason": "Change of plans"
+  }'
+
+curl "${API_BASE}/refund-status?query=LC-123456" \\
+  -H "X-Publishable-Key: pk_live_your_key"`,
+    response: `{
+  "success": true,
+  "data": {
+    "confirmationNumber": "LC-123456",
+    "status": "CANCELLED",
+    "refundAmount": 120000,
+    "currency": "NGN"
+  }
+
+{
+  "success": true,
+  "data": {
+    "reservations": [{
+      "confirmationNumber": "LC-123456",
+      "refundRequests": [{ "status": "PROCESSING", "requestedAmount": 120000 }]
+    }]
+  }
+}`,
+  },
+  {
+    title: "8. Receive a payment webhook",
+    request: `POST ${API_BASE}/payment/webhook
+X-Paystack-Signature: provider-generated-signature
+Content-Type: application/json
+
+{
+  "event": "charge.success",
+  "data": { "reference": "BK-12345678-ABC123" }
+}`,
+    response: `HTTP/1.1 200 OK
+
+OK
+
+The webhook is verified with the configured provider secret and updates the
+reservation/payment state. Do not send X-Publishable-Key to this endpoint.`,
   },
 ];
 
@@ -129,7 +264,7 @@ export default async function ApiAccessPage() {
           <div className="portal-page-kicker">Developer tools · Standalone website API</div>
           <h1 className="portal-page-title">API access</h1>
           <p className="portal-page-sub" style={{ marginBottom: 0 }}>
-            Your publishable key, setup instructions, and the public endpoints available to your website.
+            Your publishable key, setup instructions, and the complete public booking API available to your website.
           </p>
         </div>
         <span className="portal-badge badge-active">Live API</span>
@@ -157,7 +292,7 @@ export default async function ApiAccessPage() {
                   <div className="portal-stat-label">LC_PUBLISHABLE_KEY</div>
                   <code style={{ display: "block", marginTop: 7, padding: "12px 14px", overflowX: "auto", color: "var(--accent)", background: "var(--bg-overlay)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", fontSize: 12 }}>{key.key}</code>
                   <code style={{ display: "block", marginTop: 7, color: "var(--text-muted)", fontSize: 11 }}>LC_PUBLISHABLE_KEY={key.key}</code>
-                  <p style={{ margin: "8px 0 0", color: "var(--text-muted)", fontSize: 11 }}>Keep this key in your server environment or website configuration. Do not commit it to source control.</p>
+                  <p style={{ margin: "8px 0 0", color: "var(--text-muted)", fontSize: 11 }}>This is a publishable key for your booking website. Restrict it to your allowed origins and do not confuse it with private PMS credentials.</p>
                 </div>
                 <div style={{ marginTop: 22 }}>
                   <div className="portal-stat-label">Configuration guide</div>
@@ -171,17 +306,14 @@ export default async function ApiAccessPage() {
                 <div style={{ marginTop: 22 }}>
                   <div className="portal-stat-label">Public API endpoints</div>
                   <div style={{ display: "grid", gap: 8, marginTop: 10 }}>
-                    {[
-                      ["GET", "/rooms", "List public room types and amenities."],
-                      ["GET", "/availability?checkIn=YYYY-MM-DD&checkOut=YYYY-MM-DD&adults=2&children=0", "Check rooms and rates for a stay."],
-                      ["POST", "/hold", "Temporarily hold a selected room and rate."],
-                      ["POST", "/reservations", "Create a reservation from an active hold."],
-                      ["POST", "/payment/intent", "Create a payment intent when payment is required."],
-                      ["POST", "/cancel", "Cancel a reservation with its cancellation token."],
-                    ].map(([method, path, description]) => (
-                      <div key={`${method}-${path}`} style={{ display: "grid", gridTemplateColumns: "52px minmax(0, 1fr)", gap: 10, padding: "10px 12px", background: "var(--bg-overlay)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)" }}>
-                        <strong style={{ color: method === "GET" ? "var(--mint)" : "var(--accent)", fontFamily: "var(--font-mono)", fontSize: 10 }}>{method}</strong>
-                        <div><code style={{ color: "var(--text-primary)", fontSize: 11, overflowWrap: "anywhere" }}>{API_BASE}{path}</code><div style={{ color: "var(--text-muted)", fontSize: 11, marginTop: 3 }}>{description}</div></div>
+                    {API_ENDPOINTS.map((endpoint) => (
+                      <div key={`${endpoint.method}-${endpoint.path}`} style={{ display: "grid", gridTemplateColumns: "52px minmax(0, 1fr)", gap: 10, padding: "10px 12px", background: "var(--bg-overlay)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)" }}>
+                        <strong style={{ color: endpoint.method === "GET" ? "var(--mint)" : endpoint.auth === "webhook" ? "var(--warning, #f4c76b)" : "var(--accent)", fontFamily: "var(--font-mono)", fontSize: 10 }}>{endpoint.method}</strong>
+                        <div>
+                          <code style={{ color: "var(--text-primary)", fontSize: 11, overflowWrap: "anywhere" }}>{API_BASE}{endpoint.path}</code>
+                          <div style={{ color: "var(--text-muted)", fontSize: 11, marginTop: 3 }}>{endpoint.description}</div>
+                          {endpoint.note && <div style={{ color: endpoint.auth === "webhook" ? "var(--warning, #f4c76b)" : "var(--text-muted)", fontSize: 10, marginTop: 4 }}>{endpoint.note}</div>}
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -208,6 +340,15 @@ export default async function ApiAccessPage() {
                       </div>
                     ))}
                   </div>
+                </div>
+                <div style={{ marginTop: 22 }}>
+                  <div className="portal-stat-label">Webhook and response rules</div>
+                  <ul style={{ margin: "10px 0 0", paddingLeft: 20, color: "var(--text-secondary)", fontSize: 13, lineHeight: 1.8 }}>
+                    <li>All publishable-key endpoints require <code>X-Publishable-Key</code> and return a <code>success</code>/<code>data</code> envelope.</li>
+                    <li>Browser requests also require an exact or approved wildcard origin on the key.</li>
+                    <li>Payment webhooks use provider signature headers and do not use the publishable key.</li>
+                    <li>Private PMS, portal, cron, and internal worker routes are not part of this public API.</li>
+                  </ul>
                 </div>
                 {key.allowedOrigins.length === 0 && <p style={{ margin: "18px 0 0", color: "var(--warning, #f4c76b)", fontSize: 12 }}>Add your website origin to allowed origins before making browser-side API calls. Contact support to configure it.</p>}
               </>
