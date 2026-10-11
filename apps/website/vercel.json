@@ -9,7 +9,7 @@
     },
     {
       "path": "/api/v1/cron/reconcile-flutterwave-refunds",
-      "schedule": "*/15 * * * *"
+      "schedule": "0 5 * * *"
     }
   ]
 }
