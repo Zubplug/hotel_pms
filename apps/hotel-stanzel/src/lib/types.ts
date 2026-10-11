@@ -117,6 +117,21 @@ export interface PaymentIntentResponse {
   currency: string;
 }
 
+export interface ConfirmationResponse {
+  confirmationNumber: string;
+  status: string;
+  checkIn: string;
+  checkOut: string;
+  nights: number;
+  adults: number;
+  children: number;
+  guest: { firstName: string; lastName: string; email: string | null; phone: string | null };
+  roomType: string | null;
+  roomNumber: string | null;
+  pricing: { currency: string; subtotal: number | string | null; depositAmount: number | string; paymentMode: string };
+  propertyName: string;
+}
+
 // ── /cancel ───────────────────────────────────────────────────
 export interface CancelRequest {
   cancelToken: string; // = cancellationToken from ReservationResponse

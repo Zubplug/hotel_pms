@@ -20,6 +20,7 @@ import type {
   CancelResponse,
   PaymentIntentRequest,
   PaymentIntentResponse,
+  ConfirmationResponse,
 } from './types';
 
 const LC_API = process.env.LC_API_URL ?? 'https://getlodgecore.vercel.app/api/v1/public';
@@ -175,6 +176,13 @@ export async function createPaymentIntent(
     method: 'POST',
     body: JSON.stringify(body),
     idempotencyKey,
+    cache: 'no-store',
+  });
+}
+
+/** Read the current reservation/payment status after gateway redirect. */
+export async function getConfirmation(token: string): Promise<ConfirmationResponse> {
+  return lcFetch<ConfirmationResponse>(`/confirmation?token=${encodeURIComponent(token)}`, {
     cache: 'no-store',
   });
 }
