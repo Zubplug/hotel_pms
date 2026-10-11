@@ -204,6 +204,11 @@ export async function getManagedReservation(params: URLSearchParams): Promise<un
   return lcFetch<unknown>(`/manage?${query.toString()}`, { cache: 'no-store' });
 }
 
+export async function getRefundStatus(query: string): Promise<unknown> {
+  const params = new URLSearchParams({ query: query.trim() });
+  return lcFetch<unknown>(`/refund-status?${params.toString()}`, { cache: 'no-store' });
+}
+
 export async function createStayExtension(input: { confirmationNumber: string; guestEmail: string; newCheckOut: string; returnUrl: string }, idempotencyKey: string): Promise<{ authorizationUrl: string; amount: number; currency: string; newCheckOut: string; additionalNights: number }> {
   return lcFetch<{ authorizationUrl: string; amount: number; currency: string; newCheckOut: string; additionalNights: number }>('/extend', { method: 'POST', body: JSON.stringify({ ...input, idempotencyKey }), idempotencyKey, cache: 'no-store' });
 }

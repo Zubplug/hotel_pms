@@ -6,6 +6,7 @@ const FOOTER_LINKS = {
     { label: 'Special Offers', href: '/offers' },
     { label: 'Book Now', href: '/booking' },
     { label: 'Manage Booking', href: '/manage' },
+    { label: 'Track Refund', href: '/refund-status' },
   ],
   'Experience': [
     { label: 'Dining & Bar', href: '/dining' },
