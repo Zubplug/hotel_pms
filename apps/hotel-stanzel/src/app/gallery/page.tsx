@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 const GALLERY = [
   { src: '/images/hero-entrance.jpg', alt: 'Grand resort entrance at golden hour', caption: 'The Arrival' },
   { src: '/images/lobby.jpg', alt: 'Grand hotel lobby with chandelier', caption: 'The Grand Lobby' },
-  { src: '/images/room-suite.jpg', alt: 'Luxury guest suite with garden view', caption: 'Garden Suite' },
+  { src: '/images/room-suite.jpg', alt: 'Stanzel Grand Resort premium bedroom with king bed', caption: 'Premium Room' },
   { src: '/images/bathroom.jpg', alt: 'Luxury marble bathroom with soaking tub', caption: 'Private Bathroom' },
   { src: '/images/restaurant.jpg', alt: 'Stanzel restaurant and bar interior', caption: 'The Restaurant' },
   { src: '/images/bar.jpg', alt: 'Stanzel cocktail bar', caption: 'The Bar' },

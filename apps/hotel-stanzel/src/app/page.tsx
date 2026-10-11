@@ -38,7 +38,7 @@ const CONFIRMED_FACILITIES = [
     id: 'rooms',
     title: 'Premium Accommodations',
     description:
-      'Thoughtfully designed guest rooms and suites with modern amenities, warm African aesthetics, and garden views.',
+      'Thoughtfully designed guest rooms and suites with king beds, modern climate control, work desk, and en-suite amenities.',
     icon: '🛏️',
     image: '/images/room-suite.jpg',
     href: '/rooms',
@@ -47,7 +47,7 @@ const CONFIRMED_FACILITIES = [
 
 const GALLERY_IMAGES = [
   { src: '/images/hero-entrance.jpg', alt: 'Stanzel Grand Resort entrance' },
-  { src: '/images/room-suite.jpg', alt: 'Luxury guest suite' },
+  { src: '/images/room-suite.jpg', alt: 'Stanzel Grand Resort premium guest room with king bed' },
   { src: '/images/restaurant.jpg', alt: 'Restaurant and bar' },
   { src: '/images/pool-evening.jpg', alt: 'Resort swimming pool at dusk' },
 ];
@@ -275,7 +275,11 @@ export default async function HomePage() {
                       src={image}
                       alt={title}
                       fill
-                      style={{ objectFit: 'cover', transition: 'transform var(--duration-lg) var(--ease)' }}
+                      style={{
+                        objectFit: 'cover',
+                        objectPosition: id === 'pool' ? 'center 35%' : id === 'rooms' ? 'center 45%' : 'center',
+                        transition: 'transform var(--duration-lg) var(--ease)',
+                      }}
                       sizes="(max-width: 768px) 100vw, 33vw"
                     />
                     <div style={{

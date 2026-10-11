@@ -44,7 +44,7 @@ const FACILITIES = [
       'Each room and suite has been thoughtfully designed with premium furniture, quality linens, modern amenities and distinctive African character. Garden views, en-suite marble bathrooms and attentive room service complete the experience.',
     features: ['Premium furnishing', 'En-suite bathrooms', 'Air conditioning', 'Room service'],
     image: '/images/room-suite.jpg',
-    imageAlt: 'Luxury guest suite',
+    imageAlt: 'Stanzel Grand Resort premium guest room with king bed and en-suite amenities',
   },
 ];
 
@@ -76,7 +76,7 @@ export default function FacilitiesPage() {
                 }}>
                   <div style={{ order: i % 2 === 0 ? 0 : 1 }}>
                     <div style={{ position: 'relative', height: '400px', borderRadius: 'var(--radius-2xl)', overflow: 'hidden' }}>
-                      <Image src={image} alt={imageAlt} fill style={{ objectFit: 'cover', objectPosition: id === 'pool' ? 'center 35%' : 'center' }} sizes="(max-width: 768px) 100vw, 50vw" />
+                      <Image src={image} alt={imageAlt} fill style={{ objectFit: 'cover', objectPosition: id === 'rooms' ? 'center 45%' : id === 'pool' ? 'center 35%' : 'center' }} sizes="(max-width: 768px) 100vw, 50vw" />
                     </div>
                   </div>
                   <div style={{ order: i % 2 === 0 ? 1 : 0 }}>
