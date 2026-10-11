@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
+import { displayRoomNumber } from '@/lib/booking-engine/room-number';
 import crypto from 'crypto';
 import { successResponse, errorResponse } from '@/lib/api-response';
 import {
@@ -65,7 +66,7 @@ export async function GET(req: NextRequest) {
     children: reservation.children,
     guest: reservation.primaryGuest,
     roomType: room?.room?.roomType?.name ?? null,
-    roomNumber: room?.room?.number ?? null,
+    roomNumber: displayRoomNumber(room?.room?.number),
     pricing: {
       currency: reservation.currency,
       subtotal: snapshot?.subtotal ?? null,

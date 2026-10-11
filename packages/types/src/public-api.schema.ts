@@ -23,6 +23,7 @@ export const CreateReservationRequestSchema = z.object({
   adults: z.number().int().min(1).default(1),
   children: z.number().int().min(0).default(0),
   specialRequests: z.string().trim().max(2000).optional(),
+  returnUrl: z.string().url().max(2048).optional(),
 }).strict();
 
 export const ReservationResponseSchema = z.object({
@@ -42,9 +43,11 @@ export const CreatePaymentIntentRequestSchema = z.object({
 }).strict();
 
 export const CancelReservationRequestSchema = z.object({
-  cancelToken: z.string().trim().min(32).max(512),
+  cancelToken: z.string().trim().min(32).max(512).optional(),
+  confirmationNumber: z.string().trim().min(3).max(100).optional(),
+  guestEmail: z.string().trim().email().max(320).optional(),
   reason: z.string().trim().max(1000).optional(),
-}).strict();
+}).strict().refine((value) => Boolean(value.cancelToken || (value.confirmationNumber && value.guestEmail)), { message: 'A cancellation token or confirmation number and guest email are required' });
 
 export const AvailabilityQuerySchema = z.object({
   checkIn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),

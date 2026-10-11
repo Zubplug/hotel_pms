@@ -3,7 +3,7 @@ import prisma from '@hotel-pms/db';
 import crypto from 'crypto';
 import { getOrCreateBookingSystemActor } from '@/lib/booking-engine/system-actor';
 import { getPropertyBusinessDate } from '@/lib/date-utils';
-import { sendPaymentReceiptEmail } from '@/lib/email/booking-emails';
+import { sendBookingConfirmedEmail, sendPaymentReceiptEmail } from '@/lib/email/booking-emails';
 import { sendBookingPaymentFailedEmail } from '@/lib/email/booking-emails';
 import { getBookingPaymentAccount, resolveSecretRef } from '@/lib/payment-providers/booking-account';
 import { FlutterwaveProvider } from '@/lib/payment-providers/flutterwave';
@@ -210,9 +210,36 @@ export async function POST(req: NextRequest) {
 
     const paidReservation = await prisma.reservation.findUnique({
       where: { id: bpt.reservationId! },
-      select: { confirmationNumber: true, currency: true, property: { select: { name: true } }, primaryGuest: { select: { email: true } }, reservationRooms: { where: { status: 'ACTIVE' }, include: { room: { select: { number: true } } } } },
+      select: {
+        confirmationNumber: true,
+        currency: true,
+        checkIn: true,
+        checkOut: true,
+        adults: true,
+        children: true,
+        ratePlanSnapshot: true,
+        property: { select: { name: true } },
+        primaryGuest: { select: { email: true, firstName: true } },
+        reservationRooms: { where: { status: 'ACTIVE' }, include: { room: { select: { number: true } } } },
+      },
     });
     if (paidReservation?.primaryGuest.email) {
+      const snapshot = (paidReservation.ratePlanSnapshot as any) ?? {};
+      const roomNumber = paidReservation.reservationRooms[0]?.room?.number;
+      await sendBookingConfirmedEmail({
+        to: paidReservation.primaryGuest.email,
+        firstName: paidReservation.primaryGuest.firstName,
+        propertyName: paidReservation.property.name,
+        confirmationNumber: paidReservation.confirmationNumber,
+        checkIn: paidReservation.checkIn,
+        checkOut: paidReservation.checkOut,
+        roomTypeName: snapshot.roomTypeName ?? 'Room',
+        roomNumber,
+        adults: paidReservation.adults,
+        children: paidReservation.children,
+        currency: paidReservation.currency,
+        total: Number(snapshot.subtotal ?? verifiedAmount),
+      }).catch((e) => console.error('[Booking Webhook] confirmation email failed', e));
       await sendPaymentReceiptEmail({ to: paidReservation.primaryGuest.email, propertyName: paidReservation.property.name, confirmationNumber: paidReservation.confirmationNumber, amount: verifiedAmount, currency: verifiedCurrency, roomNumber: paidReservation.reservationRooms[0]?.room?.number }).catch((e) => console.error('[Booking Webhook] receipt email failed', e));
     }
 

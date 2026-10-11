@@ -1,167 +1,65 @@
 'use client';
 
-import { useState, Suspense } from 'react';
+import { FormEvent, Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
 
+type Reservation = any;
+
 function ManagePageContent() {
   const params = useSearchParams();
-  const tokenFromUrl = params.get('token') ?? '';
-  const [cancelToken, setCancelToken] = useState(tokenFromUrl);
-  const [reason, setReason] = useState('');
-  const [status, setStatus] = useState<'idle' | 'confirming' | 'cancelling' | 'cancelled' | 'error'>('idle');
-  const [result, setResult] = useState<any>(null);
-  const [errorMsg, setErrorMsg] = useState('');
+  const [token, setToken] = useState(params.get('token') ?? '');
+  const [reference, setReference] = useState('');
+  const [email, setEmail] = useState('');
+  const [reservation, setReservation] = useState<Reservation>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [cancelReason, setCancelReason] = useState('');
+  const [showCancel, setShowCancel] = useState(false);
+  const [cancelled, setCancelled] = useState(false);
 
-  function handleLookup(e: React.FormEvent) {
-    e.preventDefault();
-    if (cancelToken.trim().length < 32) {
-      setErrorMsg('Please enter a valid cancellation token (found in your booking confirmation email).');
-      return;
-    }
-    setErrorMsg('');
-    setStatus('confirming');
-  }
-
-  async function handleCancel() {
-    setStatus('cancelling'); setErrorMsg('');
+  async function loadReservation(event?: FormEvent) {
+    event?.preventDefault(); setLoading(true); setError('');
+    const query = new URLSearchParams(token.trim() ? { token: token.trim() } : { confirmationNumber: reference.trim(), email: email.trim() });
     try {
-      const res = await fetch('/api/cancel', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cancelToken: cancelToken.trim(), reason: reason.trim() || undefined }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setErrorMsg(data.message ?? 'Could not cancel this reservation.');
-        setStatus('confirming'); return;
-      }
-      setResult(data); setStatus('cancelled');
-    } catch {
-      setErrorMsg('Network error. Please try again.');
-      setStatus('confirming');
-    }
+      const response = await fetch(`/api/manage?${query}`);
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message ?? 'Reservation could not be found.');
+      setReservation(data); setCancelled(false);
+    } catch (e) { setError(e instanceof Error ? e.message : 'Could not load reservation.'); }
+    finally { setLoading(false); }
   }
 
-  return (
-    <>
-      <Header />
-      <main id="main-content" style={{ paddingTop: 'calc(var(--nav-height) + var(--space-16))', minHeight: '70vh', background: 'var(--color-ivory-dark)' }}>
-        <div className="container" style={{ maxWidth: '640px', paddingBlock: 'var(--space-12)' }}>
-          <p className="eyebrow" style={{ marginBottom: 'var(--space-3)' }}>Booking Management</p>
-          <h1 style={{ marginBottom: 'var(--space-4)' }}>Manage Your Reservation</h1>
-          <span className="gold-divider" />
-          <p style={{ marginBottom: 'var(--space-10)' }}>
-            Enter your cancellation token to manage or cancel your booking. You can find this token in your booking confirmation email.
-          </p>
+  useEffect(() => { if (token) loadReservation(); }, []);
 
-          {/* Cancelled state */}
-          {status === 'cancelled' && result && (
-            <div style={{ background: 'var(--color-white)', borderRadius: 'var(--radius-xl)', padding: 'var(--space-8)', border: '1px solid var(--border)', textAlign: 'center' }}>
-              <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'rgb(26 60 52 / 0.08)', border: '3px solid var(--color-green)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto var(--space-6)' }}>
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--color-green)" strokeWidth="2.5" strokeLinecap="round">
-                  <polyline points="20 6 9 17 4 12" />
-                </svg>
-              </div>
-              <h2 style={{ marginBottom: 'var(--space-3)' }}>Reservation Cancelled</h2>
-              <p style={{ color: 'var(--text-muted)', marginBottom: 'var(--space-5)' }}>
-                Booking <strong>{result.confirmationNumber}</strong> has been cancelled.
-              </p>
-              {result.penaltyAmount > 0 && (
-                <div style={{ padding: 'var(--space-4)', background: 'rgb(201 169 110 / 0.1)', borderRadius: 'var(--radius-lg)', marginBottom: 'var(--space-5)', border: '1px solid rgba(201,169,110,0.25)' }}>
-                  <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-gold-dark)', fontWeight: 600 }}>{result.penaltyDescription}</p>
-                </div>
-              )}
-              <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', marginBottom: 'var(--space-8)' }}>{result.refundNote}</p>
-              <Link href="/" className="btn btn-secondary">Return to Homepage</Link>
-            </div>
-          )}
+  async function cancelReservation() {
+    setLoading(true); setError('');
+    try {
+      const body = token.trim() ? { cancelToken: token.trim(), reason: cancelReason.trim() || undefined } : { confirmationNumber: reference.trim(), guestEmail: email.trim(), reason: cancelReason.trim() || undefined };
+      const response = await fetch('/api/cancel', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message ?? 'Could not cancel this reservation.');
+      setCancelled(true); setShowCancel(false); setReservation((current: any) => ({ ...current, status: 'CANCELLED', ...data }));
+    } catch (e) { setError(e instanceof Error ? e.message : 'Could not cancel reservation.'); }
+    finally { setLoading(false); }
+  }
 
-          {/* Confirm cancellation */}
-          {status === 'confirming' && (
-            <div style={{ background: 'var(--color-white)', borderRadius: 'var(--radius-xl)', padding: 'var(--space-8)', border: '1px solid var(--border)' }}>
-              <h2 style={{ fontSize: 'var(--text-xl)', marginBottom: 'var(--space-5)' }}>Confirm Cancellation</h2>
-              <p style={{ color: 'var(--text-muted)', marginBottom: 'var(--space-6)', fontSize: 'var(--text-sm)' }}>
-                You are about to cancel a reservation. Please note that a cancellation penalty may apply depending on the cancellation policy of your rate plan and how close to check-in you are cancelling.
-              </p>
+  const money = (value: number) => `${reservation?.currency ?? 'NGN'} ${Number(value ?? 0).toLocaleString('en-NG', { minimumFractionDigits: 2 })}`;
+  const date = (value: string) => value ? new Date(value).toLocaleDateString('en-NG', { dateStyle: 'medium' }) : '—';
+  const statusColor = reservation?.status === 'CONFIRMED' ? '#176b4d' : reservation?.status === 'CANCELLED' ? '#b42318' : '#9a6700';
 
-              <div className="field" style={{ marginBottom: 'var(--space-5)' }}>
-                <label htmlFor="cancel-reason" className="field-label">Reason for Cancellation (optional)</label>
-                <textarea id="cancel-reason" className="field-input" rows={3} value={reason}
-                  onChange={e => setReason(e.target.value)}
-                  placeholder="Travel plans changed, illness, etc."
-                  style={{ resize: 'vertical' }} />
-              </div>
+  return <><Header /><main id="main-content" style={{ paddingTop: 'calc(var(--nav-height) + var(--space-16))', minHeight: '75vh', background: 'var(--color-ivory-dark)' }}><div className="container" style={{ maxWidth: 1050, paddingBlock: 'var(--space-12)' }}>
+    <p className="eyebrow">Guest services</p><h1 style={{ margin: '8px 0 10px' }}>Manage your stay</h1><p style={{ color: 'var(--text-muted)', maxWidth: 650 }}>View your reservation, check payment status, manage cancellation, request room assistance, and contact our team from one secure dashboard.</p><span className="gold-divider" />
 
-              {errorMsg && (
-                <div style={{ padding: 'var(--space-4)', background: 'rgb(192 57 43 / 0.08)', borderRadius: 'var(--radius-lg)', border: '1px solid rgba(192,57,43,0.2)', marginBottom: 'var(--space-5)' }}>
-                  <p style={{ color: '#c0392b', fontSize: 'var(--text-sm)' }}>{errorMsg}</p>
-                </div>
-              )}
+    {!reservation && <form onSubmit={loadReservation} style={{ marginTop: 32, background: 'var(--color-white)', border: '1px solid var(--border)', borderRadius: 18, padding: 28, maxWidth: 650 }}><h2 style={{ fontSize: 22, marginBottom: 8 }}>Find your reservation</h2><p style={{ color: 'var(--text-muted)', fontSize: 14, marginBottom: 22 }}>Use the secure link from your email, or enter your booking reference and guest email.</p><div className="field"><label className="field-label">Cancellation token</label><input className="field-input" value={token} onChange={e => setToken(e.target.value)} placeholder="Paste token from your booking email" /></div><div style={{ textAlign: 'center', color: 'var(--text-muted)', margin: '14px 0', fontSize: 13 }}>or</div><div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}><div className="field"><label className="field-label">Booking reference</label><input className="field-input" value={reference} onChange={e => setReference(e.target.value)} placeholder="e.g. LC-123456" /></div><div className="field"><label className="field-label">Guest email</label><input className="field-input" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" /></div></div>{error && <p style={{ color: '#b42318', fontSize: 14, marginTop: 16 }}>{error}</p>}<button className="btn btn-secondary btn-lg" disabled={loading} style={{ width: '100%', marginTop: 22 }}>{loading ? 'Securely checking…' : 'Open reservation dashboard'}</button></form>}
 
-              <div style={{ display: 'flex', gap: 'var(--space-4)', flexWrap: 'wrap' }}>
-                <button onClick={handleCancel} id="confirm-cancel-btn" className="btn btn-primary"
-                  style={{ flex: 1, background: '#c0392b', borderColor: '#c0392b' }}>
-                  Confirm Cancellation
-                </button>
-                <button onClick={() => setStatus('idle')} className="btn btn-outline-dark" style={{ flex: 1 }}>
-                  Go Back
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Cancelling spinner */}
-          {status === 'cancelling' && (
-            <div style={{ textAlign: 'center', padding: 'var(--space-16)' }}>
-              <div style={{ width: 48, height: 48, border: '3px solid var(--border)', borderTopColor: 'var(--color-green)', borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto var(--space-4)' }} />
-              <p style={{ color: 'var(--text-muted)' }}>Processing cancellation…</p>
-            </div>
-          )}
-
-          {/* Token entry */}
-          {status === 'idle' && (
-            <form id="manage-booking-form" onSubmit={handleLookup}
-              style={{ background: 'var(--color-white)', borderRadius: 'var(--radius-xl)', padding: 'var(--space-8)', border: '1px solid var(--border)' }}>
-              <div className="field" style={{ marginBottom: 'var(--space-6)' }}>
-                <label htmlFor="cancel-token" className="field-label">Cancellation Token <span style={{ color: 'var(--color-gold)' }}>*</span></label>
-                <input id="cancel-token" type="text" className="field-input"
-                  value={cancelToken} onChange={e => setCancelToken(e.target.value)}
-                  placeholder="Paste your cancellation token here"
-                  autoComplete="off" required />
-                <p style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 'var(--space-2)' }}>
-                  Your cancellation token was included in your booking confirmation email from Stanzel Grand Resort.
-                </p>
-              </div>
-              {errorMsg && <p style={{ color: '#c0392b', fontSize: 'var(--text-sm)', marginBottom: 'var(--space-4)' }}>{errorMsg}</p>}
-              <button id="lookup-booking-btn" type="submit" className="btn btn-secondary btn-lg" style={{ width: '100%' }}>
-                Continue
-              </button>
-              <p style={{ textAlign: 'center', marginTop: 'var(--space-5)', fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>
-                Having trouble?{' '}
-                <Link href="/contact" style={{ color: 'var(--color-green)', fontWeight: 600 }}>Contact our team</Link>
-              </p>
-            </form>
-          )}
-        </div>
-      </main>
-      <Footer />
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-    </>
-  );
+    {reservation && <><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'end', gap: 20, marginTop: 30, flexWrap: 'wrap' }}><div><p style={{ color: 'var(--text-muted)', fontSize: 13, marginBottom: 5 }}>Booking reference</p><h2 style={{ margin: 0 }}>{reservation.confirmationNumber}</h2></div><span style={{ borderRadius: 999, padding: '8px 14px', background: `${statusColor}18`, color: statusColor, fontWeight: 700, fontSize: 13 }}>{reservation.status}</span></div><div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 18, marginTop: 22 }}><section style={{ background: 'var(--color-white)', border: '1px solid var(--border)', borderRadius: 18, padding: 26 }}><h3 style={{ marginBottom: 18 }}>Stay overview</h3><div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>{[['Guest', `${reservation.guest?.firstName ?? ''} ${reservation.guest?.lastName ?? ''}`], ['Room type', reservation.roomType ?? 'To be assigned'], ['Check-in', date(reservation.checkIn)], ['Check-out', date(reservation.checkOut)], ['Guests', `${reservation.adults} adult${reservation.adults === 1 ? '' : 's'}${reservation.children ? `, ${reservation.children} child${reservation.children === 1 ? '' : 'ren'}` : ''}`], ['Room number', reservation.roomNumber ? String(reservation.roomNumber).split('.').pop() : 'To be assigned']].map(([label, value]) => <div key={label}><p style={{ color: 'var(--text-muted)', fontSize: 12, marginBottom: 4 }}>{label}</p><strong>{value}</strong></div>)}</div></section><section style={{ background: 'var(--color-green)', color: 'var(--color-ivory)', borderRadius: 18, padding: 26 }}><h3 style={{ color: 'var(--color-gold)', marginBottom: 18 }}>Payment</h3><p style={{ color: 'rgba(250,248,244,.65)', fontSize: 13 }}>Total reservation</p><h2 style={{ color: 'var(--color-gold)', margin: '4px 0 18px' }}>{money(reservation.total)}</h2><p style={{ fontSize: 14 }}>Paid: <strong>{money(reservation.paidAmount)}</strong></p><p style={{ fontSize: 14 }}>Balance: <strong>{money(reservation.balance)}</strong></p><p style={{ marginTop: 18, fontSize: 12, color: 'rgba(250,248,244,.7)' }}>{reservation.paymentStatus}</p></section></div>
+    <section style={{ marginTop: 18, background: 'var(--color-white)', border: '1px solid var(--border)', borderRadius: 18, padding: 26 }}><h3 style={{ marginBottom: 8 }}>Guest services</h3><p style={{ color: 'var(--text-muted)', fontSize: 14, marginBottom: 20 }}>Need help before arrival? Choose an action below.</p><div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}><div style={{ border: '1px solid var(--border)', borderRadius: 12, padding: 16 }}><strong>{reservation.roomNumber ? 'Room assigned' : 'Room assignment'}</strong><p style={{ color: 'var(--text-muted)', fontSize: 13, margin: '8px 0 14px' }}>{reservation.roomNumber ? `Your room is ${String(reservation.roomNumber).split('.').pop()}.` : 'The property will assign your room before check-in.'}</p><a className="btn btn-outline-dark" href="mailto:info@stanzelgrandresort.org?subject=Room%20assignment%20request">Contact property</a></div><div style={{ border: '1px solid var(--border)', borderRadius: 12, padding: 16 }}><strong>Extend your stay</strong><p style={{ color: 'var(--text-muted)', fontSize: 13, margin: '8px 0 14px' }}>Request additional nights and receive a payment quote.</p><a className="btn btn-outline-dark" href={`mailto:info@stanzelgrandresort.org?subject=Extend%20booking%20${reservation.confirmationNumber}`}>Request extension</a></div><div style={{ border: '1px solid rgba(180,35,24,.2)', borderRadius: 12, padding: 16 }}><strong>Cancel reservation</strong><p style={{ color: 'var(--text-muted)', fontSize: 13, margin: '8px 0 14px' }}>Cancellation policy and refund rules apply.</p><button className="btn btn-outline-dark" onClick={() => setShowCancel(true)} disabled={!reservation.canCancel || cancelled}>{cancelled ? 'Cancelled' : reservation.canCancel ? 'Start cancellation' : 'Not available'}</button></div></div></section>
+    {showCancel && <div style={{ marginTop: 18, background: '#fff8ed', border: '1px solid #ead7b2', borderRadius: 16, padding: 22 }}><h3>Confirm cancellation</h3><p style={{ color: 'var(--text-muted)', fontSize: 14 }}>A cancellation charge may apply. Any eligible refund will follow the property policy.</p><textarea className="field-input" rows={3} value={cancelReason} onChange={e => setCancelReason(e.target.value)} placeholder="Reason for cancellation (optional)" style={{ margin: '14px 0' }} /><button className="btn btn-primary" onClick={cancelReservation} disabled={loading} style={{ background: '#b42318', borderColor: '#b42318' }}>{loading ? 'Processing…' : 'Confirm cancellation'}</button> <button className="btn btn-outline-dark" onClick={() => setShowCancel(false)}>Keep reservation</button></div>}
+    {error && <p style={{ color: '#b42318', marginTop: 18 }}>{error}</p>}<div style={{ marginTop: 24, display: 'flex', gap: 12, flexWrap: 'wrap' }}><button className="btn btn-outline-dark" onClick={() => setReservation(null)}>Use different booking</button><Link href="/contact" className="btn btn-secondary">Contact guest services</Link></div></>}
+  </div></main><Footer /><style>{`@media(max-width:700px){form > div[style*="grid-template-columns: 1fr 1fr"],main section > div[style*="grid-template-columns: 2fr 1fr"],main section > div[style*="repeat(3, 1fr)"]{grid-template-columns:1fr!important}}`}</style></>;
 }
 
-export default function ManagePage() {
-  return (
-    <Suspense fallback={
-      <div style={{ paddingTop: 'calc(var(--nav-height) + 4rem)', textAlign: 'center', minHeight: '60vh' }}>
-        <div style={{ width: 40, height: 40, border: '3px solid var(--border)', borderTopColor: 'var(--color-green)', borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto' }} />
-        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-      </div>
-    }>
-      <ManagePageContent />
-    </Suspense>
-  );
-}
+export default function ManagePage() { return <Suspense fallback={<div style={{ padding: 80, textAlign: 'center' }}>Loading reservation portal…</div>}><ManagePageContent /></Suspense>; }

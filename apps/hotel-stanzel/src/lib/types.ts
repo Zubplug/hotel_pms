@@ -90,6 +90,7 @@ export interface ReservationRequest {
   adults?: number;
   children?: number;
   specialRequests?: string;
+  returnUrl?: string;
 }
 
 export interface ReservationResponse {

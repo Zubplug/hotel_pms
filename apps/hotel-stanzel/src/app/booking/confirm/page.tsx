@@ -48,6 +48,7 @@ export default function ConfirmPage() {
           adults: Number.isInteger(hold.adults) && hold.adults > 0 ? hold.adults : 1,
           children: Number.isInteger(hold.children) && hold.children >= 0 ? hold.children : 0,
           specialRequests: guest.specialRequests || undefined,
+          returnUrl: `${window.location.origin}/reservation`,
         }),
       });
       const data = await res.json();

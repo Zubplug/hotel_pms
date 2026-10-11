@@ -41,15 +41,14 @@ export async function POST(req: NextRequest) {
 
   const parsedBody = CancelReservationRequestSchema.safeParse(body);
   if (!parsedBody.success) return errorResponse('BAD_REQUEST', 'Invalid cancellation payload', 400, parsedBody.error.flatten());
-  const { cancelToken, reason } = parsedBody.data;
+  const { cancelToken, confirmationNumber, guestEmail, reason } = parsedBody.data;
 
-  const tokenHash = crypto.createHash('sha256').update(cancelToken).digest('hex');
+  const tokenHash = cancelToken ? crypto.createHash('sha256').update(cancelToken).digest('hex') : null;
 
   const reservation = await prisma.reservation.findFirst({
-    where: {
-      propertyId: ctx.propertyId,
-      guestCancellationTokenHash: tokenHash,
-    },
+    where: tokenHash
+      ? { propertyId: ctx.propertyId, guestCancellationTokenHash: tokenHash }
+      : { propertyId: ctx.propertyId, confirmationNumber, primaryGuest: { email: { equals: guestEmail, mode: 'insensitive' as const } } },
     include: {
       primaryGuest: { select: { firstName: true, lastName: true, email: true } },
       reservationRooms: true,

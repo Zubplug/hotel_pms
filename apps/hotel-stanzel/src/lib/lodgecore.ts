@@ -186,3 +186,12 @@ export async function getConfirmation(token: string): Promise<ConfirmationRespon
     cache: 'no-store',
   });
 }
+
+export async function getManagedReservation(params: URLSearchParams): Promise<unknown> {
+  const query = new URLSearchParams();
+  for (const key of ['token', 'confirmationNumber', 'email']) {
+    const value = params.get(key);
+    if (value) query.set(key, value);
+  }
+  return lcFetch<unknown>(`/manage?${query.toString()}`, { cache: 'no-store' });
+}

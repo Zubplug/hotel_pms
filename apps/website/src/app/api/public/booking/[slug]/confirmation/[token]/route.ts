@@ -4,6 +4,7 @@
 
 import { NextRequest } from 'next/server';
 import prisma from '@hotel-pms/db';
+import { displayRoomNumber } from '@/lib/booking-engine/room-number';
 import crypto from 'crypto';
 import { successResponse, errorResponse } from '@/lib/api-response';
 import {
@@ -86,7 +87,7 @@ export async function GET(
       children: reservation.children,
       guest: reservation.primaryGuest,
       roomType: (resRoom as any)?.roomType?.name ?? null,
-      roomNumber: (resRoom as any)?.room?.number ?? null,
+      roomNumber: displayRoomNumber((resRoom as any)?.room?.number),
       pricing: {
         currency: reservation.currency,
         subtotal: snapshot?.subtotal ?? null,
@@ -103,4 +104,3 @@ export async function GET(
   res.headers.set('Cache-Control', 'no-store');
   return res;
 }
-

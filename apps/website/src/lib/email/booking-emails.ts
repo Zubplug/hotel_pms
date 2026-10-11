@@ -1,3 +1,5 @@
+import { displayRoomNumber } from '@/lib/booking-engine/room-number';
+
 function esc(value: unknown): string {
   return String(value ?? '').replace(/[&<>'"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[c] ?? c));
 }
@@ -21,20 +23,53 @@ async function send(to: string, subject: string, body: string) {
 export async function sendBookingConfirmationEmail(input: {
   to: string; firstName: string; propertyName: string; confirmationNumber: string;
   checkIn: Date; checkOut: Date; roomTypeName: string; total: number; currency: string;
-  manageUrl: string; roomNumber?: string | null; paymentRequired?: boolean;
+  manageUrl: string; cancellationUrl?: string; cancellationToken?: string;
+  roomNumber?: string | null; paymentRequired?: boolean;
 }) {
   const pending = input.paymentRequired === true;
   const subject = pending ? `Payment required — ${input.confirmationNumber}` : `Booking confirmed — ${input.confirmationNumber}`;
-  const room = input.roomNumber ? `<p>Assigned room: <strong>${esc(input.roomNumber)}</strong></p>` : '';
+  const roomNumber = displayRoomNumber(input.roomNumber);
+  const room = roomNumber ? `<p>Assigned room: <strong>${esc(roomNumber)}</strong></p>` : '';
   const paymentMessage = pending
     ? `<p>Your reservation is being held pending payment. Use the link below to complete payment.</p>`
     : `<p>Your reservation is confirmed.</p>`;
-  await send(input.to, subject, `<p>Hi ${esc(input.firstName)},</p>${paymentMessage}<p>Property: <strong>${esc(input.propertyName)}</strong></p><p>Confirmation: <strong>${esc(input.confirmationNumber)}</strong></p><p>${esc(input.roomTypeName)} · ${input.checkIn.toISOString().slice(0, 10)} to ${input.checkOut.toISOString().slice(0, 10)}</p>${room}<p>Total: ${esc(input.currency)} ${input.total.toFixed(2)}</p><p><a href="${esc(input.manageUrl)}">${pending ? 'Complete payment / manage booking' : 'Manage booking'}</a></p>`);
+  const cancellation = input.cancellationUrl
+    ? `<p><a href="${esc(input.cancellationUrl)}">Manage or cancel this booking</a></p>`
+    : '';
+  const token = input.cancellationToken
+    ? `<p style="font-size:12px;color:#666">Cancellation token: <code>${esc(input.cancellationToken)}</code></p>`
+    : '';
+  await send(input.to, subject, `<p>Hi ${esc(input.firstName)},</p>${paymentMessage}<p>Property: <strong>${esc(input.propertyName)}</strong></p><p>Confirmation: <strong>${esc(input.confirmationNumber)}</strong></p><p>${esc(input.roomTypeName)} · ${input.checkIn.toISOString().slice(0, 10)} to ${input.checkOut.toISOString().slice(0, 10)}</p>${room}<p>Total: ${esc(input.currency)} ${input.total.toFixed(2)}</p><p><a href="${esc(input.manageUrl)}">${pending ? 'Complete payment / manage booking' : 'View booking'}</a></p>${cancellation}${token}`);
 }
 
 export async function sendPaymentReceiptEmail(input: { to: string; propertyName: string; confirmationNumber: string; amount: number; currency: string; roomNumber?: string | null }) {
-  const room = input.roomNumber ? `<p>Assigned room: <strong>${esc(input.roomNumber)}</strong></p>` : '';
-  await send(input.to, `Payment received — ${input.confirmationNumber}`, `<p>Payment received for booking <strong>${esc(input.confirmationNumber)}</strong> at ${esc(input.propertyName)}.</p><p>Amount paid: ${esc(input.currency)} ${input.amount.toFixed(2)}</p>${room}<p>Your reservation is now confirmed.</p>`);
+  const roomNumber = displayRoomNumber(input.roomNumber);
+  const room = roomNumber ? `<p>Assigned room: <strong>${esc(roomNumber)}</strong></p>` : '';
+  await send(input.to, `Payment receipt — ${input.confirmationNumber}`, `<p>Your payment for booking <strong>${esc(input.confirmationNumber)}</strong> at ${esc(input.propertyName)} was received successfully.</p><p>Amount paid: ${esc(input.currency)} ${input.amount.toFixed(2)}</p>${room}<p>Please keep this receipt for your records.</p>`);
+}
+
+export async function sendBookingConfirmedEmail(input: {
+  to: string;
+  firstName: string;
+  propertyName: string;
+  confirmationNumber: string;
+  checkIn: Date;
+  checkOut: Date;
+  roomTypeName: string;
+  roomNumber?: string | null;
+  adults: number;
+  children: number;
+  currency: string;
+  total: number;
+}) {
+  const roomNumber = displayRoomNumber(input.roomNumber);
+  const room = roomNumber ? `<p>Assigned room: <strong>${esc(roomNumber)}</strong></p>` : '';
+  const nights = Math.max(1, Math.ceil((input.checkOut.getTime() - input.checkIn.getTime()) / 86_400_000));
+  await send(
+    input.to,
+    `Reservation confirmed — ${input.confirmationNumber}`,
+    `<p>Dear ${esc(input.firstName)},</p><p>We are pleased to confirm your reservation at <strong>${esc(input.propertyName)}</strong>.</p><div style="background:#f6f7f7;border-radius:8px;padding:16px;margin:20px 0"><p><strong>Booking reference:</strong> ${esc(input.confirmationNumber)}</p><p><strong>Stay:</strong> ${input.checkIn.toISOString().slice(0, 10)} to ${input.checkOut.toISOString().slice(0, 10)} (${nights} night${nights === 1 ? '' : 's'})</p><p><strong>Room:</strong> ${esc(input.roomTypeName)}</p>${room}<p><strong>Guests:</strong> ${input.adults} adult${input.adults === 1 ? '' : 's'}${input.children ? `, ${input.children} child${input.children === 1 ? '' : 'ren'}` : ''}</p><p><strong>Total:</strong> ${esc(input.currency)} ${input.total.toFixed(2)}</p></div><p>We look forward to welcoming you. Please keep your booking reference for check-in.</p><p>If you need assistance, please contact the property directly.</p>`,
+  );
 }
 
 export async function sendBookingPaymentFailedEmail(input: { to: string; propertyName: string; confirmationNumber: string; amount: number; currency: string; manageUrl?: string }) {

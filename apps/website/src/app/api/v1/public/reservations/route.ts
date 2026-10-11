@@ -9,6 +9,7 @@ import {
   isErrorResponse,
   checkRateLimit,
   rateLimitIdentity,
+  originMatches,
 } from '@/lib/booking-engine/middleware';
 import { AuthoritativeAvailabilityService } from '@/lib/booking-engine/availability-service';
 import { ReservationPricingService } from '@/lib/booking-engine/pricing-service';
@@ -16,6 +17,7 @@ import { SharedReservationService } from '@/lib/services/reservation-service';
 import { NotificationEngine } from '@/lib/notification-engine';
 import { sendBookingConfirmationEmail } from '@/lib/email/booking-emails';
 import { resolveBookingOrigin } from '@/lib/booking-engine/request-origin';
+import { displayRoomNumber } from '@/lib/booking-engine/room-number';
 import { CreateReservationRequestSchema } from '@hotel-pms/types';
 
 export async function OPTIONS(req: NextRequest) {
@@ -88,7 +90,23 @@ export async function POST(req: NextRequest) {
     specialRequests,
     adults,
     children,
+    returnUrl,
   } = parsedBody.data;
+
+  let bookingOrigin: string;
+  if (returnUrl) {
+    try {
+      const parsedReturnUrl = new URL(returnUrl);
+      if (parsedReturnUrl.protocol !== 'https:' || !originMatches(parsedReturnUrl.origin, ctx.allowedOrigins)) {
+        return errorResponse('BAD_REQUEST', 'returnUrl must use an allowed HTTPS origin', 400);
+      }
+      bookingOrigin = parsedReturnUrl.origin;
+    } catch {
+      return errorResponse('BAD_REQUEST', 'returnUrl must be a valid URL', 400);
+    }
+  } else {
+    bookingOrigin = resolveBookingOrigin(req.headers, process.env.NEXT_PUBLIC_BOOKING_URL);
+  }
 
   const tokenHash = crypto.createHash('sha256').update(holdToken).digest('hex');
   const hold = await prisma.bookingHold.findFirst({
@@ -252,16 +270,18 @@ export async function POST(req: NextRequest) {
         roomTypeName: (hold.quoteSnapshot as any)?.roomTypeName ?? 'Room',
         total: Number((hold.quoteSnapshot as any)?.subtotal ?? 0),
         currency: (hold.quoteSnapshot as any)?.currency ?? property.baseCurrency,
-        roomNumber: newReservation.assignedRoomNumber,
+        roomNumber: displayRoomNumber(newReservation.assignedRoomNumber),
         paymentRequired: config.paymentMode !== 'PAY_LATER',
-        manageUrl: `${resolveBookingOrigin(req.headers, process.env.NEXT_PUBLIC_BOOKING_URL)}/reservation?token=${newReservation.confirmToken}`,
+        manageUrl: `${bookingOrigin}/reservation?token=${encodeURIComponent(newReservation.confirmToken)}`,
+        cancellationUrl: `${bookingOrigin}/manage?token=${encodeURIComponent(newReservation.cancelToken)}`,
+        cancellationToken: newReservation.cancelToken,
       }).catch((e) => console.error('[Booking] confirmation email failed', e));
     }
 
     const res = successResponse(
       {
         confirmationNumber,
-        roomNumber: newReservation.assignedRoomNumber,
+        roomNumber: displayRoomNumber(newReservation.assignedRoomNumber),
         status: config.paymentMode === 'PAY_LATER' ? 'CONFIRMED' : 'PENDING',
         confirmationToken: newReservation.confirmToken,
         cancellationToken: newReservation.cancelToken,

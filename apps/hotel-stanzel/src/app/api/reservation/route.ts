@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { holdToken, guest, adults = 1, children = 0, specialRequests } = body ?? {};
+    const { holdToken, guest, adults = 1, children = 0, specialRequests, returnUrl } = body ?? {};
 
     if (!holdToken || typeof holdToken !== 'string' || holdToken.length < 1) {
       return NextResponse.json({ error: 'holdToken is required' }, { status: 400 });
@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
     }
 
     const data = await createReservation(
-      { holdToken, guest, adults, children, specialRequests },
+      { holdToken, guest, adults, children, specialRequests, returnUrl },
       idempotencyKey
     );
 
