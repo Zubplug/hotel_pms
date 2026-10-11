@@ -167,6 +167,30 @@ export async function POST(req: NextRequest) {
         systemActorId,
       });
 
+      const extension = (bpt.metadata as any)?.type === 'EXTENSION' ? (bpt.metadata as any) : null;
+      if (extension) {
+        const newCheckOut = new Date(`${extension.newCheckOut}T00:00:00Z`);
+        if (newCheckOut <= new Date(reservation.checkOut)) throw new Error('Extension check-out is no longer valid');
+        const currentSnapshot = (reservation.ratePlanSnapshot as any) ?? {};
+        await (tx as any).reservation.update({
+          where: { id: reservation.id },
+          data: {
+            checkOut: newCheckOut,
+            ratePlanSnapshot: {
+              ...currentSnapshot,
+              nights: Number(currentSnapshot.nights ?? 0) + Number(extension.additionalNights ?? 0),
+              subtotal: Number(currentSnapshot.subtotal ?? 0) + verifiedAmount,
+              total: Number(currentSnapshot.total ?? currentSnapshot.subtotal ?? 0) + verifiedAmount,
+              capturedAt: new Date().toISOString(),
+            },
+          },
+        });
+        await (tx as any).reservationRoom.updateMany({ where: { reservationId: reservation.id, status: 'ACTIVE' }, data: { checkOut: newCheckOut } });
+        // The extension is an advance payment for future nights. Night Audit
+        // will create one ROOM_CHARGE folio item per stayed night and include
+        // both the room revenue and payment in its single daily GL journal.
+      }
+
       await (tx as any).reservation.update({
         where: { id: reservation.id },
         data: { status: 'CONFIRMED' },

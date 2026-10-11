@@ -14,6 +14,7 @@ import { getOrCreateBookingSystemActor } from '@/lib/booking-engine/system-actor
 import { NotificationEngine } from '@/lib/notification-engine';
 import { sendBookingCancellationEmail } from '@/lib/email/booking-emails';
 import { queueBookingRefundRequests } from '@/lib/booking-engine/refund-service';
+import { calculateCancellationQuote } from '@/lib/booking-engine/cancellation-service';
 import { CancelReservationRequestSchema } from '@hotel-pms/types';
 
 export async function OPTIONS(req: NextRequest) {
@@ -42,6 +43,7 @@ export async function POST(req: NextRequest) {
   const parsedBody = CancelReservationRequestSchema.safeParse(body);
   if (!parsedBody.success) return errorResponse('BAD_REQUEST', 'Invalid cancellation payload', 400, parsedBody.error.flatten());
   const { cancelToken, confirmationNumber, guestEmail, reason } = parsedBody.data;
+  const preview = body?.preview === true;
 
   const tokenHash = cancelToken ? crypto.createHash('sha256').update(cancelToken).digest('hex') : null;
 
@@ -86,40 +88,12 @@ export async function POST(req: NextRequest) {
     return res;
   }
 
-  const policy = reservation.cancellationPolicy;
-  let penaltyAmount = 0;
-  let penaltyDescription = 'No penalty';
-
-  if (policy) {
-    const hoursUntilCheckIn = Math.max(
-      0,
-      (new Date(reservation.checkIn).getTime() - Date.now()) / 3_600_000
-    );
-    const isPenaltyWindow = hoursUntilCheckIn < policy.hoursBeforeCheckIn;
-    const snapshot = reservation.ratePlanSnapshot as any;
-    const subtotal = snapshot?.subtotal ?? 0;
-
-    if (isPenaltyWindow && policy.penaltyType !== 'NONE') {
-      switch (policy.penaltyType) {
-        case 'FIRST_NIGHT': {
-          const nights = Math.ceil(
-            (new Date(reservation.checkOut).getTime() - new Date(reservation.checkIn).getTime()) / 86_400_000
-          );
-          penaltyAmount = subtotal / nights;
-          penaltyDescription = 'First night charge applies';
-          break;
-        }
-        case 'PERCENTAGE':
-          penaltyAmount = subtotal * (Number(policy.penaltyValue) / 100);
-          penaltyDescription = `${policy.penaltyValue}% cancellation fee applies`;
-          break;
-        case 'FLAT':
-          penaltyAmount = Number(policy.penaltyValue);
-          penaltyDescription = `Flat cancellation fee of ${reservation.currency} ${policy.penaltyValue}`;
-          break;
-      }
-      penaltyAmount = Math.round(penaltyAmount * 100) / 100;
-    }
+  const cancellationQuote = calculateCancellationQuote(reservation);
+  const { penaltyAmount, penaltyDescription } = cancellationQuote;
+  if (preview) {
+    const response = successResponse({ confirmationNumber: reservation.confirmationNumber, currency: reservation.currency, checkIn: reservation.checkIn, checkOut: reservation.checkOut, ...cancellationQuote, canCancel: true }, 200);
+    Object.entries(corsHeaders(req, ctx.allowedOrigins)).forEach(([k, v]) => response.headers.set(k, v));
+    return response;
   }
 
   const systemActorId = await getOrCreateBookingSystemActor(
@@ -137,6 +111,31 @@ export async function POST(req: NextRequest) {
         cancellationReason: reason || 'Guest self-service cancellation via Public API',
       },
     });
+
+    if (penaltyAmount > 0 && reservation.folios[0]) {
+      const operationId = `BOOKING_CANCEL_PENALTY_${reservation.id}`;
+      const existingPenalty = await (tx as any).folioItem.findFirst({ where: { operationId } });
+      if (!existingPenalty) {
+        await (tx as any).folioItem.create({ data: {
+          folioId: reservation.folios[0].id,
+          reservationId: reservation.id,
+          guestId: reservation.primaryGuestId,
+          businessDate: reservation.property.businessDate || new Date(),
+          type: 'CHARGE',
+          source: 'ROOM_CHARGE',
+          revenueCategory: 'ROOM',
+          description: `Cancellation fee — ${penaltyDescription}`,
+          quantity: 1,
+          unitAmount: penaltyAmount,
+          amount: penaltyAmount,
+          currency: reservation.currency,
+          baseAmount: penaltyAmount,
+          postedBy: systemActorId,
+          operationId,
+        } });
+        await (tx as any).folio.update({ where: { id: reservation.folios[0].id }, data: { totalCharges: { increment: penaltyAmount }, balance: { increment: penaltyAmount } } });
+      }
+    }
 
     await (tx as any).reservationRoom.updateMany({
       where: { reservationId: reservation.id },
@@ -229,6 +228,7 @@ export async function POST(req: NextRequest) {
         currency: request.currency,
         status: request.status,
       })),
+      refundableAmount: cancellationQuote.refundableAmount,
       refundNote:
         refundRequests.length > 0
           ? 'A refund request has been submitted for property approval and processing.'

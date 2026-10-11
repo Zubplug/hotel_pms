@@ -9,6 +9,7 @@ import { CityLedgerAccountingService } from '@/lib/services/city-ledger-accounti
 import { InventoryService } from '@/lib/inventory/InventoryService';
 import { applyAvailableFolioCredit } from '@/lib/finance/apply-folio-credit';
 import { requireStockUnitConversion } from '@/lib/inventory/UnitConversionService';
+import { sendBookingRefundCompletedEmail } from '@/lib/email/booking-refund-email';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -548,6 +549,23 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         } });
         return { status: completed ? 'COMPLETED' : gatewayResult.status, refundRequestId: current.id, refundId: refund.id, providerRefundId: gatewayResult.providerRefundId };
       });
+      if (finalized.status === 'COMPLETED') {
+        const guestBooking = await prisma.refundRequest.findUnique({
+          where: { id: result.refundRequestId },
+          include: { reservation: { include: { primaryGuest: true, property: { select: { name: true } } } } },
+        });
+        const guestEmail = guestBooking?.reservation?.primaryGuest?.email;
+        if (guestEmail && guestBooking?.reservation) {
+          sendBookingRefundCompletedEmail({
+            to: guestEmail,
+            propertyName: guestBooking.reservation.property.name,
+            confirmationNumber: guestBooking.reservation.confirmationNumber,
+            amount: result.amount,
+            currency: result.currency,
+            method: result.method,
+          }).catch((error) => console.error('[Refund] completion email failed', error));
+        }
+      }
       return successResponse(finalized, 200);
     }
 

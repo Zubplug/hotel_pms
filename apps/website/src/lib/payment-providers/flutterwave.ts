@@ -39,8 +39,24 @@ export class FlutterwaveProvider implements PaymentProvider {
     return { isSuccessful: data.status === 'successful', amount: Number(data.amount), currency: data.currency, providerTransactionId: String(data.id) };
   }
 
-  async refundTransaction(): Promise<RefundPaymentResponse> {
-    return { status: 'FAILED', message: 'Flutterwave refunds require manual provider configuration and are not enabled yet.' };
+  async refundTransaction(providerTransactionId: string, amount: number, currency: string, reason: string): Promise<RefundPaymentResponse> {
+    const transactionId = encodeURIComponent(providerTransactionId);
+    const data = await this.request<{ id?: number; status?: string; amount_refunded?: number; flw_ref?: string }>(`/transactions/${transactionId}/refund`, {
+      method: 'POST',
+      body: JSON.stringify({
+        amount: Math.round(amount),
+        comments: reason,
+        // Flutterwave uses the transaction currency from the original charge;
+        // retain this value in the request context for audit/debugging.
+        currency,
+      }),
+    });
+    const status = String(data.status || '').toLowerCase();
+    return {
+      status: status === 'completed' || status === 'successful' ? 'COMPLETED' : status === 'failed' ? 'FAILED' : 'PROCESSING',
+      providerRefundId: data.flw_ref || (data.id == null ? undefined : String(data.id)),
+      message: `Flutterwave refund ${status || 'initiated'}`,
+    };
   }
 
   validateWebhookSignature(payload: string, signature: string): boolean {

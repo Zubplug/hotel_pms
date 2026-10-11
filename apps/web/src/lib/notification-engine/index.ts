@@ -319,6 +319,14 @@ async function evaluateEvent(
         priority: "Critical",
       };
     }
+    case "REFUND_ESCALATION": {
+      return {
+        subject: "Refund requires attention",
+        body: `Refund ${String(event.entityId).slice(0, 8)} has been waiting for more than ${Number(event.metadata?.ageHours || 48)} hours. Amount: ${event.metadata?.currency || 'NGN'} ${Number(event.metadata?.amount || 0).toLocaleString()}.`,
+        category: "Finance",
+        priority: "High",
+      };
+    }
 
     case "CASH_VARIANCE": {
       if (!policy.cashVarianceThreshold) return null;

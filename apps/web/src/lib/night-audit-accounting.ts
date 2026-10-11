@@ -161,7 +161,7 @@ export async function postNightAuditJournal(tx: any, input: {
   });
   if (!period) return { status: 'ACCOUNTING_PERIOD_LOCKED', journalEntryId: null, missingAccounts: ['OPEN_ACCOUNTING_PERIOD'], lineCount: 0 };
 
-  const [folioItems, refunds, fnbDepartment, recreationDepartment, posOutlets] = await Promise.all([
+  const [folioItems, payments, refunds, fnbDepartment, recreationDepartment, posOutlets] = await Promise.all([
     tx.folioItem.findMany({
       where: { 
         folio: { propertyId: input.propertyId }, 
@@ -171,6 +171,14 @@ export async function postNightAuditJournal(tx: any, input: {
         source: { notIn: ['POS', 'CITY_LEDGER'] }
       },
       select: { id: true, type: true, amount: true, source: true, revenueCategory: true, revenueClass: true, description: true },
+    }),
+    tx.payment.findMany({
+      where: {
+        propertyId: input.propertyId,
+        businessDate: input.businessDate,
+        status: { in: ['COMPLETED', 'PARTIALLY_REFUNDED'] },
+      },
+      select: { id: true, method: true, amount: true, folioId: true, reference: true, receiptNumber: true },
     }),
     tx.refund.findMany({
       where: { propertyId: input.propertyId, businessDate: input.businessDate, status: 'COMPLETED' },
@@ -207,6 +215,51 @@ export async function postNightAuditJournal(tx: any, input: {
       addLine(lines, { accountId: account('guestLedger').id, debit: amount, credit: 0, description: item.description, sourceType: 'FOLIO_ITEM', sourceId: item.id });
       addLine(lines, { accountId: eventAccount?.id || account(key!).id, debit: 0, credit: amount, description: item.description, sourceType: 'FOLIO_ITEM', sourceId: item.id });
     }
+  }
+
+  // Online and front-desk payments are recorded operationally as soon as
+  // they are received, but their GL recognition belongs to the Night Audit.
+  // Skip any payment that already has a source-linked journal line so retries
+  // and legacy real-time postings cannot be duplicated.
+  const paymentIds = payments.map((payment: any) => payment.id);
+  const postedPaymentLines = paymentIds.length
+    ? await tx.journalEntryLine.findMany({
+        where: { sourceType: 'PAYMENT', sourceId: { in: paymentIds } },
+        select: { sourceId: true },
+      })
+    : [];
+  const postedPaymentIds = new Set(postedPaymentLines.map((line: any) => line.sourceId));
+  for (const payment of payments) {
+    if (postedPaymentIds.has(payment.id)) continue;
+    const amount = Number(payment.amount);
+    if (!amount) continue;
+    const method = String(payment.method || '').toUpperCase();
+    const tender = ['CASH'].includes(method)
+      ? account('cash')
+      : ['BANK_TRANSFER'].includes(method)
+        ? account('bankTransfer')
+        : ['CHEQUE'].includes(method)
+          ? account('chequesInHand')
+          : ['POS'].includes(method)
+            ? account('posClearing')
+            : account('cardReceivable');
+    const reference = payment.reference || payment.receiptNumber || payment.id;
+    addLine(lines, {
+      accountId: tender.id,
+      debit: amount,
+      credit: 0,
+      description: `Payment Collection - ${reference}`,
+      sourceType: 'PAYMENT',
+      sourceId: payment.id,
+    });
+    addLine(lines, {
+      accountId: account('guestLedger').id,
+      debit: 0,
+      credit: amount,
+      description: `Relieve Guest Ledger for Folio ${payment.folioId}`,
+      sourceType: 'PAYMENT',
+      sourceId: payment.id,
+    });
   }
 
   for (const refund of refunds) {

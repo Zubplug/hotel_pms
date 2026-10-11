@@ -150,6 +150,25 @@ export async function POST(
       },
     });
 
+    if (penaltyAmount > 0 && reservation.folios[0]) {
+      const operationId = `BOOKING_CANCEL_PENALTY_${reservation.id}`;
+      const existingPenalty = await (tx as any).folioItem.findFirst({ where: { operationId } });
+      if (!existingPenalty) {
+        await (tx as any).folioItem.create({ data: {
+          folioId: reservation.folios[0].id,
+          reservationId: reservation.id,
+          guestId: reservation.primaryGuestId,
+          businessDate: reservation.property.businessDate || new Date(),
+          type: 'CHARGE', source: 'ROOM_CHARGE', revenueCategory: 'ROOM',
+          description: `Cancellation fee — ${penaltyDescription}`,
+          quantity: 1, unitAmount: penaltyAmount, amount: penaltyAmount,
+          currency: reservation.currency, baseAmount: penaltyAmount,
+          postedBy: systemActorId, operationId,
+        } });
+        await (tx as any).folio.update({ where: { id: reservation.folios[0].id }, data: { totalCharges: { increment: penaltyAmount }, balance: { increment: penaltyAmount } } });
+      }
+    }
+
     // Cancel all reservation rooms
     await (tx as any).reservationRoom.updateMany({
       where: { reservationId: reservation.id },

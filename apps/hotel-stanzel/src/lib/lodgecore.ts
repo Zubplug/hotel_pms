@@ -167,6 +167,14 @@ export async function cancelReservation(
   });
 }
 
+export async function previewCancellation(body: CancelRequest): Promise<CancelResponse> {
+  return lcFetch<CancelResponse>('/cancel', {
+    method: 'POST',
+    body: JSON.stringify({ ...body, preview: true }),
+    cache: 'no-store',
+  });
+}
+
 /** Start payment for a pending reservation. */
 export async function createPaymentIntent(
   body: PaymentIntentRequest,
@@ -194,4 +202,8 @@ export async function getManagedReservation(params: URLSearchParams): Promise<un
     if (value) query.set(key, value);
   }
   return lcFetch<unknown>(`/manage?${query.toString()}`, { cache: 'no-store' });
+}
+
+export async function createStayExtension(input: { confirmationNumber: string; guestEmail: string; newCheckOut: string; returnUrl: string }, idempotencyKey: string): Promise<{ authorizationUrl: string; amount: number; currency: string; newCheckOut: string; additionalNights: number }> {
+  return lcFetch<{ authorizationUrl: string; amount: number; currency: string; newCheckOut: string; additionalNights: number }>('/extend', { method: 'POST', body: JSON.stringify({ ...input, idempotencyKey }), idempotencyKey, cache: 'no-store' });
 }

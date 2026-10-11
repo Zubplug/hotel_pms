@@ -140,6 +140,7 @@ export interface CancelRequest {
   confirmationNumber?: string;
   guestEmail?: string;
   reason?: string;
+  preview?: boolean;
 }
 
 export interface RefundRequestSummary {

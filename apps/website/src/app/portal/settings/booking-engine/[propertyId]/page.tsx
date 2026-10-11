@@ -97,7 +97,6 @@ export default async function BookingEnginePropertyPage({
           ← Booking Engine
         </Link>
       </div>
-
       <BookingEnginePropertyWorkspace
         propertyId={propertyId}
         propertyName={property.name}

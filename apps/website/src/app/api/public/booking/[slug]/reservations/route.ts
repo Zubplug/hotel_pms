@@ -155,7 +155,15 @@ export async function POST(
         });
         // If price has changed we still proceed but record it — the guest already
         // accepted the quoted price when they placed the hold.
-        const finalSnapshot = snapshot;
+        const selectedRatePlan = snapshot.ratePlanId
+          ? await (tx as any).ratePlan.findUnique({ where: { id: snapshot.ratePlanId }, include: { cancellationPolicy: true } })
+          : null;
+        const finalSnapshot = {
+          ...snapshot,
+          cancellationPolicySnapshot: selectedRatePlan?.cancellationPolicy
+            ? { id: selectedRatePlan.cancellationPolicy.id, name: selectedRatePlan.cancellationPolicy.name, type: selectedRatePlan.cancellationPolicy.type, hoursBeforeCheckIn: selectedRatePlan.cancellationPolicy.hoursBeforeCheckIn, penaltyType: selectedRatePlan.cancellationPolicy.penaltyType, penaltyValue: Number(selectedRatePlan.cancellationPolicy.penaltyValue) }
+            : null,
+        };
 
         // 3. Find or create guest record
         let guestId: string | undefined;

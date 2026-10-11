@@ -9,7 +9,7 @@ import { randomUUID } from 'crypto';
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { cancelToken, confirmationNumber, guestEmail, reason } = body ?? {};
+    const { cancelToken, confirmationNumber, guestEmail, reason, preview } = body ?? {};
 
     if ((!cancelToken || typeof cancelToken !== 'string' || cancelToken.length < 32) && (!confirmationNumber || !guestEmail)) {
       return NextResponse.json({ error: 'A cancellation token or confirmation number and guest email are required' }, { status: 400 });
@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
     // from a double-click or retry.
     const idempotencyKey = `cancel-${String(confirmationNumber ?? cancelToken).substring(0, 16)}-${randomUUID()}`;
 
-    const data = await cancelReservation({ cancelToken, confirmationNumber, guestEmail, reason }, idempotencyKey);
+    const data = await cancelReservation({ cancelToken, confirmationNumber, guestEmail, reason, preview }, idempotencyKey);
     return NextResponse.json(data, { status: 200 });
   } catch (err) {
     if (err instanceof LodgeCoreApiError) {

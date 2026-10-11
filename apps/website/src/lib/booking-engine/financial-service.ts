@@ -1,5 +1,3 @@
-import { FolioPaymentAccountingService } from '@/lib/services/folio-payment-accounting-service';
-
 /**
  * Booking-engine payments use the same folio primitives as Front Desk
  * advance deposits: a native Payment plus an available FolioCredit. Keeping
@@ -62,14 +60,6 @@ export async function postBookingAdvanceDeposit(input: {
       businessDate: input.businessDate,
     },
   });
-
-  await FolioPaymentAccountingService.processPaymentAccounting(
-    input.tx,
-    payment,
-    input.folio.propertyId,
-    input.property.organizationId,
-    input.systemActorId,
-  );
 
   await input.tx.folio.update({
     where: { id: input.folio.id },

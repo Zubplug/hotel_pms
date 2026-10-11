@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { PortalShell } from "@/components/portal-shell";
 import { IntegrationSetupModal } from "./IntegrationSetupModal";
+import { CancellationPolicyIntegrationPanel } from "./CancellationPolicyIntegrationPanel";
 
 const INTEGRATIONS = [
   { id: "paystack",    name: "Paystack",     type: "Payments",         icon: "💳", status: "not-connected", desc: "Legacy reservation payment provider." },
@@ -95,6 +96,8 @@ export default function PortalIntegrationsPage() {
           <a href="/api" target="_blank" rel="noopener noreferrer" className="btn btn-outline btn-sm">View documentation ↗</a>
         </div>
       </div>
+
+      <CancellationPolicyIntegrationPanel />
 
       {/* Integration list */}
       <div className="portal-table-wrap">

@@ -163,7 +163,15 @@ export async function POST(req: NextRequest) {
           propertyId: ctx.propertyId,
           paymentMode: config.paymentMode,
         });
-        const finalSnapshot = snapshot;
+        const selectedRatePlan = snapshot.ratePlanId
+          ? await (tx as any).ratePlan.findUnique({ where: { id: snapshot.ratePlanId }, include: { cancellationPolicy: true } })
+          : null;
+        const finalSnapshot = {
+          ...snapshot,
+          cancellationPolicySnapshot: selectedRatePlan?.cancellationPolicy
+            ? { id: selectedRatePlan.cancellationPolicy.id, name: selectedRatePlan.cancellationPolicy.name, type: selectedRatePlan.cancellationPolicy.type, hoursBeforeCheckIn: selectedRatePlan.cancellationPolicy.hoursBeforeCheckIn, penaltyType: selectedRatePlan.cancellationPolicy.penaltyType, penaltyValue: Number(selectedRatePlan.cancellationPolicy.penaltyValue) }
+            : null,
+        };
 
         let guestId: string | undefined;
         if (guestInput.email) {
