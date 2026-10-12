@@ -22,6 +22,7 @@ const { auth } = NextAuth({
         token.isSuperAdmin = (user as any).isSuperAdmin;
         token.role = (user as any).role;
         token.capabilities = (user as any).capabilities;
+        token.selfServiceOnly = (user as any).selfServiceOnly;
       }
       return token;
     },
@@ -33,6 +34,7 @@ const { auth } = NextAuth({
         (session.user as any).isSuperAdmin = token.isSuperAdmin as boolean;
         (session.user as any).role = token.role;
         (session.user as any).capabilities = token.capabilities as string[];
+        (session.user as any).selfServiceOnly = token.selfServiceOnly as boolean;
       }
       return session;
     },
