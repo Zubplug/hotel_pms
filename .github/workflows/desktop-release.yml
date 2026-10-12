@@ -3,7 +3,6 @@ on:
   push:
     tags:
       - 'v*' # Trigger only when a new version tag is pushed (e.g., v1.0.1)
-  workflow_dispatch: # Allow manual trigger from GitHub Actions UI
 
 jobs:
   build-desktop:
@@ -76,12 +75,16 @@ jobs:
         echo "CERT_THUMBPRINT=$thumbprint" >> $env:GITHUB_ENV
         echo "CERT_SUBJECT=$subject" >> $env:GITHUB_ENV
 
-        # Parse version from tag (e.g. v1.2.9 -> 1.2.9.0)
-        if ("${{ github.ref_name }}" -match "^v") {
-            $tag = "${{ github.ref_name }}"
-            $version = $tag.TrimStart('v') + ".0"
+        # Parse a Windows-compatible four-part version from the release tag.
+        # Accept v1.2.9 and v1.2.9.0, but reject ambiguous/non-numeric tags.
+        $tag = "${{ github.ref_name }}"
+        if ($tag -notmatch '^v(\d+)\.(\d+)\.(\d+)(?:\.(\d+))?$') {
+            throw "Release tags must use vMAJOR.MINOR.PATCH or vMAJOR.MINOR.PATCH.BUILD (received: $tag)"
+        }
+        if ($Matches[4]) {
+            $version = "$($Matches[1]).$($Matches[2]).$($Matches[3]).$($Matches[4])"
         } else {
-            $version = "1.2.24.0"
+            $version = "$($Matches[1]).$($Matches[2]).$($Matches[3]).0"
         }
         echo "APP_VERSION=$version" >> $env:GITHUB_ENV
 
@@ -172,6 +175,19 @@ jobs:
         $writer.Close()
         Write-Host "=== Generated .appinstaller ==="
         Get-Content $xmlPath
+
+        # Fail before creating a release if the feed does not describe the
+        # exact package produced by this build.
+        [xml]$appInstallerXml = Get-Content $xmlPath -Raw
+        $appInstallerNs = New-Object System.Xml.XmlNamespaceManager($appInstallerXml.NameTable)
+        $appInstallerNs.AddNamespace('ai', 'http://schemas.microsoft.com/appx/appinstaller/2018')
+        $mainPackage = $appInstallerXml.SelectSingleNode('/ai:AppInstaller/ai:MainPackage', $appInstallerNs)
+        if (-not $mainPackage) { throw 'Generated AppInstaller has no MainPackage element' }
+        if ($mainPackage.Name -ne 'com.lodgecore.frontdesk') { throw "Unexpected package name: $($mainPackage.Name)" }
+        if ($mainPackage.Version -ne $version) { throw "AppInstaller version $($mainPackage.Version) does not match $version" }
+        if ($mainPackage.Publisher -ne $env:CERT_SUBJECT) { throw 'AppInstaller publisher does not match the signing certificate' }
+        if ($mainPackage.ProcessorArchitecture -ne 'x86') { throw 'AppInstaller architecture must be x86' }
+        if (-not $mainPackage.Uri.EndsWith($msixName)) { throw "AppInstaller URI does not reference $msixName" }
 
     - name: Prepare Release Artifacts
       shell: powershell

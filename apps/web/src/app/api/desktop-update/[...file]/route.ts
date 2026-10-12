@@ -1,5 +1,35 @@
 import { NextResponse } from 'next/server';
 
+const githubRepo = 'Zubplug/hotel_pms';
+
+async function proxyDesktopUpdate(fileName: string, method: 'GET' | 'HEAD') {
+  const githubUrl = `https://github.com/${githubRepo}/releases/latest/download/${encodeURIComponent(fileName)}`;
+
+  const upstream = await fetch(githubUrl, {
+    method,
+    headers: { Accept: '*/*' },
+    redirect: 'follow',
+    cache: 'no-store',
+  });
+
+  if (!upstream.ok) {
+    return new NextResponse(`Upstream error: ${upstream.status} ${upstream.statusText}`, {
+      status: upstream.status,
+      headers: { 'Cache-Control': 'no-store' },
+    });
+  }
+
+  const isAppInstaller = fileName.toLowerCase().endsWith('.appinstaller');
+  return new NextResponse(method === 'HEAD' ? null : upstream.body, {
+    status: 200,
+    headers: {
+      'Content-Type': isAppInstaller ? 'application/appinstaller' : 'application/msix',
+      'Content-Disposition': `attachment; filename="${fileName.replace(/"/g, '')}"`,
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+    },
+  });
+}
+
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ file: string[] }> }
@@ -10,36 +40,18 @@ export async function GET(
   }
 
   const fileName = resolvedParams.file[resolvedParams.file.length - 1];
-  const githubRepo = 'Zubplug/hotel_pms';
-  const githubUrl = `https://github.com/${githubRepo}/releases/latest/download/${fileName}`;
+  return proxyDesktopUpdate(fileName, 'GET');
+}
 
-  // Stream the file content directly instead of redirecting.
-  // Windows App Installer resolves all child URIs inside the .appinstaller relative
-  // to the declared <AppInstaller Uri="...">, so a 302 redirect would break that
-  // resolution and some App Installer versions refuse to follow redirects entirely.
-  const upstream = await fetch(githubUrl, {
-    headers: { 'Accept': '*/*' },
-    redirect: 'follow',
-  });
-
-  if (!upstream.ok) {
-    return new NextResponse(`Upstream error: ${upstream.status} ${upstream.statusText}`, {
-      status: upstream.status,
-    });
+export async function HEAD(
+  request: Request,
+  { params }: { params: Promise<{ file: string[] }> }
+) {
+  const resolvedParams = await params;
+  if (!resolvedParams.file || resolvedParams.file.length === 0) {
+    return new NextResponse(null, { status: 400 });
   }
 
-  // Determine the correct Content-Type for the file
-  const isAppInstaller = fileName.endsWith('.appinstaller');
-  const contentType = isAppInstaller
-    ? 'application/appinstaller'
-    : 'application/msix';
-
-  return new NextResponse(upstream.body, {
-    status: 200,
-    headers: {
-      'Content-Type': contentType,
-      'Content-Disposition': `attachment; filename="${fileName}"`,
-      'Cache-Control': 'no-cache, no-store, must-revalidate',
-    },
-  });
+  const fileName = resolvedParams.file[resolvedParams.file.length - 1];
+  return proxyDesktopUpdate(fileName, 'HEAD');
 }
