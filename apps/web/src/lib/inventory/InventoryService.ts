@@ -500,8 +500,7 @@ export class InventoryService {
           ? destinationCandidates.filter((candidate: any) => candidate.sku === sourceItem.sku)
           : [];
         const nameMatches = destinationCandidates.filter((candidate: any) =>
-          normalizeStockName(candidate.name) === normalizeStockName(sourceItem.name)
-          && candidate.baseUnit === sourceItem.baseUnit,
+          normalizeStockName(candidate.name) === normalizeStockName(sourceItem.name),
         );
         let destItem = skuMatches.length === 1
           ? skuMatches[0]
