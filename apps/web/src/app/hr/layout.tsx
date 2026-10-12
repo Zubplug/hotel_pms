@@ -2,6 +2,7 @@ import React from 'react';
 import { auth } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import { HrLayout } from '@/components/layout/HrLayout';
+import { EmployeeSelfServiceLayout } from '@/components/layout/EmployeeSelfServiceLayout';
 import { getNavigationModules } from '@/lib/auth/navigation-entitlements';
 
 export const metadata = {
@@ -17,6 +18,10 @@ export default async function HrRootLayout({
   const session = await auth();
   if (!session?.user) {
     redirect('/login');
+  }
+
+  if ((session.user as any).selfServiceOnly) {
+    return <EmployeeSelfServiceLayout>{children}</EmployeeSelfServiceLayout>;
   }
 
   const navigationModules = await getNavigationModules(
