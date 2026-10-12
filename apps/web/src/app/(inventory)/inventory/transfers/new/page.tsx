@@ -114,18 +114,48 @@ export default function NewTransferPage() {
     });
   }, [issueToOutlet]);
 
-  // Load only the selected source warehouse. The previous broad 500-row
-  // request could omit valid mother-warehouse items before the browser
-  // filtered the response, especially for properties with many stock rows.
+  // Load every item in the selected source warehouse. The stock-items API
+  // caps each response at 100 rows, so a single large-limit request can still
+  // silently omit valid items from the transfer picker.
   useEffect(() => {
+    let cancelled = false;
+
     if (!fromWarehouseId) {
       setStockItems([]);
       return;
     }
-    fetch(`/api/v1/inventory/stock-items?warehouseId=${encodeURIComponent(fromWarehouseId)}&limit=500`)
-      .then(r => r.json())
-      .then(r => setStockItems(r.data?.items || []))
-      .catch(() => setStockItems([]));
+
+    const loadAllItems = async () => {
+      try {
+        const pageSize = 100;
+        const allItems: StockItem[] = [];
+        let page = 1;
+        let total = Infinity;
+
+        while (allItems.length < total) {
+          const response = await fetch(
+            `/api/v1/inventory/stock-items?warehouseId=${encodeURIComponent(fromWarehouseId)}&page=${page}&limit=${pageSize}`,
+          );
+          if (!response.ok) throw new Error('Unable to load warehouse stock');
+
+          const payload = await response.json();
+          const data = payload.data || {};
+          const items = Array.isArray(data.items) ? data.items : [];
+          total = Number.isFinite(Number(data.total)) ? Number(data.total) : allItems.length + items.length;
+          allItems.push(...items);
+
+          if (items.length === 0 || items.length < pageSize) break;
+          page += 1;
+        }
+
+        if (!cancelled) setStockItems(allItems);
+      } catch {
+        if (!cancelled) setStockItems([]);
+      }
+    };
+
+    void loadAllItems();
+    return () => { cancelled = true; };
   }, [fromWarehouseId]);
 
   const sourceWarehouses  = warehouses.filter(w => !w.posOutlet);
