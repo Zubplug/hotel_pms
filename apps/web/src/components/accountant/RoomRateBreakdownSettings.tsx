@@ -11,11 +11,10 @@ import {
   ShieldAlert,
   CheckCircle2,
   RefreshCw,
-  Building2
+  Building2,
 } from 'lucide-react';
 import {
   RoomRateBreakdownConfig,
-  REFERENCE_RATE_TABLE,
   DEFAULT_BREAKDOWN_CONFIG,
   computeRateBreakdown
 } from '@/lib/room-rate-breakdown';
@@ -24,20 +23,39 @@ interface Props {
   propertyId: string;
 }
 
+interface LiveRoomType {
+  id: string;
+  name: string;
+  code?: string | null;
+  baseRate: number | string;
+  currency?: string | null;
+}
+
 export function RoomRateBreakdownSettings({ propertyId }: Props) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [config, setConfig] = useState<RoomRateBreakdownConfig>(DEFAULT_BREAKDOWN_CONFIG);
   const [currency, setCurrency] = useState('NGN');
   const [testGross, setTestGross] = useState(50000);
+  const [roomTypes, setRoomTypes] = useState<LiveRoomType[]>([]);
 
   useEffect(() => {
     async function loadSettings() {
       try {
         setLoading(true);
-        const res = await fetch(`/api/v1/properties/${propertyId}/rate-breakdown-settings`);
-        if (!res.ok) throw new Error('Failed to load breakdown settings');
-        const data = await res.json();
+        const [settingsRes, roomTypesRes] = await Promise.all([
+          fetch(`/api/v1/properties/${propertyId}/rate-breakdown-settings`),
+          fetch(`/api/v1/room-types?propertyId=${encodeURIComponent(propertyId)}`),
+        ]);
+        if (!settingsRes.ok) throw new Error('Failed to load breakdown settings');
+        if (!roomTypesRes.ok) throw new Error('Failed to load property room types');
+
+        const data = await settingsRes.json();
+        const roomTypesPayload = await roomTypesRes.json();
+        const liveRoomTypes = roomTypesPayload?.data ?? roomTypesPayload;
+        if (!Array.isArray(liveRoomTypes)) throw new Error('Invalid property room types response');
+
+        setRoomTypes(liveRoomTypes);
         if (data.config) {
           setConfig(data.config);
         }
@@ -344,42 +362,59 @@ export function RoomRateBreakdownSettings({ propertyId }: Props) {
         </div>
       </div>
 
-      {/* ── Reference Rate Table ── */}
+      {/* ── Live Property Room Type Schedule ── */}
       <div className="rounded-2xl border border-white/10 bg-slate-900/50 p-6 backdrop-blur-sm">
-        <h3 className="text-base font-semibold text-white">Hotel Stanzel Approved Reference Schedule</h3>
+        <h3 className="text-base font-semibold text-white">Property Room Type Rate Schedule</h3>
         <p className="mt-1 text-xs text-slate-400">
-          Standard published tiers decomposed under the ₦3,000 complimentary breakfast formula.
+          Live active room types and rates loaded from this property, decomposed using the policy above.
         </p>
 
         <div className="mt-4 overflow-x-auto">
           <table className="w-full text-left text-xs whitespace-nowrap">
             <thead className="bg-slate-900/80 text-[10px] uppercase tracking-wider text-slate-400 border-b border-white/10">
               <tr>
-                <th className="px-4 py-3">Room Tier</th>
-                <th className="px-4 py-3 text-right">Published Gross</th>
-                <th className="px-4 py-3 text-right text-emerald-400">Net Room (GL 4050)</th>
-                <th className="px-4 py-3 text-right text-cyan-400">VAT 7.5% (GL 2200)</th>
-                <th className="px-4 py-3 text-right text-indigo-400">SC 10% (GL 2210)</th>
-                <th className="px-4 py-3 text-right text-amber-400">Food Alloc (GL 4250)</th>
+                <th className="px-4 py-3">Room Type</th>
+                <th className="px-4 py-3">Code</th>
+                <th className="px-4 py-3 text-right">Live Gross Rate</th>
+                <th className="px-4 py-3 text-right text-emerald-400">Net Room (GL {config.glCodes.netAccommodation})</th>
+                <th className="px-4 py-3 text-right text-cyan-400">VAT ({(config.vatRate * 100).toFixed(3).replace(/\.000$/, '')}%) (GL {config.glCodes.vatPayable})</th>
+                <th className="px-4 py-3 text-right text-indigo-400">SC ({(config.serviceChargeRate * 100).toFixed(3).replace(/\.000$/, '')}%) (GL {config.glCodes.serviceChargePayable})</th>
+                <th className="px-4 py-3 text-right text-amber-400">Food Alloc (GL {config.glCodes.complimentaryBreakfast})</th>
                 <th className="px-4 py-3 text-right">Reconciled Check</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
-              {REFERENCE_RATE_TABLE.map((row) => (
-                <tr key={row.roomType} className="hover:bg-white/[0.02]">
-                  <td className="px-4 py-3 font-semibold text-white">{row.roomType}</td>
-                  <td className="px-4 py-3 text-right font-medium text-slate-200">{formatMoney(row.gross)}</td>
-                  <td className="px-4 py-3 text-right font-mono text-emerald-300">{formatMoney(row.net)}</td>
-                  <td className="px-4 py-3 text-right font-mono text-cyan-300">{formatMoney(row.vat)}</td>
-                  <td className="px-4 py-3 text-right font-mono text-indigo-300">{formatMoney(row.sc)}</td>
-                  <td className="px-4 py-3 text-right font-mono text-amber-300">{formatMoney(row.food)}</td>
-                  <td className="px-4 py-3 text-right">
-                    <span className="inline-flex items-center gap-1 rounded bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-400">
-                      <CheckCircle2 className="h-3 w-3" /> Exact
-                    </span>
+              {roomTypes.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="px-4 py-8 text-center text-slate-500">
+                    No active room types are configured for this property.
                   </td>
                 </tr>
-              ))}
+              ) : roomTypes.map((roomType) => {
+                const gross = Number(roomType.baseRate);
+                const result = computeRateBreakdown({
+                  grossRate: gross,
+                  config,
+                  roomTypeName: roomType.name,
+                });
+
+                return (
+                  <tr key={roomType.id} className="hover:bg-white/[0.02]">
+                    <td className="px-4 py-3 font-semibold text-white">{roomType.name}</td>
+                    <td className="px-4 py-3 font-mono text-slate-400">{roomType.code || '—'}</td>
+                    <td className="px-4 py-3 text-right font-medium text-slate-200">{formatMoney(gross)}</td>
+                    <td className="px-4 py-3 text-right font-mono text-emerald-300">{formatMoney(result.netAccommodation)}</td>
+                    <td className="px-4 py-3 text-right font-mono text-cyan-300">{formatMoney(result.vat)}</td>
+                    <td className="px-4 py-3 text-right font-mono text-indigo-300">{formatMoney(result.serviceCharge)}</td>
+                    <td className="px-4 py-3 text-right font-mono text-amber-300">{formatMoney(result.complimentaryFoodAllocation)}</td>
+                    <td className="px-4 py-3 text-right">
+                      <span className="inline-flex items-center gap-1 rounded bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-400">
+                        <CheckCircle2 className="h-3 w-3" /> {result.balanced ? 'Exact' : 'Unbalanced'}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
