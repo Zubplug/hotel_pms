@@ -70,6 +70,7 @@ model Organization {
   // Enterprise HR Suite
   statutoryConfigurations StatutoryConfiguration[]
   companyPolicies         CompanyPolicy[]
+  payrollPayouts          PayrollPayout[]
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
@@ -155,7 +156,6 @@ model Property {
   lockOperations           LockOperation[]
   lockEvents               LockEvent[]
   integrationConfigs       IntegrationConfig[]
-  payrollPayouts           PayrollPayout[]
   govSubmissions           GovernmentSubmission[]
   nightAudits              NightAudit[]
   occupancySnapshots       OccupancySnapshot[]
