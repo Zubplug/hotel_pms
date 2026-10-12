@@ -122,23 +122,47 @@ jobs:
         $version = $env:APP_VERSION
         $repo = "${{ github.repository }}"
 
-        # Find the built MSIX file
-        $msixFile = Get-ChildItem -Path .\apps\desktop\LodgeCore.Desktop\bin -Recurse -Filter "*.msix" |
-                    Where-Object { $_.Name -notlike "*Dependencies*" } |
+        # Find the main package and any framework packages emitted beside it.
+        $msixFiles = Get-ChildItem -Path .\apps\desktop\LodgeCore.Desktop\bin -Recurse -Filter "*.msix" |
+                     Where-Object { $_.Name -notlike "*Dependencies*" }
+        $msixFile = $msixFiles |
+                    Where-Object { $_.Name -eq "LodgeCore.Desktop_${version}_x86.msix" } |
                     Select-Object -First 1
         if (-not $msixFile) {
-          Write-Error "No MSIX file found!"
+          Write-Error "Main MSIX LodgeCore.Desktop_${version}_x86.msix not found!"
           exit 1
         }
         $msixName = $msixFile.Name
         Write-Host "MSIX: $msixName"
+
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
+        function Get-AppxIdentity($packagePath) {
+          $archive = [System.IO.Compression.ZipFile]::OpenRead($packagePath)
+          try {
+            $entry = $archive.GetEntry('AppxManifest.xml')
+            if (-not $entry) { throw "AppxManifest.xml not found in $packagePath" }
+            $reader = New-Object System.IO.StreamReader($entry.Open())
+            try { [xml]$manifest = $reader.ReadToEnd() } finally { $reader.Dispose() }
+            $ns = New-Object System.Xml.XmlNamespaceManager($manifest.NameTable)
+            $ns.AddNamespace('pkg', 'http://schemas.microsoft.com/appx/manifest/foundation/windows10')
+            $identity = $manifest.SelectSingleNode('/pkg:Package/pkg:Identity', $ns)
+            if (-not $identity) { throw "Package identity not found in $packagePath" }
+            return $identity
+          } finally {
+            $archive.Dispose()
+          }
+        }
+
+        $dependencyFiles = $msixFiles | Where-Object { $_.FullName -ne $msixFile.FullName }
 
         # The stable URL where this .appinstaller will be hosted (Vercel proxy)
         $appinstallerUrl = "https://hotel-pms-web-nine.vercel.app/api/desktop-update/LodgeCore.appinstaller"
         # Direct download URL for the MSIX on GitHub Releases
         $msixUrl = "https://github.com/$repo/releases/download/$tag/$msixName"
 
-        # Build .appinstaller XML — using XmlWriter to avoid string-escaping bugs
+        # Build .appinstaller XML using the Microsoft 2021 App Installer schema.
+        # This keeps AutomaticBackgroundTask and ForceUpdateFromAnyVersion in the
+        # correct namespace and lets App Installer install framework dependencies.
         $xmlPath = ".\release-artifacts\LodgeCore.appinstaller"
         $settings = New-Object System.Xml.XmlWriterSettings
         $settings.Indent = $true
@@ -148,26 +172,44 @@ jobs:
         New-Item -ItemType Directory -Force -Path .\release-artifacts | Out-Null
         $writer = [System.Xml.XmlWriter]::Create($xmlPath, $settings)
         $writer.WriteStartDocument()
-        $writer.WriteStartElement('AppInstaller', 'http://schemas.microsoft.com/appx/appinstaller/2018')
+        $appInstallerNamespace = 'http://schemas.microsoft.com/appx/appinstaller/2021'
+        $writer.WriteStartElement('AppInstaller', $appInstallerNamespace)
         $writer.WriteAttributeString('Uri', $appinstallerUrl)
         $writer.WriteAttributeString('Version', $version)
         # MainPackage
-        $writer.WriteStartElement('MainPackage')
+        $writer.WriteStartElement('MainPackage', $appInstallerNamespace)
         $writer.WriteAttributeString('Name', 'com.lodgecore.frontdesk')
         $writer.WriteAttributeString('Version', $version)
         $writer.WriteAttributeString('Publisher', $env:CERT_SUBJECT)
         $writer.WriteAttributeString('Uri', $msixUrl)
         $writer.WriteAttributeString('ProcessorArchitecture', 'x86')
         $writer.WriteEndElement()
+
+        if ($dependencyFiles.Count -gt 0) {
+          $writer.WriteStartElement('Dependencies', $appInstallerNamespace)
+          foreach ($dependencyFile in $dependencyFiles) {
+            $dependencyIdentity = Get-AppxIdentity $dependencyFile.FullName
+            $dependencyUrl = "https://github.com/$repo/releases/download/$tag/$($dependencyFile.Name)"
+            $writer.WriteStartElement('Package', $appInstallerNamespace)
+            $writer.WriteAttributeString('Name', $dependencyIdentity.Name)
+            $writer.WriteAttributeString('Publisher', $dependencyIdentity.Publisher)
+            $writer.WriteAttributeString('Version', $dependencyIdentity.Version)
+            $writer.WriteAttributeString('ProcessorArchitecture', $dependencyIdentity.ProcessorArchitecture)
+            $writer.WriteAttributeString('Uri', $dependencyUrl)
+            $writer.WriteEndElement()
+            Write-Host "Dependency: $($dependencyFile.Name) -> $($dependencyIdentity.Name) $($dependencyIdentity.Version)"
+          }
+          $writer.WriteEndElement() # Dependencies
+        }
         # UpdateSettings
-        $writer.WriteStartElement('UpdateSettings')
-        $writer.WriteStartElement('OnLaunch')
+        $writer.WriteStartElement('UpdateSettings', $appInstallerNamespace)
+        $writer.WriteStartElement('OnLaunch', $appInstallerNamespace)
         $writer.WriteAttributeString('HoursBetweenUpdateChecks', '1')
         $writer.WriteAttributeString('ShowPrompt', 'true')
         $writer.WriteAttributeString('UpdateBlocksActivation', 'true')
         $writer.WriteEndElement() # OnLaunch
-        $writer.WriteElementString('AutomaticBackgroundTask', $null, $null)
-        $writer.WriteElementString('ForceUpdateFromAnyVersion', 'true')
+        $writer.WriteElementString('AutomaticBackgroundTask', $appInstallerNamespace, '')
+        $writer.WriteElementString('ForceUpdateFromAnyVersion', $appInstallerNamespace, 'true')
         $writer.WriteEndElement() # UpdateSettings
         $writer.WriteEndElement() # AppInstaller
         $writer.WriteEndDocument()
@@ -180,7 +222,7 @@ jobs:
         # exact package produced by this build.
         [xml]$appInstallerXml = Get-Content $xmlPath -Raw
         $appInstallerNs = New-Object System.Xml.XmlNamespaceManager($appInstallerXml.NameTable)
-        $appInstallerNs.AddNamespace('ai', 'http://schemas.microsoft.com/appx/appinstaller/2018')
+        $appInstallerNs.AddNamespace('ai', 'http://schemas.microsoft.com/appx/appinstaller/2021')
         $mainPackage = $appInstallerXml.SelectSingleNode('/ai:AppInstaller/ai:MainPackage', $appInstallerNs)
         if (-not $mainPackage) { throw 'Generated AppInstaller has no MainPackage element' }
         if ($mainPackage.Name -ne 'com.lodgecore.frontdesk') { throw "Unexpected package name: $($mainPackage.Name)" }
@@ -188,6 +230,15 @@ jobs:
         if ($mainPackage.Publisher -ne $env:CERT_SUBJECT) { throw 'AppInstaller publisher does not match the signing certificate' }
         if ($mainPackage.ProcessorArchitecture -ne 'x86') { throw 'AppInstaller architecture must be x86' }
         if (-not $mainPackage.Uri.EndsWith($msixName)) { throw "AppInstaller URI does not reference $msixName" }
+        $dependencyNodes = $appInstallerXml.SelectNodes('/ai:AppInstaller/ai:Dependencies/ai:Package', $appInstallerNs)
+        if ($dependencyNodes.Count -ne $dependencyFiles.Count) {
+          throw "AppInstaller dependency count $($dependencyNodes.Count) does not match package count $($dependencyFiles.Count)"
+        }
+        foreach ($dependencyNode in $dependencyNodes) {
+          if ($dependencyNode.Uri -notmatch "/releases/download/$tag/[^/]+\.msix$") {
+            throw "Invalid dependency URI: $($dependencyNode.Uri)"
+          }
+        }
 
     - name: Prepare Release Artifacts
       shell: powershell
