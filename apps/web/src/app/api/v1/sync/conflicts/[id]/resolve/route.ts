@@ -5,6 +5,8 @@ import crypto from 'crypto';
 import { isNightAuditCutoverActive } from '@/lib/night-audit-guard';
 import { GLMappingService } from '@/lib/services/gl-mapping-service';
 import { GeneralLedgerService } from '@/lib/services/general-ledger-service';
+import { CityLedgerAccountingService } from '@/lib/services/city-ledger-accounting-service';
+import { applyAvailableFolioCredit } from '@/lib/finance/apply-folio-credit';
 import type { PaymentMethod } from '@hotel-pms/db';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -71,7 +73,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             data: { 
               status: 'RESOLVED', 
               resolution: 'REJECTED', 
-              resolvedBy: session.user?.id || 'SYSTEM', 
+              resolvedBy: session.user?.id || null, 
               resolvedAt: new Date() 
             }
           });
@@ -85,7 +87,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             data: {
               status: 'RESOLVED',
               resolution: `MANUAL_CORRECTION: ${resolutionComment.trim()}`,
-              resolvedBy: session.user?.id || 'SYSTEM',
+              resolvedBy: session.user?.id || null,
               resolvedAt: new Date()
             }
           });
@@ -338,12 +340,245 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
              }
           }
           else if (conflict.aggregateType === 'FOLIO') {
-             const f = await tx.folio.findUnique({ where: { id: conflict.aggregateId } });
+             let f = await tx.folio.findUnique({ where: { id: conflict.aggregateId } });
+             if (!f && payload.reservationId) {
+                f = await tx.folio.findFirst({
+                   where: { reservationId: payload.reservationId, propertyId: conflict.propertyId }
+                });
+                if (!f) {
+                   const res = await tx.reservation.findUnique({
+                      where: { id: payload.reservationId },
+                      select: { corporateAccountId: true }
+                   });
+                   if (res?.corporateAccountId) {
+                      f = await tx.folio.findFirst({
+                         where: { corporateAccountId: res.corporateAccountId, propertyId: conflict.propertyId, type: 'CITY_LEDGER', status: 'OPEN' }
+                      });
+                   }
+                }
+             }
+             if (!f && payload.accountId) {
+                const clAcc = await tx.cityLedgerAccount.findUnique({
+                   where: { id: payload.accountId },
+                   include: { CorporateAccount: true }
+                });
+                if (clAcc?.CorporateAccount?.length) {
+                   const corpIds = clAcc.CorporateAccount.map(c => c.id);
+                   f = await tx.folio.findFirst({
+                      where: { corporateAccountId: { in: corpIds }, propertyId: conflict.propertyId, type: 'CITY_LEDGER', status: 'OPEN' }
+                   });
+                }
+             }
+             if (!f && (edgeEvent.eventType === 'CITY_LEDGER_SETTLEMENT' || edgeEvent.eventType === 'CITY_LEDGER_PAYMENT')) {
+                f = await tx.folio.findFirst({
+                   where: { propertyId: conflict.propertyId, type: 'CITY_LEDGER', corporateAccountId: null, reservationId: null, status: 'OPEN' }
+                });
+                if (!f) {
+                   f = await tx.folio.create({
+                      data: {
+                         propertyId: conflict.propertyId,
+                         type: 'CITY_LEDGER',
+                         status: 'OPEN',
+                         currency: payload.currency || 'NGN',
+                         folioNumber: `AR-${conflict.propertyId.slice(0, 8).toUpperCase()}-${Date.now().toString().slice(-6)}`
+                      }
+                   });
+                }
+             }
              if (!f) throw new Error('Aggregate not found');
              currentVersion = f.version;
 
              // Domain validation for Folios
-             if (edgeEvent.eventType === 'ROOM_CHARGE' || edgeEvent.eventType === 'POST_CHARGE') {
+             if (edgeEvent.eventType === 'CITY_LEDGER_SETTLEMENT') {
+                 const amount = Number(payload.amount ?? payload.Amount);
+                 const accountId = String(payload.accountId || payload.AccountId || '');
+                 if (!Number.isFinite(amount) || amount <= 0)
+                   throw new Error('DOMAIN_ERROR: Settlement amount must be positive');
+                 if (!accountId)
+                   throw new Error('DOMAIN_ERROR: accountId is required for CITY_LEDGER_SETTLEMENT');
+
+                 const invoiceNumber = String(payload.invoiceNumber || `AR-${payload.confirmationNumber || conflict.aggregateId}-${String(conflict.aggregateId).slice(0, 8).toUpperCase()}`);
+                 const existing = await tx.cityLedgerEntry.findFirst({
+                   where: {
+                     OR: [
+                       { folioId: f.id, type: 'TRANSFER_IN', reference: invoiceNumber },
+                       ...(payload.reservationId ? [{ reservationId: payload.reservationId, type: 'TRANSFER_IN', amount }] : []),
+                       ...(payload.confirmationNumber ? [{ reference: { startsWith: `AR-${payload.confirmationNumber}` } }] : [])
+                     ]
+                   }
+                 });
+
+                 if (!existing) {
+                   const issueDate = new Date();
+                   issueDate.setUTCHours(0, 0, 0, 0);
+                   const dueDate = new Date(issueDate);
+                   dueDate.setUTCDate(dueDate.getUTCDate() + 30);
+                   const invoice = await tx.cityLedgerInvoice.upsert({
+                     where: { propertyId_invoiceNumber: { propertyId: conflict.propertyId, invoiceNumber } },
+                     create: {
+                       propertyId: conflict.propertyId,
+                       accountId,
+                       invoiceNumber,
+                       issueDate,
+                       dueDate,
+                       description: String(payload.invoiceDescription || `Corporate folio transfer ${f.id}`),
+                       amount,
+                       outstandingAmount: amount,
+                       currency: payload.currency || 'NGN',
+                       createdBy: session.user?.id || 'SYSTEM',
+                     },
+                     update: {},
+                   });
+                   await tx.cityLedgerEntry.create({
+                     data: {
+                       accountId,
+                       propertyId: conflict.propertyId,
+                       reservationId: payload.reservationId || f.reservationId,
+                       folioId: f.id,
+                       amount,
+                       currency: payload.currency || 'NGN',
+                       type: 'TRANSFER_IN',
+                       reference: invoiceNumber,
+                       invoiceId: invoice.id,
+                       reason: 'Auto-routed to City Ledger upon checkout (Conflict resolution)',
+                       createdBy: session.user?.id || 'SYSTEM',
+                     },
+                   });
+                   await tx.cityLedgerAccount.update({
+                     where: { id: accountId },
+                     data: { balance: { increment: amount } },
+                   });
+                   await tx.folio.update({
+                     where: { id: f.id },
+                     data: {
+                       totalPayments: { increment: amount },
+                       balance: { decrement: amount },
+                       version: { increment: 1 }
+                     },
+                   });
+
+                   const propRecord = await tx.property.findUnique({
+                     where: { id: conflict.propertyId },
+                     select: { organizationId: true, businessDate: true }
+                   });
+                   const postingBusinessDate = propRecord?.businessDate || new Date();
+
+                   await tx.folioItem.create({
+                     data: {
+                       folioId: f.id,
+                       businessDate: postingBusinessDate,
+                       type: 'PAYMENT',
+                       source: 'CITY_LEDGER',
+                       description: 'City Ledger transfer at checkout (Conflict resolution)',
+                       quantity: 1,
+                       unitAmount: -amount,
+                       amount: -amount,
+                       currency: payload.currency || 'NGN',
+                       baseAmount: -amount,
+                       postedBy: session.user?.id || 'SYSTEM',
+                       reservationId: payload.reservationId || f.reservationId,
+                       guestId: payload.guestId || f.guestId,
+                     },
+                   });
+
+                   await CityLedgerAccountingService.processCityLedgerRouting(
+                     tx,
+                     conflict.propertyId,
+                     propRecord?.organizationId || null,
+                     session.user?.id || 'SYSTEM',
+                     amount,
+                     f.id,
+                     invoiceNumber,
+                     `cl_resolve_${conflict.id}`,
+                     postingBusinessDate
+                   );
+                 } else {
+                   await tx.folio.update({ where: { id: f.id }, data: { version: { increment: 1 } } });
+                 }
+             } else if (edgeEvent.eventType === 'ADVANCE_DEPOSIT') {
+                 const amount = Number(payload.amount);
+                 if (!Number.isFinite(amount) || amount <= 0)
+                   throw new Error('DOMAIN_ERROR: Deposit amount must be positive');
+
+                 const propRecord = await tx.property.findUnique({
+                   where: { id: conflict.propertyId },
+                   select: { businessDate: true }
+                 });
+                 const postingBusinessDate = propRecord?.businessDate || new Date(payload.businessDate || new Date());
+
+                 let methodStr = String(payload.method || 'CASH').toUpperCase();
+                 const validMethods = ['CASH', 'BANK_TRANSFER', 'POS', 'CARD', 'CARD_OFFLINE', 'PAYMENT_GATEWAY', 'MOBILE_PAYMENT', 'CHEQUE', 'ROOM_CHARGE', 'OTHER'];
+                 if (!validMethods.includes(methodStr)) methodStr = 'OTHER';
+
+                 const existingPayment = await tx.payment.findUnique({
+                   where: { idempotencyKey: `dep_pay_${edgeEvent.idempotencyKey}` }
+                 });
+
+                 if (!existingPayment) {
+                   await tx.folioCredit.create({
+                     data: {
+                       folioId: f.id,
+                       reservationId: f.reservationId,
+                       propertyId: conflict.propertyId,
+                       amount,
+                       remainingAmount: amount,
+                       currency: payload.currency || f.currency || 'NGN',
+                       method: methodStr as any,
+                       status: 'AVAILABLE',
+                       reference: payload.reference || null,
+                       notes: payload.notes || null,
+                       receivedBy: session.user?.id || 'SYSTEM',
+                       deviceId: edgeEvent.deviceId,
+                       operationId: payload.operationId || edgeEvent.id,
+                       idempotencyKey: edgeEvent.idempotencyKey,
+                       businessDate: postingBusinessDate,
+                     },
+                   });
+
+                   await tx.payment.create({
+                     data: {
+                       folioId: f.id,
+                       propertyId: conflict.propertyId,
+                       reservationId: f.reservationId,
+                       method: methodStr as any,
+                       amount,
+                       currency: payload.currency || 'NGN',
+                       baseAmount: amount,
+                       status: 'COMPLETED',
+                       businessDate: postingBusinessDate,
+                       idempotencyKey: `dep_pay_${edgeEvent.idempotencyKey}`,
+                       receivedBy: session.user?.id || 'SYSTEM',
+                       frontdeskSessionId: payload.frontdeskSessionId || null,
+                       terminalId: payload.terminalId || edgeEvent.deviceId,
+                       reference: payload.reference || null,
+                     },
+                   });
+
+                   await tx.folio.update({
+                     where: { id: f.id },
+                     data: { totalPayments: { increment: amount }, version: { increment: 1 } },
+                   });
+
+                   if (Number(f.balance) > 0) {
+                     const debitAmount = Math.min(Number(f.balance), amount);
+                     await applyAvailableFolioCredit(tx, {
+                       folioId: f.id,
+                       propertyId: conflict.propertyId,
+                       reservationId: f.reservationId,
+                       amount: debitAmount,
+                       currency: payload.currency || f.currency || 'NGN',
+                       source: 'SYSTEM_AUTO_APPLY',
+                       description: 'Auto-applied credit to outstanding debit (Conflict resolution)',
+                       appliedBy: session.user?.id || 'SYSTEM',
+                       deviceId: edgeEvent.deviceId,
+                       operationKey: `AUTO_APPLY_${edgeEvent.idempotencyKey}`,
+                       businessDate: postingBusinessDate,
+                     });
+                   }
+                 } else {
+                   await tx.folio.update({ where: { id: f.id }, data: { version: { increment: 1 } } });
+                 }
+             } else if (edgeEvent.eventType === 'ROOM_CHARGE' || edgeEvent.eventType === 'POST_CHARGE') {
                  const amount = Number(payload.amount);
                  await tx.folioItem.create({
                    data: {
@@ -454,7 +689,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             data: { 
               status: 'RESOLVED', 
               resolution: 'FORCED', 
-              resolvedBy: session.user?.id || 'SYSTEM', 
+              resolvedBy: session.user?.id || null, 
               resolvedAt: new Date() 
             }
           });

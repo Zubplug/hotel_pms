@@ -10,7 +10,7 @@ import { calculateNoShowAssessment } from "@/lib/refunds/no-show";
 import { calculateFolioTotals } from "@/lib/finance/folio-totals";
 import { applyAvailableFolioCredit } from "@/lib/finance/apply-folio-credit";
 import { applyAvailableGuestLedgerCredit } from "@/lib/finance/apply-guest-ledger-credit";
-import { isNightAuditCutoverActive } from "@/lib/night-audit-guard";
+import { assertOfflineSessionOpenDate, isNightAuditCutoverActive } from "@/lib/night-audit-guard";
 import { getPropertyBusinessDate } from "@/lib/date-utils";
 import { getApprovedRoomDiscount } from "@/lib/finance/approved-room-discount";
 import { InventoryService } from "@/lib/inventory/InventoryService";
@@ -524,6 +524,131 @@ export async function POST(req: NextRequest) {
               data: { version: { increment: 1 } },
             });
             updatedCount = res.count;
+
+            // Safe fallback & idempotency bypass for offline folios (e.g. CITY_LEDGER_SETTLEMENT, ADVANCE_DEPOSIT)
+            if (updatedCount === 0 && eventType === "CITY_LEDGER_SETTLEMENT") {
+              const amount = Number(payload.amount ?? payload.Amount);
+              const invoiceNumber = String(
+                payload.invoiceNumber ||
+                  `AR-${payload.confirmationNumber || aggregateId}-${String(aggregateId).slice(0, 8).toUpperCase()}`
+              );
+
+              // 1. Resolve cloud folio if aggregateId is an edge/offline folio ID
+              let targetFolio = await tx.folio.findUnique({
+                where: { id: aggregateId },
+              });
+
+              if (!targetFolio && payload.reservationId) {
+                targetFolio = await tx.folio.findFirst({
+                  where: { reservationId: payload.reservationId, propertyId },
+                });
+                if (!targetFolio) {
+                  const res = await tx.reservation.findUnique({
+                    where: { id: payload.reservationId },
+                    select: { corporateAccountId: true },
+                  });
+                  if (res?.corporateAccountId) {
+                    targetFolio = await tx.folio.findFirst({
+                      where: {
+                        corporateAccountId: res.corporateAccountId,
+                        propertyId,
+                        type: "CITY_LEDGER",
+                        status: "OPEN",
+                      },
+                    });
+                  }
+                }
+              }
+
+              if (!targetFolio && payload.accountId) {
+                const clAcc = await tx.cityLedgerAccount.findUnique({
+                  where: { id: payload.accountId },
+                  include: { CorporateAccount: true },
+                });
+                if (clAcc?.CorporateAccount?.length) {
+                  const corpIds = clAcc.CorporateAccount.map((c) => c.id);
+                  targetFolio = await tx.folio.findFirst({
+                    where: {
+                      corporateAccountId: { in: corpIds },
+                      propertyId,
+                      type: "CITY_LEDGER",
+                      status: "OPEN",
+                    },
+                  });
+                }
+              }
+
+              if (!targetFolio) {
+                targetFolio = await tx.folio.findFirst({
+                  where: {
+                    propertyId,
+                    type: "CITY_LEDGER",
+                    corporateAccountId: null,
+                    reservationId: null,
+                    status: "OPEN",
+                  },
+                });
+              }
+
+              // 2. Check if already settled on cloud
+              const existing = await tx.cityLedgerEntry.findFirst({
+                where: {
+                  OR: [
+                    {
+                      folioId: targetFolio ? targetFolio.id : aggregateId,
+                      type: "TRANSFER_IN",
+                      reference: invoiceNumber,
+                    },
+                    ...(payload.reservationId
+                      ? [{ reservationId: payload.reservationId, type: "TRANSFER_IN" as const, amount }]
+                      : []),
+                    ...(payload.confirmationNumber
+                      ? [{ reference: { startsWith: `AR-${payload.confirmationNumber}` } }]
+                      : []),
+                  ],
+                },
+              });
+
+              if (existing) {
+                // Settlement already posted on server — idempotent, succeed silently
+                updatedCount = 1;
+                console.log(
+                  `[sync/push] CITY_LEDGER_SETTLEMENT idempotent accept for already-settled reservation ${payload.reservationId || aggregateId}`
+                );
+              } else if (targetFolio) {
+                // Cloud folio found, accept at current cloud version to maintain monotonicity
+                await tx.folio.updateMany({
+                  where: { id: targetFolio.id },
+                  data: { version: { increment: 1 } },
+                });
+                updatedCount = 1;
+                console.log(
+                  `[sync/push] CITY_LEDGER_SETTLEMENT auto-resolved version mismatch for folio ${targetFolio.id} (edge folio ${aggregateId})`
+                );
+              }
+            } else if (
+              updatedCount === 0 &&
+              (eventType === "ADVANCE_DEPOSIT" || eventType === "ADVANCE_DEPOSIT_REQUEST")
+            ) {
+              let targetFolio = await tx.folio.findUnique({
+                where: { id: aggregateId, propertyId },
+              });
+              if (!targetFolio && payload.reservationId) {
+                targetFolio = await tx.folio.findFirst({
+                  where: { reservationId: payload.reservationId, propertyId, status: "OPEN" },
+                });
+              }
+              if (targetFolio) {
+                await tx.folio.updateMany({
+                  where: { id: targetFolio.id },
+                  data: { version: { increment: 1 } },
+                });
+                updatedCount = 1;
+                console.log(
+                  `[sync/push] ${eventType} auto-resolved version mismatch for folio ${targetFolio.id} (edge folio ${aggregateId})`
+                );
+              }
+            }
           } else if (aggregateType === "RESERVATION") {
             if (eventType === "CREATE") {
               updatedCount = 1; // Bypass version lock since it doesn't exist yet
@@ -629,9 +754,14 @@ export async function POST(req: NextRequest) {
             // Retrieve actual version to report in the conflict
             let currentVersion = 1;
             if (aggregateType === "FOLIO") {
-              const f = await tx.folio.findUnique({
+              let f = await tx.folio.findUnique({
                 where: { id: aggregateId },
               });
+              if (!f && payload.reservationId) {
+                f = await tx.folio.findFirst({
+                  where: { reservationId: payload.reservationId, propertyId },
+                });
+              }
               if (f) currentVersion = f.version;
             } else if (aggregateType === "RESERVATION") {
               const r = await tx.reservation.findUnique({
@@ -656,6 +786,7 @@ export async function POST(req: NextRequest) {
             const businessDateValue =
               payload.businessDate ?? payload.BusinessDate;
             const businessDate = new Date(businessDateValue);
+            const openedAt = occurredAt ? new Date(occurredAt) : new Date();
             const shiftReference =
               payload.shiftReference ?? payload.ShiftReference;
             if (Number.isNaN(businessDate.getTime())) {
@@ -668,6 +799,15 @@ export async function POST(req: NextRequest) {
                 "Invalid FRONTDESK_SESSION_OPENED payload: shiftReference is required.",
               );
             }
+            if (Number.isNaN(openedAt.getTime())) {
+              throw new Error("Invalid FRONTDESK_SESSION_OPENED payload: occurredAt is required.");
+            }
+            assertOfflineSessionOpenDate({
+              propertyBusinessDate: property.businessDate ?? authoritativeBusinessDate,
+              sessionBusinessDate: businessDate,
+              occurredAt: openedAt,
+              timezone: property.timezone || "Africa/Lagos",
+            });
             const existingSession = await tx.frontdeskSession.findUnique({
               where: { id: sessionId },
             });
@@ -2473,118 +2613,135 @@ export async function POST(req: NextRequest) {
             if (!Number.isFinite(amount) || amount <= 0)
               throw new Error("Deposit amount must be positive");
 
-            const folio = await tx.folio.findUnique({
+            let folio = await tx.folio.findUnique({
               where: { id: aggregateId, propertyId },
             });
+            if (!folio && payload.reservationId) {
+              folio = await tx.folio.findFirst({
+                where: { reservationId: payload.reservationId, propertyId, status: "OPEN" },
+              });
+            }
             if (!folio) throw new Error("Folio not found or unauthorized");
             if (folio.status !== "OPEN")
               throw new Error("Cannot add a deposit to a closed folio");
 
-            let methodStr = String(payload.method || "CASH").toUpperCase();
-            const validMethods = [
-              "CASH",
-              "BANK_TRANSFER",
-              "POS",
-              "CARD",
-              "CARD_OFFLINE",
-              "PAYMENT_GATEWAY",
-              "MOBILE_PAYMENT",
-              "CHEQUE",
-              "ROOM_CHARGE",
-              "OTHER",
-            ];
-            if (!validMethods.includes(methodStr)) methodStr = "OTHER";
+            const targetFolioId = folio.id;
 
-            await tx.folioCredit.create({
-              data: {
-                folioId: aggregateId,
-                reservationId: folio.reservationId,
-                propertyId,
-                amount,
-                remainingAmount: amount,
-                currency: payload.currency || folio.currency || "NGN",
-                method: methodStr as any,
-                status: "AVAILABLE",
-                reference: payload.reference || null,
-                notes: payload.notes || null,
-                receivedBy: actorId,
-                deviceId: device.id,
-                operationId: payload.operationId || id,
-                idempotencyKey,
-                businessDate: postingBusinessDate,
-              },
+            const existingPayment = await tx.payment.findUnique({
+              where: { idempotencyKey: `dep_pay_${idempotencyKey}` },
             });
 
-            await tx.payment.create({
-              data: {
-                folioId: aggregateId,
-                propertyId,
-                reservationId: folio.reservationId,
-                method: methodStr as any,
-                amount: amount,
-                currency: payload.currency || "NGN",
-                baseAmount: amount,
-                status: "COMPLETED",
-                businessDate: postingBusinessDate,
-                idempotencyKey: `dep_pay_${idempotencyKey}`,
-                receivedBy: actorId,
-                frontdeskSessionId: payload.frontdeskSessionId || null,
-                terminalId: payload.terminalId || device.id,
-                reference: payload.reference || null,
-              },
-            });
+            if (!existingPayment) {
+              let methodStr = String(payload.method || "CASH").toUpperCase();
+              const validMethods = [
+                "CASH",
+                "BANK_TRANSFER",
+                "POS",
+                "CARD",
+                "CARD_OFFLINE",
+                "PAYMENT_GATEWAY",
+                "MOBILE_PAYMENT",
+                "CHEQUE",
+                "ROOM_CHARGE",
+                "OTHER",
+              ];
+              if (!validMethods.includes(methodStr)) methodStr = "OTHER";
 
-            if (payload.frontdeskSessionId && methodStr === "CASH") {
-              const session = await tx.frontdeskSession.findUnique({
-                where: { id: payload.frontdeskSessionId },
+              await tx.folioCredit.create({
+                data: {
+                  folioId: targetFolioId,
+                  reservationId: folio.reservationId,
+                  propertyId,
+                  amount,
+                  remainingAmount: amount,
+                  currency: payload.currency || folio.currency || "NGN",
+                  method: methodStr as any,
+                  status: "AVAILABLE",
+                  reference: payload.reference || null,
+                  notes: payload.notes || null,
+                  receivedBy: actorId,
+                  deviceId: device.id,
+                  operationId: payload.operationId || id,
+                  idempotencyKey,
+                  businessDate: postingBusinessDate,
+                },
               });
-              if (session && session.status === "OPEN") {
-                await tx.cashAccount.update({
-                  where: { id: session.cashAccountId },
-                  data: { balance: { increment: amount } },
+
+              await tx.payment.create({
+                data: {
+                  folioId: targetFolioId,
+                  propertyId,
+                  reservationId: folio.reservationId,
+                  method: methodStr as any,
+                  amount: amount,
+                  currency: payload.currency || "NGN",
+                  baseAmount: amount,
+                  status: "COMPLETED",
+                  businessDate: postingBusinessDate,
+                  idempotencyKey: `dep_pay_${idempotencyKey}`,
+                  receivedBy: actorId,
+                  frontdeskSessionId: payload.frontdeskSessionId || null,
+                  terminalId: payload.terminalId || device.id,
+                  reference: payload.reference || null,
+                },
+              });
+
+              if (payload.frontdeskSessionId && methodStr === "CASH") {
+                const session = await tx.frontdeskSession.findUnique({
+                  where: { id: payload.frontdeskSessionId },
                 });
-                await tx.posCashMovement.create({
-                  data: {
-                    propertyId,
-                    deviceId: device.id,
-                    frontdeskSessionId: session.id,
-                    userId: actorId,
-                    amount,
-                    currency: payload.currency || "NGN",
-                    type: "PAYMENT",
-                    sourceAccountId: session.cashAccountId,
-                    destinationAccountId: session.cashAccountId,
-                    reasonCode: "ADVANCE_DEPOSIT",
-                    receiptReference: payload.reference || null,
-                    operationId: `FD-DEPOSIT-${idempotencyKey}`,
-                    businessDate: session.businessDate,
-                  },
+                if (session && session.status === "OPEN") {
+                  await tx.cashAccount.update({
+                    where: { id: session.cashAccountId },
+                    data: { balance: { increment: amount } },
+                  });
+                  await tx.posCashMovement.create({
+                    data: {
+                      propertyId,
+                      deviceId: device.id,
+                      frontdeskSessionId: session.id,
+                      userId: actorId,
+                      amount,
+                      currency: payload.currency || "NGN",
+                      type: "PAYMENT",
+                      sourceAccountId: session.cashAccountId,
+                      destinationAccountId: session.cashAccountId,
+                      reasonCode: "ADVANCE_DEPOSIT",
+                      receiptReference: payload.reference || null,
+                      operationId: `FD-DEPOSIT-${idempotencyKey}`,
+                      businessDate: session.businessDate,
+                    },
+                  });
+                }
+              }
+
+              // Increment totalPayments so the Payments counter in the folio
+              // summary reflects the true money received via advance deposit.
+              await tx.folio.update({
+                where: { id: targetFolioId },
+                data: { totalPayments: { increment: amount } },
+              });
+
+              if (Number(folio.balance) > 0) {
+                const debitAmount = Math.min(Number(folio.balance), amount);
+                await applyAvailableFolioCredit(tx, {
+                  folioId: targetFolioId,
+                  propertyId,
+                  reservationId: folio.reservationId,
+                  amount: debitAmount,
+                  currency: payload.currency || folio.currency || "NGN",
+                  source: "SYSTEM_AUTO_APPLY",
+                  description: "Auto-applied credit to outstanding debit",
+                  appliedBy: actorId,
+                  deviceId: device.id,
+                  operationKey: `AUTO_APPLY_${idempotencyKey}`,
+                  businessDate: postingBusinessDate,
                 });
               }
-            }
-
-            // Increment totalPayments so the Payments counter in the folio
-            // summary reflects the true money received via advance deposit.
-            await tx.folio.update({
-              where: { id: aggregateId },
-              data: { totalPayments: { increment: amount } },
-            });
-
-            if (Number(folio.balance) > 0) {
-              const debitAmount = Math.min(Number(folio.balance), amount);
-              await applyAvailableFolioCredit(tx, {
-                folioId: aggregateId,
-                propertyId,
-                reservationId: folio.reservationId,
-                amount: debitAmount,
-                currency: payload.currency || folio.currency || "NGN",
-                source: "SYSTEM_AUTO_APPLY",
-                description: "Auto-applied credit to outstanding debit",
-                appliedBy: actorId,
-                deviceId: device.id,
-                operationKey: `AUTO_APPLY_${idempotencyKey}`,
-                businessDate: postingBusinessDate,
-              });
+            } else {
+              console.log(
+                `[sync/push] ADVANCE_DEPOSIT already applied for idempotencyKey: ${idempotencyKey}`
+              );
             }
           } else if (aggregateType === "FOLIO" && eventType === "POST_PAYMENT") {
             // Folio-level payment — idempotent via posTransactionId uniqueness
@@ -2819,17 +2976,78 @@ export async function POST(req: NextRequest) {
                 "accountId is required for CITY_LEDGER_SETTLEMENT",
               );
 
-            const folio = await tx.folio.findUnique({
+            let folio = await tx.folio.findUnique({
               where: { id: aggregateId, propertyId },
             });
+            if (!folio && payload.reservationId) {
+              folio = await tx.folio.findFirst({
+                where: { reservationId: payload.reservationId, propertyId },
+              });
+              if (!folio) {
+                const res = await tx.reservation.findUnique({
+                  where: { id: payload.reservationId },
+                  select: { corporateAccountId: true },
+                });
+                if (res?.corporateAccountId) {
+                  folio = await tx.folio.findFirst({
+                    where: {
+                      corporateAccountId: res.corporateAccountId,
+                      propertyId,
+                      type: "CITY_LEDGER",
+                      status: "OPEN",
+                    },
+                  });
+                }
+              }
+            }
+            if (!folio && payload.accountId) {
+              const clAcc = await tx.cityLedgerAccount.findUnique({
+                where: { id: payload.accountId },
+                include: { CorporateAccount: true },
+              });
+              if (clAcc?.CorporateAccount?.length) {
+                const corpIds = clAcc.CorporateAccount.map((c) => c.id);
+                folio = await tx.folio.findFirst({
+                  where: {
+                    corporateAccountId: { in: corpIds },
+                    propertyId,
+                    type: "CITY_LEDGER",
+                    status: "OPEN",
+                  },
+                });
+              }
+            }
+            if (!folio) {
+              folio = await tx.folio.findFirst({
+                where: {
+                  propertyId,
+                  type: "CITY_LEDGER",
+                  corporateAccountId: null,
+                  reservationId: null,
+                  status: "OPEN",
+                },
+              });
+            }
             if (!folio) throw new Error("Folio not found or unauthorized");
 
-            const invoiceNumber = String(payload.invoiceNumber || `AR-${payload.confirmationNumber || aggregateId}-${String(aggregateId).slice(0, 8).toUpperCase()}`);
+            const targetFolioId = folio.id;
+
+            const invoiceNumber = String(
+              payload.invoiceNumber ||
+                `AR-${payload.confirmationNumber || aggregateId}-${String(aggregateId).slice(0, 8).toUpperCase()}`
+            );
             const existing = await tx.cityLedgerEntry.findFirst({
-              // Corporate reservations share one folio. Amount-only matching
-              // would suppress a legitimate second checkout with the same
-              // balance; the immutable invoice/reference is the idempotency key.
-              where: { folioId: aggregateId, type: "TRANSFER_IN", reference: invoiceNumber },
+              where: {
+                OR: [
+                  { folioId: targetFolioId, type: "TRANSFER_IN", reference: invoiceNumber },
+                  ...(payload.reservationId
+                    ? [{ reservationId: payload.reservationId, type: "TRANSFER_IN" as const, amount }]
+                    : []),
+                  ...(payload.confirmationNumber
+                    ? [{ reference: { startsWith: `AR-${payload.confirmationNumber}` } }]
+                    : []),
+                ],
+              },
             });
             if (!existing) {
               const issueDate = new Date();
@@ -2844,7 +3062,7 @@ export async function POST(req: NextRequest) {
                   invoiceNumber,
                   issueDate,
                   dueDate,
-                  description: String(payload.invoiceDescription || `Corporate folio transfer ${aggregateId}`),
+                  description: String(payload.invoiceDescription || `Corporate folio transfer ${targetFolioId}`),
                   amount,
                   outstandingAmount: amount,
                   currency: payload.currency || "NGN",
@@ -2856,8 +3074,8 @@ export async function POST(req: NextRequest) {
                 data: {
                   accountId,
                   propertyId,
-                  reservationId: folio.reservationId,
-                  folioId: aggregateId,
+                  reservationId: folio.reservationId || payload.reservationId,
+                  folioId: targetFolioId,
                   amount,
                   currency: payload.currency || "NGN",
                   type: "TRANSFER_IN",
@@ -2873,7 +3091,7 @@ export async function POST(req: NextRequest) {
                 data: { balance: { increment: amount } },
               });
               await tx.folio.update({
-                where: { id: aggregateId },
+                where: { id: targetFolioId },
                 data: {
                   totalPayments: { increment: amount },
                   balance: { decrement: amount },
@@ -2882,7 +3100,7 @@ export async function POST(req: NextRequest) {
 
               await tx.folioItem.create({
                 data: {
-                  folioId: aggregateId,
+                  folioId: targetFolioId,
                   businessDate: postingBusinessDate,
                   type: "PAYMENT",
                   source: "CITY_LEDGER",
@@ -2909,10 +3127,14 @@ export async function POST(req: NextRequest) {
                 property?.organizationId || null,
                 actorId,
                 amount,
-                aggregateId,
+                targetFolioId,
                 invoiceNumber,
-                `cl_sync_${aggregateId}_${idempotencyKey}`,
+                `cl_sync_${targetFolioId}_${idempotencyKey}`,
                 authoritativeBusinessDate
+              );
+            } else {
+              console.log(
+                `[sync/push] CITY_LEDGER_SETTLEMENT domain bypass: already settled for ${invoiceNumber}`
               );
             }
           } else if (aggregateType === "FOLIO" && eventType === "REFUND_REQUESTED") {
@@ -4866,9 +5088,17 @@ export async function POST(req: NextRequest) {
             // Fetch the true actual version from DB to populate the conflict correctly
             try {
               if (aggregateType === "FOLIO") {
-                const f = await prisma.folio.findUnique({
+                let f = await prisma.folio.findUnique({
                   where: { id: rawAggregateId },
                 });
+                if (!f) {
+                  const parsed = JSON.parse(payloadJson || "{}");
+                  if (parsed?.reservationId) {
+                    f = await prisma.folio.findFirst({
+                      where: { reservationId: parsed.reservationId, propertyId },
+                    });
+                  }
+                }
                 if (f) expectedVersion = f.version;
               } else if (aggregateType === "RESERVATION") {
                 const r = await prisma.reservation.findUnique({
