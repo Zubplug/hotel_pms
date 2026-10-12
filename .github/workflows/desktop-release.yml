@@ -153,7 +153,22 @@ jobs:
           }
         }
 
-        $dependencyFiles = $msixFiles | Where-Object { $_.FullName -ne $msixFile.FullName }
+        # The build emits framework packages for multiple architectures. The
+        # desktop package is x86, so include only one x86 dependency per
+        # package identity/version and publish exactly those files.
+        $dependencyPackages = @()
+        $seenDependencyKeys = @{}
+        foreach ($candidate in ($msixFiles | Where-Object { $_.FullName -ne $msixFile.FullName })) {
+          $candidateIdentity = Get-AppxIdentity $candidate.FullName
+          if ($candidateIdentity.ProcessorArchitecture -ne 'x86') { continue }
+          $dependencyKey = "$($candidateIdentity.Name)|$($candidateIdentity.Version)|$($candidateIdentity.ProcessorArchitecture)"
+          if ($seenDependencyKeys.ContainsKey($dependencyKey)) { continue }
+          $seenDependencyKeys[$dependencyKey] = $true
+          $dependencyPackages += [PSCustomObject]@{
+            File = $candidate
+            Identity = $candidateIdentity
+          }
+        }
 
         # The stable URL where this .appinstaller will be hosted (Vercel proxy)
         $appinstallerUrl = "https://hotel-pms-web-nine.vercel.app/api/desktop-update/LodgeCore.appinstaller"
@@ -185,10 +200,11 @@ jobs:
         $writer.WriteAttributeString('ProcessorArchitecture', 'x86')
         $writer.WriteEndElement()
 
-        if ($dependencyFiles.Count -gt 0) {
+        if ($dependencyPackages.Count -gt 0) {
           $writer.WriteStartElement('Dependencies', $appInstallerNamespace)
-          foreach ($dependencyFile in $dependencyFiles) {
-            $dependencyIdentity = Get-AppxIdentity $dependencyFile.FullName
+          foreach ($dependencyPackage in $dependencyPackages) {
+            $dependencyFile = $dependencyPackage.File
+            $dependencyIdentity = $dependencyPackage.Identity
             $dependencyUrl = "https://github.com/$repo/releases/download/$tag/$($dependencyFile.Name)"
             $writer.WriteStartElement('Package', $appInstallerNamespace)
             $writer.WriteAttributeString('Name', $dependencyIdentity.Name)
@@ -231,8 +247,8 @@ jobs:
         if ($mainPackage.ProcessorArchitecture -ne 'x86') { throw 'AppInstaller architecture must be x86' }
         if (-not $mainPackage.Uri.EndsWith($msixName)) { throw "AppInstaller URI does not reference $msixName" }
         $dependencyNodes = $appInstallerXml.SelectNodes('/ai:AppInstaller/ai:Dependencies/ai:Package', $appInstallerNs)
-        if ($dependencyNodes.Count -ne $dependencyFiles.Count) {
-          throw "AppInstaller dependency count $($dependencyNodes.Count) does not match package count $($dependencyFiles.Count)"
+        if ($dependencyNodes.Count -ne $dependencyPackages.Count) {
+          throw "AppInstaller dependency count $($dependencyNodes.Count) does not match package count $($dependencyPackages.Count)"
         }
         foreach ($dependencyNode in $dependencyNodes) {
           if ($dependencyNode.Uri -notmatch "/releases/download/$tag/[^/]+\.msix$") {
@@ -240,18 +256,21 @@ jobs:
           }
         }
 
+        # Stage only the selected x86 packages. Do not copy every architecture
+        # emitted by the MAUI build under the same filename.
+        Copy-Item $msixFile.FullName -Destination .\release-artifacts\ -Force
+        foreach ($dependencyPackage in $dependencyPackages) {
+          Copy-Item $dependencyPackage.File.FullName -Destination .\release-artifacts\ -Force
+        }
+
     - name: Prepare Release Artifacts
       shell: powershell
       run: |
-        # Copy MSIX to release-artifacts
-        $msixFiles = Get-ChildItem -Path .\apps\desktop\LodgeCore.Desktop\bin -Recurse -Filter "*.msix" `
-                     -ErrorAction SilentlyContinue |
-                     Where-Object { $_.Name -notlike "*Dependencies*" }
-        if ($msixFiles.Count -eq 0) {
-          Write-Error "No .msix files found!"
+        $releaseMsixFiles = Get-ChildItem -Path .\release-artifacts -Filter "*.msix" -ErrorAction SilentlyContinue
+        if (-not ($releaseMsixFiles | Where-Object { $_.Name -like "LodgeCore.Desktop_*.msix" })) {
+          Write-Error "No staged main MSIX found!"
           exit 1
         }
-        $msixFiles | Copy-Item -Destination .\release-artifacts\ -Force
         Write-Host "=== Release artifacts ==="
         Get-ChildItem .\release-artifacts\
 
