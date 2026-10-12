@@ -482,15 +482,17 @@ export class InventoryService {
           throw new Error(`Insufficient stock for transfer on item: ${sourceItem.name}`);
         }
 
+        // The active-name constraint normalizes whitespace (for example,
+        // "House  Lager" and "House Lager" are the same name), while a
+        // Prisma case-insensitive equality filter does not. Load the active
+        // destination rows first, then apply the same normalization in code;
+        // otherwise the create below can collide with an existing row that
+        // the lookup failed to return.
         const destinationCandidates = await tx.stockItem.findMany({
           where: {
             propertyId: transfer.propertyId,
             warehouseId: transfer.toWarehouseId,
             isActive: true,
-            OR: [
-              ...(sourceItem.sku ? [{ sku: sourceItem.sku }] : []),
-              { name: { equals: sourceItem.name, mode: 'insensitive' as const } },
-            ],
           },
           orderBy: { updatedAt: 'desc' },
         });
