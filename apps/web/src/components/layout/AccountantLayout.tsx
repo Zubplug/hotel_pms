@@ -57,6 +57,7 @@ const ACCOUNTANT_NAV = [
       { name: 'Payroll Periods', href: '/accountant/payroll' },
       { name: 'Audit', href: '/accountant/audit' },
       { name: 'Accounting Reports', href: '/accountant/reports' },
+      { name: 'Accounting Settings', href: '/accountant/settings' },
       { name: 'Tax Remittances', href: '/accountant/taxes' },
       { name: 'Budgets', href: '/accountant/budgets' },
     ],
