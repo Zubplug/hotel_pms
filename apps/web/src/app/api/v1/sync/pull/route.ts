@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
 import { authenticateSyncRequest } from '@/lib/sync-auth';
+import { resolveBreakdownConfig } from '@/lib/room-rate-breakdown';
 
 /**
  * GET /api/v1/sync/pull
@@ -844,6 +845,8 @@ export async function GET(req: NextRequest) {
       noShowRefundableUnusedNights: noShowPolicy?.refundableUnusedNights ?? true,
       noShowAllowReinstatement: noShowPolicy?.allowReinstatement ?? true,
       noShowReinstatementRequiresApproval: noShowPolicy?.reinstatementRequiresApproval ?? true,
+      rateBreakdownJson: JSON.stringify(resolveBreakdownConfig(property.settings as any)),
+      rateBreakdownConfigVersion: Number((resolveBreakdownConfig(property.settings as any) as any).version ?? 1),
     };
 
     return NextResponse.json({

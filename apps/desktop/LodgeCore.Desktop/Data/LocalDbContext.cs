@@ -71,6 +71,7 @@ public class LocalDbContext : DbContext
     public DbSet<LocalLaundryOrderItem> LaundryOrderItems { get; set; } = null!;
     public DbSet<LocalLaundryOrderStatusHistory> LaundryOrderStatusHistory { get; set; } = null!;
     public DbSet<LocalOverrideAudit> OverrideAudits { get; set; } = null!;
+    public DbSet<LocalBreakfastRedemption> BreakfastRedemptions { get; set; } = null!;
 
     public LocalDbContext(DbContextOptions<LocalDbContext> options) : base(options)
     {
@@ -322,6 +323,40 @@ public class LocalDbContext : DbContext
     {
         try { await Database.ExecuteSqlRawAsync("ALTER TABLE Folios ADD COLUMN CloudBalance TEXT NULL"); }
         catch (Microsoft.Data.Sqlite.SqliteException ex) when (ex.SqliteErrorCode == 1 && ex.Message.Contains("duplicate column", StringComparison.OrdinalIgnoreCase)) { }
+    }
+
+    public async Task ApplyBreakfastRateBreakdownSchemaAsync()
+    {
+        var columns = new[]
+        {
+            "ALTER TABLE Properties ADD COLUMN RateBreakdownJson TEXT NULL",
+            "ALTER TABLE Properties ADD COLUMN RateBreakdownConfigVersion INTEGER NOT NULL DEFAULT 1",
+            "ALTER TABLE RatePlans ADD COLUMN IncludeFoodAllocation INTEGER NOT NULL DEFAULT 0",
+        };
+        foreach (var sql in columns)
+        {
+            try { await Database.ExecuteSqlRawAsync(sql); }
+            catch (Microsoft.Data.Sqlite.SqliteException ex)
+                when (ex.SqliteErrorCode == 1 && ex.Message.Contains("duplicate column", StringComparison.OrdinalIgnoreCase)) { }
+        }
+
+        await Database.ExecuteSqlRawAsync(@"
+            CREATE TABLE IF NOT EXISTS BreakfastRedemptions (
+                Id TEXT NOT NULL PRIMARY KEY,
+                PropertyId TEXT NOT NULL,
+                ReservationId TEXT NOT NULL,
+                RoomNumber TEXT NOT NULL,
+                BusinessDate TEXT NOT NULL,
+                CoversRedeemed INTEGER NOT NULL DEFAULT 1,
+                PosOrderId TEXT NULL,
+                Method TEXT NOT NULL DEFAULT 'POS_TICKET',
+                ServerStaffId TEXT NULL,
+                OperationId TEXT NOT NULL UNIQUE,
+                CreatedAt TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS IX_BreakfastRedemptions_PropertyId_ReservationId_BusinessDate
+                ON BreakfastRedemptions(PropertyId, ReservationId, BusinessDate);
+        ");
     }
 
     /// <summary>
@@ -592,5 +627,12 @@ public class LocalDbContext : DbContext
             .HasMany(o => o.StatusHistory)
             .WithOne()
             .HasForeignKey(h => h.LaundryOrderId);
+
+        modelBuilder.Entity<LocalBreakfastRedemption>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => new { e.PropertyId, e.ReservationId, e.BusinessDate });
+            entity.HasIndex(e => e.OperationId).IsUnique();
+        });
     }
 }

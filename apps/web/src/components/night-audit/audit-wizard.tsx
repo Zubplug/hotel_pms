@@ -115,10 +115,88 @@ export function AuditWizard({ open, onOpenChange, data, onExecute, executing, on
                 <div className="rounded-xl border border-amber-400/20 bg-amber-400/[.06] p-4"><p className="text-[10px] uppercase tracking-wider text-amber-300/70">Discounts / concessions</p><p className="mt-1 text-xl font-bold text-amber-200">-{formatMoney(proposedDiscount)}</p></div>
                 <div className="rounded-xl border border-emerald-400/20 bg-emerald-400/[.06] p-4"><p className="text-[10px] uppercase tracking-wider text-emerald-300/70">Net to post</p><p className="mt-1 text-xl font-bold text-emerald-200">{formatMoney(proposedNet)}</p></div>
               </div>
-              <div className="max-h-[36vh] overflow-auto rounded-xl border border-white/[.08]">
-                <table className="w-full min-w-[760px] text-left text-xs">
-                  <thead className="sticky top-0 bg-[#10182b] text-[10px] uppercase tracking-wider text-slate-500"><tr><th className="px-4 py-3">Room / guest</th><th className="px-4 py-3">Confirmation</th><th className="px-4 py-3 text-right">Gross</th><th className="px-4 py-3 text-right">Discount</th><th className="px-4 py-3 text-right">Net</th></tr></thead>
-                  <tbody className="divide-y divide-white/[.06]">{proposedCharges.map((item: any) => <tr key={item.operationId || item.id}><td className="px-4 py-3 text-slate-200"><span className="font-semibold">Room {item.roomNumber}</span><span className="ml-2 text-slate-500">{item.guestName}</span></td><td className="px-4 py-3 text-slate-500">{item.confirmationNumber || '—'}</td><td className="px-4 py-3 text-right text-slate-300">{formatMoney(Number(item.grossAmount || item.amount || 0))}</td><td className="px-4 py-3 text-right text-amber-300">{Number(item.discountAmount || 0) ? `-${formatMoney(Number(item.discountAmount))}` : '—'}{item.discountReason ? <span className="block text-[10px] text-slate-600">{item.discountReason}</span> : null}</td><td className="px-4 py-3 text-right font-semibold text-emerald-300">{formatMoney(Number(item.netAmount ?? item.amount ?? 0))}</td></tr>)}</tbody>
+              <div className="max-h-[40vh] overflow-auto rounded-xl border border-white/[.08]">
+                <table className="w-full min-w-[960px] text-left text-xs">
+                  <thead className="sticky top-0 bg-[#10182b] text-[10px] uppercase tracking-wider text-slate-400">
+                    <tr>
+                      <th className="px-3 py-3">Room / Guest</th>
+                      <th className="px-3 py-3">Confirmation</th>
+                      <th className="px-3 py-3 text-right">Gross</th>
+                      <th className="px-3 py-3 text-right">Discount</th>
+                      <th className="px-3 py-3 text-right">Net Folio</th>
+                      <th className="px-3 py-3 text-right text-indigo-300">Net Accom (4050)</th>
+                      <th className="px-3 py-3 text-right text-indigo-300">VAT (2200)</th>
+                      <th className="px-3 py-3 text-right text-indigo-300">SC (2210)</th>
+                      <th className="px-3 py-3 text-right text-amber-300">Food Alloc (4250)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/[.06]">
+                    {proposedCharges.map((item: any) => {
+                      const rb = item.rateBreakdown;
+                      const policyBadge = rb?.corporateOverrideApplied
+                        ? (rb.complimentaryFoodAllocation > 0 ? 'Food Included (Corporate Rate)' : 'Food Excluded (Corporate Rate)')
+                        : (rb?.foodAllocationSuppressed ? 'Food Suppressed (Discounted)' : null);
+                      return (
+                        <tr key={item.operationId || item.id} className="hover:bg-white/[.02]">
+                          <td className="px-3 py-3 text-slate-200">
+                            <span className="font-semibold text-white">Room {item.roomNumber}</span>
+                            <span className="ml-2 text-slate-400">{item.guestName}</span>
+                            {rb?.corporateOverrideApplied && (
+                              <span className="ml-1.5 rounded bg-sky-500/20 px-1 py-0.5 text-[9px] font-medium text-sky-300">Corporate</span>
+                            )}
+                            {policyBadge && <span className="ml-1.5 rounded bg-white/[.06] px-1 py-0.5 text-[9px] font-medium text-slate-300">{policyBadge}</span>}
+                          </td>
+                          <td className="px-3 py-3 text-slate-500">{item.confirmationNumber || '—'}</td>
+                          <td className="px-3 py-3 text-right text-slate-300 tabular-nums">
+                            {formatMoney(Number(item.grossAmount || item.amount || 0))}
+                          </td>
+                          <td className="px-3 py-3 text-right text-amber-300 tabular-nums">
+                            {Number(item.discountAmount || 0) > 0 ? (
+                              <span>-{formatMoney(Number(item.discountAmount))}</span>
+                            ) : (
+                              '—'
+                            )}
+                            {item.discountReason ? <span className="block text-[9px] text-slate-500">{item.discountReason}</span> : null}
+                          </td>
+                          <td className="px-3 py-3 text-right font-semibold text-emerald-300 tabular-nums">
+                            {formatMoney(Number(item.netAmount ?? item.amount ?? 0))}
+                          </td>
+                          <td className="px-3 py-3 text-right text-slate-300 tabular-nums">
+                            {rb ? formatMoney(rb.netAccommodation) : '—'}
+                          </td>
+                          <td className="px-3 py-3 text-right text-slate-300 tabular-nums">
+                            {rb ? formatMoney(rb.vat) : '—'}
+                          </td>
+                          <td className="px-3 py-3 text-right text-slate-300 tabular-nums">
+                            {rb ? formatMoney(rb.serviceCharge) : '—'}
+                          </td>
+                          <td className="px-3 py-3 text-right font-medium text-amber-300 tabular-nums">
+                            {rb ? (
+                              rb.complimentaryFoodAllocation > 0 ? (
+                                formatMoney(rb.complimentaryFoodAllocation)
+                              ) : (
+                                <span className="text-slate-500 text-[10px]">{rb.suppressionReason ? 'Suppressed' : 'Excluded'}</span>
+                              )
+                            ) : (
+                              '—'
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot className="border-t border-white/10 bg-white/[.03] font-semibold">
+                    <tr>
+                      <td className="px-3 py-3 text-slate-200" colSpan={2}>Totals</td>
+                      <td className="px-3 py-3 text-right tabular-nums">{formatMoney(proposedCharges.reduce((s: number, i: any) => s + Number(i.grossAmount || i.amount || 0), 0))}</td>
+                      <td className="px-3 py-3 text-right tabular-nums text-amber-300">-{formatMoney(proposedCharges.reduce((s: number, i: any) => s + Number(i.discountAmount || 0), 0))}</td>
+                      <td className="px-3 py-3 text-right tabular-nums text-emerald-300">{formatMoney(proposedNet)}</td>
+                      <td className="px-3 py-3 text-right tabular-nums">{formatMoney(proposedCharges.reduce((s: number, i: any) => s + Number(i.rateBreakdown?.netAccommodation || 0), 0))}</td>
+                      <td className="px-3 py-3 text-right tabular-nums">{formatMoney(proposedCharges.reduce((s: number, i: any) => s + Number(i.rateBreakdown?.vat || 0), 0))}</td>
+                      <td className="px-3 py-3 text-right tabular-nums">{formatMoney(proposedCharges.reduce((s: number, i: any) => s + Number(i.rateBreakdown?.serviceCharge || 0), 0))}</td>
+                      <td className="px-3 py-3 text-right tabular-nums text-amber-300">{formatMoney(proposedCharges.reduce((s: number, i: any) => s + Number(i.rateBreakdown?.complimentaryFoodAllocation || 0), 0))}</td>
+                    </tr>
+                  </tfoot>
                 </table>
                 {!proposedCharges.length && <p className="p-8 text-center text-sm text-slate-500">No new room charges are proposed. The audit will still complete its other close controls.</p>}
               </div>

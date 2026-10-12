@@ -8,14 +8,22 @@ import { InventoryService } from '@/lib/inventory/InventoryService';
 import { isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
 import { GLMappingService } from '@/lib/services/gl-mapping-service';
 import { GeneralLedgerService } from '@/lib/services/general-ledger-service';
+import { BreakfastEntitlementService } from '@/lib/services/breakfast-entitlement-service';
 
 const PaymentSchema = z.object({
   method: z.string(),
-  amount: z.number().positive(),
+  amount: z.number().min(0),
   currency: z.string().default('NGN'),
   checkId: z.string().nullish(),
   reference: z.string().nullish(),
   inventoryOverrideApprovalId: z.string().uuid().nullish(),
+  reservationId: z.string().uuid().nullish(),
+  folioId: z.string().uuid().nullish(),
+  breakfastRedemption: z.object({
+    reservationId: z.string().uuid(),
+    roomNumber: z.string(),
+    coversRedeemed: z.number().int().min(1),
+  }).nullish(),
 });
 
 // POST /api/v1/pos/orders/[orderId]/pay
@@ -116,6 +124,33 @@ export async function POST(
           where: { id: sessionId },
           data: { cashSales: { increment: amount } }
         });
+      }
+
+      // Record Breakfast Entitlement Redemption if applicable
+      const isBreakfastRedemption = reference?.startsWith('BREAKFAST_ENTITLEMENT') || Boolean(parsed.data.breakfastRedemption);
+      if (isBreakfastRedemption) {
+        const resId = parsed.data.breakfastRedemption?.reservationId || parsed.data.reservationId || order.reservationId;
+        const roomNo = parsed.data.breakfastRedemption?.roomNumber || order.tableNumber || '';
+        let covers = parsed.data.breakfastRedemption?.coversRedeemed;
+        if (!covers && reference?.startsWith('BREAKFAST_ENTITLEMENT:')) {
+          const parts = reference.split(':');
+          covers = parseInt(parts[1], 10) || 1;
+        }
+        covers = covers || 1;
+
+        if (resId) {
+          await BreakfastEntitlementService.recordRedemption({
+            propertyId: order.propertyId,
+            reservationId: resId,
+            roomNumber: roomNo,
+            businessDate: order.businessDate,
+            coversRedeemed: covers,
+            posOrderId: order.id,
+            serverStaffId: staffId || undefined,
+            method: 'POS_TICKET',
+            operationId: `REDEEM_${resId}_${order.businessDate.toISOString().split('T')[0]}_${order.id}`,
+          }, tx);
+        }
       }
 
       // 🚨 DOUBLE-ENTRY GL POSTING FOR NON-CASH POS PAYMENTS

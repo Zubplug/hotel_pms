@@ -2,9 +2,10 @@ import React from 'react';
 import { auth } from '@/lib/auth';
 import { prisma } from '@hotel-pms/db';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Settings, BookOpen, Calendar, Calculator, ShieldCheck } from 'lucide-react';
+import { Settings, BookOpen, Calendar, Calculator, ShieldCheck, UtensilsCrossed } from 'lucide-react';
 import { AddAccountModal } from '@/components/accountant/AddAccountModal';
 import { NewPeriodModal } from '@/components/accountant/NewPeriodModal';
+import { RoomRateBreakdownSettings } from '@/components/accountant/RoomRateBreakdownSettings';
 
 export default async function SettingsPage() {
   const session = await auth();
@@ -36,6 +37,9 @@ export default async function SettingsPage() {
         <TabsList className="bg-slate-900 border-white/10 p-1 rounded-xl gap-2 overflow-x-auto w-full justify-start h-14">
           <TabsTrigger value="coa" className="data-[state=active]:bg-emerald-500/20 data-[state=active]:text-emerald-400 rounded-lg h-10 px-4 flex gap-2">
             <BookOpen className="w-4 h-4" /> Chart of Accounts
+          </TabsTrigger>
+          <TabsTrigger value="rate-breakdown" className="data-[state=active]:bg-emerald-500/20 data-[state=active]:text-emerald-400 rounded-lg h-10 px-4 flex gap-2">
+            <UtensilsCrossed className="w-4 h-4" /> Rate Breakdown & Breakfast
           </TabsTrigger>
           <TabsTrigger value="fiscal" className="data-[state=active]:bg-emerald-500/20 data-[state=active]:text-emerald-400 rounded-lg h-10 px-4 flex gap-2">
             <Calendar className="w-4 h-4" /> Fiscal Periods
@@ -86,6 +90,10 @@ export default async function SettingsPage() {
               </tbody>
             </table>
           </div>
+        </TabsContent>
+
+        <TabsContent value="rate-breakdown" className="mt-6">
+          <RoomRateBreakdownSettings propertyId={propertyId || ''} />
         </TabsContent>
 
         <TabsContent value="fiscal" className="mt-6 space-y-6">

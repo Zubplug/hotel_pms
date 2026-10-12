@@ -957,18 +957,23 @@ function RoomChargesPreview({ item, onClose }: { item: any; onClose: () => void 
   const discount = items.reduce((sum: number, charge: any) => sum + Number(charge.discountAmount || 0), 0);
   const net = items.reduce((sum: number, charge: any) => sum + Number(charge.netAmount ?? Number(charge.amount || 0) - Number(charge.discountAmount || 0)), 0);
 
+  const totalNetAccommodation = items.reduce((sum: number, charge: any) => sum + Number(charge.rateBreakdown?.netAccommodation ?? 0), 0);
+  const totalVat = items.reduce((sum: number, charge: any) => sum + Number(charge.rateBreakdown?.vat ?? 0), 0);
+  const totalServiceCharge = items.reduce((sum: number, charge: any) => sum + Number(charge.rateBreakdown?.serviceCharge ?? 0), 0);
+  const totalFoodAllocation = items.reduce((sum: number, charge: any) => sum + Number(charge.rateBreakdown?.complimentaryFoodAllocation ?? 0), 0);
+
   return (
     <div className="rounded-2xl border border-white/[0.08] bg-[#07090f] p-6 text-white shadow-[0_40px_120px_rgba(0,0,0,0.8)]">
       <DialogHeader>
-        <DialogTitle className="text-white">Review room charges</DialogTitle>
+        <DialogTitle className="text-white">Review room charges & Rate Breakdown</DialogTitle>
         <DialogDescription className="text-slate-400">
-          Confirm these nightly charges before continuing. They are posted only when you confirm and execute the Night Audit.
+          Confirm these nightly charges before continuing. The Hotel Stanzel rate decomposition reconciles Net Room, VAT, Service Charge, and Breakfast GL 4250.
         </DialogDescription>
       </DialogHeader>
 
-      <div className="grid grid-cols-3 gap-3 py-5">
+      <div className="grid grid-cols-3 gap-3 pt-5 pb-3">
         <div className="rounded-xl border border-white/[0.08] bg-white/[0.03] p-3">
-          <p className="text-[10px] uppercase tracking-wider text-slate-500">Gross</p>
+          <p className="text-[10px] uppercase tracking-wider text-slate-500">Gross Room Charges</p>
           <p className="mt-1 font-bold tabular-nums">{money(gross)}</p>
         </div>
         <div className="rounded-xl border border-white/[0.08] bg-white/[0.03] p-3">
@@ -981,19 +986,111 @@ function RoomChargesPreview({ item, onClose }: { item: any; onClose: () => void 
         </div>
       </div>
 
-      <div className="max-h-[45vh] overflow-y-auto rounded-xl border border-white/[0.08]">
-        {items.map((charge: any) => (
-          <div key={charge.operationId || charge.id} className="grid grid-cols-[1fr_auto] gap-4 border-b border-white/[0.06] p-4 last:border-b-0">
-            <div className="min-w-0">
-              <p className="truncate font-semibold text-white">Room {charge.roomNumber || '—'} · {charge.guestName || 'Guest'}</p>
-              <p className="mt-1 text-xs text-slate-500">Confirmation: {charge.confirmationNumber || 'Unavailable'}{charge.roomType ? ` · ${charge.roomType}` : ''}</p>
-            </div>
-            <div className="text-right text-sm tabular-nums">
-              <p className="font-semibold text-white">{money(Number(charge.netAmount ?? charge.amount ?? charge.grossAmount ?? 0))}</p>
-              {Number(charge.discountAmount || 0) > 0 && <p className="text-xs text-amber-300">Discount {money(Number(charge.discountAmount))}</p>}
-            </div>
+      {totalNetAccommodation > 0 && (
+        <div className="mb-4 grid grid-cols-4 gap-2 rounded-xl border border-indigo-500/20 bg-indigo-950/20 p-3 text-xs">
+          <div>
+            <p className="text-[10px] uppercase text-indigo-300/70">Net Accom (GL 4050)</p>
+            <p className="font-semibold text-indigo-100">{money(totalNetAccommodation)}</p>
           </div>
-        ))}
+          <div>
+            <p className="text-[10px] uppercase text-indigo-300/70">VAT 7.5% (GL 2200)</p>
+            <p className="font-semibold text-indigo-100">{money(totalVat)}</p>
+          </div>
+          <div>
+            <p className="text-[10px] uppercase text-indigo-300/70">Service Chg 10% (GL 2210)</p>
+            <p className="font-semibold text-indigo-100">{money(totalServiceCharge)}</p>
+          </div>
+          <div>
+            <p className="text-[10px] uppercase text-amber-300/70">Food Alloc (GL 4250)</p>
+            <p className="font-semibold text-amber-200">{money(totalFoodAllocation)}</p>
+          </div>
+        </div>
+      )}
+
+      <div className="max-h-[50vh] overflow-auto rounded-xl border border-white/[0.08]">
+        <table className="w-full min-w-[960px] text-left text-xs">
+          <thead className="sticky top-0 bg-[#10182b] text-[10px] uppercase tracking-wider text-slate-400">
+            <tr>
+              <th className="px-3 py-3">Room / Guest</th>
+              <th className="px-3 py-3">Confirmation</th>
+              <th className="px-3 py-3 text-right">Gross</th>
+              <th className="px-3 py-3 text-right">Discount</th>
+              <th className="px-3 py-3 text-right">Net Folio</th>
+              <th className="px-3 py-3 text-right text-indigo-300">Net Accom (4050)</th>
+              <th className="px-3 py-3 text-right text-indigo-300">VAT (2200)</th>
+              <th className="px-3 py-3 text-right text-indigo-300">SC (2210)</th>
+              <th className="px-3 py-3 text-right text-amber-300">Food Alloc (4250)</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-white/[.06]">
+            {items.map((charge: any) => {
+              const breakdown = charge.rateBreakdown;
+              const policyBadge = breakdown?.corporateOverrideApplied
+                ? (breakdown.complimentaryFoodAllocation > 0 ? 'Food Included (Corporate Rate)' : 'Food Excluded (Corporate Rate)')
+                : (breakdown?.foodAllocationSuppressed ? 'Food Suppressed (Discounted)' : null);
+              return (
+                <tr key={charge.operationId || charge.id} className="hover:bg-white/[.02]">
+                  <td className="px-3 py-3 text-slate-200">
+                    <span className="font-semibold text-white">Room {charge.roomNumber || '—'}</span>
+                    <span className="ml-2 text-slate-400">{charge.guestName || 'Guest'}</span>
+                    {breakdown?.corporateOverrideApplied && (
+                      <span className="ml-1.5 rounded bg-sky-500/20 px-1 py-0.5 text-[9px] font-medium text-sky-300">Corporate</span>
+                    )}
+                    {policyBadge && <span className="ml-1.5 rounded bg-white/[.06] px-1 py-0.5 text-[9px] font-medium text-slate-300">{policyBadge}</span>}
+                  </td>
+                  <td className="px-3 py-3 text-slate-500">{charge.confirmationNumber || 'Unavailable'}</td>
+                  <td className="px-3 py-3 text-right text-slate-300 tabular-nums">
+                    {money(Number(charge.grossAmount ?? charge.amount ?? 0))}
+                  </td>
+                  <td className="px-3 py-3 text-right text-amber-300 tabular-nums">
+                    {Number(charge.discountAmount || 0) > 0 ? (
+                      <span>-{money(Number(charge.discountAmount))}</span>
+                    ) : (
+                      '—'
+                    )}
+                    {breakdown?.suppressionReason && <span className="block text-[9px] text-slate-500">{breakdown.suppressionReason}</span>}
+                  </td>
+                  <td className="px-3 py-3 text-right font-semibold text-emerald-300 tabular-nums">
+                    {money(Number(charge.netAmount ?? charge.amount ?? charge.grossAmount ?? 0))}
+                  </td>
+                  <td className="px-3 py-3 text-right text-slate-300 tabular-nums">
+                    {breakdown ? money(breakdown.netAccommodation) : '—'}
+                  </td>
+                  <td className="px-3 py-3 text-right text-slate-300 tabular-nums">
+                    {breakdown ? money(breakdown.vat) : '—'}
+                  </td>
+                  <td className="px-3 py-3 text-right text-slate-300 tabular-nums">
+                    {breakdown ? money(breakdown.serviceCharge) : '—'}
+                  </td>
+                  <td className="px-3 py-3 text-right font-medium text-amber-300 tabular-nums">
+                    {breakdown ? (
+                      breakdown.complimentaryFoodAllocation > 0 ? (
+                        money(breakdown.complimentaryFoodAllocation)
+                      ) : (
+                        <span className="text-slate-500 text-[10px]">{breakdown.suppressionReason ? 'Suppressed' : 'Excluded'}</span>
+                      )
+                    ) : (
+                      '—'
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+          <tfoot className="border-t border-white/10 bg-white/[.03] font-semibold">
+            <tr>
+              <td className="px-3 py-3 text-slate-200" colSpan={2}>Totals</td>
+              <td className="px-3 py-3 text-right tabular-nums">{money(items.reduce((s: number, i: any) => s + Number(i.grossAmount ?? i.amount ?? 0), 0))}</td>
+              <td className="px-3 py-3 text-right tabular-nums text-amber-300">-{money(items.reduce((s: number, i: any) => s + Number(i.discountAmount || 0), 0))}</td>
+              <td className="px-3 py-3 text-right tabular-nums text-emerald-300">{money(items.reduce((s: number, i: any) => s + Number(i.netAmount ?? i.amount ?? 0), 0))}</td>
+              <td className="px-3 py-3 text-right tabular-nums">{money(totalNetAccommodation)}</td>
+              <td className="px-3 py-3 text-right tabular-nums">{money(totalVat)}</td>
+              <td className="px-3 py-3 text-right tabular-nums">{money(totalServiceCharge)}</td>
+              <td className="px-3 py-3 text-right tabular-nums text-amber-300">{money(totalFoodAllocation)}</td>
+            </tr>
+          </tfoot>
+        </table>
+        {!items.length && <p className="p-8 text-center text-sm text-slate-500">No room charges proposed.</p>}
       </div>
 
       <DialogFooter className="mt-5">

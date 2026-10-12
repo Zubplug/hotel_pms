@@ -51,6 +51,7 @@ export async function GET(req: NextRequest) {
       id: true,
       name: true,
       code: true,
+      includeFoodAllocation: true,
     };
 
     if (includeRates) {
@@ -90,7 +91,7 @@ export async function POST(req: NextRequest) {
 
     const { propertyIds } = await requireOrganizationContext((session.user as any).id);
     const body = await req.json();
-    let { name, code, rates, currency, propertyId } = body;
+    let { name, code, rates, currency, propertyId, includeFoodAllocation } = body;
 
     propertyId = propertyId || propertyIds[0];
     if (!propertyId) {
@@ -165,6 +166,7 @@ export async function POST(req: NextRequest) {
           isActive: true,
           isPublic: false,
           minStay: 1,
+          includeFoodAllocation: Boolean(includeFoodAllocation),
         }
       });
 

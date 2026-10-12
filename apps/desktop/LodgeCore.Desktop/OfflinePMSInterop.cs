@@ -2144,10 +2144,19 @@ public class OfflinePMSInterop
             string currency = paymentData.ContainsKey("currency") ? paymentData["currency"]?.ToString() ?? fallbackCurrency : fallbackCurrency;
             string? checkId = paymentData.ContainsKey("checkId") ? paymentData["checkId"]?.ToString() : null;
             string? supervisorPin = paymentData.ContainsKey("supervisorPin") ? paymentData["supervisorPin"]?.ToString() : null;
+            string? reference = paymentData.ContainsKey("reference") ? paymentData["reference"]?.ToString() : null;
 
-            // Folio / reservation passed from the POS checkout state for ROOM_CHARGE
+            // Folio / reservation passed from the POS checkout state for ROOM_CHARGE / COMPLIMENTARY
             string? folioId = paymentData.ContainsKey("folioId") ? paymentData["folioId"]?.ToString() : null;
             string? reservationId = paymentData.ContainsKey("reservationId") ? paymentData["reservationId"]?.ToString() : null;
+            int covers = 1;
+            if (paymentData.ContainsKey("breakfastRedemption") && paymentData["breakfastRedemption"] is JsonElement redElement)
+            {
+                if (redElement.TryGetProperty("coversRedeemed", out var covProp))
+                    covers = covProp.GetInt32();
+                if (string.IsNullOrEmpty(reservationId) && redElement.TryGetProperty("reservationId", out var resProp))
+                    reservationId = resProp.GetString();
+            }
 
             // Room charges are regular offline POS payments. The folio is still
             // required and validated below, but no manager approval is needed.
@@ -2189,7 +2198,9 @@ public class OfflinePMSInterop
                 checkId ?? "", posCtx.StaffId, posCtx.DeviceId,
                 authorizerId,
                 folioId: folioId,
-                reservationId: reservationId);
+                reservationId: reservationId,
+                reference: reference,
+                covers: covers);
 
             return JsonSerializer.Serialize(new { success = true, data = res }, _jsonOptions);
         }

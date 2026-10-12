@@ -6,6 +6,7 @@ import { applyAvailableFolioCredit } from '@/lib/finance/apply-folio-credit';
 import { applyAvailableGuestLedgerCredit } from '@/lib/finance/apply-guest-ledger-credit';
 import { postNightAuditJournal, buildNightAuditBalanceProof } from './night-audit-accounting';
 import { processLeaseBilling } from './events/lease-actions';
+import { resolveBreakdownConfig, computeRateBreakdown } from './room-rate-breakdown';
 
 const BATCH_SIZE = 50;
 
@@ -247,18 +248,10 @@ export async function executeNightAudit(
   let leaseBilling = { processedCount: 0 };
 
   try {
-    // Resolve a valid UUID actor for DB fields that require one (postedBy, appliedBy).
-    // When the audit is triggered by a logged-in user userId is already a UUID;
-    // for scheduled / system runs we fall back to the first Night Auditor / Manager
-    // on this property so the UUID constraint is never violated.
-    let actorId = userId;
-    if (!actorId) {
-      const fallbackStaff = await prisma.staff.findFirst({
-        where: { propertyAccess: { has: propertyId }, position: { in: ['NIGHT_AUDITOR', 'HOTEL_MANAGER', 'MANAGER', 'ADMIN', 'SUPER_ADMIN'] }, isActive: true },
-        select: { id: true }
-      });
-      actorId = fallbackStaff?.id ?? null;
-    }
+    // Every audit posting must have an accountable actor. Scheduled callers
+    // must use a dedicated system identity rather than impersonating staff.
+    if (!userId) throw new Error('AUTHENTICATED_AUDITOR_REQUIRED: Night Audit requires an authenticated actor.');
+    const actorId = userId;
 
     // Generate all recurring hall billing periods due on the date being
     // closed before the close package is finalized. This keeps the billing
@@ -527,6 +520,24 @@ export async function executeNightAudit(
               if (isCorporateCharge && reservation.corporateAccount && Number(reservation.corporateAccount.creditLimit) > 0 && !reservation.corporateAccount.exemptFromHighBalance && Number(mainFolio.balance) + grossRoomCharge > Number(reservation.corporateAccount.creditLimit)) {
                 throw new Error(`CREDIT_LIMIT_EXCEEDED: Night Audit room charge exceeds corporate account credit limit for reservation ${reservation.id}`);
               }
+
+              // ── Room Rate Breakdown (VAT + SC + Complimentary Breakfast Allocation) ──
+              // Read the accountant-configured breakdown from property settings.
+              // The gross room charge is decomposed into four GL-mapped components.
+              const breakdownConfig = resolveBreakdownConfig((property as any).settings);
+              const roomTypeName = activeRoom?.room?.roomType?.name || activeRoom?.roomTypeId || undefined;
+              const isDiscountedStay = discountDeduction > 0 || Boolean(verifiedComplimentary);
+              const corporateRatePlan = reservation.corporateAccount?.ratePlan || (reservation.ratePlan?.type === 'CORPORATE' ? reservation.ratePlan : null);
+              const corporateFoodAllocationOverride = corporateRatePlan ? Boolean(corporateRatePlan.includeFoodAllocation) : null;
+              const breakdown = computeRateBreakdown(
+                grossRoomCharge,
+                breakdownConfig,
+                isDiscountedStay,
+                roomTypeName,
+                corporateFoodAllocationOverride,
+              );
+
+              // 1. Net Accommodation → GL 4050 (ROOM revenue)
               await tx.folioItem.create({
                 data: {
                   folioId: mainFolio.id,
@@ -534,11 +545,11 @@ export async function executeNightAudit(
                   type: 'CHARGE',
                   source: 'ROOM_CHARGE',
                   revenueCategory: 'ROOM',
-                  description: `Room Charge for ${auditDateLabel}${discountDeduction > 0 ? ' (gross)' : discountNote}`,
+                  description: `Net Accommodation for ${auditDateLabel}${discountDeduction > 0 ? ' (gross)' : discountNote}`,
                   quantity: 1,
-                  unitAmount: grossRoomCharge,
-                  amount: grossRoomCharge,
-                  baseAmount: grossRoomCharge,
+                  unitAmount: breakdown.netAccommodation,
+                  amount: breakdown.netAccommodation,
+                  baseAmount: breakdown.netAccommodation,
                   currency: chargeCurrency,
                   postedBy: actorId!,
                   nightAuditRunId: auditRun.id,
@@ -548,6 +559,86 @@ export async function executeNightAudit(
                   guestId: reservation.primaryGuestId,
                 }
               });
+
+              // 2. Complimentary Breakfast Allocation → GL 4250 (FNB revenue)
+              //    Suppressed when room has a discount and accountant has not enabled
+              //    allowComplimentaryFoodOnDiscountedRooms.
+              if (breakdown.complimentaryFoodAmount > 0) {
+                await tx.folioItem.create({
+                  data: {
+                    folioId: mainFolio.id,
+                    businessDate,
+                    type: 'CHARGE',
+                    source: 'ROOM_CHARGE',
+                    revenueCategory: 'FNB',
+                    revenueClass: 'FOOD',
+                    description: `${breakdown.complimentaryAllocationName} for ${auditDateLabel}`,
+                    quantity: 1,
+                    unitAmount: breakdown.complimentaryFoodAmount,
+                    amount: breakdown.complimentaryFoodAmount,
+                    baseAmount: breakdown.complimentaryFoodAmount,
+                    currency: chargeCurrency,
+                    postedBy: actorId!,
+                    nightAuditRunId: auditRun.id,
+                    operationId: `${roomChargeKey}:FNB`,
+                    discountApprovalId: null,
+                    reservationId: reservation.id,
+                    guestId: reservation.primaryGuestId,
+                  }
+                });
+              }
+
+              // 3. VAT → GL 2200 (TAX type)
+              if (breakdown.vatAmount > 0) {
+                await tx.folioItem.create({
+                  data: {
+                    folioId: mainFolio.id,
+                    businessDate,
+                    type: 'TAX',
+                    source: 'ROOM_CHARGE',
+                    revenueCategory: 'TAX',
+                    revenueClass: 'VAT',
+                    description: `VAT (${(breakdownConfig.vatRate * 100).toFixed(1)}%) for ${auditDateLabel}`,
+                    quantity: 1,
+                    unitAmount: breakdown.vatAmount,
+                    amount: breakdown.vatAmount,
+                    baseAmount: breakdown.vatAmount,
+                    currency: chargeCurrency,
+                    postedBy: actorId!,
+                    nightAuditRunId: auditRun.id,
+                    operationId: `${roomChargeKey}:VAT`,
+                    discountApprovalId: null,
+                    reservationId: reservation.id,
+                    guestId: reservation.primaryGuestId,
+                  }
+                });
+              }
+
+              // 4. Service Charge → GL 2210
+              if (breakdown.serviceChargeAmount > 0) {
+                await tx.folioItem.create({
+                  data: {
+                    folioId: mainFolio.id,
+                    businessDate,
+                    type: 'CHARGE',
+                    source: 'ROOM_CHARGE',
+                    revenueCategory: 'OTHER',
+                    revenueClass: 'SERVICE_CHARGE',
+                    description: `Service Charge (${(breakdownConfig.serviceChargeRate * 100).toFixed(0)}%) for ${auditDateLabel}`,
+                    quantity: 1,
+                    unitAmount: breakdown.serviceChargeAmount,
+                    amount: breakdown.serviceChargeAmount,
+                    baseAmount: breakdown.serviceChargeAmount,
+                    currency: chargeCurrency,
+                    postedBy: actorId!,
+                    nightAuditRunId: auditRun.id,
+                    operationId: `${roomChargeKey}:SC`,
+                    discountApprovalId: null,
+                    reservationId: reservation.id,
+                    guestId: reservation.primaryGuestId,
+                  }
+                });
+              }
 
               if (discountDeduction > 0) {
                 const concessionItem = await tx.folioItem.create({
@@ -583,6 +674,7 @@ export async function executeNightAudit(
               }
 
               // Update the folio with the net amount after the concession.
+              // The folio balance reflects the total guest-facing charge (grossRoomCharge - discount).
               await tx.folio.update({
                 where: { id: mainFolio.id },
                 data: {
@@ -757,10 +849,13 @@ export async function executeNightAudit(
 
     for (const group of revenueByCategory) {
       const amt = Number(group._sum?.amount || 0);
-      // ROOM_CHARGE is the source of truth for accommodation revenue. This
-      // protects older/imported room charges whose revenueCategory was left at
-      // the schema default of OTHER.
-      if (group.source === 'ROOM_CHARGE' || group.source === 'DAY_USE_ROOM_CHARGE' || group.revenueCategory === 'ROOM') roomRevenueVal += amt;
+      // ROOM_CHARGE items with revenueCategory=FNB are the Complimentary Breakfast
+      // Allocation — they are F&B revenue (GL 4250), not room revenue.
+      // Service Charge items are tracked separately in serviceChargeVal.
+      // Only ROOM_CHARGE items with revenueCategory=ROOM count as accommodation revenue.
+      if ((group.source === 'ROOM_CHARGE' || group.source === 'DAY_USE_ROOM_CHARGE') && group.revenueCategory === 'FNB') fnbRevenueVal += amt;
+      else if ((group.source === 'ROOM_CHARGE' || group.source === 'DAY_USE_ROOM_CHARGE') && group.revenueCategory === 'OTHER') serviceChargeVal += amt;
+      else if (group.source === 'ROOM_CHARGE' || group.source === 'DAY_USE_ROOM_CHARGE' || group.revenueCategory === 'ROOM') roomRevenueVal += amt;
       else if (group.source === 'POS' || group.revenueCategory === 'FNB') fnbRevenueVal += amt;
       else if (group.revenueCategory === 'OTHER') otherRevenueVal += amt;
       else if (group.revenueCategory === 'TAX') taxesVal += amt;

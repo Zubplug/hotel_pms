@@ -32,8 +32,40 @@ public class LocalRepository
         var status = (property.AuditStatus ?? "OPEN").Trim().ToUpperInvariant();
         var targetDate = (businessDate ?? property.BusinessDate).Date;
         var currentDate = property.BusinessDate.Date;
-        if ((status == "IN_PROGRESS" && targetDate == currentDate) || (status == "POSTING" && targetDate < currentDate))
+        if ((status is "IN_PROGRESS" or "POSTING") && targetDate <= currentDate)
             throw new InvalidOperationException("NIGHT_AUDIT_IN_PROGRESS: This business date is temporarily locked while Night Audit is posting.");
+    }
+
+    private async Task AssertCanOpenShiftAsync(string propertyId)
+    {
+        var property = await _dbContext.Properties.FindAsync(propertyId);
+        if (property == null) throw new InvalidOperationException("Property is not available offline.");
+
+        DateTime localToday;
+        try
+        {
+            var timezone = TimeZoneInfo.FindSystemTimeZoneById(property.Timezone);
+            localToday = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, timezone).Date;
+        }
+        catch (TimeZoneNotFoundException)
+        {
+            localToday = DateTime.UtcNow.Date;
+        }
+        catch (InvalidTimeZoneException)
+        {
+            localToday = DateTime.UtcNow.Date;
+        }
+        catch (ArgumentException)
+        {
+            localToday = DateTime.UtcNow.Date;
+        }
+
+        if (property.BusinessDate.Date < localToday)
+        {
+            throw new InvalidOperationException($"NIGHT_AUDIT_REQUIRED: Night Audit is still pending for business date {property.BusinessDate:yyyy-MM-dd}. Complete it before opening a new shift.");
+        }
+
+        await AssertNightAuditAllowsAsync(propertyId);
     }
 
     private async Task AssertPosSessionOpenAsync(string? sessionId)
@@ -1143,7 +1175,7 @@ public class LocalRepository
         return true;
     }
 
-    public async Task<bool> RecordChargeAsync(string folioId, decimal amount, string description, string userId, string deviceId, string? idempotencyKey = null, bool requireFrontdeskSession = true, string? posTransactionId = null, string source = "ROOM_CHARGE", string? reservationId = null)
+    public async Task<bool> RecordChargeAsync(string folioId, decimal amount, string description, string userId, string deviceId, string? idempotencyKey = null, bool requireFrontdeskSession = true, string? posTransactionId = null, string source = "ROOM_CHARGE", string? reservationId = null, string? itemType = null, string? revenueCategory = null, string? revenueClass = null)
     {
         var folio = await _dbContext.Folios.FindAsync(folioId);
         if (folio == null) return false;
@@ -1199,6 +1231,9 @@ public class LocalRepository
             description = description,
             type = "CHARGE",
             source,
+            itemType,
+            revenueCategory,
+            revenueClass,
             reservationId = reservation?.Id ?? folio.ReservationId,
             idempotencyKey = idempotencyKey,
             frontdeskSessionId = frontdeskSession?.Id,
@@ -1241,6 +1276,9 @@ public class LocalRepository
                 idempotencyKey,
                 posTransactionId,        // links cloud FolioItem → source PosPayment (audit)
                 source,
+                itemType,
+                revenueCategory,
+                revenueClass,
                 creditApplicationAmount,
                 creditApplicationKey = creditApplicationAmount > 0 ? $"CREDIT_APPLICATION:{idempotencyKey ?? newItem.id}" : null,
                 frontdeskSessionId = frontdeskSession?.Id,
@@ -1277,12 +1315,96 @@ public class LocalRepository
         return true;
     }
 
+    public record RoomRateBreakdownResult(
+        decimal NetAccommodation,
+        decimal ComplimentaryFoodAmount,
+        decimal VatAmount,
+        decimal ServiceChargeAmount,
+        string ComplimentaryAllocationName,
+        bool IsFoodAllocated);
+
+    public RoomRateBreakdownResult DecomposeRoomRate(
+        decimal grossRate,
+        string? rateBreakdownJson,
+        bool hasDiscount = false,
+        bool? corporateFoodAllocationOverride = null)
+    {
+        if (grossRate <= 0m)
+            return new RoomRateBreakdownResult(0m, 0m, 0m, 0m, "Complimentary Breakfast Allocation", false);
+
+        bool enabled = true;
+        string allocationName = "Complimentary Breakfast Allocation";
+        decimal foodAmount = 3000m;
+        decimal vatRate = 0.075m;
+        decimal scRate = 0.10m;
+        bool allowOnDiscounted = false;
+
+        if (!string.IsNullOrWhiteSpace(rateBreakdownJson))
+        {
+            try
+            {
+                using var doc = System.Text.Json.JsonDocument.Parse(rateBreakdownJson);
+                var root = doc.RootElement;
+                if (root.TryGetProperty("enabled", out var enEl)) enabled = enEl.GetBoolean();
+                if (root.TryGetProperty("complimentaryAllocationName", out var nameEl)) allocationName = nameEl.GetString() ?? allocationName;
+                if (root.TryGetProperty("complimentaryFoodAmount", out var foodEl) && foodEl.TryGetDecimal(out var f)) foodAmount = f;
+                if (root.TryGetProperty("vatRate", out var vatEl) && vatEl.TryGetDecimal(out var v)) vatRate = v;
+                if (root.TryGetProperty("serviceChargeRate", out var scEl) && scEl.TryGetDecimal(out var s)) scRate = s;
+                if (root.TryGetProperty("allowComplimentaryFoodOnDiscountedRooms", out var allowEl)) allowOnDiscounted = allowEl.GetBoolean();
+            }
+            catch (JsonException ex)
+            {
+                throw new InvalidOperationException(
+                    "The synced room-rate breakdown configuration is malformed. Sync again before running offline Night Audit.",
+                    ex);
+            }
+        }
+
+        if (!enabled)
+        {
+            return new RoomRateBreakdownResult(grossRate, 0m, 0m, 0m, allocationName, false);
+        }
+
+        bool foodSuppressed = false;
+        if (corporateFoodAllocationOverride.HasValue)
+        {
+            foodSuppressed = !corporateFoodAllocationOverride.Value;
+        }
+        else if (hasDiscount && !allowOnDiscounted)
+        {
+            foodSuppressed = true;
+        }
+
+        decimal effectiveFood = foodSuppressed ? 0m : foodAmount;
+        decimal denominator = 1m + vatRate + scRate;
+        decimal grossMinusFood = Math.Max(0m, grossRate - effectiveFood);
+        decimal netAccommodation = denominator > 0m ? grossMinusFood / denominator : grossMinusFood;
+        decimal vatAmount = netAccommodation * vatRate;
+        decimal scAmount = netAccommodation * scRate;
+
+        decimal r(decimal val) => Math.Round(val, 2, MidpointRounding.AwayFromZero);
+
+        decimal netR = r(netAccommodation);
+        decimal vatR = r(vatAmount);
+        decimal scR = r(scAmount);
+        decimal foodR = r(effectiveFood);
+
+        // Penny reconciliation onto netAccommodation
+        decimal componentTotal = r(netR + vatR + scR + foodR);
+        decimal delta = r(grossRate - componentTotal);
+        decimal finalNet = r(netR + delta);
+
+        return new RoomRateBreakdownResult(finalNet, foodR, vatR, scR, allocationName, foodR > 0m);
+    }
+
     /// <summary>
     /// Offline Night Audit room-posting entry point. Corporate reservations
     /// are charged to their shared CITY_LEDGER folio, while individual guests
     /// use their reservation folio. Every posting is idempotent by reservation
     /// and business date; Front Desk cannot call this without the dedicated
     /// night_audit:execute permission enforced by OfflinePMSInterop.
+    /// Decomposes gross room rates into Net Accommodation (GL 4050), Complimentary
+    /// Breakfast Allocation (GL 4250), VAT (GL 2200), and Service Charge (GL 2210).
     /// </summary>
     public async Task<object> PostNightAuditRoomChargesAsync(string propertyId, string userId, string deviceId, DateTime? auditDate = null)
     {
@@ -1327,16 +1449,102 @@ public class LocalRepository
                 var operationKey = $"ROOM_CHARGE_{reservation.Id}_{businessDate:yyyy-MM-dd}";
                 if (CheckFolioIdempotency(folio, operationKey)) { skipped++; continue; }
 
-                await RecordChargeAsync(
-                    folio.Id,
-                    rate,
-                    $"Room Charge for {businessDate:yyyy-MM-dd}",
-                    userId,
-                    deviceId,
-                    operationKey,
-                    requireFrontdeskSession: false,
-                    source: "ROOM_CHARGE",
-                    reservationId: reservation.Id);
+                bool? corporateOverride = null;
+                if (!string.IsNullOrWhiteSpace(ratePlanId))
+                {
+                    var plan = await _dbContext.RatePlans.FirstOrDefaultAsync(p => p.Id == ratePlanId);
+                    if (plan != null && (plan.Type == "CORPORATE" || reservation.CorporateAccountId != null))
+                    {
+                        corporateOverride = plan.IncludeFoodAllocation;
+                    }
+                }
+
+                bool hasDiscount = (assignment.DiscountAmount > 0 || assignment.DiscountPercent > 0 || !string.IsNullOrWhiteSpace(assignment.DiscountApprovalId));
+                var breakdown = DecomposeRoomRate(rate, property.RateBreakdownJson, hasDiscount, corporateOverride);
+
+                if (breakdown.ComplimentaryFoodAmount > 0 || breakdown.VatAmount > 0 || breakdown.ServiceChargeAmount > 0)
+                {
+                    // 1. Net Accommodation (GL 4050 / ROOM)
+                    await RecordChargeAsync(
+                        folio.Id,
+                        breakdown.NetAccommodation,
+                        $"Net Accommodation for {businessDate:yyyy-MM-dd}",
+                        userId,
+                        deviceId,
+                        operationKey,
+                        requireFrontdeskSession: false,
+                        source: "ROOM_CHARGE",
+                        reservationId: reservation.Id,
+                        revenueCategory: "ROOM",
+                        revenueClass: "ROOM");
+
+                    // 2. Complimentary Breakfast Allocation (GL 4250 / FNB)
+                    if (breakdown.ComplimentaryFoodAmount > 0)
+                    {
+                        await RecordChargeAsync(
+                            folio.Id,
+                            breakdown.ComplimentaryFoodAmount,
+                            $"{breakdown.ComplimentaryAllocationName} for {businessDate:yyyy-MM-dd}",
+                            userId,
+                            deviceId,
+                            $"{operationKey}:FNB",
+                            requireFrontdeskSession: false,
+                            source: "ROOM_CHARGE",
+                            reservationId: reservation.Id,
+                            revenueCategory: "FNB",
+                            revenueClass: "FOOD");
+                    }
+
+                    // 3. VAT (GL 2200 / TAX)
+                    if (breakdown.VatAmount > 0)
+                    {
+                        await RecordChargeAsync(
+                            folio.Id,
+                            breakdown.VatAmount,
+                            $"VAT for {businessDate:yyyy-MM-dd}",
+                            userId,
+                            deviceId,
+                            $"{operationKey}:VAT",
+                            requireFrontdeskSession: false,
+                            source: "ROOM_CHARGE",
+                            reservationId: reservation.Id,
+                            itemType: "TAX",
+                            revenueCategory: "TAX",
+                            revenueClass: "VAT");
+                    }
+
+                    // 4. Service Charge (GL 2210 / SERVICE_CHARGE)
+                    if (breakdown.ServiceChargeAmount > 0)
+                    {
+                        await RecordChargeAsync(
+                            folio.Id,
+                            breakdown.ServiceChargeAmount,
+                            $"Service Charge for {businessDate:yyyy-MM-dd}",
+                            userId,
+                            deviceId,
+                            $"{operationKey}:SC",
+                            requireFrontdeskSession: false,
+                            source: "ROOM_CHARGE",
+                            reservationId: reservation.Id,
+                            revenueCategory: "OTHER",
+                            revenueClass: "SERVICE_CHARGE");
+                    }
+                }
+                else
+                {
+                    // Single gross charge line
+                    await RecordChargeAsync(
+                        folio.Id,
+                        rate,
+                        $"Room Charge for {businessDate:yyyy-MM-dd}",
+                        userId,
+                        deviceId,
+                        operationKey,
+                        requireFrontdeskSession: false,
+                        source: "ROOM_CHARGE",
+                        reservationId: reservation.Id);
+                }
+
                 posted++;
                 total += rate;
             }
@@ -1816,7 +2024,7 @@ public class LocalRepository
 
     public async Task<LocalFrontdeskSession> OpenFrontdeskSessionAsync(string propertyId, string staffId, string cashAccountId, decimal openingFloat, string deviceId)
     {
-        await AssertNightAuditAllowsAsync(propertyId);
+        await AssertCanOpenShiftAsync(propertyId);
         var existing = await GetActiveFrontdeskSessionAsync(propertyId, staffId);
         if (existing != null) throw new InvalidOperationException("Staff already has an open front desk session.");
         var tillInUse = await _dbContext.FrontdeskSessions.AnyAsync(session => session.PropertyId == propertyId && session.CashAccountId == cashAccountId && session.Status == "OPEN");
@@ -4981,7 +5189,7 @@ public class LocalRepository
         await PosShiftOpenLock.WaitAsync();
         try
         {
-        await AssertNightAuditAllowsAsync(propertyId);
+        await AssertCanOpenShiftAsync(propertyId);
         var pendingStatus = await GetPendingPosShiftStatusAsync(propertyId, outletId, bankType, userId);
         if (!string.IsNullOrWhiteSpace(pendingStatus))
             throw new InvalidOperationException("The previous shift must be approved before a new shift can be opened.");
@@ -5536,7 +5744,7 @@ public class LocalRepository
         return await _dbContext.Staff.FirstOrDefaultAsync(s => s.Id == staffId);
     }
 
-    public async Task<LocalPosPayment> PayOrderAsync(string orderId, string method, decimal amount, string currency, string checkId, string userId, string deviceId, string? authorizerId = null, string? folioId = null, string? reservationId = null)
+    public async Task<LocalPosPayment> PayOrderAsync(string orderId, string method, decimal amount, string currency, string checkId, string userId, string deviceId, string? authorizerId = null, string? folioId = null, string? reservationId = null, string? reference = null, int covers = 1)
     {
         var order = await _dbContext.PosOrders
             .Include(o => o.Items)
@@ -5563,6 +5771,8 @@ public class LocalRepository
             Status = "CONFIRMED",
             OperationId = $"op_pay_{deviceId}_{DateTime.UtcNow.Ticks}",
             BusinessDate = order.BusinessDate,
+            Reference = reference,
+            ProcessedById = userId,
             CreatedAt = DateTime.UtcNow
         };
 
@@ -5597,6 +5807,132 @@ public class LocalRepository
                     posTransactionId: payment.Id,
                     source: "POS",
                     reservationId: order.ReservationId);  // audit link: cloud FolioItem → PosPayment
+        }
+        else if (string.Equals(method, "COMPLIMENTARY", StringComparison.OrdinalIgnoreCase))
+        {
+            bool isBreakfast = reference != null && reference.StartsWith("BREAKFAST_ENTITLEMENT", StringComparison.OrdinalIgnoreCase);
+
+            if (isBreakfast && !string.IsNullOrEmpty(reservationId))
+            {
+                var reservation = await _dbContext.Reservations
+                    .Include(r => r.Rooms)
+                    .FirstOrDefaultAsync(r => r.Id == reservationId);
+
+                if (reservation == null || !string.Equals(reservation.Status, "CHECKED_IN", StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new InvalidOperationException(
+                        "Cannot redeem complimentary breakfast. No active checked-in reservation found for this room.");
+                }
+
+                // 1. Corporate Rate Contract Override: Check if rate plan explicitly excludes food
+                string? ratePlanId = reservation.RatePlanId;
+                if (string.IsNullOrEmpty(ratePlanId) && !string.IsNullOrEmpty(reservation.CorporateAccountId))
+                {
+                    var corpAccount = await _dbContext.CorporateAccounts
+                        .FirstOrDefaultAsync(c => c.Id == reservation.CorporateAccountId);
+                    ratePlanId = corpAccount?.RatePlanId;
+                }
+
+                if (!string.IsNullOrEmpty(ratePlanId))
+                {
+                    var ratePlan = await _dbContext.RatePlans
+                        .FirstOrDefaultAsync(rp => rp.Id == ratePlanId);
+                    if (ratePlan != null && (string.Equals(ratePlan.Type, "CORPORATE", StringComparison.OrdinalIgnoreCase) || !string.IsNullOrEmpty(reservation.CorporateAccountId)))
+                    {
+                        if (!ratePlan.IncludeFoodAllocation)
+                        {
+                            throw new InvalidOperationException(
+                                $"Complimentary breakfast is excluded under this corporate rate agreement for room {reservation.RoomNumber}.");
+                        }
+                    }
+                }
+
+                // 2. Room Discount Suppression: Check if stay is discounted and property policy suppresses food
+                var activeRoom = reservation.Rooms.FirstOrDefault(r => r.Status == "ACTIVE") ?? reservation.Rooms.FirstOrDefault();
+                bool isDiscountedStay = activeRoom != null && (
+                    !string.IsNullOrEmpty(activeRoom.DiscountType) ||
+                    (activeRoom.DiscountAmount.HasValue && activeRoom.DiscountAmount.Value > 0) ||
+                    (activeRoom.DiscountPercent.HasValue && activeRoom.DiscountPercent.Value > 0)
+                );
+
+                if (isDiscountedStay)
+                {
+                    var localProp = await _dbContext.Properties
+                        .FirstOrDefaultAsync(p => p.Id == order.PropertyId);
+                    bool allowComplimentaryFoodOnDiscountedRooms = false;
+                    if (!string.IsNullOrEmpty(localProp?.RateBreakdownJson))
+                    {
+                        try
+                        {
+                            using var doc = System.Text.Json.JsonDocument.Parse(localProp.RateBreakdownJson);
+                            if (doc.RootElement.TryGetProperty("allowComplimentaryFoodOnDiscountedRooms", out var allowEl))
+                            {
+                                allowComplimentaryFoodOnDiscountedRooms = allowEl.GetBoolean();
+                            }
+                        }
+                        catch (JsonException ex)
+                        {
+                            throw new InvalidOperationException(
+                                "The synced room-rate breakdown configuration is malformed. Sync again before redeeming breakfast.",
+                                ex);
+                        }
+                    }
+
+                    if (!allowComplimentaryFoodOnDiscountedRooms)
+                    {
+                        throw new InvalidOperationException(
+                            $"Complimentary breakfast is suppressed on discounted room rates for room {reservation.RoomNumber}.");
+                    }
+                }
+
+                var busDate = order.BusinessDate.Date;
+                var todayRedemptions = await _dbContext.BreakfastRedemptions
+                    .Where(r => r.ReservationId == reservationId && r.BusinessDate.Date == busDate)
+                    .ToListAsync();
+
+                int alreadyClaimed = todayRedemptions.Sum(r => r.CoversRedeemed);
+                int maxDailyCovers = Math.Max(1, reservation.Adults);
+                int remaining = Math.Max(0, maxDailyCovers - alreadyClaimed);
+
+                if (covers > remaining)
+                {
+                    throw new InvalidOperationException(
+                        $"Cannot redeem {covers} breakfast cover(s). Only {remaining} remaining today for room {reservation.RoomNumber}.");
+                }
+
+                var opId = $"redempt_{reservationId}_{busDate:yyyyMMdd}_{order.Id}";
+                var existingRedemption = await _dbContext.BreakfastRedemptions
+                    .FirstOrDefaultAsync(r => r.PosOrderId == order.Id || r.OperationId == opId);
+
+                if (existingRedemption == null)
+                {
+                    var redemption = new LocalBreakfastRedemption
+                    {
+                        Id = Guid.NewGuid().ToString(),
+                        PropertyId = order.PropertyId,
+                        ReservationId = reservationId,
+                        RoomNumber = reservation.RoomNumber ?? "",
+                        BusinessDate = busDate,
+                        CoversRedeemed = covers,
+                        PosOrderId = order.Id,
+                        Method = "POS_TICKET",
+                        ServerStaffId = userId,
+                        OperationId = opId,
+                        CreatedAt = DateTime.UtcNow
+                    };
+
+                    _dbContext.BreakfastRedemptions.Add(redemption);
+                    order.FolioId = folioId ?? reservation.Folio?.Id;
+                    order.ReservationId = reservationId;
+
+                    AppendSyncEvent("BREAKFAST_REDEMPTION", redemption.Id, "BREAKFAST_REDEEMED", redemption, deviceId, order.OutletId, order.SessionId, userId);
+                }
+                else
+                {
+                    order.FolioId = folioId ?? reservation.Folio?.Id;
+                    order.ReservationId = reservationId;
+                }
+            }
         }
         // ─────────────────────────────────────────────────────────────────────────────
 

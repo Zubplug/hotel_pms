@@ -12,6 +12,7 @@ public class LocalRatePlan
     public string Type { get; set; } = "STANDARD";
     public bool IsPublic { get; set; } = true;
     public bool IsActive { get; set; } = true;
+    public bool IncludeFoodAllocation { get; set; } = false;
     public DateTime UpdatedAt { get; set; }
 }
 

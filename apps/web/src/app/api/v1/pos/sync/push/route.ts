@@ -2,10 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import prisma from "@hotel-pms/db";
 import crypto, { randomUUID } from "crypto";
 import { InventoryService } from "@/lib/inventory/InventoryService";
-import { isNightAuditCutoverActive } from "@/lib/night-audit-guard";
+import { assertOfflineSessionOpenDate, isNightAuditCutoverActive } from "@/lib/night-audit-guard";
 import { requireOrganizationContext } from "@/lib/organization-access";
 import { PosPaymentAccountingService } from "@/lib/services/pos-payment-accounting-service";
+import { BreakfastEntitlementService } from "@/lib/services/breakfast-entitlement-service";
 import { NotificationEngine } from "@/lib/notification-engine";
+import { getPropertyBusinessDate } from "@/lib/date-utils";
 
 // Legacy desktop SyncEvents use operation IDs such as `op_<device>_<ticks>`,
 // while HotelEvent.id is a PostgreSQL UUID. Keep the legacy ID as the
@@ -58,7 +60,8 @@ export async function POST(req: NextRequest) {
     }
     
     const propertyId = terminal.outlet?.propertyId;
-    if (!propertyId) {
+    const terminalProperty = terminal.outlet?.property;
+    if (!propertyId || !terminalProperty) {
       console.warn(`[sync/pos-push] request=${requestId} rejected terminalId=${terminalId} has no property`);
       return NextResponse.json({ error: "Terminal not associated with a property" }, { status: 400 });
     }
@@ -184,6 +187,7 @@ export async function POST(req: NextRequest) {
             'ORDER_CLOSED', 'ORDER_CHECK_SPLIT', 'CHECK_PAID', 'PAYMENT_RECORDED',
             'POS_PAYMENT', 'POS_ORDER_ITEM', 'POS_KOT', 'POS_VOID', 'POS_CASH_MOVEMENT',
             'CASH_MOVEMENT', 'REFUND_REQUESTED', 'DISCOUNT_APPLIED',
+            'BREAKFAST_REDEEMED', 'BREAKFAST_REDEMPTION'
           ]);
           if (transactionEventTypes.has(String(event.eventType))) {
             let sessionId = payload.SessionId || payload.sessionId || payload.PosSessionId || payload.posSessionId || event.sessionId;
@@ -293,6 +297,12 @@ export async function POST(req: NextRequest) {
                  const sessionPropertyId = payload.PropertyId || payload.propertyId || terminal.propertyId;
                  const sessionOutletId = payload.OutletId || payload.outletId || terminal.outletId;
                  const sessionPrimaryOperatorId = isUuid(payload.PrimaryOperatorId) ? payload.PrimaryOperatorId : operatorId;
+                 assertOfflineSessionOpenDate({
+                   propertyBusinessDate: terminalProperty.businessDate || getPropertyBusinessDate(terminalProperty.timezone),
+                   sessionBusinessDate,
+                   occurredAt: sessionOpenedAt,
+                   timezone: terminalProperty.timezone || 'Africa/Lagos',
+                 });
 
                  // The partial unique index protects the database, but a
                  // read-then-create sequence can still race when two offline
@@ -634,10 +644,9 @@ export async function POST(req: NextRequest) {
                       sessionId: order.sessionId,
                       processedById: isUuid(payload.processedById) ? payload.processedById : operatorId,
                       createdAt: new Date(event.occurredAt),
-                      reference: event.idempotencyKey // Store idempotency on payment itself for journaling
+                      reference: payload.Reference || payload.reference || event.idempotencyKey
                   }
               });
-
               // Fetch full relations needed for double-entry GL logic
               const orderWithRelations = await tx.posOrder.findUnique({
                 where: { id: orderId },
@@ -689,6 +698,43 @@ export async function POST(req: NextRequest) {
               }
               // Note: SERVER_BANKING logic runs separately (e.g. at end of shift/cash drop),
               // but we ensure non-cash doesn't increment cash balances.
+          }
+          else if (event.eventType === 'BREAKFAST_REDEEMED' || event.aggregateType === 'BREAKFAST_REDEMPTION') {
+              const resId = payload.ReservationId || payload.reservationId;
+              const covers = Number(payload.CoversRedeemed ?? payload.coversRedeemed ?? 1);
+              const opId = payload.OperationId || payload.operationId || event.idempotencyKey;
+              const busDate = new Date(payload.BusinessDate || payload.businessDate || event.occurredAt);
+
+              if (resId) {
+                const res = await tx.reservation.findUnique({
+                  where: { id: resId },
+                  include: {
+                    room: true,
+                    reservationRooms: {
+                      where: { status: 'ACTIVE' },
+                      include: { room: true },
+                    },
+                  }
+                });
+                const roomNum = payload.RoomNumber || payload.roomNumber || res?.room?.number || res?.reservationRooms?.[0]?.room?.number || '';
+
+                // Atomically revalidate in-house status, corporate rate policy, discount suppression,
+                // and cover allowance with transaction-level advisory locking
+                await BreakfastEntitlementService.recordRedemption(
+                  {
+                    propertyId,
+                    reservationId: resId,
+                    roomNumber: roomNum,
+                    businessDate: busDate,
+                    coversRedeemed: covers,
+                    posOrderId: payload.PosOrderId || payload.posOrderId || null,
+                    serverStaffId: operatorId || undefined,
+                    operationId: opId,
+                    method: payload.Method || payload.method || 'POS_TICKET',
+                  },
+                  tx,
+                );
+              }
           }
           else if (event.eventType === 'REFUND_REQUESTED') {
               const amount = Math.abs(Number(payload.Amount ?? payload.amount));

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
 import { compare } from 'bcryptjs';
 import { auth } from '@/lib/auth';
-import { isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
+import { assertCanOpenShift } from '@/lib/night-audit-guard';
 import { getPropertyBusinessDate } from '@/lib/date-utils';
 import { requireOrganizationContext } from "@/lib/organization-access";
 
@@ -24,9 +24,7 @@ export async function POST(req: NextRequest) {
     if (!propertyId) {
       return NextResponse.json({ error: 'Property ID missing from session context' }, { status: 400 });
     }
-    if (await isNightAuditTransactionLocked(propertyId)) {
-      return NextResponse.json({ error: 'Night audit cutover is in progress. Emergency POS banks cannot be opened until the new business date is active.', code: 'NIGHT_AUDIT_IN_PROGRESS' }, { status: 409 });
-    }
+    await assertCanOpenShift(propertyId);
 
     // Deep Authorization: Check Manager permissions for this property
     const potentialManagers = await prisma.staff.findMany({
@@ -119,6 +117,10 @@ export async function POST(req: NextRequest) {
 
   } catch (error: any) {
     console.error('Error in emergency-bank:', error);
+    if (error?.message?.startsWith('NIGHT_AUDIT_REQUIRED:') || error?.message?.startsWith('NIGHT_AUDIT_IN_PROGRESS:')) {
+       const [code, ...messageParts] = error.message.split(':');
+       return NextResponse.json({ error: messageParts.join(':'), code }, { status: 409 });
+    }
     if (error.message.includes('already active')) {
        return NextResponse.json({ error: error.message }, { status: 409 });
     }

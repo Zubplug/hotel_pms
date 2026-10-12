@@ -26,6 +26,15 @@ export class PosPaymentAccountingService {
     const orderTotalTax = Number(order.taxAmount);
     const orderTotalServiceCharge = Number(order.serviceCharge);
     const isComplimentaryPayment = String(payment.method).toUpperCase() === 'COMPLIMENTARY';
+    const isBreakfastRedemption = Boolean(payment.reference?.startsWith('BREAKFAST_ENTITLEMENT'));
+
+    // Critical Safeguard: Complimentary Breakfast Allocation was already recognized
+    // into GL 4250 by Night Audit once per entitled room-night.
+    // The POS redemption ticket is a non-revenue settlement; it must NEVER credit
+    // GL 4250 or general revenue a second time.
+    if (isBreakfastRedemption) {
+      return;
+    }
 
     // POS complimentary events are represented by a complimentary record and
     // the order's discount field for backward compatibility. Split that value

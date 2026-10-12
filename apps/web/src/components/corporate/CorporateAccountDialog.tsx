@@ -12,7 +12,7 @@ import { Switch } from '@/components/ui/switch';
 import { useSWRConfig } from 'swr';
 import useSWR from 'swr';
 import { toast } from 'sonner';
-import { Building2, CreditCard, Landmark, Mail, Phone, Plus, ShieldAlert, Tag, UserRound } from 'lucide-react';
+import { Building2, Coffee, CreditCard, Landmark, Mail, Phone, Plus, ShieldAlert, Tag, UserRound } from 'lucide-react';
 
 const dialogInput = 'border-white/10 bg-white/[.045] text-slate-100 placeholder:text-slate-600 shadow-inner shadow-black/10 focus-visible:border-indigo-400 focus-visible:ring-indigo-400/20 disabled:cursor-not-allowed disabled:opacity-50';
 const dialogSelect = 'border-white/10 bg-white/[.045] text-slate-100 shadow-inner shadow-black/10 focus:ring-indigo-400/20 data-[placeholder]:text-slate-500';
@@ -36,6 +36,7 @@ function QuickRateDialog({ open, onOpenChange, onSaved, propertyId }: QuickRateD
       name: '',
       code: '',
       currency: 'NGN',
+      includeFoodAllocation: false,
       rates: {} as Record<string, string>
     }
   });
@@ -46,6 +47,7 @@ function QuickRateDialog({ open, onOpenChange, onSaved, propertyId }: QuickRateD
         name: '',
         code: '',
         currency: 'NGN',
+        includeFoodAllocation: false,
         rates: {}
       });
     }
@@ -73,6 +75,7 @@ function QuickRateDialog({ open, onOpenChange, onSaved, propertyId }: QuickRateD
           currency: data.currency,
           rates: submittedRates,
           propertyId,
+          includeFoodAllocation: Boolean(data.includeFoodAllocation),
         })
       });
 
@@ -148,6 +151,21 @@ function QuickRateDialog({ open, onOpenChange, onSaved, propertyId }: QuickRateD
                 </SelectContent>
               </Select>
             </div>
+          </div>
+
+          <div className="flex items-center justify-between rounded-xl border border-white/[.07] bg-white/[.02] p-4">
+            <div className="space-y-0.5">
+              <Label className="text-xs font-medium text-slate-200">
+                Complimentary Breakfast Allocation
+              </Label>
+              <p className="text-xs text-slate-400">
+                Include ₦3,000 daily F&B breakfast allocation in this corporate agreement. (Default: OFF)
+              </p>
+            </div>
+            <Switch
+              checked={watch('includeFoodAllocation') || false}
+              onCheckedChange={(checked) => setValue('includeFoodAllocation', checked)}
+            />
           </div>
 
           <div className="pt-4 space-y-3">
@@ -479,7 +497,18 @@ export function CorporateAccountDialog({
                 return (
                   <div className="mt-4 overflow-hidden rounded-xl border border-indigo-400/15 bg-[#0d1422]">
                     <div className="flex items-center justify-between border-b border-white/[.08] bg-indigo-500/[.06] px-4 py-3 text-sm font-medium text-slate-200">
-                      <span>Included room types</span><span className="text-[11px] font-normal text-indigo-300">Negotiated pricing preview</span>
+                      <div className="flex items-center gap-2">
+                        <span>Included room types</span>
+                        <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                          selectedPlan.includeFoodAllocation
+                            ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
+                            : 'bg-slate-700/40 text-slate-400 border border-slate-600/30'
+                        }`}>
+                          <Coffee className="h-3 w-3" />
+                          {selectedPlan.includeFoodAllocation ? 'Breakfast Included' : 'No Breakfast Allocation'}
+                        </span>
+                      </div>
+                      <span className="text-[11px] font-normal text-indigo-300">Negotiated pricing preview</span>
                     </div>
                     <table className="w-full text-xs text-left">
                       <thead className="bg-white/[.03] text-slate-500">

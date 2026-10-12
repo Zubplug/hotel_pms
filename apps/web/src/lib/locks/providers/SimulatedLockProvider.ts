@@ -3,6 +3,12 @@ import { LockProvider, LockProviderCapabilities, IssueCredentialParams, RevokeCr
 export class SimulatedLockProvider implements LockProvider {
   readonly name = 'SIMULATED';
 
+  constructor() {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('SIMULATED_LOCK_PROVIDER_DISABLED_IN_PRODUCTION');
+    }
+  }
+
   readonly capabilities: LockProviderCapabilities = {
     supportsDuplicateCards: true,
     supportsCardReplacement: true,

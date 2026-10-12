@@ -1873,8 +1873,10 @@ export async function POST(req: NextRequest) {
               data: {
                 folioId: aggregateId,
                 businessDate: postingBusinessDate,
-                type: "CHARGE",
+                type: payload.itemType || payload.type || "CHARGE",
                 source: payload.source || "ROOM_CHARGE",
+                revenueCategory: payload.revenueCategory || undefined,
+                revenueClass: payload.revenueClass || undefined,
                 description: payload.description,
                 quantity: 1,
                 unitAmount: amount,

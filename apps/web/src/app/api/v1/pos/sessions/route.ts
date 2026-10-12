@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
 import { auth } from '@/lib/auth';
 import { verifyOperatorToken } from '@/lib/pos/operatorAuth';
-import { isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
+import { assertCanOpenShift } from '@/lib/night-audit-guard';
 import { getPropertyBusinessDate } from '@/lib/date-utils';
 import { requireOrganizationContext } from "@/lib/organization-access";
 
@@ -77,9 +77,7 @@ export async function POST(req: NextRequest) {
     if (!property || !property.isActive) {
       return NextResponse.json({ error: 'Property not found or inactive' }, { status: 400 });
     }
-    if (await isNightAuditTransactionLocked(propertyId)) {
-      return NextResponse.json({ error: 'Night audit cutover is in progress. Open a POS session after the new business date is active.', code: 'NIGHT_AUDIT_IN_PROGRESS' }, { status: 409 });
-    }
+    await assertCanOpenShift(propertyId);
     const bankingModel = (property?.settings as any)?.pos?.bankingModel || 'CENTRAL_CASHIER';
     const bankType = bankingModel === 'SERVER_BANKING' ? 'SERVER' : 'CENTRAL';
     const businessDate = property.businessDate || getPropertyBusinessDate(property.timezone);
@@ -188,6 +186,10 @@ export async function POST(req: NextRequest) {
     }
     if (error.message.startsWith('SHIFT_PENDING_APPROVAL:')) {
       return NextResponse.json({ error: 'The previous shift must be approved before a new shift can be opened.' }, { status: 409 });
+    }
+    if (error.message.startsWith('NIGHT_AUDIT_REQUIRED:') || error.message.startsWith('NIGHT_AUDIT_IN_PROGRESS:')) {
+      const [, message] = error.message.split(':', 2);
+      return NextResponse.json({ error: message, code: error.message.split(':', 1)[0] }, { status: 409 });
     }
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }

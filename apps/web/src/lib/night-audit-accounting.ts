@@ -202,7 +202,15 @@ export async function postNightAuditJournal(tx: any, input: {
       addLine(lines, { accountId: contraAccount.id, debit: amount, credit: 0, description: item.description, sourceType: 'FOLIO_ITEM', sourceId: item.id });
       addLine(lines, { accountId: account('guestLedger').id, debit: 0, credit: amount, description: item.description, sourceType: 'FOLIO_ITEM', sourceId: item.id });
     } else {
-      const eventCode = item.revenueClass === 'FOOD'
+      // ── Revenue classification (precedence-ordered) ──────────────────────
+      // 1. Service Charge breakdown lines (GL 2210) — room rate component
+      if (item.revenueClass === 'SERVICE_CHARGE') {
+        addLine(lines, { accountId: account('guestLedger').id, debit: amount, credit: 0, description: item.description, sourceType: 'FOLIO_ITEM', sourceId: item.id });
+        addLine(lines, { accountId: account('serviceCharge').id, debit: 0, credit: amount, description: item.description, sourceType: 'FOLIO_ITEM', sourceId: item.id });
+        continue;
+      }
+      // 2. Event-hall and F&B breakdown lines resolved via dynamic event codes
+      const eventCode = item.revenueClass === 'FOOD' || item.revenueCategory === 'FNB'
         ? (typeof revenueMap.FOOD === 'string' ? revenueMap.FOOD : '4250')
         : item.revenueClass === 'HALL'
           ? (typeof revenueMap.EVENT_HALL === 'string' ? revenueMap.EVENT_HALL : '4300')
@@ -210,8 +218,17 @@ export async function postNightAuditJournal(tx: any, input: {
             ? (typeof revenueMap.EVENT_EQUIPMENT === 'string' ? revenueMap.EVENT_EQUIPMENT : '4300')
             : null;
       const eventAccount = eventCode ? byCode.get(eventCode) : undefined;
-      if (item.revenueClass && !eventAccount) return { status: 'MISSING_MAPPING', journalEntryId: null, missingAccounts: [`EVENT_${item.revenueClass}_REVENUE`], lineCount: lines.length };
-      const key = eventAccount ? null : (['ROOM_CHARGE', 'DAY_USE_ROOM_CHARGE'].includes(item.source) || item.revenueCategory === 'ROOM' ? 'roomsRevenue' : item.source === 'POS' || item.revenueCategory === 'FNB' ? 'fnbRevenue' : 'otherRevenue');
+      // Missing dynamic account is an explicit misconfiguration — stop the journal.
+      if ((item.revenueClass === 'HALL' || item.revenueClass === 'EQUIPMENT') && !eventAccount) {
+        return { status: 'MISSING_MAPPING', journalEntryId: null, missingAccounts: [`EVENT_${item.revenueClass}_REVENUE`], lineCount: lines.length };
+      }
+      // 3. Fall through: ROOM source → 4050, POS/FNB → 4250, everything else → otherRevenue
+      const key = eventAccount ? null
+        : (['ROOM_CHARGE', 'DAY_USE_ROOM_CHARGE'].includes(item.source) && item.revenueCategory === 'ROOM')
+          ? 'roomsRevenue'
+          : (item.source === 'POS' || item.revenueCategory === 'FNB')
+            ? 'fnbRevenue'
+            : 'otherRevenue';
       addLine(lines, { accountId: account('guestLedger').id, debit: amount, credit: 0, description: item.description, sourceType: 'FOLIO_ITEM', sourceId: item.id });
       addLine(lines, { accountId: eventAccount?.id || account(key!).id, debit: 0, credit: amount, description: item.description, sourceType: 'FOLIO_ITEM', sourceId: item.id });
     }
@@ -332,7 +349,7 @@ export async function buildNightAuditBalanceProof(tx: any, input: {
     }),
   ]);
   const activity = Number(folioActivity._sum.amount || 0);
-  const journalAccounts = ['1000', '1100', '1110', '1120', '1130', '1140', '1150', '2200', '2300'].map((code) => {
+  const journalAccounts = ['1000', '1100', '1110', '1120', '1130', '1140', '1150', '2200', '2210', '2300'].map((code) => {
     const before = postedEntries.reduce((sum: number, entry: any) => entry.entryDate < input.businessDate
       ? sum + journalNet(code, entry.lines)
       : sum, 0);
@@ -363,6 +380,7 @@ export async function buildNightAuditBalanceProof(tx: any, input: {
     makeJournalBalanceRow('SETTLEMENT', 'BANK_TRANSFER', previousByKey.get('SETTLEMENT:BANK_TRANSFER'), accountBalance('1130'), 'Bank transfer receivable is sourced from dated posted payment and refund journals.'),
     makeJournalBalanceRow('SETTLEMENT', 'CHEQUES_IN_HAND', previousByKey.get('SETTLEMENT:CHEQUES_IN_HAND'), accountBalance('1150'), 'Cheques in hand are sourced from dated posted payment and refund journals.'),
     makeJournalBalanceRow('LIABILITY', 'TAX_PAYABLE', previousByKey.get('LIABILITY:TAX_PAYABLE'), accountBalance('2200'), 'Tax payable is sourced from dated posted tax journals.'),
+    makeJournalBalanceRow('LIABILITY', 'SERVICE_CHARGE_PAYABLE', previousByKey.get('LIABILITY:SERVICE_CHARGE_PAYABLE'), accountBalance('2210'), 'Service charge payable is sourced from dated posted room charges and F&B service charge journals.'),
     makeJournalBalanceRow('LIABILITY', 'ADVANCED_DEPOSITS', previousByKey.get('LIABILITY:ADVANCED_DEPOSITS'), accountBalance('2300'), 'Corporate and guest advance payments are sourced from dated posted advance journals.'),
   ];
   return rows;
@@ -373,7 +391,7 @@ function journalNet(code: string, lines: any[]) {
     if (line.account.code !== code) return sum;
     const debit = Number(line.debit || 0);
     const credit = Number(line.credit || 0);
-    return sum + (['2200', '2300'].includes(code) ? credit - debit : debit - credit);
+    return sum + (['2200', '2210', '2300'].includes(code) ? credit - debit : debit - credit);
   }, 0);
 }
 

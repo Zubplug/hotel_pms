@@ -1,13 +1,14 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Boxes, Edit2, Loader2, Package, RefreshCw, Search, Send, ShieldCheck, Trash2, Warehouse } from 'lucide-react';
+import { AlertTriangle, Boxes, ChefHat, Edit2, Loader2, Package, RefreshCw, Search, Send, ShieldCheck, Trash2, Warehouse } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatUnit } from '@/lib/inventory/units';
 import { OutletStockEditDialog } from './OutletStockEditDialog';
+import { DailyBreakfastProductionModal } from '@/components/inventory/DailyBreakfastProductionModal';
 
 type WarehouseRecord = { id: string; name: string; parentWarehouseId?: string | null; posOutletId?: string | null };
 type InventoryItem = {
@@ -50,6 +51,7 @@ export function FnbInventoryClient() {
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
   const [error, setError] = useState('');
+  const [breakfastModalOpen, setBreakfastModalOpen] = useState(false);
 
   useEffect(() => {
     fetch('/api/v1/inventory/warehouses?scope=outlet')
@@ -116,10 +118,17 @@ export function FnbInventoryClient() {
               </Select>
             </div>
             <Button variant="outline" onClick={() => void loadInventory()} disabled={loading || !warehouseId} className="h-11 rounded-xl border-[#eadfd8] bg-white text-[#6f5d53] shadow-sm"><RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />Refresh</Button>
+            <Button onClick={() => setBreakfastModalOpen(true)} className="h-11 rounded-xl bg-orange-600 text-white shadow-sm hover:bg-orange-700 font-semibold"><ChefHat className="mr-2 h-4 w-4" />Produce breakfast buffet</Button>
             {isOutlet && <div className="flex gap-2"><Button onClick={() => { window.location.href = '/fnb/requisitions'; }} className="h-11 rounded-xl bg-orange-600 text-white shadow-sm hover:bg-orange-700"><Send className="mr-2 h-4 w-4" />Stock requisition</Button><Button variant="outline" onClick={() => { window.location.href = '/fnb/inventory/waste'; }} className="h-11 rounded-xl border-[#eadfd8] bg-white text-[#6f5d53] shadow-sm"><Trash2 className="mr-2 h-4 w-4 text-rose-600" />Waste log</Button></div>}
             {!isOutlet && <Button variant="outline" onClick={() => { window.location.href = '/inventory/approvals'; }} className="h-11 rounded-xl border-[#eadfd8] bg-white text-[#6f5d53] shadow-sm"><ShieldCheck className="mr-2 h-4 w-4 text-amber-600" />Approval Control Center</Button>}
           </div>
         }
+      />
+
+      <DailyBreakfastProductionModal
+        open={breakfastModalOpen}
+        onOpenChange={setBreakfastModalOpen}
+        onSuccess={() => void loadInventory()}
       />
 
       {error && <div className="mb-5 flex items-center gap-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"><AlertTriangle className="h-4 w-4" />{error}</div>}

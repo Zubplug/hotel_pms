@@ -3,6 +3,7 @@ import { getPropertyBusinessDate, getNextBusinessDate } from '@/lib/date-utils';
 import crypto from 'crypto';
 import { TenantContext } from './organization-access';
 import { postEventInvoiceRevenue } from './events/event-revenue-accounting';
+import { computeRateBreakdown, resolveBreakdownConfig } from '@/lib/room-rate-breakdown';
 
 export async function getOperationalReview(ctx: TenantContext, propertyId: string) {
   if (!ctx.propertyIds.includes(propertyId)) throw new Error('FORBIDDEN');
@@ -568,6 +569,7 @@ export async function getFinancialAudit(ctx: TenantContext, propertyId: string) 
       reservationRooms: { where: { status: 'ACTIVE' }, include: { room: { include: { roomType: true } } }, orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }] },
       folios: { where: { type: { in: ['MAIN', 'ROOM', 'CITY_LEDGER'] }, status: 'OPEN' }, select: { id: true } },
       ratePlan: true,
+      corporateAccount: { include: { ratePlan: true } },
     },
   });
   const previewApprovalIds = previewReservations.flatMap((reservation: any) => reservation.reservationRooms.map((room: any) => room.discountApprovalId).filter(Boolean));
@@ -590,6 +592,24 @@ export async function getFinancialAudit(ctx: TenantContext, propertyId: string) 
     let discount = 0;
     if (approvalApproved && room.discountType === 'FIXED_AMOUNT') discount = Math.min(gross, Number(room.discountAmount || 0));
     if (approvalApproved && room.discountType === 'PERCENTAGE') discount = Math.min(gross, gross * Number(room.discountPercent || 0) / 100);
+
+    // Match executeNightAudit: the original gross is decomposed and any
+    // approved concession is posted separately as a contra-revenue line.
+    const effectiveGross = discount > 0 ? gross : Math.max(0, gross - discount);
+    const breakdownConfig = resolveBreakdownConfig((property.settings as any) || {});
+    const corporateRatePlan = reservation.corporateAccount?.ratePlan ||
+      (reservation.ratePlan?.type === 'CORPORATE' ? reservation.ratePlan : null);
+    const corporateFoodAllocationOverride = corporateRatePlan
+      ? Boolean(corporateRatePlan.includeFoodAllocation)
+      : null;
+
+    const rateBreakdown = computeRateBreakdown({
+      grossRate: effectiveGross,
+      config: breakdownConfig,
+      hasApprovedDiscount: discount > 0,
+      corporateFoodAllocationOverride,
+    });
+
     return [{
       id: reservation.id,
       operationId,
@@ -600,10 +620,11 @@ export async function getFinancialAudit(ctx: TenantContext, propertyId: string) 
       currency: room.currency || property.baseCurrency || 'NGN',
       grossAmount: gross,
       discountAmount: discount,
-      netAmount: Math.max(0, gross - discount),
-      amount: Math.max(0, gross - discount),
+      netAmount: effectiveGross,
+      amount: effectiveGross,
       discountType: discount > 0 ? room.discountType : null,
       discountReason: discount > 0 ? room.discountReason : null,
+      rateBreakdown,
     }];
   });
 

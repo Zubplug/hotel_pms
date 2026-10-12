@@ -730,7 +730,21 @@ export default function PosApp() {
   // ─────────────────────────────────────────────────────────────────
   // CHARGE — process payment on existing order
   // ─────────────────────────────────────────────────────────────────
-  const handleCharge = async (method: string, reference?: string, roomChargeData?: { folioId: string; reservationId: string; guestName: string; roomNumber: string }) => {
+  const handleCharge = async (
+    method: string,
+    reference?: string,
+    roomChargeData?: {
+      folioId: string;
+      reservationId: string;
+      guestName: string;
+      roomNumber: string;
+      breakfastRedemption?: {
+        reservationId: string;
+        roomNumber: string;
+        coversRedeemed: number;
+      };
+    }
+  ) => {
     if (!operatorToken) { toast.error('No operator authenticated'); return; }
     if (!currentOrderId) { toast.error('No active order to charge'); return; }
     setIsProcessing(true);
@@ -743,11 +757,13 @@ export default function PosApp() {
         reference,
       };
 
-      // For ROOM_CHARGE, include the folio/reservation so the backend can
-      // validate + post the charge atomically.
-      if (method === 'ROOM_CHARGE' && roomChargeData) {
-        paymentData.folioId = roomChargeData.folioId;
-        paymentData.reservationId = roomChargeData.reservationId;
+      // For ROOM_CHARGE or COMPLIMENTARY breakfast redemption, include folio/reservation
+      if (roomChargeData) {
+        if (roomChargeData.folioId) paymentData.folioId = roomChargeData.folioId;
+        if (roomChargeData.reservationId) paymentData.reservationId = roomChargeData.reservationId;
+        if (roomChargeData.breakfastRedemption) {
+          paymentData.breakfastRedemption = roomChargeData.breakfastRedemption;
+        }
       }
 
       const res = await provider.pos.payOrder(currentOrderId, paymentData, operatorToken);
@@ -773,22 +789,35 @@ export default function PosApp() {
         setActiveOrderType('TABLE');
         setActiveDisplayName('');
         setShowChargeModal(false);
-        setSuccessDialog(method === 'ROOM_CHARGE' && roomChargeData
-          ? {
-              isOpen: true,
-              title: 'Room charge posted',
-              message: `${roomChargeData.guestName} · Room ${roomChargeData.roomNumber}`,
-              meta: [
-                { label: 'Amount', value: formatCurrency(total) },
-                { label: 'Folio', value: 'Updated successfully' },
-              ],
-              statusText: isOnline ? undefined : 'Saved offline · will sync automatically',
-            }
-          : {
-              isOpen: true,
-              title: 'Payment Successful!',
-              message: `Payment of ${formatCurrency(total)} via ${method} has been processed successfully.`,
-            });
+        setSuccessDialog(
+          roomChargeData?.breakfastRedemption
+            ? {
+                isOpen: true,
+                title: 'Breakfast Entitlement Redeemed!',
+                message: `${roomChargeData.guestName} · Room ${roomChargeData.roomNumber}`,
+                meta: [
+                  { label: 'Covers Redeemed', value: `${roomChargeData.breakfastRedemption.coversRedeemed}` },
+                  { label: 'Settlement', value: 'Complimentary (₦0.00)' },
+                ],
+                statusText: isOnline ? undefined : 'Saved offline · will sync automatically',
+              }
+            : method === 'ROOM_CHARGE' && roomChargeData
+            ? {
+                isOpen: true,
+                title: 'Room charge posted',
+                message: `${roomChargeData.guestName} · Room ${roomChargeData.roomNumber}`,
+                meta: [
+                  { label: 'Amount', value: formatCurrency(total) },
+                  { label: 'Folio', value: 'Updated successfully' },
+                ],
+                statusText: isOnline ? undefined : 'Saved offline · will sync automatically',
+              }
+            : {
+                isOpen: true,
+                title: 'Payment Successful!',
+                message: `Payment of ${formatCurrency(total)} via ${method} has been processed successfully.`,
+              }
+        );
         setTableRefreshTrigger(Date.now());
       } else {
         throw new Error(res.error);

@@ -4,7 +4,7 @@ import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
 import { requireOrganizationContext } from '@/lib/organization-access';
-import { isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
+import { assertCanOpenShift } from '@/lib/night-audit-guard';
 
 export async function GET(req: NextRequest) {
   try {
@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
     const property = await prisma.property.findUnique({ where: { id: propertyId } });
     if (!property) return errorResponse('NOT_FOUND', 'Property not found', 404);
     if (!((await requireOrganizationContext(session.user.id)).propertyIds).includes(propertyId)) return errorResponse('FORBIDDEN', 'No access to this property', 403);
-    if (await isNightAuditTransactionLocked(propertyId)) return errorResponse('NIGHT_AUDIT_IN_PROGRESS', 'Night audit cutover is in progress. Open a cashier shift after the new business date is active.', 409);
+    await assertCanOpenShift(propertyId);
     const cashAccount = await prisma.cashAccount.findFirst({ where: { id: cashAccountId, propertyId, type: 'FRONTDESK_TILL', isActive: true } });
     if (!cashAccount) return errorResponse('BAD_REQUEST', 'Select an active Front Desk Till. Cash in Transit and control accounts cannot be used for a cashier shift.', 400);
     const businessDate = property.businessDate || new Date(new Intl.DateTimeFormat('en-CA', { timeZone: property.timezone || 'Africa/Lagos' }).format(new Date()) + 'T00:00:00.000Z');
@@ -66,6 +66,10 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     if (error instanceof Error && error.message === 'STAFF_SESSION_EXISTS') return errorResponse('CONFLICT', 'Staff already has an open session', 409);
     if (error instanceof Error && error.message === 'TILL_SESSION_EXISTS') return errorResponse('CONFLICT', 'Till is already in use by another open session', 409);
+    if (error instanceof Error && (error.message.startsWith('NIGHT_AUDIT_REQUIRED:') || error.message.startsWith('NIGHT_AUDIT_IN_PROGRESS:'))) {
+      const [code, ...messageParts] = error.message.split(':');
+      return errorResponse(code, messageParts.join(':'), 409);
+    }
     console.error('[Frontdesk Sessions POST]', error);
     return errorResponse('INTERNAL_ERROR', 'Unexpected error', 500);
   }

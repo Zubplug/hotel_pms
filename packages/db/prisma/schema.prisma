@@ -236,6 +236,7 @@ model Property {
   bookingPaymentAccounts BookingPaymentAccount[]
   customDomainRequests   CustomDomainRequest[]
   customWebsiteRequests  CustomWebsiteRequest[]
+  breakfastRedemptions   BreakfastRedemption[]
 }
 
 model Building {
@@ -471,6 +472,7 @@ model RatePlan {
   type        RatePlanType
   isPublic    Boolean      @default(true)
   isActive    Boolean      @default(true)
+  includeFoodAllocation Boolean @default(false)
 
   minStay            Int        @default(1)
   maxStay            Int?
@@ -813,8 +815,9 @@ model Reservation {
   updatedAt       DateTime          @updatedAt @db.Timestamptz
   deletedAt       DateTime?         @db.Timestamptz
   laundryOrders   LaundryOrder[]
-  CityLedgerEntry CityLedgerEntry[]
-  folioItems      FolioItem[]
+  CityLedgerEntry      CityLedgerEntry[]
+  folioItems           FolioItem[]
+  breakfastRedemptions BreakfastRedemption[]
 }
 
 model ReservationGuest {
@@ -3975,8 +3978,9 @@ model PosOrder {
   voids             PosVoid[]
   discounts         PosDiscount[]
   checks            PosCheck[]
-  kots              PosKot[]
-  productionBatches PosProductionBatch[]
+  kots                 PosKot[]
+  productionBatches    PosProductionBatch[]
+  breakfastRedemptions BreakfastRedemption[]
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
@@ -7024,4 +7028,25 @@ model BookingPaymentAccount {
   Organization Organization @relation(fields: [organizationId], references: [id])
 
   @@index([organizationId, provider, isActive])
+}
+
+model BreakfastRedemption {
+  id             String   @id @default(uuid()) @db.Uuid
+  propertyId     String   @db.Uuid
+  reservationId  String   @db.Uuid
+  roomNumber     String
+  businessDate   DateTime @db.Date
+  coversRedeemed Int      @default(1)
+  posOrderId     String?  @db.Uuid
+  method         String   @default("POS_TICKET") // 'POS_TICKET' or 'BUFFET_BATCH'
+  serverStaffId  String?  @db.Uuid
+  operationId    String   @unique
+  createdAt      DateTime @default(now()) @db.Timestamptz
+
+  property    Property     @relation(fields: [propertyId], references: [id])
+  reservation Reservation  @relation(fields: [reservationId], references: [id])
+  posOrder    PosOrder?    @relation(fields: [posOrderId], references: [id])
+
+  @@unique([propertyId, reservationId, businessDate, operationId])
+  @@index([propertyId, businessDate])
 }

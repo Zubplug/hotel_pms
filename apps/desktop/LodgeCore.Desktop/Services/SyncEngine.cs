@@ -901,6 +901,46 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                         localProp.NoShowAllowReinstatement = nsa.ValueKind == System.Text.Json.JsonValueKind.True;
                     if (propEl.TryGetProperty("noShowReinstatementRequiresApproval", out var nsra))
                         localProp.NoShowReinstatementRequiresApproval = nsra.ValueKind == System.Text.Json.JsonValueKind.True;
+                    if (propEl.TryGetProperty("rateBreakdownConfigVersion", out var rbv) && rbv.TryGetInt32(out var serverVer))
+                    {
+                        // Stale-config protection: only update if server version >= local version
+                        if (serverVer >= localProp.RateBreakdownConfigVersion)
+                        {
+                            localProp.RateBreakdownConfigVersion = serverVer;
+                            if (propEl.TryGetProperty("rateBreakdownJson", out var rbj) && rbj.ValueKind != System.Text.Json.JsonValueKind.Null)
+                            {
+                                var rawJson = rbj.GetString();
+                                if (!string.IsNullOrWhiteSpace(rawJson))
+                                {
+                                    try
+                                    {
+                                        using var parsedTest = System.Text.Json.JsonDocument.Parse(rawJson);
+                                        localProp.RateBreakdownJson = rawJson;
+                                    }
+                                    catch
+                                    {
+                                        // Do not overwrite existing valid config if incoming payload is malformed
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    else if (propEl.TryGetProperty("rateBreakdownJson", out var rbjFallback) && rbjFallback.ValueKind != System.Text.Json.JsonValueKind.Null)
+                    {
+                        var rawJson = rbjFallback.GetString();
+                        if (!string.IsNullOrWhiteSpace(rawJson))
+                        {
+                            try
+                            {
+                                using var parsedTest = System.Text.Json.JsonDocument.Parse(rawJson);
+                                localProp.RateBreakdownJson = rawJson;
+                            }
+                            catch
+                            {
+                                // Never replace a valid local configuration with malformed legacy payload.
+                            }
+                        }
+                    }
 
                     if (root.TryGetProperty("syncedAt", out var syncedAtEl))
                     {
@@ -1151,6 +1191,7 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                     rp.Type = el.TryGetProperty("type", out var t) && t.ValueKind != System.Text.Json.JsonValueKind.Null ? t.GetString() ?? "STANDARD" : "STANDARD";
                     rp.IsPublic = el.TryGetProperty("isPublic", out var pub) ? pub.GetBoolean() : true;
                     rp.IsActive = el.TryGetProperty("isActive", out var act) ? act.GetBoolean() : true;
+                    rp.IncludeFoodAllocation = el.TryGetProperty("includeFoodAllocation", out var ifa) && ifa.ValueKind == System.Text.Json.JsonValueKind.True;
                     rp.UpdatedAt = DateTime.UtcNow;
                 }
             }
