@@ -154,8 +154,9 @@ export class GeneralLedgerService {
     return parentTx ? operation(parentTx) : prisma.$transaction(operation);
   }
 
-  static async reverseJournal(ctx: TenantContext, entryId: string, reversalDate: Date, reason: string) {
-    const original = await prisma.journalEntry.findUnique({
+  static async reverseJournal(ctx: TenantContext, entryId: string, reversalDate: Date, reason: string, parentTx?: any) {
+    const db = parentTx || prisma;
+    const original = await db.journalEntry.findUnique({
       where: { id: entryId },
       include: { lines: true }
     });
@@ -165,19 +166,20 @@ export class GeneralLedgerService {
     if (original.status !== 'POSTED') throw new Error(`Cannot reverse entry with status ${original.status}`);
 
     // Create the reversing entry lines
-    const reversalLines = original.lines.map(line => ({
+    const reversalLines = original.lines.map((line: any) => ({
       accountId: line.accountId,
       debit: Number(line.credit), // Flip credit to debit
       credit: Number(line.debit), // Flip debit to credit
       description: `Reversal of ${original.reference || entryId}: ${line.description || ''}`,
     }));
 
-    return prisma.$transaction(async (tx) => {
+    const operation = async (tx: any) => {
       // 1. Mark original as reversed
-      await tx.journalEntry.update({
-        where: { id: entryId },
+      const marked = await tx.journalEntry.updateMany({
+        where: { id: entryId, status: 'POSTED' },
         data: { status: 'REVERSED', reference: `${original.reference || ''} [REVERSED]` }
       });
+      if (marked.count !== 1) throw new Error('Journal entry was already reversed or changed');
 
       // 2. Post reversal entry
       const reversalEntry = await GeneralLedgerService.postJournal(ctx, {
@@ -187,7 +189,7 @@ export class GeneralLedgerService {
         reference: `REV-${original.id.substring(0, 8)}`,
         sourceModule: 'MANUAL_REVERSAL',
         lines: reversalLines
-      });
+      }, tx);
 
       await tx.auditLog.create({
         data: {
@@ -204,6 +206,8 @@ export class GeneralLedgerService {
       });
 
       return reversalEntry;
-    });
+    };
+
+    return parentTx ? operation(parentTx) : prisma.$transaction(operation);
   }
 }

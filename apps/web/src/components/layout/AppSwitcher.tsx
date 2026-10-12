@@ -15,7 +15,8 @@ import {
   Grid3X3,
   X,
   Home,
-  Lock
+  Lock,
+  Users
 } from 'lucide-react';
 import { useSession } from 'next-auth/react';
 import { useLock } from '@/components/auth/LockProvider';
@@ -40,6 +41,7 @@ const TILES = [
   },
   { cap: ['ACCESS_MAINTENANCE'], label: 'Maintenance', icon: Wrench, href: '/maintenance', module: 'MODULE_OPERATIONS' },
   { cap: ['ACCESS_MANAGEMENT'], label: 'Management', icon: BarChart3, href: '/general-manager', module: 'MODULE_ENTERPRISE' },
+  { cap: ['ACCESS_HR', 'hr.employee.view', 'hr.payroll.view'], label: 'HR & Payroll', icon: Users, href: '/hr', module: 'MODULE_ENTERPRISE' },
   { cap: ['ACCESS_NIGHT_AUDIT'], label: 'Night Audit', icon: Moon, href: '/night-audit', module: 'MODULE_PMS' },
   { cap: ['ACCESS_SYNC_CENTER'], label: 'Sync Center', icon: RefreshCw, href: '/sync-center', module: 'MODULE_PMS' },
 ];

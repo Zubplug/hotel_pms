@@ -20,7 +20,13 @@ const dirsToHide = [
   { src: path.join(process.cwd(), 'src/app/admin'), dest: path.join(process.cwd(), 'src/app/_admin') },
   { src: path.join(process.cwd(), 'src/app/night-audit'), dest: path.join(process.cwd(), 'src/app/_night-audit') },
   { src: path.join(process.cwd(), 'src/app/(external-auditor)'), dest: path.join(process.cwd(), 'src/app/_external-auditor_group') },
-  { src: path.join(process.cwd(), 'src/app/external-auditor'), dest: path.join(process.cwd(), 'src/app/_external-auditor') }
+  { src: path.join(process.cwd(), 'src/app/external-auditor'), dest: path.join(process.cwd(), 'src/app/_external-auditor') },
+  // The HR & Payroll workspace uses server-authenticated layouts and is excluded from desktop static export.
+  { src: path.join(process.cwd(), 'src/app/hr'), dest: path.join(process.cwd(), 'src/app/_hr') },
+  { src: path.join(process.cwd(), 'src/app/(hr)'), dest: path.join(process.cwd(), 'src/app/_hr_group') },
+  // Portal integrations require an online session and provider credentials; never package them in offline desktop builds.
+  { src: path.join(process.cwd(), 'src/app/portal'), dest: path.join(process.cwd(), 'src/app/_portal') },
+  { src: path.join(process.cwd(), 'src/app/(portal)'), dest: path.join(process.cwd(), 'src/app/_portal_group') }
 ];
 
 // These cashier pages reuse admin POS screens. When the admin route group is

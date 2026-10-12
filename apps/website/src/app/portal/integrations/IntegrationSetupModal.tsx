@@ -10,10 +10,10 @@ type Property = {
   account: { id: string; provider: string; mode: string; target: string; currency: string; configured: boolean } | null;
 };
 
-export function IntegrationSetupModal({ onClose, onSaved }: { onClose: () => void; onSaved?: () => void }) {
+export function IntegrationSetupModal({ onClose, onSaved, payrollOnly = false }: { onClose: () => void; onSaved?: () => void; payrollOnly?: boolean }) {
   const [properties, setProperties] = useState<Property[]>([]);
   const [propertyId, setPropertyId] = useState("");
-  const [target, setTarget] = useState("STANDALONE_API");
+  const [target, setTarget] = useState(payrollOnly ? "PAYROLL" : "STANDALONE_API");
   const [secret, setSecret] = useState("");
   const [webhookSecret, setWebhookSecret] = useState("");
   const [status, setStatus] = useState("Loading properties…");
@@ -29,7 +29,7 @@ export function IntegrationSetupModal({ onClose, onSaved }: { onClose: () => voi
         setProperties(payload.properties ?? []);
         if (payload.properties?.[0]) {
           setPropertyId(payload.properties[0].id);
-          setTarget(payload.properties[0].targets.includes("STANDALONE_API") ? "STANDALONE_API" : "BOOKING_ENGINE");
+          setTarget(payrollOnly ? "PAYROLL" : (payload.properties[0].targets.includes("STANDALONE_API") ? "STANDALONE_API" : "BOOKING_ENGINE"));
         }
         setStatus("");
       })
@@ -37,12 +37,12 @@ export function IntegrationSetupModal({ onClose, onSaved }: { onClose: () => voi
   }, []);
 
   const property = properties.find((item) => item.id === propertyId) ?? null;
-  const targets = useMemo(() => Array.from(new Set(property?.targets ?? [])), [property]);
+  const targets = useMemo(() => payrollOnly ? ["PAYROLL"] : Array.from(new Set(property?.targets ?? [])), [property, payrollOnly]);
 
   function changeProperty(value: string) {
     const next = properties.find((item) => item.id === value);
     setPropertyId(value);
-    setTarget(next?.targets.includes("STANDALONE_API") ? "STANDALONE_API" : "BOOKING_ENGINE");
+    setTarget(payrollOnly ? "PAYROLL" : (next?.targets.includes("STANDALONE_API") ? "STANDALONE_API" : "BOOKING_ENGINE"));
   }
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
@@ -52,7 +52,7 @@ export function IntegrationSetupModal({ onClose, onSaved }: { onClose: () => voi
     setStatus("");
     try {
       const form = new FormData(event.currentTarget);
-      form.set("accountId", property.account?.id ?? "00000000-0000-0000-0000-000000000000");
+      form.set("accountId", payrollOnly ? "00000000-0000-0000-0000-000000000000" : (property.account?.id ?? "00000000-0000-0000-0000-000000000000"));
       form.set("provider", "FLUTTERWAVE");
       form.set("mode", "CUSTOMER");
       form.set("target", target);
@@ -87,12 +87,12 @@ export function IntegrationSetupModal({ onClose, onSaved }: { onClose: () => voi
         {properties.length > 0 && (
           <form onSubmit={submit}>
             <label className="be-field"><span className="be-field-label">Property</span><select value={propertyId} onChange={(event) => changeProperty(event.target.value)}><option value="">Select property</option>{properties.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
-            <div style={{ marginTop: 16 }}><span className="be-field-label">Payment target</span><div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10, marginTop: 8 }}>{targets.map((value) => <label key={value} style={{ display: "block", padding: 14, border: `1px solid ${target === value ? "var(--accent)" : "var(--border)"}`, borderRadius: 8, cursor: "pointer" }}><input type="radio" name="paymentTarget" value={value} checked={target === value} onChange={() => setTarget(value)} style={{ marginRight: 8 }} />{value === "STANDALONE_API" ? "Standalone API" : value === "PMS_WEBSITE" ? "PMS Website" : "Booking Engine"}<small style={{ display: "block", color: "var(--text-muted)", margin: "6px 0 0 22px" }}>{value === "STANDALONE_API" ? "Your custom website reservations" : value === "PMS_WEBSITE" ? "Your LodgeCore PMS website" : "LodgeCore booking site reservations"}</small></label>)}</div></div>
+            {!payrollOnly && <div style={{ marginTop: 16 }}><span className="be-field-label">Payment target</span><div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10, marginTop: 8 }}>{targets.map((value) => <label key={value} style={{ display: "block", padding: 14, border: `1px solid ${target === value ? "var(--accent)" : "var(--border)"}`, borderRadius: 8, cursor: "pointer" }}><input type="radio" name="paymentTarget" value={value} checked={target === value} onChange={() => setTarget(value)} style={{ marginRight: 8 }} />{value === "STANDALONE_API" ? "Standalone API" : value === "PMS_WEBSITE" ? "PMS Website" : "Booking Engine"}<small style={{ display: "block", color: "var(--text-muted)", margin: "6px 0 0 22px" }}>{value === "STANDALONE_API" ? "Your custom website reservations" : value === "PMS_WEBSITE" ? "Your LodgeCore PMS website" : "LodgeCore booking site reservations"}</small></label>)}</div></div>}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 16 }}>
               <label className="be-field"><span className="be-field-label">Flutterwave secret key</span><input name="customerSecret" value={secret} onChange={(event) => setSecret(event.target.value)} type="password" autoComplete="new-password" placeholder={property?.account?.configured ? "Leave blank to keep saved key" : "FLWSECK-…"} /></label>
               <label className="be-field"><span className="be-field-label">Webhook secret hash</span><input name="customerWebhookSecret" value={webhookSecret} onChange={(event) => setWebhookSecret(event.target.value)} type="password" autoComplete="new-password" placeholder={property?.account?.configured ? "Leave blank to keep saved secret" : "Secret hash"} /></label>
             </div>
-            <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 14 }}>Set your Flutterwave webhook URL to <code>https://getlodgecore.vercel.app/api/v1/public/payment/webhook</code>.</p>
+            <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 14 }}>{payrollOnly ? "This configures the property’s payroll payout account. Payroll can operate independently of booking-engine or website add-ons." : <>Set your Flutterwave webhook URL to <code>https://getlodgecore.vercel.app/api/v1/public/payment/webhook</code>.</>}</p>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 22 }}><button type="button" className="btn btn-outline btn-sm" onClick={onClose}>Cancel</button><button type="submit" className="btn btn-primary btn-sm" disabled={saving || !propertyId || !target}>{saving ? "Saving…" : "Save configuration"}</button></div>
           </form>
         )}

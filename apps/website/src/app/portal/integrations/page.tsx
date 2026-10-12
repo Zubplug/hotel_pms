@@ -8,7 +8,7 @@ import { CancellationPolicyIntegrationPanel } from "./CancellationPolicyIntegrat
 
 const INTEGRATIONS = [
   { id: "paystack",    name: "Paystack",     type: "Payments",         icon: "💳", status: "not-connected", desc: "Legacy reservation payment provider." },
-  { id: "flutterwave", name: "Flutterwave",  type: "Payments",         icon: "🔄", status: "available",     desc: "Connect your own Flutterwave account for reservation payments." },
+  { id: "flutterwave", name: "Flutterwave",  type: "Payments",         icon: "🔄", status: "available",     desc: "Connect your own Flutterwave account for reservations and automatic payroll salary payments." },
   { id: "booking-com", name: "Booking.com",  type: "Distribution",     icon: "🌐", status: "not-connected", desc: "Two-way channel sync." },
   { id: "expedia",     name: "Expedia",      type: "Distribution",     icon: "✈️", status: "not-connected", desc: "Expedia Group network." },
   { id: "whatsapp",    name: "WhatsApp",     type: "Communications",   icon: "💬", status: "not-connected", desc: "Automated guest messaging." },
@@ -39,6 +39,7 @@ type IntegrationProperty = {
 export default function PortalIntegrationsPage() {
   const [requesting, setRequesting] = useState<string | null>(null);
   const [setupOpen, setSetupOpen] = useState(false);
+  const [payrollSetupOpen, setPayrollSetupOpen] = useState(false);
   const [properties, setProperties] = useState<IntegrationProperty[]>([]);
 
   const loadIntegrationProperties = () => {
@@ -68,7 +69,7 @@ export default function PortalIntegrationsPage() {
             Connected systems and API access for your organization.
           </p>
         </div>
-        <Link href="/portal/support" className="btn btn-outline btn-sm">Request integration →</Link>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}><button type="button" onClick={() => setPayrollSetupOpen(true)} className="btn btn-primary btn-sm">Configure payroll payouts</button><Link href="/portal/support" className="btn btn-outline btn-sm">Request integration →</Link></div>
       </div>
 
       {/* API credentials panel */}
@@ -163,7 +164,7 @@ export default function PortalIntegrationsPage() {
         <div className="portal-card" style={{ marginTop: 16, borderColor: "color-mix(in srgb, var(--success) 35%, var(--border))" }}>
           <div className="portal-card-title" style={{ marginBottom: 8 }}>Flutterwave connection</div>
           <p style={{ fontSize: 13, color: "var(--text-muted)", margin: 0 }}>
-            Customer-owned payments are connected. Credentials are encrypted and are never displayed again.
+            Customer-owned Flutterwave payments are connected. The same verified account is reused for eligible payroll salary payments; credentials are encrypted and never displayed again.
           </p>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
             {configuredFlutterwaveProperties.map((property) => (
@@ -176,6 +177,7 @@ export default function PortalIntegrationsPage() {
         </div>
       )}
       {setupOpen && <IntegrationSetupModal onClose={() => setSetupOpen(false)} onSaved={loadIntegrationProperties} />}
+      {payrollSetupOpen && <IntegrationSetupModal payrollOnly onClose={() => setPayrollSetupOpen(false)} onSaved={() => { setPayrollSetupOpen(false); loadIntegrationProperties(); }} />}
     </PortalShell>
   );
 }

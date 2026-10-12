@@ -1,0 +1,68 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { randomUUID } from 'crypto';
+import prisma from '@hotel-pms/db';
+import { HrAuthorizationService } from '@/lib/services/hr-authorization-service';
+
+function errorResponse(error: any) {
+  const message = String(error?.message || 'Request failed');
+  return NextResponse.json({ error: message }, { status: message.includes('Unauthorized') ? 401 : message.includes('Forbidden') ? 403 : 500 });
+}
+
+export async function GET(req: NextRequest) {
+  try {
+    const context = await HrAuthorizationService.resolveAuthContext(req);
+    const canManage = HrAuthorizationService.can(context, 'hr.service-desk.manage');
+    const where: any = {
+      propertyId: context.propertyId,
+      ...(canManage ? {} : { staff: { userId: context.userId, organizationId: context.organizationId } }),
+      ...(context.role === 'DEPARTMENT_HEAD' && context.department && canManage
+        ? { staff: { department: context.department, organizationId: context.organizationId } }
+        : {}),
+    };
+    const tickets = await prisma.hrServiceDeskTicket.findMany({
+      where,
+      include: { staff: { select: { id: true, firstName: true, lastName: true, employeeId: true, department: true } } },
+      orderBy: { createdAt: 'desc' },
+      take: 250,
+    });
+    return NextResponse.json({ tickets });
+  } catch (error) { return errorResponse(error); }
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    const context = await HrAuthorizationService.resolveAuthContext(req);
+    const body = await req.json();
+    const canManage = HrAuthorizationService.can(context, 'hr.service-desk.manage');
+    const staffId = body.staffId || (await prisma.staff.findFirst({ where: { userId: context.userId, organizationId: context.organizationId, isActive: true }, select: { id: true } }))?.id;
+    if (!staffId || !body.category || !body.subject?.trim() || !body.description?.trim()) {
+      return NextResponse.json({ error: 'Staff, category, subject, and description are required' }, { status: 400 });
+    }
+    const staff = await prisma.staff.findFirst({ where: { ...HrAuthorizationService.staffScope(context, { id: staffId }), isActive: true }, select: { id: true, userId: true } });
+    if (!staff) return NextResponse.json({ error: 'Staff member not found or inaccessible' }, { status: 404 });
+    if (!canManage && staff.userId !== context.userId) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    const ticket = await prisma.hrServiceDeskTicket.create({
+      data: {
+        propertyId: context.propertyId,
+        staffId,
+        ticketNumber: `HR-${randomUUID().replace(/-/g, '').slice(0, 16).toUpperCase()}`,
+        category: String(body.category), priority: String(body.priority || 'MEDIUM'),
+        subject: String(body.subject).trim(), description: String(body.description).trim(),
+      },
+    });
+    return NextResponse.json({ success: true, ticket }, { status: 201 });
+  } catch (error) { return errorResponse(error); }
+}
+
+export async function PATCH(req: NextRequest) {
+  try {
+    const context = await HrAuthorizationService.resolveAuthContext(req);
+    HrAuthorizationService.assertPermission(context, 'hr.service-desk.manage');
+    const body = await req.json();
+    if (!body.id || !['OPEN', 'IN_PROGRESS', 'RESOLVED', 'CLOSED'].includes(body.status)) return NextResponse.json({ error: 'Ticket ID and valid status are required' }, { status: 400 });
+    const existing = await prisma.hrServiceDeskTicket.findFirst({ where: { id: body.id, propertyId: context.propertyId, staff: { organizationId: context.organizationId, ...(context.role === 'DEPARTMENT_HEAD' && context.department ? { department: context.department } : {}) } } });
+    if (!existing) return NextResponse.json({ error: 'Ticket not found' }, { status: 404 });
+    const ticket = await prisma.hrServiceDeskTicket.update({ where: { id: existing.id }, data: { status: body.status, assignedToUser: body.assignedToUser || context.userId, resolutionNotes: body.resolutionNotes?.trim() || undefined, resolvedAt: ['RESOLVED', 'CLOSED'].includes(body.status) ? new Date() : null } });
+    return NextResponse.json({ success: true, ticket });
+  } catch (error) { return errorResponse(error); }
+}

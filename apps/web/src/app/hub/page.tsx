@@ -14,7 +14,8 @@ import {
   RefreshCw, 
   Wrench,
   AlertTriangle,
-  CheckCircle2
+  CheckCircle2,
+  Users
 } from 'lucide-react';
 import Link from 'next/link';
 import { getNavigationModules } from '@/lib/auth/navigation-entitlements';
@@ -51,6 +52,11 @@ function getDirectLandingUrl(
   // Accountant role → Accountant workspace
   if (role === 'ACCOUNTANT') {
     return '/accountant';
+  }
+
+  // HR roles → HR & Payroll workspace
+  if (['HR_MANAGER', 'PAYROLL_OFFICER', 'PAYROLL_APPROVER', 'HR_OFFICER'].includes(role)) {
+    return '/hr';
   }
 
   // Stock / Procurement roles → Inventory dashboard
@@ -165,6 +171,7 @@ export default async function HubPage() {
     { cap: 'ACCESS_INVENTORY', module: 'MODULE_OPERATIONS', label: 'INVENTORY', icon: Package, href: '/inventory', color: 'bg-amber-600 hover:bg-amber-700' },
     { cap: 'ACCESS_MAINTENANCE', module: 'MODULE_OPERATIONS', label: 'MAINTENANCE', icon: Wrench, href: '/maintenance', color: 'bg-orange-600 hover:bg-orange-700' },
     { cap: 'ACCESS_MANAGEMENT', module: 'MODULE_ENTERPRISE', label: 'MANAGEMENT', icon: BarChart3, href: '/general-manager', color: 'bg-slate-700 hover:bg-slate-600' },
+    { cap: 'ACCESS_HR', module: 'MODULE_ENTERPRISE', label: 'HR & PAYROLL', icon: Users, href: '/hr', color: 'bg-teal-600 hover:bg-teal-700' },
     { cap: 'ACCESS_NIGHT_AUDIT', module: 'MODULE_PMS', label: 'NIGHT AUDIT', icon: Moon, href: '/night-audit', color: 'bg-purple-600 hover:bg-purple-700' },
     { cap: 'ACCESS_SYNC_CENTER', module: 'MODULE_PMS', label: 'SYNC CENTER', icon: RefreshCw, href: '/sync-center', color: 'bg-blue-600 hover:bg-blue-700' },
   ] as const;

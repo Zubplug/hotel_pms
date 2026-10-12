@@ -67,14 +67,18 @@ model Organization {
   customDomainRequests   CustomDomainRequest[]
   customWebsiteRequests  CustomWebsiteRequest[]
 
+  // Enterprise HR Suite
+  statutoryConfigurations StatutoryConfiguration[]
+  companyPolicies         CompanyPolicy[]
+
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
 }
 
 model Property {
-  id             String       @id @default(uuid()) @db.Uuid
-  organizationId String       @db.Uuid
-  organization   Organization @relation(fields: [organizationId], references: [id])
+  id                String             @id @default(uuid()) @db.Uuid
+  organizationId    String             @db.Uuid
+  organization      Organization       @relation(fields: [organizationId], references: [id])
   posActivationKeys PosActivationKey[]
 
   corporateAccounts CorporateAccount[]
@@ -151,6 +155,7 @@ model Property {
   lockOperations           LockOperation[]
   lockEvents               LockEvent[]
   integrationConfigs       IntegrationConfig[]
+  payrollPayouts           PayrollPayout[]
   govSubmissions           GovernmentSubmission[]
   nightAudits              NightAudit[]
   occupancySnapshots       OccupancySnapshot[]
@@ -219,6 +224,7 @@ model Property {
   nightAuditClosePackages    NightAuditClosePackage[]
   nightAuditBalanceSnapshots NightAuditBalanceSnapshot[]
   payrollPeriods             PayrollPeriod[]
+  payrollPayouts             PayrollPayout[]
   fixedAssetCategories       FixedAssetCategory[]
   fixedAssets                FixedAsset[]
   assetDepreciations         AssetDepreciation[]
@@ -237,6 +243,22 @@ model Property {
   customDomainRequests   CustomDomainRequest[]
   customWebsiteRequests  CustomWebsiteRequest[]
   breakfastRedemptions   BreakfastRedemption[]
+
+  // Enterprise HR & Payroll Suite
+  jobPositions          JobPosition[]
+  workShifts            WorkShift[]
+  shiftRosters          ShiftRoster[]
+  attendanceRecords     AttendanceRecord[]
+  leaveTypes            LeaveType[]
+  leaveApplications     LeaveApplication[]
+  jobRequisitions       JobRequisition[]
+  employeeLoans         EmployeeLoan[]
+  salaryAdvances        SalaryAdvance[]
+  expenseClaims         ExpenseClaim[]
+  performanceAppraisals PerformanceAppraisal[]
+  trainingRecords       TrainingRecord[]
+  disciplinaryRecords   DisciplinaryRecord[]
+  serviceDeskTickets    HrServiceDeskTicket[]
 }
 
 model Building {
@@ -463,16 +485,16 @@ enum RatePlanType {
 }
 
 model RatePlan {
-  id          String       @id @default(uuid()) @db.Uuid
-  propertyId  String       @db.Uuid
-  property    Property     @relation(fields: [propertyId], references: [id])
-  name        String
-  code        String
-  description String?
-  type        RatePlanType
-  isPublic    Boolean      @default(true)
-  isActive    Boolean      @default(true)
-  includeFoodAllocation Boolean @default(false)
+  id                    String       @id @default(uuid()) @db.Uuid
+  propertyId            String       @db.Uuid
+  property              Property     @relation(fields: [propertyId], references: [id])
+  name                  String
+  code                  String
+  description           String?
+  type                  RatePlanType
+  isPublic              Boolean      @default(true)
+  isActive              Boolean      @default(true)
+  includeFoodAllocation Boolean      @default(false)
 
   minStay            Int        @default(1)
   maxStay            Int?
@@ -811,10 +833,10 @@ model Reservation {
   priorities        ReservationPriority[]
   CheckInBypass     CheckInBypass[]
 
-  createdAt       DateTime          @default(now()) @db.Timestamptz
-  updatedAt       DateTime          @updatedAt @db.Timestamptz
-  deletedAt       DateTime?         @db.Timestamptz
-  laundryOrders   LaundryOrder[]
+  createdAt            DateTime              @default(now()) @db.Timestamptz
+  updatedAt            DateTime              @updatedAt @db.Timestamptz
+  deletedAt            DateTime?             @db.Timestamptz
+  laundryOrders        LaundryOrder[]
   CityLedgerEntry      CityLedgerEntry[]
   folioItems           FolioItem[]
   breakfastRedemptions BreakfastRedemption[]
@@ -2015,8 +2037,32 @@ model Staff {
   bypassesReviewed       CheckInBypass[]         @relation("BypassReviewer")
 
   // Enterprise Accounting Suite
-  salaryStructure SalaryStructure?
-  payslips        Payslip[]
+  salaryStructure         SalaryStructure?
+  salaryStructureVersions SalaryStructureVersion[]
+  payslips                Payslip[]
+  payrollPayouts          PayrollPayout[]
+
+  // Enterprise HR & Payroll Lifecycle
+  employeeProfile        EmployeeProfile?
+  leaveAllocations       LeaveAllocation[]
+  leaveApplications      LeaveApplication[]
+  attendanceRecords      AttendanceRecord[]
+  shiftRosters           ShiftRoster[]
+  shiftSwapsRequested    ShiftSwapRequest[]      @relation("ShiftSwapRequester")
+  shiftSwapsReceived     ShiftSwapRequest[]      @relation("ShiftSwapTarget")
+  missedPunchRequests    MissedPunchRequest[]
+  employeeLoans          EmployeeLoan[]
+  salaryAdvances         SalaryAdvance[]
+  expenseClaims          ExpenseClaim[]
+  performanceAppraisals  PerformanceAppraisal[]  @relation("AppraisalStaff")
+  reviewedAppraisals     PerformanceAppraisal[]  @relation("AppraisalReviewer")
+  trainingRecords        TrainingRecord[]
+  disciplinaryRecords    DisciplinaryRecord[]
+  employeeDocuments      EmployeeDocument[]
+  onboardingTasks        OnboardingTask[]
+  serviceDeskTickets     HrServiceDeskTicket[]
+  employeeMovements      EmployeeMovement[]
+  policyAcknowledgements PolicyAcknowledgement[]
 }
 
 model StaffPosOutletAccess {
@@ -3089,26 +3135,26 @@ model PurchaseOrder {
   supplierId String   @db.Uuid
   supplier   Supplier @relation(fields: [supplierId], references: [id])
 
-  poNumber     String              @unique
-  status       PurchaseOrderStatus @default(DRAFT)
+  poNumber      String              @unique
+  status        PurchaseOrderStatus @default(DRAFT)
   /// ACCOUNTANT while awaiting first approval; GENERAL_MANAGER while awaiting final approval.
-  approvalStage String?           @default("ACCOUNTANT")
-  expectedDate DateTime?           @db.Date
-  totalAmount  Decimal             @default(0) @db.Decimal(18, 4)
-  paidAmount   Decimal             @default(0) @db.Decimal(18, 4)
-  paymentStatus String             @default("UNPAID") // UNPAID, PARTIAL, PAID
-  notes        String?
+  approvalStage String?             @default("ACCOUNTANT")
+  expectedDate  DateTime?           @db.Date
+  totalAmount   Decimal             @default(0) @db.Decimal(18, 4)
+  paidAmount    Decimal             @default(0) @db.Decimal(18, 4)
+  paymentStatus String              @default("UNPAID") // UNPAID, PARTIAL, PAID
+  notes         String?
 
-  currency       String    @default("NGN")
-  rejectedBy     String?   @db.Uuid
-  rejectedAt     DateTime? @db.Timestamptz
-  rejectedReason String?
-  accountantApprovedBy String?   @db.Uuid
-  accountantApprovedAt DateTime? @db.Timestamptz
+  currency                 String    @default("NGN")
+  rejectedBy               String?   @db.Uuid
+  rejectedAt               DateTime? @db.Timestamptz
+  rejectedReason           String?
+  accountantApprovedBy     String?   @db.Uuid
+  accountantApprovedAt     DateTime? @db.Timestamptz
   generalManagerApprovedBy String?   @db.Uuid
   generalManagerApprovedAt DateTime? @db.Timestamptz
-  cancelledBy    String?   @db.Uuid
-  cancelledAt    DateTime? @db.Timestamptz
+  cancelledBy              String?   @db.Uuid
+  cancelledAt              DateTime? @db.Timestamptz
 
   items            PurchaseOrderItem[]
   grns             GoodsReceivedNote[]
@@ -3243,14 +3289,14 @@ model PosOutlet {
   createdBy String?  @db.Uuid
   updatedBy String?  @db.Uuid
 
-  devices      PosDevice[]
-  terminals    PosTerminal[]
+  devices           PosDevice[]
+  terminals         PosTerminal[]
   posActivationKeys PosActivationKey[]
-  staffAccess  StaffPosOutletAccess[]
-  floorPlans   PosFloorPlan[]
-  CashAccount  CashAccount[]
-  warehouse    Warehouse?
-  journalLines JournalEntryLine[]
+  staffAccess       StaffPosOutletAccess[]
+  floorPlans        PosFloorPlan[]
+  CashAccount       CashAccount[]
+  warehouse         Warehouse?
+  journalLines      JournalEntryLine[]
 }
 
 model PosFloorPlan {
@@ -3319,8 +3365,8 @@ model PosProduct {
   image             String?
   productionStation ProductionStation?
 
-  recipe     Recipe?
-  modifiers  PosProductModifier[]
+  recipe    Recipe?
+  modifiers PosProductModifier[]
 
   createdAt           DateTime             @default(now()) @db.Timestamptz
   updatedAt           DateTime             @updatedAt @db.Timestamptz
@@ -3528,39 +3574,39 @@ model CashAccount {
 // This is the operational expense subledger; future GL posting can consume
 // the journal entry created at payment time.
 model CashExpense {
-  id               String    @id @default(uuid()) @db.Uuid
-  propertyId       String    @db.Uuid
-  property         Property  @relation(fields: [propertyId], references: [id])
-  expenseReference String    @unique
-  status           String    @default("PENDING_APPROVAL")
-  amount           Decimal   @db.Decimal(18, 4)
-  currency         String    @default("NGN")
-  category         String
-  categoryId       String?   @db.Uuid
-  description      String
-  payee            String
-  receiptUrl       String?
-  costCenter       String?
-  costCenterId     String?   @db.Uuid
-  requestedBy      String    @db.Uuid
-  approvedBy       String?   @db.Uuid
-  paidBy           String?   @db.Uuid
-  cashAccountId    String?   @db.Uuid
-  approvalNotes    String?
-  rejectionReason  String?
-  requestedAt      DateTime  @default(now()) @db.Timestamptz
-  approvedAt       DateTime? @db.Timestamptz
-  rejectedAt       DateTime? @db.Timestamptz
-  paidAt           DateTime? @db.Timestamptz
+  id                   String    @id @default(uuid()) @db.Uuid
+  propertyId           String    @db.Uuid
+  property             Property  @relation(fields: [propertyId], references: [id])
+  expenseReference     String    @unique
+  status               String    @default("PENDING_APPROVAL")
+  amount               Decimal   @db.Decimal(18, 4)
+  currency             String    @default("NGN")
+  category             String
+  categoryId           String?   @db.Uuid
+  description          String
+  payee                String
+  receiptUrl           String?
+  costCenter           String?
+  costCenterId         String?   @db.Uuid
+  requestedBy          String    @db.Uuid
+  approvedBy           String?   @db.Uuid
+  paidBy               String?   @db.Uuid
+  cashAccountId        String?   @db.Uuid
+  approvalNotes        String?
+  rejectionReason      String?
+  requestedAt          DateTime  @default(now()) @db.Timestamptz
+  approvedAt           DateTime? @db.Timestamptz
+  rejectedAt           DateTime? @db.Timestamptz
+  paidAt               DateTime? @db.Timestamptz
   currentApprovalStage String?
-  paymentMethod    String?   // CASH | BANK_TRANSFER
-  paymentReference String?
-  createdAt        DateTime  @default(now()) @db.Timestamptz
-  updatedAt        DateTime  @updatedAt @db.Timestamptz
+  paymentMethod        String? // CASH | BANK_TRANSFER
+  paymentReference     String?
+  createdAt            DateTime  @default(now()) @db.Timestamptz
+  updatedAt            DateTime  @updatedAt @db.Timestamptz
 
-  cashAccount     CashAccount?        @relation(fields: [cashAccountId], references: [id])
-  expenseCategory ExpenseCategory?    @relation(fields: [categoryId], references: [id])
-  costCenterRef   CostCenter?         @relation(fields: [costCenterId], references: [id])
+  cashAccount     CashAccount?          @relation(fields: [cashAccountId], references: [id])
+  expenseCategory ExpenseCategory?      @relation(fields: [categoryId], references: [id])
+  costCenterRef   CostCenter?           @relation(fields: [costCenterId], references: [id])
   journal         CashExpenseJournal?
   audits          CashExpenseAudit[]
   approvals       CashExpenseApproval[]
@@ -3586,16 +3632,16 @@ model CashExpenseLineItem {
 
 // Segregated approval chain for controlled operating expenses.
 model CashExpenseApproval {
-  id          String      @id @default(uuid()) @db.Uuid
-  expenseId   String      @db.Uuid
-  expense     CashExpense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
-  stage       String      // GENERAL_CASHIER | ACCOUNTANT | GENERAL_MANAGER
-  status      String      @default("PENDING") // PENDING | APPROVED | REJECTED
-  approverId  String?     @db.Uuid
-  notes       String?
-  actedAt     DateTime?   @db.Timestamptz
-  createdAt   DateTime    @default(now()) @db.Timestamptz
-  updatedAt   DateTime    @updatedAt @db.Timestamptz
+  id         String      @id @default(uuid()) @db.Uuid
+  expenseId  String      @db.Uuid
+  expense    CashExpense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  stage      String // GENERAL_CASHIER | ACCOUNTANT | GENERAL_MANAGER
+  status     String      @default("PENDING") // PENDING | APPROVED | REJECTED
+  approverId String?     @db.Uuid
+  notes      String?
+  actedAt    DateTime?   @db.Timestamptz
+  createdAt  DateTime    @default(now()) @db.Timestamptz
+  updatedAt  DateTime    @updatedAt @db.Timestamptz
 
   @@unique([expenseId, stage])
   @@index([expenseId, status])
@@ -3973,11 +4019,11 @@ model PosOrder {
   deviceId    String?
   closedAt    DateTime? @db.Timestamptz
 
-  items             PosOrderItem[]
-  payments          PosPayment[]
-  voids             PosVoid[]
-  discounts         PosDiscount[]
-  checks            PosCheck[]
+  items                PosOrderItem[]
+  payments             PosPayment[]
+  voids                PosVoid[]
+  discounts            PosDiscount[]
+  checks               PosCheck[]
   kots                 PosKot[]
   productionBatches    PosProductionBatch[]
   breakfastRedemptions BreakfastRedemption[]
@@ -4267,23 +4313,23 @@ model PosTerminal {
 // One-time bootstrap credentials for Desktop/POS terminal activation. The raw
 // key is never persisted; it is shown to an administrator exactly once.
 model PosActivationKey {
-  id                 String      @id @default(uuid()) @db.Uuid
-  keyHash            String      @unique
-  organizationId     String      @db.Uuid
-  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  propertyId         String?     @db.Uuid
-  property           Property?   @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  outletId           String?     @db.Uuid
-  outlet             PosOutlet?  @relation(fields: [outletId], references: [id], onDelete: Cascade)
-  activatedTerminalId String?    @unique @db.Uuid
-  activatedTerminal  PosTerminal? @relation(fields: [activatedTerminalId], references: [id], onDelete: SetNull)
-  status             String      @default("ACTIVE") // ACTIVE | USED | REVOKED | EXPIRED
-  expiresAt          DateTime?   @db.Timestamptz
-  createdBy          String?     @db.Uuid
-  activatedAt        DateTime?   @db.Timestamptz
-  revokedAt          DateTime?   @db.Timestamptz
-  createdAt          DateTime    @default(now()) @db.Timestamptz
-  updatedAt          DateTime    @updatedAt @db.Timestamptz
+  id                  String       @id @default(uuid()) @db.Uuid
+  keyHash             String       @unique
+  organizationId      String       @db.Uuid
+  organization        Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  propertyId          String?      @db.Uuid
+  property            Property?    @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  outletId            String?      @db.Uuid
+  outlet              PosOutlet?   @relation(fields: [outletId], references: [id], onDelete: Cascade)
+  activatedTerminalId String?      @unique @db.Uuid
+  activatedTerminal   PosTerminal? @relation(fields: [activatedTerminalId], references: [id], onDelete: SetNull)
+  status              String       @default("ACTIVE") // ACTIVE | USED | REVOKED | EXPIRED
+  expiresAt           DateTime?    @db.Timestamptz
+  createdBy           String?      @db.Uuid
+  activatedAt         DateTime?    @db.Timestamptz
+  revokedAt           DateTime?    @db.Timestamptz
+  createdAt           DateTime     @default(now()) @db.Timestamptz
+  updatedAt           DateTime     @updatedAt @db.Timestamptz
 
   @@index([organizationId, status])
   @@index([propertyId, status])
@@ -4468,6 +4514,8 @@ model Department {
   isActive    Boolean @default(true)
 
   journalLines JournalEntryLine[]
+  sections     DepartmentSection[]
+  positions    JobPosition[]
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
@@ -5531,10 +5579,10 @@ model SupplierInvoiceItem {
 }
 
 model SupplierPayment {
-  id         String @id @default(uuid()) @db.Uuid
-  propertyId String @db.Uuid
+  id              String  @id @default(uuid()) @db.Uuid
+  propertyId      String  @db.Uuid
   invoiceId       String? @db.Uuid
-  supplierId      String @db.Uuid
+  supplierId      String  @db.Uuid
   purchaseOrderId String? @db.Uuid
 
   invoice       SupplierInvoice? @relation(fields: [invoiceId], references: [id])
@@ -5738,6 +5786,9 @@ model SalaryStructure {
   bankName          String?
   bankAccountNumber String?
   bankSortCode      String?
+  bankAccountName   String?
+  bankVerifiedAt    DateTime? @db.Timestamptz
+  bankVerificationReference String?
   pensionFundAdmin  String?
   pensionNumber     String?
 
@@ -5749,6 +5800,35 @@ model SalaryStructure {
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
+}
+
+/// Immutable effective-dated compensation snapshots. SalaryStructure remains
+/// the legacy/current-record contract used by operational modules.
+model SalaryStructureVersion {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @db.Uuid
+  propertyId     String @db.Uuid
+  staffId        String @db.Uuid
+  staff          Staff  @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  basicSalary        Decimal @db.Decimal(18, 4)
+  housingAllowance   Decimal @default(0) @db.Decimal(18, 4)
+  transportAllowance Decimal @default(0) @db.Decimal(18, 4)
+  otherAllowances    Decimal @default(0) @db.Decimal(18, 4)
+  currency           String  @default("NGN")
+  bankName           String?
+  bankAccountNumber  String?
+  bankSortCode       String?
+  pensionFundAdmin   String?
+  pensionNumber      String?
+
+  effectiveFrom DateTime  @db.Date
+  effectiveTo   DateTime? @db.Date
+  createdBy     String    @db.Uuid
+  createdAt     DateTime  @default(now()) @db.Timestamptz
+
+  @@index([staffId, effectiveFrom, effectiveTo])
+  @@index([organizationId, propertyId, effectiveFrom])
 }
 
 model PayrollPeriod {
@@ -5779,7 +5859,17 @@ model PayrollPeriod {
 
   journalEntryId String? @db.Uuid
 
+  // Audit, exception and payment disbursement tracking
+  snapshot        Json? // Frozen calculation inputs and outputs for immutable audit trail
+  exceptions      Json? // Anomalies detected (negative net pay, bank errors, >20% variance)
+  approvalTrail   Json? // Submitter ID, approval timestamp, approver comments
+  paymentBatchRef String? // NIP/CBN disbursement batch reference
+  paymentStatus   String? // UNPAID | PROCESSING | PAID | PARTIAL | FAILED
+  reversalOfId    String? // Pointer to reversed payroll period if applicable
+  reversalReason  String? // Reason for rollback/reversal
+
   payslips Payslip[]
+  payrollPayouts PayrollPayout[]
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
@@ -5824,8 +5914,14 @@ model Payslip {
 
   bankName      String?
   accountNumber String?
+  bankSortCode  String?
+  bvn           String?
+  tin           String?
+  rsaPin        String?
+  pfaName       String?
 
   components PayslipComponent[]
+  payout     PayrollPayout?
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
@@ -5846,6 +5942,38 @@ model PayslipComponent {
   createdAt DateTime @default(now()) @db.Timestamptz
 
   @@index([payslipId])
+}
+
+model PayrollPayout {
+  id                  String        @id @default(uuid()) @db.Uuid
+  organizationId      String        @db.Uuid
+  organization        Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  propertyId          String        @db.Uuid
+  property            Property      @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  payrollPeriodId     String        @db.Uuid
+  payrollPeriod       PayrollPeriod @relation(fields: [payrollPeriodId], references: [id], onDelete: Cascade)
+  payslipId           String        @unique @db.Uuid
+  payslip             Payslip       @relation(fields: [payslipId], references: [id], onDelete: Cascade)
+  staffId             String        @db.Uuid
+  staff               Staff         @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  provider            String        @default("FLUTTERWAVE")
+  providerReference   String        @unique
+  providerTransferId  String?
+  providerBatchId     String?
+  providerStatus      String?
+  amount              Decimal       @db.Decimal(18, 4)
+  currency            String        @default("NGN")
+  status              String        @default("QUEUED")
+  failureReason       String?
+  rawResponse         Json?
+  initiatedAt         DateTime?     @db.Timestamptz
+  completedAt         DateTime?     @db.Timestamptz
+  createdAt           DateTime      @default(now()) @db.Timestamptz
+  updatedAt           DateTime      @updatedAt @db.Timestamptz
+
+  @@index([organizationId, propertyId, status])
+  @@index([payrollPeriodId, status])
+  @@index([providerTransferId])
 }
 
 // -----------------------------------------------------------------------------
@@ -6557,77 +6685,77 @@ model InstalledIntegration {
 }
 
 model PropertyIntegration {
-  id             String          @id @default(uuid()) @db.Uuid
-  organizationId String          @db.Uuid
-  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  propertyId     String          @db.Uuid
-  property       Property        @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  propertyId     String       @db.Uuid
+  property       Property     @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 
-  name           String          // e.g. "Main Website", "Partner Booking Widget"
-  provider       String          @default("LODGECORE_CMS") // e.g. LODGECORE_CMS, CUSTOM_WEBSITE, WIDGET
-  status         String          @default("ACTIVE") // ACTIVE, SUSPENDED
+  name     String // e.g. "Main Website", "Partner Booking Widget"
+  provider String @default("LODGECORE_CMS") // e.g. LODGECORE_CMS, CUSTOM_WEBSITE, WIDGET
+  status   String @default("ACTIVE") // ACTIVE, SUSPENDED
 
   publishableKeys PublishableKey[]
 
-  createdAt      DateTime        @default(now()) @db.Timestamptz
-  updatedAt      DateTime        @updatedAt @db.Timestamptz
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
 
   @@index([propertyId])
   @@index([organizationId])
 }
 
 model PublishableKey {
-  id             String          @id @default(uuid()) @db.Uuid
-  integrationId  String          @db.Uuid
-  integration    PropertyIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  id            String              @id @default(uuid()) @db.Uuid
+  integrationId String              @db.Uuid
+  integration   PropertyIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
 
-  key            String          @unique // e.g. "pk_live_..."
-  environment    String          @default("LIVE") // TEST, LIVE
-  status         String          @default("ACTIVE") // ACTIVE, REVOKED
-  allowedOrigins String[]        @default([]) // e.g. ["https://myhotel.com", "https://*.myhotel.com"]
+  key            String   @unique // e.g. "pk_live_..."
+  environment    String   @default("LIVE") // TEST, LIVE
+  status         String   @default("ACTIVE") // ACTIVE, REVOKED
+  allowedOrigins String[] @default([]) // e.g. ["https://myhotel.com", "https://*.myhotel.com"]
 
-  lastUsedAt     DateTime?       @db.Timestamptz
-  revokedAt      DateTime?       @db.Timestamptz
-  createdAt      DateTime        @default(now()) @db.Timestamptz
-  updatedAt      DateTime        @updatedAt @db.Timestamptz
+  lastUsedAt DateTime? @db.Timestamptz
+  revokedAt  DateTime? @db.Timestamptz
+  createdAt  DateTime  @default(now()) @db.Timestamptz
+  updatedAt  DateTime  @updatedAt @db.Timestamptz
 
   @@index([key])
   @@index([integrationId, status])
 }
 
 model WebsiteProject {
-  id               String           @id @default(uuid()) @db.Uuid
-  organizationId   String           @db.Uuid
-  organization     Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  propertyId       String           @db.Uuid
-  property         Property         @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  propertyId     String       @db.Uuid
+  property       Property     @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 
-  status           String           @default("DRAFT") // DRAFT, PUBLISHED, SUSPENDED
-  name             String
-  customDomain     String?          @unique
-  customDomainVerifiedAt DateTime?  @db.Timestamptz
-  customDomainVerificationToken String? @unique
+  status                        String    @default("DRAFT") // DRAFT, PUBLISHED, SUSPENDED
+  name                          String
+  customDomain                  String?   @unique
+  customDomainVerifiedAt        DateTime? @db.Timestamptz
+  customDomainVerificationToken String?   @unique
 
-  primaryColor     String?
-  secondaryColor   String?
-  logoUrl          String?
-  faviconUrl       String?
+  primaryColor   String?
+  secondaryColor String?
+  logoUrl        String?
+  faviconUrl     String?
 
-  contactEmail     String?
-  contactPhone     String?
-  socialLinks      Json?            // { facebook, instagram, twitter, etc }
-  seoMetadata      Json?            // { defaultTitleFormat, defaultDescription }
+  contactEmail String?
+  contactPhone String?
+  socialLinks  Json? // { facebook, instagram, twitter, etc }
+  seoMetadata  Json? // { defaultTitleFormat, defaultDescription }
 
-  activeRevisionId String?          @db.Uuid
-  activeRevision   WebsiteRevision? @relation("ActiveRevision", fields: [activeRevisionId], references: [id])
-  previewRevisionId String?         @db.Uuid
-  previewRevision  WebsiteRevision? @relation("PreviewRevision", fields: [previewRevisionId], references: [id])
+  activeRevisionId  String?          @db.Uuid
+  activeRevision    WebsiteRevision? @relation("ActiveRevision", fields: [activeRevisionId], references: [id])
+  previewRevisionId String?          @db.Uuid
+  previewRevision   WebsiteRevision? @relation("PreviewRevision", fields: [previewRevisionId], references: [id])
 
-  revisions        WebsiteRevision[] @relation("ProjectRevisions")
-  assets           WebsiteAsset[]
+  revisions WebsiteRevision[] @relation("ProjectRevisions")
+  assets    WebsiteAsset[]
 
-  createdAt        DateTime         @default(now()) @db.Timestamptz
-  updatedAt        DateTime         @updatedAt @db.Timestamptz
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
 
   @@index([propertyId])
   @@index([organizationId])
@@ -6635,75 +6763,75 @@ model WebsiteProject {
 }
 
 model WebsiteRevision {
-  id               String           @id @default(uuid()) @db.Uuid
-  projectId        String           @db.Uuid
-  project          WebsiteProject   @relation("ProjectRevisions", fields: [projectId], references: [id], onDelete: Cascade)
+  id        String         @id @default(uuid()) @db.Uuid
+  projectId String         @db.Uuid
+  project   WebsiteProject @relation("ProjectRevisions", fields: [projectId], references: [id], onDelete: Cascade)
 
-  status           String           @default("DRAFT") // DRAFT, PUBLISHED, ARCHIVED
-  versionName      String           // e.g. "Summer 2026 Update"
+  status      String @default("DRAFT") // DRAFT, PUBLISHED, ARCHIVED
+  versionName String // e.g. "Summer 2026 Update"
 
-  publishedAt      DateTime?        @db.Timestamptz
-  createdBy        String           @db.Uuid
+  publishedAt DateTime? @db.Timestamptz
+  createdBy   String    @db.Uuid
 
-  pages            WebsitePage[]
+  pages WebsitePage[]
 
-  activeFor        WebsiteProject[] @relation("ActiveRevision")
-  previewFor       WebsiteProject[] @relation("PreviewRevision")
+  activeFor  WebsiteProject[] @relation("ActiveRevision")
+  previewFor WebsiteProject[] @relation("PreviewRevision")
 
-  createdAt        DateTime         @default(now()) @db.Timestamptz
-  updatedAt        DateTime         @updatedAt @db.Timestamptz
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
 
   @@index([projectId, status])
 }
 
 model WebsitePage {
-  id               String           @id @default(uuid()) @db.Uuid
-  revisionId       String           @db.Uuid
-  revision         WebsiteRevision  @relation(fields: [revisionId], references: [id], onDelete: Cascade)
+  id         String          @id @default(uuid()) @db.Uuid
+  revisionId String          @db.Uuid
+  revision   WebsiteRevision @relation(fields: [revisionId], references: [id], onDelete: Cascade)
 
-  slug             String           // e.g. "/", "/about", "/rooms"
-  title            String
-  seoTitle         String?
-  seoDescription   String?
+  slug           String // e.g. "/", "/about", "/rooms"
+  title          String
+  seoTitle       String?
+  seoDescription String?
 
-  status           String           @default("PUBLISHED") // PUBLISHED, DRAFT
+  status String @default("PUBLISHED") // PUBLISHED, DRAFT
 
-  sections         WebsiteSection[]
+  sections WebsiteSection[]
 
-  createdAt        DateTime         @default(now()) @db.Timestamptz
-  updatedAt        DateTime         @updatedAt @db.Timestamptz
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
 
   @@unique([revisionId, slug])
 }
 
 model WebsiteSection {
-  id               String           @id @default(uuid()) @db.Uuid
-  pageId           String           @db.Uuid
-  page             WebsitePage      @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  id     String      @id @default(uuid()) @db.Uuid
+  pageId String      @db.Uuid
+  page   WebsitePage @relation(fields: [pageId], references: [id], onDelete: Cascade)
 
-  type             String           // HERO, GALLERY, TEXT_IMAGE, ROOM_LIST, AMENITIES, CONTACT, HTML
-  sortOrder        Int              @default(0)
+  type      String // HERO, GALLERY, TEXT_IMAGE, ROOM_LIST, AMENITIES, CONTACT, HTML
+  sortOrder Int    @default(0)
 
-  content          Json             // Zod validated content payload
+  content Json // Zod validated content payload
 
-  createdAt        DateTime         @default(now()) @db.Timestamptz
-  updatedAt        DateTime         @updatedAt @db.Timestamptz
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
 
   @@index([pageId, sortOrder])
 }
 
 model WebsiteAsset {
-  id               String           @id @default(uuid()) @db.Uuid
-  projectId        String           @db.Uuid
-  project          WebsiteProject   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  id        String         @id @default(uuid()) @db.Uuid
+  projectId String         @db.Uuid
+  project   WebsiteProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
-  url              String
-  type             String           // IMAGE, VIDEO, DOCUMENT
-  altText          String?
-  fileSize         Int?
+  url      String
+  type     String // IMAGE, VIDEO, DOCUMENT
+  altText  String?
+  fileSize Int?
 
-  createdAt        DateTime         @default(now()) @db.Timestamptz
-  updatedAt        DateTime         @updatedAt @db.Timestamptz
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
 
   @@index([projectId])
 }
@@ -7006,15 +7134,15 @@ model BookingPaymentAccount {
   /// PAYSTACK | FLUTTERWAVE
   provider String
   /// BOOKING_ENGINE | STANDALONE_API
-  target   String   @default("BOOKING_ENGINE")
+  target   String @default("BOOKING_ENGINE")
   /// PLATFORM = LodgeCore's own account; CUSTOMER = hotel's own merchant account
   mode     String
 
-  publicKey        String?
+  publicKey               String?
   /// Name of the environment variable that holds the secret key. Never the raw key.
-  secretRef        String?
+  secretRef               String?
   /// Name of the environment variable that holds the webhook secret.
-  webhookSecretRef String?
+  webhookSecretRef        String?
   /// Encrypted customer-owned provider credentials. Never expose these fields
   /// to portal clients or API responses.
   secretCiphertext        String?
@@ -7022,6 +7150,7 @@ model BookingPaymentAccount {
 
   currency String
   isActive Boolean @default(false)
+  payrollEnabled Boolean @default(true)
 
   createdAt    DateTime     @default(now()) @db.Timestamptz
   updatedAt    DateTime     @updatedAt @db.Timestamptz
@@ -7043,10 +7172,696 @@ model BreakfastRedemption {
   operationId    String   @unique
   createdAt      DateTime @default(now()) @db.Timestamptz
 
-  property    Property     @relation(fields: [propertyId], references: [id])
-  reservation Reservation  @relation(fields: [reservationId], references: [id])
-  posOrder    PosOrder?    @relation(fields: [posOrderId], references: [id])
+  property    Property    @relation(fields: [propertyId], references: [id])
+  reservation Reservation @relation(fields: [reservationId], references: [id])
+  posOrder    PosOrder?   @relation(fields: [posOrderId], references: [id])
 
   @@unique([propertyId, reservationId, businessDate, operationId])
   @@index([propertyId, businessDate])
+}
+
+// -----------------------------------------------------------------------------
+// ENTERPRISE HR & PAYROLL MANAGEMENT SUITE
+// -----------------------------------------------------------------------------
+
+model EmployeeProfile {
+  id      String @id @default(uuid()) @db.Uuid
+  staffId String @unique @db.Uuid
+  staff   Staff  @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  nin String? // National Identity Number
+  tin String? // Tax Identification Number
+  bvn String? // Bank Verification Number (masked in API responses)
+
+  dateOfBirth        DateTime? @db.Date
+  gender             String? // MALE | FEMALE | OTHER
+  maritalStatus      String? // SINGLE | MARRIED | DIVORCED | WIDOWED
+  nationality        String?   @default("Nigerian")
+  stateOfOrigin      String?
+  lgaOfOrigin        String?
+  residentialAddress String?
+
+  employmentType String @default("PERMANENT") // PERMANENT | PROBATION | CONTRACT | CASUAL | INTERN
+  status         String @default("ACTIVE") // ACTIVE | ON_LEAVE | SUSPENDED | PROBATION | TERMINATED | RESIGNED | RETIRED
+
+  confirmationDate  DateTime? @db.Date
+  contractStartDate DateTime? @db.Date
+  contractEndDate   DateTime? @db.Date
+  probationEndDate  DateTime? @db.Date
+
+  emergencyContacts Json? // [{ name, relationship, phone, email, address }]
+  nextOfKin         Json? // { name, relationship, phone, email, address }
+  qualifications    Json? // [{ institution, degree, field, yearCompleted }]
+  certifications    Json? // [{ title, issuingBody, issueDate, expiryDate, credentialId }]
+
+  reportingManagerId String? @db.Uuid
+  positionId         String? @db.Uuid
+  sectionId          String? @db.Uuid
+
+  exitDate           DateTime? @db.Date
+  exitReason         String?
+  exitInterviewNotes String?
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@index([employmentType, status])
+}
+
+model DepartmentSection {
+  id           String     @id @default(uuid()) @db.Uuid
+  departmentId String     @db.Uuid
+  department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  name         String
+  code         String?
+  description  String?
+  isActive     Boolean    @default(true)
+
+  positions JobPosition[]
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@unique([departmentId, name])
+}
+
+model JobPosition {
+  id           String             @id @default(uuid()) @db.Uuid
+  propertyId   String             @db.Uuid
+  property     Property           @relation(fields: [propertyId], references: [id])
+  departmentId String             @db.Uuid
+  department   Department         @relation(fields: [departmentId], references: [id])
+  sectionId    String?            @db.Uuid
+  section      DepartmentSection? @relation(fields: [sectionId], references: [id])
+
+  title           String
+  code            String
+  grade           String? // e.g. "LEVEL_1", "SUPERVISOR", "EXECUTIVE"
+  headcountBudget Int      @default(1)
+  minSalary       Decimal? @db.Decimal(18, 4)
+  maxSalary       Decimal? @db.Decimal(18, 4)
+  description     String?
+  requirements    String?
+  isActive        Boolean  @default(true)
+
+  requisitions JobRequisition[]
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@unique([propertyId, code])
+  @@index([propertyId, departmentId])
+}
+
+model EmployeeMovement {
+  id      String @id @default(uuid()) @db.Uuid
+  staffId String @db.Uuid
+  staff   Staff  @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  effectiveDate DateTime @db.Date
+  type          String // TRANSFER | PROMOTION | DEMOTION | SALARY_INCREMENT | DESIGNATION_CHANGE
+  reason        String?
+
+  fromDetails Json // { propertyId, department, position, salary }
+  toDetails   Json // { propertyId, department, position, salary }
+
+  approvedBy String   @db.Uuid
+  approvedAt DateTime @default(now()) @db.Timestamptz
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+
+  @@index([staffId, effectiveDate])
+}
+
+// -----------------------------------------------------------------------------
+// WORK SHIFTS, ROSTER & 24/7 HOSPITALITY TIME TRACKING
+// -----------------------------------------------------------------------------
+
+model WorkShift {
+  id           String   @id @default(uuid()) @db.Uuid
+  propertyId   String   @db.Uuid
+  property     Property @relation(fields: [propertyId], references: [id])
+  departmentId String?  @db.Uuid
+
+  name                 String // e.g. Morning, Afternoon, Night, Overnight Front Desk, Split
+  code                 String
+  startTime            String // "07:00"
+  endTime              String // "15:30"
+  isOvernight          Boolean @default(false)
+  gracePeriodMinutes   Int     @default(15)
+  breakDurationMinutes Int     @default(60)
+  colorCode            String  @default("#3b82f6")
+  isActive             Boolean @default(true)
+
+  rosters ShiftRoster[]
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@unique([propertyId, code])
+  @@index([propertyId])
+}
+
+model ShiftRoster {
+  id           String    @id @default(uuid()) @db.Uuid
+  propertyId   String    @db.Uuid
+  property     Property  @relation(fields: [propertyId], references: [id])
+  departmentId String?   @db.Uuid
+  staffId      String    @db.Uuid
+  staff        Staff     @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  shiftId      String    @db.Uuid
+  shift        WorkShift @relation(fields: [shiftId], references: [id])
+
+  date   DateTime @db.Date
+  status String   @default("SCHEDULED") // SCHEDULED | COMPLETED | SWAPPED | ABSENT | CANCELLED
+  notes  String?
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@unique([staffId, date])
+  @@index([propertyId, date])
+  @@index([departmentId, date])
+}
+
+model ShiftSwapRequest {
+  id               String @id @default(uuid()) @db.Uuid
+  propertyId       String @db.Uuid
+  requesterStaffId String @db.Uuid
+  requesterStaff   Staff  @relation("ShiftSwapRequester", fields: [requesterStaffId], references: [id])
+  targetStaffId    String @db.Uuid
+  targetStaff      Staff  @relation("ShiftSwapTarget", fields: [targetStaffId], references: [id])
+
+  requesterDate DateTime @db.Date
+  targetDate    DateTime @db.Date
+  reason        String
+
+  status               String    @default("PENDING_PEER") // PENDING_PEER | PENDING_SUPERVISOR | APPROVED | REJECTED | CANCELLED
+  peerApprovedAt       DateTime? @db.Timestamptz
+  supervisorApprovedAt DateTime? @db.Timestamptz
+  supervisorUserId     String?   @db.Uuid
+  rejectionReason      String?
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@index([propertyId, status])
+}
+
+model AttendanceRecord {
+  id         String   @id @default(uuid()) @db.Uuid
+  propertyId String   @db.Uuid
+  property   Property @relation(fields: [propertyId], references: [id])
+  staffId    String   @db.Uuid
+  staff      Staff    @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  date     DateTime  @db.Date
+  clockIn  DateTime? @db.Timestamptz
+  clockOut DateTime? @db.Timestamptz
+
+  lateMinutes           Int     @default(0)
+  earlyDepartureMinutes Int     @default(0)
+  overtimeMinutes       Int     @default(0)
+  nightHours            Decimal @default(0) @db.Decimal(5, 2)
+
+  status      String @default("PRESENT") // PRESENT | LATE | HALF_DAY | ABSENT | ON_LEAVE | REST_DAY | HOLIDAY
+  punchSource String @default("WEB") // WEB | MOBILE | MANUAL | BIOMETRIC
+
+  supervisorVerified Boolean   @default(false)
+  verifiedByUserId   String?   @db.Uuid
+  verifiedAt         DateTime? @db.Timestamptz
+  notes              String?
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@unique([staffId, date])
+  @@index([propertyId, date])
+  @@index([propertyId, status])
+}
+
+model MissedPunchRequest {
+  id         String @id @default(uuid()) @db.Uuid
+  propertyId String @db.Uuid
+  staffId    String @db.Uuid
+  staff      Staff  @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  date         DateTime  @db.Date
+  requestedIn  DateTime? @db.Timestamptz
+  requestedOut DateTime? @db.Timestamptz
+  reason       String
+  status       String    @default("PENDING") // PENDING | APPROVED | REJECTED
+
+  reviewedByUserId String?   @db.Uuid
+  reviewedAt       DateTime? @db.Timestamptz
+  reviewerNotes    String?
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@index([propertyId, status])
+}
+
+// -----------------------------------------------------------------------------
+// LEAVE & ABSENCE MANAGEMENT
+// -----------------------------------------------------------------------------
+
+model LeaveType {
+  id               String   @id @default(uuid()) @db.Uuid
+  propertyId       String   @db.Uuid
+  property         Property @relation(fields: [propertyId], references: [id])
+  name             String // Annual, Sick, Casual, Maternity, Paternity, Compassionate, Study, Unpaid
+  code             String
+  defaultDays      Int      @default(20)
+  isPaid           Boolean  @default(true)
+  requiresProof    Boolean  @default(false)
+  carryOverMaxDays Int      @default(5)
+  isActive         Boolean  @default(true)
+
+  allocations  LeaveAllocation[]
+  applications LeaveApplication[]
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@unique([propertyId, code])
+}
+
+model LeaveAllocation {
+  id          String    @id @default(uuid()) @db.Uuid
+  propertyId  String    @db.Uuid
+  staffId     String    @db.Uuid
+  staff       Staff     @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  leaveTypeId String    @db.Uuid
+  leaveType   LeaveType @relation(fields: [leaveTypeId], references: [id])
+
+  year            Int
+  entitledDays    Int
+  carriedOverDays Int @default(0)
+  usedDays        Int @default(0)
+  pendingDays     Int @default(0)
+  balanceDays     Int
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@unique([staffId, leaveTypeId, year])
+  @@index([propertyId, year])
+}
+
+model LeaveApplication {
+  id          String    @id @default(uuid()) @db.Uuid
+  propertyId  String    @db.Uuid
+  property    Property  @relation(fields: [propertyId], references: [id])
+  staffId     String    @db.Uuid
+  staff       Staff     @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  leaveTypeId String    @db.Uuid
+  leaveType   LeaveType @relation(fields: [leaveTypeId], references: [id])
+
+  startDate       DateTime @db.Date
+  endDate         DateTime @db.Date
+  totalDays       Int
+  reason          String
+  attachmentUrl   String?
+  handoverStaffId String?  @db.Uuid
+
+  status String @default("PENDING_HOD") // PENDING_HOD | PENDING_HR | APPROVED | REJECTED | CANCELLED
+
+  hodApprovedAt   DateTime? @db.Timestamptz
+  hodUserId       String?   @db.Uuid
+  hrApprovedAt    DateTime? @db.Timestamptz
+  hrUserId        String?   @db.Uuid
+  rejectionReason String?
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@index([propertyId, status])
+  @@index([staffId, startDate])
+}
+
+// -----------------------------------------------------------------------------
+// RECRUITMENT & APPLICANT TRACKING
+// -----------------------------------------------------------------------------
+
+model JobRequisition {
+  id           String      @id @default(uuid()) @db.Uuid
+  propertyId   String      @db.Uuid
+  property     Property    @relation(fields: [propertyId], references: [id])
+  departmentId String      @db.Uuid
+  positionId   String      @db.Uuid
+  position     JobPosition @relation(fields: [positionId], references: [id])
+
+  openings       Int      @default(1)
+  employmentType String   @default("PERMANENT")
+  justification  String
+  salaryMin      Decimal? @db.Decimal(18, 4)
+  salaryMax      Decimal? @db.Decimal(18, 4)
+
+  status     String    @default("PENDING_APPROVAL") // DRAFT | PENDING_APPROVAL | APPROVED | REJECTED | CLOSED
+  approvedBy String?   @db.Uuid
+  approvedAt DateTime? @db.Timestamptz
+
+  vacancies JobVacancy[]
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@index([propertyId, status])
+}
+
+model JobVacancy {
+  id            String         @id @default(uuid()) @db.Uuid
+  requisitionId String         @db.Uuid
+  requisition   JobRequisition @relation(fields: [requisitionId], references: [id])
+
+  title        String
+  description  String
+  requirements String
+  closingDate  DateTime? @db.Date
+  status       String    @default("OPEN") // OPEN | PAUSED | CLOSED
+
+  applicants JobApplicant[]
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@index([status])
+}
+
+model JobApplicant {
+  id        String     @id @default(uuid()) @db.Uuid
+  vacancyId String     @db.Uuid
+  vacancy   JobVacancy @relation(fields: [vacancyId], references: [id], onDelete: Cascade)
+
+  fullName    String
+  email       String
+  phone       String
+  resumeUrl   String?
+  coverLetter String?
+
+  stage          String    @default("APPLIED") // APPLIED | SCREENING | INTERVIEW | ASSESSMENT | OFFER | HIRED | REJECTED
+  rating         Int?      @default(0) // 1-5 stars
+  interviewDate  DateTime? @db.Timestamptz
+  interviewNotes String?
+  offerDetails   Json? // { basicSalary, allowances, proposedStartDate }
+
+  convertedStaffId String? @db.Uuid
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@index([vacancyId, stage])
+}
+
+// -----------------------------------------------------------------------------
+// ONBOARDING & OFFBOARDING
+// -----------------------------------------------------------------------------
+
+model OnboardingTask {
+  id      String @id @default(uuid()) @db.Uuid
+  staffId String @db.Uuid
+  staff   Staff  @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  category    String // DOCUMENTATION | INDUCTION | ASSET_ISSUANCE | IT_SETUP | COMPLIANCE
+  title       String
+  description String?
+  dueDate     DateTime? @db.Date
+  isCompleted Boolean   @default(false)
+  completedAt DateTime? @db.Timestamptz
+  verifiedBy  String?   @db.Uuid
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@index([staffId, isCompleted])
+}
+
+// -----------------------------------------------------------------------------
+// NIGERIAN STATUTORY CONFIGURATION, LOANS, ADVANCES & EXPENSES
+// -----------------------------------------------------------------------------
+
+model StatutoryConfiguration {
+  id               String       @id @default(uuid()) @db.Uuid
+  organizationId   String       @db.Uuid
+  organization     Organization @relation(fields: [organizationId], references: [id])
+  versionTag       String       @default("PITA_2020_CURRENT") // e.g. "PITA_2020_CURRENT", "FINANCE_REFORMS_2026"
+  effectiveFrom    DateTime     @db.Date
+  effectiveTo      DateTime?    @db.Date
+  minimumWageFloor Decimal      @default(70000) @db.Decimal(18, 4)
+
+  // Tax Reliefs & Bands
+  craPercentGross  Decimal @default(0.20) @db.Decimal(5, 4) // 20%
+  craBaseAmount    Decimal @default(200000) @db.Decimal(18, 4) // ₦200,000 annual
+  craHigherPercent Decimal @default(0.01) @db.Decimal(5, 4) // 1% gross
+  taxBands         Json // [{ limit: 300000, rate: 0.07 }, { limit: 300000, rate: 0.11 }, ...]
+
+  // Pension Reform Act 2014
+  pensionEmployeeRate Decimal @default(0.08) @db.Decimal(5, 4) // 8%
+  pensionEmployerRate Decimal @default(0.10) @db.Decimal(5, 4) // 10%
+
+  // Other statutory levies
+  nhfRate   Decimal @default(0.025) @db.Decimal(5, 4) // 2.5% on basic
+  nsitfRate Decimal @default(0.01) @db.Decimal(5, 4) // 1% employer levy
+  itfRate   Decimal @default(0.01) @db.Decimal(5, 4) // 1% employer levy
+
+  isActive    Boolean @default(true)
+  createdById String  @db.Uuid
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@unique([organizationId, versionTag])
+}
+
+model EmployeeLoan {
+  id         String   @id @default(uuid()) @db.Uuid
+  propertyId String   @db.Uuid
+  property   Property @relation(fields: [propertyId], references: [id])
+  staffId    String   @db.Uuid
+  staff      Staff    @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  loanNumber       String   @unique
+  principalAmount  Decimal  @db.Decimal(18, 4)
+  interestRate     Decimal  @default(0) @db.Decimal(5, 2)
+  termMonths       Int      @default(12)
+  monthlyDeduction Decimal  @db.Decimal(18, 4)
+  remainingBalance Decimal  @db.Decimal(18, 4)
+  disbursementDate DateTime @db.Date
+  reason           String
+
+  status     String    @default("ACTIVE") // PENDING | ACTIVE | FULLY_PAID | WRITTEN_OFF
+  approvedBy String    @db.Uuid
+  approvedAt DateTime? @db.Timestamptz
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@index([propertyId, status])
+  @@index([staffId])
+}
+
+model SalaryAdvance {
+  id         String   @id @default(uuid()) @db.Uuid
+  propertyId String   @db.Uuid
+  property   Property @relation(fields: [propertyId], references: [id])
+  staffId    String   @db.Uuid
+  staff      Staff    @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  amount                Decimal @db.Decimal(18, 4)
+  reason                String
+  targetPayrollPeriodId String? @db.Uuid
+
+  status     String    @default("PENDING") // PENDING | APPROVED | DEDUCTED | REJECTED
+  approvedBy String?   @db.Uuid
+  approvedAt DateTime? @db.Timestamptz
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@index([propertyId, status])
+}
+
+model ExpenseClaim {
+  id         String   @id @default(uuid()) @db.Uuid
+  propertyId String   @db.Uuid
+  property   Property @relation(fields: [propertyId], references: [id])
+  staffId    String   @db.Uuid
+  staff      Staff    @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  claimNumber String  @unique
+  category    String // TRAVEL | HOTEL_SUPPLIES | MEDICAL | MEALS | OTHER
+  amount      Decimal @db.Decimal(18, 4)
+  currency    String  @default("NGN")
+  receiptUrl  String?
+  description String
+
+  status               String    @default("SUBMITTED") // SUBMITTED | APPROVED | REJECTED | REIMBURSED
+  approvedBy           String?   @db.Uuid
+  approvedAt           DateTime? @db.Timestamptz
+  reimbursedInPeriodId String?   @db.Uuid
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@index([propertyId, status])
+}
+
+// -----------------------------------------------------------------------------
+// PERFORMANCE, TRAINING & DISCIPLINARY
+// -----------------------------------------------------------------------------
+
+model PerformanceAppraisal {
+  id         String   @id @default(uuid()) @db.Uuid
+  propertyId String   @db.Uuid
+  property   Property @relation(fields: [propertyId], references: [id])
+  staffId    String   @db.Uuid
+  staff      Staff    @relation("AppraisalStaff", fields: [staffId], references: [id], onDelete: Cascade)
+  reviewerId String   @db.Uuid
+  reviewer   Staff    @relation("AppraisalReviewer", fields: [reviewerId], references: [id])
+
+  cycleName   String // e.g. "Q1 2026", "Annual 2025"
+  periodStart DateTime @db.Date
+  periodEnd   DateTime @db.Date
+
+  kpis            Json // [{ kpi: "Guest Satisfaction", target: "95%", actual: "92%", score: 4 }]
+  selfScore       Decimal? @db.Decimal(3, 1) // 1.0 - 5.0
+  managerScore    Decimal? @db.Decimal(3, 1)
+  finalRating     String? // OUTSTANDING | EXCEEDS_EXPECTATIONS | MEETS_EXPECTATIONS | NEEDS_IMPROVEMENT | UNSATISFACTORY
+  developmentPlan String?
+  promotionReady  Boolean  @default(false)
+
+  status String @default("DRAFT") // DRAFT | SUBMITTED | REVIEWED | ACKNOWLEDGED
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@index([propertyId, cycleName])
+  @@index([staffId])
+}
+
+model TrainingRecord {
+  id         String   @id @default(uuid()) @db.Uuid
+  propertyId String   @db.Uuid
+  property   Property @relation(fields: [propertyId], references: [id])
+  staffId    String   @db.Uuid
+  staff      Staff    @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  courseTitle    String // Food Safety, Fire Safety, Customer Service, Opera/LodgeCore PMS
+  provider       String?
+  completedAt    DateTime  @db.Date
+  expiresAt      DateTime? @db.Date
+  certificateUrl String?
+  score          Decimal?  @db.Decimal(5, 2)
+  isMandatory    Boolean   @default(false)
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@index([propertyId, courseTitle])
+  @@index([staffId])
+}
+
+model DisciplinaryRecord {
+  id         String   @id @default(uuid()) @db.Uuid
+  propertyId String   @db.Uuid
+  property   Property @relation(fields: [propertyId], references: [id])
+  staffId    String   @db.Uuid
+  staff      Staff    @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  incidentDate   DateTime @db.Date
+  type           String // VERBAL_WARNING | WRITTEN_WARNING | SUSPENSION | INQUIRY | FINAL_WARNING | TERMINATION
+  subject        String
+  description    String
+  actionTaken    String
+  isConfidential Boolean  @default(true)
+
+  issuedByUserId String  @db.Uuid
+  documentUrl    String?
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@index([propertyId, type])
+  @@index([staffId])
+}
+
+// -----------------------------------------------------------------------------
+// DOCUMENTS, POLICIES & HR SERVICE DESK
+// -----------------------------------------------------------------------------
+
+model EmployeeDocument {
+  id      String @id @default(uuid()) @db.Uuid
+  staffId String @db.Uuid
+  staff   Staff  @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  category       String // CONTRACT | ID_PROOF | DEGREE | CERTIFICATION | MEDICAL | APPRAISAL | EXIT
+  title          String
+  fileUrl        String
+  expiresAt      DateTime? @db.Date
+  isConfidential Boolean   @default(false)
+
+  uploadedBy String   @db.Uuid
+  createdAt  DateTime @default(now()) @db.Timestamptz
+
+  @@index([staffId, category])
+}
+
+model CompanyPolicy {
+  id                      String       @id @default(uuid()) @db.Uuid
+  organizationId          String       @db.Uuid
+  organization            Organization @relation(fields: [organizationId], references: [id])
+  title                   String
+  version                 String       @default("1.0")
+  category                String // CODE_OF_CONDUCT | SAFETY | LEAVE_POLICY | IT_USAGE | HOSPITALITY_STANDARDS
+  fileUrl                 String
+  effectiveDate           DateTime     @db.Date
+  requiresAcknowledgement Boolean      @default(true)
+  isActive                Boolean      @default(true)
+
+  acknowledgements PolicyAcknowledgement[]
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@index([organizationId, isActive])
+}
+
+model PolicyAcknowledgement {
+  id             String        @id @default(uuid()) @db.Uuid
+  policyId       String        @db.Uuid
+  policy         CompanyPolicy @relation(fields: [policyId], references: [id], onDelete: Cascade)
+  staffId        String        @db.Uuid
+  staff          Staff         @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  acknowledgedAt DateTime      @default(now()) @db.Timestamptz
+  ipAddress      String?
+  userAgent      String?
+
+  @@unique([policyId, staffId])
+  @@index([staffId, acknowledgedAt])
+}
+
+model HrServiceDeskTicket {
+  id         String   @id @default(uuid()) @db.Uuid
+  propertyId String   @db.Uuid
+  property   Property @relation(fields: [propertyId], references: [id])
+  staffId    String   @db.Uuid
+  staff      Staff    @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  ticketNumber String @unique
+  category     String // EMPLOYMENT_LETTER | SALARY_INQUIRY | LEAVE_INQUIRY | GRIEVANCE | PROFILE_UPDATE | BENEFIT
+  priority     String @default("MEDIUM") // LOW | MEDIUM | HIGH | URGENT
+  subject      String
+  description  String
+
+  status          String    @default("OPEN") // OPEN | IN_PROGRESS | RESOLVED | CLOSED
+  assignedToUser  String?   @db.Uuid
+  resolutionNotes String?
+  resolvedAt      DateTime? @db.Timestamptz
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@index([propertyId, status])
+  @@index([staffId])
 }

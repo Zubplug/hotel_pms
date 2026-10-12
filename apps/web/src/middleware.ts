@@ -48,6 +48,7 @@ const FRONT_DESK_ROLES = ['RECEPTIONIST', 'FRONT_DESK'];
 const INVENTORY_ROLES = ['STOCK_MANAGER', 'STOCK_KEEPER', 'PROCUREMENT_MANAGER', 'OUTLET_HEAD'];
 const FNB_ROLES = ['FNB_MANAGER', 'RESTAURANT_MANAGER', 'BANQUET_MANAGER', 'EVENT_MANAGER', ...MANAGEMENT_ROLES];
 const KITCHEN_ROLES = ['KITCHEN_STAFF', 'CHEF', 'HEAD_CHEF', 'KITCHEN_MANAGER'];
+const HR_ROLES = ['HR_MANAGER', 'PAYROLL_OFFICER', 'PAYROLL_APPROVER', 'HR_OFFICER', 'HOD', 'DEPARTMENT_HEAD', ...MANAGEMENT_ROLES];
 
 function hasModuleAccess(req: any, pathname: string): { allowed: boolean; redirectTo?: string } {
   const user = req.auth?.user as any;
@@ -150,6 +151,14 @@ function hasModuleAccess(req: any, pathname: string): { allowed: boolean; redire
   if (pathname === '/housekeeping-manager' || pathname.startsWith('/housekeeping-manager/')) {
     return (capabilities.includes('ACCESS_HOUSEKEEPING') && capabilities.includes('ACCESS_MAINTENANCE')) ||
       role === 'HOUSEKEEPING_MAINTENANCE_MANAGER'
+      ? { allowed: true } : { allowed: false, redirectTo: '/hub' };
+  }
+  if (pathname === '/hr' || pathname.startsWith('/hr/')) {
+    // Employee self-service sub-route is accessible to any authenticated employee
+    if (pathname === '/hr/self-service' || pathname.startsWith('/hr/self-service/')) {
+      return { allowed: true };
+    }
+    return can('ACCESS_HR', HR_ROLES) || capabilities.some((value: string) => value.startsWith('hr.'))
       ? { allowed: true } : { allowed: false, redirectTo: '/hub' };
   }
   return { allowed: true };

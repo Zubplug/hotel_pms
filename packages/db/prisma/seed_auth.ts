@@ -49,6 +49,32 @@ const permissionsList = [
   { name: 'APPROVE_DRAWER_VARIANCE', resource: 'CASH', action: 'UPDATE', description: 'Approve drawer variance' },
   { name: 'OVERRIDE_NIGHT_AUDIT', resource: 'AUDIT', action: 'UPDATE', description: 'Override night audit' },
   { name: 'POST_CITY_LEDGER', resource: 'LEDGER', action: 'CREATE', description: 'Post to city ledger' },
+
+  // Enterprise HR & Payroll
+  { name: 'ACCESS_HR', resource: 'SYSTEM', action: 'ACCESS', description: 'Access HR & Payroll module' },
+  { name: 'hr.employee.view', resource: 'HR_EMPLOYEE', action: 'READ', description: 'View employee records' },
+  { name: 'hr.employee.manage', resource: 'HR_EMPLOYEE', action: 'MANAGE', description: 'Create and update employee records' },
+  { name: 'hr.org.manage', resource: 'HR_ORG', action: 'MANAGE', description: 'Manage departments, positions, sections' },
+  { name: 'hr.recruitment.manage', resource: 'HR_RECRUITMENT', action: 'MANAGE', description: 'Manage job vacancies and candidates' },
+  { name: 'hr.onboarding.manage', resource: 'HR_ONBOARDING', action: 'MANAGE', description: 'Manage onboarding & offboarding' },
+  { name: 'hr.attendance.view', resource: 'HR_ATTENDANCE', action: 'READ', description: 'View attendance timesheets' },
+  { name: 'hr.attendance.manage', resource: 'HR_ATTENDANCE', action: 'MANAGE', description: 'Manage attendance and exceptions' },
+  { name: 'hr.shifts.manage', resource: 'HR_SHIFTS', action: 'MANAGE', description: 'Manage work shifts and rosters' },
+  { name: 'hr.leave.view', resource: 'HR_LEAVE', action: 'READ', description: 'View leave requests and balances' },
+  { name: 'hr.leave.apply', resource: 'HR_LEAVE', action: 'CREATE', description: 'Submit leave applications' },
+  { name: 'hr.leave.approve', resource: 'HR_LEAVE', action: 'UPDATE', description: 'Approve or reject leave applications' },
+  { name: 'hr.payroll.view', resource: 'HR_PAYROLL', action: 'READ', description: 'View payroll batches and summaries' },
+  { name: 'hr.payroll.prepare', resource: 'HR_PAYROLL', action: 'CREATE', description: 'Prepare and calculate payroll batches' },
+  { name: 'hr.payroll.approve', resource: 'HR_PAYROLL', action: 'UPDATE', description: 'Approve payroll batches' },
+  { name: 'hr.payroll.release', resource: 'HR_PAYROLL', action: 'PAY', description: 'Release payroll disbursements and post to GL' },
+  { name: 'hr.benefits.manage', resource: 'HR_BENEFITS', action: 'MANAGE', description: 'Manage loans, advances, expense claims' },
+  { name: 'hr.performance.manage', resource: 'HR_PERFORMANCE', action: 'MANAGE', description: 'Manage appraisals and KPIs' },
+  { name: 'hr.training.manage', resource: 'HR_TRAINING', action: 'MANAGE', description: 'Manage training courses and records' },
+  { name: 'hr.disciplinary.manage', resource: 'HR_DISCIPLINARY', action: 'MANAGE', description: 'Manage disciplinary records' },
+  { name: 'hr.documents.manage', resource: 'HR_DOCUMENTS', action: 'MANAGE', description: 'Manage employee contracts and policies' },
+  { name: 'hr.reports.view', resource: 'HR_REPORTS', action: 'READ', description: 'View HR and payroll reports' },
+  { name: 'hr.settings.manage', resource: 'HR_SETTINGS', action: 'MANAGE', description: 'Manage HR statutory and policy settings' },
+  { name: 'hr.self_service.access', resource: 'HR_SELF_SERVICE', action: 'ACCESS', description: 'Access employee self-service portal' },
 ];
 
 const systemRoles = {
@@ -95,7 +121,35 @@ const systemRoles = {
   AUDITOR: [
     'ACCESS_REPORTS', 'ACCESS_NIGHT_AUDIT', 'ACCESS_CASH_MANAGEMENT', 'ACCESS_FRONT_DESK', 'ACCESS_POS', 'ACCESS_INVENTORY'
   ],
-  EXTERNAL_AUDITOR: []
+  EXTERNAL_AUDITOR: [],
+  HR_MANAGER: [
+    'ACCESS_HR', 'hr.employee.view', 'hr.employee.manage', 'hr.org.manage',
+    'hr.recruitment.manage', 'hr.onboarding.manage', 'hr.attendance.view', 'hr.attendance.manage',
+    'hr.shifts.manage', 'hr.leave.view', 'hr.leave.apply', 'hr.leave.approve',
+    'hr.payroll.view', 'hr.payroll.prepare', 'hr.payroll.approve', 'hr.payroll.release',
+    'hr.benefits.manage', 'hr.performance.manage', 'hr.training.manage', 'hr.disciplinary.manage',
+    'hr.documents.manage', 'hr.reports.view', 'hr.settings.manage', 'hr.self_service.access'
+  ],
+  PAYROLL_OFFICER: [
+    'ACCESS_HR', 'hr.employee.view', 'hr.attendance.view', 'hr.leave.view',
+    'hr.payroll.view', 'hr.payroll.prepare', 'hr.benefits.manage', 'hr.reports.view',
+    'hr.self_service.access'
+  ],
+  PAYROLL_APPROVER: [
+    'ACCESS_HR', 'hr.employee.view', 'hr.payroll.view', 'hr.payroll.approve',
+    'hr.payroll.release', 'hr.reports.view', 'hr.self_service.access'
+  ],
+  HR_OFFICER: [
+    'ACCESS_HR', 'hr.employee.view', 'hr.employee.manage', 'hr.org.manage',
+    'hr.recruitment.manage', 'hr.onboarding.manage', 'hr.attendance.view', 'hr.attendance.manage',
+    'hr.shifts.manage', 'hr.leave.view', 'hr.leave.apply', 'hr.leave.approve',
+    'hr.performance.manage', 'hr.training.manage', 'hr.disciplinary.manage',
+    'hr.documents.manage', 'hr.reports.view', 'hr.self_service.access'
+  ],
+  DEPARTMENT_HEAD: [
+    'ACCESS_HR', 'hr.employee.view', 'hr.attendance.view', 'hr.shifts.manage',
+    'hr.leave.view', 'hr.leave.approve', 'hr.performance.manage', 'hr.self_service.access'
+  ],
 };
 
 async function main() {

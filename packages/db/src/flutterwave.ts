@@ -19,14 +19,73 @@ function secretKey() {
   return key;
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+async function request<T>(path: string, init?: RequestInit, apiKey = secretKey()): Promise<T> {
   const response = await fetch(`${API_URL}${path}`, {
     ...init,
-    headers: { Authorization: `Bearer ${secretKey()}`, 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
+    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
   });
   const payload = await response.json().catch(() => null) as { status?: string; message?: string; data?: T } | null;
   if (!response.ok || payload?.status === 'error') throw new Error(payload?.message || `Flutterwave request failed (${response.status})`);
   return payload?.data as T;
+}
+
+export type FlutterwaveTransferInput = {
+  secretKey: string;
+  amount: number;
+  currency: string;
+  bankCode: string;
+  accountNumber: string;
+  beneficiaryName: string;
+  reference: string;
+  narration: string;
+  callbackUrl?: string;
+  meta?: Record<string, string>;
+};
+
+export async function createFlutterwaveTransfer(input: FlutterwaveTransferInput) {
+  return request<{
+    id: number;
+    status: string;
+    reference: string;
+    amount: number;
+    currency: string;
+    complete_message?: string;
+  }>('/transfers', {
+    method: 'POST',
+    body: JSON.stringify({
+      account_bank: input.bankCode,
+      account_number: input.accountNumber,
+      amount: input.amount,
+      currency: input.currency,
+      beneficiary_name: input.beneficiaryName,
+      reference: input.reference,
+      narration: input.narration,
+      callback_url: input.callbackUrl,
+      meta: input.meta,
+    }),
+  }, input.secretKey);
+}
+
+export async function getFlutterwaveTransfer(secretKey: string, transferId: string) {
+  return request<{
+    id: number;
+    status: string;
+    reference: string;
+    amount: number;
+    currency: string;
+    complete_message?: string;
+  }>(`/transfers/${encodeURIComponent(transferId)}`, undefined, secretKey);
+}
+
+export async function getFlutterwaveBanks(secretKey: string) {
+  return request<Array<{ id: number; code: string; name: string }>>('/banks/NG', undefined, secretKey);
+}
+
+export async function resolveFlutterwaveBankAccount(input: { secretKey: string; accountNumber: string; bankCode: string }) {
+  return request<{ account_number: string; account_name: string }>('/accounts/resolve', {
+    method: 'POST',
+    body: JSON.stringify({ account_number: input.accountNumber, account_bank: input.bankCode }),
+  }, input.secretKey);
 }
 
 export async function createFlutterwaveCheckout(input: FlutterwaveCheckoutInput) {
