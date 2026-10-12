@@ -33,11 +33,20 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           const employerId = String(credentials.employerId || '').trim();
           if (!employerId) return null;
 
+          const normalizedEmployerId = employerId.toUpperCase();
+
           // Employer IDs are legacy nullable/non-unique fields. Reject
           // duplicates rather than silently authenticating the wrong tenant.
           const matches = await prisma.staff.findMany({
             where: {
-              employeeId: { equals: employerId, mode: 'insensitive' },
+              OR: [
+                { employeeId: { equals: employerId, mode: 'insensitive' } },
+                // Older staff records have no employeeId and are displayed by
+                // the HR API using this deterministic fallback code.
+                ...(normalizedEmployerId.startsWith('EMP-')
+                  ? [{ id: { startsWith: normalizedEmployerId.slice(4).toLowerCase() } }]
+                  : []),
+              ],
               isActive: true,
               deletedAt: null,
             },
@@ -51,7 +60,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           // linked during login instead of failing with a generic credential error.
           user = matches[0].userId
             ? await prisma.user.findUnique({ where: { id: matches[0].userId }, include: { membership: true, roles: { include: { role: { include: { permissions: { include: { permission: true } } } } } } } })
-            : await prisma.user.findUnique({ where: { email: matches[0].email.toLowerCase() }, include: { membership: true, roles: { include: { role: { include: { permissions: { include: { permission: true } } } } } } } });
+            : await prisma.user.findFirst({ where: { email: { equals: matches[0].email.trim(), mode: 'insensitive' } }, include: { membership: true, roles: { include: { role: { include: { permissions: { include: { permission: true } } } } } } } });
         } else {
           if (!credentials.email) return null;
           const email = String(credentials.email).trim().toLowerCase();
