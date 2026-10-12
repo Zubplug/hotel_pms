@@ -88,6 +88,7 @@ export default function EmployeesPage() {
     emergencyContactRelationship: '',
     emergencyContactPhone: '',
     posPin: '',
+    selfServicePassword: '',
   });
 
   const fetchEmployees = async () => {
@@ -210,6 +211,7 @@ export default function EmployeesPage() {
           emergencyContactRelationship: '',
           emergencyContactPhone: '',
           posPin: '',
+          selfServicePassword: '',
         });
       } else {
         const errorData = await res.json();
@@ -749,6 +751,19 @@ export default function EmployeesPage() {
                     onChange={(e) => setForm({ ...form, phone: e.target.value })}
                     className="bg-slate-950 border-slate-800 text-slate-100 text-xs h-8"
                   />
+                </div>
+                <div className="col-span-2">
+                  <label className="text-slate-400 mb-1 block">Self-service password *</label>
+                  <Input
+                    required
+                    minLength={8}
+                    type="password"
+                    placeholder="At least 8 characters"
+                    value={form.selfServicePassword}
+                    onChange={(e) => setForm({ ...form, selfServicePassword: e.target.value })}
+                    className="bg-slate-950 border-slate-800 text-slate-100 text-xs h-8"
+                  />
+                  <p className="text-[10px] text-slate-500 mt-1">The employee uses this password together with their Employer ID.</p>
                 </div>
               </div>
             </div>

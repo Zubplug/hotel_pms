@@ -40,17 +40,18 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
               employeeId: { equals: employerId, mode: 'insensitive' },
               isActive: true,
               deletedAt: null,
-              userId: { not: null },
             },
-            select: { id: true, firstName: true, lastName: true, organizationId: true, userId: true },
+            select: { id: true, firstName: true, lastName: true, organizationId: true, userId: true, email: true },
             take: 2,
           });
-          if (matches.length !== 1 || !matches[0].userId) return null;
+          if (matches.length !== 1) return null;
           staff = matches[0];
-          user = await prisma.user.findUnique({
-            where: { id: matches[0].userId },
-            include: { roles: { include: { role: { include: { permissions: { include: { permission: true } } } } } } },
-          });
+          // Older staff records may have been created before web accounts were
+          // provisioned. Fall back to the staff email so those accounts can be
+          // linked during login instead of failing with a generic credential error.
+          user = matches[0].userId
+            ? await prisma.user.findUnique({ where: { id: matches[0].userId }, include: { membership: true, roles: { include: { role: { include: { permissions: { include: { permission: true } } } } } } } })
+            : await prisma.user.findUnique({ where: { email: matches[0].email.toLowerCase() }, include: { membership: true, roles: { include: { role: { include: { permissions: { include: { permission: true } } } } } } } });
         } else {
           if (!credentials.email) return null;
           const email = String(credentials.email).trim().toLowerCase();
@@ -88,6 +89,23 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         if (!isPasswordValid) {
           return null;
+        }
+
+        if (isEmployeeLogin && staff && staff.userId !== user.id) {
+          // Complete the legacy link once the employee proves possession of
+          // the existing work-account password above.
+          await prisma.$transaction([
+            prisma.staff.update({ where: { id: staff.id }, data: { userId: user.id } }),
+            ...(user.staffId ? [] : [prisma.user.update({ where: { id: user.id }, data: { staffId: staff.id } })]),
+          ]);
+          user.staffId = staff.id;
+        }
+        if (isEmployeeLogin && staff) {
+          if (user.membership && user.membership.organizationId !== staff.organizationId) return null;
+          if (user.membership?.status !== 'ACTIVE') return null;
+          if (!user.membership) {
+            await prisma.organizationMembership.create({ data: { userId: user.id, organizationId: staff.organizationId, status: 'ACTIVE', role: 'MEMBER' } });
+          }
         }
 
         let capabilities: string[] = [];
@@ -150,7 +168,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           capabilities,
           sessionVersion: user.sessionVersion || 1,
           propertyId,
-          organizationId
+          organizationId,
+          selfServiceOnly: isEmployeeLogin
         };
       },
     }),
@@ -169,6 +188,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.sessionVersion = (user as any).sessionVersion;
         token.propertyId = (user as any).propertyId;
         token.organizationId = (user as any).organizationId;
+        token.selfServiceOnly = (user as any).selfServiceOnly;
       } else if (token.id) {
         // Validate session version on subsequent requests to support remote revocation
         try {
@@ -198,6 +218,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         session.user.sessionVersion = token.sessionVersion as number;
         session.user.propertyId = token.propertyId as string | null;
         session.user.organizationId = token.organizationId as string | null;
+        (session.user as any).selfServiceOnly = token.selfServiceOnly as boolean;
       }
       return session;
     },

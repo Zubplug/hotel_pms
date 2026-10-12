@@ -173,11 +173,12 @@ export async function POST(req: NextRequest) {
       emergencyContactRelationship,
       emergencyContactPhone,
       posPin,
+      selfServicePassword,
     } = body;
 
-    if (!firstName || !lastName || !email || !departmentName?.trim() || !positionTitle?.trim()) {
+    if (!firstName || !lastName || !email || !departmentName?.trim() || !positionTitle?.trim() || !selfServicePassword || String(selfServicePassword).length < 8) {
       return NextResponse.json(
-        { error: 'First name, last name, email, department, and position are mandatory' },
+        { error: 'First name, last name, email, department, position, and a self-service password of at least 8 characters are mandatory' },
         { status: 400 }
       );
     }
@@ -192,12 +193,24 @@ export async function POST(req: NextRequest) {
     }
 
     const newStaff = await prisma.$transaction(async (tx: any) => {
+      const normalizedEmail = email.trim().toLowerCase();
+      const passwordHash = await hash(String(selfServicePassword), 12);
+      const existingUser = await tx.user.findUnique({ where: { email: normalizedEmail } });
+      if (existingUser?.staffId) {
+        throw new Error('A web account already belongs to another employee with this email address');
+      }
+
+      const user = existingUser
+        ? await tx.user.update({ where: { id: existingUser.id }, data: { passwordHash } })
+        : await tx.user.create({ data: { email: normalizedEmail, passwordHash } });
+
       // 1. Create Staff record
       const staff = await tx.staff.create({
         data: {
           organizationId,
           employeeId: employeeCode,
-          email: email.trim().toLowerCase(),
+          userId: user.id,
+          email: normalizedEmail,
           firstName: firstName.trim(),
           lastName: lastName.trim(),
           phone: phone?.trim() || null,
@@ -208,6 +221,12 @@ export async function POST(req: NextRequest) {
           isActive: true,
           hiredAt: hireDate ? new Date(hireDate) : new Date(),
         },
+      });
+      await tx.user.update({ where: { id: user.id }, data: { staffId: staff.id } });
+      await tx.organizationMembership.upsert({
+        where: { userId: user.id },
+        update: { organizationId, status: 'ACTIVE', role: 'MEMBER' },
+        create: { userId: user.id, organizationId, status: 'ACTIVE', role: 'MEMBER' },
       });
 
       // 2. Create EmployeeProfile

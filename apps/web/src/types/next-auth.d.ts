@@ -12,6 +12,7 @@ declare module 'next-auth' {
       capabilities?: string[];
       role?: string;
       sessionVersion?: number;
+      selfServiceOnly?: boolean;
     } & DefaultSession['user'];
   }
 
@@ -24,5 +25,6 @@ declare module 'next-auth' {
     capabilities?: string[];
     role?: string;
     sessionVersion?: number;
+    selfServiceOnly?: boolean;
   }
 }

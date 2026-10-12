@@ -34,6 +34,7 @@ export function StaffForm({ staff, onClose, onSaved }: StaffFormProps) {
     department: staff?.department || '',
     position: staff?.position || '',
     posPin: '',
+    selfServicePassword: '',
     isActive: staff?.isActive ?? true,
     posOutlets: staff?.posOutletAccess?.map((a: any) => a.outlet.id) || [] as string[],
   });
@@ -171,6 +172,18 @@ export function StaffForm({ staff, onClose, onSaved }: StaffFormProps) {
           </div>
 
           <div className="border-t pt-4 mt-2">
+            <div className="space-y-2 mb-4">
+              <Label htmlFor="selfServicePassword">Employee self-service password</Label>
+              <Input
+                id="selfServicePassword"
+                type="password"
+                minLength={8}
+                placeholder={isEditing ? 'Enter to create or reset password' : 'At least 8 characters (optional)'}
+                value={formData.selfServicePassword}
+                onChange={(e) => handleChange('selfServicePassword', e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">When set, the employee can use Employer ID + this password at the Employee login.</p>
+            </div>
             <h4 className="font-medium mb-3">POS Settings</h4>
             <div className="space-y-4">
               <div className="space-y-2">

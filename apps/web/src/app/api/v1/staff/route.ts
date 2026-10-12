@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { randomUUID } from 'crypto';
 import prisma from '@hotel-pms/db';
 import { auth } from '@/lib/auth';
 import { hash } from 'bcryptjs';
@@ -63,7 +64,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { firstName, lastName, email, department, position, posPin, posOutlets } = body;
+    const { firstName, lastName, email, department, position, posPin, posOutlets, selfServicePassword } = body;
 
     if (!firstName || !lastName || !email) {
       return NextResponse.json({ error: 'First name, last name, and email are required' }, { status: 400 });
@@ -95,6 +96,7 @@ export async function POST(req: NextRequest) {
       const staff = await tx.staff.create({
         data: {
           organizationId,
+          employeeId: `EMP-${randomUUID().replace(/-/g, '').slice(0, 12).toUpperCase()}`,
           email,
           firstName: String(firstName),
           lastName: String(lastName),
@@ -104,6 +106,18 @@ export async function POST(req: NextRequest) {
           propertyAccess: [propertyId],
         }
       });
+
+      if (selfServicePassword) {
+        if (String(selfServicePassword).length < 8) throw new Error('Self-service password must be at least 8 characters');
+        const normalizedEmail = String(email).trim().toLowerCase();
+        const existingUser = await tx.user.findUnique({ where: { email: normalizedEmail } });
+        if (existingUser?.staffId) throw new Error('A web account already belongs to another employee with this email address');
+        const user = existingUser
+          ? await tx.user.update({ where: { id: existingUser.id }, data: { passwordHash: await hash(String(selfServicePassword), 12), staffId: staff.id } })
+          : await tx.user.create({ data: { email: normalizedEmail, passwordHash: await hash(String(selfServicePassword), 12), staffId: staff.id } });
+        await tx.staff.update({ where: { id: staff.id }, data: { userId: user.id } });
+        await tx.organizationMembership.upsert({ where: { userId: user.id }, update: { organizationId, status: 'ACTIVE', role: 'MEMBER' }, create: { userId: user.id, organizationId, status: 'ACTIVE', role: 'MEMBER' } });
+      }
 
       if (posOutlets && Array.isArray(posOutlets) && posOutlets.length > 0) {
         await tx.staffPosOutletAccess.createMany({

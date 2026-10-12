@@ -53,6 +53,9 @@ const HR_ROLES = ['HR_MANAGER', 'PAYROLL_OFFICER', 'PAYROLL_APPROVER', 'HR_OFFIC
 function hasModuleAccess(req: any, pathname: string): { allowed: boolean; redirectTo?: string } {
   const user = req.auth?.user as any;
   if (!user) return { allowed: false, redirectTo: '/login' };
+  if (user.selfServiceOnly && pathname !== '/hr/self-service' && !pathname.startsWith('/hr/self-service/') && pathname !== '/api/hr/self-service') {
+    return { allowed: false, redirectTo: '/hr/self-service' };
+  }
   if (user.isLodgeCoreAdmin) return { allowed: true };
 
   const role = String(user.role || '').toUpperCase();
@@ -202,6 +205,9 @@ export default auth((req) => {
     if (nextUrl.pathname === '/login' && isLoggedIn) {
       if ((req.auth?.user as any)?.isLodgeCoreAdmin) {
         return Response.redirect(new URL('/hq', nextUrl));
+      }
+      if ((req.auth?.user as any)?.selfServiceOnly) {
+        return Response.redirect(new URL('/hr/self-service', nextUrl));
       }
       if (String((req.auth?.user as any)?.role || '').toUpperCase() === 'EXTERNAL_AUDITOR') {
         return Response.redirect(new URL('/external-auditor', nextUrl));
