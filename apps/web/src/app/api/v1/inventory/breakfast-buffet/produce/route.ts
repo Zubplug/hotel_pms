@@ -5,6 +5,18 @@ import { successResponse, errorResponse } from '@/lib/api-response';
 import { requireOrganizationContext } from '@/lib/organization-access';
 import { BuffetProductionService } from '@/lib/services/buffet-production-service';
 
+type BuffetPostBody = {
+  propertyId?: string;
+  covers?: number | string;
+  recipeId?: string;
+  productId?: string;
+  warehouseId?: string;
+  businessDate?: string;
+  operationId?: string;
+};
+
+type AuthenticatedUser = { id: string };
+
 export async function POST(req: NextRequest) {
   try {
     const session = await auth();
@@ -12,11 +24,12 @@ export async function POST(req: NextRequest) {
       return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
     }
 
-    const { propertyIds } = await requireOrganizationContext((session.user as any).id);
-    const body = await req.json();
-    let { propertyId, covers, recipeId, productId, warehouseId, businessDate, operationId } = body;
+    const user = session.user as AuthenticatedUser;
+    const { propertyIds } = await requireOrganizationContext(user.id);
+    const body = (await req.json()) as BuffetPostBody;
+    const { covers, recipeId, productId, warehouseId, businessDate, operationId } = body;
+    const propertyId = body.propertyId || propertyIds[0];
 
-    propertyId = propertyId || propertyIds[0];
     if (!propertyId) {
       return errorResponse('BAD_REQUEST', 'Property ID is required', 400);
     }
@@ -44,18 +57,18 @@ export async function POST(req: NextRequest) {
     const result = await BuffetProductionService.produceBuffetBatch({
       propertyId,
       covers: Math.floor(parsedCovers),
-      recipeId: targetRecipeId,
+      recipeId,
       productId,
       warehouseId,
       businessDate,
       operationId,
-      actorId: (session.user as any).id,
+      actorId: user.id,
     });
 
     return successResponse(result, 201);
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[BREAKFAST_BUFFET_PRODUCE_POST]', error);
-    return errorResponse('INTERNAL_ERROR', error.message || 'Internal error', 500);
+    return errorResponse('INTERNAL_ERROR', error instanceof Error ? error.message : 'Internal error', 500);
   }
 }
 
@@ -66,7 +79,7 @@ export async function GET(req: NextRequest) {
       return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
     }
 
-    const { propertyIds } = await requireOrganizationContext((session.user as any).id);
+    const { propertyIds } = await requireOrganizationContext((session.user as AuthenticatedUser).id);
     const { searchParams } = req.nextUrl;
     const propertyId = searchParams.get('propertyId') || propertyIds[0];
     const covers = Number(searchParams.get('covers') || '1');
@@ -105,8 +118,8 @@ export async function GET(req: NextRequest) {
       ...preview,
       availableRecipes,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[BREAKFAST_BUFFET_PREVIEW_GET]', error);
-    return errorResponse('INTERNAL_ERROR', error.message || 'Internal error', 500);
+    return errorResponse('INTERNAL_ERROR', error instanceof Error ? error.message : 'Internal error', 500);
   }
 }
