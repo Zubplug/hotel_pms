@@ -39,20 +39,27 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           // duplicates rather than silently authenticating the wrong tenant.
           const matches = await prisma.staff.findMany({
             where: {
-              OR: [
-                { employeeId: { equals: employerId, mode: 'insensitive' } },
-                // Older staff records have no employeeId and are displayed by
-                // the HR API using this deterministic fallback code.
-                ...(normalizedEmployerId.startsWith('EMP-')
-                  ? [{ id: { startsWith: normalizedEmployerId.slice(4).toLowerCase() } }]
-                  : []),
-              ],
+              employeeId: { equals: employerId, mode: 'insensitive' },
               isActive: true,
               deletedAt: null,
             },
             select: { id: true, firstName: true, lastName: true, organizationId: true, userId: true, email: true },
             take: 2,
           });
+
+          // Older staff records may not have a persisted employeeId. The HR
+          // API displays a deterministic fallback code for those records.
+          // UUID fields cannot use Prisma's startsWith filter, so compare the
+          // short prefix after reading only the eligible legacy rows.
+          if (matches.length === 0 && normalizedEmployerId.startsWith('EMP-')) {
+            const fallbackMatches = await prisma.staff.findMany({
+              where: { employeeId: null, isActive: true, deletedAt: null },
+              select: { id: true, firstName: true, lastName: true, organizationId: true, userId: true, email: true },
+            });
+            const prefix = normalizedEmployerId.slice(4).toLowerCase();
+            matches.push(...fallbackMatches.filter((candidate) => candidate.id.slice(0, prefix.length) === prefix).slice(0, 2));
+          }
+
           if (matches.length !== 1) return null;
           staff = matches[0];
           // Older staff records may have been created before web accounts were

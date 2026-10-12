@@ -29,7 +29,7 @@ export function EmployeeSelfServiceLayout({ children }: { children: React.ReactN
   }
 
   const name = session.user.name?.trim() || 'Employee';
-  const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase() || 'ME';
+  const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map((part: string) => part[0]).join('').toUpperCase() || 'ME';
   const nav = [
     { href: '/hr/self-service', label: 'My dashboard', icon: Home },
   ];
