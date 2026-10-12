@@ -14,6 +14,8 @@ export default function LoginPage() {
   
   // Web state
   const [email, setEmail] = useState('');
+  const [employerId, setEmployerId] = useState('');
+  const [loginMode, setLoginMode] = useState<'account' | 'employee'>('account');
   const [password, setPassword] = useState('');
   
   // Desktop state
@@ -86,7 +88,7 @@ export default function LoginPage() {
     setError('');
     
     const result = await signIn('credentials', {
-      email,
+      ...(loginMode === 'employee' ? { employerId, loginType: 'employee' } : { email }),
       password,
       redirect: false,
     });
@@ -95,7 +97,7 @@ export default function LoginPage() {
       setError('Invalid email or password. Please try again.');
       setIsLoading(false);
     } else {
-      router.push('/hub');
+      router.push(loginMode === 'employee' ? '/hr/self-service' : '/hub');
       router.refresh();
     }
   }
@@ -217,8 +219,13 @@ export default function LoginPage() {
   const renderWebUI = () => (
     <div className="space-y-6">
       <div className="mb-6">
-        <h2 className="text-xl font-semibold text-white">Welcome back</h2>
-        <p className="text-slate-400 text-sm mt-1">Sign in to your account to continue</p>
+        <h2 className="text-xl font-semibold text-white">{loginMode === 'employee' ? 'Employee self-service' : 'Welcome back'}</h2>
+        <p className="text-slate-400 text-sm mt-1">{loginMode === 'employee' ? 'Use your Employer ID to view your HR records' : 'Sign in to your account to continue'}</p>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2 rounded-xl bg-white/5 p-1">
+        <button type="button" onClick={() => { setLoginMode('account'); setError(''); }} className={`rounded-lg px-3 py-2 text-xs font-medium transition-colors ${loginMode === 'account' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}>Account login</button>
+        <button type="button" onClick={() => { setLoginMode('employee'); setError(''); }} className={`rounded-lg px-3 py-2 text-xs font-medium transition-colors ${loginMode === 'employee' ? 'bg-teal-600 text-white' : 'text-slate-400 hover:text-white'}`}>Employee login</button>
       </div>
 
       <form onSubmit={handleWebLogin} className="space-y-5">
@@ -228,7 +235,10 @@ export default function LoginPage() {
           </div>
         )}
 
-        <div className="space-y-1.5">
+        {loginMode === 'employee' ? <div className="space-y-1.5">
+          <label htmlFor="employerId" className="text-sm font-medium text-slate-300">Employer ID</label>
+          <input id="employerId" type="text" autoComplete="username" required value={employerId} onChange={(e) => setEmployerId(e.target.value)} placeholder="EMP-0001" className="w-full rounded-xl bg-white/5 border border-white/10 px-4 py-3 text-white placeholder-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/50 focus:border-teal-500/50 transition-all" />
+        </div> : <div className="space-y-1.5">
           <label htmlFor="email" className="text-sm font-medium text-slate-300">
             Email address
           </label>
@@ -242,7 +252,7 @@ export default function LoginPage() {
             placeholder="admin@lodgecore.com"
             className="w-full rounded-xl bg-white/5 border border-white/10 px-4 py-3 text-white placeholder-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all"
           />
-        </div>
+        </div>}
 
         <div className="space-y-1.5">
           <label htmlFor="password" className="text-sm font-medium text-slate-300">
@@ -275,7 +285,7 @@ export default function LoginPage() {
           className="w-full rounded-xl bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-semibold py-3 text-sm transition-all shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
         >
           {isLoading && <Loader2 className="w-4 h-4 animate-spin" />}
-          {isLoading ? 'Signing in...' : 'Sign in'}
+            {isLoading ? 'Signing in...' : loginMode === 'employee' ? 'Open my HR dashboard' : 'Sign in'}
         </button>
       </form>
     </div>

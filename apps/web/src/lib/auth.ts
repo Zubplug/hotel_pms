@@ -16,39 +16,65 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       name: 'Credentials',
       credentials: {
         email: { label: 'Email', type: 'email' },
+        employerId: { label: 'Employer ID', type: 'text' },
+        loginType: { label: 'Login type', type: 'text' },
         password: { label: 'Password', type: 'password' },
       },
       async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) {
+        if (!credentials?.password) {
           return null;
         }
 
-        const email = String(credentials.email).trim().toLowerCase();
+        const isEmployeeLogin = String(credentials.loginType || '').toLowerCase() === 'employee';
+        let user: any = null;
+        let staff: any = null;
 
-        const user = await prisma.user.findUnique({
-          where: { email },
-          include: { 
-            roles: { 
-              include: { 
-                role: { include: { permissions: { include: { permission: true } } } } 
-              } 
-            } 
-          }
-        });
+        if (isEmployeeLogin) {
+          const employerId = String(credentials.employerId || '').trim();
+          if (!employerId) return null;
+
+          // Employer IDs are legacy nullable/non-unique fields. Reject
+          // duplicates rather than silently authenticating the wrong tenant.
+          const matches = await prisma.staff.findMany({
+            where: {
+              employeeId: { equals: employerId, mode: 'insensitive' },
+              isActive: true,
+              deletedAt: null,
+              userId: { not: null },
+            },
+            select: { id: true, firstName: true, lastName: true, organizationId: true, userId: true },
+            take: 2,
+          });
+          if (matches.length !== 1 || !matches[0].userId) return null;
+          staff = matches[0];
+          user = await prisma.user.findUnique({
+            where: { id: matches[0].userId },
+            include: { roles: { include: { role: { include: { permissions: { include: { permission: true } } } } } } },
+          });
+        } else {
+          if (!credentials.email) return null;
+          const email = String(credentials.email).trim().toLowerCase();
+          user = await prisma.user.findUnique({
+            where: { email },
+            include: { roles: { include: { role: { include: { permissions: { include: { permission: true } } } } } } },
+          });
+        }
 
         if (!user || !user.passwordHash) {
           return null;
         }
 
-        let staff = await prisma.staff.findFirst({
-          where: {
-            OR: [
-              ...(user.staffId ? [{ id: user.staffId }] : []),
-              { userId: user.id }
-            ]
-          },
-          select: { id: true, firstName: true, lastName: true, organizationId: true }
-        });
+        if (!staff) {
+          staff = await prisma.staff.findFirst({
+            where: {
+              OR: [
+                ...(user.staffId ? [{ id: user.staffId }] : []),
+                { userId: user.id }
+              ]
+            },
+            select: { id: true, firstName: true, lastName: true, organizationId: true }
+          });
+        }
         
         // Ensure staffId is populated on user if we found the staff via userId
         if (staff && !user.staffId) {
