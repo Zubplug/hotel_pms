@@ -82,9 +82,6 @@ export function AuditReadiness({ data }: { data: NightAuditData }) {
         {sections.map((section) => {
           const Icon = section.icon;
           const isClear = section.count === 0;
-          const barColor = isClear ? '#10b981' : section.hasBlocker ? '#f43f5e' : '#f59e0b';
-          const barWidth = isClear ? '100%' : section.hasBlocker ? '70%' : '45%';
-
           const iconStyle = isClear
             ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-400'
             : section.hasBlocker
@@ -126,12 +123,9 @@ export function AuditReadiness({ data }: { data: NightAuditData }) {
 
                   <p className="mt-0.5 text-[11px] text-slate-500">{section.description}</p>
 
-                  {/* Progress bar */}
-                  <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/[0.06]">
-                    <div
-                      className="h-full rounded-full transition-all duration-700"
-                      style={{ width: barWidth, background: barColor }}
-                    />
+                  <div className="mt-3 flex items-center justify-between text-[10px] text-slate-600">
+                    <span>{isClear ? 'No records require review' : 'Server-returned evidence'}</span>
+                    <span className="font-mono tabular-nums">{section.count} record{section.count === 1 ? '' : 's'}</span>
                   </div>
                 </div>
               </div>

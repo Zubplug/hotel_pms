@@ -30,6 +30,8 @@ export default function NightAuditDashboard({ managerMode = false }: { managerMo
   const [flashData, setFlashData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [lastSuccessfulRefresh, setLastSuccessfulRefresh] = useState<Date | null>(null);
+  const [now, setNow] = useState(() => new Date());
 
   const [wizardOpen, setWizardOpen] = useState(false);
   const [executing, setExecuting] = useState(false);
@@ -41,14 +43,21 @@ export default function NightAuditDashboard({ managerMode = false }: { managerMo
 
   const [resolutionAction, setResolutionAction] = useState<ResolutionAction>(null);
 
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
   const load = async (quiet = false) => {
     if (!propertyId) return;
     quiet ? setRefreshing(true) : setLoading(true);
+    setError(null);
     try {
       const response = await fetch(`/api/v1/night-audit/status?propertyId=${propertyId}`);
       const result = await response.json();
       if (!response.ok) throw new Error(result.error?.message || 'Unable to load audit status');
       setData(result.data);
+      setLastSuccessfulRefresh(new Date());
 
       try {
         const flashRes = await fetch(`/api/v1/night-audit/reports/managers-flash?propertyId=${propertyId}&businessDate=${result.data.businessDate}`);
@@ -154,21 +163,59 @@ export default function NightAuditDashboard({ managerMode = false }: { managerMo
     >
       <div className="mx-auto max-w-[1600px] space-y-6">
 
-        {/* Page header breadcrumb */}
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.2em]">
-            <span className="text-slate-600">General Manager</span>
-            <span className="text-slate-700">/</span>
-            <span className="text-indigo-400">Night Audit</span>
+        {/* Operational header: the calendar date and the hotel's business date are deliberately separate. */}
+        <div className="overflow-hidden rounded-[24px] border border-white/[0.08] bg-[#0b1220]/90 shadow-2xl shadow-black/20">
+          <div className="flex flex-wrap items-center justify-between gap-5 border-b border-white/[0.06] px-5 py-4 sm:px-6">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-indigo-400/25 bg-indigo-400/10 text-indigo-300">
+                <MoonStar className="h-5 w-5" />
+              </div>
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="truncate text-base font-bold text-white">{data.property.name}</p>
+                  <span className="rounded-full border border-indigo-400/20 bg-indigo-400/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-indigo-300">Night audit</span>
+                </div>
+                <p className="mt-1 text-xs text-slate-500">Financial operations and business-date control centre</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-bold ${data.auditState === 'COMPLETED' ? 'border-emerald-400/25 bg-emerald-400/10 text-emerald-300' : data.summary.blockers > 0 ? 'border-rose-400/25 bg-rose-400/10 text-rose-300' : 'border-amber-400/25 bg-amber-400/10 text-amber-300'}`}>
+                <span className="h-1.5 w-1.5 rounded-full bg-current" />
+                {data.auditState.replaceAll('_', ' ')}
+              </span>
+              <button
+                onClick={() => load(true)}
+                disabled={refreshing}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-white/[0.08] bg-white/[0.04] px-3 py-2 text-xs font-semibold text-slate-300 transition hover:bg-white/[0.08] disabled:opacity-50"
+                aria-label="Refresh night audit data"
+              >
+                <RefreshCcw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+                Refresh
+              </button>
+            </div>
           </div>
-          <button
-            onClick={() => load(true)}
-            disabled={refreshing}
-            className="flex items-center gap-1.5 rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-1.5 text-xs font-semibold text-slate-400 transition-all hover:bg-white/[0.06] hover:text-slate-200 disabled:opacity-50"
-          >
-            <RefreshCcw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
-            Refresh
-          </button>
+          <div className="grid gap-4 px-5 py-4 sm:grid-cols-2 lg:grid-cols-4 sm:px-6">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Business date</p>
+              <p className="mt-1 font-mono text-sm font-bold tabular-nums text-white">{data.businessDate}</p>
+              <p className="mt-1 text-[11px] text-slate-500">The date being reconciled and closed</p>
+            </div>
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Property local time</p>
+              <p className="mt-1 font-mono text-sm font-bold tabular-nums text-white">{new Intl.DateTimeFormat('en-GB', { timeZone: data.property.timezone, hour: '2-digit', minute: '2-digit', second: '2-digit' }).format(now)}</p>
+              <p className="mt-1 text-[11px] text-slate-500">{data.property.timezone} · calendar date may differ</p>
+            </div>
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Control summary</p>
+              <p className="mt-1 text-sm font-bold text-white"><span className={data.summary.blockers ? 'text-rose-300' : 'text-emerald-300'}>{data.summary.blockers} blockers</span><span className="mx-2 text-slate-700">/</span><span className="text-amber-300">{data.summary.warnings} warnings</span></p>
+              <p className="mt-1 text-[11px] text-slate-500">Server-evaluated readiness checks</p>
+            </div>
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Data freshness</p>
+              <p className="mt-1 text-sm font-bold text-white">{lastSuccessfulRefresh ? lastSuccessfulRefresh.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—'}</p>
+              <p className={`mt-1 text-[11px] ${error ? 'text-rose-300' : 'text-slate-500'}`}>{error ? 'Refresh failed · displayed data may be stale' : 'Last successful status read'}</p>
+            </div>
+          </div>
         </div>
 
         {/* Global Alerts */}
@@ -234,15 +281,15 @@ export default function NightAuditDashboard({ managerMode = false }: { managerMo
               <div className="bg-[#0a0c22] p-6">
                 <h3 className="mb-5 text-xs font-bold uppercase tracking-[0.15em] text-slate-500">Revenue Summary</h3>
                 <div className="space-y-4">
-                  <div className="flex justify-between"><span className="text-sm font-medium text-slate-400">Room Revenue</span><span className="font-bold text-white">₦{Number(flashData.roomRevenue || 0).toLocaleString()}</span></div>
-                  <div className="flex justify-between"><span className="text-sm font-medium text-slate-400">F&B Revenue</span><span className="font-bold text-white">₦{Number(flashData.fbRevenue || 0).toLocaleString()}</span></div>
-                  <div className="flex justify-between"><span className="text-sm font-medium text-slate-400">Other Revenue</span><span className="font-bold text-white">₦{Number(flashData.otherRevenue || 0).toLocaleString()}</span></div>
+                  <div className="flex justify-between"><span className="text-sm font-medium text-slate-400">Room Revenue</span><span className="font-bold text-white">{new Intl.NumberFormat(undefined, { style: 'currency', currency: data.property.baseCurrency, maximumFractionDigits: 0 }).format(Number(flashData.roomRevenue || 0))}</span></div>
+                  <div className="flex justify-between"><span className="text-sm font-medium text-slate-400">F&B Revenue</span><span className="font-bold text-white">{new Intl.NumberFormat(undefined, { style: 'currency', currency: data.property.baseCurrency, maximumFractionDigits: 0 }).format(Number(flashData.fbRevenue || 0))}</span></div>
+                  <div className="flex justify-between"><span className="text-sm font-medium text-slate-400">Other Revenue</span><span className="font-bold text-white">{new Intl.NumberFormat(undefined, { style: 'currency', currency: data.property.baseCurrency, maximumFractionDigits: 0 }).format(Number(flashData.otherRevenue || 0))}</span></div>
                   <div className="my-2 border-t border-white/5"></div>
-                  <div className="flex justify-between"><span className="text-sm font-semibold text-slate-300">Net Revenue</span><span className="font-bold text-emerald-400">₦{Number(flashData.netRevenue || 0).toLocaleString()}</span></div>
-                  <div className="flex justify-between"><span className="text-sm text-slate-500">Taxes</span><span className="font-medium text-slate-400">₦{Number(flashData.totalTaxes || 0).toLocaleString()}</span></div>
-                  <div className="flex justify-between"><span className="text-sm text-slate-500">Concessions/Discounts</span><span className="font-medium text-rose-400">-₦{Number(flashData.totalDiscounts || 0).toLocaleString()}</span></div>
+                  <div className="flex justify-between"><span className="text-sm font-semibold text-slate-300">Net Revenue</span><span className="font-bold text-emerald-400">{new Intl.NumberFormat(undefined, { style: 'currency', currency: data.property.baseCurrency, maximumFractionDigits: 0 }).format(Number(flashData.netRevenue || 0))}</span></div>
+                  <div className="flex justify-between"><span className="text-sm text-slate-500">Taxes</span><span className="font-medium text-slate-400">{new Intl.NumberFormat(undefined, { style: 'currency', currency: data.property.baseCurrency, maximumFractionDigits: 0 }).format(Number(flashData.totalTaxes || 0))}</span></div>
+                  <div className="flex justify-between"><span className="text-sm text-slate-500">Concessions/Discounts</span><span className="font-medium text-rose-400">-{new Intl.NumberFormat(undefined, { style: 'currency', currency: data.property.baseCurrency, maximumFractionDigits: 0 }).format(Number(flashData.totalDiscounts || 0))}</span></div>
                   <div className="mt-2 border-t border-white/10 pt-3"></div>
-                  <div className="flex justify-between"><span className="text-base font-bold text-white">Gross Revenue</span><span className="text-base font-bold text-white">₦{Number(flashData.grossRevenue || 0).toLocaleString()}</span></div>
+                  <div className="flex justify-between"><span className="text-base font-bold text-white">Gross Revenue</span><span className="text-base font-bold text-white">{new Intl.NumberFormat(undefined, { style: 'currency', currency: data.property.baseCurrency, maximumFractionDigits: 0 }).format(Number(flashData.grossRevenue || 0))}</span></div>
                 </div>
               </div>
               
@@ -255,9 +302,9 @@ export default function NightAuditDashboard({ managerMode = false }: { managerMo
                     <div className="mt-2 text-right text-xs font-medium text-slate-500">{flashData.occupiedRooms || 0} / {flashData.totalRooms || 0} rooms</div>
                   </div>
                   <div className="flex items-center justify-between rounded-xl border border-white/[0.04] bg-white/[0.02] p-4">
-                    <div className="flex items-center gap-3"><TrendingUp className="h-6 w-6 text-indigo-400" /><div><div className="text-xs font-bold uppercase tracking-wider text-slate-500">ADR</div><div className="text-lg font-bold text-white">₦{Number(flashData.adr || 0).toLocaleString()}</div></div></div>
+                    <div className="flex items-center gap-3"><TrendingUp className="h-6 w-6 text-indigo-400" /><div><div className="text-xs font-bold uppercase tracking-wider text-slate-500">ADR</div><div className="text-lg font-bold text-white">{new Intl.NumberFormat(undefined, { style: 'currency', currency: data.property.baseCurrency, maximumFractionDigits: 0 }).format(Number(flashData.adr || 0))}</div></div></div>
                     <div className="h-10 w-px bg-white/5"></div>
-                    <div className="flex items-center gap-3 text-right"><div><div className="text-xs font-bold uppercase tracking-wider text-slate-500">RevPAR</div><div className="text-lg font-bold text-white">₦{Number(flashData.revPar || 0).toLocaleString()}</div></div><Percent className="h-6 w-6 text-indigo-400" /></div>
+                    <div className="flex items-center gap-3 text-right"><div><div className="text-xs font-bold uppercase tracking-wider text-slate-500">RevPAR</div><div className="text-lg font-bold text-white">{new Intl.NumberFormat(undefined, { style: 'currency', currency: data.property.baseCurrency, maximumFractionDigits: 0 }).format(Number(flashData.revPar || 0))}</div></div><Percent className="h-6 w-6 text-indigo-400" /></div>
                   </div>
                 </div>
               </div>
