@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { CalendarCheck2, Home, LogOut, Menu, UserRound, X, ShieldCheck, WalletCards } from 'lucide-react';
+import { CalendarCheck2, Home, LogOut, Menu, UserRound, X, ShieldCheck, WalletCards, MessageSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useLogout } from '@/hooks/useLogout';
 import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
@@ -33,6 +33,7 @@ export function EmployeeSelfServiceLayout({ children }: { children: React.ReactN
   const nav = [
     { href: '/hr/self-service', label: 'My dashboard', icon: Home },
     { href: '/hr/self-service/pay', label: 'My pay', icon: WalletCards },
+    { href: '/hr/self-service/support', label: 'HR support', icon: MessageSquare },
     { href: '/hr/self-service/security', label: 'Account security', icon: ShieldCheck },
   ];
 
