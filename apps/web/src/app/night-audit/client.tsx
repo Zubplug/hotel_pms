@@ -53,14 +53,14 @@ export default function NightAuditDashboard({ managerMode = false }: { managerMo
     quiet ? setRefreshing(true) : setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`/api/v1/night-audit/status?propertyId=${propertyId}`);
+      const response = await fetch(`/api/v1/night-audit/status?propertyId=${propertyId}`, { cache: 'no-store' });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error?.message || 'Unable to load audit status');
       setData(result.data);
       setLastSuccessfulRefresh(new Date());
 
       try {
-        const flashRes = await fetch(`/api/v1/night-audit/reports/managers-flash?propertyId=${propertyId}&businessDate=${result.data.businessDate}`);
+        const flashRes = await fetch(`/api/v1/night-audit/reports/managers-flash?propertyId=${propertyId}&businessDate=${result.data.businessDate}`, { cache: 'no-store' });
         const flashJson = await flashRes.json();
         if (flashRes.ok) setFlashData(flashJson.data || flashJson);
       } catch (e) {

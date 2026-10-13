@@ -41,6 +41,27 @@ Scope: `/night-audit`, its status/execute APIs, the Prisma night-audit models, a
 4. The overview’s older sections duplicate information already returned by the status endpoint, making the critical path harder to scan.
 5. The current page has no explicit client-side refresh timestamp and no visible indication when the last successful read is old or when a refresh failed after data was displayed.
 
+### End-to-end flow traced
+
+- Reservations and `ReservationRoom` provide arrival/departure, room assignment, and checked-in occupancy state. `getOperationalReview` compares expected movement and active room assignments without changing either record.
+- Room charges are created by `executeNightAudit` for eligible checked-in stays. The operation key is date/reservation scoped; corporate stays route to the existing city-ledger folio rules. Rate breakdown, tax, package, amenity, housekeeping, and lease/event billing are delegated to their existing services.
+- POS and front-desk activity reaches the web database through their existing session/order/payment models and offline push routes. `getSystemIntegrity`, `getCashReconciliation`, and `getFnbControl` expose open sessions, orders, sync conflicts, unverified transactions, handovers, and outlet controls.
+- Payments and refunds are distinct from recognized revenue. The status route reports folio activity, completed refunds, payment totals, cashier/POS variances, and open transaction exceptions independently.
+- Posting closes with `postNightAuditJournal` and `buildNightAuditBalanceProof`; the run stores a `NightAuditFinancialSnapshot`, `NightAuditClosePackage`, journal links, account balance snapshots, and a content hash before the property date advances.
+- The close is recorded in `AuditLog` and `HotelActivityEvent`. The property-row lock and unique `(propertyId, businessDate)` run constraint protect concurrent starts; posting failures set the run/property to `FAILED` and preserve recovery state.
+
+### Security and desktop boundary
+
+- Tenant isolation is enforced through `requireOrganizationContext` and server-derived `propertyIds`; the execute route additionally checks `night_audit:execute` and the existing role exception.
+- Historical/report endpoints must continue to validate property scope server-side. Client-supplied property IDs are not trusted.
+- Desktop hardware and offline SQLite behavior remain in `apps/desktop`, `apps/web/src/lib/desktop`, and sync push routes. The web dashboard only reads their server-confirmed state and must not force, discard, or rewrite pending events.
+
+### Missing capabilities intentionally not invented
+
+- The current status contract does not provide a persisted historical-date selector, per-record cashier/folio drawer payloads, budget/forecast comparisons, provider-bank settlement evidence, or a persisted insight assignment/resolution workflow.
+- The current contract also does not expose a server-authenticated supervisor approval dialog payload. Existing acknowledgement and execute gates remain the only supported override path.
+- These gaps require new server contracts and acceptance tests; the overview will link to existing reports/control pages rather than present decorative or simulated actions.
+
 ## Implementation plan
 
 ### Phase A — safe overview redesign (this pass)
@@ -50,6 +71,7 @@ Scope: `/night-audit`, its status/execute APIs, the Prisma night-audit models, a
 - Make status and close evidence the first-class overview controls.
 - Use `baseCurrency` for every supported monetary display and remove presentation-only assumptions.
 - Keep all existing drill-down links, wizard, resolution actions, and report routes intact.
+- Make readiness rows explicitly evidence-based and include the existing open POS-order and accounting-exception controls so the UI cannot imply clearance while those records remain open.
 
 ### Phase B — follow-up hardening
 
@@ -63,6 +85,14 @@ Scope: `/night-audit`, its status/execute APIs, the Prisma night-audit models, a
 - Run web lint/typecheck and targeted night-audit tests.
 - Review the diff for tenant/property scope and unchanged desktop sync paths.
 - Do not apply a schema migration in this UI pass: the required night-audit close-package, snapshot, and acknowledgement models already exist and are additive migrations in the repository.
+
+### Phase A result
+
+- Delivered the overview hardening in `apps/web/src/app/night-audit/client.tsx`, `status-banner.tsx`, and `audit-readiness.tsx`.
+- Status and manager-flash reads are explicitly uncached so the displayed freshness timestamp corresponds to a server read rather than a browser cache hit.
+- The status banner now says `Server verified` rather than implying a realtime subscription.
+- Readiness evidence now includes open POS orders and persisted accounting transaction exceptions, and a completed audit with warnings is labelled `Closed with findings`.
+- Existing execute, resolution, report, acknowledgement, close-package, and offline-sync paths were not changed.
 
 ## Known limitations
 

@@ -83,7 +83,7 @@ export function StatusBanner({ data, isAuditInProgress, onOpenWizard, refreshing
           </div>
           <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 backdrop-blur-md">
             <Radio className="h-3 w-3 text-emerald-400" />
-            <span className="text-[11px] font-semibold text-emerald-300">Live</span>
+            <span className="text-[11px] font-semibold text-emerald-300">Server verified</span>
             <span className="mx-1.5 h-3 w-px bg-white/15" />
             <CalendarDays className="h-3 w-3 text-slate-400" />
             <span className="text-[11px] font-medium text-slate-300">
