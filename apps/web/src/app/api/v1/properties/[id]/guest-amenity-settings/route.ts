@@ -7,12 +7,13 @@ import { DEFAULT_GUEST_AMENITY_PACK } from '@/lib/services/guest-amenity-service
 
 type Params = { params: Promise<{ id: string }> };
 
-async function authorize(propertyId: string) {
+async function authorize(propertyId: string, requireWrite = false) {
   const session = await auth();
   if (!session?.user) throw new Error('UNAUTHORIZED');
   const ctx = await requireOrganizationContext(session.user.id);
   if (!ctx.propertyIds.includes(propertyId)) throw new ForbiddenError('Unauthorized property access');
   await assertPropertyAccess(session.user.id, propertyId);
+  if (!requireWrite) return session;
   // Organization memberships and legacy role records are not guaranteed to
   // use the same casing. Normalize both sides so an Accountant can manage
   // these settings regardless of whether the stored value is `ACCOUNTANT`,
@@ -28,7 +29,8 @@ async function authorize(propertyId: string) {
 export async function GET(_request: NextRequest, { params }: Params) {
   try {
     const { id: propertyId } = await params;
-    await authorize(propertyId);
+    // Loading the settings is read-only. Write privileges are checked by PUT.
+    await authorize(propertyId, false);
     const property = await prisma.property.findUnique({ where: { id: propertyId }, select: { settings: true, baseCurrency: true } });
     if (!property) throw new NotFoundError('Property not found');
     const warehouses = await prisma.warehouse.findMany({ where: { propertyId, isActive: true }, orderBy: { name: 'asc' }, select: { id: true, name: true, isActive: true } });
@@ -53,7 +55,7 @@ export async function GET(_request: NextRequest, { params }: Params) {
 export async function PUT(request: NextRequest, { params }: Params) {
   try {
     const { id: propertyId } = await params;
-    await authorize(propertyId);
+    await authorize(propertyId, true);
     const body = await request.json();
     const incoming = body?.guestAmenities;
     if (!incoming || typeof incoming !== 'object' || !Array.isArray(incoming.items)) {
