@@ -1671,6 +1671,8 @@ model NightAuditFinancialSnapshot {
   nightAudit   NightAudit @relation(fields: [nightAuditId], references: [id])
 
   roomRevenue  Decimal @default(0) @db.Decimal(18, 4)
+  guestAmenityCost Decimal @default(0) @db.Decimal(18, 4)
+  netRoomContribution Decimal @default(0) @db.Decimal(18, 4)
   fnbRevenue   Decimal @default(0) @db.Decimal(18, 4)
   otherRevenue Decimal @default(0) @db.Decimal(18, 4)
   taxes        Decimal @default(0) @db.Decimal(18, 4)

@@ -124,13 +124,15 @@ export default function AuditHistoryPage() {
       total: history.length,
       successRate: history.length ? Math.round((completed.length / history.length) * 100) : 0,
       totalRevenue: completed.reduce((s, a) => s + Number(a.totalRevenue || 0), 0),
+      totalAmenityCost: completed.reduce((s, a) => s + Number(a.guestAmenityCost || 0), 0),
       avgDuration: avgMs ? formatDuration(new Date(0).toISOString(), new Date(avgMs).toISOString()) : '—',
       latestRevenue: Number(completed[0]?.totalRevenue || 0),
+      latestContribution: Number(completed[0]?.netRoomContribution || 0),
     };
   }, [history]);
 
   const exportCsv = () => {
-    const header = ['Date', 'Auditor', 'Status', 'Duration', 'Rooms Charged', 'Total Revenue'];
+    const header = ['Date', 'Auditor', 'Status', 'Duration', 'Rooms Charged', 'Total Revenue', 'Amenity COGS', 'Net Room Contribution'];
     const rows = filteredHistory.map((a) => [
       new Date(a.businessDate).toLocaleDateString(),
       a.auditorName,
@@ -138,6 +140,8 @@ export default function AuditHistoryPage() {
       formatDuration(a.startedAt, a.completedAt),
       a.roomChargesPosted || 0,
       a.totalRevenue || 0,
+      a.guestAmenityCost || 0,
+      a.netRoomContribution || 0,
     ]);
     const csv = [header, ...rows].map((r) => r.join(',')).join('\n');
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
@@ -158,6 +162,8 @@ export default function AuditHistoryPage() {
       startedAt: audit.startedAt,
       completedAt: audit.completedAt,
       financialSnapshot: audit.financialSnapshot,
+      guestAmenityCost: audit.guestAmenityCost || 0,
+      netRoomContribution: audit.netRoomContribution || 0,
       closePackage: audit.closePackage,
       acknowledgements: audit.acknowledgements,
       occupancy: { rate: audit.occupancy, adr: audit.adr, revpar: audit.revpar },
@@ -210,6 +216,16 @@ export default function AuditHistoryPage() {
       iconBg: 'border-violet-400/20 bg-violet-400/10 text-violet-400',
       bar: null,
       barColor: '#8b5cf6',
+    },
+    {
+      label: 'Amenity COGS',
+      value: formatCurrency(insights.totalAmenityCost),
+      sub: 'Housekeeping/laundry inventory cost',
+      icon: Package,
+      accent: 'border-rose-400/20 bg-rose-400/[0.07] text-rose-300',
+      iconBg: 'border-rose-400/20 bg-rose-400/10 text-rose-400',
+      bar: null,
+      barColor: '#f43f5e',
     },
   ];
 
@@ -323,7 +339,7 @@ export default function AuditHistoryPage() {
         </div>
 
         {/* ── Stat Cards ──────────────────────────────────────────────────── */}
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
           {STAT_CARDS.map(({ label, value, sub, icon: Icon, accent, iconBg, bar, barColor }) => (
             <div
               key={label}
@@ -379,10 +395,10 @@ export default function AuditHistoryPage() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-white/[0.06]" style={{ background: 'rgba(255,255,255,0.03)' }}>
-                  {['Date', 'Auditor', 'Duration', 'Revenue', 'Status', ''].map((h, i) => (
+                  {['Date', 'Auditor', 'Duration', 'Revenue', 'Amenity COGS', 'Status', ''].map((h, i) => (
                     <th
                       key={i}
-                      className={`px-5 py-3.5 text-[9px] font-bold uppercase tracking-[0.18em] text-slate-500 ${i === 3 || i === 5 ? 'text-right' : 'text-left'}`}
+                      className={`px-5 py-3.5 text-[9px] font-bold uppercase tracking-[0.18em] text-slate-500 ${i === 3 || i === 4 || i === 6 ? 'text-right' : 'text-left'}`}
                     >
                       {h}
                     </th>
@@ -392,7 +408,7 @@ export default function AuditHistoryPage() {
               <tbody className="divide-y divide-white/[0.04]">
                 {loading ? (
                   <tr>
-                    <td colSpan={6} className="h-48 text-center">
+                    <td colSpan={7} className="h-48 text-center">
                       <div className="flex flex-col items-center justify-center gap-3 text-slate-500">
                         <Loader2 className="h-7 w-7 animate-spin text-indigo-400" />
                         <p className="text-sm font-medium">Loading history…</p>
@@ -401,7 +417,7 @@ export default function AuditHistoryPage() {
                   </tr>
                 ) : filteredHistory.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="h-48 text-center">
+                    <td colSpan={7} className="h-48 text-center">
                       <div className="flex flex-col items-center justify-center gap-3">
                         <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/[0.07] bg-white/[0.03] text-slate-600">
                           <FileText className="h-6 w-6" />
@@ -454,6 +470,13 @@ export default function AuditHistoryPage() {
                       <td className="px-5 py-4 text-right">
                         <span className="text-sm font-bold text-white tabular-nums">
                           {formatCurrency(audit.totalRevenue || 0)}
+                        </span>
+                      </td>
+
+                      {/* Amenity COGS */}
+                      <td className="px-5 py-4 text-right">
+                        <span className="text-sm font-semibold text-rose-200 tabular-nums">
+                          {formatCurrency(audit.guestAmenityCost || 0)}
                         </span>
                       </td>
 
@@ -608,6 +631,8 @@ export default function AuditHistoryPage() {
                     <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
                       {[
                         { label: 'Rooms', icon: BedDouble, iconCls: 'border-indigo-400/20 bg-indigo-400/10 text-indigo-400', val: selectedAudit.financialSnapshot?.roomRevenue ?? selectedAudit.totalRoomRevenue ?? selectedAudit.totalRevenue ?? 0 },
+                        { label: 'Amenity COGS', icon: Package, iconCls: 'border-rose-400/20 bg-rose-400/10 text-rose-400', val: selectedAudit.guestAmenityCost || selectedAudit.financialSnapshot?.guestAmenityCost || 0 },
+                        { label: 'Room Contribution', icon: TrendingUp, iconCls: 'border-emerald-400/20 bg-emerald-400/10 text-emerald-400', val: selectedAudit.netRoomContribution || (Number(selectedAudit.financialSnapshot?.roomRevenue || selectedAudit.totalRoomRevenue || 0) - Number(selectedAudit.guestAmenityCost || selectedAudit.financialSnapshot?.guestAmenityCost || 0)) },
                         { label: 'F&B', icon: Coffee, iconCls: 'border-amber-400/20 bg-amber-400/10 text-amber-400', val: selectedAudit.financialSnapshot?.fnbRevenue ?? 0 },
                         { label: 'Other', icon: Package, iconCls: 'border-sky-400/20 bg-sky-400/10 text-sky-400', val: selectedAudit.financialSnapshot?.otherRevenue ?? 0 },
                       ].map(({ label, icon: Icon, iconCls, val }) => (

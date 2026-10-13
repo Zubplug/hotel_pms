@@ -834,7 +834,7 @@ export async function executeNightAudit(
 
   // The date was already rolled during cutover. Finish the previous date's
   // posting work and publish a final, immutable audit result.
-    const [revenueByCategory, otherItemsByType, roomCount, occupiedCount, posOrders, posFolioItems] = await Promise.all([
+    const [revenueByCategory, otherItemsByType, roomCount, occupiedCount, posOrders, posFolioItems, guestAmenityTotals] = await Promise.all([
       prisma.folioItem.groupBy({
         by: ['source', 'revenueCategory'],
         where: { folio: { propertyId }, businessDate, type: 'CHARGE', voidedAt: null },
@@ -869,7 +869,12 @@ export async function executeNightAudit(
         // clients may not contain the current POS enum value.
         where: { folio: { propertyId }, businessDate, type: 'CHARGE', posTransactionId: { not: null }, voidedAt: null },
         select: { posTransactionId: true },
-      })
+      }),
+      prisma.stockTransaction.aggregate({
+        where: { propertyId, businessDate, source: 'GUEST_AMENITY' as any },
+        _sum: { totalValue: true },
+        _count: { id: true },
+      }),
     ]);
 
     let roomRevenueVal = 0, fnbRevenueVal = 0, poolRevenueVal = 0, otherRevenueVal = 0, taxesVal = 0, serviceChargeVal = 0, discountsVal = 0, refundsVal = 0;
@@ -972,6 +977,8 @@ export async function executeNightAudit(
     const netRevenueVal = grossRevenueVal - discountsVal - refundsVal;
 
     const totalRoomRevenue = roomRevenueVal;
+    const guestAmenityCostVal = Math.abs(Number(guestAmenityTotals._sum.totalValue || 0));
+    const netRoomContributionVal = totalRoomRevenue - guestAmenityCostVal;
     const totalRevenueValue = grossRevenueVal;
     const occupancy = roomCount ? (occupiedCount / roomCount) * 100 : 0;
     const adr = occupiedCount ? totalRoomRevenue / occupiedCount : 0;
@@ -1059,6 +1066,8 @@ export async function executeNightAudit(
       refunds: refundsVal,
       grossRevenue: grossRevenueVal,
       netRevenue: netRevenueVal,
+      guestAmenityCost: guestAmenityCostVal,
+      netRoomContribution: netRoomContributionVal,
       paymentTotals,
       cashExpected: Number(cashTotals._sum.expectedCash || 0),
       cashDeclared: Number(cashTotals._sum.actualCash || 0),
@@ -1128,6 +1137,8 @@ export async function executeNightAudit(
       data: {
         nightAuditId: auditRun.id,
         roomRevenue: roomRevenueVal,
+        guestAmenityCost: guestAmenityCostVal,
+        netRoomContribution: netRoomContributionVal,
         fnbRevenue: fnbRevenueVal,
         otherRevenue: schemaOtherRevenue,
         taxes: taxesVal,

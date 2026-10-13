@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
     const businessDate = new Date(`${dateValue}T00:00:00.000Z`);
     if (Number.isNaN(businessDate.getTime())) return errorResponse('BAD_REQUEST', 'Invalid businessDate', 400);
 
-    const [property, audit, snapshot, items, posOrders, frontDeskPayments, posPayments, journalEntries] = await Promise.all([
+    const [property, audit, snapshot, items, posOrders, frontDeskPayments, posPayments, journalEntries, guestAmenityTransactions] = await Promise.all([
       prisma.property.findUnique({ where: { id: propertyId }, select: { id: true, name: true, baseCurrency: true } }),
       prisma.nightAudit.findUnique({ where: { propertyId_businessDate: { propertyId, businessDate } }, select: { id: true, status: true, startedAt: true, completedAt: true } }),
       prisma.nightAuditFinancialSnapshot.findFirst({ where: { nightAudit: { propertyId, businessDate } } }),
@@ -54,6 +54,10 @@ export async function GET(req: NextRequest) {
         where: { propertyId, entryDate: businessDate, status: 'POSTED' },
         _sum: { totalDebit: true, totalCredit: true },
         _count: { id: true },
+      }),
+      prisma.stockTransaction.findMany({
+        where: { propertyId, businessDate, source: 'GUEST_AMENITY' as any },
+        select: { id: true, totalValue: true, stockItem: { select: { name: true } } },
       }),
     ]);
 
@@ -89,6 +93,8 @@ export async function GET(req: NextRequest) {
     }
     fnbRevenue += directPosOrders;
 
+    const guestAmenityCost = round(guestAmenityTransactions.reduce((sum, transaction) => sum + Math.abs(Number(transaction.totalValue || 0)), 0));
+    const netRoomContribution = round(roomRevenue - guestAmenityCost);
     const sourceTotals = {
       roomRevenue: round(roomRevenue),
       fnbRevenue: round(fnbRevenue),
@@ -98,12 +104,16 @@ export async function GET(req: NextRequest) {
       refunds: round(refunds),
       grossRevenue: round(roomRevenue + fnbRevenue + otherRevenue),
       netRevenue: round(roomRevenue + fnbRevenue + otherRevenue - discounts - refunds),
+      guestAmenityCost,
+      netRoomContribution,
     };
 
     const snapshotTotals = snapshot ? {
       roomRevenue: Number(snapshot.roomRevenue), fnbRevenue: Number(snapshot.fnbRevenue), otherRevenue: Number(snapshot.otherRevenue),
       taxes: Number(snapshot.taxes), discounts: Number(snapshot.discounts), refunds: Number(snapshot.refunds),
       grossRevenue: Number(snapshot.grossRevenue), netRevenue: Number(snapshot.netRevenue),
+      guestAmenityCost: Number((snapshot as any).guestAmenityCost || 0),
+      netRoomContribution: Number((snapshot as any).netRoomContribution || 0),
     } : null;
     const grossVariance = snapshotTotals ? round(sourceTotals.grossRevenue - snapshotTotals.grossRevenue) : null;
     const payments = new Map<string, { amount: number; count: number }>();
@@ -126,6 +136,12 @@ export async function GET(req: NextRequest) {
       audit: { ...audit, hasSnapshot: Boolean(snapshot) },
       snapshot: snapshotTotals,
       sourceTotals,
+      guestAmenity: {
+        cost: guestAmenityCost,
+        netRoomContribution,
+        transactionCount: guestAmenityTransactions.length,
+        transactions: guestAmenityTransactions.map((transaction) => ({ id: transaction.id, item: transaction.stockItem?.name || 'Amenity', cost: Math.abs(Number(transaction.totalValue || 0)) })),
+      },
       variance: { grossRevenue: grossVariance, status: grossVariance === null ? 'NOT_RUN' : Math.abs(grossVariance) < 0.01 ? 'BALANCED' : 'REVIEW' },
       payments: [...payments.entries()].map(([method, value]) => ({ method, amount: round(value.amount), count: value.count })).sort((a, b) => b.amount - a.amount),
       ledger: { debit: round(debit), credit: round(credit), difference: ledgerDifference, entryCount: journalEntries._count.id, status: Math.abs(ledgerDifference) < 0.01 ? 'BALANCED' : 'REVIEW' },

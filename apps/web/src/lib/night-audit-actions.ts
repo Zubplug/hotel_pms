@@ -43,6 +43,18 @@ export async function getNightAuditHistory(propertyId: string) {
     : [];
   const roomRevenueMap = new Map(roomRevenueByAudit.map((row) => [row.nightAuditRunId, Number(row._sum.amount || 0)]));
 
+  const amenityTransactions = audits.length > 0
+    ? await prisma.stockTransaction.findMany({
+        where: { propertyId, businessDate: { in: audits.map((audit) => audit.businessDate) }, source: 'GUEST_AMENITY' as any },
+        select: { businessDate: true, totalValue: true },
+      })
+    : [];
+  const amenityCostMap = new Map<string, number>();
+  for (const transaction of amenityTransactions) {
+    const key = new Date(transaction.businessDate).toISOString().slice(0, 10);
+    amenityCostMap.set(key, (amenityCostMap.get(key) || 0) + Math.abs(Number(transaction.totalValue || 0)));
+  }
+
   const userIds = [...new Set(audits.map(a => a.runBy).filter(Boolean))];
   
   const users = await prisma.user.findMany({
@@ -74,6 +86,8 @@ export async function getNightAuditHistory(propertyId: string) {
     occupancy: Number(audit.occupancy || 0),
     adr: Number(audit.adr || 0),
     revpar: Number(audit.revpar || 0),
+    guestAmenityCost: amenityCostMap.get(new Date(audit.businessDate).toISOString().slice(0, 10)) || Number((audit.financialSnapshot as any)?.guestAmenityCost || 0),
+    netRoomContribution: Number(roomRevenueMap.get(audit.id) || (audit.financialSnapshot as any)?.roomRevenue || 0) - (amenityCostMap.get(new Date(audit.businessDate).toISOString().slice(0, 10)) || Number((audit.financialSnapshot as any)?.guestAmenityCost || 0)),
     financialSnapshot: audit.financialSnapshot && roomRevenueMap.has(audit.id)
       ? { ...audit.financialSnapshot, roomRevenue: roomRevenueMap.get(audit.id) }
       : audit.financialSnapshot,

@@ -84,6 +84,8 @@ export default function ReconciliationPage() {
 
   const TABLE_ROWS: [string, string][] = [
     ['Room Revenue', 'roomRevenue'],
+    ['Guest Amenity COGS', 'guestAmenityCost'],
+    ['Net Room Contribution', 'netRoomContribution'],
     ['F&B / POS', 'fnbRevenue'],
     ['Pool Revenue', 'poolRevenue'],
     ['Other Revenue', 'otherRevenue'],
@@ -172,8 +174,10 @@ export default function ReconciliationPage() {
         </section>
 
         {/* ── Stat cards ── */}
-        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-8">
           <StatCard label="Room Revenue" value={money(source?.roomRevenue, currency)} detail="Posted accommodation charges" accent="border-indigo-400/20 bg-indigo-400/[0.07] text-indigo-300" />
+          <StatCard label="Amenity COGS" value={money(source?.guestAmenityCost, currency)} detail={`${data?.guestAmenity?.transactionCount || 0} stock issues · GL5000`} accent="border-rose-400/20 bg-rose-400/[0.07] text-rose-300" />
+          <StatCard label="Room Contribution" value={money(source?.netRoomContribution, currency)} detail="Room revenue less amenity COGS" accent="border-emerald-400/20 bg-emerald-400/[0.07] text-emerald-300" />
           <StatCard label="F&B / POS" value={money(source?.fnbRevenue, currency)} detail="Includes direct paid POS orders" accent="border-emerald-400/20 bg-emerald-400/[0.07] text-emerald-300" />
           <StatCard label="Pool Revenue" value={money(source?.poolRevenue, currency)} detail="Pool passes and recreation" accent="border-cyan-400/20 bg-cyan-400/[0.07] text-cyan-300" />
           <StatCard label="Other Revenue" value={money(source?.otherRevenue, currency)} detail="Ancillary and miscellaneous" accent="border-slate-600/40 bg-slate-600/10 text-slate-300" />
@@ -269,6 +273,20 @@ export default function ReconciliationPage() {
                 <span>{data?.ledger?.status || 'NOT RUN'}</span>
               </div>
               <p className="mt-3 text-[11px] text-slate-600">{data?.ledger?.entryCount || 0} posted journal entries included.</p>
+            </div>
+          </div>
+
+          {/* Guest amenity inventory control */}
+          <div className="rounded-[20px] border border-white/[0.06] p-5" style={{ background: 'rgba(255,255,255,0.025)' }}>
+            <h3 className="flex items-center gap-2 text-sm font-bold text-white">
+              <WalletCards className="h-4 w-4 text-rose-400" />
+              Guest Amenity COGS
+            </h3>
+            <div className="mt-4 space-y-3 text-xs">
+              <div className="flex justify-between gap-3"><span className="text-slate-500">Stock issues</span><span className="font-semibold text-white">{data?.guestAmenity?.transactionCount || 0}</span></div>
+              <div className="flex justify-between gap-3"><span className="text-slate-500">Inventory credit</span><span className="font-semibold text-rose-200">{money(data?.guestAmenity?.cost, currency)} · GL1300</span></div>
+              <div className="flex justify-between gap-3"><span className="text-slate-500">COGS debit</span><span className="font-semibold text-rose-200">{money(data?.guestAmenity?.cost, currency)} · GL5000</span></div>
+              <div className="border-t border-white/[0.06] pt-3 text-slate-500">This cost is not a guest folio charge. It reduces room contribution for management reporting.</div>
             </div>
           </div>
         </section>
