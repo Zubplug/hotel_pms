@@ -13,8 +13,14 @@ async function authorize(propertyId: string) {
   const ctx = await requireOrganizationContext(session.user.id);
   if (!ctx.propertyIds.includes(propertyId)) throw new ForbiddenError('Unauthorized property access');
   await assertPropertyAccess(session.user.id, propertyId);
-  const allowed = ['ADMIN', 'SUPER_ADMIN', 'OWNER', 'FINANCE_ADMIN', 'ACCOUNTANT', 'FINANCE_MANAGER', 'HOTEL_MANAGER'].includes(ctx.role)
-    || ctx.permissions.some((permission) => ['FINANCE_ADMIN', 'MANAGE_SETTINGS', 'ACCOUNTANT', 'SETTINGS_MANAGE'].includes(permission));
+  // Organization memberships and legacy role records are not guaranteed to
+  // use the same casing. Normalize both sides so an Accountant can manage
+  // these settings regardless of whether the stored value is `ACCOUNTANT`,
+  // `accountant`, or a permission returned in lowercase.
+  const role = String(ctx.role || '').trim().toUpperCase();
+  const permissions = ctx.permissions.map((permission) => String(permission).trim().toUpperCase());
+  const allowed = ['ADMIN', 'SUPER_ADMIN', 'OWNER', 'FINANCE_ADMIN', 'ACCOUNTANT', 'FINANCE_MANAGER', 'HOTEL_MANAGER'].includes(role)
+    || permissions.some((permission) => ['FINANCE_ADMIN', 'MANAGE_SETTINGS', 'ACCOUNTANT', 'SETTINGS_MANAGE'].includes(permission));
   if (!allowed) throw new ForbiddenError('Insufficient privileges to update guest amenity settings');
   return session;
 }
