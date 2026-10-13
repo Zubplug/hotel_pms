@@ -59,12 +59,20 @@ export default function NightAuditDashboard({ managerMode = false }: { managerMo
       setData(result.data);
       setLastSuccessfulRefresh(new Date());
 
-      try {
-        const flashRes = await fetch(`/api/v1/night-audit/reports/managers-flash?propertyId=${propertyId}&businessDate=${result.data.businessDate}`, { cache: 'no-store' });
-        const flashJson = await flashRes.json();
-        if (flashRes.ok) setFlashData(flashJson.data || flashJson);
-      } catch (e) {
-        console.error('Failed to load flash report:', e);
+      // The managers-flash report is persisted from a NightAudit run. An open
+      // business date can legitimately have no NightAudit row yet, so do not
+      // turn that expected state into a noisy 404 request.
+      const hasPersistedAudit = Boolean(result.data.currentAudit);
+      if (hasPersistedAudit) {
+        try {
+          const flashRes = await fetch(`/api/v1/night-audit/reports/managers-flash?propertyId=${propertyId}&businessDate=${result.data.businessDate}`, { cache: 'no-store' });
+          const flashJson = await flashRes.json();
+          if (flashRes.ok) setFlashData(flashJson.data || flashJson);
+        } catch (e) {
+          console.error('Failed to load flash report:', e);
+        }
+      } else {
+        setFlashData(null);
       }
 
       if (result.data.auditState === 'OVERDUE' && !quiet && !managerMode) {

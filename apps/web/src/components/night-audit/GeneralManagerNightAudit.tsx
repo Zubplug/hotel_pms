@@ -83,8 +83,15 @@ export default function GeneralManagerNightAudit() {
       const body = await response.json();
       if (!response.ok) throw new Error(body.error?.message || 'Unable to load night audit controls');
       setData(body.data);
-      const flashResponse = await fetch(`/api/v1/night-audit/reports/managers-flash?propertyId=${propertyId}&businessDate=${body.data.businessDate}`, { cache: 'no-store' });
-      if (flashResponse.ok) setFlash((await flashResponse.json()).data);
+      // A pending business date has no persisted NightAudit record yet. The
+      // report endpoint correctly returns 404 in that state, so wait until a
+      // run exists instead of treating expected pre-audit state as an error.
+      if (body.data.currentAudit) {
+        const flashResponse = await fetch(`/api/v1/night-audit/reports/managers-flash?propertyId=${propertyId}&businessDate=${body.data.businessDate}`, { cache: 'no-store' });
+        if (flashResponse.ok) setFlash((await flashResponse.json()).data);
+      } else {
+        setFlash(null);
+      }
     } catch (cause: any) { setError(cause.message || 'Unable to load night audit controls'); }
     finally { setLoading(false); setRefreshing(false); }
   };
