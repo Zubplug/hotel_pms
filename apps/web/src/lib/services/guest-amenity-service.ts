@@ -7,7 +7,7 @@ type AmenityDefinition = {
 };
 
 export const DEFAULT_GUEST_AMENITY_PACK: AmenityDefinition[] = [
-  { key: 'bottle-water', name: 'Bottle Water', aliases: ['bottle water', 'bottled water', 'complimentry water', 'complimentary water'], quantityPerGuest: 1, expectedCost: 125 },
+  { key: 'bottle-water', name: 'Complimentary Water', aliases: ['bottle water', 'bottled water', 'complimentry water', 'complimentary water', 'complementary water'], quantityPerGuest: 1, expectedCost: 125 },
   { key: 'sachet-milk', name: 'Sachet Milk', aliases: ['sachet milk', 'satchet milk'], quantityPerGuest: 1, expectedCost: 162 },
   { key: 'milo', name: 'Milo', aliases: ['milo'], quantityPerGuest: 1, expectedCost: 175 },
   { key: 'sugar', name: 'Sugar', aliases: ['sugar'], quantityPerGuest: 1, expectedCost: 30 },
