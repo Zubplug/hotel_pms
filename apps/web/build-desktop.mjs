@@ -2,6 +2,22 @@ import fs from 'fs';
 import path from 'path';
 import { execSync } from 'child_process';
 
+const desktopApiUrl = process.env.NEXT_PUBLIC_API_URL;
+if (!desktopApiUrl) {
+  throw new Error('Desktop builds require NEXT_PUBLIC_API_URL so the packaged client cannot silently target itself.');
+}
+
+let parsedDesktopApiUrl;
+try {
+  parsedDesktopApiUrl = new URL(desktopApiUrl);
+} catch {
+  throw new Error(`Desktop build received an invalid NEXT_PUBLIC_API_URL: ${desktopApiUrl}`);
+}
+
+if (!['http:', 'https:'].includes(parsedDesktopApiUrl.protocol) || /localhost|127\.0\.0\.1|0\.0\.0\.0/i.test(parsedDesktopApiUrl.hostname)) {
+  throw new Error(`Desktop build cannot use a local or unsupported NEXT_PUBLIC_API_URL: ${desktopApiUrl}`);
+}
+
 const dirsToHide = [
   { src: path.join(process.cwd(), 'src/app/(admin)'), dest: path.join(process.cwd(), 'src/app/_admin_group') },
   { src: path.join(process.cwd(), 'src/app/(dashboard)'), dest: path.join(process.cwd(), 'src/app/_dashboard') },

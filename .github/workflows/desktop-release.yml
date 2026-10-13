@@ -42,6 +42,7 @@ jobs:
       run: pnpm build:desktop
       env:
         NEXT_PUBLIC_IS_DESKTOP: "true"
+        NEXT_PUBLIC_API_URL: https://lodgecore.vercel.app
 
     - name: Move Web Export to MAUI wwwroot
       shell: powershell
@@ -171,7 +172,7 @@ jobs:
         }
 
         # The stable URL where this .appinstaller will be hosted (Vercel proxy)
-        $appinstallerUrl = "https://hotel-pms-web-nine.vercel.app/api/desktop-update/LodgeCore.appinstaller"
+        $appinstallerUrl = "https://lodgecore.vercel.app/api/desktop-update/LodgeCore.appinstaller"
         # Direct download URL for the MSIX on GitHub Releases
         $msixUrl = "https://github.com/$repo/releases/download/$tag/$msixName"
 

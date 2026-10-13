@@ -73,7 +73,6 @@ public static class MauiProgram
         builder.Services.AddSingleton(sp => 
         {
             var baseUrl = Environment.GetEnvironmentVariable("LODGECORE_API_URL") 
-                          // ?? Microsoft.Maui.Storage.Preferences.Default.Get("ApiBaseUrl", "https://hotel-pms-web-nine.vercel.app/api/v1/"); // Staging Fallback
                           ?? Microsoft.Maui.Storage.Preferences.Default.Get("ApiBaseUrl", "https://lodgecore.vercel.app/api/v1/");
 
 #if !DEBUG

@@ -1758,8 +1758,8 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                     folio.ReservationId = reservationId;
                     folio.Type = el.TryGetProperty("type", out var folioType) && folioType.ValueKind != System.Text.Json.JsonValueKind.Null ? folioType.GetString() ?? "ROOM" : "ROOM";
                     folio.Status = el.TryGetProperty("status", out var st) && st.ValueKind != System.Text.Json.JsonValueKind.Null ? st.GetString() ?? "" : "";
-                    folio.TotalCharges = el.TryGetProperty("totalCharges", out var tc) && tc.ValueKind != System.Text.Json.JsonValueKind.Null && decimal.TryParse(tc.GetString(), out var tcd) ? tcd : 0m;
-                    folio.TotalPayments = el.TryGetProperty("totalPayments", out var tp) && tp.ValueKind != System.Text.Json.JsonValueKind.Null && decimal.TryParse(tp.GetString(), out var tpd) ? tpd : 0m;
+                    folio.TotalCharges = ReadDecimal(el, "totalCharges");
+                    folio.TotalPayments = ReadDecimal(el, "totalPayments");
                     folio.CloudBalance = el.TryGetProperty("balance", out var cloudBalance) && cloudBalance.ValueKind != System.Text.Json.JsonValueKind.Null
                         ? cloudBalance.ValueKind == System.Text.Json.JsonValueKind.Number && cloudBalance.TryGetDecimal(out var balanceNumber)
                             ? balanceNumber
@@ -1770,10 +1770,10 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                     folio.Version = el.TryGetProperty("version", out var folioVersion) && folioVersion.TryGetInt32(out var serverFolioVersion)
                         ? serverFolioVersion
                         : folio.Version;
-                    folio.AvailableCredit = el.TryGetProperty("availableCredit", out var ac) && ac.ValueKind != System.Text.Json.JsonValueKind.Null && decimal.TryParse(ac.GetString(), out var acd)
-                        ? acd
+                    folio.AvailableCredit = el.TryGetProperty("availableCredit", out var ac) && ac.ValueKind != System.Text.Json.JsonValueKind.Null
+                        ? ReadDecimal(ac)
                         : el.TryGetProperty("credits", out var credits) && credits.ValueKind == System.Text.Json.JsonValueKind.Array
-                            ? credits.EnumerateArray().Sum(credit => credit.TryGetProperty("remainingAmount", out var remaining) && decimal.TryParse(remaining.GetString(), out var remainingAmount) ? remainingAmount : 0m)
+                            ? credits.EnumerateArray().Sum(credit => ReadDecimal(credit, "remainingAmount"))
                             : 0m;
                     // Keep locally-created financial entries visible while their
                     // outbox events are still unresolved. The server snapshot
