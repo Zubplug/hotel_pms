@@ -62,6 +62,46 @@ body:has(.ess-shell) [data-slot='dialog-content'] [data-slot='dialog-close']:hov
 .ess-dialog-card { border-color: rgba(148,163,184,.20) !important; background: linear-gradient(145deg, #102337, #0b1725) !important; box-shadow: 0 28px 90px rgba(0,0,0,.48) !important; animation: ess-dialog-in .2s ease-out both; }
 @keyframes ess-page-in { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes ess-dialog-in { from { opacity: 0; transform: translateY(8px) scale(.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes ess-sheet-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
+.ess-sheet-in { animation: ess-sheet-up .28s cubic-bezier(.2,.8,.2,1) both; }
+
+/* Mobile-first employee portal: touch ergonomics, no iOS zoom, bottom-sheet dialogs. */
+.ess-shell { -webkit-tap-highlight-color: transparent; overscroll-behavior-y: none; }
+.ess-shell a, .ess-shell button { touch-action: manipulation; }
+@media (max-width: 1023px) {
+  /* Pages other than the dashboard also need room above the bottom tab bar. */
+  .ess-shell .ess-content { padding-bottom: calc(5rem + env(safe-area-inset-bottom)); }
+  .ess-shell .ess-content > .ess-page { padding-bottom: 1.5rem; }
+}
+@media (max-width: 639px) {
+  /* 16px inputs stop iOS Safari from auto-zooming on focus. */
+  .ess-shell input:not([type='checkbox']):not([type='radio']),
+  .ess-shell textarea, .ess-shell select,
+  body:has(.ess-shell) [data-slot='dialog-content'] input:not([type='checkbox']),
+  body:has(.ess-shell) [data-slot='dialog-content'] textarea,
+  body:has(.ess-shell) [data-slot='dialog-content'] [data-slot='select-trigger'] { font-size: 16px !important; min-height: 2.75rem; }
+
+  body:has(.ess-shell) [data-slot='dialog-content'] {
+    top: auto !important; bottom: 0 !important; left: 0 !important; right: 0 !important;
+    translate: none !important; transform: none !important;
+    width: 100% !important; max-width: 100% !important;
+    max-height: 92dvh; overflow-y: auto; overscroll-behavior: contain;
+    border-radius: 1.5rem 1.5rem 0 0 !important;
+    border-bottom: 0 !important;
+    padding-bottom: calc(1rem + env(safe-area-inset-bottom));
+    animation: ess-sheet-up .28s cubic-bezier(.2,.8,.2,1) both !important;
+  }
+  body:has(.ess-shell) [data-slot='dialog-content']::before {
+    content: ''; display: block; width: 2.5rem; height: .35rem; margin: -.25rem auto .5rem;
+    border-radius: 999px; background: rgba(255,255,255,.15);
+  }
+  body:has(.ess-shell) [data-slot='dialog-content'] [data-slot='dialog-footer'] {
+    position: sticky; bottom: calc(-1rem - env(safe-area-inset-bottom)); z-index: 2;
+    display: flex; flex-direction: column-reverse; gap: .5rem;
+    background: #0b1725 !important; backdrop-filter: blur(10px);
+  }
+  body:has(.ess-shell) [data-slot='dialog-content'] [data-slot='dialog-footer'] button { width: 100%; min-height: 3rem; font-size: .875rem; }
+}
 
 /* General Manager executive control room. The route is intentionally scoped so
    the rest of the PMS can keep its existing theme tokens and workflows. */

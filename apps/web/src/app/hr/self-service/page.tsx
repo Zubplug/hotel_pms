@@ -20,7 +20,9 @@ import {
   MessageSquare,
   WalletCards,
   Timer,
+  ChevronRight,
 } from 'lucide-react';
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -228,283 +230,229 @@ export default function EmployeeSelfServicePage() {
     );
   }
 
+  const pendingPunches = (data.missedPunchRequests || []).filter((r: any) => r.status === 'PENDING');
+  const openRequests = (data.serviceRequests || []).filter((r: any) => !['CLOSED', 'RESOLVED'].includes(r.status));
+  const openPayslip = (ps: any) => {
+    setSelectedPayslip({ ...ps, name: data.name, employeeCode: data.employeeCode, department: data.department, position: data.position, bankName: data.bankName });
+    setPayslipModalOpen(true);
+  };
+
   return (
-    <div className="ess-page p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
-      {false && <>
-      <section className="relative overflow-hidden rounded-[2rem] border border-teal-400/20 bg-[radial-gradient(circle_at_top_right,rgba(20,184,166,0.18),transparent_36%),linear-gradient(135deg,#102d39_0%,#0b1725_52%,#08111d_100%)] p-6 shadow-2xl shadow-black/20 sm:p-8">
-        <div className="pointer-events-none absolute -bottom-24 -left-16 h-56 w-56 rounded-full bg-cyan-400/10 blur-3xl" />
-        <div className="relative flex flex-col gap-7 xl:flex-row xl:items-end xl:justify-between">
-          <div className="flex items-start gap-4"><div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-[1.35rem] bg-gradient-to-br from-teal-300 to-emerald-600 text-xl font-black text-white shadow-xl shadow-teal-950/50">{data.name.slice(0, 2).toUpperCase()}</div><div><div className="flex flex-wrap items-center gap-2"><p className="text-[10px] font-bold uppercase tracking-[0.22em] text-teal-300">Employee command center</p><span className="rounded-full border border-emerald-300/20 bg-emerald-300/10 px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-emerald-300">{data.status || 'Active'}</span></div><h1 className="mt-2 text-3xl font-black tracking-tight text-white sm:text-4xl">Welcome back, {data.name.split(' ')[0]}</h1><p className="mt-2 text-sm text-slate-400">{data.position} <span className="px-1 text-slate-600">•</span> {data.department}</p><div className="mt-4 flex flex-wrap gap-2 text-[10px] text-slate-400"><span className="rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1.5 font-mono text-teal-200">{data.employeeCode}</span><span className="rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1.5">Member since {new Date(data.hireDate).toLocaleDateString()}</span></div></div></div>
-          <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap xl:max-w-[470px] xl:justify-end"><Button onClick={() => setLeaveModalOpen(true)} className="h-10 gap-2 bg-teal-500 px-4 text-xs font-bold text-slate-950 shadow-lg shadow-teal-950/30 hover:bg-teal-300"><CalendarCheck2 className="h-4 w-4" /> Request leave</Button><Button onClick={() => setProfileModalOpen(true)} variant="outline" className="h-10 !border-white/15 !bg-white/[0.06] px-4 text-xs !text-slate-100 hover:!bg-white/10">Update profile</Button><Button onClick={() => setAttendanceModalOpen(true)} variant="outline" className="h-10 !border-white/15 !bg-white/[0.06] px-4 text-xs !text-slate-100 hover:!bg-white/10">Report time issue</Button><Button onClick={() => setSupportModalOpen(true)} variant="outline" className="h-10 !border-white/15 !bg-white/[0.06] px-4 text-xs !text-slate-100 hover:!bg-white/10">Contact HR</Button></div>
+    <div className="ess-page mx-auto max-w-7xl space-y-5 px-4 pb-28 pt-4 sm:px-6 sm:pt-6 lg:px-8 lg:pb-10">
+      {/* Hero */}
+      <section className="relative overflow-hidden rounded-3xl border border-teal-400/20 bg-[radial-gradient(circle_at_top_right,rgba(20,184,166,0.22),transparent_45%),linear-gradient(135deg,#102d39_0%,#0b1725_60%,#08111d_100%)] p-5 sm:p-7">
+        <div className="pointer-events-none absolute -bottom-20 -left-16 h-48 w-48 rounded-full bg-cyan-400/10 blur-3xl" />
+        <div className="relative flex items-start gap-4">
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-teal-300 to-emerald-600 text-lg font-black text-white shadow-xl shadow-teal-950/50 sm:h-16 sm:w-16">{data.name.slice(0, 2).toUpperCase()}</div>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-teal-300">{greeting()}</p>
+              <span className="rounded-full border border-emerald-300/20 bg-emerald-300/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-300">{data.status || 'Active'}</span>
+            </div>
+            <h1 className="mt-1 truncate text-2xl font-black tracking-tight text-white sm:text-3xl">{data.name.split(' ')[0]}</h1>
+            <p className="mt-0.5 truncate text-sm text-slate-400">{data.position} · {data.department}</p>
+          </div>
+        </div>
+        <div className="relative mt-4 flex flex-wrap gap-2 text-[11px] text-slate-400">
+          <span className="rounded-lg border border-white/10 bg-white/[0.05] px-2.5 py-1 font-mono text-teal-200">{data.employeeCode}</span>
+          <span className="rounded-lg border border-white/10 bg-white/[0.05] px-2.5 py-1">Since {fmtDate(data.hireDate)}</span>
         </div>
       </section>
 
-      <section className="grid grid-cols-2 gap-3 lg:grid-cols-4"><div className="rounded-2xl border border-teal-400/20 bg-teal-400/[0.06] p-4"><div className="flex items-center justify-between"><span className="text-[10px] font-bold uppercase tracking-[0.16em] text-teal-300">Next shift</span><Timer className="h-4 w-4 text-teal-300" /></div><p className="mt-4 truncate text-lg font-black text-white">{data.upcomingShifts?.[0]?.shiftName || 'Not scheduled'}</p><p className="mt-1 truncate text-[11px] text-slate-400">{data.upcomingShifts?.[0] ? `${new Date(data.upcomingShifts[0].date).toLocaleDateString()} · ${data.upcomingShifts[0].times}` : 'Check with your supervisor'}</p></div><div className="rounded-2xl border border-slate-800 bg-[#0b1624] p-4"><div className="flex items-center justify-between"><span className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">Attendance</span><ClipboardCheck className="h-4 w-4 text-emerald-300" /></div><p className="mt-4 text-lg font-black text-white">{data.attendance?.filter((a: any) => ['PRESENT', 'LATE'].includes(a.status)).length || 0}<span className="ml-1 text-xs font-medium text-slate-500">days present</span></p><p className="mt-1 text-[11px] text-slate-500">Last 31 days</p></div><div className="rounded-2xl border border-slate-800 bg-[#0b1624] p-4"><div className="flex items-center justify-between"><span className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">Last pay</span><WalletCards className="h-4 w-4 text-emerald-300" /></div><p className="mt-4 text-lg font-black text-emerald-300">{data.payslips?.[0] ? `₦${data.payslips[0].netPay?.toLocaleString()}` : 'Not available'}</p><p className="mt-1 text-[11px] text-slate-500">{data.payslips?.[0]?.paymentStatus || 'Awaiting payroll'}</p></div><div className="rounded-2xl border border-slate-800 bg-[#0b1624] p-4"><div className="flex items-center justify-between"><span className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">Open requests</span><MessageSquare className="h-4 w-4 text-cyan-300" /></div><p className="mt-4 text-lg font-black text-white">{data.serviceRequests?.filter((r: any) => !['CLOSED', 'RESOLVED'].includes(r.status)).length || 0}</p><p className="mt-1 text-[11px] text-slate-500">Needs your attention</p></div></section>
-
-      <section className="grid gap-5 xl:grid-cols-[1.25fr_0.75fr]">
-        <div className="rounded-2xl border border-slate-800 bg-[#0b1624] p-5 sm:p-6"><div className="mb-5 flex items-center justify-between"><div><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-cyan-300">Daily focus</p><h2 className="mt-1 text-lg font-bold text-white">Your workplace at a glance</h2></div><span className="rounded-full bg-slate-950 px-3 py-1.5 text-[10px] text-slate-500">Live overview</span></div><div className="grid gap-3 sm:grid-cols-2"><div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4"><div className="flex items-center gap-2 text-xs font-bold text-white"><CalendarRange className="h-4 w-4 text-teal-300" /> Upcoming shifts</div>{data.upcomingShifts?.slice(0, 3).map((shift: any) => <div key={shift.id} className="mt-4 flex items-center justify-between border-t border-slate-800 pt-3 text-xs"><div><p className="font-semibold text-slate-200">{new Date(shift.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</p><p className="mt-1 text-[10px] text-slate-500">{shift.shiftName}</p></div><span className="rounded-lg bg-teal-400/10 px-2 py-1 font-mono text-[10px] text-teal-300">{shift.times}</span></div>)}{!data.upcomingShifts?.length && <p className="mt-8 text-xs text-slate-500">No shifts scheduled for this week.</p>}</div><div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4"><div className="flex items-center gap-2 text-xs font-bold text-white"><CalendarCheck2 className="h-4 w-4 text-amber-300" /> Leave balance</div>{data.leaveBalances?.slice(0, 3).map((balance: any, index: number) => <div key={index} className="mt-4 border-t border-slate-800 pt-3"><div className="flex items-center justify-between text-xs"><span className="text-slate-300">{balance.leaveType}</span><strong className="text-emerald-300">{balance.remaining} days</strong></div><div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-800"><div className="h-full rounded-full bg-gradient-to-r from-amber-400 to-emerald-400" style={{ width: `${Math.min(100, (Number(balance.remaining) / Math.max(1, Number(balance.allocated))) * 100)}%` }} /></div></div>)}{!data.leaveBalances?.length && <p className="mt-8 text-xs text-slate-500">Your leave entitlement is being prepared.</p>}</div></div></div>
-        <div className="rounded-2xl border border-amber-400/15 bg-gradient-to-br from-amber-400/[0.07] to-[#0b1624] p-5 sm:p-6"><div className="flex items-center justify-between"><div><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-amber-300">Action center</p><h2 className="mt-1 text-lg font-bold text-white">What needs attention</h2></div><AlertCircle className="h-5 w-5 text-amber-300" /></div><div className="mt-5 space-y-3">{(data.missedPunchRequests || []).filter((r: any) => r.status === 'PENDING').slice(0, 2).map((request: any) => <button key={request.id} type="button" onClick={() => setAttendanceModalOpen(true)} className="w-full rounded-xl border border-amber-300/15 bg-slate-950/60 p-3 text-left hover:border-amber-300/30"><p className="text-xs font-semibold text-slate-200">Attendance correction</p><p className="mt-1 text-[10px] text-amber-300">{new Date(request.date).toLocaleDateString()} · Awaiting review</p></button>)}{(data.serviceRequests || []).filter((r: any) => !['CLOSED', 'RESOLVED'].includes(r.status)).slice(0, 2).map((request: any) => <button key={request.id} type="button" onClick={() => { setReplyTicket(request); setReplyModalOpen(true); }} className="w-full rounded-xl border border-cyan-300/15 bg-slate-950/60 p-3 text-left hover:border-cyan-300/30"><p className="truncate text-xs font-semibold text-slate-200">{request.subject}</p><p className="mt-1 text-[10px] text-cyan-300">{request.status.replaceAll('_', ' ')} · Reply to HR</p></button>)}{!data.missedPunchRequests?.some((r: any) => r.status === 'PENDING') && !data.serviceRequests?.some((r: any) => !['CLOSED', 'RESOLVED'].includes(r.status)) && <div className="rounded-xl border border-emerald-300/15 bg-emerald-300/[0.06] p-4"><CheckCircle2 className="h-5 w-5 text-emerald-300" /><p className="mt-2 text-xs font-semibold text-emerald-200">You’re all caught up</p><p className="mt-1 text-[10px] text-slate-500">No pending employee actions right now.</p></div>}</div></div>
+      {/* Quick actions */}
+      <section aria-label="Quick actions" className="!shadow-none">
+        <div className="grid grid-cols-4 gap-2 sm:gap-3">
+          {[
+            { label: 'Leave', icon: CalendarCheck2, tone: 'text-teal-300 bg-teal-400/10', onClick: () => setLeaveModalOpen(true) },
+            { label: 'Time fix', icon: Clock, tone: 'text-amber-300 bg-amber-400/10', onClick: () => setAttendanceModalOpen(true) },
+            { label: 'Loan', icon: CreditCard, tone: 'text-emerald-300 bg-emerald-400/10', onClick: () => setLoanModalOpen(true) },
+            { label: 'Ask HR', icon: MessageSquare, tone: 'text-cyan-300 bg-cyan-400/10', onClick: () => setSupportModalOpen(true) },
+            { label: 'Profile', icon: User, tone: 'text-violet-300 bg-violet-400/10', onClick: () => setProfileModalOpen(true) },
+            { label: 'Payslips', icon: Receipt, tone: 'text-sky-300 bg-sky-400/10', href: '/hr/self-service/pay' },
+            { label: 'Claims', icon: Download, tone: 'text-rose-300 bg-rose-400/10', href: '/hr/self-service/expenses' },
+            { label: 'Security', icon: ShieldCheck, tone: 'text-slate-200 bg-white/10', href: '/hr/self-service/security' },
+          ].map(({ label, icon: Icon, tone, onClick, href }) => {
+            const inner = (<><span className={`flex h-12 w-12 items-center justify-center rounded-2xl ${tone}`}><Icon className="h-5 w-5" /></span><span className="text-[11px] font-semibold text-slate-300">{label}</span></>);
+            const cls = 'flex flex-col items-center gap-1.5 rounded-2xl border border-white/5 bg-[#0b1624] py-3 transition active:scale-95 hover:border-white/15';
+            return href ? <Link key={label} href={href} className={cls}>{inner}</Link> : <button key={label} type="button" onClick={onClick} className={cls}>{inner}</button>;
+          })}
+        </div>
       </section>
 
-      <section className="grid gap-5 lg:grid-cols-[1.15fr_0.85fr]"><div className="rounded-2xl border border-slate-800 bg-[#0b1624] p-5 sm:p-6"><div className="flex items-center justify-between"><div><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-teal-300">Payroll snapshot</p><h2 className="mt-1 text-lg font-bold text-white">Your latest earnings</h2></div><Button variant="ghost" onClick={() => window.location.assign('/hr/self-service/pay')} className="text-xs text-teal-300 hover:bg-teal-300/10 hover:text-teal-200">View all pay <span className="ml-1">→</span></Button></div>{data.payslips?.[0] ? <div className="mt-5 rounded-2xl border border-teal-400/15 bg-gradient-to-r from-teal-400/[0.09] to-slate-950/50 p-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-[10px] uppercase tracking-wider text-slate-500">{data.payslips[0].periodName}</p><p className="mt-2 text-3xl font-black text-white">₦{data.payslips[0].netPay?.toLocaleString()}</p><p className="mt-1 text-xs text-slate-400">Net salary · {data.payslips[0].paymentStatus}</p></div><span className="rounded-full border border-emerald-300/20 bg-emerald-300/10 px-3 py-1.5 text-[10px] font-bold text-emerald-300">{data.payslips[0].status}</span></div><div className="mt-5 grid grid-cols-2 gap-3 border-t border-white/10 pt-4 text-xs sm:grid-cols-3"><div><p className="text-[10px] text-slate-500">Gross</p><p className="mt-1 font-bold text-slate-200">₦{data.payslips[0].grossPay?.toLocaleString()}</p></div><div><p className="text-[10px] text-slate-500">Deductions</p><p className="mt-1 font-bold text-amber-300">₦{data.payslips[0].deductions?.toLocaleString()}</p></div><div className="col-span-2 sm:col-span-1"><p className="text-[10px] text-slate-500">Payment date</p><p className="mt-1 font-bold text-slate-200">{data.payslips[0].paymentDate ? new Date(data.payslips[0].paymentDate).toLocaleDateString() : 'Pending'}</p></div></div></div> : <div className="mt-5 rounded-2xl border border-dashed border-slate-700 p-8 text-center"><Receipt className="mx-auto h-8 w-8 text-slate-700" /><p className="mt-3 text-sm font-semibold text-slate-300">No finalized payslip yet</p><p className="mt-1 text-xs text-slate-500">Your payroll documents will appear here once published.</p></div>}</div><div className="rounded-2xl border border-slate-800 bg-[#0b1624] p-5 sm:p-6"><div className="flex items-center justify-between"><div><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-violet-300">Secure records</p><h2 className="mt-1 text-lg font-bold text-white">Documents</h2></div><Building2 className="h-5 w-5 text-violet-300" /></div><div className="mt-5 space-y-2">{data.documents?.slice(0, 4).map((document: any) => <a key={document.id} href={document.downloadUrl} target="_blank" rel="noreferrer" className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-950/60 p-3 transition hover:border-violet-300/30"><div className="min-w-0"><p className="truncate text-xs font-semibold text-slate-200">{document.title}</p><p className="mt-1 text-[10px] text-slate-500">{document.category}</p></div><span className="text-[10px] font-semibold text-violet-300">Open →</span></a>)}{!data.documents?.length && <div className="rounded-xl border border-dashed border-slate-700 p-6 text-center"><p className="text-xs text-slate-500">No documents available yet.</p></div>}</div></div></section>
+      {/* Stats — swipeable on mobile */}
+      <section aria-label="Overview" className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 lg:grid-cols-4 [&::-webkit-scrollbar]:hidden !shadow-none">
+        <StatCard label="Next shift" icon={Timer} accent value={data.upcomingShifts?.[0]?.shiftName || 'Not scheduled'} sub={data.upcomingShifts?.[0] ? `${fmtDate(data.upcomingShifts[0].date)} · ${data.upcomingShifts[0].times}` : 'Check with your supervisor'} />
+        <StatCard label="Attendance" icon={ClipboardCheck} value={`${data.attendance?.filter((a: any) => ['PRESENT', 'LATE'].includes(a.status)).length || 0} days`} sub="Present · last 31 days" />
+        <StatCard label="Last pay" icon={WalletCards} value={data.payslips?.[0] ? naira(data.payslips[0].netPay) : '—'} valueClass="text-emerald-300" sub={data.payslips?.[0]?.paymentStatus || 'Awaiting payroll'} />
+        <StatCard label="Open requests" icon={MessageSquare} value={String(openRequests.length)} sub="HR support tickets" />
+      </section>
 
-      <section className="grid gap-5 lg:grid-cols-[1fr_1fr_1fr]"><div className="rounded-2xl border border-slate-800 bg-[#0b1624] p-5"><div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.16em] text-teal-300"><ShieldCheck className="h-4 w-4" /> Payment profile</div><div className="mt-4 rounded-xl bg-slate-950/70 p-3"><p className="text-[10px] uppercase text-slate-600">Bank account</p><p className="mt-1 text-sm font-bold text-white">{data.bankName}</p><p className="mt-1 font-mono text-xs text-slate-400">{data.bankAccountNumber || 'Not configured'}</p></div><div className="mt-2 rounded-xl bg-slate-950/70 p-3"><p className="text-[10px] uppercase text-slate-600">Pension RSA</p><p className="mt-1 text-sm font-bold text-white">{data.pfaName}</p><p className="mt-1 font-mono text-xs text-slate-400">{data.rsaPin || 'Not registered'}</p></div></div><div className="rounded-2xl border border-slate-800 bg-[#0b1624] p-5"><div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.16em] text-amber-300"><Bell className="h-4 w-4" /> Latest updates</div><div className="mt-4 space-y-3">{data.notifications?.slice(0, 3).map((notification: any) => <button type="button" key={notification.id} onClick={() => { if (!notification.isRead) fetch('/api/hr/self-service/notifications', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ notificationId: notification.id }) }).then(fetchSelfServiceData); }} className="block w-full border-b border-slate-800 pb-3 text-left last:border-0"><p className="truncate text-xs font-semibold text-slate-200">{notification.subject || 'LodgeCore update'}</p><p className="mt-1 line-clamp-1 text-[10px] text-slate-500">{notification.body}</p></button>)}{!data.notifications?.length && <p className="py-5 text-xs text-slate-500">You’re up to date.</p>}</div></div><div className="rounded-2xl border border-slate-800 bg-[#0b1624] p-5"><div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.16em] text-cyan-300"><MessageSquare className="h-4 w-4" /> Need help?</div><p className="mt-4 text-sm font-semibold text-white">Talk to the LodgeCore HR team.</p><p className="mt-2 text-xs leading-5 text-slate-500">Ask a question, follow a request, or share supporting information securely.</p><Button onClick={() => setSupportModalOpen(true)} className="mt-5 h-9 w-full bg-cyan-600 text-xs text-white hover:bg-cyan-500">Open HR support</Button></div></section>
-
-      </>}
-      <>
-      {/* Welcome Card */}
-      <div className="bg-gradient-to-r from-teal-950/40 via-slate-900 to-slate-900 border border-teal-800/30 rounded-2xl p-6 relative overflow-hidden shadow-xl">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-teal-500 to-emerald-600 text-white flex items-center justify-center font-bold text-xl shadow-lg shadow-teal-950">
-              {data.name.slice(0, 2).toUpperCase()}
+      {/* Action center */}
+      <Card title="Needs your attention" eyebrow="Action center" eyebrowClass="text-amber-300" icon={<AlertCircle className="h-5 w-5 text-amber-300" />}>
+        <div className="space-y-2">
+          {pendingPunches.slice(0, 3).map((request: any) => (
+            <ListRow key={request.id} onClick={() => setAttendanceModalOpen(true)} title="Attendance correction" sub={`${fmtDate(request.date)} · Awaiting review`} subClass="text-amber-300" />
+          ))}
+          {openRequests.slice(0, 3).map((request: any) => (
+            <ListRow key={request.id} onClick={() => { setReplyTicket(request); setReplyModalOpen(true); }} title={request.subject} sub={`${String(request.status).replaceAll('_', ' ')} · Tap to reply`} subClass="text-cyan-300" />
+          ))}
+          {!pendingPunches.length && !openRequests.length && (
+            <div className="flex items-center gap-3 rounded-2xl border border-emerald-300/15 bg-emerald-300/[0.06] p-4">
+              <CheckCircle2 className="h-6 w-6 shrink-0 text-emerald-300" />
+              <div><p className="text-sm font-semibold text-emerald-200">You’re all caught up</p><p className="text-xs text-slate-500">No pending actions right now.</p></div>
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-xl sm:text-2xl font-bold text-white">{data.name}</h1>
-                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-teal-500/20 text-teal-300 border border-teal-500/30">
-                  {data.employeeCode}
-                </span>
+          )}
+        </div>
+      </Card>
+
+      <div className="grid gap-5 lg:grid-cols-2">
+        {/* Latest pay */}
+        <Card title="Your latest earnings" eyebrow="Payroll" action={<Link href="/hr/self-service/pay" className="text-xs font-semibold text-teal-300">View all →</Link>}>
+          {data.payslips?.[0] ? (
+            <div className="rounded-2xl border border-teal-400/15 bg-gradient-to-br from-teal-400/[0.10] to-slate-950/40 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-[11px] uppercase tracking-wider text-slate-500">{data.payslips[0].periodName}</p>
+                  <p className="mt-1 text-3xl font-black text-white">{naira(data.payslips[0].netPay)}</p>
+                  <p className="mt-0.5 text-xs text-slate-400">Net salary · {data.payslips[0].paymentStatus}</p>
+                </div>
+                <span className="shrink-0 rounded-full border border-emerald-300/20 bg-emerald-300/10 px-2.5 py-1 text-[10px] font-bold text-emerald-300">{data.payslips[0].status}</span>
               </div>
-              <p className="text-xs text-slate-400 mt-0.5">
-                {data.position} • {data.department}
-              </p>
-              <p className="text-[10px] text-slate-500 mt-1">
-                Member of staff since {new Date(data.hireDate).toLocaleDateString()}
-              </p>
+              <div className="mt-4 grid grid-cols-3 gap-2 border-t border-white/10 pt-3 text-xs">
+                <div><p className="text-[10px] text-slate-500">Gross</p><p className="mt-0.5 font-bold text-slate-200">{naira(data.payslips[0].grossPay)}</p></div>
+                <div><p className="text-[10px] text-slate-500">Deductions</p><p className="mt-0.5 font-bold text-amber-300">{naira(data.payslips[0].deductions)}</p></div>
+                <div><p className="text-[10px] text-slate-500">Paid on</p><p className="mt-0.5 font-bold text-slate-200">{data.payslips[0].paymentDate ? fmtDate(data.payslips[0].paymentDate) : 'Pending'}</p></div>
+              </div>
+              <Button onClick={() => openPayslip(data.payslips[0])} className="mt-4 h-11 w-full gap-2 bg-teal-500 text-sm font-bold text-slate-950 hover:bg-teal-400"><Receipt className="h-4 w-4" /> View payslip</Button>
             </div>
-          </div>
+          ) : (
+            <Empty icon={<Receipt className="h-8 w-8 text-slate-700" />} title="No finalized payslip yet" sub="Your payslips will appear here once published." />
+          )}
+        </Card>
 
-          <div className="flex items-center gap-2">
-            <Button size="sm" variant="outline" onClick={() => setProfileModalOpen(true)} className="h-9 !border-slate-700 !bg-slate-900 text-xs !text-slate-100 hover:!bg-slate-800">Update details</Button>
-            <Button size="sm" variant="outline" onClick={() => setSupportModalOpen(true)} className="h-9 !border-slate-700 !bg-slate-900 text-xs !text-slate-100 hover:!bg-slate-800">Contact HR</Button>
-            <Button size="sm" variant="outline" onClick={() => setAttendanceModalOpen(true)} className="h-9 !border-slate-700 !bg-slate-900 text-xs !text-slate-100 hover:!bg-slate-800">Report attendance issue</Button>
-            <Button
-              size="sm"
-              onClick={() => setLeaveModalOpen(true)}
-              className="bg-teal-600 hover:bg-teal-500 text-white text-xs h-9 gap-1.5 shadow-md shadow-teal-950"
-            >
-              <CalendarCheck2 className="w-3.5 h-3.5" />
-              Request Leave
-            </Button>
-          </div>
-        </div>
-      </div>
-
-      {/* Employee overview */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <div className="rounded-xl border border-teal-800/30 bg-teal-950/20 p-4">
-          <div className="flex items-center justify-between"><span className="text-[10px] font-bold uppercase tracking-wider text-teal-300">Next shift</span><Timer className="h-4 w-4 text-teal-400" /></div>
-          <p className="mt-3 truncate text-sm font-bold text-white">{data.upcomingShifts?.[0]?.shiftName || 'Not scheduled'}</p>
-          <p className="mt-1 text-[11px] text-slate-400">{data.upcomingShifts?.[0] ? `${new Date(data.upcomingShifts[0].date).toLocaleDateString()} · ${data.upcomingShifts[0].times}` : 'Check with your supervisor'}</p>
-        </div>
-        <div className="rounded-xl border border-slate-800 bg-[#090e17] p-4">
-          <div className="flex items-center justify-between"><span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Attendance</span><ClipboardCheck className="h-4 w-4 text-emerald-400" /></div>
-          <p className="mt-3 text-sm font-bold text-white">{data.attendance?.filter((a: any) => ['PRESENT', 'LATE'].includes(a.status)).length || 0} days present</p>
-          <p className="mt-1 text-[11px] text-slate-400">Last 31 days</p>
-        </div>
-        <div className="rounded-xl border border-slate-800 bg-[#090e17] p-4">
-          <div className="flex items-center justify-between"><span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Last pay</span><WalletCards className="h-4 w-4 text-emerald-400" /></div>
-          <p className="mt-3 text-sm font-bold text-emerald-300">{data.payslips?.[0] ? `₦${data.payslips[0].netPay?.toLocaleString()}` : 'Not available'}</p>
-          <p className="mt-1 text-[11px] text-slate-400">{data.payslips?.[0]?.paymentStatus || 'Awaiting payroll'}</p>
-        </div>
-        <div className="rounded-xl border border-slate-800 bg-[#090e17] p-4">
-          <div className="flex items-center justify-between"><span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Open requests</span><MessageSquare className="h-4 w-4 text-cyan-400" /></div>
-          <p className="mt-3 text-sm font-bold text-white">{data.serviceRequests?.filter((r: any) => !['CLOSED', 'RESOLVED'].includes(r.status)).length || 0}</p>
-          <p className="mt-1 text-[11px] text-slate-400">HR support requests</p>
-        </div>
-      </div>
-
-      {(data.notifications?.length > 0 || data.missedPunchRequests?.length > 0 || data.serviceRequests?.length > 0) && (
-        <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
-          <div className="rounded-xl border border-slate-800 bg-[#090e17] p-5 lg:col-span-2">
-            <h3 className="mb-4 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-cyan-300"><Bell className="h-4 w-4" /> Recent notifications</h3>
+        {/* Shifts */}
+        <Card title="Upcoming shifts" eyebrow="Schedule" eyebrowClass="text-cyan-300" icon={<CalendarRange className="h-5 w-5 text-cyan-300" />}>
+          {data.upcomingShifts?.length ? (
             <div className="space-y-2">
-              {(data.notifications || []).slice(0, 4).map((notification: any) => (
-                <button type="button" key={notification.id} onClick={async () => { if (!notification.isRead) { await fetch('/api/hr/self-service/notifications', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ notificationId: notification.id }) }); fetchSelfServiceData(); } }} className={`block w-full rounded-lg border p-3 text-left ${notification.isRead ? 'border-slate-800 bg-slate-950/40' : 'border-cyan-800/40 bg-cyan-950/20'}`}>
-                  <div className="flex items-start justify-between gap-3"><p className="text-xs font-semibold text-white">{notification.subject || 'LodgeCore update'}</p><span className="text-[10px] text-slate-500">{new Date(notification.createdAt).toLocaleDateString()}</span></div>
-                  <p className="mt-1 line-clamp-2 text-[11px] text-slate-400">{notification.body}</p>
-                </button>
-              ))}
-              {!data.notifications?.length && <p className="py-4 text-center text-xs text-slate-500">You have no new notifications.</p>}
+              {data.upcomingShifts.slice(0, 5).map((s: any) => {
+                const d = new Date(s.date);
+                return (
+                  <div key={s.id} className="flex items-center gap-3 rounded-2xl border border-white/5 bg-slate-950/50 p-3">
+                    <div className="flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-xl bg-teal-400/10 text-teal-200">
+                      <span className="text-[9px] font-bold uppercase">{d.toLocaleDateString('en-US', { weekday: 'short' })}</span>
+                      <span className="text-lg font-black leading-none">{d.getDate()}</span>
+                    </div>
+                    <div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-white">{s.shiftName}</p><p className="text-xs text-slate-500">{d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</p></div>
+                    <span className="shrink-0 rounded-lg bg-teal-400/10 px-2 py-1 font-mono text-[11px] text-teal-300">{s.times}</span>
+                  </div>
+                );
+              })}
             </div>
-          </div>
-          <div className="rounded-xl border border-slate-800 bg-[#090e17] p-5">
-            <h3 className="mb-4 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-amber-300"><AlertCircle className="h-4 w-4" /> Pending actions</h3>
-            <div className="space-y-3 text-xs">
-              {(data.missedPunchRequests || []).filter((r: any) => r.status === 'PENDING').slice(0, 3).map((request: any) => <div key={request.id} className="rounded-lg bg-slate-950 p-3 text-slate-300">Attendance correction for {new Date(request.date).toLocaleDateString()}<span className="mt-1 block text-[10px] text-amber-400">Awaiting review</span></div>)}
-              {(data.serviceRequests || []).filter((r: any) => !['CLOSED', 'RESOLVED'].includes(r.status)).slice(0, 3).map((request: any) => <div key={request.id} className="rounded-lg bg-slate-950 p-3 text-slate-300"><div className="flex items-start justify-between gap-2"><span>{request.subject}</span><button type="button" onClick={() => { setReplyTicket(request); setReplyModalOpen(true); }} className="text-[10px] text-teal-300 hover:text-teal-200">Reply</button></div><span className="mt-1 block text-[10px] text-cyan-400">{request.status}</span></div>)}
-              {!data.missedPunchRequests?.some((r: any) => r.status === 'PENDING') && !data.serviceRequests?.some((r: any) => !['CLOSED', 'RESOLVED'].includes(r.status)) && <p className="py-4 text-center text-slate-500">Nothing requires your attention.</p>}
-            </div>
-          </div>
-        </div>
-      )}
+          ) : <Empty icon={<CalendarRange className="h-8 w-8 text-slate-700" />} title="No shifts scheduled" sub="Your roster for this week will show here." />}
+        </Card>
+      </div>
 
-      {data.profileChangeRequests?.length > 0 && (
-        <div className="rounded-xl border border-slate-800 bg-[#090e17] p-5">
-          <h3 className="mb-3 text-xs font-bold uppercase tracking-wider text-violet-300">Profile change requests</h3>
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {data.profileChangeRequests.slice(0, 6).map((request: any) => (
-              <div key={request.id} className="rounded-lg border border-slate-800 bg-slate-950 p-3 text-xs"><div className="flex justify-between gap-2"><span className="font-semibold text-white">{request.fieldName}</span><span className="text-violet-300">{request.status}</span></div><p className="mt-1 truncate text-slate-400">{request.proposedValue}</p></div>
+      {/* Leave */}
+      <Card title="Leave balance" eyebrow="Time off" eyebrowClass="text-amber-300" action={<button type="button" onClick={() => setLeaveModalOpen(true)} className="flex items-center gap-1 rounded-full bg-teal-400/10 px-3 py-1.5 text-xs font-semibold text-teal-300 active:scale-95"><Plus className="h-3.5 w-3.5" /> Request</button>}>
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          {(data.leaveBalances?.length ? data.leaveBalances : [{ leaveType: 'Annual leave', remaining: 20, allocated: 20 }]).map((lb: any, i: number) => (
+            <div key={i} className="rounded-2xl border border-white/5 bg-slate-950/50 p-3">
+              <div className="flex items-baseline justify-between gap-2"><span className="truncate text-sm text-slate-300">{lb.leaveType}</span><span className="shrink-0 text-lg font-black text-emerald-300">{lb.remaining}<span className="ml-1 text-[10px] font-medium text-slate-500">/ {lb.allocated} days</span></span></div>
+              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-800"><div className="h-full rounded-full bg-gradient-to-r from-amber-400 to-emerald-400" style={{ width: `${Math.min(100, (Number(lb.remaining) / Math.max(1, Number(lb.allocated))) * 100)}%` }} /></div>
+            </div>
+          ))}
+        </div>
+        <p className="mb-2 mt-5 text-[10px] font-bold uppercase tracking-wider text-slate-500">Recent applications</p>
+        <div className="space-y-2">
+          {(data.leaves || []).slice(0, 4).map((leave: any) => (
+            <div key={leave.id} className="flex items-center justify-between gap-3 rounded-2xl border border-white/5 bg-slate-950/50 p-3">
+              <div className="min-w-0"><p className="truncate text-sm font-medium text-slate-200">{leave.leaveType}</p><p className="text-xs text-slate-500">{fmtDate(leave.startDate)} · {leave.days} day(s)</p></div>
+              <div className="flex shrink-0 flex-col items-end gap-1">
+                <StatusPill status={leave.status} />
+                {['PENDING_HOD', 'PENDING_HR'].includes(leave.status) && <button type="button" onClick={() => handleCancelLeave(leave.id)} className="py-1 text-[11px] font-semibold text-rose-300">Withdraw</button>}
+              </div>
+            </div>
+          ))}
+          {!data.leaves?.length && <p className="text-xs text-slate-500">No recent applications.</p>}
+        </div>
+      </Card>
+
+      <div className="grid gap-5 lg:grid-cols-2">
+        {/* Loans */}
+        <Card title="Loans & deductions" eyebrow="Benefits" eyebrowClass="text-emerald-300" action={<button type="button" onClick={() => setLoanModalOpen(true)} className="rounded-full bg-emerald-400/10 px-3 py-1.5 text-xs font-semibold text-emerald-300 active:scale-95">Apply</button>}>
+          {data.activeLoans?.length ? (
+            <div className="space-y-2">{data.activeLoans.map((loan: any) => (
+              <div key={loan.id} className="flex items-center justify-between rounded-2xl border border-white/5 bg-slate-950/50 p-3">
+                <div><p className="text-sm font-semibold text-white">Outstanding loan</p><p className="text-xs text-slate-500">{naira(loan.monthly)} / month</p></div>
+                <span className="font-mono text-sm font-bold text-amber-300">{naira(loan.balance)}</span>
+              </div>
+            ))}</div>
+          ) : <Empty icon={<CreditCard className="h-8 w-8 text-slate-700" />} title="No active loans" sub="Salary advances and loans will show here." />}
+        </Card>
+
+        {/* Documents */}
+        <Card title="My documents" eyebrow="Secure records" eyebrowClass="text-violet-300" icon={<Building2 className="h-5 w-5 text-violet-300" />}>
+          {data.documents?.length ? (
+            <div className="space-y-2">{data.documents.slice(0, 5).map((document: any) => (
+              <a key={document.id} href={document.downloadUrl} target="_blank" rel="noreferrer" className="flex items-center gap-3 rounded-2xl border border-white/5 bg-slate-950/50 p-3 active:scale-[.99]">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-400/10 text-violet-300"><Download className="h-4 w-4" /></span>
+                <div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-white">{document.title}</p><p className="truncate text-xs text-slate-500">{document.category}{document.expiresAt ? ` · Expires ${fmtDate(document.expiresAt)}` : ''}</p></div>
+                <ChevronRight className="h-4 w-4 shrink-0 text-slate-600" />
+              </a>
+            ))}</div>
+          ) : <Empty icon={<Building2 className="h-8 w-8 text-slate-700" />} title="No documents yet" sub="Contracts and letters will appear here." />}
+        </Card>
+      </div>
+
+      <div className="grid gap-5 lg:grid-cols-2">
+        {/* Notifications */}
+        <Card title="Latest updates" eyebrow="Notifications" eyebrowClass="text-cyan-300" icon={<Bell className="h-5 w-5 text-cyan-300" />}>
+          <div className="space-y-2">
+            {(data.notifications || []).slice(0, 5).map((n: any) => (
+              <button type="button" key={n.id} onClick={async () => { if (!n.isRead) { await fetch('/api/hr/self-service/notifications', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ notificationId: n.id }) }); fetchSelfServiceData(); } }} className={`flex w-full items-start gap-3 rounded-2xl border p-3 text-left ${n.isRead ? 'border-white/5 bg-slate-950/40' : 'border-cyan-400/20 bg-cyan-400/[0.06]'}`}>
+                <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${n.isRead ? 'bg-slate-700' : 'bg-cyan-400'}`} />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-start justify-between gap-2"><p className="truncate text-sm font-semibold text-white">{n.subject || 'LodgeCore update'}</p><span className="shrink-0 text-[10px] text-slate-500">{fmtDate(n.createdAt)}</span></div>
+                  <p className="mt-0.5 line-clamp-2 text-xs text-slate-400">{n.body}</p>
+                </div>
+              </button>
+            ))}
+            {!data.notifications?.length && <p className="py-4 text-center text-xs text-slate-500">You’re up to date.</p>}
+          </div>
+        </Card>
+
+        {/* Payment profile + change requests */}
+        <Card title="Payment profile" eyebrow="Disbursement" icon={<ShieldCheck className="h-5 w-5 text-teal-300" />} action={<button type="button" onClick={() => setProfileModalOpen(true)} className="rounded-full bg-violet-400/10 px-3 py-1.5 text-xs font-semibold text-violet-300 active:scale-95">Update</button>}>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <div className="rounded-2xl border border-white/5 bg-slate-950/50 p-3"><p className="text-[10px] uppercase tracking-wider text-slate-500">Bank account</p><p className="mt-1 truncate text-sm font-bold text-white">{data.bankName || '—'}</p><p className="font-mono text-xs text-slate-400">{data.bankAccountNumber || 'Not configured'}</p></div>
+            <div className="rounded-2xl border border-white/5 bg-slate-950/50 p-3"><p className="text-[10px] uppercase tracking-wider text-slate-500">Pension RSA</p><p className="mt-1 truncate text-sm font-bold text-white">{data.pfaName || '—'}</p><p className="font-mono text-xs text-slate-400">{data.rsaPin || 'Not registered'}</p></div>
+          </div>
+          {data.profileChangeRequests?.length > 0 && (
+            <>
+              <p className="mb-2 mt-5 text-[10px] font-bold uppercase tracking-wider text-slate-500">Change requests</p>
+              <div className="space-y-2">{data.profileChangeRequests.slice(0, 4).map((r: any) => (
+                <div key={r.id} className="flex items-center justify-between gap-3 rounded-2xl border border-white/5 bg-slate-950/50 p-3"><div className="min-w-0"><p className="text-sm font-semibold text-white">{r.fieldName}</p><p className="truncate text-xs text-slate-500">{r.proposedValue}</p></div><StatusPill status={r.status} /></div>
+              ))}</div>
+            </>
+          )}
+        </Card>
+      </div>
+
+      {/* Payslip history — card list (no tables on mobile) */}
+      <Card title="Payslip history" eyebrow="Salary" icon={<Receipt className="h-5 w-5 text-teal-300" />}>
+        {data.payslips?.length ? (
+          <div className="divide-y divide-white/5 overflow-hidden rounded-2xl border border-white/5 bg-slate-950/40">
+            {data.payslips.map((ps: any) => (
+              <button key={ps.id} type="button" onClick={() => openPayslip(ps)} className="flex w-full items-center gap-3 p-3.5 text-left transition hover:bg-white/[0.03] active:bg-white/[0.05]">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-400/10 text-teal-300"><Receipt className="h-4 w-4" /></span>
+                <div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-white">{ps.periodName}</p><p className="text-xs text-slate-500">Gross {naira(ps.grossPay)} · Ded. {naira(ps.deductions)}</p></div>
+                <div className="shrink-0 text-right"><p className="font-mono text-sm font-bold text-emerald-300">{naira(ps.netPay)}</p><p className="text-[10px] text-slate-500">{ps.status}</p></div>
+                <ChevronRight className="h-4 w-4 shrink-0 text-slate-600" />
+              </button>
             ))}
           </div>
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-        <div className="rounded-xl border border-slate-800 bg-[#090e17] p-5">
-          <div className="mb-4 flex items-center justify-between gap-3"><h3 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-emerald-300"><WalletCards className="h-4 w-4" /> My loans and deductions</h3><Button size="sm" onClick={() => setLoanModalOpen(true)} className="h-7 bg-emerald-700 px-2 text-[10px] hover:bg-emerald-600">Apply for loan</Button></div>
-          {data.activeLoans?.length ? <div className="space-y-2">{data.activeLoans.map((loan: any) => <div key={loan.id} className="flex items-center justify-between rounded-lg bg-slate-950 p-3 text-xs"><div><p className="font-semibold text-white">Outstanding loan</p><p className="mt-1 text-slate-500">Monthly deduction ₦{loan.monthly?.toLocaleString()}</p></div><span className="font-mono font-bold text-amber-300">₦{loan.balance?.toLocaleString()}</span></div>)}</div> : <p className="py-6 text-center text-xs text-slate-500">No active loans or salary advances.</p>}
-        </div>
-        <div className="rounded-xl border border-slate-800 bg-[#090e17] p-5">
-          <h3 className="mb-4 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-violet-300"><Building2 className="h-4 w-4" /> My documents</h3>
-          {data.documents?.length ? <div className="space-y-2">{data.documents.slice(0, 5).map((document: any) => <a key={document.id} href={document.downloadUrl} target="_blank" rel="noreferrer" className="flex items-center justify-between rounded-lg bg-slate-950 p-3 text-xs hover:bg-slate-900"><div><p className="font-semibold text-white">{document.title}</p><p className="mt-1 text-slate-500">{document.category}{document.expiresAt ? ` · Expires ${new Date(document.expiresAt).toLocaleDateString()}` : ''}</p></div><span className="text-teal-300">Open →</span></a>)}</div> : <p className="py-6 text-center text-xs text-slate-500">No employee documents are available.</p>}
-        </div>
-      </div>
-
-      {/* Grid: Shifts, Leave Balances, Statutory Profile */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-        {/* Upcoming Duty Shifts */}
-        <div className="bg-[#090e17] border border-slate-800 rounded-xl p-5 space-y-4">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-teal-400 flex items-center gap-2">
-            <CalendarRange className="w-4 h-4" />
-            My Upcoming Shifts
-          </h3>
-          {data.upcomingShifts?.length > 0 ? (
-            <div className="space-y-2">
-              {data.upcomingShifts.map((s: any) => (
-                <div key={s.id} className="p-2.5 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-between text-xs">
-                  <div>
-                    <p className="font-semibold text-white">{new Date(s.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</p>
-                    <p className="text-[10px] text-slate-400">{s.shiftName}</p>
-                  </div>
-                  <span className="font-mono text-[10px] text-teal-400 bg-slate-950 px-2 py-1 rounded border border-slate-800">
-                    {s.times}
-                  </span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-xs text-slate-500 py-6 text-center">No shifts scheduled for this week.</p>
-          )}
-        </div>
-
-        {/* Leave Balances */}
-        <div className="bg-[#090e17] border border-slate-800 rounded-xl p-5 space-y-4">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-2">
-            <CalendarCheck2 className="w-4 h-4" />
-            My Leave Balances
-          </h3>
-          {data.leaveBalances?.length > 0 ? (
-            <div className="space-y-3">
-              {data.leaveBalances.map((lb: any, i: number) => (
-                <div key={i} className="p-3 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-between text-xs">
-                  <span className="text-slate-300 font-medium">{lb.leaveType}</span>
-                  <div className="text-right">
-                    <span className="text-base font-bold text-emerald-400">{lb.remaining} days</span>
-                    <span className="text-[10px] text-slate-500 block">of {lb.allocated} allocated</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="p-3 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-between text-xs">
-              <span className="text-slate-300 font-medium">Annual Statutory Leave</span>
-              <div className="text-right">
-                <span className="text-base font-bold text-emerald-400">20 days</span>
-                <span className="text-[10px] text-slate-500 block">Annual entitlement</span>
-              </div>
-            </div>
-          )}
-          <div className="border-t border-slate-800 pt-3">
-            <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-slate-500">Recent applications</p>
-            <div className="space-y-2">{(data.leaves || []).slice(0, 3).map((leave: any) => <div key={leave.id} className="flex items-center justify-between gap-2 rounded-lg bg-slate-950 p-2 text-[11px]"><div><p className="font-medium text-slate-200">{leave.leaveType}</p><p className="text-slate-500">{new Date(leave.startDate).toLocaleDateString()} · {leave.days} day(s)</p></div><div className="text-right"><span className="text-amber-300">{leave.status}</span>{['PENDING_HOD', 'PENDING_HR'].includes(leave.status) && <button type="button" onClick={() => handleCancelLeave(leave.id)} className="mt-1 block text-[10px] text-rose-300 hover:text-rose-200">Withdraw</button>}</div></div>)}{!data.leaves?.length && <p className="text-[11px] text-slate-500">No recent applications.</p>}</div>
-          </div>
-        </div>
-
-        {/* Statutory & Bank IDs */}
-        <div className="bg-[#090e17] border border-slate-800 rounded-xl p-5 space-y-3">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
-            <ShieldCheck className="w-4 h-4 text-teal-400" />
-            Disbursement &amp; Pension IDs
-          </h3>
-          <div className="space-y-2 text-xs">
-            <div className="p-2 rounded bg-slate-950 border border-slate-800">
-              <span className="text-slate-500 text-[10px] block">BANK ACCOUNT</span>
-              <p className="font-semibold text-white">{data.bankName}</p>
-              <p className="font-mono text-slate-400 text-[11px]">{data.bankAccountNumber || 'Not configured'}</p>
-            </div>
-            <div className="p-2 rounded bg-slate-950 border border-slate-800">
-              <span className="text-slate-500 text-[10px] block">PENSION RSA PIN</span>
-              <p className="font-semibold text-white">{data.pfaName}</p>
-              <p className="font-mono text-slate-400 text-[11px]">{data.rsaPin || 'Not registered'}</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Recent Payslips Section */}
-      <div className="bg-[#090e17] border border-slate-800 rounded-xl overflow-hidden shadow-xl">
-        <div className="p-4 border-b border-slate-800 flex items-center justify-between">
-          <h3 className="text-sm font-bold text-white flex items-center gap-2">
-            <Receipt className="w-4 h-4 text-teal-400" />
-            My Recent Payslips &amp; Salary History
-          </h3>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs text-slate-300">
-            <thead className="bg-[#060a12] border-b border-slate-800 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-              <tr>
-                <th className="py-3 px-4">Period</th>
-                <th className="py-3 px-4">Gross Earnings</th>
-                <th className="py-3 px-4">Deductions (PAYE/Pension)</th>
-                <th className="py-3 px-4">Net Salary Paid</th>
-                <th className="py-3 px-4">Status</th>
-                <th className="py-3 px-4 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800/60">
-              {data.payslips?.length > 0 ? (
-                data.payslips.map((ps: any) => (
-                  <tr key={ps.id} className="hover:bg-slate-800/30">
-                    <td className="py-3 px-4 font-semibold text-white">{ps.periodName}</td>
-                    <td className="py-3 px-4 font-mono">₦{ps.grossPay?.toLocaleString()}</td>
-                    <td className="py-3 px-4 font-mono text-amber-400">-₦{ps.deductions?.toLocaleString()}</td>
-                    <td className="py-3 px-4 font-mono font-bold text-emerald-400">₦{ps.netPay?.toLocaleString()}</td>
-                    <td className="py-3 px-4">
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                        {ps.status}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 text-right">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => {
-                          setSelectedPayslip({ ...ps, name: data.name, employeeCode: data.employeeCode, department: data.department, position: data.position, bankName: data.bankName });
-                          setPayslipModalOpen(true);
-                        }}
-                        className="text-teal-400 hover:text-teal-300 text-xs h-7 px-2"
-                      >
-                        View &amp; Print Payslip &rarr;
-                      </Button>
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={6} className="py-8 text-center text-slate-500">
-                    No historical payslips generated yet.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      </>
+        ) : <Empty icon={<Receipt className="h-8 w-8 text-slate-700" />} title="No payslips yet" sub="Historical payslips will appear here." />}
+      </Card>
 
       {/* Printable Payslip Modal */}
       <Dialog open={payslipModalOpen} onOpenChange={setPayslipModalOpen}>
@@ -626,4 +574,58 @@ export default function EmployeeSelfServicePage() {
       <EmployeePortalFeedbackDialog feedback={feedback} onClose={() => setFeedback(null)} />
     </div>
   );
+}
+
+const naira = (v: any) => `₦${Number(v || 0).toLocaleString()}`;
+const fmtDate = (v: any) => (v ? new Date(v).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—');
+const greeting = () => { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'; };
+
+function Card({ title, eyebrow, eyebrowClass = 'text-teal-300', icon, action, children }: { title: string; eyebrow?: string; eyebrowClass?: string; icon?: React.ReactNode; action?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <section className="rounded-3xl border border-slate-800 bg-[#0b1624] p-4 sm:p-6">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          {eyebrow && <p className={`text-[10px] font-bold uppercase tracking-[0.18em] ${eyebrowClass}`}>{eyebrow}</p>}
+          <h2 className="mt-0.5 truncate text-base font-bold text-white sm:text-lg">{title}</h2>
+        </div>
+        {action || icon}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function StatCard({ label, icon: Icon, value, sub, accent, valueClass = 'text-white' }: { label: string; icon: any; value: string; sub: string; accent?: boolean; valueClass?: string }) {
+  return (
+    <div className={`min-w-[70%] snap-start rounded-2xl border p-4 sm:min-w-0 ${accent ? 'border-teal-400/20 bg-teal-400/[0.07]' : 'border-slate-800 bg-[#0b1624]'}`}>
+      <div className="flex items-center justify-between"><span className={`text-[10px] font-bold uppercase tracking-[0.16em] ${accent ? 'text-teal-300' : 'text-slate-500'}`}>{label}</span><Icon className={`h-4 w-4 ${accent ? 'text-teal-300' : 'text-slate-400'}`} /></div>
+      <p className={`mt-3 truncate text-xl font-black ${valueClass}`}>{value}</p>
+      <p className="mt-0.5 truncate text-xs text-slate-500">{sub}</p>
+    </div>
+  );
+}
+
+function ListRow({ title, sub, subClass, onClick }: { title: string; sub: string; subClass: string; onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick} className="flex w-full items-center gap-3 rounded-2xl border border-white/5 bg-slate-950/50 p-3 text-left active:scale-[.99]">
+      <div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-slate-100">{title}</p><p className={`mt-0.5 text-xs ${subClass}`}>{sub}</p></div>
+      <ChevronRight className="h-4 w-4 shrink-0 text-slate-600" />
+    </button>
+  );
+}
+
+function Empty({ icon, title, sub }: { icon: React.ReactNode; title: string; sub: string }) {
+  return (
+    <div className="flex flex-col items-center rounded-2xl border border-dashed border-slate-700/70 px-4 py-7 text-center">
+      {icon}
+      <p className="mt-2 text-sm font-semibold text-slate-300">{title}</p>
+      <p className="mt-0.5 text-xs text-slate-500">{sub}</p>
+    </div>
+  );
+}
+
+function StatusPill({ status }: { status: string }) {
+  const s = String(status || '');
+  const tone = /APPROV|PAID|RESOLV|COMPLET/.test(s) ? 'bg-emerald-400/10 text-emerald-300' : /REJECT|CANCEL|DECLIN/.test(s) ? 'bg-rose-400/10 text-rose-300' : 'bg-amber-400/10 text-amber-300';
+  return <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${tone}`}>{s.replaceAll('_', ' ')}</span>;
 }
