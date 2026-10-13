@@ -7,7 +7,9 @@ type AmenityDefinition = {
 };
 
 export const DEFAULT_GUEST_AMENITY_PACK: AmenityDefinition[] = [
-  { key: 'bottle-water', name: 'Complimentary Water', aliases: ['bottle water', 'bottled water', 'complimentry water', 'complimentary water', 'complementary water'], quantityPerGuest: 1, expectedCost: 125 },
+  // Complimentary water and Bottle Water are separate stock items. Keep the
+  // legacy spelling as an alias, but never alias Bottle Water into this pack.
+  { key: 'complimentary-water', name: 'Complimentary Water', aliases: ['complimentry water', 'complimentary water', 'complementary water'], quantityPerGuest: 1, expectedCost: 125 },
   { key: 'sachet-milk', name: 'Sachet Milk', aliases: ['sachet milk', 'satchet milk'], quantityPerGuest: 1, expectedCost: 162 },
   { key: 'milo', name: 'Milo', aliases: ['milo'], quantityPerGuest: 1, expectedCost: 175 },
   { key: 'sugar', name: 'Sugar', aliases: ['sugar'], quantityPerGuest: 1, expectedCost: 30 },

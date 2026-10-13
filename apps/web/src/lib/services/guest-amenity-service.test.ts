@@ -4,7 +4,8 @@ import { postGuestAmenityPackInTransaction } from './guest-amenity-service';
 describe('guest amenity stock posting', () => {
   it('deducts one pack per occupied room only from the configured housekeeping warehouse', async () => {
     const stock = [
-      { id: 'water', name: 'Bottle Water', warehouseId: 'hk', baseUnit: 'BOTTLE', costPrice: 125, stockUnits: [], isActive: true },
+      { id: 'water', name: 'Complimentry water', warehouseId: 'hk', baseUnit: 'BOTTLE', costPrice: 125, stockUnits: [], isActive: true },
+      { id: 'bottle-water', name: 'Bottle Water', warehouseId: 'hk', baseUnit: 'BOTTLE', costPrice: 999, stockUnits: [], isActive: true },
       { id: 'milk', name: 'Sachet Milk', warehouseId: 'hk', baseUnit: 'SACHET', costPrice: 162, stockUnits: [], isActive: true },
       { id: 'milo', name: 'Milo', warehouseId: 'hk', baseUnit: 'SACHET', costPrice: 175, stockUnits: [], isActive: true },
       { id: 'sugar', name: 'Sugar', warehouseId: 'hk', baseUnit: 'SACHET', costPrice: 30, stockUnits: [], isActive: true },

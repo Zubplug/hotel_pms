@@ -35,7 +35,7 @@ export function GuestAmenitySettings({ propertyId }: { propertyId: string }) {
         setItems((configured.items || []).map((item: any) => {
           const names = [item.name, ...(Array.isArray(item.aliases) ? item.aliases : [])].filter(Boolean).map(String);
           const matched = warehouseStock.find((stock: StockItem) => names.some((name) => normalize(name) === normalize(stock.name)));
-          const displayName = item.key === 'bottle-water' ? 'Complimentary Water' : item.name;
+          const displayName = item.key === 'complimentary-water' ? 'Complimentary Water' : item.name;
           return { ...item, name: displayName, stockItemId: item.stockItemId || matched?.id || '', quantityPerGuest: Number(item.quantityPerGuest ?? item.quantityPerRoom ?? 1), expectedCost: Number(item.expectedCost ?? 0) };
         }));
       })
