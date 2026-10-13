@@ -10,6 +10,9 @@ export function calculateFolioTotals(items: FolioLedgerItem[], appliedCredits: A
   const paymentCredits = activeItems.filter(item => item.type === 'PAYMENT').reduce((sum, item) => sum + Math.abs(Number(item.amount)), 0);
   const refundDebits = activeItems.filter(item => item.type === 'REFUND').reduce((sum, item) => sum + Math.abs(Number(item.amount)), 0);
   const totalPayments = paymentCredits - refundDebits;
-  const totalAppliedCredits = appliedCredits.reduce((sum, application) => sum + Number(application.amount), 0);
-  return { totalCharges, totalPayments, balance: totalCharges - totalPayments - totalAppliedCredits };
+  // Credit applications consume credits whose original payment is already
+  // represented by totalPayments. Subtracting applications again double-counts
+  // advances and incorrectly turns settled folios into guest credit.
+  void appliedCredits;
+  return { totalCharges, totalPayments, balance: totalCharges - totalPayments };
 }

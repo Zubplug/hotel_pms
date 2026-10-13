@@ -87,7 +87,7 @@ export async function POST(
       // false guest credit that forces a retain/refund decision.
       if (!reservation.corporateAccountId) {
         for (const folio of folios) {
-          const reconciledBalance = await reconcileFolioBalanceFromCounters(tx, folio.id, { forceCounters: true });
+          const reconciledBalance = await reconcileFolioBalanceFromCounters(tx, folio.id);
           if (reconciledBalance != null) folio.balance = Number(reconciledBalance);
         }
       }

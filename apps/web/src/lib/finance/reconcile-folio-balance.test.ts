@@ -14,9 +14,6 @@ describe('reconcileFolioBalanceFromCounters', () => {
         }),
         update,
       },
-      folioCreditApplication: {
-        count: vi.fn().mockResolvedValue(0),
-      },
     };
 
     const result = await reconcileFolioBalanceFromCounters(tx, 'folio-1');
@@ -40,13 +37,31 @@ describe('reconcileFolioBalanceFromCounters', () => {
         }),
         update,
       },
-      folioCreditApplication: {
-        count: vi.fn().mockResolvedValue(0),
-      },
     };
 
     await reconcileFolioBalanceFromCounters(tx, 'folio-1');
 
     expect(update).not.toHaveBeenCalled();
+  });
+
+  it('repairs stale balances even when credits were applied', async () => {
+    const update = vi.fn();
+    const tx = {
+      folio: {
+        findUnique: vi.fn().mockResolvedValue({
+          id: 'folio-1',
+          totalCharges: '140000.0000',
+          totalPayments: '140000.0000',
+          balance: '-140000.0000',
+        }),
+        update,
+      },
+    };
+
+    const result = await reconcileFolioBalanceFromCounters(tx, 'folio-1');
+
+    expect(result?.toString()).toBe('0');
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(update.mock.calls[0][0].data.balance.toString()).toBe('0');
   });
 });

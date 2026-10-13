@@ -14,21 +14,12 @@ import { Prisma } from '@hotel-pms/db';
 export async function reconcileFolioBalanceFromCounters(
   tx: any,
   folioId: string,
-  options: { forceCounters?: boolean } = {},
 ) {
   const folio = await tx.folio.findUnique({
     where: { id: folioId },
     select: { id: true, totalCharges: true, totalPayments: true, balance: true },
   });
   if (!folio) return null;
-
-  const appliedCredits = await tx.folioCreditApplication.count({
-    where: { folioId },
-  });
-  // Folio-credit applications have legacy semantics: some historical flows
-  // already include their value in totalPayments while others only changed
-  // balance. Do not rewrite those folios from counters alone.
-  if (appliedCredits > 0 && !options.forceCounters) return new Prisma.Decimal(folio.balance);
 
   const expectedBalance = new Prisma.Decimal(folio.totalCharges)
     .minus(folio.totalPayments);
