@@ -48,7 +48,7 @@ export function EmployeeSelfServiceLayout({ children }: { children: React.ReactN
   const current = NAV.find((n) => isActive(n.href));
 
   const SideNav = () => (
-    <aside className="sticky top-0 flex h-screen w-64 flex-col border-r border-white/10 bg-[#091522]">
+    <aside className="flex h-full w-64 flex-col border-r border-white/10 bg-[#091522]">
       <div className="flex h-20 items-center gap-3 border-b border-white/10 px-5">
         <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-teal-400 to-emerald-600 shadow-lg shadow-teal-950/40">
           <UserRound className="h-5 w-5 text-white" />
@@ -62,7 +62,7 @@ export function EmployeeSelfServiceLayout({ children }: { children: React.ReactN
         <p className="px-3 pb-3 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">My workspace</p>
         <nav className="space-y-1">
           {NAV.map(({ href, label, icon: Icon }) => (
-            <Link key={href} href={href} className={cn('flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-colors', isActive(href) ? 'bg-teal-500/15 text-teal-200 ring-1 ring-teal-400/20' : 'text-slate-400 hover:bg-white/5 hover:text-white')}>
+            <Link key={href} href={href} className={cn('flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-colors', pathname === href ? 'bg-teal-500/15 text-teal-200 ring-1 ring-teal-400/20' : 'text-slate-400 hover:bg-white/5 hover:text-white')}>
               <Icon className="h-4 w-4" />
               {label}
             </Link>
@@ -90,8 +90,16 @@ export function EmployeeSelfServiceLayout({ children }: { children: React.ReactN
       <div className="hidden lg:block"><SideNav /></div>
 
       <main className="min-w-0 flex-1">
+        {/* Desktop header: original design */}
+        <header className="ess-topbar sticky top-0 z-30 hidden h-16 items-center justify-between border-b border-white/10 bg-[#07111c]/95 px-6 backdrop-blur lg:flex">
+          <div className="flex items-center gap-3">
+            <div><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-teal-300">Employee self-service</p><p className="text-sm font-semibold text-white">Your workplace hub</p></div>
+          </div>
+          <div className="flex items-center gap-2 text-xs text-slate-400"><CalendarCheck2 className="h-4 w-4 text-teal-400" />Manage your work life in one place</div>
+        </header>
+
         {/* Mobile app bar */}
-        <header className="ess-topbar sticky top-0 z-30 border-b border-white/10 bg-[#07111c]/90 backdrop-blur-xl" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
+        <header className="ess-topbar sticky top-0 z-30 border-b border-white/10 bg-[#07111c]/90 backdrop-blur-xl lg:hidden" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
           <div className="flex h-14 items-center justify-between gap-3 px-4 sm:h-16 sm:px-6">
             <div className="flex min-w-0 items-center gap-3">
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-teal-400 to-emerald-600 lg:hidden">
@@ -102,7 +110,6 @@ export function EmployeeSelfServiceLayout({ children }: { children: React.ReactN
                 <p className="truncate text-sm font-semibold text-white">{current?.label || 'Your workplace hub'}</p>
               </div>
             </div>
-            <div className="hidden items-center gap-2 text-xs text-slate-400 lg:flex"><CalendarCheck2 className="h-4 w-4 text-teal-400" />Manage your work life in one place</div>
             <button type="button" onClick={() => setMenuOpen(true)} aria-label="Open account menu" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-teal-500/15 text-xs font-bold text-teal-200 ring-1 ring-teal-400/25 active:scale-95 lg:hidden">
               {initials}
             </button>

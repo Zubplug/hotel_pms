@@ -238,7 +238,265 @@ export default function EmployeeSelfServicePage() {
   };
 
   return (
-    <div className="ess-page mx-auto max-w-7xl space-y-5 px-4 pb-28 pt-4 sm:px-6 sm:pt-6 lg:px-8 lg:pb-10">
+    <div>
+      {/* Desktop: original design */}
+      <div className="ess-page hidden lg:block p-8 space-y-6 max-w-7xl mx-auto">
+      {/* Welcome Card */}
+      <div className="bg-gradient-to-r from-teal-950/40 via-slate-900 to-slate-900 border border-teal-800/30 rounded-2xl p-6 relative overflow-hidden shadow-xl">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-teal-500 to-emerald-600 text-white flex items-center justify-center font-bold text-xl shadow-lg shadow-teal-950">
+              {data.name.slice(0, 2).toUpperCase()}
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="text-xl sm:text-2xl font-bold text-white">{data.name}</h1>
+                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-teal-500/20 text-teal-300 border border-teal-500/30">
+                  {data.employeeCode}
+                </span>
+              </div>
+              <p className="text-xs text-slate-400 mt-0.5">
+                {data.position} • {data.department}
+              </p>
+              <p className="text-[10px] text-slate-500 mt-1">
+                Member of staff since {new Date(data.hireDate).toLocaleDateString()}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" onClick={() => setProfileModalOpen(true)} className="h-9 !border-slate-700 !bg-slate-900 text-xs !text-slate-100 hover:!bg-slate-800">Update details</Button>
+            <Button size="sm" variant="outline" onClick={() => setSupportModalOpen(true)} className="h-9 !border-slate-700 !bg-slate-900 text-xs !text-slate-100 hover:!bg-slate-800">Contact HR</Button>
+            <Button size="sm" variant="outline" onClick={() => setAttendanceModalOpen(true)} className="h-9 !border-slate-700 !bg-slate-900 text-xs !text-slate-100 hover:!bg-slate-800">Report attendance issue</Button>
+            <Button
+              size="sm"
+              onClick={() => setLeaveModalOpen(true)}
+              className="bg-teal-600 hover:bg-teal-500 text-white text-xs h-9 gap-1.5 shadow-md shadow-teal-950"
+            >
+              <CalendarCheck2 className="w-3.5 h-3.5" />
+              Request Leave
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* Employee overview */}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div className="rounded-xl border border-teal-800/30 bg-teal-950/20 p-4">
+          <div className="flex items-center justify-between"><span className="text-[10px] font-bold uppercase tracking-wider text-teal-300">Next shift</span><Timer className="h-4 w-4 text-teal-400" /></div>
+          <p className="mt-3 truncate text-sm font-bold text-white">{data.upcomingShifts?.[0]?.shiftName || 'Not scheduled'}</p>
+          <p className="mt-1 text-[11px] text-slate-400">{data.upcomingShifts?.[0] ? `${new Date(data.upcomingShifts[0].date).toLocaleDateString()} · ${data.upcomingShifts[0].times}` : 'Check with your supervisor'}</p>
+        </div>
+        <div className="rounded-xl border border-slate-800 bg-[#090e17] p-4">
+          <div className="flex items-center justify-between"><span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Attendance</span><ClipboardCheck className="h-4 w-4 text-emerald-400" /></div>
+          <p className="mt-3 text-sm font-bold text-white">{data.attendance?.filter((a: any) => ['PRESENT', 'LATE'].includes(a.status)).length || 0} days present</p>
+          <p className="mt-1 text-[11px] text-slate-400">Last 31 days</p>
+        </div>
+        <div className="rounded-xl border border-slate-800 bg-[#090e17] p-4">
+          <div className="flex items-center justify-between"><span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Last pay</span><WalletCards className="h-4 w-4 text-emerald-400" /></div>
+          <p className="mt-3 text-sm font-bold text-emerald-300">{data.payslips?.[0] ? `₦${data.payslips[0].netPay?.toLocaleString()}` : 'Not available'}</p>
+          <p className="mt-1 text-[11px] text-slate-400">{data.payslips?.[0]?.paymentStatus || 'Awaiting payroll'}</p>
+        </div>
+        <div className="rounded-xl border border-slate-800 bg-[#090e17] p-4">
+          <div className="flex items-center justify-between"><span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Open requests</span><MessageSquare className="h-4 w-4 text-cyan-400" /></div>
+          <p className="mt-3 text-sm font-bold text-white">{data.serviceRequests?.filter((r: any) => !['CLOSED', 'RESOLVED'].includes(r.status)).length || 0}</p>
+          <p className="mt-1 text-[11px] text-slate-400">HR support requests</p>
+        </div>
+      </div>
+
+      {(data.notifications?.length > 0 || data.missedPunchRequests?.length > 0 || data.serviceRequests?.length > 0) && (
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+          <div className="rounded-xl border border-slate-800 bg-[#090e17] p-5 lg:col-span-2">
+            <h3 className="mb-4 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-cyan-300"><Bell className="h-4 w-4" /> Recent notifications</h3>
+            <div className="space-y-2">
+              {(data.notifications || []).slice(0, 4).map((notification: any) => (
+                <button type="button" key={notification.id} onClick={async () => { if (!notification.isRead) { await fetch('/api/hr/self-service/notifications', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ notificationId: notification.id }) }); fetchSelfServiceData(); } }} className={`block w-full rounded-lg border p-3 text-left ${notification.isRead ? 'border-slate-800 bg-slate-950/40' : 'border-cyan-800/40 bg-cyan-950/20'}`}>
+                  <div className="flex items-start justify-between gap-3"><p className="text-xs font-semibold text-white">{notification.subject || 'LodgeCore update'}</p><span className="text-[10px] text-slate-500">{new Date(notification.createdAt).toLocaleDateString()}</span></div>
+                  <p className="mt-1 line-clamp-2 text-[11px] text-slate-400">{notification.body}</p>
+                </button>
+              ))}
+              {!data.notifications?.length && <p className="py-4 text-center text-xs text-slate-500">You have no new notifications.</p>}
+            </div>
+          </div>
+          <div className="rounded-xl border border-slate-800 bg-[#090e17] p-5">
+            <h3 className="mb-4 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-amber-300"><AlertCircle className="h-4 w-4" /> Pending actions</h3>
+            <div className="space-y-3 text-xs">
+              {(data.missedPunchRequests || []).filter((r: any) => r.status === 'PENDING').slice(0, 3).map((request: any) => <div key={request.id} className="rounded-lg bg-slate-950 p-3 text-slate-300">Attendance correction for {new Date(request.date).toLocaleDateString()}<span className="mt-1 block text-[10px] text-amber-400">Awaiting review</span></div>)}
+              {(data.serviceRequests || []).filter((r: any) => !['CLOSED', 'RESOLVED'].includes(r.status)).slice(0, 3).map((request: any) => <div key={request.id} className="rounded-lg bg-slate-950 p-3 text-slate-300"><div className="flex items-start justify-between gap-2"><span>{request.subject}</span><button type="button" onClick={() => { setReplyTicket(request); setReplyModalOpen(true); }} className="text-[10px] text-teal-300 hover:text-teal-200">Reply</button></div><span className="mt-1 block text-[10px] text-cyan-400">{request.status}</span></div>)}
+              {!data.missedPunchRequests?.some((r: any) => r.status === 'PENDING') && !data.serviceRequests?.some((r: any) => !['CLOSED', 'RESOLVED'].includes(r.status)) && <p className="py-4 text-center text-slate-500">Nothing requires your attention.</p>}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {data.profileChangeRequests?.length > 0 && (
+        <div className="rounded-xl border border-slate-800 bg-[#090e17] p-5">
+          <h3 className="mb-3 text-xs font-bold uppercase tracking-wider text-violet-300">Profile change requests</h3>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {data.profileChangeRequests.slice(0, 6).map((request: any) => (
+              <div key={request.id} className="rounded-lg border border-slate-800 bg-slate-950 p-3 text-xs"><div className="flex justify-between gap-2"><span className="font-semibold text-white">{request.fieldName}</span><span className="text-violet-300">{request.status}</span></div><p className="mt-1 truncate text-slate-400">{request.proposedValue}</p></div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+        <div className="rounded-xl border border-slate-800 bg-[#090e17] p-5">
+          <div className="mb-4 flex items-center justify-between gap-3"><h3 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-emerald-300"><WalletCards className="h-4 w-4" /> My loans and deductions</h3><Button size="sm" onClick={() => setLoanModalOpen(true)} className="h-7 bg-emerald-700 px-2 text-[10px] hover:bg-emerald-600">Apply for loan</Button></div>
+          {data.activeLoans?.length ? <div className="space-y-2">{data.activeLoans.map((loan: any) => <div key={loan.id} className="flex items-center justify-between rounded-lg bg-slate-950 p-3 text-xs"><div><p className="font-semibold text-white">Outstanding loan</p><p className="mt-1 text-slate-500">Monthly deduction ₦{loan.monthly?.toLocaleString()}</p></div><span className="font-mono font-bold text-amber-300">₦{loan.balance?.toLocaleString()}</span></div>)}</div> : <p className="py-6 text-center text-xs text-slate-500">No active loans or salary advances.</p>}
+        </div>
+        <div className="rounded-xl border border-slate-800 bg-[#090e17] p-5">
+          <h3 className="mb-4 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-violet-300"><Building2 className="h-4 w-4" /> My documents</h3>
+          {data.documents?.length ? <div className="space-y-2">{data.documents.slice(0, 5).map((document: any) => <a key={document.id} href={document.downloadUrl} target="_blank" rel="noreferrer" className="flex items-center justify-between rounded-lg bg-slate-950 p-3 text-xs hover:bg-slate-900"><div><p className="font-semibold text-white">{document.title}</p><p className="mt-1 text-slate-500">{document.category}{document.expiresAt ? ` · Expires ${new Date(document.expiresAt).toLocaleDateString()}` : ''}</p></div><span className="text-teal-300">Open →</span></a>)}</div> : <p className="py-6 text-center text-xs text-slate-500">No employee documents are available.</p>}
+        </div>
+      </div>
+
+      {/* Grid: Shifts, Leave Balances, Statutory Profile */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+        {/* Upcoming Duty Shifts */}
+        <div className="bg-[#090e17] border border-slate-800 rounded-xl p-5 space-y-4">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-teal-400 flex items-center gap-2">
+            <CalendarRange className="w-4 h-4" />
+            My Upcoming Shifts
+          </h3>
+          {data.upcomingShifts?.length > 0 ? (
+            <div className="space-y-2">
+              {data.upcomingShifts.map((s: any) => (
+                <div key={s.id} className="p-2.5 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-between text-xs">
+                  <div>
+                    <p className="font-semibold text-white">{new Date(s.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</p>
+                    <p className="text-[10px] text-slate-400">{s.shiftName}</p>
+                  </div>
+                  <span className="font-mono text-[10px] text-teal-400 bg-slate-950 px-2 py-1 rounded border border-slate-800">
+                    {s.times}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-slate-500 py-6 text-center">No shifts scheduled for this week.</p>
+          )}
+        </div>
+
+        {/* Leave Balances */}
+        <div className="bg-[#090e17] border border-slate-800 rounded-xl p-5 space-y-4">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-2">
+            <CalendarCheck2 className="w-4 h-4" />
+            My Leave Balances
+          </h3>
+          {data.leaveBalances?.length > 0 ? (
+            <div className="space-y-3">
+              {data.leaveBalances.map((lb: any, i: number) => (
+                <div key={i} className="p-3 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-between text-xs">
+                  <span className="text-slate-300 font-medium">{lb.leaveType}</span>
+                  <div className="text-right">
+                    <span className="text-base font-bold text-emerald-400">{lb.remaining} days</span>
+                    <span className="text-[10px] text-slate-500 block">of {lb.allocated} allocated</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="p-3 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-between text-xs">
+              <span className="text-slate-300 font-medium">Annual Statutory Leave</span>
+              <div className="text-right">
+                <span className="text-base font-bold text-emerald-400">20 days</span>
+                <span className="text-[10px] text-slate-500 block">Annual entitlement</span>
+              </div>
+            </div>
+          )}
+          <div className="border-t border-slate-800 pt-3">
+            <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-slate-500">Recent applications</p>
+            <div className="space-y-2">{(data.leaves || []).slice(0, 3).map((leave: any) => <div key={leave.id} className="flex items-center justify-between gap-2 rounded-lg bg-slate-950 p-2 text-[11px]"><div><p className="font-medium text-slate-200">{leave.leaveType}</p><p className="text-slate-500">{new Date(leave.startDate).toLocaleDateString()} · {leave.days} day(s)</p></div><div className="text-right"><span className="text-amber-300">{leave.status}</span>{['PENDING_HOD', 'PENDING_HR'].includes(leave.status) && <button type="button" onClick={() => handleCancelLeave(leave.id)} className="mt-1 block text-[10px] text-rose-300 hover:text-rose-200">Withdraw</button>}</div></div>)}{!data.leaves?.length && <p className="text-[11px] text-slate-500">No recent applications.</p>}</div>
+          </div>
+        </div>
+
+        {/* Statutory & Bank IDs */}
+        <div className="bg-[#090e17] border border-slate-800 rounded-xl p-5 space-y-3">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+            <ShieldCheck className="w-4 h-4 text-teal-400" />
+            Disbursement &amp; Pension IDs
+          </h3>
+          <div className="space-y-2 text-xs">
+            <div className="p-2 rounded bg-slate-950 border border-slate-800">
+              <span className="text-slate-500 text-[10px] block">BANK ACCOUNT</span>
+              <p className="font-semibold text-white">{data.bankName}</p>
+              <p className="font-mono text-slate-400 text-[11px]">{data.bankAccountNumber || 'Not configured'}</p>
+            </div>
+            <div className="p-2 rounded bg-slate-950 border border-slate-800">
+              <span className="text-slate-500 text-[10px] block">PENSION RSA PIN</span>
+              <p className="font-semibold text-white">{data.pfaName}</p>
+              <p className="font-mono text-slate-400 text-[11px]">{data.rsaPin || 'Not registered'}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Recent Payslips Section */}
+      <div className="bg-[#090e17] border border-slate-800 rounded-xl overflow-hidden shadow-xl">
+        <div className="p-4 border-b border-slate-800 flex items-center justify-between">
+          <h3 className="text-sm font-bold text-white flex items-center gap-2">
+            <Receipt className="w-4 h-4 text-teal-400" />
+            My Recent Payslips &amp; Salary History
+          </h3>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs text-slate-300">
+            <thead className="bg-[#060a12] border-b border-slate-800 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+              <tr>
+                <th className="py-3 px-4">Period</th>
+                <th className="py-3 px-4">Gross Earnings</th>
+                <th className="py-3 px-4">Deductions (PAYE/Pension)</th>
+                <th className="py-3 px-4">Net Salary Paid</th>
+                <th className="py-3 px-4">Status</th>
+                <th className="py-3 px-4 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-800/60">
+              {data.payslips?.length > 0 ? (
+                data.payslips.map((ps: any) => (
+                  <tr key={ps.id} className="hover:bg-slate-800/30">
+                    <td className="py-3 px-4 font-semibold text-white">{ps.periodName}</td>
+                    <td className="py-3 px-4 font-mono">₦{ps.grossPay?.toLocaleString()}</td>
+                    <td className="py-3 px-4 font-mono text-amber-400">-₦{ps.deductions?.toLocaleString()}</td>
+                    <td className="py-3 px-4 font-mono font-bold text-emerald-400">₦{ps.netPay?.toLocaleString()}</td>
+                    <td className="py-3 px-4">
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                        {ps.status}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 text-right">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          setSelectedPayslip({ ...ps, name: data.name, employeeCode: data.employeeCode, department: data.department, position: data.position, bankName: data.bankName });
+                          setPayslipModalOpen(true);
+                        }}
+                        className="text-teal-400 hover:text-teal-300 text-xs h-7 px-2"
+                      >
+                        View &amp; Print Payslip &rarr;
+                      </Button>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={6} className="py-8 text-center text-slate-500">
+                    No historical payslips generated yet.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      </div>
+
+      {/* Mobile: app-style design */}
+      <div className="ess-page mx-auto max-w-2xl space-y-5 px-4 pb-6 pt-4 sm:px-6 sm:pt-6 lg:hidden">
       {/* Hero */}
       <section className="relative overflow-hidden rounded-3xl border border-teal-400/20 bg-[radial-gradient(circle_at_top_right,rgba(20,184,166,0.22),transparent_45%),linear-gradient(135deg,#102d39_0%,#0b1725_60%,#08111d_100%)] p-5 sm:p-7">
         <div className="pointer-events-none absolute -bottom-20 -left-16 h-48 w-48 rounded-full bg-cyan-400/10 blur-3xl" />
@@ -453,6 +711,7 @@ export default function EmployeeSelfServicePage() {
           </div>
         ) : <Empty icon={<Receipt className="h-8 w-8 text-slate-700" />} title="No payslips yet" sub="Historical payslips will appear here." />}
       </Card>
+      </div>
 
       {/* Printable Payslip Modal */}
       <Dialog open={payslipModalOpen} onOpenChange={setPayslipModalOpen}>
