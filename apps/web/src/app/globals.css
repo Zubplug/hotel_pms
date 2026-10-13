@@ -13,9 +13,9 @@
   background: radial-gradient(circle at 75% -10%, rgba(20, 184, 166, .09), transparent 32%), var(--ess-bg) !important;
 }
 .ess-shell .ess-topbar { box-shadow: 0 12px 30px rgba(0,0,0,.12); }
-/* `backwards` (not `both`) so no transform persists after the entry animation;
-   a lingering transform turns the page into the containing block for
-   position:fixed overlays and traps them beneath the mobile tab bar. */
+/* Keep self-service pages free of transforms. A transformed ancestor becomes
+   the containing block for position:fixed overlays, which can trap mobile
+   bottom sheets inside the narrow page column instead of the viewport. */
 .ess-shell .ess-page { animation: ess-page-in .35s ease-out backwards; }
 .ess-page > section > div,
 .ess-page > div:not(.fixed),
@@ -63,7 +63,7 @@ body:has(.ess-shell) [data-slot='dialog-content'] [data-slot='dialog-close'] {
 body:has(.ess-shell) [data-slot='dialog-content'] [data-slot='dialog-close']:hover { background: rgba(255,255,255,.08); color: #fff; }
 .ess-manual-dialog { background: rgba(2, 8, 18, .78); }
 .ess-dialog-card { border-color: rgba(148,163,184,.20) !important; background: linear-gradient(145deg, #102337, #0b1725) !important; box-shadow: 0 28px 90px rgba(0,0,0,.48) !important; animation: ess-dialog-in .2s ease-out both; }
-@keyframes ess-page-in { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
+@keyframes ess-page-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes ess-dialog-in { from { opacity: 0; transform: translateY(8px) scale(.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
 @keyframes ess-sheet-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
 .ess-sheet-in { animation: ess-sheet-up .28s cubic-bezier(.2,.8,.2,1) both; }
