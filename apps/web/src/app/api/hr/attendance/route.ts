@@ -5,12 +5,9 @@ import { HrAuthorizationService } from '@/lib/services/hr-authorization-service'
 export async function GET(req: NextRequest) {
   try {
     const authContext = await HrAuthorizationService.resolveAuthContext(req);
-    if (!HrAuthorizationService.can(authContext, 'hr.employee.view') && !HrAuthorizationService.can(authContext, 'hr.attendance.manage')) {
-      return NextResponse.json({ error: 'Forbidden: Insufficient attendance permissions' }, { status: 403 });
-    }
-
     const organizationId = authContext.organizationId;
     const propertyId = authContext.propertyId;
+    const canManageAttendance = HrAuthorizationService.can(authContext, 'hr.employee.view') || HrAuthorizationService.can(authContext, 'hr.attendance.manage');
 
     const { searchParams } = new URL(req.url);
     const dateStr = searchParams.get('date');
@@ -25,6 +22,9 @@ export async function GET(req: NextRequest) {
           : {}),
       },
     };
+
+    // Ordinary employees may read only their own attendance records.
+    if (!canManageAttendance) where.staff.userId = authContext.userId;
 
     if (staffId) {
       where.staffId = staffId;

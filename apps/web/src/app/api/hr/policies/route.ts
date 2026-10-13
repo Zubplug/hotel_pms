@@ -5,7 +5,6 @@ import { HrAuthorizationService } from '@/lib/services/hr-authorization-service'
 export async function GET(req: NextRequest) {
   try {
     const context = await HrAuthorizationService.resolveAuthContext(req);
-    HrAuthorizationService.assertPermission(context, 'hr.employee.view');
     const staff = await prisma.staff.findFirst({ where: { userId: context.userId, organizationId: context.organizationId, isActive: true }, select: { id: true } });
     const policies = await prisma.companyPolicy.findMany({ where: { organizationId: context.organizationId, isActive: true }, include: { acknowledgements: staff ? { where: { staffId: staff.id }, select: { acknowledgedAt: true } } : false }, orderBy: [{ effectiveDate: 'desc' }, { title: 'asc' }] });
     return NextResponse.json({ policies: policies.map((policy) => ({ ...policy, acknowledgedAt: policy.acknowledgements[0]?.acknowledgedAt || null, acknowledgements: undefined })) });

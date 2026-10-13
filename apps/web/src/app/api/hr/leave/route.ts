@@ -5,10 +5,7 @@ import { HrAuthorizationService } from '@/lib/services/hr-authorization-service'
 export async function GET(req: NextRequest) {
   try {
     const authContext = await HrAuthorizationService.resolveAuthContext(req);
-    // Viewing leave data requires at least employee viewing or leave management
-    if (!HrAuthorizationService.can(authContext, 'hr.employee.view') && !HrAuthorizationService.can(authContext, 'hr.leave.manage')) {
-      return NextResponse.json({ error: 'Forbidden: Insufficient leave permissions' }, { status: 403 });
-    }
+    const canManageLeave = HrAuthorizationService.can(authContext, 'hr.employee.view') || HrAuthorizationService.can(authContext, 'hr.leave.manage');
 
     const organizationId = authContext.organizationId;
     const propertyId = authContext.propertyId;
@@ -34,6 +31,9 @@ export async function GET(req: NextRequest) {
     if (authContext.role === 'DEPARTMENT_HEAD' && authContext.department) {
       whereStaff.department = authContext.department;
     }
+
+    // Ordinary employees may read only their own leave records and balances.
+    if (!canManageLeave) whereStaff.userId = authContext.userId;
 
     // 2. Fetch Applications scoped to tenant
     const applications = await prisma.leaveApplication.findMany({
@@ -126,7 +126,7 @@ export async function POST(req: NextRequest) {
     const propertyId = authContext.propertyId;
 
     if (action === 'APPLY_LEAVE') {
-      const { staffId, leaveTypeId, startDate, endDate, daysRequested, reason, reliefStaffId } = body;
+      const { staffId, leaveTypeId, startDate, endDate, reason, reliefStaffId } = body;
       if (!staffId || !leaveTypeId || !startDate || !endDate) {
         return NextResponse.json({ error: 'Missing required leave fields' }, { status: 400 });
       }
@@ -161,10 +161,10 @@ export async function POST(req: NextRequest) {
       if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) {
         return NextResponse.json({ error: 'Leave end date must be on or after the start date' }, { status: 400 });
       }
-      const requestedDays = Number(daysRequested);
-      if (!Number.isInteger(requestedDays) || requestedDays < 1) {
-        return NextResponse.json({ error: 'Leave days requested must be a positive whole number' }, { status: 400 });
-      }
+      const startDay = Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate());
+      const endDay = Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate());
+      const requestedDays = Math.floor((endDay - startDay) / 86400000) + 1;
+      if (!Number.isInteger(requestedDays) || requestedDays < 1) return NextResponse.json({ error: 'Leave dates are invalid' }, { status: 400 });
       const overlap = await prisma.leaveApplication.findFirst({
         where: {
           staffId,
@@ -278,6 +278,15 @@ export async function POST(req: NextRequest) {
       });
 
       return NextResponse.json({ success: true, data: result });
+    }
+
+    if (action === 'CANCEL_APPLICATION') {
+      if (!body.applicationId) return NextResponse.json({ error: 'applicationId is required' }, { status: 400 });
+      const application = await prisma.leaveApplication.findFirst({ where: { id: body.applicationId, staff: { ...HrAuthorizationService.staffScope(authContext, { userId: authContext.userId }), isActive: true } } });
+      if (!application) return NextResponse.json({ error: 'Leave application not found or inaccessible' }, { status: 404 });
+      if (!['PENDING_HOD', 'PENDING_HR'].includes(application.status)) return NextResponse.json({ error: 'Only pending leave applications can be withdrawn' }, { status: 422 });
+      const updated = await prisma.leaveApplication.update({ where: { id: application.id }, data: { status: 'CANCELLED', rejectionReason: 'Withdrawn by employee' } });
+      return NextResponse.json({ success: true, data: updated });
     }
 
     if (action === 'CREATE_LEAVE_TYPE') {

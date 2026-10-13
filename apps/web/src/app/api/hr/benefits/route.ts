@@ -5,7 +5,7 @@ import { HrAuthorizationService } from '@/lib/services/hr-authorization-service'
 export async function GET(req: NextRequest) {
   try {
     const authContext = await HrAuthorizationService.resolveAuthContext(req);
-    HrAuthorizationService.assertPermission(authContext, 'hr.employee.view');
+    const canViewAllBenefits = HrAuthorizationService.can(authContext, 'hr.employee.view');
 
     const organizationId = authContext.organizationId;
     const propertyId = authContext.propertyId;
@@ -14,13 +14,14 @@ export async function GET(req: NextRequest) {
     if (organizationId) staffWhere.organizationId = organizationId;
     if (propertyId) staffWhere.propertyAccess = { has: propertyId };
     if (authContext.role === 'DEPARTMENT_HEAD' && authContext.department) staffWhere.department = authContext.department;
+    if (!canViewAllBenefits) staffWhere.userId = authContext.userId;
 
     const [loans, advances, claims] = await Promise.all([
       prisma.employeeLoan.findMany({
         where: { staff: staffWhere },
         include: {
           staff: {
-            select: { id: true, firstName: true, lastName: true, department: true, position: true },
+            select: { id: true, userId: true, firstName: true, lastName: true, department: true, position: true },
           },
         },
         orderBy: { createdAt: 'desc' },
@@ -29,7 +30,7 @@ export async function GET(req: NextRequest) {
         where: { staff: staffWhere },
         include: {
           staff: {
-            select: { id: true, firstName: true, lastName: true, department: true, position: true },
+            select: { id: true, userId: true, firstName: true, lastName: true, department: true, position: true },
           },
         },
         orderBy: { createdAt: 'desc' },
@@ -38,7 +39,7 @@ export async function GET(req: NextRequest) {
         where: { staff: staffWhere },
         include: {
           staff: {
-            select: { id: true, firstName: true, lastName: true, department: true, position: true },
+            select: { id: true, userId: true, firstName: true, lastName: true, department: true, position: true },
           },
         },
         orderBy: { createdAt: 'desc' },
@@ -52,9 +53,9 @@ export async function GET(req: NextRequest) {
         staffName: `${l.staff.firstName || ''} ${l.staff.lastName || ''}`.trim(),
         department: l.staff.department,
         position: l.staff.position,
-        principalAmount: authContext.canViewSensitive ? Number(l.principalAmount) : null,
-        balanceRemaining: authContext.canViewSensitive ? Number(l.remainingBalance) : null,
-        monthlyDeduction: authContext.canViewSensitive ? Number(l.monthlyDeduction) : null,
+        principalAmount: authContext.canViewSensitive || l.staff.userId === authContext.userId ? Number(l.principalAmount) : null,
+        balanceRemaining: authContext.canViewSensitive || l.staff.userId === authContext.userId ? Number(l.remainingBalance) : null,
+        monthlyDeduction: authContext.canViewSensitive || l.staff.userId === authContext.userId ? Number(l.monthlyDeduction) : null,
         tenorMonths: l.termMonths,
         reason: l.reason,
         status: l.status,
@@ -65,7 +66,7 @@ export async function GET(req: NextRequest) {
         staffId: a.staffId,
         staffName: `${a.staff.firstName || ''} ${a.staff.lastName || ''}`.trim(),
         department: a.staff.department,
-        amount: authContext.canViewSensitive ? Number(a.amount) : null,
+        amount: authContext.canViewSensitive || a.staff.userId === authContext.userId ? Number(a.amount) : null,
         reason: a.reason,
         status: a.status,
         createdAt: a.createdAt,
@@ -76,7 +77,7 @@ export async function GET(req: NextRequest) {
         staffName: `${c.staff.firstName || ''} ${c.staff.lastName || ''}`.trim(),
         department: c.staff.department,
         category: c.category,
-        amount: authContext.canViewSensitive ? Number(c.amount) : null,
+        amount: authContext.canViewSensitive || c.staff.userId === authContext.userId ? Number(c.amount) : null,
         description: c.description,
         status: c.status,
         createdAt: c.createdAt,
@@ -100,8 +101,9 @@ export async function POST(req: NextRequest) {
     const { action } = body;
 
     if (action === 'CREATE_LOAN') {
-      HrAuthorizationService.assertPermission(authContext, 'hr.employee.manage');
-      const { staffId, principalAmount, tenorMonths = 6, reason } = body;
+      const canManage = HrAuthorizationService.can(authContext, 'hr.employee.manage');
+      const { principalAmount, tenorMonths = 6, reason } = body;
+      const staffId = body.staffId || (await prisma.staff.findFirst({ where: { userId: authContext.userId, organizationId, isActive: true }, select: { id: true } }))?.id;
 
       // Verify staff belongs to tenant
       const staff = await prisma.staff.findFirst({
@@ -113,6 +115,8 @@ export async function POST(req: NextRequest) {
 
       const principal = Number(principalAmount) || 0;
       const termMonths = parseInt(tenorMonths, 10) || 6;
+      if (principal <= 0 || termMonths < 1 || termMonths > 60) return NextResponse.json({ error: 'Enter a valid loan amount and repayment term' }, { status: 400 });
+      if (!canManage && staff.userId !== authContext.userId) return NextResponse.json({ error: 'Employees may only apply for themselves' }, { status: 403 });
       const monthlyDeduction = Math.round((principal / termMonths) * 100) / 100;
       const loanCount = await prisma.employeeLoan.count();
       const loanNumber = `LN-${String(loanCount + 1).padStart(5, '0')}`;
@@ -133,9 +137,9 @@ export async function POST(req: NextRequest) {
           monthlyDeduction,
           disbursementDate: new Date(),
           reason: reason?.trim() || 'Staff assistance loan',
-          status: 'ACTIVE',
-          approvedBy: authContext.userId,
-          approvedAt: new Date(),
+          status: canManage ? 'ACTIVE' : 'PENDING',
+          approvedBy: canManage ? authContext.userId : null,
+          approvedAt: canManage ? new Date() : null,
         },
       });
       return NextResponse.json({ success: true, data: loan }, { status: 201 });

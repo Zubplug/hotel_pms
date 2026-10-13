@@ -5,7 +5,7 @@ import { HrAuthorizationService } from '@/lib/services/hr-authorization-service'
 export async function GET(req: NextRequest) {
   try {
     const authContext = await HrAuthorizationService.resolveAuthContext(req);
-    HrAuthorizationService.assertPermission(authContext, 'hr.employee.view');
+    const canViewAllDocuments = HrAuthorizationService.can(authContext, 'hr.employee.view');
 
     const organizationId = authContext.organizationId;
     const propertyId = authContext.propertyId;
@@ -14,6 +14,7 @@ export async function GET(req: NextRequest) {
     if (organizationId) staffWhere.organizationId = organizationId;
     if (propertyId) staffWhere.propertyAccess = { has: propertyId };
     if (authContext.role === 'DEPARTMENT_HEAD' && authContext.department) staffWhere.department = authContext.department;
+    if (!canViewAllDocuments) staffWhere.userId = authContext.userId;
 
     const documents = await prisma.employeeDocument.findMany({
       where: {

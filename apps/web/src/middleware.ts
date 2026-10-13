@@ -55,7 +55,17 @@ const HR_ROLES = ['HR_MANAGER', 'PAYROLL_OFFICER', 'PAYROLL_APPROVER', 'HR_OFFIC
 function hasModuleAccess(req: any, pathname: string): { allowed: boolean; redirectTo?: string } {
   const user = req.auth?.user as any;
   if (!user) return { allowed: false, redirectTo: '/login' };
-  if (user.selfServiceOnly && pathname !== '/hr/self-service' && !pathname.startsWith('/hr/self-service/') && pathname !== '/api/hr/self-service') {
+  const employeeSelfServiceApi = [
+    '/api/hr/attendance',
+    '/api/hr/attendance/missed-punch',
+    '/api/hr/benefits',
+    '/api/hr/documents',
+    '/api/hr/leave',
+    '/api/hr/policies',
+    '/api/hr/service-desk',
+  ];
+  const isEmployeePortalPath = pathname === '/hr/self-service' || pathname.startsWith('/hr/self-service/') || pathname === '/api/hr/self-service' || pathname.startsWith('/api/hr/self-service/') || employeeSelfServiceApi.some((path) => pathname === path || pathname.startsWith(`${path}/`));
+  if (user.selfServiceOnly && !isEmployeePortalPath) {
     return { allowed: false, redirectTo: '/hr/self-service' };
   }
   if (user.isLodgeCoreAdmin) return { allowed: true };

@@ -2044,6 +2044,7 @@ model Staff {
 
   // Enterprise HR & Payroll Lifecycle
   employeeProfile        EmployeeProfile?
+  employeeChangeRequests EmployeeChangeRequest[]
   leaveAllocations       LeaveAllocation[]
   leaveApplications      LeaveApplication[]
   attendanceRecords      AttendanceRecord[]
@@ -7228,6 +7229,29 @@ model EmployeeProfile {
   @@index([employmentType, status])
 }
 
+model EmployeeChangeRequest {
+  id       String @id @default(uuid()) @db.Uuid
+  staffId  String @db.Uuid
+  staff    Staff  @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  fieldName      String
+  currentValue   String?
+  proposedValue  String
+  reason         String?
+  status         String   @default("PENDING") // PENDING | APPROVED | REJECTED | CLARIFICATION
+  requestedBy    String   @db.Uuid
+  reviewedBy     String?  @db.Uuid
+  reviewedAt     DateTime? @db.Timestamptz
+  reviewerNotes  String?
+  effectiveAt    DateTime? @db.Timestamptz
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@index([staffId, status, createdAt])
+  @@index([status, createdAt])
+}
+
 model DepartmentSection {
   id           String     @id @default(uuid()) @db.Uuid
   departmentId String     @db.Uuid
@@ -7651,7 +7675,7 @@ model EmployeeLoan {
   reason           String
 
   status     String    @default("ACTIVE") // PENDING | ACTIVE | FULLY_PAID | WRITTEN_OFF
-  approvedBy String    @db.Uuid
+  approvedBy String?   @db.Uuid
   approvedAt DateTime? @db.Timestamptz
 
   createdAt DateTime @default(now()) @db.Timestamptz
@@ -7659,6 +7683,18 @@ model EmployeeLoan {
 
   @@index([propertyId, status])
   @@index([staffId])
+}
+
+model HrServiceDeskMessage {
+  id         String             @id @default(uuid()) @db.Uuid
+  ticketId   String             @db.Uuid
+  ticket     HrServiceDeskTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  authorId   String             @db.Uuid
+  body       String
+  isInternal Boolean            @default(false)
+  createdAt  DateTime           @default(now()) @db.Timestamptz
+
+  @@index([ticketId, createdAt])
 }
 
 model SalaryAdvance {
@@ -7854,10 +7890,12 @@ model HrServiceDeskTicket {
   subject      String
   description  String
 
-  status          String    @default("OPEN") // OPEN | IN_PROGRESS | RESOLVED | CLOSED
+  status          String    @default("OPEN") // OPEN | IN_PROGRESS | AWAITING_EMPLOYEE | RESOLVED | CLOSED
   assignedToUser  String?   @db.Uuid
   resolutionNotes String?
   resolvedAt      DateTime? @db.Timestamptz
+
+  messages HrServiceDeskMessage[]
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz

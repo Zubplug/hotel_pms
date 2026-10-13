@@ -76,6 +76,7 @@ export const HR_NAVIGATION: HrNavSection[] = [
       { name: 'HR Dashboard', href: '/hr', icon: LayoutDashboard },
       { name: 'Employee Directory', href: '/hr/employees', icon: Users },
       { name: 'Organization Structure', href: '/hr/organization', icon: Building2 },
+      { name: 'Employee Change Requests', href: '/hr/profile-change-requests', icon: UserCheck },
     ],
   },
   {

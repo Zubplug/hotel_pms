@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
 import prisma from '@hotel-pms/db';
 import { HrAuthorizationService } from '@/lib/services/hr-authorization-service';
+import { notifyEmployee } from '@/lib/employee-notification-service';
 
 function errorResponse(error: any) {
   const message = String(error?.message || 'Request failed');
@@ -21,7 +22,7 @@ export async function GET(req: NextRequest) {
     };
     const tickets = await prisma.hrServiceDeskTicket.findMany({
       where,
-      include: { staff: { select: { id: true, firstName: true, lastName: true, employeeId: true, department: true } } },
+      include: { staff: { select: { id: true, firstName: true, lastName: true, employeeId: true, department: true } }, messages: { where: canManage ? {} : { isInternal: false }, orderBy: { createdAt: 'asc' } } },
       orderBy: { createdAt: 'desc' },
       take: 250,
     });
@@ -35,6 +36,14 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const canManage = HrAuthorizationService.can(context, 'hr.service-desk.manage');
     const staffId = body.staffId || (await prisma.staff.findFirst({ where: { userId: context.userId, organizationId: context.organizationId, isActive: true }, select: { id: true } }))?.id;
+    if (body.action === 'REPLY') {
+      if (!body.ticketId || !body.body?.trim()) return NextResponse.json({ error: 'Ticket ID and reply text are required' }, { status: 400 });
+      const ticket = await prisma.hrServiceDeskTicket.findFirst({ where: { id: body.ticketId, propertyId: context.propertyId, ...(canManage ? {} : { staff: { userId: context.userId, organizationId: context.organizationId } }) } });
+      if (!ticket) return NextResponse.json({ error: 'Ticket not found' }, { status: 404 });
+      const message = await prisma.hrServiceDeskMessage.create({ data: { ticketId: ticket.id, authorId: context.userId, body: String(body.body).trim(), isInternal: false } });
+      if (!canManage && ticket.status === 'AWAITING_EMPLOYEE') await prisma.hrServiceDeskTicket.update({ where: { id: ticket.id }, data: { status: 'IN_PROGRESS' } });
+      return NextResponse.json({ success: true, message }, { status: 201 });
+    }
     if (!staffId || !body.category || !body.subject?.trim() || !body.description?.trim()) {
       return NextResponse.json({ error: 'Staff, category, subject, and description are required' }, { status: 400 });
     }
@@ -59,10 +68,11 @@ export async function PATCH(req: NextRequest) {
     const context = await HrAuthorizationService.resolveAuthContext(req);
     HrAuthorizationService.assertPermission(context, 'hr.service-desk.manage');
     const body = await req.json();
-    if (!body.id || !['OPEN', 'IN_PROGRESS', 'RESOLVED', 'CLOSED'].includes(body.status)) return NextResponse.json({ error: 'Ticket ID and valid status are required' }, { status: 400 });
+    if (!body.id || !['OPEN', 'IN_PROGRESS', 'AWAITING_EMPLOYEE', 'RESOLVED', 'CLOSED'].includes(body.status)) return NextResponse.json({ error: 'Ticket ID and valid status are required' }, { status: 400 });
     const existing = await prisma.hrServiceDeskTicket.findFirst({ where: { id: body.id, propertyId: context.propertyId, staff: { organizationId: context.organizationId, ...(context.role === 'DEPARTMENT_HEAD' && context.department ? { department: context.department } : {}) } } });
     if (!existing) return NextResponse.json({ error: 'Ticket not found' }, { status: 404 });
     const ticket = await prisma.hrServiceDeskTicket.update({ where: { id: existing.id }, data: { status: body.status, assignedToUser: body.assignedToUser || context.userId, resolutionNotes: body.resolutionNotes?.trim() || undefined, resolvedAt: ['RESOLVED', 'CLOSED'].includes(body.status) ? new Date() : null } });
+    await notifyEmployee({ organizationId: context.organizationId, propertyId: context.propertyId, staffId: existing.staffId, subject: `HR request ${body.status.toLowerCase().replace('_', ' ')}`, body: `Your HR request “${existing.subject}” is now ${body.status.toLowerCase().replace('_', ' ')}.`, category: 'APPROVALS', action: '/hr/self-service', idempotencyKey: `service-desk:${existing.id}:${body.status}` });
     return NextResponse.json({ success: true, ticket });
   } catch (error) { return errorResponse(error); }
 }
