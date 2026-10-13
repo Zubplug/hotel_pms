@@ -66,6 +66,29 @@ export interface FinancialData {
     blockers: number;
     warnings: number;
   };
+  guestAmenity?: {
+    enabled: boolean;
+    warehouse: { id: string; name: string } | null;
+    guestCount: number;
+    perGuestCost: number;
+    estimatedCost: number;
+    currency?: string;
+    items: Array<{
+      name: string;
+      stockItemName: string | null;
+      unit: string | null;
+      quantityPerGuest: number;
+      required: number;
+      available: number;
+      unitCost: number;
+      estimatedCost: number;
+      status: string;
+    }>;
+    missingItems: string[];
+    shortages: Array<{ name: string; required: number; available: number; unit: string }>;
+    zeroCostItems: string[];
+    blockers: string[];
+  };
 }
 
 export interface CashData {

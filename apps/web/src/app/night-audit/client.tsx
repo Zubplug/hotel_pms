@@ -18,6 +18,7 @@ import { ActivityFeed } from '@/components/night-audit/dashboard/activity-feed';
 import { AttentionQueue } from '@/components/night-audit/dashboard/attention-queue';
 import { AuditPulse } from '@/components/night-audit/dashboard/audit-pulse';
 import { CloseControl } from '@/components/night-audit/dashboard/close-control';
+import { GuestAmenityControl } from '@/components/night-audit/dashboard/guest-amenity-control';
 import { AuditWizard } from '@/components/night-audit/audit-wizard';
 import { ResolutionManager, ResolutionAction } from '@/components/night-audit/resolution-manager';
 import { AuditSuccessModal } from '@/components/night-audit/audit-success-modal';
@@ -216,6 +217,9 @@ export default function NightAuditDashboard({ managerMode = false }: { managerMo
 
         {/* Financial Close Control */}
         <CloseControl data={data} />
+
+        {/* Guest amenity inventory and operating-cost preflight */}
+        <GuestAmenityControl data={data} />
 
         {/* Manager's Flash Report */}
         {flashData && (

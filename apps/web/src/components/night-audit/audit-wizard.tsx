@@ -62,6 +62,8 @@ export function AuditWizard({ open, onOpenChange, data, onExecute, executing, on
   const proposedGross = proposedCharges.reduce((sum: number, item: any) => sum + Number(item.grossAmount || item.amount || 0), 0);
   const proposedDiscount = proposedCharges.reduce((sum: number, item: any) => sum + Number(item.discountAmount || 0), 0);
   const proposedNet = proposedCharges.reduce((sum: number, item: any) => sum + Number(item.netAmount ?? (Number(item.amount || 0) - Number(item.discountAmount || 0))), 0);
+  const amenityPerGuestCost = Number(data.financial.guestAmenity?.perGuestCost || 0);
+  const proposedAmenityCost = proposedCharges.reduce((sum: number, item: any) => sum + (Number(item.guestCount || 1) * amenityPerGuestCost), 0);
 
   const handleResolve = (actionType: string, item: any) => {
     setResolutionAction({ type: actionType as any, item });
@@ -110,10 +112,11 @@ export function AuditWizard({ open, onOpenChange, data, onExecute, executing, on
             </div>
           ) : confirmExecution ? (
             <div className="mt-8 w-full max-w-5xl text-left">
-              <div className="mb-4 grid gap-3 sm:grid-cols-3">
+              <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 <div className="rounded-xl border border-white/[.08] bg-white/[.03] p-4"><p className="text-[10px] uppercase tracking-wider text-slate-500">Gross room charges</p><p className="mt-1 text-xl font-bold text-white">{formatMoney(proposedGross)}</p></div>
                 <div className="rounded-xl border border-amber-400/20 bg-amber-400/[.06] p-4"><p className="text-[10px] uppercase tracking-wider text-amber-300/70">Discounts / concessions</p><p className="mt-1 text-xl font-bold text-amber-200">-{formatMoney(proposedDiscount)}</p></div>
                 <div className="rounded-xl border border-emerald-400/20 bg-emerald-400/[.06] p-4"><p className="text-[10px] uppercase tracking-wider text-emerald-300/70">Net to post</p><p className="mt-1 text-xl font-bold text-emerald-200">{formatMoney(proposedNet)}</p></div>
+                <div className="rounded-xl border border-rose-400/20 bg-rose-400/[.06] p-4"><p className="text-[10px] uppercase tracking-wider text-rose-300/70">Estimated amenity COGS</p><p className="mt-1 text-xl font-bold text-rose-200">{formatMoney(proposedAmenityCost)}</p></div>
               </div>
               <div className="max-h-[40vh] overflow-auto rounded-xl border border-white/[.08]">
                 <table className="w-full min-w-[960px] text-left text-xs">
@@ -128,6 +131,8 @@ export function AuditWizard({ open, onOpenChange, data, onExecute, executing, on
                       <th className="px-3 py-3 text-right text-indigo-300">VAT (2200)</th>
                       <th className="px-3 py-3 text-right text-indigo-300">SC (2210)</th>
                       <th className="px-3 py-3 text-right text-amber-300">Food Alloc (4250)</th>
+                      <th className="px-3 py-3 text-right text-rose-300">Amenity COGS</th>
+                      <th className="px-3 py-3 text-right text-emerald-300">Contribution</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/[.06]">
@@ -181,6 +186,12 @@ export function AuditWizard({ open, onOpenChange, data, onExecute, executing, on
                               '—'
                             )}
                           </td>
+                          <td className="px-3 py-3 text-right font-medium text-rose-200 tabular-nums">
+                            {formatMoney(Number(item.guestCount || 1) * amenityPerGuestCost)}
+                          </td>
+                          <td className="px-3 py-3 text-right font-semibold text-emerald-200 tabular-nums">
+                            {rb ? formatMoney(Number(rb.netAccommodation || 0) - (Number(item.guestCount || 1) * amenityPerGuestCost)) : '—'}
+                          </td>
                         </tr>
                       );
                     })}
@@ -195,6 +206,8 @@ export function AuditWizard({ open, onOpenChange, data, onExecute, executing, on
                       <td className="px-3 py-3 text-right tabular-nums">{formatMoney(proposedCharges.reduce((s: number, i: any) => s + Number(i.rateBreakdown?.vat || 0), 0))}</td>
                       <td className="px-3 py-3 text-right tabular-nums">{formatMoney(proposedCharges.reduce((s: number, i: any) => s + Number(i.rateBreakdown?.serviceCharge || 0), 0))}</td>
                       <td className="px-3 py-3 text-right tabular-nums text-amber-300">{formatMoney(proposedCharges.reduce((s: number, i: any) => s + Number(i.rateBreakdown?.complimentaryFoodAllocation || 0), 0))}</td>
+                      <td className="px-3 py-3 text-right tabular-nums text-rose-200">{formatMoney(proposedAmenityCost)}</td>
+                      <td className="px-3 py-3 text-right tabular-nums text-emerald-200">{formatMoney(proposedCharges.reduce((s: number, i: any) => s + Number(i.rateBreakdown?.netAccommodation || 0) - (Number(i.guestCount || 1) * amenityPerGuestCost), 0))}</td>
                     </tr>
                   </tfoot>
                 </table>

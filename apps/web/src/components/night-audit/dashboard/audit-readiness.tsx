@@ -9,7 +9,7 @@ export function AuditReadiness({ data }: { data: NightAuditData }) {
 
   const operationalCount = (data.operational.arrivals?.length || 0) + (data.operational.departures?.length || 0) + (data.operational.roomReconciliation?.filter((r) => r.issue).length || 0);
   const systemCount = (data.system.openPosSessions?.length || 0) + (data.system.openFrontdeskSessions?.length || 0) + (data.system.financialSyncConflicts?.length || 0);
-  const financialCount = (data.financial.highBalances?.length || 0) + (data.financial.unverifiedComplimentary?.length || 0) + (data.financial.pendingCheckInBypasses?.length || 0) + (data.financial.pendingDiscounts?.length || 0) + (data.financial.rateVariances?.length || 0);
+  const financialCount = (data.financial.highBalances?.length || 0) + (data.financial.unverifiedComplimentary?.length || 0) + (data.financial.pendingCheckInBypasses?.length || 0) + (data.financial.pendingDiscounts?.length || 0) + (data.financial.rateVariances?.length || 0) + (data.financial.guestAmenity?.blockers?.length || 0) + (data.financial.guestAmenity?.zeroCostItems?.length || 0);
   const cashCount = (data.cash.cashHandovers?.length || 0) + (data.cash.unverifiedTransactions?.length || 0) + (data.cash.bankDeposits?.length || 0);
 
   const sections = [
@@ -31,10 +31,10 @@ export function AuditReadiness({ data }: { data: NightAuditData }) {
     },
     {
       title: 'Financial Review',
-      description: 'Check-in bypasses, complimentary and variances.',
+      description: 'Room charges, amenities, bypasses and variances.',
       icon: FileCheck2,
       count: financialCount,
-      hasBlocker: (data.financial.pendingCheckInBypasses?.length || 0) > 0 || (data.financial.unverifiedComplimentary?.length || 0) > 0,
+      hasBlocker: (data.financial.pendingCheckInBypasses?.length || 0) > 0 || (data.financial.unverifiedComplimentary?.length || 0) > 0 || (data.financial.guestAmenity?.blockers?.length || 0) > 0,
       color: '#f59e0b',
     },
     {

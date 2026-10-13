@@ -279,6 +279,8 @@ export async function GET(req: NextRequest) {
     if (financial.unverifiedComplimentary?.length > 0) blockers++;
     if (financial.pendingCheckInBypasses?.length > 0) blockers++;
     if (financial.eventHall?.blockers > 0) blockers++;
+    if (financial.guestAmenity?.blockers?.length) blockers++;
+    if (financial.guestAmenity?.zeroCostItems?.length) warnings++;
     if (financial.eventHall?.warnings > 0) warnings++;
     
     // Cash blockers/warnings
@@ -322,6 +324,8 @@ export async function GET(req: NextRequest) {
       missingLinkedJournal ? { severity: 'HIGH', title: 'Night Audit journal package is incomplete', detail: 'Revenue was closed, but no posted journal is linked directly to this audit run for drill-down traceability.', metric: 0 } : null,
       balanceProofHasVariance ? { severity: 'HIGH', title: 'Balance proof has variance', detail: 'One or more dated subledger balances do not agree with the expected closing balance.', metric: 0 } : null,
       snapshotTotals && snapshotTotals.grossRevenue > 0 && snapshotTotals.fnbRevenue === 0 ? { severity: 'MEDIUM', title: 'No F&B revenue captured', detail: 'The completed snapshot contains no F&B/POS revenue for this date.', metric: 0 } : null,
+      financial.guestAmenity?.blockers?.length ? { severity: 'HIGH', title: 'Guest amenity stock cannot be posted', detail: financial.guestAmenity.blockers.join(' '), metric: financial.guestAmenity.blockers.length } : null,
+      financial.guestAmenity?.zeroCostItems?.length ? { severity: 'MEDIUM', title: 'Guest amenity reference costs in use', detail: `${financial.guestAmenity.zeroCostItems.join(', ')} have zero inventory cost; the configured reference cost will be used.`, metric: financial.guestAmenity.zeroCostItems.length } : null,
     ].filter(Boolean);
     
     // Single canonical state field — the UI should branch exclusively on this.

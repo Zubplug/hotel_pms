@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import { TenantContext } from './organization-access';
 import { postEventInvoiceRevenue } from './events/event-revenue-accounting';
 import { computeRateBreakdown, resolveBreakdownConfig } from '@/lib/room-rate-breakdown';
+import { getGuestAmenityAuditControl } from '@/lib/services/guest-amenity-service';
 
 export async function getOperationalReview(ctx: TenantContext, propertyId: string) {
   if (!ctx.propertyIds.includes(propertyId)) throw new Error('FORBIDDEN');
@@ -566,6 +567,8 @@ export async function getFinancialAudit(ctx: TenantContext, propertyId: string) 
     },
     include: {
       primaryGuest: { select: { firstName: true, lastName: true } },
+      adults: true,
+      children: true,
       reservationRooms: { where: { status: 'ACTIVE' }, include: { room: { include: { roomType: true } } }, orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }] },
       folios: { where: { type: { in: ['MAIN', 'ROOM', 'CITY_LEDGER'] }, status: 'OPEN' }, select: { id: true } },
       ratePlan: true,
@@ -618,6 +621,7 @@ export async function getFinancialAudit(ctx: TenantContext, propertyId: string) 
       roomNumber: room.room?.number || '—',
       roomType: room.room?.roomType?.name || null,
       guestName: `${reservation.primaryGuest?.firstName || ''} ${reservation.primaryGuest?.lastName || ''}`.trim() || 'Guest',
+      guestCount: Math.max(1, Number(reservation.adults || 0) + Number(reservation.children || 0)),
       confirmationNumber: reservation.confirmationNumber,
       currency: room.currency || property.baseCurrency || 'NGN',
       grossAmount: gross,
@@ -713,7 +717,8 @@ export async function getFinancialAudit(ctx: TenantContext, propertyId: string) 
   });
 
   const eventHall = await getEventHallAuditControl(ctx, propertyId, businessDate);
-  return { openFolios, highBalances, rateVariances, pendingDiscounts: enrichedPendingDiscounts, pendingNightAuditPostings, unverifiedComplimentary: enrichedComplimentary, pendingCheckInBypasses, eventHall };
+  const guestAmenity = await getGuestAmenityAuditControl(propertyId, businessDate);
+  return { openFolios, highBalances, rateVariances, pendingDiscounts: enrichedPendingDiscounts, pendingNightAuditPostings, unverifiedComplimentary: enrichedComplimentary, pendingCheckInBypasses, eventHall, guestAmenity };
 }
 
 export async function getCashReconciliation(ctx: TenantContext, propertyId: string) {

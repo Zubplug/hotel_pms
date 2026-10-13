@@ -1,9 +1,12 @@
-type AmenityDefinition = {
+import prisma from '@hotel-pms/db';
+
+export type AmenityDefinition = {
   key: string;
   name: string;
   aliases: string[];
   quantityPerGuest: number;
   expectedCost: number;
+  stockItemId?: string;
 };
 
 export const DEFAULT_GUEST_AMENITY_PACK: AmenityDefinition[] = [
@@ -15,11 +18,11 @@ export const DEFAULT_GUEST_AMENITY_PACK: AmenityDefinition[] = [
   { key: 'sugar', name: 'Sugar', aliases: ['sugar'], quantityPerGuest: 1, expectedCost: 30 },
 ];
 
-function normalize(value: string) {
+export function normalizeGuestAmenityName(value: string) {
   return value.trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
-function resolveDefinitions(settings: any): AmenityDefinition[] {
+export function resolveGuestAmenityDefinitions(settings: any): AmenityDefinition[] {
   const configured = settings?.guestAmenities;
   if (configured?.enabled === false) return [];
   if (!Array.isArray(configured?.items) || configured.items.length === 0) {
@@ -33,6 +36,119 @@ function resolveDefinitions(settings: any): AmenityDefinition[] {
     expectedCost: Math.max(0, Number(item.expectedCost ?? 0)),
     stockItemId: item.stockItemId ? String(item.stockItemId) : undefined,
   })) as AmenityDefinition[];
+}
+
+/**
+ * Builds the night-audit preflight for complimentary amenities using the same
+ * warehouse, item matching, quantity and fallback-cost rules as posting.
+ */
+export async function getGuestAmenityAuditControl(propertyId: string, businessDate: Date) {
+  const property = await prisma.property.findUnique({
+    where: { id: propertyId },
+    select: { settings: true, baseCurrency: true },
+  });
+  if (!property) throw new Error('NOT_FOUND:Property not found');
+
+  const settings = (property.settings || {}) as any;
+  const guestAmenities = settings.guestAmenities || {};
+  const definitions = resolveGuestAmenityDefinitions(settings);
+  const checkedInReservations = await prisma.reservation.findMany({
+    where: {
+      propertyId,
+      status: 'CHECKED_IN',
+      reservationRooms: { some: { status: 'ACTIVE', checkIn: { lte: businessDate }, checkOut: { gt: businessDate } } },
+    },
+    select: { id: true, adults: true, children: true },
+  });
+  const guestCount = checkedInReservations.reduce((total, reservation) =>
+    total + Math.max(1, Number(reservation.adults || 0) + Number(reservation.children || 0)), 0);
+
+  if (!definitions.length) {
+    return {
+      enabled: false,
+      warehouse: null,
+      guestCount,
+      perGuestCost: 0,
+      estimatedCost: 0,
+      items: [],
+      missingItems: [],
+      shortages: [],
+      zeroCostItems: [],
+      blockers: [],
+    };
+  }
+
+  const configuredWarehouseId = String(guestAmenities.warehouseId || guestAmenities.stockWarehouseId || '');
+  const warehouse = configuredWarehouseId
+    ? await prisma.warehouse.findFirst({
+        where: { id: configuredWarehouseId, propertyId, isActive: true },
+        select: { id: true, name: true },
+      })
+    : await prisma.warehouse.findFirst({
+        where: {
+          propertyId,
+          isActive: true,
+          OR: [{ name: { contains: 'housekeeping', mode: 'insensitive' } }, { name: { contains: 'laundry', mode: 'insensitive' } }],
+        },
+        orderBy: { name: 'asc' },
+        select: { id: true, name: true },
+      });
+
+  const stockItems = warehouse
+    ? await prisma.stockItem.findMany({
+        where: { propertyId, warehouseId: warehouse.id, isActive: true },
+        select: { id: true, name: true, baseUnit: true, costPrice: true, quantityOnHand: true },
+      })
+    : [];
+
+  let perGuestCost = 0;
+  const missingItems: string[] = [];
+  const shortages: Array<{ name: string; required: number; available: number; unit: string }> = [];
+  const zeroCostItems: string[] = [];
+  const items = definitions.map((definition) => {
+    const stock = stockItems.find((candidate) => definition.stockItemId
+      ? candidate.id === definition.stockItemId
+      : [definition.name, ...definition.aliases].some((name) => normalizeGuestAmenityName(name) === normalizeGuestAmenityName(candidate.name)));
+    const inventoryCost = Number(stock?.costPrice || 0);
+    const unitCost = inventoryCost > 0 ? inventoryCost : definition.expectedCost;
+    const required = definition.quantityPerGuest * guestCount;
+    const available = Number(stock?.quantityOnHand || 0);
+    if (!stock) missingItems.push(definition.name);
+    if (stock && inventoryCost <= 0) zeroCostItems.push(definition.name);
+    if (stock && available < required) shortages.push({ name: definition.name, required, available, unit: stock.baseUnit });
+    perGuestCost += definition.quantityPerGuest * unitCost;
+    return {
+      name: definition.name,
+      stockItemName: stock?.name || null,
+      unit: stock?.baseUnit || null,
+      quantityPerGuest: definition.quantityPerGuest,
+      required,
+      available,
+      unitCost,
+      estimatedCost: definition.quantityPerGuest * unitCost,
+      status: !stock ? 'MISSING' : available < required ? 'INSUFFICIENT_STOCK' : inventoryCost <= 0 ? 'REFERENCE_COST' : 'READY',
+    };
+  });
+
+  const blockers = [
+    guestCount > 0 && !warehouse ? 'Configure an active housekeeping/laundry warehouse.' : null,
+    ...(guestCount > 0 ? missingItems.map((name) => `${name} is not configured in the selected warehouse.`) : []),
+    ...(guestCount > 0 ? shortages.map((item) => `${item.name} requires ${item.required} ${item.unit} but only ${item.available} is available.`) : []),
+  ].filter(Boolean) as string[];
+
+  return {
+    enabled: true,
+    warehouse,
+    guestCount,
+    perGuestCost,
+    estimatedCost: perGuestCost * guestCount,
+    items,
+    missingItems,
+    shortages,
+    zeroCostItems,
+    blockers,
+    currency: property.baseCurrency || 'NGN',
+  };
 }
 
 /**
@@ -59,7 +175,7 @@ export async function postGuestAmenityPackInTransaction(
 
   const settings = (property.settings || {}) as any;
   const guestAmenities = settings.guestAmenities || {};
-  const definitions = resolveDefinitions(settings);
+  const definitions = resolveGuestAmenityDefinitions(settings);
   if (!definitions.length) return { itemCount: 0, totalCost: 0 };
 
   const configuredWarehouseId = guestAmenities.warehouseId || guestAmenities.stockWarehouseId;
@@ -94,7 +210,7 @@ export async function postGuestAmenityPackInTransaction(
     const configuredId = (definition as any).stockItemId as string | undefined;
     const matches = candidates.filter((item: any) => configuredId
       ? item.id === configuredId
-      : [definition.name, ...definition.aliases].some((name) => normalize(name) === normalize(item.name)));
+      : [definition.name, ...definition.aliases].some((name) => normalizeGuestAmenityName(name) === normalizeGuestAmenityName(item.name)));
     const stock = matches[0];
     if (!stock) {
       throw new Error(`GUEST_AMENITY_STOCK_MISSING: ${definition.name} is not configured in the ${targetWarehouse.name} warehouse.`);
