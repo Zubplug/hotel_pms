@@ -22,6 +22,19 @@ export function normalizeGuestAmenityName(value: string) {
   return value.trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
+function resolveInventoryUnitCost(stock: any) {
+  const baseCost = Number(stock?.costPrice || 0);
+  if (baseCost > 0) return baseCost;
+
+  const purchaseUnit = Array.isArray(stock?.stockUnits)
+    ? stock.stockUnits.find((unit: any) => unit.isPurchaseUnit && Number(unit.purchaseCost || 0) > 0)
+      || stock.stockUnits.find((unit: any) => Number(unit.purchaseCost || 0) > 0)
+    : null;
+  const purchaseCost = Number(purchaseUnit?.purchaseCost || 0);
+  const unitsInBase = Number(purchaseUnit?.unitsInBase || 0);
+  return purchaseCost > 0 && unitsInBase > 0 ? purchaseCost / unitsInBase : 0;
+}
+
 export function resolveGuestAmenityDefinitions(settings: any): AmenityDefinition[] {
   const configured = settings?.guestAmenities;
   if (configured?.enabled === false) return [];
@@ -97,7 +110,14 @@ export async function getGuestAmenityAuditControl(propertyId: string, businessDa
   const stockItems = warehouse
     ? await prisma.stockItem.findMany({
         where: { propertyId, warehouseId: warehouse.id, isActive: true },
-        select: { id: true, name: true, baseUnit: true, costPrice: true, quantityOnHand: true },
+        select: {
+          id: true,
+          name: true,
+          baseUnit: true,
+          costPrice: true,
+          quantityOnHand: true,
+          stockUnits: { select: { unit: true, unitsInBase: true, purchaseCost: true, isPurchaseUnit: true } },
+        },
       })
     : [];
 
@@ -109,7 +129,7 @@ export async function getGuestAmenityAuditControl(propertyId: string, businessDa
     const stock = stockItems.find((candidate) => definition.stockItemId
       ? candidate.id === definition.stockItemId
       : [definition.name, ...definition.aliases].some((name) => normalizeGuestAmenityName(name) === normalizeGuestAmenityName(candidate.name)));
-    const inventoryCost = Number(stock?.costPrice || 0);
+    const inventoryCost = resolveInventoryUnitCost(stock);
     const unitCost = inventoryCost > 0 ? inventoryCost : definition.expectedCost;
     const required = definition.quantityPerGuest * guestCount;
     const available = Number(stock?.quantityOnHand || 0);
@@ -231,10 +251,17 @@ export async function postGuestAmenityPackInTransaction(
       throw new Error(`INSUFFICIENT_GUEST_AMENITY_STOCK: ${stock.name} requires ${requiredInBase} ${stock.baseUnit}, but available stock is insufficient.`);
     }
 
-    const after = await tx.stockItem.findUnique({ where: { id: stock.id }, select: { quantityOnHand: true, costPrice: true } });
+    const after = await tx.stockItem.findUnique({
+      where: { id: stock.id },
+      select: {
+        quantityOnHand: true,
+        costPrice: true,
+        stockUnits: { select: { unit: true, unitsInBase: true, purchaseCost: true, isPurchaseUnit: true } },
+      },
+    });
     // Inventory cost is authoritative. The supplied standard costs are safe
     // defaults for a newly created item whose cost has not been initialized.
-    const inventoryCost = Number(after?.costPrice ?? stock.costPrice ?? 0);
+    const inventoryCost = resolveInventoryUnitCost(after) || resolveInventoryUnitCost(stock);
     const unitCost = inventoryCost > 0 ? inventoryCost : definition.expectedCost;
     const totalValue = requiredInBase * unitCost;
     await tx.stockTransaction.create({
