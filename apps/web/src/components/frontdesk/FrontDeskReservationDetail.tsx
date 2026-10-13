@@ -23,6 +23,7 @@ import { FrontDeskCardInformationSection } from './FrontDeskCardInformationSecti
 import { HardwareBridge } from '@/lib/desktop/HardwareBridge';
 import { toast } from 'sonner';
 import { formatRoomNumber } from '@/lib/format-room';
+import { getFolioBalance } from '@/lib/finance/folio-balance';
 import { LogIn, User, MapPin, CalendarClock, CreditCard, Receipt, LogOut, ChevronDown, Edit3, XCircle, Loader2, Percent, Gift, Building2, BedDouble } from 'lucide-react';
 import {
   DropdownMenu,
@@ -93,8 +94,13 @@ export function FrontDeskReservationDetail({ reservation, darkMode = false }: Fr
   });
   const availableCredit = creditsData?.availableCredit || 0;
 
-  const balance = folio?.balance || 0;
-  const isPaid = balance <= 0;
+  // Always derive the position from the authoritative counters. The cached
+  // balance can be stale after an offline advance and must never decide
+  // whether a guest owes money.
+  const balance = (reservation.folios || (folio ? [folio] : [])).reduce(
+    (total: number, item: any) => total + getFolioBalance(item).signedBalance,
+    0,
+  );
   const canCheckIn = reservation.status === 'CONFIRMED' && room;
   const canCheckOut = reservation.status === 'CHECKED_IN';
   const canAddPayment = ['CONFIRMED', 'CHECKED_IN'].includes(reservation.status) && !!folio && folio.type !== 'CITY_LEDGER';
@@ -127,8 +133,8 @@ export function FrontDeskReservationDetail({ reservation, darkMode = false }: Fr
           amountPaid: Math.abs(Number(latestPayment.amount)),
           paymentMethod: latestPayment.method || 'CASH',
           paymentReference: latestPayment.reference || latestPayment.providerTransactionId,
-          previousBalance: Number(folio?.balance || 0) + Math.abs(Number(latestPayment.amount)),
-          remainingBalance: Number(folio?.balance || 0),
+          previousBalance: balance + Math.abs(Number(latestPayment.amount)),
+          remainingBalance: balance,
           cashierName: latestPayment.receivedByName || 'Front Desk',
           currency: folio?.currency || 'NGN',
           propertyName: reservation.property?.name || 'LodgeCore',
@@ -375,12 +381,6 @@ export function FrontDeskReservationDetail({ reservation, darkMode = false }: Fr
           {/* Right */}
           <div className="lg:col-span-8">
             <div className={`flex h-full flex-col overflow-hidden rounded-[20px] ${GLASS_BORDER}`} style={GLASS}>
-              <div className={`flex items-center justify-between border-b border-white/[0.06] p-6 ${isPaid ? 'bg-emerald-400/[0.07]' : 'bg-rose-400/[0.07]'}`}>
-                <div>
-                  <p className={`text-[10px] font-bold uppercase tracking-[0.2em] ${isPaid ? 'text-emerald-400/80' : 'text-rose-400/80'}`}>{isPaid ? 'Fully Settled' : 'Outstanding Balance'}</p>
-                  <p className={`mt-1 text-4xl font-black tracking-tight tabular-nums ${isPaid ? 'text-emerald-300' : 'text-rose-300'}`}>{formatCurrency(balance)}</p>
-                </div>
-              </div>
               <div className="flex-1 space-y-6 p-6">
                 {(reservation.status === 'CONFIRMED' || reservation.status === 'NO_SHOW') && (
                   <NoShowActions reservation={reservation} onUpdated={() => queryClient.invalidateQueries({ queryKey: ['reservation', reservation.id] })} />
@@ -546,12 +546,6 @@ export function FrontDeskReservationDetail({ reservation, darkMode = false }: Fr
 
         <div className="lg:col-span-8">
           <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden h-full flex flex-col">
-            <div className={`p-8 border-b flex justify-between items-center ${isPaid ? 'bg-emerald-50 border-emerald-100' : 'bg-red-50 border-red-100'}`}>
-              <div>
-                <p className={`text-sm font-bold uppercase tracking-wider ${isPaid ? 'text-emerald-600' : 'text-red-600'}`}>{isPaid ? 'Fully Settled' : 'Outstanding Balance'}</p>
-                <div className={`text-4xl font-black tracking-tight mt-1 ${isPaid ? 'text-emerald-700' : 'text-red-700'}`}>{formatCurrency(balance)}</div>
-              </div>
-            </div>
             <div className="p-8 flex-1 bg-slate-50 space-y-8">
               {(reservation.status === 'CONFIRMED' || reservation.status === 'NO_SHOW') && (
                 <NoShowActions reservation={reservation} onUpdated={() => queryClient.invalidateQueries({ queryKey: ['reservation', reservation.id] })} />

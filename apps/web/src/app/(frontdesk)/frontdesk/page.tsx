@@ -43,7 +43,6 @@ import {
   Landmark,
   Wallet,
   ReceiptText,
-  QrCode,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useNavigationModules } from '@/lib/auth/useNavigationModules';
@@ -731,7 +730,6 @@ export default function ReceptionistDashboardPage() {
             { label: 'Quick Checkout', icon: KeySquare,   action: () => setQuickCheckoutOpen(true),            color: 'text-violet-400' },
             ...(operationsEnabled ? [
               { label: 'Event Invoice', icon: ReceiptText, action: () => router.push('/frontdesk/event-invoices'), color: 'text-cyan-400' },
-              { label: 'QR Room Service', icon: QrCode, action: () => router.push('/frontdesk/qr-room-service'), color: 'text-amber-400' },
             ] : []),
           ].map(({ label, icon: Icon, action, color }) => (
             <button

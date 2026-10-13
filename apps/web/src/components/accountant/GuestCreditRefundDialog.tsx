@@ -10,13 +10,19 @@ import { Input } from '@/components/ui/input';
 import { AmountInput } from '@/components/ui/amount-input';
 import { Label } from '@/components/ui/label';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
-import { generateUUID } from '@/lib/utils';
+import { generateUUID, parseAmountInput } from '@/lib/utils';
 
-export function GuestCreditRefundDialog({ entryId, guestName, amount, currency, guestId, propertyId, accountType = 'GUEST_CREDIT' }: { entryId: string; guestName: string; amount: number; currency: string; guestId?: string; propertyId?: string; accountType?: 'GUEST_CREDIT' | 'CORPORATE_ADVANCE' }) {
+type RefundEntry = { id: string; availableAmount: number };
+
+export function GuestCreditRefundDialog({ entryId, guestName, amount, currency, guestId, propertyId, accountType = 'GUEST_CREDIT', entries = [] }: { entryId: string; guestName: string; amount: number; currency: string; guestId?: string; propertyId?: string; accountType?: 'GUEST_CREDIT' | 'CORPORATE_ADVANCE'; entries?: RefundEntry[] }) {
   const router = useRouter();
   const { provider, isOnline } = useLodgeCoreProvider();
   const [open, setOpen] = useState(false);
-  const [value, setValue] = useState(String(amount));
+  const refundEntries = entries.length ? entries : [{ id: entryId, availableAmount: amount }];
+  const [selectedEntryId, setSelectedEntryId] = useState(refundEntries[0]?.id || entryId);
+  const selectedEntry = refundEntries.find(entry => entry.id === selectedEntryId) || refundEntries[0];
+  const selectedAmount = Number(selectedEntry?.availableAmount || 0);
+  const [value, setValue] = useState(String(selectedAmount));
   const isCorporateAdvance = accountType === 'CORPORATE_ADVANCE';
   const [method, setMethod] = useState(isCorporateAdvance || guestId ? 'BANK_TRANSFER' : 'ORIGINAL_PAYMENT');
   const [reason, setReason] = useState(isCorporateAdvance ? 'Corporate requested refund of unapplied advance' : 'Guest requested refund of available folio credit');
@@ -25,6 +31,12 @@ export function GuestCreditRefundDialog({ entryId, guestName, amount, currency, 
   const [bankAccountNumber, setBankAccountNumber] = useState('');
   const [busy, setBusy] = useState(false);
 
+  function selectEntry(nextEntryId: string) {
+    setSelectedEntryId(nextEntryId);
+    const nextEntry = refundEntries.find(entry => entry.id === nextEntryId);
+    setValue(String(Number(nextEntry?.availableAmount || 0)));
+  }
+
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     setBusy(true);
@@ -32,10 +44,14 @@ export function GuestCreditRefundDialog({ entryId, guestName, amount, currency, 
       if (method === 'BANK_TRANSFER' && (!bankName.trim() || !bankAccountName.trim() || !/^\d{6,20}$/.test(bankAccountNumber.replace(/\s+/g, '')))) {
         throw new Error('Enter a valid bank name, account name, and 6–20 digit account number.');
       }
-      const payload = { cityLedgerEntryId: entryId, guestId, propertyId, accountType: isCorporateAdvance ? 'CORPORATE' : undefined, amount: Number(value), currency, refundMethod: method, reason, bankName, bankAccountName, bankAccountNumber, idempotencyKey: generateUUID() };
+      const numericAmount = Number(parseAmountInput(value));
+      if (!Number.isFinite(numericAmount) || numericAmount <= 0 || numericAmount > selectedAmount + 0.01) {
+        throw new Error(`Enter a refund amount between 0.01 and ${selectedAmount.toLocaleString()} ${currency}.`);
+      }
+      const payload = { cityLedgerEntryId: selectedEntryId, guestId, propertyId, accountType: isCorporateAdvance ? 'CORPORATE' : undefined, amount: numericAmount, currency, refundMethod: method, reason, bankName: bankName.trim(), bankAccountName: bankAccountName.trim(), bankAccountNumber: bankAccountNumber.replace(/\s+/g, ''), idempotencyKey: generateUUID() };
       const result = propertyId
         ? await provider.refunds.request(payload)
-        : await (async () => { const response = await fetch(`/api/v1/accountant/guest-credits/${entryId}/refund-request`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); const body = await response.json(); if (!response.ok) throw new Error(body.error?.message || body.error || 'Unable to submit refund request'); return body; })();
+        : await (async () => { const response = await fetch(`/api/v1/accountant/guest-credits/${selectedEntryId}/refund-request`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); const body = await response.json(); if (!response.ok) throw new Error(body.error?.message || body.error || 'Unable to submit refund request'); return body; })();
       toast.success((result as any)?.pendingSync || !isOnline ? 'Refund request queued offline and will sync for approval' : 'Refund request submitted for approval');
       setOpen(false);
       router.refresh();
@@ -73,7 +89,9 @@ export function GuestCreditRefundDialog({ entryId, guestName, amount, currency, 
         <div className="space-y-5 px-6 py-5">
           <div className="grid gap-2">
             <Label className="font-semibold text-slate-700">Refund amount ({currency})</Label>
-            <AmountInput min="0.01" max={amount} value={value} onValueChange={setValue} required className="h-11 border-slate-200 bg-white text-slate-900 shadow-sm focus:border-emerald-500 focus:ring-emerald-500/20" />
+            {refundEntries.length > 1 && <select aria-label="Credit entry" value={selectedEntryId} onChange={event => selectEntry(event.target.value)} className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 shadow-sm focus:border-emerald-500"><option value="" disabled>Select credit entry</option>{refundEntries.map(entry => <option key={entry.id} value={entry.id}>{entry.id.slice(0, 8)} · {currency} {entry.availableAmount.toLocaleString()} available</option>)}</select>}
+            <AmountInput min="0.01" max={selectedAmount} value={value} onValueChange={setValue} required className="h-11 border-slate-200 bg-white text-slate-900 shadow-sm focus:border-emerald-500 focus:ring-emerald-500/20" />
+            {refundEntries.length > 1 && <p className="text-xs text-slate-500">Refunds are submitted against one ledger credit at a time for a complete audit trail.</p>}
           </div>
 
           <div className="grid gap-2">

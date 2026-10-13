@@ -10,6 +10,12 @@ namespace LodgeCore.Desktop.Services;
 /// </summary>
 public class GuestCreditSummary
 {
+    public class CreditEntrySummary
+    {
+        public string Id { get; set; } = string.Empty;
+        public decimal AvailableAmount { get; set; }
+    }
+
     public string GuestId { get; set; } = string.Empty;
     public string GuestName { get; set; } = string.Empty;
     public string GuestPhone { get; set; } = string.Empty;
@@ -26,4 +32,5 @@ public class GuestCreditSummary
     /// Passed back to ApplyGuestCreditAsync when the receptionist applies credit.
     /// </summary>
     public List<string> CreditEntryIds { get; set; } = new();
+    public List<CreditEntrySummary> CreditEntries { get; set; } = new();
 }

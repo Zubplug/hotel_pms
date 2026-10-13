@@ -23,6 +23,8 @@ interface Reservation {
   folio?: { balance: number };
 }
 
+const ACTIVE_RESERVATION_STATUSES = new Set(['CONFIRMED', 'CHECKED_IN']);
+
 const formatCurrency = (amount: number) => {
   return new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', maximumFractionDigits: 0 }).format(amount);
 };
@@ -90,10 +92,8 @@ export default function FrontDeskReservationsPage() {
   const reservations: Reservation[] = Array.isArray(rawData) ? rawData : (rawData?.data ?? []);
 
   // Client-side filtering for complex filters that the API might not natively support yet
-  const filteredReservations = reservations.filter(res => {
-    if (res.status === 'CHECKED_OUT') {
-      return false;
-    }
+  const activeReservations = reservations.filter(res => ACTIVE_RESERVATION_STATUSES.has(res.status));
+  const filteredReservations = activeReservations.filter(res => {
     if (activeFilter === 'DEPARTURES') {
       const today = new Date().toISOString().split('T')[0];
       return res.status === 'CHECKED_IN' && res.checkOut.startsWith(today);
@@ -104,9 +104,9 @@ export default function FrontDeskReservationsPage() {
     return true;
   });
 
-  const arrivalsCount = reservations.filter(res => res.status === 'CONFIRMED').length;
-  const inHouseCount = reservations.filter(res => res.status === 'CHECKED_IN').length;
-  const unpaidCount = reservations.filter(res => Number(res.folio?.balance || 0) > 0).length;
+  const arrivalsCount = activeReservations.filter(res => res.status === 'CONFIRMED').length;
+  const inHouseCount = activeReservations.filter(res => res.status === 'CHECKED_IN').length;
+  const unpaidCount = activeReservations.filter(res => Number(res.folio?.balance || 0) > 0).length;
 
   return (
     <div className="min-h-screen bg-[radial-gradient(ellipse_at_top_right,rgba(79,70,229,0.08),transparent_55%),linear-gradient(180deg,#f0f4fa_0%,#e8eef7_100%)] pb-24">

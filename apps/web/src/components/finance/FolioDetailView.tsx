@@ -115,8 +115,8 @@ export function FolioDetailView({ folioId, onBack, readOnly = false, darkMode = 
             </div>
             <div className="min-w-[220px] rounded-2xl border border-white/[0.08] p-5" style={{ background: 'rgba(255,255,255,0.06)' }}>
               <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-slate-500">Outstanding balance</p>
-              <p className={`mt-2 text-3xl font-bold tabular-nums ${position.credit > 0.01 ? 'text-sky-300' : position.debit > 0.01 ? 'text-amber-300' : 'text-emerald-300'}`}>
-                {position.credit > 0.01 ? 'Credit' : position.debit > 0.01 ? 'Debit' : 'Settled'} {folio.currency} {Math.abs(position.signedBalance).toLocaleString()}
+              <p className={`mt-2 text-3xl font-bold tabular-nums ${position.debit > 0.01 ? 'text-rose-300' : 'text-emerald-300'}`}>
+                {position.debit > 0.01 ? `Debt ${folio.currency} ${position.debit.toLocaleString()}` : 'Fully Settled'}
               </p>
               <p className="mt-1 text-[11px] text-slate-600">{folio.status}</p>
             </div>
@@ -128,7 +128,7 @@ export function FolioDetailView({ folioId, onBack, readOnly = false, darkMode = 
           {[
             { label: 'Total Charges', value: `${folio.currency} ${folio.totalCharges.toLocaleString()}`, cls: 'border-white/[0.06]', valCls: 'text-white', bg: 'rgba(255,255,255,0.03)' },
             { label: 'Payments Received', value: `${folio.currency} ${folio.totalPayments.toLocaleString()}`, cls: 'border-emerald-400/20', valCls: 'text-emerald-300', bg: 'rgba(16,185,129,0.07)' },
-            { label: 'Credit Balance', value: `${folio.currency} ${Math.max(position.credit, Number(folio.creditBalance || 0), Number(folio.availableCredit || 0)).toLocaleString()}`, cls: 'border-sky-400/20', valCls: 'text-sky-300', bg: 'rgba(14,165,233,0.07)' },
+            { label: 'Credit Available', value: `${folio.currency} ${Math.max(position.credit, Number(folio.creditBalance || 0), Number(folio.availableCredit || 0)).toLocaleString()}`, cls: 'border-sky-400/20', valCls: 'text-sky-300', bg: 'rgba(14,165,233,0.07)' },
             { label: 'Account Type', value: 'Room Folio', cls: 'border-white/[0.06]', valCls: 'text-white', bg: 'rgba(255,255,255,0.03)' },
           ].map(({ label, value, cls, valCls, bg }) => (
             <div key={label} className={`rounded-2xl border p-5 ${cls}`} style={{ background: bg }}>
@@ -259,8 +259,8 @@ export function FolioDetailView({ folioId, onBack, readOnly = false, darkMode = 
           </div>
           <div className="min-w-[210px] rounded-2xl border border-white/10 bg-white/[0.06] p-4 backdrop-blur-sm sm:text-right">
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">Outstanding balance</p>
-            <p className={`mt-2 text-3xl font-semibold tracking-tight ${position.credit > 0.01 ? 'text-sky-300' : position.debit > 0.01 ? 'text-amber-300' : 'text-emerald-300'}`}>
-              {position.credit > 0.01 ? 'Credit' : position.debit > 0.01 ? 'Debit' : 'Settled'} {folio.currency} {Math.abs(position.signedBalance).toLocaleString()}
+            <p className={`mt-2 text-3xl font-semibold tracking-tight ${position.debit > 0.01 ? 'text-rose-300' : 'text-emerald-300'}`}>
+              {position.debit > 0.01 ? `Debt ${folio.currency} ${position.debit.toLocaleString()}` : 'Fully Settled'}
             </p>
             <p className="mt-1 text-xs text-slate-500">{folio.status}</p>
           </div>

@@ -54,7 +54,7 @@ export function FolioSection({ reservation, readOnly = false }: { reservation: a
   const position = getFolioBalance(folio);
   const outstandingBalance = position.debit;
   const folioAvailableCredit = Number(folio.availableCredit || 0);
-  const showAvailableCredit = !isClosed && folioAvailableCredit > 0;
+  const availableCreditAmount = Math.max(folioAvailableCredit, position.credit);
   const folioSurface = isDarkReservation
     ? 'reservation-folio-dark border-white/[0.08] bg-[#101b2f] text-slate-100 shadow-2xl shadow-black/30'
     : 'border-slate-200 bg-white shadow-lg shadow-slate-200/50';
@@ -221,7 +221,15 @@ export function FolioSection({ reservation, readOnly = false }: { reservation: a
     );
   };
 
-  const transactionLabel = (type: string) => type.replaceAll('_', ' ');
+  const transactionLabel = (type: string) => ({
+    ADVANCE_DEPOSIT: 'Advance payment',
+    PAYMENT: 'Payment received',
+    CHARGE: 'Charge',
+    ROOM_CHARGE: 'Room charge',
+    TAX: 'Tax',
+    DISCOUNT: 'Discount',
+    REFUND: 'Refund',
+  }[type] || type.replaceAll('_', ' '));
 
   return (
     <>
@@ -282,8 +290,8 @@ export function FolioSection({ reservation, readOnly = false }: { reservation: a
             <div className={`rounded-2xl p-5 text-white shadow-sm ${outstandingBalance > 0 ? 'bg-gradient-to-br from-rose-600 to-red-700' : 'bg-gradient-to-br from-emerald-600 to-teal-700'}`}>
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-white/75">{outstandingBalance > 0 ? 'Amount due' : 'Folio settled'}</p>
-                  <p className="mt-1 text-3xl font-black tracking-tight tabular-nums sm:text-4xl">{formatCurrency(outstandingBalance)}</p>
+                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-white/75">{outstandingBalance > 0 ? 'Amount due' : 'Fully Settled'}</p>
+                  {outstandingBalance > 0 && <p className="mt-1 text-3xl font-black tracking-tight tabular-nums sm:text-4xl">{formatCurrency(outstandingBalance)}</p>}
                 </div>
                 <Badge className="border-white/25 bg-white/15 px-3 py-1 text-white" variant="outline">
                   {outstandingBalance > 0 ? 'Payment required' : 'No balance due'}
@@ -301,7 +309,7 @@ export function FolioSection({ reservation, readOnly = false }: { reservation: a
               </div>
               <div className={`rounded-xl border p-4 ${isDarkReservation ? 'border-sky-300/20 bg-sky-300/[0.08]' : 'border-blue-100 bg-blue-50/60'}`}>
                 <div className={`flex items-center gap-2 ${isDarkReservation ? 'text-sky-300' : 'text-blue-700'}`}><CornerDownRight className="h-4 w-4" /><p className="text-xs font-bold uppercase tracking-wider">{isClosed ? 'Settlement state' : 'Credit available'}</p></div>
-                <p className={`mt-2 text-xl font-bold tabular-nums ${isDarkReservation ? 'text-sky-200' : 'text-blue-700'}`}>{isClosed ? 'Closed' : showAvailableCredit ? formatCurrency(folioAvailableCredit) : formatCurrency(0)}</p>
+                <p className={`mt-2 text-xl font-bold tabular-nums ${isDarkReservation ? 'text-sky-200' : 'text-blue-700'}`}>{isClosed ? 'Closed' : formatCurrency(availableCreditAmount)}</p>
                 {isClosed && <p className="mt-1 text-xs text-slate-400">No further credit actions</p>}
               </div>
             </div>
@@ -318,14 +326,15 @@ export function FolioSection({ reservation, readOnly = false }: { reservation: a
                 <tr>
                   <th className="w-36 px-4 py-3">Date</th>
                   <th className="px-4 py-3">Transaction</th>
-                  <th className="w-44 px-4 py-3 text-right">Amount</th>
+                  <th className="w-36 px-4 py-3 text-right text-rose-700">Debit</th>
+                  <th className="w-36 px-4 py-3 text-right text-emerald-700">Credit</th>
                   {!readOnly && <th className="w-40 px-4 py-3 text-right">Actions</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 bg-white">
                 {ledgerItems.length === 0 ? (
                   <tr>
-                    <td colSpan={readOnly ? 3 : 4} className="px-6 py-8 text-center text-muted-foreground">
+                    <td colSpan={readOnly ? 4 : 5} className="px-6 py-8 text-center text-muted-foreground">
                       No transactions recorded.
                     </td>
                   </tr>
@@ -348,8 +357,11 @@ export function FolioSection({ reservation, readOnly = false }: { reservation: a
                           {item.creditStatus && <Badge variant="secondary" className="shrink-0 text-[10px]">{item.creditStatus}</Badge>}
                           </div>
                         </td>
-                        <td className={`whitespace-nowrap px-4 py-4 text-right font-bold tabular-nums ${isDebit ? 'text-slate-900' : 'text-emerald-700'}`}>
-                          <span className="mr-1 text-xs font-medium text-slate-400">{isDebit ? '+' : '−'}</span>{formatCurrency(absAmount)}
+                        <td className="whitespace-nowrap px-4 py-4 text-right font-bold tabular-nums text-rose-700">
+                          {isDebit ? formatCurrency(absAmount) : '—'}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-4 text-right font-bold tabular-nums text-emerald-700">
+                          {isDebit ? '—' : formatCurrency(absAmount)}
                         </td>
                         {!readOnly && <td className="w-40 px-4 py-4"><div className="flex justify-end">{renderItemActions(item)}</div></td>}
                       </tr>
@@ -364,7 +376,7 @@ export function FolioSection({ reservation, readOnly = false }: { reservation: a
                 const isDebit = item.amount > 0;
                 const absAmount = Math.abs(item.amount);
                 return <div key={item.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                  <div className="flex items-start justify-between gap-3"><div className="min-w-0"><Badge variant={item.type === 'CHARGE' ? 'outline' : item.type === 'PAYMENT' ? 'default' : 'secondary'} className="text-[10px]">{item.type}</Badge><p className="mt-2 font-semibold text-slate-900">{item.description}</p><p className="mt-1 text-xs text-slate-500">{format(new Date(item.createdAt), 'MMM d, yyyy · h:mm a')}</p></div><p className={`shrink-0 text-lg font-black tabular-nums ${isDebit ? 'text-slate-900' : 'text-emerald-700'}`}>{isDebit ? '+' : '−'}{formatCurrency(absAmount)}</p></div>
+                  <div className="flex items-start justify-between gap-3"><div className="min-w-0"><Badge variant={item.type === 'CHARGE' ? 'outline' : item.type === 'PAYMENT' ? 'default' : 'secondary'} className="text-[10px]">{transactionLabel(item.type)}</Badge><p className="mt-2 font-semibold text-slate-900">{item.description}</p><p className="mt-1 text-xs text-slate-500">{format(new Date(item.createdAt), 'MMM d, yyyy · h:mm a')}</p></div><div className="shrink-0 text-right"><p className={`text-[10px] font-bold uppercase tracking-wider ${isDebit ? 'text-rose-700' : 'text-emerald-700'}`}>{isDebit ? 'Debit' : 'Credit'}</p><p className={`text-lg font-black tabular-nums ${isDebit ? 'text-rose-700' : 'text-emerald-700'}`}>{formatCurrency(absAmount)}</p></div></div>
                   {!readOnly && <div className="mt-3 border-t pt-3">{renderItemActions(item)}</div>}
                 </div>;
               })}

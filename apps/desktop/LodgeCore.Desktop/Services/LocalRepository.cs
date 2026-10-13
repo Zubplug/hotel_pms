@@ -8383,7 +8383,15 @@ public class LocalRepository
                 Currency = entryGroup.First().Currency,
                 LastActivityAt = entryGroup.Max(e => e.CreatedAt),
                 // Carry the entry ids so the UI can send them to ApplyGuestCreditAsync
-                CreditEntryIds = entryGroup.Select(e => e.Id).ToList()
+                CreditEntryIds = entryGroup.Select(e => e.Id).ToList(),
+                CreditEntries = entryGroup
+                    .Where(e => e.Amount - (allocationsByEntry.TryGetValue(e.Id, out var allocatedAmount) ? allocatedAmount : 0m) > 0.01m)
+                    .Select(e => new GuestCreditSummary.CreditEntrySummary
+                    {
+                        Id = e.Id,
+                        AvailableAmount = e.Amount - (allocationsByEntry.TryGetValue(e.Id, out var allocatedAmount) ? allocatedAmount : 0m)
+                    })
+                    .ToList()
             });
         }
 

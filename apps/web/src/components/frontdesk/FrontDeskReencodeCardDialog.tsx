@@ -30,7 +30,12 @@ export function FrontDeskReencodeCardDialog({ open, onOpenChange, propertyId }: 
     queryKey: ['frontdesk', 'reencode-search', propertyId, searchQuery],
     queryFn: async () => {
       const res = await provider.reservations.list(propertyId, { status: 'CHECKED_IN', search: searchQuery || undefined, limit: 10 });
-      return res?.data?.data || res?.data || [];
+      const rows = res?.data?.data || res?.data || [];
+      // The desktop/local provider may return a broader cached result even
+      // when the status parameter is supplied. Enforce the hardware safety
+      // rule at the UI boundary as well: only in-house guests can receive a
+      // re-encoded room key.
+      return (Array.isArray(rows) ? rows : []).filter((reservation: any) => reservation.status === 'CHECKED_IN');
     },
     enabled: open && phase === 'SELECT',
   });

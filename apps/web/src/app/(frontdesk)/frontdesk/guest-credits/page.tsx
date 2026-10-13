@@ -98,6 +98,7 @@ export default function FrontDeskGuestCreditsPage() {
                           guestName={credit.guestName}
                           amount={Number(credit.availableAmount || 0)}
                           currency={credit.currency || 'NGN'}
+                          entries={credit.creditEntries || []}
                         />
                       </div>
                     )}

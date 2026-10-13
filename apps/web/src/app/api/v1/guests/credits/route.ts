@@ -52,6 +52,7 @@ export async function GET(req: NextRequest) {
       currency: string;
       lastActivityAt: Date;
       creditEntryIds: string[];
+      creditEntries: { id: string; availableAmount: number }[];
     }>();
 
     for (const entry of entries) {
@@ -72,7 +73,8 @@ export async function GET(req: NextRequest) {
           availableAmount: 0,
           currency: entry.currency,
           lastActivityAt: entry.createdAt,
-          creditEntryIds: []
+          creditEntryIds: [],
+          creditEntries: []
         });
       }
 
@@ -80,6 +82,7 @@ export async function GET(req: NextRequest) {
       rec.availableAmount += available;
       if (entry.createdAt > rec.lastActivityAt) rec.lastActivityAt = entry.createdAt;
       rec.creditEntryIds.push(entry.id);
+      rec.creditEntries.push({ id: entry.id, availableAmount: available });
     }
 
     return successResponse(Array.from(byGuest.values()));

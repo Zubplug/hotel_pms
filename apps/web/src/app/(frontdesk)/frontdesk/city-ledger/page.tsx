@@ -72,6 +72,7 @@ export default function FrontDeskCityLedgerPage() {
                 ledgerOutstandingAmount: isAdvance ? 0 : Number(entry.outstandingAmount || 0),
                 advanceAmount: isAdvance ? Number(entry.amount || 0) : 0,
                 advanceOutstandingAmount: isAdvance ? Number(entry.outstandingAmount || 0) : 0,
+                advanceEntries: isAdvance ? [{ id: entry.entryId, availableAmount: Number(entry.outstandingAmount || 0) }] : [],
               };
               return groups;
             }
@@ -82,6 +83,7 @@ export default function FrontDeskCityLedgerPage() {
               current.advanceEntry = current.advanceEntry?.entryId ? current.advanceEntry : entry;
               current.advanceAmount += Number(entry.amount || 0);
               current.advanceOutstandingAmount += Number(entry.outstandingAmount || 0);
+              current.advanceEntries = [...(current.advanceEntries || []), { id: entry.entryId, availableAmount: Number(entry.outstandingAmount || 0) }];
             } else {
               current.ledgerEntry = current.ledgerEntry || entry;
               current.ledgerAmount += Number(entry.amount || 0);
@@ -143,7 +145,7 @@ export default function FrontDeskCityLedgerPage() {
                         <div className="flex flex-wrap gap-2">
                           {isCorporate && ledgerEntry && <FrontDeskCityLedgerPaymentDialog entry={ledgerEntry} onComplete={refetchCityLedger} />}
                           {isCorporate && advanceEntry && <FrontDeskCityLedgerPaymentDialog entry={advanceEntry} onComplete={refetchCityLedger} />}
-                          {isCorporate && advanceEntry?.entryId && Number(advanceEntry.outstandingAmount) > 0 && <GuestCreditRefundDialog entryId={advanceEntry.entryId} guestName={entry.accountName} amount={Number(advanceEntry.outstandingAmount)} currency={entry.currency || 'NGN'} propertyId={propertyId} accountType="CORPORATE_ADVANCE" />}
+                          {isCorporate && advanceEntry?.entryId && Number(advanceEntry.outstandingAmount) > 0 && <GuestCreditRefundDialog entryId={advanceEntry.entryId} guestName={entry.accountName} amount={Number(advanceEntry.outstandingAmount)} currency={entry.currency || 'NGN'} propertyId={propertyId} accountType="CORPORATE_ADVANCE" entries={entry.advanceEntries || []} />}
                           {!isCorporate && <FrontDeskCityLedgerPaymentDialog entry={entry} onComplete={refetchCityLedger} />}
                         </div>
                       </td>

@@ -66,7 +66,7 @@ function TentCard({ room, token, propertyName }: {
         <div className="bg-slate-50 p-3 rounded-2xl border-2 border-amber-200 shadow-inner">
           {url
             ? <QRCodeSVG value={url} size={160} level="M" includeMargin={false} />
-            : <div className="w-[160px] h-[160px] flex items-center justify-center text-slate-300 text-xs">Generating…</div>
+            : <div className="w-[160px] h-[160px] flex items-center justify-center text-center text-slate-300 text-xs px-4">{typeof navigator !== 'undefined' && !navigator.onLine ? 'Connect once to refresh QR token' : 'Generating…'}</div>
           }
         </div>
         <div className="text-center">
@@ -105,7 +105,7 @@ function TentCard({ room, token, propertyName }: {
 export default function QrRoomServicePage() {
   const router = useRouter();
   const { propertyId } = useProperty();
-  const { provider } = useLodgeCoreProvider();
+  const { provider, isOnline } = useLodgeCoreProvider();
 
   const [search, setSearch] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
@@ -120,29 +120,50 @@ export default function QrRoomServicePage() {
   const [propertyName, setPropertyName] = useState('LodgeCore Hotel');
   useEffect(() => {
     if (!propertyId) return;
-    fetch(`/api/v1/properties/${propertyId}`)
+    const apiBase = process.env.NEXT_PUBLIC_API_URL || '';
+    fetch(`${apiBase}/api/v1/properties/${propertyId}`)
       .then(r => r.json())
       .then(d => { if (d?.data?.name) setPropertyName(d.data.name); })
       .catch(() => {});
   }, [propertyId]);
 
   // ── Fetch rooms ───────────────────────────────────────────────────
-  const { data, isLoading, refetch } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['qr-room-service', 'rooms', propertyId],
     queryFn: () => provider.rooms.list(propertyId, { filter: 'ALL' }),
     enabled: !!propertyId,
+    retry: false,
+    staleTime: 60_000,
   });
   const rawRooms: any[] = Array.isArray(data) ? data : ((data as any)?.data ?? []);
+  const roomIdsKey = rawRooms.map(room => room.id).join('|');
 
   // ── Fetch signed tokens once rooms are loaded ─────────────────────
   useEffect(() => {
     if (!rawRooms.length || !propertyId) return;
+
+    const storageKey = `lodgecore:room-service-tokens:${propertyId}`;
+    try {
+      const cached = JSON.parse(localStorage.getItem(storageKey) || '{}');
+      if (cached && typeof cached === 'object') setTokenMap(previous => ({ ...cached, ...previous }));
+    } catch {
+      // Ignore malformed local QR cache and continue with the online refresh.
+    }
+
+    // The desktop shell can be offline. Do not wait on a cloud token request;
+    // use the last signed token cache and refresh it only when connected.
+    if (!isOnline || (typeof navigator !== 'undefined' && !navigator.onLine)) return;
+
     const roomIds = rawRooms.map(r => r.id);
-    fetch('/api/v1/room-service/room-tokens', {
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 8000);
+    const apiBase = process.env.NEXT_PUBLIC_API_URL || '';
+    fetch(`${apiBase}/api/v1/room-service/room-tokens`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
       body: JSON.stringify({ roomIds }),
+      signal: controller.signal,
     })
       .then(r => r.json())
       .then(json => {
@@ -150,11 +171,18 @@ export default function QrRoomServicePage() {
         (json?.data?.tokens || []).forEach((t: { roomId: string; token: string }) => {
           map[t.roomId] = t.token;
         });
-        setTokenMap(map);
+        if (Object.keys(map).length) {
+          setTokenMap(previous => ({ ...previous, ...map }));
+          localStorage.setItem(storageKey, JSON.stringify(map));
+        }
       })
-      .catch(() => {});
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rawRooms.length, propertyId]);
+      .catch(() => {})
+      .finally(() => window.clearTimeout(timeout));
+    return () => {
+      window.clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [roomIdsKey, propertyId, isOnline]);
 
   const filteredRooms = rawRooms.filter(r => {
     if (!search) return true;
@@ -413,6 +441,13 @@ export default function QrRoomServicePage() {
             <Loader2 className="w-8 h-8 text-indigo-400 animate-spin" />
             <p className="text-sm text-slate-500">Loading rooms…</p>
           </div>
+        ) : isError ? (
+          <div className="flex flex-col items-center justify-center py-20 gap-3">
+            <QrCode className="w-12 h-12 text-rose-300" />
+            <h3 className="font-bold text-slate-700">Unable to load rooms</h3>
+            <p className="text-sm text-slate-400">Reconnect or refresh the desktop data, then try again.</p>
+            <button onClick={() => refetch()} className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white">Retry</button>
+          </div>
         ) : filteredRooms.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 gap-3">
             <QrCode className="w-12 h-12 text-slate-300" />
@@ -435,7 +470,7 @@ export default function QrRoomServicePage() {
                   </button>
                   <div className="p-4 pt-8 flex flex-col items-center gap-2 text-center">
                     <div className={`w-14 h-14 rounded-xl overflow-hidden border flex items-center justify-center ${isSelected ? 'border-amber-300 bg-amber-50' : 'border-slate-100 bg-slate-50'}`}>
-                      {url ? <QRCodeSVG value={url} size={56} level="L" includeMargin={false} /> : <QrCode className="w-6 h-6 text-slate-300" />}
+                      {url ? <QRCodeSVG value={url} size={56} level="L" includeMargin={false} /> : <span className="text-[10px] text-slate-400">{isOnline ? 'Generating…' : 'Needs sync'}</span>}
                     </div>
                     <div className="text-2xl font-black text-slate-900">{displayNo}</div>
                     <div className="text-[10px] text-slate-400 font-medium leading-tight">{room.roomType?.name || 'Room'}</div>
@@ -469,7 +504,7 @@ export default function QrRoomServicePage() {
                     </div>
                   </button>
                   <div className="w-10 h-10 rounded-lg border border-slate-100 overflow-hidden shrink-0 flex items-center justify-center bg-slate-50">
-                    {url ? <QRCodeSVG value={url} size={40} level="L" includeMargin={false} /> : <QrCode className="w-5 h-5 text-slate-300" />}
+                    {url ? <QRCodeSVG value={url} size={40} level="L" includeMargin={false} /> : <span className="text-[10px] text-slate-400">{isOnline ? 'Generating…' : 'Needs sync'}</span>}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="font-bold text-slate-900">Room {displayNo}</div>
