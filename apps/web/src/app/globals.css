@@ -2,6 +2,10 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
+/* Keep the first paint aligned with the portal-based dark workspaces. */
+html, body { background: #07111c; }
+html { color-scheme: dark; }
+
 /* Employee self-service visual system. Scoped to the employee portal so the
    HR redesign can evolve independently from the operational PMS surfaces. */
 .ess-shell {
@@ -36,22 +40,22 @@
 }
 .ess-shell [data-slot='select-trigger'] { border-color: rgba(148,163,184,.20); color: #e2e8f0; }
 .ess-shell [data-slot='select-trigger']:hover { border-color: rgba(45,212,191,.45); background: rgba(255,255,255,.035); }
-.ess-shell [data-slot='select-content'] {
+body:has(.ess-shell) [data-slot='select-content'] {
   border: 1px solid rgba(148,163,184,.20) !important;
   background: #0c1b2b !important;
   color: #e2e8f0 !important;
   box-shadow: 0 24px 70px rgba(0,0,0,.48), 0 0 0 1px rgba(45,212,191,.04) !important;
   padding: .4rem !important;
 }
-.ess-shell [data-slot='select-content'] [data-slot='select-scroll-up-button'],
-.ess-shell [data-slot='select-content'] [data-slot='select-scroll-down-button'] { color: #5eead4; border-radius: .5rem; }
-.ess-shell [data-slot='select-item'] { min-height: 2.5rem; color: #cbd5e1; }
-.ess-shell [data-slot='select-item']::before { content: ''; width: .35rem; height: .35rem; flex: 0 0 auto; border-radius: 999px; background: transparent; transition: background .15s, box-shadow .15s; }
-.ess-shell [data-slot='select-item']:focus,
-.ess-shell [data-slot='select-item'][data-highlighted] { background: linear-gradient(90deg, rgba(45,212,191,.16), rgba(45,212,191,.06)); color: #ccfbf1; }
-.ess-shell [data-slot='select-item'][data-selected] { color: #f0fdfa; font-weight: 600; }
-.ess-shell [data-slot='select-item'][data-selected]::before { background: #2dd4bf; box-shadow: 0 0 0 3px rgba(45,212,191,.12); }
-.ess-shell [data-slot='select-item'] [data-slot='select-item-indicator'] { color: #5eead4; }
+body:has(.ess-shell) [data-slot='select-content'] [data-slot='select-scroll-up-button'],
+body:has(.ess-shell) [data-slot='select-content'] [data-slot='select-scroll-down-button'] { color: #5eead4; border-radius: .5rem; }
+body:has(.ess-shell) [data-slot='select-item'] { min-height: 2.5rem; color: #cbd5e1; }
+body:has(.ess-shell) [data-slot='select-item']::before { content: ''; width: .35rem; height: .35rem; flex: 0 0 auto; border-radius: 999px; background: transparent; transition: background .15s, box-shadow .15s; }
+body:has(.ess-shell) [data-slot='select-item']:focus,
+body:has(.ess-shell) [data-slot='select-item'][data-highlighted] { background: linear-gradient(90deg, rgba(45,212,191,.16), rgba(45,212,191,.06)); color: #ccfbf1; }
+body:has(.ess-shell) [data-slot='select-item'][data-selected] { color: #f0fdfa; font-weight: 600; }
+body:has(.ess-shell) [data-slot='select-item'][data-selected]::before { background: #2dd4bf; box-shadow: 0 0 0 3px rgba(45,212,191,.12); }
+body:has(.ess-shell) [data-slot='select-item'] [data-slot='select-item-indicator'] { color: #5eead4; }
 body:has(.ess-shell) [data-slot='dialog-overlay'] { background: rgba(2, 8, 18, .78) !important; backdrop-filter: blur(8px); }
 body:has(.ess-shell) [data-slot='dialog-content'] {
   position: relative;
