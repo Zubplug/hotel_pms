@@ -56,9 +56,10 @@ body:has(.ess-shell) [data-slot='select-item'][data-highlighted] { background: l
 body:has(.ess-shell) [data-slot='select-item'][data-selected] { color: #f0fdfa; font-weight: 600; }
 body:has(.ess-shell) [data-slot='select-item'][data-selected]::before { background: #2dd4bf; box-shadow: 0 0 0 3px rgba(45,212,191,.12); }
 body:has(.ess-shell) [data-slot='select-item'] [data-slot='select-item-indicator'] { color: #5eead4; }
-body:has(.ess-shell) [data-slot='dialog-overlay'] { background: rgba(2, 8, 18, .78) !important; backdrop-filter: blur(8px); }
+body:has(.ess-shell) [data-slot='dialog-overlay'] { z-index: 90 !important; background: rgba(2, 8, 18, .78) !important; backdrop-filter: blur(8px); }
 body:has(.ess-shell) [data-slot='dialog-content'] {
   position: relative;
+  z-index: 100 !important;
   border: 1px solid rgba(148,163,184,.20) !important;
   background: linear-gradient(145deg, #102337, #0b1725) !important;
   box-shadow: 0 28px 90px rgba(0,0,0,.48), 0 0 0 1px rgba(45,212,191,.04) !important;
@@ -82,8 +83,9 @@ body:has(.ess-shell) [data-slot='dialog-content'] [data-slot='dialog-close'] {
   border-radius: .65rem; color: #94a3b8; transition: .2s;
 }
 body:has(.ess-shell) [data-slot='dialog-content'] [data-slot='dialog-close']:hover { background: rgba(255,255,255,.08); color: #fff; }
-.ess-manual-dialog { background: rgba(2, 8, 18, .78); }
+.ess-manual-dialog { z-index: 90; background: rgba(2, 8, 18, .78); }
 .ess-dialog-card { position: relative; border-color: rgba(148,163,184,.20) !important; background: linear-gradient(145deg, #102337, #0b1725) !important; box-shadow: 0 28px 90px rgba(0,0,0,.48), 0 0 0 1px rgba(45,212,191,.04) !important; animation: ess-dialog-in .2s ease-out both; overflow: hidden; }
+.ess-manual-dialog .ess-dialog-card { z-index: 100; }
 .ess-dialog-card::before { content: ''; position: absolute; inset: 0 0 auto; height: 3px; background: linear-gradient(90deg, #2dd4bf, #38bdf8 55%, #a78bfa); }
 @keyframes ess-page-in { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes ess-dialog-in { from { opacity: 0; transform: translateY(8px) scale(.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
