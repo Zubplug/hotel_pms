@@ -13,9 +13,9 @@
   background: radial-gradient(circle at 75% -10%, rgba(20, 184, 166, .09), transparent 32%), var(--ess-bg) !important;
 }
 .ess-shell .ess-topbar { box-shadow: 0 12px 30px rgba(0,0,0,.12); }
-/* Keep self-service pages free of transforms. A transformed ancestor becomes
-   the containing block for position:fixed overlays, which can trap mobile
-   bottom sheets inside the narrow page column instead of the viewport. */
+/* `backwards` (not `both`) so no transform persists after the entry animation;
+   a lingering transform turns the page into the containing block for
+   position:fixed overlays and traps them beneath the mobile tab bar. */
 .ess-shell .ess-page { animation: ess-page-in .35s ease-out backwards; }
 .ess-page > section > div,
 .ess-page > div:not(.fixed),
@@ -63,7 +63,7 @@ body:has(.ess-shell) [data-slot='dialog-content'] [data-slot='dialog-close'] {
 body:has(.ess-shell) [data-slot='dialog-content'] [data-slot='dialog-close']:hover { background: rgba(255,255,255,.08); color: #fff; }
 .ess-manual-dialog { background: rgba(2, 8, 18, .78); }
 .ess-dialog-card { border-color: rgba(148,163,184,.20) !important; background: linear-gradient(145deg, #102337, #0b1725) !important; box-shadow: 0 28px 90px rgba(0,0,0,.48) !important; animation: ess-dialog-in .2s ease-out both; }
-@keyframes ess-page-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes ess-page-in { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
 @keyframes ess-dialog-in { from { opacity: 0; transform: translateY(8px) scale(.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
 @keyframes ess-sheet-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
 .ess-sheet-in { animation: ess-sheet-up .28s cubic-bezier(.2,.8,.2,1) both; }
@@ -94,26 +94,6 @@ body:has(.ess-shell) [data-slot='dialog-content'] [data-slot='dialog-close']:hov
   /* Pages other than the dashboard also need room above the bottom tab bar. */
   .ess-shell .ess-content { padding-bottom: calc(5rem + env(safe-area-inset-bottom)); }
   .ess-shell .ess-content > .ess-page { padding-bottom: 1.5rem; }
-
-  /* The ESS shell becomes mobile below lg (1024px), so shared dialogs must
-     leave desktop centering at the same breakpoint. */
-  .ess-dialog-content {
-    position: fixed !important;
-    inset: auto 0 0 0 !important;
-    width: auto !important;
-    max-width: none !important;
-    min-width: 0 !important;
-    margin: 0 !important;
-    translate: none !important;
-    transform: none !important;
-    max-height: calc(100dvh - 1.5rem - env(safe-area-inset-top)) !important;
-    overflow-y: auto !important;
-    overscroll-behavior: contain;
-    -webkit-overflow-scrolling: touch;
-    border-radius: 1.5rem 1.5rem 0 0 !important;
-    border-bottom: 0 !important;
-    animation: ess-sheet-up .28s cubic-bezier(.2,.8,.2,1) both !important;
-  }
 }
 @media (max-width: 639px) {
   /* 16px inputs stop iOS Safari from auto-zooming on focus. */
@@ -124,30 +104,15 @@ body:has(.ess-shell) [data-slot='dialog-content'] [data-slot='dialog-close']:hov
   body:has(.ess-shell) [data-slot='dialog-content'] [data-slot='select-trigger'] { font-size: 16px !important; min-height: 2.75rem; }
 
   body:has(.ess-shell) [data-slot='dialog-content'] {
-    position: fixed !important;
     top: auto !important; bottom: 0 !important; left: 0 !important; right: 0 !important;
-    inset-inline: 0 !important;
     translate: none !important; transform: none !important;
-    width: 100vw !important; min-width: 0 !important; max-width: 100vw !important;
-    margin: 0 !important;
+    width: 100% !important; max-width: 100% !important;
     max-height: calc(100dvh - 1.5rem - env(safe-area-inset-top)) !important;
     overflow-y: auto !important; overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
     border-radius: 1.5rem 1.5rem 0 0 !important;
     border-bottom: 0 !important;
     padding-bottom: calc(1rem + env(safe-area-inset-bottom)) !important;
     animation: ess-sheet-up .28s cubic-bezier(.2,.8,.2,1) both !important;
-  }
-  /* Base UI's popup has desktop width/centering utilities. Override those
-     directly on the shared ESS dialog so it follows the same geometry as the
-     working hand-rolled reimbursement sheet. */
-  .ess-dialog-content {
-    inset: auto 0 0 0 !important;
-    width: auto !important;
-    max-width: none !important;
-    min-width: 0 !important;
-    margin-inline: 0 !important;
-    translate: none !important;
-    transform: none !important;
   }
   /* Dialogs with a footer: the footer owns the bottom padding and stays pinned. */
   body:has(.ess-shell) [data-slot='dialog-content']:has([data-slot='dialog-footer']) { padding-bottom: 0 !important; }
