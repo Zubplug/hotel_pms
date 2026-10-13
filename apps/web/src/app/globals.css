@@ -94,6 +94,26 @@ body:has(.ess-shell) [data-slot='dialog-content'] [data-slot='dialog-close']:hov
   /* Pages other than the dashboard also need room above the bottom tab bar. */
   .ess-shell .ess-content { padding-bottom: calc(5rem + env(safe-area-inset-bottom)); }
   .ess-shell .ess-content > .ess-page { padding-bottom: 1.5rem; }
+
+  /* The ESS shell becomes mobile below lg (1024px), so shared dialogs must
+     leave desktop centering at the same breakpoint. */
+  .ess-dialog-content {
+    position: fixed !important;
+    inset: auto 0 0 0 !important;
+    width: auto !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+    translate: none !important;
+    transform: none !important;
+    max-height: calc(100dvh - 1.5rem - env(safe-area-inset-top)) !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    border-radius: 1.5rem 1.5rem 0 0 !important;
+    border-bottom: 0 !important;
+    animation: ess-sheet-up .28s cubic-bezier(.2,.8,.2,1) both !important;
+  }
 }
 @media (max-width: 639px) {
   /* 16px inputs stop iOS Safari from auto-zooming on focus. */
@@ -116,6 +136,18 @@ body:has(.ess-shell) [data-slot='dialog-content'] [data-slot='dialog-close']:hov
     border-bottom: 0 !important;
     padding-bottom: calc(1rem + env(safe-area-inset-bottom)) !important;
     animation: ess-sheet-up .28s cubic-bezier(.2,.8,.2,1) both !important;
+  }
+  /* Base UI's popup has desktop width/centering utilities. Override those
+     directly on the shared ESS dialog so it follows the same geometry as the
+     working hand-rolled reimbursement sheet. */
+  .ess-dialog-content {
+    inset: auto 0 0 0 !important;
+    width: auto !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    margin-inline: 0 !important;
+    translate: none !important;
+    transform: none !important;
   }
   /* Dialogs with a footer: the footer owns the bottom padding and stays pinned. */
   body:has(.ess-shell) [data-slot='dialog-content']:has([data-slot='dialog-footer']) { padding-bottom: 0 !important; }
