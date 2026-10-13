@@ -16,7 +16,11 @@ function DialogTrigger({ ...props }: DialogPrimitive.Trigger.Props) {
 }
 
 function DialogPortal({ ...props }: DialogPrimitive.Portal.Props) {
-  return <DialogPrimitive.Portal data-slot="dialog-portal" {...props} />
+  // Keep fixed dialogs anchored to the document viewport. This is especially
+  // important in the employee portal, where app-shell overflow rules can make
+  // a mobile popup resolve against a narrow content column.
+  const container = typeof document === "undefined" ? undefined : document.body
+  return <DialogPrimitive.Portal data-slot="dialog-portal" container={container} {...props} />
 }
 
 function DialogClose({ ...props }: DialogPrimitive.Close.Props) {
