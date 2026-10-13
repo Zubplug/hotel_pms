@@ -116,7 +116,8 @@ export async function GET(req: NextRequest) {
           occupancy: true, 
           adr: true, 
           revpar: true,
-          financialSnapshot: true 
+          financialSnapshot: true,
+          closePackage: { select: { controlSummary: true } },
         } 
       }),
       (async () => {

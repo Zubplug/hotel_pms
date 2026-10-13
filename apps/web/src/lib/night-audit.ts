@@ -836,7 +836,7 @@ export async function executeNightAudit(
   // posting work and publish a final, immutable audit result.
     const [revenueByCategory, otherItemsByType, roomCount, occupiedCount, posOrders, posFolioItems, guestAmenityTotals] = await Promise.all([
       prisma.folioItem.groupBy({
-        by: ['source', 'revenueCategory'],
+        by: ['source', 'revenueCategory', 'revenueClass'],
         where: { folio: { propertyId }, businessDate, type: 'CHARGE', voidedAt: null },
         _sum: { amount: true }
       }),
@@ -877,10 +877,36 @@ export async function executeNightAudit(
       }),
     ]);
 
-    let roomRevenueVal = 0, fnbRevenueVal = 0, poolRevenueVal = 0, otherRevenueVal = 0, taxesVal = 0, serviceChargeVal = 0, discountsVal = 0, refundsVal = 0;
+    let roomRevenueVal = 0, fnbRevenueVal = 0, eventFoodRevenueVal = 0, eventHallRevenueVal = 0, eventEquipmentRevenueVal = 0, poolRevenueVal = 0, otherRevenueVal = 0, taxesVal = 0, serviceChargeVal = 0, discountsVal = 0, refundsVal = 0;
+    const ancillaryRevenueByDepartment = new Map<string, number>();
+    const sourceLabels: Record<string, string> = {
+      SPA: 'Spa',
+      LAUNDRY: 'Laundry',
+      TRANSPORT: 'Transport',
+      TELEPHONE: 'Telephone',
+      INTERNET: 'Internet',
+      MINIBAR: 'Minibar',
+      CITY_LEDGER: 'City Ledger',
+      MANUAL: 'Manual Revenue',
+    };
 
     for (const group of revenueByCategory) {
       const amt = Number(group._sum?.amount || 0);
+      const revenueClass = String(group.revenueClass || '').toUpperCase();
+      // Event billing uses revenueClass to preserve Hall, Equipment, and Food
+      // revenue even though event folio items use the generic OTHER source.
+      if (revenueClass === 'HALL') {
+        eventHallRevenueVal += amt;
+        continue;
+      }
+      if (revenueClass === 'EQUIPMENT') {
+        eventEquipmentRevenueVal += amt;
+        continue;
+      }
+      if (revenueClass === 'FOOD' && group.source === 'OTHER') {
+        eventFoodRevenueVal += amt;
+        continue;
+      }
       // ROOM_CHARGE items with revenueCategory=FNB are the Complimentary Breakfast
       // Allocation — they are F&B revenue (GL 4250), not room revenue.
       // Service Charge items are tracked separately in serviceChargeVal.
@@ -889,7 +915,11 @@ export async function executeNightAudit(
       else if ((group.source === 'ROOM_CHARGE' || group.source === 'DAY_USE_ROOM_CHARGE') && group.revenueCategory === 'OTHER') serviceChargeVal += amt;
       else if (group.source === 'ROOM_CHARGE' || group.source === 'DAY_USE_ROOM_CHARGE' || group.revenueCategory === 'ROOM') roomRevenueVal += amt;
       else if (group.source === 'POS' || group.revenueCategory === 'FNB') fnbRevenueVal += amt;
-      else if (group.revenueCategory === 'OTHER') otherRevenueVal += amt;
+      else if (group.revenueCategory === 'OTHER') {
+        const department = sourceLabels[String(group.source)] || 'Other';
+        if (department === 'Other') otherRevenueVal += amt;
+        else ancillaryRevenueByDepartment.set(department, (ancillaryRevenueByDepartment.get(department) || 0) + amt);
+      }
       else if (group.revenueCategory === 'TAX') taxesVal += amt;
     }
 
@@ -971,7 +1001,8 @@ export async function executeNightAudit(
     // Since NightAuditFinancialSnapshot schema does not have a pool or service charge bucket,
     // we logically fold them into otherRevenueVal and taxes for the gross calculations.
     // The departmentReconciliation accurately reflects their GL split.
-    const schemaOtherRevenue = otherRevenueVal + poolRevenueVal + serviceChargeVal;
+    const ancillaryRevenueTotal = [...ancillaryRevenueByDepartment.values()].reduce((sum, amount) => sum + amount, 0);
+    const schemaOtherRevenue = otherRevenueVal + ancillaryRevenueTotal + eventFoodRevenueVal + poolRevenueVal + serviceChargeVal + eventHallRevenueVal + eventEquipmentRevenueVal;
 
     const grossRevenueVal = roomRevenueVal + fnbRevenueVal + schemaOtherRevenue;
     const netRevenueVal = grossRevenueVal - discountsVal - refundsVal;
@@ -1026,11 +1057,29 @@ export async function executeNightAudit(
     }) : [];
     
     const glCredit = (code: string) => journalLines.filter((line) => line.account.code === code).reduce((sum, line) => sum + Number(line.credit), 0);
+    const revenueMap = (((property.settings as any)?.accountingConfig?.revenueAccounts || {}) as Record<string, string>);
+    const eventHallCode = revenueMap.EVENT_HALL || '4300';
+    const eventEquipmentCode = revenueMap.EVENT_EQUIPMENT || '4300';
+    const eventTotal = eventHallRevenueVal + eventEquipmentRevenueVal;
+    const sharedEventGl = eventHallCode === eventEquipmentCode ? glCredit(eventHallCode) : 0;
+    const eventHallGl = eventHallCode === eventEquipmentCode
+      ? (eventTotal > 0 ? sharedEventGl * eventHallRevenueVal / eventTotal : 0)
+      : glCredit(eventHallCode);
+    const eventEquipmentGl = eventHallCode === eventEquipmentCode
+      ? sharedEventGl - eventHallGl
+      : glCredit(eventEquipmentCode);
+    const otherRevenueTotal = otherRevenueVal + ancillaryRevenueTotal;
+    const otherRevenueGl = glCredit('4400');
+    const allocateOtherGl = (amount: number) => otherRevenueTotal > 0 ? otherRevenueGl * amount / otherRevenueTotal : 0;
     const departmentReconciliation = [
       { department: 'Rooms', source: roomRevenueVal, gl: glCredit('4050') },
-      { department: 'F&B/POS', source: fnbRevenueVal, gl: glCredit('4250') },
+      { department: 'F&B/POS', source: fnbRevenueVal, gl: glCredit('4250') - eventFoodRevenueVal },
+      { department: 'Event Food', source: eventFoodRevenueVal, gl: glCredit('4250') },
       { department: 'Recreation/Pool', source: poolRevenueVal, gl: glCredit('4100') },
-      { department: 'Other', source: otherRevenueVal, gl: glCredit('4400') },
+      { department: 'Event Hall', source: eventHallRevenueVal, gl: eventHallGl },
+      { department: 'Event Equipment', source: eventEquipmentRevenueVal, gl: eventEquipmentGl },
+      { department: 'Other', source: otherRevenueVal, gl: allocateOtherGl(otherRevenueVal) },
+      ...[...ancillaryRevenueByDepartment.entries()].map(([department, source]) => ({ department, source, gl: allocateOtherGl(source) })),
       { department: 'Taxes', source: taxesVal, gl: glCredit('2200') },
       { department: 'Service Charge', source: serviceChargeVal, gl: glCredit('2210') },
     ].map((row) => ({ ...row, difference: row.source - row.gl, status: Math.abs(row.source - row.gl) < 0.01 ? 'MATCHED' : 'VARIANCE' }));

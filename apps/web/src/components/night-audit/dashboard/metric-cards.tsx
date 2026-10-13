@@ -12,6 +12,80 @@ import {
 const currency = (value: number, code = 'NGN') =>
   new Intl.NumberFormat('en-NG', { style: 'currency', currency: code, maximumFractionDigits: 0 }).format(value);
 
+const REVENUE_SERIES = [
+  { key: 'roomRevenue', name: 'Rooms', color: '#6366f1' },
+  { key: 'fnbRevenue', name: 'F&B / POS', color: '#f59e0b' },
+  { key: 'eventFoodRevenue', name: 'Event Food', color: '#fb923c' },
+  { key: 'poolRevenue', name: 'Recreation / Pool', color: '#38bdf8' },
+  { key: 'eventHallRevenue', name: 'Event Hall', color: '#ec4899' },
+  { key: 'eventEquipmentRevenue', name: 'Event Equipment', color: '#f472b6' },
+  { key: 'spaRevenue', name: 'Spa', color: '#14b8a6' },
+  { key: 'laundryRevenue', name: 'Laundry', color: '#2dd4bf' },
+  { key: 'transportRevenue', name: 'Transport', color: '#84cc16' },
+  { key: 'telephoneRevenue', name: 'Telephone', color: '#eab308' },
+  { key: 'internetRevenue', name: 'Internet', color: '#06b6d4' },
+  { key: 'minibarRevenue', name: 'Minibar', color: '#f97316' },
+  { key: 'cityLedgerRevenue', name: 'City Ledger', color: '#64748b' },
+  { key: 'manualRevenue', name: 'Manual Revenue', color: '#94a3b8' },
+  { key: 'otherRevenue', name: 'Other', color: '#10b981' },
+  { key: 'serviceChargeRevenue', name: 'Service Charge', color: '#a78bfa' },
+] as const;
+
+function revenueBreakdown(audit: any) {
+  const fallback = audit?.financialSnapshot || {};
+  const rows = audit?.closePackage?.controlSummary?.departmentReconciliation;
+  if (!Array.isArray(rows)) {
+    return {
+      roomRevenue: Number(fallback.roomRevenue || 0),
+      fnbRevenue: Number(fallback.fnbRevenue || 0),
+      eventFoodRevenue: 0,
+      poolRevenue: 0,
+      eventHallRevenue: 0,
+      eventEquipmentRevenue: 0,
+      spaRevenue: 0,
+      laundryRevenue: 0,
+      transportRevenue: 0,
+      telephoneRevenue: 0,
+      internetRevenue: 0,
+      minibarRevenue: 0,
+      cityLedgerRevenue: 0,
+      manualRevenue: 0,
+      otherRevenue: Number(fallback.otherRevenue || 0),
+      serviceChargeRevenue: 0,
+    };
+  }
+
+  const valueFor = (department: string) => Number(rows.find((row: any) => row.department === department)?.source || 0);
+  const departmentValues: Record<string, number> = {
+    Spa: valueFor('Spa'),
+    Laundry: valueFor('Laundry'),
+    Transport: valueFor('Transport'),
+    Telephone: valueFor('Telephone'),
+    Internet: valueFor('Internet'),
+    Minibar: valueFor('Minibar'),
+    'City Ledger': valueFor('City Ledger'),
+    'Manual Revenue': valueFor('Manual Revenue'),
+  };
+  return {
+    roomRevenue: valueFor('Rooms'),
+    fnbRevenue: valueFor('F&B/POS'),
+    eventFoodRevenue: valueFor('Event Food'),
+    poolRevenue: valueFor('Recreation/Pool'),
+    eventHallRevenue: valueFor('Event Hall'),
+    eventEquipmentRevenue: valueFor('Event Equipment'),
+    otherRevenue: valueFor('Other'),
+    serviceChargeRevenue: valueFor('Service Charge'),
+    spaRevenue: departmentValues.Spa,
+    laundryRevenue: departmentValues.Laundry,
+    transportRevenue: departmentValues.Transport,
+    telephoneRevenue: departmentValues.Telephone,
+    internetRevenue: departmentValues.Internet,
+    minibarRevenue: departmentValues.Minibar,
+    cityLedgerRevenue: departmentValues['City Ledger'],
+    manualRevenue: departmentValues['Manual Revenue'],
+  };
+}
+
 interface MetricCardProps {
   label: string;
   value: string | number;
@@ -146,10 +220,13 @@ export function MetricCards({ data }: { data: NightAuditData }) {
     return {
       date: dateStr,
       revenue: Number(t.totalRevenue) || 0,
-      roomRevenue: t.financialSnapshot ? Number(t.financialSnapshot.roomRevenue) : Number(t.totalRevenue),
-      fnbRevenue: t.financialSnapshot ? Number(t.financialSnapshot.fnbRevenue) : 0,
-      otherRevenue: t.financialSnapshot ? Number(t.financialSnapshot.otherRevenue) : 0,
+      ...revenueBreakdown(t),
     };
+  });
+
+  const currentRevenue = revenueBreakdown({
+    financialSnapshot: currentSnapshot || lastAudit?.financialSnapshot,
+    closePackage: data.currentAudit?.closePackage || lastAudit?.closePackage,
   });
 
   return (
@@ -196,9 +273,16 @@ export function MetricCards({ data }: { data: NightAuditData }) {
               <YAxis hide domain={[0, 'dataMax + (dataMax * 0.15)']} />
               <Tooltip content={<DarkTooltip baseCurrency={baseCurrency} />} cursor={{ fill: 'rgba(255,255,255,0.03)' }} />
               <Legend iconType="circle" wrapperStyle={{ paddingTop: '20px', fontSize: '12px', color: '#94a3b8' }} />
-              <Bar dataKey="roomRevenue" name="Rooms" stackId="a" fill="#6366f1" radius={[0, 0, 4, 4]} />
-              <Bar dataKey="fnbRevenue" name="F&B" stackId="a" fill="#f59e0b" />
-              <Bar dataKey="otherRevenue" name="Other" stackId="a" fill="#10b981" radius={[4, 4, 0, 0]} />
+              {REVENUE_SERIES.map((series, index) => (
+                <Bar
+                  key={series.key}
+                  dataKey={series.key}
+                  name={series.name}
+                  stackId="a"
+                  fill={series.color}
+                  radius={index === REVENUE_SERIES.length - 1 ? [4, 4, 0, 0] : index === 0 ? [0, 0, 4, 4] : undefined}
+                />
+              ))}
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -208,22 +292,29 @@ export function MetricCards({ data }: { data: NightAuditData }) {
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
         <Metric
           label="Room Revenue"
-          value={currency(currentSnapshot?.roomRevenue ?? (lastAudit?.financialSnapshot ? Number(lastAudit.financialSnapshot.roomRevenue) : 0), baseCurrency)}
+          value={currency(currentRevenue.roomRevenue, baseCurrency)}
           subtext="Last completed audit"
           icon={BedDouble}
           tone="indigo"
         />
         <Metric
           label="F&B / POS"
-          value={currency(currentSnapshot?.fnbRevenue ?? (lastAudit?.financialSnapshot ? Number(lastAudit.financialSnapshot.fnbRevenue) : 0), baseCurrency)}
+          value={currency(currentRevenue.fnbRevenue, baseCurrency)}
           subtext="Food and beverage"
           icon={Banknote}
           tone="amber"
         />
         <Metric
           label="Other Revenue"
-          value={currency(currentSnapshot?.otherRevenue ?? (lastAudit?.financialSnapshot ? Number(lastAudit.financialSnapshot.otherRevenue) : 0), baseCurrency)}
-          subtext="Ancillary revenue"
+          value={currency(
+            currentRevenue.eventFoodRevenue + currentRevenue.poolRevenue + currentRevenue.eventHallRevenue
+              + currentRevenue.eventEquipmentRevenue + currentRevenue.otherRevenue + currentRevenue.serviceChargeRevenue
+              + currentRevenue.spaRevenue + currentRevenue.laundryRevenue + currentRevenue.transportRevenue
+              + currentRevenue.telephoneRevenue + currentRevenue.internetRevenue + currentRevenue.minibarRevenue
+              + currentRevenue.cityLedgerRevenue + currentRevenue.manualRevenue,
+            baseCurrency,
+          )}
+          subtext="Events and ancillary revenue"
           icon={TrendingUp}
           tone="emerald"
         />

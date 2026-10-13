@@ -25,6 +25,7 @@ export interface TrendData {
   adr: number | string;
   revpar: number | string;
   financialSnapshot?: any;
+  closePackage?: { controlSummary?: any };
 }
 
 export interface AnalyticsData {
