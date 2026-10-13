@@ -567,8 +567,6 @@ export async function getFinancialAudit(ctx: TenantContext, propertyId: string) 
     },
     include: {
       primaryGuest: { select: { firstName: true, lastName: true } },
-      adults: true,
-      children: true,
       reservationRooms: { where: { status: 'ACTIVE' }, include: { room: { include: { roomType: true } } }, orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }] },
       folios: { where: { type: { in: ['MAIN', 'ROOM', 'CITY_LEDGER'] }, status: 'OPEN' }, select: { id: true } },
       ratePlan: true,
