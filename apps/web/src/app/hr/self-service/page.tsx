@@ -30,6 +30,8 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { EmployeePortalFeedbackDialog, type EmployeePortalFeedback } from '@/components/hr/EmployeePortalFeedbackDialog';
 
 export default function EmployeeSelfServicePage() {
   const [data, setData] = useState<any | null>(null);
@@ -60,6 +62,9 @@ export default function EmployeeSelfServicePage() {
   const [loanModalOpen, setLoanModalOpen] = useState(false);
   const [loanForm, setLoanForm] = useState({ principalAmount: '', tenorMonths: '6', reason: '' });
   const [actionError, setActionError] = useState('');
+  const [feedback, setFeedback] = useState<EmployeePortalFeedback | null>(null);
+
+  const showFeedback = (type: EmployeePortalFeedback['type'], title: string, message: string) => setFeedback({ type, title, message });
 
   const fetchSelfServiceData = async () => {
     setLoading(true);
@@ -109,8 +114,13 @@ export default function EmployeeSelfServicePage() {
 
       if (res.ok) {
         setLeaveModalOpen(false);
-        fetchSelfServiceData();
+        await fetchSelfServiceData();
+        showFeedback('success', 'Leave request submitted', 'Your leave application has been sent to the configured approval workflow.');
+      } else {
+        showFeedback('error', 'Leave request was not submitted', (await res.json()).error || 'Please review the dates and try again.');
       }
+    } catch (error: any) {
+      showFeedback('error', 'Leave request was not submitted', error.message || 'Please try again.');
     } finally {
       setSubmitting(false);
     }
@@ -123,8 +133,8 @@ export default function EmployeeSelfServicePage() {
       const res = await fetch('/api/hr/self-service/profile-changes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(profileForm) });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Unable to submit profile change');
-      setProfileModalOpen(false); setProfileForm({ ...profileForm, proposedValue: '', reason: '' }); fetchSelfServiceData();
-    } catch (error: any) { setActionError(error.message); } finally { setSubmitting(false); }
+      setProfileModalOpen(false); setProfileForm({ ...profileForm, proposedValue: '', reason: '' }); await fetchSelfServiceData(); showFeedback('success', 'Change request submitted', 'HR will review your update and notify you when a decision is made.');
+    } catch (error: any) { setActionError(error.message); showFeedback('error', 'Could not submit change request', error.message); } finally { setSubmitting(false); }
   };
 
   const handleSupportRequest = async (e: React.FormEvent) => {
@@ -134,8 +144,8 @@ export default function EmployeeSelfServicePage() {
       const res = await fetch('/api/hr/service-desk', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(supportForm) });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Unable to submit HR request');
-      setSupportModalOpen(false); setSupportForm({ ...supportForm, subject: '', description: '' }); fetchSelfServiceData();
-    } catch (error: any) { setActionError(error.message); } finally { setSubmitting(false); }
+      setSupportModalOpen(false); setSupportForm({ ...supportForm, subject: '', description: '' }); await fetchSelfServiceData(); showFeedback('success', 'Request sent to HR', 'Your request has been created. You can track replies from your dashboard.');
+    } catch (error: any) { setActionError(error.message); showFeedback('error', 'Could not contact HR', error.message); } finally { setSubmitting(false); }
   };
 
   const handleSupportReply = async (e: React.FormEvent) => {
@@ -146,8 +156,8 @@ export default function EmployeeSelfServicePage() {
       const res = await fetch('/api/hr/service-desk', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'REPLY', ticketId: replyTicket.id, body: replyBody }) });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Unable to send reply');
-      setReplyModalOpen(false); setReplyTicket(null); setReplyBody(''); fetchSelfServiceData();
-    } catch (error: any) { setActionError(error.message); } finally { setSubmitting(false); }
+      setReplyModalOpen(false); setReplyTicket(null); setReplyBody(''); await fetchSelfServiceData(); showFeedback('success', 'Reply sent', 'Your message has been added to the HR request.');
+    } catch (error: any) { setActionError(error.message); showFeedback('error', 'Could not send reply', error.message); } finally { setSubmitting(false); }
   };
 
   const handleAttendanceCorrection = async (e: React.FormEvent) => {
@@ -157,8 +167,8 @@ export default function EmployeeSelfServicePage() {
       const res = await fetch('/api/hr/attendance/missed-punch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(attendanceForm) });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Unable to submit attendance correction');
-      setAttendanceModalOpen(false); setAttendanceForm({ date: '', requestedIn: '', requestedOut: '', reason: '' }); fetchSelfServiceData();
-    } catch (error: any) { setActionError(error.message); } finally { setSubmitting(false); }
+      setAttendanceModalOpen(false); setAttendanceForm({ date: '', requestedIn: '', requestedOut: '', reason: '' }); await fetchSelfServiceData(); showFeedback('success', 'Attendance issue reported', 'Your correction request has been sent for supervisor review.');
+    } catch (error: any) { setActionError(error.message); showFeedback('error', 'Could not report attendance issue', error.message); } finally { setSubmitting(false); }
   };
 
   const handleCancelLeave = async (applicationId: string) => {
@@ -167,8 +177,8 @@ export default function EmployeeSelfServicePage() {
       const res = await fetch('/api/hr/leave', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'CANCEL_APPLICATION', applicationId }) });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Unable to withdraw leave');
-      fetchSelfServiceData();
-    } catch (error: any) { setActionError(error.message); }
+      await fetchSelfServiceData(); showFeedback('success', 'Leave request withdrawn', 'The pending leave application has been withdrawn.');
+    } catch (error: any) { setActionError(error.message); showFeedback('error', 'Could not withdraw leave', error.message); }
   };
 
   const handleLoanRequest = async (e: React.FormEvent) => {
@@ -178,8 +188,8 @@ export default function EmployeeSelfServicePage() {
       const res = await fetch('/api/hr/benefits', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'CREATE_LOAN', ...loanForm }) });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Unable to submit loan request');
-      setLoanModalOpen(false); setLoanForm({ principalAmount: '', tenorMonths: '6', reason: '' }); fetchSelfServiceData();
-    } catch (error: any) { setActionError(error.message); } finally { setSubmitting(false); }
+      setLoanModalOpen(false); setLoanForm({ principalAmount: '', tenorMonths: '6', reason: '' }); await fetchSelfServiceData(); showFeedback('success', 'Loan application submitted', 'Your application is pending HR review and approval.');
+    } catch (error: any) { setActionError(error.message); showFeedback('error', 'Could not submit loan application', error.message); } finally { setSubmitting(false); }
   };
 
   if (loading) {
@@ -472,7 +482,7 @@ export default function EmployeeSelfServicePage() {
 
       {/* Printable Payslip Modal */}
       <Dialog open={payslipModalOpen} onOpenChange={setPayslipModalOpen}>
-        <DialogContent className="max-w-lg bg-slate-900 border-slate-800 text-slate-100 p-0 overflow-hidden">
+        <DialogContent className="max-w-lg overflow-hidden rounded-2xl border-slate-800 bg-[#0b1624] p-0 text-slate-100 shadow-2xl shadow-black/40">
           {selectedPayslip && (
             <div>
               <div className="p-6 bg-slate-950 border-b border-slate-800">
@@ -560,7 +570,7 @@ export default function EmployeeSelfServicePage() {
 
       {/* Leave Application Modal */}
       <Dialog open={leaveModalOpen} onOpenChange={setLeaveModalOpen}>
-        <DialogContent className="max-w-md bg-slate-900 border-slate-800 text-slate-100">
+        <DialogContent className="max-w-md rounded-2xl border-slate-800 bg-[#0b1624] text-slate-100 shadow-2xl shadow-black/40">
           <DialogHeader>
             <DialogTitle className="text-sm font-bold text-white flex items-center gap-2">
               <CalendarCheck2 className="w-4 h-4 text-teal-400" />
@@ -612,12 +622,10 @@ export default function EmployeeSelfServicePage() {
       </Dialog>
 
       <Dialog open={profileModalOpen} onOpenChange={setProfileModalOpen}>
-        <DialogContent className="max-w-md border-slate-800 bg-slate-900 text-slate-100">
+        <DialogContent className="max-w-md rounded-2xl border-slate-800 bg-[#0b1624] text-slate-100 shadow-2xl shadow-black/40">
           <DialogHeader><DialogTitle className="text-sm font-bold text-white">Request profile update</DialogTitle></DialogHeader>
           <form onSubmit={handleProfileChange} className="space-y-4 text-xs">
-            <select value={profileForm.fieldName} onChange={(e) => setProfileForm({ ...profileForm, fieldName: e.target.value })} className="h-9 w-full rounded-md border border-slate-800 bg-slate-950 px-3 text-slate-100">
-              <option value="phone">Phone number</option><option value="residentialAddress">Residential address</option><option value="maritalStatus">Marital status</option><option value="emergencyContacts">Emergency contacts</option><option value="nextOfKin">Next of kin</option><option value="bankName">Bank name</option><option value="bankAccountNumber">Bank account number</option><option value="bankSortCode">Bank sort code</option><option value="tin">Tax ID</option><option value="pfaName">Pension administrator</option><option value="rsaPin">Pension RSA PIN</option>
-            </select>
+            <Select value={profileForm.fieldName} onValueChange={(fieldName) => setProfileForm({ ...profileForm, fieldName })}><SelectTrigger className="h-10 w-full !border-slate-700 !bg-slate-950 text-xs !text-slate-100"><SelectValue placeholder="Select a field to update" /></SelectTrigger><SelectContent className="border-slate-700 bg-slate-900 text-slate-100"><SelectItem value="phone">Phone number</SelectItem><SelectItem value="residentialAddress">Residential address</SelectItem><SelectItem value="maritalStatus">Marital status</SelectItem><SelectItem value="emergencyContacts">Emergency contacts</SelectItem><SelectItem value="nextOfKin">Next of kin</SelectItem><SelectItem value="bankName">Bank name</SelectItem><SelectItem value="bankAccountNumber">Bank account number</SelectItem><SelectItem value="bankSortCode">Bank sort code</SelectItem><SelectItem value="tin">Tax ID</SelectItem><SelectItem value="pfaName">Pension administrator</SelectItem><SelectItem value="rsaPin">Pension RSA PIN</SelectItem></SelectContent></Select>
             <Input required placeholder="Proposed value" value={profileForm.proposedValue} onChange={(e) => setProfileForm({ ...profileForm, proposedValue: e.target.value })} className="border-slate-800 bg-slate-950 text-xs" />
             <Input placeholder="Reason (optional)" value={profileForm.reason} onChange={(e) => setProfileForm({ ...profileForm, reason: e.target.value })} className="border-slate-800 bg-slate-950 text-xs" />
             {actionError && <p className="text-xs text-rose-400">{actionError}</p>}
@@ -627,10 +635,10 @@ export default function EmployeeSelfServicePage() {
       </Dialog>
 
       <Dialog open={supportModalOpen} onOpenChange={setSupportModalOpen}>
-        <DialogContent className="max-w-md border-slate-800 bg-slate-900 text-slate-100">
+        <DialogContent className="max-w-md rounded-2xl border-slate-800 bg-[#0b1624] text-slate-100 shadow-2xl shadow-black/40">
           <DialogHeader><DialogTitle className="text-sm font-bold text-white">Contact HR</DialogTitle></DialogHeader>
           <form onSubmit={handleSupportRequest} className="space-y-4 text-xs">
-            <select value={supportForm.category} onChange={(e) => setSupportForm({ ...supportForm, category: e.target.value })} className="h-9 w-full rounded-md border border-slate-800 bg-slate-950 px-3 text-slate-100"><option value="PROFILE_UPDATE">Profile update</option><option value="SALARY_INQUIRY">Salary inquiry</option><option value="LEAVE_INQUIRY">Leave inquiry</option><option value="BENEFIT">Benefits</option><option value="EMPLOYMENT_LETTER">Employment letter</option><option value="GRIEVANCE">Confidential concern</option></select>
+            <Select value={supportForm.category} onValueChange={(category) => setSupportForm({ ...supportForm, category })}><SelectTrigger className="h-10 w-full !border-slate-700 !bg-slate-950 text-xs !text-slate-100"><SelectValue placeholder="Choose a request category" /></SelectTrigger><SelectContent className="border-slate-700 bg-slate-900 text-slate-100"><SelectItem value="PROFILE_UPDATE">Profile update</SelectItem><SelectItem value="SALARY_INQUIRY">Salary inquiry</SelectItem><SelectItem value="LEAVE_INQUIRY">Leave inquiry</SelectItem><SelectItem value="BENEFIT">Benefits</SelectItem><SelectItem value="EMPLOYMENT_LETTER">Employment letter</SelectItem><SelectItem value="GRIEVANCE">Confidential concern</SelectItem></SelectContent></Select>
             <Input required placeholder="Subject" value={supportForm.subject} onChange={(e) => setSupportForm({ ...supportForm, subject: e.target.value })} className="border-slate-800 bg-slate-950 text-xs" />
             <textarea required placeholder="Describe your request" value={supportForm.description} onChange={(e) => setSupportForm({ ...supportForm, description: e.target.value })} className="min-h-28 w-full rounded-md border border-slate-800 bg-slate-950 p-3 text-xs text-slate-100" />
             {actionError && <p className="text-xs text-rose-400">{actionError}</p>}
@@ -640,7 +648,7 @@ export default function EmployeeSelfServicePage() {
       </Dialog>
 
       <Dialog open={replyModalOpen} onOpenChange={setReplyModalOpen}>
-        <DialogContent className="max-w-md border-slate-800 bg-slate-900 text-slate-100">
+        <DialogContent className="max-w-md rounded-2xl border-slate-800 bg-[#0b1624] text-slate-100 shadow-2xl shadow-black/40">
           <DialogHeader><DialogTitle className="text-sm font-bold text-white">Reply to HR request</DialogTitle></DialogHeader>
           <div className="mb-2 rounded-lg bg-slate-950 p-3 text-xs text-slate-400">{replyTicket?.subject}</div>
           {replyTicket?.messages?.length > 0 && <div className="max-h-32 space-y-2 overflow-y-auto rounded-lg border border-slate-800 p-3 text-xs">{replyTicket.messages.map((message: any) => <div key={message.id}><p className="text-slate-300">{message.body}</p><p className="mt-1 text-[10px] text-slate-600">{new Date(message.createdAt).toLocaleString()}</p></div>)}</div>}
@@ -649,7 +657,7 @@ export default function EmployeeSelfServicePage() {
       </Dialog>
 
       <Dialog open={attendanceModalOpen} onOpenChange={setAttendanceModalOpen}>
-        <DialogContent className="max-w-md border-slate-800 bg-slate-900 text-slate-100">
+        <DialogContent className="max-w-md rounded-2xl border-slate-800 bg-[#0b1624] text-slate-100 shadow-2xl shadow-black/40">
           <DialogHeader><DialogTitle className="text-sm font-bold text-white">Report attendance issue</DialogTitle></DialogHeader>
           <form onSubmit={handleAttendanceCorrection} className="space-y-4 text-xs">
             <Input required type="date" value={attendanceForm.date} onChange={(e) => setAttendanceForm({ ...attendanceForm, date: e.target.value })} className="border-slate-800 bg-slate-950 text-xs" />
@@ -662,8 +670,9 @@ export default function EmployeeSelfServicePage() {
       </Dialog>
 
       <Dialog open={loanModalOpen} onOpenChange={setLoanModalOpen}>
-        <DialogContent className="max-w-md border-slate-800 bg-slate-900 text-slate-100"><DialogHeader><DialogTitle className="text-sm font-bold text-white">Apply for employee loan</DialogTitle></DialogHeader><form onSubmit={handleLoanRequest} className="space-y-4 text-xs"><Input required type="number" min="1" placeholder="Requested amount" value={loanForm.principalAmount} onChange={(e) => setLoanForm({ ...loanForm, principalAmount: e.target.value })} className="border-slate-800 bg-slate-950 text-xs" /><Input required type="number" min="1" max="60" placeholder="Repayment term in months" value={loanForm.tenorMonths} onChange={(e) => setLoanForm({ ...loanForm, tenorMonths: e.target.value })} className="border-slate-800 bg-slate-950 text-xs" /><textarea required placeholder="Reason for request" value={loanForm.reason} onChange={(e) => setLoanForm({ ...loanForm, reason: e.target.value })} className="min-h-24 w-full rounded-md border border-slate-800 bg-slate-950 p-3 text-xs text-slate-100" />{actionError && <p className="text-xs text-rose-400">{actionError}</p>}<DialogFooter><Button type="submit" disabled={submitting} className="bg-emerald-700 text-xs hover:bg-emerald-600">{submitting ? 'Submitting…' : 'Submit application'}</Button></DialogFooter></form></DialogContent>
+        <DialogContent className="max-w-md rounded-2xl border-slate-800 bg-[#0b1624] text-slate-100 shadow-2xl shadow-black/40"><DialogHeader><DialogTitle className="text-sm font-bold text-white">Apply for employee loan</DialogTitle></DialogHeader><form onSubmit={handleLoanRequest} className="space-y-4 text-xs"><Input required type="number" min="1" placeholder="Requested amount" value={loanForm.principalAmount} onChange={(e) => setLoanForm({ ...loanForm, principalAmount: e.target.value })} className="border-slate-800 bg-slate-950 text-xs" /><Input required type="number" min="1" max="60" placeholder="Repayment term in months" value={loanForm.tenorMonths} onChange={(e) => setLoanForm({ ...loanForm, tenorMonths: e.target.value })} className="border-slate-800 bg-slate-950 text-xs" /><textarea required placeholder="Reason for request" value={loanForm.reason} onChange={(e) => setLoanForm({ ...loanForm, reason: e.target.value })} className="min-h-24 w-full rounded-md border border-slate-800 bg-slate-950 p-3 text-xs text-slate-100" />{actionError && <p className="text-xs text-rose-400">{actionError}</p>}<DialogFooter><Button type="submit" disabled={submitting} className="bg-emerald-700 text-xs hover:bg-emerald-600">{submitting ? 'Submitting…' : 'Submit application'}</Button></DialogFooter></form></DialogContent>
       </Dialog>
+      <EmployeePortalFeedbackDialog feedback={feedback} onClose={() => setFeedback(null)} />
     </div>
   );
 }
