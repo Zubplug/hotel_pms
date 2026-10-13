@@ -29,6 +29,7 @@ describe('guest amenity stock posting', () => {
     const result = await postGuestAmenityPackInTransaction(tx, {
       propertyId: 'property-1',
       reservationId: 'reservation-1',
+      roomId: 'room-1',
       businessDate: new Date('2026-10-13T00:00:00.000Z'),
       guestCount: 2,
       actorId: 'staff-1',

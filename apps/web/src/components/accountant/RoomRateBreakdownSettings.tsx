@@ -31,6 +31,51 @@ interface LiveRoomType {
   currency?: string | null;
 }
 
+interface GuestAmenityPolicy {
+  enabled: boolean;
+  warehouseName?: string;
+  perGuestCost: number;
+  referenceCostItems: string[];
+}
+
+function normalizeAmenityName(value: string) {
+  return value.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function calculateGuestAmenityPolicy(data: any): GuestAmenityPolicy {
+  const guestAmenities = data?.guestAmenities;
+  if (guestAmenities?.enabled === false) {
+    return { enabled: false, perGuestCost: 0, referenceCostItems: [] };
+  }
+
+  const items = Array.isArray(guestAmenities?.items) ? guestAmenities.items : [];
+  const stockItems = Array.isArray(data?.stockItems) ? data.stockItems : [];
+  let perGuestCost = 0;
+  const referenceCostItems: string[] = [];
+
+  for (const item of items) {
+    const quantity = Math.max(0, Number(item.quantityPerGuest ?? item.quantityPerRoom ?? 1));
+    if (!item?.name || quantity <= 0) continue;
+    const aliases = [String(item.name), ...(Array.isArray(item.aliases) ? item.aliases : [])]
+      .map(normalizeAmenityName);
+    const stock = stockItems.find((candidate: any) =>
+      (item.stockItemId && candidate.id === item.stockItemId)
+      || aliases.includes(normalizeAmenityName(String(candidate.name || ''))),
+    );
+    const inventoryCost = Number(stock?.costPrice ?? 0);
+    const expectedCost = Math.max(0, Number(item.expectedCost ?? 0));
+    if (!stock || inventoryCost <= 0) referenceCostItems.push(String(item.name));
+    perGuestCost += quantity * (inventoryCost > 0 ? inventoryCost : expectedCost);
+  }
+
+  return {
+    enabled: true,
+    warehouseName: data?.warehouses?.find((warehouse: any) => warehouse.id === guestAmenities?.warehouseId)?.name,
+    perGuestCost,
+    referenceCostItems,
+  };
+}
+
 export function RoomRateBreakdownSettings({ propertyId }: Props) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -38,14 +83,20 @@ export function RoomRateBreakdownSettings({ propertyId }: Props) {
   const [currency, setCurrency] = useState('NGN');
   const [testGross, setTestGross] = useState(50000);
   const [roomTypes, setRoomTypes] = useState<LiveRoomType[]>([]);
+  const [guestAmenityPolicy, setGuestAmenityPolicy] = useState<GuestAmenityPolicy>({
+    enabled: true,
+    perGuestCost: 0,
+    referenceCostItems: [],
+  });
 
   useEffect(() => {
     async function loadSettings() {
       try {
         setLoading(true);
-        const [settingsRes, roomTypesRes] = await Promise.all([
+        const [settingsRes, roomTypesRes, guestAmenityRes] = await Promise.all([
           fetch(`/api/v1/properties/${propertyId}/rate-breakdown-settings`),
           fetch(`/api/v1/room-types?propertyId=${encodeURIComponent(propertyId)}`),
+          fetch(`/api/v1/properties/${propertyId}/guest-amenity-settings`),
         ]);
         if (!settingsRes.ok) throw new Error('Failed to load breakdown settings');
         if (!roomTypesRes.ok) throw new Error('Failed to load property room types');
@@ -61,6 +112,9 @@ export function RoomRateBreakdownSettings({ propertyId }: Props) {
         }
         if (data.baseCurrency) {
           setCurrency(data.baseCurrency);
+        }
+        if (guestAmenityRes.ok) {
+          setGuestAmenityPolicy(calculateGuestAmenityPolicy(await guestAmenityRes.json()));
         }
       } catch (err: any) {
         toast.error(err.message || 'Error loading settings');
@@ -153,6 +207,9 @@ export function RoomRateBreakdownSettings({ propertyId }: Props) {
             </p>
             <p className="mt-1 text-xs text-indigo-300/60">
               Net Accommodation is dynamically solved as (Gross Rate - Food Allocation) / 1.175 with rounding delta reconciled onto Net Accommodation.
+            </p>
+            <p className="mt-1 text-xs text-indigo-300/60">
+              Net room contribution is Net Accommodation less the complimentary amenity cost issued from the housekeeping/laundry warehouse. This is an operating-cost view; it does not reduce the GL4050 room revenue posting.
             </p>
           </div>
         </div>
@@ -342,7 +399,7 @@ export function RoomRateBreakdownSettings({ propertyId }: Props) {
           </div>
         </div>
 
-        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
           <div className="rounded-xl border border-emerald-500/20 bg-emerald-950/20 p-3">
             <p className="text-[10px] uppercase tracking-wider text-emerald-400/80">Net Room (GL {config.glCodes.netAccommodation})</p>
             <p className="mt-1 text-base font-bold text-emerald-300">{formatMoney(previewResult.netAccommodation)}</p>
@@ -359,6 +416,30 @@ export function RoomRateBreakdownSettings({ propertyId }: Props) {
             <p className="text-[10px] uppercase tracking-wider text-amber-400/80">Complimentary Food (GL {config.glCodes.complimentaryBreakfast})</p>
             <p className="mt-1 text-base font-bold text-amber-300">{formatMoney(previewResult.complimentaryFoodAllocation)}</p>
           </div>
+          <div className="rounded-xl border border-rose-500/20 bg-rose-950/20 p-3">
+            <p className="text-[10px] uppercase tracking-wider text-rose-400/80">Amenity Cost / Guest (Housekeeping/Laundry)</p>
+            <p className="mt-1 text-base font-bold text-rose-300">
+              {guestAmenityPolicy.enabled ? formatMoney(guestAmenityPolicy.perGuestCost) : formatMoney(0)}
+            </p>
+          </div>
+          <div className="rounded-xl border border-emerald-500/20 bg-emerald-950/20 p-3">
+            <p className="text-[10px] uppercase tracking-wider text-emerald-400/80">Net Room Contribution / Guest</p>
+            <p className="mt-1 text-base font-bold text-emerald-300">
+              {formatMoney(previewResult.netAccommodation - (guestAmenityPolicy.enabled ? guestAmenityPolicy.perGuestCost : 0))}
+            </p>
+          </div>
+        </div>
+        <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500">
+          <span>
+            Amenity policy: {guestAmenityPolicy.enabled ? 'enabled' : 'disabled'}
+            {guestAmenityPolicy.warehouseName ? ` · ${guestAmenityPolicy.warehouseName}` : ''}
+          </span>
+          {guestAmenityPolicy.referenceCostItems.length > 0 && (
+            <span className="text-amber-400">
+              Reference cost used for missing/zero-cost stock: {guestAmenityPolicy.referenceCostItems.join(', ')}
+            </span>
+          )}
+          <span>Contribution is for one registered guest; occupied-room totals multiply by guest count.</span>
         </div>
       </div>
 
@@ -380,13 +461,15 @@ export function RoomRateBreakdownSettings({ propertyId }: Props) {
                 <th className="px-4 py-3 text-right text-cyan-400">VAT ({(config.vatRate * 100).toFixed(3).replace(/\.000$/, '')}%) (GL {config.glCodes.vatPayable})</th>
                 <th className="px-4 py-3 text-right text-indigo-400">SC ({(config.serviceChargeRate * 100).toFixed(3).replace(/\.000$/, '')}%) (GL {config.glCodes.serviceChargePayable})</th>
                 <th className="px-4 py-3 text-right text-amber-400">Food Alloc (GL {config.glCodes.complimentaryBreakfast})</th>
+                <th className="px-4 py-3 text-right text-rose-400">Amenity Cost / Guest</th>
+                <th className="px-4 py-3 text-right text-emerald-400">Net Contribution / Guest</th>
                 <th className="px-4 py-3 text-right">Reconciled Check</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
               {roomTypes.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-slate-500">
+                  <td colSpan={10} className="px-4 py-8 text-center text-slate-500">
                     No active room types are configured for this property.
                   </td>
                 </tr>
@@ -407,6 +490,12 @@ export function RoomRateBreakdownSettings({ propertyId }: Props) {
                     <td className="px-4 py-3 text-right font-mono text-cyan-300">{formatMoney(result.vat)}</td>
                     <td className="px-4 py-3 text-right font-mono text-indigo-300">{formatMoney(result.serviceCharge)}</td>
                     <td className="px-4 py-3 text-right font-mono text-amber-300">{formatMoney(result.complimentaryFoodAllocation)}</td>
+                    <td className="px-4 py-3 text-right font-mono text-rose-300">
+                      {formatMoney(guestAmenityPolicy.enabled ? guestAmenityPolicy.perGuestCost : 0)}
+                    </td>
+                    <td className="px-4 py-3 text-right font-mono font-semibold text-emerald-300">
+                      {formatMoney(result.netAccommodation - (guestAmenityPolicy.enabled ? guestAmenityPolicy.perGuestCost : 0))}
+                    </td>
                     <td className="px-4 py-3 text-right">
                       <span className="inline-flex items-center gap-1 rounded bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-400">
                         <CheckCircle2 className="h-3 w-3" /> {result.balanced ? 'Exact' : 'Unbalanced'}

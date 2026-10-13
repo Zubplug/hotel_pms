@@ -743,6 +743,7 @@ export async function executeNightAudit(
           await postGuestAmenityPackInTransaction(tx, {
             propertyId,
             reservationId: reservation.id,
+            roomId: activeRoom?.roomId || null,
             businessDate,
             guestCount: Math.max(1, Number(reservation.adults || 0) + Number(reservation.children || 0)),
             actorId,

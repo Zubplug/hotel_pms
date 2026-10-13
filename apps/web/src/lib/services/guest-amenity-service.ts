@@ -43,6 +43,7 @@ export async function postGuestAmenityPackInTransaction(
   input: {
     propertyId: string;
     reservationId: string;
+    roomId?: string | null;
     businessDate: Date;
     guestCount: number;
     actorId: string;
@@ -122,6 +123,8 @@ export async function postGuestAmenityPackInTransaction(
       data: {
         propertyId: input.propertyId,
         stockItemId: stock.id,
+        reservationId: input.reservationId,
+        roomId: input.roomId || null,
         source: 'GUEST_AMENITY',
         quantity: -requiredInBase,
         unitCost,

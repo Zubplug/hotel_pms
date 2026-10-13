@@ -107,7 +107,7 @@ export async function GET(req: NextRequest) {
     const priorYearDate = addYears(businessDate, -1);
     const queryStart = addYears(yearStart, -1);
 
-    const [property, chartOfAccounts, items, posOrders, eventInvoiceJournals] = await Promise.all([
+    const [property, chartOfAccounts, items, posOrders, eventInvoiceJournals, guestAmenityTransactions] = await Promise.all([
       prisma.property.findUnique({ where: { id: propertyId }, select: { name: true, baseCurrency: true, settings: true } }),
       prisma.chartOfAccount.findMany({
         where: { propertyId, type: 'REVENUE', isActive: true },
@@ -155,6 +155,10 @@ export async function GET(req: NextRequest) {
             },
           },
         },
+      }),
+      prisma.stockTransaction.findMany({
+        where: { propertyId, source: 'GUEST_AMENITY' as any, businessDate: { gte: queryStart, lte: businessDate } },
+        select: { businessDate: true, totalValue: true },
       }),
     ]);
 
@@ -341,6 +345,15 @@ export async function GET(req: NextRequest) {
       return { date: key(date), revenue: Number(values.revenue.toFixed(2)), gross: Number(values.gross.toFixed(2)), discounts: Number(values.discounts.toFixed(2)), transactions: values.transactions };
     });
     const todayActivity = daily.get(key(businessDate)) || { revenue: 0, gross: 0, discounts: 0, transactions: 0 };
+    const roomRevenue = totals.get('4050') || { today: 0, mtd: 0, ytd: 0 };
+    const amenityCost = { today: 0, mtd: 0, ytd: 0 };
+    for (const transaction of guestAmenityTransactions) {
+      const transactionDate = dateOnly(new Date(transaction.businessDate));
+      const cost = Math.abs(Number(transaction.totalValue || 0));
+      if (key(transactionDate) === key(businessDate)) amenityCost.today += cost;
+      if (transactionDate >= monthStart && transactionDate <= businessDate) amenityCost.mtd += cost;
+      if (transactionDate >= yearStart && transactionDate <= businessDate) amenityCost.ytd += cost;
+    }
 
     return successResponse({
       property: { id: propertyId, name: property?.name || 'Property', currency: property?.baseCurrency || 'NGN' },
@@ -356,6 +369,11 @@ export async function GET(req: NextRequest) {
         transactionCountToday: todayActivity.transactions,
         variance: priorYear === 0 ? null : Number((((today - priorYear) / Math.abs(priorYear)) * 100).toFixed(1)),
         isUp: priorYear > 0 && today >= priorYear,
+      },
+      roomProfitability: {
+        today: { roomRevenue: Number(roomRevenue.today.toFixed(2)), amenityCost: Number(amenityCost.today.toFixed(2)), netRoomContribution: Number((roomRevenue.today - amenityCost.today).toFixed(2)) },
+        mtd: { roomRevenue: Number(roomRevenue.mtd.toFixed(2)), amenityCost: Number(amenityCost.mtd.toFixed(2)), netRoomContribution: Number((roomRevenue.mtd - amenityCost.mtd).toFixed(2)) },
+        ytd: { roomRevenue: Number(roomRevenue.ytd.toFixed(2)), amenityCost: Number(amenityCost.ytd.toFixed(2)), netRoomContribution: Number((roomRevenue.ytd - amenityCost.ytd).toFixed(2)) },
       },
       departments,
       dailyTrend,

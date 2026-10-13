@@ -407,6 +407,7 @@ model Room {
   lockCredentials   LockCredential[]
   lockOperations    LockOperation[]
   statusHistory     RoomStatusHistory[]
+  guestAmenityStockTransactions StockTransaction[] @relation("GuestAmenityStockRoom")
 
   createdAt     DateTime       @default(now()) @db.Timestamptz
   updatedAt     DateTime       @updatedAt @db.Timestamptz
@@ -843,6 +844,7 @@ model Reservation {
   CityLedgerEntry      CityLedgerEntry[]
   folioItems           FolioItem[]
   breakfastRedemptions BreakfastRedemption[]
+  guestAmenityStockTransactions StockTransaction[] @relation("GuestAmenityStock")
 }
 
 model ReservationGuest {
@@ -3057,6 +3059,11 @@ model StockTransaction {
   stockItemId String    @db.Uuid
   stockItem   StockItem @relation(fields: [stockItemId], references: [id])
 
+  reservationId String?      @db.Uuid
+  reservation   Reservation? @relation("GuestAmenityStock", fields: [reservationId], references: [id])
+  roomId        String?      @db.Uuid
+  room          Room?        @relation("GuestAmenityStockRoom", fields: [roomId], references: [id])
+
   source   StockTransactionSource
   quantity Decimal                @db.Decimal(18, 4)
   unitCost Decimal                @db.Decimal(18, 4)
@@ -3087,6 +3094,9 @@ model StockTransaction {
 
   transferId String?        @db.Uuid
   transfer   StockTransfer? @relation(fields: [transferId], references: [id])
+
+  @@index([propertyId, reservationId, businessDate])
+  @@index([propertyId, roomId, businessDate])
 }
 
 model KitchenWasteEntry {
