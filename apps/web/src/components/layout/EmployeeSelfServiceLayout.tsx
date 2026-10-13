@@ -89,7 +89,7 @@ export function EmployeeSelfServiceLayout({ children }: { children: React.ReactN
     <div className="ess-shell flex min-h-[100dvh] w-full overflow-x-hidden bg-[#07111c] text-slate-100">
       <div className="hidden lg:block"><SideNav /></div>
 
-      <main className="min-w-0 w-full flex-1">
+      <main className="min-h-0 min-w-0 w-full flex-1 overflow-y-auto overscroll-contain">
         {/* Desktop header: original design */}
         <header className="ess-topbar sticky top-0 z-30 hidden h-16 items-center justify-between border-b border-white/10 bg-[#07111c]/95 px-6 backdrop-blur lg:flex">
           <div className="flex items-center gap-3">
