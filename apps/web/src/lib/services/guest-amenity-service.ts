@@ -15,7 +15,7 @@ export const DEFAULT_GUEST_AMENITY_PACK: AmenityDefinition[] = [
   { key: 'complimentary-water', name: 'Complimentary Water', aliases: ['complimentry water', 'complimentary water', 'complementary water'], quantityPerGuest: 1, expectedCost: 125 },
   { key: 'sachet-milk', name: 'Sachet Milk', aliases: ['sachet milk', 'satchet milk'], quantityPerGuest: 1, expectedCost: 162 },
   { key: 'milo', name: 'Milo', aliases: ['milo'], quantityPerGuest: 1, expectedCost: 175 },
-  { key: 'sugar', name: 'Sugar', aliases: ['sugar'], quantityPerGuest: 1, expectedCost: 30 },
+  { key: 'sugar-cube', name: 'Sugar Cube', aliases: ['sugar cube', 'sugar cubes'], quantityPerGuest: 1, expectedCost: 30 },
 ];
 
 export function normalizeGuestAmenityName(value: string) {

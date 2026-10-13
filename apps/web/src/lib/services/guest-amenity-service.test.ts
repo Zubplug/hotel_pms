@@ -8,7 +8,7 @@ describe('guest amenity stock posting', () => {
       { id: 'bottle-water', name: 'Bottle Water', warehouseId: 'hk', baseUnit: 'BOTTLE', costPrice: 999, stockUnits: [], isActive: true },
       { id: 'milk', name: 'Sachet Milk', warehouseId: 'hk', baseUnit: 'SACHET', costPrice: 162, stockUnits: [], isActive: true },
       { id: 'milo', name: 'Milo', warehouseId: 'hk', baseUnit: 'SACHET', costPrice: 175, stockUnits: [], isActive: true },
-      { id: 'sugar', name: 'Sugar', warehouseId: 'hk', baseUnit: 'SACHET', costPrice: 30, stockUnits: [], isActive: true },
+      { id: 'sugar-cube', name: 'Sugar Cube', warehouseId: 'hk', baseUnit: 'PIECE', costPrice: 30, stockUnits: [], isActive: true },
     ];
     const tx = {
       property: { findUnique: vi.fn().mockResolvedValue({ settings: {}, baseCurrency: 'NGN', supportedCurrencies: ['NGN'] }) },
