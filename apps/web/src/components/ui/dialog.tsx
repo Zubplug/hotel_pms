@@ -1,7 +1,6 @@
 "use client"
 
 import * as React from "react"
-import { createPortal } from "react-dom"
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog"
 
 import { cn } from "@/lib/utils"
@@ -17,19 +16,13 @@ function DialogTrigger({ ...props }: DialogPrimitive.Trigger.Props) {
 }
 
 function DialogPortal({ children }: DialogPrimitive.Portal.Props) {
-  const mounted = React.useSyncExternalStore(
-    React.useCallback(() => () => {}, []),
-    () => true,
-    () => false,
-  )
-
-  if (!mounted) return null
-
-  // Keep fixed dialogs outside every app-shell sizing and overflow context.
-  // This prevents mobile popups from resolving against a narrow content column.
-  return createPortal(
-    <div data-slot="dialog-portal">{children}</div>,
-    document.body,
+  // Base UI's Portal is required for the dialog portal context used by Popup
+  // and its focus/scroll management. A raw React DOM portal looks equivalent
+  // visually but triggers production error #26 because that context is absent.
+  return (
+    <DialogPrimitive.Portal data-slot="dialog-portal">
+      {children}
+    </DialogPrimitive.Portal>
   )
 }
 
