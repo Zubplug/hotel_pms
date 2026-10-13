@@ -49,7 +49,15 @@ function calculateGuestAmenityPolicy(data: any): GuestAmenityPolicy {
   }
 
   const items = Array.isArray(guestAmenities?.items) ? guestAmenities.items : [];
-  const stockItems = Array.isArray(data?.stockItems) ? data.stockItems : [];
+  const allStockItems = Array.isArray(data?.stockItems) ? data.stockItems : [];
+  const selectedWarehouseId = String(guestAmenities?.warehouseId || '');
+  const selectedWarehouse = data?.warehouses?.find((warehouse: any) => warehouse.id === selectedWarehouseId);
+  // Match the night-audit service: amenity cost must come from the selected
+  // housekeeping/laundry outlet, never from a duplicate item in F&B or a
+  // different warehouse on the property.
+  const stockItems = allStockItems.filter((stock: any) => selectedWarehouseId
+    ? stock.warehouseId === selectedWarehouseId
+    : data?.warehouses?.some((warehouse: any) => warehouse.id === stock.warehouseId && /housekeeping|laundry/i.test(warehouse.name)));
   let perGuestCost = 0;
   const referenceCostItems: string[] = [];
 
@@ -70,7 +78,7 @@ function calculateGuestAmenityPolicy(data: any): GuestAmenityPolicy {
 
   return {
     enabled: true,
-    warehouseName: data?.warehouses?.find((warehouse: any) => warehouse.id === guestAmenities?.warehouseId)?.name,
+    warehouseName: selectedWarehouse?.name,
     perGuestCost,
     referenceCostItems,
   };
