@@ -14,6 +14,7 @@ import { FrontDeskDiscountModal } from '../frontdesk/FrontDeskDiscountModal';
 import { usePathname } from 'next/navigation';
 import { HardwareBridge } from '@/lib/desktop/HardwareBridge';
 import { formatRoomNumber } from '@/lib/format-room';
+import { getFolioBalance } from '@/lib/finance/folio-balance';
 
 export function FolioSection({ reservation, readOnly = false }: { reservation: any; readOnly?: boolean }) {
   const pathname = usePathname();
@@ -50,7 +51,8 @@ export function FolioSection({ reservation, readOnly = false }: { reservation: a
   // deposits are included when they are recorded locally and when they sync;
   // adding credit amounts here would count every deposit twice.
   const totalPayments = Number(folio.totalPayments || 0);
-  const outstandingBalance = Math.max(0, Number(folio.balance || 0));
+  const position = getFolioBalance(folio);
+  const outstandingBalance = position.debit;
   const folioAvailableCredit = Number(folio.availableCredit || 0);
   const showAvailableCredit = !isClosed && folioAvailableCredit > 0;
   const folioSurface = isDarkReservation

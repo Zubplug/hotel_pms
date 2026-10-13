@@ -218,12 +218,14 @@ function GuestRow({ name, room, balance, availableCredit, roomStatus, status, ch
 }) {
   const initials = name.split(' ').map((n: string) => n[0] ?? '').join('').substring(0, 2).toUpperCase();
   const isPaid = balance !== null && balance <= 0;
+  const creditBalance = balance !== null ? Math.max(0, -Number(balance)) : 0;
+  const isSettled = balance !== null && Math.abs(Number(balance)) <= 0.01;
   const isArrival = mode === 'arrival';
   const isPaymentRequired = mode === 'payment';
   const isRoomReady = roomStatus === 'AVAILABLE' || roomStatus === 'CLEAN';
   const canAct = isArrival
     ? isPaid && isRoomReady && status === 'CONFIRMED'
-    : isPaid && status === 'CHECKED_IN';
+    : isSettled && status === 'CHECKED_IN';
 
   const hue = name.charCodeAt(0) % 6;
   const avatarColors = [
@@ -250,13 +252,15 @@ function GuestRow({ name, room, balance, availableCredit, roomStatus, status, ch
           {/* Balance */}
           {balance === null ? (
             <span className="text-[11px] text-slate-500 flex items-center gap-1"><Info className="w-3 h-3" />Unknown</span>
-          ) : isPaid ? (
+          ) : isPaid && creditBalance <= 0.01 ? (
             <span className="text-[11px] text-emerald-400 flex items-center gap-1 font-semibold"><CheckCircle2 className="w-3 h-3" />Settled</span>
+          ) : isPaid ? (
+            <span className="text-[11px] text-sky-400 flex items-center gap-1 font-semibold"><Wallet className="w-3 h-3" />{formatCurrency(creditBalance)} Credit</span>
           ) : (
             <span className="text-[11px] text-rose-400 flex items-center gap-1 font-semibold"><CreditCard className="w-3 h-3" />{formatCurrency(balance)} Due</span>
           )}
 
-          {Number(availableCredit ?? 0) > 0 && (
+          {Number(availableCredit ?? 0) > 0 && creditBalance <= 0.01 && (
             <span className="text-[11px] text-indigo-400 font-semibold">{formatCurrency(Number(availableCredit))} Credit</span>
           )}
 
@@ -287,7 +291,7 @@ function GuestRow({ name, room, balance, availableCredit, roomStatus, status, ch
       <div className="shrink-0">
         {!isPaymentRequired && (isArrival ? status === 'CONFIRMED' : status === 'CHECKED_IN') ? (
           <button
-            onClick={isPaid ? onAction : onViewFolio}
+            onClick={canAct ? onAction : onViewFolio}
             className={cn(
               'h-9 px-4 rounded-xl text-xs font-bold transition-all duration-200 border',
               canAct
@@ -297,7 +301,7 @@ function GuestRow({ name, room, balance, availableCredit, roomStatus, status, ch
                 : 'bg-white/5 text-slate-400 border-white/10 hover:bg-white/10 hover:text-slate-300',
             )}
           >
-            {isPaid ? (isArrival ? 'Check In' : 'Check Out') : 'View Folio'}
+            {canAct ? (isArrival ? 'Check In' : 'Check Out') : 'View Folio'}
           </button>
         ) : isPaymentRequired ? (
           <button

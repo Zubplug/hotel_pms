@@ -81,6 +81,17 @@ export async function POST(
         folios = sharedCorporateFolios;
       }
 
+      // Repair stale cached balances before applying checkout rules. This is
+      // important for older folios where an advance was applied and the room
+      // charge arrived later: equal charges/payments must be settled, not a
+      // false guest credit that forces a retain/refund decision.
+      if (!reservation.corporateAccountId) {
+        for (const folio of folios) {
+          const reconciledBalance = await reconcileFolioBalanceFromCounters(tx, folio.id, { forceCounters: true });
+          if (reconciledBalance != null) folio.balance = Number(reconciledBalance);
+        }
+      }
+
       // Day-use/same-day stays must be charged at checkout because they will
       // no longer be CHECKED_IN when Night Audit selects overnight guests.
       // The deterministic operation key prevents a duplicate if another

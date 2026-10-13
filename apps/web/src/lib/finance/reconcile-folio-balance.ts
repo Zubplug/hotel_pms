@@ -11,7 +11,11 @@ import { Prisma } from '@hotel-pms/db';
  * This helper intentionally runs inside the caller's transaction. It does not
  * create a second payment or credit and is therefore safe to call on retries.
  */
-export async function reconcileFolioBalanceFromCounters(tx: any, folioId: string) {
+export async function reconcileFolioBalanceFromCounters(
+  tx: any,
+  folioId: string,
+  options: { forceCounters?: boolean } = {},
+) {
   const folio = await tx.folio.findUnique({
     where: { id: folioId },
     select: { id: true, totalCharges: true, totalPayments: true, balance: true },
@@ -24,7 +28,7 @@ export async function reconcileFolioBalanceFromCounters(tx: any, folioId: string
   // Folio-credit applications have legacy semantics: some historical flows
   // already include their value in totalPayments while others only changed
   // balance. Do not rewrite those folios from counters alone.
-  if (appliedCredits > 0) return new Prisma.Decimal(folio.balance);
+  if (appliedCredits > 0 && !options.forceCounters) return new Prisma.Decimal(folio.balance);
 
   const expectedBalance = new Prisma.Decimal(folio.totalCharges)
     .minus(folio.totalPayments);

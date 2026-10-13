@@ -2751,6 +2751,25 @@ export async function POST(req: NextRequest) {
                 `[sync/push] ADVANCE_DEPOSIT already applied for idempotencyKey: ${idempotencyKey}`
               );
             }
+
+            // An advance is a payment whether it is immediately applied to
+            // an outstanding charge or remains available as guest credit.
+            // The payment/counter writes above are authoritative; repair the
+            // cached balance from them so an overpayment becomes a negative
+            // credit balance and checkout/folio views do not use stale state.
+            const latestFolio = await tx.folio.findUnique({
+              where: { id: targetFolioId },
+              select: { totalCharges: true, totalPayments: true, balance: true },
+            });
+            if (latestFolio) {
+              const reconciledBalance = Number(latestFolio.totalCharges) - Number(latestFolio.totalPayments);
+              if (Math.abs(Number(latestFolio.balance) - reconciledBalance) > 0.01) {
+                await tx.folio.update({
+                  where: { id: targetFolioId },
+                  data: { balance: reconciledBalance, version: { increment: 1 } },
+                });
+              }
+            }
           } else if (aggregateType === "FOLIO" && eventType === "POST_PAYMENT") {
             // Folio-level payment — idempotent via posTransactionId uniqueness
             const amount = Number(payload.amount);

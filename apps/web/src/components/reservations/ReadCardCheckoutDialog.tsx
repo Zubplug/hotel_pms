@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { formatCurrency } from '@/lib/utils';
 import { CreditCard, Loader2, AlertCircle, CheckCircle2, Wallet } from 'lucide-react';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
+import { getFolioBalance } from '@/lib/finance/folio-balance';
 
 interface ReadCardCheckoutDialogProps {
   open: boolean;
@@ -122,7 +123,10 @@ export function ReadCardCheckoutDialog({ open, onOpenChange, propertyId }: ReadC
     }
   };
 
-  const balance = Number(reservation?.balance ?? reservation?.folioBalance ?? 0);
+  const folio = reservation?.folios?.[0] || reservation?.folio;
+  const balance = getFolioBalance(folio || {
+    balance: reservation?.balance ?? reservation?.folioBalance ?? 0,
+  }).signedBalance;
   const isUnpaid = balance > 0.01;
   const hasGuestCredit = balance < -0.01;
   const isFolioSettled = !isUnpaid && !hasGuestCredit;

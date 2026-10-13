@@ -1714,7 +1714,12 @@ public class OfflinePMSInterop
                 { "status", data.Status },
                 { "totalCharges", data.TotalCharges },
                 { "totalPayments", data.TotalPayments },
-                { "balance", Math.Max(0m, data.CheckoutBalance) },
+                // Keep the signed balance. Positive means debt; negative means
+                // a guest credit. Clamping here made credits look like a zero
+                // balance and caused checkout/folio screens to disagree.
+                { "balance", data.CheckoutBalance },
+                { "outstandingBalance", data.OutstandingBalance },
+                { "creditBalance", data.CreditBalance },
                 { "availableCredit", data.AvailableCredit },
                 { "createdAt", data.CreatedAt },
                 { "updatedAt", data.UpdatedAt },

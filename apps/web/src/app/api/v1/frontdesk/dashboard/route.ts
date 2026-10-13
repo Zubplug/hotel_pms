@@ -4,6 +4,7 @@ import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
 import { requireOrganizationContext } from "@/lib/organization-access";
 import { reconcileRoomOccupancy } from '@/lib/room-occupancy';
+import { getFolioBalance } from '@/lib/finance/folio-balance';
 
 export async function GET(req: NextRequest) {
   try {
@@ -139,7 +140,7 @@ export async function GET(req: NextRequest) {
 
     const formatGuestList = (resList: any[]) => resList.map(res => {
       const folio = res.folios?.[0];
-      const balance = folio ? Number(folio.balance || 0) : null;
+      const balance = folio ? getFolioBalance(folio).signedBalance : null;
       const availableCredit = folio?.credits?.reduce((sum: number, credit: any) => sum + Math.max(0, Number(credit.remainingAmount || 0)), 0) || 0;
       
       let arrivalStatus = 'Ready';

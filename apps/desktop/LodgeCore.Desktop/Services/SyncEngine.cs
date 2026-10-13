@@ -289,6 +289,13 @@ public class SyncEngine : BackgroundService
                     try { await PushFrontDeskOutboxAsync(stoppingToken); } catch (Exception ex) { _logger.LogError(ex, "Failed to push Front Desk events"); }
                     try { await PushKeycardAuditsAsync(stoppingToken); } catch (Exception ex) { _logger.LogError(ex, "Failed to push Keycard events"); }
 
+                    // Pushes happen after the control-state pull above. Pull
+                    // once more so accepted offline payments/advances and the
+                    // repaired folio balance are visible immediately instead
+                    // of waiting for the next (possibly backoff-delayed) cycle.
+                    try { await PullUpdatesAsync(stoppingToken); }
+                    catch (Exception ex) { _logger.LogWarning(ex, "Post-push pull failed; accepted events will be reflected on the next sync cycle."); }
+
                     try { await SyncRefundStatusesAsync(stoppingToken); } catch (Exception ex) { _logger.LogWarning(ex, "Failed to sync refund statuses"); }
 
                     // Resolve any conflicts that emerged from the push/pull

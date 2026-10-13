@@ -91,6 +91,7 @@ public class LocalFolio
         ? CloudBalance.Value
         : NetBalance;
     public decimal OutstandingBalance => Math.Max(0m, CheckoutBalance);
+    public decimal CreditBalance => Math.Max(0m, -CheckoutBalance);
     public string? Currency { get; set; }
 
     // Storing transactions as JSON string for simplicity offline, or we could make a separate table

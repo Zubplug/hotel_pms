@@ -7,6 +7,7 @@ import { calculateFolioTotals } from '@/lib/finance/folio-totals';
 import { applyAvailableFolioCredit } from '@/lib/finance/apply-folio-credit';
 import { isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
 import { getPropertyBusinessDate } from '@/lib/date-utils';
+import { getFolioBalance } from '@/lib/finance/folio-balance';
 import { requireOrganizationContext } from "@/lib/organization-access";
 
 export async function GET(
@@ -166,7 +167,7 @@ export async function GET(
       // authoritative. Computing it as totalCharges - totalPayments - creditApplications
       // was fragile: advance deposits increment both totalPayments (cash received)
       // AND creditApplications (credit applied), causing double-subtraction.
-      balance: Number(folio.balance),
+      balance: getFolioBalance(folio).signedBalance,
       availableCredit: folio.credits.reduce((sum, credit) => sum + Number(credit.remainingAmount), 0) + guestCreditAvailable,
       appliedCreditAmount: folio.creditApplications.reduce((sum, application) => sum + Number(application.amount), 0),
       // Total of ALL advance deposits / credits ever received (regardless of status).

@@ -8,6 +8,7 @@ import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { cn } from '@/lib/utils';
 import { HardwareBridge } from '@/lib/desktop/HardwareBridge';
 import { ManagerOverrideModal } from '../pos/ManagerOverrideModal';
+import { getFolioBalance } from '@/lib/finance/folio-balance';
 
 interface FrontDeskQuickCheckoutDialogProps {
   open: boolean;
@@ -125,10 +126,14 @@ export function FrontDeskQuickCheckoutDialog({ open, onOpenChange, propertyId, i
     } catch { setPrintStatus('FAILED'); }
   };
 
-  // Folio.balance is the authoritative checkout balance. netBalance is a
-  // legacy desktop-derived value and can represent an exhausted advance
-  // deposit as a negative credit even when the persisted folio is settled.
-  const balance = (reservation?.folios || []).reduce((total: number, folio: any) => total + Number(folio?.balance ?? 0), 0);
+  // Prefer the signed cached balance, but repair stale legacy snapshots from
+  // the authoritative counters when charges and payments are available.
+  // Without this, an exhausted advance can display as guest credit even when
+  // the folio is fully settled.
+  const balance = (reservation?.folios || []).reduce(
+    (total: number, folio: any) => total + getFolioBalance(folio).signedBalance,
+    0,
+  );
   const isCorporate = Boolean(reservation?.corporateAccountId || reservation?.corporateAccount);
   const isUnpaid = balance > 0.01;
   const isGuestUnpaid = isUnpaid && !isCorporate;

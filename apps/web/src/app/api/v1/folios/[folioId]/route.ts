@@ -5,6 +5,7 @@ import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { errorResponse, successResponse } from '@/lib/api-response';
 import { assertPropertyAccess } from '@/lib/property-access';
+import { getFolioBalance } from '@/lib/finance/folio-balance';
 
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ folioId: string }> }) {
   const session = await auth();
@@ -45,11 +46,12 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   // totalCreditsReceived: ALL credits ever recorded (including EXHAUSTED), used to
   // show the correct "Payments received" total even after deposits are fully applied.
   const totalCreditsReceived = folio.credits.reduce((sum, c) => sum + Number(c.amount), 0);
+  const signedBalance = getFolioBalance(folio).signedBalance;
   return successResponse({
     ...folio,
     totalCharges: Number(folio.totalCharges),
     totalPayments: Number(folio.totalPayments),
-    balance: Number(folio.balance),
+    balance: signedBalance,
     availableCredit,
     totalCreditsReceived,
     credits: folio.credits.map((credit) => ({ ...credit, amount: Number(credit.amount), remainingAmount: Number(credit.remainingAmount) })),

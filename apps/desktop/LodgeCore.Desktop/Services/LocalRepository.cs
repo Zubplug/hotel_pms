@@ -2220,6 +2220,7 @@ public class LocalRepository
         });
 
         await _dbContext.SaveChangesAsync();
+        SyncEngine.Instance?.TriggerManualSync();
         return true;
     }
 
@@ -2314,6 +2315,7 @@ public class LocalRepository
         });
 
         await _dbContext.SaveChangesAsync();
+        SyncEngine.Instance?.TriggerManualSync();
         return true;
     }
 

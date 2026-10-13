@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Loader2, ArrowRight, FileCheck2, Building2, X, Wallet } from 'lucide-react';
+import { getFolioBalance } from '@/lib/finance/folio-balance';
 
 export function CheckOutDialog({ open, onOpenChange, reservation, folio }: { open: boolean, onOpenChange: (open: boolean) => void, reservation: any, folio: any }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -11,7 +12,7 @@ export function CheckOutDialog({ open, onOpenChange, reservation, folio }: { ope
   
   const queryClient = useQueryClient();
 
-  const balance = Number(folio?.balance || 0);
+  const balance = getFolioBalance(folio || {}).signedBalance;
   const currency = folio?.currency || 'NGN';
 
   const handleCheckOut = async () => {
