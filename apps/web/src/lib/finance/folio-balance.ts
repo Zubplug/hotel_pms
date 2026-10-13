@@ -4,10 +4,12 @@
  * guest credit. The persisted balance is a cache; counters repair stale cache
  * values at read boundaries.
  */
+type DecimalLike = number | string | { toString(): string } | null;
+
 export type FolioBalanceSource = {
-  balance?: number | string | null;
-  totalCharges?: number | string | null;
-  totalPayments?: number | string | null;
+  balance?: DecimalLike;
+  totalCharges?: DecimalLike;
+  totalPayments?: DecimalLike;
 };
 
 export function getFolioBalance(input: FolioBalanceSource) {
