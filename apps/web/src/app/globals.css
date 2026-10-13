@@ -13,7 +13,10 @@
   background: radial-gradient(circle at 75% -10%, rgba(20, 184, 166, .09), transparent 32%), var(--ess-bg) !important;
 }
 .ess-shell .ess-topbar { box-shadow: 0 12px 30px rgba(0,0,0,.12); }
-.ess-shell .ess-page { animation: ess-page-in .35s ease-out both; }
+/* `backwards` (not `both`) so no transform persists after the entry animation;
+   a lingering transform turns the page into the containing block for
+   position:fixed overlays and traps them beneath the mobile tab bar. */
+.ess-shell .ess-page { animation: ess-page-in .35s ease-out backwards; }
 .ess-page > section > div,
 .ess-page > div:not(.fixed),
 .ess-page > form,
@@ -60,7 +63,7 @@ body:has(.ess-shell) [data-slot='dialog-content'] [data-slot='dialog-close'] {
 body:has(.ess-shell) [data-slot='dialog-content'] [data-slot='dialog-close']:hover { background: rgba(255,255,255,.08); color: #fff; }
 .ess-manual-dialog { background: rgba(2, 8, 18, .78); }
 .ess-dialog-card { border-color: rgba(148,163,184,.20) !important; background: linear-gradient(145deg, #102337, #0b1725) !important; box-shadow: 0 28px 90px rgba(0,0,0,.48) !important; animation: ess-dialog-in .2s ease-out both; }
-@keyframes ess-page-in { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes ess-page-in { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
 @keyframes ess-dialog-in { from { opacity: 0; transform: translateY(8px) scale(.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
 @keyframes ess-sheet-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
 .ess-sheet-in { animation: ess-sheet-up .28s cubic-bezier(.2,.8,.2,1) both; }
@@ -104,22 +107,42 @@ body:has(.ess-shell) [data-slot='dialog-content'] [data-slot='dialog-close']:hov
     top: auto !important; bottom: 0 !important; left: 0 !important; right: 0 !important;
     translate: none !important; transform: none !important;
     width: 100% !important; max-width: 100% !important;
-    max-height: 92dvh; overflow-y: auto; overscroll-behavior: contain;
+    max-height: calc(100dvh - 1.5rem - env(safe-area-inset-top)) !important;
+    overflow-y: auto !important; overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
     border-radius: 1.5rem 1.5rem 0 0 !important;
     border-bottom: 0 !important;
-    padding-bottom: calc(1rem + env(safe-area-inset-bottom));
+    padding-bottom: calc(1rem + env(safe-area-inset-bottom)) !important;
     animation: ess-sheet-up .28s cubic-bezier(.2,.8,.2,1) both !important;
   }
+  /* Dialogs with a footer: the footer owns the bottom padding and stays pinned. */
+  body:has(.ess-shell) [data-slot='dialog-content']:has([data-slot='dialog-footer']) { padding-bottom: 0 !important; }
   body:has(.ess-shell) [data-slot='dialog-content']::before {
-    content: ''; display: block; width: 2.5rem; height: .35rem; margin: -.25rem auto .5rem;
+    content: ''; display: block; width: 2.5rem; height: .35rem; margin: -.25rem auto 0;
     border-radius: 999px; background: rgba(255,255,255,.15);
   }
   body:has(.ess-shell) [data-slot='dialog-content'] [data-slot='dialog-footer'] {
-    position: sticky; bottom: calc(-1rem - env(safe-area-inset-bottom)); z-index: 2;
+    position: sticky; bottom: 0; z-index: 2;
+    margin-bottom: 0 !important; border-radius: 0 !important;
+    padding-bottom: calc(1rem + env(safe-area-inset-bottom)) !important;
     display: flex; flex-direction: column-reverse; gap: .5rem;
-    background: #0b1725 !important; backdrop-filter: blur(10px);
+    background: #0b1725 !important;
   }
   body:has(.ess-shell) [data-slot='dialog-content'] [data-slot='dialog-footer'] button { width: 100%; min-height: 3rem; font-size: .875rem; }
+
+  /* Hand-rolled overlays (Support, Expenses): become scrollable bottom sheets. */
+  .ess-shell .fixed.inset-0.z-50:has(> form) {
+    align-items: flex-end !important; padding: 0 !important;
+    padding-top: calc(1.5rem + env(safe-area-inset-top)) !important;
+    overflow-y: auto; overscroll-behavior: contain;
+  }
+  .ess-shell .fixed.inset-0.z-50 > form {
+    max-width: 100% !important;
+    max-height: calc(100dvh - 1.5rem - env(safe-area-inset-top));
+    overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
+    border-radius: 1.5rem 1.5rem 0 0 !important; border-bottom: 0 !important;
+    padding: 1.25rem 1rem calc(1.25rem + env(safe-area-inset-bottom)) !important;
+    animation: ess-sheet-up .28s cubic-bezier(.2,.8,.2,1) both !important;
+  }
 }
 
 /* General Manager executive control room. The route is intentionally scoped so
