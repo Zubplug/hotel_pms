@@ -227,7 +227,7 @@ export default function EmployeeSelfServicePage() {
   }
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
+    <div className="ess-page p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
       {false && <>
       <section className="relative overflow-hidden rounded-[2rem] border border-teal-400/20 bg-[radial-gradient(circle_at_top_right,rgba(20,184,166,0.18),transparent_36%),linear-gradient(135deg,#102d39_0%,#0b1725_52%,#08111d_100%)] p-6 shadow-2xl shadow-black/20 sm:p-8">
         <div className="pointer-events-none absolute -bottom-24 -left-16 h-56 w-56 rounded-full bg-cyan-400/10 blur-3xl" />

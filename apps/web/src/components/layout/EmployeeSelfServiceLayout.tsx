@@ -89,7 +89,7 @@ export function EmployeeSelfServiceLayout({ children }: { children: React.ReactN
   );
 
   return (
-    <div className="flex min-h-screen bg-[#07111c] text-slate-100">
+    <div className="ess-shell flex min-h-screen bg-[#07111c] text-slate-100">
       <div className="hidden lg:block"><SideNav /></div>
       {menuOpen && (
         <div className="fixed inset-0 z-50 lg:hidden">
@@ -98,7 +98,7 @@ export function EmployeeSelfServiceLayout({ children }: { children: React.ReactN
         </div>
       )}
       <main className="min-w-0 flex-1">
-        <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-white/10 bg-[#07111c]/95 px-4 backdrop-blur sm:px-6">
+        <header className="ess-topbar sticky top-0 z-30 flex h-16 items-center justify-between border-b border-white/10 bg-[#07111c]/95 px-4 backdrop-blur sm:px-6">
           <div className="flex items-center gap-3">
             <Button variant="outline" size="icon" onClick={() => setMenuOpen(true)} className="border-white/10 bg-white/5 text-slate-300 lg:hidden" aria-label="Open employee navigation"><Menu className="h-4 w-4" /></Button>
             <div><p className="text-[10px] font-bold uppercase tracking-[0.18em] text-teal-300">Employee self-service</p><p className="text-sm font-semibold text-white">Your workplace hub</p></div>

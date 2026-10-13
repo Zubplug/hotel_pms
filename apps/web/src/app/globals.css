@@ -2,6 +2,67 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
+/* Employee self-service visual system. Scoped to the employee portal so the
+   HR redesign can evolve independently from the operational PMS surfaces. */
+.ess-shell {
+  --ess-bg: #07111c;
+  --ess-panel: rgba(13, 28, 43, .88);
+  --ess-panel-strong: #0c1b2b;
+  --ess-border: rgba(148, 163, 184, .14);
+  --ess-accent: #2dd4bf;
+  background: radial-gradient(circle at 75% -10%, rgba(20, 184, 166, .09), transparent 32%), var(--ess-bg) !important;
+}
+.ess-shell .ess-topbar { box-shadow: 0 12px 30px rgba(0,0,0,.12); }
+.ess-shell .ess-page { animation: ess-page-in .35s ease-out both; }
+.ess-page > section > div,
+.ess-page > div:not(.fixed),
+.ess-page > form,
+.ess-page > section > article {
+  border-color: var(--ess-border);
+  box-shadow: 0 14px 36px rgba(0,0,0,.10);
+}
+.ess-page input:not([type='checkbox']),
+.ess-page textarea,
+.ess-page [role='combobox'] {
+  border-color: rgba(148,163,184,.20) !important;
+  border-radius: .75rem;
+  transition: border-color .2s, box-shadow .2s, background-color .2s;
+}
+.ess-page input:not([type='checkbox']):focus,
+.ess-page textarea:focus,
+.ess-page [role='combobox']:focus-visible {
+  border-color: rgba(45,212,191,.72) !important;
+  box-shadow: 0 0 0 4px rgba(45,212,191,.10) !important;
+}
+.ess-shell [data-slot='select-trigger'] { border-color: rgba(148,163,184,.20); color: #e2e8f0; }
+.ess-shell [data-slot='select-trigger']:hover { border-color: rgba(45,212,191,.45); background: rgba(255,255,255,.035); }
+.ess-shell [data-slot='select-content'] {
+  border: 1px solid rgba(148,163,184,.20) !important;
+  background: #0c1b2b !important;
+  color: #e2e8f0 !important;
+  box-shadow: 0 22px 60px rgba(0,0,0,.42) !important;
+}
+.ess-shell [data-slot='select-item']:focus { background: rgba(45,212,191,.14); color: #ccfbf1; }
+.ess-shell [data-slot='select-item'][data-highlighted] { background: rgba(45,212,191,.14); color: #ccfbf1; }
+body:has(.ess-shell) [data-slot='dialog-overlay'] { background: rgba(2, 8, 18, .78) !important; backdrop-filter: blur(8px); }
+body:has(.ess-shell) [data-slot='dialog-content'] {
+  border: 1px solid rgba(148,163,184,.20) !important;
+  background: linear-gradient(145deg, #102337, #0b1725) !important;
+  box-shadow: 0 28px 90px rgba(0,0,0,.48), 0 0 0 1px rgba(45,212,191,.04) !important;
+}
+body:has(.ess-shell) [data-slot='dialog-content'] [data-slot='dialog-footer'] {
+  border-color: rgba(148,163,184,.13); background: rgba(2,8,18,.24);
+}
+body:has(.ess-shell) [data-slot='dialog-content'] > button[aria-label='Close'],
+body:has(.ess-shell) [data-slot='dialog-content'] [data-slot='dialog-close'] {
+  border-radius: .65rem; color: #94a3b8; transition: .2s;
+}
+body:has(.ess-shell) [data-slot='dialog-content'] [data-slot='dialog-close']:hover { background: rgba(255,255,255,.08); color: #fff; }
+.ess-manual-dialog { background: rgba(2, 8, 18, .78); }
+.ess-dialog-card { border-color: rgba(148,163,184,.20) !important; background: linear-gradient(145deg, #102337, #0b1725) !important; box-shadow: 0 28px 90px rgba(0,0,0,.48) !important; animation: ess-dialog-in .2s ease-out both; }
+@keyframes ess-page-in { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes ess-dialog-in { from { opacity: 0; transform: translateY(8px) scale(.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
+
 /* General Manager executive control room. The route is intentionally scoped so
    the rest of the PMS can keep its existing theme tokens and workflows. */
 .gm-shell {
