@@ -1453,7 +1453,11 @@ public class LocalRepository
                 if (!string.IsNullOrWhiteSpace(ratePlanId))
                 {
                     var plan = await _dbContext.RatePlans.FirstOrDefaultAsync(p => p.Id == ratePlanId);
-                    if (plan != null && (plan.Type == "CORPORATE" || reservation.CorporateAccountId != null))
+                    // Match the cloud rule: only a linked corporate account
+                    // represents a corporate stay. A normal room reservation
+                    // may use a rate plan labelled CORPORATE and still gets
+                    // the standard food allocation.
+                    if (plan != null && reservation.CorporateAccountId != null)
                     {
                         corporateOverride = plan.IncludeFoodAllocation;
                     }
@@ -5837,7 +5841,10 @@ public class LocalRepository
                 {
                     var ratePlan = await _dbContext.RatePlans
                         .FirstOrDefaultAsync(rp => rp.Id == ratePlanId);
-                    if (ratePlan != null && (string.Equals(ratePlan.Type, "CORPORATE", StringComparison.OrdinalIgnoreCase) || !string.IsNullOrEmpty(reservation.CorporateAccountId)))
+                    // A rate plan labelled CORPORATE is not sufficient to
+                    // identify a corporate stay. Corporate reservations have
+                    // a linked account and use the shared CITY_LEDGER folio.
+                    if (ratePlan != null && !string.IsNullOrEmpty(reservation.CorporateAccountId))
                     {
                         if (!ratePlan.IncludeFoodAllocation)
                         {

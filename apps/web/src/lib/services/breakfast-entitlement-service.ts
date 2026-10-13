@@ -149,9 +149,10 @@ export class BreakfastEntitlementService {
 
     // 2. Resolve Rate Breakdown Configuration & Policy Rules
     const breakdownConfig = resolveBreakdownConfig(property.settings as any);
-    const corporateRatePlan =
-      reservation.corporateAccount?.ratePlan ||
-      (reservation.ratePlan?.type === 'CORPORATE' ? reservation.ratePlan : null);
+    // Corporate eligibility comes from the linked corporate account, not the
+    // label of the selected rate plan. Ordinary room-folio reservations may
+    // use a plan marked CORPORATE and still receive breakfast.
+    const corporateRatePlan = reservation.corporateAccount?.ratePlan || null;
     const corporateFoodOverride = corporateRatePlan
       ? Boolean(corporateRatePlan.includeFoodAllocation)
       : null;

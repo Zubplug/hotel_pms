@@ -10,6 +10,7 @@ import { calculateNoShowAssessment } from "@/lib/refunds/no-show";
 import { calculateFolioTotals } from "@/lib/finance/folio-totals";
 import { applyAvailableFolioCredit } from "@/lib/finance/apply-folio-credit";
 import { applyAvailableGuestLedgerCredit } from "@/lib/finance/apply-guest-ledger-credit";
+import { reconcileFolioBalanceFromCounters } from "@/lib/finance/reconcile-folio-balance";
 import { assertOfflineSessionOpenDate, isNightAuditCutoverActive } from "@/lib/night-audit-guard";
 import { getPropertyBusinessDate } from "@/lib/date-utils";
 import { getApprovedRoomDiscount } from "@/lib/finance/approved-room-discount";
@@ -1978,6 +1979,11 @@ export async function POST(req: NextRequest) {
                 remainingToApply -= applied;
               }
             }
+
+            // A payment may have been received before the charge reached the
+            // server. Reconcile the cached balance after the complete event so
+            // stale CloudBalance values cannot block offline checkout.
+            await reconcileFolioBalanceFromCounters(tx, aggregateId);
           } else if (aggregateType === "FOLIO" && eventType === "DISCOUNT_REQUESTED") {
             const folio = await tx.folio.findUnique({ where: { id: aggregateId, propertyId } });
             if (folio) {

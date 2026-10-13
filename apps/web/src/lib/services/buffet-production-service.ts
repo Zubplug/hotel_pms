@@ -160,8 +160,8 @@ export class BuffetProductionService {
 
     let entitledInHouseCovers = 0;
     for (const res of activeReservations) {
-      const isCorporate = Boolean(res.corporateAccount || res.ratePlan?.type === 'CORPORATE');
-      const corporatePlan = res.corporateAccount?.ratePlan || res.ratePlan;
+      const isCorporate = Boolean(res.corporateAccount);
+      const corporatePlan = res.corporateAccount?.ratePlan || null;
       if (isCorporate && corporatePlan && !corporatePlan.includeFoodAllocation) {
         continue;
       }

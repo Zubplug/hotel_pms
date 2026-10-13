@@ -80,11 +80,16 @@ public class LocalFolio
         return value.ValueKind == JsonValueKind.String && decimal.TryParse(value.GetString(), out var text) ? text : 0m;
     }
 
-    // The balance used for checkout decisions. CloudBalance is the latest
-    // server-authoritative value; NetBalance is the offline fallback when no
-    // cloud snapshot has been received yet.
-    public decimal CheckoutBalance => CloudBalance ?? NetBalance;
     public decimal NetBalance => TotalCharges - TotalPayments - AppliedCreditAdjustmentAmount;
+
+    // The server balance is a cache of the same ledger represented by the
+    // synced counters. Never allow a contradictory cached value to block an
+    // offline checkout; this is especially important when a payment arrived
+    // before Night Audit posted the room charge.
+    public bool HasBalanceConflict => CloudBalance.HasValue && Math.Abs(CloudBalance.Value - NetBalance) > 0.01m;
+    public decimal CheckoutBalance => CloudBalance.HasValue && !HasBalanceConflict
+        ? CloudBalance.Value
+        : NetBalance;
     public decimal OutstandingBalance => Math.Max(0m, CheckoutBalance);
     public string? Currency { get; set; }
 

@@ -3024,6 +3024,7 @@ enum AdjustmentReason {
 enum StockTransactionSource {
   RECEIPT
   SALE
+  GUEST_AMENITY
   TRANSFER
   ADJUSTMENT
   WASTE

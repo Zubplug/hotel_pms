@@ -128,6 +128,42 @@ describe('Production Certification: Rate Breakdown, Offline Parity & Breakfast L
       expect(result.remainingCovers).toBe(0);
     });
 
+    it('does not exclude a normal room folio merely because its rate plan is labelled corporate', async () => {
+      const mockTx = {
+        property: {
+          findUnique: vi.fn().mockResolvedValue({
+            id: 'prop-1',
+            businessDate: new Date('2026-10-12'),
+            settings: {},
+          }),
+        },
+        reservation: {
+          findFirst: vi.fn().mockResolvedValue({
+            id: 'res-ordinary-corp-plan',
+            status: 'CHECKED_IN',
+            adults: 2,
+            reservationRooms: [{ room: { number: '102' } }],
+            corporateAccount: null,
+            ratePlan: {
+              type: 'CORPORATE',
+              includeFoodAllocation: false,
+            },
+          }),
+        },
+        breakfastRedemption: {
+          findMany: vi.fn().mockResolvedValue([]),
+        },
+      };
+
+      const result = await BreakfastEntitlementService.checkEntitlement(
+        { propertyId: 'prop-1', reservationId: 'res-ordinary-corp-plan' },
+        mockTx as any,
+      );
+
+      expect(result.eligible).toBe(true);
+      expect(result.remainingCovers).toBe(2);
+    });
+
     it('denies entitlement when stay is discounted and property setting suppresses food', async () => {
       const mockTx = {
         property: {

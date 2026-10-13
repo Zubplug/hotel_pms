@@ -3,6 +3,7 @@ import { randomUUID } from "crypto";
 import { FolioItemSource, PaymentMethod } from "@hotel-pms/db";
 import { applyAvailableFolioCredit } from "@/lib/finance/apply-folio-credit";
 import { applyAvailableGuestLedgerCredit } from "@/lib/finance/apply-guest-ledger-credit";
+import { reconcileFolioBalanceFromCounters } from "@/lib/finance/reconcile-folio-balance";
 
 export class PaymentService {
   /**
@@ -140,6 +141,8 @@ export class PaymentService {
             description: `Applied previous-stay guest credit to POS charge - Order #${order.orderNumber}`,
           });
         }
+
+        await reconcileFolioBalanceFromCounters(tx, folio.id);
       }
 
       // 4. Create Payment Ledger Record (PosPayment acts as the ledger)

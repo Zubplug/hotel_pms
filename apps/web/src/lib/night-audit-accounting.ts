@@ -18,6 +18,8 @@ const ACCOUNT_CODES = {
   complimentary: '4950',
   refunds: '4910',
   serviceCharge: '2210',
+  guestAmenityCogs: '5000',
+  guestAmenityInventory: '1300',
 } as const;
 
 type PostingLine = {
@@ -161,7 +163,7 @@ export async function postNightAuditJournal(tx: any, input: {
   });
   if (!period) return { status: 'ACCOUNTING_PERIOD_LOCKED', journalEntryId: null, missingAccounts: ['OPEN_ACCOUNTING_PERIOD'], lineCount: 0 };
 
-  const [folioItems, payments, refunds, fnbDepartment, recreationDepartment, posOutlets] = await Promise.all([
+  const [folioItems, payments, refunds, fnbDepartment, recreationDepartment, posOutlets, guestAmenityTransactions] = await Promise.all([
     tx.folioItem.findMany({
       where: { 
         folio: { propertyId: input.propertyId }, 
@@ -187,6 +189,10 @@ export async function postNightAuditJournal(tx: any, input: {
     tx.department.findFirst({ where: { propertyId: input.propertyId, name: { in: ['F&B', 'Food & Beverage', 'Food and Beverage'] } }, select: { id: true } }),
     tx.department.findFirst({ where: { propertyId: input.propertyId, name: { in: ['Recreation', 'Pool'] } }, select: { id: true } }),
     tx.posOutlet.findMany({ where: { propertyId: input.propertyId }, select: { id: true, type: true } }),
+    tx.stockTransaction.findMany({
+      where: { propertyId: input.propertyId, businessDate: input.businessDate, source: 'GUEST_AMENITY' },
+      select: { id: true, totalValue: true, stockItem: { select: { name: true } } },
+    }),
   ]);
   const outletTypes = new Map(posOutlets.map((o: any) => [o.id, o.type]));
 
@@ -231,6 +237,32 @@ export async function postNightAuditJournal(tx: any, input: {
             : 'otherRevenue';
       addLine(lines, { accountId: account('guestLedger').id, debit: amount, credit: 0, description: item.description, sourceType: 'FOLIO_ITEM', sourceId: item.id });
       addLine(lines, { accountId: eventAccount?.id || account(key!).id, debit: 0, credit: amount, description: item.description, sourceType: 'FOLIO_ITEM', sourceId: item.id });
+    }
+  }
+
+  // Complimentary guest amenities are not guest revenue. Their stock is
+  // consumed at current cost: debit guest-amenity COGS (5000) and credit
+  // inventory (1300), linked one-to-one to the stock transaction.
+  if (guestAmenityTransactions.length > 0) {
+    const amenityCogs = byCode.get(ACCOUNT_CODES.guestAmenityCogs);
+    const amenityInventory = byCode.get(ACCOUNT_CODES.guestAmenityInventory);
+    if (!amenityCogs || !amenityInventory) {
+      return {
+        status: 'MISSING_MAPPING',
+        journalEntryId: null,
+        missingAccounts: [
+          ...(!amenityCogs ? [`GUEST_AMENITY_COGS_${ACCOUNT_CODES.guestAmenityCogs}`] : []),
+          ...(!amenityInventory ? [`GUEST_AMENITY_INVENTORY_${ACCOUNT_CODES.guestAmenityInventory}`] : []),
+        ],
+        lineCount: lines.length,
+      };
+    }
+    for (const transaction of guestAmenityTransactions) {
+      const amount = Math.abs(Number(transaction.totalValue || 0));
+      if (!amount) continue;
+      const description = `Complimentary guest amenity stock: ${transaction.stockItem?.name || 'Amenity'}`;
+      addLine(lines, { accountId: amenityCogs.id, debit: amount, credit: 0, description, sourceType: 'GUEST_AMENITY_STOCK', sourceId: transaction.id });
+      addLine(lines, { accountId: amenityInventory.id, debit: 0, credit: amount, description, sourceType: 'GUEST_AMENITY_STOCK', sourceId: transaction.id });
     }
   }
 

@@ -13,6 +13,7 @@ import { upsertCheckoutHousekeepingTask } from '@/lib/housekeeping-task';
 import { routeFoliosToCityLedger } from '@/lib/finance/route-folio-to-city-ledger';
 import { applyAvailableFolioCredit } from '@/lib/finance/apply-folio-credit';
 import { applyAvailableGuestLedgerCredit } from '@/lib/finance/apply-guest-ledger-credit';
+import { reconcileFolioBalanceFromCounters } from '@/lib/finance/reconcile-folio-balance';
 import { getPropertyBusinessDate } from '@/lib/date-utils';
 import { getApprovedRoomDiscount } from '@/lib/finance/approved-room-discount';
 
@@ -195,6 +196,9 @@ export async function POST(
             // folio-credit applications only change the balance.
             if (cityLedgerCreditApplied > 0.01) folio.version += 1;
           }
+
+          const reconciledBalance = await reconcileFolioBalanceFromCounters(tx, folio.id);
+          if (reconciledBalance) folio.balance = Number(reconciledBalance);
         }
       }
 

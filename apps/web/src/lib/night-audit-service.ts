@@ -597,8 +597,10 @@ export async function getFinancialAudit(ctx: TenantContext, propertyId: string) 
     // approved concession is posted separately as a contra-revenue line.
     const effectiveGross = discount > 0 ? gross : Math.max(0, gross - discount);
     const breakdownConfig = resolveBreakdownConfig((property.settings as any) || {});
-    const corporateRatePlan = reservation.corporateAccount?.ratePlan ||
-      (reservation.ratePlan?.type === 'CORPORATE' ? reservation.ratePlan : null);
+    // Only a linked corporate account makes this a corporate stay. A
+    // reservation can use a rate plan labelled CORPORATE while still having
+    // a normal room folio; that must not suppress complimentary food.
+    const corporateRatePlan = reservation.corporateAccount?.ratePlan || null;
     const corporateFoodAllocationOverride = corporateRatePlan
       ? Boolean(corporateRatePlan.includeFoodAllocation)
       : null;

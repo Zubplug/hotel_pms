@@ -4,9 +4,11 @@ import crypto from 'crypto';
 import { NotificationEngine } from '@/lib/notification-engine';
 import { applyAvailableFolioCredit } from '@/lib/finance/apply-folio-credit';
 import { applyAvailableGuestLedgerCredit } from '@/lib/finance/apply-guest-ledger-credit';
+import { reconcileFolioBalanceFromCounters } from '@/lib/finance/reconcile-folio-balance';
 import { postNightAuditJournal, buildNightAuditBalanceProof } from './night-audit-accounting';
 import { processLeaseBilling } from './events/lease-actions';
 import { resolveBreakdownConfig, computeRateBreakdown } from './room-rate-breakdown';
+import { postGuestAmenityPackInTransaction } from './services/guest-amenity-service';
 
 const BATCH_SIZE = 50;
 
@@ -242,7 +244,7 @@ export async function executeNightAudit(
     confirmationNumber: string;
     guestName: string;
     roomNumber: string | null;
-    stage: 'ROOM_CHARGE' | 'HOUSEKEEPING';
+    stage: 'ROOM_CHARGE' | 'GUEST_AMENITIES' | 'HOUSEKEEPING';
     message: string;
   }> = [];
   let leaseBilling = { processedCount: 0 };
@@ -527,7 +529,12 @@ export async function executeNightAudit(
               const breakdownConfig = resolveBreakdownConfig((property as any).settings);
               const roomTypeName = activeRoom?.room?.roomType?.name || activeRoom?.roomTypeId || undefined;
               const isDiscountedStay = discountDeduction > 0 || Boolean(verifiedComplimentary);
-              const corporateRatePlan = reservation.corporateAccount?.ratePlan || (reservation.ratePlan?.type === 'CORPORATE' ? reservation.ratePlan : null);
+              // A rate plan's type is not proof that this reservation is
+              // corporate. Corporate reservations are identified by the
+              // linked corporate account and its shared CITY_LEDGER folio.
+              // Some ordinary reservations use a plan labelled CORPORATE;
+              // they must not lose their breakfast allocation.
+              const corporateRatePlan = reservation.corporateAccount?.ratePlan || null;
               const corporateFoodAllocationOverride = corporateRatePlan ? Boolean(corporateRatePlan.includeFoodAllocation) : null;
               const breakdown = computeRateBreakdown(
                 grossRoomCharge,
@@ -722,7 +729,24 @@ export async function executeNightAudit(
                 description: `Applied previous-stay guest credit to room charge - ${businessDate.toISOString().split('T')[0]}`,
               });
             }
+
+            // Advance payments can arrive before this night's room charge.
+            // Rebuild the cached balance after all credit applications so the
+            // posting order cannot leave a stale debt on the folio.
+            await reconcileFolioBalanceFromCounters(tx, mainFolio.id);
           }
+
+          // Complimentary in-room amenities are free to the guest but are
+          // consumed from housekeeping/laundry stock at the current cost.
+          // This remains in the same reservation transaction and is idempotent
+          // per reservation, business date, and stock item.
+          await postGuestAmenityPackInTransaction(tx, {
+            propertyId,
+            reservationId: reservation.id,
+            businessDate,
+            guestCount: Math.max(1, Number(reservation.adults || 0) + Number(reservation.children || 0)),
+            actorId,
+          });
 
           // Generate Housekeeping Tasks Idempotently. Housekeeping is best
           // effort: a task conflict or room update failure must not roll back
@@ -798,7 +822,9 @@ export async function executeNightAudit(
             ? `${reservation.primaryGuest.firstName} ${reservation.primaryGuest.lastName}`.trim()
             : 'Unknown Guest',
           roomNumber: reservation.reservationRooms?.[0]?.room?.number || null,
-          stage: 'ROOM_CHARGE',
+          stage: e instanceof Error && /GUEST_AMENITY|guest amenity/i.test(e.message)
+            ? 'GUEST_AMENITIES'
+            : 'ROOM_CHARGE',
           message: e instanceof Error ? e.message : String(e),
         });
       }
@@ -952,9 +978,10 @@ export async function executeNightAudit(
   const journalBusinessDate = new Date(businessDate.getTime());
 
   const roomChargeExceptions = postingExceptions.filter((exception) => exception.stage === 'ROOM_CHARGE');
-  if (roomChargeExceptions.length > 0) {
+  const guestAmenityExceptions = postingExceptions.filter((exception) => exception.stage === 'GUEST_AMENITIES');
+  if (roomChargeExceptions.length > 0 || guestAmenityExceptions.length > 0) {
     throw new Error(
-      `BLOCKER:Night Audit could not post ${roomChargeExceptions.length} room charge(s). Resolve the listed reservation errors and retry the audit.`,
+      `BLOCKER:Night Audit could not post ${roomChargeExceptions.length} room charge(s) and ${guestAmenityExceptions.length} guest amenity stock deduction(s). Resolve the listed reservation errors and retry the audit.`,
     );
   }
 

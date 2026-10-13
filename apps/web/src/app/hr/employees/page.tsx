@@ -56,6 +56,7 @@ export default function EmployeesPage() {
   const [selectedEmployee, setSelectedEmployee] = useState<any | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [addModalOpen, setAddModalOpen] = useState(false);
+  const [editingEmployeeId, setEditingEmployeeId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [banks, setBanks] = useState<{ code: string; name: string }[]>([]);
 
@@ -70,6 +71,7 @@ export default function EmployeesPage() {
     jobPositionId: '',
     positionTitle: '',
     employmentType: 'FULL_TIME',
+    employmentStatus: 'ACTIVE',
     hireDate: new Date().toISOString().split('T')[0],
     baseSalary: '',
     transportAllowance: '',
@@ -174,13 +176,21 @@ export default function EmployeesPage() {
     e.preventDefault();
     setSubmitting(true);
     try {
-      const res = await fetch('/api/hr/employees', {
-        method: 'POST',
+      const isEditing = Boolean(editingEmployeeId);
+      const res = await fetch(isEditing ? `/api/hr/employees/${editingEmployeeId}` : '/api/hr/employees', {
+        method: isEditing ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+        body: JSON.stringify(isEditing ? {
+          ...form,
+          employmentStatus: form.employmentStatus,
+          emergencyContact: form.emergencyContactName,
+          emergencyRelation: form.emergencyContactRelationship,
+          emergencyPhone: form.emergencyContactPhone,
+        } : form),
       });
       if (res.ok) {
         setAddModalOpen(false);
+        setEditingEmployeeId(null);
         fetchEmployees();
         // Reset form
         setForm({
@@ -193,6 +203,7 @@ export default function EmployeesPage() {
           jobPositionId: '',
           positionTitle: '',
           employmentType: 'FULL_TIME',
+          employmentStatus: 'ACTIVE',
           hireDate: new Date().toISOString().split('T')[0],
           baseSalary: '',
           transportAllowance: '',
@@ -223,6 +234,36 @@ export default function EmployeesPage() {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const openEmployeeEditor = (employee: any) => {
+    setEditingEmployeeId(employee.id);
+    setForm((current) => ({
+      ...current,
+      firstName: employee.firstName || '',
+      lastName: employee.lastName || '',
+      email: employee.email || '',
+      phone: employee.phone || '',
+      departmentName: employee.department || employee.departmentRef?.name || '',
+      positionTitle: employee.position || employee.jobPosition?.title || '',
+      employmentType: employee.employeeProfile?.employmentType || employee.profile?.employmentType || employee.employmentType || 'FULL_TIME',
+      employmentStatus: employee.employeeProfile?.status || employee.profile?.employmentStatus || employee.status || 'ACTIVE',
+      baseSalary: String(employee.salaryStructure?.basicSalary ?? employee.profile?.baseSalary ?? employee.baseSalary ?? ''),
+      nin: employee.employeeProfile?.nin || employee.profile?.nin || '',
+      bvn: employee.employeeProfile?.bvn || employee.profile?.bvn || '',
+      taxId: employee.employeeProfile?.tin || employee.profile?.taxId || '',
+      pfaName: employee.salaryStructure?.pensionFundAdmin || employee.profile?.pfaName || '',
+      rsaPin: employee.salaryStructure?.pensionNumber || employee.profile?.rsaPin || '',
+      bankName: employee.salaryStructure?.bankName || employee.profile?.bankName || '',
+      bankAccountNumber: employee.salaryStructure?.bankAccountNumber || employee.profile?.bankAccountNumber || '',
+      bankSortCode: employee.salaryStructure?.bankSortCode || employee.profile?.bankSortCode || '',
+      bankAccountName: employee.salaryStructure?.bankAccountName || employee.profile?.bankAccountName || '',
+      emergencyContactName: employee.profile?.emergencyContact || '',
+      emergencyContactRelationship: employee.profile?.emergencyRelation || '',
+      emergencyContactPhone: employee.profile?.emergencyPhone || '',
+    }));
+    setDrawerOpen(false);
+    setAddModalOpen(true);
   };
 
   const verifyBankAccount = async () => {
@@ -296,7 +337,7 @@ export default function EmployeesPage() {
           </Button>
           <Button
             size="sm"
-            onClick={() => setAddModalOpen(true)}
+            onClick={() => { setEditingEmployeeId(null); setAddModalOpen(true); }}
             className="bg-teal-600 hover:bg-teal-500 text-white font-medium text-xs h-9 gap-1.5 shadow-md shadow-teal-950"
           >
             <Plus className="w-3.5 h-3.5" />
@@ -517,6 +558,9 @@ export default function EmployeesPage() {
                       Hired {selectedEmployee.profile?.hireDate ? new Date(selectedEmployee.profile.hireDate).toLocaleDateString() : 'N/A'}
                     </p>
                   </div>
+                  <Button type="button" variant="outline" onClick={() => openEmployeeEditor(selectedEmployee)} className="ml-auto border-teal-500/30 text-teal-300 hover:bg-teal-500/10">
+                    Edit staff
+                  </Button>
                 </div>
               </div>
 
@@ -719,7 +763,7 @@ export default function EmployeesPage() {
                 <div>
                   <label className="text-slate-400 mb-1 block">First Name *</label>
                   <Input
-                    required
+                    required={!editingEmployeeId}
                     value={form.firstName}
                     onChange={(e) => setForm({ ...form, firstName: e.target.value })}
                     className="bg-slate-950 border-slate-800 text-slate-100 text-xs h-8"
@@ -763,7 +807,7 @@ export default function EmployeesPage() {
                     onChange={(e) => setForm({ ...form, selfServicePassword: e.target.value })}
                     className="bg-slate-950 border-slate-800 text-slate-100 text-xs h-8"
                   />
-                  <p className="text-[10px] text-slate-500 mt-1">The employee uses this password together with their Employer ID.</p>
+                  <p className="text-[10px] text-slate-500 mt-1">{editingEmployeeId ? 'Leave blank to keep the current self-service password.' : 'The employee uses this password together with their Employer ID.'}</p>
                 </div>
               </div>
             </div>
@@ -824,6 +868,20 @@ export default function EmployeesPage() {
                     <option value="CONTRACT">Contract</option>
                     <option value="CASUAL">Casual</option>
                     <option value="INTERN">Intern</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-slate-400 mb-1 block">Employment Status</label>
+                  <select
+                    value={form.employmentStatus}
+                    onChange={(e) => setForm({ ...form, employmentStatus: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 text-slate-300 rounded-lg text-xs px-2.5 h-8 outline-none"
+                  >
+                    <option value="ACTIVE">Active</option>
+                    <option value="PROBATION">Probation</option>
+                    <option value="ON_LEAVE">On leave</option>
+                    <option value="SUSPENDED">Suspended</option>
+                    <option value="TERMINATED">Terminated</option>
                   </select>
                 </div>
                 <div>
@@ -942,7 +1000,7 @@ export default function EmployeesPage() {
                 disabled={submitting}
                 className="bg-teal-600 hover:bg-teal-500 text-white text-xs h-8"
               >
-                {submitting ? 'Creating Employee…' : 'Save & Register Employee'}
+                {submitting ? (editingEmployeeId ? 'Saving changes…' : 'Creating Employee…') : (editingEmployeeId ? 'Save staff changes' : 'Save & Register Employee')}
               </Button>
             </DialogFooter>
           </form>
