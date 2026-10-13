@@ -242,9 +242,9 @@ export default function EmployeeSelfServicePage() {
           </div>
 
           <div className="flex items-center gap-2">
-            <Button size="sm" variant="outline" onClick={() => setProfileModalOpen(true)} className="h-9 border-slate-700 text-xs text-slate-200 hover:bg-slate-800">Update details</Button>
-            <Button size="sm" variant="outline" onClick={() => setSupportModalOpen(true)} className="h-9 border-slate-700 text-xs text-slate-200 hover:bg-slate-800">Contact HR</Button>
-            <Button size="sm" variant="outline" onClick={() => setAttendanceModalOpen(true)} className="h-9 border-slate-700 text-xs text-slate-200 hover:bg-slate-800">Report attendance issue</Button>
+            <Button size="sm" variant="outline" onClick={() => setProfileModalOpen(true)} className="h-9 !border-slate-700 !bg-slate-900 text-xs !text-slate-100 hover:!bg-slate-800">Update details</Button>
+            <Button size="sm" variant="outline" onClick={() => setSupportModalOpen(true)} className="h-9 !border-slate-700 !bg-slate-900 text-xs !text-slate-100 hover:!bg-slate-800">Contact HR</Button>
+            <Button size="sm" variant="outline" onClick={() => setAttendanceModalOpen(true)} className="h-9 !border-slate-700 !bg-slate-900 text-xs !text-slate-100 hover:!bg-slate-800">Report attendance issue</Button>
             <Button
               size="sm"
               onClick={() => setLeaveModalOpen(true)}
@@ -600,7 +600,7 @@ export default function EmployeeSelfServicePage() {
               />
             </div>
             <DialogFooter className="pt-2">
-              <Button type="button" variant="outline" onClick={() => setLeaveModalOpen(false)} className="border-slate-800 text-xs h-8">
+              <Button type="button" variant="outline" onClick={() => setLeaveModalOpen(false)} className="h-8 !border-slate-800 !bg-slate-900 text-xs !text-slate-100 hover:!bg-slate-800">
                 Cancel
               </Button>
               <Button type="submit" disabled={submitting} className="bg-teal-600 hover:bg-teal-500 text-white text-xs h-8">
