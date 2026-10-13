@@ -350,7 +350,7 @@ export function HrLayout({
   };
 
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-950 text-slate-50">
+    <div className="hr-shell flex h-screen overflow-hidden bg-slate-950 text-slate-50">
       {/* Desktop Sidebar */}
       <aside className="hidden w-64 shrink-0 lg:block">
         <Sidebar />

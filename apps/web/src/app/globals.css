@@ -68,6 +68,25 @@ body:has(.ess-shell) [data-slot='dialog-content'] [data-slot='dialog-close']:hov
 /* Mobile-first employee portal: touch ergonomics, no iOS zoom, bottom-sheet dialogs. */
 .ess-shell { -webkit-tap-highlight-color: transparent; overscroll-behavior-y: none; }
 .ess-shell a, .ess-shell button { touch-action: manipulation; }
+
+/* HR & Payroll is a dark control-room shell. The shared shadcn outline
+   variant uses the global background token, which can resolve to a light
+   surface while a page supplies muted light text. Keep all HR outline
+   controls consistently readable across every HR route and dialog. */
+.hr-shell button[data-slot='button'].bg-background,
+.hr-shell button[data-slot='button'].bg-white {
+  background-color: #14213a !important;
+  color: #e2e8f0 !important;
+  border-color: rgba(148, 163, 184, .34) !important;
+}
+.hr-shell button[data-slot='button'].bg-background:hover,
+.hr-shell button[data-slot='button'].bg-white:hover {
+  background-color: #1b2d4b !important;
+  color: #f8fafc !important;
+}
+.hr-shell button[data-slot='button'].border-border {
+  border-color: rgba(148, 163, 184, .34) !important;
+}
 @media (max-width: 1023px) {
   /* Pages other than the dashboard also need room above the bottom tab bar. */
   .ess-shell .ess-content { padding-bottom: calc(5rem + env(safe-area-inset-bottom)); }
