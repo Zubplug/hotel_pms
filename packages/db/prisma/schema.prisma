@@ -122,6 +122,9 @@ model Property {
   // When true, all Night Audit warnings must be explicitly acknowledged (via
   // NightAuditAcknowledgement tied to the specific run ID) before /execute proceeds.
   requireAuditAcknowledgements    Boolean  @default(false)
+  // HR-controlled switch for employee claims requesting bank transfer.
+  // Disabled means the General Cashier completes the bank transfer manually.
+  autoBankReimbursementEnabled    Boolean  @default(false)
 
   cashHandovers            CashHandover[]
   bankDeposits             BankDeposit[]
@@ -7732,15 +7735,33 @@ model ExpenseClaim {
   receiptUrl  String?
   description String
 
-  status               String    @default("SUBMITTED") // SUBMITTED | APPROVED | REJECTED | REIMBURSED
+  // SUBMITTED/HR_REVIEW -> ACCOUNTANT_REVIEW -> GENERAL_MANAGER_REVIEW
+  // -> APPROVED_FOR_PAYMENT -> REIMBURSED. REJECTED is terminal.
+  status               String    @default("HR_REVIEW")
   approvedBy           String?   @db.Uuid
   approvedAt           DateTime? @db.Timestamptz
+  hrReviewedBy         String?   @db.Uuid
+  hrReviewedAt         DateTime? @db.Timestamptz
+  accountantReviewedBy String?   @db.Uuid
+  accountantReviewedAt DateTime? @db.Timestamptz
+  managerApprovedBy   String?   @db.Uuid
+  managerApprovedAt   DateTime? @db.Timestamptz
+  rejectionReason     String?
+  requestedPaymentMethod String    @default("CASH") // CASH | BANK_TRANSFER
+  autoPaymentStatus   String? // PENDING | PROCESSING | SUCCESSFUL | FAILED | MANUAL_REQUIRED
+  paymentMethod       String?
+  paymentReference    String?
+  paidBy              String?   @db.Uuid
+  paidAt              DateTime? @db.Timestamptz
+  paymentAccountId    String?   @db.Uuid
+  accountingJournalEntryId String? @db.Uuid
   reimbursedInPeriodId String?   @db.Uuid
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
 
   @@index([propertyId, status])
+  @@index([staffId, createdAt])
 }
 
 // -----------------------------------------------------------------------------

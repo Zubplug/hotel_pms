@@ -63,6 +63,7 @@ function hasModuleAccess(req: any, pathname: string): { allowed: boolean; redire
     '/api/hr/leave',
     '/api/hr/policies',
     '/api/hr/service-desk',
+    '/api/hr/expense-reimbursements',
   ];
   const isEmployeePortalPath = pathname === '/hr/self-service' || pathname.startsWith('/hr/self-service/') || pathname === '/api/hr/self-service' || pathname.startsWith('/api/hr/self-service/') || employeeSelfServiceApi.some((path) => pathname === path || pathname.startsWith(`${path}/`));
   if (user.selfServiceOnly && !isEmployeePortalPath) {

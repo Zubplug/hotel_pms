@@ -178,7 +178,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === 'CREATE_CLAIM') {
-      const { staffId, category = 'OTHER', amount, description } = body;
+      const { staffId, category = 'OTHER', amount, description, receiptUrl } = body;
       const staff = await prisma.staff.findFirst({
         where: HrAuthorizationService.staffScope(authContext, { id: staffId }),
       });
@@ -208,7 +208,8 @@ export async function POST(req: NextRequest) {
           category,
           amount: Number(amount) || 0,
           description: description?.trim() || 'Staff operational reimbursement',
-          status: 'SUBMITTED',
+            status: 'HR_REVIEW',
+            receiptUrl: receiptUrl?.trim() || null,
         },
       });
       return NextResponse.json({ success: true, data: claim }, { status: 201 });
