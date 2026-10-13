@@ -48,6 +48,7 @@ export default function EmployeeSelfServicePage() {
     startDate: '',
     endDate: '',
     reason: '',
+    handover: '',
   });
   const [submitting, setSubmitting] = useState(false);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
@@ -108,7 +109,7 @@ export default function EmployeeSelfServicePage() {
           leaveTypeId: firstType,
           startDate: leaveForm.startDate,
           endDate: leaveForm.endDate,
-          reason: leaveForm.reason,
+          reason: `${leaveForm.reason.trim()}${leaveForm.handover.trim() ? `\nHandover plan: ${leaveForm.handover.trim()}` : ''}`,
         }),
       });
 
@@ -595,81 +596,15 @@ export default function EmployeeSelfServicePage() {
 
       {/* Leave Application Modal */}
       <Dialog open={leaveModalOpen} onOpenChange={setLeaveModalOpen}>
-        <DialogContent className="max-w-md rounded-2xl border-slate-800 bg-[#0b1624] text-slate-100 shadow-2xl shadow-black/40">
-          <DialogHeader>
-            <DialogTitle className="text-sm font-bold text-white flex items-center gap-2">
-              <CalendarCheck2 className="w-4 h-4 text-teal-400" />
-              Submit Leave Application
-            </DialogTitle>
-          </DialogHeader>
-          <form onSubmit={handleApplyLeave} className="space-y-4 text-xs">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-slate-400 block mb-1">Start Date *</label>
-                <Input
-                  type="date"
-                  required
-                  value={leaveForm.startDate}
-                  onChange={(e) => setLeaveForm({ ...leaveForm, startDate: e.target.value })}
-                  className="bg-slate-950 border-slate-800 text-slate-100 text-xs h-8"
-                />
-              </div>
-              <div>
-                <label className="text-slate-400 block mb-1">End Date *</label>
-                <Input
-                  type="date"
-                  required
-                  value={leaveForm.endDate}
-                  onChange={(e) => setLeaveForm({ ...leaveForm, endDate: e.target.value })}
-                  className="bg-slate-950 border-slate-800 text-slate-100 text-xs h-8"
-                />
-              </div>
-            </div>
-            <div>
-              <label className="text-slate-400 block mb-1">Reason / Handover Note</label>
-              <Input
-                placeholder="Reason for absence and relief handover"
-                value={leaveForm.reason}
-                onChange={(e) => setLeaveForm({ ...leaveForm, reason: e.target.value })}
-                className="bg-slate-950 border-slate-800 text-slate-100 text-xs h-8"
-              />
-            </div>
-            <DialogFooter className="pt-2">
-              <Button type="button" variant="outline" onClick={() => setLeaveModalOpen(false)} className="h-8 !border-slate-800 !bg-slate-900 text-xs !text-slate-100 hover:!bg-slate-800">
-                Cancel
-              </Button>
-              <Button type="submit" disabled={submitting} className="bg-teal-600 hover:bg-teal-500 text-white text-xs h-8">
-                {submitting ? 'Submitting…' : 'Submit Application'}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
+        <DialogContent className="max-w-lg rounded-2xl border-slate-800 bg-[#0b1624] text-slate-100 shadow-2xl shadow-black/40"><DialogHeader><div className="mb-2 flex h-11 w-11 items-center justify-center rounded-xl bg-teal-400/10 text-teal-300"><CalendarCheck2 className="h-5 w-5" /></div><DialogTitle className="text-lg font-bold text-white">Submit leave application</DialogTitle><p className="text-xs leading-5 text-slate-400">Choose the period you need away from work. Your request will follow the configured supervisor and HR approval process.</p></DialogHeader><form onSubmit={handleApplyLeave} className="space-y-5 text-xs"><div className="grid gap-4 sm:grid-cols-2"><label className="block font-medium text-slate-300">First day<div className="mt-2"><Input type="date" required value={leaveForm.startDate} onChange={(e) => setLeaveForm({ ...leaveForm, startDate: e.target.value })} className="h-10 border-slate-700 bg-slate-950 text-sm text-slate-100" /></div></label><label className="block font-medium text-slate-300">Last day<div className="mt-2"><Input type="date" required value={leaveForm.endDate} onChange={(e) => setLeaveForm({ ...leaveForm, endDate: e.target.value })} className="h-10 border-slate-700 bg-slate-950 text-sm text-slate-100" /></div></label></div><div className="rounded-xl border border-teal-400/15 bg-teal-400/[0.06] p-3 text-[11px] leading-5 text-slate-400"><span className="font-semibold text-teal-200">Before you submit:</span> confirm your dates, review your leave balance, and provide a clear handover plan for your team.</div><label className="block font-medium text-slate-300">Reason for leave<textarea required minLength={5} placeholder="Briefly explain the reason for your leave" value={leaveForm.reason} onChange={(e) => setLeaveForm({ ...leaveForm, reason: e.target.value })} className="mt-2 min-h-20 w-full rounded-xl border border-slate-700 bg-slate-950 p-3 text-sm text-slate-100 outline-none placeholder:text-slate-600 focus:border-teal-400" /></label><label className="block font-medium text-slate-300">Handover plan<textarea placeholder="Who will cover your duties? Include important handover notes." value={leaveForm.handover} onChange={(e) => setLeaveForm({ ...leaveForm, handover: e.target.value })} className="mt-2 min-h-20 w-full rounded-xl border border-slate-700 bg-slate-950 p-3 text-sm text-slate-100 outline-none placeholder:text-slate-600 focus:border-teal-400" /></label><DialogFooter className="border-slate-800 bg-slate-950/30"><Button type="button" variant="outline" onClick={() => setLeaveModalOpen(false)} className="h-10 !border-slate-700 !bg-slate-900 text-xs !text-slate-100 hover:!bg-slate-800">Cancel</Button><Button type="submit" disabled={submitting} className="h-10 bg-teal-600 text-xs text-white hover:bg-teal-500">{submitting ? 'Submitting application…' : 'Submit for approval'}</Button></DialogFooter></form></DialogContent>
       </Dialog>
 
       <Dialog open={profileModalOpen} onOpenChange={setProfileModalOpen}>
-        <DialogContent className="max-w-md rounded-2xl border-slate-800 bg-[#0b1624] text-slate-100 shadow-2xl shadow-black/40">
-          <DialogHeader><DialogTitle className="text-sm font-bold text-white">Request profile update</DialogTitle></DialogHeader>
-          <form onSubmit={handleProfileChange} className="space-y-4 text-xs">
-            <Select value={profileForm.fieldName} onValueChange={(fieldName) => fieldName && setProfileForm({ ...profileForm, fieldName })}><SelectTrigger className="h-10 w-full !border-slate-700 !bg-slate-950 text-xs !text-slate-100"><SelectValue placeholder="Select a field to update" /></SelectTrigger><SelectContent className="border-slate-700 bg-slate-900 text-slate-100"><SelectItem value="phone">Phone number</SelectItem><SelectItem value="residentialAddress">Residential address</SelectItem><SelectItem value="maritalStatus">Marital status</SelectItem><SelectItem value="emergencyContacts">Emergency contacts</SelectItem><SelectItem value="nextOfKin">Next of kin</SelectItem><SelectItem value="bankName">Bank name</SelectItem><SelectItem value="bankAccountNumber">Bank account number</SelectItem><SelectItem value="bankSortCode">Bank sort code</SelectItem><SelectItem value="tin">Tax ID</SelectItem><SelectItem value="pfaName">Pension administrator</SelectItem><SelectItem value="rsaPin">Pension RSA PIN</SelectItem></SelectContent></Select>
-            <Input required placeholder="Proposed value" value={profileForm.proposedValue} onChange={(e) => setProfileForm({ ...profileForm, proposedValue: e.target.value })} className="border-slate-800 bg-slate-950 text-xs" />
-            <Input placeholder="Reason (optional)" value={profileForm.reason} onChange={(e) => setProfileForm({ ...profileForm, reason: e.target.value })} className="border-slate-800 bg-slate-950 text-xs" />
-            {actionError && <p className="text-xs text-rose-400">{actionError}</p>}
-            <DialogFooter><Button type="submit" disabled={submitting} className="bg-teal-600 text-xs hover:bg-teal-500">{submitting ? 'Submitting…' : 'Submit for review'}</Button></DialogFooter>
-          </form>
-        </DialogContent>
+        <DialogContent className="max-w-lg rounded-2xl border-slate-800 bg-[#0b1624] text-slate-100 shadow-2xl shadow-black/40"><DialogHeader><div className="mb-2 flex h-11 w-11 items-center justify-center rounded-xl bg-violet-400/10 text-violet-300"><User className="h-5 w-5" /></div><DialogTitle className="text-lg font-bold text-white">Request profile update</DialogTitle><p className="text-xs leading-5 text-slate-400">Official employment details remain protected. Your proposed personal or payment-profile changes will be reviewed by HR or Payroll.</p></DialogHeader><form onSubmit={handleProfileChange} className="space-y-5 text-xs"><label className="block font-medium text-slate-300">Information to update<Select value={profileForm.fieldName} onValueChange={(fieldName) => fieldName && setProfileForm({ ...profileForm, fieldName })}><SelectTrigger className="mt-2 h-10 w-full !border-slate-700 !bg-slate-950 text-sm !text-slate-100"><SelectValue placeholder="Select a field to update" /></SelectTrigger><SelectContent className="border-slate-700 bg-slate-900 text-slate-100"><SelectItem value="phone">Phone number</SelectItem><SelectItem value="residentialAddress">Residential address</SelectItem><SelectItem value="maritalStatus">Marital status</SelectItem><SelectItem value="emergencyContacts">Emergency contacts</SelectItem><SelectItem value="nextOfKin">Next of kin</SelectItem><SelectItem value="bankName">Bank name</SelectItem><SelectItem value="bankAccountNumber">Bank account number</SelectItem><SelectItem value="bankSortCode">Bank sort code</SelectItem><SelectItem value="tin">Tax ID</SelectItem><SelectItem value="pfaName">Pension administrator</SelectItem><SelectItem value="rsaPin">Pension RSA PIN</SelectItem></SelectContent></Select></label><label className="block font-medium text-slate-300">Proposed new value<Input required placeholder="Enter the correct information" value={profileForm.proposedValue} onChange={(e) => setProfileForm({ ...profileForm, proposedValue: e.target.value })} className="mt-2 h-10 border-slate-700 bg-slate-950 text-sm text-slate-100" /></label><label className="block font-medium text-slate-300">Why does this need to change?<textarea required minLength={5} placeholder="Provide context so the reviewer can verify the request" value={profileForm.reason} onChange={(e) => setProfileForm({ ...profileForm, reason: e.target.value })} className="mt-2 min-h-24 w-full rounded-xl border border-slate-700 bg-slate-950 p-3 text-sm text-slate-100 outline-none placeholder:text-slate-600 focus:border-violet-400" /></label><div className="rounded-xl border border-violet-400/15 bg-violet-400/[0.06] p-3 text-[11px] leading-5 text-slate-400">Sensitive bank and pension changes may require additional verification and may be subject to a payroll cooling-off period.</div>{actionError && <p className="rounded-lg border border-rose-400/20 bg-rose-400/10 p-3 text-xs text-rose-300">{actionError}</p>}<DialogFooter className="border-slate-800 bg-slate-950/30"><Button type="submit" disabled={submitting} className="h-10 bg-violet-600 text-xs text-white hover:bg-violet-500">{submitting ? 'Sending for review…' : 'Submit change request'}</Button></DialogFooter></form></DialogContent>
       </Dialog>
 
       <Dialog open={supportModalOpen} onOpenChange={setSupportModalOpen}>
-        <DialogContent className="max-w-md rounded-2xl border-slate-800 bg-[#0b1624] text-slate-100 shadow-2xl shadow-black/40">
-          <DialogHeader><DialogTitle className="text-sm font-bold text-white">Contact HR</DialogTitle></DialogHeader>
-          <form onSubmit={handleSupportRequest} className="space-y-4 text-xs">
-            <Select value={supportForm.category} onValueChange={(category) => category && setSupportForm({ ...supportForm, category })}><SelectTrigger className="h-10 w-full !border-slate-700 !bg-slate-950 text-xs !text-slate-100"><SelectValue placeholder="Choose a request category" /></SelectTrigger><SelectContent className="border-slate-700 bg-slate-900 text-slate-100"><SelectItem value="PROFILE_UPDATE">Profile update</SelectItem><SelectItem value="SALARY_INQUIRY">Salary inquiry</SelectItem><SelectItem value="LEAVE_INQUIRY">Leave inquiry</SelectItem><SelectItem value="BENEFIT">Benefits</SelectItem><SelectItem value="EMPLOYMENT_LETTER">Employment letter</SelectItem><SelectItem value="GRIEVANCE">Confidential concern</SelectItem></SelectContent></Select>
-            <Input required placeholder="Subject" value={supportForm.subject} onChange={(e) => setSupportForm({ ...supportForm, subject: e.target.value })} className="border-slate-800 bg-slate-950 text-xs" />
-            <textarea required placeholder="Describe your request" value={supportForm.description} onChange={(e) => setSupportForm({ ...supportForm, description: e.target.value })} className="min-h-28 w-full rounded-md border border-slate-800 bg-slate-950 p-3 text-xs text-slate-100" />
-            {actionError && <p className="text-xs text-rose-400">{actionError}</p>}
-            <DialogFooter><Button type="submit" disabled={submitting} className="bg-teal-600 text-xs hover:bg-teal-500">{submitting ? 'Submitting…' : 'Submit request'}</Button></DialogFooter>
-          </form>
-        </DialogContent>
+        <DialogContent className="max-w-lg rounded-2xl border-slate-800 bg-[#0b1624] text-slate-100 shadow-2xl shadow-black/40"><DialogHeader><div className="mb-2 flex h-11 w-11 items-center justify-center rounded-xl bg-cyan-400/10 text-cyan-300"><MessageSquare className="h-5 w-5" /></div><DialogTitle className="text-lg font-bold text-white">Contact HR support</DialogTitle><p className="text-xs leading-5 text-slate-400">Create a trackable request. HR responses and status changes will appear in your support center.</p></DialogHeader><form onSubmit={handleSupportRequest} className="space-y-5 text-xs"><label className="block font-medium text-slate-300">Request category<Select value={supportForm.category} onValueChange={(category) => category && setSupportForm({ ...supportForm, category })}><SelectTrigger className="mt-2 h-10 w-full !border-slate-700 !bg-slate-950 text-sm !text-slate-100"><SelectValue placeholder="Choose a request category" /></SelectTrigger><SelectContent className="border-slate-700 bg-slate-900 text-slate-100"><SelectItem value="PROFILE_UPDATE">Profile update</SelectItem><SelectItem value="SALARY_INQUIRY">Salary inquiry</SelectItem><SelectItem value="LEAVE_INQUIRY">Leave inquiry</SelectItem><SelectItem value="BENEFIT">Benefits</SelectItem><SelectItem value="EMPLOYMENT_LETTER">Employment letter</SelectItem><SelectItem value="GRIEVANCE">Confidential concern</SelectItem></SelectContent></Select></label><label className="block font-medium text-slate-300">Subject<Input required placeholder="Summarize what you need" value={supportForm.subject} onChange={(e) => setSupportForm({ ...supportForm, subject: e.target.value })} className="mt-2 h-10 border-slate-700 bg-slate-950 text-sm text-slate-100" /></label><label className="block font-medium text-slate-300">Request details<textarea required minLength={10} placeholder="Include dates, references, and the outcome you need" value={supportForm.description} onChange={(e) => setSupportForm({ ...supportForm, description: e.target.value })} className="mt-2 min-h-32 w-full rounded-xl border border-slate-700 bg-slate-950 p-3 text-sm text-slate-100 outline-none placeholder:text-slate-600 focus:border-cyan-400" /></label><div className="rounded-xl border border-cyan-400/15 bg-cyan-400/[0.06] p-3 text-[11px] leading-5 text-slate-400">Do not include passwords, full bank numbers, BVN, NIN, or other secrets in your message.</div>{actionError && <p className="rounded-lg border border-rose-400/20 bg-rose-400/10 p-3 text-xs text-rose-300">{actionError}</p>}<DialogFooter className="border-slate-800 bg-slate-950/30"><Button type="submit" disabled={submitting} className="h-10 bg-cyan-600 text-xs text-white hover:bg-cyan-500">{submitting ? 'Creating request…' : 'Create HR request'}</Button></DialogFooter></form></DialogContent>
       </Dialog>
 
       <Dialog open={replyModalOpen} onOpenChange={setReplyModalOpen}>
@@ -682,16 +617,7 @@ export default function EmployeeSelfServicePage() {
       </Dialog>
 
       <Dialog open={attendanceModalOpen} onOpenChange={setAttendanceModalOpen}>
-        <DialogContent className="max-w-md rounded-2xl border-slate-800 bg-[#0b1624] text-slate-100 shadow-2xl shadow-black/40">
-          <DialogHeader><DialogTitle className="text-sm font-bold text-white">Report attendance issue</DialogTitle></DialogHeader>
-          <form onSubmit={handleAttendanceCorrection} className="space-y-4 text-xs">
-            <Input required type="date" value={attendanceForm.date} onChange={(e) => setAttendanceForm({ ...attendanceForm, date: e.target.value })} className="border-slate-800 bg-slate-950 text-xs" />
-            <div className="grid grid-cols-2 gap-3"><div><label className="mb-1 block text-slate-400">Requested clock-in</label><Input type="datetime-local" value={attendanceForm.requestedIn} onChange={(e) => setAttendanceForm({ ...attendanceForm, requestedIn: e.target.value })} className="border-slate-800 bg-slate-950 text-xs" /></div><div><label className="mb-1 block text-slate-400">Requested clock-out</label><Input type="datetime-local" value={attendanceForm.requestedOut} onChange={(e) => setAttendanceForm({ ...attendanceForm, requestedOut: e.target.value })} className="border-slate-800 bg-slate-950 text-xs" /></div></div>
-            <textarea required placeholder="Explain what happened" value={attendanceForm.reason} onChange={(e) => setAttendanceForm({ ...attendanceForm, reason: e.target.value })} className="min-h-24 w-full rounded-md border border-slate-800 bg-slate-950 p-3 text-xs text-slate-100" />
-            {actionError && <p className="text-xs text-rose-400">{actionError}</p>}
-            <DialogFooter><Button type="submit" disabled={submitting} className="bg-teal-600 text-xs hover:bg-teal-500">{submitting ? 'Submitting…' : 'Submit for review'}</Button></DialogFooter>
-          </form>
-        </DialogContent>
+        <DialogContent className="max-w-lg rounded-2xl border-slate-800 bg-[#0b1624] text-slate-100 shadow-2xl shadow-black/40"><DialogHeader><div className="mb-2 flex h-11 w-11 items-center justify-center rounded-xl bg-amber-400/10 text-amber-300"><ClipboardCheck className="h-5 w-5" /></div><DialogTitle className="text-lg font-bold text-white">Report attendance issue</DialogTitle><p className="text-xs leading-5 text-slate-400">Request a correction without overwriting the original attendance record. A supervisor or HR reviewer will verify it.</p></DialogHeader><form onSubmit={handleAttendanceCorrection} className="space-y-5 text-xs"><label className="block font-medium text-slate-300">Attendance date<Input required type="date" value={attendanceForm.date} onChange={(e) => setAttendanceForm({ ...attendanceForm, date: e.target.value })} className="mt-2 h-10 border-slate-700 bg-slate-950 text-sm text-slate-100" /></label><div className="grid gap-4 sm:grid-cols-2"><label className="block font-medium text-slate-300">Correct clock-in<Input type="datetime-local" value={attendanceForm.requestedIn} onChange={(e) => setAttendanceForm({ ...attendanceForm, requestedIn: e.target.value })} className="mt-2 h-10 border-slate-700 bg-slate-950 text-sm text-slate-100" /></label><label className="block font-medium text-slate-300">Correct clock-out<Input type="datetime-local" value={attendanceForm.requestedOut} onChange={(e) => setAttendanceForm({ ...attendanceForm, requestedOut: e.target.value })} className="mt-2 h-10 border-slate-700 bg-slate-950 text-sm text-slate-100" /></label></div><label className="block font-medium text-slate-300">What happened?<textarea required minLength={10} placeholder="Explain the missed punch, late arrival, early departure, or other issue" value={attendanceForm.reason} onChange={(e) => setAttendanceForm({ ...attendanceForm, reason: e.target.value })} className="mt-2 min-h-28 w-full rounded-xl border border-slate-700 bg-slate-950 p-3 text-sm text-slate-100 outline-none placeholder:text-slate-600 focus:border-amber-400" /></label><div className="rounded-xl border border-amber-400/15 bg-amber-400/[0.06] p-3 text-[11px] leading-5 text-slate-400">Your original punch remains preserved. Only an approved correction can be used in attendance and payroll calculations.</div>{actionError && <p className="rounded-lg border border-rose-400/20 bg-rose-400/10 p-3 text-xs text-rose-300">{actionError}</p>}<DialogFooter className="border-slate-800 bg-slate-950/30"><Button type="submit" disabled={submitting} className="h-10 bg-amber-600 text-xs text-white hover:bg-amber-500">{submitting ? 'Sending for review…' : 'Submit correction request'}</Button></DialogFooter></form></DialogContent>
       </Dialog>
 
       <Dialog open={loanModalOpen} onOpenChange={setLoanModalOpen}>
