@@ -66,6 +66,7 @@ export default function EmployeeSelfServicePage() {
   const [loanForm, setLoanForm] = useState({ principalAmount: '', tenorMonths: '6', purpose: 'PERSONAL_SUPPORT', additionalDetails: '', consent: false });
   const [actionError, setActionError] = useState('');
   const [feedback, setFeedback] = useState<EmployeePortalFeedback | null>(null);
+  const [punching, setPunching] = useState(false);
 
   const showFeedback = (type: EmployeePortalFeedback['type'], title: string, message: string) => setFeedback({ type, title, message });
 
@@ -177,13 +178,14 @@ export default function EmployeeSelfServicePage() {
 
   const handleAttendancePunch = async (action: 'CLOCK_IN' | 'CLOCK_OUT') => {
     setActionError('');
+    setPunching(true);
     try {
-      const res = await fetch('/api/hr/attendance', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, date: new Date().toISOString() }) });
+      const res = await fetch('/api/hr/attendance', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, punchSource: window.matchMedia('(max-width: 1023px)').matches ? 'MOBILE' : 'WEB', date: new Date().toISOString() }) });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Unable to record attendance');
       await fetchSelfServiceData();
       showFeedback('success', action === 'CLOCK_IN' ? 'Clocked in' : 'Clocked out', 'Your attendance record has been updated.');
-    } catch (error: any) { setActionError(error.message); showFeedback('error', 'Attendance was not recorded', error.message); }
+    } catch (error: any) { setActionError(error.message); showFeedback('error', 'Attendance was not recorded', error.message); } finally { setPunching(false); }
   };
 
   const handleCancelLeave = async (applicationId: string) => {
@@ -243,6 +245,7 @@ export default function EmployeeSelfServicePage() {
   }
 
   const pendingPunches = (data.missedPunchRequests || []).filter((r: any) => r.status === 'PENDING');
+  const todayPunch = (data.attendance || []).find((record: any) => new Date(record.date).toISOString().slice(0, 10) === new Date().toISOString().slice(0, 10));
   const openRequests = (data.serviceRequests || []).filter((r: any) => !['CLOSED', 'RESOLVED'].includes(r.status));
   const openPayslip = (ps: any) => {
     setSelectedPayslip({ ...ps, name: data.name, employeeCode: data.employeeCode, department: data.department, position: data.position, bankName: data.bankName });
@@ -530,6 +533,17 @@ export default function EmployeeSelfServicePage() {
       </section>
 
       {/* Quick actions */}
+      <section aria-label="Mobile attendance" className="rounded-3xl border border-emerald-400/20 bg-gradient-to-br from-emerald-950/50 to-slate-950 p-4 shadow-xl shadow-emerald-950/20">
+        <div className="flex items-center justify-between gap-3">
+          <div><p className="text-[10px] font-bold uppercase tracking-wider text-emerald-300">Today&apos;s attendance</p><p className="mt-1 text-sm font-semibold text-white">{todayPunch?.clockIn ? todayPunch.clockOut ? 'Shift completed' : 'Currently clocked in' : 'Not clocked in yet'}</p><p className="mt-1 text-xs text-slate-400">{todayPunch?.clockIn ? `In ${new Date(todayPunch.clockIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}${todayPunch.clockOut ? ` · Out ${new Date(todayPunch.clockOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}` : 'Use your phone to record your shift start.'}</p></div>
+          <Clock className="h-7 w-7 shrink-0 text-emerald-300" />
+        </div>
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          <Button type="button" disabled={punching || Boolean(todayPunch?.clockIn)} onClick={() => void handleAttendancePunch('CLOCK_IN')} className="h-11 bg-emerald-600 text-sm font-bold text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50">{punching ? 'Saving…' : 'Check in'}</Button>
+          <Button type="button" disabled={punching || !todayPunch?.clockIn || Boolean(todayPunch?.clockOut)} onClick={() => void handleAttendancePunch('CLOCK_OUT')} className="h-11 bg-slate-700 text-sm font-bold text-white hover:bg-slate-600 disabled:cursor-not-allowed disabled:opacity-50">{punching ? 'Saving…' : 'Check out'}</Button>
+        </div>
+        {actionError && <p className="mt-3 rounded-xl border border-rose-400/20 bg-rose-400/10 p-3 text-xs text-rose-300">{actionError}</p>}
+      </section>
       <section aria-label="Quick actions" className="!shadow-none">
         <div className="grid grid-cols-4 gap-2 sm:gap-3">
           {[

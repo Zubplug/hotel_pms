@@ -172,7 +172,8 @@ export async function POST(req: NextRequest) {
       const clockIn = action === 'CLOCK_IN' ? now : existing?.clockIn || null;
       const clockOut = action === 'CLOCK_OUT' ? now : existing?.clockOut || null;
       const calculated = calculateAttendance(date, clockIn ? new Date(clockIn) : null, clockOut ? new Date(clockOut) : null, roster);
-      const record = await prisma.attendanceRecord.upsert({ where: { staffId_date: { staffId, date } }, update: { clockIn: clockIn || undefined, clockOut: clockOut || undefined, ...calculated, punchSource: 'WEB' }, create: { propertyId: targetPropertyId, staffId, date, clockIn: clockIn || now, clockOut, ...calculated, punchSource: 'WEB' } });
+      const punchSource = body.punchSource === 'MOBILE' ? 'MOBILE' : 'WEB';
+      const record = await prisma.attendanceRecord.upsert({ where: { staffId_date: { staffId, date } }, update: { clockIn: clockIn || undefined, clockOut: clockOut || undefined, ...calculated, punchSource }, create: { propertyId: targetPropertyId, staffId, date, clockIn: clockIn || now, clockOut, ...calculated, punchSource } });
       return NextResponse.json({ success: true, data: record }, { status: 201 });
     }
 
