@@ -77,7 +77,7 @@ export async function GET(req: NextRequest) {
       prisma.housekeepingTask.groupBy({ by: ['status'], where: { propertyId, businessDate }, _count: { id: true } }),
       prisma.posOrder.count({ where: { propertyId, businessDate, status: { not: 'CLOSED' } } }),
       prisma.transactionException.findMany({ where: { propertyId, businessDate: { gte: businessDate, lt: new Date(businessDate.getTime() + 86400000) }, status: { in: ['OPEN', 'PENDING_APPROVAL'] } }, select: { id: true, status: true, questionReason: true, proposedResolution: true, resolutionNotes: true } }),
-      prisma.reconciliationException.findMany({ where: { propertyId, status: 'OPEN' }, select: { id: true, type: true, severity: true, amount: true, source: true, reason: true, status: true, frontdeskSession: { select: { shiftReference: true } } } }),
+      prisma.reconciliationException.findMany({ where: { propertyId, status: 'OPEN', frontdeskSession: { businessDate } }, select: { id: true, type: true, severity: true, amount: true, source: true, reason: true, status: true, frontdeskSession: { select: { shiftReference: true } } } }),
       prisma.folio.aggregate({ where: { propertyId, reservation: { status: 'CHECKED_IN' } }, _sum: { balance: true } }),
       prisma.guestServiceRequest.groupBy({ by: ['status'], where: { propertyId, requestedAt: { gte: businessDate, lt: new Date(businessDate.getTime() + 86400000) } }, _count: { id: true } }),
     ]);
