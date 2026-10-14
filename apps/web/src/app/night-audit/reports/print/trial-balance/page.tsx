@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, react-hooks/set-state-in-effect */
 'use client';
 
 import React, { useEffect, useState } from 'react';
@@ -55,9 +56,12 @@ export default function TrialBalanceReportPage() {
       propertyPhone={data.propertyPhone}
       propertyAddress={data.propertyAddress}
       businessDate={businessDate || ''}
-      reportId={`TB-${Date.now().toString().slice(-6)}`}
+      reportId={`TB-${(businessDate || 'REPORT').replaceAll('-', '')}`}
       status={data.auditStatus || 'CLOSED'}
     >
+      <div className="mb-5 grid grid-cols-4 gap-2 text-xs">
+        {[["Posted entries", data.postedEntryCount || 0], ["Posted lines", data.postedLineCount || 0], ["Accounts", data.accountCount || 0], ["Balance status", totals.status || 'BALANCED']].map(([label, value]) => <div key={String(label)} className="border border-slate-200 p-2"><div className="text-[9px] uppercase tracking-wide text-slate-500">{label}</div><div className="mt-1 font-semibold text-slate-900">{value}</div></div>)}
+      </div>
       {accounts.length === 0 ? (
         <div className="py-20 text-center text-slate-500 italic">No records for this business date.</div>
       ) : (
@@ -77,7 +81,7 @@ export default function TrialBalanceReportPage() {
               <tr className="border-b-2 border-slate-800">
                 <th className="py-1.5 px-2 print:px-1 print:py-1 font-bold uppercase text-slate-700 break-words">Account Code</th>
                 <th className="py-1.5 px-2 print:px-1 print:py-1 font-bold uppercase text-slate-700 break-words">Account Name</th>
-                <th className="py-1.5 px-2 print:px-1 print:py-1 font-bold uppercase text-slate-700 break-words">Department</th>
+                <th className="py-1.5 px-2 print:px-1 print:py-1 font-bold uppercase text-slate-700 break-words">Type / Department</th>
                 <th className="py-1.5 px-2 print:px-1 print:py-1 font-bold uppercase text-slate-700 text-right break-words">Debit</th>
                 <th className="py-1.5 px-2 print:px-1 print:py-1 font-bold uppercase text-slate-700 text-right break-words">Credit</th>
                 <th className="py-1.5 px-2 print:px-1 print:py-1 font-bold uppercase text-slate-700 text-right break-words">Net Balance</th>
@@ -90,7 +94,7 @@ export default function TrialBalanceReportPage() {
                 <tr key={index} className="border-b border-slate-200">
                   <td className="py-1.5 px-2 print:px-1 print:py-1 whitespace-nowrap">{acc.accountCode}</td>
                   <td className="py-1.5 px-2 print:px-1 print:py-1 font-medium break-words">{acc.accountName}</td>
-                  <td className="py-1.5 px-2 print:px-1 print:py-1 text-slate-600 break-words">{acc.department}</td>
+                  <td className="py-1.5 px-2 print:px-1 print:py-1 text-slate-600 break-words">{acc.accountType}<br />{acc.department}</td>
                   <td className="py-1.5 px-2 print:px-1 print:py-1 text-right whitespace-nowrap">{formatCurrency(acc.debit || 0, currencyCode)}</td>
                   <td className="py-1.5 px-2 print:px-1 print:py-1 text-right whitespace-nowrap">{formatCurrency(acc.credit || 0, currencyCode)}</td>
                   <td className="py-1.5 px-2 print:px-1 print:py-1 text-right font-medium whitespace-nowrap">{formatCurrency(acc.netBalance || 0, currencyCode)}</td>

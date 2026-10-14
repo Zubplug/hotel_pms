@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextResponse } from 'next/server';
 import { requireOrganizationContext } from '@/lib/organization-access';
 import { NextRequest } from 'next/server';
@@ -17,6 +18,7 @@ export async function GET(req: NextRequest) {
     if (!propertyId || !businessDateStr) return errorResponse('BAD_REQUEST', 'Missing propertyId or businessDate', 400);
     if (!(await requireOrganizationContext(session.user.id)).propertyIds.includes(propertyId)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(businessDateStr)) return errorResponse('BAD_REQUEST', 'businessDate must be YYYY-MM-DD', 400);
     const businessDate = new Date(`${businessDateStr}T00:00:00.000Z`);
     if (Number.isNaN(businessDate.getTime())) {
       return errorResponse('BAD_REQUEST', 'businessDate must be a valid date', 400);
@@ -37,7 +39,7 @@ export async function GET(req: NextRequest) {
         // otherwise an account deactivation could hide valid ledger history.
         where: { propertyId },
         orderBy: { code: 'asc' },
-        select: { id: true, code: true, name: true, category: true, normalBalance: true }
+        select: { id: true, code: true, name: true, category: true, type: true, normalBalance: true }
       }),
       prisma.journalEntry.findMany({
         where: {
@@ -47,6 +49,9 @@ export async function GET(req: NextRequest) {
         },
         select: {
           id: true,
+          entryNumber: true,
+          entryDate: true,
+          source: true,
           lines: {
             select: {
               accountId: true,
@@ -83,10 +88,12 @@ export async function GET(req: NextRequest) {
         credit: balance.credit,
         netBalance,
         transactionCount: balance.transactionCount,
+        accountType: account.type,
+        normalBalance: account.normalBalance,
         source: 'GENERAL_LEDGER'
       };
     });
-    let totals = { debit: 0, credit: 0, difference: 0, status: 'BALANCED' };
+    const totals = { debit: 0, credit: 0, difference: 0, status: 'BALANCED' };
 
     accounts.forEach(a => {
       totals.debit += a.debit;
@@ -106,6 +113,9 @@ export async function GET(req: NextRequest) {
       auditStatus: nightAudit?.status || 'CLOSED',
       reportSource: 'POSTED_GENERAL_LEDGER',
       postedEntryCount: postedEntries.length,
+      postedLineCount: accounts.reduce((sum, account) => sum + account.transactionCount, 0),
+      accountCount: accounts.length,
+      nonZeroAccountCount: accounts.filter((account) => account.transactionCount > 0).length,
       accounts,
       totals
     });

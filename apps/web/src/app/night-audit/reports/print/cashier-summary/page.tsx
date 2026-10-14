@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, react-hooks/set-state-in-effect, react-hooks/static-components */
 'use client';
 
 import React, { useEffect, useState } from 'react';
@@ -49,6 +50,8 @@ export default function CashierSummaryReportPage() {
 
   const { cashiers = [] } = data;
   const currencyCode = data.propertyCurrency || 'NGN';
+  const totals = data.totals || {};
+  const controls = data.controls || {};
 
   const TableSection = ({ title, children, status, shift }: { title: string, children: React.ReactNode, status?: string, shift?: string }) => (
     <div className="mb-8 border border-slate-200 rounded-lg overflow-hidden">
@@ -84,10 +87,13 @@ export default function CashierSummaryReportPage() {
       propertyPhone={data.propertyPhone}
       propertyAddress={data.propertyAddress}
       businessDate={businessDate || ''}
-      reportId={`CSH-${Date.now().toString().slice(-6)}`}
+      reportId={`CSH-${(businessDate || 'REPORT').replaceAll('-', '')}`}
       status={data.auditStatus || 'CLOSED'}
     >
       
+      <div className="mb-5 grid grid-cols-4 gap-2 text-xs">
+        {[['Sessions', controls.sessionCount || 0], ['Payments', controls.paymentCount || totals.paymentCount || 0], ['Exceptions', controls.exceptionCount || 0], ['Approved', `${controls.approvedCount || 0} / ${controls.sessionCount || 0}`]].map(([label, value]) => <div key={String(label)} className="border border-slate-200 p-2"><div className="text-[9px] uppercase tracking-wide text-slate-500">{label}</div><div className="mt-1 font-semibold text-slate-900">{value}</div></div>)}
+      </div>
       {!cashiers || cashiers.length === 0 ? (
         <div className="py-20 text-center text-slate-500 italic">No records for this business date.</div>
       ) : (
@@ -123,6 +129,7 @@ export default function CashierSummaryReportPage() {
                     <table className="w-full text-xs">
                       <tbody>
                         <TableRow label="Opening Float" value={formatCurrency(cashier.openingFloat, currencyCode)} />
+                        <TableRow label="Cash In" value={formatCurrency(cashier.cashIn, currencyCode)} />
                         <TableRow label="Cash Drops" value={`(${formatCurrency(cashier.cashDrops, currencyCode)})`} />
                         <tr><td colSpan={2} className="py-1"></td></tr>
                         <TableRow label="Expected Cash" value={formatCurrency(cashier.expectedCash, currencyCode)} isBold />
@@ -150,11 +157,15 @@ export default function CashierSummaryReportPage() {
                     </table>
                   </div>
                 </div>
+                <div className="mt-3 border-t border-slate-200 pt-2 text-[10px] text-slate-500">{cashier.sessionType || 'CASHIER'} · {cashier.paymentCount || 0} payments · Control: {cashier.controlStatus || cashier.status || '—'} · Exceptions: {cashier.exceptionCount || 0}</div>
+                {cashier.exceptions?.length > 0 && <div className="mt-2 text-[10px] text-rose-700">{cashier.exceptions.map((exception: any, exceptionIndex: number) => <div key={`${exception.reason}-${exceptionIndex}`}>{exception.severity} · {exception.status} · {exception.reason} · {formatCurrency(exception.amount || 0, currencyCode)}</div>)}</div>}
               </TableSection>
             );
           })}
         </div>
       )}
+
+      {cashiers.length > 0 && <div className="mt-8 border-t-2 border-slate-800 pt-3"><h2 className="mb-2 text-xs font-bold uppercase tracking-widest text-slate-900">Property cashier totals</h2><table className="w-full text-xs"><tbody><TableRow label="Cash / card" value={`${formatCurrency(totals.cashSales, currencyCode)} / ${formatCurrency(totals.cardSales, currencyCode)}`} /><TableRow label="Bank transfer / POS" value={`${formatCurrency(totals.bankTransfer, currencyCode)} / ${formatCurrency(totals.posPayment, currencyCode)}`} /><TableRow label="Other methods" value={formatCurrency(totals.other, currencyCode)} /><TableRow label="Expected / actual cash" value={`${formatCurrency(totals.expectedCash, currencyCode)} / ${formatCurrency(totals.actualCash, currencyCode)}`} isBold /><TableRow label="Cash variance" value={formatCurrency(Math.abs(totals.variance || 0), currencyCode) + (totals.variance < 0 ? ' (Short)' : totals.variance > 0 ? ' (Over)' : '')} isTotal isNegative={totals.variance < 0} /></tbody></table></div>}
 
     </A4ReportWrapper>
   );
