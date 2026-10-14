@@ -27,10 +27,12 @@ function classify(source: string, category: string, revenueClass: string | null)
 function movementRow(reservation: any) {
   const firstRoom = reservation.reservationRooms?.[0];
   const balance = (reservation.folios || []).reduce((sum: number, folio: any) => sum + money(folio.balance), 0);
+  const internalRoomNumber = firstRoom?.room?.number;
+  const roomNumber = internalRoomNumber ? String(internalRoomNumber).split('.').pop() || String(internalRoomNumber) : 'Unassigned';
   return {
     reservationId: reservation.confirmationNumber,
     guestName: `${reservation.primaryGuest?.firstName || ''} ${reservation.primaryGuest?.lastName || ''}`.trim() || 'Unknown guest',
-    roomNumber: firstRoom?.room?.number || 'Unassigned',
+    roomNumber,
     roomType: firstRoom?.room?.roomType?.name || 'Unassigned',
     adults: reservation.adults,
     children: reservation.children,
@@ -139,7 +141,6 @@ export async function GET(req: NextRequest) {
     const guestRefundLiability = guestRefundEntries.reduce((sum, entry) => sum + Math.max(0, money(entry.amount) - entry.allocations.reduce((allocated, allocation) => allocated + money(allocation.amount), 0)), 0);
     const cityLedgerSales = cityLedgerItems.filter((item) => item.type === 'CHARGE').reduce((sum, item) => sum + Math.max(0, money(item.amount)), 0);
     const cityLedgerSettlements = cityLedgerPayments.reduce((sum, payment) => sum + Math.max(0, money(payment.amount)), 0);
-    const cityLedgerBalance = cityLedgerInvoices.reduce((sum, invoice) => sum + Math.max(0, money(invoice.outstandingAmount)), 0);
     const cityLedgerCredits = cityLedgerFolios.reduce((sum, folio) => sum + Math.max(0, -money(folio.balance)), 0);
     const corporateMap = new Map<string, { name: string; code: string; balance: number; ledgerBalance: number; advanceCredit: number; creditLimit: number; exemptFromHighBalance: boolean }>();
     for (const account of corporateAccountRegistry) {
@@ -164,6 +165,7 @@ export async function GET(req: NextRequest) {
     const corporateAccounts = [...corporateMap.values()].map((row) => ({ ...row, balance: round(row.balance), ledgerBalance: round(row.ledgerBalance), advanceCredit: round(row.advanceCredit), amountDue: round(Math.max(0, row.balance)), creditBalance: round(Math.max(0, -row.balance)), unapplied: row.code === '—' && row.balance < 0, overLimit: !row.exemptFromHighBalance && row.creditLimit > 0 && row.balance > row.creditLimit })).sort((a, b) => b.balance - a.balance || b.advanceCredit - a.advanceCredit);
     const unappliedCityLedgerCredit = corporateAccounts.filter((row) => row.unapplied).reduce((sum, row) => sum + row.creditBalance, 0);
     const corporateAdvanceCredits = corporateAccounts.reduce((sum, row) => sum + row.advanceCredit, 0);
+    const cityLedgerBalance = corporateAccounts.reduce((sum, row) => sum + row.amountDue, 0);
     const revenue = {
       room: roomRevenueAmount,
       fb: fnbRevenueAmount,
