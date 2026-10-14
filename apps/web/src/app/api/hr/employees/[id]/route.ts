@@ -124,7 +124,7 @@ export async function PUT(
     if (authContext.role === 'DEPARTMENT_HEAD' && authContext.department) {
       existingWhere.department = authContext.department;
     }
-    const existing = await prisma.staff.findFirst({ where: existingWhere });
+    const existing = await prisma.staff.findFirst({ where: existingWhere, include: { employeeProfile: true, salaryStructure: true } });
     if (!existing) {
       return NextResponse.json({ error: 'Employee not found or inaccessible' }, { status: 404 });
     }
@@ -157,6 +157,32 @@ export async function PUT(
     if (['TERMINATED', 'RESIGNED', 'RETIRED'].includes(String(employmentStatus || '').toUpperCase())) {
       return NextResponse.json({ error: 'Employee separation must be submitted through the General Manager approval workflow' }, { status: 400 });
     }
+
+    const changeReason = String(body.changeReason || '').trim();
+    if (changeReason.length < 10) {
+      return NextResponse.json({ error: 'A change reason of at least 10 characters is required for General Manager review' }, { status: 400 });
+    }
+
+    const proposedValue = {
+      firstName, lastName, email, phone, departmentName, positionTitle, employmentStatus, employmentType,
+      baseSalary, housingAllowance: body.housingAllowance, transportAllowance: body.transportAllowance,
+      otherAllowances: body.otherAllowances, nin, bvn, taxId, pfaName, rsaPin, bankName,
+      bankAccountNumber, bankSortCode, bankAccountName, emergencyContact, emergencyPhone, emergencyRelation,
+    };
+    const pendingChange = await prisma.employeeChangeRequest.findFirst({ where: { staffId: id, fieldName: 'staffProfile', status: { in: ['PENDING', 'CLARIFICATION'] } } });
+    if (pendingChange) return NextResponse.json({ error: 'This employee already has a profile change awaiting General Manager review' }, { status: 409 });
+
+    const request = await prisma.employeeChangeRequest.create({
+      data: {
+        staffId: id,
+        fieldName: 'staffProfile',
+        currentValue: JSON.stringify({ staff: existing, employeeProfile: existing.employeeProfile, salaryStructure: existing.salaryStructure }),
+        proposedValue: JSON.stringify(proposedValue),
+        reason: changeReason,
+        requestedBy: authContext.userId,
+      },
+    });
+    return NextResponse.json({ success: true, pendingApproval: true, request }, { status: 202 });
 
     const updated = await prisma.$transaction(async (tx: any) => {
       // 1. Update Staff
@@ -258,7 +284,7 @@ export async function PUT(
         await tx.salaryStructureVersion.create({
           data: {
             organizationId: authContext.organizationId,
-            propertyId: authContext.propertyId || existing.propertyAccess[0],
+            propertyId: authContext.propertyId || existing!.propertyAccess[0],
             staffId: id,
             basicSalary: newBasic,
             housingAllowance: newHousing,
@@ -291,7 +317,7 @@ export async function PUT(
           },
           create: {
             organizationId: authContext.organizationId,
-            propertyId: authContext.propertyId || existing.propertyAccess[0],
+            propertyId: authContext.propertyId || existing!.propertyAccess[0],
             staffId: id,
             basicSalary: newBasic,
             housingAllowance: newHousing,

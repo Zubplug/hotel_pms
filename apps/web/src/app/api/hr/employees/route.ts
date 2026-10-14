@@ -57,7 +57,7 @@ export async function GET(req: NextRequest) {
       ];
     }
 
-    const [total, staffList, separationRequests] = await Promise.all([
+    const [total, staffList, separationRequests, profileChangeRequests] = await Promise.all([
       prisma.staff.count({ where }),
       prisma.staff.findMany({
         where,
@@ -75,6 +75,11 @@ export async function GET(req: NextRequest) {
           staff: { select: { id: true, firstName: true, lastName: true, email: true, department: true, position: true } },
           requestedBy: { select: { email: true } },
         },
+        orderBy: { createdAt: 'desc' },
+      }),
+      prisma.employeeChangeRequest.findMany({
+        where: { fieldName: 'staffProfile', status: { in: ['PENDING', 'CLARIFICATION'] }, staff: where },
+        include: { staff: { select: { id: true, firstName: true, lastName: true, email: true, department: true, position: true } } },
         orderBy: { createdAt: 'desc' },
       }),
     ]);
@@ -135,6 +140,8 @@ export async function GET(req: NextRequest) {
       totalPages: Math.ceil(total / limit),
       canApproveSeparations: ['GENERAL_MANAGER', 'SUPER_ADMIN', 'OWNER', 'ADMIN', 'CEO'].includes(authContext.role),
       separationRequests,
+      profileChangeRequests,
+      canApproveProfileChanges: ['GENERAL_MANAGER', 'SUPER_ADMIN', 'OWNER', 'ADMIN', 'CEO'].includes(authContext.role),
     });
   } catch (error: any) {
     if (error.message?.includes('Forbidden') || error.message?.includes('Unauthorized')) {

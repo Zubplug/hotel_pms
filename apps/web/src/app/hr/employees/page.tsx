@@ -53,6 +53,8 @@ export default function EmployeesPage() {
   const [positions, setPositions] = useState<any[]>([]);
   const [separationRequests, setSeparationRequests] = useState<any[]>([]);
   const [canApproveSeparations, setCanApproveSeparations] = useState(false);
+  const [profileChangeRequests, setProfileChangeRequests] = useState<any[]>([]);
+  const [canApproveProfileChanges, setCanApproveProfileChanges] = useState(false);
 
   // Drawer & Modal States
   const [selectedEmployee, setSelectedEmployee] = useState<any | null>(null);
@@ -95,6 +97,7 @@ export default function EmployeesPage() {
     emergencyContactRelationship: '',
     emergencyContactPhone: '',
     posPin: '',
+    changeReason: '',
   });
 
   const fetchEmployees = async () => {
@@ -106,6 +109,8 @@ export default function EmployeesPage() {
         setEmployees(data.employees || []);
         setSeparationRequests(data.separationRequests || []);
         setCanApproveSeparations(Boolean(data.canApproveSeparations));
+        setProfileChangeRequests(data.profileChangeRequests || []);
+        setCanApproveProfileChanges(Boolean(data.canApproveProfileChanges));
       }
     } catch (err) {
       console.error('Failed to load employees', err);
@@ -203,6 +208,8 @@ export default function EmployeesPage() {
           alert(result.invitationSent
             ? 'Employee created. An activation link was sent to their email and expires in 72 hours.'
             : `Employee created, but the activation email could not be sent. ${result.invitationWarning || 'Please verify email configuration.'}`);
+        } else if (result.pendingApproval) {
+          alert('Staff profile changes submitted for General Manager approval. The live profile remains unchanged until approval.');
         }
         // Reset form
         setForm({
@@ -234,6 +241,7 @@ export default function EmployeesPage() {
           emergencyContactRelationship: '',
           emergencyContactPhone: '',
           posPin: '',
+          changeReason: '',
         });
       } else {
         const errorData = await res.json();
@@ -281,6 +289,7 @@ export default function EmployeesPage() {
       emergencyContactName: employee.profile?.emergencyContact || '',
       emergencyContactRelationship: employee.profile?.emergencyRelation || '',
       emergencyContactPhone: employee.profile?.emergencyPhone || '',
+      changeReason: '',
     }));
     setDrawerOpen(false);
     setAddModalOpen(true);
@@ -325,6 +334,19 @@ export default function EmployeesPage() {
       });
       const result = await response.json();
       if (!response.ok) alert(result.error || 'Unable to review separation request');
+      else await fetchEmployees();
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const reviewProfileChange = async (request: any, status: 'APPROVED' | 'REJECTED') => {
+    const reviewerNotes = status === 'REJECTED' ? window.prompt('Reason for rejecting this profile change (optional):') || '' : '';
+    setSubmitting(true);
+    try {
+      const response = await fetch('/api/hr/profile-change-requests', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: request.id, status, reviewerNotes }) });
+      const result = await response.json();
+      if (!response.ok) alert(result.error || 'Unable to review profile change');
       else await fetchEmployees();
     } finally {
       setSubmitting(false);
@@ -460,6 +482,11 @@ export default function EmployeesPage() {
           <span className="text-[10px] text-slate-500 mt-1">Monthly gross sum</span>
         </div>
       </div>
+
+      {profileChangeRequests.length > 0 && <section className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4">
+        <div className="mb-3 flex items-center justify-between gap-3"><div><h2 className="text-sm font-semibold text-amber-200">Pending staff profile changes</h2><p className="mt-1 text-[11px] text-slate-400">Review the complete proposed profile before approving the update.</p></div><span className="rounded-full bg-amber-500/10 px-2 py-1 text-[10px] font-semibold text-amber-300">{profileChangeRequests.length} pending</span></div>
+        <div className="space-y-2">{profileChangeRequests.map((request) => <div key={request.id} className="flex flex-col justify-between gap-3 rounded-lg border border-slate-800 bg-slate-950/50 p-3 sm:flex-row sm:items-center"><div className="text-xs"><p className="font-semibold text-white">{request.staff.firstName} {request.staff.lastName} <span className="text-[10px] uppercase text-amber-300">Profile update</span></p><p className="mt-1 text-[11px] text-slate-400">Submitted {new Date(request.createdAt).toLocaleDateString()}</p><p className="mt-1 text-[11px] text-slate-500">Reason: {request.reason || 'Not provided'}</p><details className="mt-2 text-[11px] text-slate-400"><summary className="cursor-pointer text-amber-200">View proposed profile</summary><pre className="mt-2 max-w-xl overflow-x-auto whitespace-pre-wrap rounded bg-slate-950 p-2 text-[10px]">{request.proposedValue}</pre></details></div>{canApproveProfileChanges && <div className="flex shrink-0 gap-2"><Button type="button" size="sm" disabled={submitting} onClick={() => reviewProfileChange(request, 'REJECTED')} variant="outline" className="h-7 border-slate-700 text-[10px] text-slate-300">Reject</Button><Button type="button" size="sm" disabled={submitting} onClick={() => reviewProfileChange(request, 'APPROVED')} className="h-7 bg-amber-600 text-[10px] text-white hover:bg-amber-500">Approve profile</Button></div>}</div>)}</div>
+      </section>}
 
       {separationRequests.length > 0 && <section className="rounded-xl border border-rose-500/20 bg-rose-500/5 p-4">
         <div className="mb-3 flex items-center justify-between gap-3">
@@ -990,6 +1017,11 @@ export default function EmployeesPage() {
                     className="bg-slate-950 border-slate-800 text-slate-100 text-xs h-8"
                   />
                 </div>
+                {editingEmployeeId && <div className="col-span-2 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3">
+                  <label className="mb-1 block text-slate-300">Reason for profile change *</label>
+                  <Input required minLength={10} placeholder="Explain the business reason and supporting record" value={form.changeReason} onChange={(e) => setForm({ ...form, changeReason: e.target.value })} className="h-8 border-slate-800 bg-slate-950 text-xs text-slate-100" />
+                  <p className="mt-1 text-[10px] text-amber-100/70">All staff edits are submitted to the General Manager and do not change the live profile immediately.</p>
+                </div>}
               </div>
             </div>
 
