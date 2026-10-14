@@ -101,7 +101,10 @@ export async function GET(req: NextRequest) {
       if (representedPosOrders.has(order.id)) continue;
       const complimentary = order.payments.filter((payment) => String(payment.method) === 'COMPLIMENTARY').reduce((sum, payment) => sum + money(payment.amount), 0);
       const amount = Math.max(0, money(order.total) - complimentary);
-      const department = order.outlet?.name ? `F&B · ${order.outlet.name}` : 'F&B';
+      // Outlet is an operational sales channel, not a financial department.
+      // Keep the manager's flash department totals normalized to F&B so an
+      // outlet name cannot appear as a separate department.
+      const department = 'F&B';
       const row = departments.get(department) || { department, gross: 0, discounts: 0, adjustments: 0, refunds: 0, taxes: 0, net: 0, transactionCount: 0 };
       row.gross += amount; row.net += amount; row.transactionCount += 1; departments.set(department, row);
     }
