@@ -30,12 +30,15 @@ export default function OrganizationPage() {
   const [departments, setDepartments] = useState<any[]>([]);
   const [positions, setPositions] = useState<any[]>([]);
   const [headCandidates, setHeadCandidates] = useState<any[]>([]);
+  const [positionChangeRequests, setPositionChangeRequests] = useState<any[]>([]);
+  const [canApprovePositionChanges, setCanApprovePositionChanges] = useState(false);
   const [loading, setLoading] = useState(true);
 
   // Modal States
   const [deptModalOpen, setDeptModalOpen] = useState(false);
   const [sectionModalOpen, setSectionModalOpen] = useState(false);
   const [posModalOpen, setPosModalOpen] = useState(false);
+  const [editingPositionId, setEditingPositionId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   // Forms
@@ -51,6 +54,7 @@ export default function OrganizationPage() {
     maxSalary: '',
     headcountBudget: '1',
     description: '',
+    reason: '',
   });
 
   const fetchData = async () => {
@@ -62,6 +66,8 @@ export default function OrganizationPage() {
         setDepartments(data.departments || []);
         setPositions(data.positions || []);
         setHeadCandidates(data.headCandidates || []);
+        setPositionChangeRequests(data.positionChangeRequests || []);
+        setCanApprovePositionChanges(Boolean(data.canApprovePositionChanges));
       }
     } catch (err) {
       console.error('Failed to load organization data', err);
@@ -133,17 +139,20 @@ export default function OrganizationPage() {
     }
   };
 
-  const handleCreatePosition = async (e: React.FormEvent) => {
+  const handleSavePosition = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
     try {
       const res = await fetch('/api/hr/organization', {
-        method: 'POST',
+        method: editingPositionId ? 'PATCH' : 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'POSITION', ...posForm }),
+        body: JSON.stringify(editingPositionId
+          ? { positionId: editingPositionId, minSalary: posForm.minSalary, maxSalary: posForm.maxSalary, headcountBudget: posForm.headcountBudget, reason: posForm.reason }
+          : { type: 'POSITION', ...posForm }),
       });
       if (res.ok) {
         setPosModalOpen(false);
+        setEditingPositionId(null);
         setPosForm({
           departmentId: '',
           title: '',
@@ -153,9 +162,52 @@ export default function OrganizationPage() {
           maxSalary: '',
           headcountBudget: '1',
           description: '',
+          reason: '',
         });
         fetchData();
+      } else {
+        const error = await res.json();
+        alert(error.error || 'Unable to save position');
       }
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const openNewPosition = () => {
+    setEditingPositionId(null);
+    setPosForm({ departmentId: '', title: '', code: '', gradeLevel: 'L1', minSalary: '', maxSalary: '', headcountBudget: '1', description: '', reason: '' });
+    setPosModalOpen(true);
+  };
+
+  const openEditPosition = (position: any) => {
+    setEditingPositionId(position.id);
+    setPosForm({
+      departmentId: position.departmentId || '',
+      title: position.title || '',
+      code: position.code || '',
+      gradeLevel: position.gradeLevel || 'L1',
+      minSalary: position.minSalary == null ? '' : String(position.minSalary),
+      maxSalary: position.maxSalary == null ? '' : String(position.maxSalary),
+      headcountBudget: String(position.headcountBudget || 1),
+      description: position.description || '',
+      reason: '',
+    });
+    setPosModalOpen(true);
+  };
+
+  const reviewPositionChange = async (requestId: string, action: 'APPROVE' | 'REJECT') => {
+    const reviewNotes = action === 'REJECT' ? window.prompt('Reason for rejecting this position change (optional):') || '' : '';
+    setSubmitting(true);
+    try {
+      const res = await fetch('/api/hr/organization', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ changeRequestId: requestId, action, reviewNotes }),
+      });
+      const result = await res.json();
+      if (!res.ok) alert(result.error || 'Unable to review position change');
+      else fetchData();
     } finally {
       setSubmitting(false);
     }
@@ -189,7 +241,7 @@ export default function OrganizationPage() {
           </Button>
           <Button
             size="sm"
-            onClick={() => setPosModalOpen(true)}
+            onClick={openNewPosition}
             className="bg-teal-600 hover:bg-teal-500 text-white text-xs h-9 gap-1.5 shadow-md shadow-teal-950"
           >
             <Plus className="w-3.5 h-3.5" />
@@ -324,6 +376,28 @@ export default function OrganizationPage() {
 
         {/* Tab 2: Job Positions & Grades */}
         <TabsContent value="positions">
+          {positionChangeRequests.length > 0 && <div className="mb-4 rounded-xl border border-amber-500/20 bg-amber-500/5 p-4">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-semibold text-amber-200">Pending position changes</h3>
+                <p className="mt-1 text-[11px] text-slate-400">Salary bands and budgeted headcount remain unchanged until a General Manager approves them.</p>
+              </div>
+              <span className="rounded-full bg-amber-500/10 px-2 py-1 text-[10px] font-semibold text-amber-300">{positionChangeRequests.length} pending</span>
+            </div>
+            <div className="space-y-2">
+              {positionChangeRequests.map((request) => <div key={request.id} className="flex flex-col justify-between gap-3 rounded-lg border border-slate-800 bg-slate-950/50 p-3 sm:flex-row sm:items-center">
+                <div className="text-xs">
+                  <p className="font-semibold text-white">{request.position.title} <span className="font-mono text-[10px] text-teal-400">{request.position.code}</span></p>
+                  <p className="mt-1 text-[11px] text-slate-400">₦{Number(request.proposedMinSalary || 0).toLocaleString()} - ₦{Number(request.proposedMaxSalary || 0).toLocaleString()} · Headcount budget: {request.proposedHeadcount} · Requested by {request.requestedByName}</p>
+                  {request.reason && <p className="mt-1 text-[11px] text-slate-500">Reason: {request.reason}</p>}
+                </div>
+                {canApprovePositionChanges && <div className="flex shrink-0 gap-2">
+                  <Button type="button" size="sm" disabled={submitting} onClick={() => reviewPositionChange(request.id, 'REJECT')} variant="outline" className="h-7 border-rose-500/30 text-[10px] text-rose-300">Reject</Button>
+                  <Button type="button" size="sm" disabled={submitting} onClick={() => reviewPositionChange(request.id, 'APPROVE')} className="h-7 bg-emerald-600 text-[10px] text-white hover:bg-emerald-500">Approve</Button>
+                </div>}
+              </div>)}
+            </div>
+          </div>}
           <div className="bg-[#090e17] border border-slate-800/80 rounded-xl overflow-hidden shadow-xl">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs text-slate-300">
@@ -336,18 +410,19 @@ export default function OrganizationPage() {
                     <th className="py-3 px-4">Salary Band (NGN)</th>
                     <th className="py-3 px-4">Headcount (Actual / Budget)</th>
                     <th className="py-3 px-4">Status</th>
+                    <th className="py-3 px-4 text-right">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/60">
                   {loading ? (
                     <tr>
-                      <td colSpan={7} className="py-10 text-center text-slate-500">
+                      <td colSpan={8} className="py-10 text-center text-slate-500">
                         Loading job positions…
                       </td>
                     </tr>
                   ) : positions.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="py-10 text-center text-slate-500">
+                      <td colSpan={8} className="py-10 text-center text-slate-500">
                         No job positions defined yet.
                       </td>
                     </tr>
@@ -385,6 +460,11 @@ export default function OrganizationPage() {
                             >
                               {isFilled ? 'Filled' : isOverBudget ? 'Over Budget' : 'Open'}
                             </span>
+                          </td>
+                          <td className="py-3 px-4 text-right">
+                            <Button type="button" size="sm" variant="outline" onClick={() => openEditPosition(pos)} className="h-7 border-slate-700 text-[10px] text-slate-300 hover:text-white">
+                              <Pencil className="mr-1 h-3 w-3" /> Edit
+                            </Button>
                           </td>
                         </tr>
                       );
@@ -524,14 +604,15 @@ export default function OrganizationPage() {
           <DialogHeader>
             <DialogTitle className="text-sm font-bold text-white flex items-center gap-2">
               <Briefcase className="w-4 h-4 text-teal-400" />
-              Define Job Position
+              {editingPositionId ? 'Request Position Change' : 'Define Job Position'}
             </DialogTitle>
           </DialogHeader>
-          <form onSubmit={handleCreatePosition} className="space-y-4 text-xs">
+          <form onSubmit={handleSavePosition} className="space-y-4 text-xs">
             <div>
               <label className="text-slate-400 block mb-1">Department</label>
               <select
                 value={posForm.departmentId}
+                disabled={Boolean(editingPositionId)}
                 onChange={(e) => setPosForm({ ...posForm, departmentId: e.target.value })}
                 className="w-full bg-slate-950 border border-slate-800 text-slate-300 rounded-lg text-xs px-2.5 h-8 outline-none"
               >
@@ -547,6 +628,7 @@ export default function OrganizationPage() {
                 required
                 placeholder="e.g. Front Desk Officer, Sous Chef"
                 value={posForm.title}
+                disabled={Boolean(editingPositionId)}
                 onChange={(e) => setPosForm({ ...posForm, title: e.target.value })}
                 className="bg-slate-950 border-slate-800 text-slate-100 text-xs h-8"
               />
@@ -557,6 +639,7 @@ export default function OrganizationPage() {
                 <Input
                   placeholder="e.g. L1, L2, Senior"
                   value={posForm.gradeLevel}
+                  disabled={Boolean(editingPositionId)}
                   onChange={(e) => setPosForm({ ...posForm, gradeLevel: e.target.value })}
                   className="bg-slate-950 border-slate-800 text-slate-100 text-xs h-8"
                 />
@@ -594,12 +677,22 @@ export default function OrganizationPage() {
                 />
               </div>
             </div>
+            {editingPositionId && <div>
+              <label className="text-slate-400 mb-1 block">Reason for change</label>
+              <Input
+                placeholder="e.g. Approved annual salary review"
+                value={posForm.reason}
+                onChange={(e) => setPosForm({ ...posForm, reason: e.target.value })}
+                className="bg-slate-950 border-slate-800 text-slate-100 text-xs h-8"
+              />
+              <p className="mt-1 text-[10px] text-slate-500">A General Manager must approve this change before it becomes active.</p>
+            </div>}
             <DialogFooter className="pt-2">
-              <Button type="button" variant="outline" onClick={() => setPosModalOpen(false)} className="border-slate-800 text-xs h-8">
+              <Button type="button" variant="outline" onClick={() => { setPosModalOpen(false); setEditingPositionId(null); }} className="border-slate-800 text-xs h-8">
                 Cancel
               </Button>
               <Button type="submit" disabled={submitting} className="bg-teal-600 hover:bg-teal-500 text-white text-xs h-8">
-                {submitting ? 'Saving…' : 'Define Position'}
+                {submitting ? 'Saving…' : editingPositionId ? 'Submit for GM Approval' : 'Define Position'}
               </Button>
             </DialogFooter>
           </form>

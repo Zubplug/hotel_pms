@@ -154,6 +154,10 @@ export async function PUT(
       emergencyRelation,
     } = body;
 
+    if (['TERMINATED', 'RESIGNED', 'RETIRED'].includes(String(employmentStatus || '').toUpperCase())) {
+      return NextResponse.json({ error: 'Employee separation must be submitted through the General Manager approval workflow' }, { status: 400 });
+    }
+
     const updated = await prisma.$transaction(async (tx: any) => {
       // 1. Update Staff
       const staffUpdateData: any = {};

@@ -43,7 +43,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
               isActive: true,
               deletedAt: null,
             },
-            select: { id: true, firstName: true, lastName: true, organizationId: true, userId: true, email: true },
+            select: { id: true, firstName: true, lastName: true, organizationId: true, userId: true, email: true, isActive: true },
             take: 2,
           });
 
@@ -54,7 +54,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           if (matches.length === 0 && normalizedEmployerId.startsWith('EMP-')) {
             const fallbackMatches = await prisma.staff.findMany({
               where: { employeeId: null, isActive: true, deletedAt: null },
-              select: { id: true, firstName: true, lastName: true, organizationId: true, userId: true, email: true },
+              select: { id: true, firstName: true, lastName: true, organizationId: true, userId: true, email: true, isActive: true },
             });
             const prefix = normalizedEmployerId.slice(4).toLowerCase();
             matches.push(...fallbackMatches.filter((candidate) => candidate.id.slice(0, prefix.length) === prefix).slice(0, 2));
@@ -89,10 +89,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
                 { userId: user.id }
               ]
             },
-            select: { id: true, firstName: true, lastName: true, organizationId: true }
+            select: { id: true, firstName: true, lastName: true, organizationId: true, isActive: true }
           });
         }
-        
+
+        if (staff?.isActive === false) return null;
+
         // Ensure staffId is populated on user if we found the staff via userId
         if (staff && !user.staffId) {
           user.staffId = staff.id;

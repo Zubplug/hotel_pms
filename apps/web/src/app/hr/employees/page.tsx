@@ -51,6 +51,8 @@ export default function EmployeesPage() {
   const [selectedStatus, setSelectedStatus] = useState('ALL');
   const [departments, setDepartments] = useState<any[]>([]);
   const [positions, setPositions] = useState<any[]>([]);
+  const [separationRequests, setSeparationRequests] = useState<any[]>([]);
+  const [canApproveSeparations, setCanApproveSeparations] = useState(false);
 
   // Drawer & Modal States
   const [selectedEmployee, setSelectedEmployee] = useState<any | null>(null);
@@ -59,6 +61,9 @@ export default function EmployeesPage() {
   const [editingEmployeeId, setEditingEmployeeId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [banks, setBanks] = useState<{ code: string; name: string }[]>([]);
+  const [separationModalOpen, setSeparationModalOpen] = useState(false);
+  const [separationEmployee, setSeparationEmployee] = useState<any | null>(null);
+  const [separationForm, setSeparationForm] = useState({ separationType: 'TERMINATED', effectiveDate: new Date().toISOString().split('T')[0], reason: '' });
 
   // New Employee Form
   const [form, setForm] = useState({
@@ -99,6 +104,8 @@ export default function EmployeesPage() {
       if (res.ok) {
         const data = await res.json();
         setEmployees(data.employees || []);
+        setSeparationRequests(data.separationRequests || []);
+        setCanApproveSeparations(Boolean(data.canApproveSeparations));
       }
     } catch (err) {
       console.error('Failed to load employees', err);
@@ -279,6 +286,51 @@ export default function EmployeesPage() {
     setAddModalOpen(true);
   };
 
+  const openSeparationModal = (employee: any) => {
+    setSeparationEmployee(employee);
+    setSeparationForm({ separationType: 'TERMINATED', effectiveDate: new Date().toISOString().split('T')[0], reason: '' });
+    setDrawerOpen(false);
+    setSeparationModalOpen(true);
+  };
+
+  const submitSeparation = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!separationEmployee) return;
+    setSubmitting(true);
+    try {
+      const response = await fetch(`/api/hr/employees/${separationEmployee.id}/separation`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(separationForm),
+      });
+      const result = await response.json();
+      if (!response.ok) return alert(result.error || 'Unable to submit separation request');
+      setSeparationModalOpen(false);
+      setSeparationEmployee(null);
+      await fetchEmployees();
+      alert('Separation request submitted for General Manager approval.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const reviewSeparation = async (request: any, action: 'APPROVE' | 'REJECT') => {
+    const reviewNotes = action === 'REJECT' ? window.prompt('Reason for rejecting this separation (optional):') || '' : '';
+    setSubmitting(true);
+    try {
+      const response = await fetch(`/api/hr/employees/${request.id}/separation`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, reviewNotes }),
+      });
+      const result = await response.json();
+      if (!response.ok) alert(result.error || 'Unable to review separation request');
+      else await fetchEmployees();
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const verifyBankAccount = async () => {
     const response = await fetch('/api/hr/employees/bank-account/verify', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -409,6 +461,29 @@ export default function EmployeesPage() {
         </div>
       </div>
 
+      {separationRequests.length > 0 && <section className="rounded-xl border border-rose-500/20 bg-rose-500/5 p-4">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold text-rose-200">Pending staff separations</h2>
+            <p className="mt-1 text-[11px] text-slate-400">Review the documented reason and effective date before access is revoked.</p>
+          </div>
+          <span className="rounded-full bg-rose-500/10 px-2 py-1 text-[10px] font-semibold text-rose-300">{separationRequests.length} pending</span>
+        </div>
+        <div className="space-y-2">
+          {separationRequests.map((request) => <div key={request.id} className="flex flex-col justify-between gap-3 rounded-lg border border-slate-800 bg-slate-950/50 p-3 sm:flex-row sm:items-center">
+            <div className="text-xs">
+              <p className="font-semibold text-white">{request.staff.firstName} {request.staff.lastName} <span className="text-[10px] uppercase text-rose-300">{request.separationType}</span></p>
+              <p className="mt-1 text-[11px] text-slate-400">Effective {new Date(request.effectiveDate).toLocaleDateString()} · Requested by {request.requestedBy.email}</p>
+              <p className="mt-1 text-[11px] text-slate-500">{request.reason}</p>
+            </div>
+            {canApproveSeparations && <div className="flex shrink-0 gap-2">
+              <Button type="button" size="sm" disabled={submitting} onClick={() => reviewSeparation(request, 'REJECT')} variant="outline" className="h-7 border-slate-700 text-[10px] text-slate-300">Reject</Button>
+              <Button type="button" size="sm" disabled={submitting} onClick={() => reviewSeparation(request, 'APPROVE')} className="h-7 bg-rose-600 text-[10px] text-white hover:bg-rose-500">Approve separation</Button>
+            </div>}
+          </div>)}
+        </div>
+      </section>}
+
       {/* Filter and Search Bar */}
       <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between bg-slate-900/60 border border-slate-800/80 p-3 rounded-xl">
         <div className="relative flex-1">
@@ -444,7 +519,6 @@ export default function EmployeesPage() {
             <option value="PROBATION">Probation</option>
             <option value="ON_LEAVE">On Leave</option>
             <option value="SUSPENDED">Suspended</option>
-            <option value="TERMINATED">Terminated</option>
           </select>
         </div>
       </div>
@@ -574,6 +648,9 @@ export default function EmployeesPage() {
                   <Button type="button" variant="outline" onClick={() => openEmployeeEditor(selectedEmployee)} className="ml-auto border-teal-500/30 text-teal-300 hover:bg-teal-500/10">
                     Edit staff
                   </Button>
+                  {selectedEmployee.isActive && <Button type="button" variant="outline" onClick={() => openSeparationModal(selectedEmployee)} className="border-rose-500/30 text-rose-300 hover:bg-rose-500/10">
+                    Start separation
+                  </Button>}
                 </div>
               </div>
 
@@ -758,6 +835,22 @@ export default function EmployeesPage() {
         </SheetContent>
       </Sheet>
 
+      <Dialog open={separationModalOpen} onOpenChange={setSeparationModalOpen}>
+        <DialogContent className="max-w-md border-slate-800 bg-slate-900 text-slate-100">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-sm font-bold text-white"><XCircle className="h-4 w-4 text-rose-400" /> Start staff separation</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={submitSeparation} className="space-y-4 text-xs">
+            <p className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 text-[11px] leading-5 text-amber-100">This submits a formal request. The employee remains active until a General Manager approves it.</p>
+            <div><label className="mb-1 block text-slate-400">Employee</label><p className="font-semibold text-white">{separationEmployee?.name}</p><p className="text-[11px] text-slate-500">{separationEmployee?.department} · {separationEmployee?.position}</p></div>
+            <div><label className="mb-1 block text-slate-400">Separation type</label><select value={separationForm.separationType} onChange={(e) => setSeparationForm({ ...separationForm, separationType: e.target.value })} className="h-8 w-full rounded-lg border border-slate-800 bg-slate-950 px-2.5 text-slate-300 outline-none"><option value="TERMINATED">Termination / dismissal</option><option value="RESIGNED">Resignation</option><option value="RETIRED">Retirement</option></select></div>
+            <div><label className="mb-1 block text-slate-400">Effective date</label><Input required type="date" value={separationForm.effectiveDate} onChange={(e) => setSeparationForm({ ...separationForm, effectiveDate: e.target.value })} className="h-8 border-slate-800 bg-slate-950 text-xs text-slate-100" /></div>
+            <div><label className="mb-1 block text-slate-400">Reason and supporting record *</label><textarea required minLength={10} value={separationForm.reason} onChange={(e) => setSeparationForm({ ...separationForm, reason: e.target.value })} placeholder="Document the factual reason, prior warnings or resignation notice, and any relevant handover details." className="min-h-24 w-full rounded-lg border border-slate-800 bg-slate-950 p-2.5 text-xs text-slate-100 outline-none focus:border-rose-500" /></div>
+            <DialogFooter className="pt-2"><Button type="button" variant="outline" onClick={() => setSeparationModalOpen(false)} className="border-slate-800 text-xs">Cancel</Button><Button type="submit" disabled={submitting || separationForm.reason.trim().length < 10} className="bg-rose-600 text-xs text-white hover:bg-rose-500">{submitting ? 'Submitting…' : 'Submit for GM approval'}</Button></DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
       {/* Add Employee Dialog Modal */}
       <Dialog open={addModalOpen} onOpenChange={setAddModalOpen}>
         <DialogContent className="max-w-2xl bg-slate-900 border-slate-800 text-slate-100 max-h-[90vh] overflow-y-auto">
@@ -886,7 +979,6 @@ export default function EmployeesPage() {
                     <option value="PROBATION">Probation</option>
                     <option value="ON_LEAVE">On leave</option>
                     <option value="SUSPENDED">Suspended</option>
-                    <option value="TERMINATED">Terminated</option>
                   </select>
                 </div>
                 <div>

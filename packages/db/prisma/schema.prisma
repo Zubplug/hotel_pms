@@ -250,6 +250,8 @@ model Property {
 
   // Enterprise HR & Payroll Suite
   jobPositions          JobPosition[]
+  positionChangeRequests PositionChangeRequest[]
+  employeeSeparationRequests EmployeeSeparationRequest[]
   workShifts            WorkShift[]
   shiftRosters          ShiftRoster[]
   attendanceRecords     AttendanceRecord[]
@@ -2045,6 +2047,7 @@ model Staff {
   bypassesReviewed       CheckInBypass[]         @relation("BypassReviewer")
   headedDepartments      Department[]            @relation("DepartmentHead")
   employeeInvitations    EmployeeInvitation[]
+  separationRequests     EmployeeSeparationRequest[]
 
   // Enterprise Accounting Suite
   salaryStructure         SalaryStructure?
@@ -2128,6 +2131,10 @@ model User {
   sentCustomerInvitations        CustomerInvitation[]         @relation("CustomerInvitationCreatedBy")
   employeeInvitations            EmployeeInvitation[]         @relation("EmployeeInvitationUser")
   sentEmployeeInvitations        EmployeeInvitation[]         @relation("EmployeeInvitationInvitedBy")
+  requestedSeparations            EmployeeSeparationRequest[]  @relation("SeparationRequestedBy")
+  reviewedSeparations             EmployeeSeparationRequest[]  @relation("SeparationReviewedBy")
+  requestedPositionChanges       PositionChangeRequest[]      @relation("PositionChangeRequestedBy")
+  reviewedPositionChanges        PositionChangeRequest[]      @relation("PositionChangeReviewedBy")
 }
 
 // FCM device tokens for push notifications
@@ -7334,12 +7341,60 @@ model JobPosition {
   isActive        Boolean  @default(true)
 
   requisitions JobRequisition[]
+  changeRequests PositionChangeRequest[]
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
 
   @@unique([propertyId, code])
   @@index([propertyId, departmentId])
+}
+
+model PositionChangeRequest {
+  id                  String      @id @default(uuid()) @db.Uuid
+  positionId          String      @db.Uuid
+  position            JobPosition @relation(fields: [positionId], references: [id], onDelete: Cascade)
+  propertyId          String      @db.Uuid
+  property            Property    @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  requestedById       String      @db.Uuid
+  requestedBy         User        @relation("PositionChangeRequestedBy", fields: [requestedById], references: [id])
+  reviewedById        String?     @db.Uuid
+  reviewedBy          User?       @relation("PositionChangeReviewedBy", fields: [reviewedById], references: [id])
+  proposedMinSalary   Decimal?    @db.Decimal(18, 4)
+  proposedMaxSalary   Decimal?    @db.Decimal(18, 4)
+  proposedHeadcount   Int
+  reason              String?
+  status              String      @default("PENDING")
+  reviewNotes         String?
+  reviewedAt          DateTime?   @db.Timestamptz
+  createdAt           DateTime    @default(now()) @db.Timestamptz
+  updatedAt           DateTime    @updatedAt @db.Timestamptz
+
+  @@index([positionId, status])
+  @@index([propertyId, status, createdAt])
+}
+
+model EmployeeSeparationRequest {
+  id             String      @id @default(uuid()) @db.Uuid
+  staffId        String      @db.Uuid
+  staff          Staff       @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  propertyId     String      @db.Uuid
+  property       Property    @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  requestedById  String      @db.Uuid
+  requestedBy    User        @relation("SeparationRequestedBy", fields: [requestedById], references: [id])
+  reviewedById   String?     @db.Uuid
+  reviewedBy     User?       @relation("SeparationReviewedBy", fields: [reviewedById], references: [id])
+  separationType String      @default("TERMINATED")
+  reason         String
+  effectiveDate  DateTime    @db.Date
+  status         String      @default("PENDING")
+  reviewNotes    String?
+  reviewedAt     DateTime?   @db.Timestamptz
+  createdAt      DateTime    @default(now()) @db.Timestamptz
+  updatedAt      DateTime    @updatedAt @db.Timestamptz
+
+  @@index([staffId, status])
+  @@index([propertyId, status, createdAt])
 }
 
 model EmployeeMovement {

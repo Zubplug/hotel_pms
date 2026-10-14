@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
     const propWhere: any = { organizationId };
     if (propertyId) propWhere.id = propertyId;
 
-    const [departments, positions, allStaff, headCandidates] = await Promise.all([
+    const [departments, positions, allStaff, headCandidates, positionChangeRequests] = await Promise.all([
       prisma.department.findMany({
         where: {
           property: propWhere,
@@ -82,6 +82,14 @@ export async function GET(req: NextRequest) {
         },
         orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
       }),
+      prisma.positionChangeRequest.findMany({
+        where: { propertyId, status: 'PENDING' },
+        include: {
+          position: { select: { id: true, title: true, code: true, minSalary: true, maxSalary: true, headcountBudget: true } },
+          requestedBy: { select: { id: true, email: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
     ]);
 
     const formattedDepartments = departments.map((d) => {
@@ -124,6 +132,13 @@ export async function GET(req: NextRequest) {
       departments: formattedDepartments,
       positions: formattedPositions,
       headCandidates,
+      canApprovePositionChanges: ['GENERAL_MANAGER', 'SUPER_ADMIN', 'OWNER', 'ADMIN', 'CEO'].includes(authContext.role),
+      positionChangeRequests: positionChangeRequests.map((request) => ({
+        ...request,
+        proposedMinSalary: request.proposedMinSalary == null ? null : Number(request.proposedMinSalary),
+        proposedMaxSalary: request.proposedMaxSalary == null ? null : Number(request.proposedMaxSalary),
+        requestedByName: request.requestedBy.email,
+      })),
     });
   } catch (error: any) {
     if (error.message?.includes('Forbidden') || error.message?.includes('Unauthorized')) {
@@ -251,7 +266,75 @@ export async function PATCH(req: NextRequest) {
     const propertyId = authContext.propertyId;
     if (!propertyId) return NextResponse.json({ error: 'Property ID required' }, { status: 400 });
 
-    const { departmentId, name, code, description, headStaffId } = await req.json();
+    const body = await req.json();
+    const { departmentId, name, code, description, headStaffId, positionId, changeRequestId, action, minSalary, maxSalary, headcountBudget, reason, reviewNotes } = body;
+
+    if (action === 'APPROVE' || action === 'REJECT') {
+      if (!['GENERAL_MANAGER', 'SUPER_ADMIN', 'OWNER', 'ADMIN', 'CEO'].includes(authContext.role)) {
+        return NextResponse.json({ error: 'Only the General Manager can approve position changes' }, { status: 403 });
+      }
+
+      const change = await prisma.positionChangeRequest.findFirst({ where: { id: changeRequestId, propertyId, status: 'PENDING' } });
+      if (!change) return NextResponse.json({ error: 'Pending position change not found' }, { status: 404 });
+      if (change.requestedById === authContext.userId) return NextResponse.json({ error: 'The requester cannot approve their own position change' }, { status: 403 });
+
+      if (action === 'REJECT') {
+        const rejected = await prisma.positionChangeRequest.update({
+          where: { id: change.id },
+          data: { status: 'REJECTED', reviewNotes: reviewNotes?.trim() || null, reviewedById: authContext.userId, reviewedAt: new Date() },
+        });
+        return NextResponse.json({ success: true, data: rejected });
+      }
+
+      const approved = await prisma.$transaction(async (tx) => {
+        const updatedPosition = await tx.jobPosition.update({
+          where: { id: change.positionId },
+          data: {
+            minSalary: change.proposedMinSalary,
+            maxSalary: change.proposedMaxSalary,
+            headcountBudget: change.proposedHeadcount,
+          },
+        });
+        const updatedRequest = await tx.positionChangeRequest.update({
+          where: { id: change.id },
+          data: { status: 'APPROVED', reviewNotes: reviewNotes?.trim() || null, reviewedById: authContext.userId, reviewedAt: new Date() },
+        });
+        return { position: updatedPosition, request: updatedRequest };
+      });
+      return NextResponse.json({ success: true, data: approved });
+    }
+
+    if (positionId) {
+      const position = await prisma.jobPosition.findFirst({ where: { id: positionId, propertyId } });
+      if (!position) return NextResponse.json({ error: 'Position not found in current property' }, { status: 404 });
+
+      const proposedMinSalary = minSalary === '' || minSalary == null ? null : Number(minSalary);
+      const proposedMaxSalary = maxSalary === '' || maxSalary == null ? null : Number(maxSalary);
+      const proposedHeadcount = Number(headcountBudget);
+      if ((proposedMinSalary != null && (!Number.isFinite(proposedMinSalary) || proposedMinSalary < 0)) ||
+        (proposedMaxSalary != null && (!Number.isFinite(proposedMaxSalary) || proposedMaxSalary < 0)) ||
+        (proposedMinSalary != null && proposedMaxSalary != null && proposedMinSalary > proposedMaxSalary) ||
+        !Number.isInteger(proposedHeadcount) || proposedHeadcount < 1) {
+        return NextResponse.json({ error: 'Enter a valid salary band and a whole-number headcount of at least 1' }, { status: 400 });
+      }
+
+      const pending = await prisma.positionChangeRequest.findFirst({ where: { positionId, status: 'PENDING' } });
+      if (pending) return NextResponse.json({ error: 'This position already has a pending change awaiting General Manager approval' }, { status: 409 });
+
+      const request = await prisma.positionChangeRequest.create({
+        data: {
+          positionId,
+          propertyId,
+          requestedById: authContext.userId,
+          proposedMinSalary,
+          proposedMaxSalary,
+          proposedHeadcount,
+          reason: reason?.trim() || null,
+        },
+      });
+      return NextResponse.json({ success: true, pendingApproval: true, data: request }, { status: 201 });
+    }
+
     if (!departmentId) return NextResponse.json({ error: 'Department ID is required' }, { status: 400 });
 
     const department = await prisma.department.findFirst({ where: { id: departmentId, propertyId } });
