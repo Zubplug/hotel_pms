@@ -64,6 +64,7 @@ export async function GET(req: NextRequest) {
     const detail: any[] = [];
     let voidCount = 0;
     let latePostingCount = 0;
+    let complimentaryPos = 0;
     for (const item of items) {
       if (item.voidedAt) { voidCount += 1; continue; }
       if (item.isLatePosting) latePostingCount += 1;
@@ -82,11 +83,15 @@ export async function GET(req: NextRequest) {
     for (const order of posOrders) {
       if (representedPos.has(order.id)) continue;
       const complimentary = order.payments.filter((payment) => String(payment.method) === 'COMPLIMENTARY').reduce((sum, payment) => sum + n(payment.amount), 0);
+      complimentaryPos += complimentary;
       const outlet = order.outlet?.name || 'F&B';
-      const gross = Math.max(0, n(order.subtotal));
-      const discounts = n(order.discount) + complimentary;
-      addRow(rows, `F&B:POS:${outlet}`, { department: 'F&B', code: 'POS', description: `${outlet} · ${order.orderNumber}`, gross, discounts, net: gross - discounts, tax: n(order.taxAmount), total: n(order.total), transactionCount: 1 });
-      detail.push({ id: order.id, type: 'POS_ORDER', department: 'F&B', source: 'POS', description: `${outlet} · ${order.orderNumber}`, amount: round(n(order.total)), quantity: 1, unitAmount: round(n(order.total)), latePosting: false });
+      // Complimentary POS tenders are concessions, not recognized revenue.
+      // Exclude them from gross while retaining the amount in the control summary.
+      const gross = Math.max(0, n(order.subtotal) - complimentary);
+      const discounts = n(order.discount);
+      const total = Math.max(0, n(order.total) - complimentary);
+      addRow(rows, `F&B:POS:${outlet}`, { department: 'F&B', code: 'POS', description: `${outlet} · ${order.orderNumber}`, gross, discounts, net: gross - discounts, tax: n(order.taxAmount), total, transactionCount: 1 });
+      detail.push({ id: order.id, type: 'POS_ORDER', department: 'F&B', source: 'POS', description: `${outlet} · ${order.orderNumber}`, amount: round(total), quantity: 1, unitAmount: round(total), latePosting: false });
     }
 
     const departments = [...new Set([...rows.values()].map((row: any) => row.department))].map((department) => ({ department, revenues: [...rows.values()].filter((row: any) => row.department === department).map((row: any) => Object.fromEntries(Object.entries(row).map(([key, value]) => [key, typeof value === 'number' ? round(value) : value]))) })).sort((a, b) => a.department.localeCompare(b.department));
@@ -97,7 +102,7 @@ export async function GET(req: NextRequest) {
     const paymentTotals = [...paymentMap.values()].map((row) => ({ ...row, amount: round(row.amount) })).sort((a, b) => b.amount - a.amount);
     const snapshot = audit?.financialSnapshot;
     const snapshotValues = { gross: n(snapshot?.grossRevenue), net: n(snapshot?.netRevenue), tax: n(snapshot?.taxes), discounts: n(snapshot?.discounts), refunds: n(snapshot?.refunds) };
-    return successResponse({ propertyName: property.name, propertyEmail: property.email || '', propertyPhone: property.phone || '', propertyAddress: [property.address, property.city, property.state].filter(Boolean).join(', '), propertyCurrency: property.baseCurrency || 'NGN', businessDate: businessDateValue, auditStatus: audit?.status || 'NOT_RUN', audit: { status: audit?.status || 'NOT_RUN', closePackageStatus: audit?.closePackage?.status || 'NOT_FINALIZED', finalizedAt: audit?.closePackage?.finalizedAt, roomChargesPosted: audit?.roomChargesPosted || 0, errors: audit?.errors || 0 }, departments, totals, taxBreakdown: [...taxRows.values()].map((row) => ({ ...row, tax: round(row.tax), total: round(row.total) })), sourceBreakdown: [...sourceRows.values()].map((row) => ({ ...row, gross: round(row.gross), net: round(row.net), tax: round(row.tax), total: round(row.total), transactionCount: row.transactionCount })), paymentTotals, detail: detail.slice(0, 500), controls: { itemCount: items.length, detailCount: detail.length, voidCount, latePostingCount, posOrderCount: posOrders.length, representedPosOrderCount: representedPos.size }, reconciliation: { snapshot: snapshotValues, detail: { gross: totals.gross, net: totals.net, tax: totals.tax, discounts: totals.discounts, refunds: totals.refunds }, variance: { gross: round(totals.gross - snapshotValues.gross), net: round(totals.net - snapshotValues.net), tax: round(totals.tax - snapshotValues.tax), discounts: round(totals.discounts - snapshotValues.discounts), refunds: round(totals.refunds - snapshotValues.refunds) } } });
+    return successResponse({ propertyName: property.name, propertyEmail: property.email || '', propertyPhone: property.phone || '', propertyAddress: [property.address, property.city, property.state].filter(Boolean).join(', '), propertyCurrency: property.baseCurrency || 'NGN', businessDate: businessDateValue, auditStatus: audit?.status || 'NOT_RUN', audit: { status: audit?.status || 'NOT_RUN', closePackageStatus: audit?.closePackage?.status || 'NOT_FINALIZED', finalizedAt: audit?.closePackage?.finalizedAt, roomChargesPosted: audit?.roomChargesPosted || 0, errors: audit?.errors || 0 }, departments, totals, taxBreakdown: [...taxRows.values()].map((row) => ({ ...row, tax: round(row.tax), total: round(row.total) })), sourceBreakdown: [...sourceRows.values()].map((row) => ({ ...row, gross: round(row.gross), net: round(row.net), tax: round(row.tax), total: round(row.total), transactionCount: row.transactionCount })), paymentTotals, detail: detail.slice(0, 500), controls: { itemCount: items.length, detailCount: detail.length, voidCount, latePostingCount, complimentaryPos: round(complimentaryPos), posOrderCount: posOrders.length, representedPosOrderCount: representedPos.size }, reconciliation: { snapshot: snapshotValues, detail: { gross: totals.gross, net: totals.net, tax: totals.tax, discounts: totals.discounts, refunds: totals.refunds }, variance: { gross: round(totals.gross - snapshotValues.gross), net: round(totals.net - snapshotValues.net), tax: round(totals.tax - snapshotValues.tax), discounts: round(totals.discounts - snapshotValues.discounts), refunds: round(totals.refunds - snapshotValues.refunds) } } });
   } catch (err: any) {
     console.error('[Detailed Revenue GET]', err);
     return errorResponse('INTERNAL_ERROR', err.message || 'Failed to build detailed revenue report', 500);
