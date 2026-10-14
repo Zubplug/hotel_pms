@@ -5,6 +5,7 @@ import { hash } from 'bcryptjs';
 import { HrAuthorizationService } from '@/lib/services/hr-authorization-service';
 import { PiiMaskingService } from '@/lib/services/pii-masking-service';
 import { sendEmployeeInvitationEmail } from '@/lib/email/send-employee-invitation';
+import { redactProfileChangeRequest } from '@/lib/hr/profile-change-request-redaction';
 
 export async function GET(req: NextRequest) {
   try {
@@ -140,7 +141,7 @@ export async function GET(req: NextRequest) {
       totalPages: Math.ceil(total / limit),
       canApproveSeparations: ['GENERAL_MANAGER', 'SUPER_ADMIN', 'OWNER', 'ADMIN', 'CEO'].includes(authContext.role),
       separationRequests,
-      profileChangeRequests,
+      profileChangeRequests: profileChangeRequests.map((request) => redactProfileChangeRequest(request, canViewSensitive)),
       canApproveProfileChanges: ['GENERAL_MANAGER', 'SUPER_ADMIN', 'OWNER', 'ADMIN', 'CEO'].includes(authContext.role),
     });
   } catch (error: any) {

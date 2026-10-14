@@ -2131,6 +2131,8 @@ model User {
   sentCustomerInvitations        CustomerInvitation[]         @relation("CustomerInvitationCreatedBy")
   employeeInvitations            EmployeeInvitation[]         @relation("EmployeeInvitationUser")
   sentEmployeeInvitations        EmployeeInvitation[]         @relation("EmployeeInvitationInvitedBy")
+  requestedEmployeeChanges        EmployeeChangeRequest[]      @relation("EmployeeChangeRequestRequestedBy")
+  reviewedEmployeeChanges         EmployeeChangeRequest[]      @relation("EmployeeChangeRequestReviewedBy")
   requestedSeparations            EmployeeSeparationRequest[]  @relation("SeparationRequestedBy")
   reviewedSeparations             EmployeeSeparationRequest[]  @relation("SeparationReviewedBy")
   requestedPositionChanges       PositionChangeRequest[]      @relation("PositionChangeRequestedBy")
@@ -7292,7 +7294,9 @@ model EmployeeChangeRequest {
   reason         String?
   status         String   @default("PENDING") // PENDING | APPROVED | REJECTED | CLARIFICATION
   requestedBy    String   @db.Uuid
+  requester      User     @relation("EmployeeChangeRequestRequestedBy", fields: [requestedBy], references: [id], onDelete: Restrict, onUpdate: Cascade)
   reviewedBy     String?  @db.Uuid
+  reviewer       User?    @relation("EmployeeChangeRequestReviewedBy", fields: [reviewedBy], references: [id], onDelete: SetNull, onUpdate: Cascade)
   reviewedAt     DateTime? @db.Timestamptz
   reviewerNotes  String?
   effectiveAt    DateTime? @db.Timestamptz

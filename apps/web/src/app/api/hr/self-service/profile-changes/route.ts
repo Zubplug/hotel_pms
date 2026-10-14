@@ -64,7 +64,24 @@ export async function POST(req: NextRequest) {
     const currentValue = source[fieldName];
     const serializedCurrent = typeof currentValue === 'string' || currentValue == null ? currentValue : JSON.stringify(currentValue);
     const duplicate = await prisma.employeeChangeRequest.findFirst({ where: { staffId: staff.id, fieldName, status: { in: ['PENDING', 'CLARIFICATION'] } } });
-    if (duplicate) return NextResponse.json({ error: 'There is already an open request for this field' }, { status: 409 });
+    if (duplicate) {
+      if (duplicate.status !== 'CLARIFICATION' || body.requestId !== duplicate.id) return NextResponse.json({ error: 'There is already an open request for this field' }, { status: 409 });
+      const request = await prisma.employeeChangeRequest.update({
+        where: { id: duplicate.id },
+        data: {
+          currentValue: serializedCurrent,
+          proposedValue,
+          reason: String(body.reason || '').trim() || null,
+          requestedBy: context.userId,
+          status: 'PENDING',
+          reviewedBy: null,
+          reviewedAt: null,
+          reviewerNotes: null,
+          effectiveAt: null,
+        },
+      });
+      return NextResponse.json({ success: true, request, resubmitted: true }, { status: 200 });
+    }
 
     const request = await prisma.employeeChangeRequest.create({ data: { staffId: staff.id, fieldName, currentValue: serializedCurrent, proposedValue, reason: String(body.reason || '').trim() || null, requestedBy: context.userId } });
     return NextResponse.json({ success: true, request }, { status: 201 });

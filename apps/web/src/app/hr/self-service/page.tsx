@@ -133,10 +133,11 @@ export default function EmployeeSelfServicePage() {
     e.preventDefault();
     setSubmitting(true); setActionError('');
     try {
-      const res = await fetch('/api/hr/self-service/profile-changes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(profileForm) });
+      const clarification = data?.profileChangeRequests?.find((request: any) => request.fieldName === profileForm.fieldName && request.status === 'CLARIFICATION');
+      const res = await fetch('/api/hr/self-service/profile-changes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...profileForm, requestId: clarification?.id }) });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Unable to submit profile change');
-      setProfileModalOpen(false); setProfileForm({ ...profileForm, proposedValue: '', reason: '' }); await fetchSelfServiceData(); showFeedback('success', 'Change request submitted', 'HR will review your update and notify you when a decision is made.');
+      setProfileModalOpen(false); setProfileForm({ ...profileForm, proposedValue: '', reason: '' }); await fetchSelfServiceData(); showFeedback('success', clarification ? 'Change request resubmitted' : 'Change request submitted', clarification ? 'Your clarification has been sent back for review.' : 'HR will review your update and notify you when a decision is made.');
     } catch (error: any) { setActionError(error.message); showFeedback('error', 'Could not submit change request', error.message); } finally { setSubmitting(false); }
   };
 

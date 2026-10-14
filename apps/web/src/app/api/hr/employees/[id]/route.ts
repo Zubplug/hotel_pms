@@ -170,7 +170,24 @@ export async function PUT(
       bankAccountNumber, bankSortCode, bankAccountName, emergencyContact, emergencyPhone, emergencyRelation,
     };
     const pendingChange = await prisma.employeeChangeRequest.findFirst({ where: { staffId: id, fieldName: 'staffProfile', status: { in: ['PENDING', 'CLARIFICATION'] } } });
-    if (pendingChange) return NextResponse.json({ error: 'This employee already has a profile change awaiting General Manager review' }, { status: 409 });
+    if (pendingChange?.status === 'PENDING') return NextResponse.json({ error: 'This employee already has a profile change awaiting General Manager review' }, { status: 409 });
+    if (pendingChange?.status === 'CLARIFICATION') {
+      const request = await prisma.employeeChangeRequest.update({
+        where: { id: pendingChange.id },
+        data: {
+          currentValue: JSON.stringify({ staff: existing, employeeProfile: existing.employeeProfile, salaryStructure: existing.salaryStructure }),
+          proposedValue: JSON.stringify(proposedValue),
+          reason: changeReason,
+          requestedBy: authContext.userId,
+          status: 'PENDING',
+          reviewedBy: null,
+          reviewedAt: null,
+          reviewerNotes: null,
+          effectiveAt: null,
+        },
+      });
+      return NextResponse.json({ success: true, pendingApproval: true, resubmitted: true, request }, { status: 202 });
+    }
 
     const request = await prisma.employeeChangeRequest.create({
       data: {
