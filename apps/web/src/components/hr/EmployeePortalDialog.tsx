@@ -3,12 +3,6 @@
 import React from 'react';
 import { X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import {
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 
 type EmployeePortalDialogContextValue = { close: () => void };
 const EmployeePortalDialogContext = React.createContext<EmployeePortalDialogContextValue | null>(null);
@@ -74,4 +68,18 @@ export function DialogContent({ className = '', children }: { className?: string
   );
 }
 
-export { DialogDescription, DialogFooter, DialogHeader, DialogTitle };
+export function DialogHeader({ className = '', children }: { className?: string; children: React.ReactNode }) {
+  return <div className={`flex flex-col gap-2 ${className}`}>{children}</div>;
+}
+
+export function DialogTitle({ className = '', children }: { className?: string; children: React.ReactNode }) {
+  return <h2 className={`text-base font-medium leading-none ${className}`}>{children}</h2>;
+}
+
+export function DialogDescription({ className = '', children }: { className?: string; children: React.ReactNode }) {
+  return <p className={`text-sm text-slate-400 ${className}`}>{children}</p>;
+}
+
+export function DialogFooter({ className = '', children }: { className?: string; children: React.ReactNode }) {
+  return <div className={`-mx-4 -mb-4 flex flex-col-reverse gap-2 rounded-b-xl border-t border-slate-800 bg-slate-950/30 p-4 sm:flex-row sm:justify-end ${className}`}>{children}</div>;
+}
