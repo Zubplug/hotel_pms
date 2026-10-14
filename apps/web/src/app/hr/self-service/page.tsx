@@ -175,6 +175,17 @@ export default function EmployeeSelfServicePage() {
     } catch (error: any) { setActionError(error.message); showFeedback('error', 'Could not report attendance issue', error.message); } finally { setSubmitting(false); }
   };
 
+  const handleAttendancePunch = async (action: 'CLOCK_IN' | 'CLOCK_OUT') => {
+    setActionError('');
+    try {
+      const res = await fetch('/api/hr/attendance', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, date: new Date().toISOString() }) });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Unable to record attendance');
+      await fetchSelfServiceData();
+      showFeedback('success', action === 'CLOCK_IN' ? 'Clocked in' : 'Clocked out', 'Your attendance record has been updated.');
+    } catch (error: any) { setActionError(error.message); showFeedback('error', 'Attendance was not recorded', error.message); }
+  };
+
   const handleCancelLeave = async (applicationId: string) => {
     setActionError('');
     try {
@@ -268,7 +279,7 @@ export default function EmployeeSelfServicePage() {
           <div className="flex items-center gap-2">
             <Button size="sm" variant="outline" onClick={() => setProfileModalOpen(true)} className="h-9 !border-slate-700 !bg-slate-900 text-xs !text-slate-100 hover:!bg-slate-800">Update details</Button>
             <Button size="sm" variant="outline" onClick={() => setSupportModalOpen(true)} className="h-9 !border-slate-700 !bg-slate-900 text-xs !text-slate-100 hover:!bg-slate-800">Contact HR</Button>
-            <Button size="sm" variant="outline" onClick={() => setAttendanceModalOpen(true)} className="h-9 !border-slate-700 !bg-slate-900 text-xs !text-slate-100 hover:!bg-slate-800">Report attendance issue</Button>
+          <Button size="sm" onClick={() => handleAttendancePunch('CLOCK_IN')} className="h-9 bg-emerald-700 text-xs text-white hover:bg-emerald-600">Clock in</Button><Button size="sm" onClick={() => handleAttendancePunch('CLOCK_OUT')} className="h-9 bg-slate-700 text-xs text-white hover:bg-slate-600">Clock out</Button><Button size="sm" variant="outline" onClick={() => setAttendanceModalOpen(true)} className="h-9 !border-slate-700 !bg-slate-900 text-xs !text-slate-100 hover:!bg-slate-800">Report attendance issue</Button>
             <Button
               size="sm"
               onClick={() => setLeaveModalOpen(true)}

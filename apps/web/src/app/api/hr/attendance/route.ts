@@ -2,6 +2,29 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
 import { HrAuthorizationService } from '@/lib/services/hr-authorization-service';
 
+function dayStart(value: string | Date) {
+  const date = new Date(value);
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+}
+
+function scheduledBoundary(date: Date, time: string, overnight = false) {
+  const [hours, minutes] = String(time || '00:00').split(':').map(Number);
+  const boundary = new Date(date);
+  boundary.setUTCHours(hours || 0, minutes || 0, 0, 0);
+  if (overnight) boundary.setUTCDate(boundary.getUTCDate() + 1);
+  return boundary;
+}
+
+function calculateAttendance(date: Date, clockIn: Date | null, clockOut: Date | null, roster: any) {
+  if (!roster) return { lateMinutes: 0, earlyDepartureMinutes: 0, overtimeMinutes: 0, status: clockIn ? 'PRESENT' : 'ABSENT' };
+  const start = scheduledBoundary(date, roster.shift.startTime, false);
+  const end = scheduledBoundary(date, roster.shift.endTime, roster.shift.isOvernight);
+  const lateMinutes = clockIn ? Math.max(0, Math.floor((clockIn.getTime() - start.getTime()) / 60000) - roster.shift.gracePeriodMinutes) : 0;
+  const earlyDepartureMinutes = clockOut ? Math.max(0, Math.floor((end.getTime() - clockOut.getTime()) / 60000)) : 0;
+  const overtimeMinutes = clockOut ? Math.max(0, Math.floor((clockOut.getTime() - end.getTime()) / 60000)) : 0;
+  return { lateMinutes, earlyDepartureMinutes, overtimeMinutes, status: !clockIn ? 'ABSENT' : lateMinutes > 0 ? 'LATE' : 'PRESENT' };
+}
+
 export async function GET(req: NextRequest) {
   try {
     const authContext = await HrAuthorizationService.resolveAuthContext(req);
@@ -131,6 +154,41 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { action } = body;
 
+    if (action === 'CLOCK_IN' || action === 'CLOCK_OUT') {
+      const staffId = body.staffId || (await prisma.staff.findFirst({ where: { userId: authContext.userId, organizationId, isActive: true, deletedAt: null }, select: { id: true } }))?.id;
+      if (!staffId) return NextResponse.json({ error: 'Active employee record not found' }, { status: 404 });
+      const staff = await prisma.staff.findFirst({ where: { ...HrAuthorizationService.staffScope(authContext, { id: staffId }), isActive: true, deletedAt: null }, select: { id: true, userId: true, propertyAccess: true } });
+      if (!staff || (staff.userId !== authContext.userId && !HrAuthorizationService.can(authContext, 'hr.attendance.manage'))) return NextResponse.json({ error: 'You may only record your own attendance' }, { status: 403 });
+      const date = dayStart(body.date || new Date());
+      const targetPropertyId = propertyId || staff.propertyAccess[0];
+      if (!targetPropertyId) return NextResponse.json({ error: 'No property context is available for attendance' }, { status: 400 });
+      const roster = await prisma.shiftRoster.findFirst({ where: { staffId, propertyId: targetPropertyId, date, publicationStatus: 'PUBLISHED', status: { not: 'CANCELLED' } }, include: { shift: true } });
+      if (!roster) return NextResponse.json({ error: 'No published shift roster exists for this date' }, { status: 409 });
+      const now = body.timestamp ? new Date(body.timestamp) : new Date();
+      if (Number.isNaN(now.getTime())) return NextResponse.json({ error: 'Invalid attendance timestamp' }, { status: 400 });
+      const existing = await prisma.attendanceRecord.findUnique({ where: { staffId_date: { staffId, date } } });
+      if (action === 'CLOCK_IN' && existing?.clockIn) return NextResponse.json({ error: 'You are already clocked in for this date' }, { status: 409 });
+      if (action === 'CLOCK_OUT' && (!existing || !existing.clockIn)) return NextResponse.json({ error: 'Clock in must be recorded before clock out' }, { status: 409 });
+      const clockIn = action === 'CLOCK_IN' ? now : existing?.clockIn || null;
+      const clockOut = action === 'CLOCK_OUT' ? now : existing?.clockOut || null;
+      const calculated = calculateAttendance(date, clockIn ? new Date(clockIn) : null, clockOut ? new Date(clockOut) : null, roster);
+      const record = await prisma.attendanceRecord.upsert({ where: { staffId_date: { staffId, date } }, update: { clockIn: clockIn || undefined, clockOut: clockOut || undefined, ...calculated, punchSource: 'WEB' }, create: { propertyId: targetPropertyId, staffId, date, clockIn: clockIn || now, clockOut, ...calculated, punchSource: 'WEB' } });
+      return NextResponse.json({ success: true, data: record }, { status: 201 });
+    }
+
+    if (action === 'MARK_ABSENT') {
+      HrAuthorizationService.assertPermission(authContext, 'hr.attendance.manage');
+      const date = dayStart(body.date || new Date());
+      if (date.getTime() > dayStart(new Date()).getTime()) return NextResponse.json({ error: 'Future dates cannot be marked absent' }, { status: 400 });
+      const rosters = await prisma.shiftRoster.findMany({ where: { propertyId, date, publicationStatus: 'PUBLISHED', status: { not: 'CANCELLED' }, staff: HrAuthorizationService.staffScope(authContext) }, include: { shift: true } });
+      let marked = 0;
+      for (const roster of rosters) {
+        const existing = await prisma.attendanceRecord.findUnique({ where: { staffId_date: { staffId: roster.staffId, date } } });
+        if (!existing) { await prisma.attendanceRecord.create({ data: { propertyId: roster.propertyId, staffId: roster.staffId, date, status: 'ABSENT', punchSource: 'MANUAL', notes: 'Automatically marked absent: no punch recorded' } }); marked++; }
+      }
+      return NextResponse.json({ success: true, marked });
+    }
+
     if (action === 'MANUAL_PUNCH') {
       const { staffId, date, clockIn, clockOut, status = 'PRESENT', notes, overtimeHours = 0 } = body;
       if (!staffId || !date) {
@@ -164,6 +222,8 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Missing target property context' }, { status: 400 });
       }
 
+      const roster = await prisma.shiftRoster.findFirst({ where: { staffId, propertyId: targetPropertyId, date: startOfDay, publicationStatus: 'PUBLISHED', status: { not: 'CANCELLED' } }, include: { shift: true } });
+      const calculated = calculateAttendance(startOfDay, clockIn ? new Date(clockIn) : null, clockOut ? new Date(clockOut) : null, roster);
       const record = await prisma.attendanceRecord.upsert({
         where: {
           staffId_date: {
@@ -174,8 +234,10 @@ export async function POST(req: NextRequest) {
         update: {
           clockIn: clockIn ? new Date(clockIn) : undefined,
           clockOut: clockOut ? new Date(clockOut) : undefined,
-          status,
-          overtimeMinutes: otMins,
+          status: status === 'PRESENT' ? calculated.status : status,
+          lateMinutes: calculated.lateMinutes,
+          earlyDepartureMinutes: calculated.earlyDepartureMinutes,
+          overtimeMinutes: otMins || calculated.overtimeMinutes,
           punchSource: 'MANUAL',
           notes: notes?.trim() || `Manual punch entry recorded by HR (${authContext.userId})`,
         },
@@ -185,8 +247,10 @@ export async function POST(req: NextRequest) {
           date: startOfDay,
           clockIn: clockIn ? new Date(clockIn) : new Date(),
           clockOut: clockOut ? new Date(clockOut) : null,
-          status,
-          overtimeMinutes: otMins,
+          status: status === 'PRESENT' ? calculated.status : status,
+          lateMinutes: calculated.lateMinutes,
+          earlyDepartureMinutes: calculated.earlyDepartureMinutes,
+          overtimeMinutes: otMins || calculated.overtimeMinutes,
           punchSource: 'MANUAL',
           notes: notes?.trim() || `Manual punch entry recorded by HR (${authContext.userId})`,
         },

@@ -115,6 +115,17 @@ export default function AttendancePage() {
     }
   };
 
+  const markUnreportedAbsent = async () => {
+    setSubmitting(true);
+    try {
+      const res = await fetch('/api/hr/attendance', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'MARK_ABSENT', date: selectedDate }) });
+      const data = await res.json();
+      if (!res.ok) return alert(data.error || 'Unable to mark absences');
+      alert(`${data.marked || 0} scheduled employee(s) marked absent.`);
+      await fetchData();
+    } finally { setSubmitting(false); }
+  };
+
   const filteredRecords = useMemo(() => {
     return records.filter((r) => {
       const matchesSearch =
@@ -155,6 +166,7 @@ export default function AttendancePage() {
             onChange={(e) => setSelectedDate(e.target.value)}
             className="bg-slate-900 border-slate-800 text-slate-200 text-xs h-9 w-auto"
           />
+          <Button variant="outline" size="sm" disabled={submitting} onClick={markUnreportedAbsent} className="border-rose-800 bg-rose-950/20 text-xs text-rose-300 hover:bg-rose-900/30 h-9">Mark unreported absent</Button>
           <Button
             size="sm"
             onClick={() => setPunchModalOpen(true)}

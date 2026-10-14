@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
 import { HrAuthorizationService } from '@/lib/services/hr-authorization-service';
+import { notifyEmployee } from '@/lib/employee-notification-service';
 
 export async function GET(req: NextRequest) {
   try {
@@ -187,15 +188,24 @@ export async function POST(req: NextRequest) {
           totalDays: requestedDays,
           reason: reason?.trim() || 'Leave request',
           handoverStaffId: reliefStaffId || null,
-          status: 'PENDING_HR',
+          status: 'PENDING_HOD',
         },
       });
+      const allocation = await prisma.leaveAllocation.findUnique({ where: { staffId_leaveTypeId_year: { staffId, leaveTypeId, year: start.getUTCFullYear() } } });
+      if (allocation) {
+        if (allocation.balanceDays - allocation.pendingDays < requestedDays) {
+          await prisma.leaveApplication.delete({ where: { id: application.id } });
+          return NextResponse.json({ error: `Insufficient leave balance: only ${allocation.balanceDays - allocation.pendingDays} days are available` }, { status: 422 });
+        }
+        await prisma.leaveAllocation.update({ where: { id: allocation.id }, data: { pendingDays: { increment: requestedDays } } });
+      }
+      await notifyEmployee({ organizationId, propertyId: targetPropertyId, staffId, subject: 'Leave request submitted', body: 'Your leave request has been submitted and is awaiting department approval.', category: 'APPROVALS', action: '/hr/self-service', idempotencyKey: `leave:${application.id}:submitted` });
       return NextResponse.json({ success: true, data: application }, { status: 201 });
     }
 
     if (action === 'PROCESS_APPLICATION') {
-      // Must have leave management permission
-      HrAuthorizationService.assertPermission(authContext, 'hr.leave.manage');
+      const canProcessLeave = HrAuthorizationService.can(authContext, 'hr.leave.manage') || ['DEPARTMENT_HEAD', 'GENERAL_MANAGER', 'SUPER_ADMIN', 'OWNER', 'ADMIN', 'HR_MANAGER'].includes(authContext.role);
+      if (!canProcessLeave) HrAuthorizationService.assertPermission(authContext, 'hr.leave.manage');
 
       const { applicationId, status, rejectionReason } = body;
       if (!applicationId || !status) {
@@ -238,7 +248,15 @@ export async function POST(req: NextRequest) {
 
         const year = new Date(app.startDate).getFullYear();
 
-        if (isApproved) {
+        const isHodStage = app.status === 'PENDING_HOD';
+        if (isHodStage && isApproved && !['DEPARTMENT_HEAD', 'GENERAL_MANAGER', 'SUPER_ADMIN', 'OWNER', 'ADMIN', 'HR_MANAGER'].includes(authContext.role)) {
+          throw new Error('Only the department head or HR management can approve this leave stage');
+        }
+        if (isHodStage && !isApproved && authContext.role === 'DEPARTMENT_HEAD') {
+          // Department heads may reject at their approval stage.
+        }
+
+        if (isApproved && !isHodStage) {
           // Check leave balance before approving
           const allocation = await tx.leaveAllocation.findFirst({
             where: {
@@ -248,7 +266,7 @@ export async function POST(req: NextRequest) {
             },
           });
 
-          if (allocation && allocation.balanceDays < app.totalDays) {
+          if (allocation && allocation.balanceDays - allocation.pendingDays < app.totalDays) {
             throw new Error(`Insufficient leave balance: Requested ${app.totalDays} days, but only ${allocation.balanceDays} days remain`);
           }
 
@@ -257,26 +275,35 @@ export async function POST(req: NextRequest) {
             await tx.leaveAllocation.update({
               where: { id: allocation.id },
               data: {
+                pendingDays: { decrement: app.totalDays },
                 usedDays: { increment: app.totalDays },
                 balanceDays: { decrement: app.totalDays },
               },
             });
+          }
+        } else if (!isApproved) {
+          const allocation = await tx.leaveAllocation.findUnique({ where: { staffId_leaveTypeId_year: { staffId: app.staffId, leaveTypeId: app.leaveTypeId, year } } });
+          if (allocation && allocation.pendingDays > 0) {
+            await tx.leaveAllocation.update({ where: { id: allocation.id }, data: { pendingDays: { decrement: Math.min(allocation.pendingDays, app.totalDays) } } });
           }
         }
 
         const updated = await tx.leaveApplication.update({
           where: { id: applicationId },
           data: {
-            status,
+            status: isApproved && isHodStage ? 'PENDING_HR' : status,
+            hodApprovedAt: isApproved && isHodStage ? new Date() : app.hodApprovedAt,
+            hodUserId: isApproved && isHodStage ? authContext.userId : app.hodUserId,
             rejectionReason: rejectionReason?.trim() || null,
-            hrUserId: authContext.userId,
-            hrApprovedAt: isApproved ? new Date() : null,
+            hrUserId: isApproved && !isHodStage ? authContext.userId : app.hrUserId,
+            hrApprovedAt: isApproved && !isHodStage ? new Date() : app.hrApprovedAt,
           },
         });
 
         return updated;
       });
 
+      await notifyEmployee({ organizationId, propertyId, staffId: result.staffId, subject: `Leave request ${result.status.toLowerCase().replace('_', ' ')}`, body: result.status === 'PENDING_HR' ? 'Your department approved the leave request. It is now awaiting HR confirmation.' : result.status === 'APPROVED' ? 'Your leave request has been approved.' : `Your leave request was ${result.status.toLowerCase()}.${rejectionReason ? ` Note: ${rejectionReason}` : ''}`, category: 'APPROVALS', action: '/hr/self-service', idempotencyKey: `leave:${result.id}:${result.status}` });
       return NextResponse.json({ success: true, data: result });
     }
 
@@ -286,6 +313,8 @@ export async function POST(req: NextRequest) {
       if (!application) return NextResponse.json({ error: 'Leave application not found or inaccessible' }, { status: 404 });
       if (!['PENDING_HOD', 'PENDING_HR'].includes(application.status)) return NextResponse.json({ error: 'Only pending leave applications can be withdrawn' }, { status: 422 });
       const updated = await prisma.leaveApplication.update({ where: { id: application.id }, data: { status: 'CANCELLED', rejectionReason: 'Withdrawn by employee' } });
+      const allocation = await prisma.leaveAllocation.findUnique({ where: { staffId_leaveTypeId_year: { staffId: application.staffId, leaveTypeId: application.leaveTypeId, year: new Date(application.startDate).getUTCFullYear() } } });
+      if (allocation && allocation.pendingDays > 0) await prisma.leaveAllocation.update({ where: { id: allocation.id }, data: { pendingDays: { decrement: Math.min(allocation.pendingDays, application.totalDays) } } });
       return NextResponse.json({ success: true, data: updated });
     }
 
