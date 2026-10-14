@@ -66,6 +66,15 @@ export default function HrSettingsPage() {
             craFixedFloor: String(data.config.craFixedFloor ?? prev.craFixedFloor),
             craPercentOne: String(data.config.craPercentOne ?? prev.craPercentOne),
             craPercentTwo: String(data.config.craPercentTwo ?? prev.craPercentTwo),
+            standardWorkWeekHours: String(data.config.standardWorkWeekHours ?? prev.standardWorkWeekHours),
+            overtimeRateMultiplier: String(data.config.overtimeRateMultiplier ?? prev.overtimeRateMultiplier),
+            holidayOvertimeMultiplier: String(data.config.holidayOvertimeMultiplier ?? prev.holidayOvertimeMultiplier),
+            gracePeriodMins: String(data.config.gracePeriodMins ?? prev.gracePeriodMins),
+            glSalaryExpense: String(data.config.glSalaryExpense ?? prev.glSalaryExpense),
+            glEmployerPensionExpense: String(data.config.glEmployerPensionExpense ?? prev.glEmployerPensionExpense),
+            glNetSalariesPayable: String(data.config.glNetSalariesPayable ?? prev.glNetSalariesPayable),
+            glPayePayable: String(data.config.glPayePayable ?? prev.glPayePayable),
+            glPensionPayable: String(data.config.glPensionPayable ?? prev.glPensionPayable),
           }));
         }
       })
@@ -102,6 +111,15 @@ export default function HrSettingsPage() {
           craFixedFloor: parseFloat(form.craFixedFloor),
           craPercentOne: parseFloat(form.craPercentOne),
           craPercentTwo: parseFloat(form.craPercentTwo),
+          standardWorkWeekHours: parseFloat(form.standardWorkWeekHours),
+          overtimeRateMultiplier: parseFloat(form.overtimeRateMultiplier),
+          holidayOvertimeMultiplier: parseFloat(form.holidayOvertimeMultiplier),
+          gracePeriodMins: parseInt(form.gracePeriodMins, 10),
+          glSalaryExpense: form.glSalaryExpense,
+          glEmployerPensionExpense: form.glEmployerPensionExpense,
+          glNetSalariesPayable: form.glNetSalariesPayable,
+          glPayePayable: form.glPayePayable,
+          glPensionPayable: form.glPensionPayable,
         }),
       });
 

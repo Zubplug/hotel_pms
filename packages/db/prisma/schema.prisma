@@ -5691,8 +5691,13 @@ model TaxRemittance {
 
   status     TaxRemittanceStatus @default(DRAFT)
   recordedBy String              @db.Uuid
+  submittedBy String?            @db.Uuid
+  submittedAt DateTime?          @db.Timestamptz
   approvedBy String?             @db.Uuid
   approvedAt DateTime?           @db.Timestamptz
+  remittedBy String?             @db.Uuid
+  remittedAt DateTime?           @db.Timestamptz
+  rejectionReason String?
 
   journalEntryId String? @db.Uuid
 
@@ -7766,6 +7771,16 @@ model StatutoryConfiguration {
   nsitfRate Decimal @default(0.01) @db.Decimal(5, 4) // 1% employer levy
   itfRate   Decimal @default(0.01) @db.Decimal(5, 4) // 1% employer levy
 
+  standardWorkWeekHours      Decimal @default(40) @db.Decimal(5, 2)
+  overtimeRateMultiplier     Decimal @default(1.5) @db.Decimal(5, 2)
+  holidayOvertimeMultiplier  Decimal @default(2) @db.Decimal(5, 2)
+  gracePeriodMinutes         Int     @default(15)
+  glSalaryExpense            String  @default("6000")
+  glEmployerPensionExpense   String  @default("6010")
+  glNetSalariesPayable       String  @default("2100")
+  glPayePayable              String  @default("2110")
+  glPensionPayable           String  @default("2120")
+
   isActive    Boolean @default(true)
   createdById String  @db.Uuid
 
@@ -7957,6 +7972,11 @@ model DisciplinaryRecord {
 
   issuedByUserId String  @db.Uuid
   documentUrl    String?
+  status         String  @default("OPEN")
+  reviewedBy     String? @db.Uuid
+  reviewedAt     DateTime? @db.Timestamptz
+  resolutionNotes String?
+  closedAt       DateTime? @db.Timestamptz
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz

@@ -75,6 +75,9 @@ importers:
       '@upstash/qstash':
         specifier: ^2.11.3
         version: 2.11.3
+      '@vercel/blob':
+        specifier: ^2.8.0
+        version: 2.8.0
       bcryptjs:
         specifier: ^3.0.3
         version: 3.0.3

@@ -5,10 +5,24 @@ import { HrAuthorizationService } from '@/lib/services/hr-authorization-service'
 export async function GET(req: NextRequest) {
   try {
     const context = await HrAuthorizationService.resolveAuthContext(req);
+    const canManage = HrAuthorizationService.can(context, 'hr.policy.manage');
     const staff = await prisma.staff.findFirst({ where: { userId: context.userId, organizationId: context.organizationId, isActive: true }, select: { id: true } });
     const policies = await prisma.companyPolicy.findMany({ where: { organizationId: context.organizationId, isActive: true }, include: { acknowledgements: staff ? { where: { staffId: staff.id }, select: { acknowledgedAt: true } } : false }, orderBy: [{ effectiveDate: 'desc' }, { title: 'asc' }] });
-    return NextResponse.json({ policies: policies.map((policy) => ({ ...policy, acknowledgedAt: policy.acknowledgements[0]?.acknowledgedAt || null, acknowledgements: undefined })) });
+    return NextResponse.json({ canManage, policies: policies.map((policy) => ({ ...policy, acknowledgedAt: policy.acknowledgements[0]?.acknowledgedAt || null, acknowledgements: undefined })) });
   } catch (error: any) { return NextResponse.json({ error: error.message || 'Failed to retrieve policies' }, { status: error.message?.includes('Forbidden') ? 403 : 500 }); }
+}
+
+export async function PATCH(req: NextRequest) {
+  try {
+    const context = await HrAuthorizationService.resolveAuthContext(req);
+    HrAuthorizationService.assertPermission(context, 'hr.policy.manage');
+    const body = await req.json();
+    if (!body.id) return NextResponse.json({ error: 'Policy ID is required' }, { status: 400 });
+    const existing = await prisma.companyPolicy.findFirst({ where: { id: body.id, organizationId: context.organizationId } });
+    if (!existing) return NextResponse.json({ error: 'Policy not found' }, { status: 404 });
+    const policy = await prisma.companyPolicy.update({ where: { id: existing.id }, data: { isActive: body.isActive !== false, title: body.title?.trim() || undefined, version: body.version ? String(body.version) : undefined, fileUrl: body.fileUrl?.trim() || undefined, requiresAcknowledgement: typeof body.requiresAcknowledgement === 'boolean' ? body.requiresAcknowledgement : undefined } });
+    return NextResponse.json({ success: true, policy });
+  } catch (error: any) { return NextResponse.json({ error: error.message || 'Policy update failed' }, { status: error.message?.includes('Forbidden') ? 403 : 500 }); }
 }
 
 export async function POST(req: NextRequest) {

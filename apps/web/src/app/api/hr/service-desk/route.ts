@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
       orderBy: { createdAt: 'desc' },
       take: 250,
     });
-    return NextResponse.json({ tickets });
+    return NextResponse.json({ tickets, canManage });
   } catch (error) { return errorResponse(error); }
 }
 

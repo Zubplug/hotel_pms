@@ -29,6 +29,7 @@ export default function DocumentsPage() {
   const [search, setSearch] = useState('');
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [form, setForm] = useState({
     staffId: '',
     title: '',
@@ -61,6 +62,15 @@ export default function DocumentsPage() {
     if (!form.staffId || !form.title) return;
     setSubmitting(true);
     try {
+      let fileUrl = form.fileUrl;
+      if (selectedFile) {
+        const uploadData = new FormData(); uploadData.append('file', selectedFile);
+        const uploadResponse = await fetch('/api/hr/documents/upload', { method: 'POST', body: uploadData });
+        const uploadResult = await uploadResponse.json();
+        if (!uploadResponse.ok) throw new Error(uploadResult.error || 'File upload failed');
+        fileUrl = uploadResult.url;
+      }
+      if (!fileUrl) throw new Error('Select a file or provide a secure file URL');
       const res = await fetch('/api/hr/documents', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -68,12 +78,12 @@ export default function DocumentsPage() {
           staffId: form.staffId,
           title: form.title,
           type: form.type,
-          fileUrl: form.fileUrl,
+          fileUrl,
         }),
       });
       if (res.ok) {
         setUploadModalOpen(false);
-        setForm({ staffId: '', title: '', type: 'CONTRACT', fileUrl: '' });
+        setForm({ staffId: '', title: '', type: 'CONTRACT', fileUrl: '' }); setSelectedFile(null);
         loadDocuments();
       } else {
         const err = await res.json();
@@ -197,7 +207,7 @@ export default function DocumentsPage() {
                       <Button
                         size="sm"
                         variant="ghost"
-                        onClick={() => alert(`Accessing verified document: ${doc.title}`)}
+                        onClick={() => window.open(`/api/hr/self-service/documents/${doc.id}`, '_blank', 'noopener,noreferrer')}
                         className="text-teal-400 hover:text-teal-300 text-xs h-7 px-2"
                       >
                         <Download className="w-3.5 h-3.5 mr-1" /> View
@@ -263,8 +273,11 @@ export default function DocumentsPage() {
               <label className="text-slate-400 block mb-1">Select File (PDF, PNG, JPG)</label>
               <Input
                 type="file"
+                accept="application/pdf,image/png,image/jpeg"
+                onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
                 className="bg-slate-950 border-slate-800 text-slate-300 text-xs h-9 cursor-pointer"
               />
+              <p className="mt-1 text-[10px] text-slate-500">PDF, PNG or JPG up to 10 MB. Files are stored in the configured document repository.</p>
             </div>
             <DialogFooter className="pt-2">
               <Button type="button" variant="outline" onClick={() => setUploadModalOpen(false)} className="border-slate-800 text-xs h-8">

@@ -1,0 +1,33 @@
+BEGIN;
+
+ALTER TABLE "TaxRemittance"
+  ADD COLUMN IF NOT EXISTS "submittedBy" UUID,
+  ADD COLUMN IF NOT EXISTS "submittedAt" TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS "remittedBy" UUID,
+  ADD COLUMN IF NOT EXISTS "remittedAt" TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS "rejectionReason" TEXT;
+
+ALTER TABLE "StatutoryConfiguration"
+  ADD COLUMN IF NOT EXISTS "standardWorkWeekHours" DECIMAL(5,2) NOT NULL DEFAULT 40,
+  ADD COLUMN IF NOT EXISTS "overtimeRateMultiplier" DECIMAL(5,2) NOT NULL DEFAULT 1.5,
+  ADD COLUMN IF NOT EXISTS "holidayOvertimeMultiplier" DECIMAL(5,2) NOT NULL DEFAULT 2,
+  ADD COLUMN IF NOT EXISTS "gracePeriodMinutes" INTEGER NOT NULL DEFAULT 15,
+  ADD COLUMN IF NOT EXISTS "glSalaryExpense" TEXT NOT NULL DEFAULT '6000',
+  ADD COLUMN IF NOT EXISTS "glEmployerPensionExpense" TEXT NOT NULL DEFAULT '6010',
+  ADD COLUMN IF NOT EXISTS "glNetSalariesPayable" TEXT NOT NULL DEFAULT '2100',
+  ADD COLUMN IF NOT EXISTS "glPayePayable" TEXT NOT NULL DEFAULT '2110',
+  ADD COLUMN IF NOT EXISTS "glPensionPayable" TEXT NOT NULL DEFAULT '2120';
+
+ALTER TABLE "DisciplinaryRecord"
+  ADD COLUMN IF NOT EXISTS "status" TEXT NOT NULL DEFAULT 'OPEN',
+  ADD COLUMN IF NOT EXISTS "reviewedBy" UUID,
+  ADD COLUMN IF NOT EXISTS "reviewedAt" TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS "resolutionNotes" TEXT,
+  ADD COLUMN IF NOT EXISTS "closedAt" TIMESTAMPTZ;
+
+CREATE INDEX IF NOT EXISTS "TaxRemittance_propertyId_status_createdAt_idx"
+  ON "TaxRemittance"("propertyId", "status", "createdAt");
+CREATE INDEX IF NOT EXISTS "DisciplinaryRecord_propertyId_status_idx"
+  ON "DisciplinaryRecord"("propertyId", "status");
+
+COMMIT;

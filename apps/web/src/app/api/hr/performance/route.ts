@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { randomUUID } from 'crypto';
 import prisma from '@hotel-pms/db';
 import { HrAuthorizationService } from '@/lib/services/hr-authorization-service';
 
@@ -83,7 +84,8 @@ export async function GET(req: NextRequest) {
         category: d.type,
         description: d.description,
         actionTaken: d.actionTaken,
-        status: 'LOGGED',
+        status: d.status,
+        resolutionNotes: d.resolutionNotes,
       })),
     });
   } catch (error: any) {
@@ -208,9 +210,26 @@ export async function POST(req: NextRequest) {
           description: description.trim(),
           actionTaken: actionTaken?.trim() || 'Verbal Warning',
           issuedByUserId: authContext.userId,
+          status: 'OPEN',
         },
       });
       return NextResponse.json({ success: true, data: record }, { status: 201 });
+    }
+
+    if (action === 'UPDATE_DISCIPLINARY') {
+      HrAuthorizationService.assertPermission(authContext, 'hr.employee.sensitive.view');
+      const status = String(body.status || '');
+      if (!body.id || !['OPEN', 'UNDER_REVIEW', 'RESOLVED', 'CLOSED'].includes(status)) return NextResponse.json({ error: 'Case ID and valid status are required' }, { status: 400 });
+      if (['RESOLVED', 'CLOSED'].includes(status) && !body.resolutionNotes?.trim()) return NextResponse.json({ error: 'Resolution notes are required when closing a case' }, { status: 400 });
+      const existing = await prisma.disciplinaryRecord.findFirst({ where: { id: body.id, propertyId, staff: { organizationId } } });
+      if (!existing) return NextResponse.json({ error: 'Disciplinary case not found' }, { status: 404 });
+      const now = new Date();
+      const record = await prisma.$transaction(async (tx) => {
+        const updated = await tx.disciplinaryRecord.update({ where: { id: existing.id }, data: { status, reviewedBy: authContext.userId, reviewedAt: now, resolutionNotes: body.resolutionNotes?.trim() || undefined, closedAt: status === 'CLOSED' ? now : null } });
+        await tx.auditLog.create({ data: { organizationId, propertyId, userId: authContext.userId, action: `HR_DISCIPLINARY_${status}`, resource: 'DisciplinaryRecord', resourceId: updated.id, previousValue: { status: existing.status }, newValue: { status, resolutionNotes: body.resolutionNotes || null }, requestId: randomUUID() } });
+        return updated;
+      });
+      return NextResponse.json({ success: true, data: record });
     }
 
     return NextResponse.json({ error: 'Invalid performance action' }, { status: 400 });

@@ -74,6 +74,10 @@ export async function GET(req: NextRequest) {
         craPercentTwo: Number(activeConfig.craPercentGross) * 100,
         craPercentOne: Number(activeConfig.craHigherPercent) * 100,
         minimumWageFloor: Number(activeConfig.minimumWageFloor),
+        standardWorkWeekHours: Number(activeConfig.standardWorkWeekHours),
+        overtimeRateMultiplier: Number(activeConfig.overtimeRateMultiplier),
+        holidayOvertimeMultiplier: Number(activeConfig.holidayOvertimeMultiplier),
+        gracePeriodMins: activeConfig.gracePeriodMinutes,
       },
     });
   } catch (error: any) {
@@ -116,6 +120,15 @@ export async function POST(req: NextRequest) {
       minimumWageFloor = 70000,
       effectiveFrom,
       taxBands,
+      standardWorkWeekHours = 40,
+      overtimeRateMultiplier = 1.5,
+      holidayOvertimeMultiplier = 2,
+      gracePeriodMins = 15,
+      glSalaryExpense = '6000',
+      glEmployerPensionExpense = '6010',
+      glNetSalariesPayable = '2100',
+      glPayePayable = '2110',
+      glPensionPayable = '2120',
     } = body;
 
     const effectiveFromDate = effectiveFrom ? new Date(effectiveFrom) : new Date();
@@ -149,6 +162,9 @@ export async function POST(req: NextRequest) {
     if (!Number.isFinite(Number(minimumWageFloor)) || Number(minimumWageFloor) < 0) {
       return NextResponse.json({ error: 'Minimum wage floor must be a non-negative number' }, { status: 400 });
     }
+    if (![standardWorkWeekHours, overtimeRateMultiplier, holidayOvertimeMultiplier, gracePeriodMins].every((value) => Number.isFinite(Number(value)) && Number(value) >= 0)) {
+      return NextResponse.json({ error: 'Operational settings must be non-negative numbers' }, { status: 400 });
+    }
 
     const newConfig = await prisma.$transaction(async (tx) => {
       const overlap = await tx.statutoryConfiguration.findFirst({
@@ -179,6 +195,15 @@ export async function POST(req: NextRequest) {
           craBaseAmount: Number(craFixedFloor),
           craPercentGross: Number(craPercentTwo) / 100,
           craHigherPercent: Number(craPercentOne) / 100,
+          standardWorkWeekHours: Number(standardWorkWeekHours),
+          overtimeRateMultiplier: Number(overtimeRateMultiplier),
+          holidayOvertimeMultiplier: Number(holidayOvertimeMultiplier),
+          gracePeriodMinutes: Math.round(Number(gracePeriodMins)),
+          glSalaryExpense: String(glSalaryExpense).trim(),
+          glEmployerPensionExpense: String(glEmployerPensionExpense).trim(),
+          glNetSalariesPayable: String(glNetSalariesPayable).trim(),
+          glPayePayable: String(glPayePayable).trim(),
+          glPensionPayable: String(glPensionPayable).trim(),
           taxBands: normalizedTaxBands,
           isActive: true,
           createdById: authContext.userId,
