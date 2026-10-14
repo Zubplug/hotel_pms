@@ -81,7 +81,7 @@ export default function ShiftPlanningPage() {
     try {
       const [shiftsRes, empRes] = await Promise.all([
         fetch(`/api/hr/shifts?startDate=${startDateStr}&endDate=${endDateStr}`),
-        fetch('/api/hr/employees?limit=200'),
+        fetch('/api/hr/employees?limit=200&status=ACTIVE'),
       ]);
 
       if (shiftsRes.ok) {
@@ -148,6 +148,36 @@ export default function ShiftPlanningPage() {
     }
   };
 
+  const handlePublishRoster = async () => {
+    setSubmitting(true);
+    try {
+      const res = await fetch('/api/hr/shifts', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'PUBLISH_ROSTER', startDate: startDateStr, endDate: endDateStr }),
+      });
+      const data = await res.json();
+      if (!res.ok) return alert(data.error || 'Unable to publish roster');
+      alert(`${data.published || 0} roster assignment(s) published.`);
+      await fetchData();
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleCancelRoster = async (rosterId: string) => {
+    if (!window.confirm('Cancel this roster assignment? The employee will be notified.')) return;
+    setSubmitting(true);
+    try {
+      const res = await fetch('/api/hr/shifts', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'CANCEL_ROSTER', id: rosterId }) });
+      const data = await res.json();
+      if (!res.ok) return alert(data.error || 'Unable to cancel roster');
+      await fetchData();
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const getRosterForCell = (staffId: string, date: Date) => {
     const targetDateStr = date.toISOString().split('T')[0];
     return rosters.find(
@@ -169,6 +199,15 @@ export default function ShiftPlanningPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={submitting || rosters.length === 0}
+            onClick={handlePublishRoster}
+            className="border-emerald-800 bg-emerald-950/30 text-xs text-emerald-300 hover:bg-emerald-900/40 h-9"
+          >
+            Publish Week
+          </Button>
           <Button
             size="sm"
             variant="outline"
@@ -305,10 +344,11 @@ export default function ShiftPlanningPage() {
                                   : 'bg-amber-950/40 text-amber-300 border-amber-800/60'
                               }`}
                             >
-                              <div className="truncate">{roster.shiftName}</div>
+                              <div className="flex items-center justify-between gap-1"><div className="truncate">{roster.shiftName}</div><button type="button" disabled={submitting} onClick={(event) => { event.stopPropagation(); void handleCancelRoster(roster.id); }} className="text-[9px] text-rose-300 hover:text-rose-200" title="Cancel roster">×</button></div>
                               <div className="text-[9px] font-mono opacity-80">
                                 {roster.startTime} - {roster.endTime}
                               </div>
+                              <div className="mt-0.5 text-[8px] uppercase opacity-70">{roster.publicationStatus || 'DRAFT'}</div>
                             </div>
                           ) : (
                             <div className="p-1.5 rounded border border-dashed border-slate-800 text-[10px] text-slate-600 hover:border-slate-700 hover:text-slate-400">

@@ -2137,6 +2137,8 @@ model User {
   reviewedSeparations             EmployeeSeparationRequest[]  @relation("SeparationReviewedBy")
   requestedPositionChanges       PositionChangeRequest[]      @relation("PositionChangeRequestedBy")
   reviewedPositionChanges        PositionChangeRequest[]      @relation("PositionChangeReviewedBy")
+  publishedShiftRosters          ShiftRoster[]                @relation("ShiftRosterPublishedBy")
+  cancelledShiftRosters          ShiftRoster[]                @relation("ShiftRosterCancelledBy")
 }
 
 // FCM device tokens for push notifications
@@ -4568,6 +4570,7 @@ model Department {
   journalLines JournalEntryLine[]
   sections     DepartmentSection[]
   positions    JobPosition[]
+  workShifts   WorkShift[]
   headStaffId  String? @db.Uuid
   headStaff    Staff? @relation("DepartmentHead", fields: [headStaffId], references: [id], onDelete: SetNull)
 
@@ -7430,6 +7433,7 @@ model WorkShift {
   propertyId   String   @db.Uuid
   property     Property @relation(fields: [propertyId], references: [id])
   departmentId String?  @db.Uuid
+  department   Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
 
   name                 String // e.g. Morning, Afternoon, Night, Overnight Front Desk, Split
   code                 String
@@ -7463,6 +7467,13 @@ model ShiftRoster {
   date   DateTime @db.Date
   status String   @default("SCHEDULED") // SCHEDULED | COMPLETED | SWAPPED | ABSENT | CANCELLED
   notes  String?
+  publicationStatus String @default("DRAFT") // DRAFT | PUBLISHED | CANCELLED
+  publishedAt DateTime? @db.Timestamptz
+  publishedById String? @db.Uuid
+  publishedBy User? @relation("ShiftRosterPublishedBy", fields: [publishedById], references: [id], onDelete: SetNull)
+  cancelledAt DateTime? @db.Timestamptz
+  cancelledById String? @db.Uuid
+  cancelledBy User? @relation("ShiftRosterCancelledBy", fields: [cancelledById], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz

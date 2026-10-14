@@ -41,9 +41,7 @@ export async function GET(req: NextRequest) {
           include: { leaveType: true },
         },
         shiftRosters: {
-          where: {
-            date: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
-          },
+          where: { publicationStatus: 'PUBLISHED', status: { not: 'CANCELLED' }, date: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } },
           include: { shift: true },
           orderBy: { date: 'asc' },
           take: 7,
