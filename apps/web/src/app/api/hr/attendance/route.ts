@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { randomUUID } from 'crypto';
 import prisma from '@hotel-pms/db';
 import { HrAuthorizationService } from '@/lib/services/hr-authorization-service';
 
@@ -23,6 +24,15 @@ function calculateAttendance(date: Date, clockIn: Date | null, clockOut: Date | 
   const earlyDepartureMinutes = clockOut ? Math.max(0, Math.floor((end.getTime() - clockOut.getTime()) / 60000)) : 0;
   const overtimeMinutes = clockOut ? Math.max(0, Math.floor((clockOut.getTime() - end.getTime()) / 60000)) : 0;
   return { lateMinutes, earlyDepartureMinutes, overtimeMinutes, status: !clockIn ? 'ABSENT' : lateMinutes > 0 ? 'LATE' : 'PRESENT' };
+}
+
+function distanceInMeters(latitudeA: number, longitudeA: number, latitudeB: number, longitudeB: number) {
+  const earthRadius = 6371000;
+  const toRadians = (value: number) => (value * Math.PI) / 180;
+  const dLatitude = toRadians(latitudeB - latitudeA);
+  const dLongitude = toRadians(longitudeB - longitudeA);
+  const a = Math.sin(dLatitude / 2) ** 2 + Math.cos(toRadians(latitudeA)) * Math.cos(toRadians(latitudeB)) * Math.sin(dLongitude / 2) ** 2;
+  return earthRadius * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
 export async function GET(req: NextRequest) {
@@ -66,6 +76,7 @@ export async function GET(req: NextRequest) {
     const records = await prisma.attendanceRecord.findMany({
       where,
       include: {
+        punches: { orderBy: { punchedAt: 'asc' } },
         staff: {
           select: {
             id: true,
@@ -130,6 +141,8 @@ export async function GET(req: NextRequest) {
         overtimeHours: Math.round((r.overtimeMinutes / 60) * 10) / 10,
         status: r.status,
         punchSource: r.punchSource,
+        locationStatus: r.locationStatus,
+        punches: r.punches.map((p) => ({ id: p.id, action: p.action, punchedAt: p.punchedAt, latitude: p.latitude, longitude: p.longitude, accuracyMeters: p.accuracyMeters, distanceMeters: p.distanceMeters, locationStatus: p.locationStatus, punchSource: p.punchSource, recordedBy: p.recordedBy })),
         notes: r.notes,
       };
     });
@@ -166,14 +179,28 @@ export async function POST(req: NextRequest) {
       if (!roster) return NextResponse.json({ error: 'No published shift roster exists for this date' }, { status: 409 });
       const now = body.timestamp ? new Date(body.timestamp) : new Date();
       if (Number.isNaN(now.getTime())) return NextResponse.json({ error: 'Invalid attendance timestamp' }, { status: 400 });
+      const punchSource = body.punchSource === 'MOBILE' ? 'MOBILE' : 'WEB';
+      const geofence = await prisma.attendanceGeofence.findFirst({ where: { propertyId: targetPropertyId, organizationId } });
+      if (!geofence) return NextResponse.json({ error: 'Attendance location has not been configured for this property. Contact HR.' }, { status: 409 });
+      if (!geofence.isEnabled) return NextResponse.json({ error: 'Location-restricted attendance is currently disabled for this property. Contact HR.' }, { status: 409 });
+      const latitude = Number(body.latitude);
+      const longitude = Number(body.longitude);
+      const accuracyMeters = Number(body.accuracyMeters);
+      if (![latitude, longitude, accuracyMeters].every(Number.isFinite) || latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180 || accuracyMeters < 0) return NextResponse.json({ error: 'A valid current GPS location and accuracy are required to record attendance' }, { status: 422 });
+      if (accuracyMeters > geofence.minAccuracyMeters) return NextResponse.json({ error: `GPS accuracy is too low (${Math.round(accuracyMeters)}m). Move to an open area and try again.` }, { status: 422 });
+      const distanceMeters = distanceInMeters(latitude, longitude, Number(geofence.latitude), Number(geofence.longitude));
+      if (distanceMeters > geofence.radiusMeters) return NextResponse.json({ error: `You are approximately ${Math.round(distanceMeters)}m from the attendance location. You must be within ${geofence.radiusMeters}m.` }, { status: 403 });
       const existing = await prisma.attendanceRecord.findUnique({ where: { staffId_date: { staffId, date } } });
       if (action === 'CLOCK_IN' && existing?.clockIn) return NextResponse.json({ error: 'You are already clocked in for this date' }, { status: 409 });
       if (action === 'CLOCK_OUT' && (!existing || !existing.clockIn)) return NextResponse.json({ error: 'Clock in must be recorded before clock out' }, { status: 409 });
       const clockIn = action === 'CLOCK_IN' ? now : existing?.clockIn || null;
       const clockOut = action === 'CLOCK_OUT' ? now : existing?.clockOut || null;
       const calculated = calculateAttendance(date, clockIn ? new Date(clockIn) : null, clockOut ? new Date(clockOut) : null, roster);
-      const punchSource = body.punchSource === 'MOBILE' ? 'MOBILE' : 'WEB';
-      const record = await prisma.attendanceRecord.upsert({ where: { staffId_date: { staffId, date } }, update: { clockIn: clockIn || undefined, clockOut: clockOut || undefined, ...calculated, punchSource }, create: { propertyId: targetPropertyId, staffId, date, clockIn: clockIn || now, clockOut, ...calculated, punchSource } });
+      const record = await prisma.$transaction(async (tx) => {
+        const saved = await tx.attendanceRecord.upsert({ where: { staffId_date: { staffId, date } }, update: { clockIn: clockIn || undefined, clockOut: clockOut || undefined, ...calculated, punchSource, locationStatus: 'VERIFIED' }, create: { propertyId: targetPropertyId, staffId, date, clockIn: clockIn || now, clockOut, ...calculated, punchSource, locationStatus: 'VERIFIED' } });
+        await tx.attendancePunch.create({ data: { attendanceRecordId: saved.id, action, punchedAt: now, latitude, longitude, accuracyMeters, distanceMeters, locationStatus: 'VERIFIED', punchSource, recordedBy: authContext.userId } });
+        return saved;
+      });
       return NextResponse.json({ success: true, data: record }, { status: 201 });
     }
 
@@ -195,6 +222,7 @@ export async function POST(req: NextRequest) {
       if (!staffId || !date) {
         return NextResponse.json({ error: 'Staff ID and date are required' }, { status: 400 });
       }
+      if (!notes?.trim() || notes.trim().length < 10) return NextResponse.json({ error: 'A detailed reason is required for a manual attendance exception' }, { status: 400 });
 
       // Verify staff belongs to organization
       const staff = await prisma.staff.findFirst({
@@ -225,36 +253,15 @@ export async function POST(req: NextRequest) {
 
       const roster = await prisma.shiftRoster.findFirst({ where: { staffId, propertyId: targetPropertyId, date: startOfDay, publicationStatus: 'PUBLISHED', status: { not: 'CANCELLED' } }, include: { shift: true } });
       const calculated = calculateAttendance(startOfDay, clockIn ? new Date(clockIn) : null, clockOut ? new Date(clockOut) : null, roster);
-      const record = await prisma.attendanceRecord.upsert({
-        where: {
-          staffId_date: {
-            staffId,
-            date: startOfDay,
-          },
-        },
-        update: {
-          clockIn: clockIn ? new Date(clockIn) : undefined,
-          clockOut: clockOut ? new Date(clockOut) : undefined,
-          status: status === 'PRESENT' ? calculated.status : status,
-          lateMinutes: calculated.lateMinutes,
-          earlyDepartureMinutes: calculated.earlyDepartureMinutes,
-          overtimeMinutes: otMins || calculated.overtimeMinutes,
-          punchSource: 'MANUAL',
-          notes: notes?.trim() || `Manual punch entry recorded by HR (${authContext.userId})`,
-        },
-        create: {
-          propertyId: targetPropertyId,
-          staffId,
-          date: startOfDay,
-          clockIn: clockIn ? new Date(clockIn) : new Date(),
-          clockOut: clockOut ? new Date(clockOut) : null,
-          status: status === 'PRESENT' ? calculated.status : status,
-          lateMinutes: calculated.lateMinutes,
-          earlyDepartureMinutes: calculated.earlyDepartureMinutes,
-          overtimeMinutes: otMins || calculated.overtimeMinutes,
-          punchSource: 'MANUAL',
-          notes: notes?.trim() || `Manual punch entry recorded by HR (${authContext.userId})`,
-        },
+      const record = await prisma.$transaction(async (tx) => {
+        const saved = await tx.attendanceRecord.upsert({
+          where: { staffId_date: { staffId, date: startOfDay } },
+          update: { clockIn: clockIn ? new Date(clockIn) : undefined, clockOut: clockOut ? new Date(clockOut) : undefined, status: status === 'PRESENT' ? calculated.status : status, lateMinutes: calculated.lateMinutes, earlyDepartureMinutes: calculated.earlyDepartureMinutes, overtimeMinutes: otMins || calculated.overtimeMinutes, punchSource: 'MANUAL', locationStatus: 'MANUAL_OVERRIDE', notes: notes.trim() },
+          create: { propertyId: targetPropertyId, staffId, date: startOfDay, clockIn: clockIn ? new Date(clockIn) : new Date(), clockOut: clockOut ? new Date(clockOut) : null, status: status === 'PRESENT' ? calculated.status : status, lateMinutes: calculated.lateMinutes, earlyDepartureMinutes: calculated.earlyDepartureMinutes, overtimeMinutes: otMins || calculated.overtimeMinutes, punchSource: 'MANUAL', locationStatus: 'MANUAL_OVERRIDE', notes: notes.trim() },
+        });
+        await tx.attendancePunch.create({ data: { attendanceRecordId: saved.id, action: 'MANUAL_OVERRIDE', punchedAt: new Date(), locationStatus: 'MANUAL_OVERRIDE', punchSource: 'MANUAL', recordedBy: authContext.userId } });
+        await tx.auditLog.create({ data: { organizationId, propertyId: targetPropertyId, userId: authContext.userId, action: 'HR_ATTENDANCE_MANUAL_OVERRIDE', resource: 'AttendanceRecord', resourceId: saved.id, newValue: { staffId, date, clockIn, clockOut, reason: notes.trim() }, requestId: randomUUID() } });
+        return saved;
       });
 
       return NextResponse.json({ success: true, data: record }, { status: 201 });

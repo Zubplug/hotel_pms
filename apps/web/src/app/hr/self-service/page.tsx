@@ -180,12 +180,17 @@ export default function EmployeeSelfServicePage() {
     setActionError('');
     setPunching(true);
     try {
-      const res = await fetch('/api/hr/attendance', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, punchSource: window.matchMedia('(max-width: 1023px)').matches ? 'MOBILE' : 'WEB', date: new Date().toISOString() }) });
+      if (!navigator.geolocation) throw new Error('Location services are not available on this device.');
+      const position = await new Promise<GeolocationPosition>((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }));
+      const res = await fetch('/api/hr/attendance', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, punchSource: window.matchMedia('(max-width: 1023px)').matches ? 'MOBILE' : 'WEB', date: new Date().toISOString(), latitude: position.coords.latitude, longitude: position.coords.longitude, accuracyMeters: position.coords.accuracy }) });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Unable to record attendance');
       await fetchSelfServiceData();
       showFeedback('success', action === 'CLOCK_IN' ? 'Clocked in' : 'Clocked out', 'Your attendance record has been updated.');
-    } catch (error: any) { setActionError(error.message); showFeedback('error', 'Attendance was not recorded', error.message); } finally { setPunching(false); }
+    } catch (error: any) {
+      const locationMessage = error?.code === 1 ? 'Location permission was denied. Enable location access for LodgeCore and try again.' : error?.code === 2 ? 'Your device could not determine its location. Move to an open area and try again.' : error?.code === 3 ? 'Location lookup timed out. Try again with GPS enabled.' : error.message;
+      setActionError(locationMessage); showFeedback('error', 'Attendance was not recorded', locationMessage);
+    } finally { setPunching(false); }
   };
 
   const handleCancelLeave = async (applicationId: string) => {

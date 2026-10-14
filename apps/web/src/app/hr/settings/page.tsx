@@ -22,6 +22,8 @@ export default function HrSettingsPage() {
   const [paymentConfigured, setPaymentConfigured] = useState(false);
   const [autoPaymentEnabled, setAutoPaymentEnabled] = useState(false);
   const [paymentSaving, setPaymentSaving] = useState(false);
+  const [geofenceSaving, setGeofenceSaving] = useState(false);
+  const [geofence, setGeofence] = useState({ latitude: '', longitude: '', radiusMeters: '150', minAccuracyMeters: '100', isEnabled: true });
   const [form, setForm] = useState({
     // Statutory settings
     pensionEmployeeRate: '8.0',
@@ -82,6 +84,12 @@ export default function HrSettingsPage() {
       .finally(() => setLoading(false));
   }, []);
 
+  useEffect(() => {
+    fetch('/api/hr/attendance/geofence').then((response) => response.json()).then((data) => {
+      if (data.geofence) setGeofence({ latitude: String(data.geofence.latitude), longitude: String(data.geofence.longitude), radiusMeters: String(data.geofence.radiusMeters), minAccuracyMeters: String(data.geofence.minAccuracyMeters), isEnabled: Boolean(data.geofence.isEnabled) });
+    }).catch(() => setError('Unable to load attendance location settings'));
+  }, []);
+
   const toggleAutoPayment = async () => {
     setPaymentSaving(true);
     setError(null);
@@ -135,6 +143,17 @@ export default function HrSettingsPage() {
     }
   };
 
+  const saveGeofence = async () => {
+    setGeofenceSaving(true); setError(null);
+    try {
+      const response = await fetch('/api/hr/attendance/geofence', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...geofence, latitude: Number(geofence.latitude), longitude: Number(geofence.longitude), radiusMeters: Number(geofence.radiusMeters), minAccuracyMeters: Number(geofence.minAccuracyMeters) }) });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Unable to save attendance location');
+      setGeofence({ latitude: String(result.geofence.latitude), longitude: String(result.geofence.longitude), radiusMeters: String(result.geofence.radiusMeters), minAccuracyMeters: String(result.geofence.minAccuracyMeters), isEnabled: Boolean(result.geofence.isEnabled) });
+      setSaved(true); setTimeout(() => setSaved(false), 3000);
+    } catch (err: any) { setError(err.message || 'Unable to save attendance location'); } finally { setGeofenceSaving(false); }
+  };
+
   return (
     <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-5xl mx-auto">
       {/* Header */}
@@ -164,6 +183,20 @@ export default function HrSettingsPage() {
           <p className={`text-[11px] mt-2 ${paymentConfigured ? 'text-emerald-300' : 'text-amber-300'}`}>{paymentConfigured ? (autoPaymentEnabled ? 'Configured and enabled' : 'Configured but disabled') : 'Flutterwave is not configured. Configure it from /portal/integrations.'}</p>
         </div>
         <Button type="button" onClick={toggleAutoPayment} disabled={!paymentConfigured || paymentSaving} className={autoPaymentEnabled ? 'bg-amber-600 hover:bg-amber-500 text-white' : 'bg-emerald-600 hover:bg-emerald-500 text-white'}>{paymentSaving ? 'Saving…' : autoPaymentEnabled ? 'Disable auto payment' : 'Enable auto payment'}</Button>
+      </div>
+
+      <div className="bg-[#090e17] border border-slate-800/80 rounded-2xl p-6 space-y-4">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div><h3 className="text-sm font-bold text-white">Attendance location boundary</h3><p className="text-xs text-slate-400 mt-1">Employees must have a live GPS position inside this property boundary to check in or check out. HR manual punches remain available as audited exceptions.</p></div>
+          <label className="flex items-center gap-2 text-xs text-slate-300"><input type="checkbox" checked={geofence.isEnabled} onChange={(e) => setGeofence({ ...geofence, isEnabled: e.target.checked })} /> Enforce location</label>
+        </div>
+        <div className="grid grid-cols-1 gap-4 text-xs sm:grid-cols-4">
+          <label className="text-slate-400">Latitude<Input type="number" step="0.0000001" min="-90" max="90" value={geofence.latitude} onChange={(e) => setGeofence({ ...geofence, latitude: e.target.value })} className="mt-1 bg-slate-950 border-slate-800 text-slate-100 text-xs h-8" placeholder="6.5244" /></label>
+          <label className="text-slate-400">Longitude<Input type="number" step="0.0000001" min="-180" max="180" value={geofence.longitude} onChange={(e) => setGeofence({ ...geofence, longitude: e.target.value })} className="mt-1 bg-slate-950 border-slate-800 text-slate-100 text-xs h-8" placeholder="3.3792" /></label>
+          <label className="text-slate-400">Allowed radius (m)<Input type="number" min="25" max="2000" value={geofence.radiusMeters} onChange={(e) => setGeofence({ ...geofence, radiusMeters: e.target.value })} className="mt-1 bg-slate-950 border-slate-800 text-slate-100 text-xs h-8" /></label>
+          <label className="text-slate-400">Maximum GPS error (m)<Input type="number" min="10" max="500" value={geofence.minAccuracyMeters} onChange={(e) => setGeofence({ ...geofence, minAccuracyMeters: e.target.value })} className="mt-1 bg-slate-950 border-slate-800 text-slate-100 text-xs h-8" /></label>
+        </div>
+        <Button type="button" onClick={saveGeofence} disabled={geofenceSaving} className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs">{geofenceSaving ? 'Saving location…' : 'Save attendance boundary'}</Button>
       </div>
 
       <form onSubmit={handleSave} className="space-y-6">

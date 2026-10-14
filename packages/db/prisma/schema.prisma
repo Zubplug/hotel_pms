@@ -71,6 +71,7 @@ model Organization {
   // Enterprise HR Suite
   statutoryConfigurations StatutoryConfiguration[]
   companyPolicies         CompanyPolicy[]
+  attendanceGeofences     AttendanceGeofence[]
   payrollPayouts          PayrollPayout[]
 
   createdAt DateTime @default(now()) @db.Timestamptz
@@ -81,6 +82,7 @@ model Property {
   id                String             @id @default(uuid()) @db.Uuid
   organizationId    String             @db.Uuid
   organization      Organization       @relation(fields: [organizationId], references: [id])
+  attendanceGeofence AttendanceGeofence?
   posActivationKeys PosActivationKey[]
 
   corporateAccounts CorporateAccount[]
@@ -7535,6 +7537,8 @@ model AttendanceRecord {
   verifiedByUserId   String?   @db.Uuid
   verifiedAt         DateTime? @db.Timestamptz
   notes              String?
+  locationStatus     String?
+  punches            AttendancePunch[]
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
@@ -7542,6 +7546,43 @@ model AttendanceRecord {
   @@unique([staffId, date])
   @@index([propertyId, date])
   @@index([propertyId, status])
+}
+
+model AttendanceGeofence {
+  id                String       @id @default(uuid()) @db.Uuid
+  organizationId    String       @db.Uuid
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  propertyId        String       @unique @db.Uuid
+  property          Property     @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  latitude          Decimal      @db.Decimal(10, 7)
+  longitude         Decimal      @db.Decimal(10, 7)
+  radiusMeters      Int          @default(150)
+  minAccuracyMeters Int          @default(100)
+  isEnabled         Boolean      @default(true)
+  createdBy         String       @db.Uuid
+  updatedBy         String       @db.Uuid
+  createdAt         DateTime     @default(now()) @db.Timestamptz
+  updatedAt         DateTime     @updatedAt @db.Timestamptz
+
+  @@index([organizationId])
+}
+
+model AttendancePunch {
+  id                    String           @id @default(uuid()) @db.Uuid
+  attendanceRecordId    String           @db.Uuid
+  attendanceRecord      AttendanceRecord @relation(fields: [attendanceRecordId], references: [id], onDelete: Cascade)
+  action                String           // CLOCK_IN | CLOCK_OUT | MANUAL_OVERRIDE
+  punchedAt             DateTime         @db.Timestamptz
+  latitude              Decimal?         @db.Decimal(10, 7)
+  longitude             Decimal?         @db.Decimal(10, 7)
+  accuracyMeters        Decimal?         @db.Decimal(8, 2)
+  distanceMeters        Decimal?         @db.Decimal(8, 2)
+  locationStatus        String           // VERIFIED | NOT_REQUIRED | MANUAL_OVERRIDE
+  punchSource           String
+  recordedBy            String           @db.Uuid
+  createdAt             DateTime         @default(now()) @db.Timestamptz
+
+  @@index([attendanceRecordId, punchedAt])
 }
 
 model MissedPunchRequest {
