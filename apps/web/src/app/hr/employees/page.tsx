@@ -238,14 +238,23 @@ export default function EmployeesPage() {
 
   const openEmployeeEditor = (employee: any) => {
     setEditingEmployeeId(employee.id);
+    const departmentName = employee.department || employee.departmentRef?.name || '';
+    const positionTitle = employee.position || employee.jobPosition?.title || '';
+    const department = departments.find((item) => item.name?.trim().toLowerCase() === departmentName.trim().toLowerCase());
+    const position = positions.find((item) =>
+      item.title?.trim().toLowerCase() === positionTitle.trim().toLowerCase() &&
+      (!department || item.departmentId === department.id),
+    );
     setForm((current) => ({
       ...current,
       firstName: employee.firstName || '',
       lastName: employee.lastName || '',
       email: employee.email || '',
       phone: employee.phone || '',
-      departmentName: employee.department || employee.departmentRef?.name || '',
-      positionTitle: employee.position || employee.jobPosition?.title || '',
+      departmentId: department?.id || '',
+      departmentName,
+      jobPositionId: position?.id || '',
+      positionTitle,
       employmentType: employee.employeeProfile?.employmentType || employee.profile?.employmentType || employee.employmentType || 'FULL_TIME',
       employmentStatus: employee.employeeProfile?.status || employee.profile?.employmentStatus || employee.status || 'ACTIVE',
       baseSalary: String(employee.salaryStructure?.basicSalary ?? employee.profile?.baseSalary ?? employee.baseSalary ?? ''),
@@ -796,10 +805,10 @@ export default function EmployeesPage() {
                     className="bg-slate-950 border-slate-800 text-slate-100 text-xs h-8"
                   />
                 </div>
-                <div className="col-span-2">
+                {!editingEmployeeId && <div className="col-span-2">
                   <label className="text-slate-400 mb-1 block">Self-service password *</label>
                   <Input
-                    required
+                    required={!editingEmployeeId}
                     minLength={8}
                     type="password"
                     placeholder="At least 8 characters"
@@ -807,8 +816,8 @@ export default function EmployeesPage() {
                     onChange={(e) => setForm({ ...form, selfServicePassword: e.target.value })}
                     className="bg-slate-950 border-slate-800 text-slate-100 text-xs h-8"
                   />
-                  <p className="text-[10px] text-slate-500 mt-1">{editingEmployeeId ? 'Leave blank to keep the current self-service password.' : 'The employee uses this password together with their Employer ID.'}</p>
-                </div>
+                  <p className="text-[10px] text-slate-500 mt-1">The employee uses this password together with their Employer ID.</p>
+                </div>}
               </div>
             </div>
 
@@ -826,6 +835,8 @@ export default function EmployeesPage() {
                         ...form,
                         departmentId: e.target.value,
                         departmentName: dept?.name || '',
+                        jobPositionId: '',
+                        positionTitle: '',
                       });
                     }}
                     className="w-full bg-slate-950 border border-slate-800 text-slate-300 rounded-lg text-xs px-2.5 h-8 outline-none"
@@ -851,7 +862,7 @@ export default function EmployeesPage() {
                     className="w-full bg-slate-950 border border-slate-800 text-slate-300 rounded-lg text-xs px-2.5 h-8 outline-none"
                   >
                     <option value="">Select Position</option>
-                    {positions.map((p) => (
+                    {positions.filter((p) => !form.departmentId || p.departmentId === form.departmentId).map((p) => (
                       <option key={p.id} value={p.id}>{p.title}</option>
                     ))}
                   </select>
