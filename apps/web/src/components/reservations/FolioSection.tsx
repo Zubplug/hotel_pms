@@ -53,6 +53,7 @@ export function FolioSection({ reservation, readOnly = false }: { reservation: a
   const totalPayments = Number(folio.totalPayments || 0);
   const position = getFolioBalance(folio);
   const outstandingBalance = position.debit;
+  const hasDebt = outstandingBalance > 0.01;
   const folioAvailableCredit = Number(folio.availableCredit || 0);
   const availableCreditAmount = Math.max(folioAvailableCredit, position.credit);
   const folioSurface = isDarkReservation
@@ -287,14 +288,14 @@ export function FolioSection({ reservation, readOnly = false }: { reservation: a
         </CardHeader>
         <CardContent className="p-0">
           <div className={`border-b p-4 sm:p-6 ${isDarkReservation ? 'border-white/[0.08] bg-[#172437]' : 'bg-slate-50'}`}>
-            <div className={`rounded-2xl p-5 text-white shadow-sm ${outstandingBalance > 0 ? 'bg-gradient-to-br from-rose-600 to-red-700' : 'bg-gradient-to-br from-emerald-600 to-teal-700'}`}>
+            <div className={`rounded-2xl p-5 text-white shadow-sm ${hasDebt ? 'bg-gradient-to-br from-rose-600 to-red-700' : 'bg-gradient-to-br from-emerald-600 to-teal-700'}`}>
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-white/75">{outstandingBalance > 0 ? 'Amount due' : 'Fully Settled'}</p>
-                  {outstandingBalance > 0 && <p className="mt-1 text-3xl font-black tracking-tight tabular-nums sm:text-4xl">{formatCurrency(outstandingBalance)}</p>}
+                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-white/75">{hasDebt ? 'Debt outstanding' : 'Fully Settled'}</p>
+                  {hasDebt && <p className="mt-1 text-3xl font-black tracking-tight tabular-nums text-rose-50 sm:text-4xl">{formatCurrency(outstandingBalance)}</p>}
                 </div>
                 <Badge className="border-white/25 bg-white/15 px-3 py-1 text-white" variant="outline">
-                  {outstandingBalance > 0 ? 'Payment required' : 'No balance due'}
+                  {hasDebt ? 'Payment required' : 'No balance due'}
                 </Badge>
               </div>
             </div>
