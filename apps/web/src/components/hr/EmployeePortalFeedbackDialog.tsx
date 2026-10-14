@@ -2,7 +2,7 @@
 
 import { CheckCircle2, XCircle, Info, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from '@/components/hr/EmployeePortalDialog';
 
 export type EmployeePortalFeedback = { type: 'success' | 'error' | 'info'; title: string; message: string };
 
