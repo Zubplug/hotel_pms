@@ -41,6 +41,7 @@ model Organization {
   externalAuditorAccesses    ExternalAuditorAccess[]
   externalAuditorInvitations ExternalAuditorInvitation[]
   customerInvitations        CustomerInvitation[]
+  employeeInvitations        EmployeeInvitation[]
 
   billingCustomer        BillingCustomer?
   subscriptions          Subscription[]
@@ -2043,6 +2044,7 @@ model Staff {
   bypassAcknowledgements CheckInBypass[]         @relation("BypassAcknowledger")
   bypassesReviewed       CheckInBypass[]         @relation("BypassReviewer")
   headedDepartments      Department[]            @relation("DepartmentHead")
+  employeeInvitations    EmployeeInvitation[]
 
   // Enterprise Accounting Suite
   salaryStructure         SalaryStructure?
@@ -2124,6 +2126,8 @@ model User {
   sentExternalAuditorInvitations ExternalAuditorInvitation[]  @relation("ExternalAuditorInvitationInvitedBy")
   customerInvitations            CustomerInvitation[]         @relation("CustomerInvitationUser")
   sentCustomerInvitations        CustomerInvitation[]         @relation("CustomerInvitationCreatedBy")
+  employeeInvitations            EmployeeInvitation[]         @relation("EmployeeInvitationUser")
+  sentEmployeeInvitations        EmployeeInvitation[]         @relation("EmployeeInvitationInvitedBy")
 }
 
 // FCM device tokens for push notifications
@@ -2504,6 +2508,27 @@ model CustomerInvitation {
 
   @@index([email, organizationId])
   @@index([expiresAt, acceptedAt])
+}
+
+model EmployeeInvitation {
+  id             String       @id @default(uuid()) @db.Uuid
+  staffId        String       @db.Uuid
+  staff          Staff        @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  userId         String       @db.Uuid
+  user           User         @relation("EmployeeInvitationUser", fields: [userId], references: [id], onDelete: Cascade)
+  organizationId String       @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tokenHash      String       @unique
+  expiresAt      DateTime     @db.Timestamptz
+  acceptedAt     DateTime?    @db.Timestamptz
+  invitedById    String       @db.Uuid
+  invitedBy      User         @relation("EmployeeInvitationInvitedBy", fields: [invitedById], references: [id])
+  createdAt      DateTime     @default(now()) @db.Timestamptz
+  updatedAt      DateTime     @updatedAt @db.Timestamptz
+
+  @@index([staffId])
+  @@index([userId])
+  @@index([organizationId, expiresAt, acceptedAt])
 }
 
 // -----------------------------------------------------------------------------

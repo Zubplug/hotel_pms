@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { randomUUID } from 'crypto';
+import { randomBytes, randomUUID, createHash } from 'crypto';
 import prisma from '@hotel-pms/db';
 import { hash } from 'bcryptjs';
 import { HrAuthorizationService } from '@/lib/services/hr-authorization-service';
 import { PiiMaskingService } from '@/lib/services/pii-masking-service';
+import { sendEmployeeInvitationEmail } from '@/lib/email/send-employee-invitation';
 
 export async function GET(req: NextRequest) {
   try {
@@ -173,12 +174,11 @@ export async function POST(req: NextRequest) {
       emergencyContactRelationship,
       emergencyContactPhone,
       posPin,
-      selfServicePassword,
     } = body;
 
-    if (!firstName || !lastName || !email || !departmentName?.trim() || !positionTitle?.trim() || !selfServicePassword || String(selfServicePassword).length < 8) {
+    if (!firstName || !lastName || !email || !departmentName?.trim() || !positionTitle?.trim()) {
       return NextResponse.json(
-        { error: 'First name, last name, email, department, position, and a self-service password of at least 8 characters are mandatory' },
+        { error: 'First name, last name, email, department, and position are mandatory' },
         { status: 400 }
       );
     }
@@ -192,9 +192,15 @@ export async function POST(req: NextRequest) {
       posPinHash = await hash(posPin, 10);
     }
 
+    const rawToken = randomBytes(32).toString('hex');
+    const tokenHash = createHash('sha256').update(rawToken).digest('hex');
+    const invitationExpiresAt = new Date(Date.now() + 72 * 60 * 60 * 1000);
+
     const newStaff = await prisma.$transaction(async (tx: any) => {
       const normalizedEmail = email.trim().toLowerCase();
-      const passwordHash = await hash(String(selfServicePassword), 12);
+      // Until the employee accepts the invitation, the random password is not known
+      // to anyone and cannot be used to sign in.
+      const passwordHash = await hash(randomBytes(32).toString('hex'), 12);
       const existingUser = await tx.user.findUnique({ where: { email: normalizedEmail } });
       if (existingUser?.staffId) {
         throw new Error('A web account already belongs to another employee with this email address');
@@ -227,6 +233,16 @@ export async function POST(req: NextRequest) {
         where: { userId: user.id },
         update: { organizationId, status: 'ACTIVE', role: 'MEMBER' },
         create: { userId: user.id, organizationId, status: 'ACTIVE', role: 'MEMBER' },
+      });
+      await tx.employeeInvitation.create({
+        data: {
+          staffId: staff.id,
+          userId: user.id,
+          organizationId,
+          tokenHash,
+          expiresAt: invitationExpiresAt,
+          invitedById: authContext.userId,
+        },
       });
 
       // 2. Create EmployeeProfile
@@ -284,10 +300,27 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      return { staff, profile };
+      const organization = await tx.organization.findUnique({ where: { id: organizationId }, select: { name: true } });
+      return { staff, profile, organizationName: organization?.name || 'LodgeCore' };
     });
 
-    return NextResponse.json({ success: true, data: newStaff }, { status: 201 });
+    let invitationSent = true;
+    let invitationWarning: string | undefined;
+    try {
+      await sendEmployeeInvitationEmail({
+        to: newStaff.staff.email,
+        inviteUrl: `${req.nextUrl.origin}/employee/invite/${rawToken}`,
+        expiresAt: invitationExpiresAt,
+        employeeName: `${newStaff.staff.firstName} ${newStaff.staff.lastName}`.trim(),
+        organizationName: newStaff.organizationName,
+      });
+    } catch (emailError) {
+      invitationSent = false;
+      invitationWarning = emailError instanceof Error ? emailError.message : 'Unable to send the employee activation email';
+      console.error('Employee activation email failed:', emailError);
+    }
+
+    return NextResponse.json({ success: true, data: newStaff, invitationSent, invitationExpiresAt, invitationWarning }, { status: 201 });
   } catch (error: any) {
     if (error.message?.includes('Forbidden') || error.message?.includes('Unauthorized')) {
       return NextResponse.json({ error: error.message }, { status: error.message.includes('Forbidden') ? 403 : 401 });

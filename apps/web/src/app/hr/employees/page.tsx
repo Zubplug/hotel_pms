@@ -90,7 +90,6 @@ export default function EmployeesPage() {
     emergencyContactRelationship: '',
     emergencyContactPhone: '',
     posPin: '',
-    selfServicePassword: '',
   });
 
   const fetchEmployees = async () => {
@@ -189,9 +188,15 @@ export default function EmployeesPage() {
         } : form),
       });
       if (res.ok) {
+        const result = await res.json();
         setAddModalOpen(false);
         setEditingEmployeeId(null);
         fetchEmployees();
+        if (!isEditing) {
+          alert(result.invitationSent
+            ? 'Employee created. An activation link was sent to their email and expires in 72 hours.'
+            : `Employee created, but the activation email could not be sent. ${result.invitationWarning || 'Please verify email configuration.'}`);
+        }
         // Reset form
         setForm({
           firstName: '',
@@ -222,7 +227,6 @@ export default function EmployeesPage() {
           emergencyContactRelationship: '',
           emergencyContactPhone: '',
           posPin: '',
-          selfServicePassword: '',
         });
       } else {
         const errorData = await res.json();
@@ -805,18 +809,8 @@ export default function EmployeesPage() {
                     className="bg-slate-950 border-slate-800 text-slate-100 text-xs h-8"
                   />
                 </div>
-                {!editingEmployeeId && <div className="col-span-2">
-                  <label className="text-slate-400 mb-1 block">Self-service password *</label>
-                  <Input
-                    required={!editingEmployeeId}
-                    minLength={8}
-                    type="password"
-                    placeholder="At least 8 characters"
-                    value={form.selfServicePassword}
-                    onChange={(e) => setForm({ ...form, selfServicePassword: e.target.value })}
-                    className="bg-slate-950 border-slate-800 text-slate-100 text-xs h-8"
-                  />
-                  <p className="text-[10px] text-slate-500 mt-1">The employee uses this password together with their Employer ID.</p>
+                {!editingEmployeeId && <div className="col-span-2 rounded-lg border border-teal-500/20 bg-teal-500/5 px-3 py-2 text-[10px] text-teal-200">
+                  An activation link will be sent to the employee&apos;s email after the record is created. They will create their own password from that link.
                 </div>}
               </div>
             </div>
