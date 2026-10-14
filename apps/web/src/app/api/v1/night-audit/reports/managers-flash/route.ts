@@ -143,7 +143,7 @@ export async function GET(req: NextRequest) {
       row.balance += money(folio.balance);
       corporateMap.set(key, row);
     }
-    const corporateAccounts = [...corporateMap.values()].map((row) => ({ ...row, balance: round(row.balance), overLimit: !row.exemptFromHighBalance && row.creditLimit > 0 && row.balance > row.creditLimit })).sort((a, b) => b.balance - a.balance);
+    const corporateAccounts = [...corporateMap.values()].map((row) => ({ ...row, balance: round(row.balance), amountDue: round(Math.max(0, row.balance)), creditBalance: round(Math.max(0, -row.balance)), overLimit: !row.exemptFromHighBalance && row.creditLimit > 0 && row.balance > row.creditLimit })).sort((a, b) => b.balance - a.balance);
     const revenue = {
       room: roomRevenueAmount,
       fb: fnbRevenueAmount,
