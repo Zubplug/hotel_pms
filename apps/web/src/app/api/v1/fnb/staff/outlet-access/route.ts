@@ -5,8 +5,8 @@ import { requireOrganizationContext } from '@/lib/organization-access';
 import { errorResponse, successResponse } from '@/lib/api-response';
 
 const MANAGER_ROLES = ['FNB_MANAGER', 'RESTAURANT_MANAGER', 'BANQUET_MANAGER', 'EVENT_MANAGER', 'GENERAL_MANAGER', 'HOTEL_MANAGER', 'ADMIN', 'CEO', 'SUPER_ADMIN'];
-const WAITER_POSITIONS = ['WAITER', 'WAITRESS'];
 const FNB_POS_OUTLET_TYPES = ['RESTAURANT', 'BAR', 'CAFE', 'POOL', 'ROOM_SERVICE', 'BANQUET'];
+const waiterPositionFilter = { contains: 'wait', mode: 'insensitive' as const };
 
 async function authorize(req: NextRequest) {
   const user = await resolveUser(req);
@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
   const [outlets, staff] = await Promise.all([
     prisma.posOutlet.findMany({ where: { propertyId, isActive: true, type: { in: FNB_POS_OUTLET_TYPES } }, select: { id: true, name: true, type: true }, orderBy: { name: 'asc' } }),
     prisma.staff.findMany({
-      where: { organizationId: ctx.organizationId, propertyAccess: { has: propertyId }, isActive: true, position: { in: WAITER_POSITIONS }, department: { in: ['F&B', 'Food & Beverage', 'Kitchen', 'Bar', 'Restaurant'] } },
+      where: { organizationId: ctx.organizationId, propertyAccess: { has: propertyId }, isActive: true, deletedAt: null, position: waiterPositionFilter },
       select: { id: true, firstName: true, lastName: true, position: true, outletAccess: { where: { outlet: { propertyId } }, select: { outletId: true } } },
       orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
     }),
@@ -42,7 +42,7 @@ export async function PUT(req: NextRequest) {
   const outletIds: string[] = Array.isArray(body.outletIds) ? [...new Set<string>(body.outletIds.map((id: unknown) => String(id)).filter(Boolean))] : [];
   if (!staffId) return errorResponse('BAD_REQUEST', 'Staff member is required', 400);
   const [staff, outlets] = await Promise.all([
-    prisma.staff.findFirst({ where: { id: staffId, propertyAccess: { has: propertyId }, isActive: true, position: { in: WAITER_POSITIONS } }, select: { id: true } }),
+    prisma.staff.findFirst({ where: { id: staffId, organizationId: access.ctx.organizationId, propertyAccess: { has: propertyId }, isActive: true, deletedAt: null, position: waiterPositionFilter }, select: { id: true } }),
     prisma.posOutlet.findMany({ where: { id: { in: outletIds }, propertyId, isActive: true, type: { in: FNB_POS_OUTLET_TYPES } }, select: { id: true } }),
   ]);
   if (!staff) return errorResponse('NOT_FOUND', 'Staff member not found for this property', 404);

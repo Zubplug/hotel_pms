@@ -22,7 +22,7 @@ const formatCurrency = (amount: number, currency: string = 'NGN') => {
 
 const isWaiter = (position: string | null | undefined) => {
   const normalized = String(position || '').trim().toUpperCase().replace(/[_-]+/g, ' ');
-  return normalized === 'WAITER' || normalized === 'WAITRESS';
+  return normalized.includes('WAITER') || normalized.includes('WAITRESS') || normalized.includes('WAIT STAFF');
 };
 
 export default async function FnbStaffPage() {
@@ -70,6 +70,8 @@ export default async function FnbStaffPage() {
     where: {
       organizationId: orgContext.organizationId,
       isActive: true,
+      deletedAt: null,
+      propertyAccess: { hasSome: propertyIds },
       OR: [
         {
           outletAccess: {
@@ -79,7 +81,7 @@ export default async function FnbStaffPage() {
           }
         },
         {
-          department: { in: ['F&B', 'Food & Beverage', 'Kitchen', 'Bar', 'Restaurant'] }
+          department: { in: ['F&B', 'Food & Beverage', 'Food and Beverage', 'Kitchen', 'Bar', 'Restaurant'] }
         }
       ]
     },
@@ -130,7 +132,7 @@ export default async function FnbStaffPage() {
   let additionalStaff: any[] = [];
   if (missingStaffIds.length > 0) {
     additionalStaff = (await prisma.staff.findMany({
-      where: { id: { in: missingStaffIds } },
+      where: { id: { in: missingStaffIds }, organizationId: orgContext.organizationId, propertyAccess: { hasSome: propertyIds }, isActive: true, deletedAt: null },
       select: { id: true, firstName: true, lastName: true, position: true }
     })).filter((staff) => isWaiter(staff.position));
   }
