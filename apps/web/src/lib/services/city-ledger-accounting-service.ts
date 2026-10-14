@@ -30,6 +30,12 @@ export class CityLedgerAccountingService {
     });
     if (!account || account.type !== 'CORPORATE') return 0;
 
+    const targetInvoice = await tx.cityLedgerInvoice.findUnique({
+      where: { id: input.invoiceId },
+      select: { outstandingAmount: true },
+    });
+    if (!targetInvoice || Number(targetInvoice.outstandingAmount) <= 0.01) return 0;
+
     const openPayments = await tx.cityLedgerEntry.findMany({
       where: {
         accountId: input.accountId,
@@ -81,12 +87,13 @@ export class CityLedgerAccountingService {
 
     if (appliedTotal <= 0.01) return 0;
 
+    const currentOutstanding = Number(targetInvoice.outstandingAmount);
     const invoice = await tx.cityLedgerInvoice.update({
       where: { id: input.invoiceId },
       data: {
         paidAmount: { increment: appliedTotal },
         outstandingAmount: { decrement: appliedTotal },
-        status: remaining <= 0.01 ? 'PAID' : 'PARTIALLY_PAID',
+        status: currentOutstanding - appliedTotal <= 0.01 ? 'PAID' : 'PARTIALLY_PAID',
       },
     });
 
