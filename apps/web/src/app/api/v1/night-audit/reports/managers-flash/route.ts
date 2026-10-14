@@ -109,6 +109,15 @@ export async function GET(req: NextRequest) {
       row.gross += amount; row.net += amount; row.transactionCount += 1; departments.set(department, row);
     }
 
+    const complimentaryRoom = folioItems
+      .filter((item) => item.type === 'COMPLIMENTARY' && item.source === 'ROOM_CHARGE' && item.revenueCategory === 'ROOM')
+      .reduce((sum, item) => sum + Math.abs(money(item.amount)), 0);
+    const complimentaryFood = folioItems
+      .filter((item) => item.type === 'CHARGE' && item.source === 'ROOM_CHARGE' && item.revenueCategory === 'FNB' && String(item.revenueClass || '').toUpperCase() === 'FOOD')
+      .reduce((sum, item) => sum + money(item.amount), 0);
+    const complimentaryPos = posOrders
+      .reduce((sum, order) => sum + order.payments.filter((payment) => String(payment.method).toUpperCase() === 'COMPLIMENTARY').reduce((inner, payment) => inner + money(payment.amount), 0), 0);
+
     const derived = { gross: 0, discounts: 0, adjustments: 0, refunds: 0, taxes: 0, net: 0 };
     for (const row of departments.values()) { derived.gross += row.gross; derived.discounts += row.discounts; derived.adjustments += row.adjustments; derived.refunds += row.refunds; derived.taxes += row.taxes; derived.net += row.net; }
     const financial = audit?.financialSnapshot;
@@ -158,6 +167,7 @@ export async function GET(req: NextRequest) {
       occupancy: { totalRooms, available: availableRooms, sourceAvailable: sourceAvailableRooms, inventoryVariance, occupied: occupiedRooms, outOfOrder, outOfService, blocked, percentage: round(occupancyPercentage), inHouseGuests, arrivals: actualArrivals.length, checkedInArrivals: actualArrivals.filter((row) => row.status === 'CHECKED_IN').length, departures: actualDepartures.length, completedDepartures: actualDepartures.filter((row) => row.status === 'CHECKED_OUT').length, noShows: actualArrivals.filter((row) => row.status === 'NO_SHOW').length, cancellations: cancelledArrivals.length + cancelledDepartures.length, walkIns: actualArrivals.filter((row) => String(row.source) === 'WALK_IN').length, roomsSold: snapshot?.occupiedRooms ?? occupiedRooms },
       performance: { adr: round(adr), revpar: round(revpar), roomsAvailable: availableRooms, occupancy: round(occupancyPercentage) },
       revenue: { ...Object.fromEntries(Object.entries(revenue).map(([key, value]) => [key, round(value)])), total: round(revenue.net + revenue.taxes), departmentBreakdown: [...departments.values()].map((row) => ({ ...row, gross: round(row.gross), discounts: round(row.discounts), adjustments: round(row.adjustments), refunds: round(row.refunds), taxes: round(row.taxes), net: round(row.net) })).sort((a, b) => b.gross - a.gross), derivedReconciliation: { derivedGross: round(derived.gross), derivedNet: round(derived.net), snapshotGross: financial ? round(money(financial.grossRevenue)) : null, snapshotNet: financial ? round(money(financial.netRevenue)) : null, grossVariance: financial ? round(derived.gross - money(financial.grossRevenue)) : null, netVariance: financial ? round(derived.net - money(financial.netRevenue)) : null } },
+      concessions: { complimentaryRoom: round(complimentaryRoom), complimentaryFood: round(complimentaryFood), complimentaryPos: round(complimentaryPos), guestAmenityCost: round(money(financial?.guestAmenityCost)), totalValue: round(complimentaryRoom + complimentaryFood + complimentaryPos + money(financial?.guestAmenityCost)) },
       financial: { paymentTotals, cash: round(paymentByMethod(['CASH'])), card: round(paymentByMethod(['CARD', 'CARD_OFFLINE', 'POS'])), transfer: round(paymentByMethod(['BANK_TRANSFER', 'PAYMENT_GATEWAY', 'MOBILE_PAYMENT'])), other: round(paymentByMethod(['CHEQUE', 'CITY_LEDGER', 'COMPLIMENTARY', 'OTHER'])), deposits: round(paymentByMethod(['CASH', 'CARD', 'CARD_OFFLINE', 'POS', 'BANK_TRANSFER', 'PAYMENT_GATEWAY', 'MOBILE_PAYMENT', 'CHEQUE'])), refunds: round(revenue.refunds), adjustments: round(revenue.adjustments), outstanding: round(money(outstandingFolios._sum.balance)), cashExpected: sessionCash.expected, cashDeclared: sessionCash.declared, cashVariance: sessionCash.variance, closeCashExpected: financial?.cashExpected == null ? null : money(financial.cashExpected), closeCashDeclared: financial?.cashDeclared == null ? null : money(financial.cashDeclared), closeCashVariance: financial?.cashVariance == null ? null : money(financial.cashVariance) },
       movements: { arrivals: actualArrivals.map(movementRow), departures: actualDepartures.map(movementRow), cancellations: [...cancelledArrivals, ...cancelledDepartures].map(movementRow) },
       controls: { ...controls, sessions, housekeeping: housekeepingTotals, serviceRequests: serviceRequests.map((row) => ({ status: row.status, count: row._count.id })) },

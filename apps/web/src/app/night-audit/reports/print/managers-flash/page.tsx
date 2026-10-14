@@ -39,6 +39,7 @@ export default function ManagersFlashReportPage() {
   const occupancy = data.occupancy || {};
   const performance = data.performance || {};
   const revenue = data.revenue || {};
+  const concessions = data.concessions || {};
   const financial = data.financial || {};
   const controls = data.controls || {};
   const labour = data.labour || {};
@@ -103,6 +104,9 @@ export default function ManagersFlashReportPage() {
           </Section>
           <Section title="Payments, deposits & balances">
             <table className="w-full text-xs"><tbody><Row label="Cash / card" value={`${currency(financial.cash, currencyCode)} / ${currency(financial.card, currencyCode)}`} /><Row label="Transfers / other" value={`${currency(financial.transfer, currencyCode)} / ${currency(financial.other, currencyCode)}`} /><Row label="Deposits received" value={currency(financial.deposits, currencyCode)} /><Row label="Outstanding checked-in folios" value={currency(financial.outstanding, currencyCode)} /><Row label="Cash expected / declared" value={`${currency(financial.cashExpected, currencyCode)} / ${currency(financial.cashDeclared, currencyCode)}`} /><Row label="Cash variance" value={currency(financial.cashVariance, currencyCode)} total /></tbody></table>
+          </Section>
+          <Section title="Complimentary & guest benefits">
+            <table className="w-full text-xs"><tbody><Row label="Complimentary room revenue" value={currency(concessions.complimentaryRoom, currencyCode)} /><Row label="Complimentary food from room packages" value={currency(concessions.complimentaryFood, currencyCode)} /><Row label="POS complimentary sales" value={currency(concessions.complimentaryPos, currencyCode)} /><Row label="Guest gifts / amenity cost" value={currency(concessions.guestAmenityCost, currencyCode)} /><Row label="Total complimentary value" value={currency(concessions.totalValue, currencyCode)} total /></tbody></table>
           </Section>
           <Section title="Night audit controls">
             <table className="w-full text-xs"><tbody><Row label="Room charges posted" value={audit.roomChargesPosted || 0} /><Row label="Open POS orders" value={controls.openPosOrders || 0} /><Row label="Transaction / reconciliation exceptions" value={`${controls.unresolvedTransactionExceptions || 0} / ${controls.openReconciliationExceptions || 0}`} /><Row label="Late postings / voids / adjustments" value={`${controls.latePostings || 0} / ${controls.voids || 0} / ${controls.adjustments || 0}`} /><Row label="Audit errors" value={audit.errors || 0} total /></tbody></table>
