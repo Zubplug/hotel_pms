@@ -463,6 +463,23 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
                    });
                    const postingBusinessDate = propRecord?.businessDate || new Date();
 
+                   const corporateAccount = await tx.cityLedgerAccount.findUnique({
+                     where: { id: accountId },
+                     select: { type: true },
+                   });
+                   if (corporateAccount?.type === 'CORPORATE') {
+                     await CityLedgerAccountingService.applyAvailableCorporateAdvance(tx, {
+                       propertyId: conflict.propertyId,
+                       organizationId: propRecord?.organizationId || '',
+                       staffId: session.user?.id || 'SYSTEM',
+                       accountId,
+                       invoiceId: invoice.id,
+                       amount,
+                       currency: payload.currency || 'NGN',
+                       businessDate: postingBusinessDate,
+                     });
+                   }
+
                    await tx.folioItem.create({
                      data: {
                        folioId: f.id,

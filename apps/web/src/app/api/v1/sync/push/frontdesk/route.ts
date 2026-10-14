@@ -3117,6 +3117,25 @@ export async function POST(req: NextRequest) {
                 where: { id: accountId },
                 data: { balance: { increment: amount } },
               });
+              // Offline checkout can create the invoice after an earlier
+              // corporate payment was synced. Consume any unapplied payment
+              // against this newly-created invoice before leaving it open.
+              const corporateAccount = await tx.cityLedgerAccount.findUnique({
+                where: { id: accountId },
+                select: { type: true },
+              });
+              if (corporateAccount?.type === 'CORPORATE') {
+                await CityLedgerAccountingService.applyAvailableCorporateAdvance(tx, {
+                  propertyId,
+                  organizationId: property.organizationId,
+                  staffId: actorId,
+                  accountId,
+                  invoiceId: invoice.id,
+                  amount,
+                  currency: payload.currency || 'NGN',
+                  businessDate: postingBusinessDate,
+                });
+              }
               await tx.folio.update({
                 where: { id: targetFolioId },
                 data: {
@@ -3144,14 +3163,14 @@ export async function POST(req: NextRequest) {
               });
 
               // Safely construct double-entry GL inside the exact same sync transaction boundary
-              const property = await tx.property.findUnique({
+              const propertyForGl = await tx.property.findUnique({
                 where: { id: propertyId },
                 select: { organizationId: true }
               });
               await CityLedgerAccountingService.processCityLedgerRouting(
                 tx,
                 propertyId,
-                property?.organizationId || null,
+                propertyForGl?.organizationId || null,
                 actorId,
                 amount,
                 targetFolioId,
