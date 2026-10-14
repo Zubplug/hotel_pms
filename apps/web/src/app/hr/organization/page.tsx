@@ -13,6 +13,7 @@ import {
   TrendingUp,
   AlertCircle,
   CheckCircle2,
+  Pencil,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -28,6 +29,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 export default function OrganizationPage() {
   const [departments, setDepartments] = useState<any[]>([]);
   const [positions, setPositions] = useState<any[]>([]);
+  const [headCandidates, setHeadCandidates] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Modal States
@@ -37,7 +39,8 @@ export default function OrganizationPage() {
   const [submitting, setSubmitting] = useState(false);
 
   // Forms
-  const [deptForm, setDeptForm] = useState({ name: '', code: '', description: '' });
+  const [deptForm, setDeptForm] = useState({ name: '', code: '', description: '', headStaffId: '' });
+  const [editingDeptId, setEditingDeptId] = useState<string | null>(null);
   const [sectionForm, setSectionForm] = useState({ departmentId: '', name: '', code: '', description: '' });
   const [posForm, setPosForm] = useState({
     departmentId: '',
@@ -58,6 +61,7 @@ export default function OrganizationPage() {
         const data = await res.json();
         setDepartments(data.departments || []);
         setPositions(data.positions || []);
+        setHeadCandidates(data.headCandidates || []);
       }
     } catch (err) {
       console.error('Failed to load organization data', err);
@@ -70,23 +74,44 @@ export default function OrganizationPage() {
     fetchData();
   }, []);
 
-  const handleCreateDept = async (e: React.FormEvent) => {
+  const handleSaveDept = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
     try {
       const res = await fetch('/api/hr/organization', {
-        method: 'POST',
+        method: editingDeptId ? 'PATCH' : 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'DEPARTMENT', ...deptForm }),
+        body: JSON.stringify({
+          ...(editingDeptId ? { departmentId: editingDeptId } : { type: 'DEPARTMENT' }),
+          ...deptForm,
+        }),
       });
       if (res.ok) {
         setDeptModalOpen(false);
-        setDeptForm({ name: '', code: '', description: '' });
+        setDeptForm({ name: '', code: '', description: '', headStaffId: '' });
+        setEditingDeptId(null);
         fetchData();
       }
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const openNewDepartment = () => {
+    setEditingDeptId(null);
+    setDeptForm({ name: '', code: '', description: '', headStaffId: '' });
+    setDeptModalOpen(true);
+  };
+
+  const openEditDepartment = (dept: any) => {
+    setEditingDeptId(dept.id);
+    setDeptForm({
+      name: dept.name || '',
+      code: dept.code || '',
+      description: dept.description || '',
+      headStaffId: dept.headStaffId || '',
+    });
+    setDeptModalOpen(true);
   };
 
   const handleCreateSection = async (e: React.FormEvent) => {
@@ -156,7 +181,7 @@ export default function OrganizationPage() {
         <div className="flex items-center gap-2">
           <Button
             size="sm"
-            onClick={() => setDeptModalOpen(true)}
+            onClick={openNewDepartment}
             className="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs h-9 gap-1.5"
           >
             <Plus className="w-3.5 h-3.5" />
@@ -236,6 +261,15 @@ export default function OrganizationPage() {
                       <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-teal-500/10 text-teal-300 border border-teal-500/20">
                         {dept.code || 'DEPT'}
                       </span>
+                      <button
+                        type="button"
+                        onClick={() => openEditDepartment(dept)}
+                        className="text-xs font-semibold text-slate-400 flex items-center gap-1 hover:text-teal-300"
+                        title="Edit department"
+                      >
+                        <Pencil className="w-3 h-3" />
+                        Edit
+                      </button>
                       <span className="text-xs font-semibold text-slate-400 flex items-center gap-1">
                         <Users className="w-3.5 h-3.5 text-teal-400" />
                         {dept.headcount} staff
@@ -369,10 +403,10 @@ export default function OrganizationPage() {
           <DialogHeader>
             <DialogTitle className="text-sm font-bold text-white flex items-center gap-2">
               <Building2 className="w-4 h-4 text-teal-400" />
-              Add Department
+              {editingDeptId ? 'Edit Department' : 'Add Department'}
             </DialogTitle>
           </DialogHeader>
-          <form onSubmit={handleCreateDept} className="space-y-4 text-xs">
+          <form onSubmit={handleSaveDept} className="space-y-4 text-xs">
             <div>
               <label className="text-slate-400 block mb-1">Department Name *</label>
               <Input
@@ -401,12 +435,28 @@ export default function OrganizationPage() {
                 className="bg-slate-950 border-slate-800 text-slate-100 text-xs h-8"
               />
             </div>
+            <div>
+              <label className="text-slate-400 block mb-1">Department Head</label>
+              <select
+                value={deptForm.headStaffId}
+                onChange={(e) => setDeptForm({ ...deptForm, headStaffId: e.target.value })}
+                className="w-full bg-slate-950 border border-slate-800 text-slate-300 rounded-lg text-xs px-2.5 h-8 outline-none"
+              >
+                <option value="">Unassigned</option>
+                {headCandidates.map((staff) => (
+                  <option key={staff.id} value={staff.id}>
+                    {staff.firstName} {staff.lastName} · {staff.position || staff.department || staff.email}
+                  </option>
+                ))}
+              </select>
+              <p className="text-[10px] text-slate-500 mt-1">Only active employees assigned to this property are listed.</p>
+            </div>
             <DialogFooter className="pt-2">
-              <Button type="button" variant="outline" onClick={() => setDeptModalOpen(false)} className="border-slate-800 text-xs h-8">
+              <Button type="button" variant="outline" onClick={() => { setDeptModalOpen(false); setEditingDeptId(null); }} className="border-slate-800 text-xs h-8">
                 Cancel
               </Button>
               <Button type="submit" disabled={submitting} className="bg-teal-600 hover:bg-teal-500 text-white text-xs h-8">
-                {submitting ? 'Saving…' : 'Create Department'}
+                {submitting ? 'Saving…' : editingDeptId ? 'Save Changes' : 'Create Department'}
               </Button>
             </DialogFooter>
           </form>

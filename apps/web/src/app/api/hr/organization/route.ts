@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
     const propWhere: any = { organizationId };
     if (propertyId) propWhere.id = propertyId;
 
-    const [departments, positions, allStaff] = await Promise.all([
+    const [departments, positions, allStaff, headCandidates] = await Promise.all([
       prisma.department.findMany({
         where: {
           property: propWhere,
@@ -28,6 +28,9 @@ export async function GET(req: NextRequest) {
           },
           property: {
             select: { id: true, name: true },
+          },
+          headStaff: {
+            select: { id: true, firstName: true, lastName: true, email: true },
           },
         },
         orderBy: { name: 'asc' },
@@ -59,6 +62,26 @@ export async function GET(req: NextRequest) {
           position: true,
         },
       }),
+      prisma.staff.findMany({
+        where: {
+          organizationId,
+          ...(propertyId ? { propertyAccess: { has: propertyId } } : {}),
+          ...(authContext.role === 'DEPARTMENT_HEAD' && authContext.department
+            ? { department: authContext.department }
+            : {}),
+          isActive: true,
+          deletedAt: null,
+        },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          department: true,
+          position: true,
+        },
+        orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
+      }),
     ]);
 
     const formattedDepartments = departments.map((d) => {
@@ -70,7 +93,10 @@ export async function GET(req: NextRequest) {
         description: d.description,
         propertyName: d.property?.name,
         propertyId: d.propertyId,
-        headOfDept: null,
+        headOfDept: d.headStaff
+          ? `${d.headStaff.firstName} ${d.headStaff.lastName}`.trim() || d.headStaff.email
+          : null,
+        headStaffId: d.headStaffId,
         sectionsCount: d.sections.length,
         sections: d.sections,
         headcount,
@@ -97,6 +123,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       departments: formattedDepartments,
       positions: formattedPositions,
+      headCandidates,
     });
   } catch (error: any) {
     if (error.message?.includes('Forbidden') || error.message?.includes('Unauthorized')) {
@@ -121,8 +148,21 @@ export async function POST(req: NextRequest) {
     const { type } = body; // 'DEPARTMENT' | 'SECTION' | 'POSITION'
 
     if (type === 'DEPARTMENT') {
-      const { name, code, description } = body;
+      const { name, code, description, headStaffId } = body;
       if (!name) return NextResponse.json({ error: 'Department name is required' }, { status: 400 });
+
+      if (headStaffId) {
+        const head = await prisma.staff.findFirst({
+          where: {
+            id: headStaffId,
+            organizationId: authContext.organizationId,
+            propertyAccess: { has: propertyId },
+            isActive: true,
+            deletedAt: null,
+          },
+        });
+        if (!head) return NextResponse.json({ error: 'Department head not found in current property' }, { status: 404 });
+      }
 
       const dept = await prisma.department.create({
         data: {
@@ -130,6 +170,7 @@ export async function POST(req: NextRequest) {
           code: code ? code.trim().toUpperCase() : name.slice(0, 3).toUpperCase(),
           description: description?.trim() || null,
           propertyId,
+          headStaffId: headStaffId || null,
           isActive: true,
         },
       });
@@ -199,5 +240,52 @@ export async function POST(req: NextRequest) {
     }
     console.error('Failed to create org unit:', error);
     return NextResponse.json({ error: 'Failed to create organization unit' }, { status: 500 });
+  }
+}
+
+export async function PATCH(req: NextRequest) {
+  try {
+    const authContext = await HrAuthorizationService.resolveAuthContext(req);
+    HrAuthorizationService.assertPermission(authContext, 'hr.employee.manage');
+
+    const propertyId = authContext.propertyId;
+    if (!propertyId) return NextResponse.json({ error: 'Property ID required' }, { status: 400 });
+
+    const { departmentId, name, code, description, headStaffId } = await req.json();
+    if (!departmentId) return NextResponse.json({ error: 'Department ID is required' }, { status: 400 });
+
+    const department = await prisma.department.findFirst({ where: { id: departmentId, propertyId } });
+    if (!department) return NextResponse.json({ error: 'Department not found in current property' }, { status: 404 });
+
+    if (headStaffId) {
+      const head = await prisma.staff.findFirst({
+        where: {
+          id: headStaffId,
+          organizationId: authContext.organizationId,
+          propertyAccess: { has: propertyId },
+          isActive: true,
+          deletedAt: null,
+        },
+      });
+      if (!head) return NextResponse.json({ error: 'Department head not found in current property' }, { status: 404 });
+    }
+
+    const updated = await prisma.department.update({
+      where: { id: departmentId },
+      data: {
+        ...(name !== undefined ? { name: String(name).trim() } : {}),
+        ...(code !== undefined ? { code: code ? String(code).trim().toUpperCase() : null } : {}),
+        ...(description !== undefined ? { description: description ? String(description).trim() : null } : {}),
+        headStaffId: headStaffId || null,
+      },
+    });
+
+    return NextResponse.json({ success: true, data: updated });
+  } catch (error: any) {
+    if (error.message?.includes('Forbidden') || error.message?.includes('Unauthorized')) {
+      return NextResponse.json({ error: error.message }, { status: error.message.includes('Forbidden') ? 403 : 401 });
+    }
+    console.error('Failed to update department:', error);
+    return NextResponse.json({ error: 'Failed to update department' }, { status: 500 });
   }
 }
