@@ -57,7 +57,7 @@ export async function GET(req: NextRequest) {
     if (!context.propertyIds.includes(propertyId) && !(session.user as any).isSuperAdmin) return errorResponse('FORBIDDEN', 'Property access denied', 403);
 
     const businessDate = new Date(`${businessDateValue}T00:00:00.000Z`);
-    const [property, audit, rooms, snapshot, folioItems, posOrders, arrivals, departures, inHouseReservations, roomStatuses, payments, posPayments, posSessions, frontdeskSessions, attendance, rosters, housekeeping, openPosOrders, transactionExceptions, reconciliationExceptions, outstandingFolios, guestCredits, guestRefundEntries, corporateAccountRegistry, cityLedgerFolios, orphanCityLedgerFolioCount, cityLedgerItems, cityLedgerPayments, serviceRequests] = await Promise.all([
+    const [property, audit, rooms, snapshot, folioItems, posOrders, arrivals, departures, inHouseReservations, roomStatuses, payments, posPayments, posSessions, frontdeskSessions, attendance, rosters, housekeeping, openPosOrders, transactionExceptions, reconciliationExceptions, outstandingFolios, guestCredits, guestRefundEntries, corporateAccountRegistry, cityLedgerFolios, cityLedgerInvoices, orphanCityLedgerFolioCount, cityLedgerItems, cityLedgerPayments, serviceRequests] = await Promise.all([
       prisma.property.findUnique({ where: { id: propertyId }, select: { name: true, email: true, phone: true, address: true, city: true, state: true, baseCurrency: true, timezone: true } }),
       prisma.nightAudit.findUnique({ where: { propertyId_businessDate: { propertyId, businessDate } }, include: { financialSnapshot: true, closePackage: { select: { status: true, packageHash: true, finalizedAt: true, balanceProof: true, controlSummary: true } } } }),
       prisma.room.findMany({ where: { propertyId, isActive: true, deletedAt: null }, select: { id: true, number: true, status: true, roomType: { select: { name: true } } } }),
@@ -83,6 +83,7 @@ export async function GET(req: NextRequest) {
       prisma.cityLedgerEntry.findMany({ where: { propertyId, type: 'REFUND_OWED', status: 'OPEN' }, select: { amount: true, allocations: { select: { amount: true } } } }),
       prisma.corporateAccount.findMany({ where: { propertyId, isActive: true }, select: { name: true, code: true, creditLimit: true, exemptFromHighBalance: true, cityLedgerAccount: { select: { entries: { where: { type: 'PAYMENT', status: { not: 'REVERSED' } }, select: { amount: true, allocations: { select: { amount: true } } } } } } } }),
       prisma.folio.findMany({ where: { propertyId, type: 'CITY_LEDGER', status: { not: 'VOID' }, corporateAccountId: { not: null } }, select: { id: true, balance: true, totalCharges: true, totalPayments: true, corporateAccount: { select: { name: true, code: true, creditLimit: true, exemptFromHighBalance: true, cityLedgerAccount: { select: { balance: true } } } } } }),
+      prisma.cityLedgerInvoice.findMany({ where: { propertyId, status: { in: ['OPEN', 'PARTIALLY_PAID'] }, account: { CorporateAccount: { some: { isActive: true } } } }, select: { outstandingAmount: true, account: { select: { CorporateAccount: { where: { isActive: true }, select: { name: true, code: true, creditLimit: true, exemptFromHighBalance: true } } } } } }),
       prisma.folio.count({ where: { propertyId, type: 'CITY_LEDGER', status: { not: 'VOID' }, corporateAccountId: null } }),
       prisma.folioItem.findMany({ where: { businessDate, voidedAt: null, folio: { propertyId, type: 'CITY_LEDGER', status: { not: 'VOID' }, corporateAccountId: { not: null } } }, select: { type: true, amount: true, revenueCategory: true, description: true, folio: { select: { corporateAccount: { select: { name: true, code: true } } } } } }),
       prisma.payment.findMany({ where: { propertyId, businessDate, status: { in: ['COMPLETED', 'PARTIALLY_REFUNDED'] }, folio: { type: 'CITY_LEDGER', status: { not: 'VOID' }, corporateAccountId: { not: null } } }, select: { amount: true, method: true, folio: { select: { corporateAccount: { select: { name: true, code: true } } } } } }),
@@ -138,7 +139,7 @@ export async function GET(req: NextRequest) {
     const guestRefundLiability = guestRefundEntries.reduce((sum, entry) => sum + Math.max(0, money(entry.amount) - entry.allocations.reduce((allocated, allocation) => allocated + money(allocation.amount), 0)), 0);
     const cityLedgerSales = cityLedgerItems.filter((item) => item.type === 'CHARGE').reduce((sum, item) => sum + Math.max(0, money(item.amount)), 0);
     const cityLedgerSettlements = cityLedgerPayments.reduce((sum, payment) => sum + Math.max(0, money(payment.amount)), 0);
-    const cityLedgerBalance = cityLedgerFolios.reduce((sum, folio) => sum + Math.max(0, money(folio.balance)), 0);
+    const cityLedgerBalance = cityLedgerInvoices.reduce((sum, invoice) => sum + Math.max(0, money(invoice.outstandingAmount)), 0);
     const cityLedgerCredits = cityLedgerFolios.reduce((sum, folio) => sum + Math.max(0, -money(folio.balance)), 0);
     const corporateMap = new Map<string, { name: string; code: string; balance: number; ledgerBalance: number; advanceCredit: number; creditLimit: number; exemptFromHighBalance: boolean }>();
     for (const account of corporateAccountRegistry) {
@@ -152,6 +153,13 @@ export async function GET(req: NextRequest) {
       row.balance += money(folio.balance);
       row.ledgerBalance = money(account?.cityLedgerAccount?.balance);
       corporateMap.set(key, row);
+    }
+    for (const invoice of cityLedgerInvoices) {
+      const account = invoice.account.CorporateAccount[0];
+      if (!account) continue;
+      const row = corporateMap.get(account.code) || { name: account.name, code: account.code, balance: 0, ledgerBalance: 0, advanceCredit: 0, creditLimit: money(account.creditLimit), exemptFromHighBalance: Boolean(account.exemptFromHighBalance) };
+      row.balance += Math.max(0, money(invoice.outstandingAmount));
+      corporateMap.set(account.code, row);
     }
     const corporateAccounts = [...corporateMap.values()].map((row) => ({ ...row, balance: round(row.balance), ledgerBalance: round(row.ledgerBalance), advanceCredit: round(row.advanceCredit), amountDue: round(Math.max(0, row.balance)), creditBalance: round(Math.max(0, -row.balance)), unapplied: row.code === '—' && row.balance < 0, overLimit: !row.exemptFromHighBalance && row.creditLimit > 0 && row.balance > row.creditLimit })).sort((a, b) => b.balance - a.balance || b.advanceCredit - a.advanceCredit);
     const unappliedCityLedgerCredit = corporateAccounts.filter((row) => row.unapplied).reduce((sum, row) => sum + row.creditBalance, 0);
