@@ -4,6 +4,7 @@ import prisma from '@hotel-pms/db';
 import { requireOrganizationContext } from '@/lib/organization-access';
 import { assertPropertyAccess, ForbiddenError, NotFoundError } from '@/lib/property-access';
 import { DEFAULT_GUEST_AMENITY_PACK } from '@/lib/services/guest-amenity-service';
+import { hasEntitlement, requireEntitlement } from '@/lib/auth/entitlement';
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -31,7 +32,7 @@ export async function GET(_request: NextRequest, { params }: Params) {
     const { id: propertyId } = await params;
     // Loading the settings is read-only. Write privileges are checked by PUT.
     await authorize(propertyId, false);
-    const property = await prisma.property.findUnique({ where: { id: propertyId }, select: { settings: true, baseCurrency: true } });
+    const property = await prisma.property.findUnique({ where: { id: propertyId }, select: { organizationId: true, settings: true, baseCurrency: true } });
     if (!property) throw new NotFoundError('Property not found');
     const warehouses = await prisma.warehouse.findMany({ where: { propertyId, isActive: true }, orderBy: { name: 'asc' }, select: { id: true, name: true, isActive: true } });
     const stockItems = await prisma.stockItem.findMany({
@@ -42,6 +43,7 @@ export async function GET(_request: NextRequest, { params }: Params) {
     const settings = (property.settings as any) || {};
     return NextResponse.json({
       guestAmenities: settings.guestAmenities || { enabled: true, items: DEFAULT_GUEST_AMENITY_PACK },
+      featureAvailable: await hasEntitlement(property.organizationId, 'MODULE_OPERATIONS', propertyId),
       warehouses,
       stockItems: stockItems.map((item) => ({ ...item, costPrice: Number(item.costPrice), quantityOnHand: Number(item.quantityOnHand) })),
       baseCurrency: property.baseCurrency || 'NGN',
@@ -55,7 +57,13 @@ export async function GET(_request: NextRequest, { params }: Params) {
 export async function PUT(request: NextRequest, { params }: Params) {
   try {
     const { id: propertyId } = await params;
-    await authorize(propertyId, true);
+    const session = await authorize(propertyId, true);
+    const ctx = await requireOrganizationContext(session.user.id);
+    try {
+      await requireEntitlement(ctx.organizationId, 'MODULE_OPERATIONS', propertyId);
+    } catch {
+      return NextResponse.json({ error: 'Complimentary guest amenities with inventory tracking require the Professional plan or higher.' }, { status: 402 });
+    }
     const body = await request.json();
     const incoming = body?.guestAmenities;
     if (!incoming || typeof incoming !== 'object' || !Array.isArray(incoming.items)) {

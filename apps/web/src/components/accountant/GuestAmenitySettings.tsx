@@ -15,6 +15,7 @@ export function GuestAmenitySettings({ propertyId }: { propertyId: string }) {
   const [warehouses, setWarehouses] = useState<any[]>([]);
   const [stockItems, setStockItems] = useState<StockItem[]>([]);
   const [items, setItems] = useState<Amenity[]>([]);
+  const [featureAvailable, setFeatureAvailable] = useState(true);
 
   const normalize = (value: string) => value.trim().toLowerCase().replace(/\s+/g, ' ');
 
@@ -28,6 +29,7 @@ export function GuestAmenitySettings({ propertyId }: { propertyId: string }) {
         setWarehouses(housekeeping);
         setStockItems(body.stockItems || []);
         const configured = body.guestAmenities || {};
+        setFeatureAvailable(body.featureAvailable !== false);
         setEnabled(configured.enabled !== false);
         const selectedWarehouseId = configured.warehouseId || housekeeping[0]?.id || '';
         setWarehouseId(selectedWarehouseId);
@@ -61,6 +63,8 @@ export function GuestAmenitySettings({ propertyId }: { propertyId: string }) {
   };
 
   if (loading) return <div className="flex h-48 items-center justify-center rounded-xl border border-white/10 bg-white/[.03]"><Loader2 className="h-5 w-5 animate-spin text-emerald-400" /></div>;
+
+  if (!featureAvailable) return <div className="rounded-xl border border-amber-400/20 bg-amber-400/5 p-5"><h2 className="text-xl font-semibold text-white">Complimentary Guest Amenities</h2><p className="mt-2 text-sm text-slate-400">Inventory-backed complimentary guest amenities are available on the Professional plan or higher. This property will continue using the normal complimentary flow.</p></div>;
 
   return <div className="space-y-5 rounded-xl border border-white/10 bg-white/[.03] p-5">
     <div className="flex items-start justify-between gap-4">

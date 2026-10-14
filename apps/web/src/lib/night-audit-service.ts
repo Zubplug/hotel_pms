@@ -5,6 +5,7 @@ import { TenantContext } from './organization-access';
 import { postEventInvoiceRevenue } from './events/event-revenue-accounting';
 import { computeRateBreakdown, resolveBreakdownConfig } from '@/lib/room-rate-breakdown';
 import { getGuestAmenityAuditControl } from '@/lib/services/guest-amenity-service';
+import { hasEntitlement } from '@/lib/auth/entitlement';
 
 export async function getOperationalReview(ctx: TenantContext, propertyId: string) {
   if (!ctx.propertyIds.includes(propertyId)) throw new Error('FORBIDDEN');
@@ -383,6 +384,7 @@ export async function getFinancialAudit(ctx: TenantContext, propertyId: string) 
   if (!ctx.propertyIds.includes(propertyId)) throw new Error('FORBIDDEN');
   const property = await prisma.property.findUnique({ where: { id: propertyId } });
   if (!property) throw new Error('NOT_FOUND:Property not found');
+  const professionalOperationsEnabled = await hasEntitlement(property.organizationId, 'MODULE_OPERATIONS', propertyId);
   const businessDate = property.businessDate ?? getPropertyBusinessDate(property.timezone, new Date());
 
   const openFolios = await prisma.folio.findMany({
@@ -597,7 +599,11 @@ export async function getFinancialAudit(ctx: TenantContext, propertyId: string) 
     // Match executeNightAudit: the original gross is decomposed and any
     // approved concession is posted separately as a contra-revenue line.
     const effectiveGross = discount > 0 ? gross : Math.max(0, gross - discount);
-    const breakdownConfig = resolveBreakdownConfig((property.settings as any) || {});
+    const savedBreakdownConfig = resolveBreakdownConfig((property.settings as any) || {});
+    const breakdownConfig = {
+      ...savedBreakdownConfig,
+      enabled: savedBreakdownConfig.enabled && professionalOperationsEnabled,
+    };
     // Only a linked corporate account makes this a corporate stay. A
     // reservation can use a rate plan labelled CORPORATE while still having
     // a normal room folio; that must not suppress complimentary food.

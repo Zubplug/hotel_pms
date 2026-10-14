@@ -9,6 +9,7 @@ import { postNightAuditJournal, buildNightAuditBalanceProof } from './night-audi
 import { processLeaseBilling } from './events/lease-actions';
 import { resolveBreakdownConfig, computeRateBreakdown } from './room-rate-breakdown';
 import { postGuestAmenityPackInTransaction } from './services/guest-amenity-service';
+import { hasEntitlement } from '@/lib/auth/entitlement';
 
 const BATCH_SIZE = 50;
 
@@ -60,6 +61,7 @@ export async function executeNightAudit(
   if (!property) throw new Error('NOT_FOUND:Property not found');
 
   const propertyBusinessDate = property.businessDate ?? getPropertyBusinessDate(property.timezone, new Date());
+  const professionalOperationsEnabled = await hasEntitlement(property.organizationId, 'MODULE_OPERATIONS', propertyId);
   if (propertyBusinessDate.getTime() > getPropertyBusinessDate(property.timezone, new Date()).getTime()) {
     throw new Error('BLOCKER:Cannot execute audit. The business date is in the future. Today\'s audit has already been completed.');
   }
@@ -526,7 +528,11 @@ export async function executeNightAudit(
               // ── Room Rate Breakdown (VAT + SC + Complimentary Breakfast Allocation) ──
               // Read the accountant-configured breakdown from property settings.
               // The gross room charge is decomposed into four GL-mapped components.
-              const breakdownConfig = resolveBreakdownConfig((property as any).settings);
+              const savedBreakdownConfig = resolveBreakdownConfig((property as any).settings);
+              const breakdownConfig = {
+                ...savedBreakdownConfig,
+                enabled: savedBreakdownConfig.enabled && professionalOperationsEnabled,
+              };
               const roomTypeName = activeRoom?.room?.roomType?.name || activeRoom?.roomTypeId || undefined;
               const isDiscountedStay = discountDeduction > 0 || Boolean(verifiedComplimentary);
               // A rate plan's type is not proof that this reservation is
@@ -740,14 +746,19 @@ export async function executeNightAudit(
           // consumed from housekeeping/laundry stock at the current cost.
           // This remains in the same reservation transaction and is idempotent
           // per reservation, business date, and stock item.
-          await postGuestAmenityPackInTransaction(tx, {
-            propertyId,
-            reservationId: reservation.id,
-            roomId: activeRoom?.roomId || null,
-            businessDate,
-            guestCount: Math.max(1, Number(reservation.adults || 0) + Number(reservation.children || 0)),
-            actorId,
-          });
+          // Stock-backed complimentary amenities are only available to
+          // Professional Operations properties. Starter properties retain
+          // the normal complimentary flow and do not consume inventory here.
+          if (professionalOperationsEnabled) {
+            await postGuestAmenityPackInTransaction(tx, {
+              propertyId,
+              reservationId: reservation.id,
+              roomId: activeRoom?.roomId || null,
+              businessDate,
+              guestCount: Math.max(1, Number(reservation.adults || 0) + Number(reservation.children || 0)),
+              actorId,
+            });
+          }
 
           // Generate Housekeeping Tasks Idempotently. Housekeeping is best
           // effort: a task conflict or room update failure must not roll back

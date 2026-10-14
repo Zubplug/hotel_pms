@@ -1,4 +1,5 @@
 import prisma from '@hotel-pms/db';
+import { hasEntitlement } from '@/lib/auth/entitlement';
 
 export type AmenityDefinition = {
   key: string;
@@ -58,9 +59,28 @@ export function resolveGuestAmenityDefinitions(settings: any): AmenityDefinition
 export async function getGuestAmenityAuditControl(propertyId: string, businessDate: Date) {
   const property = await prisma.property.findUnique({
     where: { id: propertyId },
-    select: { settings: true, baseCurrency: true },
+    select: { organizationId: true, settings: true, baseCurrency: true },
   });
   if (!property) throw new Error('NOT_FOUND:Property not found');
+
+  // Complimentary stock-backed amenities are a Professional Operations
+  // feature. Properties on Starter (or without an active Operations module)
+  // continue through the normal complimentary/front-desk flow.
+  if (!(await hasEntitlement(property.organizationId, 'MODULE_OPERATIONS', propertyId))) {
+    return {
+      enabled: false,
+      warehouse: null,
+      guestCount: 0,
+      perGuestCost: 0,
+      estimatedCost: 0,
+      items: [],
+      missingItems: [],
+      shortages: [],
+      zeroCostItems: [],
+      blockers: [],
+      currency: property.baseCurrency || 'NGN',
+    };
+  }
 
   const settings = (property.settings || {}) as any;
   const guestAmenities = settings.guestAmenities || {};

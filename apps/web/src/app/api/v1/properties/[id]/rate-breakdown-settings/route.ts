@@ -3,6 +3,7 @@ import { prisma } from '@hotel-pms/db';
 import { auth } from '@/lib/auth';
 import { requireOrganizationContext } from '@/lib/organization-access';
 import { resolveBreakdownConfig, RoomRateBreakdownConfig } from '@/lib/room-rate-breakdown';
+import { hasEntitlement, requireEntitlement } from '@/lib/auth/entitlement';
 
 export async function GET(
   req: NextRequest,
@@ -22,7 +23,7 @@ export async function GET(
 
     const property = await prisma.property.findUnique({
       where: { id: propertyId },
-      select: { id: true, name: true, settings: true, baseCurrency: true },
+      select: { id: true, name: true, organizationId: true, settings: true, baseCurrency: true },
     });
 
     if (!property) {
@@ -30,7 +31,11 @@ export async function GET(
     }
 
     const config = resolveBreakdownConfig(property.settings as any);
-    return NextResponse.json({ config, baseCurrency: property.baseCurrency || 'NGN' });
+    return NextResponse.json({
+      config,
+      baseCurrency: property.baseCurrency || 'NGN',
+      featureAvailable: await hasEntitlement(property.organizationId, 'MODULE_OPERATIONS', propertyId),
+    });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
@@ -50,6 +55,12 @@ export async function PUT(
     const ctx = await requireOrganizationContext((session.user as any).id);
     if (!ctx.propertyIds.includes(propertyId)) {
       return NextResponse.json({ error: 'Forbidden: Unauthorized property access' }, { status: 403 });
+    }
+
+    try {
+      await requireEntitlement(ctx.organizationId, 'MODULE_OPERATIONS', propertyId);
+    } catch {
+      return NextResponse.json({ error: 'Room rate breakdown and food allocation require the Professional plan or higher.' }, { status: 402 });
     }
 
     // Role / Permission check: Only finance/accounting or managerial roles can alter GL rate breakdown settings

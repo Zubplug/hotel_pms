@@ -96,6 +96,7 @@ export function RoomRateBreakdownSettings({ propertyId }: Props) {
     perGuestCost: 0,
     referenceCostItems: [],
   });
+  const [featureAvailable, setFeatureAvailable] = useState(true);
 
   useEffect(() => {
     async function loadSettings() {
@@ -118,6 +119,7 @@ export function RoomRateBreakdownSettings({ propertyId }: Props) {
         if (data.config) {
           setConfig(data.config);
         }
+        setFeatureAvailable(data.featureAvailable !== false);
         if (data.baseCurrency) {
           setCurrency(data.baseCurrency);
         }
@@ -177,6 +179,10 @@ export function RoomRateBreakdownSettings({ propertyId }: Props) {
         <RefreshCw className="h-6 w-6 animate-spin text-emerald-400" />
       </div>
     );
+  }
+
+  if (!featureAvailable) {
+    return <div className="rounded-2xl border border-amber-400/20 bg-amber-400/5 p-6"><h2 className="text-xl font-semibold text-white">Room Rate Breakdown &amp; Food Allocation</h2><p className="mt-2 text-sm text-slate-400">This Professional feature is not enabled for this property. The property will continue using the normal room-rate and food flow.</p></div>;
   }
 
   return (
