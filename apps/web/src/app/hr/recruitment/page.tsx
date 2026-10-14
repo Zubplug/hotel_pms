@@ -42,6 +42,7 @@ export default function RecruitmentPage() {
   const [vacancies, setVacancies] = useState<any[]>([]);
   const [applicants, setApplicants] = useState<any[]>([]);
   const [departments, setDepartments] = useState<any[]>([]);
+  const [role, setRole] = useState('');
   const [loading, setLoading] = useState(true);
 
   const [selectedVacancy, setSelectedVacancy] = useState<string>('ALL');
@@ -83,6 +84,7 @@ export default function RecruitmentPage() {
         const recData = await recRes.json();
         setVacancies(recData.vacancies || []);
         setApplicants(recData.applicants || []);
+        setRole(recData.role || '');
       }
       if (orgRes.ok) {
         const orgData = await orgRes.json();
@@ -94,6 +96,17 @@ export default function RecruitmentPage() {
       setLoading(false);
     }
   };
+
+  const reviewRequisition = async (requisitionId: string, action: 'APPROVE_REQUISITION' | 'REJECT_REQUISITION') => {
+    const reason = action === 'REJECT_REQUISITION' ? window.prompt('Reason for rejecting this requisition (minimum 10 characters):') : undefined;
+    if (action === 'REJECT_REQUISITION' && (!reason || reason.trim().length < 10)) return;
+    const res = await fetch('/api/hr/recruitment', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, requisitionId, reason }) });
+    const data = await res.json();
+    if (!res.ok) return alert(data.error || 'Unable to review requisition');
+    fetchData();
+  };
+
+  const canApproveRequisition = ['GENERAL_MANAGER', 'HOTEL_MANAGER', 'CEO', 'ADMIN', 'SUPER_ADMIN', 'OWNER'].includes(role);
 
   useEffect(() => {
     fetchData();
@@ -335,17 +348,10 @@ export default function RecruitmentPage() {
 
               <div className="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
                 <span>{v.applicantsCount} Applicants</span>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => {
-                    setSelectedVacancy(v.id);
-                    setActiveTab('pipeline');
-                  }}
-                  className="text-teal-400 hover:text-teal-300 text-xs h-7"
-                >
-                  View Pipeline &rarr;
-                </Button>
+                <div className="flex items-center gap-1">
+                  {canApproveRequisition && v.requisitionStatus === 'PENDING_APPROVAL' && <><Button size="sm" onClick={() => void reviewRequisition(v.requisitionId, 'APPROVE_REQUISITION')} className="h-7 bg-emerald-600 px-2 text-[10px] hover:bg-emerald-500">Approve</Button><Button size="sm" variant="outline" onClick={() => void reviewRequisition(v.requisitionId, 'REJECT_REQUISITION')} className="h-7 border-rose-400/30 px-2 text-[10px] text-rose-300">Reject</Button></>}
+                  <Button size="sm" variant="ghost" onClick={() => { setSelectedVacancy(v.id); setActiveTab('pipeline'); }} className="text-teal-400 hover:text-teal-300 text-xs h-7">View Pipeline &rarr;</Button>
+                </div>
               </div>
             </div>
           ))}

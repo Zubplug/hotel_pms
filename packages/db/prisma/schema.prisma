@@ -7658,8 +7658,10 @@ model JobRequisition {
   salaryMax      Decimal? @db.Decimal(18, 4)
 
   status     String    @default("PENDING_APPROVAL") // DRAFT | PENDING_APPROVAL | APPROVED | REJECTED | CLOSED
+  createdBy  String?   @db.Uuid
   approvedBy String?   @db.Uuid
   approvedAt DateTime? @db.Timestamptz
+  rejectionReason String?
 
   vacancies JobVacancy[]
 
@@ -7792,6 +7794,10 @@ model EmployeeLoan {
   status     String    @default("ACTIVE") // PENDING | ACTIVE | FULLY_PAID | WRITTEN_OFF
   approvedBy String?   @db.Uuid
   approvedAt DateTime? @db.Timestamptz
+  requestedBy String?  @db.Uuid
+  rejectedBy String?   @db.Uuid
+  rejectedAt DateTime? @db.Timestamptz
+  rejectionReason String?
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
@@ -7826,6 +7832,10 @@ model SalaryAdvance {
   status     String    @default("PENDING") // PENDING | APPROVED | DEDUCTED | REJECTED
   approvedBy String?   @db.Uuid
   approvedAt DateTime? @db.Timestamptz
+  requestedBy String?  @db.Uuid
+  rejectedBy String?   @db.Uuid
+  rejectedAt DateTime? @db.Timestamptz
+  rejectionReason String?
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz

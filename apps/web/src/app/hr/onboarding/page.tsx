@@ -71,11 +71,16 @@ export default function OnboardingPage() {
         prev.map((t) => (t.id === taskId ? { ...t, isCompleted: !currentStatus } : t))
       );
 
-      await fetch('/api/hr/onboarding', {
+      const response = await fetch('/api/hr/onboarding', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'TOGGLE_TASK', taskId, isCompleted: !currentStatus }),
       });
+      if (!response.ok) {
+        fetchData();
+        const data = await response.json().catch(() => ({}));
+        window.alert(data.error || 'Unable to update onboarding task');
+      }
     } catch (err) {
       console.error('Failed to toggle task', err);
       fetchData();

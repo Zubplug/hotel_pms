@@ -528,9 +528,9 @@ export async function POST(
       });
 
       if (!period) return NextResponse.json({ error: 'Payroll batch not found' }, { status: 404 });
-      if (period.status !== 'PAID') {
+      if (!['PROCESSING', 'PAID'].includes(period.status)) {
         return NextResponse.json(
-          { error: `Cannot record payment settlement for batch in status [${period.status}]. Must be posted to GL first.` },
+          { error: `Cannot record payment settlement for batch in status [${period.status}]. The batch must be posted to the GL and awaiting settlement.` },
           { status: 400 }
         );
       }
@@ -541,6 +541,17 @@ export async function POST(
           paymentStatus: 'SETTLED',
           settlementRef,
         });
+      }
+
+      const payoutStatuses = await prisma.payrollPayout.findMany({
+        where: { payrollPeriodId: id },
+        select: { status: true },
+      });
+      if (payoutStatuses.some((payout) => ['QUEUED', 'PROCESSING', 'SUCCESSFUL'].includes(payout.status))) {
+        return NextResponse.json(
+          { error: 'Provider payroll payouts are still active. Reconcile the provider payouts before recording a manual bank settlement.' },
+          { status: 409 }
+        );
       }
 
       const existingTrail = Array.isArray(period.approvalTrail) ? (period.approvalTrail as any[]) : [];

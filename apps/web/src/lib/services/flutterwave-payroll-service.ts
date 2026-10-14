@@ -146,10 +146,10 @@ export async function reconcileFlutterwavePayout(payoutId: string) {
 
 export async function settlePeriodIfComplete(payrollPeriodId: string) {
   const [period, payouts] = await Promise.all([
-    prisma.payrollPeriod.findUnique({ where: { id: payrollPeriodId }, select: { id: true, paymentStatus: true } }),
+    prisma.payrollPeriod.findUnique({ where: { id: payrollPeriodId }, select: { id: true, status: true, paymentStatus: true } }),
     prisma.payrollPayout.findMany({ where: { payrollPeriodId }, select: { status: true } }),
   ]);
-  if (!period || !payouts.length) return;
+  if (!period || period.status !== 'PROCESSING' || !payouts.length) return;
   if (payouts.every(payout => payout.status === 'SUCCESSFUL')) {
     await prisma.$transaction([
       prisma.payrollPeriod.update({ where: { id: payrollPeriodId }, data: { paymentStatus: 'SETTLED', paymentDate: new Date(), status: 'PAID' } }),

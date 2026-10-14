@@ -50,6 +50,9 @@ export default function PerformancePage() {
     provider: '',
     startDate: new Date().toISOString().split('T')[0],
     score: '90',
+    expiresAt: '',
+    certificateUrl: '',
+    isMandatory: false,
   });
 
   const fetchData = async () => {
@@ -465,6 +468,11 @@ export default function PerformancePage() {
                 />
               </div>
             </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className="text-slate-400 block mb-1">Certificate expiry</label><Input type="date" value={trainingForm.expiresAt} onChange={(e) => setTrainingForm({ ...trainingForm, expiresAt: e.target.value })} className="bg-slate-950 border-slate-800 text-slate-100 text-xs h-8" /></div>
+              <div><label className="text-slate-400 block mb-1">Certificate URL</label><Input placeholder="https://…" value={trainingForm.certificateUrl} onChange={(e) => setTrainingForm({ ...trainingForm, certificateUrl: e.target.value })} className="bg-slate-950 border-slate-800 text-slate-100 text-xs h-8" /></div>
+            </div>
+            <label className="flex items-center gap-2 text-slate-300"><input type="checkbox" checked={trainingForm.isMandatory} onChange={(e) => setTrainingForm({ ...trainingForm, isMandatory: e.target.checked })} /> Mandatory compliance training</label>
             <DialogFooter className="pt-2">
               <Button type="button" variant="outline" onClick={() => setTrainingModalOpen(false)} className="border-slate-800 text-xs h-8">
                 Cancel

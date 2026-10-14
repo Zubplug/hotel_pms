@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { randomUUID } from 'crypto';
 import prisma from '@hotel-pms/db';
 import { HrAuthorizationService } from '@/lib/services/hr-authorization-service';
 
@@ -98,8 +99,10 @@ export async function POST(req: NextRequest) {
         data: {
           isCompleted,
           completedAt: isCompleted ? new Date() : null,
+          verifiedBy: isCompleted ? authContext.userId : null,
         },
       });
+      await prisma.auditLog.create({ data: { organizationId, propertyId, userId: authContext.userId, action: isCompleted ? 'HR_ONBOARDING_TASK_COMPLETED' : 'HR_ONBOARDING_TASK_REOPENED', resource: 'OnboardingTask', resourceId: taskId, requestId: randomUUID(), newValue: { isCompleted } } });
       return NextResponse.json({ success: true, data: updated });
     }
 
@@ -120,6 +123,9 @@ export async function POST(req: NextRequest) {
       if (!targetStaff) {
         return NextResponse.json({ error: 'Staff member not found or inaccessible in property' }, { status: 404 });
       }
+
+      const existingTasks = await prisma.onboardingTask.count({ where: { staffId } });
+      if (existingTasks > 0) return NextResponse.json({ error: 'This employee already has an onboarding checklist.' }, { status: 409 });
 
       const standardTasks = [
         { title: 'Submit NIN, BVN & State Tax ID', category: 'COMPLIANCE', description: 'Statutory identity verification' },

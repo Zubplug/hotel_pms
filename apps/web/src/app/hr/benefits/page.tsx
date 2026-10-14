@@ -27,6 +27,7 @@ export default function BenefitsPage() {
   const [loans, setLoans] = useState<any[]>([]);
   const [advances, setAdvances] = useState<any[]>([]);
   const [employees, setEmployees] = useState<any[]>([]);
+  const [role, setRole] = useState('');
   const [loading, setLoading] = useState(true);
 
   // Modals
@@ -60,6 +61,7 @@ export default function BenefitsPage() {
         const data = await benRes.json();
         setLoans(data.loans || []);
         setAdvances(data.advances || []);
+        setRole(data.role || '');
       }
       if (empRes.ok) {
         const empData = await empRes.json();
@@ -71,6 +73,27 @@ export default function BenefitsPage() {
       setLoading(false);
     }
   };
+
+  const updateRequest = async (id: string, action: string) => {
+    let reason: string | undefined;
+    if (action.startsWith('REJECT')) {
+      reason = window.prompt('Enter a detailed rejection reason (minimum 10 characters):') || undefined;
+      if (!reason?.trim() || reason.trim().length < 10) return;
+    }
+    const res = await fetch('/api/hr/benefits', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, action, reason }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      window.alert(data.error || 'Unable to update request');
+      return;
+    }
+    fetchData();
+  };
+
+  const canApprove = ['GENERAL_MANAGER', 'HOTEL_MANAGER', 'CEO', 'ADMIN', 'SUPER_ADMIN', 'OWNER', 'FINANCIAL_CONTROLLER'].includes(role);
 
   useEffect(() => {
     fetchData();
@@ -202,16 +225,17 @@ export default function BenefitsPage() {
                     <th className="py-3 px-4">Tenor</th>
                     <th className="py-3 px-4">Reason</th>
                     <th className="py-3 px-4">Status</th>
+                    <th className="py-3 px-4">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/60">
                   {loading ? (
                     <tr>
-                      <td colSpan={7} className="py-10 text-center text-slate-500">Loading loan records…</td>
+                      <td colSpan={8} className="py-10 text-center text-slate-500">Loading loan records…</td>
                     </tr>
                   ) : loans.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="py-10 text-center text-slate-500">No active loans on file.</td>
+                      <td colSpan={8} className="py-10 text-center text-slate-500">No loan requests on file.</td>
                     </tr>
                   ) : (
                     loans.map((l) => (
@@ -226,9 +250,13 @@ export default function BenefitsPage() {
                         <td className="py-3 px-4">{l.tenorMonths} months</td>
                         <td className="py-3 px-4 text-slate-400">{l.reason}</td>
                         <td className="py-3 px-4">
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${l.status === 'PENDING' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : l.status === 'REJECTED' ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'}`}>
                             {l.status}
                           </span>
+                        </td>
+                        <td className="py-3 px-4">
+                          {canApprove && l.status === 'PENDING' && <div className="flex gap-1.5"><Button size="sm" onClick={() => void updateRequest(l.id, 'APPROVE_LOAN')} className="h-7 bg-emerald-600 px-2 text-[10px] hover:bg-emerald-500">Approve</Button><Button size="sm" variant="outline" onClick={() => void updateRequest(l.id, 'REJECT_LOAN')} className="h-7 border-rose-400/30 px-2 text-[10px] text-rose-300">Reject</Button></div>}
+                          {l.rejectionReason && <p className="mt-1 max-w-40 text-[10px] text-rose-300">{l.rejectionReason}</p>}
                         </td>
                       </tr>
                     ))
@@ -252,12 +280,13 @@ export default function BenefitsPage() {
                     <th className="py-3 px-4">Reason</th>
                     <th className="py-3 px-4">Status</th>
                     <th className="py-3 px-4">Request Date</th>
+                    <th className="py-3 px-4">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/60">
                   {advances.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="py-10 text-center text-slate-500">No salary advances requested.</td>
+                      <td colSpan={7} className="py-10 text-center text-slate-500">No salary advances requested.</td>
                     </tr>
                   ) : (
                     advances.map((a) => (
@@ -267,11 +296,15 @@ export default function BenefitsPage() {
                         <td className="py-3 px-4 font-mono font-bold text-amber-400">₦{a.amount?.toLocaleString()}</td>
                         <td className="py-3 px-4 text-slate-300">{a.reason}</td>
                         <td className="py-3 px-4">
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${a.status === 'PENDING' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : a.status === 'REJECTED' ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'}`}>
                             {a.status}
                           </span>
                         </td>
                         <td className="py-3 px-4 text-slate-500">{new Date(a.createdAt).toLocaleDateString()}</td>
+                        <td className="py-3 px-4">
+                          {canApprove && a.status === 'PENDING' && <div className="flex gap-1.5"><Button size="sm" onClick={() => void updateRequest(a.id, 'APPROVE_ADVANCE')} className="h-7 bg-emerald-600 px-2 text-[10px] hover:bg-emerald-500">Approve</Button><Button size="sm" variant="outline" onClick={() => void updateRequest(a.id, 'REJECT_ADVANCE')} className="h-7 border-rose-400/30 px-2 text-[10px] text-rose-300">Reject</Button></div>}
+                          {a.rejectionReason && <p className="mt-1 max-w-40 text-[10px] text-rose-300">{a.rejectionReason}</p>}
+                        </td>
                       </tr>
                     ))
                   )}

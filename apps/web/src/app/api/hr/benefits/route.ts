@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { randomUUID } from 'crypto';
 import prisma from '@hotel-pms/db';
 import { HrAuthorizationService } from '@/lib/services/hr-authorization-service';
 
@@ -16,7 +17,7 @@ export async function GET(req: NextRequest) {
     if (authContext.role === 'DEPARTMENT_HEAD' && authContext.department) staffWhere.department = authContext.department;
     if (!canViewAllBenefits) staffWhere.userId = authContext.userId;
 
-    const [loans, advances, claims] = await Promise.all([
+    const [loans, advances] = await Promise.all([
       prisma.employeeLoan.findMany({
         where: { staff: staffWhere },
         include: {
@@ -27,15 +28,6 @@ export async function GET(req: NextRequest) {
         orderBy: { createdAt: 'desc' },
       }),
       prisma.salaryAdvance.findMany({
-        where: { staff: staffWhere },
-        include: {
-          staff: {
-            select: { id: true, userId: true, firstName: true, lastName: true, department: true, position: true },
-          },
-        },
-        orderBy: { createdAt: 'desc' },
-      }),
-      prisma.expenseClaim.findMany({
         where: { staff: staffWhere },
         include: {
           staff: {
@@ -59,6 +51,10 @@ export async function GET(req: NextRequest) {
         tenorMonths: l.termMonths,
         reason: l.reason,
         status: l.status,
+        requestedBy: l.requestedBy,
+        approvedBy: l.approvedBy,
+        approvedAt: l.approvedAt,
+        rejectionReason: l.rejectionReason,
         createdAt: l.createdAt,
       })),
       advances: advances.map((a) => ({
@@ -69,19 +65,14 @@ export async function GET(req: NextRequest) {
         amount: authContext.canViewSensitive || a.staff.userId === authContext.userId ? Number(a.amount) : null,
         reason: a.reason,
         status: a.status,
+        requestedBy: a.requestedBy,
+        approvedBy: a.approvedBy,
+        approvedAt: a.approvedAt,
+        rejectionReason: a.rejectionReason,
         createdAt: a.createdAt,
       })),
-      claims: claims.map((c) => ({
-        id: c.id,
-        staffId: c.staffId,
-        staffName: `${c.staff.firstName || ''} ${c.staff.lastName || ''}`.trim(),
-        department: c.staff.department,
-        category: c.category,
-        amount: authContext.canViewSensitive || c.staff.userId === authContext.userId ? Number(c.amount) : null,
-        description: c.description,
-        status: c.status,
-        createdAt: c.createdAt,
-      })),
+      role: authContext.role,
+      canApprove: ['GENERAL_MANAGER', 'HOTEL_MANAGER', 'CEO', 'ADMIN', 'SUPER_ADMIN', 'OWNER', 'FINANCIAL_CONTROLLER'].includes(authContext.role),
     });
   } catch (error: any) {
     if (error.message?.includes('Forbidden') || error.message?.includes('Unauthorized')) {
@@ -107,7 +98,7 @@ export async function POST(req: NextRequest) {
 
       // Verify staff belongs to tenant
       const staff = await prisma.staff.findFirst({
-        where: HrAuthorizationService.staffScope(authContext, { id: staffId }),
+        where: HrAuthorizationService.staffScope(authContext, { id: staffId, isActive: true, deletedAt: null }),
       });
       if (!staff) {
         return NextResponse.json({ error: 'Staff member not found or inaccessible' }, { status: 404 });
@@ -118,8 +109,7 @@ export async function POST(req: NextRequest) {
       if (principal <= 0 || termMonths < 1 || termMonths > 60) return NextResponse.json({ error: 'Enter a valid loan amount and repayment term' }, { status: 400 });
       if (!canManage && staff.userId !== authContext.userId) return NextResponse.json({ error: 'Employees may only apply for themselves' }, { status: 403 });
       const monthlyDeduction = Math.round((principal / termMonths) * 100) / 100;
-      const loanCount = await prisma.employeeLoan.count();
-      const loanNumber = `LN-${String(loanCount + 1).padStart(5, '0')}`;
+      const loanNumber = `LN-${Date.now().toString(36).toUpperCase()}-${randomUUID().slice(0, 6).toUpperCase()}`;
       const targetPropertyId = propertyId || staff.propertyAccess[0];
 
       if (!targetPropertyId) {
@@ -137,9 +127,8 @@ export async function POST(req: NextRequest) {
           monthlyDeduction,
           disbursementDate: new Date(),
           reason: reason?.trim() || 'Staff assistance loan',
-          status: canManage ? 'ACTIVE' : 'PENDING',
-          approvedBy: canManage ? authContext.userId : null,
-          approvedAt: canManage ? new Date() : null,
+          status: 'PENDING',
+          requestedBy: authContext.userId,
         },
       });
       return NextResponse.json({ success: true, data: loan }, { status: 201 });
@@ -148,7 +137,7 @@ export async function POST(req: NextRequest) {
     if (action === 'CREATE_ADVANCE') {
       const { staffId, amount, reason } = body;
       const staff = await prisma.staff.findFirst({
-        where: HrAuthorizationService.staffScope(authContext, { id: staffId }),
+        where: HrAuthorizationService.staffScope(authContext, { id: staffId, isActive: true, deletedAt: null }),
       });
       if (!staff) {
         return NextResponse.json({ error: 'Staff member not found or inaccessible' }, { status: 404 });
@@ -165,54 +154,22 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Staff has no associated property' }, { status: 400 });
       }
 
+      const advanceAmount = Number(amount);
+      if (!Number.isFinite(advanceAmount) || advanceAmount <= 0) {
+        return NextResponse.json({ error: 'Enter a valid salary advance amount' }, { status: 400 });
+      }
+
       const advance = await prisma.salaryAdvance.create({
         data: {
           propertyId: targetPropertyId,
           staffId,
-          amount: Number(amount) || 0,
+          amount: advanceAmount,
           reason: reason?.trim() || 'Mid-month salary advance',
           status: 'PENDING',
+          requestedBy: authContext.userId,
         },
       });
       return NextResponse.json({ success: true, data: advance }, { status: 201 });
-    }
-
-    if (action === 'CREATE_CLAIM') {
-      const { staffId, category = 'OTHER', amount, description, receiptUrl } = body;
-      const staff = await prisma.staff.findFirst({
-        where: HrAuthorizationService.staffScope(authContext, { id: staffId }),
-      });
-      if (!staff) {
-        return NextResponse.json({ error: 'Staff member not found or inaccessible' }, { status: 404 });
-      }
-
-      if (staff.userId !== authContext.userId) {
-        if (!HrAuthorizationService.can(authContext, 'hr.employee.manage')) {
-          return NextResponse.json({ error: 'Forbidden: Employees may only submit claims for themselves' }, { status: 403 });
-        }
-      }
-
-      const claimCount = await prisma.expenseClaim.count();
-      const claimNumber = `CLM-${String(claimCount + 1).padStart(5, '0')}`;
-      const targetPropertyId = propertyId || staff.propertyAccess[0];
-
-      if (!targetPropertyId) {
-        return NextResponse.json({ error: 'Staff has no associated property' }, { status: 400 });
-      }
-
-      const claim = await prisma.expenseClaim.create({
-        data: {
-          propertyId: targetPropertyId,
-          staffId,
-          claimNumber,
-          category,
-          amount: Number(amount) || 0,
-          description: description?.trim() || 'Staff operational reimbursement',
-            status: 'HR_REVIEW',
-            receiptUrl: receiptUrl?.trim() || null,
-        },
-      });
-      return NextResponse.json({ success: true, data: claim }, { status: 201 });
     }
 
     return NextResponse.json({ error: 'Invalid benefits action' }, { status: 400 });
@@ -222,5 +179,66 @@ export async function POST(req: NextRequest) {
     }
     console.error('Benefits operation failed:', error);
     return NextResponse.json({ error: 'Failed to process benefits request' }, { status: 500 });
+  }
+}
+
+export async function PATCH(req: NextRequest) {
+  try {
+    const authContext = await HrAuthorizationService.resolveAuthContext(req);
+    const body = await req.json();
+    const { action, id, reason } = body;
+    const canApprove = ['GENERAL_MANAGER', 'HOTEL_MANAGER', 'CEO', 'ADMIN', 'SUPER_ADMIN', 'OWNER', 'FINANCIAL_CONTROLLER'].includes(authContext.role);
+    if (!canApprove) return NextResponse.json({ error: 'Only an independent General Manager or authorized executive may approve benefits.' }, { status: 403 });
+    if (!id || !['APPROVE_LOAN', 'REJECT_LOAN', 'APPROVE_ADVANCE', 'REJECT_ADVANCE'].includes(action)) {
+      return NextResponse.json({ error: 'A valid benefit approval action and record id are required.' }, { status: 400 });
+    }
+    const isLoan = action.endsWith('LOAN');
+    const approving = action.startsWith('APPROVE');
+    if (!approving && String(reason || '').trim().length < 10) {
+      return NextResponse.json({ error: 'A detailed rejection reason is required.' }, { status: 400 });
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      let result: any;
+      let resource: 'EmployeeLoan' | 'SalaryAdvance';
+      if (isLoan) {
+        resource = 'EmployeeLoan';
+        const loan = await tx.employeeLoan.findFirst({ where: { id, propertyId: authContext.propertyId } });
+        if (!loan) throw new Error('Loan request not found.');
+        if (loan.status !== 'PENDING') throw new Error(`Loan request is already ${loan.status.toLowerCase()}.`);
+        if (loan.requestedBy === authContext.userId) throw new Error('Maker-checker violation: the requester cannot approve their own loan.');
+        result = await tx.employeeLoan.update({ where: { id }, data: approving ? {
+          status: 'ACTIVE', approvedBy: authContext.userId, approvedAt: new Date(), rejectionReason: null, rejectedBy: null, rejectedAt: null,
+        } : {
+          status: 'REJECTED', rejectedBy: authContext.userId, rejectedAt: new Date(), rejectionReason: String(reason).trim(),
+        } });
+      } else {
+        resource = 'SalaryAdvance';
+        const advance = await tx.salaryAdvance.findFirst({ where: { id, propertyId: authContext.propertyId } });
+        if (!advance) throw new Error('Salary advance request not found.');
+        if (advance.status !== 'PENDING') throw new Error(`Salary advance is already ${advance.status.toLowerCase()}.`);
+        if (advance.requestedBy === authContext.userId) throw new Error('Maker-checker violation: the requester cannot approve their own advance.');
+        result = await tx.salaryAdvance.update({ where: { id }, data: approving ? {
+          status: 'APPROVED', approvedBy: authContext.userId, approvedAt: new Date(), rejectionReason: null, rejectedBy: null, rejectedAt: null,
+        } : {
+          status: 'REJECTED', rejectedBy: authContext.userId, rejectedAt: new Date(), rejectionReason: String(reason).trim(),
+        } });
+      }
+      await tx.auditLog.create({ data: {
+        organizationId: authContext.organizationId,
+        propertyId: authContext.propertyId,
+        userId: authContext.userId,
+        action: approving ? 'HR_BENEFIT_APPROVED' : 'HR_BENEFIT_REJECTED',
+        resource,
+        resourceId: id,
+        requestId: randomUUID(),
+        newValue: { status: result.status, reason: reason?.trim() || null },
+      } });
+      return result;
+    });
+    return NextResponse.json({ success: true, data: result });
+  } catch (error: any) {
+    const message = error.message || 'Failed to update benefit request';
+    return NextResponse.json({ error: message }, { status: /Unauthorized/i.test(message) ? 401 : /Forbidden|maker-checker/i.test(message) ? 403 : 400 });
   }
 }

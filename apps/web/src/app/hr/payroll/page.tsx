@@ -154,6 +154,62 @@ export default function PayrollPage() {
     }
   };
 
+  const handleReconcileProvider = async () => {
+    if (!selectedPeriodId) return;
+    try {
+      const res = await fetch(`/api/hr/payroll/${selectedPeriodId}/flutterwave/reconcile`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Unable to reconcile provider payouts');
+      alert(`Reconciled ${data.reconciled || 0} provider payout(s).`);
+      openBatchDetails(selectedPeriodId);
+      fetchPeriods();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Unable to reconcile provider payouts');
+    }
+  };
+
+  const handleRecordSettlement = async () => {
+    if (!selectedPeriodId) return;
+    const settlementRef = window.prompt('Enter the bank settlement reference:');
+    if (!settlementRef?.trim()) return;
+    const notes = window.prompt('Settlement notes (optional):') || undefined;
+    try {
+      const res = await fetch(`/api/hr/payroll/${selectedPeriodId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'RECORD_PAYMENT_SETTLEMENT', settlementRef: settlementRef.trim(), notes }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Unable to record settlement');
+      alert('Bank settlement recorded and payslips marked paid.');
+      openBatchDetails(selectedPeriodId);
+      fetchPeriods();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Unable to record settlement');
+    }
+  };
+
+  const handleReversePayroll = async () => {
+    if (!selectedPeriodId) return;
+    const reason = window.prompt('Enter a detailed reason for reversing this posted payroll (minimum 10 characters):');
+    if (!reason?.trim() || reason.trim().length < 10) return;
+    if (!confirm('This will create a reversing GL journal and cancel the payroll batch. Continue?')) return;
+    try {
+      const res = await fetch(`/api/hr/payroll/${selectedPeriodId}/reverse`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: reason.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Unable to reverse payroll');
+      alert('Payroll reversed with a compensating GL journal.');
+      openBatchDetails(selectedPeriodId);
+      fetchPeriods();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Unable to reverse payroll');
+    }
+  };
+
   // Grand stats from latest batch
   const latestBatch = periods[0] || null;
 
@@ -361,6 +417,23 @@ export default function PayrollPage() {
                         className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs h-8"
                       >
                         Disburse &amp; Post to GL
+                      </Button>
+                    )}
+
+                    {batchDetail.status === 'PROCESSING' && batchDetail.paymentStatus !== 'SETTLED' && (
+                      <>
+                        <Button size="sm" variant="outline" onClick={handleReconcileProvider} className="border-slate-800 text-slate-300 hover:text-white text-xs h-8">
+                          Reconcile payouts
+                        </Button>
+                        <Button size="sm" onClick={handleRecordSettlement} className="bg-teal-600 hover:bg-teal-500 text-white text-xs h-8">
+                          Record bank settlement
+                        </Button>
+                      </>
+                    )}
+
+                    {['PROCESSING', 'PAID'].includes(batchDetail.status) && (
+                      <Button size="sm" variant="outline" onClick={handleReversePayroll} className="border-rose-400/30 text-rose-300 hover:text-rose-200 text-xs h-8">
+                        Reverse payroll
                       </Button>
                     )}
                   </div>

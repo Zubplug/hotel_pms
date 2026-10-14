@@ -126,6 +126,11 @@ export async function POST(req: NextRequest) {
       if (!staff) {
         return NextResponse.json({ error: 'Staff member not found or unauthorized' }, { status: 404 });
       }
+      const start = new Date(reviewPeriodStart);
+      const end = new Date(reviewPeriodEnd);
+      const score = Number(overallScore);
+      if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start > end) return NextResponse.json({ error: 'Review period dates are invalid' }, { status: 400 });
+      if (!Number.isFinite(score) || score < 1 || score > 5) return NextResponse.json({ error: 'Appraisal score must be between 1 and 5' }, { status: 400 });
 
       const reviewer = await prisma.staff.findFirst({
         where: { userId: authContext.userId, organizationId: authContext.organizationId, isActive: true, deletedAt: null },
@@ -141,10 +146,10 @@ export async function POST(req: NextRequest) {
           staffId,
           reviewerId: reviewer.id,
           cycleName: `Review ${new Date().getFullYear()}`,
-          periodStart: new Date(reviewPeriodStart),
-          periodEnd: new Date(reviewPeriodEnd),
-          managerScore: Number(overallScore),
-          kpis: [{ kpi: 'Core Competency', score: Number(overallScore) }],
+          periodStart: start,
+          periodEnd: end,
+          managerScore: score,
+          kpis: [{ kpi: 'Core Competency', score }],
           developmentPlan: reviewerNotes?.trim() || 'Annual performance evaluation',
           status: 'REVIEWED',
         },
@@ -153,13 +158,19 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === 'CREATE_TRAINING') {
-      const { staffId, courseName, provider, startDate, score } = body;
+      const { staffId, courseName, provider, startDate, score, expiresAt, certificateUrl, isMandatory = false } = body;
       if (!staffId) return NextResponse.json({ error: 'Staff ID is required' }, { status: 400 });
 
       const staff = await validateStaff(staffId);
       if (!staff) {
         return NextResponse.json({ error: 'Staff member not found or unauthorized' }, { status: 404 });
       }
+      const completedAt = new Date(startDate || Date.now());
+      const numericScore = score === '' || score == null ? null : Number(score);
+      const expiry = expiresAt ? new Date(expiresAt) : null;
+      if (!courseName?.trim() || Number.isNaN(completedAt.getTime()) || (expiry && Number.isNaN(expiry.getTime()))) return NextResponse.json({ error: 'Course name and valid training dates are required' }, { status: 400 });
+      if (expiry && expiry < completedAt) return NextResponse.json({ error: 'Training expiry cannot be before completion' }, { status: 400 });
+      if (numericScore !== null && (!Number.isFinite(numericScore) || numericScore < 0 || numericScore > 100)) return NextResponse.json({ error: 'Training score must be between 0 and 100' }, { status: 400 });
 
       const training = await prisma.trainingRecord.create({
         data: {
@@ -167,8 +178,11 @@ export async function POST(req: NextRequest) {
           staffId,
           courseTitle: courseName.trim(),
           provider: provider?.trim() || null,
-          completedAt: new Date(startDate || Date.now()),
-          score: score ? Number(score) : null,
+          completedAt,
+          expiresAt: expiry,
+          certificateUrl: certificateUrl?.trim() || null,
+          isMandatory: Boolean(isMandatory),
+          score: numericScore,
         },
       });
       return NextResponse.json({ success: true, data: training }, { status: 201 });

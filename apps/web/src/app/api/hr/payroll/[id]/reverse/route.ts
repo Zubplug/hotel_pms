@@ -15,11 +15,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (!body.reason?.trim() || body.reason.trim().length < 10) return NextResponse.json({ error: 'A detailed reversal reason is required' }, { status: 400 });
     const period = await prisma.payrollPeriod.findFirst({ where: { id, organizationId: context.organizationId, propertyId: context.propertyId } });
     if (!period) return NextResponse.json({ error: 'Payroll period not found' }, { status: 404 });
-    if (!['APPROVED', 'PAID'].includes(period.status)) return NextResponse.json({ error: 'Only approved or paid payroll periods can be reversed' }, { status: 409 });
+    if (!['PROCESSING', 'PAID'].includes(period.status)) return NextResponse.json({ error: 'Only GL-posted payroll periods can be reversed' }, { status: 409 });
     if (!period.journalEntryId) return NextResponse.json({ error: 'Payroll period has no posted journal to reverse' }, { status: 409 });
     const ledgerContext = await requireOrganizationContext(context.userId);
     const result = await prisma.$transaction(async (tx) => {
-      const current = await tx.payrollPeriod.findFirst({ where: { id: period.id, status: { in: ['APPROVED', 'PAID'] }, journalEntryId: period.journalEntryId } });
+      const current = await tx.payrollPeriod.findFirst({ where: { id: period.id, status: { in: ['PROCESSING', 'PAID'] }, journalEntryId: period.journalEntryId } });
       if (!current) throw new Error('Payroll period was already changed or reversed');
       const reversal = await GeneralLedgerService.reverseJournal(ledgerContext, period.journalEntryId!, body.reversalDate ? new Date(body.reversalDate) : new Date(), body.reason.trim(), tx);
       const existingTrail = Array.isArray(current.approvalTrail) ? current.approvalTrail : [];
