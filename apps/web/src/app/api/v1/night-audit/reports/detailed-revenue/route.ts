@@ -50,7 +50,7 @@ export async function GET(req: NextRequest) {
     const [property, audit, items, posOrders, payments, posPayments] = await Promise.all([
       prisma.property.findUnique({ where: { id: propertyId }, select: { name: true, email: true, phone: true, address: true, city: true, state: true, baseCurrency: true } }),
       prisma.nightAudit.findUnique({ where: { propertyId_businessDate: { propertyId, businessDate } }, include: { financialSnapshot: true, closePackage: { select: { status: true, finalizedAt: true, packageHash: true } } } }),
-      prisma.folioItem.findMany({ where: { folio: { propertyId }, businessDate }, select: { id: true, type: true, source: true, revenueCategory: true, revenueClass: true, description: true, amount: true, quantity: true, unitAmount: true, baseAmount: true, posTransactionId: true, voidedAt: true, isLatePosting: true, taxId: true, discountId: true } }),
+      prisma.folioItem.findMany({ where: { folio: { propertyId }, businessDate }, select: { id: true, type: true, source: true, revenueCategory: true, revenueClass: true, description: true, amount: true, quantity: true, unitAmount: true, baseAmount: true, posTransactionId: true, voidedAt: true, isLatePosting: true, taxId: true, discountId: true, reservation: { select: { reservationRooms: { where: { checkIn: { lte: businessDate }, checkOut: { gte: businessDate } }, orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }], take: 1, select: { room: { select: { number: true } } } } } } } }),
       prisma.posOrder.findMany({ where: { propertyId, businessDate, status: 'CLOSED', payments: { some: { status: { in: ['CONFIRMED', 'PAID'] } } } }, select: { id: true, orderNumber: true, subtotal: true, taxAmount: true, discount: true, total: true, serviceCharge: true, outlet: { select: { name: true, type: true } }, payments: { where: { status: { in: ['CONFIRMED', 'PAID'] } }, select: { amount: true, method: true } } } }),
       prisma.payment.groupBy({ by: ['method'], where: { propertyId, businessDate, status: { in: ['COMPLETED', 'PARTIALLY_REFUNDED'] } }, _sum: { amount: true }, _count: { id: true } }),
       prisma.posPayment.groupBy({ by: ['method'], where: { businessDate, status: { in: ['CONFIRMED', 'PAID'] }, order: { propertyId } }, _sum: { amount: true }, _count: { id: true } }),
@@ -77,7 +77,7 @@ export async function GET(req: NextRequest) {
       addRow(rows, `${department}:${code}:${description}`, values);
       addRow(sourceRows, code, { department, code, description: code, transactionCount: values.transactionCount, gross: values.gross, net: values.net, tax: values.tax, total: values.total });
       if (item.type === 'TAX') addRow(taxRows, item.taxId || description, { code: item.taxId || '—', description, transactionCount: 1, gross: 0, net: 0, tax: amount, total: amount });
-      if (item.type !== 'PAYMENT') detail.push({ id: item.id, type: item.type, department, source: code, description, amount: round(amount), quantity: n(item.quantity), unitAmount: round(n(item.unitAmount)), latePosting: Boolean(item.isLatePosting) });
+      if (item.type !== 'PAYMENT') detail.push({ id: item.id, type: item.type, department, source: code, description, roomNumber: item.reservation?.reservationRooms[0]?.room?.number ? String(item.reservation.reservationRooms[0].room.number).split('.').pop() : null, amount: round(amount), quantity: n(item.quantity), unitAmount: round(n(item.unitAmount)), latePosting: Boolean(item.isLatePosting) });
     }
 
     for (const order of posOrders) {
@@ -91,7 +91,7 @@ export async function GET(req: NextRequest) {
       const discounts = n(order.discount);
       const total = Math.max(0, n(order.total) - complimentary);
       addRow(rows, `F&B:POS:${outlet}`, { department: 'F&B', code: 'POS', description: `${outlet} · POS sales`, gross, discounts, net: gross - discounts, tax: n(order.taxAmount), total, transactionCount: 1 });
-      detail.push({ id: order.id, type: 'POS_ORDER', department: 'F&B', source: 'POS', description: `${outlet} · ${order.orderNumber}${complimentary > 0 ? ` · complimentary ${round(complimentary)}` : ''}`, amount: round(total), quantity: 1, unitAmount: round(total), latePosting: false });
+      detail.push({ id: order.id, type: 'POS_ORDER', department: 'F&B', source: 'POS', description: `${outlet} · ${order.orderNumber}${complimentary > 0 ? ` · complimentary ${round(complimentary)}` : ''}`, roomNumber: null, amount: round(total), quantity: 1, unitAmount: round(total), latePosting: false });
     }
 
     const departments = [...new Set([...rows.values()].map((row: any) => row.department))].map((department) => ({ department, revenues: [...rows.values()].filter((row: any) => row.department === department).map((row: any) => Object.fromEntries(Object.entries(row).map(([key, value]) => [key, typeof value === 'number' ? round(value) : value]))) })).sort((a, b) => a.department.localeCompare(b.department));
