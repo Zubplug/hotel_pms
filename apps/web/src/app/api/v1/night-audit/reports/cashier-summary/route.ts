@@ -133,7 +133,7 @@ export async function GET(req: NextRequest) {
       const cashDrops = session.cashMovements.filter((movement) => movement.type === 'CASH_DROP').reduce((sum, movement) => sum + Number(movement.amount || 0), 0);
       const expectedCash = openingFloat + totals.cashSales + cashIn - cashRefunds - paidOuts;
       const actualCash = session.actualCash == null ? 0 : Number(session.actualCash);
-      const variance = session.actualCash == null ? 0 : actualCash - expectedCash;
+      const variance = session.actualCash == null && session.status === 'OPEN' ? 0 : actualCash - expectedCash;
 
       return {
         cashierName: `${session.primaryOperator?.firstName || 'POS'} ${session.primaryOperator?.lastName || ''}`.trim(),
