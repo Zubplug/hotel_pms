@@ -857,7 +857,15 @@ export async function executeNightAudit(
         _sum: { amount: true }
       }),
       prisma.room.count({ where: { propertyId, isActive: true } }),
-      prisma.room.count({ where: { propertyId, isActive: true, status: 'OCCUPIED' } }),
+      prisma.reservationRoom.count({
+        where: {
+          roomId: { not: null },
+          status: 'ACTIVE',
+          checkIn: { lte: businessDate },
+          checkOut: { gt: businessDate },
+          reservation: { propertyId, status: 'CHECKED_IN' },
+        },
+      }),
       prisma.posOrder.findMany({
         // Offline POS orders can have confirmed payments while their header
         // paymentStatus remains UNPAID. Count closed orders with confirmed
