@@ -233,10 +233,15 @@ export async function POST(req: NextRequest) {
           },
         });
 
-        await (tx as any).bookingHold.update({
-          where: { id: hold.id },
-          data: { status: 'CONVERTED' },
-        });
+        // Keep payment-required bookings attached to an ACTIVE hold until the
+        // payment webhook confirms them. The expiry cron needs this state to
+        // expire unpaid PENDING reservations and release their room.
+        if (reservationStatus === 'CONFIRMED') {
+          await (tx as any).bookingHold.update({
+            where: { id: hold.id },
+            data: { status: 'CONVERTED' },
+          });
+        }
 
         return {
           reservation: res,

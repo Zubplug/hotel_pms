@@ -212,6 +212,16 @@ export async function POST(req: NextRequest) {
         data: { status: 'CONFIRMED' },
       });
 
+      // Payment completes the booking-hold lifecycle. Until this point the
+      // hold remains ACTIVE so the expiry cron can safely expire unpaid
+      // pending reservations.
+      if (reservation.bookingChannelRef) {
+        await (tx as any).bookingHold.updateMany({
+          where: { id: reservation.bookingChannelRef, status: 'ACTIVE' },
+          data: { status: 'CONVERTED' },
+        });
+      }
+
       await (tx as any).bookingPaymentTransaction.update({
         where: { id: bpt.id },
         data: {

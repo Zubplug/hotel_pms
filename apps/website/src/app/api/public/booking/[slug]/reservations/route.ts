@@ -232,10 +232,16 @@ export async function POST(
         });
 
         // 7. Convert the hold
-        await (tx as any).bookingHold.update({
-          where: { id: hold.id },
-          data: { status: 'CONVERTED' },
-        });
+        // A PAY_LATER booking is confirmed immediately, so its inventory hold
+        // is permanently converted. Payment-required bookings remain linked to
+        // an ACTIVE hold until payment succeeds; the expiry cron uses that hold
+        // to expire unpaid PENDING reservations and release their room.
+        if (reservationStatus === 'CONFIRMED') {
+          await (tx as any).bookingHold.update({
+            where: { id: hold.id },
+            data: { status: 'CONVERTED' },
+          });
+        }
 
         return {
           reservation: res,
