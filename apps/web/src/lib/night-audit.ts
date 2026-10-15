@@ -1195,7 +1195,10 @@ export async function executeNightAudit(
         children: true,
         primaryGuest: { select: { firstName: true, lastName: true } },
         reservationRooms: {
-          where: { status: 'ACTIVE' },
+          where: {
+            checkIn: { lte: businessDate },
+            checkOut: { gte: businessDate },
+          },
           orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }],
           take: 1,
           select: { room: { select: { number: true, roomType: { select: { name: true } } } } },
