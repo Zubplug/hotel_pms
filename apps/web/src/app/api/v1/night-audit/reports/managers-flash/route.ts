@@ -119,8 +119,8 @@ export async function GET(req: NextRequest) {
     const snapshotMovements = audit?.movementSnapshots || [];
     const snapshotMovement = (row: (typeof snapshotMovements)[number]) => ({
       reservationId: row.confirmationNumber,
-      guestName: row.guestName,
-      roomNumber: row.roomNumber || 'Unassigned',
+      guestName: row.guestName.replace(/\s+/g, ' ').trim(),
+      roomNumber: row.roomNumber ? String(row.roomNumber).split('.').pop() || String(row.roomNumber) : 'Unassigned',
       roomType: row.roomType || 'Unassigned',
       adults: row.adults,
       children: row.children,
@@ -263,7 +263,11 @@ export async function GET(req: NextRequest) {
       concessions: { complimentaryRoom: round(complimentaryRoom), complimentaryFood: round(complimentaryFood), complimentaryPos: round(complimentaryPos), guestAmenityCost: round(money(financial?.guestAmenityCost)), totalValue: round(complimentaryRoom + complimentaryFood + complimentaryPos + money(financial?.guestAmenityCost)) },
       cityLedger: { creditSales: round(cityLedgerSales), settlements: round(cityLedgerSettlements), closingBalance: round(cityLedgerBalance), creditBalance: round(cityLedgerCredits), corporateAdvanceCredits: round(corporateAdvanceCredits), unappliedCredit: round(unappliedCityLedgerCredit), orphanedFolioCount: orphanCityLedgerFolioCount, accountCount: corporateAccounts.length, unlinkedCorporateAccountCount: corporateAccountRegistry.filter((account) => !account.cityLedgerAccount).length, overLimitCount: corporateAccounts.filter((row) => row.overLimit).length, accounts: corporateAccounts },
       financial: { paymentTotals, cash: round(paymentByMethod(['CASH'])), card: round(paymentByMethod(['CARD', 'CARD_OFFLINE', 'POS'])), transfer: round(paymentByMethod(['BANK_TRANSFER', 'PAYMENT_GATEWAY', 'MOBILE_PAYMENT'])), other: round(paymentByMethod(['CHEQUE', 'CITY_LEDGER', 'COMPLIMENTARY', 'OTHER'])), deposits: round(paymentByMethod(['CASH', 'CARD', 'CARD_OFFLINE', 'POS', 'BANK_TRANSFER', 'PAYMENT_GATEWAY', 'MOBILE_PAYMENT', 'CHEQUE'])), refunds: round(revenue.refunds), adjustments: round(revenue.adjustments), outstanding: round(outstandingDue), creditBalance: round(guestCreditBalance), guestRefundLiability: round(guestRefundLiability), cashExpected: sessionCash.expected, cashDeclared: sessionCash.declared, cashVariance: sessionCash.variance, closeCashExpected: financial?.cashExpected == null ? null : money(financial.cashExpected), closeCashDeclared: financial?.cashDeclared == null ? null : money(financial.cashDeclared), closeCashVariance: financial?.cashVariance == null ? null : money(financial.cashVariance) },
-      movements: { arrivals: actualArrivals.map(movementRow), departures: actualDepartures.map(movementRow), cancellations: [...cancelledArrivals, ...cancelledDepartures].map(movementRow) },
+      movements: {
+        arrivals: snapshotMovements.length ? actualArrivals : actualArrivals.map(movementRow),
+        departures: snapshotMovements.length ? actualDepartures : actualDepartures.map(movementRow),
+        cancellations: snapshotMovements.length ? [...cancelledArrivals, ...cancelledDepartures] : [...cancelledArrivals, ...cancelledDepartures].map(movementRow),
+      },
       controls: { ...controls, sessions, housekeeping: housekeepingTotals, serviceRequests: serviceRequests.map((row) => ({ status: row.status, count: row._count.id })) },
       labour: { scheduled: rosters.length, published: rosters.filter((row) => row.publicationStatus === 'PUBLISHED').length, attendanceRecords: attendance.length, present: attendance.filter((row) => ['PRESENT', 'LATE'].includes(row.status)).length, late: attendance.filter((row) => row.status === 'LATE').length, absent: attendance.filter((row) => row.status === 'ABSENT').length, workedHours: round(hours) },
       flat: { roomRevenue: round(revenue.room), fbRevenue: round(revenue.fb), otherRevenue: round(revenue.other), grossRevenue: round(revenue.gross), netRevenue: round(revenue.net), totalTaxes: round(revenue.taxes), totalDiscounts: round(revenue.discounts), occupancyPercentage: round(occupancyPercentage), adr: round(adr), revPar: round(revpar), arrivals: actualArrivals.length, departures: actualDepartures.length, noShows: actualArrivals.filter((row) => row.status === 'NO_SHOW').length, walkIns: actualArrivals.filter((row) => String(row.source) === 'WALK_IN').length },

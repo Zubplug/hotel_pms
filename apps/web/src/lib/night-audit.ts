@@ -1205,7 +1205,7 @@ export async function executeNightAudit(
     });
     const movementSnapshots = movementReservations.flatMap((reservation) => {
       const cancelled = reservation.status === 'CANCELLED';
-      const guestName = `${reservation.primaryGuest?.firstName || ''} ${reservation.primaryGuest?.lastName || ''}`.trim() || 'Unknown guest';
+      const guestName = `${reservation.primaryGuest?.firstName || ''} ${reservation.primaryGuest?.lastName || ''}`.replace(/\s+/g, ' ').trim() || 'Unknown guest';
       const room = reservation.reservationRooms[0]?.room;
       const folioBalance = reservation.folios.reduce((sum, folio) => sum + Number(folio.balance || 0), 0);
       const base = {
