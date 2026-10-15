@@ -1175,6 +1175,66 @@ export async function executeNightAudit(
       departmentReconciliation,
     })).digest('hex');
 
+    // Freeze the movement register at the audit cutoff. Reports for this
+    // business date must remain stable even if the reservations change after
+    // the audit completes.
+    const movementCapturedAt = new Date();
+    const movementReservations = await tx.reservation.findMany({
+      where: {
+        propertyId,
+        OR: [{ checkIn: businessDate }, { checkOut: businessDate }],
+      },
+      select: {
+        id: true,
+        confirmationNumber: true,
+        source: true,
+        status: true,
+        checkIn: true,
+        checkOut: true,
+        adults: true,
+        children: true,
+        primaryGuest: { select: { firstName: true, lastName: true } },
+        reservationRooms: {
+          where: { status: 'ACTIVE' },
+          orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }],
+          take: 1,
+          select: { room: { select: { number: true, roomType: { select: { name: true } } } } },
+        },
+        folios: { select: { balance: true } },
+      },
+    });
+    const movementSnapshots = movementReservations.flatMap((reservation) => {
+      const cancelled = reservation.status === 'CANCELLED';
+      const guestName = `${reservation.primaryGuest?.firstName || ''} ${reservation.primaryGuest?.lastName || ''}`.trim() || 'Unknown guest';
+      const room = reservation.reservationRooms[0]?.room;
+      const folioBalance = reservation.folios.reduce((sum, folio) => sum + Number(folio.balance || 0), 0);
+      const base = {
+        nightAuditId: auditRun.id,
+        propertyId,
+        businessDate,
+        reservationId: reservation.id,
+        confirmationNumber: reservation.confirmationNumber,
+        guestName,
+        roomNumber: room?.number ? String(room.number) : null,
+        roomType: room?.roomType?.name || null,
+        source: String(reservation.source),
+        status: String(reservation.status),
+        adults: reservation.adults,
+        children: reservation.children,
+        folioBalance,
+        capturedAt: movementCapturedAt,
+      };
+      if (cancelled) return [{ ...base, movementType: 'CANCELLATION' }];
+      const rows = [] as Array<typeof base & { movementType: string }>;
+      if (reservation.checkIn.getTime() === businessDate.getTime()) rows.push({ ...base, movementType: 'ARRIVAL' });
+      if (reservation.checkOut.getTime() === businessDate.getTime()) rows.push({ ...base, movementType: 'DEPARTURE' });
+      return rows;
+    });
+    await tx.nightAuditMovementSnapshot.deleteMany({ where: { nightAuditId: auditRun.id } });
+    if (movementSnapshots.length) {
+      await tx.nightAuditMovementSnapshot.createMany({ data: movementSnapshots });
+    }
+
     const runUpdate = await tx.nightAudit.update({
       where: { id: auditRun.id },
       data: {
@@ -1256,6 +1316,8 @@ export async function executeNightAudit(
       _count: { status: true }
     });
     const outOfOrderRooms = roomStatusCounts.find((r: any) => r.status === 'OUT_OF_ORDER')?._count?.status ?? 0;
+    const outOfServiceRooms = (roomStatusCounts.find((r: any) => r.status === 'OUT_OF_SERVICE')?._count?.status ?? 0)
+      + (roomStatusCounts.find((r: any) => r.status === 'MAINTENANCE')?._count?.status ?? 0);
     const blockedRooms = roomStatusCounts.find((r: any) => r.status === 'BLOCKED')?._count?.status ?? 0;
 
     await tx.occupancySnapshot.upsert({
@@ -1265,15 +1327,26 @@ export async function executeNightAudit(
         businessDate,
         totalRooms: roomCount,
         occupiedRooms: occupiedCount,
-        availableRooms: roomCount - occupiedCount,
+        availableRooms: Math.max(0, roomCount - occupiedCount - outOfOrderRooms - outOfServiceRooms - blockedRooms),
         outOfOrderRooms,
+        outOfServiceRooms,
         blockedRooms,
         occupancyPct: occupancy,
         adr,
         revpar,
         currency: property.supportedCurrencies?.[0] || 'NGN',
       },
-      update: { occupancyPct: occupancy, adr, revpar, totalRooms: roomCount, occupiedRooms: occupiedCount, outOfOrderRooms, blockedRooms }
+      update: {
+        occupancyPct: occupancy,
+        adr,
+        revpar,
+        totalRooms: roomCount,
+        occupiedRooms: occupiedCount,
+        availableRooms: Math.max(0, roomCount - occupiedCount - outOfOrderRooms - outOfServiceRooms - blockedRooms),
+        outOfOrderRooms,
+        outOfServiceRooms,
+        blockedRooms,
+      }
     });
 
     await tx.auditLog.create({

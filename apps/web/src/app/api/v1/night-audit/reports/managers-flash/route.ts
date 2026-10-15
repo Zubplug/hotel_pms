@@ -61,7 +61,7 @@ export async function GET(req: NextRequest) {
     const businessDate = new Date(`${businessDateValue}T00:00:00.000Z`);
     const [property, audit, rooms, snapshot, folioItems, posOrders, arrivals, departures, inHouseReservations, roomStatuses, payments, posPayments, posSessions, frontdeskSessions, attendance, rosters, housekeeping, openPosOrders, transactionExceptions, reconciliationExceptions, outstandingFolios, guestCredits, guestRefundEntries, corporateAccountRegistry, cityLedgerFolios, cityLedgerInvoices, orphanCityLedgerFolioCount, cityLedgerItems, cityLedgerPayments, serviceRequests] = await Promise.all([
       prisma.property.findUnique({ where: { id: propertyId }, select: { name: true, email: true, phone: true, address: true, city: true, state: true, baseCurrency: true, timezone: true } }),
-      prisma.nightAudit.findUnique({ where: { propertyId_businessDate: { propertyId, businessDate } }, include: { financialSnapshot: true, closePackage: { select: { status: true, packageHash: true, finalizedAt: true, balanceProof: true, controlSummary: true } } } }),
+      prisma.nightAudit.findUnique({ where: { propertyId_businessDate: { propertyId, businessDate } }, include: { financialSnapshot: true, movementSnapshots: { orderBy: [{ movementType: 'asc' }, { guestName: 'asc' }] }, closePackage: { select: { status: true, packageHash: true, finalizedAt: true, balanceProof: true, controlSummary: true } } } }),
       prisma.room.findMany({ where: { propertyId, isActive: true, deletedAt: null }, select: { id: true, number: true, status: true, roomType: { select: { name: true } } } }),
       prisma.occupancySnapshot.findUnique({ where: { propertyId_businessDate: { propertyId, businessDate } } }),
       prisma.folioItem.findMany({ where: { folio: { propertyId }, businessDate, voidedAt: null }, select: { type: true, source: true, revenueCategory: true, revenueClass: true, amount: true, description: true, posTransactionId: true } }),
@@ -92,6 +92,53 @@ export async function GET(req: NextRequest) {
       prisma.guestServiceRequest.groupBy({ by: ['status'], where: { propertyId, requestedAt: { gte: businessDate, lt: new Date(businessDate.getTime() + 86400000) } }, _count: { id: true } }),
     ]);
     if (!property) return errorResponse('NOT_FOUND', 'Property not found', 404);
+
+    // Prefer the immutable movement register captured by Night Audit. The
+    // audit-log fallback preserves historical reports created before the
+    // movement snapshot migration was deployed.
+    const movementReservationIds = [...arrivals, ...departures].map((row) => row.id);
+    const auditCutoff = audit?.completedAt || audit?.cutoffAt || new Date(businessDate.getTime() + 86400000);
+    const movementAudits = movementReservationIds.length
+      ? await prisma.auditLog.findMany({
+          where: {
+            propertyId,
+            resource: 'Reservation',
+            resourceId: { in: movementReservationIds },
+            action: { in: ['RESERVATION_CHECKED_IN', 'RESERVATION_CHECKED_OUT', 'RESERVATION_CHECKED_OUT_CREDIT_TRANSFERRED', 'RESERVATION_CHECKED_OUT_CREDIT_RETAINED', 'RESERVATION_CANCELLED', 'RESERVATION_NO_SHOW_ASSESSED'] },
+            createdAt: { lte: auditCutoff },
+          },
+          select: { resourceId: true, newValue: true, createdAt: true },
+          orderBy: { createdAt: 'asc' },
+        })
+      : [];
+    const statusAtAudit = new Map<string, string>();
+    for (const entry of movementAudits) {
+      const status = (entry.newValue as { status?: string } | null)?.status;
+      if (status) statusAtAudit.set(entry.resourceId, status);
+    }
+    const snapshotMovements = audit?.movementSnapshots || [];
+    const snapshotMovement = (row: (typeof snapshotMovements)[number]) => ({
+      reservationId: row.confirmationNumber,
+      guestName: row.guestName,
+      roomNumber: row.roomNumber || 'Unassigned',
+      roomType: row.roomType || 'Unassigned',
+      adults: row.adults,
+      children: row.children,
+      source: row.source || 'AUDIT_SNAPSHOT',
+      status: row.status,
+      balance: round(Number(row.folioBalance || 0)),
+      specialRequests: '',
+    });
+    const historicalMovement = (row: any) => ({ ...row, status: statusAtAudit.get(row.id) || row.status });
+    const historicalArrivals = snapshotMovements.length
+      ? snapshotMovements.filter((row) => row.movementType === 'ARRIVAL').map(snapshotMovement)
+      : arrivals.map(historicalMovement);
+    const historicalDepartures = snapshotMovements.length
+      ? snapshotMovements.filter((row) => row.movementType === 'DEPARTURE').map(snapshotMovement)
+      : departures.map(historicalMovement);
+    const historicalCancellations = snapshotMovements.length
+      ? snapshotMovements.filter((row) => row.movementType === 'CANCELLATION').map(snapshotMovement)
+      : [];
 
     const departments = new Map<string, { department: string; gross: number; discounts: number; adjustments: number; refunds: number; taxes: number; net: number; transactionCount: number }>();
     const representedPosOrders = new Set<string>();
@@ -186,7 +233,7 @@ export async function GET(req: NextRequest) {
     const roomCount = (status: string) => roomStatuses.find((row) => row.status === status)?._count.id || 0;
     const totalRooms = snapshot?.totalRooms ?? rooms.length;
     const outOfOrder = snapshot?.outOfOrderRooms ?? roomCount('OUT_OF_ORDER');
-    const outOfService = roomCount('OUT_OF_SERVICE') + roomCount('MAINTENANCE');
+    const outOfService = snapshot?.outOfServiceRooms ?? (roomCount('OUT_OF_SERVICE') + roomCount('MAINTENANCE'));
     const blocked = snapshot?.blockedRooms ?? roomCount('BLOCKED');
     const occupiedRooms = snapshot?.occupiedRooms ?? roomCount('OCCUPIED');
     const calculatedAvailableRooms = Math.max(0, totalRooms - occupiedRooms - outOfOrder - outOfService - blocked);
@@ -201,10 +248,10 @@ export async function GET(req: NextRequest) {
     const housekeepingTotals = housekeeping.map((row) => ({ status: row.status, count: row._count.id }));
     const sessions = [...posSessions.map((row) => ({ id: row.id, type: 'POS', name: row.outlet?.name || 'POS', status: row.controlStatus || row.status, expectedCash: money(row.expectedCash), declaredCash: money(row.actualCash), variance: money(row.variance) })), ...frontdeskSessions.map((row) => ({ id: row.id, type: 'Front Desk', name: row.shiftReference, status: row.controlStatus || row.status, expectedCash: money(row.systemExpectedCash), declaredCash: money(row.declaredCash), variance: money(row.variance) }))];
     const sessionCash = { expected: round(sessions.reduce((sum, row) => sum + row.expectedCash, 0)), declared: round(sessions.reduce((sum, row) => sum + row.declaredCash, 0)), variance: round(sessions.reduce((sum, row) => sum + row.variance, 0)) };
-    const cancelledArrivals = arrivals.filter((row) => row.status === 'CANCELLED');
-    const cancelledDepartures = departures.filter((row) => row.status === 'CANCELLED');
-    const actualArrivals = arrivals.filter((row) => row.status !== 'CANCELLED');
-    const actualDepartures = departures.filter((row) => row.status !== 'CANCELLED');
+    const cancelledArrivals = snapshotMovements.length ? historicalCancellations : historicalArrivals.filter((row) => row.status === 'CANCELLED');
+    const cancelledDepartures = snapshotMovements.length ? [] : historicalDepartures.filter((row) => row.status === 'CANCELLED');
+    const actualArrivals = historicalArrivals.filter((row) => row.status !== 'CANCELLED');
+    const actualDepartures = historicalDepartures.filter((row) => row.status !== 'CANCELLED');
     const controls = { unresolvedTransactionExceptions: transactionExceptions.length, openReconciliationExceptions: reconciliationExceptions.length, transactionExceptionDetails: transactionExceptions, reconciliationExceptionDetails: reconciliationExceptions.map((row) => ({ ...row, amount: money(row.amount), session: row.frontdeskSession?.shiftReference || null })), openPosOrders, voids: folioItems.filter((item) => item.type === 'VOID').length, adjustments: folioItems.filter((item) => item.type === 'ADJUSTMENT').length, latePostings: await prisma.folioItem.count({ where: { folio: { propertyId }, businessDate, isLatePosting: true, voidedAt: null } }) };
 
     const report = {

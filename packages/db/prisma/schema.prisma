@@ -128,6 +128,7 @@ model Property {
   // HR-controlled switch for employee claims requesting bank transfer.
   // Disabled means the General Cashier completes the bank transfer manually.
   autoBankReimbursementEnabled    Boolean  @default(false)
+  nightAuditMovementSnapshots     NightAuditMovementSnapshot[]
 
   cashHandovers            CashHandover[]
   bankDeposits             BankDeposit[]
@@ -850,6 +851,7 @@ model Reservation {
   folioItems           FolioItem[]
   breakfastRedemptions BreakfastRedemption[]
   guestAmenityStockTransactions StockTransaction[] @relation("GuestAmenityStock")
+  nightAuditMovementSnapshots NightAuditMovementSnapshot[]
 }
 
 model ReservationGuest {
@@ -1616,6 +1618,7 @@ model NightAudit {
   acknowledgements  NightAuditAcknowledgement[]
   financialSnapshot NightAuditFinancialSnapshot?
   closePackage      NightAuditClosePackage?
+  movementSnapshots NightAuditMovementSnapshot[]
   journalEntries    JournalEntry[]
 
   @@unique([propertyId, businessDate])
@@ -1702,6 +1705,34 @@ model NightAuditFinancialSnapshot {
   createdAt DateTime @default(now()) @db.Timestamptz
 }
 
+// Immutable arrivals/departures captured at night-audit completion. Historical
+// reports must not recalculate movement status from live reservations.
+model NightAuditMovementSnapshot {
+  id               String    @id @default(uuid()) @db.Uuid
+  nightAuditId     String    @db.Uuid
+  propertyId       String    @db.Uuid
+  businessDate     DateTime  @db.Date
+  reservationId    String    @db.Uuid
+  movementType     String
+  confirmationNumber String
+  guestName        String
+  roomNumber       String?
+  roomType         String?
+  source           String?
+  status           String
+  adults           Int
+  children         Int
+  folioBalance     Decimal   @default(0) @db.Decimal(18, 4)
+  capturedAt       DateTime  @db.Timestamptz
+
+  nightAudit       NightAudit  @relation(fields: [nightAuditId], references: [id], onDelete: Restrict)
+  property         Property    @relation(fields: [propertyId], references: [id], onDelete: Restrict)
+  reservation      Reservation @relation(fields: [reservationId], references: [id], onDelete: Restrict)
+
+  @@unique([nightAuditId, reservationId, movementType])
+  @@index([propertyId, businessDate, movementType])
+}
+
 model NightAuditAcknowledgement {
   id             String     @id @default(uuid()) @db.Uuid
   nightAuditId   String     @db.Uuid
@@ -1723,6 +1754,7 @@ model OccupancySnapshot {
   occupiedRooms   Int
   availableRooms  Int
   outOfOrderRooms Int
+  outOfServiceRooms Int @default(0)
   blockedRooms    Int
 
   occupancyPct Decimal @db.Decimal(5, 2)
