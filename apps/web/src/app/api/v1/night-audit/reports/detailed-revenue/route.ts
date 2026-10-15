@@ -90,8 +90,8 @@ export async function GET(req: NextRequest) {
       const gross = Math.max(0, n(order.subtotal) - complimentary);
       const discounts = n(order.discount);
       const total = Math.max(0, n(order.total) - complimentary);
-      addRow(rows, `F&B:POS:${outlet}`, { department: 'F&B', code: 'POS', description: `${outlet} · ${order.orderNumber}`, gross, discounts, net: gross - discounts, tax: n(order.taxAmount), total, transactionCount: 1 });
-      detail.push({ id: order.id, type: 'POS_ORDER', department: 'F&B', source: 'POS', description: `${outlet} · ${order.orderNumber}`, amount: round(total), quantity: 1, unitAmount: round(total), latePosting: false });
+      addRow(rows, `F&B:POS:${outlet}`, { department: 'F&B', code: 'POS', description: `${outlet} · POS sales`, gross, discounts, net: gross - discounts, tax: n(order.taxAmount), total, transactionCount: 1 });
+      detail.push({ id: order.id, type: 'POS_ORDER', department: 'F&B', source: 'POS', description: `${outlet} · ${order.orderNumber}${complimentary > 0 ? ` · complimentary ${round(complimentary)}` : ''}`, amount: round(total), quantity: 1, unitAmount: round(total), latePosting: false });
     }
 
     const departments = [...new Set([...rows.values()].map((row: any) => row.department))].map((department) => ({ department, revenues: [...rows.values()].filter((row: any) => row.department === department).map((row: any) => Object.fromEntries(Object.entries(row).map(([key, value]) => [key, typeof value === 'number' ? round(value) : value]))) })).sort((a, b) => a.department.localeCompare(b.department));

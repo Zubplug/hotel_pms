@@ -136,7 +136,7 @@ export default function CashierSummaryReportPage() {
                         <TableRow label="Actual Cash" value={formatCurrency(cashier.actualCash, currencyCode)} isBold />
                         <TableRow 
                           label="Variance" 
-                          value={formatCurrency(Math.abs(cashier.variance || 0), currencyCode) + (cashier.variance < 0 ? ' (Short)' : cashier.variance > 0 ? ' (Over)' : '')} 
+                          value={formatCurrency(cashier.variance || 0, currencyCode) + (cashier.variance < 0 ? ' (Short)' : cashier.variance > 0 ? ' (Over)' : '')}
                           isTotal 
                           isNegative={isVarianceNegative}
                         />
@@ -165,7 +165,7 @@ export default function CashierSummaryReportPage() {
         </div>
       )}
 
-      {cashiers.length > 0 && <div className="mt-8 border-t-2 border-slate-800 pt-3"><h2 className="mb-2 text-xs font-bold uppercase tracking-widest text-slate-900">Property cashier totals</h2><table className="w-full text-xs"><tbody><TableRow label="Cash / card" value={`${formatCurrency(totals.cashSales, currencyCode)} / ${formatCurrency(totals.cardSales, currencyCode)}`} /><TableRow label="Bank transfer / POS" value={`${formatCurrency(totals.bankTransfer, currencyCode)} / ${formatCurrency(totals.posPayment, currencyCode)}`} /><TableRow label="Other methods" value={formatCurrency(totals.other, currencyCode)} /><TableRow label="Expected / actual cash" value={`${formatCurrency(totals.expectedCash, currencyCode)} / ${formatCurrency(totals.actualCash, currencyCode)}`} isBold /><TableRow label="Cash variance" value={formatCurrency(Math.abs(totals.variance || 0), currencyCode) + (totals.variance < 0 ? ' (Short)' : totals.variance > 0 ? ' (Over)' : '')} isTotal isNegative={totals.variance < 0} /></tbody></table></div>}
+      {cashiers.length > 0 && <div className="mt-8 border-t-2 border-slate-800 pt-3"><h2 className="mb-2 text-xs font-bold uppercase tracking-widest text-slate-900">Property cashier totals</h2><table className="w-full text-xs"><tbody><TableRow label="Cash / card" value={`${formatCurrency(totals.cashSales, currencyCode)} / ${formatCurrency(totals.cardSales, currencyCode)}`} /><TableRow label="Bank transfer / POS" value={`${formatCurrency(totals.bankTransfer, currencyCode)} / ${formatCurrency(totals.posPayment, currencyCode)}`} /><TableRow label="Other methods" value={formatCurrency(totals.other, currencyCode)} /><TableRow label="Expected / actual cash" value={`${formatCurrency(totals.expectedCash, currencyCode)} / ${formatCurrency(totals.actualCash, currencyCode)}`} isBold /><TableRow label="Cash variance" value={formatCurrency(totals.variance || 0, currencyCode) + (totals.variance < 0 ? ' (Short)' : totals.variance > 0 ? ' (Over)' : '')} isTotal isNegative={totals.variance < 0} /></tbody></table></div>}
 
     </A4ReportWrapper>
   );

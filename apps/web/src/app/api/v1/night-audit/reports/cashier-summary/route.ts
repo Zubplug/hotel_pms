@@ -166,7 +166,7 @@ export async function GET(req: NextRequest) {
       result.paymentCount += Number(cashier.paymentCount || 0);
       return result;
     }, { cashSales: 0, cardSales: 0, bankTransfer: 0, posPayment: 0, other: 0, cashRefunds: 0, paidOuts: 0, cashDrops: 0, cashIn: 0, openingFloat: 0, expectedCash: 0, actualCash: 0, variance: 0, paymentCount: 0 });
-    const controls = { sessionCount: allCashiers.length, paymentCount: totals.paymentCount, submittedCount: allCashiers.filter((cashier) => cashier.actualCash !== 0 || cashier.status !== 'OPEN').length, approvedCount: allCashiers.filter((cashier) => cashier.supervisorApproval === 'APPROVED').length, exceptionCount: allCashiers.reduce((sum, cashier) => sum + Number(cashier.exceptionCount || 0), 0) + allCashiers.filter((cashier) => Math.abs(cashier.variance) > 0.01).length };
+    const controls = { sessionCount: allCashiers.length, paymentCount: totals.paymentCount, submittedCount: allCashiers.filter((cashier) => cashier.actualCash !== 0 || cashier.status !== 'OPEN').length, approvedCount: allCashiers.filter((cashier) => cashier.supervisorApproval === 'APPROVED').length, exceptionCount: allCashiers.filter((cashier) => Number(cashier.exceptionCount || 0) > 0 || Math.abs(cashier.variance) > 0.01).length, varianceCount: allCashiers.filter((cashier) => Math.abs(cashier.variance) > 0.01).length };
 
     return successResponse({
       propertyName: property?.name || 'Property',
