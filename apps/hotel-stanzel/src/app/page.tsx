@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Image from 'next/image';
 import Link from 'next/link';
+import { Suspense } from 'react';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
 import { DateSearchWidget } from '@/components/booking/DateSearchWidget';
@@ -134,7 +135,9 @@ export default async function HomePage() {
 
             {/* Booking widget */}
             <div className="animate-fade-in-up delay-400" style={{ marginTop: 'var(--space-12)', maxWidth: '860px' }}>
-              <DateSearchWidget />
+              <Suspense fallback={null}>
+                <DateSearchWidget />
+              </Suspense>
             </div>
           </div>
 
