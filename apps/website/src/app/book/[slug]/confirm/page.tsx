@@ -15,6 +15,7 @@ interface SearchParams {
   firstName?: string; lastName?: string;
   email?: string; phone?: string;
   country?: string; specialRequests?: string; eta?: string;
+  reach?: string;
 }
 
 export default async function ConfirmPage({
@@ -30,7 +31,7 @@ export default async function ConfirmPage({
     checkIn, checkOut, adults = "2", children = "0",
     roomTypeId, ratePlanId, holdToken,
     firstName = "", lastName = "", email = "",
-    specialRequests = "", eta = "",
+    specialRequests = "", eta = "", reach: referralToken,
   } = sp;
 
   if (!checkIn || !checkOut || !roomTypeId || !ratePlanId || !holdToken || !email) {
@@ -167,6 +168,7 @@ export default async function ConfirmPage({
         currency={currency}
         paymentMode={config.paymentMode}
         specialRequests={specialRequests}
+        referralToken={referralToken}
         eta={eta}
       />
     </div>

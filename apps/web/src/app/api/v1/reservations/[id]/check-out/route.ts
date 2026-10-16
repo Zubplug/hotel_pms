@@ -16,6 +16,7 @@ import { applyAvailableGuestLedgerCredit } from '@/lib/finance/apply-guest-ledge
 import { reconcileFolioBalanceFromCounters } from '@/lib/finance/reconcile-folio-balance';
 import { getPropertyBusinessDate } from '@/lib/date-utils';
 import { getApprovedRoomDiscount } from '@/lib/finance/approved-room-discount';
+import { fulfilReachBooking } from '@/lib/reach-commission';
 
 export async function POST(
   req: NextRequest,
@@ -360,6 +361,33 @@ export async function POST(
             version: { increment: 1 }
           }
         });
+      }
+
+      // Reach commissions are earned only after a completed stay. Payment
+      // webhooks intentionally do not settle commissions: a payment receipt
+      // is not proof that the guest completed the stay. Use completed
+      // reservation payments already recorded by the front desk, and leave
+      // city-ledger/skipper stays for later reconciliation when collected.
+      const reachBookings = await tx.referralBooking.findMany({
+        where: { reservationId: id, status: 'BOOKED' },
+        select: { id: true, currency: true },
+      });
+      if (reachBookings.length > 0) {
+        const completedPayments = await tx.payment.aggregate({
+          where: { reservationId: id, status: 'COMPLETED' },
+          _sum: { amount: true },
+        });
+        const collectedRevenue = Number(completedPayments._sum.amount || 0);
+        if (collectedRevenue > 0) {
+          for (const booking of reachBookings) {
+            await fulfilReachBooking(tx, {
+              referralBookingId: booking.id,
+              collectedRevenue,
+              actorId: session.user.id,
+              now: today,
+            });
+          }
+        }
       }
 
       // 5. Audit Logging

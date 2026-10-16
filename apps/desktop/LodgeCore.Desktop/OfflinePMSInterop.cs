@@ -1458,6 +1458,13 @@ public class OfflinePMSInterop
                     ? source.GetString()
                     : null;
             }
+            if (root.TryGetProperty("referralToken", out var referralToken) ||
+                root.TryGetProperty("ReferralToken", out referralToken))
+            {
+                res.ReferralToken = referralToken.ValueKind == System.Text.Json.JsonValueKind.String
+                    ? referralToken.GetString()
+                    : null;
+            }
             if (res.CorporateAccountId != null)
                 res.Source = "CORPORATE";
             else if (string.IsNullOrWhiteSpace(res.Source))

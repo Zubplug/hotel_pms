@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 
 interface Props {
   slug: string;
+  referralToken?: string;
   roomTypeId?: string;
   config: {
     minStay: number;
@@ -35,7 +36,7 @@ function diffDays(a: string, b: string) {
   return Math.round((new Date(b).getTime() - new Date(a).getTime()) / 86400000);
 }
 
-export function DateSearchForm({ slug, roomTypeId, config }: Props) {
+export function DateSearchForm({ slug, roomTypeId, referralToken, config }: Props) {
   const router = useRouter();
   const [, startTransition] = useTransition();
 
@@ -60,6 +61,7 @@ export function DateSearchForm({ slug, roomTypeId, config }: Props) {
       startTransition(() => {
         const params = new URLSearchParams({ checkIn, checkOut, adults: String(adults), children: String(children) });
         if (roomTypeId) params.set("roomTypeId", roomTypeId);
+        if (referralToken) params.set("reach", referralToken);
         router.push(`/book/${slug}/rooms?${params.toString()}`);
       });
   };

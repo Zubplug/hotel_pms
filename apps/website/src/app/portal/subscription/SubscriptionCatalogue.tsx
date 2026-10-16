@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
 import CustomWebsiteAddonModal from "./CustomWebsiteAddonModal";
 import CustomDomainAddonModal from "./CustomDomainAddonModal";
+import { ReachActivationCard } from "@/components/reach-activation-card";
 
 /* ─────────────────────────────────────────────────────────────
    TYPES
@@ -609,6 +610,7 @@ function AddOnCard({
   const isPropertyPriced = product.metadata && typeof product.metadata === "object" && !Array.isArray(product.metadata) && (product.metadata as Record<string, unknown>).unit === "PROPERTY";
   const key = `addon-${product.id}`;
   const features = addOnFeatures(product);
+  const isReach = product.code === "ADDON_REACH";
 
   return (
     <div className={`sub-addon-card${isActive ? " sub-addon-card--active" : ""}`}>
@@ -659,7 +661,7 @@ function AddOnCard({
           disabled={busy !== null || !price || !canSubscribe || !scopeReady || isActive}
           onClick={() => price && (onSpecialAddon ? onSpecialAddon() : onCheckout(key, [price.id]))}
         >
-          {busy === key ? "Opening…" : isActive ? "Active add-on" : !canSubscribe ? "Base plan required" : !scopeReady ? "No property available" : price ? ["ADDON_CUSTOM_WEBSITE_API", "ADDON_CUSTOM_WEBSITE_PMS"].includes(product.code) ? "Design my website →" : product.code === "ADDON_CUSTOM_DOMAIN" ? "Check domain →" : "Add on →" : "Unavailable"}
+          {busy === key ? "Opening…" : isActive ? "Active add-on" : isReach ? "Configure Reach →" : !canSubscribe ? "Base plan required" : !scopeReady ? "No property available" : price ? ["ADDON_CUSTOM_WEBSITE_API", "ADDON_CUSTOM_WEBSITE_PMS"].includes(product.code) ? "Design my website →" : product.code === "ADDON_CUSTOM_DOMAIN" ? "Check domain →" : "Add on →" : "Unavailable"}
         </button>
       </div>
     </div>
@@ -825,7 +827,7 @@ export default function SubscriptionCatalogue({
                 interval={interval}
                 busy={busy}
                 onCheckout={(key, priceIds) => startAddonCheckout(product, key, priceIds)}
-                onSpecialAddon={["ADDON_CUSTOM_WEBSITE_API", "ADDON_CUSTOM_WEBSITE_PMS"].includes(product.code) ? () => setWebsiteModalOpen(true) : product.code === "ADDON_CUSTOM_DOMAIN" ? () => setDomainModalOpen(true) : undefined}
+                onSpecialAddon={["ADDON_CUSTOM_WEBSITE_API", "ADDON_CUSTOM_WEBSITE_PMS"].includes(product.code) ? () => setWebsiteModalOpen(true) : product.code === "ADDON_CUSTOM_DOMAIN" ? () => setDomainModalOpen(true) : product.code === "ADDON_REACH" ? () => document.getElementById("reach-activation-card")?.scrollIntoView({ behavior: "smooth", block: "center" }) : undefined}
                 canSubscribe={hasActiveBaseSubscription}
                 scopeReady={!isPropertyScoped(product) || properties.length > 0}
                 isActive={isPropertyScoped(product) ? properties.length > 0 && properties.every(property => (activeAddonPropertyIds[product.code] ?? []).includes(property.id)) : activeAddonCodes.includes(product.code)}
@@ -835,6 +837,8 @@ export default function SubscriptionCatalogue({
           </div>
         </div>
       )}
+
+      <ReachActivationCard />
 
       {/* Detail Drawer */}
       {details && (

@@ -65,6 +65,19 @@ model Organization {
   bookingEngineConfigs   BookingEngineConfig[]
   bookingSites           BookingSite[]
   bookingPaymentAccounts BookingPaymentAccount[]
+  referralPrograms       ReferralProgram[]
+  referralPartners       ReferralPartner[]
+  referralCampaigns      ReferralCampaign[]
+  referralClicks         ReferralClick[]
+  referralAttributions   ReferralAttribution[]
+  referralBookings       ReferralBooking[]
+  referralCommissions    ReferralCommission[]
+  referralLedgerEntries  ReferralLedgerEntry[]
+  referralPayouts        ReferralPayout[]
+  referralPlatformFees   ReferralPlatformFee[]
+  referralActivationPayments ReferralActivationPayment[]
+  reachWallet            ReachWallet?
+  reachPropertyDebts     ReachPropertyDebt[]
   customDomainRequests   CustomDomainRequest[]
   customWebsiteRequests  CustomWebsiteRequest[]
 
@@ -129,6 +142,15 @@ model Property {
   // Disabled means the General Cashier completes the bank transfer manually.
   autoBankReimbursementEnabled    Boolean  @default(false)
   nightAuditMovementSnapshots     NightAuditMovementSnapshot[]
+  referralProgram       ReferralProgram?
+  referralCampaigns     ReferralCampaign[]
+  referralClicks        ReferralClick[]
+  referralAttributions  ReferralAttribution[]
+  referralBookings      ReferralBooking[]
+  referralCommissions   ReferralCommission[]
+  referralPlatformFees  ReferralPlatformFee[]
+  referralActivationPayments ReferralActivationPayment[]
+  reachPropertyDebt     ReachPropertyDebt?
 
   cashHandovers            CashHandover[]
   bankDeposits             BankDeposit[]
@@ -841,6 +863,7 @@ model Reservation {
   lockCredentials   LockCredential[]
   lockOperations    LockOperation[]
   priorities        ReservationPriority[]
+  referralBookings  ReferralBooking[]
   CheckInBypass     CheckInBypass[]
 
   createdAt            DateTime              @default(now()) @db.Timestamptz
@@ -5264,6 +5287,7 @@ model Event {
   leaseContract LeaseContract?
   beos          BanquetEventOrder[]
   changeOrders  EventChangeOrder[]
+  referralBookings ReferralBooking[]
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
@@ -7254,6 +7278,447 @@ model BookingPaymentAccount {
   Organization Organization @relation(fields: [organizationId], references: [id])
 
   @@index([organizationId, provider, isActive])
+}
+
+// -----------------------------------------------------------------------------
+// LODGECORE REACH - PROPERTY REFERRAL NETWORK
+// -----------------------------------------------------------------------------
+
+/// Property-controlled Reach activation. Eligibility is enforced by the
+/// application against the property's digital-commerce entitlements.
+model ReferralProgram {
+  id                   String   @id @default(uuid()) @db.Uuid
+  organizationId       String   @db.Uuid
+  propertyId           String   @unique @db.Uuid
+  enabled              Boolean  @default(false)
+  attributionWindowDays Int     @default(30)
+  platformFeeBps       Int      @default(100)
+  platformFeeCap       Decimal? @db.Decimal(18, 4)
+  minimumPayout        Decimal  @default(5000) @db.Decimal(18, 4)
+  debtSuspensionThreshold Decimal @default(50000) @db.Decimal(18, 4)
+  walletAutoApply      Boolean  @default(true)
+  activationFeeAmount  Decimal  @default(50000) @db.Decimal(18, 4)
+  activationFeeCurrency String  @default("NGN")
+  activationPaymentStatus String @default("NOT_PAID") // NOT_PAID | PENDING | PAID | FAILED
+  activationFeePaidAt DateTime? @db.Timestamptz
+  eligibleCategories   String[] @default(["STAY"])
+  rules                Json?
+  activatedAt          DateTime? @db.Timestamptz
+  pausedAt             DateTime? @db.Timestamptz
+  createdAt            DateTime @default(now()) @db.Timestamptz
+  updatedAt            DateTime @updatedAt @db.Timestamptz
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  property     Property     @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  campaigns    ReferralCampaign[]
+  clicks       ReferralClick[]
+  attributions ReferralAttribution[]
+  bookings     ReferralBooking[]
+  commissions  ReferralCommission[]
+  platformFees ReferralPlatformFee[]
+  activationPayments ReferralActivationPayment[]
+
+  @@index([organizationId, enabled])
+}
+
+model ReferralPartner {
+  id                 String   @id @default(uuid()) @db.Uuid
+  organizationId     String?  @db.Uuid
+  displayName        String
+  email              String?
+  phone              String?
+  status             String   @default("PENDING") // PENDING | ACTIVE | SUSPENDED | CLOSED
+  verificationStatus String   @default("UNVERIFIED") // UNVERIFIED | PENDING | VERIFIED | REJECTED
+  payoutProfile      Json?
+  termsAcceptedAt    DateTime? @db.Timestamptz
+  createdAt          DateTime @default(now()) @db.Timestamptz
+  updatedAt          DateTime @updatedAt @db.Timestamptz
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  campaigns    ReferralCampaign[]
+  clicks       ReferralClick[]
+  attributions ReferralAttribution[]
+  bookings     ReferralBooking[]
+  commissions  ReferralCommission[]
+  payouts      ReferralPayout[]
+  ledgerEntries ReferralLedgerEntry[]
+
+  @@index([email])
+  @@index([status, verificationStatus])
+}
+
+model ReferralCampaign {
+  id          String   @id @default(uuid()) @db.Uuid
+  organizationId String @db.Uuid
+  propertyId  String   @db.Uuid
+  programId   String   @db.Uuid
+  partnerId   String   @db.Uuid
+  name        String
+  code        String   @unique
+  category    String   @default("STAY") // STAY | VENUE | EVENT | CORPORATE
+  targetUrl   String?
+  commissionBps Int     @default(700)
+  budget      Decimal? @db.Decimal(18, 4)
+  startsAt    DateTime?
+  endsAt      DateTime?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now()) @db.Timestamptz
+  updatedAt   DateTime @updatedAt @db.Timestamptz
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  property     Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  program      ReferralProgram @relation(fields: [programId], references: [id], onDelete: Cascade)
+  partner      ReferralPartner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  clicks       ReferralClick[]
+  attributions ReferralAttribution[]
+  bookings     ReferralBooking[]
+
+  @@index([propertyId, isActive])
+  @@index([partnerId, isActive])
+}
+
+model ReferralClick {
+  id            String   @id @default(uuid()) @db.Uuid
+  organizationId String  @db.Uuid
+  propertyId    String   @db.Uuid
+  programId     String   @db.Uuid
+  campaignId    String?  @db.Uuid
+  partnerId     String   @db.Uuid
+  referralToken String   @unique
+  landingPath   String?
+  occurredAt    DateTime @default(now()) @db.Timestamptz
+  expiresAt     DateTime @db.Timestamptz
+  metadata      Json?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  property     Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  program      ReferralProgram @relation(fields: [programId], references: [id], onDelete: Cascade)
+  campaign     ReferralCampaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  partner      ReferralPartner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  attributions ReferralAttribution[]
+
+  @@index([propertyId, occurredAt])
+  @@index([partnerId, occurredAt])
+}
+
+model ReferralAttribution {
+  id            String   @id @default(uuid()) @db.Uuid
+  organizationId String  @db.Uuid
+  propertyId    String   @db.Uuid
+  programId     String   @db.Uuid
+  partnerId     String   @db.Uuid
+  campaignId    String?  @db.Uuid
+  clickId       String?  @db.Uuid
+  referralCode  String?
+  bookingId     String?
+  status        String   @default("QUALIFIED") // QUALIFIED | CONVERTED | EXPIRED | REJECTED
+  policyVersion String   @default("LAST_ELIGIBLE_V1")
+  qualifiedAt   DateTime @default(now()) @db.Timestamptz
+  expiresAt     DateTime @db.Timestamptz
+  convertedAt   DateTime? @db.Timestamptz
+  metadata      Json?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  property     Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  program      ReferralProgram @relation(fields: [programId], references: [id], onDelete: Cascade)
+  partner      ReferralPartner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  campaign     ReferralCampaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  click        ReferralClick? @relation(fields: [clickId], references: [id], onDelete: SetNull)
+  booking      ReferralBooking?
+
+  @@index([propertyId, status, expiresAt])
+  @@index([partnerId, qualifiedAt])
+  @@unique([propertyId, bookingId])
+}
+
+model ReferralBooking {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  propertyId     String   @db.Uuid
+  programId      String   @db.Uuid
+  partnerId      String   @db.Uuid
+  campaignId     String?  @db.Uuid
+  attributionId  String   @unique @db.Uuid
+  reservationId  String?  @unique @db.Uuid
+  eventId        String?  @unique @db.Uuid
+  category       String   @default("STAY")
+  status         String   @default("BOOKED") // BOOKED | FULFILLED | CANCELLED | REFUNDED | DISPUTED
+  eligibleRevenue Decimal @default(0) @db.Decimal(18, 4)
+  collectedRevenue Decimal @default(0) @db.Decimal(18, 4)
+  currency       String   @default("NGN")
+  fulfilledAt    DateTime? @db.Timestamptz
+  cancelledAt    DateTime? @db.Timestamptz
+  createdAt      DateTime @default(now()) @db.Timestamptz
+  updatedAt      DateTime @updatedAt @db.Timestamptz
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  property     Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  program      ReferralProgram @relation(fields: [programId], references: [id], onDelete: Cascade)
+  partner      ReferralPartner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  campaign     ReferralCampaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  attribution  ReferralAttribution @relation(fields: [attributionId], references: [id], onDelete: Restrict)
+  reservation  Reservation? @relation(fields: [reservationId], references: [id], onDelete: SetNull)
+  event        Event? @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  commission   ReferralCommission?
+  platformFee  ReferralPlatformFee?
+
+  @@index([propertyId, status, createdAt])
+  @@index([partnerId, status])
+}
+
+model ReferralCommission {
+  id              String   @id @default(uuid()) @db.Uuid
+  organizationId  String   @db.Uuid
+  propertyId      String   @db.Uuid
+  programId       String   @db.Uuid
+  partnerId       String   @db.Uuid
+  referralBookingId String @unique @db.Uuid
+  status          String   @default("PENDING") // PENDING | APPROVED | PAYABLE | PROCESSING | PAID | ON_HOLD | REVERSED | FAILED
+  basisAmount     Decimal  @db.Decimal(18, 4)
+  rateBps         Int
+  amount          Decimal  @db.Decimal(18, 4)
+  reversedAmount  Decimal  @default(0) @db.Decimal(18, 4)
+  accrualJournalEntryId String? @db.Uuid
+  currency        String   @default("NGN")
+  earnedAt        DateTime? @db.Timestamptz
+  approvedAt      DateTime? @db.Timestamptz
+  paidAt          DateTime? @db.Timestamptz
+  createdAt       DateTime @default(now()) @db.Timestamptz
+  updatedAt       DateTime @updatedAt @db.Timestamptz
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  property     Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  program      ReferralProgram @relation(fields: [programId], references: [id], onDelete: Cascade)
+  partner      ReferralPartner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  referralBooking ReferralBooking @relation(fields: [referralBookingId], references: [id], onDelete: Restrict)
+  ledgerEntries ReferralLedgerEntry[]
+  payoutItems ReferralPayoutItem[]
+
+  @@index([propertyId, status])
+  @@index([partnerId, status])
+}
+
+model ReferralLedgerEntry {
+  id            String   @id @default(uuid()) @db.Uuid
+  organizationId String  @db.Uuid
+  partnerId     String?  @db.Uuid
+  commissionId  String?  @db.Uuid
+  payoutId      String?  @db.Uuid
+  entryType     String   // COMMISSION | REVERSAL | PAYOUT | ADJUSTMENT
+  amount        Decimal  @db.Decimal(18, 4)
+  currency      String   @default("NGN")
+  idempotencyKey String  @unique
+  metadata      Json?
+  journalEntryId String? @db.Uuid
+  createdAt     DateTime @default(now()) @db.Timestamptz
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  partner      ReferralPartner? @relation(fields: [partnerId], references: [id], onDelete: SetNull)
+  commission   ReferralCommission? @relation(fields: [commissionId], references: [id], onDelete: SetNull)
+  payout       ReferralPayout? @relation(fields: [payoutId], references: [id], onDelete: SetNull)
+
+  @@index([partnerId, createdAt])
+  @@index([commissionId, createdAt])
+}
+
+model ReferralPayout {
+  id            String   @id @default(uuid()) @db.Uuid
+  organizationId String  @db.Uuid
+  propertyId    String   @db.Uuid
+  partnerId     String   @db.Uuid
+  status        String   @default("PENDING") // PENDING | PROCESSING | PAID | FAILED
+  amount        Decimal  @db.Decimal(18, 4)
+  currency      String   @default("NGN")
+  payoutReference String?
+  failureReason String?
+  settlementMethod String?
+  settlementAccountId String? @db.Uuid
+  journalEntryId String? @db.Uuid
+  processedAt   DateTime? @db.Timestamptz
+  createdAt     DateTime @default(now()) @db.Timestamptz
+  updatedAt     DateTime @updatedAt @db.Timestamptz
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  partner      ReferralPartner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  commissions  ReferralPayoutItem[]
+  ledgerEntries ReferralLedgerEntry[]
+
+  @@index([partnerId, status, createdAt])
+}
+
+model ReferralPayoutItem {
+  id           String @id @default(uuid()) @db.Uuid
+  payoutId     String @db.Uuid
+  commissionId String @db.Uuid
+  amount       Decimal @db.Decimal(18, 4)
+  payout       ReferralPayout @relation(fields: [payoutId], references: [id], onDelete: Cascade)
+  commission   ReferralCommission @relation(fields: [commissionId], references: [id], onDelete: Restrict)
+
+  @@unique([payoutId, commissionId])
+}
+
+model ReferralPlatformFee {
+  id              String   @id @default(uuid()) @db.Uuid
+  organizationId  String   @db.Uuid
+  propertyId      String   @db.Uuid
+  programId       String   @db.Uuid
+  referralBookingId String  @unique @db.Uuid
+  basisAmount     Decimal  @db.Decimal(18, 4)
+  rateBps         Int
+  amount          Decimal  @db.Decimal(18, 4)
+  reversedAmount  Decimal  @default(0) @db.Decimal(18, 4)
+  hqJournalEntryId String? @db.Uuid
+  walletAppliedAmount Decimal @default(0) @db.Decimal(18, 4)
+  outstandingAmount Decimal @default(0) @db.Decimal(18, 4)
+  currency        String   @default("NGN")
+  status          String   @default("EARNED") // EARNED | INVOICED | REVERSED
+  createdAt       DateTime @default(now()) @db.Timestamptz
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  property     Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  program      ReferralProgram @relation(fields: [programId], references: [id], onDelete: Cascade)
+  referralBooking ReferralBooking @relation(fields: [referralBookingId], references: [id], onDelete: Restrict)
+
+  @@index([propertyId, status, createdAt])
+}
+
+model ReferralActivationPayment {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  propertyId     String   @db.Uuid
+  programId      String   @db.Uuid
+  amount         Decimal  @db.Decimal(18, 4)
+  currency       String   @default("NGN")
+  status         String   @default("PENDING") // PENDING | PAID | FAILED
+  provider       String   @default("FLUTTERWAVE")
+  providerReference String @unique
+  providerTransactionId String?
+  hqJournalEntryId String? @db.Uuid
+  createdAt      DateTime @default(now()) @db.Timestamptz
+  paidAt         DateTime? @db.Timestamptz
+
+  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  property     Property        @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  program      ReferralProgram @relation(fields: [programId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, status])
+  @@index([propertyId, status])
+}
+
+/// Organization-level customer wallet used to settle HQ-owned Reach fees.
+/// The balance is a customer liability; it is never a hotel-property asset.
+model ReachWallet {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @unique @db.Uuid
+  currency       String   @default("NGN")
+  balance        Decimal  @default(0) @db.Decimal(18, 4)
+  status         String   @default("ACTIVE") // ACTIVE | LOCKED
+  createdAt      DateTime @default(now()) @db.Timestamptz
+  updatedAt      DateTime @updatedAt @db.Timestamptz
+
+  organization Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  transactions ReachWalletTransaction[]
+
+  @@index([organizationId, status])
+}
+
+model ReachWalletTransaction {
+  id                  String   @id @default(uuid()) @db.Uuid
+  walletId            String   @db.Uuid
+  organizationId      String   @db.Uuid
+  propertyId          String?  @db.Uuid
+  referralPlatformFeeId String? @db.Uuid
+  hqJournalEntryId     String?  @db.Uuid
+  type                String   // FUNDING | FEE_SETTLEMENT | REFUND | ADJUSTMENT
+  status              String   @default("PENDING") // PENDING | COMPLETED | FAILED
+  amount              Decimal  @db.Decimal(18, 4) // positive credit/debit magnitude
+  balanceAfter        Decimal? @db.Decimal(18, 4)
+  currency            String   @default("NGN")
+  provider            String?
+  providerReference   String?
+  idempotencyKey      String   @unique
+  description         String?
+  metadata            Json?
+  createdAt           DateTime @default(now()) @db.Timestamptz
+  completedAt         DateTime? @db.Timestamptz
+
+  wallet ReachWallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, createdAt])
+  @@index([propertyId, createdAt])
+  @@index([providerReference])
+  @@index([referralPlatformFeeId])
+}
+
+model ReachPropertyDebt {
+  id                    String   @id @default(uuid()) @db.Uuid
+  organizationId        String   @db.Uuid
+  propertyId            String   @unique @db.Uuid
+  currency              String   @default("NGN")
+  outstandingAmount     Decimal  @default(0) @db.Decimal(18, 4)
+  suspensionThreshold   Decimal  @default(50000) @db.Decimal(18, 4)
+  status                String   @default("CURRENT") // CURRENT | OVERDUE | SUSPENDED | CLEARED
+  suspendedAt           DateTime? @db.Timestamptz
+  clearedAt             DateTime? @db.Timestamptz
+  lastEvaluatedAt       DateTime?
+  createdAt             DateTime @default(now()) @db.Timestamptz
+  updatedAt             DateTime @updatedAt @db.Timestamptz
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  property     Property     @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, propertyId])
+  @@index([organizationId, status])
+  @@index([status, outstandingAmount])
+}
+
+/// LodgeCore-owned accounting profile. This is intentionally not scoped to a
+/// customer organization or hotel property.
+model HqChartOfAccount {
+  id            String   @id @default(uuid()) @db.Uuid
+  code          String   @unique
+  name          String
+  type          String
+  normalBalance String
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now()) @db.Timestamptz
+  updatedAt     DateTime @updatedAt @db.Timestamptz
+
+  lines HqJournalEntryLine[]
+}
+
+model HqJournalEntry {
+  id          String   @id @default(uuid()) @db.Uuid
+  entryNumber String   @unique
+  entryDate   DateTime @db.Date
+  description String
+  reference   String?
+  source      String   @default("REACH")
+  status      String   @default("POSTED")
+  totalDebit  Decimal  @default(0) @db.Decimal(18, 4)
+  totalCredit Decimal  @default(0) @db.Decimal(18, 4)
+  createdBy   String?  @db.Uuid
+  createdAt   DateTime @default(now()) @db.Timestamptz
+
+  lines HqJournalEntryLine[]
+}
+
+model HqJournalEntryLine {
+  id          String @id @default(uuid()) @db.Uuid
+  entryId     String @db.Uuid
+  accountId   String @db.Uuid
+  debit       Decimal @default(0) @db.Decimal(18, 4)
+  credit      Decimal @default(0) @db.Decimal(18, 4)
+  description String?
+  sourceType  String?
+  sourceId    String?
+
+  entry   HqJournalEntry   @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  account HqChartOfAccount @relation(fields: [accountId], references: [id], onDelete: Restrict)
+
+  @@index([entryId])
+  @@index([accountId])
+  @@unique([sourceType, sourceId, accountId])
 }
 
 model BreakfastRedemption {

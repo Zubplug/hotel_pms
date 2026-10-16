@@ -1,10 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 export function DateSearchWidget() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [checkIn, setCheckIn] = useState('');
   const [checkOut, setCheckOut] = useState('');
   const [adults, setAdults] = useState(2);
@@ -26,6 +27,8 @@ export function DateSearchWidget() {
       adults: String(adults),
       children: String(children),
     });
+    const referralToken = searchParams.get('reach');
+    if (referralToken) params.set('reach', referralToken);
     router.push(`/booking/rooms?${params.toString()}`);
   }
 

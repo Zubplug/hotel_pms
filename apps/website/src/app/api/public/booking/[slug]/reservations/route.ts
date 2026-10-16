@@ -21,6 +21,7 @@ import { NotificationEngine } from '@/lib/notification-engine';
 import { sendBookingConfirmationEmail } from '@/lib/email/booking-emails';
 import { resolveBookingOrigin } from '@/lib/booking-engine/request-origin';
 import { displayRoomNumber } from '@/lib/booking-engine/room-number';
+import { attributeReachReservation } from '@/lib/reach-attribution';
 
 export async function OPTIONS(req: NextRequest) {
   return corsPreflightResponse(req);
@@ -83,6 +84,7 @@ export async function POST(
     guest: guestInput,
     ratePlanId,
     specialRequests,
+    referralToken,
   } = body;
 
   if (!holdToken || !guestInput?.firstName || !guestInput?.lastName) {
@@ -229,6 +231,15 @@ export async function POST(
             guestConfirmationTokenHash: confirmHash,
             guestCancellationTokenHash: cancelHash,
           },
+        });
+
+        await attributeReachReservation(tx as any, {
+          referralToken,
+          reservationId: res.id,
+          propertyId: ctx.property.id,
+          organizationId: ctx.property.organizationId,
+          eligibleRevenue: Number(finalSnapshot.subtotal ?? 0),
+          currency: finalSnapshot.currency,
         });
 
         // 7. Convert the hold

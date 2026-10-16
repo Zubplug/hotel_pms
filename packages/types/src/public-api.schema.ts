@@ -23,6 +23,7 @@ export const CreateReservationRequestSchema = z.object({
   adults: z.number().int().min(1).default(1),
   children: z.number().int().min(0).default(0),
   specialRequests: z.string().trim().max(2000).optional(),
+  referralToken: z.string().trim().min(16).max(255).optional(),
   returnUrl: z.string().url().max(2048).optional(),
 }).strict();
 

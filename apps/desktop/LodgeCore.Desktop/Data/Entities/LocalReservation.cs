@@ -15,6 +15,7 @@ public class LocalReservation
     public string? CompanyId { get; set; }
     public string? Source { get; set; }
     public string? ChannelRef { get; set; }
+    public string? ReferralToken { get; set; }
     public string? RatePlanId { get; set; }
     public string? RatePlanSnapshotJson { get; set; }
     public string? Currency { get; set; }

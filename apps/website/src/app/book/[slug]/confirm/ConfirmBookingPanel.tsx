@@ -22,6 +22,7 @@ interface Props {
   paymentMode: string;
   specialRequests: string;
   eta: string;
+  referralToken?: string;
 }
 
 function fmtCurrency(amount: number, currency: string) {
@@ -76,6 +77,7 @@ export function ConfirmBookingPanel({
   checkIn, checkOut, nights, adults, children,
   roomTypeName, ratePlanName, totalAmount, nightlyRate, currency,
   paymentMode, specialRequests, eta,
+  referralToken,
 }: Props) {
   const router = useRouter();
   const [, startTransition] = useTransition();
@@ -102,7 +104,7 @@ export function ConfirmBookingPanel({
       const res = await fetch(`/api/public/booking/${slug}/reservations`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Idempotency-Key": crypto.randomUUID() },
-        body: JSON.stringify({ holdToken, guest: { firstName, lastName, email }, adults, children, specialRequests }),
+        body: JSON.stringify({ holdToken, guest: { firstName, lastName, email }, adults, children, specialRequests, referralToken }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error?.message ?? data.error ?? "Booking failed");

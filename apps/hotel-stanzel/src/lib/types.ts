@@ -87,6 +87,7 @@ export interface ReservationGuest {
 export interface ReservationRequest {
   holdToken: string;
   guest: ReservationGuest;
+  referralToken?: string;
   adults?: number;
   children?: number;
   specialRequests?: string;

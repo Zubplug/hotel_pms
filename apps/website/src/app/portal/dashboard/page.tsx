@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import prisma from "@hotel-pms/db";
 import { PortalShell } from "@/components/portal-shell";
+import { ReachWalletCard } from "@/components/reach-wallet-card";
 
 type SessionUser = { organizationId?: string; name?: string | null; email?: string | null };
 
@@ -140,6 +141,8 @@ export default async function PortalDashboard() {
           )}
         </p>
       </div>
+
+      <ReachWalletCard />
 
       {/* ── STATS ROW ─────────────────────────────────────── */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12, marginBottom: 24 }}>

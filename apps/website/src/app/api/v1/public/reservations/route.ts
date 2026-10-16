@@ -19,6 +19,7 @@ import { sendBookingConfirmationEmail } from '@/lib/email/booking-emails';
 import { resolveBookingOrigin } from '@/lib/booking-engine/request-origin';
 import { displayRoomNumber } from '@/lib/booking-engine/room-number';
 import { CreateReservationRequestSchema } from '@hotel-pms/types';
+import { attributeReachReservation } from '@/lib/reach-attribution';
 
 export async function OPTIONS(req: NextRequest) {
   return await corsPreflightResponse(req);
@@ -90,6 +91,7 @@ export async function POST(req: NextRequest) {
     specialRequests,
     adults,
     children,
+    referralToken,
     returnUrl,
   } = parsedBody.data;
 
@@ -231,6 +233,15 @@ export async function POST(req: NextRequest) {
             guestConfirmationTokenHash: confirmHash,
             guestCancellationTokenHash: cancelHash,
           },
+        });
+
+        await attributeReachReservation(tx as any, {
+          referralToken,
+          reservationId: res.id,
+          propertyId: ctx.propertyId,
+          organizationId: ctx.organizationId,
+          eligibleRevenue: Number(finalSnapshot.subtotal ?? 0),
+          currency: finalSnapshot.currency,
         });
 
         // Keep payment-required bookings attached to an ACTIVE hold until the

@@ -27,6 +27,7 @@ interface Props {
   checkOut: string;
   adults: string;
   children: string;
+  referralToken?: string;
   nights: number;
   paymentMode: string;
 }
@@ -88,7 +89,7 @@ function Modal({ isOpen, onClose, children }: { isOpen: boolean; onClose: () => 
   );
 }
 
-export function RoomCard({ room, slug, checkIn, checkOut, adults, children, nights, paymentMode }: Props) {
+export function RoomCard({ room, slug, checkIn, checkOut, adults, children, referralToken, nights, paymentMode }: Props) {
   const router = useRouter();
   const [, startTransition] = useTransition();
   const [selectedRateIdx, setSelectedRateIdx] = useState(0);
@@ -113,6 +114,7 @@ export function RoomCard({ room, slug, checkIn, checkOut, adults, children, nigh
       roomTypeId: room.roomTypeId,
       ratePlanId: selectedRate.ratePlanId,
     });
+    if (referralToken) params.set("reach", referralToken);
     startTransition(() => {
       router.push(`/book/${slug}/guest?${params}`);
     });

@@ -168,6 +168,7 @@ public class LocalDbContext : DbContext
             "ALTER TABLE Reservations ADD COLUMN ReinstatedAt TEXT",
             "ALTER TABLE Reservations ADD COLUMN ReinstatedBy TEXT",
             "ALTER TABLE Reservations ADD COLUMN ReinstatementReason TEXT",
+            "ALTER TABLE Reservations ADD COLUMN ReferralToken TEXT",
             "ALTER TABLE Guests ADD COLUMN PropertyId TEXT NOT NULL DEFAULT ''"
         };
         foreach (var sql in columns)

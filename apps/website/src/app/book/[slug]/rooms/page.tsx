@@ -13,6 +13,7 @@ interface SearchParams {
   adults?: string;
   children?: string;
   roomTypeId?: string;
+  reach?: string;
 }
 
 export default async function RoomsPage({
@@ -25,7 +26,7 @@ export default async function RoomsPage({
   const { slug } = await params;
   const sp = await searchParams;
 
-  const { checkIn, checkOut, adults = "2", children = "0", roomTypeId } = sp;
+  const { checkIn, checkOut, adults = "2", children = "0", roomTypeId, reach: referralToken } = sp;
 
   if (!checkIn || !checkOut || checkIn >= checkOut) {
     redirect(`/book/${slug}`);
@@ -97,6 +98,7 @@ export default async function RoomsPage({
         roomTypeId,
         ratePlanId: selectedRate.ratePlanId,
       });
+      if (referralToken) guestParams.set("reach", referralToken);
       redirect(`/book/${slug}/guest?${guestParams.toString()}`);
     }
   }
@@ -242,7 +244,8 @@ export default async function RoomsPage({
                 checkIn={checkIn}
                 checkOut={checkOut}
                 adults={adults}
-                children={children}
+        children={children}
+        referralToken={referralToken}
                 nights={nights}
                 paymentMode={config.paymentMode}
               />

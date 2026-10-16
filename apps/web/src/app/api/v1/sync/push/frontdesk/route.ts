@@ -22,6 +22,8 @@ import { GeneralLedgerService } from "@/lib/services/general-ledger-service";
 import { GLMappingService } from "@/lib/services/gl-mapping-service";
 import { queueCancellationRefunds as queueCancellationRefundsProfessional } from "@/lib/finance/queue-cancellation-refund";
 import { QueuePublisher } from "@/lib/integrations/ota/queue";
+import { attributeReachReservation } from "@/lib/reach-attribution";
+import { fulfilReachBooking } from "@/lib/reach-commission";
 
 const parseLocalDateString = (dateString: string | Date | undefined): Date | undefined => {
   if (!dateString) return undefined;
@@ -1365,6 +1367,15 @@ export async function POST(req: NextRequest) {
               },
             });
 
+            await attributeReachReservation(tx, {
+              referralToken: payload.ReferralToken || payload.referralToken,
+              reservationId: aggregateId,
+              propertyId,
+              organizationId: property!.organizationId,
+              eligibleRevenue: amount,
+              currency,
+            });
+
             // 7D.1: Create Folio
             const sharedCorporateFolio = corporateAccountId
               ? await tx.folio.findFirst({
@@ -1743,6 +1754,22 @@ export async function POST(req: NextRequest) {
               where: { reservationId: aggregateId },
               data: { checkOut: today },
             });
+            const reachBookings = await tx.referralBooking.findMany({
+              where: { reservationId: aggregateId, status: "BOOKED" },
+              select: { id: true },
+            });
+            if (reachBookings.length > 0) {
+              const completedPayments = await tx.payment.aggregate({
+                where: { reservationId: aggregateId, status: "COMPLETED" },
+                _sum: { amount: true },
+              });
+              const collectedRevenue = Number(completedPayments._sum.amount || 0);
+              if (collectedRevenue > 0) {
+                for (const booking of reachBookings) {
+                  await fulfilReachBooking(tx, { referralBookingId: booking.id, collectedRevenue, actorId: actorId!, now: today });
+                }
+              }
+            }
             // Checkout never makes a room immediately sellable. Every physical
             // room assigned to this reservation is released from occupancy and
             // enters the housekeeping workflow. This is authoritative for

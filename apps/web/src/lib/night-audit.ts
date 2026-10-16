@@ -6,6 +6,7 @@ import { applyAvailableFolioCredit } from '@/lib/finance/apply-folio-credit';
 import { applyAvailableGuestLedgerCredit } from '@/lib/finance/apply-guest-ledger-credit';
 import { reconcileFolioBalanceFromCounters } from '@/lib/finance/reconcile-folio-balance';
 import { postNightAuditJournal, buildNightAuditBalanceProof } from './night-audit-accounting';
+import { fulfilReachBooking } from './reach-commission';
 import { processLeaseBilling } from './events/lease-actions';
 import { resolveBreakdownConfig, computeRateBreakdown } from './room-rate-breakdown';
 import { postGuestAmenityPackInTransaction } from './services/guest-amenity-service';
@@ -841,6 +842,43 @@ export async function executeNightAudit(
         });
       }
     }
+    }
+
+    // Reconcile any completed-stay referrals that were created or checked out
+    // while the desktop client was offline, or whose first fulfilment attempt
+    // failed. This pass is deliberately idempotent: fulfilReachBooking locks
+    // the booking and returns the existing commission on repeated audits.
+    const pendingReachBookings = await prisma.referralBooking.findMany({
+      where: {
+        propertyId,
+        status: 'BOOKED',
+        reservation: { propertyId, status: 'CHECKED_OUT' },
+        commission: null,
+      },
+      select: { id: true, reservationId: true },
+    });
+    for (const reachBooking of pendingReachBookings) {
+      try {
+        await prisma.$transaction(async (tx: any) => {
+          const paymentTotal = await tx.payment.aggregate({
+            where: { reservationId: reachBooking.reservationId, status: 'COMPLETED' },
+            _sum: { amount: true },
+          });
+          const collectedRevenue = Number(paymentTotal._sum.amount || 0);
+          if (collectedRevenue > 0) {
+            await fulfilReachBooking(tx, {
+              referralBookingId: reachBooking.id,
+              collectedRevenue,
+              actorId: actorId || userId || '',
+              now: new Date(),
+            });
+          }
+        });
+      } catch (error) {
+        // A single referral must not prevent the property close package from
+        // completing; the next audit/reconciliation retry can safely retry it.
+        console.error(`[Night Audit] Reach fulfilment failed for ${reachBooking.id}:`, error);
+      }
     }
 
   // The date was already rolled during cutover. Finish the previous date's

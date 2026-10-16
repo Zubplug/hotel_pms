@@ -7,6 +7,7 @@ import { applyRefundToFolio } from '@/lib/refunds/settle-refund';
 import { isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
 import { CityLedgerAccountingService } from '@/lib/services/city-ledger-accounting-service';
 import { sendBookingRefundCompletedEmail } from '@/lib/email/booking-refund-email';
+import { reverseReachReservation } from '@/lib/reach-commission';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -44,6 +45,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         status: 'COMPLETED',
         idempotencyKey: `refund-request:${request.id}`
       } });
+      await reverseReachReservation(tx, {
+        reservationId: request.reservationId,
+        refundedRevenue: amount,
+        idempotencyKey: `reach-refund:${refund.id}`,
+        reason: request.reason,
+        actorId: user.id,
+      });
       if (request.cityLedgerEntryId) await CityLedgerAccountingService.settleGuestRefund(tx, { propertyId: request.propertyId, organizationId: property?.organizationId || '', staffId: user.id, cityLedgerEntryId: request.cityLedgerEntryId, refundRequestId: request.id, amount, method: 'CASH', businessDate });
       const staff = await tx.staff.findFirst({ where: { userId: user.id } });
       const activeSession = staff ? await tx.frontdeskSession.findFirst({ where: { propertyId: request.propertyId, staffId: staff.id, status: 'OPEN' } }) : null;

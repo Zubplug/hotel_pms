@@ -12,9 +12,10 @@ function formatCurrency(amount: number, currency: string) {
   return `${currency} ${amount.toLocaleString('en-NG', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 }
 
-function RoomCard({ room, checkIn, checkOut, adults, children }: {
+function RoomCard({ room, checkIn, checkOut, adults, children, referralToken }: {
   room: LCAvailableRoomType;
   checkIn: string; checkOut: string; adults: number; children: number;
+  referralToken?: string;
 }) {
   const router = useRouter();
   const [selectedRate, setSelectedRate] = useState<LCRatePricing | null>(room.rates[0] ?? null);
@@ -40,8 +41,9 @@ function RoomCard({ room, checkIn, checkOut, adults, children }: {
         room: { id: room.roomTypeId, name: room.name, photos: room.photos },
         rate: selectedRate,
         checkIn, checkOut, adults, children,
+        referralToken,
       }));
-      router.push('/booking/guest');
+      router.push(referralToken ? `/booking/guest?reach=${encodeURIComponent(referralToken)}` : '/booking/guest');
     } catch { setError('Network error. Please try again.'); }
     finally { setHolding(false); }
   }
@@ -162,6 +164,7 @@ function RoomsPageContent() {
   const checkOut = params.get('checkOut') ?? '';
   const adults = Number(params.get('adults') ?? 2);
   const children = Number(params.get('children') ?? 0);
+  const referralToken = params.get('reach') || undefined;
 
   const [availability, setAvailability] = useState<AvailabilityResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -280,7 +283,7 @@ function RoomsPageContent() {
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 'var(--space-8)' }}>
                 {availableRooms.map(room => (
-                  <RoomCard key={room.roomTypeId} room={room} checkIn={checkIn} checkOut={checkOut} adults={adults} children={children} />
+                  <RoomCard key={room.roomTypeId} room={room} checkIn={checkIn} checkOut={checkOut} adults={adults} children={children} referralToken={referralToken} />
                 ))}
               </div>
 
@@ -291,7 +294,7 @@ function RoomsPageContent() {
                   </p>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 'var(--space-8)', opacity: 0.6 }}>
                     {unavailableRooms.map(room => (
-                      <RoomCard key={room.roomTypeId} room={room} checkIn={checkIn} checkOut={checkOut} adults={adults} children={children} />
+                      <RoomCard key={room.roomTypeId} room={room} checkIn={checkIn} checkOut={checkOut} adults={adults} children={children} referralToken={referralToken} />
                     ))}
                   </div>
                 </div>

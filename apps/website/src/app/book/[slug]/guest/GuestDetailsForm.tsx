@@ -16,6 +16,7 @@ interface Props {
   currency: string;
   roomTypeId: string;
   ratePlanId: string;
+  referralToken?: string;
   paymentMode: string;
 }
 
@@ -40,7 +41,7 @@ const COUNTRIES = [
 export function GuestDetailsForm({
   slug, checkIn, checkOut, adults, children, nights,
   roomTypeName, ratePlanName, nightlyRate, totalAmount, currency,
-  roomTypeId, ratePlanId, paymentMode,
+  roomTypeId, ratePlanId, referralToken, paymentMode,
 }: Props) {
   const router = useRouter();
   const [, startTransition] = useTransition();
@@ -96,6 +97,7 @@ export function GuestDetailsForm({
         firstName, lastName, email, phone, country,
         specialRequests, eta,
       });
+      if (referralToken) params.set("reach", referralToken);
       startTransition(() => {
         router.push(`/book/${slug}/confirm?${params}`);
       });

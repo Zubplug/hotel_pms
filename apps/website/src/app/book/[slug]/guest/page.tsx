@@ -14,6 +14,7 @@ interface SearchParams {
   children?: string;
   roomTypeId?: string;
   ratePlanId?: string;
+  reach?: string;
 }
 
 export default async function GuestDetailsPage({
@@ -25,7 +26,7 @@ export default async function GuestDetailsPage({
 }) {
   const { slug } = await params;
   const sp = await searchParams;
-  const { checkIn, checkOut, adults = "2", children = "0", roomTypeId, ratePlanId } = sp;
+  const { checkIn, checkOut, adults = "2", children = "0", roomTypeId, ratePlanId, reach: referralToken } = sp;
 
   if (!checkIn || !checkOut || !roomTypeId || !ratePlanId) redirect(`/book/${slug}`);
 
@@ -154,6 +155,7 @@ export default async function GuestDetailsPage({
         currency={currency}
         roomTypeId={roomTypeId}
         ratePlanId={ratePlanId}
+        referralToken={referralToken}
         paymentMode={config.paymentMode}
       />
     </div>

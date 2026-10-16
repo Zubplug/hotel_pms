@@ -406,6 +406,7 @@ public class LocalRepository
                 CorporateAccountId = reservation.CorporateAccountId,
                 Status = reservation.Status,
                 Source = reservation.Source,
+                ReferralToken = reservation.ReferralToken,
                 DepositRequired = reservation.DepositRequired,
                 DepositPaid = reservation.DepositPaid,
                 // Discount fields — only included when a discount is being applied

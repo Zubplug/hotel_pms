@@ -7,6 +7,7 @@ import { applyRefundToFolio } from '@/lib/refunds/settle-refund';
 import { isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
 import { CityLedgerAccountingService } from '@/lib/services/city-ledger-accounting-service';
 import { sendBookingRefundCompletedEmail } from '@/lib/email/booking-refund-email';
+import { reverseReachReservation } from '@/lib/reach-commission';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -28,6 +29,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       const property = await tx.property.findUnique({ where: { id: request.propertyId }, select: { organizationId: true, businessDate: true, timezone: true } });
       const businessDate = property?.businessDate || new Date();
       const refund = await tx.refund.create({ data: { refundRequestId: request.id, paymentId: request.paymentId, folioId: request.folioId, propertyId: request.propertyId, businessDate, amount, currency: request.currency, method: 'BANK_TRANSFER', reason: request.reason, authorizedBy: user.id, providerRefundId: `bank-transfer:${reference}`, status: 'COMPLETED', idempotencyKey: `refund-request:${request.id}` } });
+      await reverseReachReservation(tx, {
+        reservationId: request.reservationId,
+        refundedRevenue: amount,
+        idempotencyKey: `reach-refund:${refund.id}`,
+        reason: request.reason,
+        actorId: user.id,
+      });
       if (request.cityLedgerEntryId) await CityLedgerAccountingService.settleGuestRefund(tx, { propertyId: request.propertyId, organizationId: property?.organizationId || '', staffId: user.id, cityLedgerEntryId: request.cityLedgerEntryId, refundRequestId: request.id, amount, method: 'BANK_TRANSFER', businessDate });
       if (request.folioId) await tx.folioItem.create({ data: { folioId: request.folioId, businessDate, type: 'REFUND', source: 'MANUAL', description: `Bank transfer refund ${reference}`, quantity: 1, unitAmount: amount, amount, currency: request.currency, baseAmount: amount, postedBy: user.id } });
       if (request.paymentId) {

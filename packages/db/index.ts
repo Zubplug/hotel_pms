@@ -10,5 +10,6 @@ export * from '@prisma/client';
 export * from './src/crypto';
 export * from './src/billing';
 export * from './src/flutterwave';
+export * from './src/reach-wallet';
 export * from './src/availability';
 export default prisma;

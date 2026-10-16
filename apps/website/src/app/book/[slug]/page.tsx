@@ -27,6 +27,7 @@ function today() {
 
 interface SearchParams {
   roomTypeId?: string;
+  reach?: string;
 }
 
 interface LiveRoomPreview {
@@ -52,7 +53,7 @@ export default async function BookingLandingPage({
   searchParams: Promise<SearchParams>;
 }) {
   const { slug } = await params;
-  const { roomTypeId: selectedRoomTypeId } = await searchParams;
+  const { roomTypeId: selectedRoomTypeId, reach: referralToken } = await searchParams;
 
   const [config, site, roomTypes] = await Promise.all([
     prisma.bookingEngineConfig.findFirst({
@@ -182,6 +183,7 @@ export default async function BookingLandingPage({
       {/* ── SEARCH FORM ───────────────────────────────────────── */}
       <DateSearchForm
         slug={slug}
+        referralToken={referralToken}
         roomTypeId={selectedRoomTypeId}
         config={{
           minStay: config.minStay,

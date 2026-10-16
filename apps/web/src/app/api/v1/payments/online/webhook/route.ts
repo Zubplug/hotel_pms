@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
 import { PaystackProvider } from '@/lib/payment-providers/paystack';
 import crypto from 'node:crypto';
+import { reverseReachReservation } from '@/lib/reach-commission';
 
 export async function POST(req: NextRequest) {
   try {
@@ -245,6 +246,13 @@ async function handleRefundProcessed(req: NextRequest, event: any) {
       await tx.refund.update({
         where: { id: refund.id },
         data: { status: 'COMPLETED' }
+      });
+      await reverseReachReservation(tx, {
+        reservationId: refund.payment?.reservationId,
+        refundedRevenue: numericAmount,
+        idempotencyKey: `reach-refund:${refund.id}`,
+        reason: 'Online payment refund processed',
+        actorId: refund.authorizedBy,
       });
       if (refund.refundRequestId) {
         await tx.refundRequest.update({ where: { id: refund.refundRequestId }, data: { status: 'COMPLETED' } });

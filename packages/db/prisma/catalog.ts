@@ -33,6 +33,7 @@ export const catalogProducts: CatalogProduct[] = [
   { code: 'ADDON_CUSTOM_WEBSITE_DESIGN', name: 'Custom Website Design Service (legacy)', type: 'ADDON', active: false, metadata: { family: 'SERVICES', unit: 'PROJECT', sellable: false, offlineCapable: false, oneTime: true, retired: true, version: CATALOG_VERSION } },
   { code: 'ADDON_CUSTOM_WEBSITE_API', name: 'Standalone API Website Development', type: 'ADDON', active: true, metadata: { family: 'SERVICES', mode: 'STANDALONE_API', unit: 'PROJECT', sellable: true, offlineCapable: false, requiresApproval: true, oneTime: true, version: CATALOG_VERSION } },
   { code: 'ADDON_CUSTOM_WEBSITE_PMS', name: 'PMS-Connected Website Development', type: 'ADDON', active: true, metadata: { family: 'SERVICES', mode: 'PMS_CONNECTED', unit: 'PROJECT', sellable: true, offlineCapable: false, requiresApproval: true, oneTime: true, version: CATALOG_VERSION } },
+  { code: 'ADDON_REACH', name: 'LodgeCore Reach Referral Network', type: 'ADDON', active: true, metadata: { family: 'REVENUE', unit: 'PROPERTY', sellable: true, offlineCapable: false, oneTime: true, activation: true, version: CATALOG_VERSION } },
   { code: 'ADDON_WHATSAPP', name: 'WhatsApp Guest Messaging', type: 'ADDON', active: false, metadata: { family: 'CONNECTIVITY', unit: 'USAGE', sellable: false, offlineCapable: false, version: CATALOG_VERSION } },
   { code: 'ADDON_SMS', name: 'SMS Notifications', type: 'ADDON', active: false, metadata: { family: 'CONNECTIVITY', unit: 'USAGE', sellable: false, offlineCapable: false, version: CATALOG_VERSION } },
   { code: 'ADDON_API', name: 'API and Integrations', type: 'ADDON', active: false, metadata: { family: 'CONNECTIVITY', unit: 'FLAT', sellable: false, offlineCapable: false, version: CATALOG_VERSION } },
@@ -54,6 +55,7 @@ export const planPrices = [
 export const oneTimePrices = [
   { code: 'ADDON_CUSTOM_WEBSITE_API', amount: 120000000, currency: 'ngn' }, // ₦1,200,000
   { code: 'ADDON_CUSTOM_WEBSITE_PMS', amount: 250000000, currency: 'ngn' }, // ₦2,500,000
+  { code: 'ADDON_REACH', amount: 5000000, currency: 'ngn' }, // ₦50,000 activation fee per property
 ] as const;
 
 export const addOnPrices = [
