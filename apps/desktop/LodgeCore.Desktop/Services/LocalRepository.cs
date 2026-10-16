@@ -3860,7 +3860,7 @@ public class LocalRepository
             .Include(r => r.Guest)
             .Include(r => r.Folio)
             .Include(r => r.Rooms).ThenInclude(rr => rr.Room)
-            .Where(r => r.PropertyId == propertyId && r.Status != "CANCELLED" && r.Status != "NO_SHOW")
+            .Where(r => r.PropertyId == propertyId && r.Status != "CANCELLED" && r.Status != "NO_SHOW" && r.Status != "EXPIRED")
             .ToListAsync();
             
         var rooms = await _dbContext.Rooms

@@ -72,7 +72,7 @@ export default function FrontDeskCityLedgerPage() {
                 ledgerOutstandingAmount: isAdvance ? 0 : Number(entry.outstandingAmount || 0),
                 advanceAmount: isAdvance ? Number(entry.amount || 0) : 0,
                 advanceOutstandingAmount: isAdvance ? Number(entry.outstandingAmount || 0) : 0,
-                advanceEntries: isAdvance ? [{ id: entry.entryId, availableAmount: Number(entry.outstandingAmount || 0) }] : [],
+                advanceEntries: isAdvance && entry.entryId ? [{ id: entry.entryId, availableAmount: Number(entry.outstandingAmount || 0) }] : [],
               };
               return groups;
             }
@@ -83,7 +83,9 @@ export default function FrontDeskCityLedgerPage() {
               current.advanceEntry = current.advanceEntry?.entryId ? current.advanceEntry : entry;
               current.advanceAmount += Number(entry.amount || 0);
               current.advanceOutstandingAmount += Number(entry.outstandingAmount || 0);
-              current.advanceEntries = [...(current.advanceEntries || []), { id: entry.entryId, availableAmount: Number(entry.outstandingAmount || 0) }];
+              if (entry.entryId) {
+                current.advanceEntries = [...(current.advanceEntries || []), { id: entry.entryId, availableAmount: Number(entry.outstandingAmount || 0) }];
+              }
             } else {
               current.ledgerEntry = current.ledgerEntry || entry;
               current.ledgerAmount += Number(entry.amount || 0);

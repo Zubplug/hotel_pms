@@ -65,6 +65,19 @@ function ReservationDetailContent() {
     );
   }
 
+  if (String(reservation.status || '').toUpperCase() === 'EXPIRED') {
+    return (
+      <div className="p-8 max-w-5xl mx-auto mt-12">
+        <div className="bg-slate-50 text-slate-600 p-6 rounded-2xl border border-slate-200 font-medium">
+          This reservation is no longer available in Front Desk.
+        </div>
+        <Button variant="outline" className="mt-6 rounded-xl h-12 px-6" onClick={() => goBack(router, '/frontdesk/reservations')}>
+          <ArrowLeft className="h-4 w-4 mr-2" /> Back to Search
+        </Button>
+      </div>
+    );
+  }
+
   if (propertyId && reservation.propertyId && reservation.propertyId !== propertyId) {
     return (
       <div className="p-8 max-w-5xl mx-auto mt-12">

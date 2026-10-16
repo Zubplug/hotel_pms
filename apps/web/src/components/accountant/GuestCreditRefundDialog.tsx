@@ -18,7 +18,7 @@ export function GuestCreditRefundDialog({ entryId, guestName, amount, currency, 
   const router = useRouter();
   const { provider, isOnline } = useLodgeCoreProvider();
   const [open, setOpen] = useState(false);
-  const refundEntries = entries.length ? entries : [{ id: entryId, availableAmount: amount }];
+  const refundEntries = (entries.length ? entries : [{ id: entryId, availableAmount: amount }]).filter(entry => entry?.id);
   const [selectedEntryId, setSelectedEntryId] = useState(refundEntries[0]?.id || entryId);
   const selectedEntry = refundEntries.find(entry => entry.id === selectedEntryId) || refundEntries[0];
   const selectedAmount = Number(selectedEntry?.availableAmount || 0);
@@ -89,7 +89,7 @@ export function GuestCreditRefundDialog({ entryId, guestName, amount, currency, 
         <div className="space-y-5 px-6 py-5">
           <div className="grid gap-2">
             <Label className="font-semibold text-slate-700">Refund amount ({currency})</Label>
-            {refundEntries.length > 1 && <select aria-label="Credit entry" value={selectedEntryId} onChange={event => selectEntry(event.target.value)} className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 shadow-sm focus:border-emerald-500"><option value="" disabled>Select credit entry</option>{refundEntries.map(entry => <option key={entry.id} value={entry.id}>{entry.id.slice(0, 8)} · {currency} {entry.availableAmount.toLocaleString()} available</option>)}</select>}
+            {refundEntries.length > 1 && <select aria-label="Credit entry" value={selectedEntryId} onChange={event => selectEntry(event.target.value)} className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 shadow-sm focus:border-emerald-500"><option value="" disabled>Select credit entry</option>{refundEntries.map(entry => <option key={entry.id} value={entry.id}>{String(entry.id).slice(0, 8)} · {currency} {entry.availableAmount.toLocaleString()} available</option>)}</select>}
             <AmountInput min="0.01" max={selectedAmount} value={value} onValueChange={setValue} required className="h-11 border-slate-200 bg-white text-slate-900 shadow-sm focus:border-emerald-500 focus:ring-emerald-500/20" />
             {refundEntries.length > 1 && <p className="text-xs text-slate-500">Refunds are submitted against one ledger credit at a time for a complete audit trail.</p>}
           </div>
