@@ -70,6 +70,7 @@ export default function AuditHistoryPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showFilter, setShowFilter] = useState(false);
   const [dateRange, setDateRange] = useState({ from: '', to: '' });
+  const [statusFilter, setStatusFilter] = useState('ALL');
   const [selectedAudit, setSelectedAudit] = useState<any>(null);
   const [selectedChargesAudit, setSelectedChargesAudit] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -106,9 +107,14 @@ export default function AuditHistoryPage() {
       }
       if (dateRange.from && new Date(audit.businessDate) < new Date(dateRange.from)) return false;
       if (dateRange.to && new Date(audit.businessDate) > new Date(dateRange.to)) return false;
+      if (statusFilter !== 'ALL' && audit.status !== statusFilter) return false;
       return true;
     });
-  }, [history, searchQuery, dateRange]);
+  }, [history, searchQuery, dateRange, statusFilter]);
+
+  const latestAudit = history[0];
+  const failedCount = history.filter((audit) => audit.status === 'FAILED').length;
+  const activeFilterCount = Number(Boolean(dateRange.from || dateRange.to)) + Number(statusFilter !== 'ALL');
 
   const insights = useMemo(() => {
     const completed = history.filter((a) => a.status === 'COMPLETED');
@@ -229,6 +235,34 @@ export default function AuditHistoryPage() {
     },
   ];
 
+  const detailRevenueRows = useMemo(() => {
+    if (!selectedAudit) return [];
+    const reconciliation = selectedAudit.closePackage?.controlSummary?.departmentReconciliation;
+    const departments = Array.isArray(reconciliation) && reconciliation.length > 0
+      ? reconciliation
+        .filter((row: any) => row.department !== 'Taxes' && Number(row.source || 0) > 0)
+        .map((row: any) => ({
+          label: String(row.department),
+          val: Number(row.source || 0),
+          icon: row.department === 'Rooms' ? BedDouble : row.department === 'F&B/POS' ? Coffee : Package,
+          iconCls: row.department === 'Rooms'
+            ? 'border-indigo-400/20 bg-indigo-400/10 text-indigo-400'
+            : row.department === 'F&B/POS'
+              ? 'border-amber-400/20 bg-amber-400/10 text-amber-400'
+              : 'border-sky-400/20 bg-sky-400/10 text-sky-400',
+        }))
+      : [
+        { label: 'Rooms', icon: BedDouble, iconCls: 'border-indigo-400/20 bg-indigo-400/10 text-indigo-400', val: selectedAudit.financialSnapshot?.roomRevenue ?? selectedAudit.totalRoomRevenue ?? 0 },
+        { label: 'F&B / POS', icon: Coffee, iconCls: 'border-amber-400/20 bg-amber-400/10 text-amber-400', val: selectedAudit.financialSnapshot?.fnbRevenue ?? 0 },
+        { label: 'Other', icon: Package, iconCls: 'border-sky-400/20 bg-sky-400/10 text-sky-400', val: selectedAudit.financialSnapshot?.otherRevenue ?? 0 },
+      ];
+    return [
+      ...departments,
+      { label: 'Amenity COGS', icon: Package, iconCls: 'border-rose-400/20 bg-rose-400/10 text-rose-400', val: selectedAudit.guestAmenityCost || selectedAudit.financialSnapshot?.guestAmenityCost || 0 },
+      { label: 'Room Contribution', icon: TrendingUp, iconCls: 'border-emerald-400/20 bg-emerald-400/10 text-emerald-400', val: selectedAudit.netRoomContribution || (Number(selectedAudit.financialSnapshot?.roomRevenue || selectedAudit.totalRoomRevenue || 0) - Number(selectedAudit.guestAmenityCost || selectedAudit.financialSnapshot?.guestAmenityCost || 0)) },
+    ];
+  }, [selectedAudit]);
+
   /* ────────────────────────────────────────────────────────── Render ────── */
   return (
     <div
@@ -272,9 +306,9 @@ export default function AuditHistoryPage() {
               >
                 <Filter className="h-4 w-4" />
                 Filter
-                {(dateRange.from || dateRange.to) && (
+                {activeFilterCount > 0 && (
                   <span className="ml-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-indigo-500 text-[9px] font-bold text-white">
-                    •
+                    {activeFilterCount}
                   </span>
                 )}
               </button>
@@ -294,6 +328,20 @@ export default function AuditHistoryPage() {
                     </button>
                   </div>
                   <div className="space-y-3">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">Run status</label>
+                      <select
+                        value={statusFilter}
+                        onChange={(e) => setStatusFilter(e.target.value)}
+                        className="h-9 w-full rounded-xl border border-white/[0.08] bg-white/[0.05] px-3 text-sm text-slate-200 outline-none focus:border-indigo-400/50"
+                      >
+                        <option value="ALL">All statuses</option>
+                        <option value="COMPLETED">Completed</option>
+                        <option value="FAILED">Failed</option>
+                        <option value="IN_PROGRESS">In progress</option>
+                        <option value="POSTING">Posting</option>
+                      </select>
+                    </div>
                     {['from', 'to'].map((key) => (
                       <div key={key} className="space-y-1.5">
                         <label className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">
@@ -310,7 +358,7 @@ export default function AuditHistoryPage() {
                     <div className="flex gap-2 pt-2">
                       <button
                         className="flex-1 rounded-xl border border-white/[0.07] py-2 text-xs font-semibold text-slate-400 transition-colors hover:bg-white/[0.05] hover:text-slate-200"
-                        onClick={() => { setDateRange({ from: '', to: '' }); setShowFilter(false); }}
+                        onClick={() => { setDateRange({ from: '', to: '' }); setStatusFilter('ALL'); setShowFilter(false); }}
                       >
                         Clear
                       </button>
@@ -335,6 +383,26 @@ export default function AuditHistoryPage() {
               <Download className="h-4 w-4" />
               <span className="hidden sm:inline">Export CSV</span>
             </button>
+          </div>
+        </div>
+
+        {/* ── Operational context ───────────────────────────────────────── */}
+        <div className="relative overflow-hidden rounded-[24px] border border-indigo-400/15 p-5 sm:p-6" style={{ background: 'linear-gradient(120deg, rgba(99,102,241,0.12), rgba(8,15,32,0.92) 58%, rgba(6,10,22,0.98))' }}>
+          <div className="pointer-events-none absolute -right-20 -top-24 h-64 w-64 rounded-full bg-indigo-500/10 blur-3xl" />
+          <div className="relative flex flex-col justify-between gap-5 lg:flex-row lg:items-center">
+            <div>
+              <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.2em] text-indigo-300/80">
+                <Zap className="h-3.5 w-3.5" /> Close control room
+                <span className="rounded-full border border-emerald-400/25 bg-emerald-400/10 px-2 py-0.5 text-[9px] text-emerald-300">LIVE RECORDS</span>
+              </div>
+              <h2 className="mt-2 text-xl font-bold tracking-tight text-white sm:text-2xl">Operational history, ready for review</h2>
+              <p className="mt-1 max-w-2xl text-xs leading-relaxed text-slate-400">Use the history as an evidence trail: confirm the latest close, identify failed runs, then open a sealed audit pack for the exact business date.</p>
+            </div>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              <div className="rounded-2xl border border-white/[0.08] bg-black/20 px-4 py-3"><p className="text-[9px] font-bold uppercase tracking-[0.16em] text-slate-500">Latest close</p><p className="mt-1 text-sm font-bold text-white">{latestAudit ? new Date(latestAudit.businessDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : '—'}</p></div>
+              <div className="rounded-2xl border border-white/[0.08] bg-black/20 px-4 py-3"><p className="text-[9px] font-bold uppercase tracking-[0.16em] text-slate-500">Failed runs</p><p className={`mt-1 text-sm font-bold ${failedCount ? 'text-rose-300' : 'text-emerald-300'}`}>{failedCount}</p></div>
+              <div className="col-span-2 rounded-2xl border border-white/[0.08] bg-black/20 px-4 py-3 sm:col-span-1"><p className="text-[9px] font-bold uppercase tracking-[0.16em] text-slate-500">Filtered view</p><p className="mt-1 text-sm font-bold text-white">{filteredHistory.length} runs</p></div>
+            </div>
           </div>
         </div>
 
@@ -628,14 +696,8 @@ export default function AuditHistoryPage() {
                     </div>
 
                     {/* Sub-breakdown */}
-                    <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
-                      {[
-                        { label: 'Rooms', icon: BedDouble, iconCls: 'border-indigo-400/20 bg-indigo-400/10 text-indigo-400', val: selectedAudit.financialSnapshot?.roomRevenue ?? selectedAudit.totalRoomRevenue ?? selectedAudit.totalRevenue ?? 0 },
-                        { label: 'Amenity COGS', icon: Package, iconCls: 'border-rose-400/20 bg-rose-400/10 text-rose-400', val: selectedAudit.guestAmenityCost || selectedAudit.financialSnapshot?.guestAmenityCost || 0 },
-                        { label: 'Room Contribution', icon: TrendingUp, iconCls: 'border-emerald-400/20 bg-emerald-400/10 text-emerald-400', val: selectedAudit.netRoomContribution || (Number(selectedAudit.financialSnapshot?.roomRevenue || selectedAudit.totalRoomRevenue || 0) - Number(selectedAudit.guestAmenityCost || selectedAudit.financialSnapshot?.guestAmenityCost || 0)) },
-                        { label: 'F&B', icon: Coffee, iconCls: 'border-amber-400/20 bg-amber-400/10 text-amber-400', val: selectedAudit.financialSnapshot?.fnbRevenue ?? 0 },
-                        { label: 'Other', icon: Package, iconCls: 'border-sky-400/20 bg-sky-400/10 text-sky-400', val: selectedAudit.financialSnapshot?.otherRevenue ?? 0 },
-                      ].map(({ label, icon: Icon, iconCls, val }) => (
+                    <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                      {detailRevenueRows.map(({ label, icon: Icon, iconCls, val }) => (
                         <div key={label} className="rounded-xl border border-white/[0.06] p-4" style={{ background: 'rgba(255,255,255,0.03)' }}>
                           <div className="flex items-center gap-2">
                             <span className={`flex h-7 w-7 items-center justify-center rounded-lg border ${iconCls}`}>
