@@ -13,6 +13,7 @@ export async function getPartnerEligibleProperties(organizationId?: string | nul
       baseCurrency: true, website: true, phone: true,
       reachMedia: { where: { status: "APPROVED" }, orderBy: { sortOrder: "asc" } },
       referralProgram: { select: { id: true, platformFeeBps: true, minimumPayout: true } },
+      referralCampaigns: { where: { isActive: true }, select: { commissionBps: true }, orderBy: { updatedAt: "desc" }, take: 1 },
       bookingEngineConfig: { select: { publicSlug: true } },
       bookingSite: { select: { publicSlug: true, status: true } },
       roomTypes: { where: { isActive: true, deletedAt: null }, select: { id: true, name: true, description: true, baseRate: true, currency: true, maxOccupancy: true, defaultBedConfig: true, amenities: true, photos: true, reachMedia: { where: { status: "APPROVED" }, orderBy: { sortOrder: "asc" } }, rooms: { where: { isActive: true, deletedAt: null }, select: { id: true } } }, orderBy: { name: "asc" } },
