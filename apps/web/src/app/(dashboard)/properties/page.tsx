@@ -12,6 +12,7 @@ import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer,
 import { useProperty } from '@/components/PropertyProvider';
 import { PropertyForm, PropertyFormValues } from '@/components/properties/PropertyForm';
 import { BuildingManagementDialog } from '@/components/properties/BuildingManagementDialog';
+import { PropertyMediaManager } from '@/components/properties/PropertyMediaManager';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -31,6 +32,7 @@ type Property = {
   isActive: boolean;
   buildings: Array<{ id: string; name: string; _count?: { rooms: number } }>;
   _count: { rooms: number; roomTypes: number };
+  reachMedia?: Array<{ id: string; url: string; altText?: string | null }>;
 };
 
 const unwrap = <T,>(response: any, fallback: T): T => response?.data ?? fallback;
@@ -119,6 +121,8 @@ export default function PropertiesPage() {
         </div>
       </DialogContent>
     </Dialog>
+
+    <PropertyMediaManager propertyId={property.id} propertyName={property.name} initialMedia={property.reachMedia || []} />
 
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><Metric label="Room inventory" value={property._count.rooms} detail={`${property._count.roomTypes} active room types`} icon={BedDouble} /><Metric label="Live occupancy" value={`${property._count.rooms ? Math.round((occupied / property._count.rooms) * 100) : 0}%`} detail={`${occupied} occupied / assigned rooms`} icon={Activity} accent="sky" /><Metric label="Today’s movement" value={`${arrivals + departures}`} detail={`${arrivals} arrivals · ${departures} departures`} icon={CalendarDays} accent="amber" /><Metric label="Receivables" value={formatCurrency(totalReceivables)} detail={`${receivables.length} open folios`} icon={ReceiptText} accent="rose" /></div>
 

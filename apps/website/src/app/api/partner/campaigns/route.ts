@@ -27,7 +27,8 @@ export async function POST(request: NextRequest) {
   const slug = property.bookingEngineConfig?.publicSlug || property.bookingSite?.publicSlug;
   if (!slug) return NextResponse.json({ error: "This property has no public booking destination" }, { status: 409 });
   const code = `REACH-${crypto.randomUUID().replaceAll("-", "").slice(0, 12).toUpperCase()}`;
-  const targetUrl = `${process.env.NEXT_PUBLIC_SITE_URL || "https://getlodgecore.vercel.app"}/api/public/booking/${encodeURIComponent(slug)}/reach?campaign=${code}`;
+  const siteOrigin = process.env.NEXT_PUBLIC_SITE_URL || request.nextUrl.origin;
+  const targetUrl = `${siteOrigin}/api/public/booking/${encodeURIComponent(slug)}/reach?campaign=${code}`;
   const campaign = await prisma.referralCampaign.create({ data: { organizationId: property.organizationId, propertyId, programId: property.referralProgram.id, partnerId: partner.id, name, code, category, targetUrl, commissionBps: 700 } });
   return NextResponse.json({ campaign }, { status: 201 });
 }

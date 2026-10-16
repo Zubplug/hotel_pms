@@ -24,6 +24,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
       include: {
         buildings: { include: { floors: true, _count: { select: { rooms: true } } } },
         _count: { select: { rooms: true, roomTypes: true } },
+        reachMedia: { where: { kind: 'PROPERTY', status: 'APPROVED' }, orderBy: { sortOrder: 'asc' } },
       },
     });
     if (!property) return errorResponse('NOT_FOUND', 'Property not found', 404);
