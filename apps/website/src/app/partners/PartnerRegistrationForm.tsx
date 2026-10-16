@@ -9,13 +9,14 @@ export function PartnerRegistrationForm() {
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setBusy(true); setError(null);
     const form = new FormData(event.currentTarget);
-    const response = await fetch("/api/partner/register", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ displayName: form.get("displayName"), email: form.get("email"), phone: form.get("phone"), password: form.get("password"), terms: form.get("terms") === "on" }) });
+    const response = await fetch("/api/partner/register", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ businessName: form.get("businessName"), directorName: form.get("directorName"), email: form.get("email"), phone: form.get("phone"), password: form.get("password"), terms: form.get("terms") === "on" }) });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) { setError(data.error || "Unable to create partner account"); setBusy(false); return; }
     window.location.href = data.redirectTo || "/partner/dashboard";
   }
   return <form onSubmit={submit} className="portal-card" style={{ display: "grid", gap: 14, maxWidth: 520 }}>
-    <label className="form-group"><span className="form-label">Name or business name</span><input className="form-input" name="displayName" required minLength={2} /></label>
+    <label className="form-group"><span className="form-label">Business or company name</span><input className="form-input" name="businessName" required minLength={2} autoComplete="organization" /></label>
+    <label className="form-group"><span className="form-label">Director or representative name</span><input className="form-input" name="directorName" required minLength={2} autoComplete="name" /></label>
     <label className="form-group"><span className="form-label">Email</span><input className="form-input" name="email" required type="email" autoComplete="email" /></label>
     <label className="form-group"><span className="form-label">Phone (optional)</span><input className="form-input" name="phone" type="tel" /></label>
     <label className="form-group"><span className="form-label">Password</span><input className="form-input" name="password" required minLength={12} type="password" autoComplete="new-password" /><small style={{ color: "var(--text-muted)" }}>Use at least 12 characters.</small></label>
