@@ -7328,7 +7328,10 @@ model ReferralProgram {
 model ReferralPartner {
   id                 String   @id @default(uuid()) @db.Uuid
   organizationId     String?  @db.Uuid
-  businessName       String   @default("")
+  firstName          String?
+  middleName         String?
+  lastName           String?
+  businessName       String?
   directorName       String?
   displayName        String
   email              String?
