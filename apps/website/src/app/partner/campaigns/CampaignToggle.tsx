@@ -1,0 +1,3 @@
+"use client";
+import { useState } from "react";
+export function CampaignToggle({ id, active }: { id: string; active: boolean }) { const [isActive, setIsActive] = useState(active); const [busy, setBusy] = useState(false); async function toggle() { setBusy(true); const response = await fetch(`/api/partner/campaigns/${id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ isActive: !isActive }) }); if (response.ok) setIsActive(!isActive); setBusy(false); } return <button className="reach-button secondary small" onClick={() => void toggle()} disabled={busy}>{busy ? "Saving…" : isActive ? "Pause" : "Resume"}</button>; }

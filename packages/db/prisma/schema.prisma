@@ -151,6 +151,8 @@ model Property {
   referralPlatformFees  ReferralPlatformFee[]
   referralActivationPayments ReferralActivationPayment[]
   reachPropertyDebt     ReachPropertyDebt?
+  reachMedia            ReachPropertyMedia[]
+  reachCreativeAssets   ReachCreativeAsset[]
 
   cashHandovers            CashHandover[]
   bankDeposits             BankDeposit[]
@@ -352,6 +354,7 @@ model RoomType {
   rates         Rate[]
   seasonalRates SeasonalRate[]
   referralBookings ReferralBooking[]
+  reachMedia      ReachPropertyMedia[]
 
   createdAt DateTime  @default(now()) @db.Timestamptz
   updatedAt DateTime  @updatedAt @db.Timestamptz
@@ -5157,6 +5160,7 @@ model Hall {
   bookings      EventBooking[]
   leases        LeaseContract[]
   leaseSegments LeaseContractSegment[]
+  reachMedia ReachPropertyMedia[]
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
@@ -7325,6 +7329,60 @@ model ReferralProgram {
   @@index([organizationId, enabled])
 }
 
+// Approved hospitality media exposed to Reach partners. The source URL must
+// point to existing managed storage; partners never upload into this table.
+model ReachPropertyMedia {
+  id         String   @id @default(uuid()) @db.Uuid
+  propertyId String   @db.Uuid
+  roomTypeId String?  @db.Uuid
+  hallId     String?  @db.Uuid
+  kind       String   @default("PROPERTY") // PROPERTY | ROOM | VENUE
+  url        String
+  altText    String?
+  storageKey String?
+  mimeType   String?
+  width      Int?
+  height     Int?
+  sortOrder  Int      @default(0)
+  status     String   @default("APPROVED") // DRAFT | APPROVED | ARCHIVED
+  createdAt  DateTime @default(now()) @db.Timestamptz
+  updatedAt  DateTime @updatedAt @db.Timestamptz
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  roomType RoomType? @relation(fields: [roomTypeId], references: [id], onDelete: Cascade)
+  hall     Hall?     @relation(fields: [hallId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId, kind, status, sortOrder])
+  @@index([roomTypeId, status])
+  @@index([hallId, status])
+}
+
+// Approved partner-facing promotional assets managed by HQ/property teams.
+model ReachCreativeAsset {
+  id           String   @id @default(uuid()) @db.Uuid
+  propertyId   String   @db.Uuid
+  campaignId   String?  @db.Uuid
+  title        String
+  assetType    String   // BANNER | SOCIAL_SQUARE | SOCIAL_PORTRAIT | WHATSAPP | POSTER | TEMPLATE
+  url          String
+  thumbnailUrl String?
+  mimeType     String?
+  width        Int?
+  height       Int?
+  validFrom    DateTime?
+  validUntil   DateTime?
+  usageNotes   String?
+  status       String   @default("APPROVED") // DRAFT | APPROVED | ARCHIVED
+  createdAt    DateTime @default(now()) @db.Timestamptz
+  updatedAt    DateTime @updatedAt @db.Timestamptz
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  campaign ReferralCampaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+
+  @@index([propertyId, status, validUntil])
+  @@index([campaignId, status])
+}
+
 model ReferralPartner {
   id                 String   @id @default(uuid()) @db.Uuid
   organizationId     String?  @db.Uuid
@@ -7399,6 +7457,7 @@ model ReferralCampaign {
   clicks       ReferralClick[]
   attributions ReferralAttribution[]
   bookings     ReferralBooking[]
+  creativeAssets ReachCreativeAsset[]
 
   @@index([propertyId, isActive])
   @@index([partnerId, isActive])

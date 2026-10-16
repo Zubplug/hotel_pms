@@ -1,0 +1,9 @@
+import prisma from "@hotel-pms/db";
+import { PartnerShell } from "@/components/partner-shell";
+import { getPartnerWalletBalance, requirePartnerPortal } from "@/lib/partner-portal";
+
+export default async function PartnerTransactionsPage() {
+  const partner = await requirePartnerPortal();
+  const [wallet, rows] = await Promise.all([getPartnerWalletBalance(partner.id), prisma.referralPartnerWalletTransaction.findMany({ where: { partnerId: partner.id }, orderBy: { createdAt: "desc" }, take: 100 })]);
+  return <PartnerShell partner={partner} availableBalance={Number(wallet?.availableBalance || 0)} currency={wallet?.currency || "NGN"}><div className="reach-page-head"><div><span className="reach-eyebrow">Earnings</span><h1>Transaction history</h1><p>Wallet credits, payout holds and adjustments for your partner account.</p></div></div><div className="reach-table-card reach-card"><div className="reach-table-wrap"><table className="reach-table"><thead><tr><th>Date</th><th>Type</th><th>Status</th><th>Amount</th><th>Balance after</th><th>Reference</th></tr></thead><tbody>{rows.map((row) => <tr key={row.id}><td>{row.createdAt.toLocaleString("en-NG")}</td><td>{row.type.replaceAll("_", " ")}</td><td><span className={`reach-pill ${row.status === "COMPLETED" ? "success" : row.status === "REVERSED" ? "danger" : "pending"}`}>{row.status}</span></td><td>{Number(row.amount).toLocaleString("en-NG", { style: "currency", currency: row.currency })}</td><td>{Number(row.balanceAfter).toLocaleString("en-NG", { style: "currency", currency: row.currency })}</td><td><small>{row.id.slice(0, 12).toUpperCase()}</small></td></tr>)}</tbody></table>{!rows.length && <div className="reach-empty compact"><strong>No wallet transactions yet</strong><p>Completed commission credits and payout activity will appear here.</p></div>}</div></div></PartnerShell>;
+}

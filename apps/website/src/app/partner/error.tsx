@@ -1,0 +1,2 @@
+"use client";
+export default function PartnerError({ reset }: { error: Error & { digest?: string }; reset: () => void }) { return <main className="reach-error-state"><div><span className="reach-eyebrow">LodgeCore Reach</span><h1>We couldn’t load this workspace</h1><p>Check your connection and try again. Your account and financial records have not been changed.</p><button className="reach-button primary" onClick={() => reset()}>Try again</button></div></main>; }

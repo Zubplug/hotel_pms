@@ -8,6 +8,7 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { RoomTypeForm } from '@/components/room-types/RoomTypeForm';
 import { Card, CardContent } from '@/components/ui/card';
 import { LoadingState } from '@/components/ui/EmptyState';
+import { RoomTypeMediaManager } from '@/components/room-types/RoomTypeMediaManager';
 
 export default function EditRoomTypePage() {
   const { id } = useParams() as { id: string };
@@ -33,7 +34,10 @@ export default function EditRoomTypePage() {
           {isLoading ? (
             <LoadingState message="Loading room type..." />
           ) : data ? (
-            <RoomTypeForm initialData={data} />
+            <>
+              <RoomTypeForm initialData={data} />
+              <RoomTypeMediaManager roomTypeId={id} roomTypeName={data.name} initialPhotos={data.photos || []} />
+            </>
           ) : (
             <div>Room type not found.</div>
           )}

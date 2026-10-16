@@ -3,19 +3,21 @@ import { prisma } from '@hotel-pms/db';
 import { verifyPreviewToken } from '@/lib/cms/preview-token';
 
 interface CmsPageProps {
-  params: {
+  params: Promise<{
     projectId: string;
     slug?: string[];
-  };
-  searchParams: {
+  }>;
+  searchParams: Promise<{
     previewToken?: string;
-  };
+  }>;
 }
 
 export default async function CmsPage({ params, searchParams }: CmsPageProps) {
-  const { projectId } = params;
-  const rawSlug = params.slug ? `/${params.slug.join('/')}` : '/';
-  const isPreview = Boolean(searchParams.previewToken);
+  const resolvedParams = await params;
+  const resolvedSearchParams = await searchParams;
+  const { projectId } = resolvedParams;
+  const rawSlug = resolvedParams.slug ? `/${resolvedParams.slug.join('/')}` : '/';
+  const isPreview = Boolean(resolvedSearchParams.previewToken);
 
   const project = await prisma.websiteProject.findUnique({
     where: { id: projectId },
@@ -29,7 +31,7 @@ export default async function CmsPage({ params, searchParams }: CmsPageProps) {
     notFound();
   }
 
-  const revisionId = isPreview && project.previewRevisionId && verifyPreviewToken(searchParams.previewToken!, project.id, project.previewRevisionId)
+  const revisionId = isPreview && project.previewRevisionId && verifyPreviewToken(resolvedSearchParams.previewToken!, project.id, project.previewRevisionId)
     ? project.previewRevisionId
     : project.activeRevisionId;
 

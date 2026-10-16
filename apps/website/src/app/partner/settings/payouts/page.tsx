@@ -1,0 +1,4 @@
+import { PartnerShell } from "@/components/partner-shell";
+import { getPartnerWalletBalance, requirePartnerPortal } from "@/lib/partner-portal";
+import { PayoutSettingsForm } from "./PayoutSettingsForm";
+export default async function PartnerPayoutSettingsPage() { const partner = await requirePartnerPortal(); const wallet = await getPartnerWalletBalance(partner.id); const profile = (partner.payoutProfile && typeof partner.payoutProfile === "object" ? partner.payoutProfile : {}) as { bankCode?: string; accountNumber?: string; accountName?: string }; return <PartnerShell partner={partner} availableBalance={Number(wallet?.availableBalance || 0)} currency={wallet?.currency || "NGN"}><div className="reach-page-head"><div><span className="reach-eyebrow">Account</span><h1>Payout settings</h1><p>Keep your bank settlement information current before requesting a payout.</p></div></div><PayoutSettingsForm profile={profile} /></PartnerShell>; }
