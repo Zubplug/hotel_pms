@@ -96,9 +96,13 @@ export async function POST(req: Request) {
   // payments on the same HQ billing endpoint and hand them to the dedicated
   // activation reconciler before normal subscription processing.
   const webhookMeta = payload?.data?.meta ?? payload?.data?.meta_data ?? payload?.meta ?? payload?.meta_data;
-  if (metadataValue(webhookMeta, 'lodgecore_source') === 'reach_activation') {
-    const activationUrl = new URL('/api/v1/referrals/activation/webhook', req.url);
-    return fetch(activationUrl, {
+  const reachSource = metadataValue(webhookMeta, 'lodgecore_source');
+  if (reachSource === 'reach_activation' || reachSource === 'reach_wallet') {
+    const reachUrl = new URL(
+      reachSource === 'reach_activation' ? '/api/v1/referrals/activation/webhook' : '/api/v1/reach/wallet/webhook',
+      req.url,
+    );
+    return fetch(reachUrl, {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
