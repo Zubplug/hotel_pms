@@ -5,7 +5,6 @@ import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
 import CustomWebsiteAddonModal from "./CustomWebsiteAddonModal";
 import CustomDomainAddonModal from "./CustomDomainAddonModal";
-import { ReachActivationCard } from "@/components/reach-activation-card";
 
 /* ─────────────────────────────────────────────────────────────
    TYPES
@@ -417,6 +416,115 @@ function PropertyScopeDialog({
   );
 }
 
+type ReachActivationProperty = {
+  id: string;
+  name: string;
+  eligible: boolean;
+  program: {
+    enabled: boolean;
+    activationPaymentStatus: string;
+    activationFeeAmount: number;
+    activationFeeCurrency: string;
+  } | null;
+};
+
+function ReachActivationDialog({ onClose }: { onClose: () => void }) {
+  const [mounted, setMounted] = useState(false);
+  const [properties, setProperties] = useState<ReachActivationProperty[]>([]);
+  const [propertyId, setPropertyId] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    setMounted(true);
+    document.body.style.overflow = "hidden";
+    fetch("/api/portal/reach-activation", { cache: "no-store" })
+      .then(async response => {
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || "Unable to load properties");
+        setProperties(payload.properties || []);
+        setPropertyId(payload.properties?.find((property: ReachActivationProperty) => property.eligible)?.id || payload.properties?.[0]?.id || "");
+      })
+      .catch(error => setMessage(error instanceof Error ? error.message : "Unable to load properties"))
+      .finally(() => setLoading(false));
+    return () => { document.body.style.overflow = ""; };
+  }, []);
+
+  if (!mounted) return null;
+  const selected = properties.find(property => property.id === propertyId);
+
+  async function activate() {
+    if (!selected?.eligible || selected.program?.enabled) return;
+    setBusy(true);
+    setMessage(null);
+    try {
+      const response = await fetch("/api/portal/reach-activation", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ propertyId: selected.id }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "Unable to start Reach activation");
+      if (payload.checkoutUrl) window.location.assign(payload.checkoutUrl);
+      else setMessage("Reach is already active for this property.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to start Reach activation");
+      setBusy(false);
+    }
+  }
+
+  return createPortal(
+    <div className="sub-modal-backdrop" onClick={onClose} role="dialog" aria-modal="true" aria-labelledby="reach-activation-title">
+      <div className="sub-modal sub-property-scope-modal" onClick={event => event.stopPropagation()}>
+        <div className="sub-modal-header">
+          <div>
+            <div className="sub-section-kicker">Reach add-on</div>
+            <h2 id="reach-activation-title" className="sub-modal-title">Choose a property</h2>
+            <p style={{ color: "var(--text-muted)", fontSize: 12, marginTop: 6, lineHeight: 1.5 }}>
+              Select the property where you want to activate LodgeCore Reach.
+            </p>
+          </div>
+          <button className="sub-modal-close" onClick={onClose} aria-label="Close Reach activation">
+            <svg viewBox="0 0 14 14" fill="none" width="14"><path d="M1 1l12 12M13 1L1 13" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /></svg>
+          </button>
+        </div>
+        <div className="sub-modal-body">
+          {loading ? <p style={{ color: "var(--text-muted)", fontSize: 13 }}>Loading properties…</p> : properties.length === 0 ? (
+            <p style={{ color: "var(--text-muted)", fontSize: 13 }}>Add an active property before activating Reach.</p>
+          ) : (
+            <>
+              <div className="sub-scope-dialog-list">
+                {properties.map(property => (
+                  <label key={property.id} className={`sub-scope-dialog-option${property.id === propertyId ? " selected" : ""}`} style={!property.eligible ? { opacity: 0.62 } : undefined}>
+                    <input type="radio" name="reach-property" checked={property.id === propertyId} onChange={() => setPropertyId(property.id)} />
+                    <span className="sub-scope-dialog-check">{property.id === propertyId ? "✓" : ""}</span>
+                    <span style={{ display: "grid", gap: 4 }}>
+                      <span>{property.name}</span>
+                      <span style={{ color: "var(--text-muted)", fontSize: 11 }}>
+                        {property.program?.enabled ? "Reach is active" : property.eligible ? "Eligible for Reach" : "Requires Booking Engine, Standalone API, or Custom Website"}
+                      </span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+              <div className="sub-scope-dialog-note">After selection, payment opens securely in Flutterwave.</div>
+              {message && <p role="alert" style={{ color: "#ff5f72", fontSize: 12, marginTop: 12 }}>{message}</p>}
+              <div className="sub-modal-actions">
+                <button className="btn btn-outline btn-sm" onClick={onClose}>Cancel</button>
+                <button className="btn btn-sm sub-plan-cta" disabled={busy || !selected?.eligible || Boolean(selected?.program?.enabled)} onClick={() => void activate()}>
+                  {busy ? "Opening Flutterwave…" : selected?.program?.enabled ? "Reach active" : "Continue to payment →"}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
 function DrawerSection({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section style={{ marginBottom: 24 }}>
@@ -696,6 +804,7 @@ export default function SubscriptionCatalogue({
   const [scopeProduct, setScopeProduct] = useState<{ product: Product; key: string; priceIds: string[] } | null>(null);
   const [websiteModalOpen, setWebsiteModalOpen] = useState(false);
   const [domainModalOpen, setDomainModalOpen] = useState(false);
+  const [reachModalOpen, setReachModalOpen] = useState(false);
 
   async function checkout(key: string, priceIds: string[], planId?: string, requestedPropertyIds = selectedPropertyIds.slice(0, 1)) {
     if (!priceIds.length) return setError("This option does not have a published price for the selected billing interval yet.");
@@ -827,7 +936,7 @@ export default function SubscriptionCatalogue({
                 interval={interval}
                 busy={busy}
                 onCheckout={(key, priceIds) => startAddonCheckout(product, key, priceIds)}
-                onSpecialAddon={["ADDON_CUSTOM_WEBSITE_API", "ADDON_CUSTOM_WEBSITE_PMS"].includes(product.code) ? () => setWebsiteModalOpen(true) : product.code === "ADDON_CUSTOM_DOMAIN" ? () => setDomainModalOpen(true) : product.code === "ADDON_REACH" ? () => document.getElementById("reach-activation-card")?.scrollIntoView({ behavior: "smooth", block: "center" }) : undefined}
+                onSpecialAddon={["ADDON_CUSTOM_WEBSITE_API", "ADDON_CUSTOM_WEBSITE_PMS"].includes(product.code) ? () => setWebsiteModalOpen(true) : product.code === "ADDON_CUSTOM_DOMAIN" ? () => setDomainModalOpen(true) : product.code === "ADDON_REACH" ? () => setReachModalOpen(true) : undefined}
                 canSubscribe={hasActiveBaseSubscription}
                 scopeReady={!isPropertyScoped(product) || properties.length > 0}
                 isActive={isPropertyScoped(product) ? properties.length > 0 && properties.every(property => (activeAddonPropertyIds[product.code] ?? []).includes(property.id)) : activeAddonCodes.includes(product.code)}
@@ -837,8 +946,6 @@ export default function SubscriptionCatalogue({
           </div>
         </div>
       )}
-
-      <ReachActivationCard />
 
       {/* Detail Drawer */}
       {details && (
@@ -861,6 +968,7 @@ export default function SubscriptionCatalogue({
       )}
       {websiteModalOpen && <CustomWebsiteAddonModal properties={properties} websitePrices={{ standalone: addOns.find(product => product.code === "ADDON_CUSTOM_WEBSITE_API")?.prices.find(price => price.interval === "one_time"), pms: addOns.find(product => product.code === "ADDON_CUSTOM_WEBSITE_PMS")?.prices.find(price => price.interval === "one_time") }} domainPrice={addOns.find(product => product.code === "ADDON_CUSTOM_DOMAIN")?.prices.find(price => price.interval === "month") ?? addOns.find(product => product.code === "ADDON_CUSTOM_DOMAIN")?.prices.find(price => price.interval === "year")} onError={message => setError(message || null)} initiallyOpen onClose={() => setWebsiteModalOpen(false)} />}
       {domainModalOpen && <CustomDomainAddonModal properties={properties} domainPrice={addOns.find(product => product.code === "ADDON_CUSTOM_DOMAIN")?.prices.find(price => price.interval === "month") ?? addOns.find(product => product.code === "ADDON_CUSTOM_DOMAIN")?.prices.find(price => price.interval === "year")} onError={message => setError(message || null)} onClose={() => setDomainModalOpen(false)} />}
+      {reachModalOpen && <ReachActivationDialog onClose={() => setReachModalOpen(false)} />}
       <style>{`.sub-property-scope-modal{max-width:520px}.sub-scope-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:14px;border:1px solid var(--border);border-radius:12px;background:rgba(255,255,255,.025);margin-bottom:24px}.sub-scope-summary-label{font:10px var(--font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted)}.sub-scope-summary-value{margin-top:6px;color:var(--text-primary);font-size:13px;font-weight:650}.sub-scope-summary-total{color:var(--accent)}.sub-scope-dialog-heading{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;color:var(--text-secondary);font-size:12px;font-weight:650}.sub-scope-dialog-heading span+span{color:var(--text-muted);font:10px var(--font-mono)}.sub-scope-dialog-list{display:grid;gap:8px;max-height:260px;overflow:auto}.sub-scope-dialog-option{display:flex;align-items:center;gap:10px;padding:13px 14px;border:1px solid var(--border);border-radius:10px;background:rgba(255,255,255,.018);color:var(--text-secondary);font-size:13px;cursor:pointer;transition:border-color .2s,background .2s}.sub-scope-dialog-option:hover,.sub-scope-dialog-option.selected{border-color:rgba(0,212,232,.42);background:rgba(0,212,232,.07)}.sub-scope-dialog-option input{position:absolute;opacity:0;pointer-events:none}.sub-scope-dialog-check{display:flex;align-items:center;justify-content:center;width:18px;height:18px;border:1px solid rgba(255,255,255,.18);border-radius:5px;color:#06121c;background:transparent;font-size:11px;font-weight:800}.sub-scope-dialog-option.selected .sub-scope-dialog-check{border-color:var(--accent);background:var(--accent)}.sub-scope-dialog-note{margin-top:16px;color:var(--text-muted);font-size:11px;line-height:1.5}.sub-modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:22px;padding-top:18px;border-top:1px solid var(--border)}@media (max-width:600px){.sub-scope-summary{grid-template-columns:1fr}.sub-modal-actions{flex-direction:column-reverse}.sub-modal-actions .btn{width:100%}}`}</style>
     </div>
   );
