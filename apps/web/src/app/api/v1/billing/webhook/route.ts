@@ -92,6 +92,23 @@ export async function POST(req: Request) {
   let payload: any;
   try { payload = JSON.parse(rawBody); } catch { return NextResponse.json({ error: 'Invalid webhook payload' }, { status: 400 }); }
 
+  // Flutterwave supports one webhook URL per account. Keep Reach activation
+  // payments on the same HQ billing endpoint and hand them to the dedicated
+  // activation reconciler before normal subscription processing.
+  const webhookMeta = payload?.data?.meta ?? payload?.data?.meta_data ?? payload?.meta ?? payload?.meta_data;
+  if (metadataValue(webhookMeta, 'lodgecore_source') === 'reach_activation') {
+    const activationUrl = new URL('/api/v1/referrals/activation/webhook', req.url);
+    return fetch(activationUrl, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        ...(signature ? { 'flutterwave-signature': signature } : {}),
+        ...(legacySignature ? { 'verif-hash': legacySignature } : {}),
+      },
+      body: rawBody,
+    });
+  }
+
   try {
     const data = payload?.data ?? payload;
     const transactionId = String(data?.id ?? data?.transaction_id ?? '');
