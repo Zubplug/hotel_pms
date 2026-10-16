@@ -11,9 +11,44 @@ export async function GET() {
   const partners = await prisma.referralPartner.findMany({
     where: { OR: [{ organizationId: context.organizationId }, { organizationId: null }] },
     orderBy: { createdAt: 'desc' },
-    select: { id: true, displayName: true, email: true, phone: true, status: true, verificationStatus: true, termsAcceptedAt: true, createdAt: true },
+    select: { id: true, displayName: true, businessName: true, firstName: true, middleName: true, lastName: true, email: true, phone: true, status: true, verificationStatus: true, termsAcceptedAt: true, createdAt: true },
   });
   return successResponse({ partners });
+}
+
+export async function PATCH(req: NextRequest) {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
+    const context = await requireOrganizationContext(session.user.id);
+    if (!['ADMIN', 'SUPER_ADMIN', 'OWNER'].includes(context.role)) return errorResponse('FORBIDDEN', 'Only property administrators can verify Reach partners', 403);
+
+    const body = await req.json().catch(() => ({}));
+    const partnerId = typeof body?.partnerId === 'string' ? body.partnerId : '';
+    const verificationStatus = typeof body?.verificationStatus === 'string' ? body.verificationStatus.toUpperCase() : '';
+    const status = typeof body?.status === 'string' ? body.status.toUpperCase() : undefined;
+    if (!partnerId) return errorResponse('BAD_REQUEST', 'partnerId is required', 400);
+    if (!['PENDING', 'VERIFIED', 'REJECTED'].includes(verificationStatus)) return errorResponse('BAD_REQUEST', 'verificationStatus must be PENDING, VERIFIED, or REJECTED', 400);
+    if (status !== undefined && !['ACTIVE', 'SUSPENDED', 'CLOSED'].includes(status)) return errorResponse('BAD_REQUEST', 'status must be ACTIVE, SUSPENDED, or CLOSED', 400);
+
+    const partner = await prisma.referralPartner.findFirst({
+      where: { id: partnerId, OR: [{ organizationId: context.organizationId }, { organizationId: null }] },
+      select: { id: true },
+    });
+    if (!partner) return errorResponse('NOT_FOUND', 'Reach partner not found', 404);
+
+    const updated = await prisma.referralPartner.update({
+      where: { id: partner.id },
+      data: {
+        verificationStatus,
+        ...(status ? { status } : verificationStatus === 'VERIFIED' ? { status: 'ACTIVE' } : {}),
+      },
+      select: { id: true, displayName: true, businessName: true, firstName: true, middleName: true, lastName: true, email: true, phone: true, status: true, verificationStatus: true },
+    });
+    return successResponse({ partner });
+  } catch (error: any) {
+    return errorResponse('BAD_REQUEST', error?.message || 'Unable to update partner verification', 400);
+  }
 }
 
 export async function POST(req: NextRequest) {
