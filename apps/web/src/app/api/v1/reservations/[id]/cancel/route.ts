@@ -45,8 +45,9 @@ export async function POST(
       return errorResponse('NIGHT_AUDIT_IN_PROGRESS', 'Reservation changes are temporarily paused while Night Audit is posting.', 409);
     }
 
-    // Business Logic: Only CONFIRMED reservations can be cancelled.
-    if (existingReservation.status !== 'CONFIRMED') {
+    // Business Logic: Cannot cancel a reservation that is already checked in or cancelled/checked-out.
+    const nonCancellableStatuses = ['CHECKED_IN', 'CHECKED_OUT', 'CANCELLED'];
+    if (nonCancellableStatuses.includes(existingReservation.status)) {
       return errorResponse('BAD_REQUEST', `Cannot cancel a reservation that is ${existingReservation.status}`, 400);
     }
 
