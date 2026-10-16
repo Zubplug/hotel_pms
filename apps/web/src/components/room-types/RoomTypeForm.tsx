@@ -55,10 +55,16 @@ export function RoomTypeForm({ initialData, onSaved, onCancel, darkTheme = false
       const url = initialData ? `/api/v1/room-types/${initialData.id}` : '/api/v1/room-types';
       const method = initialData ? 'PATCH' : 'POST';
 
+      const payload = {
+        ...data,
+        referralEnabled: Boolean(data.referralEnabled),
+        referralCommissionMode: data.referralCommissionMode || 'PERCENT',
+        referralCommissionValue: Number(data.referralCommissionValue ?? 0),
+      };
       const response = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
@@ -189,14 +195,14 @@ export function RoomTypeForm({ initialData, onSaved, onCancel, darkTheme = false
           />
         </div>
 
-        {reachEnabled && <div className={darkTheme ? 'rounded-xl border border-emerald-300/20 bg-emerald-300/[0.06] p-4' : 'rounded-xl border p-4'}>
-          <div className="mb-3"><p className="font-semibold">LodgeCore Reach referral rule</p><p className="text-xs text-muted-foreground">Visible only when this property has the active Reach add-on. This room type can override the campaign commission.</p></div>
+        <div className={darkTheme ? 'rounded-xl border border-emerald-300/20 bg-emerald-300/[0.06] p-4' : 'rounded-xl border p-4'}>
+          <div className="mb-3"><p className="font-semibold">LodgeCore Reach referral rule</p><p className="text-xs text-muted-foreground">{reachEnabled ? 'This room type can override the campaign commission.' : 'Reach is not currently active for this property. Existing commission settings remain visible and will apply when Reach is enabled.'}</p></div>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <FormField control={form.control as any} name="referralEnabled" render={({ field }) => <FormItem className="flex items-center gap-3 space-y-0 md:pt-8"><FormControl><input type="checkbox" checked={field.value} onChange={field.onChange} /></FormControl><FormLabel>Eligible for referrals</FormLabel></FormItem>} />
             <FormField control={form.control as any} name="referralCommissionMode" render={({ field }) => <FormItem><FormLabel>Commission type</FormLabel><FormControl><select className={darkTheme ? 'h-10 w-full rounded-md border border-white/10 bg-slate-950 px-3 text-sm text-slate-100' : 'h-10 w-full rounded-md border px-3 text-sm'} value={field.value} onChange={field.onChange}><option value="PERCENT">Percentage of eligible revenue</option><option value="AMOUNT">Fixed amount per night</option></select></FormControl><FormMessage /></FormItem>} />
             <FormField control={form.control as any} name="referralCommissionValue" render={({ field }) => <FormItem><FormLabel>{form.watch('referralCommissionMode') === 'AMOUNT' ? 'Amount per night' : 'Percentage'} </FormLabel><FormControl><Input type="number" min="0" step="0.01" {...field} onChange={(event) => field.onChange(Number(event.target.value || 0))} /></FormControl><FormMessage /></FormItem>} />
           </div>
-        </div>}
+        </div>
 
         <FormField
           control={form.control as any}

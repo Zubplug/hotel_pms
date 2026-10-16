@@ -41,7 +41,15 @@ export async function PATCH(req: NextRequest, { params }: Params) {
         let reqPropertyId = body?.propertyId;
         if (reqPropertyId && !ctx.propertyIds.includes(reqPropertyId)) return NextResponse.json({ error: 'Forbidden property' }, { status: 403 });
     const data = updateRoomTypeSchema.parse(body);
-    const updated = await prisma.roomType.update({ where: { id }, data: { ...data, baseRate: data.baseRate } });
+    // Keep the Reach override fields explicit. This prevents a form/client
+    // serializer from silently dropping them before Prisma receives the update.
+    const updateData = {
+      ...data,
+      ...(Object.prototype.hasOwnProperty.call(body, 'referralEnabled') ? { referralEnabled: Boolean(body.referralEnabled) } : {}),
+      ...(Object.prototype.hasOwnProperty.call(body, 'referralCommissionMode') ? { referralCommissionMode: body.referralCommissionMode } : {}),
+      ...(Object.prototype.hasOwnProperty.call(body, 'referralCommissionValue') ? { referralCommissionValue: Number(body.referralCommissionValue) } : {}),
+    };
+    const updated = await prisma.roomType.update({ where: { id }, data: { ...updateData, baseRate: data.baseRate } });
     const property = await prisma.property.findUnique({ where: { id: rt.propertyId }, select: { organizationId: true } });
     await createAuditLog({
       organizationId: property!.organizationId, propertyId: rt.propertyId, userId: session.user.id,
