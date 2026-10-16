@@ -6173,7 +6173,10 @@ public class LocalRepository
         var operatorRole = operatorStaff?.Role ?? string.Empty;
         var privileged = operatorRole.Contains("MANAGER", StringComparison.OrdinalIgnoreCase)
             || operatorRole.Contains("FINANCE", StringComparison.OrdinalIgnoreCase)
-            || operatorRole.Contains("ADMIN", StringComparison.OrdinalIgnoreCase);
+            || operatorRole.Contains("ADMIN", StringComparison.OrdinalIgnoreCase)
+            || operatorRole.Contains("NIGHT_AUDITOR", StringComparison.OrdinalIgnoreCase)
+            || operatorRole.Contains("NIGHT AUDITOR", StringComparison.OrdinalIgnoreCase)
+            || operatorRole.Contains("NIGHT AUDIT", StringComparison.OrdinalIgnoreCase);
         if (!privileged && !string.Equals(session.UserId, operatorId, StringComparison.OrdinalIgnoreCase))
         {
             throw new UnauthorizedAccessException("Only the POS cashier who opened this shift can close and submit it.");
@@ -6315,7 +6318,28 @@ public class LocalRepository
             EntityType = "POS_SESSION",
             EntityId = session.Id,
             OperationType = "POS_SESSION_UPDATED",
-            PayloadJson = JsonSerializer.Serialize(new { Status = session.Status, ControlStatus = session.ControlStatus, VarianceStatus = session.VarianceStatus, SubmittedAt = session.SubmittedAt, SubmittedBy = session.SubmittedBy, ClosedAt = session.ClosedAt }),
+            // Carry the settlement evidence on the lifecycle event as well as
+            // the dedicated POS_SETTLEMENT event. Offline events can arrive
+            // independently; the server must never accept a submitted shift
+            // without enough evidence to persist the cashier declaration.
+            PayloadJson = JsonSerializer.Serialize(new
+            {
+                Status = session.Status,
+                ControlStatus = session.ControlStatus,
+                VarianceStatus = session.VarianceStatus,
+                SubmittedAt = session.SubmittedAt,
+                SubmittedBy = session.SubmittedBy,
+                ClosedAt = session.ClosedAt,
+                SettlementId = settlement.Id,
+                SettlementOperationId = settlement.OperationId,
+                ExpectedCash = settlement.ExpectedCash,
+                ActualCash = settlement.ActualCash,
+                Variance = settlement.Variance,
+                SettledAt = settlement.SettledAt,
+                SettlementStatus = settlement.Status,
+                AuthorizerId = settlement.AuthorizerId,
+                SessionOwnerId = settlement.SessionOwnerId
+            }),
             UserId = operatorId,
             DeviceId = deviceId,
             SessionId = sessionId,

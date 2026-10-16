@@ -7,6 +7,10 @@ import { ShiftControlService } from '@/lib/services/shift-control-service';
 import { isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
 
 const amount = (value: unknown) => Number(value ?? 0);
+const normalizeRole = (value: unknown) => String(value || '')
+  .trim()
+  .toUpperCase()
+  .replace(/[^A-Z0-9]+/g, '_');
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ sessionId: string }> }) {
   try {
@@ -16,6 +20,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (!actor?.user && !operatorPayload) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const { sessionId } = await params;
     const body = await request.json();
+    if (body.actualCash === undefined || body.actualCash === null || body.actualCash === '') {
+      return NextResponse.json({ error: 'Declared cash is required before submitting the POS shift' }, { status: 400 });
+    }
     const actualCash = amount(body.actualCash);
     if (!Number.isFinite(actualCash) || actualCash < 0) return NextResponse.json({ error: 'Actual cash must be a valid non-negative amount' }, { status: 400 });
 
@@ -77,14 +84,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         ? await prisma.staff.findFirst({ where: { userId: actor.user.id }, select: { id: true, position: true } })
         : null;
     if (!actorStaff) return NextResponse.json({ error: 'Staff record not found' }, { status: 401 });
-    const privilegedPositions = new Set(['MANAGER', 'HOTEL_MANAGER', 'FINANCE_MANAGER', 'ADMIN', 'SUPER_ADMIN', 'CEO', 'DIRECTOR', 'NIGHT_AUDITOR']);
+    const privilegedPositions = new Set(['MANAGER', 'HOTEL_MANAGER', 'FINANCE_MANAGER', 'ADMIN', 'SUPER_ADMIN', 'CEO', 'DIRECTOR', 'NIGHT_AUDITOR', 'NIGHT_AUDIT']);
     // Staff.position is a free-text HR field and may not match the system role
     // identifier exactly (e.g. "Night Auditor" vs "NIGHT_AUDITOR"). The JWT
     // session role (actor.user.role) is the authoritative RBAC signal for web
     // users, so we check both to avoid locking out privileged operators.
-    const sessionRole = String((actor?.user as any)?.role || '').toUpperCase();
+    const sessionRole = normalizeRole((actor?.user as any)?.role);
     const isPrivileged =
-      privilegedPositions.has(String(actorStaff.position || '').toUpperCase()) ||
+      privilegedPositions.has(normalizeRole(actorStaff.position)) ||
       privilegedPositions.has(sessionRole) ||
       !!(actor?.user as any)?.isSuperAdmin;
     const sessionOwnerId = current.primaryOperatorId || current.openedBy;

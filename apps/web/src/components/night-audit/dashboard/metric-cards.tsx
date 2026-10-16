@@ -6,29 +6,24 @@ import {
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  CartesianGrid, Legend
+  CartesianGrid, Cell, PieChart, Pie
 } from 'recharts';
 
 const currency = (value: number, code = 'NGN') =>
   new Intl.NumberFormat('en-NG', { style: 'currency', currency: code, maximumFractionDigits: 0 }).format(value);
 
+const currencyCompact = (value: number, code = 'NGN') =>
+  new Intl.NumberFormat('en', { style: 'currency', currency: code, notation: 'compact', maximumFractionDigits: 1 }).format(value);
+
 const REVENUE_SERIES = [
   { key: 'roomRevenue', name: 'Rooms', color: '#6366f1' },
   { key: 'fnbRevenue', name: 'F&B / POS', color: '#f59e0b' },
   { key: 'eventFoodRevenue', name: 'Event Food', color: '#fb923c' },
-  { key: 'poolRevenue', name: 'Recreation / Pool', color: '#38bdf8' },
+  { key: 'poolRevenue', name: 'Recreation', color: '#38bdf8' },
   { key: 'eventHallRevenue', name: 'Event Hall', color: '#ec4899' },
-  { key: 'eventEquipmentRevenue', name: 'Event Equipment', color: '#f472b6' },
   { key: 'spaRevenue', name: 'Spa', color: '#14b8a6' },
   { key: 'laundryRevenue', name: 'Laundry', color: '#2dd4bf' },
-  { key: 'transportRevenue', name: 'Transport', color: '#84cc16' },
-  { key: 'telephoneRevenue', name: 'Telephone', color: '#eab308' },
-  { key: 'internetRevenue', name: 'Internet', color: '#06b6d4' },
-  { key: 'minibarRevenue', name: 'Minibar', color: '#f97316' },
-  { key: 'cityLedgerRevenue', name: 'City Ledger', color: '#64748b' },
-  { key: 'manualRevenue', name: 'Manual Revenue', color: '#94a3b8' },
   { key: 'otherRevenue', name: 'Other', color: '#10b981' },
-  { key: 'serviceChargeRevenue', name: 'Service Charge', color: '#a78bfa' },
 ] as const;
 
 function revenueBreakdown(audit: any) {
@@ -54,18 +49,7 @@ function revenueBreakdown(audit: any) {
       serviceChargeRevenue: 0,
     };
   }
-
   const valueFor = (department: string) => Number(rows.find((row: any) => row.department === department)?.source || 0);
-  const departmentValues: Record<string, number> = {
-    Spa: valueFor('Spa'),
-    Laundry: valueFor('Laundry'),
-    Transport: valueFor('Transport'),
-    Telephone: valueFor('Telephone'),
-    Internet: valueFor('Internet'),
-    Minibar: valueFor('Minibar'),
-    'City Ledger': valueFor('City Ledger'),
-    'Manual Revenue': valueFor('Manual Revenue'),
-  };
   return {
     roomRevenue: valueFor('Rooms'),
     fnbRevenue: valueFor('F&B/POS'),
@@ -75,14 +59,14 @@ function revenueBreakdown(audit: any) {
     eventEquipmentRevenue: valueFor('Event Equipment'),
     otherRevenue: valueFor('Other'),
     serviceChargeRevenue: valueFor('Service Charge'),
-    spaRevenue: departmentValues.Spa,
-    laundryRevenue: departmentValues.Laundry,
-    transportRevenue: departmentValues.Transport,
-    telephoneRevenue: departmentValues.Telephone,
-    internetRevenue: departmentValues.Internet,
-    minibarRevenue: departmentValues.Minibar,
-    cityLedgerRevenue: departmentValues['City Ledger'],
-    manualRevenue: departmentValues['Manual Revenue'],
+    spaRevenue: 0,
+    laundryRevenue: 0,
+    transportRevenue: 0,
+    telephoneRevenue: 0,
+    internetRevenue: 0,
+    minibarRevenue: 0,
+    cityLedgerRevenue: 0,
+    manualRevenue: 0,
   };
 }
 
@@ -95,28 +79,36 @@ interface MetricCardProps {
   tone?: 'default' | 'rose' | 'emerald' | 'amber' | 'indigo' | 'violet' | 'sky';
 }
 
-const toneMap = {
-  default: { icon: 'border-slate-600/40 bg-slate-600/15 text-slate-300', value: 'text-white' },
-  rose: { icon: 'border-rose-400/30 bg-rose-400/10 text-rose-400', value: 'text-white' },
-  emerald: { icon: 'border-emerald-400/30 bg-emerald-400/10 text-emerald-400', value: 'text-white' },
-  amber: { icon: 'border-amber-400/30 bg-amber-400/10 text-amber-400', value: 'text-white' },
-  indigo: { icon: 'border-indigo-400/30 bg-indigo-400/10 text-indigo-400', value: 'text-white' },
-  violet: { icon: 'border-violet-400/30 bg-violet-400/10 text-violet-400', value: 'text-white' },
-  sky: { icon: 'border-sky-400/30 bg-sky-400/10 text-sky-400', value: 'text-white' },
+const TONE_MAP = {
+  default: { icon: 'border-slate-600/40 bg-slate-600/15 text-slate-300', glow: 'rgba(100,116,139,0.15)' },
+  rose: { icon: 'border-rose-400/30 bg-rose-400/[0.12] text-rose-400', glow: 'rgba(244,63,94,0.15)' },
+  emerald: { icon: 'border-emerald-400/30 bg-emerald-400/[0.12] text-emerald-400', glow: 'rgba(16,185,129,0.15)' },
+  amber: { icon: 'border-amber-400/30 bg-amber-400/[0.12] text-amber-400', glow: 'rgba(245,158,11,0.15)' },
+  indigo: { icon: 'border-indigo-400/30 bg-indigo-400/[0.12] text-indigo-400', glow: 'rgba(99,102,241,0.15)' },
+  violet: { icon: 'border-violet-400/30 bg-violet-400/[0.12] text-violet-400', glow: 'rgba(139,92,246,0.15)' },
+  sky: { icon: 'border-sky-400/30 bg-sky-400/[0.12] text-sky-400', glow: 'rgba(14,165,233,0.15)' },
 };
 
-function Metric({ label, value, subtext, trend, icon: Icon, tone = 'default' }: MetricCardProps) {
-  const tc = toneMap[tone];
+function MetricCard({ label, value, subtext, trend, icon: Icon, tone = 'default' }: MetricCardProps) {
+  const tc = TONE_MAP[tone];
   return (
-    <div className="group relative overflow-hidden rounded-[20px] border border-slate-200/[0.06] bg-white/[0.03] p-4 backdrop-blur-md transition-all duration-200 hover:bg-white/[0.06] hover:border-white/[0.1]">
-      <div className="flex items-start justify-between gap-3">
+    <div
+      className="group relative overflow-hidden rounded-[20px] border border-white/[0.06] p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-white/[0.1]"
+      style={{ background: 'rgba(255,255,255,0.025)' }}
+    >
+      {/* Hover glow */}
+      <div
+        className="absolute -top-6 -right-6 h-16 w-16 rounded-full blur-xl opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+        style={{ background: tc.glow }}
+      />
+      <div className="relative flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">{label}</p>
-          <h3 className={`mt-2.5 text-xl font-bold tracking-tight ${tc.value}`}>{value}</h3>
-          {subtext && <p className="mt-1 text-[11px] text-slate-500">{subtext}</p>}
+          <h3 className="mt-2 text-xl font-bold tracking-tight text-white">{value}</h3>
+          {subtext && <p className="mt-0.5 text-[11px] text-slate-500">{subtext}</p>}
         </div>
         <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border ${tc.icon}`}>
-          <Icon className="h-4.5 w-4.5 h-[18px] w-[18px]" />
+          <Icon className="h-[18px] w-[18px]" />
         </div>
       </div>
 
@@ -124,21 +116,21 @@ function Metric({ label, value, subtext, trend, icon: Icon, tone = 'default' }: 
         <div className="mt-3 flex items-center gap-1.5 text-xs font-semibold">
           {trend > 0 ? (
             <>
-              <span className="inline-flex items-center gap-0.5 rounded-full border border-emerald-400/25 bg-emerald-400/10 px-2 py-0.5 text-emerald-300">
+              <span className="inline-flex items-center gap-0.5 rounded-full border border-emerald-400/25 bg-emerald-400/[0.08] px-2 py-0.5 text-emerald-300">
                 <ArrowUpRight className="h-3 w-3" />{trend.toFixed(1)}%
               </span>
               <span className="text-slate-600">vs prior</span>
             </>
           ) : trend < 0 ? (
             <>
-              <span className="inline-flex items-center gap-0.5 rounded-full border border-rose-400/25 bg-rose-400/10 px-2 py-0.5 text-rose-300">
+              <span className="inline-flex items-center gap-0.5 rounded-full border border-rose-400/25 bg-rose-400/[0.08] px-2 py-0.5 text-rose-300">
                 <ArrowDownRight className="h-3 w-3" />{Math.abs(trend).toFixed(1)}%
               </span>
               <span className="text-slate-600">vs prior</span>
             </>
           ) : (
             <>
-              <span className="inline-flex items-center gap-0.5 rounded-full border border-slate-600/30 bg-slate-600/10 px-2 py-0.5 text-slate-400">
+              <span className="inline-flex items-center gap-0.5 rounded-full border border-slate-600/30 bg-slate-600/[0.08] px-2 py-0.5 text-slate-400">
                 <Minus className="h-3 w-3" />0.0%
               </span>
               <span className="text-slate-600">no change</span>
@@ -153,25 +145,39 @@ function Metric({ label, value, subtext, trend, icon: Icon, tone = 'default' }: 
 const DarkTooltip = ({ active, payload, label, baseCurrency }: any) => {
   if (active && payload && payload.length) {
     return (
-      <div className="rounded-2xl border border-white/10 p-4 shadow-2xl backdrop-blur-xl" style={{ background: 'rgba(10,14,26,0.95)' }}>
+      <div className="rounded-2xl border border-white/[0.1] p-4 shadow-2xl" style={{ background: 'rgba(10,14,26,0.97)', backdropFilter: 'blur(16px)' }}>
         <p className="mb-3 text-xs font-bold uppercase tracking-[0.15em] text-slate-400">{label}</p>
-        <div className="space-y-2">
+        <div className="space-y-1.5">
           {payload.map((entry: any, i: number) => (
-            <div key={i} className="flex items-center justify-between gap-6">
-              <div className="flex items-center gap-2">
-                <div className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: entry.color }} />
-                <span className="text-xs font-medium text-slate-300">{entry.name}</span>
+            entry.value > 0 && (
+              <div key={i} className="flex items-center justify-between gap-6">
+                <div className="flex items-center gap-2">
+                  <div className="h-2 w-2 rounded-sm" style={{ backgroundColor: entry.color }} />
+                  <span className="text-xs font-medium text-slate-300">{entry.name}</span>
+                </div>
+                <span className="font-mono text-xs font-bold tabular-nums text-white">{currency(entry.value, baseCurrency)}</span>
               </div>
-              <span className="text-xs font-bold text-white">{currency(entry.value, baseCurrency)}</span>
-            </div>
+            )
           ))}
-          <div className="mt-2 flex items-center justify-between gap-6 border-t border-white/10 pt-2">
+          <div className="mt-2 flex items-center justify-between gap-6 border-t border-white/[0.08] pt-2">
             <span className="text-xs font-semibold text-slate-300">Total</span>
-            <span className="text-xs font-bold text-indigo-300">
+            <span className="font-mono text-xs font-bold tabular-nums text-amber-300">
               {currency(payload.reduce((s: number, e: any) => s + e.value, 0), baseCurrency)}
             </span>
           </div>
         </div>
+      </div>
+    );
+  }
+  return null;
+};
+
+const DonutTooltip = ({ active, payload }: any) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="rounded-xl border border-white/[0.1] px-3 py-2 shadow-xl" style={{ background: 'rgba(10,14,26,0.97)' }}>
+        <p className="text-xs font-bold text-white">{payload[0].name}</p>
+        <p className="text-[10px] text-slate-400">{payload[0].payload.pct?.toFixed(1)}%</p>
       </div>
     );
   }
@@ -219,7 +225,6 @@ export function MetricCards({ data }: { data: NightAuditData }) {
     } catch { /* ignore */ }
     return {
       date: dateStr,
-      revenue: Number(t.totalRevenue) || 0,
       ...revenueBreakdown(t),
     };
   });
@@ -229,50 +234,100 @@ export function MetricCards({ data }: { data: NightAuditData }) {
     closePackage: data.currentAudit?.closePackage || lastAudit?.closePackage,
   });
 
+  // Department donut data
+  const donutData = REVENUE_SERIES.map((s) => ({
+    name: s.name,
+    value: (currentRevenue as any)[s.key] || 0,
+    color: s.color,
+  })).filter((d) => d.value > 0);
+  const totalForDonut = donutData.reduce((s, d) => s + d.value, 0);
+  const donutDataWithPct = donutData.map((d) => ({ ...d, pct: totalForDonut > 0 ? (d.value / totalForDonut) * 100 : 0 }));
+
   return (
     <div className="space-y-5">
-      {/* Revenue Hero + Chart */}
-      <div className="rounded-[24px] border border-slate-200/[0.06] bg-white/[0.03] p-6 backdrop-blur-md sm:p-8">
-        <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
-          <div>
+      {/* Revenue Hero + Chart + Donut */}
+      <div
+        className="rounded-[24px] border border-white/[0.06] p-6 sm:p-8"
+        style={{ background: 'rgba(255,255,255,0.025)' }}
+      >
+        <div className="mb-6 flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+          {/* Revenue figure */}
+          <div className="min-w-0">
             <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-500">Gross Revenue — Last Audit</p>
-            <h2 className="mt-2.5 text-4xl font-bold tracking-tight text-white sm:text-5xl">
+            <h2 className="mt-2 text-4xl font-bold tracking-tight text-white sm:text-5xl">
               {currency(revenue, baseCurrency)}
             </h2>
             {revTrend !== undefined && (
               <div className="mt-3 flex items-center gap-2 text-sm font-semibold">
                 {revTrend > 0 ? (
                   <>
-                    <span className="inline-flex items-center gap-1 rounded-full border border-emerald-400/25 bg-emerald-400/10 px-2.5 py-1 text-emerald-300">
+                    <span className="inline-flex items-center gap-1 rounded-full border border-emerald-400/25 bg-emerald-400/[0.08] px-3 py-1 text-emerald-300">
                       <ArrowUpRight className="h-4 w-4" />{revTrend.toFixed(1)}%
                     </span>
                     <span className="text-slate-500">vs prior audit</span>
                   </>
                 ) : revTrend < 0 ? (
                   <>
-                    <span className="inline-flex items-center gap-1 rounded-full border border-rose-400/25 bg-rose-400/10 px-2.5 py-1 text-rose-300">
+                    <span className="inline-flex items-center gap-1 rounded-full border border-rose-400/25 bg-rose-400/[0.08] px-3 py-1 text-rose-300">
                       <ArrowDownRight className="h-4 w-4" />{Math.abs(revTrend).toFixed(1)}%
                     </span>
                     <span className="text-slate-500">vs prior audit</span>
                   </>
                 ) : (
-                  <span className="inline-flex items-center gap-1 rounded-full border border-slate-600/30 bg-slate-600/10 px-2.5 py-1 text-slate-400">
+                  <span className="inline-flex items-center gap-1 rounded-full border border-slate-600/30 bg-slate-600/[0.08] px-3 py-1 text-slate-400">
                     <Minus className="h-4 w-4" />No change
                   </span>
                 )}
               </div>
             )}
           </div>
+
+          {/* Department donut */}
+          {donutDataWithPct.length > 0 && (
+            <div className="flex items-center gap-6 shrink-0">
+              <div className="relative">
+                <PieChart width={120} height={120}>
+                  <Pie
+                    data={donutDataWithPct}
+                    cx={55}
+                    cy={55}
+                    innerRadius={36}
+                    outerRadius={52}
+                    paddingAngle={2}
+                    dataKey="value"
+                  >
+                    {donutDataWithPct.map((entry, i) => (
+                      <Cell key={i} fill={entry.color} stroke="transparent" />
+                    ))}
+                  </Pie>
+                  <Tooltip content={<DonutTooltip />} />
+                </PieChart>
+                {/* Center label */}
+                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                  <span className="text-[9px] font-bold uppercase tracking-wider text-slate-500">Mix</span>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                {donutDataWithPct.slice(0, 6).map((d) => (
+                  <div key={d.name} className="flex items-center gap-2">
+                    <div className="h-2 w-2 rounded-sm shrink-0" style={{ backgroundColor: d.color }} />
+                    <span className="text-[11px] text-slate-400 leading-none">{d.name}</span>
+                    <span className="ml-auto pl-3 font-mono text-[11px] font-bold tabular-nums text-slate-300">{d.pct.toFixed(0)}%</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
-        <div className="h-[260px] w-full">
+        {/* 7-day stacked bar chart */}
+        <div className="h-[220px] w-full">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData} margin={{ top: 10, right: 0, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
-              <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#64748b' }} dy={10} />
+            <BarChart data={chartData} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.04)" />
+              <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#64748b' }} dy={8} />
               <YAxis hide domain={[0, 'dataMax + (dataMax * 0.15)']} />
-              <Tooltip content={<DarkTooltip baseCurrency={baseCurrency} />} cursor={{ fill: 'rgba(255,255,255,0.03)' }} />
-              <Legend iconType="circle" wrapperStyle={{ paddingTop: '20px', fontSize: '12px', color: '#94a3b8' }} />
+              <Tooltip content={<DarkTooltip baseCurrency={baseCurrency} />} cursor={{ fill: 'rgba(255,255,255,0.02)' }} />
               {REVENUE_SERIES.map((series, index) => (
                 <Bar
                   key={series.key}
@@ -288,88 +343,86 @@ export function MetricCards({ data }: { data: NightAuditData }) {
         </div>
       </div>
 
-      {/* Metric grid */}
+      {/* KPI Metric grid */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
-        <Metric
+        <MetricCard
           label="Room Revenue"
-          value={currency(currentRevenue.roomRevenue, baseCurrency)}
-          subtext="Last completed audit"
+          value={currencyCompact(currentRevenue.roomRevenue, baseCurrency)}
+          subtext={currency(currentRevenue.roomRevenue, baseCurrency)}
           icon={BedDouble}
           tone="indigo"
         />
-        <Metric
+        <MetricCard
           label="F&B / POS"
-          value={currency(currentRevenue.fnbRevenue, baseCurrency)}
+          value={currencyCompact(currentRevenue.fnbRevenue, baseCurrency)}
           subtext="Food and beverage"
           icon={Banknote}
           tone="amber"
         />
-        <Metric
+        <MetricCard
           label="Other Revenue"
-          value={currency(
+          value={currencyCompact(
             currentRevenue.eventFoodRevenue + currentRevenue.poolRevenue + currentRevenue.eventHallRevenue
               + currentRevenue.eventEquipmentRevenue + currentRevenue.otherRevenue + currentRevenue.serviceChargeRevenue
-              + currentRevenue.spaRevenue + currentRevenue.laundryRevenue + currentRevenue.transportRevenue
-              + currentRevenue.telephoneRevenue + currentRevenue.internetRevenue + currentRevenue.minibarRevenue
-              + currentRevenue.cityLedgerRevenue + currentRevenue.manualRevenue,
+              + currentRevenue.spaRevenue + currentRevenue.laundryRevenue,
             baseCurrency,
           )}
-          subtext="Events and ancillary revenue"
+          subtext="Events and ancillary"
           icon={TrendingUp}
           tone="emerald"
         />
-        <Metric
+        <MetricCard
           label="Taxes"
-          value={currency(currentSnapshot?.taxes ?? (lastAudit?.financialSnapshot ? Number(lastAudit.financialSnapshot.taxes) : 0), baseCurrency)}
+          value={currencyCompact(currentSnapshot?.taxes ?? (lastAudit?.financialSnapshot ? Number(lastAudit.financialSnapshot.taxes) : 0), baseCurrency)}
           subtext="Posted tax total"
           icon={Percent}
           tone="default"
         />
-        <Metric
+        <MetricCard
           label="Prior Audit"
-          value={currency(previousAuditRevenue, baseCurrency)}
+          value={currencyCompact(previousAuditRevenue, baseCurrency)}
           subtext="Day before last"
           icon={CalendarDays}
           tone="default"
         />
-        <Metric
+        <MetricCard
           label="Payments"
-          value={currency(payments, baseCurrency)}
+          value={currencyCompact(payments, baseCurrency)}
           subtext="Captured today"
           icon={CreditCard}
           tone="indigo"
         />
-        <Metric
+        <MetricCard
           label="Refunds"
-          value={currency(currentSnapshot?.refunds ?? (lastAudit?.financialSnapshot ? Number(lastAudit.financialSnapshot.refunds) : 0), baseCurrency)}
+          value={currencyCompact(currentSnapshot?.refunds ?? (lastAudit?.financialSnapshot ? Number(lastAudit.financialSnapshot.refunds) : 0), baseCurrency)}
           subtext="Posted refunds"
           icon={ArrowDownRight}
           tone="rose"
         />
-        <Metric
+        <MetricCard
           label="Discounts"
-          value={currency(currentSnapshot?.discounts ?? (lastAudit?.financialSnapshot ? Number(lastAudit.financialSnapshot.discounts) : 0), baseCurrency)}
+          value={currencyCompact(currentSnapshot?.discounts ?? (lastAudit?.financialSnapshot ? Number(lastAudit.financialSnapshot.discounts) : 0), baseCurrency)}
           subtext="Applied discounts"
           icon={Tag}
           tone="amber"
         />
-        <Metric
-          label="ADR (Last)"
-          value={currency(adr, baseCurrency)}
+        <MetricCard
+          label="ADR"
+          value={currencyCompact(adr, baseCurrency)}
           subtext={`${occupied} occupied rooms`}
           trend={adrTrend}
           icon={TrendingUp}
           tone="violet"
         />
-        <Metric
-          label="RevPAR (Last)"
-          value={currency(revpar, baseCurrency)}
+        <MetricCard
+          label="RevPAR"
+          value={currencyCompact(revpar, baseCurrency)}
           subtext={`${totalRooms} total rooms`}
           trend={revparTrend}
           icon={BedDouble}
           tone="sky"
         />
-        <Metric
+        <MetricCard
           label="In-house"
           value={inHouseGuests}
           subtext={`${openSessions} open sessions`}

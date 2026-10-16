@@ -1088,11 +1088,15 @@ export async function POST(req: NextRequest) {
                   // ledger after all preceding events have been materialized.
                   const settlementSession = await tx.posSession.findUnique({
                     where: { id: session.id },
-                    include: { payments: true, cashMovements: true }
+                    include: { payments: true, cashMovements: true, settlements: true }
                   });
                   if (!settlementSession) throw new Error(`RETRYABLE_SESSION_NOT_FOUND: POS session ${session.id} is unavailable`);
                   const protectedControlStates = ['SUBMITTED', 'UNDER_REVIEW', 'RETURNED', 'APPROVED', 'APPROVED_WITH_VARIANCE', 'HANDOVER_PENDING', 'DEPOSITED', 'RECONCILED', 'HANDED_OVER'];
-                  if (settlementSession.status !== 'OPEN' || protectedControlStates.includes(String(settlementSession.controlStatus))) {
+                  const canRecoverMissingSettlement = settlementSession.status === 'CLOSED'
+                    && settlementSession.controlStatus === 'SUBMITTED'
+                    && settlementSession.settlements.length === 0;
+                  if ((settlementSession.status !== 'OPEN' || protectedControlStates.includes(String(settlementSession.controlStatus)))
+                    && !canRecoverMissingSettlement) {
                     const conflict = new Error('CONCURRENCY_CONFLICT: settlement cannot be appended to a financially controlled shift');
                     (conflict as any).currentVersion = settlementSession.controlStatus;
                     throw conflict;
@@ -1108,7 +1112,14 @@ export async function POST(req: NextRequest) {
                     + movementTotal(['CASH_IN', 'CASH_TRANSFER_IN'])
                     - movementTotal(['CASH_DROP', 'PAID_OUT', 'CASH_TRANSFER_OUT'])
                     - movementTotal(['REFUND', 'REFUND_CASH']);
-                  const declaredCash = Number(payload.ActualCash ?? payload.actualCash ?? 0);
+                  const rawDeclaredCash = payload.ActualCash ?? payload.actualCash;
+                  if (rawDeclaredCash === undefined || rawDeclaredCash === null || rawDeclaredCash === '') {
+                    throw new Error('INVALID_SETTLEMENT: declared cash is required before submitting the POS shift');
+                  }
+                  const declaredCash = Number(rawDeclaredCash);
+                  if (!Number.isFinite(declaredCash) || declaredCash < 0) {
+                    throw new Error('INVALID_SETTLEMENT: declared cash must be a valid non-negative amount');
+                  }
                   const calculatedVariance = declaredCash - expectedCash;
 
                   await tx.posSettlement.create({
@@ -1181,7 +1192,7 @@ export async function POST(req: NextRequest) {
               const closedAt = payload.ClosedAt || payload.closedAt;
               const currentSession = await tx.posSession.findUnique({
                 where: { id: event.aggregateId },
-                select: { status: true, controlStatus: true }
+                include: { payments: true, cashMovements: true }
               });
               if (!currentSession) {
                 throw new Error(`RETRYABLE_SESSION_NOT_FOUND: POS operator session ${event.aggregateId} has not reached the cloud yet`);
@@ -1191,6 +1202,86 @@ export async function POST(req: NextRequest) {
                 const conflict = new Error('CONCURRENCY_CONFLICT: controlled shift cannot be overwritten by a late offline status event');
                 (conflict as any).currentVersion =  currentSession.controlStatus;
                 throw conflict;
+              }
+
+              // Offline close and settlement events are separate records and
+              // can arrive out of order. Never let the close projection become
+              // SUBMITTED while the declaration is missing. New desktop
+              // clients include settlement evidence in this lifecycle event,
+              // allowing us to recover atomically when POS_SETTLEMENT was lost
+              // or rejected during the original sync.
+              const isSubmittedClose = status === 'CLOSED' && controlStatus === 'SUBMITTED';
+              if (isSubmittedClose) {
+                const settlement = await tx.posSettlement.findFirst({
+                  where: { sessionId },
+                  orderBy: { settledAt: 'desc' },
+                });
+                const hasActualCash = payload.ActualCash !== undefined || payload.actualCash !== undefined;
+                if (!settlement && !hasActualCash) {
+                  throw new Error('RETRYABLE_SETTLEMENT_REQUIRED: POS close cannot be submitted without a cash declaration');
+                }
+
+                if (!settlement && hasActualCash) {
+                  const cashSales = currentSession.payments
+                    .filter((p: any) => ['CONFIRMED', 'PAID'].includes(p.status) && p.method === 'CASH')
+                    .reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0);
+                  const movementTotal = (types: string[]) => currentSession.cashMovements
+                    .filter((m: any) => types.includes(m.type))
+                    .reduce((sum: number, m: any) => sum + Number(m.amount || 0), 0);
+                  const expectedCash = Number(currentSession.openingCash || 0)
+                    + cashSales
+                    + movementTotal(['CASH_IN', 'CASH_TRANSFER_IN'])
+                    - movementTotal(['CASH_DROP', 'PAID_OUT', 'CASH_TRANSFER_OUT'])
+                    - movementTotal(['REFUND', 'REFUND_CASH']);
+                  const declaredCash = Number(payload.ActualCash ?? payload.actualCash);
+                  if (!Number.isFinite(declaredCash) || declaredCash < 0) {
+                    throw new Error('INVALID_SETTLEMENT: offline cash declaration must be a valid non-negative amount');
+                  }
+                  const calculatedVariance = declaredCash - expectedCash;
+                  const settlementOperationId = String(
+                    payload.SettlementOperationId
+                      || payload.settlementOperationId
+                      || `${event.idempotencyKey}:settlement`
+                  );
+
+                  await tx.posSettlement.create({
+                    data: {
+                      id: isUuid(payload.SettlementId || payload.settlementId)
+                        ? (payload.SettlementId || payload.settlementId)
+                        : crypto.randomUUID(),
+                      sessionId,
+                      propertyId,
+                      outletId: currentSession.outletId,
+                      deviceId: payload.DeviceId || payload.deviceId || event.deviceId || 'offline-sync',
+                      sessionOwnerId: isUuid(payload.SessionOwnerId || payload.sessionOwnerId)
+                        ? (payload.SessionOwnerId || payload.sessionOwnerId)
+                        : currentSession.primaryOperatorId || currentSession.openedBy,
+                      operatorId: isUuid(payload.OperatorId || payload.operatorId)
+                        ? (payload.OperatorId || payload.operatorId)
+                        : currentSession.primaryOperatorId || currentSession.openedBy,
+                      businessDate: currentSession.businessDate,
+                      expectedCash,
+                      actualCash: declaredCash,
+                      variance: calculatedVariance,
+                      authorizerId: isUuid(payload.AuthorizerId || payload.authorizerId)
+                        ? (payload.AuthorizerId || payload.authorizerId)
+                        : null,
+                      settledAt: payload.SettledAt || payload.settledAt
+                        ? new Date(payload.SettledAt || payload.settledAt)
+                        : new Date(event.occurredAt),
+                      status: payload.SettlementStatus || payload.settlementStatus || 'SETTLED',
+                      operationId: settlementOperationId,
+                    },
+                  });
+
+                  // Use the server-calculated values in the projection. The
+                  // offline declaration is evidence, not the expected-cash
+                  // source of truth.
+                  await tx.posSession.update({
+                    where: { id: sessionId },
+                    data: { expectedCash, actualCash: declaredCash, variance: calculatedVariance },
+                  });
+                }
               }
               let opStatus;
               if (status === 'RECONCILIATION_REQUIRED' || status === 'CLOSED' || status === 'CLOSING') {

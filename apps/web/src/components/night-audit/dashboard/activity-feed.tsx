@@ -1,40 +1,44 @@
-import React from 'react';
-import { Activity, AlertTriangle, Info, AlertCircle, CalendarClock, ShieldAlert, MonitorDot, Banknote, Users } from 'lucide-react';
+import React, { useState } from 'react';
+import {
+  Activity, AlertTriangle, Info, AlertCircle, CalendarClock,
+  ShieldAlert, MonitorDot, Banknote, Users, Filter
+} from 'lucide-react';
 import { NightAuditData } from '@/types/night-audit';
 
-const getCategoryIcon = (category: string) => {
-  switch (category) {
-    case 'FINANCIAL': return <Banknote className="h-4 w-4" />;
-    case 'SECURITY': return <ShieldAlert className="h-4 w-4" />;
-    case 'FRONT_DESK': return <Users className="h-4 w-4" />;
-    case 'NIGHT_AUDIT': return <CalendarClock className="h-4 w-4" />;
-    default: return <MonitorDot className="h-4 w-4" />;
-  }
+type Category = 'ALL' | 'FINANCIAL' | 'SECURITY' | 'FRONT_DESK' | 'NIGHT_AUDIT' | 'SYSTEM';
+type Severity = 'ALL' | 'CRITICAL' | 'WARNING' | 'INFO';
+
+const CATEGORY_META: Record<string, { icon: React.ReactNode; label: string; color: string }> = {
+  FINANCIAL: { icon: <Banknote className="h-3.5 w-3.5" />, label: 'Financial', color: '#f59e0b' },
+  SECURITY: { icon: <ShieldAlert className="h-3.5 w-3.5" />, label: 'Security', color: '#f43f5e' },
+  FRONT_DESK: { icon: <Users className="h-3.5 w-3.5" />, label: 'Front Desk', color: '#6366f1' },
+  NIGHT_AUDIT: { icon: <CalendarClock className="h-3.5 w-3.5" />, label: 'Night Audit', color: '#8b5cf6' },
+  SYSTEM: { icon: <MonitorDot className="h-3.5 w-3.5" />, label: 'System', color: '#0ea5e9' },
 };
 
-const severityMeta = {
+const SEVERITY_META = {
   CRITICAL: {
-    icon: <AlertCircle className="h-3.5 w-3.5 text-rose-400" />,
-    iconBg: 'border-rose-400/20 bg-rose-400/10 text-rose-400',
-    badge: 'border-rose-400/30 bg-rose-400/10 text-rose-300',
-    border: 'border-l-rose-500',
-    dot: 'bg-rose-500',
+    icon: <AlertCircle className="h-4 w-4" />,
+    nodeColor: '#f43f5e',
+    nodeBg: 'bg-rose-500',
+    badge: 'border-rose-400/30 bg-rose-400/[0.08] text-rose-300',
+    cardBg: 'border-rose-400/[0.12] bg-rose-400/[0.04]',
     label: 'Critical',
   },
   WARNING: {
-    icon: <AlertTriangle className="h-3.5 w-3.5 text-amber-400" />,
-    iconBg: 'border-amber-400/20 bg-amber-400/10 text-amber-400',
-    badge: 'border-amber-400/30 bg-amber-400/10 text-amber-300',
-    border: 'border-l-amber-500',
-    dot: 'bg-amber-500',
+    icon: <AlertTriangle className="h-4 w-4" />,
+    nodeColor: '#f59e0b',
+    nodeBg: 'bg-amber-500',
+    badge: 'border-amber-400/30 bg-amber-400/[0.08] text-amber-300',
+    cardBg: 'border-amber-400/[0.10] bg-amber-400/[0.03]',
     label: 'Warning',
   },
   INFO: {
-    icon: <Info className="h-3.5 w-3.5 text-slate-400" />,
-    iconBg: 'border-slate-600/40 bg-slate-600/15 text-slate-400',
-    badge: 'border-slate-600/30 bg-slate-600/10 text-slate-400',
-    border: 'border-l-slate-600',
-    dot: 'bg-slate-500',
+    icon: <Info className="h-4 w-4" />,
+    nodeColor: '#475569',
+    nodeBg: 'bg-slate-600',
+    badge: 'border-slate-600/30 bg-slate-600/[0.08] text-slate-400',
+    cardBg: 'border-white/[0.06] bg-white/[0.02]',
     label: 'Info',
   },
 };
@@ -49,104 +53,218 @@ const getRelativeTime = (dateStr: string) => {
   return `${Math.floor(diff / 86400)}d ago`;
 };
 
+function FilterChip({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`rounded-xl border px-3 py-1.5 text-[11px] font-bold transition-all duration-150 ${
+        active
+          ? 'border-amber-400/40 bg-amber-400/10 text-amber-300'
+          : 'border-white/[0.07] bg-white/[0.03] text-slate-500 hover:border-white/[0.12] hover:text-slate-300'
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
 export function ActivityFeed({ data }: { data: NightAuditData }) {
   const events = data.activityFeed || [];
+  const [categoryFilter, setCategoryFilter] = useState<Category>('ALL');
+  const [severityFilter, setSeverityFilter] = useState<Severity>('ALL');
+
+  const filtered = events.filter((e) => {
+    const catOk = categoryFilter === 'ALL' || e.category === categoryFilter;
+    const sevOk = severityFilter === 'ALL' || e.severity === severityFilter;
+    return catOk && sevOk;
+  });
+
+  const uniqueCategories = Array.from(new Set(events.map((e) => e.category)));
 
   if (events.length === 0) {
     return (
-      <div className="flex h-full flex-col rounded-[24px] border border-slate-200/[0.06] bg-white/[0.03] p-6 backdrop-blur-md sm:p-7">
-        <div className="flex items-center gap-2.5">
-          <span className="flex h-8 w-8 items-center justify-center rounded-xl border border-indigo-400/25 bg-indigo-400/10 text-indigo-400">
+      <div
+        className="flex flex-col rounded-[24px] border border-white/[0.06] p-6 sm:p-8"
+        style={{ background: 'rgba(255,255,255,0.02)' }}
+      >
+        <div className="flex items-center gap-3">
+          <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-indigo-400/25 bg-indigo-400/10 text-indigo-400">
             <Activity className="h-4 w-4" />
           </span>
           <div>
-            <h3 className="text-base font-bold text-white">Operational Audit Feed</h3>
-            <p className="text-[11px] text-slate-500">Real-time event log</p>
+            <h3 className="text-base font-bold text-white">Audit Event Timeline</h3>
+            <p className="text-[11px] text-slate-500">Real-time operational log</p>
           </div>
         </div>
-        <div className="mt-6 flex flex-1 min-h-[180px] flex-col items-center justify-center rounded-2xl border border-dashed border-white/[0.07]">
-          <MonitorDot className="h-8 w-8 text-slate-600" />
-          <p className="mt-3 text-sm font-semibold text-slate-400">No significant events recorded</p>
-          <p className="mt-1 text-xs text-slate-600">Activity logged today will appear here.</p>
+        <div className="mt-8 flex flex-1 min-h-[160px] flex-col items-center justify-center rounded-2xl border border-dashed border-white/[0.07] py-12">
+          <MonitorDot className="h-10 w-10 text-slate-700" />
+          <p className="mt-4 text-sm font-semibold text-slate-400">No events recorded yet</p>
+          <p className="mt-1 text-xs text-slate-600">Activity logged during this shift will appear here.</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex h-full max-h-[600px] flex-col rounded-[24px] border border-slate-200/[0.06] bg-white/[0.03] backdrop-blur-md">
-      {/* Sticky header */}
-      <div className="flex items-center justify-between gap-4 border-b border-white/[0.05] px-6 py-5">
-        <div className="flex items-center gap-2.5">
-          <span className="flex h-8 w-8 items-center justify-center rounded-xl border border-indigo-400/25 bg-indigo-400/10 text-indigo-400">
-            <Activity className="h-4 w-4" />
-          </span>
-          <div>
-            <h3 className="text-base font-bold text-white">Operational Audit Feed</h3>
-            <p className="text-[11px] text-slate-500">Real-time event log</p>
+    <div
+      className="flex flex-col rounded-[24px] border border-white/[0.06] overflow-hidden"
+      style={{ background: 'rgba(255,255,255,0.02)' }}
+    >
+      {/* Header */}
+      <div className="border-b border-white/[0.05] px-6 py-5">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-indigo-400/25 bg-indigo-400/10 text-indigo-400">
+              <Activity className="h-4 w-4" />
+            </span>
+            <div>
+              <h3 className="text-base font-bold text-white">Audit Event Timeline</h3>
+              <p className="text-[11px] text-slate-500">Real-time operational log</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="rounded-full border border-white/[0.07] bg-white/[0.03] px-2.5 py-1 text-[11px] font-bold text-slate-400">
+              {events.length} events
+            </span>
+            <span className="hidden sm:flex items-center gap-1 text-[10px] font-semibold text-slate-600">
+              <Filter className="h-3 w-3" />
+              Showing {filtered.length}
+            </span>
           </div>
         </div>
-        <span className="rounded-full border border-white/[0.07] bg-white/[0.03] px-2.5 py-1 text-[11px] font-bold text-slate-400">
-          {events.length} events
-        </span>
-      </div>
 
-      {/* Scrollable event list */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="divide-y divide-white/[0.04]">
-          {events.map((event) => {
-            const sev = event.severity as keyof typeof severityMeta;
-            const meta = severityMeta[sev] || severityMeta.INFO;
-
+        {/* Filter row */}
+        <div className="mt-4 flex flex-wrap gap-2">
+          <FilterChip active={severityFilter === 'ALL' && categoryFilter === 'ALL'} onClick={() => { setSeverityFilter('ALL'); setCategoryFilter('ALL'); }}>
+            All
+          </FilterChip>
+          <FilterChip active={severityFilter === 'CRITICAL'} onClick={() => setSeverityFilter(severityFilter === 'CRITICAL' ? 'ALL' : 'CRITICAL')}>
+            🔴 Critical
+          </FilterChip>
+          <FilterChip active={severityFilter === 'WARNING'} onClick={() => setSeverityFilter(severityFilter === 'WARNING' ? 'ALL' : 'WARNING')}>
+            🟡 Warning
+          </FilterChip>
+          <FilterChip active={severityFilter === 'INFO'} onClick={() => setSeverityFilter(severityFilter === 'INFO' ? 'ALL' : 'INFO')}>
+            ℹ️ Info
+          </FilterChip>
+          <div className="h-5 w-px bg-white/[0.08] mx-1 self-center" />
+          {uniqueCategories.map((cat) => {
+            const meta = CATEGORY_META[cat] || { label: cat, color: '#94a3b8' };
             return (
-              <div
-                key={event.id}
-                className={`group flex items-start gap-4 border-l-2 px-5 py-4 transition-colors hover:bg-white/[0.03] ${meta.border}`}
+              <FilterChip
+                key={cat}
+                active={categoryFilter === cat}
+                onClick={() => setCategoryFilter(categoryFilter === cat ? 'ALL' : cat as Category)}
               >
-                {/* Category icon */}
-                <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border ${meta.iconBg}`}>
-                  {getCategoryIcon(event.category)}
-                </div>
-
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-start justify-between gap-2">
-                    <h4 className="text-sm font-semibold text-white">{event.title}</h4>
-                    <div className="shrink-0 text-right">
-                      <span className="block text-[11px] font-medium tabular-nums text-slate-400">
-                        {new Date(event.occurredAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </span>
-                      <span className="block text-[10px] text-slate-600">{getRelativeTime(event.occurredAt)}</span>
-                    </div>
-                  </div>
-
-                  {event.description && (
-                    <p className="mt-1 text-xs leading-relaxed text-slate-400 line-clamp-2">{event.description}</p>
-                  )}
-
-                  <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-                    <span className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-widest ${meta.badge}`}>
-                      {meta.icon}
-                      {meta.label}
-                    </span>
-                    <span className="inline-flex items-center rounded-md border border-white/[0.07] bg-white/[0.03] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-widest text-slate-500">
-                      {event.category.replace('_', ' ')}
-                    </span>
-                    {event.actorName && (
-                      <span className="text-[11px] text-slate-600 before:mr-1.5 before:text-slate-700 before:content-['·']">
-                        {event.actorName}
-                      </span>
-                    )}
-                    {event.amount !== null && event.currency && (
-                      <span className="ml-auto text-sm font-bold tracking-tight text-white">
-                        {new Intl.NumberFormat('en-NG', { style: 'currency', currency: event.currency }).format(event.amount)}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
+                {meta.label}
+              </FilterChip>
             );
           })}
         </div>
+      </div>
+
+      {/* Timeline */}
+      <div className="relative max-h-[560px] overflow-y-auto">
+        {filtered.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <p className="text-sm font-semibold text-slate-400">No events match filters</p>
+            <button
+              onClick={() => { setSeverityFilter('ALL'); setCategoryFilter('ALL'); }}
+              className="mt-3 text-xs font-medium text-indigo-400 hover:text-indigo-300"
+            >
+              Clear filters
+            </button>
+          </div>
+        ) : (
+          <div className="relative px-6 py-5">
+            {/* Vertical timeline line */}
+            <div
+              className="absolute left-[34px] top-5 bottom-5 w-px"
+              style={{ background: 'linear-gradient(180deg, rgba(99,102,241,0.3) 0%, rgba(255,255,255,0.05) 100%)' }}
+            />
+
+            <div className="space-y-4">
+              {filtered.map((event, idx) => {
+                const sev = event.severity as keyof typeof SEVERITY_META;
+                const meta = SEVERITY_META[sev] || SEVERITY_META.INFO;
+                const catMeta = CATEGORY_META[event.category] || { label: event.category, color: '#94a3b8', icon: <MonitorDot className="h-3.5 w-3.5" /> };
+
+                return (
+                  <div key={event.id} className="relative flex gap-4">
+                    {/* Timeline node */}
+                    <div className="relative z-10 flex-shrink-0">
+                      <div
+                        className={`flex h-7 w-7 items-center justify-center rounded-full border-2 border-[#07090f] ${meta.nodeBg} text-white`}
+                        style={{ boxShadow: `0 0 8px ${meta.nodeColor}50` }}
+                      >
+                        <div className="scale-75">{meta.icon}</div>
+                      </div>
+                    </div>
+
+                    {/* Event card */}
+                    <div
+                      className={`flex-1 rounded-2xl border p-4 transition-all duration-150 hover:brightness-110 ${meta.cardBg}`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <h4 className="text-sm font-semibold leading-snug text-white">{event.title}</h4>
+                        <div className="shrink-0 text-right">
+                          <span className="block font-mono text-[11px] font-semibold tabular-nums text-slate-400">
+                            {new Date(event.occurredAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                          <span className="block text-[10px] text-slate-600">{getRelativeTime(event.occurredAt)}</span>
+                        </div>
+                      </div>
+
+                      {event.description && (
+                        <p className="mt-1.5 text-xs leading-relaxed text-slate-400 line-clamp-2">{event.description}</p>
+                      )}
+
+                      <div className="mt-3 flex flex-wrap items-center gap-1.5">
+                        {/* Severity badge */}
+                        <span className={`inline-flex items-center gap-1 rounded-lg border px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest ${meta.badge}`}>
+                          {meta.label}
+                        </span>
+
+                        {/* Category chip */}
+                        <span
+                          className="inline-flex items-center gap-1 rounded-lg border px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest"
+                          style={{
+                            borderColor: `${catMeta.color}30`,
+                            background: `${catMeta.color}10`,
+                            color: catMeta.color,
+                          }}
+                        >
+                          {catMeta.icon}
+                          {catMeta.label}
+                        </span>
+
+                        {event.actorName && (
+                          <span className="text-[10px] text-slate-600 before:mr-1.5 before:text-slate-700 before:content-['·']">
+                            {event.actorName}
+                          </span>
+                        )}
+
+                        {event.amount !== null && event.amount !== undefined && event.currency && (
+                          <span className="ml-auto font-mono text-sm font-bold tracking-tight text-white tabular-nums">
+                            {new Intl.NumberFormat('en', { style: 'currency', currency: event.currency }).format(event.amount)}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
