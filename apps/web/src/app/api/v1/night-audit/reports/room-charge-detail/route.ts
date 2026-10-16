@@ -5,6 +5,11 @@ import { auth } from '@/lib/auth';
 import { successResponse, errorResponse } from '@/lib/api-response';
 import prisma from '@hotel-pms/db';
 
+function displayRoomNumber(value: string | null | undefined) {
+  if (!value) return 'N/A';
+  return value.split('.').filter(Boolean).pop() || value;
+}
+
 export async function GET(req: NextRequest) {
   try {
     const session = await auth();
@@ -80,7 +85,7 @@ export async function GET(req: NextRequest) {
         timestamp: item.createdAt,
         folioId: item.folio?.folioNumber || item.folio?.id.slice(0, 8) || 'N/A',
         guestName: item.folio?.guest ? `${item.folio.guest.firstName} ${item.folio.guest.lastName}` : 'Unknown Guest',
-        roomNumber: item.folio?.reservation?.reservationRooms?.[0]?.room?.number || 'N/A',
+        roomNumber: displayRoomNumber(item.folio?.reservation?.reservationRooms?.[0]?.room?.number),
         description: item.description,
         amount: amt,
         operator: 'Staff', // In a full implementation, we'd join Staff/User on postedBy

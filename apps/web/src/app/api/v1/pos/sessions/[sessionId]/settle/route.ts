@@ -78,7 +78,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         : null;
     if (!actorStaff) return NextResponse.json({ error: 'Staff record not found' }, { status: 401 });
     const privilegedPositions = new Set(['MANAGER', 'HOTEL_MANAGER', 'FINANCE_MANAGER', 'ADMIN', 'SUPER_ADMIN', 'CEO', 'DIRECTOR', 'NIGHT_AUDITOR']);
-    const isPrivileged = privilegedPositions.has(String(actorStaff.position || '').toUpperCase());
+    // Staff.position is a free-text HR field and may not match the system role
+    // identifier exactly (e.g. "Night Auditor" vs "NIGHT_AUDITOR"). The JWT
+    // session role (actor.user.role) is the authoritative RBAC signal for web
+    // users, so we check both to avoid locking out privileged operators.
+    const sessionRole = String((actor?.user as any)?.role || '').toUpperCase();
+    const isPrivileged =
+      privilegedPositions.has(String(actorStaff.position || '').toUpperCase()) ||
+      privilegedPositions.has(sessionRole) ||
+      !!(actor?.user as any)?.isSuperAdmin;
     const sessionOwnerId = current.primaryOperatorId || current.openedBy;
     if (actorStaff.id !== sessionOwnerId && !isPrivileged) {
       return NextResponse.json({ error: 'Only the POS cashier who opened this shift can close and submit it.' }, { status: 403 });

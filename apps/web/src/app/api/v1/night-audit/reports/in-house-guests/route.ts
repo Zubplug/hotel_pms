@@ -14,6 +14,11 @@ function guestName(guest: { firstName: string; lastName: string }) {
   return `${guest.firstName} ${guest.lastName}`.trim();
 }
 
+function displayRoomNumber(value: string | null | undefined) {
+  if (!value) return 'Unassigned';
+  return value.split('.').filter(Boolean).pop() || value;
+}
+
 export async function GET(req: NextRequest) {
   try {
     const session = await auth();
@@ -112,7 +117,7 @@ export async function GET(req: NextRequest) {
         : payments > 0 ? 'PARTIAL' : 'UNPAID';
       const primaryRoom = reservation.reservationRooms[0];
       const roomAssignments = reservation.reservationRooms.map((assignment) => ({
-        room: assignment.room?.number ?? 'Unassigned',
+        room: displayRoomNumber(assignment.room?.number),
         roomType: assignment.room?.roomType?.name ?? assignment.room?.roomType?.code ?? 'Unassigned',
         rate: Number(assignment.rateAmount || 0),
         adults: assignment.adults,
@@ -124,13 +129,13 @@ export async function GET(req: NextRequest) {
 
       return [{
         id: reservation.id,
-        room: primaryRoom?.room?.number ?? 'Unassigned',
+        room: displayRoomNumber(primaryRoom?.room?.number),
         roomType: primaryRoom?.room?.roomType?.name ?? primaryRoom?.room?.roomType?.code ?? 'Unassigned',
         roomAssignments,
         guestName: guestName(reservation.primaryGuest),
         phone: reservation.primaryGuest.phone || 'Not recorded',
         email: reservation.primaryGuest.email || 'Not recorded',
-        company: reservation.primaryGuest.companyName || reservation.corporateAccount?.name || '—',
+        company: reservation.primaryGuest.companyName || reservation.corporateAccount?.name || 'Individual guest',
         corporateAccount: reservation.corporateAccount ? `${reservation.corporateAccount.name} (${reservation.corporateAccount.code})` : '—',
         occupants,
         reservationRef: reservation.confirmationNumber,

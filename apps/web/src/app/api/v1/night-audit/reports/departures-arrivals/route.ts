@@ -14,6 +14,11 @@ function nameOf(guest: { firstName: string; lastName: string }) {
   return `${guest.firstName} ${guest.lastName}`.trim();
 }
 
+function displayRoomNumber(value: string | null | undefined) {
+  if (!value) return 'Unassigned';
+  return value.split('.').filter(Boolean).pop() || value;
+}
+
 function amountFor(reservation: any) {
   return reservation.folios.reduce((totals: { charges: number; payments: number; balance: number }, folio: any) => ({
     charges: totals.charges + Number(folio.totalCharges || 0),
@@ -22,7 +27,10 @@ function amountFor(reservation: any) {
   }), { charges: 0, payments: 0, balance: 0 });
 }
 
-function paymentStatus(balance: number, payments: number) {
+function paymentStatus(balance: number, payments: number, reservationStatus: string) {
+  if (reservationStatus === 'PENDING') return 'PAYMENT_PENDING';
+  if (reservationStatus === 'CANCELLED') return 'CANCELLED';
+  if (reservationStatus === 'NO_SHOW') return 'NO_SHOW';
   if (balance < 0) return 'CREDIT';
   if (balance === 0) return 'PAID';
   return payments > 0 ? 'PARTIAL' : 'UNPAID';
@@ -146,7 +154,7 @@ export async function GET(req: NextRequest) {
       const times = eventTimes.get(reservationId) || {};
       const scheduledDate = movementType === 'ARRIVAL' ? reservation.checkIn : reservation.checkOut;
       const roomAssignments = reservation.reservationRooms.map((room) => ({
-        room: room.room?.number || 'Unassigned',
+        room: displayRoomNumber(room.room?.number),
         roomType: room.room?.roomType?.name || room.room?.roomType?.code || 'Unassigned',
         rate: Number(room.rateAmount || 0),
       }));
@@ -154,12 +162,12 @@ export async function GET(req: NextRequest) {
         id: reservation.id,
         reservationId: snapshot?.confirmationNumber || reservation.confirmationNumber,
         guestName: snapshot?.guestName || nameOf(reservation.primaryGuest),
-        roomNumber: snapshot?.roomNumber || assignment?.room?.number || 'Unassigned',
+        roomNumber: displayRoomNumber(snapshot?.roomNumber || assignment?.room?.number),
         roomType: snapshot?.roomType || assignment?.room?.roomType?.name || assignment?.room?.roomType?.code || 'Unassigned',
         roomAssignments,
         phone: reservation.primaryGuest.phone || 'Not recorded',
         email: reservation.primaryGuest.email || 'Not recorded',
-        company: reservation.primaryGuest.companyName || reservation.corporateAccount?.name || '—',
+        company: reservation.primaryGuest.companyName || reservation.corporateAccount?.name || 'Individual guest',
         corporateAccount: reservation.corporateAccount ? `${reservation.corporateAccount.name} (${reservation.corporateAccount.code})` : '—',
         arrival: dateOnly(reservation.checkIn),
         departure: dateOnly(reservation.checkOut),
@@ -170,7 +178,7 @@ export async function GET(req: NextRequest) {
         charges: financials.charges,
         payments: financials.payments,
         balance: snapshot ? Number(snapshot.folioBalance || 0) : financials.balance,
-        paymentStatus: paymentStatus(snapshot ? Number(snapshot.folioBalance || 0) : financials.balance, financials.payments),
+        paymentStatus: paymentStatus(snapshot ? Number(snapshot.folioBalance || 0) : financials.balance, financials.payments, status),
         status,
         scheduledDate: dateOnly(scheduledDate),
         checkedInAt: times.checkedInAt || null,
