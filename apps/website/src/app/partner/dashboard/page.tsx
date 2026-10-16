@@ -3,6 +3,7 @@ import prisma from "@hotel-pms/db";
 import { getPartnerSession } from "@/lib/partner-auth";
 import { getPartnerEligibleProperties } from "@/lib/partner-reach";
 import { PartnerDashboard } from "./PartnerDashboard";
+import { reachShareUrl } from "@/lib/reach-links";
 
 const numeric = (value: unknown) => Number(value || 0);
 
@@ -28,7 +29,7 @@ export default async function PartnerDashboardPage() {
   const data = {
     partner: { displayName: partner.displayName, firstName: partner.firstName, businessName: partner.businessName, email: partner.email || "", verificationStatus: partner.verificationStatus },
     properties: properties.map((property) => ({ id: property.id, name: property.name, city: property.city, state: property.state, country: property.country, baseCurrency: property.baseCurrency, website: property.website, bookingSlug: property.bookingEngineConfig?.publicSlug || property.bookingSite?.publicSlug || null, rooms: property.roomTypes.map((room) => ({ id: room.id, name: room.name, description: room.description, baseRate: numeric(room.baseRate), currency: room.currency, maxOccupancy: room.maxOccupancy, bedConfiguration: room.defaultBedConfig, amenities: room.amenities, photos: room.photos, roomCount: room.rooms.length })) })),
-    campaigns: campaigns.map((campaign) => ({ id: campaign.id, name: campaign.name, code: campaign.code, category: campaign.category, targetUrl: campaign.targetUrl, property: campaign.property })),
+    campaigns: campaigns.map((campaign) => ({ id: campaign.id, name: campaign.name, code: campaign.code, category: campaign.category, targetUrl: reachShareUrl(campaign.code), property: campaign.property })),
     recentClicks: recentClicks.map((click) => ({ id: click.id, propertyName: click.property.name, campaignName: click.campaign?.name || "Referral link", occurredAt: click.occurredAt.toISOString() })),
     recentBookings: recentBookings.map((booking) => ({ id: booking.id, propertyName: booking.property.name, campaignName: booking.campaign?.name || "Referral booking", status: booking.status, commissionAmount: numeric(booking.commission?.amount), commissionStatus: booking.commission?.status || "PENDING", currency: booking.commission?.currency || "NGN", createdAt: booking.createdAt.toISOString() })),
     stats: { properties: properties.length, bookings: bookingCount, fulfilled, clicks, conversionRate: clicks ? Math.round((bookingCount / clicks) * 1000) / 10 : null, totalCommission, pending: commissions.PENDING?.amount || 0, approved: (commissions.APPROVED?.amount || 0) + (commissions.PAYABLE?.amount || 0), processing: commissions.PROCESSING?.amount || 0, paid: commissions.PAID?.amount || 0, reversed: commissions.REVERSED?.amount || 0, availableBalance: numeric(wallet?.availableBalance), currency: wallet?.currency || "NGN", paidCount },

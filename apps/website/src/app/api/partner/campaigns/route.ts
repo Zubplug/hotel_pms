@@ -3,13 +3,14 @@ import crypto from "node:crypto";
 import prisma from "@hotel-pms/db";
 import { getPartnerSession } from "@/lib/partner-auth";
 import { getPartnerEligibleProperties } from "@/lib/partner-reach";
+import { reachShareUrl } from "@/lib/reach-links";
 
 export async function GET() {
   const partner = await getPartnerSession();
   if (!partner) return NextResponse.json({ error: "Partner authentication required" }, { status: 401 });
   const properties = await getPartnerEligibleProperties(partner.organizationId);
   const campaigns = await prisma.referralCampaign.findMany({ where: { partnerId: partner.id, propertyId: { in: properties.map((property) => property.id) } }, include: { property: { select: { name: true } } }, orderBy: { createdAt: "desc" } });
-  return NextResponse.json({ campaigns });
+  return NextResponse.json({ campaigns: campaigns.map((campaign) => ({ ...campaign, targetUrl: reachShareUrl(campaign.code, process.env.NEXT_PUBLIC_SITE_URL || "https://getlodgecore.vercel.app") })) });
 }
 
 export async function POST(request: NextRequest) {
@@ -31,7 +32,7 @@ export async function POST(request: NextRequest) {
   // Keep the implementation endpoint private-looking and stable for partners.
   // The friendly route performs tracking and then resolves the correct
   // booking-engine or standalone-property destination.
-  const targetUrl = `${siteOrigin}/r/${encodeURIComponent(code)}`;
+  const targetUrl = reachShareUrl(code, siteOrigin);
   const campaign = await prisma.referralCampaign.create({ data: { organizationId: property.organizationId, propertyId, programId: property.referralProgram.id, partnerId: partner.id, name, code, category, targetUrl, commissionBps: 700 } });
   return NextResponse.json({ campaign }, { status: 201 });
 }
