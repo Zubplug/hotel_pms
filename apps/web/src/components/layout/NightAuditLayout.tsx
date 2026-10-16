@@ -8,7 +8,7 @@ import {
   Hotel, Menu, MoonStar, Clock, FileText, LogOut, ChevronDown,
   ShieldCheck, BedDouble, Scale, Wallet, Banknote,
   X, ChevronRight, Radio, Zap, Utensils, PanelLeftClose, PanelLeftOpen,
-  Search, Bell, Settings, User, ChevronLeft, RefreshCw
+  Search, Bell, Settings, User, ChevronLeft
 } from 'lucide-react';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
@@ -364,7 +364,6 @@ export function NightAuditLayout({ children }: { children: React.ReactNode }) {
           {!collapsed && (
             <div className="flex min-w-0 flex-col leading-none">
               <span className="text-[15px] font-bold tracking-tight text-white">LodgeCore</span>
-              <span className="ml-1 inline-flex w-fit rounded border border-cyan-400/25 bg-cyan-400/10 px-1 py-0.5 text-[8px] font-bold text-cyan-300">v2</span>
               <span className="mt-0.5 text-[9px] font-bold uppercase tracking-[0.22em] text-amber-400/70">Night Audit</span>
             </div>
           )}
@@ -625,14 +624,6 @@ export function NightAuditLayout({ children }: { children: React.ReactNode }) {
                 onMultiplePropertiesChange={setHasMultipleProperties}
               />
             )}
-            <button
-              type="button"
-              title="Refresh audit data"
-              onClick={() => window.dispatchEvent(new Event('night-audit:refresh'))}
-              className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/[0.07] text-slate-500 transition-colors hover:bg-white/[0.06] hover:text-slate-200"
-            >
-              <RefreshCw className="h-3.5 w-3.5" />
-            </button>
             {/* User avatar shortcut */}
             <div
               className="flex h-8 w-8 items-center justify-center rounded-lg text-[11px] font-bold text-white ring-1 ring-white/10"
