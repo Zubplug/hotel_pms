@@ -15,24 +15,20 @@ const currency = (value: number, code = 'NGN') =>
 const currencyCompact = (value: number, code = 'NGN') =>
   new Intl.NumberFormat('en', { style: 'currency', currency: code, notation: 'compact', maximumFractionDigits: 1 }).format(value);
 
-const REVENUE_SERIES = [
-  { key: 'roomRevenue', name: 'Rooms', color: '#6366f1' },
-  { key: 'fnbRevenue', name: 'F&B / POS', color: '#f59e0b' },
-  { key: 'eventFoodRevenue', name: 'Event Food', color: '#fb923c' },
-  { key: 'poolRevenue', name: 'Recreation', color: '#38bdf8' },
-  { key: 'eventHallRevenue', name: 'Event Hall', color: '#ec4899' },
-  { key: 'spaRevenue', name: 'Spa', color: '#14b8a6' },
-  { key: 'laundryRevenue', name: 'Laundry', color: '#2dd4bf' },
-  { key: 'otherRevenue', name: 'Other', color: '#10b981' },
-] as const;
+const DEPARTMENT_COLORS = ['#6366f1', '#f59e0b', '#fb923c', '#38bdf8', '#ec4899', '#14b8a6', '#2dd4bf', '#10b981', '#a78bfa', '#f43f5e'];
+const departmentKey = (name: string) => `department_${name.toLowerCase().replace(/[^a-z0-9]+/g, '_')}`;
 
 function revenueBreakdown(audit: any) {
   const fallback = audit?.financialSnapshot || {};
   const rows = audit?.closePackage?.controlSummary?.departmentReconciliation;
   if (!Array.isArray(rows)) {
-    return {
+    const values = {
       roomRevenue: Number(fallback.roomRevenue || 0),
       fnbRevenue: Number(fallback.fnbRevenue || 0),
+      otherRevenue: Number(fallback.otherRevenue || 0),
+    };
+    return {
+      ...values,
       eventFoodRevenue: 0,
       poolRevenue: 0,
       eventHallRevenue: 0,
@@ -45,11 +41,23 @@ function revenueBreakdown(audit: any) {
       minibarRevenue: 0,
       cityLedgerRevenue: 0,
       manualRevenue: 0,
-      otherRevenue: Number(fallback.otherRevenue || 0),
       serviceChargeRevenue: 0,
+      departments: [
+        { name: 'Rooms', value: values.roomRevenue, key: departmentKey('Rooms'), color: DEPARTMENT_COLORS[0] },
+        { name: 'F&B / POS', value: values.fnbRevenue, key: departmentKey('F&B / POS'), color: DEPARTMENT_COLORS[1] },
+        { name: 'Other', value: values.otherRevenue, key: departmentKey('Other'), color: DEPARTMENT_COLORS[7] },
+      ].filter((department) => department.value > 0),
     };
   }
   const valueFor = (department: string) => Number(rows.find((row: any) => row.department === department)?.source || 0);
+  const departments = rows
+    .filter((row: any) => row.department !== 'Taxes' && Number(row.source || 0) > 0)
+    .map((row: any, index: number) => ({
+      name: String(row.department),
+      value: Number(row.source || 0),
+      key: departmentKey(String(row.department)),
+      color: DEPARTMENT_COLORS[index % DEPARTMENT_COLORS.length],
+    }));
   return {
     roomRevenue: valueFor('Rooms'),
     fnbRevenue: valueFor('F&B/POS'),
@@ -67,6 +75,7 @@ function revenueBreakdown(audit: any) {
     minibarRevenue: 0,
     cityLedgerRevenue: 0,
     manualRevenue: 0,
+    departments,
   };
 }
 
@@ -223,9 +232,11 @@ export function MetricCards({ data }: { data: NightAuditData }) {
       const d = new Date(t.businessDate);
       if (!isNaN(d.getTime())) dateStr = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
     } catch { /* ignore */ }
+    const breakdown = revenueBreakdown(t);
     return {
       date: dateStr,
-      ...revenueBreakdown(t),
+      ...breakdown,
+      ...Object.fromEntries(breakdown.departments.map((department) => [department.key, department.value])),
     };
   });
 
@@ -234,12 +245,17 @@ export function MetricCards({ data }: { data: NightAuditData }) {
     closePackage: data.currentAudit?.closePackage || lastAudit?.closePackage,
   });
 
+  const departmentSeries = Array.from(new Map(
+    [...chartData.flatMap((day: any) => day.departments || []), ...currentRevenue.departments]
+      .map((department: any) => [department.key, department]),
+  ).values());
+
   // Department donut data
-  const donutData = REVENUE_SERIES.map((s) => ({
-    name: s.name,
-    value: (currentRevenue as any)[s.key] || 0,
-    color: s.color,
-  })).filter((d) => d.value > 0);
+  const donutData = currentRevenue.departments.map((department) => ({
+    name: department.name,
+    value: department.value,
+    color: department.color,
+  }));
   const totalForDonut = donutData.reduce((s, d) => s + d.value, 0);
   const donutDataWithPct = donutData.map((d) => ({ ...d, pct: totalForDonut > 0 ? (d.value / totalForDonut) * 100 : 0 }));
 
@@ -328,14 +344,14 @@ export function MetricCards({ data }: { data: NightAuditData }) {
               <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#64748b' }} dy={8} />
               <YAxis hide domain={[0, 'dataMax + (dataMax * 0.15)']} />
               <Tooltip content={<DarkTooltip baseCurrency={baseCurrency} />} cursor={{ fill: 'rgba(255,255,255,0.02)' }} />
-              {REVENUE_SERIES.map((series, index) => (
+              {departmentSeries.map((series: any, index) => (
                 <Bar
                   key={series.key}
                   dataKey={series.key}
                   name={series.name}
                   stackId="a"
                   fill={series.color}
-                  radius={index === REVENUE_SERIES.length - 1 ? [4, 4, 0, 0] : index === 0 ? [0, 0, 4, 4] : undefined}
+                  radius={index === departmentSeries.length - 1 ? [4, 4, 0, 0] : index === 0 ? [0, 0, 4, 4] : undefined}
                 />
               ))}
             </BarChart>
@@ -359,18 +375,18 @@ export function MetricCards({ data }: { data: NightAuditData }) {
           icon={Banknote}
           tone="amber"
         />
-        <MetricCard
-          label="Other Revenue"
-          value={currencyCompact(
-            currentRevenue.eventFoodRevenue + currentRevenue.poolRevenue + currentRevenue.eventHallRevenue
-              + currentRevenue.eventEquipmentRevenue + currentRevenue.otherRevenue + currentRevenue.serviceChargeRevenue
-              + currentRevenue.spaRevenue + currentRevenue.laundryRevenue,
-            baseCurrency,
-          )}
-          subtext="Events and ancillary"
-          icon={TrendingUp}
-          tone="emerald"
-        />
+        {currentRevenue.departments
+          .filter((department) => department.name !== 'Rooms' && department.name !== 'F&B/POS' && department.name !== 'F&B / POS')
+          .map((department) => (
+            <MetricCard
+              key={department.key}
+              label={department.name}
+              value={currencyCompact(department.value, baseCurrency)}
+              subtext="Revenue department"
+              icon={TrendingUp}
+              tone="emerald"
+            />
+          ))}
         <MetricCard
           label="Taxes"
           value={currencyCompact(currentSnapshot?.taxes ?? (lastAudit?.financialSnapshot ? Number(lastAudit.financialSnapshot.taxes) : 0), baseCurrency)}
