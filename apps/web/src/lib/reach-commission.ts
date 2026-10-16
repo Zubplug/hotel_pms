@@ -258,6 +258,40 @@ export async function reverseReachBooking(
       where: { id: booking.commission.id },
       data: { reversedAmount: newReversed, status: newReversed >= Number(booking.commission.amount) ? 'REVERSED' : 'ON_HOLD' },
     });
+
+    // Claw back any amount that was already credited to the partner wallet.
+    // A negative balance is intentional: it records a recoverable partner
+    // debt when the commission has already been withdrawn or spent.
+    const wallet = await tx.referralPartnerWallet.findUnique({ where: { partnerId: booking.partnerId } });
+    if (wallet) {
+      await tx.$queryRaw`SELECT id FROM "ReferralPartnerWallet" WHERE id = ${wallet.id}::uuid FOR UPDATE`;
+      const walletCredit = await tx.referralPartnerWalletTransaction.findFirst({
+        where: { commissionId: booking.commission.id, type: 'COMMISSION_CREDIT', status: 'COMPLETED' },
+        select: { id: true },
+      });
+      const walletReversalKey = `${input.idempotencyKey}:wallet`;
+      const existingWalletReversal = await tx.referralPartnerWalletTransaction.findUnique({ where: { idempotencyKey: walletReversalKey }, select: { id: true } });
+      if (walletCredit && !existingWalletReversal) {
+        const lockedWallet = await tx.referralPartnerWallet.findUniqueOrThrow({ where: { id: wallet.id } });
+        const balance = Math.round((Number(lockedWallet.availableBalance) - commissionReversal) * 100) / 100;
+        await tx.referralPartnerWallet.update({ where: { id: wallet.id }, data: { availableBalance: balance } });
+        await tx.referralPartnerWalletTransaction.create({
+          data: {
+            walletId: wallet.id,
+            partnerId: booking.partnerId,
+            commissionId: booking.commission.id,
+            type: 'ADJUSTMENT',
+            status: 'COMPLETED',
+            amount: -commissionReversal,
+            balanceAfter: balance,
+            currency: booking.currency,
+            idempotencyKey: walletReversalKey,
+            metadata: { source: 'REFUND_OR_CANCELLATION', reason: input.reason, refundedRevenue: refundBasis },
+            completedAt: now,
+          },
+        });
+      }
+    }
   }
 
   if (booking.platformFee && originalBasis > 0) {
