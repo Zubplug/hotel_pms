@@ -21,6 +21,49 @@ export async function GET(
   const campaignCode = req.nextUrl.searchParams.get('campaign')?.trim();
   if (!campaignCode) return NextResponse.json({ error: 'campaign is required' }, { status: 400 });
 
+  // A standalone API property may not have a LodgeCore Booking Engine at all.
+  // Resolve its external website first so the referral link can still work.
+  const standaloneCampaign = await prisma.referralCampaign.findFirst({
+    where: { code: campaignCode, isActive: true },
+    select: {
+      propertyId: true,
+      property: {
+        select: {
+          website: true,
+          propertyIntegrations: {
+            where: { provider: 'CUSTOM_WEBSITE', status: 'ACTIVE' },
+            select: { id: true },
+            take: 1,
+          },
+          customDomainRequests: {
+            where: { status: 'ACTIVE' },
+            orderBy: { updatedAt: 'desc' },
+            select: { domain: true, metadata: true },
+          },
+        },
+      },
+    },
+  });
+  const standaloneDomain = standaloneCampaign?.property.customDomainRequests.find((request) => {
+    const metadata = request.metadata;
+    return metadata && typeof metadata === 'object' && !Array.isArray(metadata)
+      && (metadata as Record<string, unknown>).domainTarget === 'STANDALONE_API';
+  })?.domain;
+  const standaloneDestination = standaloneDomain
+    ? safeWebsite(`https://${standaloneDomain}`)
+    : standaloneCampaign?.property.propertyIntegrations.length
+      ? safeWebsite(standaloneCampaign.property.website)
+      : null;
+  if (standaloneDestination && standaloneCampaign) {
+    const click = await recordReachClick(prisma, {
+      propertyId: standaloneCampaign.propertyId,
+      campaignCode,
+      landingPath: req.nextUrl.pathname,
+    });
+    if (click) standaloneDestination.searchParams.set('reach', click.referralToken);
+    return NextResponse.redirect(standaloneDestination);
+  }
+
   const context = await resolveBookingContext(slug);
   if (isErrorResponse(context)) return context;
 

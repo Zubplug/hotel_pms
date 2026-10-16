@@ -30,6 +30,11 @@ export async function GET(
             select: { id: true },
             take: 1,
           },
+          customDomainRequests: {
+            where: { status: "ACTIVE" },
+            orderBy: { updatedAt: "desc" },
+            select: { domain: true, metadata: true },
+          },
           bookingEngineConfig: { select: { publicSlug: true } },
           bookingSite: { select: { publicSlug: true } },
         },
@@ -47,8 +52,14 @@ export async function GET(
   const website = campaign.property.propertyIntegrations.length
     ? safeWebsite(campaign.property.website)
     : null;
+  const standaloneDomain = campaign.property.customDomainRequests.find((request) => {
+    const metadata = request.metadata;
+    return metadata && typeof metadata === "object" && !Array.isArray(metadata)
+      && (metadata as Record<string, unknown>).domainTarget === "STANDALONE_API";
+  })?.domain;
+  const standaloneWebsite = standaloneDomain ? safeWebsite(`https://${standaloneDomain}`) : website;
   const slug = campaign.property.bookingEngineConfig?.publicSlug || campaign.property.bookingSite?.publicSlug;
-  const destination = website ?? (slug ? new URL(`/book/${encodeURIComponent(slug)}`, req.url) : null);
+  const destination = standaloneWebsite ?? (slug ? new URL(`/book/${encodeURIComponent(slug)}`, req.url) : null);
   if (!destination) return NextResponse.json({ error: "This property has no valid public destination" }, { status: 409 });
   if (click) destination.searchParams.set("reach", click.referralToken);
   return NextResponse.redirect(destination);
