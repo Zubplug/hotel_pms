@@ -14,6 +14,9 @@ export const createRoomTypeSchema = z.object({
   baseRate: z.number().positive(),
   currency: z.string().length(3).toUpperCase(),
   isActive: z.boolean().default(true),
+  referralEnabled: z.boolean().default(true),
+  referralCommissionMode: z.enum(['PERCENT', 'AMOUNT']).default('PERCENT'),
+  referralCommissionValue: z.number().min(0).default(0),
 });
 
 export const updateRoomTypeSchema = createRoomTypeSchema.partial().omit({

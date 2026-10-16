@@ -344,10 +344,14 @@ model RoomType {
   baseRate         Decimal  @db.Decimal(18, 4)
   currency         String
   isActive         Boolean  @default(true)
+  referralEnabled  Boolean  @default(true)
+  referralCommissionMode String @default("PERCENT") // PERCENT | AMOUNT
+  referralCommissionValue Decimal @default(0) @db.Decimal(18, 4)
 
   rooms         Room[]
   rates         Rate[]
   seasonalRates SeasonalRate[]
+  referralBookings ReferralBooking[]
 
   createdAt DateTime  @default(now()) @db.Timestamptz
   updatedAt DateTime  @updatedAt @db.Timestamptz
@@ -7327,6 +7331,8 @@ model ReferralPartner {
   displayName        String
   email              String?
   phone              String?
+  passwordHash       String?
+  lastLoginAt        DateTime? @db.Timestamptz
   status             String   @default("PENDING") // PENDING | ACTIVE | SUSPENDED | CLOSED
   verificationStatus String   @default("UNVERIFIED") // UNVERIFIED | PENDING | VERIFIED | REJECTED
   payoutProfile      Json?
@@ -7342,9 +7348,25 @@ model ReferralPartner {
   commissions  ReferralCommission[]
   payouts      ReferralPayout[]
   ledgerEntries ReferralLedgerEntry[]
+  sessions     ReferralPartnerSession[]
+  wallet       ReferralPartnerWallet?
+  walletTransactions ReferralPartnerWalletTransaction[]
 
   @@index([email])
   @@index([status, verificationStatus])
+}
+
+model ReferralPartnerSession {
+  id         String         @id @default(uuid()) @db.Uuid
+  partnerId  String         @db.Uuid
+  tokenHash  String         @unique
+  expiresAt  DateTime       @db.Timestamptz
+  lastSeenAt DateTime       @default(now()) @db.Timestamptz
+  createdAt  DateTime       @default(now()) @db.Timestamptz
+
+  partner ReferralPartner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+
+  @@index([partnerId, expiresAt])
 }
 
 model ReferralCampaign {
@@ -7441,6 +7463,7 @@ model ReferralBooking {
   attributionId  String   @unique @db.Uuid
   reservationId  String?  @unique @db.Uuid
   eventId        String?  @unique @db.Uuid
+  roomTypeId     String?  @db.Uuid
   category       String   @default("STAY")
   status         String   @default("BOOKED") // BOOKED | FULFILLED | CANCELLED | REFUNDED | DISPUTED
   eligibleRevenue Decimal @default(0) @db.Decimal(18, 4)
@@ -7459,6 +7482,7 @@ model ReferralBooking {
   attribution  ReferralAttribution @relation(fields: [attributionId], references: [id], onDelete: Restrict)
   reservation  Reservation? @relation(fields: [reservationId], references: [id], onDelete: SetNull)
   event        Event? @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  roomType     RoomType? @relation(fields: [roomTypeId], references: [id], onDelete: SetNull)
   commission   ReferralCommission?
   platformFee  ReferralPlatformFee?
 
@@ -7493,6 +7517,7 @@ model ReferralCommission {
   referralBooking ReferralBooking @relation(fields: [referralBookingId], references: [id], onDelete: Restrict)
   ledgerEntries ReferralLedgerEntry[]
   payoutItems ReferralPayoutItem[]
+  walletTransactions ReferralPartnerWalletTransaction[]
 
   @@index([propertyId, status])
   @@index([partnerId, status])
@@ -7542,8 +7567,50 @@ model ReferralPayout {
   partner      ReferralPartner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
   commissions  ReferralPayoutItem[]
   ledgerEntries ReferralLedgerEntry[]
+  walletTransactions ReferralPartnerWalletTransaction[]
 
   @@index([partnerId, status, createdAt])
+}
+
+model ReferralPartnerWallet {
+  id              String   @id @default(uuid()) @db.Uuid
+  partnerId       String   @unique @db.Uuid
+  currency        String   @default("NGN")
+  availableBalance Decimal @default(0) @db.Decimal(18, 4)
+  status          String   @default("ACTIVE") // ACTIVE | SUSPENDED | CLOSED
+  createdAt       DateTime @default(now()) @db.Timestamptz
+  updatedAt       DateTime @updatedAt @db.Timestamptz
+
+  partner       ReferralPartner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  transactions  ReferralPartnerWalletTransaction[]
+
+  @@index([status, updatedAt])
+}
+
+model ReferralPartnerWalletTransaction {
+  id                   String   @id @default(uuid()) @db.Uuid
+  walletId             String   @db.Uuid
+  partnerId            String   @db.Uuid
+  commissionId         String?  @db.Uuid
+  payoutId             String?  @db.Uuid
+  type                 String   // COMMISSION_CREDIT | WITHDRAWAL_HOLD | WITHDRAWAL_RELEASE | ADJUSTMENT
+  status               String   @default("COMPLETED") // PENDING | COMPLETED | REVERSED
+  amount               Decimal  @db.Decimal(18, 4)
+  balanceAfter         Decimal  @db.Decimal(18, 4)
+  currency             String   @default("NGN")
+  idempotencyKey       String   @unique
+  metadata             Json?
+  createdAt            DateTime @default(now()) @db.Timestamptz
+  completedAt          DateTime? @db.Timestamptz
+
+  wallet      ReferralPartnerWallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  partner     ReferralPartner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  commission  ReferralCommission? @relation(fields: [commissionId], references: [id], onDelete: SetNull)
+  payout      ReferralPayout? @relation(fields: [payoutId], references: [id], onDelete: SetNull)
+
+  @@index([partnerId, createdAt])
+  @@index([walletId, createdAt])
+  @@index([payoutId])
 }
 
 model ReferralPayoutItem {

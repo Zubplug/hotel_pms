@@ -64,6 +64,7 @@ export async function attributeReachReservation(
     organizationId: string;
     eligibleRevenue: number;
     currency: string;
+    roomTypeId?: string | null;
     now?: Date;
   },
 ) {
@@ -108,6 +109,7 @@ export async function attributeReachReservation(
       campaignId: click.campaignId,
       attributionId: attribution.id,
       reservationId: input.reservationId,
+      roomTypeId: input.roomTypeId ?? null,
       category: click.campaign?.category ?? 'STAY',
       eligibleRevenue: input.eligibleRevenue,
       collectedRevenue: 0,

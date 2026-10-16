@@ -65,7 +65,7 @@ export function FrontDeskCityLedgerPaymentDialog({ entry, onComplete, requireAct
             </div>
           </div>
           <div className={`mt-5 flex items-center justify-between rounded-2xl border px-4 py-3 ${isCorporate ? 'border-blue-200 bg-blue-50' : 'border-indigo-200 bg-indigo-50'}`}>
-            <div><p className="text-xs font-bold uppercase tracking-wide text-slate-500">{isCorporate ? 'Corporate account' : 'Invoice reference'}</p><p className="mt-1 font-semibold text-slate-800">{isCorporate ? entry.accountName : (entry.invoiceNumber || entry.entryId.slice(0, 8))}</p></div>
+            <div><p className="text-xs font-bold uppercase tracking-wide text-slate-500">{isCorporate ? 'Corporate account' : 'Invoice reference'}</p><p className="mt-1 font-semibold text-slate-800">{isCorporate ? entry.accountName : (entry.invoiceNumber || String(entry.entryId || '').slice(0, 8) || 'Unreferenced invoice')}</p></div>
             <div className="text-right"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">{isAdvance ? 'Current balance' : 'Outstanding'}</p><p className={`mt-1 text-lg font-extrabold ${isCorporate ? 'text-blue-700' : 'text-indigo-700'}`}>{entry.currency || 'NGN'} {Number(entry.outstandingAmount).toLocaleString()}</p></div>
           </div>
         </DialogHeader>

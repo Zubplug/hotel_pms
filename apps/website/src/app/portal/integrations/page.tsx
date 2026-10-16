@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { PortalShell } from "@/components/portal-shell";
 import { IntegrationSetupModal } from "./IntegrationSetupModal";
 import { CancellationPolicyIntegrationPanel } from "./CancellationPolicyIntegrationPanel";
+import { ReachIntegrationPanel } from "@/components/reach-integration-panel";
 
 const INTEGRATIONS = [
   { id: "paystack",    name: "Paystack",     type: "Payments",         icon: "💳", status: "not-connected", desc: "Legacy reservation payment provider." },
@@ -99,6 +100,8 @@ export default function PortalIntegrationsPage() {
       </div>
 
       <CancellationPolicyIntegrationPanel />
+
+      <ReachIntegrationPanel />
 
       {/* Integration list */}
       <div className="portal-table-wrap">

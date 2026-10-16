@@ -227,6 +227,9 @@ export default function HomePage() {
                 <Link href="/book-demo" className="btn btn-outline btn-lg">
                   Book a Demo
                 </Link>
+                <Link href="/partners" className="btn btn-outline btn-lg">
+                  Become a Partner
+                </Link>
               </div>
 
               {/* Trust strip */}
@@ -590,6 +593,9 @@ export default function HomePage() {
               </Link>
               <Link href="/hardware" className="btn btn-outline btn-lg">
                 Browse Hardware
+              </Link>
+              <Link href="/partners" className="btn btn-outline btn-lg">
+                Become a Partner
               </Link>
             </div>
 

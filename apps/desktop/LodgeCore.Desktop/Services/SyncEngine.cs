@@ -1131,13 +1131,34 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                     rt.Name = el.TryGetProperty("name", out var n) && n.ValueKind != System.Text.Json.JsonValueKind.Null ? n.GetString() ?? "" : "";
                     rt.Code = el.TryGetProperty("code", out var cd) && cd.ValueKind != System.Text.Json.JsonValueKind.Null ? cd.GetString() ?? "" : "";
                     rt.Description = el.TryGetProperty("description", out var d) && d.ValueKind != System.Text.Json.JsonValueKind.Null ? d.GetString() : null;
-                    rt.BasePrice = el.TryGetProperty("baseRate", out var br) && br.ValueKind != System.Text.Json.JsonValueKind.Null && decimal.TryParse(br.GetString(), out var brd) ? brd : 0m;
+                    if (el.TryGetProperty("baseRate", out var br) && br.ValueKind != System.Text.Json.JsonValueKind.Null)
+                    {
+                        rt.BasePrice = br.ValueKind == System.Text.Json.JsonValueKind.Number && br.TryGetDecimal(out var baseRateNumber)
+                            ? baseRateNumber
+                            : decimal.TryParse(br.GetString(), System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var baseRateText)
+                                ? baseRateText
+                                : 0m;
+                    }
+                    else rt.BasePrice = 0m;
                     rt.Currency = el.TryGetProperty("currency", out var curr) && curr.ValueKind != System.Text.Json.JsonValueKind.Null ? curr.GetString() ?? "NGN" : "NGN";
                     rt.MaxOccupancy = el.TryGetProperty("maxOccupancy", out var mo) ? mo.GetInt32() : 2;
                     rt.MaxAdults = el.TryGetProperty("maxAdults", out var ma) ? ma.GetInt32() : 2;
                     rt.MaxChildren = el.TryGetProperty("maxChildren", out var mc) ? mc.GetInt32() : 0;
                     rt.DefaultBedConfig = el.TryGetProperty("defaultBedConfig", out var dbc) && dbc.ValueKind != System.Text.Json.JsonValueKind.Null ? dbc.GetString() : null;
                     rt.IsActive = el.TryGetProperty("isActive", out var ia) ? ia.GetBoolean() : true;
+                    rt.ReferralEnabled = !el.TryGetProperty("referralEnabled", out var re) || re.ValueKind == System.Text.Json.JsonValueKind.Null || re.GetBoolean();
+                    rt.ReferralCommissionMode = el.TryGetProperty("referralCommissionMode", out var rcm) && rcm.ValueKind != System.Text.Json.JsonValueKind.Null
+                        ? rcm.GetString() ?? "PERCENT"
+                        : "PERCENT";
+                    if (el.TryGetProperty("referralCommissionValue", out var rcv) && rcv.ValueKind != System.Text.Json.JsonValueKind.Null)
+                    {
+                        rt.ReferralCommissionValue = rcv.ValueKind == System.Text.Json.JsonValueKind.Number && rcv.TryGetDecimal(out var commissionNumber)
+                            ? commissionNumber
+                            : decimal.TryParse(rcv.GetString(), System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var commissionText)
+                                ? commissionText
+                                : 0m;
+                    }
+                    else rt.ReferralCommissionValue = 0m;
                     rt.UpdatedAt = DateTime.UtcNow;
                 }
             }

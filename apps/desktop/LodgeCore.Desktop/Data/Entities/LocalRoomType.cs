@@ -21,6 +21,13 @@ public class LocalRoomType
     public int TotalRooms { get; set; }
     public bool IsActive { get; set; } = true;
 
+    // Cached Reach configuration. The front desk does not settle commissions
+    // offline, but it must retain the property configuration with the room
+    // type so the local cache remains consistent until reconnect.
+    public bool ReferralEnabled { get; set; } = true;
+    public string ReferralCommissionMode { get; set; } = "PERCENT";
+    public decimal ReferralCommissionValue { get; set; }
+
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 }

@@ -378,15 +378,13 @@ export async function POST(
           _sum: { amount: true },
         });
         const collectedRevenue = Number(completedPayments._sum.amount || 0);
-        if (collectedRevenue > 0) {
-          for (const booking of reachBookings) {
-            await fulfilReachBooking(tx, {
-              referralBookingId: booking.id,
-              collectedRevenue,
-              actorId: session.user.id,
-              now: today,
-            });
-          }
+        for (const booking of reachBookings) {
+          await fulfilReachBooking(tx, {
+            referralBookingId: booking.id,
+            collectedRevenue,
+            actorId: session.user.id,
+            now: today,
+          });
         }
       }
 

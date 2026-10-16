@@ -242,6 +242,7 @@ export async function POST(req: NextRequest) {
           organizationId: ctx.organizationId,
           eligibleRevenue: Number(finalSnapshot.subtotal ?? 0),
           currency: finalSnapshot.currency,
+          roomTypeId: hold.roomTypeId,
         });
 
         // Keep payment-required bookings attached to an ACTIVE hold until the

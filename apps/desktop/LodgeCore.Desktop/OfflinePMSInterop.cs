@@ -1317,7 +1317,7 @@ public class OfflinePMSInterop
     {
         try
         {
-            var data = (await _repo.GetRoomTypesAsync(propertyId)).Select(rt => new { id = rt.Id, name = rt.Name, description = rt.Description, baseRate = rt.BasePrice, maxOccupancy = rt.MaxOccupancy, totalRooms = rt.TotalRooms });
+            var data = (await _repo.GetRoomTypesAsync(propertyId)).Select(rt => new { id = rt.Id, name = rt.Name, description = rt.Description, baseRate = rt.BasePrice, maxOccupancy = rt.MaxOccupancy, totalRooms = rt.TotalRooms, referralEnabled = rt.ReferralEnabled, referralCommissionMode = rt.ReferralCommissionMode, referralCommissionValue = rt.ReferralCommissionValue });
             return JsonSerializer.Serialize(new { success = true, data }, _jsonOptions);
         }
         catch (Exception ex)
@@ -1456,13 +1456,6 @@ public class OfflinePMSInterop
             {
                 res.Source = source.ValueKind == System.Text.Json.JsonValueKind.String
                     ? source.GetString()
-                    : null;
-            }
-            if (root.TryGetProperty("referralToken", out var referralToken) ||
-                root.TryGetProperty("ReferralToken", out referralToken))
-            {
-                res.ReferralToken = referralToken.ValueKind == System.Text.Json.JsonValueKind.String
-                    ? referralToken.GetString()
                     : null;
             }
             if (res.CorporateAccountId != null)

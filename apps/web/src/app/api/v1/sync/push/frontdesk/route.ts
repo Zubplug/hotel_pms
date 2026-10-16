@@ -22,7 +22,6 @@ import { GeneralLedgerService } from "@/lib/services/general-ledger-service";
 import { GLMappingService } from "@/lib/services/gl-mapping-service";
 import { queueCancellationRefunds as queueCancellationRefundsProfessional } from "@/lib/finance/queue-cancellation-refund";
 import { QueuePublisher } from "@/lib/integrations/ota/queue";
-import { attributeReachReservation } from "@/lib/reach-attribution";
 import { fulfilReachBooking } from "@/lib/reach-commission";
 
 const parseLocalDateString = (dateString: string | Date | undefined): Date | undefined => {
@@ -1367,15 +1366,6 @@ export async function POST(req: NextRequest) {
               },
             });
 
-            await attributeReachReservation(tx, {
-              referralToken: payload.ReferralToken || payload.referralToken,
-              reservationId: aggregateId,
-              propertyId,
-              organizationId: property!.organizationId,
-              eligibleRevenue: amount,
-              currency,
-            });
-
             // 7D.1: Create Folio
             const sharedCorporateFolio = corporateAccountId
               ? await tx.folio.findFirst({
@@ -1764,10 +1754,8 @@ export async function POST(req: NextRequest) {
                 _sum: { amount: true },
               });
               const collectedRevenue = Number(completedPayments._sum.amount || 0);
-              if (collectedRevenue > 0) {
-                for (const booking of reachBookings) {
-                  await fulfilReachBooking(tx, { referralBookingId: booking.id, collectedRevenue, actorId: actorId!, now: today });
-                }
+              for (const booking of reachBookings) {
+                await fulfilReachBooking(tx, { referralBookingId: booking.id, collectedRevenue, actorId: actorId!, now: today });
               }
             }
             // Checkout never makes a room immediately sellable. Every physical
@@ -3650,6 +3638,14 @@ export async function POST(req: NextRequest) {
               },
             });
 
+            // Reach attribution is created only for online bookings, but the
+            // booking may be reassigned by the offline front desk before
+            // checkout. Keep the final room type authoritative for fulfilment.
+            await tx.referralBooking.updateMany({
+              where: { reservationId: aggregateId, status: "BOOKED" },
+              data: { roomTypeId: newRoom.roomTypeId },
+            });
+
             // Do not update the reservation snapshot or post a downgrade credit.
             // Both would alter financial history before the auditor has reviewed
             // the business date. The active ReservationRoom rate is the input
@@ -3772,6 +3768,28 @@ export async function POST(req: NextRequest) {
                 where: { id: activeRoom.id },
                 data: { checkOut: newCheckOut },
               });
+            }
+
+            // Extend the eligible online referral booking by the additional
+            // nights. The commission is still created exactly once at final
+            // checkout, using the accumulated eligible revenue.
+            const referralBooking = await tx.referralBooking.findUnique({
+              where: { reservationId: aggregateId },
+              select: { id: true, status: true },
+            });
+            if (referralBooking?.status === "BOOKED" && activeRoom?.rateAmount) {
+              const addedNights = Math.ceil(
+                (newCheckOut.getTime() - res.checkOut.getTime()) /
+                  (1000 * 60 * 60 * 24),
+              );
+              if (addedNights > 0) {
+                await tx.referralBooking.update({
+                  where: { id: referralBooking.id },
+                  data: {
+                    eligibleRevenue: { increment: Number(activeRoom.rateAmount) * addedNights },
+                  },
+                });
+              }
             }
           } else if (aggregateType === "RESERVATION" && eventType === "KEYCARD_ENCODE") {
             const reservation = await tx.reservation.findUnique({

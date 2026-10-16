@@ -39,7 +39,33 @@ export async function POST(request: NextRequest) {
     if (claimed.count !== 1) return;
     const journalId = await postActivationJournal(tx, payment.id, Number(payment.amount));
     await tx.referralActivationPayment.update({ where: { id: payment.id }, data: { hqJournalEntryId: journalId } });
-    await tx.referralProgram.update({ where: { id: payment.programId }, data: { enabled: true, activatedAt: new Date(), pausedAt: null, activationPaymentStatus: 'PAID', activationFeePaidAt: new Date() } });
+    const now = new Date();
+    await tx.referralProgram.update({ where: { id: payment.programId }, data: { enabled: true, activatedAt: now, pausedAt: null, activationPaymentStatus: 'PAID', activationFeePaidAt: now } });
+    await tx.entitlement.upsert({
+      where: { scopeKey: `${payment.organizationId}:${payment.propertyId}:ADDON_REACH` },
+      create: {
+        organizationId: payment.organizationId,
+        propertyId: payment.propertyId,
+        productCode: 'ADDON_REACH',
+        scopeKey: `${payment.organizationId}:${payment.propertyId}:ADDON_REACH`,
+        status: 'ACTIVE',
+        quantity: 1,
+        startsAt: now,
+        activatedAt: now,
+        expiresAt: null,
+        metadata: { source: 'reach_activation', activationPaymentId: payment.id },
+      },
+      update: {
+        status: 'ACTIVE',
+        quantity: 1,
+        startsAt: now,
+        activatedAt: now,
+        expiresAt: null,
+        suspendedAt: null,
+        suspensionReason: null,
+        metadata: { source: 'reach_activation', activationPaymentId: payment.id },
+      },
+    });
   });
   return new NextResponse('OK');
 }

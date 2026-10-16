@@ -57,6 +57,31 @@ async function reconcileEntitlements(tx: Prisma.TransactionClient, organizationI
   for (const entitlement of existing) if (!active.has(entitlement.scopeKey)) await tx.entitlement.update({ where: { id: entitlement.id }, data: { status: 'SUSPENDED', suspendedAt: entitlement.suspendedAt ?? new Date(), suspensionReason: 'No active subscription' } });
 }
 
+async function reconcileReachPrograms(tx: Prisma.TransactionClient, organizationId: string) {
+  const [properties, reachEntitlements, reachPrice] = await Promise.all([
+    tx.property.findMany({ where: { organizationId, isActive: true }, select: { id: true } }),
+    tx.entitlement.findMany({ where: { organizationId, productCode: 'ADDON_REACH', status: 'ACTIVE' }, select: { propertyId: true } }),
+    tx.billingPrice.findFirst({ where: { product: { code: 'ADDON_REACH', active: true }, interval: 'one_time' }, orderBy: { createdAt: 'desc' }, select: { amount: true, currency: true } }),
+  ]);
+  const entitledPropertyIds = new Set(
+    properties.filter((property) => reachEntitlements.some((entitlement) => entitlement.propertyId === null || entitlement.propertyId === property.id)).map((property) => property.id),
+  );
+  const amount = reachPrice ? reachPrice.amount / 100 : 0;
+  const currency = reachPrice?.currency || 'NGN';
+  for (const property of properties) {
+    const existing = await tx.referralProgram.findUnique({ where: { propertyId: property.id }, select: { id: true } });
+    if (entitledPropertyIds.has(property.id)) {
+      if (existing) {
+        await tx.referralProgram.update({ where: { id: existing.id }, data: { activationFeeAmount: amount, activationFeeCurrency: currency, activationPaymentStatus: 'PAID' } });
+      } else {
+        await tx.referralProgram.create({ data: { organizationId, propertyId: property.id, enabled: true, activatedAt: new Date(), activationFeeAmount: amount, activationFeeCurrency: currency, activationPaymentStatus: 'PAID', activationFeePaidAt: new Date() } });
+      }
+    } else if (existing) {
+      await tx.referralProgram.updateMany({ where: { id: existing.id, enabled: true }, data: { enabled: false, pausedAt: new Date() } });
+    }
+  }
+}
+
 export async function POST(req: Request) {
   const secretHash = process.env.FLW_WEBHOOK_SECRET_HASH;
   if (!process.env.FLW_SECRET_KEY || !secretHash) return NextResponse.json({ error: 'Flutterwave webhook is not configured' }, { status: 503 });
@@ -103,6 +128,7 @@ export async function POST(req: Request) {
         for (const price of prices) await tx.subscriptionItem.upsert({ where: { subscriptionId_priceId: { subscriptionId: subscription.id, priceId: price.id } }, create: { subscriptionId: subscription.id, priceId: price.id, quantity: 1 }, update: { quantity: 1 } });
         if (successful && planId) await tx.subscription.updateMany({ where: { organizationId, planId: { not: null }, status: { in: ['ACTIVE', 'TRIALING', 'PAST_DUE'] }, id: { not: subscription.id } }, data: { status: 'CANCELED', canceledAt: now, cancelAtPeriodEnd: false } });
         await reconcileEntitlements(tx, organizationId);
+        if (successful) await reconcileReachPrograms(tx, organizationId);
       }
       await tx.billingInvoice.upsert({ where: { flutterwaveInvoiceId: transactionId }, create: { organizationId, flutterwaveInvoiceId: transactionId, flutterwaveCustomerId: verified.customer?.email ?? null, flutterwaveSubscriptionId: subscriptionRef, status: successful ? 'paid' : 'failed', currency: verified.currency, subtotal: Math.round(verified.amount * 100), total: Math.round(verified.amount * 100), amountPaid: successful ? Math.round(verified.amount * 100) : 0, amountDue: successful ? 0 : Math.round(verified.amount * 100), periodStart: isCustomWebsiteOneTime ? null : now, periodEnd: isCustomWebsiteOneTime ? null : currentPeriodEnd, hostedInvoiceUrl: null, invoicePdf: null, payload: verified as unknown as Prisma.InputJsonValue }, update: { status: successful ? 'paid' : 'failed', amountPaid: successful ? Math.round(verified.amount * 100) : 0, amountDue: successful ? 0 : Math.round(verified.amount * 100), payload: verified as unknown as Prisma.InputJsonValue } });
       if (customDomainRequestId && successful) {

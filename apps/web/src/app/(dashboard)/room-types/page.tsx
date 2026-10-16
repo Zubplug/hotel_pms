@@ -14,7 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 
-type RoomType = { id: string; name: string; code: string; description?: string | null; baseRate: number | string; maxOccupancy: number; maxAdults: number; maxChildren: number; defaultBedConfig: string; isActive: boolean };
+type RoomType = { id: string; name: string; code: string; description?: string | null; baseRate: number | string; maxOccupancy: number; maxAdults: number; maxChildren: number; defaultBedConfig: string; isActive: boolean; referralEnabled?: boolean; referralCommissionMode?: string; referralCommissionValue?: number | string };
 type Room = { id: string; status: string; isActive: boolean; roomType?: { id?: string; name: string; code: string } | null };
 const chartColors = ['#34d399', '#60a5fa', '#a78bfa', '#fbbf24', '#fb7185', '#f97316'];
 const money = (value: unknown) => new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', maximumFractionDigits: 0 }).format(Number(value || 0));

@@ -236,6 +236,7 @@ export function PublicHeader() {
           {/* Desktop Actions */}
           <div className="header-actions">
             <Link href="/portal" className="header-signin">Sign in</Link>
+            <Link href="/partners" className="header-signin">Become a partner</Link>
             <Link href="/book-demo" className="btn btn-primary btn-sm">
               Talk to LodgeCore <span className="btn-arrow">→</span>
             </Link>
@@ -299,6 +300,7 @@ export function PublicHeader() {
           ]} />
           <Link href="/integrations" className="drawer-link" onClick={closeDrawer}>Integrations <span>→</span></Link>
           <div className="drawer-actions">
+            <Link href="/partners" className="btn btn-outline" style={{ width: "100%", justifyContent: "center" }} onClick={closeDrawer}>Become a partner →</Link>
             <Link href="/portal" className="btn btn-outline" style={{ width: "100%", justifyContent: "center" }} onClick={closeDrawer}>Sign in</Link>
             <Link href="/book-demo" className="btn btn-primary" style={{ width: "100%", justifyContent: "center" }} onClick={closeDrawer}>Talk to LodgeCore →</Link>
           </div>
@@ -402,4 +404,3 @@ export function PublicShell({
     </main>
   );
 }
-

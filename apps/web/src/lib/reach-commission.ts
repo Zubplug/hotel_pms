@@ -10,7 +10,10 @@ export function calculateReachAmounts(input: {
   platformFeeBps: number;
   platformFeeCap?: number | null;
 }) {
-  const basis = Math.max(0, Math.min(input.eligibleRevenue, input.collectedRevenue));
+  // Referral earnings are based on eligible room revenue, not on whether the
+  // property has collected payment. Payment collection is a property-side
+  // responsibility and must not reduce the partner's commission.
+  const basis = Math.max(0, input.eligibleRevenue);
   const commission = roundMoney(basis * Math.max(0, input.commissionBps) / 10_000);
   const uncappedPlatformFee = roundMoney(basis * Math.max(0, input.platformFeeBps) / 10_000);
   const platformFee = input.platformFeeCap == null
@@ -58,7 +61,13 @@ export async function fulfilReachBooking(
   await tx.$queryRaw`SELECT id FROM "ReferralBooking" WHERE id = ${input.referralBookingId}::uuid FOR UPDATE`;
   const booking = await tx.referralBooking.findUnique({
     where: { id: input.referralBookingId },
-    include: { campaign: true, program: true, commission: true },
+    include: {
+      campaign: true,
+      program: true,
+      commission: true,
+      roomType: true,
+      reservation: { select: { checkIn: true, checkOut: true } },
+    },
   });
   if (!booking) throw new Error('Reach booking not found');
   if (booking.commission) return booking.commission;
@@ -71,6 +80,20 @@ export async function fulfilReachBooking(
     platformFeeBps: booking.program.platformFeeBps,
     platformFeeCap: booking.program.platformFeeCap == null ? null : Number(booking.program.platformFeeCap),
   });
+  const roomRule = booking.roomType;
+  const stayNights = booking.reservation
+    ? Math.max(1, Math.ceil((booking.reservation.checkOut.getTime() - booking.reservation.checkIn.getTime()) / (1000 * 60 * 60 * 24)))
+    : 1;
+  if (roomRule && !roomRule.referralEnabled) amounts.commission = 0;
+  else if (roomRule && Number(roomRule.referralCommissionValue) > 0) {
+    amounts.commission = roomRule.referralCommissionMode === 'AMOUNT'
+      ? roundMoney(Number(roomRule.referralCommissionValue) * stayNights)
+      // Room-type referral rules apply to the complete eligible stay. The
+      // booking may be paid in instalments (for example, before and after an
+      // extension), but the partner commission still covers every eligible
+      // night in the booking.
+      : roundMoney(Number(booking.eligibleRevenue) * Number(roomRule.referralCommissionValue) / 100);
+  }
   const fulfilled = await tx.referralBooking.update({
     where: { id: booking.id },
     data: { status: 'FULFILLED', collectedRevenue: input.collectedRevenue, fulfilledAt: now },
@@ -82,12 +105,22 @@ export async function fulfilReachBooking(
       programId: booking.programId,
       partnerId: booking.partnerId,
       referralBookingId: fulfilled.id,
-      status: 'PENDING',
-      basisAmount: amounts.basis,
-      rateBps: booking.campaign?.commissionBps ?? 0,
+      // Reach commissions are approved automatically once the authoritative
+      // checkout has been reconciled. The whole transaction rolls back if
+      // accounting or wallet crediting fails.
+      status: 'APPROVED',
+      basisAmount: roomRule?.referralCommissionMode === 'PERCENT' && Number(roomRule.referralCommissionValue) > 0
+        ? Number(booking.eligibleRevenue)
+        : amounts.basis,
+      rateBps: roomRule?.referralCommissionMode === 'AMOUNT' && Number(roomRule.referralCommissionValue) > 0
+        ? 0
+        : roomRule && Number(roomRule.referralCommissionValue) > 0
+          ? Math.round(Number(roomRule.referralCommissionValue) * 100)
+          : (booking.campaign?.commissionBps ?? 0),
       amount: amounts.commission,
       currency: booking.currency,
       earnedAt: now,
+      approvedAt: now,
     },
   });
   await tx.referralLedgerEntry.create({
@@ -131,6 +164,44 @@ export async function fulfilReachBooking(
       where: { idempotencyKey: `REACH_COMMISSION:${booking.id}` },
       data: { journalEntryId: accounting.commissionJournalId },
     });
+  }
+
+  // Credit the partner wallet in the same transaction as fulfilment. The
+  // unique idempotency key prevents duplicate wallet credit when an offline
+  // checkout is retried or replayed.
+  if (amounts.commission > 0) {
+    const wallet = await tx.referralPartnerWallet.upsert({
+      where: { partnerId: booking.partnerId },
+      update: {},
+      create: { partnerId: booking.partnerId, currency: booking.currency },
+    });
+    await tx.$queryRaw`SELECT id FROM "ReferralPartnerWallet" WHERE id = ${wallet.id}::uuid FOR UPDATE`;
+    const lockedWallet = await tx.referralPartnerWallet.findUniqueOrThrow({ where: { id: wallet.id } });
+    const existingWalletCredit = await tx.referralPartnerWalletTransaction.findUnique({
+      where: { idempotencyKey: `REACH_PARTNER_COMMISSION:${commission.id}` },
+    });
+    if (!existingWalletCredit) {
+      const balance = Number(lockedWallet.availableBalance) + amounts.commission;
+      await tx.referralPartnerWallet.update({
+        where: { id: wallet.id },
+        data: { availableBalance: balance, currency: booking.currency },
+      });
+      await tx.referralPartnerWalletTransaction.create({
+        data: {
+          walletId: wallet.id,
+          partnerId: booking.partnerId,
+          commissionId: commission.id,
+          type: 'COMMISSION_CREDIT',
+          status: 'COMPLETED',
+          amount: amounts.commission,
+          balanceAfter: balance,
+          currency: booking.currency,
+          idempotencyKey: `REACH_PARTNER_COMMISSION:${commission.id}`,
+          metadata: { source: 'FULFILMENT', autoApproved: true },
+          completedAt: now,
+        },
+      });
+    }
   }
   return commission;
 }

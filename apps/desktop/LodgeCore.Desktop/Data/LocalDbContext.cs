@@ -177,6 +177,22 @@ public class LocalDbContext : DbContext
         }
     }
 
+    public async Task ApplyReachRoomTypeSchemaAsync()
+    {
+        var columns = new[]
+        {
+            "ALTER TABLE RoomTypes ADD COLUMN ReferralEnabled INTEGER NOT NULL DEFAULT 1",
+            "ALTER TABLE RoomTypes ADD COLUMN ReferralCommissionMode TEXT NOT NULL DEFAULT 'PERCENT'",
+            "ALTER TABLE RoomTypes ADD COLUMN ReferralCommissionValue TEXT NOT NULL DEFAULT '0'",
+        };
+        foreach (var sql in columns)
+        {
+            try { await Database.ExecuteSqlRawAsync(sql); }
+            catch (Microsoft.Data.Sqlite.SqliteException ex)
+                when (ex.SqliteErrorCode == 1 && ex.Message.Contains("duplicate column", StringComparison.OrdinalIgnoreCase)) { }
+        }
+    }
+
     public async Task ApplyEntitlementSchemaAsync()
     {
         var columns = new[]

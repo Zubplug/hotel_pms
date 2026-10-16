@@ -38,11 +38,12 @@ export async function GET(req: NextRequest) {
     const session = await auth();
     if (!session?.user?.id) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
     const { property } = await resolveProperty(session.user.id, req.nextUrl.searchParams.get('propertyId'));
-    const [program, access] = await Promise.all([
+    const [program, access, reachAddon] = await Promise.all([
       prisma.referralProgram.findUnique({ where: { propertyId: property.id } }),
       eligibility(property.organizationId, property.id),
+      hasEntitlement(property.organizationId, 'ADDON_REACH', property.id),
     ]);
-    return successResponse({ propertyId: property.id, currency: property.baseCurrency, program, eligibility: access });
+    return successResponse({ propertyId: property.id, currency: property.baseCurrency, program, reachEnabled: Boolean(program?.enabled && reachAddon), eligibility: access });
   } catch (error: any) {
     return errorResponse('FORBIDDEN', error?.message || 'Unable to resolve property', 403);
   }

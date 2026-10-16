@@ -240,6 +240,7 @@ export async function POST(
           organizationId: ctx.property.organizationId,
           eligibleRevenue: Number(finalSnapshot.subtotal ?? 0),
           currency: finalSnapshot.currency,
+          roomTypeId: hold.roomTypeId,
         });
 
         // 7. Convert the hold

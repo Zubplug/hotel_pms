@@ -8,7 +8,7 @@ describe('Reach commission calculation', () => {
       collectedRevenue: 80000,
       commissionBps: 700,
       platformFeeBps: 100,
-    })).toEqual({ basis: 80000, commission: 5600, platformFee: 800 });
+    })).toEqual({ basis: 100000, commission: 7000, platformFee: 1000 });
   });
 
   it('applies the property platform-fee cap', () => {
@@ -21,13 +21,13 @@ describe('Reach commission calculation', () => {
     })).toEqual({ basis: 100000, commission: 5000, platformFee: 1000 });
   });
 
-  it('does not earn commission on an uncollected booking', () => {
+  it('earns commission from eligible revenue even when the booking is uncollected', () => {
     expect(calculateReachAmounts({
       eligibleRevenue: 100000,
       collectedRevenue: 0,
       commissionBps: 700,
       platformFeeBps: 100,
-    })).toEqual({ basis: 0, commission: 0, platformFee: 0 });
+    })).toEqual({ basis: 100000, commission: 7000, platformFee: 1000 });
   });
 
   it('caps partial refund reversals and never reverses twice', () => {
