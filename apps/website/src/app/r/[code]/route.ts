@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@hotel-pms/db";
-import { recordReachClick } from "@/lib/reach-attribution";
+import { reachVisitorId, recordReachClick } from "@/lib/reach-attribution";
 
 function safeWebsite(value: string | null | undefined) {
   try {
@@ -42,11 +42,14 @@ export async function GET(
     },
   });
   if (!campaign) return NextResponse.json({ error: "Campaign is unavailable" }, { status: 404 });
+  const visitorId = reachVisitorId(req);
 
   const click = await recordReachClick(prisma, {
     propertyId: campaign.propertyId,
     campaignCode: campaign.code,
     landingPath: req.nextUrl.pathname,
+    visitorId,
+    userAgent: req.headers.get("user-agent"),
   });
 
   const website = campaign.property.propertyIntegrations.length
@@ -62,5 +65,7 @@ export async function GET(
   const destination = standaloneWebsite ?? (slug ? new URL(`/book/${encodeURIComponent(slug)}`, req.url) : null);
   if (!destination) return NextResponse.json({ error: "This property has no valid public destination" }, { status: 409 });
   if (click) destination.searchParams.set("reach", click.referralToken);
-  return NextResponse.redirect(destination);
+  const response = NextResponse.redirect(destination);
+  response.cookies.set("reach_visitor", visitorId, { httpOnly: true, sameSite: "lax", secure: req.nextUrl.protocol === "https:", maxAge: 60 * 60 * 24 * 365, path: "/" });
+  return response;
 }

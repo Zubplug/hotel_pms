@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
-import { recordReachClick } from '@/lib/reach-attribution';
+import { reachVisitorId, recordReachClick } from '@/lib/reach-attribution';
 import { resolveBookingContext, isErrorResponse } from '@/lib/booking-engine/middleware';
 
 function safeWebsite(value: string | null | undefined) {
@@ -20,6 +20,7 @@ export async function GET(
   const { slug } = await params;
   const campaignCode = req.nextUrl.searchParams.get('campaign')?.trim();
   if (!campaignCode) return NextResponse.json({ error: 'campaign is required' }, { status: 400 });
+  const visitorId = reachVisitorId(req);
 
   // A standalone API property may not have a LodgeCore Booking Engine at all.
   // Resolve its external website first so the referral link can still work.
@@ -59,9 +60,13 @@ export async function GET(
       propertyId: standaloneCampaign.propertyId,
       campaignCode,
       landingPath: req.nextUrl.pathname,
+      visitorId,
+      userAgent: req.headers.get('user-agent'),
     });
     if (click) standaloneDestination.searchParams.set('reach', click.referralToken);
-    return NextResponse.redirect(standaloneDestination);
+    const response = NextResponse.redirect(standaloneDestination);
+    response.cookies.set('reach_visitor', visitorId, { httpOnly: true, sameSite: 'lax', secure: req.nextUrl.protocol === 'https:', maxAge: 60 * 60 * 24 * 365, path: '/' });
+    return response;
   }
 
   const context = await resolveBookingContext(slug);
@@ -71,6 +76,8 @@ export async function GET(
     propertyId: context.property.id,
     campaignCode,
     landingPath: req.nextUrl.pathname,
+    visitorId,
+    userAgent: req.headers.get('user-agent'),
   });
   // Always resolve the booking destination on the current deployment. A
   // campaign may have been created with an older NEXT_PUBLIC_SITE_URL, and
@@ -107,5 +114,7 @@ export async function GET(
     : null;
   const destination = websiteDestination ?? new URL(`/book/${encodeURIComponent(slug)}`, req.url);
   if (click) destination.searchParams.set('reach', click.referralToken);
-  return NextResponse.redirect(destination);
+  const response = NextResponse.redirect(destination);
+  response.cookies.set('reach_visitor', visitorId, { httpOnly: true, sameSite: 'lax', secure: req.nextUrl.protocol === 'https:', maxAge: 60 * 60 * 24 * 365, path: '/' });
+  return response;
 }

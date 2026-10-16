@@ -37,6 +37,8 @@ export async function POST(req: NextRequest) {
     propertyId: ctx.propertyId,
     campaignCode,
     landingPath: typeof body.landingPath === 'string' ? body.landingPath.slice(0, 512) : null,
+    visitorId: req.headers.get('x-reach-visitor-id'),
+    userAgent: req.headers.get('user-agent'),
   });
   if (!click) return errorResponse('NOT_FOUND', 'Campaign is unavailable', 404);
 

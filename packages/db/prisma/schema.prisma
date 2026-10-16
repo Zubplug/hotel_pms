@@ -7471,6 +7471,7 @@ model ReferralClick {
   campaignId    String?  @db.Uuid
   partnerId     String   @db.Uuid
   referralToken String   @unique
+  visitorId     String?
   landingPath   String?
   occurredAt    DateTime @default(now()) @db.Timestamptz
   expiresAt     DateTime @db.Timestamptz
@@ -7485,6 +7486,7 @@ model ReferralClick {
 
   @@index([propertyId, occurredAt])
   @@index([partnerId, occurredAt])
+  @@index([campaignId, visitorId, occurredAt])
 }
 
 model ReferralAttribution {

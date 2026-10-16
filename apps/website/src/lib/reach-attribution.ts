@@ -1,11 +1,12 @@
 import crypto from 'node:crypto';
 import type { Prisma } from '@hotel-pms/db';
+import type { NextRequest } from 'next/server';
 
 type ReachTx = Prisma.TransactionClient;
 
 export async function recordReachClick(
   db: any,
-  input: { propertyId: string; campaignCode: string; landingPath?: string | null; now?: Date },
+  input: { propertyId: string; campaignCode: string; landingPath?: string | null; visitorId?: string | null; userAgent?: string | null; now?: Date },
 ) {
   const now = input.now ?? new Date();
   const campaign = await db.referralCampaign.findFirst({
@@ -31,6 +32,27 @@ export async function recordReachClick(
   });
   if (!campaign) return null;
 
+  // Social networks and browsers routinely prefetch shared links. Do not
+  // count those requests as guest clicks or create attribution tokens for them.
+  if (input.userAgent && /bot|crawler|spider|preview|prefetch|facebookexternalhit|whatsapp|slackbot|twitterbot|linkedinbot|bingpreview|google-inspectiontool/i.test(input.userAgent)) {
+    return null;
+  }
+
+  // A refresh or repeated open from the same browser is one click for a short
+  // window. The original token is reused so booking attribution still works.
+  if (input.visitorId) {
+    const recent = await db.referralClick.findFirst({
+      where: {
+        campaignId: campaign.id,
+        visitorId: input.visitorId,
+        occurredAt: { gte: new Date(now.getTime() - 30 * 60 * 1000) },
+      },
+      orderBy: { occurredAt: 'desc' },
+      select: { referralToken: true, expiresAt: true },
+    });
+    if (recent) return { ...recent, campaignCode: campaign.code, targetUrl: campaign.targetUrl };
+  }
+
   const referralToken = crypto.randomBytes(32).toString('base64url');
   const expiresAt = new Date(now.getTime() + campaign.program.attributionWindowDays * 86_400_000);
   const click = await db.referralClick.create({
@@ -41,6 +63,7 @@ export async function recordReachClick(
       campaignId: campaign.id,
       partnerId: campaign.partnerId,
       referralToken,
+      visitorId: input.visitorId ?? null,
       landingPath: input.landingPath ?? null,
       occurredAt: now,
       expiresAt,
@@ -49,6 +72,10 @@ export async function recordReachClick(
   });
 
   return { ...click, campaignCode: campaign.code, targetUrl: campaign.targetUrl };
+}
+
+export function reachVisitorId(req: NextRequest) {
+  return req.cookies.get('reach_visitor')?.value || crypto.randomUUID();
 }
 
 /**
