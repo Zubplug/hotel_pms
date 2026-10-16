@@ -25,10 +25,13 @@ export async function POST(request: NextRequest) {
   const property = properties.find((item) => item.id === propertyId);
   if (!property || !property.referralProgram) return NextResponse.json({ error: "This property is not currently available for Reach referrals" }, { status: 403 });
   const slug = property.bookingEngineConfig?.publicSlug || property.bookingSite?.publicSlug;
-  if (!slug) return NextResponse.json({ error: "This property has no public booking destination" }, { status: 409 });
+  if (!slug && !property.website) return NextResponse.json({ error: "This property has no public booking or website destination" }, { status: 409 });
   const code = `REACH-${crypto.randomUUID().replaceAll("-", "").slice(0, 12).toUpperCase()}`;
   const siteOrigin = process.env.NEXT_PUBLIC_SITE_URL || request.nextUrl.origin;
-  const targetUrl = `${siteOrigin}/api/public/booking/${encodeURIComponent(slug)}/reach?campaign=${code}`;
+  // Keep the implementation endpoint private-looking and stable for partners.
+  // The friendly route performs tracking and then resolves the correct
+  // booking-engine or standalone-property destination.
+  const targetUrl = `${siteOrigin}/r/${encodeURIComponent(code)}`;
   const campaign = await prisma.referralCampaign.create({ data: { organizationId: property.organizationId, propertyId, programId: property.referralProgram.id, partnerId: partner.id, name, code, category, targetUrl, commissionBps: 700 } });
   return NextResponse.json({ campaign }, { status: 201 });
 }
