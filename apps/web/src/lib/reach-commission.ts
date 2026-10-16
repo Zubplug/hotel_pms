@@ -230,7 +230,7 @@ export async function reverseReachBooking(
   });
   if (!booking?.commission) return null;
 
-  const originalBasis = Math.min(Number(booking.eligibleRevenue), Number(booking.collectedRevenue));
+  const originalBasis = Math.max(0, Number(booking.eligibleRevenue));
   const reversal = calculateReachReversal({
     originalBasis,
     refundedRevenue: input.refundedRevenue,
@@ -303,7 +303,7 @@ export async function reverseReachBooking(
 
 export async function reverseReachReservation(
   tx: ReachTx,
-  input: { reservationId?: string | null; refundedRevenue: number; idempotencyKey: string; reason: string; now?: Date },
+  input: { reservationId?: string | null; refundedRevenue: number; idempotencyKey: string; reason: string; actorId: string; now?: Date },
 ) {
   if (!input.reservationId) return null;
   const booking = await tx.referralBooking.findFirst({

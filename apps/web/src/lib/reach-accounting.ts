@@ -91,7 +91,7 @@ async function postHqPlatformFeeJournal(input: {
 }) {
   const accounts = await resolveHqAccounts(input.tx);
   const existingLine = await input.tx.hqJournalEntryLine.findFirst({
-    where: { sourceType: 'REACH_PLATFORM_FEE', sourceId },
+    where: { sourceType: 'REACH_PLATFORM_FEE', sourceId: input.sourceId },
     select: { entryId: true },
   });
   if (existingLine) return input.tx.hqJournalEntry.findUnique({ where: { id: existingLine.entryId } });
@@ -110,8 +110,8 @@ async function postHqPlatformFeeJournal(input: {
       createdBy: input.actorId,
       lines: {
         create: [
-          { accountId: debitAccount, debit: input.amount, credit: 0, description: input.debit ? 'HQ Reach platform-fee receivable' : 'Reverse HQ Reach platform-fee revenue', sourceType: 'REACH_PLATFORM_FEE', sourceId },
-          { accountId: creditAccount, debit: 0, credit: input.amount, description: input.debit ? 'HQ Reach platform-fee revenue' : 'Reverse HQ Reach platform-fee receivable', sourceType: 'REACH_PLATFORM_FEE', sourceId },
+          { accountId: debitAccount, debit: input.amount, credit: 0, description: input.debit ? 'HQ Reach platform-fee receivable' : 'Reverse HQ Reach platform-fee revenue', sourceType: 'REACH_PLATFORM_FEE', sourceId: input.sourceId },
+          { accountId: creditAccount, debit: 0, credit: input.amount, description: input.debit ? 'HQ Reach platform-fee revenue' : 'Reverse HQ Reach platform-fee receivable', sourceType: 'REACH_PLATFORM_FEE', sourceId: input.sourceId },
         ],
       },
     },
