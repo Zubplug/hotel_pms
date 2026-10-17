@@ -322,11 +322,11 @@ export function FolioSection({ reservation, readOnly = false, darkMode = false }
               <span className="text-xs font-medium text-slate-400">All amounts in {folio.currency || 'NGN'}</span>
             </div>
             <div className={`hidden overflow-x-auto rounded-xl border md:block ${isDarkReservation ? 'border-white/[0.08]' : 'border-slate-200'}`}>
-            <table className="w-full min-w-[820px] table-fixed text-left text-sm">
+            <table className="w-full min-w-[920px] table-auto text-left text-sm">
               <thead className={`border-b text-[11px] font-bold uppercase tracking-wider ${isDarkReservation ? 'border-white/[0.08] bg-[#111d31] text-slate-500' : 'bg-slate-50 text-slate-500'}`}>
                 <tr>
                   <th className="w-36 px-4 py-3">Date</th>
-                  <th className="px-4 py-3">Transaction</th>
+                  <th className="w-[44%] min-w-[320px] px-4 py-3">Transaction</th>
                   <th className={`w-36 px-4 py-3 text-right ${isDarkReservation ? 'text-rose-300' : 'text-rose-700'}`}>Debit</th>
                   <th className={`w-36 px-4 py-3 text-right ${isDarkReservation ? 'text-emerald-300' : 'text-emerald-700'}`}>Credit</th>
                   {!readOnly && <th className="w-40 px-4 py-3 text-right">Actions</th>}
@@ -354,7 +354,7 @@ export function FolioSection({ reservation, readOnly = false, darkMode = false }
                           <Badge variant={item.type === 'CHARGE' ? 'outline' : item.type === 'PAYMENT' ? 'default' : 'secondary'} className="shrink-0 whitespace-nowrap text-[10px]">
                             {transactionLabel(item.type)}
                           </Badge>
-                          <p className={`min-w-0 flex-1 break-words font-medium leading-5 ${isDarkReservation ? 'text-slate-200' : 'text-slate-800'}`} title={item.description}>{item.description}</p>
+                          <p className={`min-w-0 flex-1 whitespace-normal break-normal font-medium leading-5 ${isDarkReservation ? 'text-slate-200' : 'text-slate-800'}`} title={item.description}>{item.description}</p>
                           {item.creditStatus && <Badge variant="secondary" className="shrink-0 text-[10px]">{item.creditStatus}</Badge>}
                           </div>
                         </td>
