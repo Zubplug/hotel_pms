@@ -5,39 +5,45 @@
 
 /* ── DESIGN TOKENS ──────────────────────────────────────────── */
 .reach-app-shell {
-  --reach-bg:         #080B16;
-  --reach-surface:    #0D1526;
-  --reach-card:       #11182A;
-  --reach-card-2:     #141d31;
-  --reach-popover:    #172138;
-  --reach-sidebar:    #080e1c;
-  --reach-border:     rgba(255,255,255,0.07);
-  --reach-border-md:  rgba(255,255,255,0.11);
-  --reach-border-act: rgba(99,102,241,0.45);
+  /* ── LodgeCore Reach exact brand palette ─────────────────── */
+  --reach-bg:         #080B16;   /* Application background     */
+  --reach-surface:    #0B1020;   /* Sidebar background         */
+  --reach-card:       #11182A;   /* Standard cards             */
+  --reach-card-2:     #172138;   /* Elevated surface / modals  */
+  --reach-popover:    #172138;   /* Dropdowns / popovers       */
+  --reach-sidebar:    #0B1020;   /* Sidebar (matches surface)  */
+  --reach-hover:      #202B45;   /* Hover + selected surface   */
+  --reach-border:     #27324A;   /* Card / table / input edges */
+  --reach-border-md:  #2f3d59;   /* Slightly brighter border   */
+  --reach-border-act: rgba(99,133,255,0.55); /* Active/focus ring */
 
-  /* Text */
-  --reach-text:       #e2e8f0;
-  --reach-text-2:     #94a3b8;
-  --reach-text-3:     #4e6070;
-  --reach-text-4:     #2e3a4e;
+  /* Brand identity */
+  --reach-navy:       #02005A;   /* Primary brand navy         */
+  --reach-indigo:     #5146A8;   /* Indigo accent (brand)      */
 
-  /* Accent — indigo/violet */
-  --reach-accent:     #6366f1;
-  --reach-accent-2:   #818cf8;
-  --reach-accent-dim: rgba(99,102,241,0.12);
-  --reach-accent-glow:rgba(99,102,241,0.30);
+  /* Text — LodgeCore Reach spec */
+  --reach-text:       #F4F6FC;   /* Primary text               */
+  --reach-text-2:     #A4AEC3;   /* Secondary text             */
+  --reach-text-3:     #7D89A3;   /* Muted metadata             */
+  --reach-text-4:     #4A5568;   /* Subtle / disabled          */
 
-  /* Status */
-  --reach-green:      #10b981;
-  --reach-green-dim:  rgba(16,185,129,0.12);
-  --reach-amber:      #f59e0b;
-  --reach-amber-dim:  rgba(245,158,11,0.12);
-  --reach-rose:       #f43f5e;
-  --reach-rose-dim:   rgba(244,63,94,0.12);
-  --reach-violet:     #a78bfa;
+  /* Interactive blue — spec primary button colour */
+  --reach-accent:     #6385FF;   /* Interactive blue           */
+  --reach-accent-2:   #8BA4FF;   /* Lighter interactive        */
+  --reach-accent-dim: rgba(99,133,255,0.12);
+  --reach-accent-glow:rgba(99,133,255,0.28);
+
+  /* Status palette — exact spec values */
+  --reach-green:      #34D399;   /* Success / earnings         */
+  --reach-green-dim:  rgba(52,211,153,0.12);
+  --reach-amber:      #FBBF24;   /* Warning / pending          */
+  --reach-amber-dim:  rgba(251,191,36,0.12);
+  --reach-rose:       #F87171;   /* Error / reversed           */
+  --reach-rose-dim:   rgba(248,113,113,0.12);
+  --reach-violet:     #A78BFA;   /* Conversion / analytics     */
   --reach-violet-dim: rgba(167,139,250,0.12);
-  --reach-sky:        #38bdf8;
-  --reach-sky-dim:    rgba(56,189,248,0.12);
+  --reach-sky:        #7DD3FC;   /* Information                */
+  --reach-sky-dim:    rgba(125,211,252,0.12);
 
   /* Typography */
   --reach-font-display: var(--font-sora, "Sora"), system-ui, sans-serif;
@@ -51,9 +57,9 @@
   --reach-radius-xl: 20px;
 
   /* Shadows */
-  --reach-shadow:     0 1px 2px rgba(0,0,0,0.5), 0 8px 24px rgba(0,0,0,0.35);
-  --reach-shadow-lg:  0 4px 6px rgba(0,0,0,0.6), 0 24px 64px rgba(0,0,0,0.45);
-  --reach-shadow-act: 0 0 0 2px rgba(99,102,241,0.22), 0 8px 24px rgba(99,102,241,0.14);
+  --reach-shadow:     0 1px 3px rgba(0,0,0,0.55), 0 8px 24px rgba(0,0,0,0.4);
+  --reach-shadow-lg:  0 4px 8px rgba(0,0,0,0.65), 0 24px 64px rgba(0,0,0,0.5);
+  --reach-shadow-act: 0 0 0 2px rgba(99,133,255,0.25), 0 8px 24px rgba(99,133,255,0.12);
 
   /* Sidebar */
   --reach-sidebar-w: 264px;
@@ -308,8 +314,8 @@
 }
 
 .reach-nav-item:hover {
-  background: rgba(255,255,255,0.04);
-  color: var(--reach-text-2);
+  background: var(--reach-hover);
+  color: var(--reach-text);
   transform: translateX(2px);
 }
 
@@ -317,7 +323,7 @@
   background: var(--reach-accent-dim);
   color: var(--reach-accent-2);
   font-weight: 600;
-  border: 1px solid rgba(99,102,241,0.18);
+  border: 1px solid rgba(99,133,255,0.20);
 }
 
 .reach-nav-item.is-active::before {

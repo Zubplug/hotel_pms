@@ -46,7 +46,7 @@ export default function PartnerLoginPage() {
           flex-direction: column;
           justify-content: space-between;
           padding: 48px 56px;
-          background: linear-gradient(160deg, #0b1225 0%, #0f1735 60%, rgba(99,102,241,0.08) 100%);
+          background: linear-gradient(160deg, #0b1225 0%, #0f1735 60%, rgba(99,133,255,0.08) 100%);
           border-right: 1px solid rgba(255,255,255,0.07);
           overflow: hidden;
         }
@@ -57,7 +57,7 @@ export default function PartnerLoginPage() {
           top: -120px; right: -80px;
           width: 420px; height: 420px;
           border-radius: 50%;
-          background: radial-gradient(circle, rgba(99,102,241,0.14), transparent 70%);
+          background: radial-gradient(circle, rgba(99,133,255,0.14), transparent 70%);
           pointer-events: none;
         }
         .reach-login-panel::after {
@@ -82,21 +82,21 @@ export default function PartnerLoginPage() {
           place-items: center;
           width: 38px; height: 38px;
           border-radius: 11px;
-          background: linear-gradient(135deg, #6366f1, #4f46e5);
-          box-shadow: 0 4px 16px rgba(99,102,241,0.35);
+          background: linear-gradient(135deg, #6385FF, #5146A8);
+          box-shadow: 0 4px 16px rgba(99,133,255,0.35);
           color: #fff;
           font-family: var(--font-sora, "Sora"), system-ui, sans-serif;
           font-size: 20px;
           font-weight: 800;
         }
         .reach-login-brand-text {
-          color: #e2e8f0;
+          color: #F4F6FC;
           font-family: var(--font-sora, "Sora"), system-ui, sans-serif;
           font-size: 18px;
           font-weight: 800;
           letter-spacing: -0.05em;
         }
-        .reach-login-brand-text span { color: #818cf8; }
+        .reach-login-brand-text span { color: #8BA4FF; }
         .reach-login-hero {
           position: relative;
           z-index: 1;
@@ -106,10 +106,10 @@ export default function PartnerLoginPage() {
           align-items: center;
           gap: 8px;
           padding: 5px 12px 5px 8px;
-          border: 1px solid rgba(99,102,241,0.28);
+          border: 1px solid rgba(99,133,255,0.28);
           border-radius: 999px;
-          background: rgba(99,102,241,0.1);
-          color: #818cf8;
+          background: rgba(99,133,255,0.1);
+          color: #8BA4FF;
           font-family: var(--font-mono, "JetBrains Mono"), monospace;
           font-size: 9px;
           font-weight: 700;
@@ -120,7 +120,7 @@ export default function PartnerLoginPage() {
         .reach-login-kicker-dot {
           width: 6px; height: 6px;
           border-radius: 50%;
-          background: #10b981;
+          background: #34D399;
           box-shadow: 0 0 8px rgba(16,185,129,0.6);
           animation: reach-login-ping 2.5s ease-out infinite;
         }
@@ -130,7 +130,7 @@ export default function PartnerLoginPage() {
           100%  { box-shadow: 0 0 0 0 rgba(16,185,129,0); }
         }
         .reach-login-headline {
-          color: #e2e8f0;
+          color: #F4F6FC;
           font-family: var(--font-sora, "Sora"), system-ui, sans-serif;
           font-size: clamp(28px, 3vw, 42px);
           font-weight: 800;
@@ -140,14 +140,14 @@ export default function PartnerLoginPage() {
         }
         .reach-login-headline em {
           display: block;
-          background: linear-gradient(135deg, #818cf8, #a78bfa);
+          background: linear-gradient(135deg, #8BA4FF, #A78BFA);
           -webkit-background-clip: text;
           -webkit-text-fill-color: transparent;
           background-clip: text;
           font-style: normal;
         }
         .reach-login-sub {
-          color: #4e6070;
+          color: #7D89A3;
           font-size: 14px;
           line-height: 1.7;
           max-width: 380px;
@@ -169,7 +169,7 @@ export default function PartnerLoginPage() {
         }
         .reach-login-stat strong {
           display: block;
-          color: #e2e8f0;
+          color: #F4F6FC;
           font-family: var(--font-sora, "Sora"), system-ui, sans-serif;
           font-size: 22px;
           font-weight: 800;
@@ -178,12 +178,12 @@ export default function PartnerLoginPage() {
         .reach-login-stat span {
           display: block;
           margin-top: 4px;
-          color: #4e6070;
+          color: #7D89A3;
           font-size: 10px;
           line-height: 1.4;
         }
         .reach-login-footer {
-          color: #2e3a4e;
+          color: #4A5568;
           font-size: 11px;
           position: relative;
           z-index: 1;
@@ -203,7 +203,7 @@ export default function PartnerLoginPage() {
         .reach-login-form-head { margin-bottom: 32px; }
         .reach-login-form-eyebrow {
           display: block;
-          color: #6366f1;
+          color: #6385FF;
           font-family: var(--font-mono, "JetBrains Mono"), monospace;
           font-size: 9px;
           font-weight: 700;
@@ -212,7 +212,7 @@ export default function PartnerLoginPage() {
           margin-bottom: 10px;
         }
         .reach-login-form-head h1 {
-          color: #e2e8f0;
+          color: #F4F6FC;
           font-family: var(--font-sora, "Sora"), system-ui, sans-serif;
           font-size: 28px;
           font-weight: 800;
@@ -221,7 +221,7 @@ export default function PartnerLoginPage() {
           margin: 0 0 8px;
         }
         .reach-login-form-head p {
-          color: #4e6070;
+          color: #7D89A3;
           font-size: 13px;
           line-height: 1.6;
         }
@@ -244,17 +244,17 @@ export default function PartnerLoginPage() {
           border: 1px solid rgba(255,255,255,0.1);
           border-radius: 10px;
           background: rgba(255,255,255,0.03);
-          color: #e2e8f0;
+          color: #F4F6FC;
           font: inherit;
           font-size: 14px;
           outline: none;
           transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
         }
-        .reach-login-field input::placeholder { color: #2e3a4e; }
+        .reach-login-field input::placeholder { color: #4A5568; }
         .reach-login-field input:focus {
-          border-color: #6366f1;
-          box-shadow: 0 0 0 3px rgba(99,102,241,0.15);
-          background: rgba(99,102,241,0.04);
+          border-color: #6385FF;
+          box-shadow: 0 0 0 3px rgba(99,133,255,0.15);
+          background: rgba(99,133,255,0.04);
         }
         .reach-login-error {
           display: flex;
@@ -264,7 +264,7 @@ export default function PartnerLoginPage() {
           border: 1px solid rgba(244,63,94,0.22);
           border-radius: 10px;
           background: rgba(244,63,94,0.06);
-          color: #f43f5e;
+          color: #F87171;
           font-size: 12px;
           line-height: 1.5;
           margin-bottom: 16px;
@@ -277,21 +277,21 @@ export default function PartnerLoginPage() {
           width: 100%;
           height: 48px;
           border-radius: 10px;
-          background: linear-gradient(135deg, #6366f1, #4f46e5);
-          border: 1px solid rgba(99,102,241,0.3);
+          background: linear-gradient(135deg, #6385FF, #5146A8);
+          border: 1px solid rgba(99,133,255,0.3);
           color: #fff;
           font: inherit;
           font-size: 14px;
           font-weight: 700;
           letter-spacing: -0.01em;
           cursor: pointer;
-          box-shadow: 0 4px 16px rgba(99,102,241,0.25);
+          box-shadow: 0 4px 16px rgba(99,133,255,0.25);
           transition: transform 0.2s, box-shadow 0.2s, opacity 0.2s;
           margin-top: 4px;
         }
         .reach-login-btn:hover:not(:disabled) {
           transform: translateY(-2px);
-          box-shadow: 0 8px 28px rgba(99,102,241,0.38);
+          box-shadow: 0 8px 28px rgba(99,133,255,0.38);
         }
         .reach-login-btn:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
         .reach-login-spin {
@@ -305,16 +305,16 @@ export default function PartnerLoginPage() {
         .reach-login-links {
           margin-top: 22px;
           text-align: center;
-          color: #2e3a4e;
+          color: #4A5568;
           font-size: 12px;
         }
         .reach-login-links a {
-          color: #818cf8;
+          color: #8BA4FF;
           font-weight: 600;
           text-decoration: none;
           transition: color 0.2s;
         }
-        .reach-login-links a:hover { color: #6366f1; }
+        .reach-login-links a:hover { color: #6385FF; }
         .reach-login-divider {
           position: relative;
           margin: 24px 0;
@@ -331,7 +331,7 @@ export default function PartnerLoginPage() {
           position: relative;
           padding: 0 12px;
           background: #080B16;
-          color: #2e3a4e;
+          color: #4A5568;
           font-size: 10px;
           font-family: var(--font-mono, "JetBrains Mono"), monospace;
           letter-spacing: 0.1em;
