@@ -29,7 +29,7 @@ export async function processReachCreativeGeneration(generationId: string) {
       .filter((room) => Number.isFinite(room.amount) && room.amount > 0);
     const lowestRate = roomRates.sort((a, b) => a.amount - b.amount)[0];
     const startingPrice = lowestRate
-      ? new Intl.NumberFormat("en-NG", { style: "currency", currency: lowestRate.currency, maximumFractionDigits: 0 }).format(lowestRate.amount).replace(/\u00a0/g, " ")
+      ? new Intl.NumberFormat("en", { style: "currency", currency: lowestRate.currency, currencyDisplay: "code", maximumFractionDigits: 0 }).format(lowestRate.amount).replace(/\u00a0/g, " ")
       : null;
     const rendered = await renderReachCreative({ template, propertyName: job.property.name, campaignName: job.campaign.name, referralUrl: reachShareUrl(job.campaign.code), sourceUrl: job.sourceUrl, startingPrice });
     const blob = await put(`reach/creatives/${job.propertyId}/${job.id}.png`, rendered.buffer, { access: "public", addRandomSuffix: false, contentType: rendered.mimeType });

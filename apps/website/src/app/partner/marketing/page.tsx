@@ -13,7 +13,7 @@ export default async function PartnerMarketingPage() {
   const now = new Date();
   const [campaigns, creatives] = await Promise.all([
     prisma.referralCampaign.findMany({ where: { partnerId: partner.id, propertyId: { in: propertyIds } }, orderBy: { createdAt: "desc" }, take: 50, include: { property: { select: { name: true } } } }),
-    prisma.reachCreativeAsset.findMany({ where: { propertyId: { in: propertyIds }, status: "APPROVED", OR: [{ validFrom: null }, { validFrom: { lte: now } }], AND: [{ OR: [{ validUntil: null }, { validUntil: { gte: now } }] }] }, orderBy: { createdAt: "desc" }, take: 100, include: { property: { select: { name: true } }, campaign: { select: { name: true } } } }),
+    prisma.reachCreativeAsset.findMany({ where: { propertyId: { in: propertyIds }, status: "APPROVED", OR: [{ validFrom: null }, { validFrom: { lte: now } }], AND: [{ OR: [{ validUntil: null }, { validUntil: { gte: now } }] }, { OR: [{ usageNotes: null }, { usageNotes: { not: { startsWith: "Deterministically rendered from approved LodgeCore data" } } }] }] }, orderBy: { createdAt: "desc" }, take: 100, include: { property: { select: { name: true } }, campaign: { select: { name: true } } } }),
   ]);
   const rooms = properties.flatMap((property) => property.roomTypes.flatMap((room) => [...room.photos, ...room.reachMedia.map((media) => media.url)].map((photo, index) => ({ photo, index, roomName: room.name, propertyName: property.name }))));
   return <PartnerShell partner={partner} availableBalance={Number(wallet?.availableBalance || 0)} currency={wallet?.currency || "NGN"}>
