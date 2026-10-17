@@ -167,7 +167,7 @@
 
 .reach-brand-copy small {
   margin-top: 3px;
-  color: var(--reach-text-3);
+  color: var(--reach-text-2);
   font-family: var(--reach-font-mono);
   font-size: 8px;
   font-weight: 600;
@@ -242,7 +242,7 @@
 
 .reach-partner-copy span {
   margin-top: 2px;
-  color: var(--reach-text-3);
+  color: var(--reach-text-2);
   font-size: 10px;
 }
 
@@ -290,7 +290,7 @@
 
 .reach-nav-group > p {
   padding: 10px 8px 6px;
-  color: var(--reach-text-4);
+  color: var(--reach-text-2);
   font-family: var(--reach-font-mono);
   font-size: 9px;
   font-weight: 700;
@@ -305,7 +305,7 @@
   margin: 1px 0;
   padding: 8px 10px;
   border-radius: var(--reach-radius);
-  color: var(--reach-text-3);
+  color: var(--reach-text-2);
   font-size: 12.5px;
   font-weight: 500;
   text-decoration: none;
@@ -342,7 +342,7 @@
   place-items: center;
   width: 16px;
   flex-shrink: 0;
-  color: var(--reach-text-4);
+  color: var(--reach-text-2);
   transition: color 0.18s;
 }
 
@@ -367,7 +367,7 @@
 .reach-balance-mini strong { display: block; }
 
 .reach-balance-mini span {
-  color: var(--reach-text-3);
+  color: var(--reach-text-2);
   font-family: var(--reach-font-mono);
   font-size: 8.5px;
   font-weight: 600;
@@ -392,7 +392,7 @@
   margin-top: 10px;
   padding: 8px 10px;
   border-radius: var(--reach-radius);
-  color: var(--reach-text-3);
+  color: var(--reach-text-2);
   font-size: 11px;
   font-weight: 500;
   transition: background 0.18s, color 0.18s;
@@ -455,14 +455,14 @@
 }
 
 .reach-breadcrumb > span:first-child {
-  color: var(--reach-text-3);
+  color: var(--reach-text-2);
   font-size: 11.5px;
   font-weight: 500;
 }
 
 .reach-breadcrumb-sep {
   margin: 0 8px;
-  color: var(--reach-text-4);
+  color: var(--reach-text-2);
   font-size: 11px;
 }
 
@@ -479,7 +479,7 @@
 }
 
 .reach-help-link {
-  color: var(--reach-text-3);
+  color: var(--reach-text-2);
   font-size: 11px;
   transition: color 0.2s;
 }
@@ -553,7 +553,7 @@
 
 .reach-page-head p,
 .reach-card-head p {
-  color: var(--reach-text-3);
+  color: var(--reach-text-2);
   font-size: 13px;
   line-height: 1.6;
 }
@@ -588,15 +588,15 @@
 .reach-button:active { transform: translateY(0); }
 
 .reach-button.primary {
-  background: linear-gradient(135deg, var(--reach-accent), #4f46e5);
+  background: linear-gradient(135deg, var(--reach-accent), #5146A8);
   color: #fff;
-  border-color: rgba(99,102,241,0.3);
-  box-shadow: 0 4px 14px rgba(99,102,241,0.22);
+  border-color: rgba(99,133,255,0.35);
+  box-shadow: 0 4px 14px rgba(99,133,255,0.22);
 }
 
 .reach-button.primary:hover {
-  box-shadow: 0 6px 22px rgba(99,102,241,0.38);
-  background: linear-gradient(135deg, #7c7ff5, #5b52f5);
+  box-shadow: 0 6px 22px rgba(99,133,255,0.38);
+  background: linear-gradient(135deg, #7c8fff, #6161d0);
 }
 
 .reach-button.secondary {
@@ -661,7 +661,7 @@
 
 .reach-alert p {
   margin-top: 3px;
-  color: var(--reach-text-3);
+  color: var(--reach-text-2);
   font-size: 11px;
   line-height: 1.6;
 }
@@ -784,7 +784,7 @@
 }
 
 .reach-kpi p {
-  color: var(--reach-text-3);
+  color: var(--reach-text-2);
   font-size: 10.5px;
   font-weight: 500;
   letter-spacing: 0.01em;
@@ -804,7 +804,7 @@
 .reach-kpi small {
   display: block;
   margin-top: 6px;
-  color: var(--reach-text-3);
+  color: var(--reach-text-2);
   font-size: 10px;
 }
 
@@ -885,7 +885,7 @@
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  color: var(--reach-text-3);
+  color: var(--reach-text-2);
   font-size: 11.5px;
 }
 
@@ -930,7 +930,7 @@
 .reach-summary-row strong { display: block; }
 
 .reach-summary-row small {
-  color: var(--reach-text-3);
+  color: var(--reach-text-2);
   font-size: 9px;
   font-family: var(--reach-font-mono);
   font-weight: 600;
@@ -1002,7 +1002,7 @@
 .reach-action-grid small {
   display: block;
   margin-top: 3px;
-  color: var(--reach-text-3);
+  color: var(--reach-text-2);
   font-size: 9.5px;
   font-weight: 400;
 }
@@ -1095,13 +1095,13 @@
 
 .reach-property-title p {
   margin-top: 4px;
-  color: var(--reach-text-3);
+  color: var(--reach-text-2);
   font-size: 10px;
 }
 
 .reach-property-description {
   margin-top: 10px;
-  color: var(--reach-text-3);
+  color: var(--reach-text-2);
   font-size: 10.5px;
   line-height: 1.6;
 }
@@ -1118,7 +1118,7 @@
   border-radius: 6px;
   background: rgba(255,255,255,0.04);
   border: 1px solid var(--reach-border);
-  color: var(--reach-text-3);
+  color: var(--reach-text-2);
   font-size: 9.5px;
   font-weight: 500;
 }
@@ -1158,14 +1158,14 @@
 .reach-activity strong,
 .reach-activity small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-.reach-activity strong { color: var(--reach-text-2); font-size: 11px; }
-.reach-activity small  { margin-top: 2px; color: var(--reach-text-3); font-size: 9.5px; }
+.reach-activity strong { color: var(--reach-text); font-size: 11px; font-weight: 600; }
+.reach-activity small  { margin-top: 2px; color: var(--reach-text-2); font-size: 9.5px; }
 
 /* ── CAMPAIGN FORM ───────────────────────────────────────────── */
 .reach-campaign-form { display: grid; gap: 13px; }
 
 .reach-campaign-form label {
-  color: var(--reach-text-3);
+  color: var(--reach-text-2);
   font-size: 10.5px;
   font-weight: 600;
   letter-spacing: 0.02em;
@@ -1181,7 +1181,7 @@
   padding: 0 12px;
   border: 1px solid var(--reach-border-md);
   border-radius: var(--reach-radius);
-  background: rgba(255,255,255,0.03);
+  background: var(--reach-card-2);
   color: var(--reach-text);
   font-family: var(--reach-font-body);
   font-size: 12px;
@@ -1221,7 +1221,7 @@
 }
 
 .reach-link-preview span {
-  color: var(--reach-text-3);
+  color: var(--reach-text-2);
   font-size: 9px;
   white-space: nowrap;
   font-family: var(--reach-font-mono);
@@ -1266,7 +1266,7 @@
   border: 1px solid var(--reach-border);
   border-radius: var(--reach-radius-lg);
   background: var(--reach-card);
-  color: var(--reach-text-3);
+  color: var(--reach-text-2);
   font-size: 11px;
   flex-wrap: wrap;
 }
@@ -1284,7 +1284,7 @@
   padding: 0 12px;
   border: 1px solid var(--reach-border-md);
   border-radius: var(--reach-radius);
-  background: rgba(255,255,255,0.03);
+  background: var(--reach-card-2);
   color: var(--reach-text);
   font-family: var(--reach-font-body);
   font-size: 11.5px;
@@ -1310,7 +1310,7 @@
   align-items: center;
   gap: 6px;
   margin-bottom: 22px;
-  color: var(--reach-text-3);
+  color: var(--reach-text-2);
   font-size: 11px;
   font-weight: 500;
   text-decoration: none;
@@ -1353,7 +1353,7 @@
 
 .reach-detail-hero > p {
   margin-top: 8px;
-  color: var(--reach-text-3);
+  color: var(--reach-text-2);
   font-size: 13px;
 }
 
@@ -1391,7 +1391,7 @@
   border-bottom: 1px solid var(--reach-border);
 }
 
-.reach-side-summary dt { color: var(--reach-text-3); font-size: 10px; }
+.reach-side-summary dt { color: var(--reach-text-2); font-size: 10px; }
 .reach-side-summary dd { color: var(--reach-text); font-size: 10.5px; font-weight: 700; text-align: right; }
 
 /* ── ROOM GRID ───────────────────────────────────────────────── */
@@ -1423,7 +1423,7 @@
   overflow: hidden;
   height: 165px;
   background: linear-gradient(140deg, #0f1a2e, rgba(99,102,241,0.12));
-  color: var(--reach-text-3);
+  color: var(--reach-text-2);
   font-size: 11px;
   position: relative;
 }
@@ -1449,7 +1449,7 @@
   padding: 7px;
   background: rgba(8,11,22,0.7);
   backdrop-filter: blur(8px);
-  color: var(--reach-text-3);
+  color: var(--reach-text-2);
   font-size: 10px;
   border-top: 1px solid var(--reach-border);
 }
@@ -1474,7 +1474,7 @@
 .reach-room-property {
   display: block;
   overflow: hidden;
-  color: var(--reach-text-3);
+  color: var(--reach-text-2);
   font-family: var(--reach-font-mono);
   font-size: 9px;
   font-weight: 600;
@@ -1497,7 +1497,7 @@
   display: -webkit-box;
   overflow: hidden;
   margin-top: 7px;
-  color: var(--reach-text-3);
+  color: var(--reach-text-2);
   font-size: 11px;
   line-height: 1.6;
   -webkit-box-orient: vertical;
@@ -1518,7 +1518,7 @@
   border-radius: 6px;
   background: rgba(255,255,255,0.04);
   border: 1px solid var(--reach-border);
-  color: var(--reach-text-3);
+  color: var(--reach-text-2);
   font-size: 9.5px;
 }
 
@@ -1541,7 +1541,7 @@
 }
 
 .reach-room-footer small {
-  color: var(--reach-text-3);
+  color: var(--reach-text-2);
   font-size: 9px;
   font-weight: 400;
 }
@@ -1557,7 +1557,7 @@
 }
 
 .reach-room-body > strong small {
-  color: var(--reach-text-3);
+  color: var(--reach-text-2);
   font-size: 9.5px;
   font-weight: 400;
 }
@@ -1608,7 +1608,7 @@
 
 .reach-event-body p {
   margin: 8px 0;
-  color: var(--reach-text-3);
+  color: var(--reach-text-2);
   font-size: 11.5px;
   line-height: 1.6;
 }
@@ -1620,7 +1620,7 @@
   margin-top: 16px;
   padding-top: 14px;
   border-top: 1px solid var(--reach-border);
-  color: var(--reach-text-3);
+  color: var(--reach-text-2);
   font-size: 10.5px;
 }
 
@@ -1678,7 +1678,7 @@
 .reach-link-stats {
   justify-content: flex-start;
   margin-top: 12px;
-  color: var(--reach-text-3);
+  color: var(--reach-text-2);
   font-size: 11px;
   gap: 20px;
 }
@@ -1707,7 +1707,7 @@
 }
 
 .reach-table th {
-  color: var(--reach-text-3);
+  color: var(--reach-text-2);
   background: rgba(255,255,255,0.018);
   font-family: var(--reach-font-mono);
   font-size: 9.5px;
@@ -1721,7 +1721,7 @@
 .reach-table td small {
   display: block;
   margin-top: 3px;
-  color: var(--reach-text-3);
+  color: var(--reach-text-2);
   font-size: 10px;
 }
 
@@ -1754,7 +1754,7 @@
 .reach-rule-grid span {
   display: block;
   margin-top: 5px;
-  color: var(--reach-text-3);
+  color: var(--reach-text-2);
   font-size: 11px;
 }
 
@@ -1768,7 +1768,7 @@
 .reach-field { display: grid; gap: 7px; }
 
 .reach-field label {
-  color: var(--reach-text-3);
+  color: var(--reach-text-2);
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.02em;
@@ -1781,7 +1781,7 @@
   border: 1px solid var(--reach-border-md);
   border-radius: var(--reach-radius);
   padding: 11px 14px;
-  background: rgba(255,255,255,0.03);
+  background: var(--reach-card-2);
   color: var(--reach-text);
   font: inherit;
   font-size: 13px;
@@ -1868,7 +1868,7 @@
 
 .reach-asset-card small {
   margin-bottom: 8px;
-  color: var(--reach-text-3);
+  color: var(--reach-text-2);
   font-size: 10px;
 }
 
@@ -1908,7 +1908,7 @@
 
 .reach-modal p {
   margin: 8px 0 22px;
-  color: var(--reach-text-3);
+  color: var(--reach-text-2);
   font-size: 13px;
   line-height: 1.6;
 }
@@ -1921,7 +1921,7 @@
   height: 28px;
   border-radius: var(--reach-radius-sm);
   background: rgba(255,255,255,0.06);
-  color: var(--reach-text-3);
+  color: var(--reach-text-2);
   font-size: 20px;
   line-height: 28px;
   text-align: center;
@@ -1960,7 +1960,7 @@
 .reach-empty p {
   max-width: 420px;
   margin: 6px auto 0;
-  color: var(--reach-text-3);
+  color: var(--reach-text-2);
   font-size: 12px;
   line-height: 1.65;
 }
@@ -2002,7 +2002,7 @@
 
 .reach-error-state > div { max-width: 480px; }
 .reach-error-state h1 { margin: 12px 0; color: var(--reach-text); font-family: var(--reach-font-display); font-size: 32px; font-weight: 800; letter-spacing: -0.06em; }
-.reach-error-state p  { margin-bottom: 22px; color: var(--reach-text-3); font-size: 14px; line-height: 1.7; }
+.reach-error-state p  { margin-bottom: 22px; color: var(--reach-text-2); font-size: 14px; line-height: 1.7; }
 
 /* ── PAGINATION ──────────────────────────────────────────────── */
 .reach-pagination {
@@ -2012,7 +2012,7 @@
   gap: 14px;
   padding: 16px 24px;
   border-top: 1px solid var(--reach-border);
-  color: var(--reach-text-3);
+  color: var(--reach-text-2);
   font-size: 11px;
 }
 
@@ -2087,4 +2087,50 @@
 
   .reach-summary-row { gap: 8px; }
   .reach-summary-row strong { font-size: 14px; }
+}
+
+/* ── PLACEHOLDER + INPUT CONTRAST ───────────────────────────── */
+/* Global placeholder brightness for all Reach form controls     */
+.reach-app-shell input::placeholder,
+.reach-app-shell select::placeholder,
+.reach-app-shell textarea::placeholder {
+  color: var(--reach-text-2);
+  opacity: 0.55;
+}
+
+/* Ensure select option dropdown is dark-themed on all OS */
+.reach-app-shell select option {
+  background: var(--reach-surface);
+  color: var(--reach-text);
+}
+
+/* Discovery toolbar count/hint text */
+.reach-discovery-toolbar > span:last-child {
+  color: var(--reach-text-2);
+  font-size: 11px;
+  white-space: nowrap;
+  margin-left: auto;
+}
+
+/* Nav group section labels — keep clearly readable */
+.reach-nav-group > p {
+  color: var(--reach-text-2) !important;
+}
+
+/* Sidebar icons — brighter to avoid disappearing */
+.reach-nav-icon {
+  color: var(--reach-text-2);
+}
+
+/* Table body — ensure strong/em values are bright */
+.reach-table td strong { color: var(--reach-text); font-weight: 700; }
+.reach-table td small  { color: var(--reach-text-2); }
+
+/* Form message colours */
+.reach-form-message.error { color: var(--reach-rose); }
+.reach-form-message.success { color: var(--reach-green); }
+
+/* Eyebrow text — always use accent colour so it's visible */
+.reach-eyebrow {
+  color: var(--reach-accent-2) !important;
 }
