@@ -973,8 +973,8 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                         localProp.KitchenServiceOutletId = kitchenOutlet.GetString();
                     if (propEl.TryGetProperty("address", out var address) && address.ValueKind != System.Text.Json.JsonValueKind.Null)
                         localProp.Address = address.GetString() ?? localProp.Address;
-                    if (propEl.TryGetProperty("city", out var city) && city.ValueKind != System.Text.Json.JsonValueKind.Null)
-                        localProp.City = city.GetString() ?? localProp.City;
+                    if (propEl.TryGetProperty("city", out var cityContact) && cityContact.ValueKind != System.Text.Json.JsonValueKind.Null)
+                        localProp.City = cityContact.GetString() ?? localProp.City;
                     if (propEl.TryGetProperty("state", out var state) && state.ValueKind != System.Text.Json.JsonValueKind.Null)
                         localProp.State = state.GetString() ?? localProp.State;
                     if (propEl.TryGetProperty("phone", out var phone) && phone.ValueKind != System.Text.Json.JsonValueKind.Null)
