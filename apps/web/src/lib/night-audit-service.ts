@@ -166,6 +166,7 @@ export async function getSystemIntegrity(ctx: TenantContext, propertyId: string)
     },
     select: {
       id: true,
+      propertyId: true,
       orderNumber: true,
       displayName: true,
       tableNumber: true,
@@ -188,6 +189,7 @@ export async function getSystemIntegrity(ctx: TenantContext, propertyId: string)
     .filter(o => o.items.length === 0 || o.items.some(item => !item.voidReason && Number(item.total || 0) > 0))
     .map(o => ({
     id: o.id,
+    propertyId: o.propertyId,
     orderNumber: o.orderNumber,
     displayName: o.displayName,
     tableNumber: o.tableNumber,

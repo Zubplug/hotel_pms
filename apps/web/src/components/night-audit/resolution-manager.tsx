@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Loader2, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { Loader2, AlertTriangle, CheckCircle2, ShieldAlert } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { FolioDetailView } from '@/components/finance/FolioDetailView';
@@ -15,6 +15,7 @@ export type ResolutionAction =
   | { type: 'DEPARTURES'; item: any }
   | { type: 'ROOM_DISCREPANCY'; item: any }
   | { type: 'POS_SESSION'; item: any }
+  | { type: 'POS_ORDER'; item: any }
   | { type: 'FRONTDESK_SHIFT'; item: any }
   | { type: 'FOLIO_PREVIEW'; item: any }
   | { type: 'ROOM_CHARGES_PREVIEW'; item: any }
@@ -47,6 +48,7 @@ export function ResolutionManager({ action, onClose, onSuccess }: Props) {
         {action.type === 'DEPARTURES' && <DepartureResolution item={action.item} onSuccess={onSuccess} onClose={onClose} />}
         {action.type === 'ROOM_DISCREPANCY' && <RoomDiscrepancyResolution item={action.item} onSuccess={onSuccess} onClose={onClose} />}
         {action.type === 'POS_SESSION' && <PosSessionResolution item={action.item} onSuccess={onSuccess} onClose={onClose} />}
+        {action.type === 'POS_ORDER' && <PosOrderVoidResolution item={action.item} onSuccess={onSuccess} onClose={onClose} />}
         {action.type === 'FRONTDESK_SHIFT' && <FrontdeskShiftResolution item={action.item} onSuccess={onSuccess} onClose={onClose} />}
         {action.type === 'FOLIO_PREVIEW' && <FolioPreview item={action.item} onClose={onClose} />}
         {action.type === 'ROOM_CHARGES_PREVIEW' && <RoomChargesPreview item={action.item} onClose={onClose} />}
@@ -59,6 +61,60 @@ export function ResolutionManager({ action, onClose, onSuccess }: Props) {
       </DialogContent>
     </Dialog>
   );
+}
+
+function PosOrderVoidResolution({ item, onSuccess, onClose }: { item: any; onSuccess: () => void; onClose: () => void }) {
+  const [reason, setReason] = useState('');
+  const [confirmed, setConfirmed] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const voidOrder = async () => {
+    if (!confirmed) return setError('Confirm that you investigated the order before voiding it.');
+    if (reason.trim().length < 5) return setError('Enter a reason of at least 5 characters.');
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await fetch(`/api/v1/night-audit/resolve/void-pos-order/${item.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ propertyId: item.propertyId, reason: reason.trim(), investigationConfirmed: true }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.error || 'Unable to void order');
+      toast.success(`Order #${item.orderNumber} voided and recorded`);
+      onSuccess();
+    } catch (err: any) {
+      setError(err.message || 'Unable to void order');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return <>
+    <DialogHeader>
+      <DialogTitle className="flex items-center gap-2 text-amber-200"><ShieldAlert className="h-5 w-5 text-amber-300" /> Investigate before voiding</DialogTitle>
+      <DialogDescription className="text-slate-400">Order #{item.orderNumber} · {item.outletName || 'POS order'}</DialogDescription>
+    </DialogHeader>
+    <div className="space-y-4 py-4 text-sm text-slate-300">
+      <div className="rounded-xl border border-amber-400/30 bg-amber-400/[0.08] p-4 leading-6 text-amber-100">
+        Verify the table, guest, waiter, items, payment status, and physical evidence before voiding. This action removes the order from the close blocker and cannot be casually reversed.
+      </div>
+      <label className="flex items-start gap-3 rounded-xl border border-white/[0.08] bg-white/[0.03] p-3 text-xs leading-5">
+        <input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} className="mt-1" />
+        <span>I investigated this order and confirm that voiding it is appropriate.</span>
+      </label>
+      <textarea value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Investigation findings and void reason" className="min-h-24 w-full rounded-xl border border-white/[0.1] bg-white/[0.04] p-3 text-sm text-white outline-none placeholder:text-slate-600 focus:border-amber-300/50" />
+      {error && <p className="rounded-lg border border-rose-400/20 bg-rose-400/10 p-3 text-sm text-rose-300">{error}</p>}
+    </div>
+    <DialogFooter>
+      <Button variant="ghost" onClick={onClose} disabled={loading} className="text-slate-300 hover:text-white">Cancel</Button>
+      <Button onClick={() => void voidOrder()} disabled={loading || !confirmed || reason.trim().length < 5} className="bg-amber-500 text-slate-950 hover:bg-amber-400">
+        {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <AlertTriangle className="mr-2 h-4 w-4" />}
+        {loading ? 'Voiding…' : 'Confirm void'}
+      </Button>
+    </DialogFooter>
+  </>;
 }
 
 function CashHandoverResolution({ item, onSuccess, onClose }: { item: any; onSuccess: () => void; onClose: () => void }) {

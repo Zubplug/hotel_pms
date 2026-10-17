@@ -92,6 +92,13 @@ export function SystemControlReview({ data, onResolve }: SystemControlReviewProp
                   }`}>
                     {order.paymentStatus}
                   </span>
+                  <button
+                    type="button"
+                    onClick={() => onResolve('POS_ORDER', order)}
+                    className="mt-1 rounded-lg border border-amber-300/30 bg-amber-300/10 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-amber-200 transition hover:bg-amber-300/20"
+                  >
+                    Void after investigation
+                  </button>
                 </div>
               </div>
             ))}
