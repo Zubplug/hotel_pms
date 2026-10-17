@@ -1,5 +1,5 @@
 import sharp from "sharp";
-import fs from "node:fs";
+import { REACH_FONT_WOFF2_BASE64 } from "./reach-creative-font";
 
 export const CREATIVE_TEMPLATES = {
   SQUARE: { width: 1080, height: 1080, assetType: "SOCIAL_SQUARE" },
@@ -12,7 +12,6 @@ export type CreativeTemplate = keyof typeof CREATIVE_TEMPLATES;
 const XML_ENTITIES: Record<string, string> = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" };
 const escapeXml = (value: string) => value.replace(/[&<>"']/g, (character) => XML_ENTITIES[character] || character);
 const wrap = (value: string, max = 28) => value.length <= max ? [value] : [value.slice(0, max - 1) + "…"];
-const embeddedFont = fs.readFileSync(require.resolve("next/dist/compiled/@vercel/og/Geist-Regular.ttf")).toString("base64");
 
 async function sourceBuffer(sourceUrl?: string | null) {
   if (!sourceUrl) return null;
@@ -42,7 +41,7 @@ export async function renderReachCreative(input: {
     : await sharp({ create: { width: dimensions.width, height: dimensions.height, channels: 4, background: { r: 16, g: 24, b: 40, alpha: 1 } } }).png().toBuffer();
   const y = input.template === "STORY" ? 820 : Math.round(dimensions.height * 0.55);
   const svg = `<svg width="${dimensions.width}" height="${dimensions.height}" xmlns="http://www.w3.org/2000/svg">
-    <style>@font-face{font-family:LodgeCoreSans;src:url(data:font/ttf;base64,${embeddedFont})} text{font-family:LodgeCoreSans}</style>
+    <style>@font-face{font-family:LodgeCoreSans;src:url(data:font/woff2;base64,${REACH_FONT_WOFF2_BASE64}) format("woff2")} text{font-family:LodgeCoreSans}</style>
     <defs><linearGradient id="shade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#07111f" stop-opacity=".15"/><stop offset=".72" stop-color="#07111f" stop-opacity=".86"/></linearGradient></defs>
     <rect width="100%" height="100%" fill="url(#shade)"/>
     <text x="64" y="82" fill="#b9f5d0" font-size="28" font-weight="700" letter-spacing="4">LODGECORE REACH</text>
