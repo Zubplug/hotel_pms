@@ -137,6 +137,22 @@ export default function PosApp() {
   const [pendingRoomServiceOrders, setPendingRoomServiceOrders] = useState<any[]>([]);
   const [showRoomServiceAlert, setShowRoomServiceAlert] = useState(false);
   const seenRoomServiceIds = useRef<Set<string>>(new Set());
+  const roomServiceChimeTimer = useRef<number | null>(null);
+
+  const stopRoomServiceChime = useCallback(() => {
+    if (roomServiceChimeTimer.current !== null) {
+      window.clearInterval(roomServiceChimeTimer.current);
+      roomServiceChimeTimer.current = null;
+    }
+  }, []);
+
+  const startRoomServiceChime = useCallback(() => {
+    stopRoomServiceChime();
+    void playRoomServiceChime();
+    roomServiceChimeTimer.current = window.setInterval(() => {
+      void playRoomServiceChime();
+    }, 5000);
+  }, [stopRoomServiceChime]);
 
   const pollRoomServiceOrders = useCallback(async () => {
     try {
@@ -172,15 +188,21 @@ export default function PosApp() {
       const newOrders = orders.filter(o => !seenRoomServiceIds.current.has(o.id));
       if (newOrders.length > 0) {
         newOrders.forEach(o => seenRoomServiceIds.current.add(o.id));
-        // Fire audio chime for each new order (browser may ignore if AudioContext suspended)
-        void unlockAudio().then(() => playRoomServiceChime()).catch(() => {});
+        // Keep alerting until the order is acknowledged or rejected.
+        void unlockAudio().then(() => startRoomServiceChime()).catch(() => startRoomServiceChime());
         setShowRoomServiceAlert(true);
       }
       setPendingRoomServiceOrders(orders);
     } catch {
       // Polling errors are non-critical — suppress silently
     }
-  }, [isDesktopMode, operatorToken, posSessionId, provider.pos]);
+  }, [isDesktopMode, operatorToken, posSessionId, provider.pos, startRoomServiceChime]);
+
+  useEffect(() => {
+    if (pendingRoomServiceOrders.length === 0) stopRoomServiceChime();
+  }, [pendingRoomServiceOrders.length, stopRoomServiceChime]);
+
+  useEffect(() => stopRoomServiceChime, [stopRoomServiceChime]);
 
   useEffect(() => {
     pollRoomServiceOrders();

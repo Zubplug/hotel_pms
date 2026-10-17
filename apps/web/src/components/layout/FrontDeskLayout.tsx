@@ -75,6 +75,7 @@ export function FrontDeskLayout({ children, enabledModules = [], licenseSnapshot
   const [showMasterCardModal, setShowMasterCardModal] = useState(false);
   const [roomChargeNotification, setRoomChargeNotification] = useState<FrontDeskRoomChargeNotification | null>(null);
   const lastRoomChargeNotificationId = React.useRef<string | null>(null);
+  const roomChargeChimeTimer = React.useRef<number | null>(null);
 
   const isDesktop = process.env.NEXT_PUBLIC_IS_DESKTOP === 'true';
   const visibleModules = isDesktop || isDesktopMode ? cachedModules : enabledModules;
@@ -114,7 +115,23 @@ export function FrontDeskLayout({ children, enabledModules = [], licenseSnapshot
     }
   }, [enabledModules, licenseSnapshot, propertyId]);
 
+  const stopRoomChargeChime = React.useCallback(() => {
+    if (roomChargeChimeTimer.current !== null) {
+      window.clearInterval(roomChargeChimeTimer.current);
+      roomChargeChimeTimer.current = null;
+    }
+  }, []);
+
+  const startRoomChargeChime = React.useCallback(() => {
+    stopRoomChargeChime();
+    void playRoomServiceChime();
+    roomChargeChimeTimer.current = window.setInterval(() => {
+      void playRoomServiceChime();
+    }, 5000);
+  }, [stopRoomChargeChime]);
+
   const dismissRoomChargeNotification = () => {
+    stopRoomChargeChime();
     if (roomChargeNotification) {
       void fetch('/api/v1/frontdesk/notifications', {
         method: 'PATCH',
@@ -137,7 +154,7 @@ export function FrontDeskLayout({ children, enabledModules = [], licenseSnapshot
         if (!cancelled && next) {
           if (lastRoomChargeNotificationId.current !== next.id) {
             lastRoomChargeNotificationId.current = next.id;
-            void playRoomServiceChime();
+            startRoomChargeChime();
           }
           const metadata = next.metadata || {};
           setRoomChargeNotification({
@@ -158,8 +175,12 @@ export function FrontDeskLayout({ children, enabledModules = [], licenseSnapshot
     };
     void poll();
     const timer = window.setInterval(() => void poll(), 10000);
-    return () => { cancelled = true; window.clearInterval(timer); };
-  }, [isOnline, propertyId, status]);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+      stopRoomChargeChime();
+    };
+  }, [isOnline, propertyId, status, startRoomChargeChime, stopRoomChargeChime]);
 
   const { data: res } = useQuery({
     queryKey: ['frontdesk', 'dashboard', propertyId],
