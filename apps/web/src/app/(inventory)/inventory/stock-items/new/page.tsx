@@ -169,7 +169,7 @@ export default function NewStockItemPage() {
                   <option key={type.value} value={type.value}>{type.label}</option>
                 ))}
               </select>
-              <p className="text-xs text-slate-500">Stock types are loaded from the database schema. This creates one item in the selected main warehouse; an outlet item is created only when stock is transferred there.</p>
+              <p className="text-xs text-slate-500">Stock types are loaded from the database schema. This creates the item in the selected main warehouse. Outlet stock records are created automatically when stock is transferred to an outlet, and transfers are required to add outlet quantity.</p>
             </div>
 
             <div className="space-y-2">

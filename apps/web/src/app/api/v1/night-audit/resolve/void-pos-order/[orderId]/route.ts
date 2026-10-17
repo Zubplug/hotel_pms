@@ -45,15 +45,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ ord
       return NextResponse.json({ error: 'POS order changes are temporarily paused while Night Audit is posting' }, { status: 409 });
     }
 
-    const inventoryContext = {
-      organizationId: order.property.organizationId,
-      userId: session.user.id,
-      role,
-      permissions: [],
-      propertyIds: [order.propertyId],
-      outletIds: [order.outletId],
-    } as any;
-    await InventoryService.restoreSale(inventoryContext, order.id, session.user.id, `night_audit_void_${order.id}`);
+    await InventoryService.restoreSale(order.id, session.user.id, `night_audit_void_${order.id}`);
 
     const updated = await prisma.posOrder.update({
       where: { id: order.id },
