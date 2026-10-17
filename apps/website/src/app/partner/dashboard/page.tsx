@@ -17,14 +17,14 @@ export default async function PartnerDashboardPage() {
     prisma.referralCampaign.findMany({ where: scope, include: { property: { select: { name: true } } }, orderBy: { createdAt: "desc" }, take: 12 }),
     prisma.referralBooking.count({ where: scope }),
     prisma.referralBooking.count({ where: { ...scope, status: "FULFILLED" } }),
-    prisma.referralClick.findMany({ where: scope, select: { visitorId: true, referralToken: true } }),
+    prisma.referralClick.findMany({ where: scope, select: { id: true, referralToken: true } }),
     prisma.referralCommission.groupBy({ by: ["status"], where: scope, _sum: { amount: true }, _count: { _all: true } }),
     prisma.referralPartnerWallet.findUnique({ where: { partnerId: partner.id }, select: { availableBalance: true, currency: true } }),
     prisma.referralBooking.count({ where: { ...scope, commission: { is: { status: { in: ["APPROVED", "PAYABLE", "PROCESSING", "PAID"] } } } } }),
     prisma.referralClick.findMany({ where: scope, orderBy: { occurredAt: "desc" }, take: 6, include: { property: { select: { name: true } }, campaign: { select: { name: true } } } }),
     prisma.referralBooking.findMany({ where: scope, orderBy: { createdAt: "desc" }, take: 8, include: { property: { select: { name: true } }, campaign: { select: { name: true } }, commission: { select: { amount: true, status: true, currency: true } } } }),
   ]);
-  const uniqueClickKeys = new Set(clicks.map((click) => click.visitorId || click.referralToken));
+  const uniqueClickKeys = new Set(clicks.map((click) => click.referralToken));
   const clickCount = uniqueClickKeys.size;
   const commissions = Object.fromEntries(commissionGroups.map((group) => [group.status, { amount: numeric(group._sum.amount), count: group._count._all }]));
   const totalCommission = Object.values(commissions).reduce((sum, group) => sum + group.amount, 0);
