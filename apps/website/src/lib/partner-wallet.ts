@@ -1,6 +1,8 @@
 import { createFlutterwaveTransfer, prisma } from "@hotel-pms/db";
 import { getPartnerEligibleProperties } from "@/lib/partner-reach";
 import { decryptPaymentCredential } from "@/lib/payment-providers/credentials";
+import { resolveSecretRef } from "@/lib/payment-providers/booking-account";
+import { partnerPropertyWalletSnapshot } from "@/lib/partner-property-wallet";
 
 const PAYABLE_STATUSES = ["APPROVED", "PAYABLE", "PAID"];
 
@@ -71,16 +73,19 @@ function isFundingError(error: unknown) {
 async function propertyFlutterwaveSecret(organizationId: string, propertyId: string) {
   const account = await prisma.bookingPaymentAccount.findFirst({
     where: { organizationId, propertyId, provider: "FLUTTERWAVE", mode: "CUSTOMER", isActive: true },
-    select: { secretCiphertext: true, payrollEnabled: true },
+    select: { secretCiphertext: true, secretRef: true, payrollEnabled: true },
   });
-  if (!account?.payrollEnabled || !account.secretCiphertext) throw new Error("Property Flutterwave payout account is not enabled");
-  return decryptPaymentCredential(account.secretCiphertext);
+  if (!account?.payrollEnabled) throw new Error("Property Flutterwave payout account is not enabled");
+  return account.secretCiphertext ? decryptPaymentCredential(account.secretCiphertext) : resolveSecretRef(account.secretRef, "FLW_SECRET_KEY");
 }
 
 export async function attemptPartnerWithdrawal(payoutId: string) {
   const payout = await prisma.referralPayout.findUnique({ where: { id: payoutId }, include: { partner: true } });
   if (!payout || !["PENDING", "PROCESSING"].includes(payout.status)) return payout;
-  const profile = (payout.partner.payoutProfile || {}) as Record<string, unknown>;
+  const storedProfile = (payout.partner.payoutProfile || {}) as Record<string, unknown>;
+  const accounts = storedProfile.accounts && typeof storedProfile.accounts === "object" ? storedProfile.accounts as Record<string, unknown> : {};
+  const profile = (accounts[payout.propertyId] && typeof accounts[payout.propertyId] === "object" ? accounts[payout.propertyId] : storedProfile) as Record<string, unknown>;
+  if (String(profile.propertyId || "") !== payout.propertyId) throw new Error("Payout account is not verified for this property");
   const bankCode = String(profile.bankCode || "").trim();
   const accountNumber = String(profile.accountNumber || "").replace(/\D/g, "");
   const beneficiaryName = String(profile.accountName || payout.partner.displayName).trim();
@@ -102,11 +107,12 @@ export async function attemptPartnerWithdrawal(payoutId: string) {
 }
 
 export async function partnerWalletSnapshot(partnerId: string) {
-  const wallet = await syncPartnerWallet(partnerId);
-  const [transactions, payouts, properties] = await Promise.all([
-    prisma.referralPartnerWalletTransaction.findMany({ where: { partnerId }, orderBy: { createdAt: "desc" }, take: 30 }),
-    prisma.referralPayout.findMany({ where: { partnerId }, orderBy: { createdAt: "desc" }, take: 20, select: { id: true, propertyId: true, amount: true, currency: true, status: true, failureReason: true, createdAt: true, processedAt: true } }),
-    getPartnerEligibleProperties(),
-  ]);
-  return { wallet, transactions, payouts, properties };
+  const snapshot = await partnerPropertyWalletSnapshot(partnerId);
+  const wallet = {
+    id: snapshot.wallets[0]?.id || partnerId,
+    currency: snapshot.wallets[0]?.currency || "NGN",
+    availableBalance: snapshot.wallets.reduce((sum, item) => sum + Number(item.availableBalance), 0),
+    status: snapshot.wallets.some((item) => item.status === "ACTIVE") ? "ACTIVE" : "SUSPENDED",
+  };
+  return { ...snapshot, wallet };
 }

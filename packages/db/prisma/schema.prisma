@@ -155,6 +155,8 @@ model Property {
   reachMedia            ReachPropertyMedia[]
   reachCreativeAssets   ReachCreativeAsset[]
   reachCreativeGenerations ReachCreativeGeneration[]
+  partnerPropertyWallets ReferralPartnerPropertyWallet[]
+  partnerPropertyWalletTransactions ReferralPartnerPropertyWalletTransaction[]
 
   cashHandovers            CashHandover[]
   bankDeposits             BankDeposit[]
@@ -7448,6 +7450,8 @@ model ReferralPartner {
   sessions     ReferralPartnerSession[]
   wallet       ReferralPartnerWallet?
   walletTransactions ReferralPartnerWalletTransaction[]
+  propertyWallets ReferralPartnerPropertyWallet[]
+  propertyWalletTransactions ReferralPartnerPropertyWalletTransaction[]
 
   @@index([email])
   @@index([status, verificationStatus])
@@ -7619,6 +7623,7 @@ model ReferralCommission {
   ledgerEntries ReferralLedgerEntry[]
   payoutItems ReferralPayoutItem[]
   walletTransactions ReferralPartnerWalletTransaction[]
+  propertyWalletTransactions ReferralPartnerPropertyWalletTransaction[]
 
   @@index([propertyId, status])
   @@index([partnerId, status])
@@ -7669,6 +7674,7 @@ model ReferralPayout {
   commissions  ReferralPayoutItem[]
   ledgerEntries ReferralLedgerEntry[]
   walletTransactions ReferralPartnerWalletTransaction[]
+  propertyWalletTransactions ReferralPartnerPropertyWalletTransaction[]
 
   @@index([partnerId, status, createdAt])
 }
@@ -7711,6 +7717,55 @@ model ReferralPartnerWalletTransaction {
 
   @@index([partnerId, createdAt])
   @@index([walletId, createdAt])
+  @@index([payoutId])
+}
+
+model ReferralPartnerPropertyWallet {
+  id              String   @id @default(uuid()) @db.Uuid
+  partnerId       String   @db.Uuid
+  propertyId      String   @db.Uuid
+  currency        String   @default("NGN")
+  availableBalance Decimal @default(0) @db.Decimal(18, 4)
+  status          String   @default("ACTIVE") // ACTIVE | SUSPENDED | CLOSED
+  createdAt       DateTime @default(now()) @db.Timestamptz
+  updatedAt       DateTime @updatedAt @db.Timestamptz
+
+  partner       ReferralPartner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  property      Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  transactions  ReferralPartnerPropertyWalletTransaction[]
+
+  @@unique([partnerId, propertyId])
+  @@index([partnerId, status, updatedAt])
+  @@index([propertyId, status])
+}
+
+model ReferralPartnerPropertyWalletTransaction {
+  id                   String   @id @default(uuid()) @db.Uuid
+  walletId             String   @db.Uuid
+  partnerId            String   @db.Uuid
+  propertyId           String   @db.Uuid
+  commissionId         String?  @db.Uuid
+  payoutId             String?  @db.Uuid
+  type                 String   // COMMISSION_CREDIT | COMMISSION_REVERSAL | WITHDRAWAL_HOLD | WITHDRAWAL_RELEASE | ADJUSTMENT
+  status               String   @default("COMPLETED") // PENDING | COMPLETED | REVERSED
+  amount               Decimal  @db.Decimal(18, 4)
+  balanceAfter         Decimal  @db.Decimal(18, 4)
+  currency             String   @default("NGN")
+  idempotencyKey       String   @unique
+  metadata             Json?
+  createdAt            DateTime @default(now()) @db.Timestamptz
+  completedAt          DateTime?
+
+  wallet      ReferralPartnerPropertyWallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  partner     ReferralPartner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  property    Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  commission  ReferralCommission? @relation(fields: [commissionId], references: [id], onDelete: SetNull)
+  payout      ReferralPayout? @relation(fields: [payoutId], references: [id], onDelete: SetNull)
+
+  @@index([partnerId, createdAt])
+  @@index([walletId, createdAt])
+  @@index([propertyId, createdAt])
+  @@index([commissionId])
   @@index([payoutId])
 }
 

@@ -3,6 +3,7 @@ import crypto from "node:crypto";
 import prisma from "@hotel-pms/db";
 import { getPartnerSession } from "@/lib/partner-auth";
 import { attemptPartnerWithdrawal, partnerWalletSnapshot } from "@/lib/partner-wallet";
+import { syncPartnerPropertyWallets } from "@/lib/partner-property-wallet";
 
 export async function GET() {
   const partner = await getPartnerSession();
@@ -10,7 +11,8 @@ export async function GET() {
   const snapshot = await partnerWalletSnapshot(partner.id);
   return NextResponse.json({
     wallet: { id: snapshot.wallet.id, currency: snapshot.wallet.currency, availableBalance: Number(snapshot.wallet.availableBalance), status: snapshot.wallet.status },
-    transactions: snapshot.transactions.map((row: any) => ({ ...row, amount: Number(row.amount), balanceAfter: Number(row.balanceAfter), createdAt: row.createdAt.toISOString() })),
+    propertyWallets: snapshot.wallets.map((row: any) => ({ id: row.id, propertyId: row.propertyId, propertyName: row.property.name, currency: row.currency, availableBalance: Number(row.availableBalance), status: row.status, minimumPayout: Number(row.property.referralProgram?.minimumPayout || 0) })),
+    transactions: snapshot.transactions.map((row: any) => ({ ...row, propertyName: row.property.name, amount: Number(row.amount), balanceAfter: Number(row.balanceAfter), createdAt: row.createdAt.toISOString() })),
     payouts: snapshot.payouts.map((row: any) => ({ ...row, amount: Number(row.amount), createdAt: row.createdAt.toISOString(), processedAt: row.processedAt?.toISOString() || null })),
     properties: snapshot.properties.map((property: any) => ({ id: property.id, name: property.name, baseCurrency: property.baseCurrency, minimumPayout: Number(property.referralProgram?.minimumPayout || 0) })),
   });
@@ -23,17 +25,20 @@ export async function POST(request: NextRequest) {
   const propertyId = String(body.propertyId || "");
   const amount = Number(body.amount);
   if (!propertyId || !Number.isFinite(amount) || amount <= 0) return NextResponse.json({ error: "A valid property and withdrawal amount are required" }, { status: 400 });
-  const eligible = await prisma.property.findFirst({ where: { id: propertyId, isActive: true, referralProgram: { is: { enabled: true } }, entitlements: { some: { productCode: "ADDON_REACH", status: "ACTIVE" } } }, select: { id: true, organizationId: true, baseCurrency: true, referralProgram: { select: { minimumPayout: true } } } });
+  const eligible = await prisma.property.findFirst({ where: { id: propertyId, isActive: true, referralProgram: { is: { enabled: true } }, entitlements: { some: { productCode: "ADDON_REACH", status: "ACTIVE" } }, referralCampaigns: { some: { partnerId: partner.id } } }, select: { id: true, organizationId: true, baseCurrency: true, referralProgram: { select: { minimumPayout: true } } } });
   if (!eligible) return NextResponse.json({ error: "This property is not currently eligible for Reach withdrawals" }, { status: 403 });
   const minimum = Number(eligible.referralProgram?.minimumPayout || 0);
   if (amount < minimum) return NextResponse.json({ error: `The minimum withdrawal is ${eligible.baseCurrency} ${minimum.toLocaleString("en-NG")}` }, { status: 409 });
+  await syncPartnerPropertyWallets(partner.id);
   const wallet = await prisma.$transaction(async (tx) => {
-    const current = await tx.referralPartnerWallet.upsert({ where: { partnerId: partner.id }, update: {}, create: { partnerId: partner.id, currency: eligible.baseCurrency } });
-    const reserved = await tx.referralPartnerWallet.updateMany({ where: { id: current.id, status: "ACTIVE", availableBalance: { gte: amount } }, data: { availableBalance: { decrement: amount } } });
+    const current = await tx.referralPartnerPropertyWallet.findUnique({ where: { partnerId_propertyId: { partnerId: partner.id, propertyId } } });
+    if (!current) throw new Error("PROPERTY_WALLET_NOT_FOUND");
+    await tx.$queryRaw`SELECT id FROM "ReferralPartnerPropertyWallet" WHERE id = ${current.id}::uuid FOR UPDATE`;
+    const reserved = await tx.referralPartnerPropertyWallet.updateMany({ where: { id: current.id, status: "ACTIVE", availableBalance: { gte: amount } }, data: { availableBalance: { decrement: amount } } });
     if (reserved.count !== 1) throw new Error("INSUFFICIENT_WALLET_BALANCE");
     const after = Number(current.availableBalance) - amount;
     const payout = await tx.referralPayout.create({ data: { organizationId: eligible.organizationId, propertyId, partnerId: partner.id, amount, currency: eligible.baseCurrency, status: "PROCESSING", payoutReference: `REACH-${crypto.randomUUID().replaceAll("-", "").slice(0, 16).toUpperCase()}`, settlementMethod: "FLUTTERWAVE_TRANSFER" } });
-    await tx.referralPartnerWalletTransaction.create({ data: { walletId: current.id, partnerId: partner.id, payoutId: payout.id, type: "WITHDRAWAL_HOLD", amount: -amount, balanceAfter: after, currency: eligible.baseCurrency, idempotencyKey: `REACH_PARTNER_WITHDRAWAL:${payout.id}`, completedAt: new Date() } });
+    await tx.referralPartnerPropertyWalletTransaction.create({ data: { walletId: current.id, partnerId: partner.id, propertyId, payoutId: payout.id, type: "WITHDRAWAL_HOLD", amount: -amount, balanceAfter: after, currency: eligible.baseCurrency, idempotencyKey: `REACH_PARTNER_PROPERTY_WITHDRAWAL:${payout.id}`, completedAt: new Date() } });
     return payout;
   });
   const result = await attemptPartnerWithdrawal(wallet.id);

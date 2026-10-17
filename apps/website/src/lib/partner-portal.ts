@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import prisma from "@hotel-pms/db";
 import { getPartnerSession } from "@/lib/partner-auth";
 import { getPartnerEligibleProperties } from "@/lib/partner-reach";
+import { getPartnerAggregateWalletBalance } from "@/lib/partner-property-wallet";
 
 export async function requirePartnerPortal() {
   const partner = await getPartnerSession();
@@ -15,5 +16,5 @@ export async function getPartnerProperties(partnerId: string, organizationId?: s
 }
 
 export async function getPartnerWalletBalance(partnerId: string) {
-  return prisma.referralPartnerWallet.findUnique({ where: { partnerId }, select: { availableBalance: true, currency: true } });
+  return getPartnerAggregateWalletBalance(partnerId);
 }

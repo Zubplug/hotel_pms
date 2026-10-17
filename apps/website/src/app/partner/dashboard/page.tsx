@@ -4,6 +4,7 @@ import { getPartnerSession } from "@/lib/partner-auth";
 import { getPartnerEligibleProperties } from "@/lib/partner-reach";
 import { PartnerDashboard } from "./PartnerDashboard";
 import { reachShareUrl } from "@/lib/reach-links";
+import { getPartnerAggregateWalletBalance } from "@/lib/partner-property-wallet";
 
 const numeric = (value: unknown) => Number(value || 0);
 
@@ -19,7 +20,7 @@ export default async function PartnerDashboardPage() {
     prisma.referralBooking.count({ where: { ...scope, status: "FULFILLED" } }),
     prisma.referralClick.findMany({ where: scope, select: { id: true, referralToken: true } }),
     prisma.referralCommission.groupBy({ by: ["status"], where: scope, _sum: { amount: true }, _count: { _all: true } }),
-    prisma.referralPartnerWallet.findUnique({ where: { partnerId: partner.id }, select: { availableBalance: true, currency: true } }),
+    getPartnerAggregateWalletBalance(partner.id),
     prisma.referralBooking.count({ where: { ...scope, commission: { is: { status: { in: ["APPROVED", "PAYABLE", "PROCESSING", "PAID"] } } } } }),
     prisma.referralClick.findMany({ where: scope, orderBy: { occurredAt: "desc" }, take: 6, include: { property: { select: { name: true } }, campaign: { select: { name: true } } } }),
     prisma.referralBooking.findMany({ where: scope, orderBy: { createdAt: "desc" }, take: 8, include: { property: { select: { name: true } }, campaign: { select: { name: true } }, commission: { select: { amount: true, status: true, currency: true } } } }),
