@@ -51,11 +51,12 @@ export async function renderReachCreative(input: {
   const cardHeight = input.template === "STORY" ? 390 : input.template === "SQUARE" ? 320 : 220;
   const cardY = dimensions.height - cardHeight - (input.template === "STORY" ? 84 : 56);
   const qrSize = input.template === "STORY" ? 220 : input.template === "SQUARE" ? 170 : 132;
-  const qrLeft = dimensions.width - 64 - qrSize;
+  // Keep the QR white frame fully inset from the card's right edge.
+  const qrLeft = dimensions.width - 120 - qrSize;
   const y = cardY + (input.template === "STORY" ? 96 : 76);
   const titleEnd = y + propertyLines.length * titleSize;
   const priceY = Math.max(cardY + (input.template === "STORY" ? 170 : input.template === "SQUARE" ? 132 : 116), titleEnd + 26);
-  const campaignY = priceY + (input.template === "STORY" ? 44 : input.template === "SQUARE" ? 36 : 30);
+  const campaignY = priceY + (input.template === "STORY" ? 56 : input.template === "SQUARE" ? 54 : 46);
   const ctaY = cardY + cardHeight - 42;
   const campaignName = input.campaignName.replace(/\s*[—-]\s*Direct Booking Campaign\s*$/i, "");
   const campaignLines = wrap(campaignName.trim().toLowerCase() === input.propertyName.trim().toLowerCase() ? "Direct booking" : campaignName, input.template === "STORY" ? 24 : 30);
@@ -66,13 +67,15 @@ export async function renderReachCreative(input: {
     <rect x="64" y="${cardY}" width="${dimensions.width - 128}" height="${cardHeight}" rx="32" fill="#06101de8" stroke="#b9f5d0" stroke-opacity=".55"/>
     <text x="96" y="${y}" fill="white" font-family="Geist" font-size="${titleSize}" font-weight="800">${escapeXml(propertyLines[0])}</text>
     ${propertyLines[1] ? `<text x="96" y="${y + titleSize + 10}" fill="white" font-family="Geist" font-size="${titleSize}" font-weight="800">${escapeXml(propertyLines[1])}</text>` : ""}
-    <text x="96" y="${priceY}" fill="#b9f5d0" font-family="Geist" font-size="${input.template === "STORY" ? 36 : input.template === "LANDSCAPE" ? 24 : 30}" font-weight="800">${escapeXml(input.startingPrice ? `Rooms from ${input.startingPrice} / night` : "Book direct for available rates")}</text>
+    <rect x="96" y="${priceY - 38}" width="${input.template === "LANDSCAPE" ? 350 : 410}" height="60" rx="18" fill="#b9f5d0" fill-opacity=".14" stroke="#b9f5d0" stroke-opacity=".45"/>
+    <text x="118" y="${priceY - 12}" fill="#b9f5d0" font-family="DejaVu Sans, Arial, sans-serif" font-size="16" font-weight="700" letter-spacing="2">${input.startingPrice ? "ROOMS FROM" : "CHECK RATES"}</text>
+    <text x="118" y="${priceY + 14}" fill="white" font-family="DejaVu Sans, Arial, sans-serif" font-size="${input.template === "STORY" ? 32 : input.template === "LANDSCAPE" ? 22 : 28}" font-weight="800">${escapeXml(input.startingPrice || "Available on booking")}${input.startingPrice ? " / night" : ""}</text>
     <text x="96" y="${campaignY}" fill="#b9f5d0" font-family="Geist" font-size="${input.template === "STORY" ? 32 : 26}" font-weight="600">${escapeXml(campaignLines[0])}</text>
     ${campaignLines[1] ? `<text x="96" y="${campaignY + 36}" fill="#b9f5d0" font-family="Geist" font-size="${input.template === "STORY" ? 32 : 26}" font-weight="600">${escapeXml(campaignLines[1])}</text>` : ""}
     <text x="96" y="${ctaY}" fill="white" font-family="Geist" font-size="24" font-weight="700">Book direct today · Scan to book</text>
     <rect x="${qrLeft - 12}" y="${cardY + (cardHeight - qrSize) / 2 - 12}" width="${qrSize + 24}" height="${qrSize + 24}" rx="18" fill="white"/>
   </svg>`;
-  const textOverlay = new Resvg(svg, { font: { loadSystemFonts: false, fontFiles: [ensureEmbeddedFont()], defaultFontFamily: "Geist" } }).render().asPng();
+  const textOverlay = new Resvg(svg, { font: { loadSystemFonts: true, fontFiles: [ensureEmbeddedFont()], defaultFontFamily: "Geist" } }).render().asPng();
   const qr = await qrToBuffer(input.referralUrl, { type: "png", width: qrSize, margin: 1, errorCorrectionLevel: "M", color: { dark: "#07111f", light: "#ffffff" } });
   const buffer = await sharp(background).composite([{ input: textOverlay, blend: "over" }, { input: qr, left: qrLeft, top: Math.round(cardY + (cardHeight - qrSize) / 2), blend: "over" }]).png().toBuffer();
   return { buffer, ...dimensions, mimeType: "image/png" };
