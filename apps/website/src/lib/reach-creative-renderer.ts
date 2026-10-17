@@ -58,6 +58,12 @@ export async function renderReachCreative(input: {
   const priceY = Math.max(cardY + (input.template === "STORY" ? 170 : input.template === "SQUARE" ? 132 : 116), titleEnd + 26);
   const campaignY = priceY + (input.template === "STORY" ? 56 : input.template === "SQUARE" ? 54 : 46);
   const ctaY = cardY + cardHeight - 42;
+  const nairaAmount = input.startingPrice?.replace(/^₦\s*/, "") || null;
+  const priceSize = input.template === "STORY" ? 32 : input.template === "LANDSCAPE" ? 22 : 28;
+  const priceBadgeWidth = Math.min(
+    input.template === "STORY" ? 500 : 430,
+    Math.max(input.template === "LANDSCAPE" ? 270 : 300, 220 + (nairaAmount?.length || 16) * (input.template === "LANDSCAPE" ? 13 : 16)),
+  );
   const campaignName = input.campaignName.replace(/\s*[—-]\s*Direct Booking Campaign\s*$/i, "");
   const campaignLines = wrap(campaignName.trim().toLowerCase() === input.propertyName.trim().toLowerCase() ? "Direct booking" : campaignName, input.template === "STORY" ? 24 : 30);
   const svg = `<svg width="${dimensions.width}" height="${dimensions.height}" xmlns="http://www.w3.org/2000/svg">
@@ -67,9 +73,13 @@ export async function renderReachCreative(input: {
     <rect x="64" y="${cardY}" width="${dimensions.width - 128}" height="${cardHeight}" rx="32" fill="#06101de8" stroke="#b9f5d0" stroke-opacity=".55"/>
     <text x="96" y="${y}" fill="white" font-family="Geist" font-size="${titleSize}" font-weight="800">${escapeXml(propertyLines[0])}</text>
     ${propertyLines[1] ? `<text x="96" y="${y + titleSize + 10}" fill="white" font-family="Geist" font-size="${titleSize}" font-weight="800">${escapeXml(propertyLines[1])}</text>` : ""}
-    <rect x="96" y="${priceY - 38}" width="${input.template === "LANDSCAPE" ? 350 : 410}" height="60" rx="18" fill="#b9f5d0" fill-opacity=".14" stroke="#b9f5d0" stroke-opacity=".45"/>
+    <rect x="96" y="${priceY - 38}" width="${priceBadgeWidth}" height="60" rx="18" fill="#b9f5d0" fill-opacity=".14" stroke="#b9f5d0" stroke-opacity=".45"/>
     <text x="118" y="${priceY - 12}" fill="#b9f5d0" font-family="DejaVu Sans, Arial, sans-serif" font-size="16" font-weight="700" letter-spacing="2">${input.startingPrice ? "ROOMS FROM" : "CHECK RATES"}</text>
-    <text x="118" y="${priceY + 14}" fill="white" font-family="DejaVu Sans, Arial, sans-serif" font-size="${input.template === "STORY" ? 32 : input.template === "LANDSCAPE" ? 22 : 28}" font-weight="800">${escapeXml(input.startingPrice || "Available on booking")}${input.startingPrice ? " / night" : ""}</text>
+    ${nairaAmount ? `<g fill="white" stroke="white" stroke-linecap="round">
+      <text x="118" y="${priceY + 14}" fill="white" stroke="none" font-family="Geist" font-size="${priceSize}" font-weight="800">N</text>
+      <path d="M119 ${priceY - 7} L136 ${priceY - 7} M119 ${priceY + 3} L136 ${priceY + 3} M123 ${priceY - 15} L132 ${priceY + 21}" stroke-width="2"/>
+      <text x="148" y="${priceY + 14}" fill="white" stroke="none" font-family="Geist" font-size="${priceSize}" font-weight="800">${escapeXml(nairaAmount)} / night</text>
+    </g>` : `<text x="118" y="${priceY + 14}" fill="white" font-family="Geist" font-size="${priceSize}" font-weight="800">Available on booking</text>`}
     <text x="96" y="${campaignY}" fill="#b9f5d0" font-family="Geist" font-size="${input.template === "STORY" ? 32 : 26}" font-weight="600">${escapeXml(campaignLines[0])}</text>
     ${campaignLines[1] ? `<text x="96" y="${campaignY + 36}" fill="#b9f5d0" font-family="Geist" font-size="${input.template === "STORY" ? 32 : 26}" font-weight="600">${escapeXml(campaignLines[1])}</text>` : ""}
     <text x="96" y="${ctaY}" fill="white" font-family="Geist" font-size="24" font-weight="700">Book direct today · Scan to book</text>
