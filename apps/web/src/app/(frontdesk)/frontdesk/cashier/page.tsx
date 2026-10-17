@@ -26,6 +26,7 @@ type ShiftSummary = {
 
 const money = (value: unknown) => `₦${Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const dateTime = (value?: string | null) => value ? new Date(value).toLocaleString() : '—';
+const businessDateLabel = (value?: string | null) => value ? new Date(value).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : 'Current business date';
 const formatRooms = (value: unknown) => String(value ?? '').split(',').map((room) => formatRoomNumber(room.trim())).filter(Boolean).join(', ');
 const compactReference = (value: unknown) => {
   const reference = String(value ?? '').trim();
@@ -180,7 +181,40 @@ export default function FrontdeskCashierPage() {
       <h2 className="mt-8 border-b pb-2 text-lg font-bold">Folio Payments</h2><table className="mt-3 w-full border-collapse text-sm"><thead><tr className="border-b-2 border-slate-800 text-left"><th className="py-2">Room</th><th className="py-2">Guest Name</th><th className="py-2 text-right">Amount / Deposit</th><th className="py-2">Method</th></tr></thead><tbody>{(dailyReport.rows || []).filter((row: any) => row.kind === 'PAYMENT').map((row: any, index: number) => <tr key={`daily-folio-payment-${row.date}-${index}`} className="border-b"><td className="py-2">{formatRooms(row.roomNumber || row.room || row.rooms?.join(', ')) || '—'}</td><td className="py-2">{row.guestName || row.guest || '—'}</td><td className="py-2 text-right font-semibold">{money(row.amount)}</td><td className="py-2">{row.method || 'Payment'}</td></tr>)}<tr className="bg-slate-50"><td colSpan={2} className="py-3 px-2 font-bold text-right">Total Folio Payments</td><td className="py-3 px-2 text-right font-bold">{money((dailyReport.rows || []).filter((row: any) => row.kind === 'PAYMENT').reduce((sum: number, row: any) => sum + Number(row.amount || 0), 0))}</td><td /></tr></tbody></table>
       <div className="mt-14 grid grid-cols-3 gap-8 text-xs text-slate-500"><div className="border-t pt-2">Front Desk signature</div><div className="border-t pt-2">Auditor signature</div><div className="border-t pt-2">General Cashier signature</div></div><p className="mt-10 text-center text-[10px] text-slate-400">Generated from the terminal&apos;s offline transaction ledger · {new Date().toLocaleString()}</p>
     </div>}
-    <style jsx global>{`@media print { @page { size: A4 portrait; margin: 12mm; } html, body, body > *, [data-slot="dialog-content"] { height: auto !important; min-height: 0 !important; max-height: none !important; overflow: visible !important; } body * { visibility: hidden !important; } #frontdesk-${printTarget || 'shift'}-a4-report, #frontdesk-${printTarget || 'shift'}-a4-report * { visibility: visible !important; } #frontdesk-${printTarget || 'shift'}-a4-report { display: block !important; position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; min-height: 270mm; padding: 0 !important; background: #fff !important; box-shadow: none !important; } }`}</style>
+    <style jsx global>{`
+      @media print {
+        @page { size: A4 portrait; margin: 0; }
+        html, body, body > *, [data-slot="dialog-content"] {
+          height: auto !important;
+          min-height: 0 !important;
+          max-height: none !important;
+          overflow: visible !important;
+        }
+        body * { visibility: hidden !important; }
+        #frontdesk-${printTarget || 'shift'}-a4-report,
+        #frontdesk-${printTarget || 'shift'}-a4-report * { visibility: visible !important; }
+        #frontdesk-${printTarget || 'shift'}-a4-report {
+          display: block !important;
+          position: absolute !important;
+          left: 0 !important;
+          top: 0 !important;
+          box-sizing: border-box !important;
+          width: 210mm !important;
+          min-width: 210mm !important;
+          height: auto !important;
+          min-height: 297mm !important;
+          padding: 12mm !important;
+          background: #fff !important;
+          color: #0f172a !important;
+          box-shadow: none !important;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
+        #frontdesk-${printTarget || 'shift'}-a4-report table { page-break-inside: auto; }
+        #frontdesk-${printTarget || 'shift'}-a4-report thead { display: table-header-group; }
+        #frontdesk-${printTarget || 'shift'}-a4-report tr { break-inside: avoid; page-break-inside: avoid; }
+      }
+    `}</style>
     <Dialog open={showShiftReport} onOpenChange={setShowShiftReport}>
       <DialogContent className="flex h-[95vh] w-[96vw] max-w-none flex-col overflow-hidden border-0 bg-slate-100 p-0 shadow-2xl" style={{ maxWidth: '1200px' }}>
         <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-6 py-4 shadow-sm">
@@ -189,7 +223,7 @@ export default function FrontdeskCashierPage() {
         </div>
         <div className="min-h-0 flex-1 overflow-auto bg-slate-200 p-4 sm:p-8">
           {summary && <div id="frontdesk-shift-a4-report" className="mx-auto box-border h-[297mm] min-h-[297mm] w-[210mm] min-w-[210mm] shrink-0 bg-white p-[12mm] text-slate-900 shadow-[0_18px_45px_rgba(15,23,42,.18)] print:h-auto print:min-h-[270mm] print:w-full print:min-w-0 print:p-0 print:shadow-none">
-            <ControlSheetHeader property={summary.property} title="Front Office Deposit Control Sheet" subtitle={`Business date: ${summary.session.businessDate || 'Current business date'} · Prepared from the cashier shift ledger`} reference={summary.session.shiftReference} status={effectiveControlStatus} />
+            <ControlSheetHeader property={summary.property} title="Front Office Deposit Control Sheet" subtitle={`Business date: ${businessDateLabel(summary.session.businessDate)} · Prepared from the cashier shift ledger`} reference={summary.session.shiftReference} status={effectiveControlStatus} />
             <div className="mt-6 grid grid-cols-4 gap-3"><div className="rounded-lg border p-3"><p className="text-[10px] uppercase text-slate-500">Cashier</p><p className="mt-1 font-bold">{summary.session.staffName}</p></div><div className="rounded-lg border p-3"><p className="text-[10px] uppercase text-slate-500">Till</p><p className="mt-1 font-bold">{summary.session.till}</p></div><div className="rounded-lg border p-3"><p className="text-[10px] uppercase text-slate-500">Status</p><p className="mt-1 font-bold">{effectiveControlStatus.replaceAll('_', ' ')}</p></div><div className="rounded-lg border p-3"><p className="text-[10px] uppercase text-slate-500">Transactions</p><p className="mt-1 font-bold">{summary.payments.count}</p></div></div><div className="mt-7 grid grid-cols-2 gap-8"><div><h2 className="border-b pb-2 text-lg font-bold">Payment capture</h2><div className="mt-3 space-y-2"><SummaryRow label="Cash" value={money(summary.payments.cash)} /><SummaryRow label="Card / POS" value={money(summary.payments.card)} /><SummaryRow label="Bank transfer" value={money(summary.payments.bankTransfer)} /><SummaryRow label="Other" value={money(summary.payments.other)} /><SummaryRow label="Total payments" value={money(summary.payments.total)} strong /></div></div><div><h2 className="border-b pb-2 text-lg font-bold">Shift analysis</h2><div className="mt-3 space-y-2"><SummaryRow label="Room charges" value={money(summary.charges.room)} /><SummaryRow label="Other charges" value={money(summary.charges.laundry + summary.charges.other)} /><SummaryRow label="Total charges" value={money(summary.charges.total)} strong /><SummaryRow label="Net movement" value={money(summary.payments.total - summary.charges.total)} strong /></div></div></div><h2 className="mt-7 border-b pb-2 text-lg font-bold">Cash reconciliation</h2><div className="mt-3 grid grid-cols-2 gap-x-12 gap-y-2"><SummaryRow label="Opening float" value={money(summary.cash.openingFloat)} /><SummaryRow label="Cash received" value={money(summary.payments.cash)} /><SummaryRow label="Cash in" value={money(summary.cash.cashIn)} /><SummaryRow label="Drops / paid out / refunds" value={money(summary.cash.refunds + summary.cash.cashDrops + summary.cash.paidOuts + summary.cash.transfersOut)} /><SummaryRow label="Expected cash" value={money(summary.cash.expected)} strong /><SummaryRow label="Declared cash" value={summary.cash.declared == null ? 'Not declared' : money(summary.cash.declared)} /><SummaryRow label="Variance" value={summary.cash.variance == null ? 'Not declared' : money(summary.cash.variance)} strong /></div><h2 className="mt-7 border-b pb-2 text-lg font-bold">Folio Payments</h2><table className="mt-3 w-full table-fixed border-collapse text-[10px]"><colgroup><col className="w-[22%]" /><col className="w-[27%]" /><col className="w-[21%]" /><col className="w-[15%]" /><col className="w-[15%]" /></colgroup><thead><tr className="border-b-2 border-slate-800 text-left"><th className="py-2">Room / source</th><th className="py-2">Guest</th><th className="py-2">Receipt Ref</th><th className="py-2">Method</th><th className="py-2 text-right">Amount</th></tr></thead><tbody>{summary.rows.filter((r: any) => r.kind === 'PAYMENT' || (r.amount > 0 && r.method)).map((row, index) => <tr key={`shift-print-${row.date}-${index}`} className="border-b border-slate-200"><td className="max-w-0 truncate py-2 font-medium">{transactionLocation(row)}</td><td className="max-w-0 truncate py-2">{row.guest || '—'}</td><td className="max-w-0 truncate py-2 font-mono text-[9px]" title={row.reference || undefined}>{compactReference(row.reference)}</td><td className="max-w-0 truncate py-2">{row.method || 'Payment'}</td><td className="py-2 text-right font-semibold">{money(row.amount)}</td></tr>)}<tr className="bg-slate-50"><td colSpan={4} className="py-3 px-2 font-bold text-right text-xs">Total Payments Collected:</td><td className="py-3 px-2 text-right font-bold text-xs">{money(summary.rows.filter((r: any) => r.kind === 'PAYMENT' || (r.amount > 0 && r.method)).reduce((acc, curr) => acc + Number(curr.amount || 0), 0))}</td></tr></tbody></table><div className="mt-12 grid grid-cols-3 gap-8 text-xs text-slate-500"><div className="border-t border-slate-800 pt-2 font-bold text-slate-900">Cashier signature</div><div className="border-t border-slate-800 pt-2 font-bold text-slate-900">Night Auditor signature</div><div className="border-t border-slate-800 pt-2 font-bold text-slate-900">General Cashier signature</div></div><p className="mt-8 text-center text-[10px] text-slate-400">Generated from the cashier shift ledger · {new Date().toLocaleString()}</p>
           </div>}
         </div>

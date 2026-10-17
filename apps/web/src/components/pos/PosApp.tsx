@@ -140,6 +140,7 @@ export default function PosApp() {
   const roomServiceChimeTimer = useRef<number | null>(null);
   const [offlineBookingNotification, setOfflineBookingNotification] = useState<any | null>(null);
   const offlineBookingChimeTimer = useRef<number | null>(null);
+  const acknowledgedOfflineBookingNotificationIds = useRef<Set<string>>(new Set());
 
   const stopRoomServiceChime = useCallback(() => {
     if (roomServiceChimeTimer.current !== null) {
@@ -232,7 +233,7 @@ export default function PosApp() {
     try {
       const result = await provider.system.getOfflineBookingNotifications(propertyId);
       const next = result?.data?.[0];
-      if (!next) return;
+      if (!next || acknowledgedOfflineBookingNotificationIds.current.has(next.id)) return;
       if (offlineBookingNotification?.id !== next.id) {
         void unlockAudio().then(() => startOfflineBookingChime()).catch(() => startOfflineBookingChime());
       }
@@ -262,6 +263,7 @@ export default function PosApp() {
         toast.error(result.error || 'Could not acknowledge notification');
         return;
       }
+      acknowledgedOfflineBookingNotificationIds.current.add(offlineBookingNotification.id);
       stopOfflineBookingChime();
       setOfflineBookingNotification(null);
     } catch (error: any) {

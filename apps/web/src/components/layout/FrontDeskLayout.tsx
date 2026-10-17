@@ -78,6 +78,7 @@ export function FrontDeskLayout({ children, enabledModules = [], licenseSnapshot
   const [showMasterCardModal, setShowMasterCardModal] = useState(false);
   const [roomChargeNotification, setRoomChargeNotification] = useState<FrontDeskRoomChargeNotification | null>(null);
   const lastRoomChargeNotificationId = React.useRef<string | null>(null);
+  const acknowledgedRoomChargeNotificationIds = React.useRef<Set<string>>(new Set());
   const roomChargeChimeTimer = React.useRef<number | null>(null);
 
   const isDesktop = process.env.NEXT_PUBLIC_IS_DESKTOP === 'true';
@@ -146,8 +147,9 @@ export function FrontDeskLayout({ children, enabledModules = [], licenseSnapshot
   const dismissRoomChargeNotification = () => {
     stopRoomChargeChime();
     if (roomChargeNotification) {
+      acknowledgedRoomChargeNotificationIds.current.add(roomChargeNotification.id);
       if (isDesktopMode && provider.system?.acknowledgeOfflineBookingNotification) {
-        void provider.system.acknowledgeOfflineBookingNotification(propertyId, roomChargeNotification.id);
+        void provider.system.acknowledgeOfflineBookingNotification(propertyId, roomChargeNotification.id).catch(() => undefined);
       }
       if (isOnline) {
         void fetch('/api/v1/frontdesk/notifications', {
@@ -182,7 +184,7 @@ export function FrontDeskLayout({ children, enabledModules = [], licenseSnapshot
           const result = await response.json();
           next = result.data?.[0];
         }
-        if (!cancelled && next) {
+        if (!cancelled && next && !acknowledgedRoomChargeNotificationIds.current.has(next.id)) {
           if (lastRoomChargeNotificationId.current !== next.id) {
             lastRoomChargeNotificationId.current = next.id;
             startRoomChargeChime();
