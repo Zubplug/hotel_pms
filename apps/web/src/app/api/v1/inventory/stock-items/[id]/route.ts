@@ -52,6 +52,11 @@ export async function PATCH(request: Request, props: { params: Promise<{ id: str
 
         const body = await request.json();
         const { name, sku, barcode, baseUnit, baseConversion, stockType, reorderLevel, isActive, quantityOnHand, costPrice } = body;
+        const requestedName = name === undefined ? undefined : String(name).trim();
+
+        if (requestedName !== undefined && requestedName.length === 0) {
+            return NextResponse.json({ error: 'Item name is required', data: null }, { status: 400 });
+        }
 
         if (quantityOnHand !== undefined && (!Number.isFinite(Number(quantityOnHand)) || Number(quantityOnHand) < 0)) return NextResponse.json({ error: 'Quantity must be zero or greater', data: null }, { status: 400 });
         if (costPrice !== undefined && (!Number.isFinite(Number(costPrice)) || Number(costPrice) < 0)) return NextResponse.json({ error: 'Cost per unit must be zero or greater', data: null }, { status: 400 });
@@ -111,6 +116,39 @@ export async function PATCH(request: Request, props: { params: Promise<{ id: str
             const rawCost = costPrice === undefined ? Number(existing.costPrice) : Number(costPrice);
             const convertedQuantity = baseUnitChanged ? rawQuantity * conversion : rawQuantity;
             const convertedCost = baseUnitChanged ? rawCost / conversion : rawCost;
+            const nameChanged = requestedName !== undefined && requestedName !== existing.name;
+
+            if (nameChanged) {
+                const nameConflict = await tx.stockItem.findFirst({
+                    where: {
+                        propertyId: existing.propertyId,
+                        isActive: true,
+                        id: { not: existing.id },
+                        name: { equals: requestedName, mode: 'insensitive' },
+                    },
+                    select: { id: true, warehouse: { select: { name: true } } },
+                });
+                if (nameConflict) {
+                    const conflict = new Error(`Cannot propagate name: an active stock item already uses "${requestedName}" in ${nameConflict.warehouse.name}`);
+                    (conflict as any).status = 409;
+                    throw conflict;
+                }
+
+                const directSaleConflict = await tx.posProduct.findFirst({
+                    where: {
+                        propertyId: existing.propertyId,
+                        isActive: true,
+                        inventoryMode: 'STOCK',
+                        name: { equals: requestedName, mode: 'insensitive' },
+                    },
+                    select: { id: true },
+                });
+                if (directSaleConflict) {
+                    const conflict = new Error(`Cannot propagate name: an active direct-sale POS menu already uses "${requestedName}"`);
+                    (conflict as any).status = 409;
+                    throw conflict;
+                }
+            }
 
             if (baseUnitChanged) {
                 const identity = existing.sku
@@ -151,10 +189,36 @@ export async function PATCH(request: Request, props: { params: Promise<{ id: str
                 }
             }
 
+            if (nameChanged) {
+                // Stock names are a property-level master-data label. Keep every
+                // outlet copy aligned, but do not rename prepared/recipe menus.
+                await tx.stockItem.updateMany({
+                    where: {
+                        propertyId: existing.propertyId,
+                        isActive: true,
+                        name: { equals: existing.name, mode: 'insensitive' },
+                        warehouse: { posOutletId: { not: null } },
+                    },
+                    data: { name: requestedName },
+                });
+
+                // Only direct stock-sale POS products follow a stock-item rename.
+                // Recipe/prepared menus intentionally retain their own names.
+                await tx.posProduct.updateMany({
+                    where: {
+                        propertyId: existing.propertyId,
+                        isActive: true,
+                        inventoryMode: 'STOCK',
+                        name: { equals: existing.name, mode: 'insensitive' },
+                    },
+                    data: { name: requestedName },
+                });
+            }
+
             return tx.stockItem.update({
                 where: { id: params.id },
                 data: {
-                    ...(name !== undefined && { name }),
+                    ...(requestedName !== undefined && { name: requestedName }),
                     ...(sku !== undefined && { sku }),
                     ...(barcode !== undefined && { barcode }),
                     ...(baseUnitChanged && { baseUnit: requestedBaseUnit as UnitOfMeasure, quantityOnHand: convertedQuantity, costPrice: convertedCost }),
@@ -169,7 +233,7 @@ export async function PATCH(request: Request, props: { params: Promise<{ id: str
 
         return NextResponse.json({ data: updated, error: null });
     } catch (error: any) {
-        return NextResponse.json({ error: error.message, data: null }, { status: 500 });
+        return NextResponse.json({ error: error.message, data: null }, { status: Number(error?.status) || 500 });
     }
 }
 
