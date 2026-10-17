@@ -73,6 +73,7 @@ model Organization {
   referralBookings       ReferralBooking[]
   referralCommissions    ReferralCommission[]
   referralLedgerEntries  ReferralLedgerEntry[]
+  reachCreativeGenerations ReachCreativeGeneration[]
   referralPayouts        ReferralPayout[]
   referralPlatformFees   ReferralPlatformFee[]
   referralActivationPayments ReferralActivationPayment[]
@@ -153,6 +154,7 @@ model Property {
   reachPropertyDebt     ReachPropertyDebt?
   reachMedia            ReachPropertyMedia[]
   reachCreativeAssets   ReachCreativeAsset[]
+  reachCreativeGenerations ReachCreativeGeneration[]
 
   cashHandovers            CashHandover[]
   bankDeposits             BankDeposit[]
@@ -5152,6 +5154,7 @@ model Hall {
   capacity     Int
   squareMeters Decimal? @db.Decimal(8, 2)
   amenities    String[]
+  photos       String[] @default([])
   isActive     Boolean  @default(true)
 
   // Pricing configuration
@@ -5208,6 +5211,7 @@ model BanquetPackage {
   name        String
   description String?
   basePrice   Decimal @db.Decimal(18, 4)
+  photos      String[] @default([])
   isHallOnly  Boolean @default(false)
   isActive    Boolean @default(true)
 
@@ -7383,6 +7387,35 @@ model ReachCreativeAsset {
   @@index([campaignId, status])
 }
 
+model ReachCreativeGeneration {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @db.Uuid
+  partnerId      String    @db.Uuid
+  propertyId     String    @db.Uuid
+  campaignId     String?   @db.Uuid
+  idempotencyKey String    @unique
+  template       String    // SQUARE | STORY | LANDSCAPE
+  width          Int
+  height         Int
+  sourceUrl      String?
+  status         String    @default("QUEUED") // QUEUED | PROCESSING | COMPLETED | FAILED
+  outputUrl      String?
+  errorMessage   String?
+  attemptCount   Int       @default(0)
+  createdAt      DateTime  @default(now()) @db.Timestamptz
+  startedAt      DateTime? @db.Timestamptz
+  completedAt    DateTime? @db.Timestamptz
+  updatedAt      DateTime  @updatedAt @db.Timestamptz
+
+  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  partner      ReferralPartner   @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  property     Property          @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  campaign     ReferralCampaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+
+  @@index([partnerId, createdAt])
+  @@index([propertyId, status, createdAt])
+}
+
 model ReferralPartner {
   id                 String   @id @default(uuid()) @db.Uuid
   organizationId     String?  @db.Uuid
@@ -7410,6 +7443,7 @@ model ReferralPartner {
   bookings     ReferralBooking[]
   commissions  ReferralCommission[]
   payouts      ReferralPayout[]
+  creativeGenerations ReachCreativeGeneration[]
   ledgerEntries ReferralLedgerEntry[]
   sessions     ReferralPartnerSession[]
   wallet       ReferralPartnerWallet?
@@ -7458,6 +7492,7 @@ model ReferralCampaign {
   attributions ReferralAttribution[]
   bookings     ReferralBooking[]
   creativeAssets ReachCreativeAsset[]
+  creativeGenerations ReachCreativeGeneration[]
 
   @@index([propertyId, isActive])
   @@index([partnerId, isActive])
