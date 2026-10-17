@@ -46,6 +46,7 @@ import { writeOfflineNavigationSnapshot } from '@/lib/auth/offline-navigation-sn
 import type { OfflineLicenseSnapshot } from '@/lib/auth/offline-navigation-snapshot';
 import { useOfflineLicenseGuard } from '@/lib/auth/useOfflineLicenseGuard';
 import { useNavigationModules } from '@/lib/auth/useNavigationModules';
+import { playRoomServiceChime, unlockAudio } from '@/lib/pos/soundEffects';
 interface FrontDeskRoomChargeNotification {
   id: string;
   type: 'POS_ROOM_CHARGE';
@@ -73,6 +74,7 @@ export function FrontDeskLayout({ children, enabledModules = [], licenseSnapshot
   const [time, setTime] = useState<Date | null>(null);
   const [showMasterCardModal, setShowMasterCardModal] = useState(false);
   const [roomChargeNotification, setRoomChargeNotification] = useState<FrontDeskRoomChargeNotification | null>(null);
+  const lastRoomChargeNotificationId = React.useRef<string | null>(null);
 
   const isDesktop = process.env.NEXT_PUBLIC_IS_DESKTOP === 'true';
   const visibleModules = isDesktop || isDesktopMode ? cachedModules : enabledModules;
@@ -90,6 +92,16 @@ export function FrontDeskLayout({ children, enabledModules = [], licenseSnapshot
   useEffect(() => {
     document.body.classList.add('frontdesk-dark-surface');
     return () => document.body.classList.remove('frontdesk-dark-surface');
+  }, []);
+
+  useEffect(() => {
+    const unlockFrontDeskAudio = () => { void unlockAudio(); };
+    window.addEventListener('pointerdown', unlockFrontDeskAudio, { once: true });
+    window.addEventListener('keydown', unlockFrontDeskAudio, { once: true });
+    return () => {
+      window.removeEventListener('pointerdown', unlockFrontDeskAudio);
+      window.removeEventListener('keydown', unlockFrontDeskAudio);
+    };
   }, []);
 
   useEffect(() => {
@@ -123,6 +135,10 @@ export function FrontDeskLayout({ children, enabledModules = [], licenseSnapshot
         const result = await response.json();
         const next = result.data?.[0];
         if (!cancelled && next) {
+          if (lastRoomChargeNotificationId.current !== next.id) {
+            lastRoomChargeNotificationId.current = next.id;
+            void playRoomServiceChime();
+          }
           const metadata = next.metadata || {};
           setRoomChargeNotification({
             id: next.id,
@@ -133,7 +149,7 @@ export function FrontDeskLayout({ children, enabledModules = [], licenseSnapshot
             currency: metadata.currency || 'NGN',
             folioId: metadata.folioId || '',
             createdAt: next.createdAt,
-            offline: true,
+            offline: false,
           });
         }
       } catch {
@@ -233,8 +249,8 @@ export function FrontDeskLayout({ children, enabledModules = [], licenseSnapshot
                 <Bell className="h-4 w-4" />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-indigo-300">POS room charge</p>
-                <h3 className="mt-1 text-sm font-bold text-white">New charge posted to guest folio</h3>
+                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-indigo-300">F&amp;B POS · Charge to room</p>
+                <h3 className="mt-1 text-sm font-bold text-white">New restaurant charge posted to guest folio</h3>
               </div>
               <button onClick={dismissRoomChargeNotification} className="rounded-lg p-1 text-slate-500 hover:bg-white/10 hover:text-white" aria-label="Dismiss notification">
                 <X className="h-4 w-4" />
@@ -253,7 +269,7 @@ export function FrontDeskLayout({ children, enabledModules = [], licenseSnapshot
                 <span className={cn('h-2 w-2 rounded-full', roomChargeNotification.offline ? 'bg-amber-400' : 'bg-emerald-400')} />
                 {roomChargeNotification.offline ? 'Saved offline · will sync automatically' : 'Posted and synchronized'}
               </div>
-              <button onClick={dismissRoomChargeNotification} className="w-full rounded-xl bg-indigo-500 px-3 py-2.5 text-xs font-bold text-white transition hover:bg-indigo-400">Acknowledge</button>
+              <button onClick={() => { void unlockAudio(); dismissRoomChargeNotification(); }} className="w-full rounded-xl bg-indigo-500 px-3 py-2.5 text-xs font-bold text-white transition hover:bg-indigo-400">Acknowledge</button>
             </div>
           </div>
         </div>
