@@ -1,5 +1,5 @@
 import sharp from "sharp";
-import { REACH_FONT_WOFF2_BASE64 } from "./reach-creative-font";
+import { REACH_FONT_TTF_BASE64 } from "./reach-creative-font";
 
 export const CREATIVE_TEMPLATES = {
   SQUARE: { width: 1080, height: 1080, assetType: "SOCIAL_SQUARE" },
@@ -41,16 +41,16 @@ export async function renderReachCreative(input: {
     : await sharp({ create: { width: dimensions.width, height: dimensions.height, channels: 4, background: { r: 16, g: 24, b: 40, alpha: 1 } } }).png().toBuffer();
   const y = input.template === "STORY" ? 820 : Math.round(dimensions.height * 0.55);
   const svg = `<svg width="${dimensions.width}" height="${dimensions.height}" xmlns="http://www.w3.org/2000/svg">
-    <style>@font-face{font-family:LodgeCoreSans;src:url(data:font/woff2;base64,${REACH_FONT_WOFF2_BASE64}) format("woff2")} text{font-family:LodgeCoreSans}</style>
+    <style>@font-face{font-family:LodgeCoreSans;src:url(data:font/ttf;base64,${REACH_FONT_TTF_BASE64})} text{font-family:LodgeCoreSans}</style>
     <defs><linearGradient id="shade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#07111f" stop-opacity=".15"/><stop offset=".72" stop-color="#07111f" stop-opacity=".86"/></linearGradient></defs>
     <rect width="100%" height="100%" fill="url(#shade)"/>
-    <text x="64" y="82" fill="#b9f5d0" font-size="28" font-weight="700" letter-spacing="4">LODGECORE REACH</text>
-    <text x="64" y="${y}" fill="white" font-size="${titleSize}" font-weight="800">${escapeXml(propertyLines[0])}</text>
-    ${propertyLines[1] ? `<text x="64" y="${y + titleSize + 12}" fill="white" font-size="${titleSize}" font-weight="800">${escapeXml(propertyLines[1])}</text>` : ""}
-    <text x="64" y="${y + titleSize * (propertyLines.length === 2 ? 2 : 1) + 56}" fill="#e8fff0" font-size="30">${escapeXml(input.campaignName)}</text>
+    <text x="64" y="82" fill="#b9f5d0" font-family="LodgeCoreSans" font-size="28" font-weight="700" letter-spacing="4">LODGECORE REACH</text>
+    <text x="64" y="${y}" fill="white" font-family="LodgeCoreSans" font-size="${titleSize}" font-weight="800">${escapeXml(propertyLines[0])}</text>
+    ${propertyLines[1] ? `<text x="64" y="${y + titleSize + 12}" fill="white" font-family="LodgeCoreSans" font-size="${titleSize}" font-weight="800">${escapeXml(propertyLines[1])}</text>` : ""}
+    <text x="64" y="${y + titleSize * (propertyLines.length === 2 ? 2 : 1) + 56}" fill="#e8fff0" font-family="LodgeCoreSans" font-size="30">${escapeXml(input.campaignName)}</text>
     <rect x="64" y="${dimensions.height - 220}" width="${dimensions.width - 128}" height="132" rx="24" fill="#06101dcc" stroke="#b9f5d0" stroke-opacity=".45"/>
-    <text x="96" y="${dimensions.height - 166}" fill="#b9f5d0" font-size="28" font-weight="700">${(input.commissionBps / 100).toFixed(2)}% referral commission</text>
-    <text x="96" y="${dimensions.height - 120}" fill="white" font-size="24">Book direct · ${escapeXml(input.referralUrl)}</text>
+    <text x="96" y="${dimensions.height - 166}" fill="#b9f5d0" font-family="LodgeCoreSans" font-size="28" font-weight="700">${(input.commissionBps / 100).toFixed(2)}% referral commission</text>
+    <text x="96" y="${dimensions.height - 120}" fill="white" font-family="LodgeCoreSans" font-size="24">Book direct · ${escapeXml(input.referralUrl)}</text>
   </svg>`;
   const buffer = await sharp(background).composite([{ input: Buffer.from(svg), blend: "over" }]).png().toBuffer();
   return { buffer, ...dimensions, mimeType: "image/png" };
