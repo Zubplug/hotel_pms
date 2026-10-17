@@ -225,7 +225,6 @@
 
 .reach-partner-copy { min-width: 0; flex: 1; }
 
-.reach-partner-copy strong,
 .reach-partner-copy span {
   display: block;
   overflow: hidden;
@@ -234,10 +233,13 @@
 }
 
 .reach-partner-copy strong {
+  display: block;
+  overflow-wrap: anywhere;
   color: var(--reach-text);
   font-size: 11px;
   font-weight: 700;
   letter-spacing: -0.02em;
+  line-height: 1.25;
 }
 
 .reach-partner-copy span {

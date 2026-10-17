@@ -4,9 +4,11 @@ import React from 'react';
 import { ImagePlus, Loader2, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { useQueryClient } from '@tanstack/react-query';
 
 export function RoomTypeMediaManager({ roomTypeId, roomTypeName, initialPhotos }: { roomTypeId: string; roomTypeName: string; initialPhotos: string[] }) {
   const [photos, setPhotos] = React.useState(initialPhotos || []);
+  const queryClient = useQueryClient();
   const [busy, setBusy] = React.useState(false);
   const inputRef = React.useRef<HTMLInputElement>(null);
 
@@ -23,6 +25,9 @@ export function RoomTypeMediaManager({ roomTypeId, roomTypeName, initialPhotos }
       const payload = await response.json();
       if (!response.ok) throw new Error(payload?.error?.message || 'Unable to upload image');
       setPhotos(payload.data.roomType.photos || []);
+      await queryClient.invalidateQueries({ queryKey: ['room-type', roomTypeId] });
+      await queryClient.invalidateQueries({ queryKey: ['roomType', roomTypeId] });
+      await queryClient.invalidateQueries({ queryKey: ['room-types'] });
       toast.success('Room image added to the shared room-type media library');
     } catch (error: any) { toast.error(error.message || 'Unable to upload image'); }
     finally { setBusy(false); }
@@ -36,6 +41,9 @@ export function RoomTypeMediaManager({ roomTypeId, roomTypeName, initialPhotos }
       const payload = await response.json();
       if (!response.ok) throw new Error(payload?.error?.message || 'Unable to remove image');
       setPhotos(payload.data.photos || []);
+      await queryClient.invalidateQueries({ queryKey: ['room-type', roomTypeId] });
+      await queryClient.invalidateQueries({ queryKey: ['roomType', roomTypeId] });
+      await queryClient.invalidateQueries({ queryKey: ['room-types'] });
       toast.success('Room image removed');
     } catch (error: any) { toast.error(error.message || 'Unable to remove image'); }
     finally { setBusy(false); }

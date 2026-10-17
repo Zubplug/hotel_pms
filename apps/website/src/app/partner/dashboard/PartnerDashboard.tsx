@@ -7,6 +7,7 @@ import { PartnerShell } from "@/components/partner-shell";
 type Property = {
   id: string; name: string; city: string; state: string; country: string;
   baseCurrency: string; website: string | null; bookingSlug: string | null;
+  reachMedia: Array<{ url: string }>;
   rooms: Array<{ id: string; name: string; description: string | null; baseRate: number; currency: string; maxOccupancy: number; bedConfiguration: string; amenities: string[]; photos: string[]; roomCount: number }>;
 };
 type Campaign  = { id: string; name: string; code: string; category: string; targetUrl: string | null; property: { name: string } };
@@ -95,7 +96,7 @@ function PropertyCard({ property }: { property: Property }) {
   return (
     <article className="reach-property-card">
       <div className="reach-property-image">
-        <span>LC</span>
+        {property.reachMedia[0]?.url ? <img src={property.reachMedia[0].url} alt={`${property.name} property`} /> : <span>LC</span>}
         <small>{property.baseCurrency}</small>
       </div>
       <div className="reach-property-body">
