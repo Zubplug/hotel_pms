@@ -1,5 +1,5 @@
 import prisma from "@hotel-pms/db";
-import { put } from "@vercel/blob";
+import { del, put } from "@vercel/blob";
 import { Client } from "@upstash/qstash";
 import { reachShareUrl } from "./reach-links";
 import { CREATIVE_TEMPLATES, renderReachCreative, type CreativeTemplate } from "./reach-creative-renderer";
@@ -28,10 +28,33 @@ export async function processReachCreativeGeneration(generationId: string) {
     const blob = await put(`reach/creatives/${job.propertyId}/${job.id}.png`, rendered.buffer, { access: "public", addRandomSuffix: false, contentType: rendered.mimeType });
     await prisma.reachCreativeAsset.updateMany({ where: { propertyId: job.propertyId, campaignId: job.campaignId, status: "APPROVED", usageNotes: { in: ["Deterministically rendered from approved LodgeCore data.", "Deterministically rendered from approved LodgeCore data · renderer v2.", "Deterministically rendered from approved LodgeCore data · renderer v3."] } }, data: { status: "ARCHIVED" } });
     const asset = await prisma.reachCreativeAsset.create({ data: { propertyId: job.propertyId, campaignId: job.campaignId, title: `${job.property.name} · ${template.toLowerCase()} referral banner`, assetType: rendered.assetType, url: blob.url, mimeType: rendered.mimeType, width: rendered.width, height: rendered.height, usageNotes: "Deterministically rendered from approved LodgeCore data · renderer v3.", status: "APPROVED" } });
+    await removePreviousSameSizeCreatives(job.id, job.partnerId, job.propertyId, job.campaignId, job.template);
     return prisma.reachCreativeGeneration.update({ where: { id: job.id }, data: { status: "COMPLETED", outputUrl: asset.url, completedAt: new Date(), errorMessage: null } });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Creative generation failed";
     await prisma.reachCreativeGeneration.update({ where: { id: generationId }, data: { status: "FAILED", errorMessage: message.slice(0, 1000) } });
     throw error;
   }
+}
+
+async function removePreviousSameSizeCreatives(currentJobId: string, partnerId: string, propertyId: string, campaignId: string | null, template: string) {
+  const previousJobs = await prisma.reachCreativeGeneration.findMany({ where: { id: { not: currentJobId }, partnerId, propertyId, campaignId, template, status: "COMPLETED", outputUrl: { not: null } }, select: { id: true, outputUrl: true } });
+  for (const previous of previousJobs) {
+    if (previous.outputUrl) {
+      try { await del(previous.outputUrl); } catch { /* The Blob may already have been removed. */ }
+      await prisma.reachCreativeAsset.deleteMany({ where: { propertyId, campaignId, url: previous.outputUrl } });
+    }
+    await prisma.reachCreativeGeneration.delete({ where: { id: previous.id } });
+  }
+}
+
+export async function deleteReachCreativeGeneration(generationId: string, partnerId: string) {
+  const job = await prisma.reachCreativeGeneration.findFirst({ where: { id: generationId, partnerId }, select: { id: true, outputUrl: true, propertyId: true, campaignId: true } });
+  if (!job) return false;
+  if (job.outputUrl) {
+    try { await del(job.outputUrl); } catch { /* Keep database cleanup safe if Blob is already gone. */ }
+    await prisma.reachCreativeAsset.deleteMany({ where: { propertyId: job.propertyId, campaignId: job.campaignId, url: job.outputUrl } });
+  }
+  await prisma.reachCreativeGeneration.delete({ where: { id: job.id } });
+  return true;
 }
