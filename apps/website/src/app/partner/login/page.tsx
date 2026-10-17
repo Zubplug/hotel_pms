@@ -147,7 +147,7 @@ export default function PartnerLoginPage() {
           font-style: normal;
         }
         .reach-login-sub {
-          color: #7D89A3;
+          color: #A4AEC3;
           font-size: 14px;
           line-height: 1.7;
           max-width: 380px;
@@ -178,12 +178,12 @@ export default function PartnerLoginPage() {
         .reach-login-stat span {
           display: block;
           margin-top: 4px;
-          color: #7D89A3;
+          color: #A4AEC3;
           font-size: 10px;
           line-height: 1.4;
         }
         .reach-login-footer {
-          color: #4A5568;
+          color: #7D89A3;
           font-size: 11px;
           position: relative;
           z-index: 1;
@@ -221,7 +221,7 @@ export default function PartnerLoginPage() {
           margin: 0 0 8px;
         }
         .reach-login-form-head p {
-          color: #7D89A3;
+          color: #A4AEC3;
           font-size: 13px;
           line-height: 1.6;
         }
@@ -231,7 +231,7 @@ export default function PartnerLoginPage() {
           margin-bottom: 16px;
         }
         .reach-login-field label {
-          color: #64748b;
+          color: #A4AEC3;
           font-size: 11px;
           font-weight: 600;
           letter-spacing: 0.04em;
@@ -241,16 +241,16 @@ export default function PartnerLoginPage() {
           width: 100%;
           height: 46px;
           padding: 0 14px;
-          border: 1px solid rgba(255,255,255,0.1);
+          border: 1px solid #27324A;
           border-radius: 10px;
-          background: rgba(255,255,255,0.03);
+          background: #172138;
           color: #F4F6FC;
           font: inherit;
           font-size: 14px;
           outline: none;
           transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
         }
-        .reach-login-field input::placeholder { color: #4A5568; }
+        .reach-login-field input::placeholder { color: #7D89A3; }
         .reach-login-field input:focus {
           border-color: #6385FF;
           box-shadow: 0 0 0 3px rgba(99,133,255,0.15);
@@ -305,7 +305,7 @@ export default function PartnerLoginPage() {
         .reach-login-links {
           margin-top: 22px;
           text-align: center;
-          color: #4A5568;
+          color: #A4AEC3;
           font-size: 12px;
         }
         .reach-login-links a {
@@ -331,7 +331,7 @@ export default function PartnerLoginPage() {
           position: relative;
           padding: 0 12px;
           background: #080B16;
-          color: #4A5568;
+          color: #7D89A3;
           font-size: 10px;
           font-family: var(--font-mono, "JetBrains Mono"), monospace;
           letter-spacing: 0.1em;
