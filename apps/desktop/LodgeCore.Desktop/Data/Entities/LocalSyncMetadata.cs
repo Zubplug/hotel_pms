@@ -12,4 +12,5 @@ public class LocalSyncMetadata
     public string? LastSyncVersion { get; set; }
     public string? LastGuestSyncCursor { get; set; }
     public string? SchemaVersion { get; set; }
+    public string? OfflineNotificationsJson { get; set; }
 }

@@ -6,7 +6,7 @@ import {
   ShoppingCart, Search, Trash2, Plus, Minus, User, Utensils,
   Loader2, CreditCard, Banknote, LayoutGrid,
   ChefHat, Scissors, X, Building2, Send, Flame, Lock,
-  Sparkles, Star, Package2, PanelRightClose, PanelRightOpen, AlertTriangle, Ban
+  Sparkles, Star, Package2, PanelRightClose, PanelRightOpen, AlertTriangle, Ban, Bell
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
@@ -138,6 +138,8 @@ export default function PosApp() {
   const [showRoomServiceAlert, setShowRoomServiceAlert] = useState(false);
   const seenRoomServiceIds = useRef<Set<string>>(new Set());
   const roomServiceChimeTimer = useRef<number | null>(null);
+  const [offlineBookingNotification, setOfflineBookingNotification] = useState<any | null>(null);
+  const offlineBookingChimeTimer = useRef<number | null>(null);
 
   const stopRoomServiceChime = useCallback(() => {
     if (roomServiceChimeTimer.current !== null) {
@@ -209,6 +211,63 @@ export default function PosApp() {
     const interval = setInterval(pollRoomServiceOrders, 20_000);
     return () => clearInterval(interval);
   }, [pollRoomServiceOrders]);
+
+  const stopOfflineBookingChime = useCallback(() => {
+    if (offlineBookingChimeTimer.current !== null) {
+      window.clearInterval(offlineBookingChimeTimer.current);
+      offlineBookingChimeTimer.current = null;
+    }
+  }, []);
+
+  const startOfflineBookingChime = useCallback(() => {
+    stopOfflineBookingChime();
+    void playRoomServiceChime();
+    offlineBookingChimeTimer.current = window.setInterval(() => {
+      void playRoomServiceChime();
+    }, 5000);
+  }, [stopOfflineBookingChime]);
+
+  const pollOfflineBookingNotifications = useCallback(async () => {
+    if (!isDesktopMode || !propertyId || !provider.system?.getOfflineBookingNotifications) return;
+    try {
+      const result = await provider.system.getOfflineBookingNotifications(propertyId);
+      const next = result?.data?.[0];
+      if (!next) return;
+      if (offlineBookingNotification?.id !== next.id) {
+        void unlockAudio().then(() => startOfflineBookingChime()).catch(() => startOfflineBookingChime());
+      }
+      setOfflineBookingNotification(next);
+    } catch {
+      // Offline notification polling must never interrupt POS operations.
+    }
+  }, [isDesktopMode, offlineBookingNotification?.id, propertyId, provider.system, startOfflineBookingChime]);
+
+  useEffect(() => {
+    void pollOfflineBookingNotifications();
+    const interval = window.setInterval(() => void pollOfflineBookingNotifications(), 10000);
+    return () => {
+      window.clearInterval(interval);
+      stopOfflineBookingChime();
+    };
+  }, [pollOfflineBookingNotifications, stopOfflineBookingChime]);
+
+  const acknowledgeOfflineBookingNotification = useCallback(async () => {
+    if (!offlineBookingNotification) return;
+    try {
+      const result = await provider.system?.acknowledgeOfflineBookingNotification?.(
+        propertyId,
+        offlineBookingNotification.id,
+      );
+      if (result?.error || result?.success === false) {
+        toast.error(result.error || 'Could not acknowledge notification');
+        return;
+      }
+      stopOfflineBookingChime();
+      setOfflineBookingNotification(null);
+    } catch (error: any) {
+      toast.error(error?.message || 'Could not acknowledge notification');
+    }
+  }, [offlineBookingNotification, propertyId, provider.system, stopOfflineBookingChime]);
 
   // ── Orders ────────────────────────────────────────────────────────
   const [myActiveOrders, setMyActiveOrders] = useState<any[]>([]);
@@ -1861,6 +1920,41 @@ export default function PosApp() {
         }}
         currency={(session?.user as any)?.currency || 'NGN'}
       />
+
+      {offlineBookingNotification && (
+        <div
+          role="alert"
+          aria-live="assertive"
+          className="pointer-events-auto fixed right-5 top-5 z-[260] w-[min(390px,calc(100vw-2rem))] animate-in slide-in-from-right-5 fade-in duration-300"
+        >
+          <div className="overflow-hidden rounded-2xl border border-indigo-400/30 bg-slate-950 shadow-2xl shadow-black/50 ring-1 ring-white/10">
+            <div className="flex items-start gap-3 border-b border-white/10 bg-indigo-500/15 px-4 py-3">
+              <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-400/20 text-indigo-200">
+                <Bell className="h-4 w-4" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-indigo-300">Front Desk synchronization</p>
+                <h3 className="mt-1 text-sm font-bold text-white">{offlineBookingNotification.subject || 'Online booking update'}</h3>
+              </div>
+            </div>
+            <div className="space-y-3 px-4 py-4">
+              <p className="whitespace-pre-line rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5 text-xs leading-5 text-slate-300">
+                {offlineBookingNotification.body || 'A new online booking update has been synchronized to this terminal.'}
+              </p>
+              <div className="flex items-center gap-2 rounded-xl bg-amber-400/10 px-3 py-2 text-[11px] font-semibold text-amber-300">
+                <span className="h-2 w-2 rounded-full bg-amber-400" />
+                Synchronized locally · awaiting acknowledgement
+              </div>
+              <button
+                onClick={() => { void unlockAudio(); void acknowledgeOfflineBookingNotification(); }}
+                className="w-full rounded-xl bg-indigo-500 px-3 py-2.5 text-xs font-bold text-white transition hover:bg-indigo-400"
+              >
+                Acknowledge
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
     </AutoLockScreen>

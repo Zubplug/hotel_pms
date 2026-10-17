@@ -212,6 +212,10 @@ public class LocalDbContext : DbContext
     {
         var columns = new[]
         {
+            "ALTER TABLE Properties ADD COLUMN Address TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE Properties ADD COLUMN State TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE Properties ADD COLUMN Phone TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE Properties ADD COLUMN Email TEXT NOT NULL DEFAULT ''",
             "ALTER TABLE Properties ADD COLUMN AuditStatus TEXT NOT NULL DEFAULT 'OPEN'",
             "ALTER TABLE Properties ADD COLUMN DepositApprovalThreshold TEXT NOT NULL DEFAULT '250000'",
             "ALTER TABLE Properties ADD COLUMN CreditAdjustmentApprovalThreshold TEXT NOT NULL DEFAULT '1'",

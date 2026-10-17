@@ -15,6 +15,8 @@ export interface LodgeCoreDataProvider {
     getSyncHealth?: () => Promise<any>;
     getOutboxEvents?: () => Promise<any>;
     getSyncEvents?: () => Promise<any>;
+    getOfflineBookingNotifications?: (propertyId: string) => Promise<any>;
+    acknowledgeOfflineBookingNotification?: (propertyId: string, notificationId: string) => Promise<any>;
     retryDeadLetters?: () => Promise<any>;
   };
   frontdesk: {

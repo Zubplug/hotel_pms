@@ -484,6 +484,32 @@ public class OfflinePMSInterop
         }
     }
 
+    public async Task<string> GetOfflineBookingNotificationsAsync(string propertyId)
+    {
+        try
+        {
+            var notifications = await _repo.GetOfflineBookingNotificationsAsync(propertyId);
+            return JsonSerializer.Serialize(new { success = true, data = notifications }, _jsonOptions);
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
+        }
+    }
+
+    public async Task<string> AcknowledgeOfflineBookingNotificationAsync(string propertyId, string notificationId)
+    {
+        try
+        {
+            var acknowledged = await _repo.AcknowledgeOfflineBookingNotificationAsync(propertyId, notificationId);
+            return JsonSerializer.Serialize(new { success = acknowledged }, _jsonOptions);
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
+        }
+    }
+
     /// <summary>
     /// Returns all guests with available guest credit (REFUND_OWED) for the
     /// current property.  Displayed on the Front Desk "Guest Credits" tab.

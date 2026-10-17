@@ -130,6 +130,42 @@ export async function GET(req: NextRequest) {
       orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
     });
 
+    // Online booking alerts are part of the desktop snapshot so Front Desk
+    // and POS can display them while fully offline after the last successful
+    // pull. They are intentionally limited to guest-facing booking events.
+    const onlineBookingNotificationTypes = [
+      'RESERVATION_CREATED',
+      'PAYMENT_RECEIVED',
+      'RESERVATION_CANCELLED',
+      'RESERVATION_EXPIRED',
+    ];
+    const onlineBookingNotifications = await prisma.notification.findMany({
+      where: {
+        propertyId,
+        channel: 'in_app',
+        readAt: null,
+        category: { in: ['Operations', 'Finance'] },
+        OR: onlineBookingNotificationTypes.map((notificationType) => ({
+          metadata: { path: ['notificationType'], equals: notificationType },
+        })),
+        ...(since
+          ? { createdAt: { gt: since, lte: watermark } }
+          : { createdAt: { lte: watermark } }),
+      },
+      select: {
+        id: true,
+        propertyId: true,
+        subject: true,
+        body: true,
+        category: true,
+        priority: true,
+        metadata: true,
+        createdAt: true,
+      },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+    });
+
     // ---- Fetch Data -----------------------------------------------------
     // To support pagination across multiple tables, we fetch up to `limit` from EACH table,
     // then merge, sort by updatedAt, and slice the overall list to `limit`.
@@ -826,6 +862,11 @@ export async function GET(req: NextRequest) {
     const propertyPayload = {
       id: property.id,
       name: property.name,
+      address: property.address,
+      city: property.city,
+      state: property.state,
+      phone: property.phone,
+      email: property.email,
       currency: property.baseCurrency,
       timezone: property.timezone,
       businessDate: property.businessDate,
@@ -883,7 +924,8 @@ export async function GET(req: NextRequest) {
       laundryItems: finalLaundryItems,
       laundryOrders: finalLaundryOrders,
       cityLedgerEntries,
-      cityLedgerAllocations
+      cityLedgerAllocations,
+      onlineBookingNotifications,
     });
 
   } catch (error: any) {

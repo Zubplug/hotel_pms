@@ -465,6 +465,45 @@ public class LocalRepository
         return events;
     }
 
+    public async Task<List<LocalOfflineNotification>> GetOfflineBookingNotificationsAsync(string propertyId)
+    {
+        var metadata = await _dbContext.SyncMetadata.FirstOrDefaultAsync(m => m.Id == "singleton");
+        if (metadata == null || string.IsNullOrWhiteSpace(metadata.OfflineNotificationsJson)) return new List<LocalOfflineNotification>();
+        try
+        {
+            return (JsonSerializer.Deserialize<List<LocalOfflineNotification>>(metadata.OfflineNotificationsJson) ?? new List<LocalOfflineNotification>())
+                .Where(n => n.PropertyId == propertyId && !n.Acknowledged)
+                .OrderByDescending(n => n.CreatedAt)
+                .ToList();
+        }
+        catch
+        {
+            return new List<LocalOfflineNotification>();
+        }
+    }
+
+    public async Task<bool> AcknowledgeOfflineBookingNotificationAsync(string propertyId, string notificationId)
+    {
+        var metadata = await _dbContext.SyncMetadata.FirstOrDefaultAsync(m => m.Id == "singleton");
+        if (metadata == null || string.IsNullOrWhiteSpace(metadata.OfflineNotificationsJson)) return false;
+        List<LocalOfflineNotification> notifications;
+        try
+        {
+            notifications = JsonSerializer.Deserialize<List<LocalOfflineNotification>>(metadata.OfflineNotificationsJson) ?? new List<LocalOfflineNotification>();
+        }
+        catch
+        {
+            return false;
+        }
+
+        var notification = notifications.FirstOrDefault(n => n.PropertyId == propertyId && n.Id == notificationId);
+        if (notification == null) return false;
+        notification.Acknowledged = true;
+        metadata.OfflineNotificationsJson = JsonSerializer.Serialize(notifications);
+        await _dbContext.SaveChangesAsync();
+        return true;
+    }
+
     public async Task<List<LocalSyncEvent>> GetSyncEventsAsync()
     {
         return await _dbContext.SyncEvents
@@ -1648,7 +1687,18 @@ public class LocalRepository
             .OrderByDescending(item => item.CreatedAt)
             .ToListAsync();
 
-        var folios = await _dbContext.Folios.Where(item => item.PropertyId == session.PropertyId).ToListAsync();
+        // The offline report must hydrate the same guest and room context as
+        // the online report. Without these includes, EF returns the folio
+        // ledger but leaves Reservation/Guest/Room navigations null, producing
+        // blank room and guest columns in the A4 control sheet.
+        var folios = await _dbContext.Folios
+            .Where(item => item.PropertyId == session.PropertyId)
+            .Include(item => item.Reservation)
+                .ThenInclude(reservation => reservation!.Guest)
+            .Include(item => item.Reservation)
+                .ThenInclude(reservation => reservation!.Rooms)
+                    .ThenInclude(reservationRoom => reservationRoom.Room)
+            .ToListAsync();
         var rows = new List<Dictionary<string, object?>>();
         decimal cashPayments = 0m, cardPayments = 0m, bankTransfers = 0m, otherPayments = 0m;
         decimal roomCharges = 0m, laundryCharges = 0m, otherCharges = 0m;
@@ -1793,7 +1843,11 @@ public class LocalRepository
             property = property == null ? null : new
             {
                 name = property.Name,
+                address = property.Address,
                 city = property.City,
+                state = property.State,
+                phone = property.Phone,
+                email = property.Email,
                 baseCurrency = property.Currency,
             },
             session = new { session.Id, session.ShiftReference, session.PropertyId, session.BusinessDate, session.Status, session.OpeningFloat, expectedCash, session.DeclaredCash, session.Variance, session.OpenedAt, session.ClosedAt, staffName = staff == null ? "Unknown cashier" : $"{staff.FirstName} {staff.LastName}".Trim(), till = account?.Name ?? "Assigned till" },

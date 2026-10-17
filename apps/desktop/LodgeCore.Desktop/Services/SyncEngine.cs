@@ -244,6 +244,14 @@ public class SyncEngine : BackgroundService
             await dbContext.Database.ExecuteSqlRawAsync(
                 "CREATE TABLE IF NOT EXISTS SyncMetadata (Id TEXT PRIMARY KEY, LastSuccessfulSyncAt TEXT, LastSyncVersion TEXT, SchemaVersion TEXT);"
             );
+            try
+            {
+                await dbContext.Database.ExecuteSqlRawAsync(
+                    "ALTER TABLE SyncMetadata ADD COLUMN OfflineNotificationsJson TEXT;",
+                    stoppingToken
+                );
+            }
+            catch (Microsoft.Data.Sqlite.SqliteException ex) when (ex.SqliteErrorCode == 1 && ex.Message.Contains("duplicate column", StringComparison.OrdinalIgnoreCase)) { }
 
             var meta = await dbContext.SyncMetadata.FirstOrDefaultAsync(stoppingToken);
             if (meta != null && meta.LastSuccessfulSyncAt.HasValue)
@@ -851,6 +859,8 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
             using var doc = System.Text.Json.JsonDocument.Parse(json);
             var root = doc.RootElement;
 
+            await ApplyOfflineBookingNotificationsAsync(dbContext, root, propertyId, stoppingToken);
+
             pageCount++;
             hasMore = root.TryGetProperty("hasMore", out var hm) && hm.GetBoolean();
             var nextCursor = root.TryGetProperty("syncedAt", out var sa) && sa.ValueKind != System.Text.Json.JsonValueKind.Null ? sa.GetString() : null;
@@ -961,6 +971,16 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                         localProp.AuditStatus = auditStatus.GetString() ?? localProp.AuditStatus;
                     if (propEl.TryGetProperty("kitchenServiceOutletId", out var kitchenOutlet) && kitchenOutlet.ValueKind != System.Text.Json.JsonValueKind.Null)
                         localProp.KitchenServiceOutletId = kitchenOutlet.GetString();
+                    if (propEl.TryGetProperty("address", out var address) && address.ValueKind != System.Text.Json.JsonValueKind.Null)
+                        localProp.Address = address.GetString() ?? localProp.Address;
+                    if (propEl.TryGetProperty("city", out var city) && city.ValueKind != System.Text.Json.JsonValueKind.Null)
+                        localProp.City = city.GetString() ?? localProp.City;
+                    if (propEl.TryGetProperty("state", out var state) && state.ValueKind != System.Text.Json.JsonValueKind.Null)
+                        localProp.State = state.GetString() ?? localProp.State;
+                    if (propEl.TryGetProperty("phone", out var phone) && phone.ValueKind != System.Text.Json.JsonValueKind.Null)
+                        localProp.Phone = phone.GetString() ?? localProp.Phone;
+                    if (propEl.TryGetProperty("email", out var email) && email.ValueKind != System.Text.Json.JsonValueKind.Null)
+                        localProp.Email = email.GetString() ?? localProp.Email;
                 }
                 else
                 {
@@ -969,7 +989,11 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                         Id = propertyId,
                         Name = propEl.TryGetProperty("name", out var n) && n.ValueKind != System.Text.Json.JsonValueKind.Null ? n.GetString() ?? "Unknown" : "Unknown",
                         Code = propEl.TryGetProperty("code", out var c) && c.ValueKind != System.Text.Json.JsonValueKind.Null ? c.GetString() ?? "" : "",
+                        Address = propEl.TryGetProperty("address", out var addr2) && addr2.ValueKind != System.Text.Json.JsonValueKind.Null ? addr2.GetString() ?? "" : "",
                         City = propEl.TryGetProperty("city", out var cy) && cy.ValueKind != System.Text.Json.JsonValueKind.Null ? cy.GetString() ?? "" : "",
+                        State = propEl.TryGetProperty("state", out var state2) && state2.ValueKind != System.Text.Json.JsonValueKind.Null ? state2.GetString() ?? "" : "",
+                        Phone = propEl.TryGetProperty("phone", out var phone2) && phone2.ValueKind != System.Text.Json.JsonValueKind.Null ? phone2.GetString() ?? "" : "",
+                        Email = propEl.TryGetProperty("email", out var email2) && email2.ValueKind != System.Text.Json.JsonValueKind.Null ? email2.GetString() ?? "" : "",
                         Currency = propEl.TryGetProperty("currency", out var cur) && cur.ValueKind != System.Text.Json.JsonValueKind.Null ? cur.GetString() ?? "NGN" : "NGN",
                         Timezone = propEl.TryGetProperty("timezone", out var tz2) && tz2.ValueKind != System.Text.Json.JsonValueKind.Null ? tz2.GetString() ?? "UTC" : "UTC",
                         IsActive = true,
@@ -4066,5 +4090,66 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                         ?? dbContext.Guests.FirstOrDefault(x => x.Id == evt.AggregateId);
             if (guest != null && guest.Version == evt.Sequence) guest.IsDirty = false;
         }
+    }
+
+    private async Task ApplyOfflineBookingNotificationsAsync(
+        LocalDbContext dbContext,
+        JsonElement root,
+        string propertyId,
+        CancellationToken stoppingToken)
+    {
+        if (!root.TryGetProperty("onlineBookingNotifications", out var incoming) || incoming.ValueKind != JsonValueKind.Array)
+            return;
+
+        var metadata = await dbContext.SyncMetadata.FirstOrDefaultAsync(m => m.Id == "singleton", stoppingToken);
+        if (metadata == null)
+        {
+            metadata = new LodgeCore.Desktop.Data.Entities.LocalSyncMetadata { Id = "singleton", SchemaVersion = "1.0" };
+            dbContext.SyncMetadata.Add(metadata);
+        }
+
+        List<LodgeCore.Desktop.Data.Entities.LocalOfflineNotification> cached;
+        try
+        {
+            cached = JsonSerializer.Deserialize<List<LodgeCore.Desktop.Data.Entities.LocalOfflineNotification>>(metadata.OfflineNotificationsJson ?? "[]")
+                ?? new List<LodgeCore.Desktop.Data.Entities.LocalOfflineNotification>();
+        }
+        catch
+        {
+            cached = new List<LodgeCore.Desktop.Data.Entities.LocalOfflineNotification>();
+        }
+
+        foreach (var item in incoming.EnumerateArray())
+        {
+            var id = item.TryGetProperty("id", out var idEl) ? idEl.GetString() : null;
+            if (string.IsNullOrWhiteSpace(id) || cached.Any(n => n.Id == id)) continue;
+
+            var metadataEl = item.TryGetProperty("metadata", out var notificationMetadata)
+                ? notificationMetadata
+                : default;
+            var notificationType = metadataEl.ValueKind == JsonValueKind.Object && metadataEl.TryGetProperty("notificationType", out var typeEl)
+                ? typeEl.GetString() ?? string.Empty
+                : string.Empty;
+            var createdAt = item.TryGetProperty("createdAt", out var createdEl) && DateTime.TryParse(createdEl.GetString(), out var parsedCreatedAt)
+                ? parsedCreatedAt
+                : DateTime.UtcNow;
+
+            cached.Add(new LodgeCore.Desktop.Data.Entities.LocalOfflineNotification
+            {
+                Id = id,
+                PropertyId = item.TryGetProperty("propertyId", out var propertyEl) ? propertyEl.GetString() ?? propertyId : propertyId,
+                NotificationType = notificationType,
+                Subject = item.TryGetProperty("subject", out var subjectEl) ? subjectEl.GetString() ?? "Online booking update" : "Online booking update",
+                Body = item.TryGetProperty("body", out var bodyEl) ? bodyEl.GetString() ?? string.Empty : string.Empty,
+                Category = item.TryGetProperty("category", out var categoryEl) ? categoryEl.GetString() ?? string.Empty : string.Empty,
+                Priority = item.TryGetProperty("priority", out var priorityEl) ? priorityEl.GetString() ?? string.Empty : string.Empty,
+                MetadataJson = metadataEl.ValueKind == JsonValueKind.Object ? metadataEl.GetRawText() : "{}",
+                CreatedAt = createdAt,
+            });
+        }
+
+        // Keep the local cache bounded while retaining every unacknowledged alert.
+        metadata.OfflineNotificationsJson = JsonSerializer.Serialize(
+            cached.Where(n => !n.Acknowledged || n.CreatedAt >= DateTime.UtcNow.AddDays(-7)).OrderBy(n => n.CreatedAt).TakeLast(200).ToList());
     }
 }

@@ -416,6 +416,14 @@ public partial class MainPage : ContentPage
                 case "sync.outbox":
                     responseData = await pmsInterop.GetOutboxEventsAsync();
                     break;
+                case "sync.offlineBookingNotifications":
+                    responseData = await pmsInterop.GetOfflineBookingNotificationsAsync(parameters?["propertyId"]?.ToString() ?? "");
+                    break;
+                case "sync.acknowledgeOfflineBookingNotification":
+                    responseData = await pmsInterop.AcknowledgeOfflineBookingNotificationAsync(
+                        parameters?["propertyId"]?.ToString() ?? "",
+                        parameters?["notificationId"]?.ToString() ?? "");
+                    break;
                 case "refunds.list":
                     responseData = await pmsInterop.GetRefundRequestsAsync(parameters?["propertyId"]?.ToString() ?? "");
                     break;

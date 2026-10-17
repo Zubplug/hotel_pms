@@ -146,24 +146,42 @@ export function FrontDeskLayout({ children, enabledModules = [], licenseSnapshot
   const dismissRoomChargeNotification = () => {
     stopRoomChargeChime();
     if (roomChargeNotification) {
-      void fetch('/api/v1/frontdesk/notifications', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ notificationId: roomChargeNotification.id }),
-      });
+      if (isDesktopMode && provider.system?.acknowledgeOfflineBookingNotification) {
+        void provider.system.acknowledgeOfflineBookingNotification(propertyId, roomChargeNotification.id);
+      }
+      if (isOnline) {
+        void fetch('/api/v1/frontdesk/notifications', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ notificationId: roomChargeNotification.id }),
+        });
+      }
     }
     setRoomChargeNotification(null);
   };
 
   useEffect(() => {
-    if (!isOnline || !propertyId || status !== 'authenticated') return;
+    if ((!isOnline && !isDesktopMode) || !propertyId || status !== 'authenticated') return;
     let cancelled = false;
     const poll = async () => {
       try {
-        const response = await fetch(`/api/v1/frontdesk/notifications?propertyId=${encodeURIComponent(propertyId)}`, { cache: 'no-store' });
-        if (!response.ok) return;
-        const result = await response.json();
-        const next = result.data?.[0];
+        let next: any;
+        if (isDesktopMode && provider.system?.getOfflineBookingNotifications) {
+          const result = await provider.system.getOfflineBookingNotifications(propertyId);
+          next = result?.data?.[0];
+          if (next?.metadataJson) {
+            try { next.metadata = JSON.parse(next.metadataJson); } catch { next.metadata = {}; }
+          }
+        }
+        // When the desktop is online, keep the live queue as a fallback for
+        // POS room-charge alerts and any notification that has not reached the
+        // next local sync yet.
+        if (!next && isOnline) {
+          const response = await fetch(`/api/v1/frontdesk/notifications?propertyId=${encodeURIComponent(propertyId)}`, { cache: 'no-store' });
+          if (!response.ok) return;
+          const result = await response.json();
+          next = result.data?.[0];
+        }
         if (!cancelled && next) {
           if (lastRoomChargeNotificationId.current !== next.id) {
             lastRoomChargeNotificationId.current = next.id;
@@ -182,7 +200,7 @@ export function FrontDeskLayout({ children, enabledModules = [], licenseSnapshot
             currency: metadata.currency || 'NGN',
             folioId: metadata.folioId || '',
             createdAt: next.createdAt,
-            offline: false,
+            offline: isDesktopMode && !isOnline,
           });
         }
       } catch {
@@ -196,7 +214,7 @@ export function FrontDeskLayout({ children, enabledModules = [], licenseSnapshot
       window.clearInterval(timer);
       stopRoomChargeChime();
     };
-  }, [isOnline, propertyId, status, startRoomChargeChime, stopRoomChargeChime]);
+  }, [isDesktopMode, isOnline, propertyId, provider.system, status, startRoomChargeChime, stopRoomChargeChime]);
 
   const { data: res } = useQuery({
     queryKey: ['frontdesk', 'dashboard', propertyId],
@@ -279,7 +297,7 @@ export function FrontDeskLayout({ children, enabledModules = [], licenseSnapshot
       <FrontDeskMasterCardModal isOpen={showMasterCardModal} onClose={() => setShowMasterCardModal(false)} />
 
       {roomChargeNotification && (
-        <div className="fixed right-5 top-[76px] z-[120] w-[min(390px,calc(100vw-2rem))] animate-in slide-in-from-right-5 fade-in duration-300">
+        <div role="alert" aria-live="assertive" className="pointer-events-auto fixed right-5 top-[76px] z-[9999] w-[min(390px,calc(100vw-2rem))] animate-in slide-in-from-right-5 fade-in duration-300">
           <div className="overflow-hidden rounded-2xl border border-indigo-400/25 bg-[#111a2d] shadow-2xl shadow-black/40 ring-1 ring-white/5">
             <div className="flex items-start gap-3 border-b border-white/[0.07] bg-indigo-500/[0.12] px-4 py-3">
               <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-400/15 text-emerald-300">
