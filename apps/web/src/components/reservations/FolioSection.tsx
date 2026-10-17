@@ -16,10 +16,10 @@ import { HardwareBridge } from '@/lib/desktop/HardwareBridge';
 import { formatRoomNumber } from '@/lib/format-room';
 import { getFolioBalance } from '@/lib/finance/folio-balance';
 
-export function FolioSection({ reservation, readOnly = false }: { reservation: any; readOnly?: boolean }) {
+export function FolioSection({ reservation, readOnly = false, darkMode = false }: { reservation: any; readOnly?: boolean; darkMode?: boolean }) {
   const pathname = usePathname();
   const isFrontDesk = pathname.startsWith('/frontdesk');
-  const isDarkReservation = pathname.startsWith('/reservations');
+  const isDarkReservation = darkMode || pathname.startsWith('/reservations');
   const [isAddPaymentOpen, setIsAddPaymentOpen] = useState(false);
   const [isCheckOutOpen, setIsCheckOutOpen] = useState(false);
   
@@ -321,18 +321,18 @@ export function FolioSection({ reservation, readOnly = false }: { reservation: a
               <div><h3 className={`font-bold ${isDarkReservation ? 'text-white' : 'text-slate-900'}`}>Transaction history</h3><p className="text-xs text-slate-400">{ledgerItems.length} posted transaction{ledgerItems.length === 1 ? '' : 's'}</p></div>
               <span className="text-xs font-medium text-slate-400">All amounts in {folio.currency || 'NGN'}</span>
             </div>
-            <div className="hidden overflow-x-auto rounded-xl border border-slate-200 md:block">
+            <div className={`hidden overflow-x-auto rounded-xl border md:block ${isDarkReservation ? 'border-white/[0.08]' : 'border-slate-200'}`}>
             <table className="w-full min-w-[820px] table-fixed text-left text-sm">
-              <thead className="border-b bg-slate-50 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+              <thead className={`border-b text-[11px] font-bold uppercase tracking-wider ${isDarkReservation ? 'border-white/[0.08] bg-[#111d31] text-slate-500' : 'bg-slate-50 text-slate-500'}`}>
                 <tr>
                   <th className="w-36 px-4 py-3">Date</th>
                   <th className="px-4 py-3">Transaction</th>
-                  <th className="w-36 px-4 py-3 text-right text-rose-700">Debit</th>
-                  <th className="w-36 px-4 py-3 text-right text-emerald-700">Credit</th>
+                  <th className={`w-36 px-4 py-3 text-right ${isDarkReservation ? 'text-rose-300' : 'text-rose-700'}`}>Debit</th>
+                  <th className={`w-36 px-4 py-3 text-right ${isDarkReservation ? 'text-emerald-300' : 'text-emerald-700'}`}>Credit</th>
                   {!readOnly && <th className="w-40 px-4 py-3 text-right">Actions</th>}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 bg-white">
+              <tbody className={`divide-y ${isDarkReservation ? 'divide-white/[0.06] bg-[#0f1b2e]' : 'divide-slate-100 bg-white'}`}>
                 {ledgerItems.length === 0 ? (
                   <tr>
                     <td colSpan={readOnly ? 4 : 5} className="px-6 py-8 text-center text-muted-foreground">
@@ -345,7 +345,7 @@ export function FolioSection({ reservation, readOnly = false }: { reservation: a
                     const absAmount = Math.abs(item.amount);
 
                     return (
-                      <tr key={item.id} className="transition-colors hover:bg-blue-50/40">
+                      <tr key={item.id} className={`transition-colors ${isDarkReservation ? 'hover:bg-white/[0.035]' : 'hover:bg-blue-50/40'}`}>
                         <td className="whitespace-nowrap px-4 py-4 text-xs text-slate-500">
                           {format(new Date(item.createdAt), 'MMM d, h:mm a')}
                         </td>
@@ -354,14 +354,14 @@ export function FolioSection({ reservation, readOnly = false }: { reservation: a
                           <Badge variant={item.type === 'CHARGE' ? 'outline' : item.type === 'PAYMENT' ? 'default' : 'secondary'} className="shrink-0 whitespace-nowrap text-[10px]">
                             {transactionLabel(item.type)}
                           </Badge>
-                          <p className="min-w-0 flex-1 break-words font-medium leading-5 text-slate-800" title={item.description}>{item.description}</p>
+                          <p className={`min-w-0 flex-1 break-words font-medium leading-5 ${isDarkReservation ? 'text-slate-200' : 'text-slate-800'}`} title={item.description}>{item.description}</p>
                           {item.creditStatus && <Badge variant="secondary" className="shrink-0 text-[10px]">{item.creditStatus}</Badge>}
                           </div>
                         </td>
-                        <td className="whitespace-nowrap px-4 py-4 text-right font-bold tabular-nums text-rose-700">
+                        <td className={`whitespace-nowrap px-4 py-4 text-right font-bold tabular-nums ${isDarkReservation ? 'text-rose-300' : 'text-rose-700'}`}>
                           {isDebit ? formatCurrency(absAmount) : '—'}
                         </td>
-                        <td className="whitespace-nowrap px-4 py-4 text-right font-bold tabular-nums text-emerald-700">
+                        <td className={`whitespace-nowrap px-4 py-4 text-right font-bold tabular-nums ${isDarkReservation ? 'text-emerald-300' : 'text-emerald-700'}`}>
                           {isDebit ? '—' : formatCurrency(absAmount)}
                         </td>
                         {!readOnly && <td className="w-40 px-4 py-4"><div className="flex justify-end">{renderItemActions(item)}</div></td>}
@@ -376,8 +376,8 @@ export function FolioSection({ reservation, readOnly = false }: { reservation: a
               {ledgerItems.length === 0 ? <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">No transactions recorded.</div> : ledgerItems.map((item: any) => {
                 const isDebit = item.amount > 0;
                 const absAmount = Math.abs(item.amount);
-                return <div key={item.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                  <div className="flex items-start justify-between gap-3"><div className="min-w-0"><Badge variant={item.type === 'CHARGE' ? 'outline' : item.type === 'PAYMENT' ? 'default' : 'secondary'} className="text-[10px]">{transactionLabel(item.type)}</Badge><p className="mt-2 font-semibold text-slate-900">{item.description}</p><p className="mt-1 text-xs text-slate-500">{format(new Date(item.createdAt), 'MMM d, yyyy · h:mm a')}</p></div><div className="shrink-0 text-right"><p className={`text-[10px] font-bold uppercase tracking-wider ${isDebit ? 'text-rose-700' : 'text-emerald-700'}`}>{isDebit ? 'Debit' : 'Credit'}</p><p className={`text-lg font-black tabular-nums ${isDebit ? 'text-rose-700' : 'text-emerald-700'}`}>{formatCurrency(absAmount)}</p></div></div>
+                return <div key={item.id} className={`rounded-xl border p-4 shadow-sm ${isDarkReservation ? 'border-white/[0.08] bg-[#0f1b2e]' : 'border-slate-200 bg-white'}`}>
+                  <div className="flex items-start justify-between gap-3"><div className="min-w-0"><Badge variant={item.type === 'CHARGE' ? 'outline' : item.type === 'PAYMENT' ? 'default' : 'secondary'} className="text-[10px]">{transactionLabel(item.type)}</Badge><p className={`mt-2 font-semibold ${isDarkReservation ? 'text-slate-100' : 'text-slate-900'}`}>{item.description}</p><p className="mt-1 text-xs text-slate-500">{format(new Date(item.createdAt), 'MMM d, yyyy · h:mm a')}</p></div><div className="shrink-0 text-right"><p className={`text-[10px] font-bold uppercase tracking-wider ${isDebit ? 'text-rose-300' : 'text-emerald-300'}`}>{isDebit ? 'Debit' : 'Credit'}</p><p className={`text-lg font-black tabular-nums ${isDebit ? 'text-rose-300' : 'text-emerald-300'}`}>{formatCurrency(absAmount)}</p></div></div>
                   {!readOnly && <div className="mt-3 border-t pt-3">{renderItemActions(item)}</div>}
                 </div>;
               })}

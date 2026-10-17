@@ -229,7 +229,7 @@ export function FrontDeskReservationDetail({ reservation, darkMode = false }: Fr
     const GLASS_BORDER = 'border border-white/[0.06]';
     const statusCls = STATUS_DARK[reservation.status] ?? 'border-slate-600/30 bg-slate-600/10 text-slate-400';
     return (
-      <div className="mx-auto max-w-5xl space-y-6 px-4 py-6" style={{ background: '#060b18', minHeight: '100%' }}>
+      <div className="mx-auto max-w-[1440px] space-y-6 px-4 py-6 sm:px-6 lg:px-8" style={{ background: '#060b18', minHeight: '100%' }}>
         {/* Header */}
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
@@ -241,7 +241,7 @@ export function FrontDeskReservationDetail({ reservation, darkMode = false }: Fr
         </div>
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
           {/* Left */}
-          <div className="space-y-4 lg:col-span-4">
+          <div className="space-y-4 lg:sticky lg:top-6 lg:col-span-4 lg:self-start">
             {/* Guest card */}
             <div className={`overflow-hidden rounded-[20px] ${GLASS_BORDER}`} style={GLASS}>
               <div className="flex items-center gap-4 border-b border-white/[0.06] px-6 py-5" style={{ background: 'rgba(255,255,255,0.03)' }}>
@@ -379,13 +379,13 @@ export function FrontDeskReservationDetail({ reservation, darkMode = false }: Fr
             </div>
           </div>
           {/* Right */}
-          <div className="lg:col-span-8">
+          <div className="min-w-0 lg:col-span-8">
             <div className={`flex h-full flex-col overflow-hidden rounded-[20px] ${GLASS_BORDER}`} style={GLASS}>
               <div className="flex-1 space-y-6 p-6">
                 {(reservation.status === 'CONFIRMED' || reservation.status === 'NO_SHOW') && (
                   <NoShowActions reservation={reservation} onUpdated={() => queryClient.invalidateQueries({ queryKey: ['reservation', reservation.id] })} />
                 )}
-                <FolioSection reservation={reservation} />
+                <FolioSection reservation={reservation} darkMode />
                 <FrontDeskCardInformationSection reservation={reservation} />
               </div>
             </div>

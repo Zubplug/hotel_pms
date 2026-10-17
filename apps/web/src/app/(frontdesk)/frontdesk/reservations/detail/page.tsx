@@ -104,7 +104,7 @@ function ReservationDetailContent() {
       </div>
       <div className="mx-auto max-w-[1440px] px-4 pt-8 sm:px-6 lg:px-8">
         <div className="animate-in fade-in slide-in-from-bottom-8 duration-700 fill-mode-both">
-          <FrontDeskReservationDetail reservation={reservation} />
+          <FrontDeskReservationDetail reservation={reservation} darkMode />
         </div>
       </div>
     </div>
