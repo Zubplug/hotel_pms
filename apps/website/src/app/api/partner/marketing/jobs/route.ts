@@ -20,14 +20,16 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null) as { campaignId?: string; template?: string; idempotencyKey?: string } | null;
   const template = body?.template as keyof typeof CREATIVE_TEMPLATES;
   if (!body?.campaignId || !CREATIVE_TEMPLATES[template]) return NextResponse.json({ error: "campaignId and a supported template are required" }, { status: 400 });
-  const campaign = await prisma.referralCampaign.findFirst({ where: { id: body.campaignId, partnerId: partner.id, isActive: true }, include: { property: { select: { id: true, name: true, reachMedia: { where: { status: "APPROVED" }, orderBy: { sortOrder: "asc" }, take: 1, select: { url: true } } } } } });
+  const campaign = await prisma.referralCampaign.findFirst({ where: { id: body.campaignId, partnerId: partner.id, isActive: true }, include: { property: { select: { id: true, name: true, reachMedia: { where: { status: "APPROVED" }, orderBy: { sortOrder: "asc" }, take: 1, select: { url: true } }, roomTypes: { where: { isActive: true, deletedAt: null }, orderBy: { name: "asc" }, select: { photos: true, reachMedia: { where: { status: "APPROVED" }, orderBy: { sortOrder: "asc" }, take: 1, select: { url: true } } } } } } } });
   if (!campaign) return NextResponse.json({ error: "Campaign is not available" }, { status: 404 });
-  const key = body.idempotencyKey?.slice(0, 200) || crypto.createHash("sha256").update(`${partner.id}:${campaign.id}:${template}:${campaign.property.reachMedia[0]?.url || "none"}`).digest("hex");
+  const roomImage = campaign.property.roomTypes.flatMap((room) => [room.reachMedia[0]?.url, room.photos[0]]).find(Boolean) || null;
+  const sourceUrl = roomImage || campaign.property.reachMedia[0]?.url || null;
+  const key = body.idempotencyKey?.slice(0, 200) || crypto.createHash("sha256").update(`${partner.id}:${campaign.id}:${template}:${sourceUrl || "none"}`).digest("hex");
   const existing = await prisma.reachCreativeGeneration.findUnique({ where: { idempotencyKey: key }, include: { property: { select: { name: true } }, campaign: { select: { name: true } } } });
   if (existing) return NextResponse.json({ job: existing, existing: true });
   let job;
   try {
-    job = await prisma.reachCreativeGeneration.create({ data: { organizationId: campaign.organizationId, partnerId: partner.id, propertyId: campaign.propertyId, campaignId: campaign.id, idempotencyKey: key, template, width: CREATIVE_TEMPLATES[template].width, height: CREATIVE_TEMPLATES[template].height, sourceUrl: campaign.property.reachMedia[0]?.url || null } });
+    job = await prisma.reachCreativeGeneration.create({ data: { organizationId: campaign.organizationId, partnerId: partner.id, propertyId: campaign.propertyId, campaignId: campaign.id, idempotencyKey: key, template, width: CREATIVE_TEMPLATES[template].width, height: CREATIVE_TEMPLATES[template].height, sourceUrl } });
   } catch (error) {
     if ((error as { code?: string }).code !== "P2002") throw error;
     const duplicate = await prisma.reachCreativeGeneration.findUnique({ where: { idempotencyKey: key }, include: { property: { select: { name: true } }, campaign: { select: { name: true } } } });

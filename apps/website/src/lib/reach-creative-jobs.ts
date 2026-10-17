@@ -24,7 +24,7 @@ export async function processReachCreativeGeneration(generationId: string) {
     if (!job.campaign) throw new Error("Campaign is no longer available");
     const template = job.template as CreativeTemplate;
     if (!CREATIVE_TEMPLATES[template]) throw new Error("Unsupported creative template");
-    const rendered = await renderReachCreative({ template, propertyName: job.property.name, campaignName: job.campaign.name, commissionBps: job.campaign.commissionBps, referralUrl: reachShareUrl(job.campaign.code), sourceUrl: job.sourceUrl });
+    const rendered = await renderReachCreative({ template, propertyName: job.property.name, campaignName: job.campaign.name, referralUrl: reachShareUrl(job.campaign.code), sourceUrl: job.sourceUrl });
     const blob = await put(`reach/creatives/${job.propertyId}/${job.id}.png`, rendered.buffer, { access: "public", addRandomSuffix: false, contentType: rendered.mimeType });
     await prisma.reachCreativeAsset.updateMany({ where: { propertyId: job.propertyId, campaignId: job.campaignId, status: "APPROVED", usageNotes: { in: ["Deterministically rendered from approved LodgeCore data.", "Deterministically rendered from approved LodgeCore data · renderer v2.", "Deterministically rendered from approved LodgeCore data · renderer v3."] } }, data: { status: "ARCHIVED" } });
     const asset = await prisma.reachCreativeAsset.create({ data: { propertyId: job.propertyId, campaignId: job.campaignId, title: `${job.property.name} · ${template.toLowerCase()} referral banner`, assetType: rendered.assetType, url: blob.url, mimeType: rendered.mimeType, width: rendered.width, height: rendered.height, usageNotes: "Deterministically rendered from approved LodgeCore data · renderer v3.", status: "APPROVED" } });
