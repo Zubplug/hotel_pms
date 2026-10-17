@@ -14,6 +14,16 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'No access to this property' }, { status: 403 });
     }
 
+    const frontDeskNotificationTypes = [
+      'POS_ROOM_CHARGE_POSTED',
+      'RESERVATION_CREATED',
+      'RESERVATION_CANCELLED',
+      'RESERVATION_EXPIRED',
+      'RESERVATION_NO_SHOW',
+      'CHECK_IN',
+      'CHECK_OUT',
+      'PAYMENT_RECEIVED',
+    ];
     const notifications = await prisma.notification.findMany({
       where: {
         recipientId: userId,
@@ -21,8 +31,10 @@ export async function GET(req: NextRequest) {
         propertyId,
         channel: 'in_app',
         readAt: null,
-        category: 'Operations',
-        metadata: { path: ['notificationType'], equals: 'POS_ROOM_CHARGE_POSTED' },
+        category: { in: ['Operations', 'Finance'] },
+        OR: frontDeskNotificationTypes.map((notificationType) => ({
+          metadata: { path: ['notificationType'], equals: notificationType },
+        })),
       },
       orderBy: { createdAt: 'asc' },
       take: 10,

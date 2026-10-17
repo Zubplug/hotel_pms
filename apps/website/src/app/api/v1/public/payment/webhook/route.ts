@@ -9,6 +9,7 @@ import { getBookingPaymentAccount, resolveSecretRef } from '@/lib/payment-provid
 import { FlutterwaveProvider } from '@/lib/payment-providers/flutterwave';
 import { postBookingAdvanceDeposit } from '@/lib/booking-engine/financial-service';
 import { reconcileFlutterwaveRefund } from '@/lib/booking-engine/flutterwave-refund-reconciliation';
+import { NotificationEngine } from '@/lib/notification-engine';
 
 export async function POST(req: NextRequest) {
   const rawBody = await req.text();
@@ -271,8 +272,26 @@ export async function POST(req: NextRequest) {
         property: { select: { name: true } },
         primaryGuest: { select: { email: true, firstName: true } },
         reservationRooms: { where: { status: 'ACTIVE' }, include: { room: { select: { number: true } } } },
+        folios: { where: { type: 'ROOM' }, orderBy: { createdAt: 'asc' }, take: 1, select: { id: true } },
       },
     });
+    if (paidReservation?.folios[0]) {
+      NotificationEngine.emit({
+        type: 'PAYMENT_RECEIVED',
+        organizationId: bpt.organizationId,
+        propertyId: bpt.propertyId,
+        entityType: 'folio',
+        entityId: paidReservation.folios[0].id,
+        idempotencyKey: `booking_payment_${bpt.id}`,
+        metadata: {
+          notificationType: 'PAYMENT_RECEIVED',
+          amount: verifiedAmount,
+          currency: verifiedCurrency,
+          method: bpt.provider === 'FLUTTERWAVE' ? 'FLUTTERWAVE_ONLINE' : 'PAYSTACK_ONLINE',
+          source: 'BOOKING_ENGINE',
+        },
+      }).catch((e: any) => console.error('[Booking Webhook] payment notification failed:', e));
+    }
     if (paidReservation?.primaryGuest.email) {
       const snapshot = (paidReservation.ratePlanSnapshot as any) ?? {};
       const roomNumber = paidReservation.reservationRooms[0]?.room?.number;

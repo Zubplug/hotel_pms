@@ -124,7 +124,7 @@ async function expire(req: NextRequest) {
         if (result.email) {
           sendBookingExpiredEmail({ to: result.email, propertyName: result.propertyName, confirmationNumber: result.confirmationNumber }).catch((error) => console.error('[Booking Hold Expiry] email failed', error));
         }
-        NotificationEngine.emit({ type: 'RESERVATION_CANCELLED', organizationId: hold.organizationId, propertyId: hold.propertyId, entityType: 'reservation', entityId: result.reservationId, idempotencyKey: `expired-reservation:${result.reservationId}`, metadata: { source: 'BOOKING_HOLD_EXPIRY', reason: 'PAYMENT_WINDOW_EXPIRED' } }).catch((error: any) => console.error('[Booking Hold Expiry] notification failed', error));
+        NotificationEngine.emit({ type: 'RESERVATION_EXPIRED', organizationId: hold.organizationId, propertyId: hold.propertyId, entityType: 'reservation', entityId: result.reservationId, idempotencyKey: `expired-reservation:${result.reservationId}`, metadata: { notificationType: 'RESERVATION_EXPIRED', source: 'BOOKING_HOLD_EXPIRY', reason: 'PAYMENT_WINDOW_EXPIRED' } }).catch((error: any) => console.error('[Booking Hold Expiry] notification failed', error));
       } else if (result.kind === 'PAID_PENDING') {
         paidPending.push(result.reservationId);
       }

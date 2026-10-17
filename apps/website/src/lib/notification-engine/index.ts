@@ -52,6 +52,7 @@ export const NotificationEngine = {
       const recipientIds = await resolveRecipients(
         event.organizationId,
         event.propertyId,
+        event.type,
       );
       if (recipientIds.length === 0) return;
 
@@ -94,8 +95,17 @@ export const NotificationEngine = {
 async function resolveRecipients(
   organizationId: string,
   propertyId?: string,
+  eventType?: string,
 ): Promise<string[]> {
-  const targetRoles = ["EXECUTIVE", "MANAGER", "GENERAL_MANAGER", "DIRECTOR"];
+  const frontDeskEventTypes = new Set([
+    "RESERVATION_CREATED",
+    "RESERVATION_CANCELLED",
+    "RESERVATION_EXPIRED",
+    "PAYMENT_RECEIVED",
+  ]);
+  const targetRoles = frontDeskEventTypes.has(eventType || "")
+    ? ["RECEPTIONIST", "FRONT_DESK", "FRONT_DESK_MANAGER", "GENERAL_CASHIER", "CASHIER", "NIGHT_AUDITOR", "MANAGER", "GENERAL_MANAGER", "DIRECTOR"]
+    : ["EXECUTIVE", "MANAGER", "GENERAL_MANAGER", "DIRECTOR"];
 
   const whereClause: any = {
     role: {
@@ -653,6 +663,27 @@ async function evaluateEvent(
       return {
         subject: `Reservation Cancelled — ${guestName}`,
         body: `❌ Conf: ${res.confirmationNumber || event.entityId}\n👤 Guest: ${guestName} | 📞 ${phone}\n🏠 ${roomDetails || "N/A"}\n📅 Was: ${checkIn} → ${checkOut} (${nights} night${nights !== 1 ? "s" : ""})\n💰 Value: ${totalAmount}\n📝 Reason: ${cancelReason}`,
+        category: "Operations",
+        priority: "High",
+      };
+    }
+
+    case "RESERVATION_EXPIRED": {
+      const res = await prisma.reservation.findUnique({
+        where: { id: event.entityId },
+        include: {
+          primaryGuest: true,
+          reservationRooms: { include: { room: true } },
+        },
+      });
+      if (!res) return null;
+      const guestName = res.primaryGuest?.firstName
+        ? `${res.primaryGuest.firstName} ${res.primaryGuest.lastName}`
+        : "A guest";
+      const roomNumber = res.reservationRooms?.[0]?.room?.number?.split(".").pop() || "N/A";
+      return {
+        subject: `Reservation Expired — ${guestName}`,
+        body: `⌛ Conf: ${res.confirmationNumber || event.entityId}\n👤 Guest: ${guestName}\n🏠 Room ${roomNumber}\n📝 Reason: ${event.metadata?.reason || "Booking payment window expired"}`,
         category: "Operations",
         priority: "High",
       };

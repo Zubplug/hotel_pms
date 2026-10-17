@@ -281,7 +281,11 @@ export async function POST(req: NextRequest) {
       entityType: 'reservation',
       entityId: reservationId!,
       idempotencyKey: `BOOKING_ENGINE_${reservationId}`,
-      metadata: { source: 'WEBSITE', bookingValue: (hold.quoteSnapshot as any).subtotal },
+      metadata: {
+        notificationType: 'RESERVATION_CREATED',
+        source: 'WEBSITE',
+        bookingValue: (hold.quoteSnapshot as any).subtotal,
+      },
     }).catch((e: any) => console.error('[Booking] Notification failed:', e));
 
     if (guestInput.email) {

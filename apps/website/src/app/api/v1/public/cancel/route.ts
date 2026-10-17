@@ -210,6 +210,7 @@ export async function POST(req: NextRequest) {
     entityType: 'reservation',
     entityId: reservation.id,
     metadata: {
+      notificationType: 'RESERVATION_CANCELLED',
       reason: reason || 'Guest self-service cancellation',
       bookingValue: (reservation.ratePlanSnapshot as any)?.subtotal ?? 0,
       source: 'PUBLIC_API',

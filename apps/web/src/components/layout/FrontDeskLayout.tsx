@@ -50,6 +50,9 @@ import { playRoomServiceChime, unlockAudio } from '@/lib/pos/soundEffects';
 interface FrontDeskRoomChargeNotification {
   id: string;
   type: 'POS_ROOM_CHARGE';
+  notificationType: string;
+  subject: string;
+  body: string;
   guestName: string;
   roomNumber: string;
   amount: number;
@@ -79,6 +82,16 @@ export function FrontDeskLayout({ children, enabledModules = [], licenseSnapshot
 
   const isDesktop = process.env.NEXT_PUBLIC_IS_DESKTOP === 'true';
   const visibleModules = isDesktop || isDesktopMode ? cachedModules : enabledModules;
+  const notificationLabel = (type: string) => ({
+    POS_ROOM_CHARGE_POSTED: 'F&B POS · Charge to room',
+    RESERVATION_CREATED: 'Online reservation synchronized',
+    PAYMENT_RECEIVED: 'Online payment synchronized',
+    RESERVATION_CANCELLED: 'Reservation cancellation synchronized',
+    RESERVATION_EXPIRED: 'Reservation expiry synchronized',
+    RESERVATION_NO_SHOW: 'Reservation no-show synchronized',
+    CHECK_IN: 'Guest check-in synchronized',
+    CHECK_OUT: 'Guest check-out synchronized',
+  }[type] || 'Front Desk synchronization');
 
   useEffect(() => {
     if (status === 'unauthenticated') logout();
@@ -160,6 +173,9 @@ export function FrontDeskLayout({ children, enabledModules = [], licenseSnapshot
           setRoomChargeNotification({
             id: next.id,
             type: 'POS_ROOM_CHARGE',
+            notificationType: metadata.notificationType || 'FRONT_DESK_SYNC',
+            subject: next.subject || 'Front Desk update synchronized',
+            body: next.body || '',
             guestName: metadata.guestName || 'Guest',
             roomNumber: metadata.roomNumber || '—',
             amount: Number(metadata.amount || 0),
@@ -270,22 +286,31 @@ export function FrontDeskLayout({ children, enabledModules = [], licenseSnapshot
                 <Bell className="h-4 w-4" />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-indigo-300">F&amp;B POS · Charge to room</p>
-                <h3 className="mt-1 text-sm font-bold text-white">New restaurant charge posted to guest folio</h3>
+                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-indigo-300">{notificationLabel(roomChargeNotification.notificationType)}</p>
+                <h3 className="mt-1 text-sm font-bold text-white">{roomChargeNotification.subject}</h3>
               </div>
               <button onClick={dismissRoomChargeNotification} className="rounded-lg p-1 text-slate-500 hover:bg-white/10 hover:text-white" aria-label="Dismiss notification">
                 <X className="h-4 w-4" />
               </button>
             </div>
             <div className="space-y-3 px-4 py-4">
-              <div>
-                <p className="truncate text-base font-bold text-white">{roomChargeNotification.guestName}</p>
-                <p className="mt-0.5 text-xs text-slate-400">Room {roomChargeNotification.roomNumber}</p>
-              </div>
-              <div className="flex items-center justify-between rounded-xl border border-white/[0.07] bg-white/[0.04] px-3 py-2.5">
-                <span className="text-xs text-slate-400">Charge amount</span>
-                <span className="text-sm font-black text-emerald-300">{formatCurrency(roomChargeNotification.amount, roomChargeNotification.currency)}</span>
-              </div>
+              {(roomChargeNotification.guestName !== 'Guest' || roomChargeNotification.roomNumber !== '—') && (
+                <div>
+                  <p className="truncate text-base font-bold text-white">{roomChargeNotification.guestName}</p>
+                  <p className="mt-0.5 text-xs text-slate-400">Room {roomChargeNotification.roomNumber}</p>
+                </div>
+              )}
+              {roomChargeNotification.amount > 0 && (
+                <div className="flex items-center justify-between rounded-xl border border-white/[0.07] bg-white/[0.04] px-3 py-2.5">
+                  <span className="text-xs text-slate-400">Amount</span>
+                  <span className="text-sm font-black text-emerald-300">{formatCurrency(roomChargeNotification.amount, roomChargeNotification.currency)}</span>
+                </div>
+              )}
+              {roomChargeNotification.body && (
+                <p className="whitespace-pre-line rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5 text-xs leading-5 text-slate-300">
+                  {roomChargeNotification.body}
+                </p>
+              )}
               <div className={cn('flex items-center gap-2 rounded-xl px-3 py-2 text-[11px] font-semibold', roomChargeNotification.offline ? 'bg-amber-400/10 text-amber-300' : 'bg-emerald-400/10 text-emerald-300')}>
                 <span className={cn('h-2 w-2 rounded-full', roomChargeNotification.offline ? 'bg-amber-400' : 'bg-emerald-400')} />
                 {roomChargeNotification.offline ? 'Saved offline · will sync automatically' : 'Posted and synchronized'}

@@ -245,6 +245,7 @@ export async function POST(
     entityType: 'reservation',
     entityId: reservation.id,
     metadata: {
+      notificationType: 'RESERVATION_CANCELLED',
       reason: reason || 'Guest self-service cancellation',
       bookingValue: (reservation.ratePlanSnapshot as any)?.subtotal ?? 0,
       source: 'BOOKING_ENGINE',
