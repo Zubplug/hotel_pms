@@ -16,10 +16,24 @@ export async function GET(_req: NextRequest, { params }: Params) {
     if (!session?.user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
     const ctx = await requireOrganizationContext((session.user as any).id || (session as any).user.id);
     const { id } = await params;
-    const rt = await prisma.roomType.findUnique({ where: { id }, include: { _count: { select: { rooms: true } } } });
+    const rt = await prisma.roomType.findUnique({
+      where: { id },
+      include: {
+        _count: { select: { rooms: true } },
+        reachMedia: {
+          where: { kind: 'ROOM', status: 'APPROVED' },
+          select: { url: true },
+          orderBy: { sortOrder: 'asc' },
+        },
+      },
+    });
     if (!rt) return errorResponse('NOT_FOUND', 'Room type not found', 404);
     if (!(await requireOrganizationContext(session.user.id)).propertyIds.includes(rt.propertyId)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    return successResponse(rt);
+    const { reachMedia, ...roomType } = rt;
+    return successResponse({
+      ...roomType,
+      photos: Array.from(new Set([...(roomType.photos || []), ...reachMedia.map((media) => media.url)])),
+    });
   } catch (err) {
     if (err instanceof ForbiddenError) return errorResponse('FORBIDDEN', err.message, 403);
     return errorResponse('INTERNAL_ERROR', 'An unexpected error occurred', 500);

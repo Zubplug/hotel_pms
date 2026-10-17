@@ -22,8 +22,21 @@ export async function GET(req: NextRequest) {
       : { propertyId: { in: allowed as string[] }, ...(includeInactive ? {} : { isActive: true }) };
 
     if (propertyId && !allowed.includes(propertyId)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    const roomTypes = await prisma.roomType.findMany({ where, orderBy: { name: 'asc' } });
-    return successResponse(roomTypes);
+    const roomTypes = await prisma.roomType.findMany({
+      where,
+      orderBy: { name: 'asc' },
+      include: {
+        reachMedia: {
+          where: { kind: 'ROOM', status: 'APPROVED' },
+          select: { url: true },
+          orderBy: { sortOrder: 'asc' },
+        },
+      },
+    });
+    return successResponse(roomTypes.map(({ reachMedia, ...roomType }) => ({
+      ...roomType,
+      photos: Array.from(new Set([...(roomType.photos || []), ...reachMedia.map((media) => media.url)])),
+    })));
   } catch (err) {
     if (err instanceof ForbiddenError) return errorResponse('FORBIDDEN', err.message, 403);
     return errorResponse('INTERNAL_ERROR', 'An unexpected error occurred', 500);
