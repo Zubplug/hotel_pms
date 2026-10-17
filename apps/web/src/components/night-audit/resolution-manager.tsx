@@ -684,12 +684,22 @@ function PosSessionResolution({ item, onSuccess, onClose }: { item: any; onSucce
   return (
     <>
       <DialogHeader>
-        <DialogTitle className="text-white">Close POS Session</DialogTitle>
-        <DialogDescription className="text-slate-400">
-          {item.outlet?.name} - Opened by {item.openedBy}
-        </DialogDescription>
-      </DialogHeader>
-      {error && <div className="p-3 bg-rose-400/[0.04] text-rose-300 rounded-lg text-sm border border-rose-400/20">{error}</div>}
+      <DialogTitle className="text-white">Close POS Session</DialogTitle>
+      <DialogDescription className="text-slate-400">
+          {item.outlet?.name || 'POS outlet'} · Opened by {item.openedByName || 'Unknown operator'}
+      </DialogDescription>
+    </DialogHeader>
+    {error && <div className="p-3 bg-rose-400/[0.04] text-rose-300 rounded-lg text-sm border border-rose-400/20">{error}</div>}
+      <div className="grid grid-cols-2 gap-3 rounded-xl border border-white/[0.08] bg-white/[0.03] p-4 text-xs">
+        <div><p className="text-slate-500">Session status</p><p className="mt-1 font-semibold text-white">{item.status || 'OPEN'}</p></div>
+        <div><p className="text-slate-500">Banking model</p><p className="mt-1 font-semibold text-white">{item.bankingModel || item.bankType || 'Not recorded'}</p></div>
+        <div><p className="text-slate-500">Opened</p><p className="mt-1 font-semibold text-white">{item.openedAt ? format(new Date(item.openedAt), 'MMM d, yyyy HH:mm') : 'Not recorded'}</p></div>
+        <div><p className="text-slate-500">Terminal / device</p><p className="mt-1 font-semibold text-white">{item.device?.name || 'Not recorded'}</p></div>
+        <div><p className="text-slate-500">Opening cash</p><p className="mt-1 font-semibold text-white">{Number(item.openingCash || 0).toLocaleString('en-NG', { style: 'currency', currency: 'NGN' })}</p></div>
+        <div><p className="text-slate-500">Cash sales</p><p className="mt-1 font-semibold text-white">{Number(item.cashSales || 0).toLocaleString('en-NG', { style: 'currency', currency: 'NGN' })}</p></div>
+        <div><p className="text-slate-500">Expected cash</p><p className="mt-1 font-semibold text-amber-200">{expected.toLocaleString('en-NG', { style: 'currency', currency: 'NGN' })}</p></div>
+        <div><p className="text-slate-500">Open orders</p><p className="mt-1 font-semibold text-rose-200">{checkingOrders ? 'Checking…' : openOrders?.length || 0}</p></div>
+      </div>
 
       {checkingOrders ? (
         <div className="py-8 flex items-center justify-center gap-2 text-slate-400 text-sm">

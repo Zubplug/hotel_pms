@@ -162,7 +162,12 @@ export function SystemControlReview({ data, onResolve }: SystemControlReviewProp
               <div key={pos.id} className="flex flex-col justify-between gap-3 rounded-xl border border-rose-400/20 bg-rose-400/[0.04] p-4 text-sm transition-all hover:bg-rose-400/[0.06] sm:flex-row sm:items-center">
                 <div>
                   <p className="font-bold text-rose-200">{pos.outlet?.name || 'Register'}</p>
-                  <p className="mt-0.5 text-xs text-rose-300/80">Opened by <span className="font-semibold text-rose-200">{pos.openedBy}</span></p>
+                  <p className="mt-0.5 text-xs text-rose-300/80">Opened by <span className="font-semibold text-rose-200">{pos.openedByName || 'Unknown operator'}</span></p>
+                  <p className="mt-1 text-[11px] text-rose-300/70">
+                    {pos.openedAt ? `Opened ${new Date(pos.openedAt).toLocaleString()}` : 'Opening time unavailable'}
+                    {pos.device?.name ? ` · ${pos.device.name}` : ''}
+                    {` · ${pos.status || 'OPEN'}`}
+                  </p>
                 </div>
                 <button
                   onClick={() => onResolve('POS_SESSION', pos)}

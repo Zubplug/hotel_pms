@@ -75,10 +75,21 @@ export async function getSystemIntegrity(ctx: TenantContext, propertyId: string)
       outletId: true,
       outlet: { select: { name: true } },
       status: true,
+      controlStatus: true,
+      bankingModel: true,
+      bankType: true,
+      openedBy: true,
       openedAt: true,
+      openingCash: true,
+      cashSales: true,
+      cashRefunds: true,
+      cashIn: true,
+      cashOut: true,
       expectedCash: true,
       actualCash: true,
-      openingCash: true,
+      variance: true,
+      primaryOperator: { select: { firstName: true, lastName: true, employeeId: true } },
+      device: { select: { name: true, identifier: true } },
       payments: {
         where: { method: 'CASH', status: { in: ['CONFIRMED', 'PAID'] } },
         select: { amount: true },
@@ -99,8 +110,11 @@ export async function getSystemIntegrity(ctx: TenantContext, propertyId: string)
       
     // Use the calculated value if the session is OPEN (where DB expectedCash might be 0/null), otherwise prefer the DB value.
     const expectedCash = session.status === 'OPEN' ? calculatedExpectedCash : Number(session.expectedCash ?? calculatedExpectedCash);
-    const { payments, cashMovements, openingCash, ...rest } = session;
-    return { ...rest, expectedCash };
+    const { payments, cashMovements, openingCash, primaryOperator, device, ...rest } = session;
+    const openedByName = primaryOperator
+      ? `${primaryOperator.firstName} ${primaryOperator.lastName}`.trim()
+      : 'Unknown operator';
+    return { ...rest, primaryOperator, device, openedByName, cashSales, expectedCash };
   });
 
   // SERVER-banking sessions that are RECONCILIATION_REQUIRED have already been submitted
