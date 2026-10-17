@@ -87,7 +87,8 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       const reservation = payment.folio.reservation;
       const guest = reservation?.primaryGuest ? `${reservation.primaryGuest.firstName} ${reservation.primaryGuest.lastName}`.trim() : payment.folio.guest ? `${payment.folio.guest.firstName} ${payment.folio.guest.lastName}`.trim() : '—';
       const room = reservation?.reservationRooms?.map(item => item.room?.displayName || item.room?.number).filter(Boolean).join(', ') || '—';
-      return { date: payment.createdAt, kind: 'PAYMENT', amount: number(payment.amount), method: payment.method, description: payment.notes || `Payment for ${guest}`, reference: payment.reference || payment.receiptNumber || payment.id, guest, room, confirmationNumber: reservation?.confirmationNumber || '—' };
+      const category = payment.eventInvoiceId ? 'EVENT_INVOICE' : payment.folio.type === 'CITY_LEDGER' ? 'CITY_LEDGER' : 'ROOM_FOLIO';
+      return { date: payment.createdAt, kind: 'PAYMENT', category, amount: number(payment.amount), method: payment.method, description: payment.notes || `Payment for ${guest}`, reference: payment.reference || payment.receiptNumber || payment.id, guest, room, confirmationNumber: reservation?.confirmationNumber || '—' };
     });
     const chargeRows = folioItems.map(item => {
       const reservation = item.folio.reservation;

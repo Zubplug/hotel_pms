@@ -1704,6 +1704,15 @@ public class LocalRepository
                         if (amount == 0) continue;
 
                         var type = item.TryGetProperty("type", out var itemType) ? itemType.GetString() : defaultType;
+                        var eventInvoiceId = item.TryGetProperty("eventInvoiceId", out var eventInvoiceElement) && eventInvoiceElement.ValueKind != JsonValueKind.Null
+                            ? eventInvoiceElement.GetString()
+                            : null;
+                        var source = item.TryGetProperty("source", out var sourceElement) ? sourceElement.GetString() : null;
+                        var category = string.Equals(folio.Type, "CITY_LEDGER", StringComparison.OrdinalIgnoreCase)
+                            ? "CITY_LEDGER"
+                            : !string.IsNullOrWhiteSpace(eventInvoiceId) || type?.Contains("EVENT_INVOICE", StringComparison.OrdinalIgnoreCase) == true || source?.Contains("EVENT_INVOICE", StringComparison.OrdinalIgnoreCase) == true
+                                ? "EVENT_INVOICE"
+                                : "ROOM_FOLIO";
 
                         // PAYMENT-type entries in the items[] array are mirror records of
                         // the entries in payments[]. Skip them here to prevent double-counting
@@ -1733,6 +1742,7 @@ public class LocalRepository
                         {
                             ["id"] = item.TryGetProperty("id", out var itemId) ? itemId.GetString() : Guid.NewGuid().ToString(),
                             ["kind"] = defaultKind,
+                            ["category"] = category,
                             ["date"] = createdAt,
                             ["direction"] = (defaultKind == "PAYMENT" || defaultKind == "CREDIT") ? "INFLOW" : (amount >= 0 ? "CHARGE" : "OUTFLOW"),
                             ["amount"] = Math.Abs(amount),
