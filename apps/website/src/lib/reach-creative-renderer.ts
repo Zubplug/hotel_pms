@@ -14,7 +14,21 @@ export type CreativeTemplate = keyof typeof CREATIVE_TEMPLATES;
 
 const XML_ENTITIES: Record<string, string> = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" };
 const escapeXml = (value: string) => value.replace(/[&<>"']/g, (character) => XML_ENTITIES[character] || character);
-const wrap = (value: string, max = 28) => value.length <= max ? [value] : [value.slice(0, max - 1) + "…"];
+const wrap = (value: string, max = 28) => {
+  const words = value.trim().split(/\s+/);
+  const lines: string[] = [];
+  let line = "";
+  for (const word of words) {
+    const candidate = line ? `${line} ${word}` : word;
+    if (candidate.length <= max || !line) line = candidate;
+    else { lines.push(line); line = word; }
+  }
+  if (line) lines.push(line);
+  if (lines.length <= 2) return lines;
+  lines.length = 2;
+  lines[1] = `${lines[1].slice(0, Math.max(1, max - 1))}…`;
+  return lines;
+};
 const EMBEDDED_FONT_PATH = "/tmp/lodgecore-reach-geist.ttf";
 
 function ensureEmbeddedFont() {
@@ -43,12 +57,12 @@ export async function renderReachCreative(input: {
 }) {
   const dimensions = CREATIVE_TEMPLATES[input.template];
   const source = await sourceBuffer(input.sourceUrl);
-  const propertyLines = wrap(input.propertyName, input.template === "STORY" ? 22 : 28);
-  const titleSize = input.template === "STORY" ? 72 : input.template === "LANDSCAPE" ? 56 : 64;
+  const propertyLines = wrap(input.propertyName, input.template === "STORY" ? 18 : input.template === "LANDSCAPE" ? 22 : 28);
+  const titleSize = input.template === "STORY" ? 56 : input.template === "LANDSCAPE" ? 48 : 64;
   const background = source
     ? await sharp(source).resize(dimensions.width, dimensions.height, { fit: "cover", position: "attention" }).png().toBuffer()
     : await sharp({ create: { width: dimensions.width, height: dimensions.height, channels: 4, background: { r: 16, g: 24, b: 40, alpha: 1 } } }).png().toBuffer();
-  const cardHeight = input.template === "STORY" ? 390 : input.template === "SQUARE" ? 320 : 220;
+  const cardHeight = input.template === "STORY" ? 450 : input.template === "SQUARE" ? 320 : 300;
   const cardY = dimensions.height - cardHeight - (input.template === "STORY" ? 84 : 56);
   const qrSize = input.template === "STORY" ? 220 : input.template === "SQUARE" ? 170 : 132;
   // Keep the QR white frame fully inset from the card's right edge.
@@ -69,7 +83,6 @@ export async function renderReachCreative(input: {
   const svg = `<svg width="${dimensions.width}" height="${dimensions.height}" xmlns="http://www.w3.org/2000/svg">
     <defs><linearGradient id="shade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#07111f" stop-opacity=".15"/><stop offset=".72" stop-color="#07111f" stop-opacity=".86"/></linearGradient></defs>
     <rect width="100%" height="100%" fill="url(#shade)"/>
-    <text x="64" y="82" fill="#b9f5d0" font-family="Geist" font-size="28" font-weight="700" letter-spacing="4">LODGECORE REACH</text>
     <rect x="64" y="${cardY}" width="${dimensions.width - 128}" height="${cardHeight}" rx="32" fill="#06101de8" stroke="#b9f5d0" stroke-opacity=".55"/>
     <text x="96" y="${y}" fill="white" font-family="Geist" font-size="${titleSize}" font-weight="800">${escapeXml(propertyLines[0])}</text>
     ${propertyLines[1] ? `<text x="96" y="${y + titleSize + 10}" fill="white" font-family="Geist" font-size="${titleSize}" font-weight="800">${escapeXml(propertyLines[1])}</text>` : ""}
