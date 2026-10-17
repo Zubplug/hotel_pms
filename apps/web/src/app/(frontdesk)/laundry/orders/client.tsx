@@ -9,6 +9,7 @@ import { useRouter } from 'next/navigation';
 import { formatCurrency } from '@/lib/utils';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { goBack } from '@/lib/frontdesk-navigation';
+import { formatRoomNumber } from '@/lib/format-room';
 
 export function LaundryOrdersClient({ managementMode = false }: { managementMode?: boolean }) {
   const { propertyId } = useProperty();
@@ -88,7 +89,7 @@ export function LaundryOrdersClient({ managementMode = false }: { managementMode
                 <tr><td colSpan={managementMode ? 6 : 7} className="text-center p-12"><Loader2 className="w-8 h-8 animate-spin mx-auto text-slate-300" /></td></tr>
               ) : orders.map(order => (
                 <tr key={order.id} className="hover:bg-cyan-50/50 transition-colors group">
-                  <td className="px-6 py-5 font-bold text-slate-900 font-mono text-base">{order.room?.number || 'N/A'}</td>
+                  <td className="px-6 py-5 font-bold text-slate-900 font-mono text-base">{formatRoomNumber(order.room?.number) || 'N/A'}</td>
                   <td className="px-6 py-5 font-medium text-slate-700">
                     {order.reservation?.primaryGuest 
                       ? `${order.reservation.primaryGuest.firstName} ${order.reservation.primaryGuest.lastName}` 

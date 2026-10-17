@@ -15,6 +15,7 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { AlertCircle, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
+import { formatRoomNumber } from '@/lib/format-room';
 
 interface FrontDeskCancelReservationDialogProps {
   reservation: any;
@@ -79,7 +80,7 @@ export function FrontDeskCancelReservationDialog({ reservation, open, onOpenChan
           <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 space-y-2">
             <p className="font-bold text-slate-900">{guest?.firstName} {guest?.lastName}</p>
             <p className="text-sm text-slate-500 font-medium">Confirmation #{reservation.confirmationNumber}</p>
-            <p className="text-sm text-slate-500">Room {room?.number || 'Unassigned'} • {room?.roomType?.name}</p>
+            <p className="text-sm text-slate-500">Room {formatRoomNumber(room?.number) || 'Unassigned'} • {room?.roomType?.name}</p>
             <p className="text-sm text-slate-500">
               {resRoom?.checkIn ? format(new Date(resRoom.checkIn), 'MMM d, yyyy') : 'N/A'} → {resRoom?.checkOut ? format(new Date(resRoom.checkOut), 'MMM d, yyyy') : 'N/A'}
             </p>

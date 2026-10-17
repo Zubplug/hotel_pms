@@ -91,7 +91,7 @@ export function FrontDeskReencodeCardDialog({ open, onOpenChange, propertyId }: 
     }
   };
 
-  const roomName = selectedReservation?.reservationRooms?.[0]?.room?.number || 'Unassigned';
+  const roomName = formatRoomNumber(selectedReservation?.reservationRooms?.[0]?.room?.number) || 'Unassigned';
   const guestName = `${selectedReservation?.primaryGuest?.firstName || ''} ${selectedReservation?.primaryGuest?.lastName || ''}`.trim();
   const initials = guestName.split(' ').map((n: string) => n[0] ?? '').join('').substring(0, 2).toUpperCase() || 'G';
 

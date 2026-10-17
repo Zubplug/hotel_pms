@@ -5,12 +5,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
-import { PlusCircle, Wallet, ArrowRightLeft, CornerDownRight, Printer, Receipt, TrendingUp, Percent } from 'lucide-react';
+import { PlusCircle, Wallet, ArrowRightLeft, CornerDownRight, Printer, Receipt, TrendingUp } from 'lucide-react';
 import { AddPaymentDialog } from './AddPaymentDialog';
 import { FrontDeskAddPaymentDialog } from '../frontdesk/FrontDeskAddPaymentDialog';
 import { FrontDeskQuickCheckoutDialog } from '../frontdesk/FrontDeskQuickCheckoutDialog';
 import { CheckOutDialog } from './CheckOutDialog';
-import { FrontDeskDiscountModal } from '../frontdesk/FrontDeskDiscountModal';
 import { usePathname } from 'next/navigation';
 import { HardwareBridge } from '@/lib/desktop/HardwareBridge';
 import { formatRoomNumber } from '@/lib/format-room';
@@ -24,8 +23,6 @@ export function FolioSection({ reservation, readOnly = false, darkMode = false }
   const [isCheckOutOpen, setIsCheckOutOpen] = useState(false);
   
   
-  // Discount state
-  const [discountTarget, setDiscountTarget] = useState<{ id: string, total: number } | null>(null);
 
   // For MVP, we assume 1 folio per reservation
   const folio = reservation.folios?.[0];
@@ -111,7 +108,7 @@ export function FolioSection({ reservation, readOnly = false, darkMode = false }
       creditStatus: credit.status,
       creditRemainingAmount: credit.remainingAmount,
     })),
-  ].sort((a: any, b: any) => new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime());
+  ].sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
 
   const findLinkedPayment = (item: any) => item.type === 'PAYMENT'
     ? folio.payments.find((payment: any) =>
@@ -160,16 +157,6 @@ export function FolioSection({ reservation, readOnly = false, darkMode = false }
     if (!linkedPayment) {
       return (
         <div className="flex flex-wrap items-center gap-1.5">
-          {(item.type === 'CHARGE' || item.type === 'ROOM_CHARGE') && !isClosed && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 px-2 text-xs text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800"
-              onClick={() => setDiscountTarget({ id: item.id, total: Number(item.amount) })}
-            >
-              <Percent className="mr-1 h-3 w-3" /> Discount
-            </Button>
-          )}
           <Button
             variant="ghost"
             size="sm"
@@ -288,13 +275,13 @@ export function FolioSection({ reservation, readOnly = false, darkMode = false }
         </CardHeader>
         <CardContent className="p-0">
           <div className={`border-b p-4 sm:p-6 ${isDarkReservation ? 'border-white/[0.08] bg-[#172437]' : 'bg-slate-50'}`}>
-            <div className={`rounded-2xl p-5 text-white shadow-sm ${hasDebt ? 'bg-gradient-to-br from-rose-600 to-red-700' : 'bg-gradient-to-br from-emerald-600 to-teal-700'}`}>
+            <div className={`rounded-2xl border p-5 shadow-sm ${hasDebt ? 'border-rose-400/35 bg-rose-500/[0.14]' : 'border-emerald-400/25 bg-emerald-500/[0.12]'}`}>
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-white/75">{hasDebt ? 'Debt outstanding' : 'Fully Settled'}</p>
-                  {hasDebt && <p className="mt-1 text-3xl font-black tracking-tight tabular-nums text-rose-50 sm:text-4xl">{formatCurrency(outstandingBalance)}</p>}
+                  <p className={`text-xs font-bold uppercase tracking-[0.16em] ${hasDebt ? 'text-rose-300' : 'text-emerald-300'}`}>{hasDebt ? 'Debt outstanding' : 'Fully Settled'}</p>
+                  {hasDebt && <p className="mt-1 text-3xl font-black tracking-tight tabular-nums text-rose-200 sm:text-4xl">{formatCurrency(outstandingBalance)}</p>}
                 </div>
-                <Badge className="border-white/25 bg-white/15 px-3 py-1 text-white" variant="outline">
+                <Badge className={`px-3 py-1 ${hasDebt ? 'border-rose-300/35 bg-rose-500/20 text-rose-200' : 'border-emerald-300/25 bg-emerald-500/15 text-emerald-200'}`} variant="outline">
                   {hasDebt ? 'Payment required' : 'No balance due'}
                 </Badge>
               </div>
@@ -417,18 +404,6 @@ export function FolioSection({ reservation, readOnly = false, darkMode = false }
           onOpenChange={setIsCheckOutOpen}
           reservation={reservation}
           folio={folio}
-        />
-      )}
-      {discountTarget && (
-        <FrontDeskDiscountModal
-          isOpen={!!discountTarget}
-          targetType="FOLIO_ITEM"
-          targetId={discountTarget.id}
-          targetTotal={discountTarget.total}
-          onClose={() => setDiscountTarget(null)}
-          onSuccess={() => {
-            window.location.reload();
-          }}
         />
       )}
       </>}

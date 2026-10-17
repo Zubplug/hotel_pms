@@ -10,6 +10,7 @@ import { cn, formatCurrency } from '@/lib/utils';
 import { ClientOnlyDate } from '@/components/ClientOnlyDate';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { goBack } from '@/lib/frontdesk-navigation';
+import { formatRoomNumber } from '@/lib/format-room';
 
 export function LaundryDashboardClient({ managementMode = false }: { managementMode?: boolean }) {
   const { propertyId } = useProperty();
@@ -165,7 +166,7 @@ export function LaundryDashboardClient({ managementMode = false }: { managementM
                     <div className="flex-1 min-w-0">
                       <div className="flex justify-between items-start mb-1">
                         <h3 className="font-bold text-slate-900 truncate pr-4">{guestName}</h3>
-                        <span className="font-mono text-xs font-bold text-slate-700 bg-slate-100 px-2 py-1 rounded-md shrink-0">{order.room?.number || 'No Room'}</span>
+                        <span className="font-mono text-xs font-bold text-slate-700 bg-slate-100 px-2 py-1 rounded-md shrink-0">{formatRoomNumber(order.room?.number) || 'No Room'}</span>
                       </div>
                       
                       <div className="flex items-center gap-3 mt-2">

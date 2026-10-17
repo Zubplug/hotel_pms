@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Loader2, AlertCircle, CheckCircle2, Key, ArrowRight, KeySquare } from 'lucide-react';
 import { format } from 'date-fns';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
+import { formatRoomNumber } from '@/lib/format-room';
 
 interface FrontDeskExtendKeyDialogProps {
   open: boolean;
@@ -166,7 +167,7 @@ export function FrontDeskExtendKeyDialog({ open, onOpenChange, reservation }: Fr
     }
   };
 
-  const roomName = reservation?.reservationRooms?.[0]?.room?.number || 'Unassigned';
+  const roomName = formatRoomNumber(reservation?.reservationRooms?.[0]?.room?.number) || 'Unassigned';
 
   return (
     <Dialog open={open} onOpenChange={(val) => {

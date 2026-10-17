@@ -300,7 +300,7 @@ export function FrontDeskReservationDetail({ reservation, darkMode = false }: Fr
                   <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-slate-500">Room Assignment</p>
                   <div className="mt-2 flex items-center gap-2">
                     <BedDouble className="h-5 w-5 text-sky-400" />
-                    <span className="text-xl font-bold text-white">Room {room?.number || 'Unassigned'}</span>
+                    <span className="text-xl font-bold text-white">Room {formatRoomNumber(room?.number) || 'Unassigned'}</span>
                     {room && <span className="text-sm text-slate-500">({room.roomType?.name})</span>}
                   </div>
                 </div>
@@ -470,7 +470,7 @@ export function FrontDeskReservationDetail({ reservation, darkMode = false }: Fr
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Room Assignment</p>
                 <div className="flex items-center gap-2">
                   <MapPin className="w-5 h-5 text-blue-500" />
-                  <span className="text-xl font-bold text-slate-900">Room {room?.number || 'Unassigned'}</span>
+                  <span className="text-xl font-bold text-slate-900">Room {formatRoomNumber(room?.number) || 'Unassigned'}</span>
                   {room && <span className="text-sm text-slate-500 font-medium">({room.roomType?.name})</span>}
                 </div>
               </div>
