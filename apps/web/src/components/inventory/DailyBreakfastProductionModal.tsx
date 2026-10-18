@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { formatUnit } from '@/lib/inventory/units';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface RequisitionItem {
   stockItemId: string;
@@ -46,6 +47,9 @@ interface DailyBreakfastProductionModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   propertyId?: string;
+  outlets?: { id: string; name: string; type?: string }[];
+  outletId?: string;
+  onOutletChange?: (outletId: string) => void;
   onSuccess?: () => void;
 }
 
@@ -61,6 +65,9 @@ export function DailyBreakfastProductionModal({
   open,
   onOpenChange,
   propertyId,
+  outlets = [],
+  outletId = '',
+  onOutletChange,
   onSuccess,
 }: DailyBreakfastProductionModalProps) {
   const [covers, setCovers] = useState<number>(0);
@@ -108,6 +115,7 @@ export function DailyBreakfastProductionModal({
       try {
         const queryParams = new URLSearchParams();
         if (covers > 0) queryParams.set('covers', covers.toString());
+        if (outletId) queryParams.set('outletId', outletId);
         const validSelections = selectedRecipes.filter((selection) => selection.recipeId);
         if (validSelections.length) queryParams.set('recipes', JSON.stringify(validSelections));
         if (propertyId) queryParams.set('propertyId', propertyId);
@@ -149,7 +157,7 @@ export function DailyBreakfastProductionModal({
       active = false;
       clearTimeout(timer);
     };
-  }, [covers, open, propertyId, selectedRecipes, hasInitializedCovers]);
+  }, [covers, open, outletId, propertyId, selectedRecipes, hasInitializedCovers]);
 
   // Check if any ingredients have insufficient stock
   const deficits = useMemo(() => {
@@ -183,6 +191,7 @@ export function DailyBreakfastProductionModal({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           propertyId,
+          outletId,
           covers,
           recipes: validSelections,
           operationId: stableOperationId,
@@ -207,8 +216,8 @@ export function DailyBreakfastProductionModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="grid h-[92vh] max-h-[92vh] w-[calc(100vw-1rem)] max-w-none grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-2xl border border-slate-200 bg-white p-0 shadow-2xl sm:w-[min(96vw,1400px)] sm:max-w-none">
-        <DialogHeader className="shrink-0 border-b border-slate-100 bg-slate-50/50 p-5 sm:p-7">
+      <DialogContent className="grid h-[92vh] max-h-[92vh] w-[calc(100vw-1rem)] max-w-none grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-2xl border border-slate-200 bg-white p-0 text-slate-900 shadow-2xl sm:w-[min(96vw,1400px)] sm:max-w-none">
+        <DialogHeader className="shrink-0 border-b border-slate-200 bg-white p-5 text-slate-900 sm:p-7">
           <div className="flex items-start gap-4">
             <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-orange-100 text-orange-600">
               <ChefHat className="h-6 w-6" />
@@ -217,16 +226,26 @@ export function DailyBreakfastProductionModal({
               <DialogTitle className="text-xl font-bold text-slate-900 sm:text-2xl">
                 Breakfast Buffet Production
               </DialogTitle>
-              <DialogDescription className="mt-1 max-w-2xl text-sm leading-5 text-slate-500">
+              <DialogDescription className="mt-1 max-w-3xl text-sm leading-5 text-slate-600">
                 Build a breakfast combo from multiple production recipes. Quantities are calculated per guest, deducted from the kitchen warehouse, and posted to COGS.
               </DialogDescription>
             </div>
           </div>
+          <div className="mt-5 max-w-sm">
+            <label className="mb-1.5 block text-xs font-bold uppercase tracking-[0.12em] text-slate-600">Production outlet</label>
+            <Select value={outletId} onValueChange={(value) => { setSelectedRecipes([]); setRecipeSearch(''); onOutletChange?.(value || ''); }}>
+              <SelectTrigger className="h-11 w-full rounded-xl border-slate-300 bg-white text-slate-900 shadow-sm"><SelectValue placeholder="Select outlet" /></SelectTrigger>
+              <SelectContent className="border-slate-200 bg-white text-slate-900">
+                {outlets.map((outlet) => <SelectItem key={outlet.id} value={outlet.id}>{outlet.name}{outlet.type ? ` · ${outlet.type}` : ''}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <p className="mt-1.5 text-xs text-slate-500">Only complimentary breakfast recipes configured for this outlet will be listed.</p>
+          </div>
         </DialogHeader>
 
-        <div className="min-h-0 space-y-5 overflow-y-auto overscroll-contain p-5 sm:p-7">
+        <div className="min-h-0 space-y-5 overflow-y-auto overscroll-contain bg-slate-50/60 p-5 text-slate-900 sm:p-7">
           <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
               <div>
                 <div className="flex flex-wrap items-center gap-2">
                   <p className="text-xs font-bold uppercase tracking-wider text-slate-600">Complimentary breakfast menus</p>

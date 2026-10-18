@@ -131,10 +131,12 @@ export default function FnbReportsPage() {
 
   const handlePrint = () => {
     setPrintMode('pack');
+    // Give React and the browser print stylesheet time to lay out all report
+    // pages before Chrome snapshots the document for print preview.
     setTimeout(() => {
       window.print();
       setPrintMode(null);
-    }, 150);
+    }, 500);
   };
 
   if (loading && !data) return (
@@ -189,14 +191,19 @@ export default function FnbReportsPage() {
           .print-only { display: none !important; }
         }
         @media print {
-          @page { margin: 0; size: A4 portrait; }
+          @page { margin: 10mm; size: A4 landscape; }
+          html, body { height: auto !important; min-height: 0 !important; overflow: visible !important; }
           body { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; background: white !important; font-family: 'Inter', system-ui, sans-serif !important; }
           .screen-only { display: none !important; }
-          .print-only { display: block !important; padding: 15mm; background: white; color: black; }
+          .print-only { display: block !important; width: auto !important; min-height: 0 !important; padding: 0 !important; overflow: visible !important; background: white; color: black; }
+          .print-page + .print-page { page-break-before: always; break-before: page; }
+          table { page-break-inside: auto !important; break-inside: auto !important; }
+          thead { display: table-header-group; }
+          tr { page-break-inside: avoid; break-inside: avoid; }
+          .avoid-break { page-break-inside: auto !important; break-inside: auto !important; }
           
           /* Utility classes to ensure A4 dimensions and page breaking */
           .page-break-before { page-break-before: always; }
-          .avoid-break { page-break-inside: avoid; }
         }
       `}} />
 
@@ -205,7 +212,7 @@ export default function FnbReportsPage() {
       {/* ────────────────────────────────────────────────────────── */}
       
       {printMode === 'pack' && data && (
-        <div className="print-only text-slate-900">
+        <div className="print-only print-page text-slate-900">
           {/* Document Header */}
           <div className="flex justify-between items-end border-b-2 border-slate-900 pb-4 mb-6">
             <div>
@@ -351,8 +358,7 @@ export default function FnbReportsPage() {
       )}
 
       {printMode === 'pack' && data && (
-        <div className="print-only text-slate-900">
-          <style dangerouslySetInnerHTML={{__html: `@media print { @page { size: A4 landscape; margin: 0; } }`}} />
+        <div className="print-only print-page text-slate-900">
           
           {/* Document Header */}
           <div className="flex justify-between items-end border-b-2 border-slate-900 pb-4 mb-6">
@@ -371,6 +377,7 @@ export default function FnbReportsPage() {
               <table className="w-full text-[10px]">
                 <thead>
                   <tr className="border-b-2 border-slate-900">
+                    <th className="py-2 text-left font-bold text-slate-900 uppercase tracking-wider">Outlet / Warehouse</th>
                     <th className="py-2 text-left font-bold text-slate-900 uppercase tracking-wider">Stock Item</th>
                     <th className="py-2 text-right font-bold text-slate-900 uppercase tracking-wider">Open</th>
                     <th className="py-2 text-right font-bold text-slate-900 uppercase tracking-wider">+In</th>
@@ -386,6 +393,10 @@ export default function FnbReportsPage() {
                 <tbody className="divide-y divide-slate-200">
                   {data.inventoryMovement.map((row: any) => (
                     <tr key={row.stockItemId} className="hover:bg-slate-50">
+                      <td className="py-2">
+                        <span className="font-semibold text-slate-800 block">{row.outletName}</span>
+                        <span className="text-[9px] text-slate-500">{row.warehouseName}</span>
+                      </td>
                       <td className="py-2">
                         <span className="font-bold text-slate-800 block">{row.name}</span>
                         <span className="text-[9px] text-slate-500">{row.sku} • {row.unitOfMeasure}</span>
@@ -405,7 +416,7 @@ export default function FnbReportsPage() {
                   ))}
                   {data.inventoryMovement.length === 0 && (
                     <tr>
-                      <td colSpan={10} className="py-8 text-center text-slate-500 font-medium">No stock movement recorded for this period.</td>
+                      <td colSpan={11} className="py-8 text-center text-slate-500 font-medium">No stock items found for this outlet scope.</td>
                     </tr>
                   )}
                 </tbody>
@@ -415,8 +426,7 @@ export default function FnbReportsPage() {
       )}
 
       {printMode === 'pack' && data && (
-        <div className="print-only text-slate-900">
-          <style dangerouslySetInnerHTML={{__html: `@media print { @page { size: A4 landscape; margin: 0; } }`}} />
+        <div className="print-only print-page text-slate-900">
           <div className="flex justify-between items-end border-b-2 border-slate-900 pb-4 mb-6">
             <div>
               <h1 className="text-2xl font-bold tracking-tight text-slate-900">WAITER POS SHIFT SUMMARY</h1>
@@ -533,7 +543,7 @@ export default function FnbReportsPage() {
               </div>
               <section className="mt-5 overflow-hidden rounded-2xl border border-slate-200 bg-white">
                 <div className="flex items-center gap-2 border-b border-slate-100 px-5 py-4"><Scale className="h-4 w-4 text-emerald-600" /><div><h3 className="font-bold text-slate-900">Outlet stock reconciliation</h3><p className="mt-0.5 text-xs text-slate-500">The selected outlet automatically supplies the warehouse scope.</p></div></div>
-                <div className="max-h-72 overflow-auto"><table className="min-w-[720px] w-full text-left text-sm"><thead className="sticky top-0 bg-slate-50"><tr>{['Stock item', 'Opening', 'In', 'Sold', 'Waste', 'Actual', 'Variance'].map((heading) => <th key={heading} className="px-5 py-3 text-[10px] font-bold uppercase tracking-wider text-slate-500">{heading}</th>)}</tr></thead><tbody className="divide-y divide-slate-100">{data.inventoryMovement.slice(0, 12).map((row: any) => <tr key={row.stockItemId}><td className="px-5 py-3 font-semibold text-slate-800">{row.name}</td><td className="px-5 py-3 tabular-nums text-slate-600">{row.opening}</td><td className="px-5 py-3 tabular-nums text-emerald-600">{row.receipts + row.transferIn || '—'}</td><td className="px-5 py-3 tabular-nums text-amber-600">{row.sales || '—'}</td><td className="px-5 py-3 tabular-nums text-rose-600">{row.waste || '—'}</td><td className="px-5 py-3 tabular-nums font-bold text-slate-900">{row.actualClosing}</td><td className="px-5 py-3"><VarianceBadge variance={row.variance} /></td></tr>)}{!data.inventoryMovement.length && <tr><td colSpan={7} className="px-5 py-8 text-center text-sm text-slate-500">No outlet stock movements in this period.</td></tr>}</tbody></table></div>
+                <div className="overflow-x-auto"><table className="min-w-[980px] w-full text-left text-sm"><thead className="bg-slate-50"><tr>{['Outlet / warehouse', 'Stock item', 'Opening', 'In', 'Sold', 'Waste', 'Actual', 'Variance'].map((heading) => <th key={heading} className="px-5 py-3 text-[10px] font-bold uppercase tracking-wider text-slate-500">{heading}</th>)}</tr></thead><tbody className="divide-y divide-slate-100">{data.inventoryMovement.map((row: any) => <tr key={row.stockItemId}><td className="px-5 py-3"><p className="font-semibold text-slate-800">{row.outletName}</p><p className="text-[10px] text-slate-500">{row.warehouseName}</p></td><td className="px-5 py-3 font-semibold text-slate-800">{row.name}<span className="ml-1 text-[10px] font-normal text-slate-500">{row.unitOfMeasure}</span></td><td className="px-5 py-3 tabular-nums text-slate-600">{row.opening}</td><td className="px-5 py-3 tabular-nums text-emerald-600">{row.receipts + row.transferIn || '—'}</td><td className="px-5 py-3 tabular-nums text-amber-600">{row.sales || '—'}</td><td className="px-5 py-3 tabular-nums text-rose-600">{row.waste || '—'}</td><td className="px-5 py-3 tabular-nums font-bold text-slate-900">{row.actualClosing}</td><td className="px-5 py-3"><VarianceBadge variance={row.variance} /></td></tr>)}{!data.inventoryMovement.length && <tr><td colSpan={8} className="px-5 py-8 text-center text-sm text-slate-500">No stock items found for this outlet scope.</td></tr>}</tbody></table></div>
               </section>
               <section className="mt-5 rounded-2xl border border-orange-200 bg-orange-50 p-5">
                 <div className="flex flex-wrap items-start justify-between gap-4">

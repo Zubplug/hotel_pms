@@ -11,6 +11,7 @@ import { OutletStockEditDialog } from './OutletStockEditDialog';
 import { DailyBreakfastProductionModal } from '@/components/inventory/DailyBreakfastProductionModal';
 
 type WarehouseRecord = { id: string; name: string; parentWarehouseId?: string | null; posOutletId?: string | null };
+type OutletRecord = { id: string; name: string; type?: string; isActive?: boolean };
 type InventoryItem = {
   stockItemId: string;
   itemCode: string;
@@ -52,6 +53,8 @@ export function FnbInventoryClient() {
   const [search, setSearch] = useState('');
   const [error, setError] = useState('');
   const [breakfastModalOpen, setBreakfastModalOpen] = useState(false);
+  const [outlets, setOutlets] = useState<OutletRecord[]>([]);
+  const [breakfastOutletId, setBreakfastOutletId] = useState('');
 
   useEffect(() => {
     fetch('/api/v1/inventory/warehouses?scope=outlet')
@@ -63,6 +66,17 @@ export function FnbInventoryClient() {
         if (filteredHierarchy.length) setWarehouseId(filteredHierarchy[0].id);
       })
       .catch(() => setError('Unable to load your inventory locations.'));
+  }, []);
+
+  useEffect(() => {
+    fetch('/api/v1/pos/outlets')
+      .then((response) => response.json())
+      .then((body) => {
+        const availableOutlets = (body.data || []).filter((outlet: OutletRecord) => outlet.isActive !== false);
+        setOutlets(availableOutlets);
+        if (availableOutlets.length) setBreakfastOutletId((current) => current || availableOutlets[0].id);
+      })
+      .catch(() => setError('Unable to load outlets for breakfast production.'));
   }, []);
 
   async function loadInventory() {
@@ -128,6 +142,9 @@ export function FnbInventoryClient() {
       <DailyBreakfastProductionModal
         open={breakfastModalOpen}
         onOpenChange={setBreakfastModalOpen}
+        outlets={outlets}
+        outletId={breakfastOutletId}
+        onOutletChange={setBreakfastOutletId}
         onSuccess={() => void loadInventory()}
       />
 

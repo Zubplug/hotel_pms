@@ -18,6 +18,7 @@ export interface RequisitionItem {
 export interface CalculateRequisitionParams {
   propertyId: string;
   covers: number;
+  outletId?: string;
   recipeId?: string;
   productId?: string;
   recipes?: RecipeSelection[];
@@ -31,6 +32,7 @@ export interface RecipeSelection {
 export interface ProduceBuffetParams {
   propertyId: string;
   covers: number;
+  outletId?: string;
   recipeId?: string;
   productId?: string;
   recipes?: RecipeSelection[];
@@ -54,7 +56,8 @@ export class BuffetProductionService {
     totalEstimatedCost: number;
     entitledInHouseCovers?: number;
   }> {
-    const { propertyId, covers, recipeId, productId } = params;
+    const { propertyId, covers, outletId, recipeId, productId } = params;
+    const outletRecipeScope = outletId ? { posProduct: { category: { outletId } } } : {};
     const selections = (params.recipes?.length
       ? params.recipes
       : recipeId
@@ -67,7 +70,7 @@ export class BuffetProductionService {
     let recipes: any[] = [];
     if (selections.length) {
       recipes = await Promise.all(selections.map((selection) => prisma.recipe.findFirst({
-        where: { id: selection.recipeId, propertyId, isActive: true },
+        where: { id: selection.recipeId, propertyId, isActive: true, ...outletRecipeScope },
         include: {
           versions: {
             where: { isActive: true },
@@ -85,7 +88,7 @@ export class BuffetProductionService {
       }
     } else if (productId) {
       const productRecipe = await prisma.recipe.findFirst({
-        where: { posProductId: productId, propertyId, isActive: true },
+        where: { posProductId: productId, propertyId, isActive: true, ...outletRecipeScope },
         include: {
           versions: { where: { isActive: true }, include: { ingredients: { include: { stockItem: true } } } },
           posProduct: true,
@@ -231,6 +234,7 @@ export class BuffetProductionService {
     const { recipe, items, totalEstimatedCost } = await this.calculateRequisition({
       propertyId,
       covers,
+      outletId: params.outletId,
       recipeId: params.recipeId,
       productId: params.productId,
       recipes: params.recipes,

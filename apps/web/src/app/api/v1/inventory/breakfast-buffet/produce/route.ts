@@ -7,6 +7,7 @@ import { BuffetProductionService, RecipeSelection } from '@/lib/services/buffet-
 
 type BuffetPostBody = {
   propertyId?: string;
+  outletId?: string;
   covers?: number | string;
   recipeId?: string;
   productId?: string;
@@ -28,7 +29,7 @@ export async function POST(req: NextRequest) {
     const user = session.user as AuthenticatedUser;
     const { propertyIds } = await requireOrganizationContext(user.id);
     const body = (await req.json()) as BuffetPostBody;
-    const { covers, recipeId, productId, warehouseId, businessDate, operationId, recipes } = body;
+    const { covers, outletId, recipeId, productId, warehouseId, businessDate, operationId, recipes } = body;
     const propertyId = body.propertyId || propertyIds[0];
 
     if (!propertyId) {
@@ -61,6 +62,7 @@ export async function POST(req: NextRequest) {
     const result = await BuffetProductionService.produceBuffetBatch({
       propertyId,
       covers: Math.floor(parsedCovers),
+      outletId,
       recipeId,
       productId,
       recipes: selectedRecipes,
@@ -87,6 +89,7 @@ export async function GET(req: NextRequest) {
     const { propertyIds } = await requireOrganizationContext((session.user as AuthenticatedUser).id);
     const { searchParams } = req.nextUrl;
     const propertyId = searchParams.get('propertyId') || propertyIds[0];
+    const outletId = searchParams.get('outletId') || undefined;
     const covers = Number(searchParams.get('covers') || '1');
     const recipeId = searchParams.get('recipeId') || undefined;
     const productId = searchParams.get('productId') || undefined;
@@ -109,10 +112,16 @@ export async function GET(req: NextRequest) {
       return errorResponse('FORBIDDEN', 'Unauthorized property access', 403);
     }
 
+    if (outletId) {
+      const outlet = await prisma.posOutlet.findFirst({ where: { id: outletId, propertyId, isActive: true }, select: { id: true } });
+      if (!outlet) return errorResponse('BAD_REQUEST', 'Selected outlet is not available for this property', 400);
+    }
+
     const breakfastCategories = await prisma.productCategory.findMany({
       where: {
         isActive: true,
         outlet: { propertyId },
+        ...(outletId ? { outletId } : {}),
         OR: [
           { name: { contains: 'breakfast', mode: 'insensitive' } },
           { name: { contains: 'complimentary', mode: 'insensitive' } },
@@ -141,6 +150,7 @@ export async function GET(req: NextRequest) {
     const preview = await BuffetProductionService.calculateRequisition({
       propertyId,
       covers: Math.max(1, Math.floor(covers)),
+      outletId,
       recipeId,
       productId,
       recipes,

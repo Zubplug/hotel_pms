@@ -2151,11 +2151,14 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
             if (root.TryGetProperty("recipes", out var recipesArray) && recipesArray.ValueKind == JsonValueKind.Array)
             {
                 var incomingIngredientIds = new HashSet<string>();
+                var incomingIngredientIdsByProduct = new Dictionary<string, HashSet<string>>();
                 foreach (var recipe in recipesArray.EnumerateArray())
                 {
                     var productId = recipe.TryGetProperty("posProductId", out var productEl) ? productEl.GetString() : null;
                     if (string.IsNullOrWhiteSpace(productId)) continue;
                     if (!recipe.TryGetProperty("versions", out var versions) || versions.ValueKind != JsonValueKind.Array) continue;
+                    if (!incomingIngredientIdsByProduct.ContainsKey(productId))
+                        incomingIngredientIdsByProduct[productId] = new HashSet<string>();
                     foreach (var version in versions.EnumerateArray())
                     {
                         var versionId = version.TryGetProperty("id", out var versionIdEl) ? versionIdEl.GetString() : null;
@@ -2166,6 +2169,7 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                             var stockItemId = ingredient.TryGetProperty("stockItemId", out var stockIdEl) ? stockIdEl.GetString() : null;
                             if (string.IsNullOrWhiteSpace(ingredientId) || string.IsNullOrWhiteSpace(stockItemId)) continue;
                             incomingIngredientIds.Add(ingredientId);
+                            incomingIngredientIdsByProduct[productId].Add(ingredientId);
                             var local = await dbContext.RecipeIngredients.FirstOrDefaultAsync(x => x.Id == ingredientId, stoppingToken);
                             if (local == null)
                             {
@@ -2179,6 +2183,20 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                             local.UnitOfMeasure = ingredient.TryGetProperty("unitOfMeasure", out var measureEl) ? measureEl.GetString() ?? "" : "";
                         }
                     }
+                }
+
+                // The pull endpoint sends only active recipe versions. Remove
+                // ingredients that belong to older versions for every product
+                // represented in this sync page, including incremental pulls.
+                // Keeping those rows makes offline sales combine stale unit
+                // mappings with the current recipe (for example KG -> PORTION).
+                foreach (var productIngredients in incomingIngredientIdsByProduct)
+                {
+                    var staleProductIngredients = await dbContext.RecipeIngredients
+                        .Where(i => i.ProductId == productIngredients.Key && !productIngredients.Value.Contains(i.Id))
+                        .ToListAsync(stoppingToken);
+                    if (staleProductIngredients.Count > 0)
+                        dbContext.RecipeIngredients.RemoveRange(staleProductIngredients);
                 }
                 if (!isIncremental && incomingIngredientIds.Count > 0)
                 {

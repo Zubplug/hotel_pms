@@ -255,7 +255,8 @@ export async function GET(req: NextRequest) {
     let stockMovement: any[] = [];
     if (effectiveWarehouseIds.length) {
       const stockItems = await prisma.stockItem.findMany({
-        where: { warehouseId: { in: effectiveWarehouseIds } }
+        where: { warehouseId: { in: effectiveWarehouseIds } },
+        include: { warehouse: { select: { name: true, posOutlet: { select: { name: true } } } } },
       });
 
       const transactions = await prisma.stockTransaction.findMany({
@@ -326,6 +327,8 @@ export async function GET(req: NextRequest) {
           stockItemId: item.id,
           name: item.name,
           sku: item.sku,
+          warehouseName: item.warehouse?.name || 'Outlet warehouse',
+          outletName: item.warehouse?.posOutlet?.name || 'Outlet',
           unitOfMeasure: item.baseUnit,
           opening,
           receipts,
