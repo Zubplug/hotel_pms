@@ -85,6 +85,7 @@ model Organization {
   // Enterprise HR Suite
   statutoryConfigurations StatutoryConfiguration[]
   attendancePenaltyPolicies AttendancePenaltyPolicy[]
+  attendancePenaltyAssessments AttendancePenaltyAssessment[]
   companyPolicies         CompanyPolicy[]
   attendanceGeofences     AttendanceGeofence[]
   payrollPayouts          PayrollPayout[]
@@ -294,7 +295,6 @@ model Property {
   leaveApplications     LeaveApplication[]
   jobRequisitions       JobRequisition[]
   employeeLoans         EmployeeLoan[]
-  attendancePenaltyPolicies AttendancePenaltyPolicy[]
   salaryAdvances        SalaryAdvance[]
   expenseClaims         ExpenseClaim[]
   performanceAppraisals PerformanceAppraisal[]

@@ -13,6 +13,9 @@ export async function GET(req: NextRequest) {
   try {
     const context = await HrAuthorizationService.resolveAuthContext(req);
     const canManage = HrAuthorizationService.can(context, 'hr.service-desk.manage');
+    if (new URL(req.url).searchParams.get('scope') === 'hr' && !canManage) {
+      return NextResponse.json({ error: 'HR service desk access is restricted to HR staff' }, { status: 403 });
+    }
     const where: any = {
       propertyId: context.propertyId,
       ...(canManage ? {} : { staff: { userId: context.userId, organizationId: context.organizationId } }),
@@ -40,8 +43,12 @@ export async function POST(req: NextRequest) {
       if (!body.ticketId || !body.body?.trim()) return NextResponse.json({ error: 'Ticket ID and reply text are required' }, { status: 400 });
       const ticket = await prisma.hrServiceDeskTicket.findFirst({ where: { id: body.ticketId, propertyId: context.propertyId, ...(canManage ? {} : { staff: { userId: context.userId, organizationId: context.organizationId } }) } });
       if (!ticket) return NextResponse.json({ error: 'Ticket not found' }, { status: 404 });
-      const message = await prisma.hrServiceDeskMessage.create({ data: { ticketId: ticket.id, authorId: context.userId, body: String(body.body).trim(), isInternal: false } });
+      const isInternal = canManage && Boolean(body.isInternal);
+      const message = await prisma.hrServiceDeskMessage.create({ data: { ticketId: ticket.id, authorId: context.userId, body: String(body.body).trim(), isInternal } });
       if (!canManage && ticket.status === 'AWAITING_EMPLOYEE') await prisma.hrServiceDeskTicket.update({ where: { id: ticket.id }, data: { status: 'IN_PROGRESS' } });
+      if (canManage && !isInternal) {
+        await notifyEmployee({ organizationId: context.organizationId, propertyId: context.propertyId, staffId: ticket.staffId, subject: 'HR replied to your request', body: `HR replied to your request “${ticket.subject}”. Open your employee portal to review the response.`, category: 'APPROVALS', action: '/hr/self-service', idempotencyKey: `service-desk:${ticket.id}:reply:${message.id}` });
+      }
       return NextResponse.json({ success: true, message }, { status: 201 });
     }
     if (!staffId || !body.category || !body.subject?.trim() || !body.description?.trim()) {
