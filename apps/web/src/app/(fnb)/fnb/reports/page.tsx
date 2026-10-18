@@ -205,6 +205,7 @@ export default function FnbReportsPage() {
         }
         @media print {
           @page { margin: 10mm; size: A4 landscape; }
+          @page report-a4-landscape { margin: 10mm; size: 297mm 210mm; }
           html, body { height: auto !important; min-height: 0 !important; overflow: visible !important; }
           body { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; background: white !important; font-family: 'Inter', system-ui, sans-serif !important; }
           body * { visibility: hidden !important; }
@@ -216,8 +217,8 @@ export default function FnbReportsPage() {
           .report-preview, .report-preview * { visibility: visible !important; }
           /* Keep the printed document visually identical to the reviewed preview.
              Only the modal positioning, scrolling constraint, and controls are removed. */
-          .report-preview { display: block !important; position: static !important; width: auto !important; min-height: 0 !important; padding: 4.23mm !important; overflow: visible !important; background: #cbd5e1 !important; color: black; }
-          .report-preview-card { display: block !important; position: static !important; width: 230mm !important; max-width: 230mm !important; height: auto !important; max-height: none !important; margin: 0 auto !important; padding: 20px !important; overflow: visible !important; border-radius: 10px !important; box-shadow: none !important; background: #cbd5e1 !important; break-inside: auto !important; page-break-inside: auto !important; }
+          .report-preview { page: report-a4-landscape; display: block !important; position: static !important; width: auto !important; min-height: 0 !important; padding: 4.23mm !important; overflow: visible !important; background: #cbd5e1 !important; color: black; }
+          .report-preview-card { display: block !important; position: static !important; width: calc(100% - 8.46mm) !important; max-width: 230mm !important; height: auto !important; max-height: none !important; margin: 0 auto !important; padding: 20px !important; overflow: visible !important; border-radius: 10px !important; box-shadow: none !important; background: #cbd5e1 !important; break-inside: auto !important; page-break-inside: auto !important; }
           .report-preview-body { display: block !important; height: auto !important; min-height: 0 !important; overflow: visible !important; padding: 12mm !important; background: white !important; break-inside: auto !important; page-break-inside: auto !important; }
           .report-preview-actions { display: none !important; }
           .report-preview .overflow-hidden, .report-preview .overflow-x-auto { overflow: visible !important; }
