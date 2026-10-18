@@ -138,6 +138,9 @@ export async function GET(req: NextRequest) {
       'PAYMENT_RECEIVED',
       'RESERVATION_CANCELLED',
       'RESERVATION_EXPIRED',
+      'SHIFT_APPROVED',
+      'SHIFT_RETURNED',
+      'SHIFT_APPROVED_WITH_VARIANCE',
     ];
     const onlineBookingNotifications = await prisma.notification.findMany({
       where: {

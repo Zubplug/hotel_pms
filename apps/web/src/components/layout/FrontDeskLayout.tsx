@@ -92,6 +92,9 @@ export function FrontDeskLayout({ children, enabledModules = [], licenseSnapshot
     RESERVATION_NO_SHOW: 'Reservation no-show synchronized',
     CHECK_IN: 'Guest check-in synchronized',
     CHECK_OUT: 'Guest check-out synchronized',
+    SHIFT_APPROVED: 'Cashier shift approved',
+    SHIFT_RETURNED: 'Cashier shift returned',
+    SHIFT_APPROVED_WITH_VARIANCE: 'Cashier shift approved with variance',
   }[type] || 'Front Desk synchronization');
 
   useEffect(() => {

@@ -5,6 +5,7 @@ import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { errorResponse, successResponse } from '@/lib/api-response';
 import { ShiftControlService, ShiftControlError } from '@/lib/services/shift-control-service';
+import { emitShiftDecisionNotification } from '@/lib/services/shift-notification-service';
 export async function POST(req: NextRequest, { params }: { params: Promise<{ shiftId: string }> }) {
   try {
     const actor = await auth();
@@ -53,6 +54,23 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ shi
       updated = await ShiftControlService.acknowledgeCashlessShift(await requireOrganizationContext(actorUserId), type, shiftId);
     } else {
       return errorResponse('BAD_REQUEST', 'Invalid approval decision', 400);
+    }
+
+    if (decision !== 'CASHLESS_ACKNOWLEDGED') {
+      try {
+        await emitShiftDecisionNotification({
+          organizationId: (await requireOrganizationContext(actorUserId)).organizationId,
+          propertyId,
+          shiftId,
+          shiftType: type,
+          decision: decision === 'REJECTED' ? 'RETURNED' : decision,
+          variance: Number((updated as any)?.variance ?? 0),
+          notes: reviewNotes,
+          idempotencyKey: `shift_decision_${type}_${shiftId}_${decision}_${String((updated as any)?.updatedAt || '')}`,
+        });
+      } catch (notificationError) {
+        console.error('[Shift approval] Notification failed', notificationError);
+      }
     }
 
     return successResponse({ type, shift: updated });

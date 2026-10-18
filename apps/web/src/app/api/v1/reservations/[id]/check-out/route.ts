@@ -17,6 +17,8 @@ import { reconcileFolioBalanceFromCounters } from '@/lib/finance/reconcile-folio
 import { getPropertyBusinessDate } from '@/lib/date-utils';
 import { getApprovedRoomDiscount } from '@/lib/finance/approved-room-discount';
 import { fulfilReachBooking } from '@/lib/reach-commission';
+import { hasEntitlement } from '@/lib/auth/entitlement';
+import { computeRateBreakdown, resolveBreakdownConfig } from '@/lib/room-rate-breakdown';
 
 export async function POST(
   req: NextRequest,
@@ -36,7 +38,16 @@ export async function POST(
       select: { 
         id: true, status: true, propertyId: true, corporateAccountId: true, primaryGuestId: true, confirmationNumber: true, checkIn: true, checkOut: true, 
         primaryGuest: { select: { firstName: true, lastName: true, phone: true } },
-        corporateAccount: { select: { id: true, name: true, creditLimit: true, exemptFromHighBalance: true, cityLedgerAccountId: true } },
+        corporateAccount: {
+          select: {
+            id: true,
+            name: true,
+            creditLimit: true,
+            exemptFromHighBalance: true,
+            cityLedgerAccountId: true,
+            ratePlan: { select: { includeFoodAllocation: true } },
+          },
+        },
         reservationRooms: { include: { room: true } } 
       },
     });
@@ -55,6 +66,17 @@ export async function POST(
     const canCheckOut = await hasPermission(session.user.id, 'reservation', 'update', reservation.propertyId);
     const canPostCityLedger = await hasPermission(session.user.id, 'LEDGER', 'CREATE', reservation.propertyId);
     if (!canCheckOut && !canPostCityLedger && !isNightAuditor) return errorResponse('FORBIDDEN', 'Insufficient permissions to complete checkout', 403);
+
+    const checkoutProperty = await prisma.property.findUnique({
+      where: { id: reservation.propertyId },
+      select: { organizationId: true, businessDate: true, timezone: true, settings: true },
+    });
+    if (!checkoutProperty) throw new Error('PROPERTY_NOT_FOUND');
+    const professionalOperationsEnabled = await hasEntitlement(
+      checkoutProperty.organizationId,
+      'MODULE_OPERATIONS',
+      reservation.propertyId,
+    );
 
     // Run the operational checkout transaction
     const txResult = await prisma.$transaction(async (tx: any) => {
@@ -127,23 +149,81 @@ export async function POST(
             const amount = Math.max(0, grossAmount - discount);
             if (amount <= 0) continue;
             const operationId = `${auditKeyPrefix}${reservation.checkIn.toISOString().slice(0, 10)}:DAY_USE:${room.id}`;
-            await tx.folioItem.create({
-              data: {
-                folioId: targetFolio.id,
-                businessDate: reservation.checkIn,
+            const breakdownConfig = resolveBreakdownConfig((checkoutProperty.settings as any) || {});
+            const breakdown = computeRateBreakdown(
+              discount > 0 ? grossAmount : amount,
+              {
+                ...breakdownConfig,
+                enabled: breakdownConfig.enabled && professionalOperationsEnabled,
+              },
+              discount > 0,
+              room.roomTypeId,
+              reservation.corporateAccount?.ratePlan?.includeFoodAllocation ?? null,
+            );
+            const chargeLines = [
+              {
                 type: 'CHARGE',
-                source: 'DAY_USE_ROOM_CHARGE',
                 revenueCategory: 'ROOM',
-                description: `Day-use room charge for ${operationalDate.toISOString().slice(0, 10)}${discount > 0 ? ` (discount ${discount})` : ''}`,
-                quantity: 1,
-                unitAmount: amount,
-                amount,
-                baseAmount: amount,
-                currency: room.currency || targetFolio.currency || 'NGN',
-                postedBy: session.user.id,
+                revenueClass: 'ROOM',
+                amount: breakdown.netAccommodation,
+                description: `Net Accommodation for ${operationalDate.toISOString().slice(0, 10)}`,
                 operationId,
               },
-            });
+              ...(breakdown.complimentaryFoodAmount > 0 ? [{
+                type: 'CHARGE',
+                revenueCategory: 'FNB',
+                revenueClass: 'FOOD',
+                amount: breakdown.complimentaryFoodAmount,
+                description: `${breakdown.complimentaryAllocationName} for ${operationalDate.toISOString().slice(0, 10)}`,
+                operationId: `${operationId}:FNB`,
+              }] : []),
+              ...(breakdown.vatAmount > 0 ? [{
+                type: 'TAX',
+                revenueCategory: 'TAX',
+                revenueClass: 'VAT',
+                amount: breakdown.vatAmount,
+                description: `VAT (${(breakdownConfig.vatRate * 100).toFixed(1)}%) for ${operationalDate.toISOString().slice(0, 10)}`,
+                operationId: `${operationId}:VAT`,
+              }] : []),
+              ...(breakdown.serviceChargeAmount > 0 ? [{
+                type: 'CHARGE',
+                revenueCategory: 'OTHER',
+                revenueClass: 'SERVICE_CHARGE',
+                amount: breakdown.serviceChargeAmount,
+                description: `Service Charge (${(breakdownConfig.serviceChargeRate * 100).toFixed(0)}%) for ${operationalDate.toISOString().slice(0, 10)}`,
+                operationId: `${operationId}:SC`,
+              }] : []),
+              ...(discount > 0 ? [{
+                type: 'DISCOUNT',
+                revenueCategory: 'ROOM',
+                revenueClass: 'ROOM',
+                amount: -discount,
+                description: `Approved room discount for ${operationalDate.toISOString().slice(0, 10)}`,
+                operationId: `${operationId}:CONCESSION`,
+              }] : []),
+            ];
+            for (const line of chargeLines) {
+              await tx.folioItem.create({
+                data: {
+                  folioId: targetFolio.id,
+                  businessDate: reservation.checkIn,
+                  type: line.type,
+                  source: 'DAY_USE_ROOM_CHARGE',
+                  revenueCategory: line.revenueCategory,
+                  revenueClass: line.revenueClass,
+                  description: line.description,
+                  quantity: 1,
+                  unitAmount: line.amount,
+                  amount: line.amount,
+                  baseAmount: line.amount,
+                  currency: room.currency || targetFolio.currency || 'NGN',
+                  postedBy: session.user.id,
+                  operationId: line.operationId,
+                  reservationId: reservation.id,
+                  guestId: reservation.primaryGuestId,
+                },
+              });
+            }
             await tx.folio.update({
               where: { id: targetFolio.id },
               data: {

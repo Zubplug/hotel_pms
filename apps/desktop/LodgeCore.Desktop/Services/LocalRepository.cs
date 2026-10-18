@@ -1214,7 +1214,7 @@ public class LocalRepository
         return true;
     }
 
-    public async Task<bool> RecordChargeAsync(string folioId, decimal amount, string description, string userId, string deviceId, string? idempotencyKey = null, bool requireFrontdeskSession = true, string? posTransactionId = null, string source = "ROOM_CHARGE", string? reservationId = null, string? itemType = null, string? revenueCategory = null, string? revenueClass = null)
+    public async Task<bool> RecordChargeAsync(string folioId, decimal amount, string description, string userId, string deviceId, string? idempotencyKey = null, bool requireFrontdeskSession = true, string? posTransactionId = null, string source = "ROOM_CHARGE", string? reservationId = null, string? itemType = null, string? revenueCategory = null, string? revenueClass = null, string transactionType = "CHARGE")
     {
         var folio = await _dbContext.Folios.FindAsync(folioId);
         if (folio == null) return false;
@@ -1253,7 +1253,7 @@ public class LocalRepository
         }
 
         folio.TotalCharges += amount;
-        var creditApplicationAmount = Math.Min(folio.AvailableCredit, amount);
+        var creditApplicationAmount = Math.Min(folio.AvailableCredit, Math.Max(0m, amount));
         folio.AvailableCredit -= creditApplicationAmount;
         if (creditApplicationAmount > 0)
             ApplyCreditToTransactionsJson(folio, creditApplicationAmount);
@@ -1268,7 +1268,7 @@ public class LocalRepository
             id = Guid.NewGuid().ToString(),
             amount = amount,
             description = description,
-            type = "CHARGE",
+            type = transactionType,
             source,
             itemType,
             revenueCategory,
@@ -1286,7 +1286,7 @@ public class LocalRepository
             {
                 id = Guid.NewGuid().ToString(),
                 amount = creditApplicationAmount,
-                source = "CHARGE",
+                source = transactionType,
                 description = $"Applied guest credit to {description}",
                 status = "PENDING_SYNC",
                 idempotencyKey = $"CREDIT_APPLICATION:{idempotencyKey ?? newItem.id}",
@@ -2753,16 +2753,58 @@ public class LocalRepository
 
                 if (dayUseAmount > 0m)
                 {
-                    await RecordChargeAsync(
-                        res.Folio.Id,
+                    var activeRoom = res.Rooms.FirstOrDefault(room => room.Status == "ACTIVE") ?? res.Rooms.FirstOrDefault();
+                    var hasDiscount = activeRoom != null && (
+                        (activeRoom.DiscountAmount ?? 0m) > 0m ||
+                        (activeRoom.DiscountPercent ?? 0m) > 0m ||
+                        !string.IsNullOrWhiteSpace(activeRoom.DiscountApprovalId));
+                    var approvedDiscount = activeRoom != null &&
+                        !string.IsNullOrWhiteSpace(activeRoom.DiscountApprovalId) &&
+                        !activeRoom.DiscountApprovalId.StartsWith("PENDING:", StringComparison.OrdinalIgnoreCase)
+                        ? (activeRoom.DiscountAmount ?? (dayUseAmount * (activeRoom.DiscountPercent ?? 0m) / 100m))
+                        : 0m;
+                    approvedDiscount = Math.Min(dayUseAmount, Math.Max(0m, approvedDiscount));
+
+                    bool? corporateFoodAllocationOverride = null;
+                    if (res.CorporateAccountId != null && !string.IsNullOrWhiteSpace(res.CorporateAccount?.RatePlanId))
+                    {
+                        var corporateRatePlan = await _dbContext.RatePlans.FirstOrDefaultAsync(plan => plan.Id == res.CorporateAccount!.RatePlanId);
+                        if (corporateRatePlan != null) corporateFoodAllocationOverride = corporateRatePlan.IncludeFoodAllocation;
+                    }
+
+                    var breakdown = DecomposeRoomRate(
                         dayUseAmount,
-                        $"Day-use room charge for {operationalDate:yyyy-MM-dd}",
-                        userId,
-                        deviceId,
-                        dayUseKey,
-                        requireFrontdeskSession: false,
-                        source: "DAY_USE_ROOM_CHARGE",
-                        reservationId: res.Id);
+                        property?.RateBreakdownJson,
+                        hasDiscount,
+                        corporateFoodAllocationOverride);
+                    var breakdownLines = new List<(decimal Amount, string Description, string Key, string ItemType, string Category, string RevenueClass, string TransactionType)>();
+                    breakdownLines.Add((breakdown.NetAccommodation, $"Net Accommodation for {operationalDate:yyyy-MM-dd}", dayUseKey, "CHARGE", "ROOM", "ROOM", "CHARGE"));
+                    if (breakdown.ComplimentaryFoodAmount > 0m)
+                        breakdownLines.Add((breakdown.ComplimentaryFoodAmount, $"{breakdown.ComplimentaryAllocationName} for {operationalDate:yyyy-MM-dd}", $"{dayUseKey}:FNB", "CHARGE", "FNB", "FOOD", "CHARGE"));
+                    if (breakdown.VatAmount > 0m)
+                        breakdownLines.Add((breakdown.VatAmount, $"VAT for {operationalDate:yyyy-MM-dd}", $"{dayUseKey}:VAT", "TAX", "TAX", "VAT", "CHARGE"));
+                    if (breakdown.ServiceChargeAmount > 0m)
+                        breakdownLines.Add((breakdown.ServiceChargeAmount, $"Service Charge for {operationalDate:yyyy-MM-dd}", $"{dayUseKey}:SC", "CHARGE", "OTHER", "SERVICE_CHARGE", "CHARGE"));
+                    if (approvedDiscount > 0m)
+                        breakdownLines.Add((-approvedDiscount, $"Approved room discount for {operationalDate:yyyy-MM-dd}", $"{dayUseKey}:CONCESSION", "DISCOUNT", "ROOM", "ROOM", "DISCOUNT"));
+
+                    foreach (var line in breakdownLines)
+                    {
+                        await RecordChargeAsync(
+                            res.Folio.Id,
+                            line.Amount,
+                            line.Description,
+                            userId,
+                            deviceId,
+                            line.Key,
+                            requireFrontdeskSession: false,
+                            source: "DAY_USE_ROOM_CHARGE",
+                            reservationId: res.Id,
+                            itemType: line.ItemType,
+                            revenueCategory: line.Category,
+                            revenueClass: line.RevenueClass,
+                            transactionType: line.TransactionType);
+                    }
                 }
             }
         }

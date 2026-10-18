@@ -23,6 +23,9 @@ export async function GET(req: NextRequest) {
       'CHECK_IN',
       'CHECK_OUT',
       'PAYMENT_RECEIVED',
+      'SHIFT_APPROVED',
+      'SHIFT_RETURNED',
+      'SHIFT_APPROVED_WITH_VARIANCE',
     ];
     const notifications = await prisma.notification.findMany({
       where: {

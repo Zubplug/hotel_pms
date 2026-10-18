@@ -23,6 +23,7 @@ import { GLMappingService } from "@/lib/services/gl-mapping-service";
 import { queueCancellationRefunds as queueCancellationRefundsProfessional } from "@/lib/finance/queue-cancellation-refund";
 import { QueuePublisher } from "@/lib/integrations/ota/queue";
 import { fulfilReachBooking } from "@/lib/reach-commission";
+import { emitShiftDecisionNotification } from '@/lib/services/shift-notification-service';
 
 const parseLocalDateString = (dateString: string | Date | undefined): Date | undefined => {
   if (!dateString) return undefined;
@@ -1871,8 +1872,10 @@ export async function POST(req: NextRequest) {
             }
 
             const amount = Number(payload.amount);
-            if (!Number.isFinite(amount) || amount <= 0)
-              throw new Error("Charge amount must be positive");
+            const itemType = payload.itemType || payload.type || "CHARGE";
+            const isDiscountLine = itemType === "DISCOUNT" && amount < 0;
+            if (!Number.isFinite(amount) || (!isDiscountLine && amount <= 0))
+              throw new Error("Charge amount must be positive unless it is a discount line");
             const folio = await tx.folio.findUnique({
               where: { id: aggregateId, propertyId },
             });
@@ -1889,7 +1892,7 @@ export async function POST(req: NextRequest) {
               data: {
                 folioId: aggregateId,
                 businessDate: postingBusinessDate,
-                type: payload.itemType || payload.type || "CHARGE",
+                type: itemType,
                 source: payload.source || "ROOM_CHARGE",
                 revenueCategory: payload.revenueCategory || undefined,
                 revenueClass: payload.revenueClass || undefined,
@@ -4984,6 +4987,38 @@ export async function POST(req: NextRequest) {
         });
 
         results.push({ id, status: resultStatus, idempotencyKey });
+
+        // A manager may review a shift from an offline Front Desk terminal.
+        // Publish the decision only after the sync transaction commits so the
+        // offline Front Desk and POS queues never announce a rolled-back review.
+        if (
+          aggregateType === "FRONTDESK_SESSION" &&
+          eventType === "FRONTDESK_SESSION_REVIEWED" &&
+          property.organizationId
+        ) {
+          try {
+            const decision = String(payload.decision || '').toUpperCase();
+            if (decision === 'APPROVED' || decision === 'APPROVED_WITH_VARIANCE' || decision === 'REJECTED') {
+              const reviewedSession = await prisma.frontdeskSession.findUnique({
+                where: { id: aggregateId },
+                select: { shiftReference: true, variance: true },
+              });
+              await emitShiftDecisionNotification({
+                organizationId: property.organizationId,
+                propertyId,
+                shiftId: aggregateId,
+                shiftType: 'FRONT_DESK',
+                decision: (decision === 'REJECTED' ? 'RETURNED' : decision) as 'APPROVED' | 'RETURNED' | 'APPROVED_WITH_VARIANCE',
+                shiftReference: reviewedSession?.shiftReference,
+                variance: reviewedSession?.variance == null ? null : Number(reviewedSession.variance),
+                notes: payload.notes || null,
+                idempotencyKey: `offline_frontdesk_shift_decision_${idempotencyKey || id}`,
+              });
+            }
+          } catch (notificationError) {
+            console.error('[Frontdesk Sync] Shift notification failed', notificationError);
+          }
+        }
 
         // Post-transaction notifications for mobile hub parity
         if (aggregateType === "RESERVATION") {

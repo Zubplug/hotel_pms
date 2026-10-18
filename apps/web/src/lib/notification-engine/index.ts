@@ -113,8 +113,8 @@ async function resolveRecipients(
   propertyId?: string,
   eventType?: string,
 ): Promise<string[]> {
-  const targetRoles = eventType === 'POS_ROOM_CHARGE_POSTED'
-    ? ["RECEPTIONIST", "FRONT_DESK", "FRONT_DESK_MANAGER", "GENERAL_CASHIER", "CASHIER", "NIGHT_AUDITOR", "MANAGER", "GENERAL_MANAGER", "DIRECTOR"]
+  const targetRoles = eventType === 'POS_ROOM_CHARGE_POSTED' || eventType?.startsWith('SHIFT_')
+    ? ["RECEPTIONIST", "FRONT_DESK", "FRONT_DESK_MANAGER", "GENERAL_CASHIER", "CASHIER", "BARTENDER", "WAITER", "NIGHT_AUDITOR", "MANAGER", "GENERAL_MANAGER", "DIRECTOR"]
     : ["EXECUTIVE", "MANAGER", "GENERAL_MANAGER", "DIRECTOR"];
 
   const whereClause: any = {
@@ -238,6 +238,30 @@ async function evaluateEvent(
   };
 
   switch (event.type) {
+    case 'SHIFT_APPROVED':
+    case 'SHIFT_RETURNED':
+    case 'SHIFT_APPROVED_WITH_VARIANCE': {
+      const shiftType = event.metadata?.shiftType === 'POS' ? 'POS' : 'Front Desk';
+      const reference = String(event.metadata?.shiftReference || event.entityId);
+      const variance = Number(event.metadata?.variance || 0);
+      const notes = String(event.metadata?.notes || '').trim();
+      const isReturned = event.type === 'SHIFT_RETURNED';
+      const hasVariance = event.type === 'SHIFT_APPROVED_WITH_VARIANCE';
+      return {
+        subject: isReturned
+          ? `${shiftType} shift returned for correction`
+          : hasVariance
+            ? `${shiftType} shift approved with variance`
+            : `${shiftType} shift approved`,
+        body: isReturned
+          ? `${reference} was returned for correction.${notes ? ` Note: ${notes}` : ''}`
+          : hasVariance
+            ? `${reference} was approved with an accepted variance of NGN ${Math.abs(variance).toLocaleString()}.${notes ? ` Note: ${notes}` : ''}`
+            : `${reference} was approved and is ready for the next control step.`,
+        category: 'Operations',
+        priority: isReturned || hasVariance ? 'High' : 'Normal',
+      };
+    }
     case 'POS_ROOM_CHARGE_POSTED': {
       const guestName = String(event.metadata?.guestName || 'Guest');
       const roomNumber = String(event.metadata?.roomNumber || '—');

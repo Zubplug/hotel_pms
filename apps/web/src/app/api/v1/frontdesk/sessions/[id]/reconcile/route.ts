@@ -5,6 +5,7 @@ import { successResponse, errorResponse } from '@/lib/api-response';
 import { ShiftControlService, ShiftControlError } from '@/lib/services/shift-control-service';
 import { isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
 import { requireOrganizationContext } from "@/lib/organization-access";
+import { emitShiftDecisionNotification } from '@/lib/services/shift-notification-service';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -32,6 +33,21 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       );
     } else {
       updated = await ShiftControlService.returnShift(ctx, 'FRONT_DESK', id, reviewNotes);
+    }
+    try {
+      await emitShiftDecisionNotification({
+        organizationId: ctx.organizationId,
+        propertyId: current.propertyId,
+        shiftId: id,
+        shiftType: 'FRONT_DESK',
+        decision: decision === 'REJECTED' ? 'RETURNED' : decision,
+        shiftReference: current.shiftReference,
+        variance: current.variance == null ? null : Number(current.variance),
+        notes: reviewNotes,
+        idempotencyKey: `frontdesk_shift_decision_${id}_${decision}_${current.updatedAt.toISOString()}`,
+      });
+    } catch (notificationError) {
+      console.error('[Frontdesk Sessions Reconcile] Notification failed', notificationError);
     }
     return successResponse({ session: updated });
   } catch (error) {
