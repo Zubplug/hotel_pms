@@ -3574,12 +3574,23 @@ export async function POST(req: NextRequest) {
             });
             if (!newRoom) throw new Error("New room not found or unauthorized");
 
-            // Validate new room not already occupied by another active reservation
+            // A room assignment is date-scoped. A future reservation may keep
+            // the room reserved for its arrival window without making the room
+            // unavailable for an earlier stay or room move.
+            const assignmentToReplace = reservationRoomId
+              ? res.reservationRooms.find((assignment: any) => assignment.id === reservationRoomId)
+              : res.reservationRooms.find((assignment: any) => assignment.roomId === oldRoomId)
+                || res.reservationRooms[0];
+            const targetCheckIn = assignmentToReplace?.checkIn || res.checkIn;
+            const targetCheckOut = assignmentToReplace?.checkOut || res.checkOut;
+
             const newRoomConflict = await tx.reservationRoom.findFirst({
               where: {
                 roomId: newRoomId,
                 status: "ACTIVE",
                 reservationId: { not: aggregateId },
+                checkIn: { lt: targetCheckOut },
+                checkOut: { gt: targetCheckIn },
                 reservation: {
                   status: { notIn: ["CHECKED_OUT", "CANCELLED", "NO_SHOW"] },
                 },
@@ -3597,10 +3608,6 @@ export async function POST(req: NextRequest) {
             // folio charge or credit here: Night Audit prices the active room
             // for each unposted business date, which prevents double posting
             // and preserves already-posted nights at their original rate.
-            const assignmentToReplace = reservationRoomId
-              ? res.reservationRooms.find((assignment: any) => assignment.id === reservationRoomId)
-              : res.reservationRooms.find((assignment: any) => assignment.roomId === oldRoomId)
-                || res.reservationRooms[0];
             if (!assignmentToReplace)
               throw new Error("Active room assignment not found for reassignment");
             const previousRoomId = oldRoomId || assignmentToReplace.roomId;
