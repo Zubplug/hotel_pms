@@ -130,12 +130,56 @@ export default function FnbReportsPage() {
   }, [propertyId, dateRange.start, dateRange.end, selectedOutlet]);
 
   const handlePrint = () => {
-    setPrintMode(null);
-    // Print the mounted preview itself so the printed document is identical
-    // to the report the manager reviewed in the preview dialog.
-    setTimeout(() => {
+    const preview = document.querySelector('.report-preview');
+    if (!preview) return;
+
+    // Print a report-only document. The preview is mounted inside the F&B
+    // shell, whose screen layout is intentionally viewport-bound. Printing a
+    // clone outside that shell gives Chrome a normal document flow and lets
+    // the explicit A4 page rule paginate the complete report.
+    const printWindow = window.open('', '_blank', 'width=1200,height=900');
+    if (!printWindow) {
       window.print();
-    }, 500);
+      return;
+    }
+
+    const styles = Array.from(document.querySelectorAll('link[rel="stylesheet"], style'))
+      .map((node) => node.outerHTML)
+      .join('');
+    const reportMarkup = preview.outerHTML;
+
+    printWindow.document.write(`<!doctype html>
+      <html lang="en">
+        <head>
+          <meta charset="utf-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1" />
+          <base href="${document.baseURI}" />
+          ${styles}
+          <title>${propertyName} · F&B report</title>
+          <style>
+            @page { size: 210mm 297mm; margin: 10mm; }
+            html, body { margin: 0; min-height: 0; background: #fff; }
+            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; font-family: Inter, system-ui, sans-serif; }
+            .report-preview { display: block !important; position: static !important; width: auto !important; min-height: 0 !important; padding: 0 !important; overflow: visible !important; background: #fff !important; }
+            .report-preview-card { display: block !important; position: static !important; width: 100% !important; max-width: none !important; height: auto !important; max-height: none !important; margin: 0 !important; padding: 0 !important; overflow: visible !important; border: 0 !important; border-radius: 0 !important; box-shadow: none !important; background: #fff !important; }
+            .report-preview-body { display: block !important; height: auto !important; min-height: 0 !important; overflow: visible !important; }
+            .report-preview-actions { display: none !important; }
+            .report-preview .overflow-hidden, .report-preview .overflow-x-auto { overflow: visible !important; }
+            .report-preview table { min-width: 0 !important; width: 100% !important; table-layout: fixed !important; font-size: 8px !important; }
+            .report-preview th, .report-preview td { padding: 2mm 1.5mm !important; overflow-wrap: anywhere !important; }
+            table { width: 100%; page-break-inside: auto; break-inside: auto; }
+            thead { display: table-header-group; }
+            tr { page-break-inside: avoid; break-inside: avoid; }
+          </style>
+        </head>
+        <body>${reportMarkup}</body>
+      </html>`);
+    printWindow.document.close();
+    printWindow.focus();
+    window.setTimeout(() => {
+      printWindow.print();
+      printWindow.close();
+    }, 800);
   };
 
   if (loading && !data) return (
@@ -204,8 +248,7 @@ export default function FnbReportsPage() {
           .print-only { display: none !important; }
         }
         @media print {
-          @page { margin: 10mm; size: A4 landscape; }
-          @page report-a4-landscape { margin: 10mm; size: 297mm 210mm; }
+          @page { margin: 10mm; size: 210mm 297mm; }
           html, body { height: auto !important; min-height: 0 !important; overflow: visible !important; }
           body { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; background: white !important; font-family: 'Inter', system-ui, sans-serif !important; }
           body * { visibility: hidden !important; }
@@ -217,11 +260,13 @@ export default function FnbReportsPage() {
           .report-preview, .report-preview * { visibility: visible !important; }
           /* Keep the printed document visually identical to the reviewed preview.
              Only the modal positioning, scrolling constraint, and controls are removed. */
-          .report-preview { page: report-a4-landscape; display: block !important; position: static !important; width: auto !important; min-height: 0 !important; padding: 4.23mm !important; overflow: visible !important; background: #cbd5e1 !important; color: black; }
-          .report-preview-card { display: block !important; position: static !important; width: calc(100% - 8.46mm) !important; max-width: 230mm !important; height: auto !important; max-height: none !important; margin: 0 auto !important; padding: 20px !important; overflow: visible !important; border-radius: 10px !important; box-shadow: none !important; background: #cbd5e1 !important; break-inside: auto !important; page-break-inside: auto !important; }
+          .report-preview { display: block !important; position: static !important; width: auto !important; min-height: 0 !important; padding: 0 !important; overflow: visible !important; background: white !important; color: black; }
+          .report-preview-card { display: block !important; position: static !important; width: 100% !important; max-width: none !important; height: auto !important; max-height: none !important; margin: 0 !important; padding: 0 !important; overflow: visible !important; border-radius: 0 !important; box-shadow: none !important; background: white !important; break-inside: auto !important; page-break-inside: auto !important; }
           .report-preview-body { display: block !important; height: auto !important; min-height: 0 !important; overflow: visible !important; padding: 12mm !important; background: white !important; break-inside: auto !important; page-break-inside: auto !important; }
           .report-preview-actions { display: none !important; }
           .report-preview .overflow-hidden, .report-preview .overflow-x-auto { overflow: visible !important; }
+          .report-preview table { min-width: 0 !important; width: 100% !important; table-layout: fixed !important; font-size: 8px !important; }
+          .report-preview th, .report-preview td { padding: 2mm 1.5mm !important; overflow-wrap: anywhere !important; }
           .report-preview section, .report-preview .grid, .report-preview table { break-inside: auto !important; page-break-inside: auto !important; }
           table { page-break-inside: auto !important; break-inside: auto !important; }
           thead { display: table-header-group; }
@@ -485,7 +530,7 @@ export default function FnbReportsPage() {
 
       {showReportPreview && data && (
         <div className="report-preview fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm">
-          <div className="report-preview-card flex h-[94vh] max-h-[94vh] w-full max-w-[230mm] flex-col overflow-hidden rounded-[10px] bg-slate-300 p-3 shadow-[0_24px_80px_rgba(15,23,42,0.35)] sm:p-5">
+          <div className="report-preview-card flex h-[94vh] max-h-[94vh] w-full max-w-[210mm] flex-col overflow-hidden rounded-[10px] bg-slate-300 p-3 shadow-[0_24px_80px_rgba(15,23,42,0.35)] sm:p-5">
             <div className="shrink-0 border-b border-slate-200 bg-white px-6 py-5 sm:px-8">
               <div className="flex flex-wrap items-start justify-between gap-6">
                 <div className="flex min-w-0 items-start gap-4">
