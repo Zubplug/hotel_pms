@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import {
-  BarChart3, RefreshCw, Loader2, Store, Box, Calendar, Calculator, Printer, CheckCircle2, AlertTriangle, WalletCards, ClipboardCheck, Scale, ChevronDown, ArrowUpRight, Clock3, CircleDollarSign, Percent, PackageCheck, UsersRound, UserRound
+  BarChart3, RefreshCw, Loader2, Store, Calendar, Calculator, Printer, CheckCircle2, AlertTriangle, WalletCards, ClipboardCheck, Scale, ArrowUpRight, Clock3, CircleDollarSign, Percent, PackageCheck, UsersRound, UserRound
 } from 'lucide-react';
 import { useProperty } from '@/components/PropertyProvider';
 import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
@@ -66,34 +66,25 @@ export default function FnbReportsPage() {
   const [dateRange, setDateRange] = useState({ start: '', end: '' });
   const [outlets, setOutlets] = useState<any[]>([]);
   const [selectedOutlet, setSelectedOutlet] = useState<string>('');
-  const [selectedWarehouse, setSelectedWarehouse] = useState<string>('');
-  const [warehouses, setWarehouses] = useState<any[]>([]);
+  const [showReportPreview, setShowReportPreview] = useState(false);
   const [refreshToken, setRefreshToken] = useState(0);
 
   // Print Mode State
-  const [printMode, setPrintMode] = useState<'dss' | 'inventory' | 'waiter' | null>(null);
-  const [showPrintMenu, setShowPrintMenu] = useState(false);
+  const [printMode, setPrintMode] = useState<'pack' | null>(null);
 
   useEffect(() => {
     if (propertyId) {
       const scope = async () => {
         try {
-          const [outletResponse, warehouseResponse] = await Promise.all([
-            fetch(`/api/v1/pos/outlets?propertyId=${encodeURIComponent(propertyId)}`),
-            fetch(`/api/v1/inventory/warehouses?propertyId=${encodeURIComponent(propertyId)}`),
-          ]);
-          const [outletBody, warehouseBody] = await Promise.all([
-            outletResponse.json(),
-            warehouseResponse.json(),
-          ]);
+          const outletResponse = await fetch(`/api/v1/pos/outlets?propertyId=${encodeURIComponent(propertyId)}`);
+          const outletBody = await outletResponse.json();
           if (!outletResponse.ok) throw new Error(outletBody?.error || 'Unable to load outlets');
-          if (!warehouseResponse.ok) throw new Error(warehouseBody?.error || 'Unable to load warehouses');
-          setOutlets(collectionFromResponse(outletBody, ['outlets', 'items']));
-          setWarehouses(collectionFromResponse(warehouseBody, ['warehouses', 'items']));
+          const availableOutlets = collectionFromResponse(outletBody, ['outlets', 'items']);
+          setOutlets(availableOutlets);
+          if (availableOutlets.length === 1) setSelectedOutlet((current) => current || availableOutlets[0].id);
         } catch (scopeError) {
           console.error('[FNB Reports] scope loading failed', scopeError);
           setOutlets([]);
-          setWarehouses([]);
         }
       };
       void scope();
@@ -113,7 +104,6 @@ export default function FnbReportsPage() {
     
     let url = `/api/v1/fnb/reports?propertyId=${propertyId}&startDate=${dateRange.start}&endDate=${dateRange.end}`;
     if (selectedOutlet) url += `&outletId=${selectedOutlet}`;
-    if (selectedWarehouse) url += `&warehouseId=${selectedWarehouse}`;
 
     fetch(url)
       .then(async res => {
@@ -124,17 +114,16 @@ export default function FnbReportsPage() {
       .then(setData)
       .catch(err => setError(err.message))
       .finally(() => setLoading(false));
-  }, [session, propertyId, dateRange, selectedOutlet, selectedWarehouse, refreshToken]);
+  }, [session, propertyId, dateRange, selectedOutlet, refreshToken]);
 
   useEffect(() => {
     if (!propertyId || !dateRange.start || !dateRange.end) return;
     const interval = window.setInterval(() => setRefreshToken(v => v + 1), 60_000);
     return () => window.clearInterval(interval);
-  }, [propertyId, dateRange.start, dateRange.end, selectedOutlet, selectedWarehouse]);
+  }, [propertyId, dateRange.start, dateRange.end, selectedOutlet]);
 
-  const handlePrint = (mode: 'dss' | 'inventory' | 'waiter') => {
-    setShowPrintMenu(false);
-    setPrintMode(mode);
+  const handlePrint = () => {
+    setPrintMode('pack');
     setTimeout(() => {
       window.print();
       setPrintMode(null);
@@ -154,7 +143,6 @@ export default function FnbReportsPage() {
   );
 
   const selectedOutletName = selectedOutlet ? outlets.find(o => o.id === selectedOutlet)?.name : 'All Outlets';
-  const selectedWarehouseName = selectedWarehouse ? warehouses.find(w => w.id === selectedWarehouse)?.name : 'All Warehouses';
   const displayDate = dateRange.start === dateRange.end ? dateRange.start : `${dateRange.start} to ${dateRange.end}`;
   const propertyName = (session?.user as any)?.organizationName || 'Hotel Property';
   const paymentTotal = data?.tenderBreakdown?.reduce((acc: number, tender: any) => acc + Number(tender.amount || 0), 0) || 0;
@@ -209,7 +197,7 @@ export default function FnbReportsPage() {
       {/* ── PRINT-ONLY VIEW: PROFESSIONAL A4 REPORT DESIGN       ── */}
       {/* ────────────────────────────────────────────────────────── */}
       
-      {printMode === 'dss' && data && (
+      {printMode === 'pack' && data && (
         <div className="print-only text-slate-900">
           {/* Document Header */}
           <div className="flex justify-between items-end border-b-2 border-slate-900 pb-4 mb-6">
@@ -225,11 +213,23 @@ export default function FnbReportsPage() {
           </div>
 
           {/* Key Metrics */}
-          <div className="grid grid-cols-4 gap-4 mb-8">
+          <div className="grid grid-cols-5 gap-4 mb-8">
             <PrintMetric label="Net Revenue" value={money(data.summary.netRevenue)} />
             <PrintMetric label="Total Covers" value={String(data.statistics.totalCovers)} />
             <PrintMetric label="Average Check" value={money(data.statistics.averageCheck)} />
             <PrintMetric label="Spend / Cover" value={money(data.statistics.spendPerCover)} />
+            <PrintMetric label="Complimentary Food" value={money(data.complimentaryFood?.allocatedAmount || 0)} />
+          </div>
+
+          <div className="mb-8 rounded-lg border border-orange-200 bg-orange-50 p-4 avoid-break">
+            <h2 className="text-sm font-bold uppercase tracking-wider text-orange-900">Complimentary breakfast control</h2>
+            <p className="mt-1 text-xs text-orange-800">Room-rate food allocation and actual breakfast redemption activity for the report period.</p>
+            <div className="mt-3 grid grid-cols-4 gap-3 text-xs">
+              <div><span className="block text-orange-700">Allocated value</span><strong>{money(data.complimentaryFood?.allocatedAmount || 0)}</strong></div>
+              <div><span className="block text-orange-700">Allocated covers</span><strong>{data.complimentaryFood?.allocatedCovers || 0}</strong></div>
+              <div><span className="block text-orange-700">Redeemed covers</span><strong>{data.complimentaryFood?.redeemedCovers || 0}</strong></div>
+              <div><span className="block text-orange-700">POS / buffet</span><strong>{data.complimentaryFood?.posTicketCovers || 0} / {data.complimentaryFood?.buffetBatchCovers || 0}</strong></div>
+            </div>
           </div>
 
           {/* Revenue & Tax Table */}
@@ -343,7 +343,7 @@ export default function FnbReportsPage() {
         </div>
       )}
 
-      {printMode === 'inventory' && data && (
+      {printMode === 'pack' && data && (
         <div className="print-only text-slate-900">
           <style dangerouslySetInnerHTML={{__html: `@media print { @page { size: A4 landscape; margin: 0; } }`}} />
           
@@ -355,15 +355,12 @@ export default function FnbReportsPage() {
             </div>
             <div className="text-right text-[11px] text-slate-600 space-y-0.5">
               <p><span className="font-semibold text-slate-900">Date Range:</span> {displayDate}</p>
-              <p><span className="font-semibold text-slate-900">Warehouse:</span> {selectedWarehouseName}</p>
+              <p><span className="font-semibold text-slate-900">Outlet warehouse:</span> {selectedOutletName}</p>
               <p><span className="font-semibold text-slate-900">Printed:</span> {new Date().toLocaleString()}</p>
             </div>
           </div>
 
-          {!selectedWarehouse ? (
-            <div className="text-center py-10 text-slate-500 font-medium">Please select a warehouse on the screen before printing the inventory ledger.</div>
-          ) : (
-            <div className="avoid-break">
+          <div className="avoid-break">
               <table className="w-full text-[10px]">
                 <thead>
                   <tr className="border-b-2 border-slate-900">
@@ -406,12 +403,11 @@ export default function FnbReportsPage() {
                   )}
                 </tbody>
               </table>
-            </div>
-          )}
+          </div>
         </div>
       )}
 
-      {printMode === 'waiter' && data && (
+      {printMode === 'pack' && data && (
         <div className="print-only text-slate-900">
           <style dangerouslySetInnerHTML={{__html: `@media print { @page { size: A4 landscape; margin: 0; } }`}} />
           <div className="flex justify-between items-end border-b-2 border-slate-900 pb-4 mb-6">
@@ -492,6 +488,63 @@ export default function FnbReportsPage() {
         </div>
       )}
 
+      {showReportPreview && data && (
+        <div className="screen-only fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm">
+          <div className="flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-[28px] bg-slate-50 shadow-2xl">
+            <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 bg-white px-6 py-5 sm:px-8">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#b85f29]">Merged report pack preview</p>
+                <h2 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">F&B outlet control pack</h2>
+                <p className="mt-1 text-sm text-slate-500">{selectedOutletName} · {displayDate} · DSS, waiter shifts, and stock reconciliation</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button type="button" onClick={() => setShowReportPreview(false)} className="inline-flex h-10 items-center rounded-xl border border-slate-200 px-4 text-sm font-semibold text-slate-600 hover:bg-slate-50">Close</button>
+                <button type="button" onClick={handlePrint} className="inline-flex h-10 items-center gap-2 rounded-xl bg-[#c96f32] px-4 text-sm font-bold text-white shadow-sm hover:bg-[#b85f29]"><Printer className="h-4 w-4" /> Print pack</button>
+              </div>
+            </div>
+            <div className="overflow-y-auto p-5 sm:p-8">
+              <div className="grid gap-4 sm:grid-cols-4">
+                <div className="rounded-2xl border border-indigo-100 bg-indigo-50 p-4"><p className="text-[10px] font-bold uppercase tracking-wider text-indigo-600">Daily sales summary</p><p className="mt-2 text-2xl font-bold text-slate-900">{money(data.summary.netRevenue)}</p><p className="mt-1 text-xs text-slate-600">{data.statistics.totalChecks} checks · {data.statistics.totalCovers} covers</p></div>
+                <div className="rounded-2xl border border-violet-100 bg-violet-50 p-4"><p className="text-[10px] font-bold uppercase tracking-wider text-violet-600">Waiter shift summary</p><p className="mt-2 text-2xl font-bold text-slate-900">{money(waiterNetSales)}</p><p className="mt-1 text-xs text-slate-600">{waiterShiftSummary.length} waiters · {waiterOpenChecks} open checks</p></div>
+                <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4"><p className="text-[10px] font-bold uppercase tracking-wider text-emerald-600">Outlet stock ledger</p><p className="mt-2 text-2xl font-bold text-slate-900">{stockVarianceCount}</p><p className="mt-1 text-xs text-slate-600">stock variance lines in the selected outlet</p></div>
+                <div className="rounded-2xl border border-orange-100 bg-orange-50 p-4"><p className="text-[10px] font-bold uppercase tracking-wider text-orange-700">Complimentary food</p><p className="mt-2 text-2xl font-bold text-slate-900">{money(data.complimentaryFood?.allocatedAmount || 0)}</p><p className="mt-1 text-xs text-slate-600">{data.complimentaryFood?.redeemedCovers || 0} covers redeemed</p></div>
+              </div>
+              <div className="mt-5 grid gap-5 lg:grid-cols-3">
+                <section className="rounded-2xl border border-slate-200 bg-white p-5 lg:col-span-2">
+                  <div className="flex items-center gap-2 border-b border-slate-100 pb-3"><ClipboardCheck className="h-4 w-4 text-indigo-500" /><h3 className="font-bold text-slate-900">Daily Sales Summary</h3></div>
+                  <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                    <PrintMetric label="Gross revenue" value={money(data.summary.grossRevenue)} />
+                    <PrintMetric label="Net revenue" value={money(data.summary.netRevenue)} />
+                    <PrintMetric label="Actual COGS" value={money(data.profitability.actualCogs)} />
+                    <PrintMetric label="Gross margin" value={pct(data.profitability.grossMarginPct)} />
+                  </div>
+                </section>
+                <section className="rounded-2xl border border-slate-200 bg-white p-5">
+                  <div className="flex items-center gap-2 border-b border-slate-100 pb-3"><UsersRound className="h-4 w-4 text-violet-500" /><h3 className="font-bold text-slate-900">Waiter shifts</h3></div>
+                  <div className="mt-4 space-y-2">{waiterShiftSummary.slice(0, 5).map((waiter: any) => <div key={waiter.staffId || waiter.name} className="flex items-center justify-between gap-3 text-sm"><span className="truncate font-medium text-slate-700">{waiter.name}</span><span className="shrink-0 font-bold tabular-nums text-slate-900">{money(waiter.netSales)}</span></div>)}{!waiterShiftSummary.length && <p className="text-sm text-slate-500">No waiter shifts in scope.</p>}</div>
+                </section>
+              </div>
+              <section className="mt-5 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                <div className="flex items-center gap-2 border-b border-slate-100 px-5 py-4"><Scale className="h-4 w-4 text-emerald-600" /><div><h3 className="font-bold text-slate-900">Outlet stock reconciliation</h3><p className="mt-0.5 text-xs text-slate-500">The selected outlet automatically supplies the warehouse scope.</p></div></div>
+                <div className="max-h-72 overflow-auto"><table className="min-w-[720px] w-full text-left text-sm"><thead className="sticky top-0 bg-slate-50"><tr>{['Stock item', 'Opening', 'In', 'Sold', 'Waste', 'Actual', 'Variance'].map((heading) => <th key={heading} className="px-5 py-3 text-[10px] font-bold uppercase tracking-wider text-slate-500">{heading}</th>)}</tr></thead><tbody className="divide-y divide-slate-100">{data.inventoryMovement.slice(0, 12).map((row: any) => <tr key={row.stockItemId}><td className="px-5 py-3 font-semibold text-slate-800">{row.name}</td><td className="px-5 py-3 tabular-nums text-slate-600">{row.opening}</td><td className="px-5 py-3 tabular-nums text-emerald-600">{row.receipts + row.transferIn || '—'}</td><td className="px-5 py-3 tabular-nums text-amber-600">{row.sales || '—'}</td><td className="px-5 py-3 tabular-nums text-rose-600">{row.waste || '—'}</td><td className="px-5 py-3 tabular-nums font-bold text-slate-900">{row.actualClosing}</td><td className="px-5 py-3"><VarianceBadge variance={row.variance} /></td></tr>)}{!data.inventoryMovement.length && <tr><td colSpan={7} className="px-5 py-8 text-center text-sm text-slate-500">No outlet stock movements in this period.</td></tr>}</tbody></table></div>
+              </section>
+              <section className="mt-5 rounded-2xl border border-orange-200 bg-orange-50 p-5">
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div><h3 className="font-bold text-orange-950">Complimentary breakfast activity</h3><p className="mt-1 text-xs text-orange-800">Included in the merged pack as F&B allocation, separate from paid POS revenue.</p></div>
+                  <span className="rounded-full border border-orange-200 bg-white px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-orange-700">Room allocation + redemption</span>
+                </div>
+                <div className="mt-4 grid gap-3 sm:grid-cols-4">
+                  <PrintMetric label="Allocated value" value={money(data.complimentaryFood?.allocatedAmount || 0)} />
+                  <PrintMetric label="Allocated covers" value={String(data.complimentaryFood?.allocatedCovers || 0)} />
+                  <PrintMetric label="Redeemed covers" value={String(data.complimentaryFood?.redeemedCovers || 0)} />
+                  <PrintMetric label="POS / buffet" value={`${data.complimentaryFood?.posTicketCovers || 0} / ${data.complimentaryFood?.buffetBatchCovers || 0}`} />
+                </div>
+              </section>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ────────────────────────────────────────────────────────── */}
       {/* ── SCREEN-ONLY VIEW: BEAUTIFUL INTERACTIVE DASHBOARD    ── */}
       {/* ────────────────────────────────────────────────────────── */}
@@ -544,13 +597,6 @@ export default function FnbReportsPage() {
                   {outlets.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
                 </select>
               </div>
-              <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/10 px-3">
-                <Box className="h-4 w-4 text-[#edb27c]" />
-                <select aria-label="Warehouse scope" value={selectedWarehouse} onChange={e => setSelectedWarehouse(e.target.value)} className="h-9 max-w-[190px] bg-transparent text-sm font-semibold text-white outline-none [&>option]:text-[#3b2116]">
-                  <option value="">All Warehouses</option>
-                  {warehouses.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
-                </select>
-              </div>
               <span className="hidden items-center gap-1.5 px-1 text-[10px] font-semibold uppercase tracking-wider text-emerald-300 xl:inline-flex" title="Reports refresh automatically every 60 seconds">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.9)]" />
                 Live
@@ -563,35 +609,13 @@ export default function FnbReportsPage() {
                 <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
               </button>
               
-              {/* Print Dropdown */}
-              <div className="relative">
-                <button 
-                  onClick={() => setShowPrintMenu(!showPrintMenu)} 
-                  className="inline-flex h-9 items-center gap-2 rounded-xl bg-[#d98245] px-3 text-sm font-semibold text-white transition-all hover:bg-[#c96f32]"
-                >
-                  <Printer className="h-4 w-4" /> Print Reports <ChevronDown className="h-3 w-3 opacity-50" />
-                </button>
-                
-                {showPrintMenu && (
-                  <>
-                    <div className="fixed inset-0 z-10" onClick={() => setShowPrintMenu(false)}></div>
-                    <div className="absolute right-0 top-full z-[60] mt-2 w-64 overflow-hidden rounded-2xl border border-[#ead7ca] bg-white py-1 text-left shadow-xl">
-                      <button onClick={() => handlePrint('dss')} className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm font-medium text-[#3b2116] hover:bg-[#fbf1eb]">
-                        <ClipboardCheck className="h-4 w-4 text-[#b85f29]" />
-                        Daily Sales Summary (DSS)
-                      </button>
-                      <button onClick={() => handlePrint('inventory')} className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm font-medium text-[#3b2116] hover:bg-[#fbf1eb]">
-                        <Scale className="h-4 w-4 text-[#b85f29]" />
-                        Stock Reconciliation Ledger
-                      </button>
-                      <button onClick={() => handlePrint('waiter')} className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm font-medium text-[#3b2116] hover:bg-[#fbf1eb]">
-                        <UsersRound className="h-4 w-4 text-[#b85f29]" />
-                        Waiter POS Shift Summary
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
+              <button
+                onClick={() => setShowReportPreview(true)}
+                disabled={!data}
+                className="inline-flex h-9 items-center gap-2 rounded-xl bg-[#d98245] px-3 text-sm font-semibold text-white transition-all hover:bg-[#c96f32] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Printer className="h-4 w-4" /> Preview report pack
+              </button>
             </div>
           </header>
 
@@ -666,7 +690,7 @@ export default function FnbReportsPage() {
                     <div className="rounded-2xl bg-[#fbf8f6] p-4">
                       <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-[#9a7764]">Stock integrity</p>
                       <p className="mt-2 text-sm font-bold text-[#2b1710]">{stockVarianceCount ? `${stockVarianceCount} variance${stockVarianceCount === 1 ? '' : 's'}` : 'Ledger balanced'}</p>
-                      <p className="mt-1 text-[11px] text-[#8d7568]">{selectedWarehouse ? selectedWarehouseName : 'Select a warehouse to prove stock'}</p>
+                      <p className="mt-1 text-[11px] text-[#8d7568]">{selectedOutlet ? `${selectedOutletName} outlet warehouse` : 'Select an outlet to prove stock'}</p>
                     </div>
                   </div>
                 </div>
@@ -680,9 +704,9 @@ export default function FnbReportsPage() {
                   </div>
                   <div className="mt-5 grid grid-cols-2 gap-3">
                     <div className="rounded-2xl border border-white/10 bg-white/10 p-3"><p className="text-2xl font-bold">{outlets.length}</p><p className="mt-1 text-[10px] uppercase tracking-wider text-[#e8cfc0]">Outlets available</p></div>
-                    <div className="rounded-2xl border border-white/10 bg-white/10 p-3"><p className="text-2xl font-bold">{warehouses.length}</p><p className="mt-1 text-[10px] uppercase tracking-wider text-[#e8cfc0]">Warehouses available</p></div>
+                    <div className="rounded-2xl border border-white/10 bg-white/10 p-3"><p className="text-2xl font-bold">{selectedOutlet ? '1' : '—'}</p><p className="mt-1 text-[10px] uppercase tracking-wider text-[#e8cfc0]">Outlet stock ledger</p></div>
                   </div>
-                  <p className="mt-4 text-[11px] leading-relaxed text-[#e8cfc0]">Use the scope controls above to move from the consolidated property view into an outlet or warehouse control view.</p>
+                  <p className="mt-4 text-[11px] leading-relaxed text-[#e8cfc0]">The selected outlet automatically determines its linked stock warehouse for the merged report pack.</p>
                 </div>
               </section>
 
@@ -927,13 +951,13 @@ export default function FnbReportsPage() {
                     </h3>
                     <p className="mt-0.5 text-[11px] text-slate-500">Industry-standard proof: Opening stock + activity = closing stock.</p>
                   </div>
-                  {!selectedWarehouse && (
+                  {!selectedOutlet && (
                     <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-amber-700">
-                      Select Warehouse
+                      Select Outlet
                     </span>
                   )}
                 </div>
-                {selectedWarehouse ? (
+                {selectedOutlet ? (
                   <div className="overflow-x-auto">
                     <table className="w-full">
                       <thead>
@@ -985,7 +1009,7 @@ export default function FnbReportsPage() {
                   </div>
                 ) : (
                   <div className="p-12 text-center text-slate-500 text-sm bg-slate-50/30">
-                    Please select a warehouse from the filters above to generate the inventory ledger proof.
+                    Please select an outlet from the filters above to generate the outlet stock ledger proof.
                   </div>
                 )}
               </section>

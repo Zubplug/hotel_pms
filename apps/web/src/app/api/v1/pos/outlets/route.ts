@@ -22,8 +22,16 @@ export async function GET(req: NextRequest) {
 
     if (!ctx.propertyIds.includes(String(propertyId))) return NextResponse.json({ error: 'Forbidden property' }, { status: 403 });
     await requireEntitlement(ctx.organizationId, 'MODULE_OPERATIONS', String(propertyId));
+    const role = String((session.user as any).role || ctx.role || '').toUpperCase();
+    const globalOutletRoles = ['SUPER_ADMIN', 'ADMIN', 'OWNER', 'MANAGER', 'GENERAL_MANAGER', 'GENERAL_CASHIER', 'CEO', 'DIRECTOR', 'ACCOUNTANT', 'HOTEL_MANAGER'];
+    const outletScopedRoles = ['FNB_MANAGER', 'RESTAURANT_MANAGER', 'BANQUET_MANAGER', 'EVENT_MANAGER', 'OUTLET_HEAD', 'OUTLET_MANAGER'];
     const outlets = await prisma.posOutlet.findMany({
-      where: { propertyId: String(propertyId) },
+      where: {
+        propertyId: String(propertyId),
+        ...(outletScopedRoles.includes(role) && !globalOutletRoles.includes(role)
+          ? { id: { in: ctx.outletIds as string[] } }
+          : {}),
+      },
       orderBy: { name: 'asc' }
     });
 

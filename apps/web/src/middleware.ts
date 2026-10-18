@@ -118,6 +118,10 @@ function hasModuleAccess(req: any, pathname: string): { allowed: boolean; redire
       ? { allowed: true } : { allowed: false, redirectTo: '/hub' };
   }
   if (pathname === '/fnb' || pathname.startsWith('/fnb/')) {
+    if (pathname === '/fnb/reports' || pathname.startsWith('/fnb/reports/')) {
+      return can('ACCESS_FNB', [...FNB_ROLES, 'OUTLET_HEAD', 'OUTLET_MANAGER']) || capabilities.some((value: string) => value.startsWith('fnb.'))
+        ? { allowed: true } : { allowed: false, redirectTo: '/hub' };
+    }
     if (pathname === '/fnb/kitchen' || pathname.startsWith('/fnb/kitchen/')) {
       return can('ACCESS_KITCHEN', [...KITCHEN_ROLES, ...MANAGEMENT_ROLES]) ||
         capabilities.some((value: string) => value === 'ACCESS_KITCHEN' || value.startsWith('kitchen.'))

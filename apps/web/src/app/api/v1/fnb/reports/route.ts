@@ -18,13 +18,43 @@ export async function GET(req: NextRequest) {
     const startDateParam = searchParams.get('startDate');
     const endDateParam = searchParams.get('endDate');
 
-    const allowedPropertyIds = (await requireOrganizationContext(session.user.id)).propertyIds;
+    const organizationContext = await requireOrganizationContext(session.user.id);
+    const allowedPropertyIds = organizationContext.propertyIds;
+    const role = String((session.user as any).role || organizationContext.role || '').toUpperCase();
+    const globalReportRoles = ['SUPER_ADMIN', 'ADMIN', 'OWNER', 'MANAGER', 'GENERAL_MANAGER', 'GENERAL_CASHIER', 'CEO', 'DIRECTOR', 'ACCOUNTANT', 'HOTEL_MANAGER'];
+    const outletScoped = !globalReportRoles.includes(role) && ['FNB_MANAGER', 'RESTAURANT_MANAGER', 'BANQUET_MANAGER', 'EVENT_MANAGER', 'OUTLET_HEAD', 'OUTLET_MANAGER'].includes(role);
+    const assignedOutletIds = organizationContext.outletIds.filter(Boolean) as string[];
+
+    if (outletScoped && !assignedOutletIds.length) {
+      return errorResponse('FORBIDDEN', 'No F&B outlet is assigned to this manager', 403);
+    }
+    if (outletScoped && outletId && !assignedOutletIds.includes(outletId)) {
+      return errorResponse('FORBIDDEN', 'This outlet is outside your assigned F&B scope', 403);
+    }
+    if (outletScoped && warehouseId) {
+      const warehouse = await prisma.warehouse.findFirst({
+        where: { id: warehouseId, propertyId: { in: allowedPropertyIds as string[] } },
+        select: { posOutletId: true },
+      });
+      if (!warehouse || !warehouse.posOutletId || !assignedOutletIds.includes(warehouse.posOutletId)) {
+        return errorResponse('FORBIDDEN', 'This warehouse is outside your assigned F&B scope', 403);
+      }
+    }
 
     if (requestedPropertyId && !allowedPropertyIds.includes(requestedPropertyId) && !(session.user as any).isSuperAdmin) {
       return errorResponse('FORBIDDEN', 'No access to this property', 403);
     }
 
     const propertyIdsToQuery = requestedPropertyId ? [requestedPropertyId] : allowedPropertyIds;
+    const outletScopeFilter = outletScoped
+      ? { outletId: { in: assignedOutletIds } }
+      : outletId ? { outletId } : {};
+    const effectiveWarehouseId = warehouseId || (outletId
+      ? (await prisma.warehouse.findFirst({
+        where: { propertyId: { in: propertyIdsToQuery as string[] }, posOutletId: outletId },
+        select: { id: true },
+      }))?.id
+      : undefined);
     
     // Determine Date Range
     let startDate: Date;
@@ -52,7 +82,7 @@ export async function GET(req: NextRequest) {
     const orders = await prisma.posOrder.findMany({
       where: {
         propertyId: { in: propertyIdsToQuery as string[] },
-        ...(outletId ? { outletId } : {}),
+        ...outletScopeFilter,
         businessDate: { gte: startDate, lte: endDate },
         status: { notIn: ['CANCELLED', 'VOIDED'] }
       },
@@ -205,7 +235,7 @@ export async function GET(req: NextRequest) {
       where: {
         order: {
           propertyId: { in: propertyIdsToQuery as string[] },
-          ...(outletId ? { outletId } : {}),
+          ...outletScopeFilter,
           businessDate: { gte: startDate, lte: endDate }
         },
         status: { notIn: ['FAILED', 'REFUNDED'] }
@@ -216,14 +246,14 @@ export async function GET(req: NextRequest) {
     // 3. Fetch Stock Transactions for the Inventory Reconciliation
     // Only fetch if warehouseId is provided or if outlet has a primary warehouse
     let stockMovement: any[] = [];
-    if (warehouseId) {
+    if (effectiveWarehouseId) {
       const stockItems = await prisma.stockItem.findMany({
-        where: { warehouseId }
+        where: { warehouseId: effectiveWarehouseId }
       });
 
       const transactions = await prisma.stockTransaction.findMany({
         where: {
-          warehouseId,
+          warehouseId: effectiveWarehouseId,
           businessDate: { gte: startDate, lte: endDate }
         },
         orderBy: { timestamp: 'asc' }
@@ -233,7 +263,7 @@ export async function GET(req: NextRequest) {
       // "Opening = quantityAfter of the latest transaction before period start"
       const prevTransactions = await prisma.stockTransaction.findMany({
         where: {
-          warehouseId,
+          warehouseId: effectiveWarehouseId,
           businessDate: { lt: startDate }
         },
         orderBy: { timestamp: 'desc' },
@@ -374,19 +404,52 @@ export async function GET(req: NextRequest) {
     const voidedOrders = await prisma.posOrder.findMany({
       where: {
         propertyId: { in: propertyIdsToQuery as string[] },
-        ...(outletId ? { outletId } : {}),
+        ...outletScopeFilter,
         businessDate: { gte: startDate, lte: endDate },
         status: { in: ['CANCELLED', 'VOIDED'] }
       },
       select: { subtotal: true }
     });
     const totalVoids = voidedOrders.reduce((sum, o) => sum + Number(o.subtotal || 0), 0);
+
+    // Complimentary breakfast is allocated on the room folio, not as a
+    // normal POS sale. Keep its allocation and actual redemption activity
+    // visible in the same F&B report pack.
+    const complimentaryAllocation = await prisma.folioItem.aggregate({
+      where: {
+        folio: { propertyId: { in: propertyIdsToQuery as string[] } },
+        businessDate: { gte: startDate, lte: endDate },
+        type: 'CHARGE',
+        source: { in: ['ROOM_CHARGE', 'DAY_USE_ROOM_CHARGE'] },
+        revenueCategory: 'FNB',
+        description: { contains: 'complimentary', mode: 'insensitive' },
+        voidedAt: null,
+      },
+      _count: { id: true },
+      _sum: { amount: true, quantity: true },
+    });
+    const breakfastRedemptions = await prisma.breakfastRedemption.findMany({
+      where: {
+        propertyId: { in: propertyIdsToQuery as string[] },
+        businessDate: { gte: startDate, lte: endDate },
+      },
+      select: { coversRedeemed: true, method: true },
+    });
+    const complimentaryFood = {
+      allocatedAmount: Number(complimentaryAllocation._sum.amount || 0),
+      allocationLines: complimentaryAllocation._count.id,
+      allocatedCovers: Number(complimentaryAllocation._sum.quantity || 0),
+      redeemedCovers: breakfastRedemptions.reduce((sum, item) => sum + Number(item.coversRedeemed || 0), 0),
+      redemptionCount: breakfastRedemptions.length,
+      posTicketCovers: breakfastRedemptions.filter((item) => item.method === 'POS_TICKET').reduce((sum, item) => sum + item.coversRedeemed, 0),
+      buffetBatchCovers: breakfastRedemptions.filter((item) => item.method === 'BUFFET_BATCH').reduce((sum, item) => sum + item.coversRedeemed, 0),
+    };
     
     // Calculate Actual COGS from StockTransactions(SALE)
     const saleTransactions = await prisma.stockTransaction.aggregate({
       where: {
         propertyId: { in: propertyIdsToQuery as string[] },
-        ...(warehouseId ? { warehouseId } : {}),
+        ...(effectiveWarehouseId ? { warehouseId: effectiveWarehouseId } : {}),
         businessDate: { gte: startDate, lte: endDate },
         source: 'SALE'
       },
@@ -435,8 +498,9 @@ export async function GET(req: NextRequest) {
           cogsVariance: actualCogs - theoreticalCogs
         },
         tenderBreakdown: paymentsAgg.map(p => ({ method: p.method, amount: Number(p._sum.amount || 0) })),
-        waiterShiftSummary,
-        inventoryMovement: stockMovement
+          waiterShiftSummary,
+          inventoryMovement: stockMovement,
+          complimentaryFood,
       }
     }, 200);
   } catch (err: any) {

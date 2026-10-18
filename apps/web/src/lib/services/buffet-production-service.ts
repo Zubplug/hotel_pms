@@ -49,6 +49,7 @@ export class BuffetProductionService {
    */
   static async calculateRequisition(params: CalculateRequisitionParams): Promise<{
     recipe: any;
+    recipes: any[];
     items: RequisitionItem[];
     totalEstimatedCost: number;
     entitledInHouseCovers?: number;
@@ -301,7 +302,7 @@ export class BuffetProductionService {
           (source.sku && candidate.sku === source.sku) ||
           normalizeName(candidate.name) === normalizeName(source.name),
         );
-        const distinctMatches = [...new Map(matches.map((match: any) => [match.id, match])).values()];
+        const distinctMatches: any[] = Array.from(new Map<string, any>(matches.map((match: any) => [match.id, match])).values());
         if (distinctMatches.length !== 1) {
           throw new Error(
             distinctMatches.length === 0

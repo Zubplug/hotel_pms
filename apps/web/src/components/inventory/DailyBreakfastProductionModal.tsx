@@ -244,13 +244,11 @@ export function DailyBreakfastProductionModal({
               {selectedRecipes.map((selection, index) => (
                 <div key={`${index}-${selection.recipeId}`} className="grid gap-2 rounded-lg border border-slate-200 bg-slate-50/70 p-3 sm:grid-cols-[minmax(0,1fr)_180px_auto] sm:items-center">
                   <Popover open={openRecipePicker === index} onOpenChange={(open) => { setOpenRecipePicker(open ? index : null); if (!open) setRecipeSearch(''); }}>
-                    <PopoverTrigger asChild>
-                      <Button type="button" variant="outline" className="h-10 min-w-0 justify-between border-slate-300 bg-white px-3 text-left font-normal text-slate-800">
+                    <PopoverTrigger type="button" className="inline-flex h-10 min-w-0 w-full items-center justify-between rounded-lg border border-slate-300 bg-white px-3 text-left text-sm font-normal text-slate-800 shadow-xs outline-none transition hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-orange-500/30">
                         <span className="truncate">
                           {previewData?.availableRecipes?.find((recipe) => recipe.id === selection.recipeId)?.posProduct?.name || 'Select complimentary menu'}
                         </span>
                         <ChevronDown className="ml-2 h-4 w-4 shrink-0 text-slate-400" />
-                      </Button>
                     </PopoverTrigger>
                     <PopoverContent align="start" className="w-[30rem] max-w-[calc(100vw-2rem)] p-2">
                       <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3">
