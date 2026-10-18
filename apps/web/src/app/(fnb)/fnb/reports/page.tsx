@@ -166,12 +166,12 @@ export default function FnbReportsPage() {
   const waiterNetSales = waiterShiftSummary.reduce((sum: number, waiter: any) => sum + Number(waiter.netSales || 0), 0);
   const waiterOpenChecks = waiterShiftSummary.reduce((sum: number, waiter: any) => sum + Number(waiter.openChecks || 0), 0);
   const waiterPaymentMethods = Array.from(new Set(waiterShiftSummary.flatMap((waiter: any) => (waiter.tenders || []).map((tender: any) => tender.method)))).sort() as string[];
-  const inventoryByOutlet = (data?.inventoryMovement || []).reduce((groups: Record<string, any[]>, row: any) => {
+  const inventoryByOutlet: Record<string, any[]> = (data?.inventoryMovement || []).reduce((groups: Record<string, any[]>, row: any) => {
     const groupName = row.outletName || 'Unassigned outlet';
     groups[groupName] = groups[groupName] || [];
     groups[groupName].push(row);
     return groups;
-  }, {});
+  }, {} as Record<string, any[]>);
 
   const printDateTime = (value: string | null | undefined) => value ? new Date(value).toLocaleString() : 'Open';
   const waiterTenderAmount = (waiter: any, method: string) => Number(waiter.tenders?.find((tender: any) => tender.method === method)?.amount || 0);
