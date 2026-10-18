@@ -130,12 +130,16 @@ export default function FnbReportsPage() {
   }, [propertyId, dateRange.start, dateRange.end, selectedOutlet]);
 
   const handlePrint = () => {
+    const finishPrint = () => {
+      window.removeEventListener('afterprint', finishPrint);
+      setPrintMode(null);
+    };
+    window.addEventListener('afterprint', finishPrint);
     setPrintMode('pack');
     // Give React and the browser print stylesheet time to lay out all report
     // pages before Chrome snapshots the document for print preview.
     setTimeout(() => {
       window.print();
-      setPrintMode(null);
     }, 500);
   };
 
@@ -162,6 +166,12 @@ export default function FnbReportsPage() {
   const waiterNetSales = waiterShiftSummary.reduce((sum: number, waiter: any) => sum + Number(waiter.netSales || 0), 0);
   const waiterOpenChecks = waiterShiftSummary.reduce((sum: number, waiter: any) => sum + Number(waiter.openChecks || 0), 0);
   const waiterPaymentMethods = Array.from(new Set(waiterShiftSummary.flatMap((waiter: any) => (waiter.tenders || []).map((tender: any) => tender.method)))).sort() as string[];
+  const inventoryByOutlet = (data?.inventoryMovement || []).reduce((groups: Record<string, any[]>, row: any) => {
+    const groupName = row.outletName || 'Unassigned outlet';
+    groups[groupName] = groups[groupName] || [];
+    groups[groupName].push(row);
+    return groups;
+  }, {});
 
   const printDateTime = (value: string | null | undefined) => value ? new Date(value).toLocaleString() : 'Open';
   const waiterTenderAmount = (waiter: any, method: string) => Number(waiter.tenders?.find((tender: any) => tender.method === method)?.amount || 0);
@@ -194,16 +204,14 @@ export default function FnbReportsPage() {
           @page { margin: 10mm; size: A4 landscape; }
           html, body { height: auto !important; min-height: 0 !important; overflow: visible !important; }
           body { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; background: white !important; font-family: 'Inter', system-ui, sans-serif !important; }
+          body * { visibility: hidden !important; }
           .screen-only { display: none !important; }
-          .print-only { display: block !important; width: auto !important; min-height: 0 !important; padding: 0 !important; overflow: visible !important; background: white; color: black; }
-          .print-page + .print-page { page-break-before: always; break-before: page; }
+          .print-only, .print-only * { visibility: visible !important; }
+          .print-only { display: block !important; position: relative !important; width: auto !important; min-height: 0 !important; padding: 0 !important; overflow: visible !important; background: white; color: black; }
           table { page-break-inside: auto !important; break-inside: auto !important; }
           thead { display: table-header-group; }
           tr { page-break-inside: avoid; break-inside: avoid; }
           .avoid-break { page-break-inside: auto !important; break-inside: auto !important; }
-          
-          /* Utility classes to ensure A4 dimensions and page breaking */
-          .page-break-before { page-break-before: always; }
         }
       `}} />
 
@@ -373,55 +381,10 @@ export default function FnbReportsPage() {
             </div>
           </div>
 
-          <div className="avoid-break">
-              <table className="w-full text-[10px]">
-                <thead>
-                  <tr className="border-b-2 border-slate-900">
-                    <th className="py-2 text-left font-bold text-slate-900 uppercase tracking-wider">Outlet / Warehouse</th>
-                    <th className="py-2 text-left font-bold text-slate-900 uppercase tracking-wider">Stock Item</th>
-                    <th className="py-2 text-right font-bold text-slate-900 uppercase tracking-wider">Open</th>
-                    <th className="py-2 text-right font-bold text-slate-900 uppercase tracking-wider">+In</th>
-                    <th className="py-2 text-right font-bold text-slate-900 uppercase tracking-wider">-Out</th>
-                    <th className="py-2 text-right font-bold text-slate-900 uppercase tracking-wider">-Sold</th>
-                    <th className="py-2 text-right font-bold text-slate-900 uppercase tracking-wider">-Waste</th>
-                    <th className="py-2 text-right font-bold text-slate-900 uppercase tracking-wider">Adj</th>
-                    <th className="py-2 text-right font-bold text-slate-900 uppercase tracking-wider">Expected</th>
-                    <th className="py-2 text-right font-bold text-slate-900 uppercase tracking-wider">Actual</th>
-                    <th className="py-2 text-right font-bold text-slate-900 uppercase tracking-wider">Variance</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200">
-                  {data.inventoryMovement.map((row: any) => (
-                    <tr key={row.stockItemId} className="hover:bg-slate-50">
-                      <td className="py-2">
-                        <span className="font-semibold text-slate-800 block">{row.outletName}</span>
-                        <span className="text-[9px] text-slate-500">{row.warehouseName}</span>
-                      </td>
-                      <td className="py-2">
-                        <span className="font-bold text-slate-800 block">{row.name}</span>
-                        <span className="text-[9px] text-slate-500">{row.sku} • {row.unitOfMeasure}</span>
-                      </td>
-                      <td className="py-2 text-right tabular-nums text-slate-600">{row.opening}</td>
-                      <td className="py-2 text-right tabular-nums text-slate-900 font-semibold">{row.receipts + row.transferIn || '-'}</td>
-                      <td className="py-2 text-right tabular-nums text-slate-900 font-semibold">{row.transferOut || '-'}</td>
-                      <td className="py-2 text-right tabular-nums text-rose-700 font-bold">{row.sales || '-'}</td>
-                      <td className="py-2 text-right tabular-nums text-amber-700 font-semibold">{row.waste || '-'}</td>
-                      <td className="py-2 text-right tabular-nums text-slate-600">{row.adjustments || '-'}</td>
-                      <td className="py-2 text-right tabular-nums text-slate-800 font-semibold">{row.expectedClosing}</td>
-                      <td className="py-2 text-right tabular-nums text-slate-900 font-bold">{row.actualClosing}</td>
-                      <td className={`py-2 text-right tabular-nums font-bold ${row.variance !== 0 ? 'text-rose-700' : 'text-slate-400'}`}>
-                        {row.variance !== 0 ? row.variance : 'BALANCED'}
-                      </td>
-                    </tr>
-                  ))}
-                  {data.inventoryMovement.length === 0 && (
-                    <tr>
-                      <td colSpan={11} className="py-8 text-center text-slate-500 font-medium">No stock items found for this outlet scope.</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-          </div>
+          {Object.keys(inventoryByOutlet).length ? Object.entries(inventoryByOutlet).map(([outletName, rows]) => <div key={`print-${outletName}`} className="mb-6 avoid-break">
+            <div className="mb-2 border-b border-slate-300 pb-1"><h2 className="text-sm font-bold uppercase tracking-wider text-slate-900">{outletName}</h2><p className="text-[9px] text-slate-500">{Array.from(new Set(rows.map((row: any) => row.warehouseName))).join(' · ')}</p></div>
+            <table className="w-full text-[10px]"><thead><tr className="border-b-2 border-slate-900"><th className="py-2 text-left font-bold text-slate-900 uppercase tracking-wider">Stock Item</th><th className="py-2 text-right font-bold text-slate-900 uppercase tracking-wider">Open</th><th className="py-2 text-right font-bold text-slate-900 uppercase tracking-wider">+In</th><th className="py-2 text-right font-bold text-slate-900 uppercase tracking-wider">-Out</th><th className="py-2 text-right font-bold text-slate-900 uppercase tracking-wider">-Sold</th><th className="py-2 text-right font-bold text-slate-900 uppercase tracking-wider">-Waste</th><th className="py-2 text-right font-bold text-slate-900 uppercase tracking-wider">Adj</th><th className="py-2 text-right font-bold text-slate-900 uppercase tracking-wider">Expected</th><th className="py-2 text-right font-bold text-slate-900 uppercase tracking-wider">Actual</th><th className="py-2 text-right font-bold text-slate-900 uppercase tracking-wider">Variance</th></tr></thead><tbody className="divide-y divide-slate-200">{rows.map((row: any) => <tr key={row.stockItemId}><td className="py-2"><span className="font-bold text-slate-800 block">{row.name}</span><span className="text-[9px] text-slate-500">{row.sku} • {row.unitOfMeasure}</span></td><td className="py-2 text-right tabular-nums text-slate-600">{row.opening}</td><td className="py-2 text-right tabular-nums text-slate-900 font-semibold">{row.receipts + row.transferIn || '-'}</td><td className="py-2 text-right tabular-nums text-slate-900 font-semibold">{row.transferOut || '-'}</td><td className="py-2 text-right tabular-nums text-rose-700 font-bold">{row.sales || '-'}</td><td className="py-2 text-right tabular-nums text-amber-700 font-semibold">{row.waste || '-'}</td><td className="py-2 text-right tabular-nums text-slate-600">{row.adjustments || '-'}</td><td className="py-2 text-right tabular-nums text-slate-800 font-semibold">{row.expectedClosing}</td><td className="py-2 text-right tabular-nums text-slate-900 font-bold">{row.actualClosing}</td><td className={`py-2 text-right tabular-nums font-bold ${row.variance !== 0 ? 'text-rose-700' : 'text-slate-400'}`}>{row.variance !== 0 ? row.variance : 'BALANCED'}</td></tr>)}</tbody></table>
+          </div>) : <p className="py-8 text-center text-slate-500">No stock items found for this outlet scope.</p>}
         </div>
       )}
 
@@ -476,7 +439,7 @@ export default function FnbReportsPage() {
               {!waiterShiftSummary.length && <tr><td colSpan={15 + waiterPaymentMethods.length} className="py-8 text-center text-slate-500">No waiter-assigned POS activity in this scope.</td></tr>}
             </tbody>
           </table>
-          <div className="mt-8 page-break-before">
+          <div className="mt-8">
             <h2 className="mb-3 border-b border-slate-300 pb-2 text-sm font-bold uppercase tracking-wider text-slate-900">Shift and payment detail by waiter</h2>
             <div className="grid grid-cols-2 gap-4">
               {waiterShiftSummary.map((waiter: any) => (
@@ -543,7 +506,10 @@ export default function FnbReportsPage() {
               </div>
               <section className="mt-5 overflow-hidden rounded-2xl border border-slate-200 bg-white">
                 <div className="flex items-center gap-2 border-b border-slate-100 px-5 py-4"><Scale className="h-4 w-4 text-emerald-600" /><div><h3 className="font-bold text-slate-900">Outlet stock reconciliation</h3><p className="mt-0.5 text-xs text-slate-500">The selected outlet automatically supplies the warehouse scope.</p></div></div>
-                <div className="overflow-x-auto"><table className="min-w-[980px] w-full text-left text-sm"><thead className="bg-slate-50"><tr>{['Outlet / warehouse', 'Stock item', 'Opening', 'In', 'Sold', 'Waste', 'Actual', 'Variance'].map((heading) => <th key={heading} className="px-5 py-3 text-[10px] font-bold uppercase tracking-wider text-slate-500">{heading}</th>)}</tr></thead><tbody className="divide-y divide-slate-100">{data.inventoryMovement.map((row: any) => <tr key={row.stockItemId}><td className="px-5 py-3"><p className="font-semibold text-slate-800">{row.outletName}</p><p className="text-[10px] text-slate-500">{row.warehouseName}</p></td><td className="px-5 py-3 font-semibold text-slate-800">{row.name}<span className="ml-1 text-[10px] font-normal text-slate-500">{row.unitOfMeasure}</span></td><td className="px-5 py-3 tabular-nums text-slate-600">{row.opening}</td><td className="px-5 py-3 tabular-nums text-emerald-600">{row.receipts + row.transferIn || '—'}</td><td className="px-5 py-3 tabular-nums text-amber-600">{row.sales || '—'}</td><td className="px-5 py-3 tabular-nums text-rose-600">{row.waste || '—'}</td><td className="px-5 py-3 tabular-nums font-bold text-slate-900">{row.actualClosing}</td><td className="px-5 py-3"><VarianceBadge variance={row.variance} /></td></tr>)}{!data.inventoryMovement.length && <tr><td colSpan={8} className="px-5 py-8 text-center text-sm text-slate-500">No stock items found for this outlet scope.</td></tr>}</tbody></table></div>
+                {Object.keys(inventoryByOutlet).length ? Object.entries(inventoryByOutlet).map(([outletName, rows]) => <div key={outletName} className="border-b border-slate-200 last:border-b-0">
+                  <div className="flex flex-wrap items-center justify-between gap-2 bg-slate-50 px-5 py-3"><div><p className="text-xs font-bold uppercase tracking-wider text-slate-800">{outletName}</p><p className="mt-0.5 text-[10px] text-slate-500">{Array.from(new Set(rows.map((row: any) => row.warehouseName))).join(' · ')}</p></div><span className="text-[10px] font-semibold text-slate-500">{rows.length} stock item{rows.length === 1 ? '' : 's'}</span></div>
+                  <div className="overflow-x-auto"><table className="min-w-[900px] w-full text-left text-sm"><thead className="bg-white"><tr>{['Stock item', 'Opening', 'In', 'Sold', 'Waste', 'Actual', 'Variance'].map((heading) => <th key={heading} className="px-5 py-3 text-[10px] font-bold uppercase tracking-wider text-slate-500">{heading}</th>)}</tr></thead><tbody className="divide-y divide-slate-100">{rows.map((row: any) => <tr key={row.stockItemId}><td className="px-5 py-3 font-semibold text-slate-800">{row.name}<span className="ml-1 text-[10px] font-normal text-slate-500">{row.unitOfMeasure}</span></td><td className="px-5 py-3 tabular-nums text-slate-600">{row.opening}</td><td className="px-5 py-3 tabular-nums text-emerald-600">{row.receipts + row.transferIn || '—'}</td><td className="px-5 py-3 tabular-nums text-amber-600">{row.sales || '—'}</td><td className="px-5 py-3 tabular-nums text-rose-600">{row.waste || '—'}</td><td className="px-5 py-3 tabular-nums font-bold text-slate-900">{row.actualClosing}</td><td className="px-5 py-3"><VarianceBadge variance={row.variance} /></td></tr>)}</tbody></table></div>
+                </div>) : <div className="p-12 text-center text-sm text-slate-500">No stock items found for this outlet scope.</div>}
               </section>
               <section className="mt-5 rounded-2xl border border-orange-200 bg-orange-50 p-5">
                 <div className="flex flex-wrap items-start justify-between gap-4">
@@ -958,76 +924,6 @@ export default function FnbReportsPage() {
                 </div>
               </section>
 
-              {/* ── Balance Proof equivalent (Inventory Movement) ── */}
-              <section className="overflow-hidden rounded-[20px] border bg-white shadow-sm mt-6">
-                <div className="border-b px-5 py-4 flex justify-between items-center">
-                  <div>
-                    <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900">
-                      <Scale className="h-4 w-4 text-indigo-500" />
-                      Stock Ledger Proof
-                    </h3>
-                    <p className="mt-0.5 text-[11px] text-slate-500">Industry-standard proof: Opening stock + activity = closing stock.</p>
-                  </div>
-                  <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-emerald-700">
-                    {selectedOutlet ? 'Outlet scope' : 'All outlet warehouses'}
-                  </span>
-                </div>
-                {data.inventoryMovement.length ? (
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead>
-                        <tr className="border-b bg-slate-50/50">
-                          {['Stock Item', 'Opening', '+ In', '- Out', '- Sold', '- Waste', 'Adj', 'Expected', 'Actual', 'Variance', 'Status'].map((h, i) => (
-                            <th key={h} className={`px-5 py-3 text-[9px] font-bold uppercase tracking-[0.16em] text-slate-500 ${i > 0 && i < 10 ? 'text-right' : 'text-left'}`}>{h}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {data.inventoryMovement.map((row: any) => {
-                          const isBalanced = row.variance === 0;
-                          return (
-                            <tr key={row.stockItemId} className="transition-colors hover:bg-slate-50/50">
-                              <td className="px-5 py-4">
-                                <p className="text-sm font-semibold text-slate-900">{row.name}</p>
-                                <p className="mt-0.5 text-[10px] text-slate-500">{row.sku} • {row.unitOfMeasure}</p>
-                              </td>
-                              <td className="px-5 py-4 text-right text-sm tabular-nums text-slate-600">{row.opening}</td>
-                              <td className="px-5 py-4 text-right text-sm tabular-nums text-emerald-600">{row.receipts + row.transferIn || '-'}</td>
-                              <td className="px-5 py-4 text-right text-sm tabular-nums text-rose-600">{row.transferOut || '-'}</td>
-                              <td className="px-5 py-4 text-right text-sm tabular-nums text-amber-600 font-bold">{row.sales || '-'}</td>
-                              <td className="px-5 py-4 text-right text-sm tabular-nums text-rose-600">{row.waste || '-'}</td>
-                              <td className="px-5 py-4 text-right text-sm tabular-nums text-slate-500">{row.adjustments || '-'}</td>
-                              <td className="px-5 py-4 text-right text-sm tabular-nums text-slate-700 font-semibold">{row.expectedClosing}</td>
-                              <td className="px-5 py-4 text-right text-sm tabular-nums text-slate-900 font-bold">{row.actualClosing}</td>
-                              <td className="px-5 py-4 text-right">
-                                <VarianceBadge variance={row.variance} />
-                              </td>
-                              <td className="px-5 py-4 text-left">
-                                <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider ${
-                                  isBalanced ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-rose-200 bg-rose-50 text-rose-700'
-                                }`}>
-                                  {isBalanced ? 'BALANCED' : 'VARIANCE'}
-                                </span>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                        {data.inventoryMovement.length === 0 && (
-                          <tr>
-                            <td colSpan={11} className="px-5 py-8 text-center text-sm text-slate-500">
-                              No stock movement recorded.
-                            </td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : (
-                  <div className="p-12 text-center text-slate-500 text-sm bg-slate-50/30">
-                    No stock items or transactions were found in the authorized outlet warehouses for this period.
-                  </div>
-                )}
-              </section>
             </>
           )}
         </div>
