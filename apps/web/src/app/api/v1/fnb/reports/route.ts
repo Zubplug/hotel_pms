@@ -49,12 +49,19 @@ export async function GET(req: NextRequest) {
     const outletScopeFilter = outletScoped
       ? { outletId: { in: assignedOutletIds } }
       : outletId ? { outletId } : {};
-    const effectiveWarehouseId = warehouseId || (outletId
-      ? (await prisma.warehouse.findFirst({
-        where: { propertyId: { in: propertyIdsToQuery as string[] }, posOutletId: outletId },
+    const effectiveWarehouseIds = warehouseId
+      ? [warehouseId]
+      : (await prisma.warehouse.findMany({
+        where: {
+          propertyId: { in: propertyIdsToQuery as string[] },
+          posOutletId: outletId
+            ? outletId
+            : outletScoped
+              ? { in: assignedOutletIds }
+              : { not: null },
+        },
         select: { id: true },
-      }))?.id
-      : undefined);
+      })).map((warehouse) => warehouse.id);
     
     // Determine Date Range
     let startDate: Date;
@@ -246,14 +253,14 @@ export async function GET(req: NextRequest) {
     // 3. Fetch Stock Transactions for the Inventory Reconciliation
     // Only fetch if warehouseId is provided or if outlet has a primary warehouse
     let stockMovement: any[] = [];
-    if (effectiveWarehouseId) {
+    if (effectiveWarehouseIds.length) {
       const stockItems = await prisma.stockItem.findMany({
-        where: { warehouseId: effectiveWarehouseId }
+        where: { warehouseId: { in: effectiveWarehouseIds } }
       });
 
       const transactions = await prisma.stockTransaction.findMany({
         where: {
-          warehouseId: effectiveWarehouseId,
+          warehouseId: { in: effectiveWarehouseIds },
           businessDate: { gte: startDate, lte: endDate }
         },
         orderBy: { timestamp: 'asc' }
@@ -263,7 +270,7 @@ export async function GET(req: NextRequest) {
       // "Opening = quantityAfter of the latest transaction before period start"
       const prevTransactions = await prisma.stockTransaction.findMany({
         where: {
-          warehouseId: effectiveWarehouseId,
+          warehouseId: { in: effectiveWarehouseIds },
           businessDate: { lt: startDate }
         },
         orderBy: { timestamp: 'desc' },
@@ -449,7 +456,7 @@ export async function GET(req: NextRequest) {
     const saleTransactions = await prisma.stockTransaction.aggregate({
       where: {
         propertyId: { in: propertyIdsToQuery as string[] },
-        ...(effectiveWarehouseId ? { warehouseId: effectiveWarehouseId } : {}),
+        ...(effectiveWarehouseIds.length ? { warehouseId: { in: effectiveWarehouseIds } } : {}),
         businessDate: { gte: startDate, lte: endDate },
         source: 'SALE'
       },

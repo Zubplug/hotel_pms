@@ -22,6 +22,13 @@ const money = (value: number, currency = 'NGN') =>
 const pct = (value: number) =>
   new Intl.NumberFormat('en-US', { style: 'percent', maximumFractionDigits: 1 }).format(Number(value || 0) / 100);
 
+function localDateString(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 function StatCard({ label, value, detail, accent }: { label: string; value: string; detail: string; accent: string }) {
   return (
     <div className={`stat-card flex flex-col gap-3 rounded-[20px] border p-5 ${accent}`}>
@@ -91,8 +98,8 @@ export default function FnbReportsPage() {
 
       const now = new Date();
       setDateRange({
-        start: new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString().slice(0, 10),
-        end: new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString().slice(0, 10)
+        start: localDateString(now),
+        end: localDateString(now)
       });
     }
   }, [propertyId]);
@@ -160,7 +167,7 @@ export default function FnbReportsPage() {
   const shiftDate = (days: number) => {
     const date = new Date();
     date.setDate(date.getDate() + days);
-    return date.toISOString().slice(0, 10);
+    return localDateString(date);
   };
 
   const setReportPreset = (preset: 'today' | 'yesterday' | 'week' | 'month') => {
@@ -172,7 +179,7 @@ export default function FnbReportsPage() {
     }
     const start = new Date();
     start.setDate(start.getDate() - (preset === 'week' ? 6 : 29));
-    setDateRange({ start: start.toISOString().slice(0, 10), end: today });
+    setDateRange({ start: localDateString(start), end: today });
   };
 
   return (
@@ -490,7 +497,7 @@ export default function FnbReportsPage() {
 
       {showReportPreview && data && (
         <div className="screen-only fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm">
-          <div className="flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-[28px] bg-slate-50 shadow-2xl">
+          <div className="flex max-h-[94vh] w-full max-w-[230mm] flex-col overflow-hidden rounded-[10px] bg-slate-300 p-3 shadow-[0_24px_80px_rgba(15,23,42,0.35)] sm:p-5">
             <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 bg-white px-6 py-5 sm:px-8">
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#b85f29]">Merged report pack preview</p>
@@ -502,7 +509,7 @@ export default function FnbReportsPage() {
                 <button type="button" onClick={handlePrint} className="inline-flex h-10 items-center gap-2 rounded-xl bg-[#c96f32] px-4 text-sm font-bold text-white shadow-sm hover:bg-[#b85f29]"><Printer className="h-4 w-4" /> Print pack</button>
               </div>
             </div>
-            <div className="overflow-y-auto p-5 sm:p-8">
+            <div className="min-h-[297mm] overflow-y-auto bg-white p-[10mm] sm:p-[12mm]">
               <div className="grid gap-4 sm:grid-cols-4">
                 <div className="rounded-2xl border border-indigo-100 bg-indigo-50 p-4"><p className="text-[10px] font-bold uppercase tracking-wider text-indigo-600">Daily sales summary</p><p className="mt-2 text-2xl font-bold text-slate-900">{money(data.summary.netRevenue)}</p><p className="mt-1 text-xs text-slate-600">{data.statistics.totalChecks} checks · {data.statistics.totalCovers} covers</p></div>
                 <div className="rounded-2xl border border-violet-100 bg-violet-50 p-4"><p className="text-[10px] font-bold uppercase tracking-wider text-violet-600">Waiter shift summary</p><p className="mt-2 text-2xl font-bold text-slate-900">{money(waiterNetSales)}</p><p className="mt-1 text-xs text-slate-600">{waiterShiftSummary.length} waiters · {waiterOpenChecks} open checks</p></div>
@@ -690,7 +697,7 @@ export default function FnbReportsPage() {
                     <div className="rounded-2xl bg-[#fbf8f6] p-4">
                       <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-[#9a7764]">Stock integrity</p>
                       <p className="mt-2 text-sm font-bold text-[#2b1710]">{stockVarianceCount ? `${stockVarianceCount} variance${stockVarianceCount === 1 ? '' : 's'}` : 'Ledger balanced'}</p>
-                      <p className="mt-1 text-[11px] text-[#8d7568]">{selectedOutlet ? `${selectedOutletName} outlet warehouse` : 'Select an outlet to prove stock'}</p>
+                      <p className="mt-1 text-[11px] text-[#8d7568]">{selectedOutlet ? `${selectedOutletName} outlet warehouse` : 'All authorized outlet warehouses'}</p>
                     </div>
                   </div>
                 </div>
@@ -951,13 +958,11 @@ export default function FnbReportsPage() {
                     </h3>
                     <p className="mt-0.5 text-[11px] text-slate-500">Industry-standard proof: Opening stock + activity = closing stock.</p>
                   </div>
-                  {!selectedOutlet && (
-                    <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-amber-700">
-                      Select Outlet
-                    </span>
-                  )}
+                  <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-emerald-700">
+                    {selectedOutlet ? 'Outlet scope' : 'All outlet warehouses'}
+                  </span>
                 </div>
-                {selectedOutlet ? (
+                {data.inventoryMovement.length ? (
                   <div className="overflow-x-auto">
                     <table className="w-full">
                       <thead>
@@ -1009,7 +1014,7 @@ export default function FnbReportsPage() {
                   </div>
                 ) : (
                   <div className="p-12 text-center text-slate-500 text-sm bg-slate-50/30">
-                    Please select an outlet from the filters above to generate the outlet stock ledger proof.
+                    No stock items or transactions were found in the authorized outlet warehouses for this period.
                   </div>
                 )}
               </section>
