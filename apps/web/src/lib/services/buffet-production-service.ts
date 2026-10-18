@@ -2,6 +2,7 @@ import { prisma } from '@hotel-pms/db';
 import { getUnitConversionToBase } from '@/lib/inventory/units';
 import { assertNightAuditAllowsTransaction } from '@/lib/night-audit-guard';
 import { resolveBreakdownConfig } from '@/lib/room-rate-breakdown';
+import { kitchenServiceOutletId } from '@/lib/inventory/kitchen-routing';
 
 export interface RequisitionItem {
   stockItemId: string;
@@ -19,6 +20,12 @@ export interface CalculateRequisitionParams {
   covers: number;
   recipeId?: string;
   productId?: string;
+  recipes?: RecipeSelection[];
+}
+
+export interface RecipeSelection {
+  recipeId: string;
+  portionsPerGuest: number;
 }
 
 export interface ProduceBuffetParams {
@@ -26,6 +33,7 @@ export interface ProduceBuffetParams {
   covers: number;
   recipeId?: string;
   productId?: string;
+  recipes?: RecipeSelection[];
   actorId: string;
   businessDate?: Date | string;
   warehouseId?: string;
@@ -46,12 +54,19 @@ export class BuffetProductionService {
     entitledInHouseCovers?: number;
   }> {
     const { propertyId, covers, recipeId, productId } = params;
+    const selections = (params.recipes?.length
+      ? params.recipes
+      : recipeId
+        ? [{ recipeId, portionsPerGuest: 1 }]
+        : []).map((selection) => ({
+      recipeId: selection.recipeId,
+      portionsPerGuest: Math.max(0.01, Number(selection.portionsPerGuest) || 1),
+    }));
 
-    let recipe: any = null;
-
-    if (recipeId) {
-      recipe = await prisma.recipe.findFirst({
-        where: { id: recipeId, propertyId, isActive: true },
+    let recipes: any[] = [];
+    if (selections.length) {
+      recipes = await Promise.all(selections.map((selection) => prisma.recipe.findFirst({
+        where: { id: selection.recipeId, propertyId, isActive: true },
         include: {
           versions: {
             where: { isActive: true },
@@ -63,72 +78,74 @@ export class BuffetProductionService {
           },
           posProduct: true,
         },
-      });
+      })));
+      if (recipes.some((candidate) => !candidate)) {
+        throw new Error('One or more selected production recipes could not be found or are inactive.');
+      }
     } else if (productId) {
-      recipe = await prisma.recipe.findFirst({
+      const productRecipe = await prisma.recipe.findFirst({
         where: { posProductId: productId, propertyId, isActive: true },
         include: {
-          versions: {
-            where: { isActive: true },
-            include: {
-              ingredients: {
-                include: { stockItem: true },
-              },
-            },
-          },
+          versions: { where: { isActive: true }, include: { ingredients: { include: { stockItem: true } } } },
           posProduct: true,
         },
       });
+      if (productRecipe) {
+        recipes = [productRecipe];
+        selections.push({ recipeId: productRecipe.id, portionsPerGuest: 1 });
+      }
     } else {
       throw new Error(
-        'EXPLICIT_RECIPE_REQUIRED: A valid recipeId or productId must be specified for buffet production.',
+        'EXPLICIT_RECIPE_REQUIRED: At least one valid production recipe must be specified for buffet production.',
       );
     }
 
-    if (!recipe) {
-      throw new Error('No active breakfast recipe found for the specified identifier.');
+    if (!recipes.length) {
+      throw new Error('No active breakfast production recipes found for the specified identifiers.');
     }
 
-    const activeVersion = recipe.versions?.[0];
-    if (!activeVersion || !activeVersion.ingredients?.length) {
-      throw new Error(`Recipe "${recipe.posProduct?.name || recipe.id}" has no active version with ingredients.`);
-    }
-
-    const items: RequisitionItem[] = [];
+    const itemMap = new Map<string, RequisitionItem>();
     let totalEstimatedCost = 0;
 
-    for (const ingredient of activeVersion.ingredients) {
-      const stockItem = ingredient.stockItem;
-      if (!stockItem) continue;
-
-      const conversion = getUnitConversionToBase(
-        ingredient.unitOfMeasure,
-        stockItem.baseUnit,
-        (stockItem.stockUnits as any) || [],
-      );
-
-      if (conversion <= 0) {
-        throw new Error(
-          `Unit conversion failed from ${ingredient.unitOfMeasure} to ${stockItem.baseUnit} for ingredient ${stockItem.name}.`,
-        );
+    for (let index = 0; index < recipes.length; index += 1) {
+      const recipe = recipes[index];
+      const activeVersion = recipe.versions?.[0];
+      if (!activeVersion || !activeVersion.ingredients?.length) {
+        throw new Error(`Recipe "${recipe.posProduct?.name || recipe.id}" has no active version with ingredients.`);
       }
-
-      const requiredQuantity = Number(ingredient.quantity) * conversion * covers;
-      const unitCost = Number(stockItem.costPrice || 0);
-      const totalCost = Math.round(requiredQuantity * unitCost * 100) / 100;
-      totalEstimatedCost += totalCost;
-
-      items.push({
-        stockItemId: stockItem.id,
-        stockItemName: stockItem.name,
-        sku: stockItem.sku || '',
-        requiredQuantity,
-        baseUnit: stockItem.baseUnit,
-        currentStock: Number(stockItem.quantityOnHand || 0),
-        unitCost,
-        totalCost,
-      });
+      const portionsPerGuest = selections[index]?.portionsPerGuest || 1;
+      for (const ingredient of activeVersion.ingredients) {
+        const stockItem = ingredient.stockItem;
+        if (!stockItem) continue;
+        const conversion = getUnitConversionToBase(ingredient.unitOfMeasure, stockItem.baseUnit, (stockItem.stockUnits as any) || []);
+        if (conversion <= 0) throw new Error(`Unit conversion failed from ${ingredient.unitOfMeasure} to ${stockItem.baseUnit} for ingredient ${stockItem.name}.`);
+        const requiredQuantity = Number(ingredient.quantity) * conversion * covers * portionsPerGuest;
+        const existing = itemMap.get(stockItem.id);
+        const unitCost = Number(stockItem.costPrice || 0);
+        const totalCost = requiredQuantity * unitCost;
+        itemMap.set(stockItem.id, existing ? {
+          ...existing,
+          requiredQuantity: existing.requiredQuantity + requiredQuantity,
+          totalCost: existing.totalCost + totalCost,
+        } : {
+          stockItemId: stockItem.id,
+          stockItemName: stockItem.name,
+          sku: stockItem.sku || '',
+          requiredQuantity,
+          baseUnit: stockItem.baseUnit,
+          currentStock: Number(stockItem.quantityOnHand || 0),
+          unitCost,
+          totalCost,
+        });
+        totalEstimatedCost += totalCost;
+      }
     }
+
+    const items = [...itemMap.values()].map((item) => ({
+      ...item,
+      requiredQuantity: Math.round(item.requiredQuantity * 10000) / 10000,
+      totalCost: Math.round(item.totalCost * 100) / 100,
+    }));
 
     // Calculate live entitled in-house covers for today
     const property = await prisma.property.findUnique({
@@ -176,7 +193,8 @@ export class BuffetProductionService {
     }
 
     return {
-      recipe,
+      recipe: recipes[0],
+      recipes,
       items,
       totalEstimatedCost: Math.round(totalEstimatedCost * 100) / 100,
       entitledInHouseCovers,
@@ -197,7 +215,7 @@ export class BuffetProductionService {
 
     const property = await prisma.property.findUnique({
       where: { id: propertyId },
-      select: { id: true, businessDate: true, baseCurrency: true, timezone: true },
+      select: { id: true, businessDate: true, baseCurrency: true, timezone: true, settings: true },
     });
 
     if (!property) throw new Error('Property not found');
@@ -214,6 +232,7 @@ export class BuffetProductionService {
       covers,
       recipeId: params.recipeId,
       productId: params.productId,
+      recipes: params.recipes,
     });
 
     const opKey = params.operationId;
@@ -237,21 +256,69 @@ export class BuffetProductionService {
         };
       }
 
-      // Check warehouse (kitchen or specified)
+      // Buffet production consumes the configured kitchen-service stock. A
+      // caller may explicitly provide a warehouse for a controlled batch,
+      // otherwise prefer the warehouse attached to kitchenServiceOutletId.
       let targetWarehouseId = params.warehouseId;
       if (!targetWarehouseId) {
-        const kitchenWarehouse = await tx.warehouse.findFirst({
-          where: { propertyId, type: 'KITCHEN' },
-          select: { id: true },
-        });
+        const configuredKitchenOutletId = kitchenServiceOutletId(property.settings as any);
+        const kitchenWarehouse = configuredKitchenOutletId
+          ? await tx.warehouse.findUnique({
+            where: { posOutletId: configuredKitchenOutletId },
+            select: { id: true },
+          })
+          : await tx.warehouse.findFirst({
+            where: { propertyId, type: 'KITCHEN' },
+            select: { id: true },
+          });
         targetWarehouseId = kitchenWarehouse?.id || null;
+      }
+      if (!targetWarehouseId) {
+        throw new Error('KITCHEN_WAREHOUSE_NOT_CONFIGURED: Configure a kitchen service warehouse before posting buffet production.');
+      }
+
+      const sourceStockItems = await tx.stockItem.findMany({
+        where: { id: { in: items.map((item) => item.stockItemId) }, propertyId },
+        select: { id: true, name: true, sku: true, barcode: true },
+      });
+      const targetStockItems = await tx.stockItem.findMany({
+        where: { propertyId, warehouseId: targetWarehouseId, isActive: true },
+        select: { id: true, name: true, sku: true, barcode: true, warehouseId: true },
+      });
+
+      // Recipe ingredients may reference a main-warehouse template item. Map
+      // that template to the active item in the production warehouse by
+      // barcode, SKU, or normalized name before touching quantityOnHand.
+      const normalizeName = (value: string) => value.trim().toLowerCase().replace(/\s+/g, ' ');
+      const resolvedStockItemIds = new Map<string, string>();
+      for (const item of items) {
+        if (resolvedStockItemIds.has(item.stockItemId)) continue;
+        const source = sourceStockItems.find((candidate: any) => candidate.id === item.stockItemId);
+        if (!source) throw new Error(`Stock item ${item.stockItemName || item.stockItemId} not found.`);
+
+        const matches = targetStockItems.filter((candidate: any) =>
+          (source.barcode && candidate.barcode === source.barcode) ||
+          (source.sku && candidate.sku === source.sku) ||
+          normalizeName(candidate.name) === normalizeName(source.name),
+        );
+        const distinctMatches = [...new Map(matches.map((match: any) => [match.id, match])).values()];
+        if (distinctMatches.length !== 1) {
+          throw new Error(
+            distinctMatches.length === 0
+              ? `${source.name} is not provisioned in the buffet production warehouse.`
+              : `Ambiguous buffet stock mapping for ${source.name}. Consolidate active stock records in the production warehouse.`,
+          );
+        }
+        resolvedStockItemIds.set(item.stockItemId, distinctMatches[0].id);
       }
 
       // 1. Strict Stock Validation: Pre-validate that all required ingredients have sufficient on-hand quantity
       const stockItemMap = new Map<string, any>();
       for (const item of items) {
+        const targetStockItemId = resolvedStockItemIds.get(item.stockItemId)!;
+        const requiredForTarget = (stockItemMap.get(targetStockItemId)?.requiredQuantity || 0) + item.requiredQuantity;
         const stockItem = await tx.stockItem.findUnique({
-          where: { id: item.stockItemId },
+          where: { id: targetStockItemId },
           select: { id: true, name: true, quantityOnHand: true, costPrice: true, baseUnit: true },
         });
 
@@ -260,24 +327,24 @@ export class BuffetProductionService {
         }
 
         const qtyOnHand = Number(stockItem.quantityOnHand || 0);
-        if (qtyOnHand < item.requiredQuantity) {
+        if (qtyOnHand < requiredForTarget) {
           throw new Error(
-            `INSUFFICIENT_STOCK: Insufficient stock for ${stockItem.name}. Required: ${item.requiredQuantity} ${stockItem.baseUnit}, Available: ${qtyOnHand} ${stockItem.baseUnit}`,
+            `INSUFFICIENT_STOCK: Insufficient stock for ${stockItem.name}. Required: ${requiredForTarget} ${stockItem.baseUnit}, Available: ${qtyOnHand} ${stockItem.baseUnit}`,
           );
         }
 
-        stockItemMap.set(item.stockItemId, stockItem);
+        stockItemMap.set(targetStockItemId, { ...stockItem, requiredQuantity: requiredForTarget });
       }
 
       // 2. Atomically decrement stock and record stock transaction log
-      for (const item of items) {
-        const stockItem = stockItemMap.get(item.stockItemId)!;
+      for (const stockItem of stockItemMap.values()) {
         const qtyBefore = Number(stockItem.quantityOnHand || 0);
-        const qtyAfter = qtyBefore - item.requiredQuantity;
+        const requiredQuantity = stockItem.requiredQuantity;
+        const qtyAfter = qtyBefore - requiredQuantity;
 
         const updatedStock = await tx.stockItem.updateMany({
-          where: { id: stockItem.id, quantityOnHand: { gte: item.requiredQuantity } },
-          data: { quantityOnHand: { decrement: item.requiredQuantity } },
+          where: { id: stockItem.id, quantityOnHand: { gte: requiredQuantity } },
+          data: { quantityOnHand: { decrement: requiredQuantity } },
         });
         if (updatedStock.count !== 1) {
           throw new Error(`INSUFFICIENT_STOCK: Inventory changed during buffet production for ${stockItem.name}.`);
@@ -288,11 +355,11 @@ export class BuffetProductionService {
             propertyId,
             stockItemId: stockItem.id,
             source: 'SALE',
-            quantity: -item.requiredQuantity,
-            unitCost: item.unitCost,
+            quantity: -requiredQuantity,
+            unitCost: Number(stockItem.costPrice || 0),
             quantityBefore: qtyBefore,
             quantityAfter: qtyAfter,
-            totalValue: item.totalCost,
+            totalValue: requiredQuantity * Number(stockItem.costPrice || 0),
             currency: property.baseCurrency || 'NGN',
             businessDate,
             reference: 'BREAKFAST_BUFFET_BATCH',

@@ -19,8 +19,12 @@ import {
   Package,
   Layers,
   ReceiptText,
+  Search,
+  ChevronDown,
+  Check,
 } from 'lucide-react';
 import { formatUnit } from '@/lib/inventory/units';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
 interface RequisitionItem {
   stockItemId: string;
@@ -31,6 +35,11 @@ interface RequisitionItem {
   currentStock: number;
   unitCost: number;
   totalCost: number;
+}
+
+interface RecipeSelection {
+  recipeId: string;
+  portionsPerGuest: number;
 }
 
 interface DailyBreakfastProductionModalProps {
@@ -56,7 +65,9 @@ export function DailyBreakfastProductionModal({
 }: DailyBreakfastProductionModalProps) {
   const [covers, setCovers] = useState<number>(0);
   const [hasInitializedCovers, setHasInitializedCovers] = useState(false);
-  const [selectedRecipeId, setSelectedRecipeId] = useState<string>('');
+  const [selectedRecipes, setSelectedRecipes] = useState<RecipeSelection[]>([]);
+  const [openRecipePicker, setOpenRecipePicker] = useState<number | null>(null);
+  const [recipeSearch, setRecipeSearch] = useState('');
   const [operationId, setOperationId] = useState<string>('');
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -65,7 +76,9 @@ export function DailyBreakfastProductionModal({
     items: RequisitionItem[];
     totalEstimatedCost: number;
     entitledInHouseCovers?: number;
-    availableRecipes?: { id: string; posProduct?: { id: string; name: string } }[];
+    availableRecipes?: { id: string; posProduct?: { id: string; name: string; category?: { name: string; outlet?: { name: string } } } }[];
+    breakfastCategories?: { id: string; name: string }[];
+    recipes?: { id: string; posProduct?: { name: string } }[];
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [successInfo, setSuccessInfo] = useState<string | null>(null);
@@ -78,7 +91,9 @@ export function DailyBreakfastProductionModal({
       setHasInitializedCovers(false);
       setCovers(0);
       setOperationId('');
-      setSelectedRecipeId('');
+      setSelectedRecipes([]);
+      setOpenRecipePicker(null);
+      setRecipeSearch('');
     }
   }, [open]);
 
@@ -93,7 +108,8 @@ export function DailyBreakfastProductionModal({
       try {
         const queryParams = new URLSearchParams();
         if (covers > 0) queryParams.set('covers', covers.toString());
-        if (selectedRecipeId) queryParams.set('recipeId', selectedRecipeId);
+        const validSelections = selectedRecipes.filter((selection) => selection.recipeId);
+        if (validSelections.length) queryParams.set('recipes', JSON.stringify(validSelections));
         if (propertyId) queryParams.set('propertyId', propertyId);
 
         const res = await fetch(`/api/v1/inventory/breakfast-buffet/produce?${queryParams.toString()}`);
@@ -115,8 +131,8 @@ export function DailyBreakfastProductionModal({
           setHasInitializedCovers(true);
         }
 
-        if (!selectedRecipeId && body.data?.recipe?.id) {
-          setSelectedRecipeId(body.data.recipe.id);
+        if (!selectedRecipes.length && body.data?.availableRecipes?.[0]?.id) {
+          setSelectedRecipes([{ recipeId: body.data.availableRecipes[0].id, portionsPerGuest: 1 }]);
         }
       } catch (err: any) {
         if (active) setError(err.message || 'Error fetching batch requisition');
@@ -133,7 +149,7 @@ export function DailyBreakfastProductionModal({
       active = false;
       clearTimeout(timer);
     };
-  }, [covers, open, propertyId, selectedRecipeId, hasInitializedCovers]);
+  }, [covers, open, propertyId, selectedRecipes, hasInitializedCovers]);
 
   // Check if any ingredients have insufficient stock
   const deficits = useMemo(() => {
@@ -144,9 +160,17 @@ export function DailyBreakfastProductionModal({
   }, [previewData]);
 
   const hasDeficit = deficits.length > 0;
+  const filteredRecipes = useMemo(() => {
+    const query = recipeSearch.trim().toLowerCase();
+    if (!query) return previewData?.availableRecipes || [];
+    return (previewData?.availableRecipes || []).filter((recipe) =>
+      `${recipe.posProduct?.name || ''} ${recipe.posProduct?.category?.name || ''} ${recipe.posProduct?.category?.outlet?.name || ''}`.toLowerCase().includes(query),
+    );
+  }, [previewData?.availableRecipes, recipeSearch]);
 
   async function handleProduce() {
-    if (hasDeficit || submitting || !covers || covers < 1 || !selectedRecipeId) return;
+    const validSelections = selectedRecipes.filter((selection) => selection.recipeId);
+    if (hasDeficit || submitting || !covers || covers < 1 || !validSelections.length || validSelections.length !== selectedRecipes.length) return;
     setSubmitting(true);
     setError(null);
     setSuccessInfo(null);
@@ -160,7 +184,7 @@ export function DailyBreakfastProductionModal({
         body: JSON.stringify({
           propertyId,
           covers,
-          recipeId: selectedRecipeId || previewData?.recipe?.id,
+          recipes: validSelections,
           operationId: stableOperationId,
         }),
       });
@@ -183,46 +207,82 @@ export function DailyBreakfastProductionModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl overflow-hidden rounded-2xl border border-slate-200 bg-white p-0 shadow-2xl">
-        <DialogHeader className="border-b border-slate-100 bg-slate-50/50 p-6">
-          <div className="flex items-center gap-3">
+      <DialogContent className="w-[calc(100vw-1rem)] max-w-6xl overflow-hidden rounded-2xl border border-slate-200 bg-white p-0 shadow-2xl">
+        <DialogHeader className="border-b border-slate-100 bg-slate-50/50 p-5 sm:p-7">
+          <div className="flex items-start gap-4">
             <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-orange-100 text-orange-600">
               <ChefHat className="h-6 w-6" />
             </div>
-
-            <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
-              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600">
-                Production Recipe
-              </label>
-              <select
-                value={selectedRecipeId}
-                onChange={(event) => {
-                  setSelectedRecipeId(event.target.value);
-                  setPreviewData(null);
-                  setHasInitializedCovers(false);
-                }}
-                className="mt-2 h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700"
-              >
-                <option value="">Select an active recipe</option>
-                {(previewData?.availableRecipes || []).map((recipe) => (
-                  <option key={recipe.id} value={recipe.id}>
-                    {recipe.posProduct?.name || recipe.id}
-                  </option>
-                ))}
-              </select>
-            </div>
             <div>
-              <DialogTitle className="text-xl font-bold text-slate-900">
-                Daily Breakfast Buffet Production
+              <DialogTitle className="text-xl font-bold text-slate-900 sm:text-2xl">
+                Breakfast Buffet Production
               </DialogTitle>
-              <DialogDescription className="mt-1 text-xs text-slate-500">
-                Kitchen Batch Preparation · Raw Stock Deduction & COGS Accounting
+              <DialogDescription className="mt-1 max-w-2xl text-sm leading-5 text-slate-500">
+                Build a breakfast combo from multiple production recipes. Quantities are calculated per guest, deducted from the kitchen warehouse, and posted to COGS.
               </DialogDescription>
             </div>
           </div>
         </DialogHeader>
 
-        <div className="max-h-[60vh] space-y-5 overflow-y-auto p-6">
+        <div className="max-h-[72vh] space-y-5 overflow-y-auto p-5 sm:p-7">
+          <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-xs font-bold uppercase tracking-wider text-slate-600">Complimentary breakfast menus</p>
+                  {(previewData?.breakfastCategories || []).map((category) => (
+                    <span key={category.id} className="rounded-full bg-orange-50 px-2 py-1 text-[10px] font-semibold text-orange-700">{category.name}</span>
+                  ))}
+                </div>
+                <p className="mt-1 text-sm text-slate-500">Add one or more breakfast recipes. Each recipe can be produced more than once per guest for combos and plated selections.</p>
+              </div>
+              <Button type="button" variant="outline" className="shrink-0 rounded-lg" onClick={() => setSelectedRecipes([...selectedRecipes, { recipeId: '', portionsPerGuest: 1 }])}>
+                Add recipe
+              </Button>
+            </div>
+            <div className="mt-4 space-y-2">
+              {selectedRecipes.map((selection, index) => (
+                <div key={`${index}-${selection.recipeId}`} className="grid gap-2 rounded-lg border border-slate-200 bg-slate-50/70 p-3 sm:grid-cols-[minmax(0,1fr)_180px_auto] sm:items-center">
+                  <Popover open={openRecipePicker === index} onOpenChange={(open) => { setOpenRecipePicker(open ? index : null); if (!open) setRecipeSearch(''); }}>
+                    <PopoverTrigger asChild>
+                      <Button type="button" variant="outline" className="h-10 min-w-0 justify-between border-slate-300 bg-white px-3 text-left font-normal text-slate-800">
+                        <span className="truncate">
+                          {previewData?.availableRecipes?.find((recipe) => recipe.id === selection.recipeId)?.posProduct?.name || 'Select complimentary menu'}
+                        </span>
+                        <ChevronDown className="ml-2 h-4 w-4 shrink-0 text-slate-400" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent align="start" className="w-[30rem] max-w-[calc(100vw-2rem)] p-2">
+                      <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3">
+                        <Search className="h-4 w-4 text-slate-400" />
+                        <Input autoFocus value={recipeSearch} onChange={(event) => setRecipeSearch(event.target.value)} placeholder="Search breakfast menus..." className="h-9 border-0 bg-transparent px-0 shadow-none focus-visible:ring-0" />
+                      </div>
+                      <div className="mt-2 max-h-64 overflow-y-auto">
+                        {filteredRecipes.length ? filteredRecipes.map((recipe) => {
+                          const isSelected = recipe.id === selection.recipeId;
+                          return (
+                            <button key={recipe.id} type="button" onClick={() => { setSelectedRecipes(selectedRecipes.map((item, itemIndex) => itemIndex === index ? { ...item, recipeId: recipe.id } : item)); setOpenRecipePicker(null); setRecipeSearch(''); }} className="flex w-full items-start gap-3 rounded-lg px-3 py-2.5 text-left hover:bg-orange-50">
+                              <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border border-slate-300">{isSelected && <Check className="h-3 w-3 text-orange-600" />}</span>
+                              <span className="min-w-0">
+                                <span className="block truncate text-sm font-semibold text-slate-800">{recipe.posProduct?.name || recipe.id}</span>
+                                <span className="mt-0.5 block truncate text-[11px] text-slate-500">{recipe.posProduct?.category?.name || 'Breakfast menu'}{recipe.posProduct?.category?.outlet?.name ? ` · ${recipe.posProduct.category.outlet.name}` : ''}</span>
+                              </span>
+                            </button>
+                          );
+                        }) : <p className="px-3 py-6 text-center text-sm text-slate-500">No breakfast menu matches your search.</p>}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                  <label className="flex items-center gap-2 text-xs font-medium text-slate-600">
+                    Portions / guest
+                    <Input type="number" min={0.01} step={0.01} value={selection.portionsPerGuest} onChange={(event) => setSelectedRecipes(selectedRecipes.map((item, itemIndex) => itemIndex === index ? { ...item, portionsPerGuest: Math.max(0.01, Number(event.target.value) || 1) } : item))} className="h-10 w-24 bg-white text-sm font-semibold" />
+                  </label>
+                  <Button type="button" variant="ghost" className="text-slate-500 hover:text-red-600" onClick={() => setSelectedRecipes(selectedRecipes.filter((_, itemIndex) => itemIndex !== index))}>Remove</Button>
+                </div>
+              ))}
+              {!selectedRecipes.length && <p className="rounded-lg border border-dashed border-slate-300 p-4 text-center text-sm text-slate-500">Add a recipe to start the production plan.</p>}
+            </div>
+          </section>
           {/* Controls: Covers Input */}
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
@@ -312,7 +372,7 @@ export function DailyBreakfastProductionModal({
           )}
 
           {/* Requisition Table */}
-          <div className="rounded-xl border border-slate-200 overflow-hidden">
+          <div className="overflow-hidden rounded-xl border border-slate-200">
             <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-2.5">
               <span className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-slate-600">
                 <Layers className="h-3.5 w-3.5 text-orange-500" />
@@ -321,7 +381,8 @@ export function DailyBreakfastProductionModal({
               {loadingPreview && <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-400" />}
             </div>
 
-            <table className="w-full text-left text-xs">
+            <div className="overflow-x-auto">
+            <table className="min-w-[760px] w-full text-left text-xs">
               <thead className="border-b border-slate-100 bg-slate-50/50 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
                 <tr>
                   <th className="px-4 py-2.5">Item</th>
@@ -381,6 +442,7 @@ export function DailyBreakfastProductionModal({
                 )}
               </tbody>
             </table>
+            </div>
           </div>
         </div>
 
@@ -395,7 +457,7 @@ export function DailyBreakfastProductionModal({
 
           <Button
             onClick={handleProduce}
-            disabled={hasDeficit || submitting || loadingPreview || !selectedRecipeId || !previewData?.items?.length}
+            disabled={hasDeficit || submitting || loadingPreview || !selectedRecipes.length || selectedRecipes.some((selection) => !selection.recipeId) || !previewData?.items?.length}
             className="rounded-xl bg-orange-600 font-semibold text-white hover:bg-orange-700 disabled:opacity-50"
           >
             {submitting ? (
