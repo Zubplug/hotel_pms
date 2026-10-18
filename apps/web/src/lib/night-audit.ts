@@ -402,6 +402,76 @@ export async function executeNightAudit(
                 _sum: { amount: true },
               });
               roomChargeAmountForCredit = Math.max(0, Number(existingCharge.amount) + Number(concession._sum.amount || 0));
+
+              // Recovery safety: older audit builds could commit the net room
+              // line (and sometimes VAT) without the breakfast/service-charge
+              // siblings. Treat the main ROOM_CHARGE line as idempotent, but
+              // backfill only the missing component lines instead of skipping
+              // the reservation or duplicating the net accommodation charge.
+              if (!isCorporateCharge && existingCharge.source === 'ROOM_CHARGE' && existingCharge.operationId === roomChargeKey && activeRoom) {
+                const grossRate = Number(activeRoom.rateAmount || 0);
+                const savedBreakdownConfig = resolveBreakdownConfig((property as any).settings);
+                const breakdownConfig = {
+                  ...savedBreakdownConfig,
+                  enabled: savedBreakdownConfig.enabled && professionalOperationsEnabled,
+                };
+                const breakdown = computeRateBreakdown(grossRate, breakdownConfig, false, activeRoom.room?.roomType?.name || activeRoom.roomTypeId, null);
+                const netMatches = Math.abs(Number(existingCharge.amount) - breakdown.netAccommodation) <= 0.02;
+                if (netMatches && breakdown.componentTotal > Number(existingCharge.amount) + 0.01) {
+                  const componentIds = [`${roomChargeKey}:FNB`, `${roomChargeKey}:VAT`, `${roomChargeKey}:SC`];
+                  const existingComponents = await tx.folioItem.findMany({
+                    where: { folioId: mainFolio.id, operationId: { in: componentIds }, voidedAt: null },
+                    select: { operationId: true },
+                  });
+                  const existingComponentIds = new Set(existingComponents.map((item: any) => item.operationId));
+                  const missingComponents = [
+                    breakdown.complimentaryFoodAmount > 0 ? {
+                      type: 'CHARGE', revenueCategory: 'FNB', revenueClass: 'FOOD', amount: breakdown.complimentaryFoodAmount,
+                      description: `${breakdown.complimentaryAllocationName} for ${businessDate.toISOString().split('T')[0]}`, operationId: `${roomChargeKey}:FNB`,
+                    } : null,
+                    breakdown.vatAmount > 0 ? {
+                      type: 'TAX', revenueCategory: 'TAX', revenueClass: 'VAT', amount: breakdown.vatAmount,
+                      description: `VAT (${(breakdownConfig.vatRate * 100).toFixed(1)}%) for ${businessDate.toISOString().split('T')[0]}`, operationId: `${roomChargeKey}:VAT`,
+                    } : null,
+                    breakdown.serviceChargeAmount > 0 ? {
+                      type: 'CHARGE', revenueCategory: 'OTHER', revenueClass: 'SERVICE_CHARGE', amount: breakdown.serviceChargeAmount,
+                      description: `Service Charge (${(breakdownConfig.serviceChargeRate * 100).toFixed(0)}%) for ${businessDate.toISOString().split('T')[0]}`, operationId: `${roomChargeKey}:SC`,
+                    } : null,
+                  ].filter((line): line is NonNullable<typeof line> => line !== null && !existingComponentIds.has(line.operationId));
+
+                  for (const line of missingComponents) {
+                    await tx.folioItem.create({
+                      data: {
+                        folioId: mainFolio.id,
+                        businessDate,
+                        type: line.type,
+                        source: 'ROOM_CHARGE',
+                        revenueCategory: line.revenueCategory,
+                        revenueClass: line.revenueClass,
+                        description: line.description,
+                        quantity: 1,
+                        unitAmount: line.amount,
+                        amount: line.amount,
+                        baseAmount: line.amount,
+                        currency: activeRoom.currency || property.supportedCurrencies[0] || 'NGN',
+                        postedBy: actorId!,
+                        nightAuditRunId: auditRun.id,
+                        operationId: line.operationId,
+                        reservationId: reservation.id,
+                        guestId: reservation.primaryGuestId,
+                      },
+                    });
+                  }
+                  const missingTotal = missingComponents.reduce((sum, line) => sum + line.amount, 0);
+                  if (missingTotal > 0.01) {
+                    await tx.folio.update({
+                      where: { id: mainFolio.id },
+                      data: { totalCharges: { increment: missingTotal }, balance: { increment: missingTotal }, version: { increment: 1 } },
+                    });
+                  }
+                  roomChargeAmountForCredit = breakdown.grossRate;
+                }
+              }
             }
 
             if (!existingCharge) {

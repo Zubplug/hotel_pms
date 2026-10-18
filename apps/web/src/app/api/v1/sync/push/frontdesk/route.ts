@@ -14,6 +14,8 @@ import { reconcileFolioBalanceFromCounters } from "@/lib/finance/reconcile-folio
 import { assertOfflineSessionOpenDate, isNightAuditCutoverActive } from "@/lib/night-audit-guard";
 import { getPropertyBusinessDate } from "@/lib/date-utils";
 import { getApprovedRoomDiscount } from "@/lib/finance/approved-room-discount";
+import { computeRateBreakdown, resolveBreakdownConfig } from "@/lib/room-rate-breakdown";
+import { hasEntitlement } from "@/lib/auth/entitlement";
 import { InventoryService } from "@/lib/inventory/InventoryService";
 import { routeFoliosToCityLedger } from "@/lib/finance/route-folio-to-city-ledger";
 import { FolioPaymentAccountingService } from "@/lib/services/folio-payment-accounting-service";
@@ -340,6 +342,11 @@ export async function POST(req: NextRequest) {
         { status: 404 },
       );
     }
+    const professionalOperationsEnabled = await hasEntitlement(
+      property.organizationId,
+      "MODULE_OPERATIONS",
+      propertyId,
+    );
     if (await isNightAuditCutoverActive(propertyId)) {
       return NextResponse.json(
         {
@@ -1470,7 +1477,18 @@ export async function POST(req: NextRequest) {
                 checkIn: true,
                 reservationRooms: {
                   where: { status: "ACTIVE" },
-                  select: { id: true, roomId: true, rateAmount: true, currency: true, discountType: true, discountAmount: true, discountPercent: true, discountApprovalId: true },
+                  select: {
+                    id: true,
+                    roomId: true,
+                    roomTypeId: true,
+                    room: { select: { roomType: { select: { name: true } } } },
+                    rateAmount: true,
+                    currency: true,
+                    discountType: true,
+                    discountAmount: true,
+                    discountPercent: true,
+                    discountApprovalId: true,
+                  },
                 },
               },
             });
@@ -1496,40 +1514,107 @@ export async function POST(req: NextRequest) {
                 reservation.checkIn.toISOString().slice(0, 10) ===
                 postingBusinessDate.toISOString().slice(0, 10);
               const targetFolio = folios[0];
-              const dayUseOperationId = `ROOM_CHARGE_${aggregateId}_${postingBusinessDate.toISOString().slice(0, 10)}:DAY_USE`;
+              const dayUseOperationPrefix = `ROOM_CHARGE_${aggregateId}_${postingBusinessDate.toISOString().slice(0, 10)}:DAY_USE`;
               const existingDayUseCharge = await tx.folioItem.findFirst({
-                where: { folioId: targetFolio.id, operationId: dayUseOperationId, voidedAt: null },
+                where: { folioId: targetFolio.id, operationId: { startsWith: dayUseOperationPrefix }, voidedAt: null },
                 select: { id: true },
               });
 
               if (sameDayCheckout && !existingDayUseCharge) {
-                const dayUseAmount = (await Promise.all(reservation.reservationRooms.map(async (room: any) => {
+                const breakdownConfig = resolveBreakdownConfig((property.settings as any) || {});
+                type DayUseLine = {
+                  type: string;
+                  revenueCategory: "ROOM" | "FNB" | "TAX" | "OTHER";
+                  revenueClass: string;
+                  amount: number;
+                  description: string;
+                  operationId: string;
+                };
+                const dayUseLines: DayUseLine[] = (await Promise.all(reservation.reservationRooms.map(async (room: any) => {
                   const grossAmount = Number(room.rateAmount || 0);
                   const discount = await getApprovedRoomDiscount(tx, room, grossAmount);
-                  return Math.max(0, grossAmount - discount);
-                }))).reduce((sum: number, amount: number) => sum + amount, 0);
-                if (dayUseAmount > 0.01) {
-                  await tx.folioItem.create({
-                    data: {
-                      folioId: targetFolio.id,
-                      reservationId: aggregateId,
-                      guestId: reservation.primaryGuestId,
-                      businessDate: postingBusinessDate,
-                      type: "CHARGE",
-                      source: "DAY_USE_ROOM_CHARGE",
-                      revenueCategory: "ROOM",
-                      description: `Day-use room charge for ${postingBusinessDate.toISOString().slice(0, 10)}`,
-                      quantity: 1,
-                      unitAmount: dayUseAmount,
-                      amount: dayUseAmount,
-                      currency: targetFolio.currency || "NGN",
-                      baseAmount: dayUseAmount,
-                      postedBy: actorId,
-                      operationId: dayUseOperationId,
-                      deviceId: device.id,
-                      isLatePosting: true,
+                  const amount = Math.max(0, grossAmount - discount);
+                  if (amount <= 0.01) return [];
+                  const operationId = `${dayUseOperationPrefix}:${room.id}`;
+                  const breakdown = computeRateBreakdown(
+                    discount > 0 ? grossAmount : amount,
+                    {
+                      ...breakdownConfig,
+                      enabled: breakdownConfig.enabled && professionalOperationsEnabled,
                     },
-                  });
+                    discount > 0,
+                    room.room?.roomType?.name || room.roomTypeId,
+                    null,
+                  );
+                  return [
+                    {
+                      type: "CHARGE",
+                      revenueCategory: "ROOM",
+                      revenueClass: "ROOM",
+                      amount: breakdown.netAccommodation,
+                      description: `Net Accommodation for ${postingBusinessDate.toISOString().slice(0, 10)}`,
+                      operationId,
+                    },
+                    ...(breakdown.complimentaryFoodAmount > 0 ? [{
+                      type: "CHARGE",
+                      revenueCategory: "FNB",
+                      revenueClass: "FOOD",
+                      amount: breakdown.complimentaryFoodAmount,
+                      description: `${breakdown.complimentaryAllocationName} for ${postingBusinessDate.toISOString().slice(0, 10)}`,
+                      operationId: `${operationId}:FNB`,
+                    }] : []),
+                    ...(breakdown.vatAmount > 0 ? [{
+                      type: "TAX",
+                      revenueCategory: "TAX",
+                      revenueClass: "VAT",
+                      amount: breakdown.vatAmount,
+                      description: `VAT (${(breakdownConfig.vatRate * 100).toFixed(1)}%) for ${postingBusinessDate.toISOString().slice(0, 10)}`,
+                      operationId: `${operationId}:VAT`,
+                    }] : []),
+                    ...(breakdown.serviceChargeAmount > 0 ? [{
+                      type: "CHARGE",
+                      revenueCategory: "OTHER",
+                      revenueClass: "SERVICE_CHARGE",
+                      amount: breakdown.serviceChargeAmount,
+                      description: `Service Charge (${(breakdownConfig.serviceChargeRate * 100).toFixed(0)}%) for ${postingBusinessDate.toISOString().slice(0, 10)}`,
+                      operationId: `${operationId}:SC`,
+                    }] : []),
+                    ...(discount > 0 ? [{
+                      type: "DISCOUNT",
+                      revenueCategory: "ROOM",
+                      revenueClass: "ROOM",
+                      amount: -discount,
+                      description: `Approved room discount for ${postingBusinessDate.toISOString().slice(0, 10)}`,
+                      operationId: `${operationId}:CONCESSION`,
+                    }] : []),
+                  ] as DayUseLine[];
+                }))).flat();
+                const dayUseAmount = dayUseLines.reduce((sum: number, line: any) => sum + Number(line.amount), 0);
+                if (dayUseAmount > 0.01) {
+                  for (const line of dayUseLines) {
+                    await tx.folioItem.create({
+                      data: {
+                        folioId: targetFolio.id,
+                        reservationId: aggregateId,
+                        guestId: reservation.primaryGuestId,
+                        businessDate: postingBusinessDate,
+                        type: line.type,
+                        source: "DAY_USE_ROOM_CHARGE",
+                        revenueCategory: line.revenueCategory,
+                        revenueClass: line.revenueClass,
+                        description: line.description,
+                        quantity: 1,
+                        unitAmount: line.amount,
+                        amount: line.amount,
+                        currency: targetFolio.currency || "NGN",
+                        baseAmount: line.amount,
+                        postedBy: actorId,
+                        operationId: line.operationId,
+                        deviceId: device.id,
+                        isLatePosting: true,
+                      },
+                    });
+                  }
                   await tx.folio.update({
                     where: { id: targetFolio.id },
                     data: {
