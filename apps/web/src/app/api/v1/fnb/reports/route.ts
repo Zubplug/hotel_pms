@@ -153,6 +153,14 @@ export async function GET(req: NextRequest) {
     };
 
     const waiterMap = new Map<string, WaiterShiftAccumulator>();
+    const outletPaymentMap = new Map<string, {
+      outletId: string | null;
+      outletName: string;
+      checks: number;
+      covers: number;
+      netSales: number;
+      tenders: Record<string, number>;
+    }>();
     for (const order of orders) {
       const key = order.serverStaffId || 'unassigned';
       const current = waiterMap.get(key) || {
@@ -208,6 +216,23 @@ export async function GET(req: NextRequest) {
         current.tenders[payment.method] = (current.tenders[payment.method] || 0) + Number(payment.amount || 0);
       }
       waiterMap.set(key, current);
+
+      const outletKey = order.outletId || order.outlet?.name || 'unassigned';
+      const outletSummary = outletPaymentMap.get(outletKey) || {
+        outletId: order.outletId || null,
+        outletName: order.outlet?.name || 'Unassigned outlet',
+        checks: 0,
+        covers: 0,
+        netSales: 0,
+        tenders: {},
+      };
+      outletSummary.checks += 1;
+      outletSummary.covers += Number(order.guestCount || 1);
+      outletSummary.netSales += Math.max(0, gross - discount);
+      for (const payment of order.payments || []) {
+        outletSummary.tenders[payment.method] = (outletSummary.tenders[payment.method] || 0) + Number(payment.amount || 0);
+      }
+      outletPaymentMap.set(outletKey, outletSummary);
     }
 
     const waiterShiftSummary = Array.from(waiterMap.values())
@@ -233,6 +258,13 @@ export async function GET(req: NextRequest) {
         shiftStatuses: Array.from(waiter.sessionStatuses),
         shiftDetails: waiter.sessions,
         tenders: Object.entries(waiter.tenders).map(([method, amount]) => ({ method, amount })),
+      }))
+      .sort((a, b) => b.netSales - a.netSales);
+
+    const outletPaymentSummary = Array.from(outletPaymentMap.values())
+      .map((outlet) => ({
+        ...outlet,
+        tenders: Object.entries(outlet.tenders).map(([method, amount]) => ({ method, amount })),
       }))
       .sort((a, b) => b.netSales - a.netSales);
 
@@ -520,6 +552,7 @@ export async function GET(req: NextRequest) {
           cogsVariance: actualCogs - theoreticalCogs
         },
         tenderBreakdown: paymentsAgg.map(p => ({ method: p.method, amount: Number(p._sum.amount || 0) })),
+          outletPaymentSummary,
           waiterShiftSummary,
           inventoryMovement: stockMovement,
           complimentaryFood,

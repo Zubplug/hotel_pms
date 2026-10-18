@@ -162,9 +162,12 @@ export default function FnbReportsPage() {
   const stockVarianceCount = data?.inventoryMovement?.filter((row: any) => Number(row.variance || 0) !== 0).length || 0;
   const cogsVariancePct = data?.summary?.netRevenue > 0 ? (Math.abs(Number(data.profitability.cogsVariance || 0)) / Number(data.summary.netRevenue)) * 100 : 0;
   const waiterShiftSummary = data?.waiterShiftSummary || [];
+  const outletPaymentSummary = data?.outletPaymentSummary || [];
   const waiterNetSales = waiterShiftSummary.reduce((sum: number, waiter: any) => sum + Number(waiter.netSales || 0), 0);
   const waiterOpenChecks = waiterShiftSummary.reduce((sum: number, waiter: any) => sum + Number(waiter.openChecks || 0), 0);
   const waiterPaymentMethods = Array.from(new Set(waiterShiftSummary.flatMap((waiter: any) => (waiter.tenders || []).map((tender: any) => tender.method)))).sort() as string[];
+  const outletPaymentMethods = Array.from(new Set(outletPaymentSummary.flatMap((outlet: any) => (outlet.tenders || []).map((tender: any) => tender.method)))).sort() as string[];
+  const paymentMethods = Array.from(new Set([...(data?.tenderBreakdown || []).map((tender: any) => tender.method), ...outletPaymentMethods, ...waiterPaymentMethods])).sort() as string[];
   const inventoryByOutlet: Record<string, any[]> = (data?.inventoryMovement || []).reduce((groups: Record<string, any[]>, row: any) => {
     const groupName = row.outletName || 'Unassigned outlet';
     groups[groupName] = groups[groupName] || [];
@@ -174,6 +177,7 @@ export default function FnbReportsPage() {
 
   const printDateTime = (value: string | null | undefined) => value ? new Date(value).toLocaleString() : 'Open';
   const waiterTenderAmount = (waiter: any, method: string) => Number(waiter.tenders?.find((tender: any) => tender.method === method)?.amount || 0);
+  const outletTenderAmount = (outlet: any, method: string) => Number(outlet.tenders?.find((tender: any) => tender.method === method)?.amount || 0);
 
   const shiftDate = (days: number) => {
     const date = new Date();
@@ -529,6 +533,22 @@ export default function FnbReportsPage() {
                   <div className="mt-4 space-y-2">{waiterShiftSummary.slice(0, 5).map((waiter: any) => <div key={waiter.staffId || waiter.name} className="flex items-center justify-between gap-3 text-sm"><span className="truncate font-medium text-slate-700">{waiter.name}</span><span className="shrink-0 font-bold tabular-nums text-slate-900">{money(waiter.netSales)}</span></div>)}{!waiterShiftSummary.length && <p className="text-sm text-slate-500">No waiter shifts in scope.</p>}</div>
                 </section>
               </div>
+              <section className="mt-5 rounded-2xl border border-slate-200 bg-white p-5">
+                <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 pb-3">
+                  <div><div className="flex items-center gap-2"><WalletCards className="h-4 w-4 text-[#b85f29]" /><h3 className="font-bold text-slate-900">Payment control summary</h3></div><p className="mt-1 text-xs text-slate-500">Reconcile captured tenders by outlet and waiter for the selected report period.</p></div>
+                  <span className="rounded-full bg-slate-100 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">{money(paymentTotal)} captured</span>
+                </div>
+                <div className="mt-4 grid gap-5 xl:grid-cols-2">
+                  <div>
+                    <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">By outlet</p>
+                    <div className="overflow-x-auto"><table className="w-full min-w-[560px] text-left text-[10px]"><thead><tr className="border-b border-slate-200">{['Outlet', 'Checks', 'Net sales', ...paymentMethods.map((method) => method.replace(/_/g, ' '))].map((heading) => <th key={heading} className="px-2 py-2 font-bold uppercase tracking-wider text-slate-500">{heading}</th>)}</tr></thead><tbody className="divide-y divide-slate-100">{outletPaymentSummary.map((outlet: any) => <tr key={outlet.outletId || outlet.outletName}><td className="px-2 py-2 font-semibold text-slate-800">{outlet.outletName}</td><td className="px-2 py-2 tabular-nums text-slate-600">{outlet.checks}</td><td className="px-2 py-2 font-bold tabular-nums text-slate-900">{money(outlet.netSales)}</td>{paymentMethods.map((method) => <td key={`${outlet.outletName}-${method}`} className="px-2 py-2 tabular-nums text-slate-700">{money(outletTenderAmount(outlet, method))}</td>)}</tr>)}{!outletPaymentSummary.length && <tr><td colSpan={3 + paymentMethods.length} className="px-2 py-4 text-center text-slate-500">No outlet payments captured.</td></tr>}</tbody></table></div>
+                  </div>
+                  <div>
+                    <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">By waiter</p>
+                    <div className="overflow-x-auto"><table className="w-full min-w-[560px] text-left text-[10px]"><thead><tr className="border-b border-slate-200">{['Waiter', 'Outlet', 'Checks', 'Net sales', ...paymentMethods.map((method) => method.replace(/_/g, ' '))].map((heading) => <th key={heading} className="px-2 py-2 font-bold uppercase tracking-wider text-slate-500">{heading}</th>)}</tr></thead><tbody className="divide-y divide-slate-100">{waiterShiftSummary.map((waiter: any) => <tr key={waiter.staffId || waiter.name}><td className="px-2 py-2 font-semibold text-slate-800">{waiter.name}</td><td className="px-2 py-2 text-slate-600">{waiter.outletNames?.join(', ') || '0'}</td><td className="px-2 py-2 tabular-nums text-slate-600">{waiter.totalChecks}</td><td className="px-2 py-2 font-bold tabular-nums text-slate-900">{money(waiter.netSales)}</td>{paymentMethods.map((method) => <td key={`${waiter.staffId || waiter.name}-${method}`} className="px-2 py-2 tabular-nums text-slate-700">{money(waiterTenderAmount(waiter, method))}</td>)}</tr>)}{!waiterShiftSummary.length && <tr><td colSpan={4 + paymentMethods.length} className="px-2 py-4 text-center text-slate-500">No waiter payments captured.</td></tr>}</tbody></table></div>
+                  </div>
+                </div>
+              </section>
               <section className="mt-5 overflow-hidden rounded-2xl border border-slate-200 bg-white">
                 <div className="flex items-center gap-2 border-b border-slate-100 px-5 py-4"><Scale className="h-4 w-4 text-emerald-600" /><div><h3 className="font-bold text-slate-900">Outlet stock reconciliation</h3><p className="mt-0.5 text-xs text-slate-500">The selected outlet automatically supplies the warehouse scope.</p></div></div>
                 {Object.keys(inventoryByOutlet).length ? Object.entries(inventoryByOutlet).map(([outletName, rows]) => <div key={outletName} className="border-b border-slate-200 last:border-b-0">
