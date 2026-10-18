@@ -3,6 +3,9 @@
 import { useEffect, useMemo, useState, useRef } from 'react';
 import Link from 'next/link';
 import { ChevronLeft, CircleAlert, CircleCheck, Plus, Save, Trash2, Search, X, ChevronDown, CheckCircle2, ChefHat, BookOpen, AlertCircle, Info } from 'lucide-react';
+import { INVENTORY_UNITS, formatUnit } from '@/lib/inventory/units';
+
+const SYSTEM_BASE_UNIT = INVENTORY_UNITS[0] || 'UNIT';
 
 /* ─── custom combobox ────────────────────────────────────────────────────── */
 interface ComboBoxProps {
@@ -142,7 +145,11 @@ export default function RecipesPage() {
     setSelected(recipe); 
     setVersionName(version?.versionName || ''); 
     setTargetMargin(String(recipe.targetMargin)); 
-    setIngredients((version?.ingredients || []).map((item: any) => ({ stockItemId: item.stockItemId, quantity: String(item.quantity), unitOfMeasure: item.unitOfMeasure }))); 
+    setIngredients((version?.ingredients || []).map((item: any) => ({
+      stockItemId: item.stockItemId,
+      quantity: String(item.quantity),
+      unitOfMeasure: item.unitOfMeasure || item.stockItem?.baseUnit || SYSTEM_BASE_UNIT,
+    })));
   };
   
   const newRecipe = () => { 
@@ -405,7 +412,11 @@ export default function RecipesPage() {
                 <div className="space-y-3">
                   {ingredients.map((item, index) => {
                     const stock = stockById[item.stockItemId] as StockItem | undefined;
-                    const units = stock ? [stock.baseUnit, ...(stock.stockUnits || []).map((u) => u.unit)] : [];
+                    const baseUnit = stock?.baseUnit || SYSTEM_BASE_UNIT;
+                    const units = stock
+                      ? [baseUnit, ...(stock.stockUnits || []).map((u) => u.unit)]
+                        .filter((unit, unitIndex, all) => Boolean(unit) && all.indexOf(unit) === unitIndex)
+                      : [];
                     const lineCost = (() => {
                       if (!stock) return 0;
                       const conversion = item.unitOfMeasure === stock.baseUnit ? 1 : Number(stock.stockUnits?.find((u: any) => u.unit === item.unitOfMeasure)?.unitsInBase || 0);
@@ -420,7 +431,7 @@ export default function RecipesPage() {
                             value={item.stockItemId}
                             onChange={(v) => {
                               updateIngredient(index, 'stockItemId', v);
-                              updateIngredient(index, 'unitOfMeasure', '');
+                              updateIngredient(index, 'unitOfMeasure', stockById[v]?.baseUnit || SYSTEM_BASE_UNIT);
                             }}
                             options={data.stockItems.map((si: StockItem) => ({ value: si.id, label: si.name, sub: `On Hand: ${si.quantityOnHand} ${si.baseUnit}` }))}
                           />
@@ -444,7 +455,7 @@ export default function RecipesPage() {
                             disabled={!stock}
                           >
                             <option value="">Unit</option>
-                            {units.map((unit) => <option key={unit} value={unit}>{unit}</option>)}
+                            {units.map((unit) => <option key={unit} value={unit}>{formatUnit(unit)}{unit === baseUnit ? ' (Base unit)' : ''}</option>)}
                           </select>
                           
                           <div className="w-24 text-right">

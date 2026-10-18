@@ -82,9 +82,11 @@ export function FolioSection({ reservation, readOnly = false, darkMode = false }
   // cloud responses also mirror them in items[]. Keep one visible row per
   // payment so offline and online reservation details agree.
   // Exclude PAYMENT-type items that duplicate a credit row (e.g. offline items
-  // written alongside the credit in TransactionsJson).
+  // written alongside the credit in TransactionsJson). Voided folio items are
+  // retained by the API for audit history but must not appear in the active
+  // guest ledger or contribute to the displayed transaction count.
   const ledgerItems = [
-    ...(folio.items || []).filter((item: any) => item.type !== 'PAYMENT' || item.source === 'CITY_LEDGER'),
+    ...(folio.items || []).filter((item: any) => !item.voidedAt && (item.type !== 'PAYMENT' || item.source === 'CITY_LEDGER')),
     ...(folio.payments || [])
       .filter((payment: any) => !advanceDepositPaymentIds.has(payment.id))
       .map((payment: any) => ({
