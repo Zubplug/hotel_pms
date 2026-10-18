@@ -208,6 +208,10 @@ export default function FnbReportsPage() {
           html, body { height: auto !important; min-height: 0 !important; overflow: visible !important; }
           body { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; background: white !important; font-family: 'Inter', system-ui, sans-serif !important; }
           body * { visibility: hidden !important; }
+          /* F&B navigation owns a viewport-height, overflow-hidden shell on screen.
+             Release those constraints for printing so Chrome paginates the full report. */
+          .fnb-shell, .fnb-shell > main, .fnb-shell > main > div, .fnb-shell > main > div > div { display: block !important; width: auto !important; height: auto !important; min-height: 0 !important; max-height: none !important; overflow: visible !important; padding: 0 !important; background: white !important; }
+          .fnb-shell > main > header { display: none !important; }
           .screen-only, .print-only { display: none !important; }
           .report-preview, .report-preview * { visibility: visible !important; }
           /* Keep the printed document visually identical to the reviewed preview.

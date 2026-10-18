@@ -234,7 +234,7 @@ export function FnbLayout({ children }: { children: React.ReactNode }) {
   );
 
   return (
-    <div className="flex h-screen bg-[#07111f] text-slate-100 font-sans overflow-hidden">
+    <div className="fnb-shell flex h-screen bg-[#07111f] text-slate-100 font-sans overflow-hidden">
       {/* Mobile overlay */}
       {sidebarOpen && (
         <div
