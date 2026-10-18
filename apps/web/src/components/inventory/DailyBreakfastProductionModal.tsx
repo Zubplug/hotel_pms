@@ -207,8 +207,8 @@ export function DailyBreakfastProductionModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[calc(100vw-1rem)] max-w-6xl overflow-hidden rounded-2xl border border-slate-200 bg-white p-0 shadow-2xl">
-        <DialogHeader className="border-b border-slate-100 bg-slate-50/50 p-5 sm:p-7">
+      <DialogContent className="grid h-[92vh] max-h-[92vh] w-[calc(100vw-1rem)] max-w-none grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-2xl border border-slate-200 bg-white p-0 shadow-2xl sm:w-[min(96vw,1400px)] sm:max-w-none">
+        <DialogHeader className="shrink-0 border-b border-slate-100 bg-slate-50/50 p-5 sm:p-7">
           <div className="flex items-start gap-4">
             <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-orange-100 text-orange-600">
               <ChefHat className="h-6 w-6" />
@@ -224,7 +224,7 @@ export function DailyBreakfastProductionModal({
           </div>
         </DialogHeader>
 
-        <div className="max-h-[72vh] space-y-5 overflow-y-auto p-5 sm:p-7">
+        <div className="min-h-0 space-y-5 overflow-y-auto overscroll-contain p-5 sm:p-7">
           <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
               <div>
@@ -444,7 +444,7 @@ export function DailyBreakfastProductionModal({
           </div>
         </div>
 
-        <DialogFooter className="flex items-center justify-between border-t border-slate-100 bg-slate-50 px-6 py-4">
+        <DialogFooter className="flex shrink-0 items-center justify-between border-t border-slate-100 bg-slate-50 px-6 py-4">
           <Button
             variant="outline"
             onClick={() => onOpenChange(false)}

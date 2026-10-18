@@ -497,8 +497,8 @@ export default function FnbReportsPage() {
 
       {showReportPreview && data && (
         <div className="screen-only fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm">
-          <div className="flex max-h-[94vh] w-full max-w-[230mm] flex-col overflow-hidden rounded-[10px] bg-slate-300 p-3 shadow-[0_24px_80px_rgba(15,23,42,0.35)] sm:p-5">
-            <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 bg-white px-6 py-5 sm:px-8">
+          <div className="flex h-[94vh] max-h-[94vh] w-full max-w-[230mm] flex-col overflow-hidden rounded-[10px] bg-slate-300 p-3 shadow-[0_24px_80px_rgba(15,23,42,0.35)] sm:p-5">
+            <div className="shrink-0 flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 bg-white px-6 py-5 sm:px-8">
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#b85f29]">Merged report pack preview</p>
                 <h2 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">F&B outlet control pack</h2>
@@ -509,7 +509,7 @@ export default function FnbReportsPage() {
                 <button type="button" onClick={handlePrint} className="inline-flex h-10 items-center gap-2 rounded-xl bg-[#c96f32] px-4 text-sm font-bold text-white shadow-sm hover:bg-[#b85f29]"><Printer className="h-4 w-4" /> Print pack</button>
               </div>
             </div>
-            <div className="min-h-[297mm] overflow-y-auto bg-white p-[10mm] sm:p-[12mm]">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-white p-[10mm] sm:p-[12mm]">
               <div className="grid gap-4 sm:grid-cols-4">
                 <div className="rounded-2xl border border-indigo-100 bg-indigo-50 p-4"><p className="text-[10px] font-bold uppercase tracking-wider text-indigo-600">Daily sales summary</p><p className="mt-2 text-2xl font-bold text-slate-900">{money(data.summary.netRevenue)}</p><p className="mt-1 text-xs text-slate-600">{data.statistics.totalChecks} checks · {data.statistics.totalCovers} covers</p></div>
                 <div className="rounded-2xl border border-violet-100 bg-violet-50 p-4"><p className="text-[10px] font-bold uppercase tracking-wider text-violet-600">Waiter shift summary</p><p className="mt-2 text-2xl font-bold text-slate-900">{money(waiterNetSales)}</p><p className="mt-1 text-xs text-slate-600">{waiterShiftSummary.length} waiters · {waiterOpenChecks} open checks</p></div>
