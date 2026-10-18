@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { CalendarCheck2, Home, LogOut, UserRound, X, ShieldCheck, WalletCards, MessageSquare, ReceiptText, ChevronRight } from 'lucide-react';
+import { CalendarCheck2, Home, LogOut, UserRound, X, ShieldCheck, WalletCards, MessageSquare, ReceiptText, ChevronRight, Share2 } from 'lucide-react';
 import { useLogout } from '@/hooks/useLogout';
 import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
 import { cn } from '@/lib/utils';
@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils';
 const NAV = [
   { href: '/hr/self-service', label: 'My dashboard', short: 'Home', icon: Home },
   { href: '/hr/self-service/pay', label: 'My pay', short: 'Pay', icon: WalletCards },
+  { href: '/hr/self-service/referrals', label: 'Staff referrals', short: 'Referrals', icon: Share2 },
   { href: '/hr/self-service/support', label: 'HR support', short: 'Support', icon: MessageSquare },
   { href: '/hr/self-service/expenses', label: 'My reimbursements', short: 'Claims', icon: ReceiptText },
   { href: '/hr/self-service/security', label: 'Account security', short: 'Account', icon: ShieldCheck },
@@ -62,7 +63,7 @@ export function EmployeeSelfServiceLayout({ children }: { children: React.ReactN
         <p className="px-3 pb-3 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">My workspace</p>
         <nav className="space-y-1">
           {NAV.map(({ href, label, icon: Icon }) => (
-            <Link key={href} href={href} className={cn('flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-colors', pathname === href ? 'bg-teal-500/15 text-teal-200 ring-1 ring-teal-400/20' : 'text-slate-400 hover:bg-white/5 hover:text-white')}>
+            <Link key={href} href={href} className={cn('flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-colors', isActive(href) ? 'bg-teal-500/15 text-teal-200 ring-1 ring-teal-400/20' : 'text-slate-400 hover:bg-white/5 hover:text-white')}>
               <Icon className="h-4 w-4" />
               {label}
             </Link>
@@ -121,7 +122,7 @@ export function EmployeeSelfServiceLayout({ children }: { children: React.ReactN
 
       {/* Mobile bottom tab bar */}
       <nav aria-label="Employee navigation" className="ess-tabbar fixed inset-x-0 bottom-0 z-40 border-t border-white/10 bg-[#091522]/95 backdrop-blur-xl lg:hidden" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
-        <div className="mx-auto grid max-w-lg grid-cols-5">
+        <div className="mx-auto grid max-w-lg grid-cols-6">
           {NAV.map(({ href, short, icon: Icon }) => {
             const active = isActive(href);
             return (
