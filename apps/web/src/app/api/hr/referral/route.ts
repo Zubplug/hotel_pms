@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
         const current = await tx.referralProgram.findFirst({ where: { organizationId: context.organizationId, propertyId: context.propertyId } });
         if (!current) throw new Error('Referral programme is not configured for this property');
         const updated = await tx.referralProgram.update({ where: { id: current.id }, data: { staffReferralEnabled: !current.staffReferralEnabled } });
-        await tx.auditLog.create({ data: { organizationId: context.organizationId, propertyId: context.propertyId, userId: context.userId, action: 'STAFF_REFERRAL_PROGRAM_TOGGLED', resource: 'ReferralProgram', resourceId: current.id, requestId: randomUUID(), oldValue: { staffReferralEnabled: current.staffReferralEnabled }, newValue: { staffReferralEnabled: updated.staffReferralEnabled } } });
+        await tx.auditLog.create({ data: { organizationId: context.organizationId, propertyId: context.propertyId, userId: context.userId, action: 'STAFF_REFERRAL_PROGRAM_TOGGLED', resource: 'ReferralProgram', resourceId: current.id, requestId: randomUUID(), previousValue: { staffReferralEnabled: current.staffReferralEnabled }, newValue: { staffReferralEnabled: updated.staffReferralEnabled } } });
         return { staffReferralEnabled: updated.staffReferralEnabled };
       }
       if (action === 'TOGGLE_STAFF_CAMPAIGN') {
@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
         if (reason.length < 3) throw new Error('A reason is required to void a commission');
         const updated = await tx.referralCommission.update({ where: { id: commission.id }, data: { status: 'REVERSED', updatedAt: new Date() } });
         await tx.referralLedgerEntry.create({ data: { organizationId: commission.organizationId, partnerId: commission.partnerId, commissionId: commission.id, entryType: 'ADJUSTMENT', amount: -commission.amount, currency: commission.currency, idempotencyKey: `STAFF_REFERRAL_VOID:${commission.id}`, metadata: { source: 'HR_VOID', reason } } });
-        await tx.auditLog.create({ data: { organizationId: context.organizationId, propertyId: context.propertyId, userId: context.userId, action: 'STAFF_REFERRAL_COMMISSION_VOIDED', resource: 'ReferralCommission', resourceId: commission.id, requestId: randomUUID(), oldValue: { status: commission.status, amount: commission.amount }, newValue: { status: updated.status, reason: String(body?.reason || '').trim() || 'HR voided commission' } } });
+        await tx.auditLog.create({ data: { organizationId: context.organizationId, propertyId: context.propertyId, userId: context.userId, action: 'STAFF_REFERRAL_COMMISSION_VOIDED', resource: 'ReferralCommission', resourceId: commission.id, requestId: randomUUID(), previousValue: { status: commission.status, amount: commission.amount }, newValue: { status: updated.status, reason: String(body?.reason || '').trim() || 'HR voided commission' } } });
         return { commissionId: updated.id, status: updated.status };
       }
       throw new Error('Unsupported HR referral action');

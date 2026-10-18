@@ -47,6 +47,7 @@ export async function GET(req: NextRequest) {
                 status: true,
                 commission: {
                   select: {
+                    id: true,
                     amount: true,
                     status: true,
                     earnedAt: true,
