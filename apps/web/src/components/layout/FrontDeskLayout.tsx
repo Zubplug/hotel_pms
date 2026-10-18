@@ -46,7 +46,7 @@ import { writeOfflineNavigationSnapshot } from '@/lib/auth/offline-navigation-sn
 import type { OfflineLicenseSnapshot } from '@/lib/auth/offline-navigation-snapshot';
 import { useOfflineLicenseGuard } from '@/lib/auth/useOfflineLicenseGuard';
 import { useNavigationModules } from '@/lib/auth/useNavigationModules';
-import { playRoomServiceChime, unlockAudio } from '@/lib/pos/soundEffects';
+import { playRoomServiceChime, stopAllChimes, unlockAudio } from '@/lib/pos/soundEffects';
 interface FrontDeskRoomChargeNotification {
   id: string;
   type: 'POS_ROOM_CHARGE';
@@ -134,6 +134,7 @@ export function FrontDeskLayout({ children, enabledModules = [], licenseSnapshot
       window.clearInterval(roomChargeChimeTimer.current);
       roomChargeChimeTimer.current = null;
     }
+    stopAllChimes();
   }, []);
 
   const startRoomChargeChime = React.useCallback(() => {

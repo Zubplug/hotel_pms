@@ -6,6 +6,7 @@
 
 let audioCtx: AudioContext | null = null;
 let isSoundMuted = false;
+const activeBellOscillators = new Set<OscillatorNode>();
 
 function getOrCreateAudioContext(): AudioContext | null {
   if (typeof window === 'undefined') return null;
@@ -50,9 +51,18 @@ export function isAudioMuted(): boolean {
 
 export function setAudioMuted(muted: boolean): void {
   isSoundMuted = muted;
+  if (muted) stopAllChimes();
   if (typeof window !== 'undefined') {
     localStorage.setItem('pos_sound_muted', muted ? 'true' : 'false');
   }
+}
+
+/** Immediately cancels any currently ringing bell tones. */
+export function stopAllChimes(): void {
+  for (const oscillator of activeBellOscillators) {
+    try { oscillator.stop(); } catch { /* already stopped */ }
+  }
+  activeBellOscillators.clear();
 }
 
 export function getAudioState(): 'running' | 'suspended' | 'muted' | 'unavailable' {
@@ -128,6 +138,8 @@ function createBellTone(
 
     osc.connect(gain);
     gain.connect(ctx.destination);
+    activeBellOscillators.add(osc);
+    osc.addEventListener('ended', () => activeBellOscillators.delete(osc), { once: true });
 
     osc.start(startTime);
     osc.stop(startTime + duration + 0.05);

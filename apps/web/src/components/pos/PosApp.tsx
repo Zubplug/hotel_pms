@@ -38,7 +38,7 @@ import { SyncCenterPanel } from '@/components/sync/SyncCenterPanel';
 import FiredItemActionsModal from '@/components/pos/FiredItemActionsModal';
 import { ManagerOverrideModal } from '@/components/pos/ManagerOverrideModal';
 import { RoomServiceAlertModal } from '@/components/pos/RoomServiceAlertModal';
-import { playRoomServiceChime, unlockAudio } from '@/lib/pos/soundEffects';
+import { playRoomServiceChime, stopAllChimes, unlockAudio } from '@/lib/pos/soundEffects';
 
 import { usePosOnlineStatus } from '@/lib/pos/usePosOnlineStatus';
 import { useLicenseGuard } from '@/lib/pos/useLicenseGuard';
@@ -147,6 +147,7 @@ export default function PosApp() {
       window.clearInterval(roomServiceChimeTimer.current);
       roomServiceChimeTimer.current = null;
     }
+    stopAllChimes();
   }, []);
 
   const startRoomServiceChime = useCallback(() => {
@@ -218,6 +219,7 @@ export default function PosApp() {
       window.clearInterval(offlineBookingChimeTimer.current);
       offlineBookingChimeTimer.current = null;
     }
+    stopAllChimes();
   }, []);
 
   const startOfflineBookingChime = useCallback(() => {
@@ -235,7 +237,8 @@ export default function PosApp() {
       const next = result?.data?.[0];
       if (!next || acknowledgedOfflineBookingNotificationIds.current.has(next.id)) return;
       if (offlineBookingNotification?.id !== next.id) {
-        void unlockAudio().then(() => startOfflineBookingChime()).catch(() => startOfflineBookingChime());
+        void unlockAudio();
+        startOfflineBookingChime();
       }
       setOfflineBookingNotification(next);
     } catch {
@@ -254,18 +257,19 @@ export default function PosApp() {
 
   const acknowledgeOfflineBookingNotification = useCallback(async () => {
     if (!offlineBookingNotification) return;
+    const notificationId = offlineBookingNotification.id;
+    acknowledgedOfflineBookingNotificationIds.current.add(notificationId);
+    stopOfflineBookingChime();
+    setOfflineBookingNotification(null);
     try {
       const result = await provider.system?.acknowledgeOfflineBookingNotification?.(
         propertyId,
-        offlineBookingNotification.id,
+        notificationId,
       );
       if (result?.error || result?.success === false) {
         toast.error(result.error || 'Could not acknowledge notification');
         return;
       }
-      acknowledgedOfflineBookingNotificationIds.current.add(offlineBookingNotification.id);
-      stopOfflineBookingChime();
-      setOfflineBookingNotification(null);
     } catch (error: any) {
       toast.error(error?.message || 'Could not acknowledge notification');
     }
