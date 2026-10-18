@@ -583,7 +583,7 @@ export default function EmployeeSelfServicePage() {
             { label: 'Profile', icon: User, tone: 'text-violet-300 bg-violet-400/10', onClick: () => setProfileModalOpen(true) },
             { label: 'Payslips', icon: Receipt, tone: 'text-sky-300 bg-sky-400/10', href: '/hr/self-service/pay' },
             { label: 'Security', icon: ShieldCheck, tone: 'text-slate-200 bg-white/10', href: '/hr/self-service/security' },
-            { label: 'Referrals', icon: Share2, tone: 'text-purple-300 bg-purple-400/10', onClick: () => document.getElementById('staff-referrals')?.scrollIntoView({ behavior: 'smooth' }) },
+            { label: 'Referrals', icon: Share2, tone: 'text-purple-300 bg-purple-400/10', href: '/hr/self-service/referrals' },
           ].map(({ label, icon: Icon, tone, onClick, href }) => {
             const inner = (<><span className={`flex h-12 w-12 items-center justify-center rounded-2xl ${tone}`}><Icon className="h-5 w-5" /></span><span className="text-[11px] font-semibold text-slate-300">{label}</span></>);
             const cls = 'flex flex-col items-center gap-1.5 rounded-2xl border border-white/5 bg-[#0b1624] py-3 transition active:scale-95 hover:border-white/15';

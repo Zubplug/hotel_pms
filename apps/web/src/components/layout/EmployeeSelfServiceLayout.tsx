@@ -16,6 +16,7 @@ const NAV = [
   { href: '/hr/self-service/expenses', label: 'My reimbursements', short: 'Claims', icon: ReceiptText },
   { href: '/hr/self-service/security', label: 'Account security', short: 'Account', icon: ShieldCheck },
 ];
+const MOBILE_NAV = NAV.filter(({ href }) => href !== '/hr/self-service/referrals');
 
 export function EmployeeSelfServiceLayout({ children }: { children: React.ReactNode }) {
   const [menuOpen, setMenuOpen] = React.useState(false);
@@ -122,8 +123,8 @@ export function EmployeeSelfServiceLayout({ children }: { children: React.ReactN
 
       {/* Mobile bottom tab bar */}
       <nav aria-label="Employee navigation" className="ess-tabbar fixed inset-x-0 bottom-0 z-40 border-t border-white/10 bg-[#091522]/95 backdrop-blur-xl lg:hidden" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
-        <div className="mx-auto grid max-w-lg grid-cols-6">
-          {NAV.map(({ href, short, icon: Icon }) => {
+        <div className="mx-auto grid max-w-lg grid-cols-5">
+          {MOBILE_NAV.map(({ href, short, icon: Icon }) => {
             const active = isActive(href);
             return (
               <Link key={href} href={href} aria-current={active ? 'page' : undefined} className={cn('relative flex h-16 flex-col items-center justify-center gap-1 text-[10px] font-semibold transition-colors active:scale-95', active ? 'text-teal-300' : 'text-slate-500')}>
