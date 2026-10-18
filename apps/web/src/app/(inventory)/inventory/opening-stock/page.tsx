@@ -15,6 +15,18 @@ type Item      = { id: string; name: string; sku?: string | null; baseUnit: stri
 type WarehouseT = { id: string; name: string; stockItems: Item[] };
 type Pending   = { id: string; warehouse: WarehouseT; item: Item; baseUnit: string; inputUnit: string; quantity: number; unitsInBase: number; unitCost: number; notes: string; baseQty: number; total: number };
 
+async function readJsonResponse(response: Response) {
+  const text = await response.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    if (response.redirected || text.trimStart().startsWith('<!DOCTYPE')) {
+      throw new Error('Your session has expired. Please sign in again and retry.');
+    }
+    throw new Error(`The server returned an invalid response (${response.status}).`);
+  }
+}
+
 const money = (v: number) =>
   new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', maximumFractionDigits: 0 }).format(v);
 
@@ -390,7 +402,7 @@ function EditSystemStockModal({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ quantityOnHand: requestQuantity, costPrice: requestCost, baseUnit, baseConversion, mainWarehouseOnly: true }),
       });
-      const result = await response.json();
+      const result = await readJsonResponse(response);
       if (!response.ok) throw new Error(result.error || 'Could not update stock balance');
 
       if (inputUnit !== baseUnit) {
@@ -399,7 +411,7 @@ function EditSystemStockModal({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ unit: inputUnit, unitsInBase: newBaseInputConversion, purchaseCost: Number(unitCost), isPurchaseUnit: true, propagate: true }),
         });
-        const unitResult = await unitResponse.json();
+        const unitResult = await readJsonResponse(unitResponse);
         if (!unitResponse.ok) throw new Error(unitResult.error || 'Could not update purchase unit');
       }
       onSaved();
@@ -495,7 +507,7 @@ export default function OpeningStockPage() {
     setLoading(true);
     try {
       const r    = await fetch('/api/v1/inventory/opening-stock', { cache: 'no-store' });
-      const body = await r.json();
+      const body = await readJsonResponse(r);
       if (!r.ok) throw new Error(body.error || 'Unable to load warehouses');
       const data: WarehouseT[] = body.data || [];
       setWarehouses(data);
@@ -604,7 +616,7 @@ export default function OpeningStockPage() {
           mainWarehouseOnly: true,
         }),
       });
-      const conversionBody = await conversionResponse.json();
+      const conversionBody = await readJsonResponse(conversionResponse);
       if (!conversionResponse.ok) return { ok: false, msg: conversionBody.error || 'Could not convert the item base unit' };
     }
     const r    = await fetch('/api/v1/inventory/opening-stock', {
@@ -622,7 +634,7 @@ export default function OpeningStockPage() {
         operationId: crypto.randomUUID(),
       }),
     });
-    const body = await r.json();
+    const body = await readJsonResponse(r);
     if (!r.ok || body.error) return { ok: false, msg: body.error || 'Post failed' };
     return { ok: true, msg: `${p.item.name}: ${p.baseQty.toFixed(2)} ${formatUnit(p.item.baseUnit)} → ${p.warehouse.name}` };
   }

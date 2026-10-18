@@ -237,6 +237,11 @@ export default auth((req) => {
 
   // Protected route — redirect to login if not authenticated
   if (!isLoggedIn) {
+    // API callers expect JSON. Redirecting them to the HTML login page makes
+    // clients fail with: Unexpected token '<' while parsing the response.
+    if (nextUrl.pathname.startsWith('/api/')) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
     // If we are on the desktop app, auth is handled by client-side guards (useLodgeCoreSession)
     // because NextAuth cookies do not exist in the WebView2 session.
     if (process.env.NEXT_PUBLIC_IS_DESKTOP === 'true') {
@@ -263,6 +268,9 @@ export default auth((req) => {
 
   const moduleAccess = hasModuleAccess(req, nextUrl.pathname);
   if (!moduleAccess.allowed) {
+    if (nextUrl.pathname.startsWith('/api/')) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
     return Response.redirect(new URL(moduleAccess.redirectTo || '/hub', nextUrl));
   }
 
