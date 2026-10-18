@@ -40,7 +40,7 @@ function StatCard({ label, value, detail, accent }: { label: string; value: stri
 }
 
 function VarianceBadge({ variance }: { variance: number | null }) {
-  if (variance === null) return <span className="text-slate-500">—</span>;
+  if (variance === null) return <span className="text-slate-500">0</span>;
   const ok = Math.abs(variance) < 0.01;
   return (
     <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold tabular-nums ${
@@ -130,14 +130,9 @@ export default function FnbReportsPage() {
   }, [propertyId, dateRange.start, dateRange.end, selectedOutlet]);
 
   const handlePrint = () => {
-    const finishPrint = () => {
-      window.removeEventListener('afterprint', finishPrint);
-      setPrintMode(null);
-    };
-    window.addEventListener('afterprint', finishPrint);
-    setPrintMode('pack');
-    // Give React and the browser print stylesheet time to lay out all report
-    // pages before Chrome snapshots the document for print preview.
+    setPrintMode(null);
+    // Print the mounted preview itself so the printed document is identical
+    // to the report the manager reviewed in the preview dialog.
     setTimeout(() => {
       window.print();
     }, 500);
@@ -157,7 +152,11 @@ export default function FnbReportsPage() {
 
   const selectedOutletName = selectedOutlet ? outlets.find(o => o.id === selectedOutlet)?.name : 'All Outlets';
   const displayDate = dateRange.start === dateRange.end ? dateRange.start : `${dateRange.start} to ${dateRange.end}`;
-  const propertyName = (session?.user as any)?.organizationName || 'Hotel Property';
+  const reportProperty = data?.property || {};
+  const propertyName = reportProperty.name || (session?.user as any)?.organizationName || 'Hotel Property';
+  const propertyAddress = reportProperty.address || '';
+  const propertyPhone = reportProperty.phone || '';
+  const propertyEmail = reportProperty.email || '';
   const paymentTotal = data?.tenderBreakdown?.reduce((acc: number, tender: any) => acc + Number(tender.amount || 0), 0) || 0;
   const leadingTender = [...(data?.tenderBreakdown || [])].sort((a: any, b: any) => Number(b.amount || 0) - Number(a.amount || 0))[0];
   const stockVarianceCount = data?.inventoryMovement?.filter((row: any) => Number(row.variance || 0) !== 0).length || 0;
@@ -205,9 +204,12 @@ export default function FnbReportsPage() {
           html, body { height: auto !important; min-height: 0 !important; overflow: visible !important; }
           body { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; background: white !important; font-family: 'Inter', system-ui, sans-serif !important; }
           body * { visibility: hidden !important; }
-          .screen-only { display: none !important; }
-          .print-only, .print-only * { visibility: visible !important; }
-          .print-only { display: block !important; position: relative !important; width: auto !important; min-height: 0 !important; padding: 0 !important; overflow: visible !important; background: white; color: black; }
+          .screen-only, .print-only { display: none !important; }
+          .report-preview, .report-preview * { visibility: visible !important; }
+          .report-preview { display: block !important; position: static !important; width: auto !important; min-height: 0 !important; padding: 0 !important; overflow: visible !important; background: white !important; color: black; }
+          .report-preview-card { display: block !important; position: static !important; width: auto !important; max-width: none !important; height: auto !important; max-height: none !important; padding: 0 !important; overflow: visible !important; border: 0 !important; border-radius: 0 !important; box-shadow: none !important; background: white !important; }
+          .report-preview-body { display: block !important; min-height: 0 !important; overflow: visible !important; padding: 0 !important; }
+          .report-preview-actions { display: none !important; }
           table { page-break-inside: auto !important; break-inside: auto !important; }
           thead { display: table-header-group; }
           tr { page-break-inside: avoid; break-inside: avoid; }
@@ -419,7 +421,7 @@ export default function FnbReportsPage() {
               {waiterShiftSummary.map((waiter: any) => (
                 <tr key={waiter.staffId || 'unassigned'}>
                   <td className="py-2 font-bold text-slate-900">{waiter.name}</td>
-                  <td className="py-2 text-slate-700">{waiter.outletNames?.join(', ') || '—'}</td>
+                  <td className="py-2 text-slate-700">{waiter.outletNames?.join(', ') || '0'}</td>
                   <td className="py-2 text-slate-700">{waiter.shiftCount || 0}</td>
                   <td className="py-2 text-slate-700">{waiter.totalChecks}</td>
                   <td className="py-2 text-slate-700">{waiter.closedChecks}</td>
@@ -433,7 +435,7 @@ export default function FnbReportsPage() {
                   {waiterPaymentMethods.map((method) => <td key={method} className="py-2 text-slate-700">{money(waiterTenderAmount(waiter, method))}</td>)}
                   <td className="py-2 text-slate-700">{money(waiter.tips)}</td>
                   <td className="py-2 text-slate-700">{waiter.voids}</td>
-                  <td className="py-2 text-slate-700">{waiter.shiftStatuses?.join(', ') || '—'}</td>
+                  <td className="py-2 text-slate-700">{waiter.shiftStatuses?.join(', ') || '0'}</td>
                 </tr>
               ))}
               {!waiterShiftSummary.length && <tr><td colSpan={15 + waiterPaymentMethods.length} className="py-8 text-center text-slate-500">No waiter-assigned POS activity in this scope.</td></tr>}
@@ -469,20 +471,39 @@ export default function FnbReportsPage() {
       )}
 
       {showReportPreview && data && (
-        <div className="screen-only fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm">
-          <div className="flex h-[94vh] max-h-[94vh] w-full max-w-[230mm] flex-col overflow-hidden rounded-[10px] bg-slate-300 p-3 shadow-[0_24px_80px_rgba(15,23,42,0.35)] sm:p-5">
-            <div className="shrink-0 flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 bg-white px-6 py-5 sm:px-8">
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#b85f29]">Merged report pack preview</p>
-                <h2 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">F&B outlet control pack</h2>
-                <p className="mt-1 text-sm text-slate-500">{selectedOutletName} · {displayDate} · DSS, waiter shifts, and stock reconciliation</p>
+        <div className="report-preview fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm">
+          <div className="report-preview-card flex h-[94vh] max-h-[94vh] w-full max-w-[230mm] flex-col overflow-hidden rounded-[10px] bg-slate-300 p-3 shadow-[0_24px_80px_rgba(15,23,42,0.35)] sm:p-5">
+            <div className="shrink-0 border-b border-slate-200 bg-white px-6 py-5 sm:px-8">
+              <div className="flex flex-wrap items-start justify-between gap-6">
+                <div className="flex min-w-0 items-start gap-4">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#2b1710] text-white shadow-sm">
+                    <Calculator className="h-5 w-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#b85f29]">Food & beverage operations</p>
+                    <h2 className="mt-1 truncate text-2xl font-bold tracking-tight text-slate-900">{propertyName}</h2>
+                    <p className="mt-1 text-sm font-semibold text-slate-700">Daily F&B outlet control report</p>
+                    <p className="mt-2 max-w-2xl text-xs leading-5 text-slate-500">
+                      {[propertyAddress, propertyPhone, propertyEmail].filter(Boolean).join('  ·  ') || 'Property contact details not configured'}
+                    </p>
+                  </div>
+                </div>
+                <div className="min-w-[180px] text-left text-xs sm:text-right">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">Management report</p>
+                  <p className="mt-2 font-semibold text-slate-900">{selectedOutletName}</p>
+                  <p className="mt-1 text-slate-500">Period: {displayDate}</p>
+                  <p className="mt-1 text-slate-500">Prepared: {new Date().toLocaleString('en-NG', { dateStyle: 'medium', timeStyle: 'short' })}</p>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <button type="button" onClick={() => setShowReportPreview(false)} className="inline-flex h-10 items-center rounded-xl border border-slate-200 px-4 text-sm font-semibold text-slate-600 hover:bg-slate-50">Close</button>
-                <button type="button" onClick={handlePrint} className="inline-flex h-10 items-center gap-2 rounded-xl bg-[#c96f32] px-4 text-sm font-bold text-white shadow-sm hover:bg-[#b85f29]"><Printer className="h-4 w-4" /> Print pack</button>
+              <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400">DSS · waiter shifts · outlet stock reconciliation · complimentary food</p>
+                <div className="report-preview-actions flex items-center gap-2">
+                  <button type="button" onClick={() => setShowReportPreview(false)} className="inline-flex h-10 items-center rounded-xl border border-slate-200 px-4 text-sm font-semibold text-slate-600 hover:bg-slate-50">Close</button>
+                  <button type="button" onClick={handlePrint} className="inline-flex h-10 items-center gap-2 rounded-xl bg-[#c96f32] px-4 text-sm font-bold text-white shadow-sm hover:bg-[#b85f29]"><Printer className="h-4 w-4" /> Print report</button>
+                </div>
               </div>
             </div>
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-white p-[10mm] sm:p-[12mm]">
+            <div className="report-preview-body min-h-0 flex-1 overflow-y-auto overscroll-contain bg-white p-[10mm] sm:p-[12mm]">
               <div className="grid gap-4 sm:grid-cols-4">
                 <div className="rounded-2xl border border-indigo-100 bg-indigo-50 p-4"><p className="text-[10px] font-bold uppercase tracking-wider text-indigo-600">Daily sales summary</p><p className="mt-2 text-2xl font-bold text-slate-900">{money(data.summary.netRevenue)}</p><p className="mt-1 text-xs text-slate-600">{data.statistics.totalChecks} checks · {data.statistics.totalCovers} covers</p></div>
                 <div className="rounded-2xl border border-violet-100 bg-violet-50 p-4"><p className="text-[10px] font-bold uppercase tracking-wider text-violet-600">Waiter shift summary</p><p className="mt-2 text-2xl font-bold text-slate-900">{money(waiterNetSales)}</p><p className="mt-1 text-xs text-slate-600">{waiterShiftSummary.length} waiters · {waiterOpenChecks} open checks</p></div>
@@ -508,7 +529,7 @@ export default function FnbReportsPage() {
                 <div className="flex items-center gap-2 border-b border-slate-100 px-5 py-4"><Scale className="h-4 w-4 text-emerald-600" /><div><h3 className="font-bold text-slate-900">Outlet stock reconciliation</h3><p className="mt-0.5 text-xs text-slate-500">The selected outlet automatically supplies the warehouse scope.</p></div></div>
                 {Object.keys(inventoryByOutlet).length ? Object.entries(inventoryByOutlet).map(([outletName, rows]) => <div key={outletName} className="border-b border-slate-200 last:border-b-0">
                   <div className="flex flex-wrap items-center justify-between gap-2 bg-slate-50 px-5 py-3"><div><p className="text-xs font-bold uppercase tracking-wider text-slate-800">{outletName}</p><p className="mt-0.5 text-[10px] text-slate-500">{Array.from(new Set(rows.map((row: any) => row.warehouseName))).join(' · ')}</p></div><span className="text-[10px] font-semibold text-slate-500">{rows.length} stock item{rows.length === 1 ? '' : 's'}</span></div>
-                  <div className="overflow-x-auto"><table className="min-w-[900px] w-full text-left text-sm"><thead className="bg-white"><tr>{['Stock item', 'Opening', 'In', 'Sold', 'Waste', 'Actual', 'Variance'].map((heading) => <th key={heading} className="px-5 py-3 text-[10px] font-bold uppercase tracking-wider text-slate-500">{heading}</th>)}</tr></thead><tbody className="divide-y divide-slate-100">{rows.map((row: any) => <tr key={row.stockItemId}><td className="px-5 py-3 font-semibold text-slate-800">{row.name}<span className="ml-1 text-[10px] font-normal text-slate-500">{row.unitOfMeasure}</span></td><td className="px-5 py-3 tabular-nums text-slate-600">{row.opening}</td><td className="px-5 py-3 tabular-nums text-emerald-600">{row.receipts + row.transferIn || '—'}</td><td className="px-5 py-3 tabular-nums text-amber-600">{row.sales || '—'}</td><td className="px-5 py-3 tabular-nums text-rose-600">{row.waste || '—'}</td><td className="px-5 py-3 tabular-nums font-bold text-slate-900">{row.actualClosing}</td><td className="px-5 py-3"><VarianceBadge variance={row.variance} /></td></tr>)}</tbody></table></div>
+                  <div className="overflow-x-auto"><table className="min-w-[900px] w-full text-left text-sm"><thead className="bg-white"><tr>{['Stock item', 'Opening', 'In', 'Sold', 'Waste', 'Actual', 'Variance'].map((heading) => <th key={heading} className="px-5 py-3 text-[10px] font-bold uppercase tracking-wider text-slate-500">{heading}</th>)}</tr></thead><tbody className="divide-y divide-slate-100">{rows.map((row: any) => <tr key={row.stockItemId}><td className="px-5 py-3 font-semibold text-slate-800">{row.name}<span className="ml-1 text-[10px] font-normal text-slate-500">{row.unitOfMeasure}</span></td><td className="px-5 py-3 tabular-nums text-slate-600">{row.opening ?? 0}</td><td className="px-5 py-3 tabular-nums text-emerald-600">{Number(row.receipts || 0) + Number(row.transferIn || 0)}</td><td className="px-5 py-3 tabular-nums text-amber-600">{row.sales ?? 0}</td><td className="px-5 py-3 tabular-nums text-rose-600">{row.waste ?? 0}</td><td className="px-5 py-3 tabular-nums font-bold text-slate-900">{row.actualClosing ?? 0}</td><td className="px-5 py-3"><VarianceBadge variance={row.variance} /></td></tr>)}</tbody></table></div>
                 </div>) : <div className="p-12 text-center text-sm text-slate-500">No stock items found for this outlet scope.</div>}
               </section>
               <section className="mt-5 rounded-2xl border border-orange-200 bg-orange-50 p-5">
@@ -687,7 +708,7 @@ export default function FnbReportsPage() {
                   </div>
                   <div className="mt-5 grid grid-cols-2 gap-3">
                     <div className="rounded-2xl border border-white/10 bg-white/10 p-3"><p className="text-2xl font-bold">{outlets.length}</p><p className="mt-1 text-[10px] uppercase tracking-wider text-[#e8cfc0]">Outlets available</p></div>
-                    <div className="rounded-2xl border border-white/10 bg-white/10 p-3"><p className="text-2xl font-bold">{selectedOutlet ? '1' : '—'}</p><p className="mt-1 text-[10px] uppercase tracking-wider text-[#e8cfc0]">Outlet stock ledger</p></div>
+                    <div className="rounded-2xl border border-white/10 bg-white/10 p-3"><p className="text-2xl font-bold">{selectedOutlet ? '1' : '0'}</p><p className="mt-1 text-[10px] uppercase tracking-wider text-[#e8cfc0]">Outlet stock ledger</p></div>
                   </div>
                   <p className="mt-4 text-[11px] leading-relaxed text-[#e8cfc0]">The selected outlet automatically determines its linked stock warehouse for the merged report pack.</p>
                 </div>
@@ -776,7 +797,7 @@ export default function FnbReportsPage() {
                               <td className="px-5 py-4"><p className="text-sm font-bold tabular-nums text-slate-900">{waiter.closedChecks} / {waiter.totalChecks}</p><p className="mt-0.5 text-[10px] text-slate-500">{waiter.covers} covers · {waiter.openChecks} open</p></td>
                               <td className="px-5 py-4"><p className="text-sm font-bold tabular-nums text-slate-900">{money(waiter.netSales)}</p><p className="mt-0.5 text-[10px] text-slate-500">{money(waiter.discounts)} allowances</p></td>
                               <td className="px-5 py-4 text-sm font-bold tabular-nums text-slate-900">{money(waiter.averageCheck)}</td>
-                              <td className="px-5 py-4"><p className="text-xs font-bold uppercase text-slate-700">{topTender ? topTender.method.replace(/_/g, ' ') : '—'}</p><p className="mt-0.5 text-[10px] text-slate-500">{topTender ? money(topTender.amount) : 'No captured tender'}</p></td>
+                              <td className="px-5 py-4"><p className="text-xs font-bold uppercase text-slate-700">{topTender ? topTender.method.replace(/_/g, ' ') : '0'}</p><p className="mt-0.5 text-[10px] text-slate-500">{topTender ? money(topTender.amount) : 'No captured tender'}</p></td>
                               <td className="px-5 py-4 text-sm font-bold tabular-nums text-emerald-600">{money(waiter.tips)}</td>
                               <td className="px-5 py-4"><span className={`inline-flex rounded-full border px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider ${waiter.voids > 0 ? 'border-rose-200 bg-rose-50 text-rose-700' : open ? 'border-amber-200 bg-amber-50 text-amber-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}>{waiter.voids > 0 ? `${waiter.voids} void${waiter.voids === 1 ? '' : 's'}` : open ? 'Open checks' : 'Clear'}</span></td>
                             </tr>

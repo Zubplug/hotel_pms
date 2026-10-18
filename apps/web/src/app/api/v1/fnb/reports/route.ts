@@ -468,6 +468,11 @@ export async function GET(req: NextRequest) {
     // totalValue is quantity * unitCost. Because quantity is negative for SALE, we use absolute.
     const actualCogs = Math.abs(Number(saleTransactions._sum?.totalValue || 0));
 
+    const reportProperty = await prisma.property.findUnique({
+      where: { id: propertyIdsToQuery[0] },
+      select: { name: true, address: true, city: true, state: true, phone: true, email: true, baseCurrency: true },
+    });
+
     const netRevenue = grossRevenue - totalDiscounts; // Tax is already excluded from subtotal in LodgeCore
     const totalGuestCharge = netRevenue + totalTax + totalServiceCharge;
 
@@ -476,6 +481,13 @@ export async function GET(req: NextRequest) {
 
     return successResponse({
       reports: {
+        property: reportProperty ? {
+          name: reportProperty.name,
+          address: [reportProperty.address, reportProperty.city, reportProperty.state].filter(Boolean).join(', '),
+          phone: reportProperty.phone || '',
+          email: reportProperty.email || '',
+          currency: reportProperty.baseCurrency || 'NGN',
+        } : null,
         dateRange: { start: startDate, end: endDate },
         summary: {
           foodGross,
