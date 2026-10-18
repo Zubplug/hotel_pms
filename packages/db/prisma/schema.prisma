@@ -285,6 +285,7 @@ model Property {
   employeeSeparationRequests EmployeeSeparationRequest[]
   workShifts            WorkShift[]
   shiftRosters          ShiftRoster[]
+  staffShiftPatterns    StaffShiftPattern[]
   attendanceRecords     AttendanceRecord[]
   leaveTypes            LeaveType[]
   leaveApplications     LeaveApplication[]
@@ -2131,6 +2132,7 @@ model Staff {
   leaveApplications      LeaveApplication[]
   attendanceRecords      AttendanceRecord[]
   shiftRosters           ShiftRoster[]
+  shiftPattern           StaffShiftPattern?
   shiftSwapsRequested    ShiftSwapRequest[]      @relation("ShiftSwapRequester")
   shiftSwapsReceived     ShiftSwapRequest[]      @relation("ShiftSwapTarget")
   missedPunchRequests    MissedPunchRequest[]
@@ -8206,12 +8208,32 @@ model WorkShift {
   isActive             Boolean @default(true)
 
   rosters ShiftRoster[]
+  staffShiftPatterns StaffShiftPattern[]
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
 
   @@unique([propertyId, code])
   @@index([propertyId])
+}
+
+model StaffShiftPattern {
+  id          String   @id @default(uuid()) @db.Uuid
+  propertyId  String   @db.Uuid
+  property    Property @relation(fields: [propertyId], references: [id])
+  staffId     String   @unique @db.Uuid
+  staff       Staff    @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  shiftId     String   @db.Uuid
+  shift       WorkShift @relation(fields: [shiftId], references: [id])
+  onDays      Int
+  offDays     Int
+  anchorDate  DateTime @db.Date
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now()) @db.Timestamptz
+  updatedAt   DateTime @updatedAt @db.Timestamptz
+
+  @@index([propertyId])
+  @@index([propertyId, anchorDate])
 }
 
 model ShiftRoster {

@@ -69,6 +69,10 @@ export default function EmployeeSelfServicePage() {
   const [feedback, setFeedback] = useState<EmployeePortalFeedback | null>(null);
   const [punching, setPunching] = useState(false);
   const [referralBusy, setReferralBusy] = useState(false);
+  const [swapRows, setSwapRows] = useState<any[]>([]);
+  const [swapStaff, setSwapStaff] = useState<any[]>([]);
+  const [swapModalOpen, setSwapModalOpen] = useState(false);
+  const [swapForm, setSwapForm] = useState({ targetStaffId: '', requesterDate: '', targetDate: '', reason: '' });
 
   const showFeedback = (type: EmployeePortalFeedback['type'], title: string, message: string) => setFeedback({ type, title, message });
 
@@ -94,6 +98,7 @@ export default function EmployeeSelfServicePage() {
       if (res.ok) {
         const json = await res.json();
         setData(json.staff);
+        await fetchSwapData();
       } else {
         setLoadError('We could not load your employee records. Please try again.');
       }
@@ -105,9 +110,50 @@ export default function EmployeeSelfServicePage() {
     }
   };
 
+  const fetchSwapData = async () => {
+    try {
+      const response = await fetch('/api/hr/shifts/swaps');
+      const json = await response.json();
+      if (response.ok) {
+        setSwapRows(json.swaps || []);
+        setSwapStaff(json.availableStaff || []);
+      }
+    } catch (error) {
+      console.error('Failed to load shift swaps', error);
+    }
+  };
+
   useEffect(() => {
     fetchSelfServiceData();
   }, []);
+
+  const handleRequestSwap = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setSubmitting(true);
+    try {
+      const response = await fetch('/api/hr/shifts/swaps', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(swapForm),
+      });
+      const json = await response.json();
+      if (!response.ok) return showFeedback('error', 'Swap request was not submitted', json.error || 'Please review the selected shifts.');
+      setSwapModalOpen(false);
+      setSwapForm({ targetStaffId: '', requesterDate: '', targetDate: '', reason: '' });
+      await fetchSwapData();
+      showFeedback('success', 'Swap request sent', 'The other employee must accept it before HR can acknowledge the change.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleSwapAction = async (id: string, action: string) => {
+    const response = await fetch('/api/hr/shifts/swaps', { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id, action, ...(action === 'PEER_REJECT' ? { reason: 'Target employee declined the request' } : {}) }) });
+    const json = await response.json();
+    if (!response.ok) return showFeedback('error', 'Unable to update swap', json.error || 'Please try again.');
+    await fetchSwapData();
+    showFeedback('success', action === 'PEER_APPROVE' ? 'Swap accepted' : action === 'PEER_REJECT' ? 'Swap declined' : 'Swap cancelled', 'The swap status has been updated.');
+  };
 
   const handleApplyLeave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -393,6 +439,20 @@ export default function EmployeeSelfServicePage() {
           {!data.referral?.programmeEnabled ? <span className="rounded-lg border border-white/10 bg-slate-950/60 px-3 py-2 text-xs text-slate-400">Not active for this property</span> : !data.referral?.isEnrolled ? <Button type="button" disabled={referralBusy} onClick={() => void activateReferral()} className="bg-purple-500 text-xs font-bold text-white hover:bg-purple-400">{referralBusy ? 'Activating…' : 'Activate referral account'}</Button> : <div className="flex flex-wrap items-center gap-2"><span className="rounded-lg border border-purple-300/20 bg-slate-950/60 px-3 py-2 font-mono text-xs text-purple-200">{data.referral.shareLink || 'Link ready'}</span><Button type="button" onClick={() => { void navigator.clipboard?.writeText(data.referral.shareLink || ''); showFeedback('success', 'Link copied', 'Your referral link is ready to share.'); }} className="bg-purple-500 text-xs font-bold text-white hover:bg-purple-400">Copy link</Button><Button type="button" onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent(`Book through my LodgeCore referral link: ${data.referral.shareLink || ''}`)}`, '_blank', 'noopener,noreferrer')} className="border border-purple-300/30 bg-transparent text-xs font-bold text-purple-200 hover:bg-purple-400/10">WhatsApp</Button></div>}
         </div>
         {data.referral?.isEnrolled && <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4"><div className="rounded-lg border border-white/10 bg-slate-950/50 p-3"><p className="text-[10px] text-slate-500">Clicks</p><p className="mt-1 text-lg font-bold text-white">{data.referral.totalClicks || 0}</p></div><div className="rounded-lg border border-white/10 bg-slate-950/50 p-3"><p className="text-[10px] text-slate-500">Confirmed stays</p><p className="mt-1 text-lg font-bold text-white">{data.referral.confirmedBookings || 0}</p></div><div className="rounded-lg border border-white/10 bg-slate-950/50 p-3"><p className="text-[10px] text-slate-500">Next payslip</p><p className="mt-1 text-lg font-bold text-amber-300">{naira(data.referral.pendingOnNextPayslip || 0)}</p></div><div className="rounded-lg border border-white/10 bg-slate-950/50 p-3"><p className="text-[10px] text-slate-500">Total earned</p><p className="mt-1 text-lg font-bold text-emerald-300">{naira(data.referral.totalEarned || 0)}</p></div></div>}
+      </section>
+
+      <section className="rounded-xl border border-slate-800 bg-[#090e17] p-5">
+        <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+          <div>
+            <h3 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-cyan-300"><CalendarRange className="h-4 w-4" /> Shift swaps</h3>
+            <p className="mt-1 text-[11px] text-slate-500">Request a swap with a colleague. They must accept before HR acknowledges it.</p>
+          </div>
+          <Button type="button" onClick={() => setSwapModalOpen(true)} className="h-8 bg-cyan-700 text-xs text-white hover:bg-cyan-600">Request a shift swap</Button>
+        </div>
+        <div className="mt-4 grid gap-2 md:grid-cols-2">
+          {swapRows.map((swap) => <div key={swap.id} className="rounded-lg border border-slate-800 bg-slate-950 p-3 text-xs"><div className="flex items-start justify-between gap-3"><div><p className="font-semibold text-white">{swap.requesterStaff?.firstName} {swap.requesterStaff?.lastName} ↔ {swap.targetStaff?.firstName} {swap.targetStaff?.lastName}</p><p className="mt-1 text-[10px] text-slate-500">{new Date(swap.requesterDate).toLocaleDateString()} ↔ {new Date(swap.targetDate).toLocaleDateString()}</p></div><span className="text-[10px] text-amber-300">{swap.status}</span></div><p className="mt-2 text-slate-400">{swap.reason}</p><div className="mt-3 flex gap-3">{swap.status === 'PENDING_PEER' && swap.targetStaffId === data?.id && <><button type="button" className="text-emerald-300" onClick={() => void handleSwapAction(swap.id, 'PEER_APPROVE')}>Accept</button><button type="button" className="text-rose-300" onClick={() => void handleSwapAction(swap.id, 'PEER_REJECT')}>Decline</button></>}{swap.requesterStaffId === data?.id && ['PENDING_PEER', 'PENDING_SUPERVISOR'].includes(swap.status) && <button type="button" className="text-slate-400" onClick={() => void handleSwapAction(swap.id, 'CANCEL_REQUEST')}>Cancel</button>}</div></div>)}
+          {!swapRows.length && <p className="py-5 text-center text-xs text-slate-500 md:col-span-2">No shift swap requests.</p>}
+        </div>
       </section>
 
       {/* Grid: Shifts, Leave Balances, Statutory Profile */}
@@ -889,6 +949,18 @@ export default function EmployeeSelfServicePage() {
 
       <Dialog open={loanModalOpen} onOpenChange={setLoanModalOpen}>
         <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto rounded-2xl border-slate-800 bg-[#0b1624] text-slate-100 shadow-2xl shadow-black/40"><DialogHeader><div className="mb-2 flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-400/10 text-emerald-300"><WalletCards className="h-5 w-5" /></div><DialogTitle className="text-lg font-bold text-white">Employee loan application</DialogTitle><p className="text-xs leading-5 text-slate-400">Submit a structured request for HR review. Approval is subject to your organization’s eligibility and affordability policy.</p></DialogHeader><form onSubmit={handleLoanRequest} className="space-y-5 text-xs"><div className="grid gap-4 sm:grid-cols-2"><label className="block font-medium text-slate-300">Requested amount<div className="relative mt-2"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">₦</span><Input required type="number" min="1" placeholder="e.g. 250,000" value={loanForm.principalAmount} onChange={(e) => setLoanForm({ ...loanForm, principalAmount: e.target.value })} className="h-10 border-slate-700 bg-slate-950 pl-7 text-sm text-slate-100" /></div></label><label className="block font-medium text-slate-300">Repayment term<Select value={loanForm.tenorMonths} onValueChange={(value) => value && setLoanForm({ ...loanForm, tenorMonths: value })}><SelectTrigger className="mt-2 h-10 w-full !border-slate-700 !bg-slate-950 text-sm !text-slate-100"><SelectValue /></SelectTrigger><SelectContent className="border-slate-700 bg-slate-900 text-slate-100"><SelectItem value="3">3 months</SelectItem><SelectItem value="6">6 months</SelectItem><SelectItem value="9">9 months</SelectItem><SelectItem value="12">12 months</SelectItem><SelectItem value="18">18 months</SelectItem><SelectItem value="24">24 months</SelectItem></SelectContent></Select></label></div><div className="rounded-xl border border-emerald-400/15 bg-emerald-400/[0.06] p-4"><div className="flex items-center justify-between"><span className="text-slate-400">Estimated monthly deduction</span><strong className="text-base text-emerald-300">₦{((Number(loanForm.principalAmount) || 0) / Number(loanForm.tenorMonths || 1)).toLocaleString(undefined, { maximumFractionDigits: 2 })}</strong></div><p className="mt-1 text-[10px] text-slate-500">Final deductions may change after HR review and applicable policy calculations.</p></div><label className="block font-medium text-slate-300">Request purpose<Select value={loanForm.purpose} onValueChange={(value) => value && setLoanForm({ ...loanForm, purpose: value })}><SelectTrigger className="mt-2 h-10 w-full !border-slate-700 !bg-slate-950 text-sm !text-slate-100"><SelectValue /></SelectTrigger><SelectContent className="border-slate-700 bg-slate-900 text-slate-100"><SelectItem value="PERSONAL_SUPPORT">Personal support</SelectItem><SelectItem value="MEDICAL">Medical expenses</SelectItem><SelectItem value="EDUCATION">Education or training</SelectItem><SelectItem value="EMERGENCY">Emergency assistance</SelectItem><SelectItem value="HOUSING">Housing or relocation</SelectItem><SelectItem value="OTHER">Other approved purpose</SelectItem></SelectContent></Select></label><label className="block font-medium text-slate-300">Supporting details<textarea required minLength={10} placeholder="Explain what the funds will support and any relevant context" value={loanForm.additionalDetails} onChange={(e) => setLoanForm({ ...loanForm, additionalDetails: e.target.value })} className="mt-2 min-h-28 w-full rounded-xl border border-slate-700 bg-slate-950 p-3 text-sm text-slate-100 outline-none placeholder:text-slate-600 focus:border-emerald-400" /></label><label className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-800 bg-slate-950/60 p-3 text-[11px] leading-5 text-slate-400"><input required type="checkbox" checked={loanForm.consent} onChange={(e) => setLoanForm({ ...loanForm, consent: e.target.checked })} className="mt-1 accent-emerald-500" /><span>I confirm that the information provided is accurate and authorize LodgeCore HR to assess this request under the applicable employee loan policy.</span></label>{actionError && <p className="rounded-lg border border-rose-400/20 bg-rose-400/10 p-3 text-xs text-rose-300">{actionError}</p>}<DialogFooter className="border-slate-800 bg-slate-950/30"><Button type="submit" disabled={submitting} className="h-10 bg-emerald-700 text-xs text-white hover:bg-emerald-600">{submitting ? 'Submitting application…' : 'Submit for HR review'}</Button></DialogFooter></form></DialogContent>
+      </Dialog>
+
+      <Dialog open={swapModalOpen} onOpenChange={setSwapModalOpen}>
+        <DialogContent className="max-w-lg rounded-2xl border-slate-800 bg-[#0b1624] text-slate-100 shadow-2xl shadow-black/40">
+          <DialogHeader><div className="mb-2 flex h-11 w-11 items-center justify-center rounded-xl bg-cyan-400/10 text-cyan-300"><CalendarRange className="h-5 w-5" /></div><DialogTitle className="text-lg font-bold text-white">Request a shift swap</DialogTitle><p className="text-xs leading-5 text-slate-400">Choose the colleague and both roster dates. The colleague must accept before HR can acknowledge and apply the swap.</p></DialogHeader>
+          <form onSubmit={handleRequestSwap} className="space-y-5 text-xs">
+            <label className="block font-medium text-slate-300">Swap with colleague<select required value={swapForm.targetStaffId} onChange={(e) => setSwapForm({ ...swapForm, targetStaffId: e.target.value })} className="mt-2 h-10 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 text-sm text-slate-100"><option value="">Select colleague</option>{swapStaff.filter((staff) => staff.id !== data?.id).map((staff) => <option key={staff.id} value={staff.id}>{staff.firstName} {staff.lastName} · {staff.department}</option>)}</select></label>
+            <div className="grid gap-4 sm:grid-cols-2"><label className="block font-medium text-slate-300">Your roster date<Input required type="date" value={swapForm.requesterDate} onChange={(e) => setSwapForm({ ...swapForm, requesterDate: e.target.value })} className="mt-2 h-10 border-slate-700 bg-slate-950 text-sm text-slate-100" /></label><label className="block font-medium text-slate-300">Their roster date<Input required type="date" value={swapForm.targetDate} onChange={(e) => setSwapForm({ ...swapForm, targetDate: e.target.value })} className="mt-2 h-10 border-slate-700 bg-slate-950 text-sm text-slate-100" /></label></div>
+            <label className="block font-medium text-slate-300">Reason<textarea required minLength={5} placeholder="Explain why you need the swap" value={swapForm.reason} onChange={(e) => setSwapForm({ ...swapForm, reason: e.target.value })} className="mt-2 min-h-24 w-full rounded-xl border border-slate-700 bg-slate-950 p-3 text-sm text-slate-100 outline-none placeholder:text-slate-600 focus:border-cyan-400" /></label>
+            <DialogFooter className="border-slate-800 bg-slate-950/30"><Button type="button" variant="outline" onClick={() => setSwapModalOpen(false)} className="h-10 !border-slate-700 !bg-slate-900 text-xs !text-slate-100">Cancel</Button><Button type="submit" disabled={submitting} className="h-10 bg-cyan-600 text-xs text-white hover:bg-cyan-500">{submitting ? 'Sending…' : 'Send swap request'}</Button></DialogFooter>
+          </form>
+        </DialogContent>
       </Dialog>
       <EmployeePortalFeedbackDialog feedback={feedback} onClose={() => setFeedback(null)} />
     </div>

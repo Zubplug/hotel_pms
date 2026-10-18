@@ -19,10 +19,11 @@ export async function POST(req: NextRequest) {
   try {
     const context = await HrAuthorizationService.resolveAuthContext(req);
     const body = await req.json();
-    const requester = await prisma.staff.findFirst({ where: { ...HrAuthorizationService.staffScope(context, { id: body.requesterStaffId }), isActive: true }, select: { id: true, userId: true, department: true } });
+    const currentStaff = await prisma.staff.findFirst({ where: { userId: context.userId, organizationId: context.organizationId, isActive: true, deletedAt: null }, select: { id: true, userId: true, department: true } });
+    const requester = await prisma.staff.findFirst({ where: { ...HrAuthorizationService.staffScope(context, { id: body.requesterStaffId || currentStaff?.id }), isActive: true }, select: { id: true, userId: true, department: true } });
     const target = await prisma.staff.findFirst({ where: { id: body.targetStaffId, organizationId: context.organizationId, ...(context.propertyId ? { propertyAccess: { has: context.propertyId } } : {}), isActive: true, deletedAt: null }, select: { id: true } });
     if (!requester || !target || requester.id === target.id || !body.requesterDate || !body.targetDate || !body.reason?.trim()) return NextResponse.json({ error: 'Valid distinct requester, target, dates, and reason are required' }, { status: 400 });
-    if (requester.userId !== context.userId && !HrAuthorizationService.can(context, 'hr.attendance.manage')) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    if (!currentStaff || requester.userId !== context.userId) return NextResponse.json({ error: 'Shift swap requests must be submitted by the employee requesting the swap' }, { status: 403 });
     const requesterRoster = await prisma.shiftRoster.findUnique({ where: { staffId_date: { staffId: requester.id, date: new Date(body.requesterDate) } } });
     const targetRoster = await prisma.shiftRoster.findUnique({ where: { staffId_date: { staffId: target.id, date: new Date(body.targetDate) } } });
     if (!requesterRoster || !targetRoster || requesterRoster.publicationStatus === 'CANCELLED' || targetRoster.publicationStatus === 'CANCELLED') return NextResponse.json({ error: 'Both employees must have active roster assignments before requesting a swap' }, { status: 400 });

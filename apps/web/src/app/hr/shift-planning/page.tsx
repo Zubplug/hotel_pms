@@ -30,6 +30,7 @@ const DAYS_OF_WEEK = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 export default function ShiftPlanningPage() {
   const [shiftTemplates, setShiftTemplates] = useState<any[]>([]);
+  const [workPatterns, setWorkPatterns] = useState<any[]>([]);
   const [rosters, setRosters] = useState<any[]>([]);
   const [employees, setEmployees] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -40,6 +41,7 @@ export default function ShiftPlanningPage() {
   // Modals
   const [assignModalOpen, setAssignModalOpen] = useState(false);
   const [templateModalOpen, setTemplateModalOpen] = useState(false);
+  const [patternModalOpen, setPatternModalOpen] = useState(false);
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -57,6 +59,13 @@ export default function ShiftPlanningPage() {
     endTime: '15:30',
     crossesMidnight: false,
     unpaidBreakMins: '30',
+  });
+  const [patternForm, setPatternForm] = useState({
+    staffId: '',
+    shiftId: '',
+    onDays: '5',
+    offDays: '1',
+    anchorDate: new Date().toISOString().split('T')[0],
   });
 
   // Calculate current week dates
@@ -89,6 +98,7 @@ export default function ShiftPlanningPage() {
       if (shiftsRes.ok) {
         const shiftsData = await shiftsRes.json();
         setShiftTemplates(shiftsData.shiftTemplates || []);
+        setWorkPatterns(shiftsData.workPatterns || []);
         setRosters(shiftsData.rosters || []);
       }
       if (empRes.ok) {
@@ -162,6 +172,37 @@ export default function ShiftPlanningPage() {
     }
   };
 
+  const openPatternEditor = (staffId: string) => {
+    const existing = workPatterns.find((pattern) => pattern.staffId === staffId);
+    setPatternForm({
+      staffId,
+      shiftId: existing?.shiftId || shiftTemplates[0]?.id || '',
+      onDays: String(existing?.onDays || 5),
+      offDays: String(existing?.offDays || 1),
+      anchorDate: existing?.anchorDate ? new Date(existing.anchorDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+    });
+    setPatternModalOpen(true);
+  };
+
+  const handleSavePattern = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitting(true);
+    try {
+      const res = await fetch('/api/hr/shifts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'SAVE_PATTERN', ...patternForm, startDate: startDateStr, endDate: endDateStr }),
+      });
+      const data = await res.json();
+      if (!res.ok) return alert(data.error || 'Unable to save work pattern');
+      alert(`Work pattern saved. ${data.generated || 0} roster day(s) generated for this week.`);
+      setPatternModalOpen(false);
+      await fetchData();
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const handlePublishRoster = async () => {
     setSubmitting(true);
     try {
@@ -225,6 +266,16 @@ export default function ShiftPlanningPage() {
           <Button
             size="sm"
             variant="outline"
+            onClick={() => openPatternEditor(employees[0]?.id || '')}
+            disabled={employees.length === 0 || shiftTemplates.length === 0}
+            className="border-slate-800 bg-slate-900/60 text-slate-300 text-xs h-9 gap-1.5"
+          >
+            <Calendar className="w-3.5 h-3.5" />
+            Work Patterns
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
             onClick={() => setTemplateModalOpen(true)}
             className="border-slate-800 bg-slate-900/60 text-slate-300 text-xs h-9 gap-1.5"
           >
@@ -239,6 +290,30 @@ export default function ShiftPlanningPage() {
             <Plus className="w-3.5 h-3.5" />
             Assign Shift Roster
           </Button>
+        </div>
+      </div>
+
+      {/* Work Patterns */}
+      <div className="bg-slate-900/60 border border-slate-800/80 p-3 rounded-xl">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h2 className="text-xs font-bold text-white">Staff Work Patterns</h2>
+            <p className="text-[11px] text-slate-500 mt-0.5">Generate working days for rotating on/off schedules.</p>
+          </div>
+          <Button size="sm" variant="outline" onClick={() => openPatternEditor(employees[0]?.id || '')} disabled={employees.length === 0 || shiftTemplates.length === 0} className="h-7 border-slate-700 text-[10px] text-slate-300">
+            <Plus className="mr-1 h-3 w-3" /> Set Pattern
+          </Button>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {employees.map((employee) => {
+            const pattern = workPatterns.find((item) => item.staffId === employee.id);
+            return (
+              <button key={employee.id} type="button" onClick={() => openPatternEditor(employee.id)} className="rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2 text-left hover:border-teal-700">
+                <p className="text-xs font-semibold text-slate-200">{employee.name}</p>
+                <p className="text-[10px] text-slate-500">{pattern ? `${pattern.onDays} on / ${pattern.offDays} off` : 'No pattern set'}</p>
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -540,6 +615,48 @@ export default function ShiftPlanningPage() {
               <Button type="submit" disabled={submitting} className="bg-teal-600 hover:bg-teal-500 text-white text-xs h-8">
                 {submitting ? 'Saving…' : editingTemplateId ? 'Save Changes' : 'Create Template'}
               </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Work Pattern Modal */}
+      <Dialog open={patternModalOpen} onOpenChange={setPatternModalOpen}>
+        <DialogContent className="max-w-md bg-slate-900 border-slate-800 text-slate-100">
+          <DialogHeader>
+            <DialogTitle className="text-sm font-bold text-white flex items-center gap-2">
+              <Calendar className="w-4 h-4 text-teal-400" />
+              Staff Work Pattern
+            </DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleSavePattern} className="space-y-4 text-xs">
+            <div>
+              <label className="text-slate-400 block mb-1">Employee *</label>
+              <select required value={patternForm.staffId} onChange={(e) => setPatternForm({ ...patternForm, staffId: e.target.value })} className="w-full bg-slate-950 border border-slate-800 text-slate-300 rounded-lg text-xs px-2.5 h-8 outline-none">
+                <option value="">Select Employee</option>
+                {employees.map((employee) => <option key={employee.id} value={employee.id}>{employee.name} ({employee.department})</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-slate-400 block mb-1">Shift *</label>
+              <select required value={patternForm.shiftId} onChange={(e) => setPatternForm({ ...patternForm, shiftId: e.target.value })} className="w-full bg-slate-950 border border-slate-800 text-slate-300 rounded-lg text-xs px-2.5 h-8 outline-none">
+                <option value="">Select Shift</option>
+                {shiftTemplates.map((shift) => <option key={shift.id} value={shift.id}>{shift.name} ({shift.startTime} - {shift.endTime})</option>)}
+              </select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="text-slate-400">Days on<input required min="1" type="number" value={patternForm.onDays} onChange={(e) => setPatternForm({ ...patternForm, onDays: e.target.value })} className="mt-1 w-full bg-slate-950 border border-slate-800 text-slate-100 rounded-lg px-2.5 h-8" /></label>
+              <label className="text-slate-400">Days off<input required min="1" type="number" value={patternForm.offDays} onChange={(e) => setPatternForm({ ...patternForm, offDays: e.target.value })} className="mt-1 w-full bg-slate-950 border border-slate-800 text-slate-100 rounded-lg px-2.5 h-8" /></label>
+            </div>
+            <div>
+              <label className="text-slate-400 block mb-1">Pattern anchor date *</label>
+              <Input type="date" required value={patternForm.anchorDate} onChange={(e) => setPatternForm({ ...patternForm, anchorDate: e.target.value })} className="bg-slate-950 border-slate-800 text-slate-100 text-xs h-8" />
+              <p className="mt-1 text-[10px] text-slate-500">The anchor date is the first working day of the cycle.</p>
+            </div>
+            <p className="rounded-lg border border-teal-800/50 bg-teal-950/20 p-2 text-[10px] text-teal-200">Saving generates this pattern for the displayed week: {weekDates[0].toLocaleDateString()} – {weekDates[6].toLocaleDateString()}.</p>
+            <DialogFooter className="pt-2">
+              <Button type="button" variant="outline" onClick={() => setPatternModalOpen(false)} className="border-slate-800 text-xs h-8">Cancel</Button>
+              <Button type="submit" disabled={submitting} className="bg-teal-600 hover:bg-teal-500 text-white text-xs h-8">{submitting ? 'Generating…' : 'Save & Generate Week'}</Button>
             </DialogFooter>
           </form>
         </DialogContent>

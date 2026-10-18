@@ -65,6 +65,14 @@ export async function GET(req: NextRequest) {
       orderBy: { date: 'asc' },
     });
 
+    const workPatterns = await prisma.staffShiftPattern.findMany({
+      where: {
+        propertyId: propertyId || undefined,
+        staff: HrAuthorizationService.staffScope(authContext),
+      },
+      orderBy: { updatedAt: 'desc' },
+    });
+
     return NextResponse.json({
       shiftTemplates: shiftTemplates.map((s) => ({
         id: s.id,
@@ -93,6 +101,15 @@ export async function GET(req: NextRequest) {
         publicationStatus: r.publicationStatus,
         publishedAt: r.publishedAt,
       })),
+      workPatterns: workPatterns.map((pattern) => ({
+        id: pattern.id,
+        staffId: pattern.staffId,
+        shiftId: pattern.shiftId,
+        onDays: pattern.onDays,
+        offDays: pattern.offDays,
+        anchorDate: pattern.anchorDate,
+        isActive: pattern.isActive,
+      })),
     });
   } catch (error: any) {
     if (error.message?.includes('Forbidden') || error.message?.includes('Unauthorized')) {
@@ -112,6 +129,59 @@ export async function POST(req: NextRequest) {
     const propertyId = authContext.propertyId;
     const body = await req.json();
     const { action } = body;
+
+    if (action === 'SAVE_PATTERN') {
+      const { staffId, shiftId, onDays, offDays, anchorDate, startDate, endDate } = body;
+      const on = Number.parseInt(String(onDays), 10);
+      const off = Number.parseInt(String(offDays), 10);
+      const anchor = new Date(`${anchorDate}T00:00:00.000Z`);
+      if (!staffId || !shiftId || !anchorDate || !Number.isInteger(on) || !Number.isInteger(off) || on < 1 || off < 1 || Number.isNaN(anchor.getTime())) {
+        return NextResponse.json({ error: 'Staff, shift, valid on/off days, and anchor date are required' }, { status: 400 });
+      }
+
+      const staff = await prisma.staff.findFirst({ where: HrAuthorizationService.staffScope(authContext, { id: staffId, isActive: true, deletedAt: null }) });
+      if (!staff) return NextResponse.json({ error: 'Staff member not found or inaccessible' }, { status: 404 });
+      const shift = await prisma.workShift.findFirst({ where: { id: shiftId, propertyId, isActive: true } });
+      if (!shift) return NextResponse.json({ error: 'Shift template not found for this property' }, { status: 404 });
+
+      const saved = await prisma.$transaction(async (tx) => {
+        const pattern = await tx.staffShiftPattern.upsert({
+          where: { staffId },
+          update: { propertyId, shiftId, onDays: on, offDays: off, anchorDate: anchor, isActive: true },
+          create: { propertyId, staffId, shiftId, onDays: on, offDays: off, anchorDate: anchor, isActive: true },
+        });
+
+        let generated = 0;
+        if (startDate && endDate) {
+          const start = new Date(`${startDate}T00:00:00.000Z`);
+          const end = new Date(`${endDate}T00:00:00.000Z`);
+          if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start > end) throw new Error('A valid generation date range is required');
+          const existing = await tx.shiftRoster.findMany({ where: { staffId, date: { gte: start, lte: end } }, select: { id: true, date: true, status: true, publicationStatus: true } });
+          const existingByDate = new Map(existing.map((roster) => [roster.date.toISOString().slice(0, 10), roster]));
+          const cycle = on + off;
+          for (let cursor = new Date(start); cursor <= end; cursor.setUTCDate(cursor.getUTCDate() + 1)) {
+            const date = new Date(cursor);
+            const offset = Math.floor((date.getTime() - anchor.getTime()) / 86400000);
+            const isWorkingDay = ((offset % cycle) + cycle) % cycle < on;
+            if (!isWorkingDay) continue;
+            const dateKey = date.toISOString().slice(0, 10);
+            const current = existingByDate.get(dateKey);
+            // A peer-approved/HR-acknowledged swap is a dated exception to the
+            // employee's baseline work pattern and must not be overwritten by
+            // a later pattern generation.
+            if (current?.publicationStatus === 'PUBLISHED' || current?.status === 'SWAPPED') continue;
+            await tx.shiftRoster.upsert({
+              where: { staffId_date: { staffId, date } },
+              update: { propertyId, departmentId: shift.departmentId, shiftId, status: 'SCHEDULED', publicationStatus: 'DRAFT', publishedAt: null, publishedById: null, cancelledAt: null, cancelledById: null },
+              create: { propertyId, departmentId: shift.departmentId, staffId, shiftId, date, status: 'SCHEDULED' },
+            });
+            generated += 1;
+          }
+        }
+        return { pattern, generated };
+      });
+      return NextResponse.json({ success: true, data: saved.pattern, generated: saved.generated }, { status: 201 });
+    }
 
     if (action === 'CREATE_TEMPLATE') {
       const { name, code, startTime, endTime, crossesMidnight = false, unpaidBreakMins = 30, departmentId } = body;
