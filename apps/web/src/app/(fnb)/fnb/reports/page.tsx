@@ -212,7 +212,9 @@ export default function FnbReportsPage() {
   const waiterPaymentMethods = Array.from(new Set(waiterShiftSummary.flatMap((waiter: any) => (waiter.tenders || []).map((tender: any) => tender.method)))).sort() as string[];
   const outletPaymentMethods = Array.from(new Set(outletPaymentSummary.flatMap((outlet: any) => (outlet.tenders || []).map((tender: any) => tender.method)))).sort() as string[];
   const paymentMethods = Array.from(new Set([...(data?.tenderBreakdown || []).map((tender: any) => tender.method), ...outletPaymentMethods, ...waiterPaymentMethods])).sort() as string[];
-  const inventoryByOutlet: Record<string, any[]> = (data?.inventoryMovement || []).reduce((groups: Record<string, any[]>, row: any) => {
+  const stockHasActivity = (row: any) => [row.opening, row.receipts, row.transferIn, row.sales, row.waste, row.actualClosing]
+    .some((value) => Math.abs(Number(value || 0)) > 0.0001);
+  const inventoryByOutlet: Record<string, any[]> = (data?.inventoryMovement || []).filter(stockHasActivity).reduce((groups: Record<string, any[]>, row: any) => {
     const groupName = row.outletName || 'Unassigned outlet';
     groups[groupName] = groups[groupName] || [];
     groups[groupName].push(row);
