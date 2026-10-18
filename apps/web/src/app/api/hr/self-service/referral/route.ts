@@ -25,7 +25,41 @@ export async function GET(req: NextRequest) {
     if (!propertyId || !staff.propertyAccess.includes(propertyId)) return NextResponse.json({ error: 'No authorized property selected' }, { status: 403 });
 
     const program = await prisma.referralProgram.findUnique({ where: { propertyId }, include: { property: { select: { name: true, bookingEngineConfig: { select: { publicSlug: true } }, bookingSite: { select: { publicSlug: true } } } } } });
-    const partner = await prisma.referralPartner.findUnique({ where: { staffId: staff.id }, select: { id: true, isStaffReferrer: true, campaigns: { where: { propertyId }, orderBy: { createdAt: 'desc' }, take: 1, select: { id: true, code: true, commissionBps: true, isActive: true, createdAt: true, clicks: { select: { id: true } }, bookings: { select: { id: true, status: true, commission: { select: { amount: true, status: true, earnedAt: true, payslipId: true, payslip: { select: { payrollPeriod: { select: { name: true } } } } } } } } } } });
+    const partner = await prisma.referralPartner.findUnique({
+      where: { staffId: staff.id },
+      select: {
+        id: true,
+        isStaffReferrer: true,
+        campaigns: {
+          where: { propertyId },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: {
+            id: true,
+            code: true,
+            commissionBps: true,
+            isActive: true,
+            createdAt: true,
+            clicks: { select: { id: true } },
+            bookings: {
+              select: {
+                id: true,
+                status: true,
+                commission: {
+                  select: {
+                    amount: true,
+                    status: true,
+                    earnedAt: true,
+                    payslipId: true,
+                    payslip: { select: { payrollPeriod: { select: { name: true } } } },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
     const campaign = partner?.campaigns[0] || null;
     const commissions = campaign?.bookings.flatMap((booking) => booking.commission ? [booking.commission] : []) || [];
     const paid = commissions.filter((commission) => commission.payslipId);
