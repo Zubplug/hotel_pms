@@ -10,6 +10,7 @@ import {
   Sun,
   Sunrise,
   Sunset,
+  Pencil,
   ChevronLeft,
   ChevronRight,
   Sparkles,
@@ -39,6 +40,7 @@ export default function ShiftPlanningPage() {
   // Modals
   const [assignModalOpen, setAssignModalOpen] = useState(false);
   const [templateModalOpen, setTemplateModalOpen] = useState(false);
+  const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   // Form states
@@ -122,27 +124,39 @@ export default function ShiftPlanningPage() {
     }
   };
 
-  const handleCreateTemplate = async (e: React.FormEvent) => {
+  const openTemplateEditor = (template: any) => {
+    setEditingTemplateId(template.id);
+    setTemplateForm({
+      name: template.name || '',
+      code: template.code || '',
+      startTime: template.startTime || '07:00',
+      endTime: template.endTime || '15:30',
+      crossesMidnight: Boolean(template.crossesMidnight),
+      unpaidBreakMins: String(template.unpaidBreakMins ?? 30),
+    });
+    setTemplateModalOpen(true);
+  };
+
+  const handleSaveTemplate = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
     try {
       const res = await fetch('/api/hr/shifts', {
-        method: 'POST',
+        method: editingTemplateId ? 'PATCH' : 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'CREATE_TEMPLATE', ...templateForm }),
+        body: JSON.stringify({
+          action: editingTemplateId ? 'UPDATE_TEMPLATE' : 'CREATE_TEMPLATE',
+          ...(editingTemplateId ? { id: editingTemplateId } : {}),
+          ...templateForm,
+        }),
       });
-      if (res.ok) {
-        setTemplateModalOpen(false);
-        setTemplateForm({
-          name: '',
-          code: '',
-          startTime: '07:00',
-          endTime: '15:30',
-          crossesMidnight: false,
-          unpaidBreakMins: '30',
-        });
-        fetchData();
-      }
+      const data = await res.json();
+      if (!res.ok) return alert(data.error || 'Unable to save shift template');
+
+      setTemplateModalOpen(false);
+      setEditingTemplateId(null);
+      setTemplateForm({ name: '', code: '', startTime: '07:00', endTime: '15:30', crossesMidnight: false, unpaidBreakMins: '30' });
+      await fetchData();
     } finally {
       setSubmitting(false);
     }
@@ -278,6 +292,43 @@ export default function ShiftPlanningPage() {
             <span className="w-2.5 h-2.5 rounded bg-slate-700" /> Off
           </span>
         </div>
+      </div>
+
+      {/* Shift Templates */}
+      <div className="bg-slate-900/60 border border-slate-800/80 p-3 rounded-xl">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h2 className="text-xs font-bold text-white">Shift Templates</h2>
+            <p className="text-[11px] text-slate-500 mt-0.5">Edit the schedules available for roster assignments.</p>
+          </div>
+          <span className="text-[10px] text-slate-500">{shiftTemplates.length} active</span>
+        </div>
+        {shiftTemplates.length === 0 ? (
+          <p className="text-xs text-slate-500">No shift templates defined yet.</p>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+            {shiftTemplates.map((template) => (
+              <div key={template.id} className="flex items-center justify-between gap-3 rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2">
+                <div className="min-w-0">
+                  <p className="truncate text-xs font-semibold text-slate-200">{template.name}</p>
+                  <p className="text-[10px] text-slate-500">
+                    {template.startTime} – {template.endTime}{template.crossesMidnight ? ' · Overnight' : ''}
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => openTemplateEditor(template)}
+                  className="h-7 shrink-0 border-slate-700 bg-slate-900 text-[10px] text-slate-300 hover:bg-slate-800"
+                >
+                  <Pencil className="mr-1 h-3 w-3" />
+                  Edit
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* 7-Day Weekly Grid Matrix */}
@@ -430,16 +481,16 @@ export default function ShiftPlanningPage() {
         </DialogContent>
       </Dialog>
 
-      {/* New Shift Template Modal */}
+      {/* Shift Template Modal */}
       <Dialog open={templateModalOpen} onOpenChange={setTemplateModalOpen}>
         <DialogContent className="max-w-md bg-slate-900 border-slate-800 text-slate-100">
           <DialogHeader>
             <DialogTitle className="text-sm font-bold text-white flex items-center gap-2">
               <Clock className="w-4 h-4 text-teal-400" />
-              Define Shift Template
+              {editingTemplateId ? 'Edit Shift Template' : 'Define Shift Template'}
             </DialogTitle>
           </DialogHeader>
-          <form onSubmit={handleCreateTemplate} className="space-y-4 text-xs">
+          <form onSubmit={handleSaveTemplate} className="space-y-4 text-xs">
             <div>
               <label className="text-slate-400 block mb-1">Shift Name *</label>
               <Input
@@ -487,7 +538,7 @@ export default function ShiftPlanningPage() {
                 Cancel
               </Button>
               <Button type="submit" disabled={submitting} className="bg-teal-600 hover:bg-teal-500 text-white text-xs h-8">
-                {submitting ? 'Saving…' : 'Create Template'}
+                {submitting ? 'Saving…' : editingTemplateId ? 'Save Changes' : 'Create Template'}
               </Button>
             </DialogFooter>
           </form>

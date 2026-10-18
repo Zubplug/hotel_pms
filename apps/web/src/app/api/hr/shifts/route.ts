@@ -253,6 +253,30 @@ export async function PATCH(req: NextRequest) {
     const propertyId = authContext.propertyId;
     if (!propertyId) return NextResponse.json({ error: 'Property context is required' }, { status: 400 });
 
+    if (body.action === 'UPDATE_TEMPLATE') {
+      const { id, name, code, startTime, endTime, crossesMidnight = false, unpaidBreakMins = 30 } = body;
+      if (!id) return NextResponse.json({ error: 'Shift template ID is required' }, { status: 400 });
+      if (!String(name || '').trim() || !String(startTime || '').match(/^([01]\d|2[0-3]):[0-5]\d$/) || !String(endTime || '').match(/^([01]\d|2[0-3]):[0-5]\d$/)) {
+        return NextResponse.json({ error: 'Shift name, start time, and end time are required in valid format' }, { status: 400 });
+      }
+
+      const template = await prisma.workShift.findFirst({ where: { id, propertyId } });
+      if (!template) return NextResponse.json({ error: 'Shift template not found for this property' }, { status: 404 });
+
+      const updated = await prisma.workShift.update({
+        where: { id: template.id },
+        data: {
+          name: name.trim(),
+          code: code ? code.trim().toUpperCase() : name.trim().slice(0, 3).toUpperCase(),
+          startTime,
+          endTime,
+          isOvernight: Boolean(crossesMidnight),
+          breakDurationMinutes: parseInt(unpaidBreakMins, 10) || 30,
+        },
+      });
+      return NextResponse.json({ success: true, data: updated });
+    }
+
     if (body.action === 'PUBLISH_ROSTER') {
       const startDate = new Date(`${body.startDate}T00:00:00.000Z`);
       const endDate = new Date(`${body.endDate}T00:00:00.000Z`);
