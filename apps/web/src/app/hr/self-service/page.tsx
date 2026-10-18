@@ -387,6 +387,14 @@ export default function EmployeeSelfServicePage() {
         </div>
       </div>
 
+      <section id="staff-referrals-desktop" className="rounded-xl border border-purple-400/20 bg-gradient-to-br from-purple-950/40 via-slate-900 to-slate-950 p-5">
+        <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+          <div><h3 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-purple-300"><Share2 className="h-4 w-4" /> Staff referrals</h3><p className="mt-2 text-sm font-semibold text-white">Earn commission automatically through your personal referral link.</p><p className="mt-1 text-xs text-slate-400">Approved commissions are added to your next payslip after the guest completes their stay.</p></div>
+          {!data.referral?.programmeEnabled ? <span className="rounded-lg border border-white/10 bg-slate-950/60 px-3 py-2 text-xs text-slate-400">Not active for this property</span> : !data.referral?.isEnrolled ? <Button type="button" disabled={referralBusy} onClick={() => void activateReferral()} className="bg-purple-500 text-xs font-bold text-white hover:bg-purple-400">{referralBusy ? 'Activating…' : 'Activate referral account'}</Button> : <div className="flex flex-wrap items-center gap-2"><span className="rounded-lg border border-purple-300/20 bg-slate-950/60 px-3 py-2 font-mono text-xs text-purple-200">{data.referral.shareLink || 'Link ready'}</span><Button type="button" onClick={() => { void navigator.clipboard?.writeText(data.referral.shareLink || ''); showFeedback('success', 'Link copied', 'Your referral link is ready to share.'); }} className="bg-purple-500 text-xs font-bold text-white hover:bg-purple-400">Copy link</Button><Button type="button" onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent(`Book through my LodgeCore referral link: ${data.referral.shareLink || ''}`)}`, '_blank', 'noopener,noreferrer')} className="border border-purple-300/30 bg-transparent text-xs font-bold text-purple-200 hover:bg-purple-400/10">WhatsApp</Button></div>}
+        </div>
+        {data.referral?.isEnrolled && <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4"><div className="rounded-lg border border-white/10 bg-slate-950/50 p-3"><p className="text-[10px] text-slate-500">Clicks</p><p className="mt-1 text-lg font-bold text-white">{data.referral.totalClicks || 0}</p></div><div className="rounded-lg border border-white/10 bg-slate-950/50 p-3"><p className="text-[10px] text-slate-500">Confirmed stays</p><p className="mt-1 text-lg font-bold text-white">{data.referral.confirmedBookings || 0}</p></div><div className="rounded-lg border border-white/10 bg-slate-950/50 p-3"><p className="text-[10px] text-slate-500">Next payslip</p><p className="mt-1 text-lg font-bold text-amber-300">{naira(data.referral.pendingOnNextPayslip || 0)}</p></div><div className="rounded-lg border border-white/10 bg-slate-950/50 p-3"><p className="text-[10px] text-slate-500">Total earned</p><p className="mt-1 text-lg font-bold text-emerald-300">{naira(data.referral.totalEarned || 0)}</p></div></div>}
+      </section>
+
       {/* Grid: Shifts, Leave Balances, Statutory Profile */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
         {/* Upcoming Duty Shifts */}
@@ -574,7 +582,6 @@ export default function EmployeeSelfServicePage() {
             { label: 'Ask HR', icon: MessageSquare, tone: 'text-cyan-300 bg-cyan-400/10', onClick: () => setSupportModalOpen(true) },
             { label: 'Profile', icon: User, tone: 'text-violet-300 bg-violet-400/10', onClick: () => setProfileModalOpen(true) },
             { label: 'Payslips', icon: Receipt, tone: 'text-sky-300 bg-sky-400/10', href: '/hr/self-service/pay' },
-            { label: 'Claims', icon: Download, tone: 'text-rose-300 bg-rose-400/10', href: '/hr/self-service/expenses' },
             { label: 'Security', icon: ShieldCheck, tone: 'text-slate-200 bg-white/10', href: '/hr/self-service/security' },
             { label: 'Referrals', icon: Share2, tone: 'text-purple-300 bg-purple-400/10', onClick: () => document.getElementById('staff-referrals')?.scrollIntoView({ behavior: 'smooth' }) },
           ].map(({ label, icon: Icon, tone, onClick, href }) => {
