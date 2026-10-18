@@ -4,6 +4,10 @@ export const INVENTORY_UNITS = [
   'BOTTLE', 'CAN', 'JAR', 'TIN', 'SACHET',
   'BOX', 'PACK', 'CART', 'CARTON', 'CASE', 'PALLET',
   'BAG', 'BUNDLE', 'ROLL', 'DOZEN',
+  'MUDU', 'DERICA', 'PORTION', 'SERVING', 'SCOOP', 'LADLE',
+  'CUP', 'GLASS', 'PLATE', 'BOWL', 'TRAY', 'CRATE', 'SACK',
+  'BASKET', 'PAIL', 'JERRYCAN', 'DRUM', 'LOAF', 'SLICE', 'STICK',
+  'BUNCH', 'HEAD',
 ] as const;
 
 export function formatUnit(unit: string) {

@@ -2967,6 +2967,28 @@ enum UnitOfMeasure {
   BAG
   BUNDLE
   ROLL
+  MUDU
+  DERICA
+  PORTION
+  SERVING
+  SCOOP
+  LADLE
+  CUP
+  GLASS
+  PLATE
+  BOWL
+  TRAY
+  CRATE
+  SACK
+  BASKET
+  PAIL
+  JERRYCAN
+  DRUM
+  LOAF
+  SLICE
+  STICK
+  BUNCH
+  HEAD
 }
 
 enum FnbClass {
