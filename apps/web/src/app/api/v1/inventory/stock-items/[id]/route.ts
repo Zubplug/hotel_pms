@@ -174,6 +174,26 @@ export async function PATCH(request: Request, props: { params: Promise<{ id: str
                             await tx.stockItemUnit.update({ where: { id: unit.id }, data: { unitsInBase: Number(unit.unitsInBase) * conversion } });
                         }
                     }
+
+                    // Recipe quantities are stored in the ingredient unit. When
+                    // the ingredient was expressed in the old base unit, carry
+                    // the physical quantity across to the new base unit. Other
+                    // configured issue/purchase units remain unchanged because
+                    // their conversion rows were updated above.
+                    const recipeIngredients = await tx.recipeIngredient.findMany({
+                        where: { stockItemId: related.id, unitOfMeasure: existing.baseUnit },
+                        select: { id: true, quantity: true },
+                    });
+                    for (const ingredient of recipeIngredients) {
+                        await tx.recipeIngredient.update({
+                            where: { id: ingredient.id },
+                            data: {
+                                unitOfMeasure: requestedBaseUnit as UnitOfMeasure,
+                                quantity: Number(ingredient.quantity) * conversion,
+                            },
+                        });
+                    }
+
                     const transactions = await tx.stockTransaction.findMany({ where: { stockItemId: related.id } });
                     for (const transaction of transactions) {
                         await tx.stockTransaction.update({
