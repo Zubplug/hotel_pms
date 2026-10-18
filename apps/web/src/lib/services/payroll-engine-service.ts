@@ -77,6 +77,7 @@ export interface EmployeePayrollInput {
   bonuses?: number;
   loanRepayment?: number;
   salaryAdvanceRepayment?: number;
+  penaltyDeduction?: number;
   hasNhf?: boolean;
 }
 
@@ -114,6 +115,7 @@ export interface CalculatedPayslip {
   // Non-statutory Deductions
   loanRepayment: number;
   salaryAdvance: number;
+  penaltyDeduction: number;
   totalDeductions: number;
 
   // Net Pay
@@ -285,9 +287,10 @@ export class NigerianPayrollEngine {
     // Non-statutory deductions
     const loanRepayment = Number(input.loanRepayment) || 0;
     const salaryAdvance = Number(input.salaryAdvanceRepayment) || 0;
+    const penaltyDeduction = Number(input.penaltyDeduction) || 0;
 
     const totalDeductions = Math.round(
-      (payeTax + pensionEmployee + nhfDeduction + loanRepayment + salaryAdvance) * 100
+      (payeTax + pensionEmployee + nhfDeduction + loanRepayment + salaryAdvance + penaltyDeduction) * 100
     ) / 100;
 
     const netPay = Math.round((grossPay - totalDeductions) * 100) / 100;
@@ -341,6 +344,7 @@ export class NigerianPayrollEngine {
       nhfDeduction,
       loanRepayment,
       salaryAdvance,
+      penaltyDeduction,
       totalDeductions,
       netPay,
       pensionEmployer,

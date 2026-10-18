@@ -23,6 +23,9 @@ export default function HrSettingsPage() {
   const [autoPaymentEnabled, setAutoPaymentEnabled] = useState(false);
   const [paymentSaving, setPaymentSaving] = useState(false);
   const [geofenceSaving, setGeofenceSaving] = useState(false);
+  const [penaltyPolicies, setPenaltyPolicies] = useState<any[]>([]);
+  const [penaltySaving, setPenaltySaving] = useState(false);
+  const [penaltyForm, setPenaltyForm] = useState({ id: '', code: '', name: '', trigger: 'LATE_ARRIVAL', calculationType: 'FIXED_AMOUNT', amount: '', graceMinutes: '0', maximumAmount: '', effectiveFrom: new Date().toISOString().split('T')[0], effectiveTo: '', isActive: true });
   const [geofence, setGeofence] = useState({ latitude: '', longitude: '', radiusMeters: '150', minAccuracyMeters: '100', isEnabled: true });
   const [form, setForm] = useState({
     // Statutory settings
@@ -56,6 +59,7 @@ export default function HrSettingsPage() {
       .then((data) => {
         setPaymentConfigured(Boolean(data.payment?.configured));
         setAutoPaymentEnabled(Boolean(data.payment?.autoPaymentEnabled));
+        setPenaltyPolicies(data.penaltyPolicies || []);
         if (data.config) {
           setForm((prev) => ({
             ...prev,
@@ -154,6 +158,20 @@ export default function HrSettingsPage() {
     } catch (err: any) { setError(err.message || 'Unable to save attendance location'); } finally { setGeofenceSaving(false); }
   };
 
+  const savePenaltyPolicy = async (event: React.FormEvent) => {
+    event.preventDefault(); setPenaltySaving(true); setError(null);
+    try {
+      const response = await fetch('/api/hr/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'SAVE_PENALTY_POLICY', ...penaltyForm }) });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Unable to save penalty policy');
+      setPenaltyPolicies((current) => { const next = { ...result.policy }; const existing = current.findIndex((item) => item.id === next.id); if (existing < 0) return [next, ...current]; const copy = [...current]; copy[existing] = next; return copy; });
+      setPenaltyForm({ id: '', code: '', name: '', trigger: 'LATE_ARRIVAL', calculationType: 'FIXED_AMOUNT', amount: '', graceMinutes: '0', maximumAmount: '', effectiveFrom: new Date().toISOString().split('T')[0], effectiveTo: '', isActive: true });
+      setSaved(true); setTimeout(() => setSaved(false), 3000);
+    } catch (err: any) { setError(err.message || 'Unable to save penalty policy'); } finally { setPenaltySaving(false); }
+  };
+
+  const editPenaltyPolicy = (policy: any) => setPenaltyForm({ id: policy.id, code: policy.code, name: policy.name, trigger: policy.trigger, calculationType: policy.calculationType, amount: String(policy.amount), graceMinutes: String(policy.graceMinutes), maximumAmount: policy.maximumAmount === null ? '' : String(policy.maximumAmount), effectiveFrom: new Date(policy.effectiveFrom).toISOString().split('T')[0], effectiveTo: policy.effectiveTo ? new Date(policy.effectiveTo).toISOString().split('T')[0] : '', isActive: Boolean(policy.isActive) });
+
   return (
     <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-5xl mx-auto">
       {/* Header */}
@@ -198,6 +216,31 @@ export default function HrSettingsPage() {
         </div>
         <Button type="button" onClick={saveGeofence} disabled={geofenceSaving} className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs">{geofenceSaving ? 'Saving location…' : 'Save attendance boundary'}</Button>
       </div>
+
+      <section className="bg-[#090e17] border border-slate-800/80 rounded-2xl p-6 space-y-4">
+        <div className="flex items-start justify-between gap-4 border-b border-slate-800 pb-3">
+          <div><h3 className="text-sm font-bold text-white">Attendance Penalty Policies</h3><p className="mt-1 text-xs text-slate-400">Configure late arrival, early departure, absence, and missed-punch rules. Policies require HR review before any payroll deduction.</p></div>
+          <Scale className="h-5 w-5 shrink-0 text-amber-400" />
+        </div>
+        <div className="grid gap-2 md:grid-cols-2">
+          {penaltyPolicies.map((policy) => <div key={policy.id} className="flex items-center justify-between gap-3 rounded-lg border border-slate-800 bg-slate-950 p-3 text-xs"><div><p className="font-semibold text-white">{policy.name} <span className="font-mono text-[10px] text-slate-500">{policy.code}</span></p><p className="mt-1 text-slate-400">{policy.trigger.replaceAll('_', ' ')} · {policy.calculationType.replaceAll('_', ' ')} · ₦{Number(policy.amount).toLocaleString()}</p><p className="mt-1 text-[10px] text-slate-500">{policy.isActive ? 'Active' : 'Inactive'} · Effective {new Date(policy.effectiveFrom).toLocaleDateString()}</p></div><Button type="button" variant="outline" onClick={() => editPenaltyPolicy(policy)} className="h-7 border-slate-700 text-[10px] text-slate-300">Edit</Button></div>)}
+          {!penaltyPolicies.length && <p className="text-xs text-slate-500">No attendance penalty policies configured.</p>}
+        </div>
+        <form onSubmit={savePenaltyPolicy} className="grid gap-3 border-t border-slate-800 pt-4 text-xs sm:grid-cols-2 lg:grid-cols-4">
+          <Input required placeholder="Policy code e.g. LATE_15" value={penaltyForm.code} onChange={(e) => setPenaltyForm({ ...penaltyForm, code: e.target.value })} className="bg-slate-950 border-slate-800 text-slate-100" />
+          <Input required placeholder="Policy name" value={penaltyForm.name} onChange={(e) => setPenaltyForm({ ...penaltyForm, name: e.target.value })} className="bg-slate-950 border-slate-800 text-slate-100" />
+          <select value={penaltyForm.trigger} onChange={(e) => setPenaltyForm({ ...penaltyForm, trigger: e.target.value })} className="h-9 rounded-md border border-slate-800 bg-slate-950 px-2 text-slate-200"><option value="LATE_ARRIVAL">Late arrival</option><option value="EARLY_DEPARTURE">Early departure</option><option value="ABSENCE">Absence / no-show</option><option value="MISSED_PUNCH">Missed punch</option></select>
+          <select value={penaltyForm.calculationType} onChange={(e) => setPenaltyForm({ ...penaltyForm, calculationType: e.target.value })} className="h-9 rounded-md border border-slate-800 bg-slate-950 px-2 text-slate-200"><option value="FIXED_AMOUNT">Fixed amount</option><option value="PER_MINUTE">Per minute</option><option value="PERCENT_BASIC">Percent of basic</option></select>
+          <Input required type="number" min="0.01" step="0.01" placeholder="Amount / rate" value={penaltyForm.amount} onChange={(e) => setPenaltyForm({ ...penaltyForm, amount: e.target.value })} className="bg-slate-950 border-slate-800 text-slate-100" />
+          <Input type="number" min="0" placeholder="Extra grace minutes" value={penaltyForm.graceMinutes} onChange={(e) => setPenaltyForm({ ...penaltyForm, graceMinutes: e.target.value })} className="bg-slate-950 border-slate-800 text-slate-100" />
+          <Input type="number" min="0" step="0.01" placeholder="Maximum amount (optional)" value={penaltyForm.maximumAmount} onChange={(e) => setPenaltyForm({ ...penaltyForm, maximumAmount: e.target.value })} className="bg-slate-950 border-slate-800 text-slate-100" />
+          <Input required type="date" value={penaltyForm.effectiveFrom} onChange={(e) => setPenaltyForm({ ...penaltyForm, effectiveFrom: e.target.value })} className="bg-slate-950 border-slate-800 text-slate-100" />
+          <Input type="date" value={penaltyForm.effectiveTo} onChange={(e) => setPenaltyForm({ ...penaltyForm, effectiveTo: e.target.value })} className="bg-slate-950 border-slate-800 text-slate-100" />
+          <label className="flex items-center gap-2 text-slate-300"><input type="checkbox" checked={penaltyForm.isActive} onChange={(e) => setPenaltyForm({ ...penaltyForm, isActive: e.target.checked })} /> Active policy</label>
+          <label className="flex items-center gap-2 text-slate-300"><input type="checkbox" checked readOnly /> HR approval required</label>
+          <Button type="submit" disabled={penaltySaving} className="bg-amber-600 text-white hover:bg-amber-500">{penaltySaving ? 'Saving…' : penaltyForm.id ? 'Update policy' : 'Add policy'}</Button>
+        </form>
+      </section>
 
       <form onSubmit={handleSave} className="space-y-6">
         {/* Section 1: Nigerian Statutory Parameters */}

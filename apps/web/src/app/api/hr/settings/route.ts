@@ -29,11 +29,16 @@ export async function GET(req: NextRequest) {
       },
       orderBy: { effectiveFrom: 'desc' },
     });
+    const penaltyPolicies = authContext.propertyId
+      ? await prisma.attendancePenaltyPolicy.findMany({ where: { organizationId, propertyId: authContext.propertyId }, orderBy: [{ isActive: 'desc' }, { effectiveFrom: 'desc' }, { name: 'asc' }] })
+      : [];
+    const formattedPenaltyPolicies = penaltyPolicies.map((policy) => ({ ...policy, amount: Number(policy.amount), maximumAmount: policy.maximumAmount === null ? null : Number(policy.maximumAmount) }));
 
     if (!activeConfig) {
       // Return defaults if none configured yet
       return NextResponse.json({
         payment: { configured: Boolean(payrollAccount?.secretCiphertext && payrollAccount.webhookSecretCiphertext), autoPaymentEnabled: Boolean(payrollAccount?.payrollEnabled && payrollAccount?.secretCiphertext && payrollAccount?.webhookSecretCiphertext) },
+        penaltyPolicies: formattedPenaltyPolicies,
         config: {
           versionTag: 'PITA_2020_CURRENT',
           effectiveFrom: new Date().toISOString(),
@@ -63,6 +68,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       payment: { configured: Boolean(payrollAccount?.secretCiphertext && payrollAccount.webhookSecretCiphertext), autoPaymentEnabled: Boolean(payrollAccount?.payrollEnabled && payrollAccount?.secretCiphertext && payrollAccount?.webhookSecretCiphertext) },
+      penaltyPolicies: formattedPenaltyPolicies,
       config: {
         ...activeConfig,
         pensionEmployeeRate: Number(activeConfig.pensionEmployeeRate) * 100,
@@ -106,6 +112,27 @@ export async function POST(req: NextRequest) {
       if (!account?.secretCiphertext || !account.webhookSecretCiphertext) return NextResponse.json({ error: 'Configure Flutterwave credentials in /portal/integrations first' }, { status: 409 });
       await prisma.bookingPaymentAccount.update({ where: { id: account.id }, data: { payrollEnabled: enabled } });
       return NextResponse.json({ success: true, autoPaymentEnabled: enabled });
+    }
+    if (body.action === 'SAVE_PENALTY_POLICY') {
+      if (!authContext.propertyId) return NextResponse.json({ error: 'Property context required' }, { status: 400 });
+      const { id, code, name, trigger, calculationType, amount, graceMinutes = 0, maximumAmount, requiresApproval = true, effectiveFrom, effectiveTo, isActive = true } = body;
+      const normalizedCode = String(code || '').trim().toUpperCase().replace(/[^A-Z0-9_]/g, '_');
+      const allowedTriggers = ['LATE_ARRIVAL', 'EARLY_DEPARTURE', 'ABSENCE', 'MISSED_PUNCH'];
+      const allowedCalculations = ['FIXED_AMOUNT', 'PER_MINUTE', 'PERCENT_BASIC'];
+      const parsedAmount = Number(amount);
+      const parsedGrace = Number(graceMinutes);
+      const start = new Date(`${effectiveFrom}T00:00:00.000Z`);
+      const end = effectiveTo ? new Date(`${effectiveTo}T00:00:00.000Z`) : null;
+      if (!normalizedCode || !String(name || '').trim() || !allowedTriggers.includes(trigger) || !allowedCalculations.includes(calculationType) || !Number.isFinite(parsedAmount) || parsedAmount <= 0 || !Number.isInteger(parsedGrace) || parsedGrace < 0 || Number.isNaN(start.getTime()) || (end && Number.isNaN(end.getTime())) || (end && end < start)) {
+        return NextResponse.json({ error: 'Provide valid policy details, amount, trigger, calculation, and effective dates' }, { status: 400 });
+      }
+      const duplicate = await prisma.attendancePenaltyPolicy.findFirst({ where: { propertyId: authContext.propertyId, code: normalizedCode, ...(id ? { id: { not: id } } : {}) }, select: { id: true } });
+      if (duplicate) return NextResponse.json({ error: `A penalty policy with code ${normalizedCode} already exists` }, { status: 409 });
+      const data = { organizationId, propertyId: authContext.propertyId, code: normalizedCode, name: String(name).trim(), trigger, calculationType, amount: parsedAmount, graceMinutes: parsedGrace, maximumAmount: maximumAmount === '' || maximumAmount === null || maximumAmount === undefined ? null : Number(maximumAmount), requiresApproval: Boolean(requiresApproval), effectiveFrom: start, effectiveTo: end, isActive: Boolean(isActive), createdById: authContext.userId };
+      const policy = id
+        ? await prisma.attendancePenaltyPolicy.update({ where: { id }, data: { ...data, organizationId, propertyId: authContext.propertyId } })
+        : await prisma.attendancePenaltyPolicy.create({ data });
+      return NextResponse.json({ success: true, policy: { ...policy, amount: Number(policy.amount), maximumAmount: policy.maximumAmount === null ? null : Number(policy.maximumAmount) } }, { status: id ? 200 : 201 });
     }
     const {
       versionTag = `CONFIG_${new Date().getFullYear()}_${Date.now().toString().slice(-4)}`,

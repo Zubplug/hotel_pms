@@ -84,6 +84,7 @@ model Organization {
 
   // Enterprise HR Suite
   statutoryConfigurations StatutoryConfiguration[]
+  attendancePenaltyPolicies AttendancePenaltyPolicy[]
   companyPolicies         CompanyPolicy[]
   attendanceGeofences     AttendanceGeofence[]
   payrollPayouts          PayrollPayout[]
@@ -286,11 +287,14 @@ model Property {
   workShifts            WorkShift[]
   shiftRosters          ShiftRoster[]
   staffShiftPatterns    StaffShiftPattern[]
+  attendancePenaltyPolicies AttendancePenaltyPolicy[]
+  attendancePenaltyAssessments AttendancePenaltyAssessment[]
   attendanceRecords     AttendanceRecord[]
   leaveTypes            LeaveType[]
   leaveApplications     LeaveApplication[]
   jobRequisitions       JobRequisition[]
   employeeLoans         EmployeeLoan[]
+  attendancePenaltyPolicies AttendancePenaltyPolicy[]
   salaryAdvances        SalaryAdvance[]
   expenseClaims         ExpenseClaim[]
   performanceAppraisals PerformanceAppraisal[]
@@ -2131,6 +2135,7 @@ model Staff {
   leaveAllocations       LeaveAllocation[]
   leaveApplications      LeaveApplication[]
   attendanceRecords      AttendanceRecord[]
+  attendancePenaltyAssessments AttendancePenaltyAssessment[]
   shiftRosters           ShiftRoster[]
   shiftPattern           StaffShiftPattern?
   shiftSwapsRequested    ShiftSwapRequest[]      @relation("ShiftSwapRequester")
@@ -6030,6 +6035,7 @@ model PayrollPeriod {
 
   payslips Payslip[]
   payrollPayouts PayrollPayout[]
+  attendancePenaltyAssessments AttendancePenaltyAssessment[]
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
@@ -8314,6 +8320,7 @@ model AttendanceRecord {
   notes              String?
   locationStatus     String?
   punches            AttendancePunch[]
+  penaltyAssessments AttendancePenaltyAssessment[]
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
@@ -8604,6 +8611,74 @@ model StatutoryConfiguration {
   updatedAt DateTime @updatedAt @db.Timestamptz
 
   @@unique([organizationId, versionTag])
+}
+
+model AttendancePenaltyPolicy {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  propertyId     String   @db.Uuid
+  property       Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  code           String
+  name           String
+  trigger        String // LATE_ARRIVAL | EARLY_DEPARTURE | ABSENCE | MISSED_PUNCH
+  calculationType String // FIXED_AMOUNT | PER_MINUTE | PERCENT_BASIC
+  amount         Decimal  @db.Decimal(18, 4)
+  graceMinutes   Int      @default(0)
+  maximumAmount  Decimal? @db.Decimal(18, 4)
+  requiresApproval Boolean @default(true)
+  effectiveFrom  DateTime @db.Date
+  effectiveTo    DateTime? @db.Date
+  isActive       Boolean  @default(true)
+  createdById    String   @db.Uuid
+  createdAt      DateTime @default(now()) @db.Timestamptz
+  updatedAt      DateTime @updatedAt @db.Timestamptz
+  assessments    AttendancePenaltyAssessment[]
+
+  @@unique([propertyId, code])
+  @@index([organizationId, propertyId, isActive])
+  @@index([propertyId, trigger, effectiveFrom])
+}
+
+model AttendancePenaltyAssessment {
+  id                 String   @id @default(uuid()) @db.Uuid
+  organizationId     String   @db.Uuid
+  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  propertyId         String   @db.Uuid
+  property           Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  staffId            String   @db.Uuid
+  staff              Staff    @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  policyId           String   @db.Uuid
+  policy             AttendancePenaltyPolicy @relation(fields: [policyId], references: [id], onDelete: Restrict)
+  attendanceRecordId String?  @db.Uuid
+  attendanceRecord   AttendanceRecord? @relation(fields: [attendanceRecordId], references: [id], onDelete: SetNull)
+  payrollPeriodId    String?  @db.Uuid
+  payrollPeriod      PayrollPeriod? @relation(fields: [payrollPeriodId], references: [id], onDelete: SetNull)
+
+  eventDate       DateTime  @db.Date
+  trigger         String
+  minutes         Int       @default(0)
+  assessedAmount  Decimal   @db.Decimal(18, 4)
+  status          String    @default("PENDING")
+  notes           String?
+  rejectionReason String?
+  appealStatus    String?
+  appealReason    String?
+  appealedAt      DateTime? @db.Timestamptz
+  appealReviewedById String? @db.Uuid
+  appealReviewedAt DateTime? @db.Timestamptz
+  createdById     String    @db.Uuid
+  reviewedById    String?   @db.Uuid
+  reviewedAt      DateTime? @db.Timestamptz
+  appliedAt       DateTime? @db.Timestamptz
+  createdAt       DateTime  @default(now()) @db.Timestamptz
+  updatedAt       DateTime  @updatedAt @db.Timestamptz
+
+  @@unique([staffId, policyId, eventDate])
+  @@index([propertyId, status, eventDate])
+  @@index([staffId, eventDate])
+  @@index([payrollPeriodId])
 }
 
 model EmployeeLoan {

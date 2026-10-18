@@ -196,6 +196,24 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const approvedPenaltyAssessments = await prisma.attendancePenaltyAssessment.findMany({
+      where: {
+        organizationId: context.organizationId,
+        propertyId: context.propertyId,
+        status: 'APPROVED',
+        payrollPeriodId: null,
+        eventDate: { gte: startDate, lte: endDate },
+      },
+      select: { id: true, staffId: true, assessedAmount: true },
+    });
+    const penaltiesByStaff = new Map<string, { amount: number; ids: string[] }>();
+    for (const assessment of approvedPenaltyAssessments) {
+      const current = penaltiesByStaff.get(assessment.staffId) || { amount: 0, ids: [] };
+      current.amount += Number(assessment.assessedAmount);
+      current.ids.push(assessment.id);
+      penaltiesByStaff.set(assessment.staffId, current);
+    }
+
     // 3. ZERO SILENT FALLBACKS: Validate that all employees have a real salary structure
     const unconfiguredStaff = staffList.filter(
       (s) => {
@@ -262,6 +280,7 @@ export async function POST(req: NextRequest) {
       // Active Loan installments & advances
       const loanRepayment = s.employeeLoans.reduce((sum, l) => sum + Number(l.monthlyDeduction || 0), 0);
       const salaryAdvanceRepayment = s.salaryAdvances.reduce((sum, a) => sum + Number(a.amount || 0), 0);
+      const penaltyDeduction = penaltiesByStaff.get(s.id)?.amount || 0;
       const referralCommission = referralByStaff.get(s.id)?.total || 0;
 
       return {
@@ -287,6 +306,7 @@ export async function POST(req: NextRequest) {
         overtimeRate: hourlyRate,
         loanRepayment,
         salaryAdvanceRepayment,
+        penaltyDeduction,
         bonuses: referralCommission,
       };
     });
@@ -354,6 +374,7 @@ export async function POST(req: NextRequest) {
             pensionEmployer: p.pensionEmployer,
             nhf: p.nhfDeduction,
             loanDeductions: p.loanRepayment + p.salaryAdvance,
+            otherDeductions: p.penaltyDeduction,
             totalDeductions: p.totalDeductions,
             netPay: p.netPay,
             bankName: p.bankName,
@@ -383,6 +404,7 @@ export async function POST(req: NextRequest) {
           { name: 'ITF (1%)', type: 'EMPLOYER_CONTRIBUTION', amount: p.itfEmployer },
           { name: 'Loan Recovery', type: 'DEDUCTION', amount: p.loanRepayment },
           { name: 'Salary Advance Recovery', type: 'DEDUCTION', amount: p.salaryAdvance },
+          { name: 'Approved Attendance Penalties', type: 'DEDUCTION', amount: p.penaltyDeduction },
         ].filter((c) => c.amount > 0);
 
         await tx.payslipComponent.createMany({
@@ -401,6 +423,14 @@ export async function POST(req: NextRequest) {
             data: { payslipId: payslip.id, payslipInjectedAt: new Date() },
           });
           if (claimed.count !== commissionIds.length) throw new Error('Referral commission claim conflict; payroll was not generated');
+        }
+        const penaltyIds = penaltiesByStaff.get(p.staffId)?.ids || [];
+        if (penaltyIds.length) {
+          const claimed = await tx.attendancePenaltyAssessment.updateMany({
+            where: { id: { in: penaltyIds }, status: 'APPROVED', payrollPeriodId: null },
+            data: { status: 'APPLIED', payrollPeriodId: period.id, appliedAt: new Date() },
+          });
+          if (claimed.count !== penaltyIds.length) throw new Error('Attendance penalty claim conflict; payroll was not generated');
         }
       }
 

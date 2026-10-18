@@ -73,6 +73,7 @@ export default function EmployeeSelfServicePage() {
   const [swapStaff, setSwapStaff] = useState<any[]>([]);
   const [swapModalOpen, setSwapModalOpen] = useState(false);
   const [swapForm, setSwapForm] = useState({ targetStaffId: '', requesterDate: '', targetDate: '', reason: '' });
+  const [penaltyRows, setPenaltyRows] = useState<any[]>([]);
 
   const showFeedback = (type: EmployeePortalFeedback['type'], title: string, message: string) => setFeedback({ type, title, message });
 
@@ -99,6 +100,8 @@ export default function EmployeeSelfServicePage() {
         const json = await res.json();
         setData(json.staff);
         await fetchSwapData();
+        const penaltyResponse = await fetch('/api/hr/attendance/penalties');
+        if (penaltyResponse.ok) setPenaltyRows((await penaltyResponse.json()).assessments || []);
       } else {
         setLoadError('We could not load your employee records. Please try again.');
       }
@@ -153,6 +156,17 @@ export default function EmployeeSelfServicePage() {
     if (!response.ok) return showFeedback('error', 'Unable to update swap', json.error || 'Please try again.');
     await fetchSwapData();
     showFeedback('success', action === 'PEER_APPROVE' ? 'Swap accepted' : action === 'PEER_REJECT' ? 'Swap declined' : 'Swap cancelled', 'The swap status has been updated.');
+  };
+
+  const appealPenalty = async (id: string) => {
+    const reason = window.prompt('Explain why you are appealing this attendance charge (minimum 10 characters):') || '';
+    if (reason.trim().length < 10) return;
+    const response = await fetch('/api/hr/attendance/penalties', { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id, action: 'APPEAL', reason }) });
+    const json = await response.json();
+    if (!response.ok) return showFeedback('error', 'Appeal was not submitted', json.error || 'Please try again.');
+    const penaltyResponse = await fetch('/api/hr/attendance/penalties');
+    if (penaltyResponse.ok) setPenaltyRows((await penaltyResponse.json()).assessments || []);
+    showFeedback('success', 'Appeal submitted', 'HR will review the charge before it can be applied to payroll.');
   };
 
   const handleApplyLeave = async (e: React.FormEvent) => {
@@ -453,6 +467,11 @@ export default function EmployeeSelfServicePage() {
           {swapRows.map((swap) => <div key={swap.id} className="rounded-lg border border-slate-800 bg-slate-950 p-3 text-xs"><div className="flex items-start justify-between gap-3"><div><p className="font-semibold text-white">{swap.requesterStaff?.firstName} {swap.requesterStaff?.lastName} ↔ {swap.targetStaff?.firstName} {swap.targetStaff?.lastName}</p><p className="mt-1 text-[10px] text-slate-500">{new Date(swap.requesterDate).toLocaleDateString()} ↔ {new Date(swap.targetDate).toLocaleDateString()}</p></div><span className="text-[10px] text-amber-300">{swap.status}</span></div><p className="mt-2 text-slate-400">{swap.reason}</p><div className="mt-3 flex gap-3">{swap.status === 'PENDING_PEER' && swap.targetStaffId === data?.id && <><button type="button" className="text-emerald-300" onClick={() => void handleSwapAction(swap.id, 'PEER_APPROVE')}>Accept</button><button type="button" className="text-rose-300" onClick={() => void handleSwapAction(swap.id, 'PEER_REJECT')}>Decline</button></>}{swap.requesterStaffId === data?.id && ['PENDING_PEER', 'PENDING_SUPERVISOR'].includes(swap.status) && <button type="button" className="text-slate-400" onClick={() => void handleSwapAction(swap.id, 'CANCEL_REQUEST')}>Cancel</button>}</div></div>)}
           {!swapRows.length && <p className="py-5 text-center text-xs text-slate-500 md:col-span-2">No shift swap requests.</p>}
         </div>
+      </section>
+
+      <section className="rounded-xl border border-amber-800/40 bg-amber-950/10 p-5">
+        <div className="flex items-center justify-between gap-3"><div><h3 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-amber-300"><AlertCircle className="h-4 w-4" /> Attendance charges</h3><p className="mt-1 text-[11px] text-slate-500">Review charges raised from attendance. You may appeal before payroll application.</p></div><span className="text-[10px] text-amber-300">{penaltyRows.length} record(s)</span></div>
+        <div className="mt-3 space-y-2">{penaltyRows.map((penalty) => <div key={penalty.id} className="flex flex-col justify-between gap-3 rounded-lg border border-slate-800 bg-slate-950 p-3 text-xs sm:flex-row sm:items-center"><div><p className="font-semibold text-white">{penalty.policy?.name || 'Attendance charge'}</p><p className="mt-1 text-slate-400">{new Date(penalty.eventDate).toLocaleDateString()} · {penalty.trigger.replaceAll('_', ' ')} · <span className="font-mono text-amber-300">₦{Number(penalty.assessedAmount).toLocaleString()}</span></p><p className="mt-1 text-[10px] text-slate-500">Status: {penalty.status}{penalty.appealStatus ? ` · Appeal ${penalty.appealStatus}` : ''}</p></div>{['PENDING', 'APPROVED'].includes(penalty.status) && !penalty.appealStatus && !penalty.payrollPeriodId && <Button type="button" size="sm" onClick={() => void appealPenalty(penalty.id)} className="h-7 bg-amber-700 px-2 text-[10px] text-white hover:bg-amber-600">Appeal charge</Button>}</div>)}{!penaltyRows.length && <p className="py-4 text-center text-xs text-slate-500">No attendance charges.</p>}</div>
       </section>
 
       {/* Grid: Shifts, Leave Balances, Statutory Profile */}

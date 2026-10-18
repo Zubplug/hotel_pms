@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
 import prisma from '@hotel-pms/db';
 import { HrAuthorizationService } from '@/lib/services/hr-authorization-service';
+import { notifyEmployee } from '@/lib/employee-notification-service';
 
 function dayStart(value: string | Date) {
   const date = new Date(value);
@@ -24,6 +25,39 @@ function calculateAttendance(date: Date, clockIn: Date | null, clockOut: Date | 
   const earlyDepartureMinutes = clockOut ? Math.max(0, Math.floor((end.getTime() - clockOut.getTime()) / 60000)) : 0;
   const overtimeMinutes = clockOut ? Math.max(0, Math.floor((clockOut.getTime() - end.getTime()) / 60000)) : 0;
   return { lateMinutes, earlyDepartureMinutes, overtimeMinutes, status: !clockIn ? 'ABSENT' : lateMinutes > 0 ? 'LATE' : 'PRESENT' };
+}
+
+async function createPenaltyAssessments(tx: any, input: { organizationId: string; propertyId: string; staffId: string; date: Date; attendanceRecordId?: string; trigger: string; minutes: number; createdById: string }) {
+  const policies = await tx.attendancePenaltyPolicy.findMany({
+    where: {
+      organizationId: input.organizationId,
+      propertyId: input.propertyId,
+      trigger: input.trigger,
+      isActive: true,
+      effectiveFrom: { lte: input.date },
+      OR: [{ effectiveTo: null }, { effectiveTo: { gte: input.date } }],
+    },
+  });
+  if (!policies.length) return;
+  const salary = input.trigger === 'ABSENCE' ? null : await tx.salaryStructure.findUnique({ where: { staffId: input.staffId }, select: { basicSalary: true } });
+  for (const policy of policies) {
+    const chargeableMinutes = input.trigger === 'ABSENCE' ? 0 : Math.max(0, input.minutes - policy.graceMinutes);
+    if (input.trigger !== 'ABSENCE' && chargeableMinutes <= 0) continue;
+    let amount = Number(policy.amount);
+    if (policy.calculationType === 'PER_MINUTE') amount *= chargeableMinutes;
+    if (policy.calculationType === 'PERCENT_BASIC') amount = (Number(salary?.basicSalary || 0) * amount) / 100;
+    if (policy.maximumAmount !== null && policy.maximumAmount !== undefined) amount = Math.min(amount, Number(policy.maximumAmount));
+    amount = Math.round(Math.max(0, amount) * 100) / 100;
+    if (amount <= 0) continue;
+    const existing = await tx.attendancePenaltyAssessment.findUnique({ where: { staffId_policyId_eventDate: { staffId: input.staffId, policyId: policy.id, eventDate: input.date } } });
+    if (existing && !['PENDING'].includes(existing.status)) continue;
+    const data = { assessedAmount: amount, minutes: chargeableMinutes, attendanceRecordId: input.attendanceRecordId || null, notes: `${policy.name} detected from ${input.trigger.toLowerCase().replace('_', ' ')}` };
+    if (existing) await tx.attendancePenaltyAssessment.update({ where: { id: existing.id }, data });
+    else {
+      const created = await tx.attendancePenaltyAssessment.create({ data: { organizationId: input.organizationId, propertyId: input.propertyId, staffId: input.staffId, policyId: policy.id, eventDate: input.date, trigger: input.trigger, createdById: input.createdById, ...data } });
+      await notifyEmployee({ organizationId: input.organizationId, propertyId: input.propertyId, staffId: input.staffId, subject: 'Attendance charge requires review', body: `${policy.name} created a pending attendance charge of ₦${amount.toLocaleString()}. Open your employee portal to review the charge and submit an appeal if needed.`, category: 'PAYROLL', action: '/hr/self-service', idempotencyKey: `penalty-assessment:${created.id}:created` });
+    }
+  }
 }
 
 function distanceInMeters(latitudeA: number, longitudeA: number, latitudeB: number, longitudeB: number) {
@@ -199,6 +233,8 @@ export async function POST(req: NextRequest) {
       const record = await prisma.$transaction(async (tx) => {
         const saved = await tx.attendanceRecord.upsert({ where: { staffId_date: { staffId, date } }, update: { clockIn: clockIn || undefined, clockOut: clockOut || undefined, ...calculated, punchSource, locationStatus: 'VERIFIED' }, create: { propertyId: targetPropertyId, staffId, date, clockIn: clockIn || now, clockOut, ...calculated, punchSource, locationStatus: 'VERIFIED' } });
         await tx.attendancePunch.create({ data: { attendanceRecordId: saved.id, action, punchedAt: now, latitude, longitude, accuracyMeters, distanceMeters, locationStatus: 'VERIFIED', punchSource, recordedBy: authContext.userId } });
+        if (calculated.lateMinutes > 0) await createPenaltyAssessments(tx, { organizationId, propertyId: targetPropertyId, staffId, date, attendanceRecordId: saved.id, trigger: 'LATE_ARRIVAL', minutes: calculated.lateMinutes, createdById: authContext.userId });
+        if (calculated.earlyDepartureMinutes > 0) await createPenaltyAssessments(tx, { organizationId, propertyId: targetPropertyId, staffId, date, attendanceRecordId: saved.id, trigger: 'EARLY_DEPARTURE', minutes: calculated.earlyDepartureMinutes, createdById: authContext.userId });
         return saved;
       });
       return NextResponse.json({ success: true, data: record }, { status: 201 });
@@ -212,7 +248,11 @@ export async function POST(req: NextRequest) {
       let marked = 0;
       for (const roster of rosters) {
         const existing = await prisma.attendanceRecord.findUnique({ where: { staffId_date: { staffId: roster.staffId, date } } });
-        if (!existing) { await prisma.attendanceRecord.create({ data: { propertyId: roster.propertyId, staffId: roster.staffId, date, status: 'ABSENT', punchSource: 'MANUAL', notes: 'Automatically marked absent: no punch recorded' } }); marked++; }
+        if (!existing) {
+          const created = await prisma.attendanceRecord.create({ data: { propertyId: roster.propertyId, staffId: roster.staffId, date, status: 'ABSENT', punchSource: 'MANUAL', notes: 'Automatically marked absent: no punch recorded' } });
+          await prisma.$transaction((tx) => createPenaltyAssessments(tx, { organizationId, propertyId: roster.propertyId, staffId: roster.staffId, date, attendanceRecordId: created.id, trigger: 'ABSENCE', minutes: 0, createdById: authContext.userId }));
+          marked++;
+        }
       }
       return NextResponse.json({ success: true, marked });
     }
@@ -260,6 +300,8 @@ export async function POST(req: NextRequest) {
           create: { propertyId: targetPropertyId, staffId, date: startOfDay, clockIn: clockIn ? new Date(clockIn) : new Date(), clockOut: clockOut ? new Date(clockOut) : null, status: status === 'PRESENT' ? calculated.status : status, lateMinutes: calculated.lateMinutes, earlyDepartureMinutes: calculated.earlyDepartureMinutes, overtimeMinutes: otMins || calculated.overtimeMinutes, punchSource: 'MANUAL', locationStatus: 'MANUAL_OVERRIDE', notes: notes.trim() },
         });
         await tx.attendancePunch.create({ data: { attendanceRecordId: saved.id, action: 'MANUAL_OVERRIDE', punchedAt: new Date(), locationStatus: 'MANUAL_OVERRIDE', punchSource: 'MANUAL', recordedBy: authContext.userId } });
+        if (calculated.lateMinutes > 0) await createPenaltyAssessments(tx, { organizationId, propertyId: targetPropertyId, staffId, date: startOfDay, attendanceRecordId: saved.id, trigger: 'LATE_ARRIVAL', minutes: calculated.lateMinutes, createdById: authContext.userId });
+        if (calculated.earlyDepartureMinutes > 0) await createPenaltyAssessments(tx, { organizationId, propertyId: targetPropertyId, staffId, date: startOfDay, attendanceRecordId: saved.id, trigger: 'EARLY_DEPARTURE', minutes: calculated.earlyDepartureMinutes, createdById: authContext.userId });
         await tx.auditLog.create({ data: { organizationId, propertyId: targetPropertyId, userId: authContext.userId, action: 'HR_ATTENDANCE_MANUAL_OVERRIDE', resource: 'AttendanceRecord', resourceId: saved.id, newValue: { staffId, date, clockIn, clockOut, reason: notes.trim() }, requestId: randomUUID() } });
         return saved;
       });

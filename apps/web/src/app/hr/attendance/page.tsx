@@ -30,6 +30,7 @@ export default function AttendancePage() {
   const [records, setRecords] = useState<any[]>([]);
   const [employees, setEmployees] = useState<any[]>([]);
   const [shifts, setShifts] = useState<any[]>([]);
+  const [penalties, setPenalties] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [search, setSearch] = useState('');
@@ -53,10 +54,11 @@ export default function AttendancePage() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [attRes, empRes, shiftRes] = await Promise.all([
+      const [attRes, empRes, shiftRes, penaltyRes] = await Promise.all([
         fetch(`/api/hr/attendance?date=${selectedDate}`),
         fetch('/api/hr/employees?limit=200'),
         fetch('/api/hr/shifts'),
+        fetch('/api/hr/attendance/penalties?status=PENDING&appealStatus=PENDING'),
       ]);
 
       if (attRes.ok) {
@@ -71,11 +73,31 @@ export default function AttendancePage() {
         const shiftData = await shiftRes.json();
         setShifts(shiftData.shiftTemplates || []);
       }
+      if (penaltyRes.ok) {
+        const penaltyData = await penaltyRes.json();
+        setPenalties(penaltyData.assessments || []);
+      }
     } catch (err) {
       console.error('Failed to load attendance records', err);
     } finally {
       setLoading(false);
     }
+  };
+
+  const reviewPenalty = async (id: string, status: 'APPROVED' | 'REJECTED' | 'WAIVED') => {
+    const reason = status === 'REJECTED' ? window.prompt('Enter a detailed reason (minimum 10 characters):') || '' : '';
+    if (status === 'REJECTED' && reason.trim().length < 10) return;
+    const response = await fetch('/api/hr/attendance/penalties', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, status, reason }) });
+    const data = await response.json();
+    if (!response.ok) return alert(data.error || 'Unable to review penalty');
+    await fetchData();
+  };
+
+  const reviewAppeal = async (id: string, status: 'UPHELD' | 'REJECTED') => {
+    const response = await fetch('/api/hr/attendance/penalties', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, action: 'RESOLVE_APPEAL', status }) });
+    const data = await response.json();
+    if (!response.ok) return alert(data.error || 'Unable to resolve appeal');
+    await fetchData();
   };
 
   useEffect(() => {
@@ -240,6 +262,11 @@ export default function AttendancePage() {
           <option value="ON_LEAVE">On Leave</option>
         </select>
       </div>
+
+      <section className="rounded-xl border border-amber-800/40 bg-amber-950/10 p-4">
+        <div className="flex items-center justify-between gap-3"><div><h2 className="text-sm font-bold text-amber-200">Pending penalty assessments</h2><p className="mt-1 text-[11px] text-slate-400">Review attendance-based assessments before they can enter payroll.</p></div><span className="rounded-full bg-amber-400/10 px-2 py-1 text-[10px] font-bold text-amber-300">{penalties.length} pending</span></div>
+        {penalties.length > 0 && <div className="mt-3 space-y-2">{penalties.map((penalty) => <div key={penalty.id} className="flex flex-col justify-between gap-3 rounded-lg border border-slate-800 bg-slate-950 p-3 text-xs sm:flex-row sm:items-center"><div><p className="font-semibold text-white">{penalty.staff?.firstName} {penalty.staff?.lastName} · {penalty.policy?.name}</p><p className="mt-1 text-slate-400">{new Date(penalty.eventDate).toLocaleDateString()} · {penalty.trigger.replaceAll('_', ' ')}{penalty.minutes ? ` · ${penalty.minutes} minutes` : ''} · <span className="font-mono text-amber-300">₦{Number(penalty.assessedAmount).toLocaleString()}</span></p>{penalty.appealStatus === 'PENDING' && <p className="mt-1 text-[10px] text-cyan-300">Employee appeal: {penalty.appealReason}</p>}</div><div className="flex gap-2">{penalty.appealStatus === 'PENDING' ? <><Button type="button" size="sm" onClick={() => void reviewAppeal(penalty.id, 'REJECTED')} variant="outline" className="h-7 border-emerald-800 text-[10px] text-emerald-300">Accept appeal</Button><Button type="button" size="sm" onClick={() => void reviewAppeal(penalty.id, 'UPHELD')} className="h-7 bg-amber-600 text-[10px] text-white hover:bg-amber-500">Confirm charge</Button></> : <><Button type="button" size="sm" onClick={() => void reviewPenalty(penalty.id, 'REJECTED')} variant="outline" className="h-7 border-rose-800 text-[10px] text-rose-300">Reject</Button><Button type="button" size="sm" onClick={() => void reviewPenalty(penalty.id, 'WAIVED')} variant="outline" className="h-7 border-slate-700 text-[10px] text-slate-300">Waive</Button><Button type="button" size="sm" onClick={() => void reviewPenalty(penalty.id, 'APPROVED')} className="h-7 bg-emerald-600 text-[10px] text-white hover:bg-emerald-500">Approve</Button></>}</div></div>)}</div>}
+      </section>
 
       {/* Attendance Register Table */}
       <div className="bg-[#090e17] border border-slate-800/80 rounded-xl overflow-hidden shadow-xl">
