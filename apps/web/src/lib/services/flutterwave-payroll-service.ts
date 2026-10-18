@@ -8,6 +8,7 @@ import {
   prisma,
 } from '@hotel-pms/db';
 import { decryptPaymentCredential } from '@/lib/payment-providers/credentials';
+import { notifyEmployee } from '@/lib/employee-notification-service';
 
 export const FLUTTERWAVE_PAYROLL_SLUG = 'FLUTTERWAVE_PAYROLL_PAYOUT';
 
@@ -151,10 +152,21 @@ export async function settlePeriodIfComplete(payrollPeriodId: string) {
   ]);
   if (!period || period.status !== 'PROCESSING' || !payouts.length) return;
   if (payouts.every(payout => payout.status === 'SUCCESSFUL')) {
+    const settledAt = new Date();
     await prisma.$transaction([
-      prisma.payrollPeriod.update({ where: { id: payrollPeriodId }, data: { paymentStatus: 'SETTLED', paymentDate: new Date(), status: 'PAID' } }),
+      prisma.payrollPeriod.update({ where: { id: payrollPeriodId }, data: { paymentStatus: 'SETTLED', paymentDate: settledAt, status: 'PAID' } }),
       prisma.payslip.updateMany({ where: { payrollPeriodId }, data: { status: 'PAID' } }),
+      prisma.referralCommission.updateMany({ where: { payslip: { payrollPeriodId }, payslipId: { not: null }, status: 'APPROVED' }, data: { status: 'PAID', paidAt: settledAt } }),
     ]);
+    const commissions = await prisma.referralCommission.findMany({ where: { payslip: { payrollPeriodId }, status: 'PAID', partner: { isStaffReferrer: true, staffId: { not: null } } }, select: { id: true, amount: true, currency: true, organizationId: true, propertyId: true, partner: { select: { staffId: true } }, payslip: { select: { payrollPeriod: { select: { name: true } } } } } });
+    await Promise.all(commissions.map(async (commission) => {
+      if (!commission.partner.staffId) return;
+      try {
+        await notifyEmployee({ organizationId: commission.organizationId, propertyId: commission.propertyId, staffId: commission.partner.staffId, subject: 'Referral commission added to payslip', body: `${Number(commission.amount).toLocaleString()} ${commission.currency} referral commission has been added to your ${commission.payslip?.payrollPeriod.name || 'payroll'} payslip.`, category: 'PAYROLL', action: '/hr/self-service', idempotencyKey: `referral-payslip:${commission.id}` });
+      } catch (error) {
+        console.error('Failed to notify staff referral payroll settlement', { commissionId: commission.id, error });
+      }
+    }));
   } else if (payouts.some(payout => payout.status === 'FAILED')) {
     await prisma.payrollPeriod.update({ where: { id: payrollPeriodId }, data: { paymentStatus: 'PARTIAL' } });
   }

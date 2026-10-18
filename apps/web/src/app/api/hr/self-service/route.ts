@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
 import { HrAuthorizationService } from '@/lib/services/hr-authorization-service';
 import { PiiMaskingService } from '@/lib/services/pii-masking-service';
+import { reachShareUrl } from '@/lib/reach-links';
 
 export async function GET(req: NextRequest) {
   try {
@@ -85,6 +86,10 @@ export async function GET(req: NextRequest) {
     const rawAcct = staff.salaryStructure?.bankAccountNumber;
     const rawRsa = staff.salaryStructure?.pensionNumber;
     const rawTin = staff.employeeProfile?.tin;
+    const referralPropertyId = staff.propertyAccess[0];
+    const referralProgram = referralPropertyId ? await prisma.referralProgram.findFirst({ where: { organizationId, propertyId: referralPropertyId }, select: { enabled: true, staffReferralEnabled: true } }) : null;
+    const referralPartner = await prisma.referralPartner.findUnique({ where: { staffId: staff.id }, select: { isStaffReferrer: true, campaigns: { where: { propertyId: referralPropertyId }, orderBy: { createdAt: 'desc' }, take: 1, select: { code: true, commissionBps: true, isActive: true, _count: { select: { clicks: true, bookings: true } } } }, commissions: { where: { propertyId: referralPropertyId }, orderBy: { earnedAt: 'desc' }, take: 30, select: { id: true, amount: true, status: true, payslipId: true, earnedAt: true, paidAt: true, payslip: { select: { payrollPeriod: { select: { name: true } } } } } } } });
+    const referralCommissions = referralPartner?.commissions || [];
     const notifications = await prisma.notification.findMany({
       where: {
         organizationId,
@@ -206,6 +211,19 @@ export async function GET(req: NextRequest) {
           ...notification,
           isRead: Boolean(notification.readAt),
         })),
+        referral: {
+          programmeEnabled: Boolean(referralProgram?.enabled && referralProgram.staffReferralEnabled),
+          isEnrolled: Boolean(referralPartner?.isStaffReferrer && referralPartner.campaigns[0]),
+          campaignCode: referralPartner?.campaigns[0]?.code || null,
+          shareLink: referralPartner?.campaigns[0]?.code ? reachShareUrl(referralPartner.campaigns[0].code) : null,
+          commissionBps: referralPartner?.campaigns[0]?.commissionBps || null,
+          totalClicks: referralPartner?.campaigns[0]?._count.clicks || 0,
+          totalBookings: referralPartner?.campaigns[0]?._count.bookings || 0,
+          confirmedBookings: referralCommissions.filter((commission) => commission.status === 'APPROVED' || commission.status === 'PAID').length,
+          pendingOnNextPayslip: referralCommissions.filter((commission) => commission.status === 'APPROVED' && !commission.payslipId).reduce((sum, commission) => sum + Number(commission.amount), 0),
+          totalEarned: referralCommissions.reduce((sum, commission) => sum + Number(commission.amount), 0),
+          recentCommissions: referralCommissions.map((commission) => ({ id: commission.id, amount: Number(commission.amount), status: commission.status, payslipId: commission.payslipId, earnedAt: commission.earnedAt, paidAt: commission.paidAt, payslipPeriod: commission.payslip?.payrollPeriod.name || null })),
+        },
       },
     });
   } catch (error: any) {

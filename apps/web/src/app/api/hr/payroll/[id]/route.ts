@@ -5,6 +5,7 @@ import { GeneralLedgerService } from '@/lib/services/general-ledger-service';
 import { requireOrganizationContext } from '@/lib/organization-access';
 import { PiiMaskingService } from '@/lib/services/pii-masking-service';
 import { initiateFlutterwavePayroll } from '@/lib/services/flutterwave-payroll-service';
+import { notifyEmployee } from '@/lib/employee-notification-service';
 
 async function getOrCreateGlAccount(
   propertyId: string,
@@ -577,7 +578,18 @@ export async function POST(
           },
         });
         await tx.payslip.updateMany({ where: { payrollPeriodId: id }, data: { status: 'PAID' } });
+        await tx.referralCommission.updateMany({ where: { payslip: { payrollPeriodId: id }, payslipId: { not: null }, status: 'APPROVED' }, data: { status: 'PAID', paidAt: settlementDate ? new Date(settlementDate) : new Date() } });
       });
+
+      const paidStaffCommissions = await prisma.referralCommission.findMany({ where: { payslip: { payrollPeriodId: id }, status: 'PAID', partner: { isStaffReferrer: true, staffId: { not: null } } }, select: { id: true, amount: true, currency: true, organizationId: true, propertyId: true, partner: { select: { staffId: true } }, payslip: { select: { payrollPeriod: { select: { name: true } } } } } });
+      await Promise.all(paidStaffCommissions.map(async (commission) => {
+        if (!commission.partner.staffId) return;
+        try {
+          await notifyEmployee({ organizationId: commission.organizationId, propertyId: commission.propertyId, staffId: commission.partner.staffId, subject: 'Referral commission added to payslip', body: `${Number(commission.amount).toLocaleString()} ${commission.currency} referral commission has been added to your ${commission.payslip?.payrollPeriod.name || 'payroll'} payslip.`, category: 'PAYROLL', action: '/hr/self-service', idempotencyKey: `referral-payslip:${commission.id}` });
+        } catch (error) {
+          console.error('Failed to notify staff referral payroll settlement', { commissionId: commission.id, error });
+        }
+      }));
 
       return NextResponse.json({
         success: true,

@@ -64,6 +64,7 @@ function hasModuleAccess(req: any, pathname: string): { allowed: boolean; redire
     '/api/hr/policies',
     '/api/hr/service-desk',
     '/api/hr/expense-reimbursements',
+    '/api/hr/self-service/referral',
   ];
   const isEmployeePortalPath = pathname === '/hr/self-service' || pathname.startsWith('/hr/self-service/') || pathname === '/api/hr/self-service' || pathname.startsWith('/api/hr/self-service/') || employeeSelfServiceApi.some((path) => pathname === path || pathname.startsWith(`${path}/`));
   if (user.selfServiceOnly && !isEmployeePortalPath) {
@@ -173,6 +174,10 @@ function hasModuleAccess(req: any, pathname: string): { allowed: boolean; redire
     // Employee self-service sub-route is accessible to any authenticated employee
     if (pathname === '/hr/self-service' || pathname.startsWith('/hr/self-service/')) {
       return { allowed: true };
+    }
+    if (pathname === '/hr/referral' || pathname.startsWith('/hr/referral/')) {
+      return can('ACCESS_HR', HR_ROLES) || capabilities.some((value: string) => value.startsWith('hr.'))
+        ? { allowed: true } : { allowed: false, redirectTo: '/hub' };
     }
     return can('ACCESS_HR', HR_ROLES) || capabilities.some((value: string) => value.startsWith('hr.'))
       ? { allowed: true } : { allowed: false, redirectTo: '/hub' };

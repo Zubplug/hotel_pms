@@ -65,6 +65,7 @@ export async function fulfilReachBooking(
       campaign: true,
       program: true,
       commission: true,
+      partner: { select: { isStaffReferrer: true } },
       roomType: true,
       reservation: { select: { checkIn: true, checkOut: true } },
     },
@@ -166,10 +167,10 @@ export async function fulfilReachBooking(
     });
   }
 
-  // Credit the partner wallet in the same transaction as fulfilment. The
-  // unique idempotency key prevents duplicate wallet credit when an offline
-  // checkout is retried or replayed.
-  if (amounts.commission > 0) {
+  // External partners are paid through Reach wallets. Staff referrers are
+  // paid only through payroll, so never credit a wallet for their commission.
+  // This prevents the same approved commission being paid twice.
+  if (amounts.commission > 0 && !booking.partner.isStaffReferrer) {
     const wallet = await tx.referralPartnerWallet.upsert({
       where: { partnerId: booking.partnerId },
       update: {},

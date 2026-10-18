@@ -33,6 +33,16 @@ export async function POST(request: NextRequest) {
   // The friendly route performs tracking and then resolves the correct
   // booking-engine or standalone-property destination.
   const targetUrl = reachShareUrl(code, siteOrigin);
-  const campaign = await prisma.referralCampaign.create({ data: { organizationId: property.organizationId, propertyId, programId: property.referralProgram.id, partnerId: partner.id, name, code, category, targetUrl, commissionBps: 700 } });
+  const campaign = await prisma.$transaction(async (tx) => {
+    const currentPartner = await tx.referralPartner.findUnique({ where: { id: partner.id }, select: { organizationId: true } });
+    if (!currentPartner) throw new Error("Partner account not found");
+    if (currentPartner.organizationId && currentPartner.organizationId !== property.organizationId) {
+      throw new Error("Partner is already linked to another organization");
+    }
+    if (!currentPartner.organizationId) {
+      await tx.referralPartner.update({ where: { id: partner.id }, data: { organizationId: property.organizationId } });
+    }
+    return tx.referralCampaign.create({ data: { organizationId: property.organizationId, propertyId, programId: property.referralProgram.id, partnerId: partner.id, name, code, category, targetUrl, commissionBps: 700 } });
+  });
   return NextResponse.json({ campaign }, { status: 201 });
 }

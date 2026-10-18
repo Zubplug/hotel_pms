@@ -27,10 +27,12 @@ export async function recordReachClick(
       organizationId: true,
       programId: true,
       targetUrl: true,
-      program: { select: { attributionWindowDays: true } },
+      program: { select: { attributionWindowDays: true, staffReferralEnabled: true } },
+      partner: { select: { isStaffReferrer: true } },
     },
   });
   if (!campaign) return null;
+  if (campaign.partner.isStaffReferrer && !campaign.program.staffReferralEnabled) return null;
 
   // Social networks and browsers routinely prefetch shared links. Do not
   // count those requests as guest clicks or create attribution tokens for them.
@@ -102,7 +104,7 @@ export async function attributeReachReservation(
     include: { program: true, campaign: true, partner: true },
   });
   if (!click || click.propertyId !== input.propertyId || click.organizationId !== input.organizationId) return null;
-  if (!click.program.enabled || click.expiresAt <= now || click.partner.status !== 'ACTIVE' || click.partner.verificationStatus !== 'VERIFIED') return null;
+  if (!click.program.enabled || (click.partner.isStaffReferrer && !click.program.staffReferralEnabled) || click.expiresAt <= now || click.partner.status !== 'ACTIVE' || click.partner.verificationStatus !== 'VERIFIED') return null;
 
   const existing = await tx.referralAttribution.findUnique({
     where: { propertyId_bookingId: { propertyId: input.propertyId, bookingId: input.reservationId } },

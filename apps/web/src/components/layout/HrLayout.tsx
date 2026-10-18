@@ -34,6 +34,7 @@ import {
   X,
   Sparkles,
   Command,
+  BadgePercent,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -97,6 +98,7 @@ export const HR_NAVIGATION: HrNavSection[] = [
       { name: 'Payroll Runs', href: '/hr/payroll', icon: Calculator },
       { name: 'Loans & Advances', href: '/hr/benefits', icon: Receipt },
       { name: 'Expense Claims', href: '/hr/expenses', icon: FileText },
+      { name: 'Staff Referrals', href: '/hr/referral', icon: BadgePercent },
     ],
   },
   {

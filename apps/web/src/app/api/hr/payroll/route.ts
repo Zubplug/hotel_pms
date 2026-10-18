@@ -221,6 +221,29 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Staff referral commissions are eligible only when already approved and
+    // earned by the payroll period end date. They are claimed atomically when
+    // the payslip is created so a retry cannot inject them twice.
+    const referralCommissions = await prisma.referralCommission.findMany({
+      where: {
+        organizationId: context.organizationId,
+        propertyId: context.propertyId,
+        status: 'APPROVED',
+        payslipId: null,
+        earnedAt: { lte: endDate },
+        partner: { isStaffReferrer: true, staff: { is: { organizationId: context.organizationId, propertyAccess: { has: context.propertyId }, isActive: true, deletedAt: null } } },
+      },
+      select: { id: true, amount: true, partner: { select: { staffId: true } } },
+    });
+    const referralByStaff = new Map<string, { total: number; ids: string[] }>();
+    for (const commission of referralCommissions) {
+      if (!commission.partner.staffId) continue;
+      const current = referralByStaff.get(commission.partner.staffId) || { total: 0, ids: [] };
+      current.total += Number(commission.amount);
+      current.ids.push(commission.id);
+      referralByStaff.set(commission.partner.staffId, current);
+    }
+
     // 4. Prepare calculation inputs
     const engineInputs: EmployeePayrollInput[] = staffList.map((s) => {
       const salary = s.salaryStructureVersions?.find((v: any) =>
@@ -239,6 +262,7 @@ export async function POST(req: NextRequest) {
       // Active Loan installments & advances
       const loanRepayment = s.employeeLoans.reduce((sum, l) => sum + Number(l.monthlyDeduction || 0), 0);
       const salaryAdvanceRepayment = s.salaryAdvances.reduce((sum, a) => sum + Number(a.amount || 0), 0);
+      const referralCommission = referralByStaff.get(s.id)?.total || 0;
 
       return {
         staffId: s.id,
@@ -263,6 +287,7 @@ export async function POST(req: NextRequest) {
         overtimeRate: hourlyRate,
         loanRepayment,
         salaryAdvanceRepayment,
+        bonuses: referralCommission,
       };
     });
 
@@ -339,6 +364,7 @@ export async function POST(req: NextRequest) {
             rsaPin: p.rsaPin || null,
             pfaName: p.pfaName || null,
             status: 'DRAFT',
+            referralCommission: p.bonuses,
           },
         });
 
@@ -348,6 +374,7 @@ export async function POST(req: NextRequest) {
           { name: 'Housing Allowance', type: 'EARNING', amount: p.housingAllowance },
           { name: 'Transport Allowance', type: 'EARNING', amount: p.transportAllowance },
           { name: 'Overtime Pay', type: 'EARNING', amount: p.overtimePay },
+          ...(p.bonuses > 0 ? [{ name: 'Referral Commission', type: 'EARNING', amount: p.bonuses }] : []),
           { name: 'PAYE Tax (PITA)', type: 'DEDUCTION', amount: p.payeTax },
           { name: 'Pension Employee (8%)', type: 'DEDUCTION', amount: p.pensionEmployee },
           { name: 'Pension Employer (10%)', type: 'EMPLOYER_CONTRIBUTION', amount: p.pensionEmployer },
@@ -366,6 +393,15 @@ export async function POST(req: NextRequest) {
             amount: c.amount,
           })),
         });
+
+        const commissionIds = referralByStaff.get(p.staffId)?.ids || [];
+        if (commissionIds.length) {
+          const claimed = await tx.referralCommission.updateMany({
+            where: { id: { in: commissionIds }, status: 'APPROVED', payslipId: null },
+            data: { payslipId: payslip.id, payslipInjectedAt: new Date() },
+          });
+          if (claimed.count !== commissionIds.length) throw new Error('Referral commission claim conflict; payroll was not generated');
+        }
       }
 
       return period;

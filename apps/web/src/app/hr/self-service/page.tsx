@@ -21,6 +21,7 @@ import {
   WalletCards,
   Timer,
   ChevronRight,
+  Share2,
 } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
@@ -67,8 +68,23 @@ export default function EmployeeSelfServicePage() {
   const [actionError, setActionError] = useState('');
   const [feedback, setFeedback] = useState<EmployeePortalFeedback | null>(null);
   const [punching, setPunching] = useState(false);
+  const [referralBusy, setReferralBusy] = useState(false);
 
   const showFeedback = (type: EmployeePortalFeedback['type'], title: string, message: string) => setFeedback({ type, title, message });
+
+  const activateReferral = async () => {
+    if (!window.confirm('Activate your staff referral account and start earning commission through your personal link?')) return;
+    setReferralBusy(true);
+    try {
+      const response = await fetch('/api/hr/self-service/referral', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || 'Unable to activate referrals');
+      await fetchSelfServiceData();
+      showFeedback('success', 'Referral account activated', 'Your personal referral link is ready to share.');
+    } catch (error: any) {
+      showFeedback('error', 'Unable to activate referrals', error.message || 'Please try again.');
+    } finally { setReferralBusy(false); }
+  };
 
   const fetchSelfServiceData = async () => {
     setLoading(true);
@@ -560,6 +576,7 @@ export default function EmployeeSelfServicePage() {
             { label: 'Payslips', icon: Receipt, tone: 'text-sky-300 bg-sky-400/10', href: '/hr/self-service/pay' },
             { label: 'Claims', icon: Download, tone: 'text-rose-300 bg-rose-400/10', href: '/hr/self-service/expenses' },
             { label: 'Security', icon: ShieldCheck, tone: 'text-slate-200 bg-white/10', href: '/hr/self-service/security' },
+            { label: 'Referrals', icon: Share2, tone: 'text-purple-300 bg-purple-400/10', onClick: () => document.getElementById('staff-referrals')?.scrollIntoView({ behavior: 'smooth' }) },
           ].map(({ label, icon: Icon, tone, onClick, href }) => {
             const inner = (<><span className={`flex h-12 w-12 items-center justify-center rounded-2xl ${tone}`}><Icon className="h-5 w-5" /></span><span className="text-[11px] font-semibold text-slate-300">{label}</span></>);
             const cls = 'flex flex-col items-center gap-1.5 rounded-2xl border border-white/5 bg-[#0b1624] py-3 transition active:scale-95 hover:border-white/15';
@@ -692,6 +709,11 @@ export default function EmployeeSelfServicePage() {
           ) : <Empty icon={<Building2 className="h-8 w-8 text-slate-700" />} title="No documents yet" sub="Contracts and letters will appear here." />}
         </Card>
       </div>
+
+      <section id="staff-referrals" className="rounded-3xl border border-purple-400/20 bg-gradient-to-br from-purple-950/40 to-slate-950 p-5 shadow-xl shadow-purple-950/10">
+        <div className="flex items-start justify-between gap-4"><div><p className="text-[10px] font-bold uppercase tracking-wider text-purple-300">Staff referrals</p><h2 className="mt-1 text-xl font-black text-white">Earn commission through your personal link</h2><p className="mt-1 max-w-2xl text-sm text-slate-400">When a guest books through your link and completes their stay, the approved commission is added automatically to your next payslip.</p></div><Share2 className="h-7 w-7 shrink-0 text-purple-300" /></div>
+        {!data.referral?.programmeEnabled ? <div className="mt-5 rounded-2xl border border-white/10 bg-slate-950/60 p-4 text-sm text-slate-400">Staff referrals are not active for your property yet. Your HR team will notify you when the programme is enabled.</div> : !data.referral?.isEnrolled ? <div className="mt-5 flex flex-col items-start justify-between gap-4 rounded-2xl border border-purple-300/20 bg-purple-400/10 p-4 sm:flex-row sm:items-center"><div><p className="font-semibold text-white">Activate your referral account</p><p className="mt-1 text-xs text-slate-400">Current commission rate: {((data.referral?.commissionBps || 0) / 100).toFixed(2)}% of eligible room revenue.</p></div><Button type="button" disabled={referralBusy} onClick={() => void activateReferral()} className="bg-purple-500 font-bold text-white hover:bg-purple-400">{referralBusy ? 'Activating…' : 'Activate my link'}</Button></div> : <div className="mt-5 space-y-4"><div className="grid gap-3 sm:grid-cols-4"><div className="rounded-2xl border border-white/10 bg-slate-950/60 p-3"><p className="text-[10px] text-slate-500">Clicks</p><p className="mt-1 text-xl font-black text-white">{data.referral.totalClicks || 0}</p></div><div className="rounded-2xl border border-white/10 bg-slate-950/60 p-3"><p className="text-[10px] text-slate-500">Confirmed stays</p><p className="mt-1 text-xl font-black text-white">{data.referral.confirmedBookings || 0}</p></div><div className="rounded-2xl border border-white/10 bg-slate-950/60 p-3"><p className="text-[10px] text-slate-500">Next payslip</p><p className="mt-1 text-xl font-black text-amber-300">{naira(data.referral.pendingOnNextPayslip || 0)}</p></div><div className="rounded-2xl border border-white/10 bg-slate-950/60 p-3"><p className="text-[10px] text-slate-500">Total earned</p><p className="mt-1 text-xl font-black text-emerald-300">{naira(data.referral.totalEarned || 0)}</p></div></div><div className="flex flex-col gap-3 rounded-2xl border border-purple-300/15 bg-purple-400/[0.06] p-4 sm:flex-row sm:items-center"><div className="min-w-0 flex-1"><p className="text-xs font-bold uppercase tracking-wider text-purple-300">Your personal referral link</p><p className="mt-2 truncate rounded-lg bg-slate-950/70 px-3 py-2 font-mono text-xs text-slate-300">{data.referral.shareLink || '—'}</p></div><div className="flex gap-2"><Button type="button" onClick={() => { void navigator.clipboard?.writeText(data.referral.shareLink || ''); showFeedback('success', 'Link copied', 'Your referral link is ready to share.'); }} className="bg-purple-500 font-bold text-white hover:bg-purple-400">Copy</Button><Button type="button" onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent(`Book through my LodgeCore referral link: ${data.referral.shareLink || ''}`)}`, '_blank', 'noopener,noreferrer')} className="border border-purple-300/30 bg-transparent font-bold text-purple-200 hover:bg-purple-400/10">WhatsApp</Button></div></div><div className="rounded-2xl border border-white/10 bg-slate-950/40 p-4"><p className="text-xs font-bold uppercase tracking-wider text-purple-300">Commission history</p><div className="mt-3 divide-y divide-white/5">{(data.referral.recentCommissions || []).map((commission: any) => <div key={commission.id} className="flex items-center justify-between gap-3 py-3 text-xs"><span className="text-slate-400">{commission.earnedAt ? new Date(commission.earnedAt).toLocaleDateString(undefined, { month: 'short', year: 'numeric' }) : '—'}</span><span className="font-semibold text-white">{naira(commission.amount)}</span><span className={commission.status === 'PAID' ? 'text-emerald-300' : commission.status === 'REVERSED' ? 'text-rose-300' : 'text-amber-300'}>{commission.status === 'PAID' ? 'Paid' : commission.payslipId ? 'Queued in payroll' : commission.status === 'APPROVED' ? 'Pending payroll' : commission.status}</span><span className="text-right text-slate-500">{commission.payslipPeriod || '—'}</span></div>)}{!(data.referral.recentCommissions || []).length && <p className="py-3 text-xs text-slate-500">No commissions yet.</p>}</div></div></div>}
+      </section>
 
       <div className="grid gap-5 lg:grid-cols-2">
         {/* Notifications */}

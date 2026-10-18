@@ -179,6 +179,26 @@ export class PayrollService {
       include: { staff: true },
     });
 
+    const referralCommissions = await prisma.referralCommission.findMany({
+      where: {
+        organizationId: ctx.organizationId,
+        propertyId: period.propertyId,
+        status: 'APPROVED',
+        payslipId: null,
+        earnedAt: { lte: period.endDate },
+        partner: { isStaffReferrer: true, staff: { is: { organizationId: ctx.organizationId, propertyAccess: { has: period.propertyId }, isActive: true, deletedAt: null } } },
+      },
+      select: { id: true, amount: true, partner: { select: { staffId: true } } },
+    });
+    const referralByStaff = new Map<string, { total: number; ids: string[] }>();
+    for (const commission of referralCommissions) {
+      if (!commission.partner.staffId) continue;
+      const current = referralByStaff.get(commission.partner.staffId) || { total: 0, ids: [] };
+      current.total += Number(commission.amount);
+      current.ids.push(commission.id);
+      referralByStaff.set(commission.partner.staffId, current);
+    }
+
     return prisma.$transaction(async (tx) => {
       await tx.payslip.deleteMany({ where: { payrollPeriodId: periodId } });
 
@@ -193,7 +213,8 @@ export class PayrollService {
         const housing = Number(struct.housingAllowance || 0);
         const transport = Number(struct.transportAllowance || 0);
         const other = Number(struct.otherAllowances || 0);
-        const gross = basic + housing + transport + other;
+        const referralCommission = referralByStaff.get(struct.staffId)?.total || 0;
+        const gross = basic + housing + transport + other + referralCommission;
 
         const { pension, pensionEmployer, nhf, nsitf, paye } = this.calculateNigerianTaxes(gross, basic);
         const totalDed = pension + nhf + nsitf + paye;
@@ -215,6 +236,7 @@ export class PayrollService {
             transportAllowance: transport,
             otherAllowances: other,
             grossEarnings: gross,
+            referralCommission,
             payeTax: paye,
             pensionEmployee: pension,
             pensionEmployer,
@@ -232,6 +254,7 @@ export class PayrollService {
           ...(housing > 0 ? [{ payslipId: payslip.id, type: 'EARNING', name: 'Housing Allowance', amount: housing }] : []),
           ...(transport > 0 ? [{ payslipId: payslip.id, type: 'EARNING', name: 'Transport Allowance', amount: transport }] : []),
           ...(other > 0 ? [{ payslipId: payslip.id, type: 'EARNING', name: 'Other Allowances', amount: other }] : []),
+          ...(referralCommission > 0 ? [{ payslipId: payslip.id, type: 'EARNING', name: 'Referral Commission', amount: referralCommission }] : []),
           { payslipId: payslip.id, type: 'STATUTORY', name: 'PAYE Tax', amount: paye },
           { payslipId: payslip.id, type: 'STATUTORY', name: 'Pension (Employee 8%)', amount: pension },
           { payslipId: payslip.id, type: 'STATUTORY', name: 'NHF (2.5%)', amount: nhf },
@@ -239,6 +262,11 @@ export class PayrollService {
         ];
 
         await tx.payslipComponent.createMany({ data: components });
+        const commissionIds = referralByStaff.get(struct.staffId)?.ids || [];
+        if (commissionIds.length) {
+          const claimed = await tx.referralCommission.updateMany({ where: { id: { in: commissionIds }, status: 'APPROVED', payslipId: null }, data: { payslipId: payslip.id, payslipInjectedAt: new Date() } });
+          if (claimed.count !== commissionIds.length) throw new Error('Referral commission claim conflict; payroll was not generated');
+        }
       }
 
       const updatedPeriod = await tx.payrollPeriod.update({

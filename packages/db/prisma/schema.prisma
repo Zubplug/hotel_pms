@@ -2076,6 +2076,7 @@ model Staff {
   userId         String?      @unique @db.Uuid // Linked User account
 
   employeeId      String?
+  referralPartner ReferralPartner?
   firstName       String
   lastName        String
   email           String  @unique
@@ -6029,6 +6030,7 @@ model Payslip {
   otherAllowances    Decimal @default(0) @db.Decimal(18, 4)
   overtime           Decimal @default(0) @db.Decimal(18, 4)
   grossEarnings      Decimal @db.Decimal(18, 4)
+  referralCommission Decimal @default(0) @db.Decimal(18, 4)
 
   // Statutory Deductions (Nigeria)
   payeTax         Decimal @default(0) @db.Decimal(18, 4) // PAYE — progressive bands
@@ -6056,6 +6058,7 @@ model Payslip {
   pfaName       String?
 
   components PayslipComponent[]
+  referralCommissions ReferralCommission[]
   payout     PayrollPayout?
 
   createdAt DateTime @default(now()) @db.Timestamptz
@@ -7315,6 +7318,7 @@ model ReferralProgram {
   activationFeeCurrency String  @default("NGN")
   activationPaymentStatus String @default("NOT_PAID") // NOT_PAID | PENDING | PAID | FAILED
   activationFeePaidAt DateTime? @db.Timestamptz
+  staffReferralEnabled Boolean @default(false)
   eligibleCategories   String[] @default(["STAY"])
   rules                Json?
   activatedAt          DateTime? @db.Timestamptz
@@ -7421,6 +7425,8 @@ model ReachCreativeGeneration {
 model ReferralPartner {
   id                 String   @id @default(uuid()) @db.Uuid
   organizationId     String?  @db.Uuid
+  staffId            String?  @unique @db.Uuid
+  isStaffReferrer    Boolean  @default(false)
   firstName          String?
   middleName         String?
   lastName           String?
@@ -7439,6 +7445,7 @@ model ReferralPartner {
   updatedAt          DateTime @updatedAt @db.Timestamptz
 
   organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  staff        Staff? @relation(fields: [staffId], references: [id], onDelete: SetNull)
   campaigns    ReferralCampaign[]
   clicks       ReferralClick[]
   attributions ReferralAttribution[]
@@ -7612,6 +7619,8 @@ model ReferralCommission {
   earnedAt        DateTime? @db.Timestamptz
   approvedAt      DateTime? @db.Timestamptz
   paidAt          DateTime? @db.Timestamptz
+  payslipId       String?   @db.Uuid
+  payslipInjectedAt DateTime? @db.Timestamptz
   createdAt       DateTime @default(now()) @db.Timestamptz
   updatedAt       DateTime @updatedAt @db.Timestamptz
 
@@ -7620,6 +7629,7 @@ model ReferralCommission {
   program      ReferralProgram @relation(fields: [programId], references: [id], onDelete: Cascade)
   partner      ReferralPartner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
   referralBooking ReferralBooking @relation(fields: [referralBookingId], references: [id], onDelete: Restrict)
+  payslip        Payslip? @relation(fields: [payslipId], references: [id], onDelete: SetNull)
   ledgerEntries ReferralLedgerEntry[]
   payoutItems ReferralPayoutItem[]
   walletTransactions ReferralPartnerWalletTransaction[]
@@ -7627,6 +7637,7 @@ model ReferralCommission {
 
   @@index([propertyId, status])
   @@index([partnerId, status])
+  @@index([payslipId])
 }
 
 model ReferralLedgerEntry {
