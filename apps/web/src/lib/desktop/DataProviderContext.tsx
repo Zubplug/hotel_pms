@@ -12,6 +12,7 @@ interface DataProviderContextValue {
   isOnline: boolean;
   syncStatus: 'synced' | 'syncing' | 'offline' | 'error';
   pos: LodgeCoreDataProvider['pos'];
+  pool: LodgeCoreDataProvider['pool'];
 }
 
 const DataProviderContext = createContext<DataProviderContextValue>({

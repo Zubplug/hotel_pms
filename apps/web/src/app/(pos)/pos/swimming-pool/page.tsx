@@ -326,6 +326,7 @@ function NewAdmissionDialog({ data, onClose, onSuccess }: {
   onClose: () => void;
   onSuccess: () => void;
 }) {
+  const { provider, isDesktopMode } = useLodgeCoreProvider();
   const [state, setState] = useState<AdmissionState>({
     step: 'guest',
     guestSearch: '',
