@@ -71,12 +71,23 @@ export class HrAuthorizationService {
       throw new Error('Forbidden: User is not linked to an active organization');
     }
 
-    const activeRole = membership.role || sessionRole;
+    // Some legacy accounts keep their operational role in UserRole while the
+    // organization membership remains MEMBER. Prefer that scoped assignment
+    // so property-level managers retain the correct HR approval scope.
+    const assignedRole = await prisma.userRole.findFirst({
+      where: { userId, role: { organizationId } },
+      orderBy: { propertyId: 'asc' },
+      select: { role: { select: { name: true } } },
+    });
+    const membershipRole = membership.role || sessionRole;
+    const activeRole = assignedRole?.role.name && ['MEMBER', 'STAFF'].includes(membershipRole)
+      ? assignedRole.role.name
+      : membershipRole;
     // HOD is the legacy role name for a department head. Normalize it once so
     // every downstream department-boundary check applies consistently.
     const effectiveRole = activeRole === 'HOD' ? 'DEPARTMENT_HEAD' : activeRole;
     const isSuperAdmin = ['SUPER_ADMIN', 'OWNER'].includes(activeRole);
-    const isGlobalAdmin = ['ADMIN', 'SUPER_ADMIN', 'OWNER', 'GENERAL_MANAGER'].includes(activeRole);
+    const isGlobalAdmin = ['ADMIN', 'SUPER_ADMIN', 'OWNER', 'GENERAL_MANAGER', 'DIRECTOR', 'HOTEL_MANAGER', 'CEO', 'FINANCIAL_CONTROLLER'].includes(activeRole);
 
     // 2. Resolve accessible properties & staff profile
     let accessiblePropertyIds: string[] = [];
