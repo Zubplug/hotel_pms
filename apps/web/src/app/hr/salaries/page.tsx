@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Download, Search, WalletCards } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 type Employee = {
   id: string;
@@ -21,6 +22,7 @@ type Employee = {
     effectiveFrom?: string;
   } | null;
 };
+type SalaryCalculation = { basicSalary: number; housingAllowance: number; transportAllowance: number; otherAllowances: number; grossPay: number; payeTax: number; pensionEmployee: number; nhfDeduction: number; loanRepayment: number; salaryAdvance: number; penaltyDeduction: number; totalDeductions: number; netPay: number; pensionEmployer: number; nsitfEmployer: number; itfEmployer: number; taxableIncome: number; cra: number };
 
 const money = (value: number, currency = 'NGN') =>
   new Intl.NumberFormat('en-NG', { style: 'currency', currency, maximumFractionDigits: 0 }).format(value || 0);
@@ -33,6 +35,18 @@ export default function SalariesPage() {
   const [status, setStatus] = useState('ACTIVE');
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [breakdown, setBreakdown] = useState<{ calculation: SalaryCalculation; currency: string; statutoryVersion: string } | null>(null);
+  const [breakdownLoading, setBreakdownLoading] = useState(false);
+
+  useEffect(() => {
+    if (!selectedId) { setBreakdown(null); return; }
+    setBreakdownLoading(true);
+    fetch(`/api/hr/salaries/${selectedId}/breakdown`, { cache: 'no-store' })
+      .then((response) => response.ok ? response.json() : Promise.reject(new Error('Unable to load salary breakdown')))
+      .then((data) => setBreakdown(data))
+      .catch((error) => console.error(error))
+      .finally(() => setBreakdownLoading(false));
+  }, [selectedId]);
 
   useEffect(() => {
     fetch('/api/hr/employees?limit=200')
@@ -107,7 +121,7 @@ export default function SalariesPage() {
         </div>
       </section>
 
-      {selectedId && (() => { const employee = employees.find((item) => item.id === selectedId); if (!employee) return null; return <Breakdown employee={employee} />; })()}
+      {selectedId && (() => { const employee = employees.find((item) => item.id === selectedId); if (!employee) return null; return <BreakdownModal employee={employee} breakdown={breakdown} loading={breakdownLoading} onClose={() => setSelectedId(null)} />; })()}
     </main>
   );
 }
@@ -116,7 +130,7 @@ function Summary({ label, value }: { label: string; value: string }) {
   return <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4"><div className="flex items-center gap-2 text-xs uppercase tracking-wider text-slate-500"><WalletCards className="h-4 w-4 text-teal-400" />{label}</div><div className="mt-2 text-xl font-bold text-white">{value}</div></div>;
 }
 
-function Breakdown({ employee }: { employee: Employee }) {
+function BreakdownModal({ employee, breakdown, loading, onClose }: { employee: Employee; breakdown: { calculation: SalaryCalculation; currency: string; statutoryVersion: string } | null; loading: boolean; onClose: () => void }) {
   const salary = employee.salary;
   const earnings = [
     ['Basic salary', numberValue(salary?.basicSalary)],
@@ -125,5 +139,9 @@ function Breakdown({ employee }: { employee: Employee }) {
     ['Other allowances', numberValue(salary?.otherAllowances)],
   ] as const;
   const gross = earnings.reduce((total, [, amount]) => total + amount, 0);
-  return <section className="rounded-2xl border border-teal-400/20 bg-slate-900 p-5"><div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center"><div><h2 className="text-lg font-bold text-white">Salary breakdown · {employee.name}</h2><p className="text-xs text-slate-500">{employee.position} · Effective {salary?.effectiveFrom ? new Date(salary.effectiveFrom).toLocaleDateString('en-NG') : 'not specified'}</p></div><div className="text-right"><p className="text-xs text-slate-500">Gross monthly salary</p><p className="text-xl font-bold text-emerald-300">{money(gross, salary?.currency)}</p></div></div><div className="mt-5 grid gap-2 sm:grid-cols-2">{earnings.map(([label, amount]) => <div key={label} className="flex justify-between rounded-lg bg-slate-950/70 px-4 py-3 text-sm"><span className="text-slate-400">{label}</span><span className="font-medium text-slate-100">{money(amount, salary?.currency)}</span></div>)}</div><p className="mt-4 text-xs leading-5 text-slate-500">Payroll deductions such as PAYE, pension, NHF, loans, and other liabilities are calculated on the Payroll Runs page when a payroll period is processed.</p></section>;
+  const calculation = breakdown?.calculation;
+  const deductions = calculation ? [['PAYE tax', calculation.payeTax], ['Employee pension', calculation.pensionEmployee], ['NHF', calculation.nhfDeduction], ['Loan repayment', calculation.loanRepayment], ['Salary advance', calculation.salaryAdvance], ['Other liabilities / penalties', calculation.penaltyDeduction]] as const : [];
+  return <Dialog open onOpenChange={(open) => !open && onClose()}><DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto border-slate-800 bg-slate-950 text-slate-100 sm:max-w-3xl"><DialogHeader><DialogTitle className="text-xl font-bold text-white">Salary breakdown · {employee.name}</DialogTitle><DialogDescription>{employee.position} · Effective {salary?.effectiveFrom ? new Date(salary.effectiveFrom).toLocaleDateString('en-NG') : 'not specified'}</DialogDescription></DialogHeader>{loading ? <div className="py-16 text-center text-sm text-slate-400">Calculating statutory deductions…</div> : calculation ? <div className="space-y-5"><div className="grid gap-3 sm:grid-cols-3"><Summary label="Gross monthly" value={money(calculation.grossPay, breakdown?.currency)} /><Summary label="Total deductions" value={money(calculation.totalDeductions, breakdown?.currency)} /><Summary label="Estimated net pay" value={money(calculation.netPay, breakdown?.currency)} /></div><div className="grid gap-5 md:grid-cols-2"><section className="rounded-xl border border-emerald-400/20 bg-emerald-400/[.05] p-4"><h3 className="font-semibold text-emerald-100">Earnings</h3><div className="mt-3 space-y-2">{earnings.map(([name, amount]) => <Row key={name} label={name} value={money(amount, breakdown?.currency)} />)}<div className="border-t border-white/10 pt-2"><Row label="Gross salary" value={money(calculation.grossPay, breakdown?.currency)} strong /></div></div></section><section className="rounded-xl border border-rose-400/20 bg-rose-400/[.05] p-4"><h3 className="font-semibold text-rose-100">Deductions</h3><div className="mt-3 space-y-2">{deductions.map(([name, amount]) => <Row key={name} label={name} value={money(amount, breakdown?.currency)} />)}<div className="border-t border-white/10 pt-2"><Row label="Total deductions" value={money(calculation.totalDeductions, breakdown?.currency)} strong /></div></div></section></div><section className="rounded-xl border border-slate-800 bg-slate-900/70 p-4"><h3 className="font-semibold text-white">Payroll calculation details</h3><div className="mt-3 grid gap-3 text-sm sm:grid-cols-3"><Row label="Taxable income" value={money(calculation.taxableIncome, breakdown?.currency)} /><Row label="CRA relief" value={money(calculation.cra, breakdown?.currency)} /><Row label="Employer pension" value={money(calculation.pensionEmployer, breakdown?.currency)} /><Row label="NSITF employer cost" value={money(calculation.nsitfEmployer, breakdown?.currency)} /><Row label="ITF employer cost" value={money(calculation.itfEmployer, breakdown?.currency)} /><Row label="Rule version" value={breakdown?.statutoryVersion || 'Default'} /></div><p className="mt-4 text-xs leading-5 text-slate-500">This is an estimated monthly calculation using the current salary structure, active loan deductions, approved salary advances, and effective statutory rules. The final payslip is created when Payroll Runs is processed.</p></section></div> : <div className="py-10 text-center text-sm text-rose-300">Salary breakdown is unavailable.</div>}</DialogContent></Dialog>;
 }
+
+function Row({ label, value, strong = false }: { label: string; value: string; strong?: boolean }) { return <div className={`flex justify-between gap-3 ${strong ? 'font-bold text-white' : 'text-slate-300'}`}><span>{label}</span><span>{value}</span></div>; }
