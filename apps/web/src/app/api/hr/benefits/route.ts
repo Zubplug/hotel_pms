@@ -3,10 +3,19 @@ import { randomUUID } from 'crypto';
 import prisma from '@hotel-pms/db';
 import { HrAuthorizationService } from '@/lib/services/hr-authorization-service';
 
+const MANAGEMENT_ROLES = ['GENERAL_MANAGER', 'HOTEL_MANAGER', 'CEO', 'ADMIN', 'SUPER_ADMIN', 'OWNER', 'FINANCIAL_CONTROLLER'];
+const HR_BENEFIT_REVIEW_ROLES = ['HR_MANAGER', 'HR_OFFICER', 'PAYROLL_OFFICER', 'ADMIN', 'SUPER_ADMIN', 'OWNER'];
+
+function canReviewBenefits(authContext: any) {
+  return HR_BENEFIT_REVIEW_ROLES.includes(authContext.role) || HrAuthorizationService.can(authContext, 'hr.benefits.manage');
+}
+
 export async function GET(req: NextRequest) {
   try {
     const authContext = await HrAuthorizationService.resolveAuthContext(req);
     const canViewAllBenefits = HrAuthorizationService.can(authContext, 'hr.employee.view');
+    const canReview = canReviewBenefits(authContext);
+    const canViewBenefitDetails = authContext.canViewSensitive || canReview || MANAGEMENT_ROLES.includes(authContext.role);
 
     const organizationId = authContext.organizationId;
     const propertyId = authContext.propertyId;
@@ -45,13 +54,17 @@ export async function GET(req: NextRequest) {
         staffName: `${l.staff.firstName || ''} ${l.staff.lastName || ''}`.trim(),
         department: l.staff.department,
         position: l.staff.position,
-        principalAmount: authContext.canViewSensitive || l.staff.userId === authContext.userId ? Number(l.principalAmount) : null,
-        balanceRemaining: authContext.canViewSensitive || l.staff.userId === authContext.userId ? Number(l.remainingBalance) : null,
-        monthlyDeduction: authContext.canViewSensitive || l.staff.userId === authContext.userId ? Number(l.monthlyDeduction) : null,
+        loanNumber: l.loanNumber,
+        principalAmount: canViewBenefitDetails || l.staff.userId === authContext.userId ? Number(l.principalAmount) : null,
+        balanceRemaining: canViewBenefitDetails || l.staff.userId === authContext.userId ? Number(l.remainingBalance) : null,
+        monthlyDeduction: canViewBenefitDetails || l.staff.userId === authContext.userId ? Number(l.monthlyDeduction) : null,
         tenorMonths: l.termMonths,
+        disbursementDate: l.disbursementDate,
         reason: l.reason,
         status: l.status,
         requestedBy: l.requestedBy,
+        hrApprovedBy: l.hrApprovedBy,
+        hrApprovedAt: l.hrApprovedAt,
         approvedBy: l.approvedBy,
         approvedAt: l.approvedAt,
         rejectionReason: l.rejectionReason,
@@ -62,17 +75,20 @@ export async function GET(req: NextRequest) {
         staffId: a.staffId,
         staffName: `${a.staff.firstName || ''} ${a.staff.lastName || ''}`.trim(),
         department: a.staff.department,
-        amount: authContext.canViewSensitive || a.staff.userId === authContext.userId ? Number(a.amount) : null,
+        amount: canViewBenefitDetails || a.staff.userId === authContext.userId ? Number(a.amount) : null,
         reason: a.reason,
         status: a.status,
         requestedBy: a.requestedBy,
+        hrApprovedBy: a.hrApprovedBy,
+        hrApprovedAt: a.hrApprovedAt,
         approvedBy: a.approvedBy,
         approvedAt: a.approvedAt,
         rejectionReason: a.rejectionReason,
         createdAt: a.createdAt,
       })),
       role: authContext.role,
-      canApprove: ['GENERAL_MANAGER', 'HOTEL_MANAGER', 'CEO', 'ADMIN', 'SUPER_ADMIN', 'OWNER', 'FINANCIAL_CONTROLLER'].includes(authContext.role),
+      canApprove: MANAGEMENT_ROLES.includes(authContext.role),
+      canReviewBenefits: canReview,
     });
   } catch (error: any) {
     if (error.message?.includes('Forbidden') || error.message?.includes('Unauthorized')) {
@@ -187,13 +203,15 @@ export async function PATCH(req: NextRequest) {
     const authContext = await HrAuthorizationService.resolveAuthContext(req);
     const body = await req.json();
     const { action, id, reason } = body;
-    const canApprove = ['GENERAL_MANAGER', 'HOTEL_MANAGER', 'CEO', 'ADMIN', 'SUPER_ADMIN', 'OWNER', 'FINANCIAL_CONTROLLER'].includes(authContext.role);
-    if (!canApprove) return NextResponse.json({ error: 'Only an independent General Manager or authorized executive may approve benefits.' }, { status: 403 });
-    if (!id || !['APPROVE_LOAN', 'REJECT_LOAN', 'APPROVE_ADVANCE', 'REJECT_ADVANCE'].includes(action)) {
+    const isHrAction = ['HR_APPROVE_LOAN', 'HR_REJECT_LOAN', 'HR_APPROVE_ADVANCE', 'HR_REJECT_ADVANCE'].includes(action);
+    const canApprove = MANAGEMENT_ROLES.includes(authContext.role);
+    if (!isHrAction && !canApprove) return NextResponse.json({ error: 'Only an independent General Manager or authorized executive may approve benefits.' }, { status: 403 });
+    if (isHrAction && !canReviewBenefits(authContext)) return NextResponse.json({ error: 'Only an authorized HR reviewer may review benefits.' }, { status: 403 });
+    if (!id || !['HR_APPROVE_LOAN', 'HR_REJECT_LOAN', 'HR_APPROVE_ADVANCE', 'HR_REJECT_ADVANCE', 'APPROVE_LOAN', 'REJECT_LOAN', 'APPROVE_ADVANCE', 'REJECT_ADVANCE'].includes(action)) {
       return NextResponse.json({ error: 'A valid benefit approval action and record id are required.' }, { status: 400 });
     }
     const isLoan = action.endsWith('LOAN');
-    const approving = action.startsWith('APPROVE');
+    const approving = action.includes('APPROVE');
     if (!approving && String(reason || '').trim().length < 10) {
       return NextResponse.json({ error: 'A detailed rejection reason is required.' }, { status: 400 });
     }
@@ -205,10 +223,12 @@ export async function PATCH(req: NextRequest) {
         resource = 'EmployeeLoan';
         const loan = await tx.employeeLoan.findFirst({ where: { id, propertyId: authContext.propertyId } });
         if (!loan) throw new Error('Loan request not found.');
-        if (loan.status !== 'PENDING') throw new Error(`Loan request is already ${loan.status.toLowerCase()}.`);
+        const expectedStatus = isHrAction ? 'PENDING' : 'MANAGER_REVIEW';
+        if (loan.status !== expectedStatus) throw new Error(`Loan request is not awaiting ${isHrAction ? 'HR' : 'manager'} review.`);
         if (loan.requestedBy === authContext.userId) throw new Error('Maker-checker violation: the requester cannot approve their own loan.');
         result = await tx.employeeLoan.update({ where: { id }, data: approving ? {
-          status: 'ACTIVE', approvedBy: authContext.userId, approvedAt: new Date(), rejectionReason: null, rejectedBy: null, rejectedAt: null,
+          ...(isHrAction ? { status: 'MANAGER_REVIEW', hrApprovedBy: authContext.userId, hrApprovedAt: new Date() } : { status: 'ACTIVE', approvedBy: authContext.userId, approvedAt: new Date() }),
+          rejectionReason: null, rejectedBy: null, rejectedAt: null,
         } : {
           status: 'REJECTED', rejectedBy: authContext.userId, rejectedAt: new Date(), rejectionReason: String(reason).trim(),
         } });
@@ -216,10 +236,12 @@ export async function PATCH(req: NextRequest) {
         resource = 'SalaryAdvance';
         const advance = await tx.salaryAdvance.findFirst({ where: { id, propertyId: authContext.propertyId } });
         if (!advance) throw new Error('Salary advance request not found.');
-        if (advance.status !== 'PENDING') throw new Error(`Salary advance is already ${advance.status.toLowerCase()}.`);
+        const expectedStatus = isHrAction ? 'PENDING' : 'MANAGER_REVIEW';
+        if (advance.status !== expectedStatus) throw new Error(`Salary advance is not awaiting ${isHrAction ? 'HR' : 'manager'} review.`);
         if (advance.requestedBy === authContext.userId) throw new Error('Maker-checker violation: the requester cannot approve their own advance.');
         result = await tx.salaryAdvance.update({ where: { id }, data: approving ? {
-          status: 'APPROVED', approvedBy: authContext.userId, approvedAt: new Date(), rejectionReason: null, rejectedBy: null, rejectedAt: null,
+          ...(isHrAction ? { status: 'MANAGER_REVIEW', hrApprovedBy: authContext.userId, hrApprovedAt: new Date() } : { status: 'APPROVED', approvedBy: authContext.userId, approvedAt: new Date() }),
+          rejectionReason: null, rejectedBy: null, rejectedAt: null,
         } : {
           status: 'REJECTED', rejectedBy: authContext.userId, rejectedAt: new Date(), rejectionReason: String(reason).trim(),
         } });

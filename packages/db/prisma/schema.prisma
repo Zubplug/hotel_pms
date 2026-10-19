@@ -8769,9 +8769,11 @@ model EmployeeLoan {
   disbursementDate DateTime @db.Date
   reason           String
 
-  status          String    @default("ACTIVE") // PENDING | ACTIVE | FULLY_PAID | WRITTEN_OFF
+  status          String    @default("ACTIVE") // PENDING | MANAGER_REVIEW | ACTIVE | FULLY_PAID | WRITTEN_OFF | REJECTED
   approvedBy      String?   @db.Uuid
   approvedAt      DateTime? @db.Timestamptz
+  hrApprovedBy    String?   @db.Uuid
+  hrApprovedAt    DateTime? @db.Timestamptz
   requestedBy     String?   @db.Uuid
   rejectedBy      String?   @db.Uuid
   rejectedAt      DateTime? @db.Timestamptz
@@ -8807,9 +8809,11 @@ model SalaryAdvance {
   reason                String
   targetPayrollPeriodId String? @db.Uuid
 
-  status          String    @default("PENDING") // PENDING | APPROVED | DEDUCTED | REJECTED
+  status          String    @default("PENDING") // PENDING | MANAGER_REVIEW | APPROVED | DEDUCTED | REJECTED
   approvedBy      String?   @db.Uuid
   approvedAt      DateTime? @db.Timestamptz
+  hrApprovedBy    String?   @db.Uuid
+  hrApprovedAt    DateTime? @db.Timestamptz
   requestedBy     String?   @db.Uuid
   rejectedBy      String?   @db.Uuid
   rejectedAt      DateTime? @db.Timestamptz

@@ -29,6 +29,7 @@ export async function POST(request: NextRequest) {
   if (!slug && !property.website) return NextResponse.json({ error: "This property has no public booking or website destination" }, { status: 409 });
   const code = `REACH-${crypto.randomUUID().replaceAll("-", "").slice(0, 12).toUpperCase()}`;
   const siteOrigin = process.env.NEXT_PUBLIC_SITE_URL || request.nextUrl.origin;
+  const programId = property.referralProgram.id;
   // Keep the implementation endpoint private-looking and stable for partners.
   // The friendly route performs tracking and then resolves the correct
   // booking-engine or standalone-property destination.
@@ -42,7 +43,7 @@ export async function POST(request: NextRequest) {
     if (!currentPartner.organizationId) {
       await tx.referralPartner.update({ where: { id: partner.id }, data: { organizationId: property.organizationId } });
     }
-    return tx.referralCampaign.create({ data: { organizationId: property.organizationId, propertyId, programId: property.referralProgram.id, partnerId: partner.id, name, code, category, targetUrl, commissionBps: 700 } });
+    return tx.referralCampaign.create({ data: { organizationId: property.organizationId, propertyId, programId, partnerId: partner.id, name, code, category, targetUrl, commissionBps: 700 } });
   });
   return NextResponse.json({ campaign }, { status: 201 });
 }

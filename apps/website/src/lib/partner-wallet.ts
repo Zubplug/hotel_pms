@@ -5,6 +5,7 @@ import { resolveSecretRef } from "@/lib/payment-providers/booking-account";
 import { partnerPropertyWalletSnapshot } from "@/lib/partner-property-wallet";
 
 const PAYABLE_STATUSES = ["APPROVED", "PAYABLE", "PAID"];
+const PUBLIC_PAYMENT_WEBHOOK_URL = process.env.PUBLIC_PAYMENT_WEBHOOK_URL || "https://getlodgecore.vercel.app/api/v1/public/payment/webhook";
 
 export async function syncPartnerWallet(partnerId: string) {
   return prisma.$transaction(async (tx) => {
@@ -94,7 +95,7 @@ export async function attemptPartnerWithdrawal(payoutId: string) {
   await prisma.referralPayout.update({ where: { id: payout.id }, data: { status: "PROCESSING", payoutReference: reference, settlementMethod: "FLUTTERWAVE_TRANSFER" } });
   try {
     const secretKey = await propertyFlutterwaveSecret(payout.organizationId, payout.propertyId);
-    const transfer = await createFlutterwaveTransfer({ secretKey, amount: Number(payout.amount), currency: payout.currency, bankCode, accountNumber, beneficiaryName, reference, narration: "LodgeCore Reach partner commission", meta: { payoutId: payout.id, partnerId: payout.partnerId, propertyId: payout.propertyId } });
+    const transfer = await createFlutterwaveTransfer({ secretKey, amount: Number(payout.amount), currency: payout.currency, bankCode, accountNumber, beneficiaryName, reference, callbackUrl: PUBLIC_PAYMENT_WEBHOOK_URL, narration: "LodgeCore Reach partner commission", meta: { payoutId: payout.id, partnerId: payout.partnerId, propertyId: payout.propertyId } });
     const successful = ["SUCCESSFUL", "COMPLETED"].includes(String(transfer.status).toUpperCase());
     await prisma.referralPayout.update({ where: { id: payout.id }, data: { status: successful ? "PAID" : "PROCESSING", processedAt: successful ? new Date() : null, failureReason: successful ? null : `Flutterwave status: ${transfer.status}` } });
     return { status: successful ? "PAID" : "PROCESSING", transfer };

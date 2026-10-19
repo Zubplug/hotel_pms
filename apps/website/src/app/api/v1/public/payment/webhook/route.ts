@@ -6,10 +6,14 @@ import { getPropertyBusinessDate } from '@/lib/date-utils';
 import { sendBookingConfirmedEmail, sendPaymentReceiptEmail } from '@/lib/email/booking-emails';
 import { sendBookingPaymentFailedEmail } from '@/lib/email/booking-emails';
 import { getBookingPaymentAccount, resolveSecretRef } from '@/lib/payment-providers/booking-account';
+import { decryptPaymentCredential } from '@/lib/payment-providers/credentials';
 import { FlutterwaveProvider } from '@/lib/payment-providers/flutterwave';
 import { postBookingAdvanceDeposit } from '@/lib/booking-engine/financial-service';
 import { reconcileFlutterwaveRefund } from '@/lib/booking-engine/flutterwave-refund-reconciliation';
 import { NotificationEngine } from '@/lib/notification-engine';
+import { getFlutterwaveTransfer } from '@hotel-pms/db';
+import { GeneralLedgerService } from '@/lib/services/general-ledger-service';
+import type { TenantContext } from '@/lib/organization-access';
 
 export async function POST(req: NextRequest) {
   const rawBody = await req.text();
@@ -23,6 +27,10 @@ export async function POST(req: NextRequest) {
 
   if (isFlutterwaveRefundEvent(event)) {
     return handleFlutterwaveRefundWebhook(req, rawBody, event);
+  }
+
+  if (isFlutterwaveTransferEvent(event)) {
+    return handleFlutterwaveTransferWebhook(req, rawBody, event);
   }
 
   if (event.event !== 'charge.success' && event.event !== 'charge.completed') {
@@ -325,6 +333,226 @@ export async function POST(req: NextRequest) {
     }).catch(() => null);
     await notifyPaymentFailure(Number(bpt.amount), bpt.currency);
     return new NextResponse('OK', { status: 200 });
+  }
+}
+
+function isFlutterwaveTransferEvent(event: any): boolean {
+  const eventName = String(event?.event || event?.type || '').toLowerCase();
+  return eventName.includes('transfer') || String(event?.data?.event?.type || '').toLowerCase() === 'transfer';
+}
+
+function transferStatus(status: unknown): 'SUCCESSFUL' | 'FAILED' | 'PROCESSING' {
+  const normalized = String(status || '').toUpperCase();
+  if (['SUCCESSFUL', 'COMPLETED', 'SUCCESS'].includes(normalized)) return 'SUCCESSFUL';
+  if (['FAILED', 'CANCELLED', 'CANCELED'].includes(normalized)) return 'FAILED';
+  return 'PROCESSING';
+}
+
+async function getPropertyFlutterwaveCredentials(propertyId: string, target?: string) {
+  const account = await prisma.bookingPaymentAccount.findFirst({
+    where: {
+      propertyId,
+      provider: 'FLUTTERWAVE',
+      mode: 'CUSTOMER',
+      isActive: true,
+      ...(target ? { target } : {}),
+    },
+    select: { secretCiphertext: true, secretRef: true, webhookSecretCiphertext: true, webhookSecretRef: true },
+  });
+  if (!account) return null;
+  const secretKey = account.secretCiphertext
+    ? decryptPaymentCredential(account.secretCiphertext)
+    : resolveSecretRef(account.secretRef, 'FLW_SECRET_KEY');
+  const webhookSecret = account.webhookSecretCiphertext
+    ? decryptPaymentCredential(account.webhookSecretCiphertext)
+    : resolveSecretRef(account.webhookSecretRef, 'FLW_WEBHOOK_SECRET_HASH');
+  return { secretKey, webhookSecret };
+}
+
+async function handleFlutterwaveTransferWebhook(req: NextRequest, rawBody: string, event: any) {
+  const data = event?.data || {};
+  const reference = String(data.reference || data.tx_ref || '').trim();
+  if (!reference) return new NextResponse('OK', { status: 200 });
+
+  const [payroll, reach, reimbursement] = await Promise.all([
+    prisma.payrollPayout.findUnique({ where: { providerReference: reference } }),
+    prisma.referralPayout.findFirst({ where: { payoutReference: reference } }),
+    prisma.expenseClaim.findFirst({ where: { paymentReference: reference, autoPaymentStatus: { in: ['PROCESSING', 'SUCCESSFUL'] } }, select: { id: true, propertyId: true, amount: true, currency: true, paymentReference: true } }),
+  ]);
+  if (!payroll && !reach && !reimbursement) return new NextResponse('OK', { status: 200 });
+  if ([payroll, reach, reimbursement].filter(Boolean).length > 1) return new NextResponse('Conflicting payout reference', { status: 409 });
+
+  const propertyId = payroll?.propertyId || reach?.propertyId || reimbursement!.propertyId;
+  let credentials: { secretKey: string; webhookSecret: string } | null;
+  try {
+    credentials = await getPropertyFlutterwaveCredentials(propertyId, payroll || reimbursement ? 'PAYROLL' : undefined);
+  } catch (error) {
+    console.error('[Public Payment Webhook] payout credentials unavailable', { propertyId, error });
+    return new NextResponse('Payment provider is not configured', { status: 503 });
+  }
+  if (!credentials) return new NextResponse('Payment provider is not configured', { status: 503 });
+
+  const provider = new FlutterwaveProvider(credentials.secretKey, credentials.webhookSecret);
+  const signature = req.headers.get('flutterwave-signature')?.trim() || '';
+  const legacySignature = req.headers.get('verif-hash')?.trim() || '';
+  if (!provider.validateWebhookSignature(rawBody, signature) && !provider.validateWebhookSignature(rawBody, legacySignature)) {
+    return new NextResponse('Forbidden', { status: 403 });
+  }
+
+  const transferId = String(data.id || data.transfer_id || payroll?.providerTransferId || '').trim();
+  if (!transferId) return new NextResponse('OK', { status: 200 });
+
+  let transfer;
+  try {
+    transfer = await getFlutterwaveTransfer(credentials.secretKey, transferId);
+  } catch (error) {
+    console.error('[Public Payment Webhook] transfer verification failed', { reference, transferId, error });
+    return new NextResponse('OK', { status: 200 });
+  }
+  if (String(transfer.reference || '') !== reference) return new NextResponse('Transfer reference mismatch', { status: 409 });
+
+  const status = transferStatus(transfer.status);
+  const failureReason = status === 'FAILED' ? (transfer.complete_message || `Flutterwave status: ${transfer.status}`).slice(0, 500) : null;
+  if (reimbursement) {
+    if (Math.abs(Number(transfer.amount) - Number(reimbursement.amount)) > 0.01 || String(transfer.currency).toUpperCase() !== reimbursement.currency.toUpperCase()) {
+      return new NextResponse('Transfer amount or currency mismatch', { status: 409 });
+    }
+    if (status === 'SUCCESSFUL') {
+      try {
+        await settleEmployeeReimbursement(reimbursement.id, reference);
+      } catch (error) {
+        console.error('[Public Payment Webhook] reimbursement settlement failed', { reimbursementId: reimbursement.id, error });
+        return new NextResponse('Reimbursement reconciliation unavailable', { status: 503 });
+      }
+    } else if (status === 'FAILED') {
+      await prisma.expenseClaim.updateMany({ where: { id: reimbursement.id, autoPaymentStatus: 'PROCESSING' }, data: { autoPaymentStatus: 'FAILED' } });
+    }
+    return new NextResponse('OK', { status: 200 });
+  }
+
+  if (payroll) {
+    if (Math.abs(Number(transfer.amount) - Number(payroll.amount)) > 0.01 || String(transfer.currency).toUpperCase() !== payroll.currency.toUpperCase()) {
+      return new NextResponse('Transfer amount or currency mismatch', { status: 409 });
+    }
+    await prisma.payrollPayout.update({
+      where: { id: payroll.id },
+      data: {
+        providerTransferId: transferId,
+        providerStatus: transfer.status,
+        status,
+        failureReason,
+        completedAt: status === 'PROCESSING' ? null : new Date(),
+        rawResponse: { id: transfer.id, reference: transfer.reference, status: transfer.status, amount: transfer.amount, currency: transfer.currency, source: 'PUBLIC_PAYMENT_WEBHOOK' },
+      },
+    });
+    await settlePayrollPeriodIfComplete(payroll.payrollPeriodId);
+  } else {
+    if (Math.abs(Number(transfer.amount) - Number(reach!.amount)) > 0.01 || String(transfer.currency).toUpperCase() !== reach!.currency.toUpperCase()) {
+      return new NextResponse('Transfer amount or currency mismatch', { status: 409 });
+    }
+    await prisma.$transaction(async (tx) => {
+      const current = await tx.referralPayout.findUnique({ where: { id: reach!.id } });
+      if (!current) return;
+      const alreadyTerminal = ['PAID', 'FAILED'].includes(current.status);
+      await tx.referralPayout.update({
+        where: { id: current.id },
+        data: { status: status === 'SUCCESSFUL' ? 'PAID' : status === 'FAILED' ? 'FAILED' : 'PROCESSING', processedAt: status === 'PROCESSING' ? null : new Date(), failureReason },
+      });
+      if (status === 'FAILED' && !alreadyTerminal) {
+        const wallet = await tx.referralPartnerPropertyWallet.findUnique({ where: { partnerId_propertyId: { partnerId: current.partnerId, propertyId: current.propertyId } } });
+        if (wallet) {
+          await tx.$queryRaw`SELECT id FROM "ReferralPartnerPropertyWallet" WHERE id = ${wallet.id}::uuid FOR UPDATE`;
+          const balance = Number(wallet.availableBalance) + Number(current.amount);
+          await tx.referralPartnerPropertyWallet.update({ where: { id: wallet.id }, data: { availableBalance: balance } });
+          await tx.referralPartnerPropertyWalletTransaction.create({ data: { walletId: wallet.id, partnerId: current.partnerId, propertyId: current.propertyId, payoutId: current.id, type: 'WITHDRAWAL_RELEASE', amount: current.amount, balanceAfter: balance, currency: current.currency, idempotencyKey: `REACH_PARTNER_PROPERTY_WITHDRAWAL_RELEASE:${current.id}`, completedAt: new Date(), metadata: { source: 'PUBLIC_PAYMENT_WEBHOOK', reason: failureReason } } });
+        }
+      }
+    });
+  }
+  return new NextResponse('OK', { status: 200 });
+}
+
+async function getReimbursementSystemUser(organizationId: string, tx: any) {
+  const email = `reimbursement.system+${organizationId}@lodgecore.internal`;
+  const user = await tx.user.upsert({
+    where: { email },
+    update: {},
+    create: {
+      email,
+      passwordHash: `SYSTEM_ONLY:${crypto.randomBytes(32).toString('hex')}`,
+      membership: { create: { organizationId, role: 'SYSTEM', status: 'ACTIVE', permissions: [] } },
+    },
+    select: { id: true },
+  });
+  return user.id;
+}
+
+async function ensureReimbursementCashControls(tx: any, propertyId: string) {
+  for (const definition of [
+    { type: 'SAFE', name: 'General Cashier Safe', aliases: ['Reception Safe'] },
+    { type: 'CASH_IN_TRANSIT', name: 'Cash in Transit', aliases: ['Pending Bank Deposits'] },
+  ]) {
+    const existing = await tx.cashAccount.findFirst({ where: { propertyId, OR: [{ type: definition.type }, { name: definition.name }, { name: { in: definition.aliases } }] } });
+    if (!existing) await tx.cashAccount.create({ data: { propertyId, name: definition.name, type: definition.type, balance: 0, isActive: true } });
+  }
+}
+
+async function ensureReimbursementClearingAccount(tx: any, propertyId: string) {
+  return (await tx.cashAccount.findFirst({ where: { propertyId, type: 'EXTERNAL', name: 'Cash Expense Clearing' } }))
+    || tx.cashAccount.create({ data: { propertyId, name: 'Cash Expense Clearing', type: 'EXTERNAL', balance: 0, isActive: true } });
+}
+
+async function settleEmployeeReimbursement(id: string, transferReference: string) {
+  return prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "ExpenseClaim" WHERE id = ${id}::uuid FOR UPDATE`;
+    const claim = await tx.expenseClaim.findUnique({ where: { id }, select: { id: true, propertyId: true, status: true, autoPaymentStatus: true, paymentReference: true, approvedBy: true, claimNumber: true, category: true, amount: true, description: true, property: { select: { organizationId: true } } } });
+    if (!claim || claim.paymentReference !== transferReference) throw new Error('Reimbursement transfer reference does not match the claim');
+    if (claim.status === 'REIMBURSED') return claim;
+    if (claim.status !== 'APPROVED_FOR_PAYMENT' || claim.autoPaymentStatus !== 'PROCESSING') throw new Error('Reimbursement is not awaiting automatic settlement');
+
+    const actorId = claim.approvedBy || await getReimbursementSystemUser(claim.property.organizationId, tx);
+    const context: TenantContext = { organizationId: claim.property.organizationId, userId: actorId, role: 'SYSTEM', permissions: [], propertyIds: [claim.propertyId], outletIds: [] };
+    await ensureReimbursementCashControls(tx, claim.propertyId);
+    const source = await tx.cashAccount.findFirst({ where: { propertyId: claim.propertyId, type: 'BANK_ACCOUNT', isActive: true, isDefault: true } })
+      || await tx.cashAccount.findFirst({ where: { propertyId: claim.propertyId, type: 'BANK_ACCOUNT', isActive: true }, orderBy: { createdAt: 'asc' } });
+    if (!source) {
+      await tx.expenseClaim.update({ where: { id }, data: { autoPaymentStatus: 'MANUAL_REQUIRED' } });
+      throw new Error('No active property bank account is available for reimbursement settlement');
+    }
+    if (!source.glAccountId) throw new Error(`Payment account ${source.name} is not mapped to a GL account.`);
+    const category = await tx.expenseCategory.findFirst({ where: { propertyId: claim.propertyId, isActive: true, OR: [{ name: claim.category }, { code: claim.category }] } });
+    if (!category) throw new Error(`Configure an expense category for ${claim.category} before payment.`);
+    const expenseAccount = await tx.chartOfAccount.findFirst({ where: { propertyId: claim.propertyId, code: category.debitAccount, type: 'EXPENSE', isActive: true } });
+    if (!expenseAccount) throw new Error(`Expense category ${category.name} is mapped to missing GL account ${category.debitAccount}.`);
+    const clearing = await ensureReimbursementClearingAccount(tx, claim.propertyId);
+    const amount = Number(claim.amount);
+    if (Number(source.balance) < amount) throw new Error(`Insufficient balance in ${source.name}.`);
+    await tx.cashAccount.update({ where: { id: source.id }, data: { balance: { decrement: amount } } });
+    await tx.cashAccount.update({ where: { id: clearing.id }, data: { balance: { increment: amount } } });
+    const journal = await GeneralLedgerService.postJournal(context, { propertyId: claim.propertyId, entryDate: new Date(), description: `Employee reimbursement: ${claim.claimNumber}`, reference: claim.claimNumber, sourceModule: 'AUTO_EXPENSE', lines: [
+      { accountId: expenseAccount.id, debit: amount, credit: 0, description: claim.description, sourceType: 'CASH_EXPENSE', sourceId: claim.id },
+      { accountId: source.glAccountId, debit: 0, credit: amount, description: 'BANK_TRANSFER employee reimbursement', sourceType: 'CASH_EXPENSE', sourceId: claim.id },
+    ] }, tx);
+    await tx.posCashMovement.create({ data: { propertyId: claim.propertyId, deviceId: 'web-employee-reimbursements', userId: actorId, amount, type: 'CASH_TRANSFER_OUT', sourceAccountId: source.id, destinationAccountId: clearing.id, reasonCode: 'EMPLOYEE_REIMBURSEMENT', receiptReference: claim.claimNumber, operationId: `employee-reimbursement-${claim.id}` } });
+    return tx.expenseClaim.update({ where: { id }, data: { status: 'REIMBURSED', autoPaymentStatus: 'SUCCESSFUL', paidBy: actorId, paidAt: new Date(), paymentMethod: 'BANK_TRANSFER', paymentReference: transferReference, paymentAccountId: source.id, accountingJournalEntryId: journal.id } });
+  });
+}
+
+async function settlePayrollPeriodIfComplete(payrollPeriodId: string) {
+  const [period, payouts] = await Promise.all([
+    prisma.payrollPeriod.findUnique({ where: { id: payrollPeriodId }, select: { id: true, status: true } }),
+    prisma.payrollPayout.findMany({ where: { payrollPeriodId }, select: { status: true } }),
+  ]);
+  if (!period || period.status !== 'PROCESSING' || !payouts.length) return;
+  if (payouts.every((payout) => payout.status === 'SUCCESSFUL')) {
+    const settledAt = new Date();
+    await prisma.$transaction([
+      prisma.payrollPeriod.update({ where: { id: payrollPeriodId }, data: { paymentStatus: 'SETTLED', paymentDate: settledAt, status: 'PAID' } }),
+      prisma.payslip.updateMany({ where: { payrollPeriodId }, data: { status: 'PAID' } }),
+      prisma.referralCommission.updateMany({ where: { payslip: { payrollPeriodId }, payslipId: { not: null }, status: 'APPROVED' }, data: { status: 'PAID', paidAt: settledAt } }),
+    ]);
+  } else if (payouts.some((payout) => payout.status === 'FAILED')) {
+    await prisma.payrollPeriod.update({ where: { id: payrollPeriodId }, data: { paymentStatus: 'PARTIAL' } });
   }
 }
 

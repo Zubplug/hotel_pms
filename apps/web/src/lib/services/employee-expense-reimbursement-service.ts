@@ -1,9 +1,13 @@
+import crypto from 'node:crypto';
 import prisma from '@hotel-pms/db';
 import { createFlutterwaveTransfer, resolveFlutterwaveBankAccount } from '@hotel-pms/db';
 import { getFlutterwavePayrollIntegration } from './flutterwave-payroll-service';
 import { GeneralLedgerService } from './general-ledger-service';
 import { ensureCashierControlAccountsForClient, ensureExpenseCounterpartyForClient } from './cash-account-service';
 import { TenantContext } from '../organization-access';
+
+const PUBLIC_PAYMENT_WEBHOOK_URL = process.env.PUBLIC_PAYMENT_WEBHOOK_URL
+  || 'https://getlodgecore.vercel.app/api/v1/public/payment/webhook';
 
 export const REIMBURSEMENT_STAGES = ['HR_REVIEW', 'ACCOUNTANT_REVIEW', 'GENERAL_MANAGER_REVIEW', 'APPROVED_FOR_PAYMENT', 'REIMBURSED'] as const;
 export type ReimbursementStage = typeof REIMBURSEMENT_STAGES[number];
@@ -22,6 +26,21 @@ export function reimbursementCanSeeAll(role: string) {
   return ['HR_MANAGER', 'HR_OFFICER', 'ADMIN', 'SUPER_ADMIN', 'ACCOUNTANT', 'FINANCE_MANAGER', 'GENERAL_MANAGER', 'HOTEL_MANAGER', 'CEO', 'GENERAL_CASHIER', 'CASHIER', 'FRONT_DESK_CASHIER'].includes(String(role).toUpperCase());
 }
 
+async function getReimbursementSystemUser(organizationId: string) {
+  const email = `reimbursement.system+${organizationId}@lodgecore.internal`;
+  const user = await prisma.user.upsert({
+    where: { email },
+    update: {},
+    create: {
+      email,
+      passwordHash: `SYSTEM_ONLY:${crypto.randomBytes(32).toString('hex')}`,
+      membership: { create: { organizationId, role: 'SYSTEM', status: 'ACTIVE', permissions: [] } },
+    },
+    select: { id: true },
+  });
+  return user.id;
+}
+
 export class EmployeeExpenseReimbursementService {
   static async autoSettleBankClaim(ctx: TenantContext, id: string) {
     const claim = await prisma.expenseClaim.findFirst({ where: { id, propertyId: { in: [...ctx.propertyIds], }, status: 'APPROVED_FOR_PAYMENT' }, include: { staff: { include: { salaryStructure: true } }, property: { select: { organizationId: true, autoBankReimbursementEnabled: true } } } });
@@ -36,7 +55,7 @@ export class EmployeeExpenseReimbursementService {
     await prisma.expenseClaim.update({ where: { id }, data: { autoPaymentStatus: 'PROCESSING', paymentReference: reference } });
     try {
       const beneficiary = await resolveFlutterwaveBankAccount({ secretKey: integration.credentials.secretKey, accountNumber: salary.bankAccountNumber, bankCode: salary.bankSortCode });
-      const transfer = await createFlutterwaveTransfer({ secretKey: integration.credentials.secretKey, amount: Number(claim.amount), currency: claim.currency, bankCode: salary.bankSortCode, accountNumber: salary.bankAccountNumber, beneficiaryName: beneficiary.account_name || salary.bankAccountName || `${claim.staff.firstName} ${claim.staff.lastName}`, reference, narration: `LodgeCore employee reimbursement ${claim.claimNumber}`, meta: { expenseClaimId: claim.id, claimNumber: claim.claimNumber } });
+      const transfer = await createFlutterwaveTransfer({ secretKey: integration.credentials.secretKey, amount: Number(claim.amount), currency: claim.currency, bankCode: salary.bankSortCode, accountNumber: salary.bankAccountNumber, beneficiaryName: beneficiary.account_name || salary.bankAccountName || `${claim.staff.firstName} ${claim.staff.lastName}`, reference, callbackUrl: PUBLIC_PAYMENT_WEBHOOK_URL, narration: `LodgeCore employee reimbursement ${claim.claimNumber}`, meta: { expenseClaimId: claim.id, claimNumber: claim.claimNumber } });
       if (!['SUCCESSFUL', 'COMPLETED'].includes(String(transfer.status).toUpperCase())) {
         return prisma.expenseClaim.update({ where: { id }, data: { autoPaymentStatus: 'PROCESSING', paymentReference: String(transfer.reference || reference) } });
       }
@@ -47,6 +66,40 @@ export class EmployeeExpenseReimbursementService {
     } catch (error) {
       console.error('Automatic employee reimbursement transfer failed:', error);
       return prisma.expenseClaim.update({ where: { id }, data: { autoPaymentStatus: 'MANUAL_REQUIRED' } });
+    }
+  }
+
+  /** Reconciles a delayed successful Flutterwave transfer into the property GL. */
+  static async settleFlutterwaveBankClaim(id: string, transferReference: string) {
+    const claim = await prisma.expenseClaim.findUnique({
+      where: { id },
+      select: { id: true, propertyId: true, status: true, autoPaymentStatus: true, paymentReference: true, approvedBy: true, property: { select: { organizationId: true } } },
+    });
+    if (!claim || claim.paymentReference !== transferReference) throw new Error('Reimbursement transfer reference does not match the claim');
+    if (claim.status === 'REIMBURSED') return claim;
+    if (claim.status !== 'APPROVED_FOR_PAYMENT' || claim.autoPaymentStatus !== 'PROCESSING') throw new Error('Reimbursement is not awaiting automatic settlement');
+
+    const actorId = claim.approvedBy || await getReimbursementSystemUser(claim.property.organizationId);
+    const context: TenantContext = {
+      organizationId: claim.property.organizationId,
+      userId: actorId,
+      role: 'SYSTEM',
+      permissions: [],
+      propertyIds: [claim.propertyId],
+      outletIds: [],
+    };
+    const bankAccount = await prisma.cashAccount.findFirst({ where: { propertyId: claim.propertyId, type: 'BANK_ACCOUNT', isActive: true, isDefault: true }, select: { id: true } })
+      || await prisma.cashAccount.findFirst({ where: { propertyId: claim.propertyId, type: 'BANK_ACCOUNT', isActive: true }, orderBy: { createdAt: 'asc' }, select: { id: true } });
+    if (!bankAccount) {
+      await prisma.expenseClaim.updateMany({ where: { id, status: 'APPROVED_FOR_PAYMENT', autoPaymentStatus: 'PROCESSING' }, data: { autoPaymentStatus: 'MANUAL_REQUIRED' } });
+      throw new Error('No active property bank account is available for reimbursement settlement');
+    }
+    try {
+      const settled = await this.pay(context, id, { method: 'BANK_TRANSFER', bankAccountId: bankAccount.id, paymentReference: transferReference });
+      return prisma.expenseClaim.update({ where: { id: settled.id }, data: { autoPaymentStatus: 'SUCCESSFUL' } });
+    } catch (error) {
+      await prisma.expenseClaim.updateMany({ where: { id, status: 'APPROVED_FOR_PAYMENT', autoPaymentStatus: 'PROCESSING' }, data: { autoPaymentStatus: 'MANUAL_REQUIRED' } });
+      throw error;
     }
   }
 
@@ -76,6 +129,7 @@ export class EmployeeExpenseReimbursementService {
 
   static async pay(ctx: TenantContext, id: string, input: { method: 'CASH' | 'BANK_TRANSFER'; bankAccountId?: string; paymentReference?: string }) {
     return prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "ExpenseClaim" WHERE id = ${id}::uuid FOR UPDATE`;
       const claim = await tx.expenseClaim.findFirst({ where: { id, propertyId: { in: [...ctx.propertyIds] } } });
       if (!claim || claim.status !== 'APPROVED_FOR_PAYMENT') throw new Error('Only claims approved by HR, Accounting, and the General Manager can be paid.');
       if (input.method === 'BANK_TRANSFER' && !input.paymentReference?.trim()) throw new Error('A bank transfer reference is required.');

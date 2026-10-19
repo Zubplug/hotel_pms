@@ -1017,7 +1017,7 @@ export default function EmployeesPage() {
 
       {/* Add Employee Dialog Modal */}
       <Dialog open={addModalOpen} onOpenChange={setAddModalOpen}>
-        <DialogContent className="w-[min(1100px,calc(100vw-2rem))] max-w-6xl bg-slate-900 border-slate-800 text-slate-100 max-h-[92vh] overflow-y-auto">
+        <DialogContent className="w-[min(1100px,calc(100vw-2rem))] max-w-6xl sm:max-w-6xl bg-slate-900 border-slate-800 text-slate-100 max-h-[92vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-base font-bold text-white flex items-center gap-2">
               <Plus className="w-5 h-5 text-teal-400" />

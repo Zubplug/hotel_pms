@@ -11,6 +11,7 @@ import { decryptPaymentCredential } from '@/lib/payment-providers/credentials';
 import { notifyEmployee } from '@/lib/employee-notification-service';
 
 export const FLUTTERWAVE_PAYROLL_SLUG = 'FLUTTERWAVE_PAYROLL_PAYOUT';
+const PUBLIC_PAYMENT_WEBHOOK_URL = process.env.PUBLIC_PAYMENT_WEBHOOK_URL || 'https://getlodgecore.vercel.app/api/v1/public/payment/webhook';
 
 type Credentials = { secretKey: string; webhookSecretHash: string; environment: 'TEST' | 'LIVE' };
 
@@ -121,7 +122,7 @@ export async function initiateFlutterwavePayroll(periodId: string, organizationI
     const payout = existing ?? await prisma.payrollPayout.create({ data: { organizationId, propertyId, payrollPeriodId: period.id, payslipId: payslip.id, staffId: payslip.staffId, providerReference: reference, amount: payslip.netPay, currency: payslip.currency, status: 'QUEUED' } });
     try {
       const verified = await resolveFlutterwaveBankAccount({ secretKey: integration.credentials.secretKey, accountNumber: payslip.accountNumber, bankCode: payslip.bankSortCode });
-      const transfer = await createFlutterwaveTransfer({ secretKey: integration.credentials.secretKey, amount: Number(payslip.netPay), currency: payslip.currency, bankCode: payslip.bankSortCode, accountNumber: payslip.accountNumber, beneficiaryName: verified.account_name, reference, narration: `LodgeCore payroll ${period.name}`, meta: { payrollPeriodId: period.id, payslipId: payslip.id, payoutId: payout.id } });
+      const transfer = await createFlutterwaveTransfer({ secretKey: integration.credentials.secretKey, amount: Number(payslip.netPay), currency: payslip.currency, bankCode: payslip.bankSortCode, accountNumber: payslip.accountNumber, beneficiaryName: verified.account_name, reference, callbackUrl: PUBLIC_PAYMENT_WEBHOOK_URL, narration: `LodgeCore payroll ${period.name}`, meta: { payrollPeriodId: period.id, payslipId: payslip.id, payoutId: payout.id } });
       await prisma.payrollPayout.update({ where: { id: payout.id }, data: { providerTransferId: String(transfer.id), providerStatus: transfer.status, status: ['SUCCESSFUL', 'COMPLETED'].includes(transfer.status) ? 'SUCCESSFUL' : 'PROCESSING', initiatedAt: new Date(), rawResponse: { id: transfer.id, status: transfer.status, reference: transfer.reference, amount: transfer.amount, currency: transfer.currency } } });
       initiated++;
     } catch (error) {

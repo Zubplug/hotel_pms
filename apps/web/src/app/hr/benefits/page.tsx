@@ -27,7 +27,7 @@ export default function BenefitsPage() {
   const [loans, setLoans] = useState<any[]>([]);
   const [advances, setAdvances] = useState<any[]>([]);
   const [employees, setEmployees] = useState<any[]>([]);
-  const [role, setRole] = useState('');
+  const [canReviewBenefits, setCanReviewBenefits] = useState(false);
   const [loading, setLoading] = useState(true);
 
   // Modals
@@ -61,7 +61,7 @@ export default function BenefitsPage() {
         const data = await benRes.json();
         setLoans(data.loans || []);
         setAdvances(data.advances || []);
-        setRole(data.role || '');
+        setCanReviewBenefits(Boolean(data.canReviewBenefits));
       }
       if (empRes.ok) {
         const empData = await empRes.json();
@@ -93,7 +93,8 @@ export default function BenefitsPage() {
     fetchData();
   };
 
-  const canApprove = ['GENERAL_MANAGER', 'HOTEL_MANAGER', 'CEO', 'ADMIN', 'SUPER_ADMIN', 'OWNER', 'FINANCIAL_CONTROLLER'].includes(role);
+  const canReview = canReviewBenefits;
+  const reviewAction = (type: 'LOAN' | 'ADVANCE', approved: boolean) => `${approved ? 'HR_APPROVE' : 'HR_REJECT'}_${type}`;
 
   useEffect(() => {
     fetchData();
@@ -255,7 +256,7 @@ export default function BenefitsPage() {
                           </span>
                         </td>
                         <td className="py-3 px-4">
-                          {canApprove && l.status === 'PENDING' && <div className="flex gap-1.5"><Button size="sm" onClick={() => void updateRequest(l.id, 'APPROVE_LOAN')} className="h-7 bg-emerald-600 px-2 text-[10px] hover:bg-emerald-500">Approve</Button><Button size="sm" variant="outline" onClick={() => void updateRequest(l.id, 'REJECT_LOAN')} className="h-7 border-rose-400/30 px-2 text-[10px] text-rose-300">Reject</Button></div>}
+                          {canReview && l.status === 'PENDING' && <div className="flex gap-1.5"><Button size="sm" onClick={() => void updateRequest(l.id, reviewAction('LOAN', true))} className="h-7 bg-emerald-600 px-2 text-[10px] hover:bg-emerald-500">HR approve</Button><Button size="sm" variant="outline" onClick={() => void updateRequest(l.id, reviewAction('LOAN', false))} className="h-7 border-rose-400/30 px-2 text-[10px] text-rose-300">Reject</Button></div>}
                           {l.rejectionReason && <p className="mt-1 max-w-40 text-[10px] text-rose-300">{l.rejectionReason}</p>}
                         </td>
                       </tr>
@@ -302,7 +303,7 @@ export default function BenefitsPage() {
                         </td>
                         <td className="py-3 px-4 text-slate-500">{new Date(a.createdAt).toLocaleDateString()}</td>
                         <td className="py-3 px-4">
-                          {canApprove && a.status === 'PENDING' && <div className="flex gap-1.5"><Button size="sm" onClick={() => void updateRequest(a.id, 'APPROVE_ADVANCE')} className="h-7 bg-emerald-600 px-2 text-[10px] hover:bg-emerald-500">Approve</Button><Button size="sm" variant="outline" onClick={() => void updateRequest(a.id, 'REJECT_ADVANCE')} className="h-7 border-rose-400/30 px-2 text-[10px] text-rose-300">Reject</Button></div>}
+                          {canReview && a.status === 'PENDING' && <div className="flex gap-1.5"><Button size="sm" onClick={() => void updateRequest(a.id, reviewAction('ADVANCE', true))} className="h-7 bg-emerald-600 px-2 text-[10px] hover:bg-emerald-500">HR approve</Button><Button size="sm" variant="outline" onClick={() => void updateRequest(a.id, reviewAction('ADVANCE', false))} className="h-7 border-rose-400/30 px-2 text-[10px] text-rose-300">Reject</Button></div>}
                           {a.rejectionReason && <p className="mt-1 max-w-40 text-[10px] text-rose-300">{a.rejectionReason}</p>}
                         </td>
                       </tr>
