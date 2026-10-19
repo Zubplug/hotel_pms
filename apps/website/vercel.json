@@ -10,10 +10,6 @@
     {
       "path": "/api/v1/cron/reconcile-flutterwave-refunds",
       "schedule": "0 5 * * *"
-    },
-    {
-      "path": "/api/v1/cron/expire-trials",
-      "schedule": "0 * * * *"
     }
   ]
 }
