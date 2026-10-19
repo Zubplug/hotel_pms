@@ -1,4 +1,4 @@
-import { ReactNode } from 'react';
+import { ReactNode, Suspense } from 'react';
 import { PoolTerminalShell } from './_components/PoolTerminalShell';
 
 export const metadata = {
@@ -7,5 +7,5 @@ export const metadata = {
 };
 
 export default function SwimmingPoolLayout({ children }: { children: ReactNode }) {
-  return <PoolTerminalShell>{children}</PoolTerminalShell>;
+  return <Suspense fallback={<div className="min-h-screen bg-[#07111f]" />}><PoolTerminalShell>{children}</PoolTerminalShell></Suspense>;
 }
