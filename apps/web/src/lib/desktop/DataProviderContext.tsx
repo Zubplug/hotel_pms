@@ -111,7 +111,7 @@ export function DataProviderWrapper({ children }: { children: React.ReactNode })
   const provider = (isDesktopMode ? DesktopDataProvider : OnlineDataProvider) as unknown as LodgeCoreDataProvider;
 
   return (
-    <DataProviderContext.Provider value={{ provider, isDesktopMode, isOnline, syncStatus, pos: provider.pos as any }}>
+    <DataProviderContext.Provider value={{ provider, isDesktopMode, isOnline, syncStatus, pos: provider.pos as any, pool: provider.pool }}>
       {children}
     </DataProviderContext.Provider>
   );
