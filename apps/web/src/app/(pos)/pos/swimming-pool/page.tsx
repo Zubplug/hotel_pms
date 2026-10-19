@@ -330,7 +330,7 @@ function NewAdmissionDialog({ data, onClose, onSuccess }: {
     guestSearch: '',
     selectedGuest: null,
     selectedFolioId: null,
-    passTypeId: data.passTypes[0]?.id ?? '',
+    passTypeId: (data.passTypes ?? [])[0]?.id ?? '',
     guestCount: 1,
     identifier: '',
     notes: '',
@@ -342,12 +342,12 @@ function NewAdmissionDialog({ data, onClose, onSuccess }: {
     error: null,
   });
 
-  const [guestMatches, setGuestMatches] = useState<GuestMatch[]>(data.guestMatches);
+  const [guestMatches, setGuestMatches] = useState<GuestMatch[]>(data.guestMatches ?? []);
   const searchRef = useRef<NodeJS.Timeout | null>(null);
 
   const set = (patch: Partial<AdmissionState>) => setState((s) => ({ ...s, ...patch }));
 
-  const selectedPass = data.passTypes.find((p) => p.id === state.passTypeId);
+  const selectedPass = (data.passTypes ?? []).find((p) => p.id === state.passTypeId);
 
   useEffect(() => {
     if (searchRef.current) clearTimeout(searchRef.current);
@@ -513,7 +513,7 @@ function NewAdmissionDialog({ data, onClose, onSuccess }: {
               <div>
                 <label className="block text-[11px] font-bold uppercase tracking-wider mb-1.5" style={{ color: '#64748b' }}>Pass Type</label>
                 <div className="grid grid-cols-1 gap-1.5">
-                  {data.passTypes.filter(p => p.isActive !== false).map((p) => (
+                  {(data.passTypes ?? []).filter(p => p.isActive !== false).map((p) => (
                     <button key={p.id} onClick={() => set({ passTypeId: p.id })} className="flex items-center justify-between px-3 py-2.5 rounded-xl text-sm text-left transition-colors" style={{ background: state.passTypeId === p.id ? 'rgba(56,189,248,0.12)' : 'rgba(255,255,255,0.04)', border: `1px solid ${state.passTypeId === p.id ? 'rgba(56,189,248,0.3)' : 'rgba(255,255,255,0.08)'}` }}>
                       <div>
                         <p className="font-semibold text-white">{p.name}</p>
@@ -753,13 +753,14 @@ export default function PoolOverviewPage() {
   const gate = evaluateSafetyGate({
     facilityStatus: data.facility.status as 'OPEN' | 'CLOSED' | 'MAINTENANCE' | 'WEATHER_HOLD',
     latestSafetyCheck: data.latestSafety ? { status: data.latestSafety.status as 'PASS' | 'ATTENTION' | 'FAILED', checkType: data.latestSafety.checkType, checkedAt: data.latestSafety.checkedAt } : null,
-    openIncidents: data.incidents.map((i) => ({ severity: i.severity as 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL' })),
+    openIncidents: (data.incidents ?? []).map((i) => ({ severity: i.severity as 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL' })),
   });
 
   const activeEntries = data.activeEntries ?? [];
   const todayReserved = (data.todayEntries ?? []).filter((e) => e.status === 'RESERVED');
   const pct = occupancyPct(data.metrics.occupancy, data.metrics.capacity);
-  const hasCritical = data.incidents.some((i) => i.severity === 'CRITICAL');
+  const incidents = data.incidents ?? [];
+  const hasCritical = incidents.some((i) => i.severity === 'CRITICAL');
 
   return (
     <div className="p-4 md:p-5 space-y-4 overflow-auto h-full" style={{ scrollbarWidth: 'thin', scrollbarColor: 'rgba(255,255,255,0.07) transparent' }}>
@@ -809,7 +810,7 @@ export default function PoolOverviewPage() {
         <KpiCard label="Today's Admissions" value={data.metrics.admissions} sub={`${activeEntries.length} active in pool`} icon={Ticket} accent="#38bdf8" trend="up" />
         <KpiCard label="Today's Revenue" value={formatMoney(data.metrics.revenue, data.currency)} sub="Pool POS outlet" icon={TrendingUp} accent="#34d399" trend="up" />
         <KpiCard label="Reserved / Pending" value={todayReserved.length} sub="Awaiting check-in" icon={Clock} accent="#a78bfa" />
-        <KpiCard label="Open Incidents" value={data.incidents.length} sub={data.latestSafety ? `Last check: ${SAFETY_STATUS_STYLES[data.latestSafety.status as 'PASS' | 'ATTENTION' | 'FAILED']?.label ?? '—'}` : 'No safety check today'} icon={hasCritical ? AlertTriangle : ShieldCheck} accent={hasCritical ? '#ef4444' : data.incidents.length > 0 ? '#f59e0b' : '#34d399'} />
+        <KpiCard label="Open Incidents" value={incidents.length} sub={data.latestSafety ? `Last check: ${SAFETY_STATUS_STYLES[data.latestSafety.status as 'PASS' | 'ATTENTION' | 'FAILED']?.label ?? '—'}` : 'No safety check today'} icon={hasCritical ? AlertTriangle : ShieldCheck} accent={hasCritical ? '#ef4444' : incidents.length > 0 ? '#f59e0b' : '#34d399'} />
       </div>
 
       {/* ── Main Grid ── */}
@@ -1046,16 +1047,16 @@ export default function PoolOverviewPage() {
           </div>
 
           {/* Open Incidents */}
-          {data.incidents.length > 0 && (
+          {incidents.length > 0 && (
             <div className="rounded-2xl overflow-hidden" style={{ border: `1px solid ${hasCritical ? 'rgba(244,63,94,0.35)' : 'rgba(245,158,11,0.25)'}`, background: hasCritical ? 'rgba(244,63,94,0.06)' : 'rgba(245,158,11,0.04)' }}>
               <div className="flex items-center gap-2 px-4 py-2.5 border-b" style={{ borderColor: hasCritical ? 'rgba(244,63,94,0.18)' : 'rgba(245,158,11,0.15)' }}>
                 <BadgeAlert className="w-3.5 h-3.5" style={{ color: hasCritical ? '#fda4af' : '#fcd34d' }} />
                 <span className="text-[11px] font-bold text-white">Open Incidents</span>
                 <span className="ml-auto text-[10px] font-black px-1.5 py-0.5 rounded-full" style={{ background: hasCritical ? 'rgba(244,63,94,0.20)' : 'rgba(245,158,11,0.20)', color: hasCritical ? '#fda4af' : '#fcd34d' }}>
-                  {data.incidents.length}
+                  {incidents.length}
                 </span>
               </div>
-              {data.incidents.slice(0, 3).map((i) => {
+              {incidents.slice(0, 3).map((i) => {
                 const sev = INCIDENT_SEVERITY_STYLES[i.severity as keyof typeof INCIDENT_SEVERITY_STYLES];
                 return (
                   <div key={i.id} className="flex items-center gap-2.5 px-4 py-2.5 border-b last:border-b-0" style={{ borderColor: 'rgba(255,255,255,0.05)' }}>
