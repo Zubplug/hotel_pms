@@ -3,6 +3,24 @@ import prisma from '@hotel-pms/db';
 import { HrAuthorizationService } from '@/lib/services/hr-authorization-service';
 import { NigerianPayrollEngine, EmployeePayrollInput, StatutoryConfigurationRule } from '@/lib/services/payroll-engine-service';
 import { PiiMaskingService } from '@/lib/services/pii-masking-service';
+import { applyDueCompensationChanges } from '@/lib/services/compensation-change-service';
+
+function payrollSalaryForPeriod(staff: any, startDate: Date, endDate: Date) {
+  const versions = [...(staff.salaryStructureVersions || [])].sort((a: any, b: any) => new Date(b.effectiveFrom).getTime() - new Date(a.effectiveFrom).getTime());
+  const days = Math.max(1, Math.round((endDate.getTime() - startDate.getTime()) / 86400000) + 1);
+  const totals = { basicSalary: 0, housingAllowance: 0, transportAllowance: 0, otherAllowances: 0 };
+  for (let index = 0; index < days; index += 1) {
+    const day = new Date(startDate); day.setDate(day.getDate() + index); day.setHours(0, 0, 0, 0);
+    const salary = versions.find((version: any) => new Date(version.effectiveFrom) <= day && (!version.effectiveTo || new Date(version.effectiveTo) >= day)) || staff.salaryStructure;
+    if (!salary) continue;
+    totals.basicSalary += Number(salary.basicSalary || 0) / days;
+    totals.housingAllowance += Number(salary.housingAllowance || 0) / days;
+    totals.transportAllowance += Number(salary.transportAllowance || 0) / days;
+    totals.otherAllowances += Number(salary.otherAllowances || 0) / days;
+  }
+  const latest = versions.find((version: any) => new Date(version.effectiveFrom) <= endDate) || staff.salaryStructure;
+  return latest ? { ...latest, ...Object.fromEntries(Object.entries(totals).map(([key, value]) => [key, Math.round(value * 100) / 100])) } : null;
+}
 
 export async function GET(req: NextRequest) {
   try {
@@ -113,6 +131,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Apply approved effective-dated compensation changes before payroll inputs
+    // are read. Historical/locked periods are protected by the compensation
+    // service; a failed change is logged and payroll continues with the last
+    // valid salary version so one bad request cannot corrupt the batch.
+    await applyDueCompensationChanges(context);
+
     // 1. Fetch effective Statutory Configuration for the period date
     const statutoryConfigRecord = await prisma.statutoryConfiguration.findFirst({
       where: {
@@ -217,9 +241,7 @@ export async function POST(req: NextRequest) {
     // 3. ZERO SILENT FALLBACKS: Validate that all employees have a real salary structure
     const unconfiguredStaff = staffList.filter(
       (s) => {
-        const effectiveSalary = s.salaryStructureVersions?.find((v: any) =>
-          new Date(v.effectiveFrom) <= endDate && (!v.effectiveTo || new Date(v.effectiveTo) >= startDate)
-        ) || s.salaryStructure;
+        const effectiveSalary = payrollSalaryForPeriod(s, startDate, endDate);
         return !effectiveSalary || Number(effectiveSalary.basicSalary) <= 0;
       }
     );
@@ -264,9 +286,7 @@ export async function POST(req: NextRequest) {
 
     // 4. Prepare calculation inputs
     const engineInputs: EmployeePayrollInput[] = staffList.map((s) => {
-      const salary = s.salaryStructureVersions?.find((v: any) =>
-        new Date(v.effectiveFrom) <= endDate && (!v.effectiveTo || new Date(v.effectiveTo) >= startDate)
-      ) || s.salaryStructure;
+      const salary = payrollSalaryForPeriod(s, startDate, endDate);
       const basicSalary = Number(salary!.basicSalary);
       const housingAllowance = Number(salary!.housingAllowance || 0);
       const transportAllowance = Number(salary!.transportAllowance || 0);

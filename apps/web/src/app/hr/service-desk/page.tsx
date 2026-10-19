@@ -35,7 +35,7 @@ export default function HrServiceDeskPage() {
   }
 
   async function changeStatus(ticket: any, status: string) {
-    const resolutionNotes = ['RESOLVED', 'CLOSED'].includes(status) ? window.prompt('Resolution or follow-up notes:') || '' : undefined;
+    const resolutionNotes = ['RESOLVED', 'CLOSED'].includes(status) ? window.prompt('Resolution or follow-up notes:') || '' : '';
     if (['RESOLVED', 'CLOSED'].includes(status) && resolutionNotes.trim().length < 5) return;
     const response = await fetch('/api/hr/service-desk', { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: ticket.id, status, resolutionNotes }) });
     const data = await response.json();

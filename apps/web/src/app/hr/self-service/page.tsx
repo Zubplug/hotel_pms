@@ -661,6 +661,7 @@ export default function EmployeeSelfServicePage() {
             { label: 'Ask HR', icon: MessageSquare, tone: 'text-cyan-300 bg-cyan-400/10', onClick: () => setSupportModalOpen(true) },
             { label: 'Profile', icon: User, tone: 'text-violet-300 bg-violet-400/10', onClick: () => setProfileModalOpen(true) },
             { label: 'Payslips', icon: Receipt, tone: 'text-sky-300 bg-sky-400/10', href: '/hr/self-service/pay' },
+            { label: 'Compensation', icon: WalletCards, tone: 'text-emerald-300 bg-emerald-400/10', href: '/hr/self-service/compensation' },
             { label: 'Security', icon: ShieldCheck, tone: 'text-slate-200 bg-white/10', href: '/hr/self-service/security' },
             { label: 'Referrals', icon: Share2, tone: 'text-purple-300 bg-purple-400/10', href: '/hr/self-service/referrals' },
           ].map(({ label, icon: Icon, tone, onClick, href }) => {

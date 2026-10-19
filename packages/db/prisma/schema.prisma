@@ -86,6 +86,7 @@ model Organization {
   statutoryConfigurations StatutoryConfiguration[]
   attendancePenaltyPolicies AttendancePenaltyPolicy[]
   attendancePenaltyAssessments AttendancePenaltyAssessment[]
+  compensationChangeRequests CompensationChangeRequest[]
   companyPolicies         CompanyPolicy[]
   attendanceGeofences     AttendanceGeofence[]
   payrollPayouts          PayrollPayout[]
@@ -301,6 +302,7 @@ model Property {
   trainingRecords       TrainingRecord[]
   disciplinaryRecords   DisciplinaryRecord[]
   serviceDeskTickets    HrServiceDeskTicket[]
+  compensationChangeRequests CompensationChangeRequest[]
 }
 
 model Building {
@@ -2151,6 +2153,7 @@ model Staff {
   employeeDocuments      EmployeeDocument[]
   onboardingTasks        OnboardingTask[]
   serviceDeskTickets     HrServiceDeskTicket[]
+  compensationChangeRequests CompensationChangeRequest[]
   employeeMovements      EmployeeMovement[]
   policyAcknowledgements PolicyAcknowledgement[]
 }
@@ -2213,6 +2216,10 @@ model User {
   reviewedSeparations             EmployeeSeparationRequest[]  @relation("SeparationReviewedBy")
   requestedPositionChanges       PositionChangeRequest[]      @relation("PositionChangeRequestedBy")
   reviewedPositionChanges        PositionChangeRequest[]      @relation("PositionChangeReviewedBy")
+  requestedCompensationChanges   CompensationChangeRequest[]   @relation("CompensationChangeRequestedBy")
+  departmentReviewedCompensationChanges CompensationChangeRequest[] @relation("CompensationChangeDepartmentReviewer")
+  hrReviewedCompensationChanges  CompensationChangeRequest[]   @relation("CompensationChangeHrReviewer")
+  approvedCompensationChanges    CompensationChangeRequest[]   @relation("CompensationChangeApprover")
   publishedShiftRosters          ShiftRoster[]                @relation("ShiftRosterPublishedBy")
   cancelledShiftRosters          ShiftRoster[]                @relation("ShiftRosterCancelledBy")
 }
@@ -8077,6 +8084,59 @@ model EmployeeChangeRequest {
 
   @@index([staffId, status, createdAt])
   @@index([status, createdAt])
+}
+
+/// Controlled, effective-dated compensation changes. Approval never rewrites
+/// historical payroll; application creates a new salary version.
+model CompensationChangeRequest {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  propertyId     String   @db.Uuid
+  property       Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  staffId        String   @db.Uuid
+  staff          Staff    @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  currentBasicSalary        Decimal @db.Decimal(18, 4)
+  currentHousingAllowance   Decimal @default(0) @db.Decimal(18, 4)
+  currentTransportAllowance Decimal @default(0) @db.Decimal(18, 4)
+  currentOtherAllowances    Decimal @default(0) @db.Decimal(18, 4)
+  proposedBasicSalary       Decimal @db.Decimal(18, 4)
+  proposedHousingAllowance  Decimal @default(0) @db.Decimal(18, 4)
+  proposedTransportAllowance Decimal @default(0) @db.Decimal(18, 4)
+  proposedOtherAllowances   Decimal @default(0) @db.Decimal(18, 4)
+  currency                  String  @default("NGN")
+  effectiveDate             DateTime @db.Date
+  increasePercentage        Decimal? @db.Decimal(9, 4)
+  probationReviewDate       DateTime? @db.Date
+  reason                    String
+  supportingDocumentUrl     String?
+  payrollImpact             Json?
+
+  status                    String   @default("DRAFT") // DRAFT | SUBMITTED | DEPARTMENT_REVIEW | HR_REVIEW | PENDING_APPROVAL | APPROVED | SCHEDULED | APPLIED | REJECTED | CANCELLED
+  requestedById             String   @db.Uuid
+  requestedBy               User     @relation("CompensationChangeRequestedBy", fields: [requestedById], references: [id], onDelete: Restrict)
+  departmentReviewedById   String?  @db.Uuid
+  departmentReviewedBy     User?    @relation("CompensationChangeDepartmentReviewer", fields: [departmentReviewedById], references: [id], onDelete: SetNull)
+  hrReviewedById            String?  @db.Uuid
+  hrReviewedBy              User?    @relation("CompensationChangeHrReviewer", fields: [hrReviewedById], references: [id], onDelete: SetNull)
+  approvedById              String?  @db.Uuid
+  approvedBy                User?    @relation("CompensationChangeApprover", fields: [approvedById], references: [id], onDelete: SetNull)
+  departmentReviewedAt      DateTime? @db.Timestamptz
+  hrReviewedAt              DateTime? @db.Timestamptz
+  approvedAt                DateTime? @db.Timestamptz
+  appliedAt                 DateTime? @db.Timestamptz
+  employeeAcknowledgedAt    DateTime? @db.Timestamptz
+  departmentReviewNotes     String?
+  hrReviewNotes             String?
+  approvalNotes             String?
+  rejectionReason           String?
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@index([organizationId, propertyId, status, createdAt])
+  @@index([staffId, effectiveDate])
 }
 
 model DepartmentSection {
