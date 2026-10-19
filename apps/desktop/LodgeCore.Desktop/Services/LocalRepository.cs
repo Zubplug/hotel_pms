@@ -484,6 +484,9 @@ public class LocalRepository
 
     public async Task<bool> AcknowledgeOfflineBookingNotificationAsync(string propertyId, string notificationId)
     {
+        await OfflineNotificationStore.Gate.WaitAsync();
+        try
+        {
         var metadata = await _dbContext.SyncMetadata.FirstOrDefaultAsync(m => m.Id == "singleton");
         if (metadata == null || string.IsNullOrWhiteSpace(metadata.OfflineNotificationsJson)) return false;
         List<LocalOfflineNotification> notifications;
@@ -506,6 +509,11 @@ public class LocalRepository
         metadata.OfflineNotificationsJson = JsonSerializer.Serialize(notifications);
         await _dbContext.SaveChangesAsync();
         return true;
+        }
+        finally
+        {
+            OfflineNotificationStore.Gate.Release();
+        }
     }
 
     public async Task<List<LocalSyncEvent>> GetSyncEventsAsync()

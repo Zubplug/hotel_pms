@@ -4119,6 +4119,10 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
         if (!root.TryGetProperty("onlineBookingNotifications", out var incoming) || incoming.ValueKind != JsonValueKind.Array)
             return;
 
+        await OfflineNotificationStore.Gate.WaitAsync(stoppingToken);
+        try
+        {
+
         var metadata = await dbContext.SyncMetadata.FirstOrDefaultAsync(m => m.Id == "singleton", stoppingToken);
         if (metadata == null)
         {
@@ -4169,5 +4173,14 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
         // Keep the local cache bounded while retaining every unacknowledged alert.
         metadata.OfflineNotificationsJson = JsonSerializer.Serialize(
             cached.Where(n => !n.Acknowledged || n.CreatedAt >= DateTime.UtcNow.AddDays(-7)).OrderBy(n => n.CreatedAt).TakeLast(200).ToList());
+        // Persist the notification merge while holding the same gate used by
+        // acknowledgement. This prevents a stale sync snapshot from winning
+        // over a user acknowledgement.
+        await dbContext.SaveChangesAsync(stoppingToken);
+        }
+        finally
+        {
+            OfflineNotificationStore.Gate.Release();
+        }
     }
 }
