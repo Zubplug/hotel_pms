@@ -115,6 +115,10 @@ export function ApprovalControlCenter({ audience }: ApprovalCenterProps) {
 
   const act = async (action: 'approve' | 'reject' | 'issue') => {
     if (!selected) return;
+    if (action === 'reject' && selected.kind === 'EMPLOYEE_PROFILE_CHANGE' && reason.trim().length < 5) {
+      toast.error('A rejection reason of at least 5 characters is required');
+      return;
+    }
     setBusy(true);
     try {
       let url = ''; let body: Record<string, unknown> = {};
@@ -252,12 +256,50 @@ function RefundReview({ value }: { value: any }) {
 }
 
 function ProfileChangeReview({ value, reason, setReason }: { value: any; reason: string; setReason: (value: string) => void }) {
-  let current: any = value.currentValue;
-  let proposed: any = value.proposedValue;
-  try { current = JSON.parse(value.currentValue || 'null'); } catch { /* scalar value */ }
-  try { proposed = JSON.parse(value.proposedValue || 'null'); } catch { /* scalar value */ }
-  const renderValue = (item: any) => item && typeof item === 'object' ? Object.entries(item).map(([key, fieldValue]) => <div key={key} className="rounded-lg border border-white/10 bg-white/[.03] p-3"><p className="text-[10px] font-semibold uppercase tracking-[.14em] text-slate-500">{label(key)}</p><p className="mt-1 whitespace-pre-wrap break-words text-sm text-white">{typeof fieldValue === 'object' ? JSON.stringify(fieldValue, null, 2) : String(fieldValue ?? '—')}</p></div>) : <p className="text-sm text-slate-200">{String(item ?? '—')}</p>;
-  return <div className="space-y-5"><section className="grid gap-4 rounded-xl border border-violet-400/20 bg-violet-400/[.06] p-5 text-sm sm:grid-cols-2 lg:grid-cols-4"><Detail label="Employee" value={`${value.staff?.firstName || ''} ${value.staff?.lastName || ''}`.trim() || '—'} /><Detail label="Employee ID" value={value.staff?.employeeId || '—'} /><Detail label="Department" value={value.staff?.department || '—'} /><Detail label="Field" value={label(value.fieldName || 'Profile change')} /><Detail label="Requested" value={dateTime(value.createdAt)} /><Detail label="Requested by" value={value.requestedBy || '—'} /><Detail label="Status" value={label(value.status || 'PENDING')} /></section><section className="grid gap-5 lg:grid-cols-2"><div className="rounded-xl border border-white/10 bg-white/[.03] p-5"><h3 className="font-semibold text-white">Current information</h3><div className="mt-4 grid gap-2">{renderValue(current)}</div></div><div className="rounded-xl border border-emerald-400/20 bg-emerald-400/[.05] p-5"><h3 className="font-semibold text-emerald-100">Proposed information</h3><div className="mt-4 grid gap-2">{renderValue(proposed)}</div></div></section><section className="rounded-xl border border-white/10 bg-white/[.03] p-5"><h3 className="font-semibold text-white">Employee reason</h3><p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-300">{value.reason || 'No reason provided.'}</p></section><label className="block text-sm text-slate-300">Decision note or rejection reason<textarea value={reason} onChange={(event) => setReason(event.target.value)} className="mt-2 min-h-24 w-full rounded-lg border border-white/10 bg-white/[.05] p-3 text-white" placeholder="A reason is required if you reject this request." /></label></div>;
+  const parse = (raw: any) => {
+    if (typeof raw !== 'string') return raw;
+    try { return JSON.parse(raw); } catch { return raw; }
+  };
+  const current = parse(value.currentValue);
+  const proposed = parse(value.proposedValue);
+  const currentProfile = current?.staff || current || {};
+  const currentEmployeeProfile = currentProfile.employeeProfile || {};
+  const currentSalary = currentProfile.salaryStructure || {};
+  const emergency = Array.isArray(currentEmployeeProfile.emergencyContacts) ? currentEmployeeProfile.emergencyContacts[0] || {} : {};
+  const currentValue = (field: string) => ({
+    firstName: currentProfile.firstName,
+    lastName: currentProfile.lastName,
+    email: currentProfile.email,
+    phone: currentProfile.phone,
+    departmentName: currentProfile.department,
+    positionTitle: currentProfile.position,
+    employmentStatus: currentEmployeeProfile.status || (currentProfile.isActive ? 'ACTIVE' : 'INACTIVE'),
+    employmentType: currentEmployeeProfile.employmentType,
+    baseSalary: currentSalary.basicSalary,
+    housingAllowance: currentSalary.housingAllowance,
+    transportAllowance: currentSalary.transportAllowance,
+    otherAllowances: currentSalary.otherAllowances,
+    nin: currentEmployeeProfile.nin,
+    bvn: currentEmployeeProfile.bvn,
+    taxId: currentEmployeeProfile.tin,
+    bankName: currentSalary.bankName,
+    bankAccountNumber: currentSalary.bankAccountNumber,
+    bankSortCode: currentSalary.bankSortCode,
+    bankAccountName: currentSalary.bankAccountName,
+    pfaName: currentSalary.pensionFundAdmin,
+    rsaPin: currentSalary.pensionNumber,
+    emergencyContact: emergency.name,
+    emergencyPhone: emergency.phone,
+    emergencyRelation: emergency.relationship,
+  } as Record<string, any>)[field];
+  const fields = proposed && typeof proposed === 'object' ? Object.entries(proposed) : [[value.fieldName || 'Requested value', proposed]];
+  const display = (field: string, fieldValue: any) => {
+    if (fieldValue === null || fieldValue === undefined || fieldValue === '') return 'Not provided';
+    if (['baseSalary', 'housingAllowance', 'transportAllowance', 'otherAllowances'].includes(field)) return money(fieldValue);
+    if (typeof fieldValue === 'object') return JSON.stringify(fieldValue);
+    return String(fieldValue);
+  };
+  return <div className="space-y-5"><section className="grid gap-4 rounded-xl border border-violet-400/20 bg-violet-400/[.06] p-5 text-sm sm:grid-cols-2 lg:grid-cols-4"><Detail label="Employee" value={`${value.staff?.firstName || ''} ${value.staff?.lastName || ''}`.trim() || '—'} /><Detail label="Employee ID" value={value.staff?.employeeId || '—'} /><Detail label="Department" value={value.staff?.department || '—'} /><Detail label="Change type" value={label(value.fieldName || 'Profile change')} /><Detail label="Requested" value={dateTime(value.createdAt)} /><Detail label="Requested by" value={value.requestedBy || '—'} /><Detail label="Status" value={label(value.status || 'PENDING')} /></section><section className="overflow-hidden rounded-xl border border-white/10"><div className="grid grid-cols-[1fr_1fr_1fr] gap-4 border-b border-white/10 bg-white/[.04] px-5 py-3 text-[10px] font-semibold uppercase tracking-[.14em] text-slate-500"><span>Information</span><span>Current value</span><span>Proposed value</span></div><div className="divide-y divide-white/10">{fields.map(([field, fieldValue]) => <div key={field} className="grid grid-cols-[1fr_1fr_1fr] gap-4 px-5 py-4 text-sm"><span className="font-medium capitalize text-slate-300">{label(field)}</span><span className="break-words text-slate-400">{display(field, currentValue(field))}</span><span className="break-words font-medium text-emerald-200">{display(field, fieldValue)}</span></div>)}</div></section><section className="rounded-xl border border-white/10 bg-white/[.03] p-5"><h3 className="font-semibold text-white">Employee reason</h3><p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-300">{value.reason || 'No reason provided.'}</p></section><label className="block text-sm text-slate-300">Decision note or rejection reason<textarea value={reason} onChange={(event) => setReason(event.target.value)} className="mt-2 min-h-24 w-full rounded-lg border border-white/10 bg-white/[.05] p-3 text-white" placeholder="A reason is required if you reject this request." /></label></div>;
 }
 
 function ApprovalReviewDialog({ selected, audience, busy, reason, setReason, lineDiscounts, setLineDiscounts, lineReasons, setLineReasons, transferQuantities, setTransferQuantities, saveTransferAdjustment, canAct, onAction, onClose }: { selected: Item; audience: ApprovalCenterProps['audience']; busy: boolean; reason: string; setReason: (value: string) => void; lineDiscounts: Record<string, string>; setLineDiscounts: (value: Record<string, string>) => void; lineReasons: Record<string, string>; setLineReasons: (value: Record<string, string>) => void; transferQuantities: Record<string, string>; setTransferQuantities: (value: Record<string, string>) => void; saveTransferAdjustment: () => Promise<void>; canAct: boolean; onAction: (action: 'approve' | 'reject' | 'issue') => Promise<void>; onClose: () => void }) {
@@ -269,7 +311,9 @@ function ApprovalReviewDialog({ selected, audience, busy, reason, setReason, lin
   const discountTotal = invoice ? Number(invoice.totalDiscount || 0) : 0;
   const taxTotal = invoice ? Number(invoice.totalTax || 0) : 0;
 
-  return <Dialog open onOpenChange={(open) => !open && !busy && onClose()}><DialogContent className="flex max-h-[calc(100vh-2rem)] flex-col gap-0 overflow-hidden border-white/10 bg-[#101a2d] p-0 text-slate-100 sm:max-w-4xl"><DialogHeader className="shrink-0 border-b border-white/10 px-6 py-5 pr-14"><div className="flex items-start justify-between gap-4"><div><DialogTitle className="text-xl font-semibold text-white">{selected.kind === 'EVENT_INVOICE' ? 'Review event invoice' : selected.kind === 'REFUND' ? 'Refund control review' : selected.kind === 'STOCK_TRANSFER' ? 'Stock Transfer Review' : selected.kind === 'EXPENSE' ? `Expense invoice ${selected.value.expenseReference}` : selected.kind === 'EMPLOYEE_REIMBURSEMENT' ? `Review reimbursement ${selected.value.claimNumber}` : selected.kind === 'PURCHASE_ORDER' ? `Purchase Order ${selected.value.poNumber}` : 'F&B pricing review'}</DialogTitle><DialogDescription className="mt-2 text-slate-400">{selected.kind === 'EVENT_INVOICE' ? 'Review the complete invoice before recording the controlled decision.' : selected.kind === 'STOCK_TRANSFER' ? 'Review the transfer request before approving or rejecting.' : selected.kind === 'EXPENSE' ? 'Review the expense line items before approving or rejecting.' : selected.kind === 'EMPLOYEE_REIMBURSEMENT' ? 'HR and Accounting have reviewed this claim. Record the final management decision.' : selected.kind === 'PURCHASE_ORDER' ? 'Review the purchase order details before making a decision.' : 'Review the evidence, then record the decision for this control stage.'}</DialogDescription></div>{selected.kind === 'EVENT_INVOICE' && <Badge variant="outline" className="shrink-0 border-cyan-300/30 bg-cyan-300/10 text-cyan-200">{label(invoice.workflowStatus)}</Badge>}</div></DialogHeader>
+  const dialogTitle = selected.kind === 'EMPLOYEE_PROFILE_CHANGE' ? 'Employee profile update review' : selected.kind === 'EVENT_INVOICE' ? 'Review event invoice' : selected.kind === 'REFUND' ? 'Refund control review' : selected.kind === 'STOCK_TRANSFER' ? 'Stock Transfer Review' : selected.kind === 'EXPENSE' ? `Expense invoice ${selected.value.expenseReference}` : selected.kind === 'EMPLOYEE_REIMBURSEMENT' ? `Review reimbursement ${selected.value.claimNumber}` : selected.kind === 'PURCHASE_ORDER' ? `Purchase Order ${selected.value.poNumber}` : 'F&B pricing review';
+  const dialogDescription = selected.kind === 'EMPLOYEE_PROFILE_CHANGE' ? 'Compare the current and proposed employee information, then record the General Manager decision.' : selected.kind === 'EVENT_INVOICE' ? 'Review the complete invoice before recording the controlled decision.' : selected.kind === 'STOCK_TRANSFER' ? 'Review the transfer request before approving or rejecting.' : selected.kind === 'EXPENSE' ? 'Review the expense line items before approving or rejecting.' : selected.kind === 'EMPLOYEE_REIMBURSEMENT' ? 'HR and Accounting have reviewed this claim. Record the final management decision.' : selected.kind === 'PURCHASE_ORDER' ? 'Review the purchase order details before making a decision.' : 'Review the evidence, then record the decision for this control stage.';
+  return <Dialog open onOpenChange={(open) => !open && !busy && onClose()}><DialogContent className="flex max-h-[calc(100vh-2rem)] flex-col gap-0 overflow-hidden border-white/10 bg-[#101a2d] p-0 text-slate-100 sm:max-w-4xl"><DialogHeader className="shrink-0 border-b border-white/10 px-6 py-5 pr-14"><div className="flex items-start justify-between gap-4"><div><DialogTitle className="text-xl font-semibold text-white">{dialogTitle}</DialogTitle><DialogDescription className="mt-2 text-slate-400">{dialogDescription}</DialogDescription></div>{selected.kind === 'EVENT_INVOICE' && <Badge variant="outline" className="shrink-0 border-cyan-300/30 bg-cyan-300/10 text-cyan-200">{label(invoice.workflowStatus)}</Badge>}</div></DialogHeader>
     <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
       {selected.kind === 'EVENT_INVOICE' && <div className="space-y-6">
         <section className="grid gap-4 rounded-xl border border-white/10 bg-white/[.03] p-5 sm:grid-cols-2 lg:grid-cols-4"><Detail label="Event" value={eventName(invoice)} /><Detail label="Client" value={clientName} /><Detail label="Invoice status" value={label(invoice.status || 'DRAFT')} /><Detail label="Submitted" value={dateTime(invoice.submittedAt || invoice.createdAt)} /></section>
