@@ -504,8 +504,31 @@ public class LocalRepository
         // race while closing the same alert; an already acknowledged row is a
         // successful outcome and must not cause the alert to be replayed.
         if (notification == null) return false;
-        if (notification.Acknowledged) return true;
-        notification.Acknowledged = true;
+
+        // A sync retry can leave multiple local rows for the same cloud event.
+        // Acknowledge the whole event group so the next polling cycle cannot
+        // reveal another copy of the same alert.
+        string? eventKey = null;
+        try
+        {
+            using var metadataDoc = JsonDocument.Parse(notification.MetadataJson ?? "{}");
+            if (metadataDoc.RootElement.ValueKind == JsonValueKind.Object)
+            {
+                if (metadataDoc.RootElement.TryGetProperty("idempotencyKey", out var idempotencyEl))
+                    eventKey = idempotencyEl.GetString();
+                if (string.IsNullOrWhiteSpace(eventKey) && metadataDoc.RootElement.TryGetProperty("incidentKey", out var incidentEl))
+                    eventKey = incidentEl.GetString();
+            }
+        }
+        catch { /* Fall back to the individual notification ID. */ }
+
+        var grouped = notifications.Where(candidate =>
+            candidate.PropertyId == propertyId &&
+            (!string.IsNullOrWhiteSpace(eventKey)
+                ? HasNotificationEventKey(candidate, eventKey!)
+                : candidate.Id == notificationId));
+        foreach (var candidate in grouped)
+            candidate.Acknowledged = true;
         metadata.OfflineNotificationsJson = JsonSerializer.Serialize(notifications);
         await _dbContext.SaveChangesAsync();
         return true;
@@ -513,6 +536,21 @@ public class LocalRepository
         finally
         {
             OfflineNotificationStore.Gate.Release();
+        }
+    }
+
+    private static bool HasNotificationEventKey(LocalOfflineNotification notification, string eventKey)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(notification.MetadataJson ?? "{}");
+            if (document.RootElement.ValueKind != JsonValueKind.Object) return false;
+            return (document.RootElement.TryGetProperty("idempotencyKey", out var idempotencyEl) && idempotencyEl.GetString() == eventKey)
+                || (document.RootElement.TryGetProperty("incidentKey", out var incidentEl) && incidentEl.GetString() == eventKey);
+        }
+        catch
+        {
+            return false;
         }
     }
 

@@ -47,6 +47,7 @@ import type { OfflineLicenseSnapshot } from '@/lib/auth/offline-navigation-snaps
 import { useOfflineLicenseGuard } from '@/lib/auth/useOfflineLicenseGuard';
 import { useNavigationModules } from '@/lib/auth/useNavigationModules';
 import { playRoomServiceChime, stopAllChimes, unlockAudio } from '@/lib/pos/soundEffects';
+import { readAcknowledgements, rememberAcknowledgement } from '@/lib/notifications/acknowledgement-store';
 interface FrontDeskRoomChargeNotification {
   id: string;
   type: 'POS_ROOM_CHARGE';
@@ -78,7 +79,7 @@ export function FrontDeskLayout({ children, enabledModules = [], licenseSnapshot
   const [showMasterCardModal, setShowMasterCardModal] = useState(false);
   const [roomChargeNotification, setRoomChargeNotification] = useState<FrontDeskRoomChargeNotification | null>(null);
   const lastRoomChargeNotificationId = React.useRef<string | null>(null);
-  const acknowledgedRoomChargeNotificationIds = React.useRef<Set<string>>(new Set());
+  const [acknowledgedRoomChargeNotificationIds] = React.useState<Set<string>>(() => readAcknowledgements('frontdesk'));
   const roomChargeChimeTimer = React.useRef<number | null>(null);
 
   const isDesktop = process.env.NEXT_PUBLIC_IS_DESKTOP === 'true';
@@ -151,7 +152,8 @@ export function FrontDeskLayout({ children, enabledModules = [], licenseSnapshot
   const dismissRoomChargeNotification = () => {
       stopRoomChargeChime();
       if (roomChargeNotification) {
-        acknowledgedRoomChargeNotificationIds.current.add(roomChargeNotification.id);
+        acknowledgedRoomChargeNotificationIds.add(roomChargeNotification.id);
+        rememberAcknowledgement('frontdesk', roomChargeNotification.id);
         window.dispatchEvent(new CustomEvent('lodgecore:offline-notification-acknowledged', { detail: { id: roomChargeNotification.id } }));
       if (isDesktopMode && provider.system?.acknowledgeOfflineBookingNotification) {
         void provider.system.acknowledgeOfflineBookingNotification(propertyId, roomChargeNotification.id).catch(() => undefined);
@@ -171,7 +173,8 @@ export function FrontDeskLayout({ children, enabledModules = [], licenseSnapshot
     const handleAcknowledged = (event: Event) => {
       const id = (event as CustomEvent<{ id?: string }>).detail?.id;
       if (!id) return;
-      acknowledgedRoomChargeNotificationIds.current.add(id);
+      acknowledgedRoomChargeNotificationIds.add(id);
+      rememberAcknowledgement('frontdesk', id);
       if (roomChargeNotification?.id === id) {
         lastRoomChargeNotificationId.current = id;
         stopRoomChargeChime();
@@ -180,7 +183,7 @@ export function FrontDeskLayout({ children, enabledModules = [], licenseSnapshot
     };
     window.addEventListener('lodgecore:offline-notification-acknowledged', handleAcknowledged);
     return () => window.removeEventListener('lodgecore:offline-notification-acknowledged', handleAcknowledged);
-  }, [roomChargeNotification?.id, stopRoomChargeChime]);
+  }, [acknowledgedRoomChargeNotificationIds, roomChargeNotification?.id, stopRoomChargeChime]);
 
   useEffect(() => {
     if ((!isOnline && !isDesktopMode) || !propertyId || status !== 'authenticated') return;
@@ -208,7 +211,7 @@ export function FrontDeskLayout({ children, enabledModules = [], licenseSnapshot
           const result = await response.json();
           next = result.data?.[0];
         }
-        if (!cancelled && next && !acknowledgedRoomChargeNotificationIds.current.has(next.id)) {
+        if (!cancelled && next && !acknowledgedRoomChargeNotificationIds.has(next.id)) {
           if (lastRoomChargeNotificationId.current !== next.id) {
             lastRoomChargeNotificationId.current = next.id;
             startRoomChargeChime();
@@ -240,7 +243,7 @@ export function FrontDeskLayout({ children, enabledModules = [], licenseSnapshot
       window.clearInterval(timer);
       stopRoomChargeChime();
     };
-  }, [isDesktopMode, isOnline, propertyId, provider.system, status, startRoomChargeChime, stopRoomChargeChime]);
+  }, [acknowledgedRoomChargeNotificationIds, isDesktopMode, isOnline, propertyId, provider.system, status, startRoomChargeChime, stopRoomChargeChime]);
 
   const { data: res } = useQuery({
     queryKey: ['frontdesk', 'dashboard', propertyId],

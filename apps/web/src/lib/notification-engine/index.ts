@@ -58,8 +58,9 @@ export const NotificationEngine = {
 
       // 3. Deduplicate
       if (event.incidentKey || event.idempotencyKey) {
-        const isDuplicate = await checkDuplicate(recipientIds, event);
-        if (isDuplicate) return;
+        const newRecipientIds = await filterNewRecipients(recipientIds, event);
+        if (newRecipientIds.length === 0) return;
+        recipientIds.splice(0, recipientIds.length, ...newRecipientIds);
       }
 
       // 4. Persist
@@ -75,6 +76,9 @@ export const NotificationEngine = {
         category: payload.category,
         priority: payload.priority,
         action: `/${event.entityType}/${event.entityId}`, // Generic deep link format
+        // Keep the event identity on the row as well as in metadata. A read
+        // notification must still deduplicate a retried event.
+        groupKey: event.idempotencyKey || event.incidentKey || null,
         metadata: event.metadata || {},
       }));
 
@@ -163,28 +167,36 @@ async function resolveRecipients(
 /**
  * Checks if a notification already exists based on incident or idempotency keys.
  */
-async function checkDuplicate(
+async function filterNewRecipients(
   recipientIds: string[],
   event: NotificationEvent,
-): Promise<boolean> {
+): Promise<string[]> {
   const key = event.idempotencyKey || event.incidentKey;
-  if (!key) return false;
+  if (!key) return recipientIds;
 
-  // If it's an incidentKey, we might want to check if there's an unread notification with that metadata.
-  // We'll use the JSON metadata field to store the keys for lookup.
-  const existing = await prisma.notification.findFirst({
+  // Acknowledgement changes read state, not event identity. Search all rows,
+  // including read rows, and deduplicate independently for each recipient.
+  const existing = await prisma.notification.findMany({
     where: {
+      organizationId: event.organizationId,
+      propertyId: event.propertyId,
       recipientId: { in: recipientIds },
       channel: "in_app",
-      readAt: null,
-      metadata: {
-        path: [event.idempotencyKey ? "idempotencyKey" : "incidentKey"],
-        equals: key,
-      },
+      OR: [
+        { groupKey: key },
+        {
+          metadata: {
+            path: [event.idempotencyKey ? "idempotencyKey" : "incidentKey"],
+            equals: key,
+          },
+        },
+      ],
     },
+    select: { recipientId: true },
   });
 
-  return !!existing;
+  const existingRecipientIds = new Set(existing.map((notification) => notification.recipientId).filter(Boolean));
+  return recipientIds.filter((recipientId) => !existingRecipientIds.has(recipientId));
 }
 
 /**

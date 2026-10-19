@@ -45,6 +45,7 @@ import { useLicenseGuard } from '@/lib/pos/useLicenseGuard';
 import { OfflineSyncQueue } from '@/lib/pos/OfflineSyncQueue';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
+import { readAcknowledgements, rememberAcknowledgement } from '@/lib/notifications/acknowledgement-store';
 
 type OrderItemModifier = { id: string; name: string; price: number };
 
@@ -138,9 +139,13 @@ export default function PosApp() {
   const [showRoomServiceAlert, setShowRoomServiceAlert] = useState(false);
   const seenRoomServiceIds = useRef<Set<string>>(new Set());
   const roomServiceChimeTimer = useRef<number | null>(null);
+  // A poll can finish after an acknowledgement request and contain the old
+  // SUBMITTED row. Keep acknowledgements separate from `seen` so a stale
+  // response cannot resurrect the modal or its chime.
+  const [acknowledgedRoomServiceIds] = useState<Set<string>>(() => readAcknowledgements('pos-room-service'));
   const [offlineBookingNotification, setOfflineBookingNotification] = useState<any | null>(null);
   const offlineBookingChimeTimer = useRef<number | null>(null);
-  const acknowledgedOfflineBookingNotificationIds = useRef<Set<string>>(new Set());
+  const [acknowledgedOfflineBookingNotificationIds] = useState<Set<string>>(() => readAcknowledgements('pos-booking'));
 
   const stopRoomServiceChime = useCallback(() => {
     if (roomServiceChimeTimer.current !== null) {
@@ -189,6 +194,7 @@ export default function PosApp() {
       }
 
       // Detect genuinely new arrivals (not yet seen)
+      orders = orders.filter(o => !acknowledgedRoomServiceIds.has(o.id));
       const newOrders = orders.filter(o => !seenRoomServiceIds.current.has(o.id));
       if (newOrders.length > 0) {
         newOrders.forEach(o => seenRoomServiceIds.current.add(o.id));
@@ -200,7 +206,7 @@ export default function PosApp() {
     } catch {
       // Polling errors are non-critical — suppress silently
     }
-  }, [isDesktopMode, operatorToken, posSessionId, provider.pos, startRoomServiceChime]);
+  }, [acknowledgedRoomServiceIds, isDesktopMode, operatorToken, posSessionId, provider.pos, startRoomServiceChime]);
 
   useEffect(() => {
     if (pendingRoomServiceOrders.length === 0) stopRoomServiceChime();
@@ -235,7 +241,7 @@ export default function PosApp() {
     try {
       const result = await provider.system.getOfflineBookingNotifications(propertyId);
       const next = result?.data?.[0];
-      if (!next || acknowledgedOfflineBookingNotificationIds.current.has(next.id)) return;
+      if (!next || acknowledgedOfflineBookingNotificationIds.has(next.id)) return;
       if (offlineBookingNotification?.id !== next.id) {
         void unlockAudio();
         startOfflineBookingChime();
@@ -244,7 +250,7 @@ export default function PosApp() {
     } catch {
       // Offline notification polling must never interrupt POS operations.
     }
-  }, [isDesktopMode, offlineBookingNotification?.id, propertyId, provider.system, startOfflineBookingChime]);
+  }, [acknowledgedOfflineBookingNotificationIds, isDesktopMode, offlineBookingNotification?.id, propertyId, provider.system, startOfflineBookingChime]);
 
   useEffect(() => {
     void pollOfflineBookingNotifications();
@@ -258,7 +264,8 @@ export default function PosApp() {
   const acknowledgeOfflineBookingNotification = useCallback(async () => {
     if (!offlineBookingNotification) return;
     const notificationId = offlineBookingNotification.id;
-    acknowledgedOfflineBookingNotificationIds.current.add(notificationId);
+    acknowledgedOfflineBookingNotificationIds.add(notificationId);
+    rememberAcknowledgement('pos-booking', notificationId);
     window.dispatchEvent(new CustomEvent('lodgecore:offline-notification-acknowledged', { detail: { id: notificationId } }));
     stopOfflineBookingChime();
     setOfflineBookingNotification(null);
@@ -274,13 +281,14 @@ export default function PosApp() {
     } catch (error: any) {
       toast.error(error?.message || 'Could not acknowledge notification');
     }
-  }, [offlineBookingNotification, propertyId, provider.system, stopOfflineBookingChime]);
+  }, [acknowledgedOfflineBookingNotificationIds, offlineBookingNotification, propertyId, provider.system, stopOfflineBookingChime]);
 
   useEffect(() => {
     const handleAcknowledged = (event: Event) => {
       const id = (event as CustomEvent<{ id?: string }>).detail?.id;
       if (!id) return;
-      acknowledgedOfflineBookingNotificationIds.current.add(id);
+      acknowledgedOfflineBookingNotificationIds.add(id);
+      rememberAcknowledgement('pos-booking', id);
       if (offlineBookingNotification?.id === id) {
         stopOfflineBookingChime();
         setOfflineBookingNotification(null);
@@ -288,7 +296,7 @@ export default function PosApp() {
     };
     window.addEventListener('lodgecore:offline-notification-acknowledged', handleAcknowledged);
     return () => window.removeEventListener('lodgecore:offline-notification-acknowledged', handleAcknowledged);
-  }, [offlineBookingNotification?.id, stopOfflineBookingChime]);
+  }, [acknowledgedOfflineBookingNotificationIds, offlineBookingNotification?.id, stopOfflineBookingChime]);
 
   // ── Orders ────────────────────────────────────────────────────────
   const [myActiveOrders, setMyActiveOrders] = useState<any[]>([]);
@@ -1921,6 +1929,14 @@ export default function PosApp() {
             toast.error(`Could not acknowledge order: ${result.error}`);
             throw new Error(result.error);
           }
+          // Mark before the next poll completes. This is important when the
+          // server/local provider returns a snapshot captured before the
+          // acknowledgement was committed.
+          acknowledgedRoomServiceIds.add(orderId);
+          rememberAcknowledgement('pos-room-service', orderId);
+          if (pendingRoomServiceOrders.filter(order => order.id !== orderId).length === 0) {
+            stopRoomServiceChime();
+          }
           // Remove from pending list and refresh all-orders panel
           setPendingRoomServiceOrders(prev => prev.filter(o => o.id !== orderId));
           await refreshActiveOrders();
@@ -1930,6 +1946,11 @@ export default function PosApp() {
           if (result?.error) {
             toast.error(`Could not decline order: ${result.error}`);
             return;
+          }
+          acknowledgedRoomServiceIds.add(orderId);
+          rememberAcknowledgement('pos-room-service', orderId);
+          if (pendingRoomServiceOrders.filter(order => order.id !== orderId).length === 0) {
+            stopRoomServiceChime();
           }
           toast.warning('Room service order declined. Guest has been notified.');
           setPendingRoomServiceOrders(prev => prev.filter(o => o.id !== orderId));

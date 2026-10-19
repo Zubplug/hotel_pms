@@ -59,11 +59,38 @@ export async function PATCH(req: NextRequest) {
     const { notificationId } = await req.json();
     if (!notificationId) return NextResponse.json({ error: 'Notification ID is required' }, { status: 400 });
 
-    await prisma.notification.updateMany({
+    const notification = await prisma.notification.findFirst({
       where: { id: notificationId, recipientId: userId, organizationId: ctx.organizationId },
-      data: { readAt: new Date() },
+      select: { id: true, propertyId: true, groupKey: true, metadata: true },
     });
-    return NextResponse.json({ success: true });
+    if (!notification) return NextResponse.json({ error: 'Notification not found' }, { status: 404 });
+
+    const metadata = notification.metadata && typeof notification.metadata === 'object' && !Array.isArray(notification.metadata)
+      ? notification.metadata as Record<string, unknown>
+      : {};
+    const eventKey = notification.groupKey
+      || (typeof metadata.idempotencyKey === 'string' ? metadata.idempotencyKey : null)
+      || (typeof metadata.incidentKey === 'string' ? metadata.incidentKey : null);
+
+    // A retry can have produced multiple rows before the original was read.
+    // Acknowledge the whole event group so an older duplicate cannot ring next.
+    const where: any = {
+      recipientId: userId,
+      organizationId: ctx.organizationId,
+      propertyId: notification.propertyId,
+    };
+    if (eventKey) {
+      where.OR = [
+        { groupKey: eventKey },
+        { metadata: { path: ['idempotencyKey'], equals: eventKey } },
+        { metadata: { path: ['incidentKey'], equals: eventKey } },
+      ];
+    } else {
+      where.id = notification.id;
+    }
+
+    const result = await prisma.notification.updateMany({ where, data: { readAt: new Date() } });
+    return NextResponse.json({ success: true, acknowledgedCount: result.count });
   } catch (error) {
     console.error('[Frontdesk notifications PATCH]', error);
     return NextResponse.json({ error: 'Unable to update notification' }, { status: 500 });
