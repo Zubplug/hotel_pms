@@ -187,7 +187,7 @@ export async function POST(req: NextRequest) {
             'ORDER_CLOSED', 'ORDER_CHECK_SPLIT', 'CHECK_PAID', 'PAYMENT_RECORDED',
             'POS_PAYMENT', 'POS_ORDER_ITEM', 'POS_KOT', 'POS_VOID', 'POS_CASH_MOVEMENT',
             'CASH_MOVEMENT', 'REFUND_REQUESTED', 'DISCOUNT_APPLIED',
-            'BREAKFAST_REDEEMED', 'BREAKFAST_REDEMPTION', 'POOL_ENTRY_CREATED', 'POOL_ENTRY_UPDATED'
+            'BREAKFAST_REDEEMED', 'BREAKFAST_REDEMPTION', 'POOL_ENTRY_CREATED', 'POOL_ENTRY_UPDATED', 'POOL_OPERATION'
           ]);
           if (transactionEventTypes.has(String(event.eventType))) {
             let sessionId = payload.SessionId || payload.sessionId || payload.PosSessionId || payload.posSessionId || event.sessionId;
@@ -414,7 +414,44 @@ export async function POST(req: NextRequest) {
                  });
              }
           }
-                    else if (event.eventType === 'POOL_ENTRY_CREATED' || (event.aggregateType === 'POOL_ENTRY' && event.eventType !== 'POOL_ENTRY_UPDATED')) {
+          else if (event.eventType === 'POOL_OPERATION' || event.aggregateType === 'POOL_OPERATION') {
+            const operation = payload.Data || payload.data || payload;
+            const action = String(payload.Action || payload.action || operation.action || '').toLowerCase();
+            const propertyId = event.propertyId;
+            if (String(payload.PropertyId || payload.propertyId || propertyId) !== propertyId) throw new Error('POOL_OPERATION_PROPERTY_MISMATCH');
+            const actorId = event.operatorId || null;
+            if (action === 'safety_check') {
+              await tx.poolSafetyCheck.create({ data: { id: String(operation.id || event.aggregateId), propertyId, facilityId: String(operation.facilityId), checkType: String(operation.checkType || 'OPENING'), status: String(operation.status || 'PASS'), chlorine: operation.chlorine == null ? undefined : Number(operation.chlorine), ph: operation.ph == null ? undefined : Number(operation.ph), notes: operation.notes ? String(operation.notes) : undefined, checkedBy: actorId } });
+            } else if (action === 'incident') {
+              await tx.poolIncident.create({ data: { id: String(operation.id || event.aggregateId), propertyId, facilityId: String(operation.facilityId), entryId: operation.entryId ? String(operation.entryId) : undefined, severity: String(operation.severity || 'LOW'), title: String(operation.title || 'Pool incident'), description: String(operation.description || ''), createdBy: actorId } });
+            } else if (action === 'update_incident') {
+              await tx.poolIncident.update({ where: { id: String(operation.id) }, data: { status: String(operation.status || 'OPEN'), resolvedAt: String(operation.status || '').toUpperCase() === 'RESOLVED' ? new Date() : undefined } });
+            } else if (action === 'book_resource') {
+              const resourceId = String(operation.resourceId || '');
+              const startAt = new Date(operation.startAt);
+              const endAt = new Date(operation.endAt);
+              const resource = await tx.poolResource.findFirst({ where: { id: resourceId, propertyId, isActive: true } });
+              if (!resource) throw new Error('RESOURCE_NOT_FOUND');
+              const overlap = await tx.poolResourceBooking.findFirst({ where: { resourceId, status: { in: ['BOOKED', 'ACTIVE'] }, startAt: { lt: endAt }, endAt: { gt: startAt } } });
+              if (overlap) throw new Error('RESOURCE_BOOKED');
+              await tx.poolResourceBooking.create({ data: { id: String(operation.id || event.aggregateId), propertyId, resourceId, entryId: operation.entryId ? String(operation.entryId) : undefined, startAt, endAt, status: 'BOOKED', notes: operation.notes ? String(operation.notes) : undefined, createdBy: actorId } });
+            } else if (action === 'update_booking') {
+              await tx.poolResourceBooking.update({ where: { id: String(operation.id) }, data: { status: String(operation.status || 'BOOKED') } });
+            } else if (action === 'update_resource') {
+              await tx.poolResource.update({ where: { id: String(operation.id) }, data: { ...(operation.name !== undefined ? { name: String(operation.name).trim() } : {}), ...(operation.code !== undefined ? { code: String(operation.code).toUpperCase().trim() } : {}), ...(operation.type !== undefined ? { type: String(operation.type).toUpperCase() } : {}), ...(operation.status !== undefined ? { status: String(operation.status).toUpperCase() } : {}), ...(operation.isActive !== undefined ? { isActive: Boolean(operation.isActive) } : {}) } });
+            } else if (action === 'configure_pass') {
+              await tx.poolPassType.update({ where: { id: String(operation.passTypeId) }, data: { ...(operation.name !== undefined ? { name: String(operation.name).trim() } : {}), ...(operation.code !== undefined ? { code: String(operation.code).toUpperCase().trim() } : {}), ...(operation.guestClass !== undefined ? { guestClass: String(operation.guestClass).toUpperCase() } : {}), ...(operation.productId !== undefined ? { productId: operation.productId ? String(operation.productId) : null } : {}), ...(operation.price !== undefined ? { price: Number(operation.price) } : {}), ...(operation.currency !== undefined ? { currency: String(operation.currency).toUpperCase() } : {}), ...(operation.maxDuration !== undefined ? { maxDuration: Number(operation.maxDuration) } : {}), ...(operation.isComplimentary !== undefined ? { isComplimentary: Boolean(operation.isComplimentary) } : {}), ...(operation.isActive !== undefined ? { isActive: Boolean(operation.isActive) } : {}) } });
+            } else if (action === 'create_pass') {
+              await tx.poolPassType.create({ data: { id: String(operation.id || event.aggregateId), propertyId, facilityId: String(operation.facilityId), name: String(operation.name || 'Pool pass'), code: String(operation.code || `PASS-${event.aggregateId.slice(0, 6)}`).toUpperCase(), guestClass: String(operation.guestClass || 'ADULT'), price: Number(operation.price || 0), currency: String(operation.currency || 'NGN'), maxDuration: Number(operation.maxDuration || 480), isComplimentary: Boolean(operation.isComplimentary), isActive: operation.isActive !== false } });
+            } else if (action === 'create_resource') {
+              await tx.poolResource.create({ data: { id: String(operation.id || event.aggregateId), propertyId, facilityId: String(operation.facilityId), name: String(operation.name || 'Pool resource'), code: String(operation.code || `RESOURCE-${event.aggregateId.slice(0, 6)}`).toUpperCase(), type: String(operation.type || 'LOUNGER'), status: String(operation.status || 'AVAILABLE'), isActive: operation.isActive !== false } });
+            } else if (action === 'update_facility') {
+              await tx.poolFacility.update({ where: { id: String(operation.facilityId) }, data: { name: operation.name == null ? undefined : String(operation.name), code: operation.code == null ? undefined : String(operation.code).toUpperCase(), capacity: operation.capacity == null ? undefined : Number(operation.capacity), status: operation.status == null ? undefined : String(operation.status) } });
+            } else {
+              throw new Error('POOL_OPERATION_UNSUPPORTED');
+            }
+          }
+          else if (event.eventType === 'POOL_ENTRY_CREATED' || (event.aggregateType === 'POOL_ENTRY' && event.eventType !== 'POOL_ENTRY_UPDATED')) {
              const existingEntry = await tx.poolEntry.findUnique({ where: { id: event.aggregateId } });
              if (!existingEntry) {
                const facilityId = payload.FacilityId || payload.facilityId;

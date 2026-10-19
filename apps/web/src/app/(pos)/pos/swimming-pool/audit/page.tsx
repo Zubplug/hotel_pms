@@ -7,7 +7,8 @@ import {
   AlertTriangle, LayoutGrid, Ticket, CheckCircle2, XCircle,
   CircleDot, Activity,
 } from 'lucide-react';
-import { formatDateTime, POOL_API } from '../_components/utils';
+import { formatDateTime } from '../_components/utils';
+import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 
 interface AuditEvent {
   id: string;
@@ -100,6 +101,7 @@ function EventRow({ event }: { event: AuditEvent }) {
 }
 
 export default function AuditPage() {
+  const { provider } = useLodgeCoreProvider();
   const [events, setEvents] = useState<AuditEvent[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -113,19 +115,13 @@ export default function AuditPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({ page: String(page), limit: String(LIMIT) });
-      if (facilityId) params.set('facilityId', facilityId);
-      if (typeFilter.length) params.set('type', typeFilter.join(','));
-      if (fromDate) params.set('from', fromDate);
-      if (toDate) params.set('to', toDate);
-
-      const res = await fetch(`${POOL_API}/audit?${params.toString()}`);
-      const json = await res.json();
-      setEvents(json.data?.events ?? []);
-      setTotal(json.data?.total ?? 0);
+      const json = await provider.pool.getAudit({ facilityId: facilityId || '', type: typeFilter.join(','), from: fromDate, to: toDate });
+      const allEvents = (json.data ?? []).filter((event: AuditEvent) => !typeFilter.length || typeFilter.includes(event.type as EventType));
+      setTotal(allEvents.length);
+      setEvents(allEvents.slice((page - 1) * LIMIT, page * LIMIT));
     } catch { /* silent */ }
     finally { setLoading(false); }
-  }, [facilityId, typeFilter, fromDate, toDate, page]);
+  }, [facilityId, provider.pool, typeFilter, fromDate, toDate, page]);
 
   useEffect(() => { load(); }, [load]);
 

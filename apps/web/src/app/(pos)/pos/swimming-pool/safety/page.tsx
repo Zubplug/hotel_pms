@@ -8,8 +8,9 @@ import {
 } from 'lucide-react';
 import {
   SAFETY_STATUS_STYLES, INCIDENT_STATUS_STYLES, INCIDENT_SEVERITY_STYLES,
-  formatDateTime, POOL_API, evaluateSafetyGate,
+  formatDateTime, evaluateSafetyGate,
 } from '../_components/utils';
+import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 
 interface SafetyCheck {
   id: string;
@@ -43,6 +44,7 @@ function SafetyCheckDialog({ facilityId, onClose, onSuccess }: {
   onClose: () => void;
   onSuccess: () => void;
 }) {
+  const { provider } = useLodgeCoreProvider();
   const [form, setForm] = useState({
     checkType: 'WATER_QUALITY',
     status: 'PASS',
@@ -59,20 +61,8 @@ function SafetyCheckDialog({ facilityId, onClose, onSuccess }: {
     setBusy(true);
     setErr(null);
     try {
-      const res = await fetch(POOL_API, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'safety_check',
-          facilityId,
-          checkType: form.checkType,
-          status: form.status,
-          chlorine: form.chlorine ? Number(form.chlorine) : undefined,
-          ph: form.ph ? Number(form.ph) : undefined,
-          notes: form.notes || undefined,
-        }),
-      });
-      if (!res.ok) { const j = await res.json(); throw new Error(j.error || 'Failed'); }
+      const result = await provider.pool.applyOperation('safety_check', { facilityId, checkType: form.checkType, status: form.status, chlorine: form.chlorine ? Number(form.chlorine) : undefined, ph: form.ph ? Number(form.ph) : undefined, notes: form.notes || undefined });
+      if (result?.success === false) throw new Error(result.error || 'Failed');
       onSuccess();
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : 'Failed');
@@ -179,6 +169,7 @@ function IncidentDialog({ facilityId, onClose, onSuccess }: {
   onClose: () => void;
   onSuccess: () => void;
 }) {
+  const { provider } = useLodgeCoreProvider();
   const [form, setForm] = useState({ title: '', description: '', severity: 'LOW' });
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -188,12 +179,8 @@ function IncidentDialog({ facilityId, onClose, onSuccess }: {
     if (!form.title.trim() || !form.description.trim()) { setErr('Title and description are required'); return; }
     setBusy(true); setErr(null);
     try {
-      const res = await fetch(POOL_API, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'incident', facilityId, title: form.title, description: form.description, severity: form.severity }),
-      });
-      if (!res.ok) { const j = await res.json(); throw new Error(j.error || 'Failed'); }
+      const result = await provider.pool.applyOperation('incident', { facilityId, title: form.title, description: form.description, severity: form.severity });
+      if (result?.success === false) throw new Error(result.error || 'Failed');
       onSuccess();
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : 'Failed');
@@ -263,6 +250,7 @@ function IncidentDialog({ facilityId, onClose, onSuccess }: {
 // ─── Main page ─────────────────────────────────────────────────────────────────
 
 export default function SafetyPage() {
+  const { provider, isDesktopMode } = useLodgeCoreProvider();
   const [pageData, setPageData] = useState<{
     facility: { id: string; name: string; status: string; capacity: number } | null;
     incidents: Incident[];
@@ -277,41 +265,38 @@ export default function SafetyPage() {
 
   const load = useCallback(async () => {
     try {
-      const params = new URLSearchParams();
-      if (facilityId) params.set('facilityId', facilityId);
-      // Main API gives us incidents + latestSafety
-      const [mainRes, checksRes] = await Promise.all([
-        fetch(`${POOL_API}?${params.toString()}`),
-        fetch(`${POOL_API}/admissions?limit=1`), // just to warm up; we'll use main data
-      ]);
-      const main = await mainRes.json();
-
-      // Get all safety checks for today via the reports endpoint
       const today = new Date().toISOString().slice(0, 10);
-      const reportRes = await fetch(`${POOL_API}/reports?from=${today}&to=${today}${facilityId ? `&facilityId=${facilityId}` : ''}`);
-      const report = await reportRes.json();
+      const snapshot = isDesktopMode
+        ? await provider.pool.getSnapshot('', facilityId)
+        : await (async () => {
+            const [mainRes, reportRes] = await Promise.all([
+              fetch(`/api/v1/pos/swimming-pool?${facilityId ? `facilityId=${facilityId}` : ''}`),
+              fetch(`/api/v1/pos/swimming-pool/reports?from=${today}&to=${today}${facilityId ? `&facilityId=${facilityId}` : ''}`),
+            ]);
+            const main = await mainRes.json();
+            const report = await reportRes.json();
+            return { data: { ...main.data, safetyChecks: report.data?.safetyChecks ?? [] } };
+          })();
+      const d = snapshot.data;
+      const safetyChecks = (d?.safetyChecks ?? []).filter((check: SafetyCheck) => String(check.checkedAt).slice(0, 10) === today);
 
       setPageData({
-        facility: main.data?.facility ?? null,
-        incidents: main.data?.incidents ?? [],
-        safetyChecks: report.data?.safetyChecks ?? [],
-        latestSafety: main.data?.latestSafety ?? null,
+        facility: d?.facility ?? d?.facilities?.[0] ?? null,
+        incidents: d?.incidents ?? [],
+        safetyChecks,
+        latestSafety: d?.latestSafety ?? safetyChecks[0] ?? null,
       });
     } catch { /* silent */ }
     finally { setLoading(false); }
-  }, [facilityId]);
+  }, [facilityId, isDesktopMode, provider.pool]);
 
   useEffect(() => { load(); }, [load]);
 
   const updateIncident = async (id: string, status: string) => {
     setUpdating(id);
     try {
-      const res = await fetch(`${POOL_API}/incidents/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status }),
-      });
-      if (!res.ok) { const j = await res.json(); alert(j.error || 'Update failed'); }
+      const result = await provider.pool.applyOperation('update_incident', { id, status });
+      if (result?.success === false) alert(result.error || 'Update failed');
       else await load();
     } finally { setUpdating(null); }
   };

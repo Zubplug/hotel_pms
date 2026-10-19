@@ -627,6 +627,50 @@ export async function GET(req: NextRequest) {
     const finalLaundryOrders = allEntities.filter(e => e.type === 'LaundryOrder').map(e => e.data);
     const finalGuests = allEntities.filter(e => e.type === 'Guest').map(e => e.data);
 
+    // Pool Terminal snapshot. Pool configuration and operational records are
+    // small enough to travel as reference data, allowing the terminal to
+    // render and continue local operations without an HTTP connection.
+    const poolFacilities = await prisma.poolFacility.findMany({
+      where: { propertyId, isActive: true },
+      include: {
+        passTypes: { where: { isActive: true }, orderBy: { name: 'asc' } },
+        resources: { where: { isActive: true }, orderBy: { name: 'asc' } },
+      },
+      orderBy: { name: 'asc' },
+    });
+    const poolFacilityIds = poolFacilities.map((facility) => facility.id);
+    const poolEntries = await prisma.poolEntry.findMany({
+      where: {
+        propertyId,
+        facilityId: { in: poolFacilityIds },
+        OR: [
+          { status: { in: ['ACTIVE', 'RESERVED'] } },
+          { entryDate: { gte: new Date(watermark.getTime() - 31 * 24 * 60 * 60 * 1000) } },
+        ],
+      },
+      include: {
+        guest: { select: { id: true, firstName: true, lastName: true, phone: true } },
+        passType: { select: { id: true, name: true, code: true, guestClass: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 1000,
+    });
+    const poolSafetyChecks = await prisma.poolSafetyCheck.findMany({
+      where: { propertyId, facilityId: { in: poolFacilityIds } },
+      orderBy: { checkedAt: 'desc' },
+      take: 100,
+    });
+    const poolIncidents = await prisma.poolIncident.findMany({
+      where: { propertyId, facilityId: { in: poolFacilityIds }, status: { not: 'RESOLVED' } },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    });
+    const poolResourceBookings = await prisma.poolResourceBooking.findMany({
+      where: { propertyId, resource: { facilityId: { in: poolFacilityIds } }, status: { not: 'COMPLETED' } },
+      orderBy: { startAt: 'asc' },
+      take: 500,
+    });
+
     const referencedCorporateAccountIds = [...new Set(
       finalReservations
         .map((reservation: any) => reservation.corporateAccountId)
@@ -922,6 +966,17 @@ export async function GET(req: NextRequest) {
       posTables:  finalTables,
       posSessions: finalPosSessions,
       posOrders: finalPosOrders,
+      poolSnapshot: {
+        businessDate: property.businessDate,
+        currency: property.baseCurrency,
+        bankingModel: String((property.settings as any)?.pos?.bankingModel || 'CENTRAL_CASHIER').toUpperCase(),
+        facilities: poolFacilities,
+        entries: poolEntries,
+        safetyChecks: poolSafetyChecks,
+        incidents: poolIncidents,
+        resourceBookings: poolResourceBookings,
+        capturedAt: watermark,
+      },
       housekeepingTasks: finalHousekeepingTasks,
       maintenanceTickets: finalMaintenanceTickets,
       laundryItems: finalLaundryItems,

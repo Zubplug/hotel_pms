@@ -526,7 +526,56 @@ export async function POST(req: NextRequest) {
 
           let updatedCount = 0;
 
-          if (aggregateType === "FRONTDESK_SESSION") {
+          if (aggregateType === "POOL_ENTRY") {
+            const entryId = String(payload.id || payload.Id || aggregateId);
+            const propertyEntryId = String(payload.propertyId || payload.PropertyId || propertyId);
+            if (propertyEntryId !== propertyId) throw new Error("POOL_ENTRY_PROPERTY_MISMATCH");
+            const facilityId = String(payload.facilityId || payload.FacilityId || "");
+            const passTypeId = String(payload.passTypeId || payload.PassTypeId || "");
+            const status = String(payload.status || payload.Status || "ACTIVE").toUpperCase();
+            const existingEntry = await tx.poolEntry.findUnique({ where: { id: entryId } });
+            if (!existingEntry) {
+              await tx.poolEntry.create({
+                data: {
+                  id: entryId,
+                  propertyId,
+                  facilityId,
+                  passTypeId,
+                  guestId: payload.guestId || payload.GuestId || null,
+                  reservationId: payload.reservationId || payload.ReservationId || null,
+                  folioId: payload.folioId || payload.FolioId || null,
+                  posOrderId: payload.posOrderId || payload.PosOrderId || null,
+                  entryNumber: String(payload.entryNumber || payload.EntryNumber || `POOL-${entryId.slice(0, 8).toUpperCase()}`),
+                  identifier: payload.identifier || payload.Identifier || null,
+                  status,
+                  entryDate: new Date(payload.entryDate || payload.EntryDate || authoritativeBusinessDate),
+                  admittedAt: payload.admittedAt || payload.AdmittedAt ? new Date(payload.admittedAt || payload.AdmittedAt) : null,
+                  exitedAt: payload.exitedAt || payload.ExitedAt ? new Date(payload.exitedAt || payload.ExitedAt) : null,
+                  guestCount: Number(payload.guestCount || payload.GuestCount || 1),
+                  waiverAccepted: Boolean(payload.waiverAccepted ?? payload.WaiverAccepted),
+                  notes: payload.notes || payload.Notes || null,
+                  createdBy: isUuid(actorId) ? actorId : null,
+                  checkedInBy: status === "ACTIVE" && isUuid(actorId) ? actorId : null,
+                  checkedOutBy: status === "COMPLETED" && isUuid(actorId) ? actorId : null,
+                  operationId: String(payload.operationId || payload.OperationId || idempotencyKey),
+                  deviceId: device.id,
+                },
+              });
+            } else {
+              await tx.poolEntry.update({
+                where: { id: entryId },
+                data: {
+                  status,
+                  identifier: payload.identifier || payload.Identifier || existingEntry.identifier,
+                  notes: payload.notes || payload.Notes || existingEntry.notes,
+                  admittedAt: payload.admittedAt || payload.AdmittedAt ? new Date(payload.admittedAt || payload.AdmittedAt) : existingEntry.admittedAt,
+                  exitedAt: payload.exitedAt || payload.ExitedAt ? new Date(payload.exitedAt || payload.ExitedAt) : existingEntry.exitedAt,
+                  checkedOutBy: status === "COMPLETED" && isUuid(actorId) ? actorId : existingEntry.checkedOutBy,
+                },
+              });
+            }
+            updatedCount = 1;
+          } else if (aggregateType === "FRONTDESK_SESSION") {
             updatedCount = 1;
           } else if (aggregateType === "FOLIO") {
             const res = await tx.folio.updateMany({

@@ -27,7 +27,17 @@ const DataProviderContext = createContext<DataProviderContextValue>({
     authenticateOperator: async () => ({ data: null, error: 'Not initialized' }),
     startSession: async () => ({ data: null, error: 'Not initialized' }),
     getAuthorizedOutlets: async () => ({ data: null, error: 'Not initialized' }),
-  } as any // Type assertion used to stub the POS interface prior to provider initialization
+  } as any, // Type assertion used to stub the POS interface prior to provider initialization
+  pool: {
+    getSnapshot: async () => ({ success: false, data: null, error: 'Not initialized' }),
+    searchGuests: async () => ({ success: false, data: { guestMatches: [] }, error: 'Not initialized' }),
+    createSale: async () => ({ success: false, error: 'Not initialized' }),
+    createEntry: async () => ({ success: false, error: 'Not initialized' }),
+    updateEntryStatus: async () => ({ success: false, error: 'Not initialized' }),
+    applyOperation: async () => ({ success: false, error: 'Not initialized' }),
+    getReport: async () => ({ success: false, data: null, error: 'Not initialized' }),
+    getAudit: async () => ({ success: false, data: [], error: 'Not initialized' }),
+  },
 });
 
 export function DataProviderWrapper({ children }: { children: React.ReactNode }) {

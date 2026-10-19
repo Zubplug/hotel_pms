@@ -4304,6 +4304,195 @@ public class LocalRepository
         return await query.OrderByDescending(entry => entry.CreatedAt).Take(200).ToListAsync();
     }
 
+    public async Task<JsonNode?> GetPoolSnapshotAsync(string propertyId)
+    {
+        var metadata = await _dbContext.SyncMetadata.FirstOrDefaultAsync(item => item.Id == "singleton");
+        if (metadata == null || string.IsNullOrWhiteSpace(metadata.PoolSnapshotJson)) return null;
+        try
+        {
+            var snapshot = JsonNode.Parse(metadata.PoolSnapshotJson);
+            if (snapshot is JsonObject obj)
+            {
+                var localEntries = await GetPoolEntriesAsync(propertyId);
+                var localNodes = JsonSerializer.SerializeToNode(localEntries, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }) as JsonArray;
+                var entries = obj["entries"] as JsonArray ?? new JsonArray();
+                var byId = entries
+                    .OfType<JsonObject>()
+                    .Where(item => item["id"] != null)
+                    .ToDictionary(item => item["id"]!.ToString(), StringComparer.OrdinalIgnoreCase);
+                foreach (var localNode in localNodes ?? new JsonArray())
+                {
+                    if (localNode is not JsonObject localObject || localObject["id"] == null) continue;
+                    var id = localObject["id"]!.ToString();
+                    if (byId.TryGetValue(id, out var existing))
+                    {
+                        foreach (var property in localObject) existing[property.Key] = property.Value?.DeepClone();
+                    }
+                    else entries.Add(localObject);
+                }
+                obj["entries"] = entries;
+            }
+            return snapshot;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    public async Task<JsonNode?> ApplyPoolOperationAsync(string propertyId, string action, JsonObject data, string userId, string deviceId, string sessionId)
+    {
+        var metadata = await _dbContext.SyncMetadata.FirstOrDefaultAsync(item => item.Id == "singleton");
+        if (metadata == null || string.IsNullOrWhiteSpace(metadata.PoolSnapshotJson))
+            throw new InvalidOperationException("Pool configuration is not available offline. Sync the terminal before using pool operations.");
+
+        var snapshot = JsonNode.Parse(metadata.PoolSnapshotJson) as JsonObject
+            ?? throw new InvalidOperationException("Pool configuration is not available offline.");
+        var operationId = data["operationId"]?.ToString() ?? $"POOL-{deviceId}-{DateTime.UtcNow.Ticks}-{Guid.NewGuid():N}";
+        data["operationId"] = operationId;
+        data["propertyId"] = propertyId;
+
+        static JsonArray Array(JsonObject root, string key)
+        {
+            if (root[key] is not JsonArray value) root[key] = value = new JsonArray();
+            return value;
+        }
+
+        JsonObject? Find(JsonArray values, string id) => values.OfType<JsonObject>().FirstOrDefault(item => string.Equals(item["id"]?.ToString(), id, StringComparison.OrdinalIgnoreCase));
+        var now = DateTime.UtcNow.ToString("O");
+        switch (action)
+        {
+            case "safety_check":
+                data["id"] ??= Guid.NewGuid().ToString();
+                data["checkedAt"] = now;
+                data["checkedBy"] = userId;
+                Array(snapshot, "safetyChecks").Add(data.DeepClone());
+                break;
+            case "incident":
+                data["id"] ??= Guid.NewGuid().ToString();
+                data["status"] = "OPEN";
+                data["createdAt"] = now;
+                data["createdBy"] = userId;
+                Array(snapshot, "incidents").Insert(0, data.DeepClone());
+                break;
+            case "update_incident":
+                {
+                    var incident = Find(Array(snapshot, "incidents"), data["id"]?.ToString() ?? "") ?? throw new InvalidOperationException("Incident not found offline.");
+                    incident["status"] = data["status"]?.ToString() ?? incident["status"]?.ToString() ?? "OPEN";
+                    if (string.Equals(incident["status"]?.ToString(), "RESOLVED", StringComparison.OrdinalIgnoreCase)) incident["resolvedAt"] = now;
+                    break;
+                }
+            case "book_resource":
+                {
+                var resourceId = data["resourceId"]?.ToString() ?? "";
+                var resource = Array(snapshot, "facilities").OfType<JsonObject>().SelectMany(f => Array(f, "resources")).FirstOrDefault(item => string.Equals(item["id"]?.ToString(), resourceId, StringComparison.OrdinalIgnoreCase));
+                if (resource == null) throw new InvalidOperationException("Pool resource not found offline.");
+                if (string.Equals(resource["status"]?.ToString(), "MAINTENANCE", StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("Resource is under maintenance.");
+                if (!DateTime.TryParse(data["startAt"]?.ToString(), out var startAt) || !DateTime.TryParse(data["endAt"]?.ToString(), out var endAt) || endAt <= startAt) throw new InvalidOperationException("Resource start and end times are required.");
+                var collision = Array(snapshot, "resourceBookings").OfType<JsonObject>().Any(booking => string.Equals(booking["resourceId"]?.ToString(), resourceId, StringComparison.OrdinalIgnoreCase)
+                    && new[] { "BOOKED", "ACTIVE" }.Contains(booking["status"]?.ToString(), StringComparer.OrdinalIgnoreCase)
+                    && DateTime.TryParse(booking["startAt"]?.ToString(), out var existingStart) && DateTime.TryParse(booking["endAt"]?.ToString(), out var existingEnd)
+                    && existingStart < endAt && existingEnd > startAt);
+                if (collision) throw new InvalidOperationException("Resource is already booked for that time.");
+                data["id"] ??= Guid.NewGuid().ToString();
+                data["status"] = "BOOKED";
+                Array(snapshot, "resourceBookings").Add(data.DeepClone());
+                break;
+                }
+            case "update_booking":
+                {
+                    var booking = Find(Array(snapshot, "resourceBookings"), data["id"]?.ToString() ?? "") ?? throw new InvalidOperationException("Resource booking not found offline.");
+                    booking["status"] = data["status"]?.ToString() ?? booking["status"]?.ToString() ?? "BOOKED";
+                    break;
+                }
+            case "update_resource":
+                {
+                    var resourceId = data["id"]?.ToString() ?? "";
+                    var resources = Array(snapshot, "facilities").OfType<JsonObject>().SelectMany(f => Array(f, "resources")).ToList();
+                    var resource = resources.FirstOrDefault(item => string.Equals(item["id"]?.ToString(), resourceId, StringComparison.OrdinalIgnoreCase)) ?? throw new InvalidOperationException("Pool resource not found offline.");
+                    foreach (var key in new[] { "name", "code", "type", "status", "isActive" }) if (data[key] != null) resource[key] = data[key]!.DeepClone();
+                    break;
+                }
+            case "configure_pass":
+                {
+                    var passId = data["passTypeId"]?.ToString() ?? "";
+                    var passes = Array(snapshot, "facilities").OfType<JsonObject>().SelectMany(f => Array(f, "passTypes")).ToList();
+                    var pass = passes.FirstOrDefault(item => string.Equals(item["id"]?.ToString(), passId, StringComparison.OrdinalIgnoreCase)) ?? throw new InvalidOperationException("Pool pass type not found offline.");
+                    foreach (var key in new[] { "name", "code", "guestClass", "productId", "price", "currency", "maxDuration", "isComplimentary", "isActive" }) if (data[key] != null) pass[key] = data[key]!.DeepClone();
+                    break;
+                }
+            case "create_pass":
+                data["id"] ??= Guid.NewGuid().ToString();
+                data["isActive"] = data["isActive"] ?? true;
+                data["currency"] = data["currency"] ?? "NGN";
+                data["maxDuration"] = data["maxDuration"] ?? 480;
+                {
+                    var facility = Find(Array(snapshot, "facilities"), data["facilityId"]?.ToString() ?? "") ?? throw new InvalidOperationException("Pool facility not found offline.");
+                    Array(facility, "passTypes").Add(data.DeepClone());
+                    break;
+                }
+            case "create_resource":
+                data["id"] ??= Guid.NewGuid().ToString();
+                data["isActive"] = data["isActive"] ?? true;
+                data["status"] = data["status"] ?? "AVAILABLE";
+                {
+                    var facility = Find(Array(snapshot, "facilities"), data["facilityId"]?.ToString() ?? "") ?? throw new InvalidOperationException("Pool facility not found offline.");
+                    Array(facility, "resources").Add(data.DeepClone());
+                    break;
+                }
+            case "update_facility":
+                {
+                    var facility = Find(Array(snapshot, "facilities"), data["facilityId"]?.ToString() ?? "") ?? throw new InvalidOperationException("Pool facility not found offline.");
+                    foreach (var key in new[] { "name", "code", "capacity", "status" }) if (data[key] != null) facility[key] = data[key]!.DeepClone();
+                    break;
+                }
+            default:
+                throw new InvalidOperationException("Unsupported pool operation.");
+        }
+
+        metadata.PoolSnapshotJson = snapshot.ToJsonString();
+        AppendSyncEvent("POOL_OPERATION", operationId, "POOL_OPERATION", new { Action = action, Data = data, PropertyId = propertyId, OperationId = operationId }, deviceId, null, sessionId, userId);
+        await _dbContext.SaveChangesAsync();
+        return snapshot;
+    }
+
+    public async Task<List<object>> SearchPoolGuestsAsync(string propertyId, string query)
+    {
+        var reservations = await _dbContext.Reservations
+            .Include(item => item.Guest)
+            .Include(item => item.Folio)
+            .Include(item => item.Rooms).ThenInclude(room => room.Room)
+            .Where(item => item.PropertyId == propertyId && item.Status == "CHECKED_IN")
+            .OrderBy(item => item.Guest != null ? item.Guest.LastName : "")
+            .ToListAsync();
+        var normalized = (query ?? string.Empty).Trim().ToLowerInvariant();
+        return reservations
+            .Where(item => string.IsNullOrWhiteSpace(normalized)
+                || (item.Guest != null && $"{item.Guest.FirstName} {item.Guest.LastName}".ToLowerInvariant().Contains(normalized))
+                || item.Rooms.Any(room => room.Room != null && room.Room.Number.ToLowerInvariant().Contains(normalized)))
+            .GroupBy(item => item.Guest?.Id ?? item.Id)
+            .Select(group =>
+            {
+                var first = group.First();
+                return (object)new
+                {
+                    id = first.Guest?.Id ?? first.Id,
+                    firstName = first.Guest?.FirstName ?? "Guest",
+                    lastName = first.Guest?.LastName ?? "",
+                    phone = first.Guest?.Phone ?? "",
+                    reservations = group.Select(item => new
+                    {
+                        id = item.Id,
+                        confirmationNumber = item.ConfirmationNumber ?? "Reference pending",
+                        status = item.Status,
+                        folios = item.Folio == null ? Array.Empty<object>() : new[] { new { id = item.Folio.Id, folioNumber = item.Folio.FolioNumber, balance = item.Folio.OutstandingBalance } },
+                    }).ToArray(),
+                };
+            })
+            .Take(20)
+            .ToList();
+    }
+
     public async Task<LocalPoolEntry?> UpdatePoolEntryStatusAsync(string entryId, string status, string userId, string deviceId, string sessionId)
     {
         var entry = await _dbContext.PoolEntries.FirstOrDefaultAsync(item => item.Id == entryId);
@@ -4317,6 +4506,14 @@ public class LocalRepository
         AppendSyncEvent("POOL_ENTRY", entry.Id, "POOL_ENTRY_UPDATED", new { entry.Id, entry.Status, entry.AdmittedAt, entry.ExitedAt, entry.OperationId }, deviceId, null, sessionId, userId);
         await _dbContext.SaveChangesAsync();
         return entry;
+    }
+
+    public async Task<LocalPosOrder> CreatePoolSaleAsync(LocalPosOrder order, string userId, string deviceId)
+    {
+        order.OrderType = "WALK_IN";
+        order.Status = "SUBMITTED";
+        order.PaymentStatus = "UNPAID";
+        return await CreatePosOrderAsync(order, userId, deviceId);
     }
 
     public async Task<LocalPosOrder> CreatePosOrderAsync(LocalPosOrder order, string userId, string deviceId)

@@ -10,6 +10,7 @@ import {
   formatDateTime, formatMoney, ENTRY_STATUS_STYLES,
   POOL_API, evaluateSafetyGate, newOperationId,
 } from '../_components/utils';
+import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 
 interface PoolEntry {
   id: string;
@@ -34,6 +35,7 @@ interface LookupResult {
 }
 
 export default function CheckInPage() {
+  const { provider, isDesktopMode } = useLodgeCoreProvider();
   const [query, setQuery] = useState('');
   const [result, setResult] = useState<LookupResult | null>(null);
   const [busy, setBusy] = useState(false);
@@ -56,9 +58,20 @@ export default function CheckInPage() {
     try {
       const params = new URLSearchParams({ search: q.trim(), limit: '5' });
       if (facilityId) params.set('facilityId', facilityId);
-      const res = await fetch(`${POOL_API}/admissions?${params.toString()}`);
-      const json = await res.json();
-      const entries: PoolEntry[] = json.data?.entries ?? [];
+      const allEntries: PoolEntry[] = isDesktopMode
+        ? ((await provider.pool.getSnapshot('', facilityId)).data?.entries ?? [])
+        : await (async () => {
+            const res = await fetch(`${POOL_API}/admissions?${params.toString()}`);
+            const json = await res.json();
+            return json.data?.entries ?? [];
+          })();
+      const normalizedQuery = q.trim().toLowerCase();
+      const entries = allEntries.filter((entry) =>
+        !isDesktopMode
+        || `${entry.entryNumber} ${entry.identifier || ''} ${entry.guest?.firstName || ''} ${entry.guest?.lastName || ''} ${entry.passType?.code || ''}`
+          .toLowerCase()
+          .includes(normalizedQuery)
+      );
 
       if (entries.length === 0) {
         setResult({ type: 'not_found', message: `No admission found for "${q}"` });
@@ -78,7 +91,7 @@ export default function CheckInPage() {
     } finally {
       setBusy(false);
     }
-  }, [facilityId]);
+  }, [facilityId, isDesktopMode, provider.pool]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') { lookup(query); }
@@ -87,20 +100,25 @@ export default function CheckInPage() {
   const doAction = async (entry: PoolEntry, action: 'checkin' | 'checkout') => {
     setBusy(true);
     try {
-      const res = await fetch(`${POOL_API}/entries/${entry.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action }),
-      });
-      if (!res.ok) {
-        const j = await res.json();
-        setResult({ type: 'error', message: j.error || `${action} failed` });
-        setFlash('error');
+      if (isDesktopMode) {
+        const response = await provider.pool.updateEntryStatus(entry.id, action === 'checkin' ? 'ACTIVE' : 'COMPLETED');
+        if (response?.success === false) {
+          setResult({ type: 'error', message: response.error || `${action} failed` });
+          setFlash('error');
+        } else {
+          setFlash('success'); setResult(null); setQuery('');
+          setTimeout(() => inputRef.current?.focus(), 100);
+        }
       } else {
-        setFlash('success');
-        setResult(null);
-        setQuery('');
-        setTimeout(() => inputRef.current?.focus(), 100);
+        const res = await fetch(`${POOL_API}/entries/${entry.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action }) });
+        if (!res.ok) {
+          const j = await res.json();
+          setResult({ type: 'error', message: j.error || `${action} failed` });
+          setFlash('error');
+        } else {
+          setFlash('success'); setResult(null); setQuery('');
+          setTimeout(() => inputRef.current?.focus(), 100);
+        }
       }
     } catch {
       setResult({ type: 'error', message: 'Action failed. Please retry.' });

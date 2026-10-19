@@ -9,7 +9,8 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   CartesianGrid, PieChart, Pie, Cell, Legend, LineChart, Line,
 } from 'recharts';
-import { formatMoney, POOL_API } from '../_components/utils';
+import { formatMoney } from '../_components/utils';
+import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 
 interface ReportData {
   entries: { id: string; passType: { name: string }; guestCount: number; entryDate: string; admittedAt: string | null; status: string }[];
@@ -84,6 +85,7 @@ function buildDailyRevenue(orders: ReportData['posOrders']): { date: string; rev
 const PIE_COLORS = ['#38bdf8', '#34d399', '#f59e0b', '#a78bfa', '#fb923c', '#fda4af'];
 
 export default function ReportsPage() {
+  const { provider } = useLodgeCoreProvider();
   const [data, setData] = useState<ReportData | null>(null);
   const [loading, setLoading] = useState(true);
   const [currency, setCurrency] = useState('NGN');
@@ -97,23 +99,13 @@ export default function ReportsPage() {
       const from = new Date();
       from.setDate(from.getDate() - Number(range));
 
-      const params = new URLSearchParams({
-        from: from.toISOString().slice(0, 10),
-        to: to.toISOString().slice(0, 10),
-      });
-      if (facilityId) params.set('facilityId', facilityId);
-
-      const [reportRes, mainRes] = await Promise.all([
-        fetch(`${POOL_API}/reports?${params.toString()}`),
-        fetch(`${POOL_API}?${facilityId ? `facilityId=${facilityId}` : ''}`),
-      ]);
-      const report = await reportRes.json();
-      const main = await mainRes.json();
+      const report = await provider.pool.getReport(from.toISOString(), to.toISOString(), facilityId);
+      const snapshot = await provider.pool.getSnapshot('', facilityId);
       setData(report.data);
-      setCurrency(main.data?.currency ?? 'NGN');
+      setCurrency(snapshot.data?.currency ?? 'NGN');
     } catch { /* silent */ }
     finally { setLoading(false); }
-  }, [facilityId, range]);
+  }, [facilityId, provider.pool, range]);
 
   useEffect(() => { load(); }, [load]);
 

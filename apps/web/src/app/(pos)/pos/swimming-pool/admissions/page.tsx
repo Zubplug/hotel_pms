@@ -12,6 +12,7 @@ import {
   formatMoney, formatDateTime, formatDuration,
   ENTRY_STATUS_STYLES, POOL_API,
 } from '../_components/utils';
+import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 
 const STATUSES = ['RESERVED', 'ACTIVE', 'COMPLETED', 'CANCELLED'];
 
@@ -186,6 +187,7 @@ function EntryDetailPanel({ entry, onClose, onCheckout, onCheckin, busy }: {
 }
 
 export default function AdmissionsPage() {
+  const { provider, isDesktopMode } = useLodgeCoreProvider();
   const [entries, setEntries] = useState<PoolEntry[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -216,35 +218,42 @@ export default function AdmissionsPage() {
       if (dateFilter) params.set('from', dateFilter);
       params.set('page', String(page));
       params.set('limit', String(LIMIT));
-      const res = await fetch(`${POOL_API}/admissions?${params.toString()}`);
-      const json = await res.json();
-      setEntries(json.data?.entries ?? []);
-      setTotal(json.data?.total ?? 0);
+      if (isDesktopMode) {
+        const snapshot = await provider.pool.getSnapshot('', facilityId);
+        const all = (snapshot.data?.entries ?? []) as PoolEntry[];
+        const filtered = all.filter((entry) =>
+          (!statusFilter.length || statusFilter.includes(entry.status))
+          && (!debouncedSearch || `${entry.entryNumber} ${entry.identifier || ''} ${entry.guest?.firstName || ''} ${entry.guest?.lastName || ''}`.toLowerCase().includes(debouncedSearch.toLowerCase()))
+          && (!dateFilter || String(entry.entryDate).slice(0, 10) >= dateFilter)
+        );
+        setTotal(filtered.length);
+        setEntries(filtered.slice((page - 1) * LIMIT, page * LIMIT));
+      } else {
+        const res = await fetch(`${POOL_API}/admissions?${params.toString()}`);
+        const json = await res.json();
+        setEntries(json.data?.entries ?? []);
+        setTotal(json.data?.total ?? 0);
+      }
     } catch { /* silent */ }
     finally { setLoading(false); }
-  }, [facilityId, statusFilter, debouncedSearch, dateFilter, page]);
+  }, [facilityId, isDesktopMode, provider.pool, statusFilter, debouncedSearch, dateFilter, page]);
 
   useEffect(() => { load(); }, [load]);
 
   const doAction = async (entryId: string, action: 'checkin' | 'checkout') => {
     setBusy(true);
     try {
-      const res = await fetch(`${POOL_API}/entries/${entryId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action }),
-      });
-      if (!res.ok) {
-        const j = await res.json();
-        alert(j.error || `${action} failed`);
+      if (isDesktopMode) {
+        const result = await provider.pool.updateEntryStatus(entryId, action === 'checkin' ? 'ACTIVE' : 'COMPLETED');
+        if (result?.success === false) alert(result.error || `${action} failed`);
       } else {
-        await load();
-        // Update selected
-        const updated = await fetch(`${POOL_API}/admissions?search=${entryId.slice(0, 8)}`);
-        const j = await updated.json();
-        const refreshed = (j.data?.entries ?? []).find((e: PoolEntry) => e.id === entryId);
-        if (refreshed) setSelected(refreshed);
+        const res = await fetch(`${POOL_API}/entries/${entryId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action }) });
+        if (!res.ok) {
+          const j = await res.json();
+          alert(j.error || `${action} failed`);
+        }
       }
+      await load();
     } finally { setBusy(false); }
   };
 

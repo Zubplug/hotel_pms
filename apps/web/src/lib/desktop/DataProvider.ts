@@ -39,6 +39,16 @@ export interface LodgeCoreDataProvider {
     printLaundryTicket?(data: any): Promise<any>;
     printLaundryDocuments?(data: any): Promise<any>;
   };
+  pool: {
+    getSnapshot(propertyId: string, facilityId?: string | null): Promise<any>;
+    searchGuests(query: string): Promise<any>;
+    createSale(data: any): Promise<any>;
+    createEntry(data: any): Promise<any>;
+    updateEntryStatus(entryId: string, status: string): Promise<any>;
+    applyOperation(action: string, data: any): Promise<any>;
+    getReport(from: string, to: string, facilityId?: string | null): Promise<any>;
+    getAudit(params?: Record<string, string>): Promise<any>;
+  };
   dashboard: {
     get(propertyId: string): Promise<any>;
   };

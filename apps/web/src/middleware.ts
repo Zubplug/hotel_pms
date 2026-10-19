@@ -45,7 +45,7 @@ const { auth } = NextAuth({
 const PUBLIC_PATHS = ['/login', '/api/auth', '/api/v1/hardware', '/api/manager', '/api/mobile', '/api/desktop-update', '/api/v1/pos', '/api/v1/sync', '/api/v1/billing/webhook', '/api/v1/reach/wallet/webhook', '/api/v1/referrals/activation/webhook', '/api/v1/webhooks/ota', '/api/v1/webhooks/flutterwave', '/desktop', '/external-auditor/invite', '/api/v1/external-auditor/invitations/accept', '/employee/invite', '/api/employee/invitations/accept', '/room-service', '/api/v1/room-service'];
 
 const MANAGEMENT_ROLES = ['CEO', 'SUPER_ADMIN', 'GENERAL_MANAGER', 'MANAGER', 'ADMIN', 'ACCOUNTANT', 'DIRECTOR'];
-const POS_ROLES = ['WAITER', 'WAITRESS', 'CASHIER', 'POS', 'POS_OPERATOR'];
+const POS_ROLES = ['WAITER', 'WAITRESS', 'CASHIER', 'POS', 'POS_OPERATOR', 'POOL_OPERATOR'];
 const FRONT_DESK_ROLES = ['RECEPTIONIST', 'FRONT_DESK'];
 const INVENTORY_ROLES = ['STOCK_MANAGER', 'STOCK_KEEPER', 'PROCUREMENT_MANAGER', 'OUTLET_HEAD'];
 const FNB_ROLES = ['FNB_MANAGER', 'RESTAURANT_MANAGER', 'BANQUET_MANAGER', 'EVENT_MANAGER', ...MANAGEMENT_ROLES];

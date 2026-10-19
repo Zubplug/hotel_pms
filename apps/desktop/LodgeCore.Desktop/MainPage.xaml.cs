@@ -603,8 +603,22 @@ public partial class MainPage : ContentPage
                 case "pool.updateEntryStatus":
                     responseData = await pmsInterop.UpdatePoolEntryStatusAsync(parameters?["entryId"]?.ToString() ?? "", parameters?["status"]?.ToString() ?? "");
                     break;
+                case "pool.createSale":
+                    responseData = await pmsInterop.CreatePoolSaleAsync(parameters?["data"]?.ToString() ?? "");
+                    break;
                 case "pool.getEntries":
                     responseData = await pmsInterop.GetPoolEntriesAsync(parameters?["propertyId"]?.ToString() ?? "", parameters?["status"]?.ToString());
+                    break;
+                case "pool.getSnapshot":
+                    responseData = await pmsInterop.GetPoolSnapshotAsync(parameters?["propertyId"]?.ToString() ?? "");
+                    break;
+                case "pool.searchGuests":
+                    responseData = await pmsInterop.SearchPoolGuestsAsync(parameters?["query"]?.ToString() ?? "");
+                    break;
+                case "pool.applyOperation":
+                    responseData = await pmsInterop.ApplyPoolOperationAsync(
+                        parameters?["action"]?.ToString() ?? "",
+                        parameters?["data"]?.ToString() ?? "{}");
                     break;
                 case "pos.splitCheck":
                     var itemIdsNode = parameters?["itemIds"] as JsonArray;

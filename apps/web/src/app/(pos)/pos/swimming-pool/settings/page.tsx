@@ -6,7 +6,8 @@ import {
   Pencil, ToggleLeft, ToggleRight, Waves, LayoutGrid,
   Ticket, AlertTriangle, Trash2, ChevronDown,
 } from 'lucide-react';
-import { formatMoney, POOL_API } from '../_components/utils';
+import { formatMoney } from '../_components/utils';
+import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -50,6 +51,7 @@ function PassTypeForm({ passType, facilityId, onClose, onSuccess }: {
   onClose: () => void;
   onSuccess: () => void;
 }) {
+  const { provider } = useLodgeCoreProvider();
   const isEdit = Boolean(passType);
   const [form, setForm] = useState({
     name: passType?.name ?? '',
@@ -69,14 +71,8 @@ function PassTypeForm({ passType, facilityId, onClose, onSuccess }: {
     if (!form.name.trim() || !form.code.trim()) { setErr('Name and code are required'); return; }
     setBusy(true); setErr(null);
     try {
-      const url = isEdit ? `${POOL_API}/pass-types/${passType!.id}` : `${POOL_API}/pass-types`;
-      const method = isEdit ? 'PATCH' : 'POST';
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, facilityId, price: Number(form.price), maxDuration: Number(form.maxDuration) }),
-      });
-      if (!res.ok) { const j = await res.json(); throw new Error(j.error || 'Failed'); }
+      const result = await provider.pool.applyOperation(isEdit ? 'configure_pass' : 'create_pass', { ...form, facilityId, passTypeId: passType?.id, price: Number(form.price), maxDuration: Number(form.maxDuration) });
+      if (result?.success === false) throw new Error(result.error || 'Failed');
       onSuccess();
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : 'Failed');
@@ -183,6 +179,7 @@ function ResourceForm({ resource, facilityId, onClose, onSuccess }: {
   onClose: () => void;
   onSuccess: () => void;
 }) {
+  const { provider } = useLodgeCoreProvider();
   const isEdit = Boolean(resource);
   const [form, setForm] = useState({
     name: resource?.name ?? '',
@@ -200,14 +197,8 @@ function ResourceForm({ resource, facilityId, onClose, onSuccess }: {
     if (!form.name.trim() || !form.code.trim()) { setErr('Name and code are required'); return; }
     setBusy(true); setErr(null);
     try {
-      const url = isEdit ? `${POOL_API}/resources/manage/${resource!.id}` : `${POOL_API}/resources/manage`;
-      const method = isEdit ? 'PATCH' : 'POST';
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, facilityId }),
-      });
-      if (!res.ok) { const j = await res.json(); throw new Error(j.error || 'Failed'); }
+      const result = await provider.pool.applyOperation(isEdit ? 'update_resource' : 'create_resource', { ...form, facilityId, id: resource?.id });
+      if (result?.success === false) throw new Error(result.error || 'Failed');
       onSuccess();
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : 'Failed');
@@ -290,6 +281,7 @@ function ResourceForm({ resource, facilityId, onClose, onSuccess }: {
 type SettingsTab = 'pass-types' | 'resources' | 'facility';
 
 export default function SettingsPage() {
+  const { provider } = useLodgeCoreProvider();
   const [activeTab, setActiveTab] = useState<SettingsTab>('pass-types');
   const [passTypes, setPassTypes] = useState<PassType[]>([]);
   const [resources, setResources] = useState<PoolResource[]>([]);
@@ -302,22 +294,14 @@ export default function SettingsPage() {
 
   const load = useCallback(async () => {
     try {
-      const params = new URLSearchParams({ includeInactive: String(includeInactive) });
-      if (facilityId) params.set('facilityId', facilityId);
-
-      const [mainRes, ptRes, resRes] = await Promise.all([
-        fetch(`${POOL_API}?${facilityId ? `facilityId=${facilityId}` : ''}`),
-        fetch(`${POOL_API}/pass-types?${params.toString()}`),
-        fetch(`${POOL_API}/resources/manage?${params.toString()}`),
-      ]);
-
-      const [main, pt, res] = await Promise.all([mainRes.json(), ptRes.json(), resRes.json()]);
-      setFacility(main.data?.facility ?? null);
-      setPassTypes(pt.data ?? []);
-      setResources(res.data ?? []);
+      const snapshot = await provider.pool.getSnapshot('', facilityId);
+      const facilityData = snapshot.data?.facility ?? snapshot.data?.facilities?.[0] ?? null;
+      setFacility(facilityData);
+      setPassTypes((facilityData?.passTypes ?? []).filter((pass: PassType) => includeInactive || pass.isActive !== false));
+      setResources((facilityData?.resources ?? []).filter((resource: PoolResource) => includeInactive || resource.isActive !== false));
     } catch { /* silent */ }
     finally { setLoading(false); }
-  }, [facilityId, includeInactive]);
+  }, [facilityId, includeInactive, provider.pool]);
 
   useEffect(() => { load(); }, [load]);
 

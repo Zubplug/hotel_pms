@@ -19,6 +19,7 @@ import {
   evaluateSafetyGate, ENTRY_STATUS_STYLES, INCIDENT_SEVERITY_STYLES,
   SAFETY_STATUS_STYLES, newOperationId, POOL_API,
 } from './_components/utils';
+import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -354,12 +355,16 @@ function NewAdmissionDialog({ data, onClose, onSuccess }: {
     if (state.guestSearch.length < 2) { setGuestMatches([]); return; }
     searchRef.current = setTimeout(async () => {
       try {
-        const res = await fetch(`${POOL_API}?search=${encodeURIComponent(state.guestSearch)}`);
-        const json = await res.json();
+        const json = isDesktopMode
+          ? await provider.pool.searchGuests(state.guestSearch)
+          : await (async () => {
+              const res = await fetch(`${POOL_API}?search=${encodeURIComponent(state.guestSearch)}`);
+              return res.json();
+            })();
         setGuestMatches(json.data?.guestMatches ?? []);
       } catch { /* silent */ }
     }, 300);
-  }, [state.guestSearch]);
+  }, [isDesktopMode, provider.pool, state.guestSearch]);
 
   const handleConfirm = async () => {
     set({ isLoading: true, error: null });
@@ -369,32 +374,30 @@ function NewAdmissionDialog({ data, onClose, onSuccess }: {
 
       let posOrderId: string | null = null;
       if (!isComplimentary && selectedPass?.productId && selectedPass.price > 0) {
-        const saleRes = await fetch(POOL_API, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
+        const salePayload = {
             action: 'sale',
             passTypeId: state.passTypeId,
             guestCount: state.guestCount,
-            method: state.method,
             folioId: isRoomCharge ? state.selectedFolioId : undefined,
             reservationId: state.selectedGuest?.reservations?.[0]?.id,
             operationId: `${state.operationId}-SALE`,
             displayName: `Pool admission — ${selectedPass.name} × ${state.guestCount}`,
-          }),
-        });
-        if (!saleRes.ok) {
-          const j = await saleRes.json();
-          throw new Error(j.error || 'Payment failed');
-        }
-        const saleData = await saleRes.json();
+          productId: selectedPass.productId,
+          productName: selectedPass.name,
+          price: Number(selectedPass.price),
+          currency: selectedPass.currency,
+          quantity: state.guestCount,
+          total: Number(selectedPass.price) * state.guestCount,
+          method: state.method,
+          items: [{ productId: selectedPass.productId, productName: selectedPass.name, quantity: state.guestCount, unitPrice: Number(selectedPass.price), subtotal: Number(selectedPass.price) * state.guestCount, total: Number(selectedPass.price) * state.guestCount, taxRate: 0, taxAmount: 0 }],
+          payments: [{ method: state.method, amount: Number(selectedPass.price) * state.guestCount, currency: selectedPass.currency }],
+        };
+        const saleData = await provider.pool.createSale(salePayload);
+        if (saleData?.success === false) throw new Error(saleData.error || 'Payment failed');
         posOrderId = saleData.data?.orderId ?? null;
       }
 
-      const entryRes = await fetch(POOL_API, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      const entryPayload = {
           action: 'entry',
           facilityId: data.facility?.id,
           passTypeId: state.passTypeId,
@@ -408,12 +411,10 @@ function NewAdmissionDialog({ data, onClose, onSuccess }: {
           waiverAccepted: true,
           admitNow: state.admitNow,
           operationId: state.operationId,
-        }),
-      });
-      if (!entryRes.ok) {
-        const j = await entryRes.json();
-        throw new Error(j.error || 'Admission failed');
-      }
+          facilityCapacity: data.facility?.capacity,
+        };
+      const entryRes = await provider.pool.createEntry({ ...entryPayload, status: state.admitNow ? 'ACTIVE' : 'RESERVED' });
+      if (entryRes?.success === false || entryRes?.ok === false) throw new Error(entryRes.error || 'Admission failed');
 
       onSuccess();
     } catch (err: unknown) {
@@ -661,6 +662,7 @@ function NewAdmissionDialog({ data, onClose, onSuccess }: {
 // ─── Overview Page ─────────────────────────────────────────────────────────────
 
 export default function PoolOverviewPage() {
+  const { provider, isDesktopMode } = useLodgeCoreProvider();
   const [data, setData] = useState<DashData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -676,9 +678,13 @@ export default function PoolOverviewPage() {
       setError(null);
       const params = new URLSearchParams();
       if (facilityId) params.set('facilityId', facilityId);
-      const res = await fetch(`${POOL_API}?${params.toString()}`);
-      if (!res.ok) throw new Error('Failed to load pool data');
-      const json = await res.json();
+      const json = isDesktopMode
+        ? await provider.pool.getSnapshot('', facilityId)
+        : await (async () => {
+            const res = await fetch(`${POOL_API}?${params.toString()}`);
+            if (!res.ok) throw new Error('Failed to load pool data');
+            return res.json();
+          })();
       setData(json.data);
       setLastRefresh(new Date());
     } catch (e: unknown) {
@@ -686,7 +692,7 @@ export default function PoolOverviewPage() {
     } finally {
       setLoading(false);
     }
-  }, [facilityId]);
+  }, [facilityId, isDesktopMode, provider.pool]);
 
   useEffect(() => { load(); const t = setInterval(load, 60_000); return () => clearInterval(t); }, [load]);
 
@@ -696,13 +702,14 @@ export default function PoolOverviewPage() {
   const handleCheckout = async (entryId: string) => {
     setCheckingOut(entryId);
     try {
-      const res = await fetch(`${POOL_API}/entries/${entryId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'checkout' }),
-      });
-      if (!res.ok) { const j = await res.json(); alert(j.error || 'Check-out failed'); }
-      else await load();
+      if (isDesktopMode) {
+        const result = await provider.pool.updateEntryStatus(entryId, 'COMPLETED');
+        if (result?.success === false) alert(result.error || 'Check-out failed');
+      } else {
+        const res = await fetch(`${POOL_API}/entries/${entryId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'checkout' }) });
+        if (!res.ok) { const j = await res.json(); alert(j.error || 'Check-out failed'); }
+      }
+      await load();
     } catch { alert('Check-out failed. Please try again.'); }
     finally { setCheckingOut(null); }
   };

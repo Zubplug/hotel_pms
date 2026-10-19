@@ -3,13 +3,15 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { useSession } from 'next-auth/react';
 import { useLogout } from '@/hooks/useLogout';
+import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
+import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
+import { TerminalAuthScreen } from '@/components/pos/TerminalAuthScreen';
 import {
   Waves, Ticket, ScanLine, Users, LayoutGrid,
   ShieldCheck, BarChart3, Clock, Settings2, ScrollText,
   AlertTriangle, ChevronDown, RefreshCw, WifiOff, Wifi,
-  LogOut, ChevronLeft, Menu, X,
+  LogOut, ChevronLeft, Menu, X, ShoppingCart,
 } from 'lucide-react';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -201,6 +203,15 @@ function Sidebar({ shellData, collapsed, incidentCount, onFacilityChange, onLogo
 
       {/* Nav items */}
       <nav className="flex-1 px-2 py-2 space-y-0.5">
+        <Link
+          href="/pos"
+          title={collapsed ? 'POS Terminal' : undefined}
+          className="pool-nav-link"
+          style={collapsed ? { justifyContent: 'center', padding: '0.5rem' } : {}}
+        >
+          <ShoppingCart className="w-4 h-4 shrink-0" />
+          {!collapsed && <span className="flex-1 truncate">POS Terminal</span>}
+        </Link>
         {NAV_ITEMS.map((item) => {
           const Icon = item.icon;
           const active = isActive(item);
@@ -276,17 +287,43 @@ export function PoolTerminalShell({ children }: PoolTerminalShellProps) {
   );
   const [incidentCount, setIncidentCount] = useState(0);
   const logout = useLogout();
-  const { data: session } = useSession();
+  const { provider, isDesktopMode } = useLodgeCoreProvider();
+  const [poolLoginOpen, setPoolLoginOpen] = useState(false);
+  const { data: session } = useLodgeCoreSession();
   const userDisplayName = (session?.user as { name?: string } | undefined)?.name ?? 'Pool Staff';
   const userInitials = userDisplayName.split(' ').map((p: string) => p[0]).join('').slice(0, 2).toUpperCase();
+
+  useEffect(() => {
+    let active = true;
+    const checkOperator = async () => {
+      const sessionId = localStorage.getItem('lodgecore_pos_session_id') || '';
+      const operatorToken = localStorage.getItem('lodgecore_pos_operator_token') || '';
+      if (!sessionId || (!isDesktopMode && !operatorToken)) {
+        if (active) setPoolLoginOpen(true);
+        return;
+      }
+      try {
+        const result = await provider.pos.getCurrentOperator(sessionId, operatorToken || undefined);
+        if (active) setPoolLoginOpen(!(result?.data?.staff && result?.data?.operatorSession && !result.error));
+      } catch {
+        if (active) setPoolLoginOpen(true);
+      }
+    };
+    void checkOperator();
+    return () => { active = false; };
+  }, [isDesktopMode, provider.pos]);
 
   const fetchShell = useCallback(async (fid?: string | null) => {
     try {
       const params = new URLSearchParams();
       if (fid) params.set('facilityId', fid);
-      const res = await fetch(`/api/v1/pos/swimming-pool?${params.toString()}`);
-      if (!res.ok) return;
-      const json = await res.json();
+      const json = isDesktopMode
+        ? await provider.pool.getSnapshot('', fid)
+        : await (async () => {
+            const res = await fetch(`/api/v1/pos/swimming-pool?${params.toString()}`);
+            if (!res.ok) throw new Error('Pool shell unavailable');
+            return res.json();
+          })();
       const d = json.data;
       setShellData({
         businessDate: d.businessDate,
@@ -304,7 +341,7 @@ export function PoolTerminalShell({ children }: PoolTerminalShellProps) {
     } catch {
       // silent
     }
-  }, []);
+  }, [isDesktopMode, provider.pool]);
 
   useEffect(() => {
     fetchShell(facilityId);
@@ -328,6 +365,12 @@ export function PoolTerminalShell({ children }: PoolTerminalShellProps) {
 
   return (
     <div className="pool-dark-surface flex-1 flex overflow-hidden" style={{ minHeight: 0 }}>
+      <TerminalAuthScreen
+        authMode="POS_OPERATOR"
+        isOpen={poolLoginOpen}
+        cancellable={false}
+        onAuthenticated={() => setPoolLoginOpen(false)}
+      />
       {/* Desktop sidebar */}
       <div className="hidden md:flex">
         <Sidebar

@@ -1986,12 +1986,80 @@ public class OfflinePMSInterop
         }
     }
 
+    public async Task<string> CreatePoolSaleAsync(string dataJson)
+    {
+        try
+        {
+            var order = JsonSerializer.Deserialize<LocalPosOrder>(dataJson, _jsonOptions)
+                ?? throw new InvalidOperationException("Invalid pool sale data");
+            var posCtx = await _sessionManager.GetActiveContextAsync();
+            order.PropertyId = posCtx.PropertyId;
+            order.OutletId = string.IsNullOrWhiteSpace(order.OutletId) ? posCtx.OutletId : order.OutletId;
+            order.SessionId = posCtx.SessionId;
+            order.ServerStaffId = posCtx.StaffId;
+            order.CreatedBy = posCtx.StaffId;
+            var result = await _repo.CreatePoolSaleAsync(order, posCtx.StaffId, posCtx.DeviceId);
+            return JsonSerializer.Serialize(new { success = true, data = new { orderId = result.Id, order = result } }, _jsonOptions);
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
+        }
+    }
+
     public async Task<string> GetPoolEntriesAsync(string propertyId, string? status = null)
     {
         try
         {
             var entries = await _repo.GetPoolEntriesAsync(propertyId, status);
             return JsonSerializer.Serialize(new { success = true, data = entries }, _jsonOptions);
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
+        }
+    }
+
+    public async Task<string> GetPoolSnapshotAsync(string propertyId)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(propertyId))
+            {
+                var context = await _sessionManager.GetActiveContextAsync();
+                propertyId = context.PropertyId;
+            }
+            var snapshot = await _repo.GetPoolSnapshotAsync(propertyId);
+            return JsonSerializer.Serialize(new { success = true, data = snapshot }, _jsonOptions);
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
+        }
+    }
+
+    public async Task<string> SearchPoolGuestsAsync(string query)
+    {
+        try
+        {
+            var ctx = await _sessionManager.GetActiveContextAsync();
+            var guests = await _repo.SearchPoolGuestsAsync(ctx.PropertyId, query);
+            return JsonSerializer.Serialize(new { success = true, data = new { guestMatches = guests } }, _jsonOptions);
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
+        }
+    }
+
+    public async Task<string> ApplyPoolOperationAsync(string action, string dataJson)
+    {
+        try
+        {
+            var data = JsonNode.Parse(dataJson) as JsonObject ?? new JsonObject();
+            var ctx = await _sessionManager.GetActiveContextAsync();
+            var snapshot = await _repo.ApplyPoolOperationAsync(ctx.PropertyId, action, data, ctx.StaffId, ctx.DeviceId, ctx.SessionId);
+            return JsonSerializer.Serialize(new { success = true, data = snapshot }, _jsonOptions);
         }
         catch (Exception ex)
         {

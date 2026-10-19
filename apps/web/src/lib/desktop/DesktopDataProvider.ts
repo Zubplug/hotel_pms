@@ -112,6 +112,66 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
     printLaundryTicket: async (ticket: any) => invokeDesktop('hardware.printLaundryTicket', { ticket }),
     printLaundryDocuments: async (ticket: any) => invokeDesktop('hardware.printLaundryDocuments', { ticket })
   },
+  pool: {
+    getSnapshot: async (propertyId: string, facilityId?: string | null) => {
+      const response = await invokeDesktop('pool.getSnapshot', { propertyId, facilityId });
+      const data = response?.data ?? response;
+      if (facilityId && data?.facilities) {
+        data.facility = data.facilities.find((facility: any) => facility.id === facilityId) ?? data.facility;
+      }
+      if (data && !data.facility && data.facilities?.length) data.facility = data.facilities[0];
+      if (data && !data.passTypes) data.passTypes = data.facility?.passTypes ?? [];
+      if (data && !data.todayEntries) data.todayEntries = data.entries ?? [];
+      if (data && !data.activeEntries) data.activeEntries = (data.entries ?? []).filter((entry: any) => entry.status === 'ACTIVE');
+      if (data && !data.latestSafety) data.latestSafety = (data.safetyChecks ?? [])[0] ?? null;
+      if (data && !data.metrics) {
+        const activeEntries = data.activeEntries ?? [];
+        data.metrics = {
+          occupancy: activeEntries.reduce((sum: number, entry: any) => sum + Number(entry.guestCount || 0), 0),
+          capacity: Number(data.facility?.capacity || 0),
+          available: Math.max(0, Number(data.facility?.capacity || 0) - activeEntries.reduce((sum: number, entry: any) => sum + Number(entry.guestCount || 0), 0)),
+          admissions: (data.todayEntries ?? []).length,
+          revenue: 0,
+        };
+      }
+      return { success: true, data };
+    },
+    searchGuests: async (query: string) => invokeDesktop('pool.searchGuests', { query }),
+    createSale: async (data: any) => invokeDesktop('pool.createSale', { data: JSON.stringify(data) }),
+    createEntry: async (data: any) => invokeDesktop('pool.createEntry', { data: JSON.stringify(data) }),
+    updateEntryStatus: async (entryId: string, status: string) => invokeDesktop('pool.updateEntryStatus', { entryId, status }),
+    applyOperation: async (action: string, data: any) => invokeDesktop('pool.applyOperation', { action, data: JSON.stringify(data) }),
+    getReport: async (from: string, to: string, facilityId?: string | null) => {
+      const snapshotResponse = await DesktopDataProvider.pool.getSnapshot('', facilityId);
+      const snapshot = snapshotResponse?.data ?? snapshotResponse;
+      const entries = snapshot?.entries ?? [];
+      const fromDate = new Date(from).getTime();
+      const toDate = new Date(to).getTime();
+      const range = entries.filter((entry: any) => {
+        const date = new Date(entry.entryDate || entry.createdAt).getTime();
+        return date >= fromDate && date <= toDate;
+      });
+      const byPassMap = range.reduce((map: Record<string, number>, entry: any) => {
+        const name = entry.passType?.name || 'Unknown pass';
+        map[name] = (map[name] || 0) + 1;
+        return map;
+      }, {});
+      return { success: true, data: { summary: { totalAdmissions: range.length, totalGuests: range.reduce((sum: number, entry: any) => sum + Number(entry.guestCount || 0), 0), posRevenue: 0, resourcesBooked: (snapshot?.resourceBookings || []).length, incidents: (snapshot?.incidents || []).length, safetyChecks: (snapshot?.safetyChecks || []).length }, byPass: byPassMap, entries: range, posOrders: [] } };
+    },
+    getAudit: async (params?: Record<string, string>) => {
+      const facilityId = params?.facilityId || null;
+      const snapshotResponse = await DesktopDataProvider.pool.getSnapshot('', facilityId);
+      const snapshot = snapshotResponse?.data ?? snapshotResponse;
+      const events = [
+        ...(snapshot?.entries || []).map((entry: any) => ({ id: `entry-${entry.id}`, type: entry.status === 'COMPLETED' ? 'ENTRY_CHECKED_OUT' : entry.status === 'CANCELLED' ? 'ENTRY_CANCELLED' : 'ENTRY_CREATED', timestamp: entry.createdAt, actorId: entry.createdBy, description: `${entry.entryNumber || 'Pool admission'} recorded`, meta: entry })),
+        ...(snapshot?.safetyChecks || []).map((check: any) => ({ id: `safety-${check.id}`, type: 'SAFETY_CHECK', timestamp: check.checkedAt, actorId: check.checkedBy, description: `${check.checkType || 'Safety'} check recorded`, meta: check })),
+        ...(snapshot?.incidents || []).map((incident: any) => ({ id: `incident-${incident.id}`, type: incident.status === 'RESOLVED' ? 'INCIDENT_RESOLVED' : 'INCIDENT_CREATED', timestamp: incident.createdAt, actorId: incident.createdBy, description: incident.title || 'Pool incident reported', meta: incident })),
+      ];
+      const from = params?.from ? new Date(params.from).getTime() : Number.NEGATIVE_INFINITY;
+      const to = params?.to ? new Date(`${params.to}T23:59:59.999Z`).getTime() : Number.POSITIVE_INFINITY;
+      return { success: true, data: events.filter((event: any) => { const timestamp = new Date(event.timestamp || 0).getTime(); return timestamp >= from && timestamp <= to; }).sort((a: any, b: any) => new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime()) };
+    },
+  },
   dashboard: {
     async get(propertyId: string) {
       return invokeDesktop('dashboard.get', { propertyId });

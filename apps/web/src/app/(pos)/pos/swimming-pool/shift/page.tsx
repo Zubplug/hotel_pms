@@ -6,7 +6,8 @@ import {
   TrendingUp, Ticket, Users, Banknote, CreditCard,
   Building2, ReceiptText, BarChart3, Plus,
 } from 'lucide-react';
-import { formatMoney, formatDateTime, POOL_API } from '../_components/utils';
+import { formatMoney, formatDateTime } from '../_components/utils';
+import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 
 interface ShiftData {
   shiftStart: string | null;
@@ -38,6 +39,7 @@ const METHOD_COLOURS: Record<string, string> = {
 };
 
 export default function ShiftPage() {
+  const { provider } = useLodgeCoreProvider();
   const [data, setData] = useState<ShiftData | null>(null);
   const [loading, setLoading] = useState(true);
   const [closing, setClosing] = useState(false);
@@ -47,16 +49,7 @@ export default function ShiftPage() {
   const load = useCallback(async () => {
     try {
       const today = new Date().toISOString().slice(0, 10);
-      const params = new URLSearchParams({ from: today, to: today });
-      if (facilityId) params.set('facilityId', facilityId);
-
-      const [mainRes, reportRes] = await Promise.all([
-        fetch(`${POOL_API}?${facilityId ? `facilityId=${facilityId}` : ''}`),
-        fetch(`${POOL_API}/reports?${params.toString()}`),
-      ]);
-      const main = await mainRes.json();
-      const report = await reportRes.json();
-
+      const [main, report] = await Promise.all([provider.pool.getSnapshot('', facilityId), provider.pool.getReport(today, today, facilityId)]);
       const md = main.data;
       const rd = report.data;
 
@@ -87,7 +80,7 @@ export default function ShiftPage() {
       });
     } catch { /* silent */ }
     finally { setLoading(false); }
-  }, [facilityId]);
+  }, [facilityId, provider.pool]);
 
   useEffect(() => { load(); }, [load]);
 

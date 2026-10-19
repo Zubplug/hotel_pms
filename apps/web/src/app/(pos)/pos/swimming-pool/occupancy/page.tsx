@@ -10,6 +10,7 @@ import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from 'recharts';
 import { occupancyPct, occupancyColour, formatDateTime, POOL_API } from '../_components/utils';
+import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 
 interface OccupancyEntry {
   id: string;
@@ -123,6 +124,7 @@ function CustomTooltip({ active, payload, label }: CustomTooltipProps) {
 }
 
 export default function OccupancyPage() {
+  const { provider, isDesktopMode } = useLodgeCoreProvider();
   const [data, setData] = useState<{ activeEntries: OccupancyEntry[]; todayEntries: OccupancyEntry[]; metrics: { occupancy: number; capacity: number; available: number; admissions: number } } | null>(null);
   const [loading, setLoading] = useState(true);
   const facilityId = typeof window !== 'undefined' ? localStorage.getItem('pool_facility_id') : null;
@@ -131,12 +133,16 @@ export default function OccupancyPage() {
     try {
       const params = new URLSearchParams();
       if (facilityId) params.set('facilityId', facilityId);
-      const res = await fetch(`${POOL_API}?${params.toString()}`);
-      const json = await res.json();
+      const json = isDesktopMode
+        ? await provider.pool.getSnapshot('', facilityId)
+        : await (async () => {
+            const res = await fetch(`${POOL_API}?${params.toString()}`);
+            return res.json();
+          })();
       setData(json.data);
     } catch { /* silent */ }
     finally { setLoading(false); }
-  }, [facilityId]);
+  }, [facilityId, isDesktopMode, provider.pool]);
 
   useEffect(() => { load(); const t = setInterval(load, 30_000); return () => clearInterval(t); }, [load]);
 

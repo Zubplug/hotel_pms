@@ -252,6 +252,14 @@ public class SyncEngine : BackgroundService
                 );
             }
             catch (Microsoft.Data.Sqlite.SqliteException ex) when (ex.SqliteErrorCode == 1 && ex.Message.Contains("duplicate column", StringComparison.OrdinalIgnoreCase)) { }
+            try
+            {
+                await dbContext.Database.ExecuteSqlRawAsync(
+                    "ALTER TABLE SyncMetadata ADD COLUMN PoolSnapshotJson TEXT;",
+                    stoppingToken
+                );
+            }
+            catch (Microsoft.Data.Sqlite.SqliteException ex) when (ex.SqliteErrorCode == 1 && ex.Message.Contains("duplicate column", StringComparison.OrdinalIgnoreCase)) { }
 
             var meta = await dbContext.SyncMetadata.FirstOrDefaultAsync(stoppingToken);
             if (meta != null && meta.LastSuccessfulSyncAt.HasValue)
@@ -1016,6 +1024,17 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                     };
                     dbContext.Properties.Add(localProp);
                 }
+            }
+
+            if (root.TryGetProperty("poolSnapshot", out var poolSnapshot) && poolSnapshot.ValueKind == JsonValueKind.Object)
+            {
+                var poolMeta = await dbContext.SyncMetadata.FirstOrDefaultAsync(m => m.Id == "singleton", stoppingToken);
+                if (poolMeta == null)
+                {
+                    poolMeta = new LodgeCore.Desktop.Data.Entities.LocalSyncMetadata { Id = "singleton", SchemaVersion = "1.0" };
+                    dbContext.SyncMetadata.Add(poolMeta);
+                }
+                poolMeta.PoolSnapshotJson = poolSnapshot.GetRawText();
             }
 
             if (root.TryGetProperty("cashAccounts", out var cashAccountsArray) && cashAccountsArray.ValueKind == System.Text.Json.JsonValueKind.Array)

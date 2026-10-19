@@ -6,7 +6,8 @@ import {
   Umbrella, ChevronDown, Settings2,
   Armchair, Lock, Shirt,
 } from 'lucide-react';
-import { RESOURCE_STATUS_STYLES, POOL_API, formatDateTime } from '../_components/utils';
+import { RESOURCE_STATUS_STYLES, formatDateTime } from '../_components/utils';
+import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 
 type ResourceType = 'CABANA' | 'LOUNGER' | 'LOCKER' | 'TOWEL';
 type ResourceStatus = 'AVAILABLE' | 'OCCUPIED' | 'CLEANING' | 'MAINTENANCE';
@@ -146,6 +147,7 @@ function BookDialog({ resource, onClose, onSuccess }: {
   onClose: () => void;
   onSuccess: () => void;
 }) {
+  const { provider } = useLodgeCoreProvider();
   const now = new Date();
   const [startAt, setStartAt] = useState(now.toISOString().slice(0, 16));
   const [endAt, setEndAt] = useState(new Date(now.getTime() + 4 * 3600_000).toISOString().slice(0, 16));
@@ -157,12 +159,8 @@ function BookDialog({ resource, onClose, onSuccess }: {
     setBusy(true);
     setErr(null);
     try {
-      const res = await fetch(`${POOL_API}/resources`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ resourceId: resource.id, startAt: new Date(startAt).toISOString(), endAt: new Date(endAt).toISOString(), notes: notes || undefined }),
-      });
-      if (!res.ok) { const j = await res.json(); throw new Error(j.error || 'Booking failed'); }
+      const result = await provider.pool.applyOperation('book_resource', { resourceId: resource.id, startAt: new Date(startAt).toISOString(), endAt: new Date(endAt).toISOString(), notes: notes || undefined });
+      if (result?.success === false) throw new Error(result.error || 'Booking failed');
       onSuccess();
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : 'Booking failed');
@@ -209,6 +207,7 @@ function BookDialog({ resource, onClose, onSuccess }: {
 // ─── Main page ─────────────────────────────────────────────────────────────────
 
 export default function ResourcesPage() {
+  const { provider } = useLodgeCoreProvider();
   const [resources, setResources] = useState<PoolResource[]>([]);
   const [loading, setLoading] = useState(true);
   const [typeFilter, setTypeFilter] = useState<string>('ALL');
@@ -217,25 +216,25 @@ export default function ResourcesPage() {
 
   const load = useCallback(async () => {
     try {
-      const params = new URLSearchParams();
-      if (facilityId) params.set('facilityId', facilityId);
-      // Use the manage endpoint for resource data with bookings
-      const res = await fetch(`${POOL_API}/resources/manage?${params.toString()}`);
-      const json = await res.json();
-      setResources(json.data ?? []);
+      const snapshot = await provider.pool.getSnapshot('', facilityId);
+      const facilities = snapshot.data?.facilities ?? [];
+      const bookings = snapshot.data?.resourceBookings ?? [];
+      const rows = facilities.flatMap((facility: any) => (facility.resources ?? []).map((resource: any) => ({
+        ...resource,
+        facility: { name: facility.name },
+        bookings: bookings.filter((booking: any) => booking.resourceId === resource.id),
+      })));
+      setResources(rows);
     } catch { /* silent */ }
     finally { setLoading(false); }
-  }, [facilityId]);
+  }, [facilityId, provider.pool]);
 
   useEffect(() => { load(); }, [load]);
 
   const handleStatusChange = async (id: string, status: ResourceStatus) => {
     try {
-      await fetch(`${POOL_API}/resources/manage/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status }),
-      });
+      const result = await provider.pool.applyOperation('update_resource', { id, status });
+      if (result?.success === false) throw new Error(result.error || 'Status update failed');
       await load();
     } catch { alert('Status update failed'); }
   };

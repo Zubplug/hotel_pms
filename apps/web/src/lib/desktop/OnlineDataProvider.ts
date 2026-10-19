@@ -55,6 +55,52 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
       return apiFetch(`/api/v1/hardware/operations/${operationId}`);
     }
   },
+  pool: {
+    async getSnapshot(propertyId: string, facilityId?: string | null) {
+      const params = new URLSearchParams({ propertyId });
+      if (facilityId) params.set('facilityId', facilityId);
+      return apiFetch(`/api/v1/pos/swimming-pool?${params.toString()}`);
+    },
+    async searchGuests(query: string) {
+      return apiFetch(`/api/v1/pos/swimming-pool?search=${encodeURIComponent(query)}`);
+    },
+    async createSale(data: any) {
+      const sessionId = typeof window !== 'undefined' ? localStorage.getItem('lodgecore_pos_session_id') : null;
+      const operatorToken = typeof window !== 'undefined' ? localStorage.getItem('lodgecore_pos_operator_token') : null;
+      return apiFetch('/api/v1/pos/swimming-pool', {
+        method: 'POST',
+        headers: operatorToken ? { Authorization: `Bearer ${operatorToken}` } : undefined,
+        body: JSON.stringify({ ...data, action: 'sale', sessionId: data.sessionId || sessionId || undefined }),
+      });
+    },
+    async createEntry(data: any) {
+      const sessionId = typeof window !== 'undefined' ? localStorage.getItem('lodgecore_pos_session_id') : null;
+      return apiFetch('/api/v1/pos/swimming-pool', { method: 'POST', body: JSON.stringify({ ...data, sessionId: data.sessionId || sessionId || undefined }) });
+    },
+    async updateEntryStatus(entryId: string, status: string) {
+      const action = status === 'ACTIVE' ? 'checkin' : status === 'COMPLETED' ? 'checkout' : status.toLowerCase();
+      return apiFetch(`/api/v1/pos/swimming-pool/entries/${encodeURIComponent(entryId)}`, { method: 'PATCH', body: JSON.stringify({ action }) });
+    },
+    async applyOperation(action: string, data: any) {
+      if (action === 'book_resource') return apiFetch('/api/v1/pos/swimming-pool/resources', { method: 'POST', body: JSON.stringify(data) });
+      if (action === 'update_booking') return apiFetch(`/api/v1/pos/swimming-pool/resources/${encodeURIComponent(data.id)}`, { method: 'PATCH', body: JSON.stringify({ status: data.status }) });
+      if (action === 'update_incident') return apiFetch(`/api/v1/pos/swimming-pool/incidents/${encodeURIComponent(data.id)}`, { method: 'PATCH', body: JSON.stringify({ status: data.status }) });
+      if (action === 'create_pass') return apiFetch('/api/v1/pos/swimming-pool/pass-types', { method: 'POST', body: JSON.stringify(data) });
+      if (action === 'configure_pass') return apiFetch(`/api/v1/pos/swimming-pool/pass-types/${encodeURIComponent(data.passTypeId)}`, { method: 'PATCH', body: JSON.stringify(data) });
+      if (action === 'create_resource') return apiFetch('/api/v1/pos/swimming-pool/resources/manage', { method: 'POST', body: JSON.stringify(data) });
+      if (action === 'update_resource') return apiFetch(`/api/v1/pos/swimming-pool/resources/manage/${encodeURIComponent(data.id)}`, { method: 'PATCH', body: JSON.stringify(data) });
+      return apiFetch('/api/v1/pos/swimming-pool', { method: 'POST', body: JSON.stringify({ ...data, action }) });
+    },
+    async getReport(from: string, to: string, facilityId?: string | null) {
+      const params = new URLSearchParams({ from, to });
+      if (facilityId) params.set('facilityId', facilityId);
+      return apiFetch(`/api/v1/pos/swimming-pool/reports?${params.toString()}`);
+    },
+    async getAudit(params?: Record<string, string>) {
+      const query = new URLSearchParams(params || {});
+      return apiFetch(`/api/v1/pos/swimming-pool/audit?${query.toString()}`);
+    },
+  },
   dashboard: {
     async get(propertyId: string) {
       return apiFetch(`/api/v1/frontdesk/dashboard?propertyId=${propertyId}`);
