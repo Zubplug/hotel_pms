@@ -8,6 +8,7 @@ import { PaymentService } from '@/lib/cash-management/PaymentService';
 import { PosPaymentAccountingService } from '@/lib/services/pos-payment-accounting-service';
 import { InventoryService } from '@/lib/inventory/InventoryService';
 import { isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
+import { verifyOperatorToken } from '@/lib/pos/operatorAuth';
 
 function error(message: string, status = 400) {
   return NextResponse.json({ error: message }, { status });
@@ -32,7 +33,7 @@ export async function GET(req: NextRequest) {
 
     const facilityId = req.nextUrl.searchParams.get('facilityId');
     const search = req.nextUrl.searchParams.get('search')?.trim();
-    const property = await prisma.property.findUnique({ where: { id: propertyId }, select: { businessDate: true, timezone: true, baseCurrency: true } });
+    const property = await prisma.property.findUnique({ where: { id: propertyId }, select: { businessDate: true, timezone: true, baseCurrency: true, settings: true } });
     if (!property) return error('Property not found', 404);
     const businessDate = property.businessDate || getPropertyBusinessDate(property.timezone);
     const dayStart = new Date(businessDate);
@@ -47,6 +48,11 @@ export async function GET(req: NextRequest) {
       },
       orderBy: { name: 'asc' },
     });
+    const mappedProductIds = facilities.flatMap((item) => item.passTypes.map((pass) => pass.productId).filter(Boolean)) as string[];
+    const mappedProducts = mappedProductIds.length
+      ? await prisma.posProduct.findMany({ where: { id: { in: mappedProductIds }, propertyId }, select: { id: true, category: { select: { outletId: true } } } })
+      : [];
+    const poolOutletId = mappedProducts.find((product) => product.category?.outletId)?.category?.outletId || null;
     const selectedFacilityId = facilityId || facilities[0]?.id;
     const activeWhere = { propertyId, ...(selectedFacilityId ? { facilityId: selectedFacilityId } : {}), status: 'ACTIVE' };
     const todayWhere = { propertyId, ...(selectedFacilityId ? { facilityId: selectedFacilityId } : {}), entryDate: businessDate };
@@ -68,6 +74,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ data: {
       businessDate,
       currency: property.baseCurrency,
+      bankingModel: String((property.settings as any)?.pos?.bankingModel || 'CENTRAL_CASHIER').toUpperCase(),
+      poolOutletId,
       facility: facility || null,
       facilities,
       metrics: { occupancy, capacity: facility?.capacity || 0, available: Math.max(0, (facility?.capacity || 0) - occupancy), admissions: todayEntries.length, revenue: Number(revenue._sum.total || 0) },
@@ -94,19 +102,31 @@ export async function POST(req: NextRequest) {
     const actorId = session.user.id;
 
     if (action === 'sale') {
+      const authHeader = req.headers.get('Authorization');
+      const bearer = authHeader?.replace(/^Bearer\s+/i, '').trim();
+      const operator = bearer ? await verifyOperatorToken(bearer) : null;
+      if (bearer && !operator) return error('Invalid operator token', 401);
       const passType = await prisma.poolPassType.findFirst({ where: { id: String(body.passTypeId || ''), propertyId, isActive: true }, include: { facility: true } });
       if (!passType?.productId) return error('This pass is not linked to a POS product', 409);
       const product = await prisma.posProduct.findFirst({ where: { id: passType.productId, propertyId, isActive: true }, include: { category: { include: { outlet: true } } } });
       if (!product?.category?.outlet) return error('The linked POS product or outlet is unavailable', 409);
+      const property = await prisma.property.findUnique({ where: { id: propertyId }, select: { businessDate: true, timezone: true, settings: true } });
+      if (!property) return error('Property not found', 404);
+      const bankingModel = String((property.settings as any)?.pos?.bankingModel || 'CENTRAL_CASHIER').toUpperCase();
+      if (bankingModel === 'SERVER_BANKING') {
+        if (!operator) return error('A verified pool operator shift is required for server-banked pool sales', 401);
+        if (operator.propertyId !== propertyId || operator.outletId !== product.category.outlet.id) return error('Operator token does not match this property or pool outlet', 403);
+        if (body.sessionId && body.sessionId !== operator.sessionId) return error('Operator token does not match the requested POS shift', 403);
+      }
       const method = String(body.method || '').toUpperCase();
       if (!['CASH', 'CARD', 'POS', 'BANK_TRANSFER', 'CARD_OFFLINE', 'MOBILE_PAYMENT', 'ROOM_CHARGE', 'COMPLIMENTARY'].includes(method)) return error('Unsupported payment method');
       if (method === 'ROOM_CHARGE' && !body.folioId) return error('An open folio is required for a room charge');
       if (await isNightAuditTransactionLocked(propertyId)) return error('Night audit is in progress. Pool sales are temporarily paused.', 409);
-      const property = await prisma.property.findUnique({ where: { id: propertyId }, select: { businessDate: true, timezone: true } });
-      if (!property) return error('Property not found', 404);
       const businessDate = property.businessDate || getPropertyBusinessDate(property.timezone);
-      const sessionRow = await prisma.posSession.findFirst({ where: { id: body.sessionId || undefined, propertyId, outletId: product.category.outlet.id, status: 'OPEN', controlStatus: 'OPEN' }, orderBy: { openedAt: 'desc' } });
+      const requestedSessionId = body.sessionId || operator?.sessionId || undefined;
+      const sessionRow = await prisma.posSession.findFirst({ where: { id: requestedSessionId, propertyId, outletId: product.category.outlet.id, status: 'OPEN', controlStatus: 'OPEN', ...(bankingModel === 'SERVER_BANKING' ? { bankType: 'SERVER', primaryOperatorId: operator?.staffId } : {}) }, orderBy: { openedAt: 'desc' } });
       if (!sessionRow) return error('Open POS session required for the pool outlet', 409);
+      const paymentActorId = operator?.staffId || (session.user as any).staffId || actorId;
       const quantity = Math.max(1, Number(body.guestCount || 1));
       const unitPrice = Number(product.price);
       const subtotal = unitPrice * quantity;
@@ -115,17 +135,17 @@ export async function POST(req: NextRequest) {
       const operationId = String(body.operationId || `POOL-SALE-${crypto.randomUUID()}`);
       const existingPayment = await prisma.posPayment.findFirst({ where: { operationId } });
       if (existingPayment) return NextResponse.json({ data: { payment: existingPayment, orderId: existingPayment.orderId }, alreadyApplied: true });
-      const order = await prisma.$transaction(async (tx: any) => tx.posOrder.create({ data: { propertyId, outletId: product.category.outlet.id, sessionId: sessionRow.id, folioId: method === 'ROOM_CHARGE' ? String(body.folioId) : undefined, reservationId: body.reservationId || undefined, roomId: body.roomId || undefined, orderNumber: `POOL-${Date.now()}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`, orderType: 'WALK_IN', status: 'SUBMITTED', paymentStatus: 'UNPAID', businessDate, subtotal, taxAmount, total, guestCount: quantity, displayName: body.displayName || 'Pool admission', items: { create: { productId: product.id, productName: product.name, quantity, unitPrice, subtotal, taxRate: product.taxRate, taxAmount, total, kitchenStatus: 'COMPLETED' } } } }));
+      const order = await prisma.$transaction(async (tx: any) => tx.posOrder.create({ data: { propertyId, outletId: product.category.outlet.id, sessionId: sessionRow.id, serverStaffId: operator?.staffId || (session.user as any).staffId || undefined, folioId: method === 'ROOM_CHARGE' ? String(body.folioId) : undefined, reservationId: body.reservationId || undefined, roomId: body.roomId || undefined, orderNumber: `POOL-${Date.now()}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`, orderType: 'WALK_IN', status: 'SUBMITTED', paymentStatus: 'UNPAID', businessDate, subtotal, taxAmount, total, guestCount: quantity, displayName: body.displayName || 'Pool admission', items: { create: { productId: product.id, productName: product.name, quantity, unitPrice, subtotal, taxRate: product.taxRate, taxAmount, total, kitchenStatus: 'COMPLETED' } } } }));
       if (method === 'ROOM_CHARGE') {
-        const settled = await PaymentService.settleOrder({ orderId: order.id, method: 'ROOM_CHARGE', amount: total, cashierId: actorId, sessionId: sessionRow.id, folioId: String(body.folioId), idempotencyKey: operationId });
+        const settled = await PaymentService.settleOrder({ orderId: order.id, method: 'ROOM_CHARGE', amount: total, cashierId: paymentActorId, sessionId: sessionRow.id, folioId: String(body.folioId), idempotencyKey: operationId });
         return NextResponse.json({ data: { orderId: order.id, payment: settled.payment, total, operationId } }, { status: 201 });
       }
       const result = await prisma.$transaction(async (tx: any) => {
-        const payment = await tx.posPayment.create({ data: { orderId: order.id, method: method as any, amount: total, currency: body.currency || 'NGN', status: 'CONFIRMED', sessionId: sessionRow.id, processedById: actorId, reference: operationId, operationId, businessDate, paidAt: new Date() } });
+        const payment = await tx.posPayment.create({ data: { orderId: order.id, method: method as any, amount: total, currency: body.currency || 'NGN', status: 'CONFIRMED', sessionId: sessionRow.id, processedById: paymentActorId, reference: operationId, operationId, businessDate, paidAt: new Date() } });
         const fullOrder = await tx.posOrder.findUnique({ where: { id: order.id }, include: { property: true, outlet: true, items: { include: { product: { include: { category: true } } } } } });
-        await PosPaymentAccountingService.processPaymentAccounting(tx, payment, fullOrder, actorId);
+        await PosPaymentAccountingService.processPaymentAccounting(tx, payment, fullOrder, paymentActorId);
         if (method === 'CASH') await tx.posSession.update({ where: { id: sessionRow.id }, data: { cashSales: { increment: total } } });
-        await InventoryService.commitSaleInTransaction(tx, order.id, actorId, `POOL_SALE_${operationId}`);
+        await InventoryService.commitSaleInTransaction(tx, order.id, paymentActorId, `POOL_SALE_${operationId}`);
         const updatedOrder = await tx.posOrder.update({ where: { id: order.id }, data: { status: 'CLOSED', paymentStatus: 'PAID', closedAt: new Date() } });
         return { payment, order: updatedOrder };
       });
@@ -156,6 +176,26 @@ export async function POST(req: NextRequest) {
         if (!product) return error('Active POS product not found for this property', 404);
       }
       const updated = await prisma.poolPassType.update({ where: { id: passType.id }, data: { productId, price: body.price == null ? passType.price : Number(body.price), isComplimentary: Boolean(body.isComplimentary) } });
+      return NextResponse.json({ data: updated });
+    }
+
+    if (action === 'update_facility') {
+      const role = String((session.user as any).role || ctx.role || '').toUpperCase();
+      if (!['SUPER_ADMIN', 'ADMIN', 'OWNER', 'HOTEL_MANAGER', 'GENERAL_MANAGER', 'DIRECTOR'].includes(role)) return error('Only an authorized manager can configure pool operations', 403);
+      const facilityId = String(body.facilityId || '');
+      const facility = await prisma.poolFacility.findFirst({ where: { id: facilityId, propertyId, isActive: true } });
+      if (!facility) return error('Pool facility not found', 404);
+
+      const name = String(body.name ?? facility.name).trim();
+      const code = String(body.code ?? facility.code).trim().toUpperCase();
+      const capacity = Number(body.capacity ?? facility.capacity);
+      const status = String(body.status ?? facility.status).toUpperCase();
+      if (!name || !code || !Number.isInteger(capacity) || capacity < 1) return error('Facility name, code and a positive whole-number capacity are required');
+      if (!['OPEN', 'CLOSED', 'MAINTENANCE', 'WEATHER_HOLD'].includes(status)) return error('Invalid pool facility status');
+
+      const active = await prisma.poolEntry.aggregate({ where: { propertyId, facilityId, status: 'ACTIVE' }, _sum: { guestCount: true } });
+      if (capacity < Number(active._sum.guestCount || 0)) return error('Capacity cannot be lower than the number of guests currently inside', 409);
+      const updated = await prisma.poolFacility.update({ where: { id: facilityId }, data: { name, code, capacity, status }, include: { passTypes: { where: { isActive: true }, orderBy: { name: 'asc' } } } });
       return NextResponse.json({ data: updated });
     }
 
