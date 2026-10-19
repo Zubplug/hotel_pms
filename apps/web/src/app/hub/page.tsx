@@ -74,6 +74,11 @@ function getDirectLandingUrl(
     return '/cash-management';
   }
 
+  // Pool operators → Swimming Pool operations
+  if (role === 'POOL_OPERATOR') {
+    return '/pos/swimming-pool';
+  }
+
   // Combined housekeeping and maintenance managers get a dedicated operating shell.
   if (role === 'HOUSEKEEPING_MAINTENANCE_MANAGER' ||
       (capabilities.includes('ACCESS_HOUSEKEEPING') && capabilities.includes('ACCESS_MAINTENANCE'))) {
