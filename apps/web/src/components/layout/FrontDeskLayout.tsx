@@ -85,17 +85,17 @@ export function FrontDeskLayout({ children, enabledModules = [], licenseSnapshot
   const visibleModules = isDesktop || isDesktopMode ? cachedModules : enabledModules;
   const notificationLabel = (type: string) => ({
     POS_ROOM_CHARGE_POSTED: 'F&B POS · Charge to room',
-    RESERVATION_CREATED: 'Online reservation synchronized',
-    PAYMENT_RECEIVED: 'Online payment synchronized',
-    RESERVATION_CANCELLED: 'Reservation cancellation synchronized',
-    RESERVATION_EXPIRED: 'Reservation expiry synchronized',
-    RESERVATION_NO_SHOW: 'Reservation no-show synchronized',
-    CHECK_IN: 'Guest check-in synchronized',
-    CHECK_OUT: 'Guest check-out synchronized',
+    RESERVATION_CREATED: 'New reservation',
+    PAYMENT_RECEIVED: 'Payment received',
+    RESERVATION_CANCELLED: 'Reservation cancelled',
+    RESERVATION_EXPIRED: 'Reservation expired',
+    RESERVATION_NO_SHOW: 'Reservation no-show',
+    CHECK_IN: 'Guest check-in',
+    CHECK_OUT: 'Guest check-out',
     SHIFT_APPROVED: 'Cashier shift approved',
     SHIFT_RETURNED: 'Cashier shift returned',
     SHIFT_APPROVED_WITH_VARIANCE: 'Cashier shift approved with variance',
-  }[type] || 'Front Desk synchronization');
+  }[type] || 'Front Desk notification');
 
   useEffect(() => {
     if (status === 'unauthenticated') logout();
@@ -218,7 +218,7 @@ export function FrontDeskLayout({ children, enabledModules = [], licenseSnapshot
             id: next.id,
             type: 'POS_ROOM_CHARGE',
             notificationType: metadata.notificationType || 'FRONT_DESK_SYNC',
-            subject: next.subject || 'Front Desk update synchronized',
+            subject: next.subject || 'New Front Desk notification',
             body: next.body || '',
             guestName: metadata.guestName || 'Guest',
             roomNumber: metadata.roomNumber || '—',
@@ -357,7 +357,7 @@ export function FrontDeskLayout({ children, enabledModules = [], licenseSnapshot
               )}
               <div className={cn('flex items-center gap-2 rounded-xl px-3 py-2 text-[11px] font-semibold', roomChargeNotification.offline ? 'bg-amber-400/10 text-amber-300' : 'bg-emerald-400/10 text-emerald-300')}>
                 <span className={cn('h-2 w-2 rounded-full', roomChargeNotification.offline ? 'bg-amber-400' : 'bg-emerald-400')} />
-                {roomChargeNotification.offline ? 'Saved offline · will sync automatically' : 'Posted and synchronized'}
+                {'Action required · Please review and acknowledge'}
               </div>
               <button onClick={() => { void unlockAudio(); dismissRoomChargeNotification(); }} className="w-full rounded-xl bg-indigo-500 px-3 py-2.5 text-xs font-bold text-white transition hover:bg-indigo-400">Acknowledge</button>
             </div>

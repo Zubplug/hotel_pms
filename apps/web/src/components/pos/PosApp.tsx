@@ -1954,17 +1954,17 @@ export default function PosApp() {
                 <Bell className="h-4 w-4" />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-indigo-300">Front Desk synchronization</p>
-                <h3 className="mt-1 text-sm font-bold text-white">{offlineBookingNotification.subject || 'Online booking update'}</h3>
+                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-indigo-300">Front Desk notification</p>
+                <h3 className="mt-1 text-sm font-bold text-white">{offlineBookingNotification.subject || 'New booking notification'}</h3>
               </div>
             </div>
             <div className="space-y-3 px-4 py-4">
               <p className="whitespace-pre-line rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5 text-xs leading-5 text-slate-300">
-                {offlineBookingNotification.body || 'A new online booking update has been synchronized to this terminal.'}
+                {offlineBookingNotification.body || 'A new booking or payment update is ready for your review.'}
               </p>
               <div className="flex items-center gap-2 rounded-xl bg-amber-400/10 px-3 py-2 text-[11px] font-semibold text-amber-300">
                 <span className="h-2 w-2 rounded-full bg-amber-400" />
-                Synchronized locally · awaiting acknowledgement
+                Action required · Please review and acknowledge
               </div>
               <button
                 onClick={() => { void unlockAudio(); void acknowledgeOfflineBookingNotification(); }}
