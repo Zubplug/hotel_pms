@@ -16,7 +16,8 @@ import {
   X,
   Home,
   Lock,
-  Users
+  Users,
+  Waves,
 } from 'lucide-react';
 import { useSession } from 'next-auth/react';
 import { useLock } from '@/components/auth/LockProvider';
@@ -24,6 +25,7 @@ import { useLock } from '@/components/auth/LockProvider';
 const TILES = [
   { cap: ['ACCESS_FRONT_DESK'], label: 'Front Desk', icon: Building2, href: '/frontdesk', module: 'MODULE_PMS' },
   { cap: ['ACCESS_POS'], label: 'Point of Sale', icon: UtensilsCrossed, href: '/pos', module: 'MODULE_OPERATIONS' },
+  { cap: ['ACCESS_POS'], label: 'Pool Operations', icon: Waves, href: '/pos/swimming-pool', module: 'MODULE_OPERATIONS' },
   { cap: ['ACCESS_HOUSEKEEPING'], label: 'Housekeeping', icon: Sparkles, href: '/housekeeping', module: 'MODULE_OPERATIONS' },
   { cap: ['ACCESS_CASH_MANAGEMENT'], label: 'Cash Management', icon: Banknote, href: '/cash-management', module: 'MODULE_PMS' },
   { 

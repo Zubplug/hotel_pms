@@ -1954,6 +1954,51 @@ public class OfflinePMSInterop
         }
     }
 
+    public async Task<string> CreatePoolEntryAsync(string dataJson)
+    {
+        try
+        {
+            var entry = JsonSerializer.Deserialize<LocalPoolEntry>(dataJson, _jsonOptions)
+                ?? throw new InvalidOperationException("Invalid pool admission data");
+            var posCtx = await _sessionManager.GetActiveContextAsync();
+            entry.PropertyId = posCtx.PropertyId;
+            var capacity = JsonNode.Parse(dataJson)?["facilityCapacity"]?.GetValue<int>() ?? 0;
+            var result = await _repo.CreatePoolEntryAsync(entry, posCtx.StaffId, posCtx.DeviceId, posCtx.SessionId, capacity);
+            return JsonSerializer.Serialize(new { success = true, data = result }, _jsonOptions);
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
+        }
+    }
+
+    public async Task<string> UpdatePoolEntryStatusAsync(string entryId, string status)
+    {
+        try
+        {
+            var posCtx = await _sessionManager.GetActiveContextAsync();
+            var result = await _repo.UpdatePoolEntryStatusAsync(entryId, status, posCtx.StaffId, posCtx.DeviceId, posCtx.SessionId);
+            return JsonSerializer.Serialize(new { success = result != null, data = result }, _jsonOptions);
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
+        }
+    }
+
+    public async Task<string> GetPoolEntriesAsync(string propertyId, string? status = null)
+    {
+        try
+        {
+            var entries = await _repo.GetPoolEntriesAsync(propertyId, status);
+            return JsonSerializer.Serialize(new { success = true, data = entries }, _jsonOptions);
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
+        }
+    }
+
     public async Task<string> SplitCheckAsync(string orderId, List<string> itemIds)
     {
         try

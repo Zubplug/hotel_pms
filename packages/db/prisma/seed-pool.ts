@@ -131,6 +131,28 @@ async function main() {
     }
   }
 
+  // Operational pool records mirror the existing POS catalog. Financial
+  // transactions remain POS orders/payments; these records only control
+  // admissions, capacity and access.
+  const facility = await prisma.poolFacility.upsert({
+    where: { propertyId_code: { propertyId: property.id, code: 'MAIN-POOL' } },
+    update: { name: 'Swimming Pool', capacity: 50, status: 'OPEN', isActive: true },
+    create: { propertyId: property.id, name: 'Swimming Pool', code: 'MAIN-POOL', capacity: 50 },
+  })
+  const operationalPasses = [
+    { code: 'ADULT-DAY', name: 'Adult Pool Pass — Day', guestClass: 'ADULT', itemCode: 'REC-POOL-SWIM-ADULT' },
+    { code: 'CHILD-DAY', name: 'Child Pool Pass — Day', guestClass: 'CHILD', itemCode: 'REC-POOL-SWIM-CHILD' },
+  ]
+  for (const pass of operationalPasses) {
+    const product = await prisma.posProduct.findFirst({ where: { propertyId: property.id, itemCode: pass.itemCode }, select: { id: true, price: true, taxRate: true } })
+    if (!product) continue
+    await prisma.poolPassType.upsert({
+      where: { propertyId_code: { propertyId: property.id, code: pass.code } },
+      update: { facilityId: facility.id, productId: product.id, name: pass.name, guestClass: pass.guestClass, price: product.price, isActive: true },
+      create: { propertyId: property.id, facilityId: facility.id, productId: product.id, name: pass.name, code: pass.code, guestClass: pass.guestClass, price: product.price, currency: property.baseCurrency },
+    })
+  }
+
   console.log('✅ Safely seeded Pool Outlets and Products to production!')
 }
 

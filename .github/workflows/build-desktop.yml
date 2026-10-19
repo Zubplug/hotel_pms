@@ -78,6 +78,7 @@ jobs:
         shell: powershell
         env:
           CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+          LODGECORE_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
         run: |
           cd apps\desktop\LodgeCore.Desktop
           dotnet publish -f net10.0-windows10.0.19041.0 -c Release /p:RuntimeIdentifierOverride=win10-x86 /p:GenerateAppxPackageOnBuild=true /p:AppxPackageSigningEnabled=true /p:PackageCertificateThumbprint="${{ env.THUMBPRINT }}"

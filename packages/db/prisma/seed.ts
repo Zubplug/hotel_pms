@@ -1,11 +1,17 @@
 import { PrismaClient } from '@prisma/client'
 import { v4 as uuidv4 } from 'uuid'
+import bcrypt from 'bcryptjs'
 import { catalogPlans, catalogProducts } from './catalog'
 
 const prisma = new PrismaClient()
 
 async function main() {
   console.log('Seeding LodgeCore PMS Database...')
+
+  const initialAdminPassword = process.env.SEED_ADMIN_PASSWORD
+  if (!initialAdminPassword || initialAdminPassword.length < 16) {
+    throw new Error('SEED_ADMIN_PASSWORD is required and must be at least 16 characters long')
+  }
 
   // 1. Organization
   const org = await prisma.organization.upsert({
@@ -237,8 +243,7 @@ async function main() {
     create: {
       staffId: staff.id,
       email: 'admin@lodgecore.com',
-      // 'password' hash (bcrypt)
-      passwordHash: '$2b$10$AmpFKjKSql.k2HpbeXE97.d0G27fSY9UfMJvdt9RoCQco1RIT9FlG',
+      passwordHash: await bcrypt.hash(initialAdminPassword, 12),
       isSuperAdmin: true,
     }
   })

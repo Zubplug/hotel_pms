@@ -1,9 +1,15 @@
 import { PrismaClient } from '@prisma/client';
+import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
 async function main() {
   console.log('Seeding Stock & Procurement Manager...');
+
+  const initialPassword = process.env.STOCK_MANAGER_INITIAL_PASSWORD;
+  if (!initialPassword || initialPassword.length < 16) {
+    throw new Error('STOCK_MANAGER_INITIAL_PASSWORD is required and must be at least 16 characters long');
+  }
 
   const org = await prisma.organization.findFirst({
     where: { slug: 'lodgecore' }
@@ -72,7 +78,7 @@ async function main() {
     create: {
       staffId: staff.id,
       email: staffEmail,
-      passwordHash: '$2b$10$AmpFKjKSql.k2HpbeXE97.d0G27fSY9UfMJvdt9RoCQco1RIT9FlG', // password123
+      passwordHash: await bcrypt.hash(initialPassword, 12),
       isSuperAdmin: false,
     }
   });
@@ -114,7 +120,7 @@ async function main() {
 
   console.log(`Successfully seeded! Login Details:`);
   console.log(`Email: ${staffEmail}`);
-  console.log(`Password: password123`);
+  console.log('Initial password supplied through STOCK_MANAGER_INITIAL_PASSWORD; it was not printed.');
 }
 
 main()

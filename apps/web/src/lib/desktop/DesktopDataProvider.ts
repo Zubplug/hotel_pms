@@ -510,7 +510,7 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
     createOrder: async (data: any, operatorToken: string) => {
       return invokeDesktop('pos.createOrder', { data, operatorToken });
     },
-    updateOrderStatus: async (orderId: string, status: string, reason?: string) => {
+    updateOrderStatus: async (orderId: string, status: string, reason?: string, operatorToken?: string) => {
       return invokeDesktop('pos.updateOrderStatus', { orderId, status, reason });
     },
     acknowledgeRoomServiceOrder: async (orderId: string) => {

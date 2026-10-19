@@ -597,6 +597,15 @@ public partial class MainPage : ContentPage
                 case "pos.createOrder":
                     responseData = await pmsInterop.CreatePosOrderAsync(parameters?["data"]?.ToString() ?? "");
                     break;
+                case "pool.createEntry":
+                    responseData = await pmsInterop.CreatePoolEntryAsync(parameters?["data"]?.ToString() ?? "");
+                    break;
+                case "pool.updateEntryStatus":
+                    responseData = await pmsInterop.UpdatePoolEntryStatusAsync(parameters?["entryId"]?.ToString() ?? "", parameters?["status"]?.ToString() ?? "");
+                    break;
+                case "pool.getEntries":
+                    responseData = await pmsInterop.GetPoolEntriesAsync(parameters?["propertyId"]?.ToString() ?? "", parameters?["status"]?.ToString());
+                    break;
                 case "pos.splitCheck":
                     var itemIdsNode = parameters?["itemIds"] as JsonArray;
                     var itemIdsList = itemIdsNode?.Select(x => x?.ToString() ?? "").Where(x => !string.IsNullOrEmpty(x)).ToList() ?? new List<string>();

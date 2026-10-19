@@ -143,7 +143,7 @@ export interface LodgeCoreDataProvider {
     getWaiterTickets(outletId: string, operatorToken: string, sessionId: string): Promise<{ data: any, error: string | null }>;
     fireKot(orderId: string, itemIds: string[], operatorToken: string): Promise<{ data: any, error: string | null }>;
     createOrder(data: any, operatorToken: string): Promise<{ data: any, error: string | null }>;
-    updateOrderStatus(orderId: string, status: string, reason?: string): Promise<{ data: any, error: string | null }>;
+    updateOrderStatus(orderId: string, status: string, reason?: string, operatorToken?: string): Promise<{ data: any, error: string | null }>;
     acknowledgeRoomServiceOrder(orderId: string, operatorToken?: string): Promise<{ data: any, error: string | null }>;
     rejectRoomServiceOrder(orderId: string, reason: string, operatorToken?: string): Promise<{ data: any, error: string | null }>;
     payOrder(orderId: string, paymentData: any, operatorToken: string): Promise<{ data: any, error: string | null }>;

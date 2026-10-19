@@ -5,7 +5,10 @@ import { SignJWT } from 'jose';
 import { successResponse, errorResponse } from '@/lib/api-response';
 import { requireOrganizationContext } from '@/lib/organization-access';
 
-const JWT_SECRET = process.env.AUTH_SECRET || 'fallback-secret-for-development';
+const JWT_SECRET = process.env.AUTH_SECRET;
+if (!JWT_SECRET) {
+  throw new Error('AUTH_SECRET is required for manager authentication');
+}
 
 export async function POST(req: NextRequest) {
   try {

@@ -4189,6 +4189,86 @@ public class LocalRepository
         return availableRooms;
     }
 
+    public async Task<LocalPoolEntry> CreatePoolEntryAsync(LocalPoolEntry entry, string userId, string deviceId, string sessionId, int facilityCapacity)
+    {
+        if (string.IsNullOrWhiteSpace(entry.PropertyId) || string.IsNullOrWhiteSpace(entry.FacilityId) || string.IsNullOrWhiteSpace(entry.PassTypeId))
+            throw new InvalidOperationException("Pool facility and pass type are required.");
+        if (!entry.WaiverAccepted)
+            throw new InvalidOperationException("A guest waiver must be accepted before admission.");
+        if (facilityCapacity < 1)
+            throw new InvalidOperationException("Pool capacity is unavailable offline; refresh pool configuration before admitting guests.");
+
+        var property = await _dbContext.Properties.FindAsync(entry.PropertyId)
+            ?? throw new InvalidOperationException("Property is not available offline.");
+        await AssertPosSessionOpenAsync(sessionId);
+        await AssertNightAuditAllowsAsync(entry.PropertyId, property.BusinessDate.Date);
+
+        entry.Id = string.IsNullOrWhiteSpace(entry.Id) ? Guid.NewGuid().ToString() : entry.Id;
+        entry.OperationId = string.IsNullOrWhiteSpace(entry.OperationId)
+            ? $"POOL-{deviceId}-{DateTime.UtcNow.Ticks}-{Guid.NewGuid():N}"
+            : entry.OperationId;
+        entry.DeviceId = deviceId;
+        entry.CreatedBy = userId;
+        entry.CheckedInBy = entry.Status == "ACTIVE" ? userId : null;
+        entry.EntryDate = entry.EntryDate == default ? property.BusinessDate.Date : entry.EntryDate.Date;
+        entry.GuestCount = Math.Clamp(entry.GuestCount, 1, 20);
+        entry.EntryNumber = string.IsNullOrWhiteSpace(entry.EntryNumber)
+            ? $"POOL-{DateTime.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid().ToString("N")[..6].ToUpperInvariant()}"
+            : entry.EntryNumber;
+        entry.AdmittedAt = entry.Status == "ACTIVE" ? (entry.AdmittedAt ?? DateTime.UtcNow) : null;
+        entry.CreatedAt = DateTime.UtcNow;
+        entry.UpdatedAt = entry.CreatedAt;
+
+        var duplicate = await _dbContext.PoolEntries.FirstOrDefaultAsync(item => item.OperationId == entry.OperationId);
+        if (duplicate != null) return duplicate;
+
+        var entryDayStart = entry.EntryDate.Date;
+        var entryDayEnd = entryDayStart.AddDays(1);
+        var activeGuests = await _dbContext.PoolEntries
+            .Where(item => item.PropertyId == entry.PropertyId && item.FacilityId == entry.FacilityId && item.Status == "ACTIVE" && item.EntryDate >= entryDayStart && item.EntryDate < entryDayEnd)
+            .Select(item => item.GuestCount)
+            .ToListAsync();
+        if (entry.Status == "ACTIVE" && activeGuests.Sum() + entry.GuestCount > facilityCapacity)
+            throw new InvalidOperationException("POOL_CAPACITY_EXCEEDED");
+
+        _dbContext.PoolEntries.Add(entry);
+        AppendSyncEvent("POOL_ENTRY", entry.Id, "POOL_ENTRY_CREATED", new
+        {
+            entry.Id, entry.PropertyId, entry.FacilityId, entry.PassTypeId,
+            entry.GuestId, entry.ReservationId, entry.FolioId, entry.PosOrderId,
+            entry.EntryNumber, entry.Identifier, entry.Status, entry.EntryDate,
+            entry.AdmittedAt, entry.GuestCount, entry.WaiverAccepted, entry.Notes,
+            entry.OperationId, SessionId = sessionId,
+        }, deviceId, null, sessionId, userId);
+        await _dbContext.SaveChangesAsync();
+        return entry;
+    }
+
+    public async Task<LocalPoolEntry?> GetPoolEntryAsync(string entryId)
+        => await _dbContext.PoolEntries.FirstOrDefaultAsync(entry => entry.Id == entryId);
+
+    public async Task<List<LocalPoolEntry>> GetPoolEntriesAsync(string propertyId, string? status = null)
+    {
+        var query = _dbContext.PoolEntries.Where(entry => entry.PropertyId == propertyId);
+        if (!string.IsNullOrWhiteSpace(status)) query = query.Where(entry => entry.Status == status);
+        return await query.OrderByDescending(entry => entry.CreatedAt).Take(200).ToListAsync();
+    }
+
+    public async Task<LocalPoolEntry?> UpdatePoolEntryStatusAsync(string entryId, string status, string userId, string deviceId, string sessionId)
+    {
+        var entry = await _dbContext.PoolEntries.FirstOrDefaultAsync(item => item.Id == entryId);
+        if (entry == null) return null;
+        if (!new[] { "RESERVED", "ACTIVE", "COMPLETED", "CANCELLED" }.Contains(status))
+            throw new InvalidOperationException("Invalid pool entry status.");
+        if (status == "ACTIVE" && entry.Status != "ACTIVE") entry.AdmittedAt = DateTime.UtcNow;
+        if (status == "COMPLETED") entry.ExitedAt = DateTime.UtcNow;
+        entry.Status = status;
+        entry.UpdatedAt = DateTime.UtcNow;
+        AppendSyncEvent("POOL_ENTRY", entry.Id, "POOL_ENTRY_UPDATED", new { entry.Id, entry.Status, entry.AdmittedAt, entry.ExitedAt, entry.OperationId }, deviceId, null, sessionId, userId);
+        await _dbContext.SaveChangesAsync();
+        return entry;
+    }
+
     public async Task<LocalPosOrder> CreatePosOrderAsync(LocalPosOrder order, string userId, string deviceId)
     {
         // 1. Generate Deterministic Operation ID

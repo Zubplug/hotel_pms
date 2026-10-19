@@ -412,9 +412,10 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
         body: JSON.stringify(data)
       });
     },
-    updateOrderStatus: async (orderId: string, status: string, reason?: string) => {
+    updateOrderStatus: async (orderId: string, status: string, reason?: string, operatorToken?: string) => {
       return apiFetchResult(`/api/v1/pos/orders/${orderId}/status`, {
         method: 'PATCH',
+        headers: operatorToken ? { Authorization: `Bearer ${operatorToken}` } : undefined,
         body: JSON.stringify({ status, reason })
       });
     },

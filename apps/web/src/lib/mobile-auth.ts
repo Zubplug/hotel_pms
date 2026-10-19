@@ -1,7 +1,10 @@
 import { NextRequest } from 'next/server';
 import { jwtVerify } from 'jose';
 
-const JWT_SECRET = process.env.AUTH_SECRET || 'fallback-secret-for-development';
+const JWT_SECRET = process.env.AUTH_SECRET;
+if (!JWT_SECRET) {
+  throw new Error('AUTH_SECRET is required for mobile authentication');
+}
 
 export interface MobileSession {
   id: string;

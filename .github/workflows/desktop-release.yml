@@ -104,6 +104,8 @@ jobs:
 
     - name: Publish MAUI Windows MSIX
       shell: powershell
+      env:
+        LODGECORE_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
       run: |
         dotnet publish apps/desktop/LodgeCore.Desktop `
           -c Release `

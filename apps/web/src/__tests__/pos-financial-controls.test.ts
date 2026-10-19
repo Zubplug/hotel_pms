@@ -1,5 +1,11 @@
-import { POST } from '../app/api/v1/sync/push/route';
+import { POST } from '../app/api/v1/pos/sync/push/route';
 import prisma from '@hotel-pms/db';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('@/lib/night-audit-guard', () => ({
+  isNightAuditCutoverActive: vi.fn().mockResolvedValue(false),
+  assertOfflineSessionOpenDate: vi.fn().mockResolvedValue(undefined),
+}));
 
 // Mock Next.js Request
 class MockRequest {
@@ -12,77 +18,88 @@ class MockRequest {
   }
   
   async json() {
-    return this.body;
+    return this.body.operationId
+      ? { ...this.body, events: [{ ...this.body, terminalId: 'terminal-1' }] }
+      : this.body;
   }
   
   get headers() {
     return {
-      get: (key: string) => this.headersObj[key]
+      get: (key: string) => this.headersObj[key] ?? this.headersObj[Object.keys(this.headersObj).find((name) => name.toLowerCase() === key.toLowerCase()) ?? key]
     };
   }
 }
 
-jest.mock('@hotel-pms/db', () => ({
+vi.mock('@hotel-pms/db', () => {
+  const mockPrisma = {
+  posTerminal: {
+    findUnique: vi.fn().mockResolvedValue({
+      id: 'terminal-1', registrationState: 'REGISTERED',
+      outlet: { propertyId: 'prop-1', property: { id: 'prop-1' } },
+    }),
+  },
   property: {
-    findUnique: jest.fn().mockResolvedValue({ id: 'prop-1', businessDate: new Date() }),
+    findUnique: vi.fn().mockResolvedValue({ id: 'prop-1', businessDate: new Date() }),
   },
   posSession: {
-    findUnique: jest.fn(),
-    create: jest.fn(),
-    update: jest.fn(),
+    findUnique: vi.fn(),
+    create: vi.fn(),
+    update: vi.fn(),
   },
   posVoid: {
-    findUnique: jest.fn(),
-    create: jest.fn(),
+    findUnique: vi.fn(),
+    create: vi.fn(),
   },
   stockTransaction: {
-    findMany: jest.fn(),
-    findFirst: jest.fn(),
-    create: jest.fn(),
+    findMany: vi.fn(),
+    findFirst: vi.fn(),
+    create: vi.fn(),
   },
   stockItem: {
-    update: jest.fn(),
+    update: vi.fn(),
   },
   posPayment: {
-    aggregate: jest.fn().mockResolvedValue({ _sum: { amount: 0 } }),
+    aggregate: vi.fn().mockResolvedValue({ _sum: { amount: 0 } }),
   },
-  $transaction: jest.fn(async (cb) => {
+  $transaction: vi.fn(async (cb) => {
     return cb({
       posSession: {
-        create: jest.fn(),
-        update: jest.fn(),
+        create: vi.fn(),
+        update: vi.fn(),
       },
       posPayment: {
-        aggregate: jest.fn().mockResolvedValue({ _sum: { amount: 1000 } }),
+        aggregate: vi.fn().mockResolvedValue({ _sum: { amount: 1000 } }),
       },
       posVoid: {
-        create: jest.fn(),
+        create: vi.fn(),
       },
       stockTransaction: {
-        findMany: jest.fn().mockResolvedValue([{
+        findMany: vi.fn().mockResolvedValue([{
           id: 'sale-1',
           stockItemId: 'item-1',
           quantity: -1,
           unitCost: 100,
           reference: 'Order-123'
         }]),
-        findFirst: jest.fn().mockResolvedValue(null),
-        create: jest.fn(),
+        findFirst: vi.fn().mockResolvedValue(null),
+        create: vi.fn(),
       },
       stockItem: {
-        update: jest.fn(),
+        update: vi.fn(),
       }
     });
   })
-}));
+  };
+  return { default: mockPrisma, ...mockPrisma };
+});
 
 describe('Phase 1.3 - POS Financial Controls Sync', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   it('calculates expectedCash server-side when closing a PosSession', async () => {
-    (prisma.posSession.findUnique as jest.Mock).mockResolvedValue({
+    (prisma.posSession.findUnique as vi.Mock).mockResolvedValue({
       id: 'session-1',
       openingBalance: 500
     });
@@ -96,11 +113,11 @@ describe('Phase 1.3 - POS Financial Controls Sync', () => {
     const req = new MockRequest({
       operationId: 'op_close_session',
       entityType: 'POS_SESSION',
-      entityId: 'session-1',
+      entityId: '44444444-4444-4444-8444-444444444444',
       operationType: 'UPDATE',
       payloadJson: JSON.stringify(payload),
       propertyId: 'prop-1'
-    }, { 'Idempotency-Key': 'key1' });
+    }, { Authorization: 'Bearer test-token', 'Idempotency-Key': 'key1' });
 
     const res = await POST(req as any);
     expect(res.status).toBe(200);
@@ -111,7 +128,7 @@ describe('Phase 1.3 - POS Financial Controls Sync', () => {
   });
 
   it('restores inventory immutably via RETURN when POS_VOID is synced', async () => {
-    (prisma.posVoid.findUnique as jest.Mock).mockResolvedValue(null);
+    (prisma.posVoid.findUnique as vi.Mock).mockResolvedValue(null);
 
     const payload = {
       orderId: 'order-1',
@@ -122,11 +139,11 @@ describe('Phase 1.3 - POS Financial Controls Sync', () => {
     const req = new MockRequest({
       operationId: 'op_void_1',
       entityType: 'POS_VOID',
-      entityId: 'void-1',
+      entityId: '55555555-5555-4555-8555-555555555555',
       operationType: 'CREATE',
       payloadJson: JSON.stringify(payload),
       propertyId: 'prop-1'
-    }, { 'Idempotency-Key': 'key2' });
+    }, { Authorization: 'Bearer test-token', 'Idempotency-Key': 'key2' });
 
     const res = await POST(req as any);
     expect(res.status).toBe(200);

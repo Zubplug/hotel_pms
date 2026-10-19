@@ -72,6 +72,7 @@ public class LocalDbContext : DbContext
     public DbSet<LocalLaundryOrderStatusHistory> LaundryOrderStatusHistory { get; set; } = null!;
     public DbSet<LocalOverrideAudit> OverrideAudits { get; set; } = null!;
     public DbSet<LocalBreakfastRedemption> BreakfastRedemptions { get; set; } = null!;
+    public DbSet<LocalPoolEntry> PoolEntries { get; set; } = null!;
 
     public LocalDbContext(DbContextOptions<LocalDbContext> options) : base(options)
     {
@@ -461,6 +462,40 @@ public class LocalDbContext : DbContext
         catch (Microsoft.Data.Sqlite.SqliteException ex) when (ex.SqliteErrorCode == 1 && ex.Message.Contains("duplicate column", StringComparison.OrdinalIgnoreCase)) { }
     }
 
+    public async Task ApplyPoolOperationsSchemaAsync()
+    {
+        await Database.ExecuteSqlRawAsync(@"
+            CREATE TABLE IF NOT EXISTS PoolEntries (
+                Id TEXT NOT NULL PRIMARY KEY,
+                PropertyId TEXT NOT NULL,
+                FacilityId TEXT NOT NULL,
+                PassTypeId TEXT NOT NULL,
+                GuestId TEXT NULL,
+                ReservationId TEXT NULL,
+                FolioId TEXT NULL,
+                PosOrderId TEXT NULL,
+                EntryNumber TEXT NOT NULL,
+                Identifier TEXT NULL,
+                Status TEXT NOT NULL DEFAULT 'ACTIVE',
+                EntryDate TEXT NOT NULL,
+                AdmittedAt TEXT NULL,
+                ExitedAt TEXT NULL,
+                GuestCount INTEGER NOT NULL DEFAULT 1,
+                WaiverAccepted INTEGER NOT NULL DEFAULT 0,
+                Notes TEXT NULL,
+                OperationId TEXT NULL,
+                DeviceId TEXT NULL,
+                CreatedBy TEXT NULL,
+                CheckedInBy TEXT NULL,
+                CreatedAt TEXT NOT NULL,
+                UpdatedAt TEXT NOT NULL
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS IX_PoolEntries_OperationId ON PoolEntries(OperationId) WHERE OperationId IS NOT NULL;
+            CREATE INDEX IF NOT EXISTS IX_PoolEntries_PropertyDateStatus ON PoolEntries(PropertyId, EntryDate, Status);
+            CREATE INDEX IF NOT EXISTS IX_PoolEntries_IdentifierStatus ON PoolEntries(Identifier, Status);
+        ");
+    }
+
     /// <summary>
     /// Adds columns required for the POS shift-settlement and cash-movement workflow.
     /// Safe to call repeatedly — duplicate-column errors are silently swallowed.
@@ -654,6 +689,14 @@ public class LocalDbContext : DbContext
             entity.HasKey(e => e.Id);
             entity.HasIndex(e => new { e.PropertyId, e.ReservationId, e.BusinessDate });
             entity.HasIndex(e => e.OperationId).IsUnique();
+        });
+
+        modelBuilder.Entity<LocalPoolEntry>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => e.OperationId).IsUnique();
+            entity.HasIndex(e => new { e.PropertyId, e.EntryDate, e.Status });
+            entity.HasIndex(e => new { e.Identifier, e.Status });
         });
     }
 }

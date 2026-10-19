@@ -31,7 +31,8 @@
 		<AppxShowProgress>True</AppxShowProgress>
 		<AppxPackageSigningEnabled>True</AppxPackageSigningEnabled>
 		<PackageCertificateKeyFile>Certificates\LodgeCore.pfx</PackageCertificateKeyFile>
-		<PackageCertificatePassword>lodgecore2026</PackageCertificatePassword>
+		<!-- Supplied by the secure production build environment; never commit it. -->
+		<PackageCertificatePassword Condition="'$(PackageCertificatePassword)' == ''">$(LODGECORE_CERTIFICATE_PASSWORD)</PackageCertificatePassword>
 	</PropertyGroup>
 
 	<ItemGroup>

@@ -7,10 +7,10 @@ export async function GET(req: NextRequest) {
   try {
     const context = await HrAuthorizationService.resolveAuthContext(req);
     const canManage = HrAuthorizationService.can(context, 'hr.attendance.manage');
-    const currentStaff = await prisma.staff.findFirst({ where: { userId: context.userId, organizationId: context.organizationId }, select: { id: true } });
+    const currentStaff = await prisma.staff.findFirst({ where: { userId: context.userId, organizationId: context.organizationId, isActive: true, deletedAt: null }, select: { id: true } });
     if (!canManage && !currentStaff) return NextResponse.json({ error: 'Linked employee record not found' }, { status: 404 });
     const swaps = await prisma.shiftSwapRequest.findMany({ where: { propertyId: context.propertyId, ...(canManage ? {} : { OR: [{ requesterStaffId: currentStaff?.id || '__none__' }, { targetStaffId: currentStaff?.id || '__none__' }] }), ...(context.role === 'DEPARTMENT_HEAD' && context.department ? { requesterStaff: { department: context.department } } : {}), }, include: { requesterStaff: { select: { firstName: true, lastName: true, employeeId: true, department: true } }, targetStaff: { select: { firstName: true, lastName: true, employeeId: true, department: true } } }, orderBy: { createdAt: 'desc' }, take: 250 });
-    const availableStaff = await prisma.staff.findMany({ where: { organizationId: context.organizationId, isActive: true, deletedAt: null, ...(context.propertyId ? { propertyAccess: { has: context.propertyId } } : {}), ...(context.role === 'DEPARTMENT_HEAD' && context.department ? { department: context.department } : {}) }, select: { id: true, firstName: true, lastName: true, employeeId: true, department: true }, orderBy: [{ department: 'asc' }, { firstName: 'asc' }] });
+    const availableStaff = await prisma.staff.findMany({ where: { organizationId: context.organizationId, id: { not: currentStaff?.id || '__none__' }, isActive: true, deletedAt: null, ...(context.propertyId ? { propertyAccess: { has: context.propertyId } } : {}) }, select: { id: true, firstName: true, lastName: true, employeeId: true, department: true }, orderBy: [{ department: 'asc' }, { firstName: 'asc' }] });
     return NextResponse.json({ swaps, availableStaff });
   } catch (error: any) { return NextResponse.json({ error: error.message || 'Failed to retrieve shift swaps' }, { status: error.message?.includes('Forbidden') ? 403 : 500 }); }
 }

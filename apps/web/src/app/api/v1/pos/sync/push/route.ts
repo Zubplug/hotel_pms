@@ -187,7 +187,7 @@ export async function POST(req: NextRequest) {
             'ORDER_CLOSED', 'ORDER_CHECK_SPLIT', 'CHECK_PAID', 'PAYMENT_RECORDED',
             'POS_PAYMENT', 'POS_ORDER_ITEM', 'POS_KOT', 'POS_VOID', 'POS_CASH_MOVEMENT',
             'CASH_MOVEMENT', 'REFUND_REQUESTED', 'DISCOUNT_APPLIED',
-            'BREAKFAST_REDEEMED', 'BREAKFAST_REDEMPTION'
+            'BREAKFAST_REDEEMED', 'BREAKFAST_REDEMPTION', 'POOL_ENTRY_CREATED', 'POOL_ENTRY_UPDATED'
           ]);
           if (transactionEventTypes.has(String(event.eventType))) {
             let sessionId = payload.SessionId || payload.sessionId || payload.PosSessionId || payload.posSessionId || event.sessionId;
@@ -414,7 +414,63 @@ export async function POST(req: NextRequest) {
                  });
              }
           }
-                    else if (event.eventType === 'ORDER_CREATED') {
+                    else if (event.eventType === 'POOL_ENTRY_CREATED' || (event.aggregateType === 'POOL_ENTRY' && event.eventType !== 'POOL_ENTRY_UPDATED')) {
+             const existingEntry = await tx.poolEntry.findUnique({ where: { id: event.aggregateId } });
+             if (!existingEntry) {
+               const facilityId = payload.FacilityId || payload.facilityId;
+               const passTypeId = payload.PassTypeId || payload.passTypeId;
+               const entryDate = new Date(payload.EntryDate || payload.entryDate || event.occurredAt);
+               const entryDayStart = new Date(Date.UTC(entryDate.getUTCFullYear(), entryDate.getUTCMonth(), entryDate.getUTCDate()));
+               const entryDayEnd = new Date(entryDayStart);
+               entryDayEnd.setUTCDate(entryDayEnd.getUTCDate() + 1);
+               const guestCount = Math.max(1, Number(payload.GuestCount || payload.guestCount || 1));
+               const facility = await tx.poolFacility.findFirst({ where: { id: facilityId, propertyId: event.propertyId, isActive: true } });
+               const passType = await tx.poolPassType.findFirst({ where: { id: passTypeId, facilityId, propertyId: event.propertyId, isActive: true } });
+               if (!facility || !passType) throw new Error('POOL_CONFIGURATION_NOT_FOUND');
+               await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`${facilityId}:${entryDate.toISOString().slice(0, 10)}`}, 0))`;
+               const active = await tx.poolEntry.aggregate({ where: { propertyId: event.propertyId, facilityId, status: 'ACTIVE', entryDate: { gte: entryDayStart, lt: entryDayEnd } }, _sum: { guestCount: true } });
+               if (Number(active._sum.guestCount || 0) + guestCount > facility.capacity) throw new Error('POOL_CAPACITY_EXCEEDED');
+               await tx.poolEntry.create({ data: {
+                 id: event.aggregateId,
+                 propertyId: event.propertyId,
+                 facilityId,
+                 passTypeId,
+                 guestId: payload.GuestId || payload.guestId || null,
+                 reservationId: payload.ReservationId || payload.reservationId || null,
+                 folioId: payload.FolioId || payload.folioId || null,
+                 posOrderId: payload.PosOrderId || payload.posOrderId || null,
+                 entryNumber: payload.EntryNumber || payload.entryNumber || `POOL-SYNC-${event.aggregateId.slice(0, 8).toUpperCase()}`,
+                 identifier: payload.Identifier || payload.identifier || null,
+                 status: payload.Status || payload.status || 'ACTIVE',
+                 entryDate,
+                 admittedAt: payload.AdmittedAt || payload.admittedAt ? new Date(payload.AdmittedAt || payload.admittedAt) : new Date(event.occurredAt),
+                 guestCount,
+                 waiverAccepted: Boolean(payload.WaiverAccepted ?? payload.waiverAccepted),
+                 operationId: payload.OperationId || payload.operationId || event.idempotencyKey,
+                 deviceId: event.deviceId,
+                 createdBy: event.operatorId || null,
+                 checkedInBy: event.operatorId || null,
+               } });
+             }
+          }
+          else if (event.eventType === 'POOL_ENTRY_UPDATED') {
+            const entry = await tx.poolEntry.findFirst({ where: { id: event.aggregateId, propertyId: event.propertyId }, include: { facility: true } });
+            if (!entry) throw new Error('POOL_ENTRY_NOT_FOUND');
+            const nextStatus = String(payload.Status || payload.status || '').toUpperCase();
+            if (!['RESERVED', 'ACTIVE', 'COMPLETED', 'CANCELLED'].includes(nextStatus)) throw new Error('POOL_ENTRY_STATUS_INVALID');
+            if (nextStatus === 'ACTIVE' && entry.status !== 'ACTIVE') {
+              await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`${entry.facilityId}:${entry.entryDate.toISOString().slice(0, 10)}`}, 0))`;
+              const active = await tx.poolEntry.aggregate({ where: { propertyId: event.propertyId, facilityId: entry.facilityId, status: 'ACTIVE', id: { not: entry.id } }, _sum: { guestCount: true } });
+              if (Number(active._sum.guestCount || 0) + entry.guestCount > entry.facility.capacity) throw new Error('POOL_CAPACITY_EXCEEDED');
+            }
+            const updateData: any = { status: nextStatus };
+            if (payload.AdmittedAt || payload.admittedAt) updateData.admittedAt = new Date(payload.AdmittedAt || payload.admittedAt);
+            if (payload.ExitedAt || payload.exitedAt) updateData.exitedAt = new Date(payload.ExitedAt || payload.exitedAt);
+            if (nextStatus === 'COMPLETED' && !updateData.exitedAt) updateData.exitedAt = new Date(event.occurredAt);
+            if (nextStatus === 'ACTIVE' && !updateData.admittedAt) updateData.admittedAt = new Date(event.occurredAt);
+            await tx.poolEntry.update({ where: { id: entry.id }, data: updateData });
+          }
+          else if (event.eventType === 'ORDER_CREATED') {
              const existingOrder = await tx.posOrder.findUnique({ where: { id: event.aggregateId }});
              if (!existingOrder) {
                  const tableId = payload.TableId || null;
