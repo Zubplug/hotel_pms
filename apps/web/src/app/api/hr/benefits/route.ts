@@ -3,7 +3,7 @@ import { randomUUID } from 'crypto';
 import prisma from '@hotel-pms/db';
 import { HrAuthorizationService } from '@/lib/services/hr-authorization-service';
 
-const MANAGEMENT_ROLES = ['GENERAL_MANAGER', 'HOTEL_MANAGER', 'CEO', 'ADMIN', 'SUPER_ADMIN', 'OWNER', 'FINANCIAL_CONTROLLER'];
+const MANAGEMENT_ROLES = ['GENERAL_MANAGER', 'HOTEL_MANAGER', 'CEO', 'DIRECTOR', 'ADMIN', 'SUPER_ADMIN', 'OWNER', 'FINANCIAL_CONTROLLER'];
 const HR_BENEFIT_REVIEW_ROLES = ['HR_MANAGER', 'HR_OFFICER', 'PAYROLL_OFFICER', 'ADMIN', 'SUPER_ADMIN', 'OWNER'];
 
 function canReviewBenefits(authContext: any) {
@@ -13,7 +13,7 @@ function canReviewBenefits(authContext: any) {
 export async function GET(req: NextRequest) {
   try {
     const authContext = await HrAuthorizationService.resolveAuthContext(req);
-    const canViewAllBenefits = HrAuthorizationService.can(authContext, 'hr.employee.view');
+    const canViewAllBenefits = HrAuthorizationService.can(authContext, 'hr.employee.view') || MANAGEMENT_ROLES.includes(authContext.role);
     const canReview = canReviewBenefits(authContext);
     const canViewBenefitDetails = authContext.canViewSensitive || canReview || MANAGEMENT_ROLES.includes(authContext.role);
 
