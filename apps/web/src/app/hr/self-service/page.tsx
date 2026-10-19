@@ -284,7 +284,7 @@ export default function EmployeeSelfServicePage() {
     if (!loanForm.consent) { showFeedback('error', 'Confirmation required', 'Please confirm that the information supplied is accurate before submitting your loan application.'); return; }
     setSubmitting(true); setActionError('');
     try {
-      const res = await fetch('/api/hr/benefits', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'CREATE_LOAN', principalAmount: loanForm.principalAmount, tenorMonths: loanForm.tenorMonths, reason: `${loanForm.purpose}: ${loanForm.additionalDetails.trim()}` }) });
+      const res = await fetch('/api/hr/benefits', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'CREATE_LOAN', source: 'SELF_SERVICE', principalAmount: loanForm.principalAmount, tenorMonths: loanForm.tenorMonths, reason: `${loanForm.purpose}: ${loanForm.additionalDetails.trim()}` }) });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Unable to submit loan request');
       setLoanModalOpen(false); setLoanForm({ principalAmount: '', tenorMonths: '6', purpose: 'PERSONAL_SUPPORT', additionalDetails: '', consent: false }); await fetchSelfServiceData(); showFeedback('success', 'Loan application submitted', 'Your application is pending HR review and approval. HR will review your eligibility, affordability, and repayment terms.');

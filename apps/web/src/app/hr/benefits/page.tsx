@@ -107,7 +107,7 @@ export default function BenefitsPage() {
       const res = await fetch('/api/hr/benefits', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'CREATE_LOAN', ...loanForm }),
+        body: JSON.stringify({ action: 'CREATE_LOAN', source: 'HR_ADMIN', ...loanForm }),
       });
       if (res.ok) {
         setLoanModalOpen(false);
@@ -126,7 +126,7 @@ export default function BenefitsPage() {
       const res = await fetch('/api/hr/benefits', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'CREATE_ADVANCE', ...advanceForm }),
+        body: JSON.stringify({ action: 'CREATE_ADVANCE', source: 'HR_ADMIN', ...advanceForm }),
       });
       if (res.ok) {
         setAdvanceModalOpen(false);

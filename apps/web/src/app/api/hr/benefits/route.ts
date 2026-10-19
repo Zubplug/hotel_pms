@@ -109,7 +109,7 @@ export async function POST(req: NextRequest) {
 
     if (action === 'CREATE_LOAN') {
       const canManage = HrAuthorizationService.can(authContext, 'hr.employee.manage');
-      const { principalAmount, tenorMonths = 6, reason } = body;
+      const { principalAmount, tenorMonths = 6, reason, source = 'SELF_SERVICE' } = body;
       const staffId = body.staffId || (await prisma.staff.findFirst({ where: { userId: authContext.userId, organizationId, isActive: true }, select: { id: true } }))?.id;
 
       // Verify staff belongs to tenant
@@ -143,7 +143,8 @@ export async function POST(req: NextRequest) {
           monthlyDeduction,
           disbursementDate: new Date(),
           reason: reason?.trim() || 'Staff assistance loan',
-          status: 'PENDING',
+          status: source === 'HR_ADMIN' && canManage ? 'MANAGER_REVIEW' : 'PENDING',
+          ...(source === 'HR_ADMIN' && canManage ? { hrApprovedBy: authContext.userId, hrApprovedAt: new Date() } : {}),
           requestedBy: authContext.userId,
         },
       });
@@ -151,7 +152,8 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === 'CREATE_ADVANCE') {
-      const { staffId, amount, reason } = body;
+      const { staffId, amount, reason, source = 'SELF_SERVICE' } = body;
+      const canManage = HrAuthorizationService.can(authContext, 'hr.employee.manage');
       const staff = await prisma.staff.findFirst({
         where: HrAuthorizationService.staffScope(authContext, { id: staffId, isActive: true, deletedAt: null }),
       });
@@ -181,7 +183,8 @@ export async function POST(req: NextRequest) {
           staffId,
           amount: advanceAmount,
           reason: reason?.trim() || 'Mid-month salary advance',
-          status: 'PENDING',
+          status: source === 'HR_ADMIN' && canManage ? 'MANAGER_REVIEW' : 'PENDING',
+          ...(source === 'HR_ADMIN' && canManage ? { hrApprovedBy: authContext.userId, hrApprovedAt: new Date() } : {}),
           requestedBy: authContext.userId,
         },
       });
