@@ -8,6 +8,8 @@ import { PosPaymentAccountingService } from "@/lib/services/pos-payment-accounti
 import { BreakfastEntitlementService } from "@/lib/services/breakfast-entitlement-service";
 import { NotificationEngine } from "@/lib/notification-engine";
 import { getPropertyBusinessDate } from "@/lib/date-utils";
+import { hasEntitlement } from "@/lib/auth/entitlement";
+import { verifyDeviceCredential } from "@/lib/pos/device-credential";
 
 // Legacy desktop SyncEvents use operation IDs such as `op_<device>_<ticks>`,
 // while HotelEvent.id is a PostgreSQL UUID. Keep the legacy ID as the
@@ -58,12 +60,19 @@ export async function POST(req: NextRequest) {
       console.warn(`[sync/pos-push] request=${requestId} rejected terminalId=${terminalId} found=${!!terminal} state=${terminal?.registrationState ?? "missing"}`);
       return NextResponse.json({ error: "Terminal inactive or unauthorized" }, { status: 403 });
     }
+    if (!(await verifyDeviceCredential(token, terminal.deviceCredentialHash))) {
+      return NextResponse.json({ error: "Invalid device token" }, { status: 401 });
+    }
     
     const propertyId = terminal.outlet?.propertyId;
     const terminalProperty = terminal.outlet?.property;
     if (!propertyId || !terminalProperty) {
       console.warn(`[sync/pos-push] request=${requestId} rejected terminalId=${terminalId} has no property`);
       return NextResponse.json({ error: "Terminal not associated with a property" }, { status: 400 });
+    }
+
+    if (!(await hasEntitlement(terminal.organisationId, 'MODULE_PMS', propertyId))) {
+      return NextResponse.json({ error: "Subscription expired or POS entitlement is unavailable" }, { status: 402 });
     }
 
     if (await isNightAuditCutoverActive(propertyId)) {

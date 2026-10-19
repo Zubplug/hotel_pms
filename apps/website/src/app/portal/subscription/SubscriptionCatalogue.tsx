@@ -546,17 +546,21 @@ function PlanCard({
   interval,
   busy,
   onCheckout,
+  onStartTrial,
   onDetails,
   currentPlanCode,
   isHighestPlan,
+  trialEligible,
 }: {
   plan: Plan;
   interval: "month" | "year";
   busy: string | null;
   onCheckout: (key: string, priceIds: string[], planId: string) => void;
+  onStartTrial: (planCode: string) => void;
   onDetails: () => void;
   currentPlanCode: string | null;
   isHighestPlan: boolean;
+  trialEligible: boolean;
 }) {
   // Modules are bundled into a plan and intentionally have no standalone
   // prices. Only the plan product itself contributes to the checkout total.
@@ -679,10 +683,10 @@ function PlanCard({
           <button
             className="btn btn-sm sub-plan-cta"
             style={{ flex: 1, background: planLocked ? "rgba(255,255,255,0.06)" : tier.color, color: planLocked ? "var(--text-muted)" : "#050c14", boxShadow: planLocked ? "none" : `0 4px 20px ${tier.glow}` }}
-            disabled={busy !== null || !complete || planLocked}
-            onClick={() => onCheckout(`plan-${plan.id}`, prices.map(p => p.id), plan.id)}
+            disabled={busy !== null || (!trialEligible && !complete) || planLocked}
+            onClick={() => trialEligible ? onStartTrial(plan.code) : onCheckout(`plan-${plan.id}`, prices.map(p => p.id), plan.id)}
           >
-            {busy === `plan-${plan.id}` ? "Opening checkout…" : !complete ? "Price not available" : isCurrent ? "Current plan" : isLowerPlan ? "Unavailable" : isUpgrade ? (isHighestPlan ? "Upgrade →" : "Update plan →") : "Subscribe →"}
+            {busy === `plan-${plan.id}` ? (trialEligible ? "Starting trial…" : "Opening checkout…") : trialEligible ? "Start 7-day trial" : !complete ? "Price not available" : isCurrent ? "Current plan" : isLowerPlan ? "Unavailable" : isUpgrade ? (isHighestPlan ? "Upgrade →" : "Update plan →") : "Subscribe →"}
           </button>
         )}
       </div>
@@ -787,6 +791,7 @@ export default function SubscriptionCatalogue({
   activeAddonPropertyIds,
   currentPlanCode,
   hasActiveBaseSubscription,
+  trialEligible,
 }: {
   plans: Plan[];
   addOns: Product[];
@@ -795,6 +800,7 @@ export default function SubscriptionCatalogue({
   activeAddonPropertyIds: Record<string, string[]>;
   currentPlanCode: string | null;
   hasActiveBaseSubscription: boolean;
+  trialEligible: boolean;
 }) {
   const [interval, setInterval] = useState<"month" | "year">("month");
   const [selectedPropertyIds, setSelectedPropertyIds] = useState<string[]>([]);
@@ -827,6 +833,25 @@ export default function SubscriptionCatalogue({
       window.location.assign(payload.url);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unable to open payment checkout");
+      setBusy(null);
+    }
+  }
+
+  async function startTrial(planCode: string) {
+    const key = `trial-${planCode}`;
+    setBusy(key);
+    setError(null);
+    try {
+      const response = await fetch("/api/portal/trial", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID() },
+        body: JSON.stringify({ planCode }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || "Unable to start your trial");
+      window.location.assign("/portal/subscription?trial=started");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Unable to start your trial");
       setBusy(null);
     }
   }
@@ -895,9 +920,11 @@ export default function SubscriptionCatalogue({
             interval={interval}
             busy={busy}
             onCheckout={checkout}
+            onStartTrial={startTrial}
             onDetails={() => setDetails({ kind: "plan", value: plan })}
             currentPlanCode={currentPlanCode}
             isHighestPlan={planRank(plan.code) === Math.max(...plans.map(candidate => planRank(candidate.code)))}
+            trialEligible={trialEligible}
           />
         ))}
       </div>

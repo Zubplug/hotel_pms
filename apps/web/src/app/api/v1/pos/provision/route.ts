@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@hotel-pms/db';
+import { effectiveSubscriptionDeadline, getOperationalSubscription, prisma } from '@hotel-pms/db';
 import { randomBytes, createHash } from 'crypto';
 import { requirePlanLimit } from '@/lib/auth/entitlement';
 
@@ -61,6 +61,8 @@ export async function POST(req: NextRequest) {
     const deviceCredentialHash = createHash('sha256').update(deviceCredential).digest('hex');
     const terminal = await prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM "Organization" WHERE id = ${adminStaff.organizationId}::uuid FOR UPDATE`;
+      const subscription = await getOperationalSubscription(tx, adminStaff.organizationId);
+      if (!subscription) throw new Error('An active subscription or trial is required to provision a terminal.');
 
       const duplicate = await tx.posTerminal.findFirst({
         where: {
@@ -92,7 +94,7 @@ export async function POST(req: NextRequest) {
           deviceCredentialHash,
           registrationState: 'REGISTERED',
           licenseState: 'VALID',
-          licenseExpiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // 1 year
+          licenseExpiresAt: effectiveSubscriptionDeadline(subscription),
         },
       });
     });

@@ -13,7 +13,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({ ...authConfig,
       if (!email || !password) return null;
       
       const user = await prisma.user.findUnique({ where: { email } });
-      if (!user || (user.lockedUntil && user.lockedUntil > new Date())) return null;
+      if (!user || !user.emailVerifiedAt || (user.lockedUntil && user.lockedUntil > new Date())) return null;
       if (!(await bcrypt.compare(password, user.passwordHash))) return null;
       // HQ Administrators are not allowed to log in via the Customer Portal.
       if (user.isLodgeCoreAdmin) {

@@ -18,6 +18,13 @@ const PROPERTY_TYPES = [
   "Estate / Development", "Hostel", "Other",
 ];
 
+const REQUEST_TYPES = [
+  { value: "PRODUCT_DEMO", label: "Book a product demo" },
+  { value: "QUOTE", label: "Request a quote" },
+  { value: "DEPLOYMENT", label: "Plan a property deployment" },
+  { value: "CONSULTATION", label: "Talk to an expert" },
+] as const;
+
 export default function BookDemoPage() {
   const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
 
@@ -43,8 +50,12 @@ export default function BookDemoPage() {
           roomCount: values.get("roomCount"),
           message: values.get("message"),
           interests,
+          requestType: values.get("requestType") || "PRODUCT_DEMO",
+          preferredDate: values.get("preferredDate"),
+          preferredTimeWindow: values.get("preferredTimeWindow"),
+          idempotencyKey: typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
           source: "BOOK_DEMO",
-          consent: "true",
+          consent: values.get("consent") === "on",
         }),
       });
       setStatus(response.ok ? "sent" : "error");
@@ -58,8 +69,27 @@ export default function BookDemoPage() {
     <main className="site-shell">
       <PublicHeader />
 
+      <section style={{ paddingTop: 112, paddingBottom: 24 }}>
+        <div className="contain">
+          <div className="book-demo-paths" style={{ display: "grid", gridTemplateColumns: "1.15fr .85fr", gap: 16 }}>
+            <div className="portal-card" style={{ padding: "24px 26px", borderColor: "rgba(0,212,232,.28)", background: "linear-gradient(135deg, rgba(0,212,232,.12), rgba(12,22,36,.92))" }}>
+              <div className="section-kicker">Choose your path</div>
+              <h2 style={{ fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 750, color: "var(--text-primary)", margin: "12px 0 8px", letterSpacing: "-.04em" }}>Need to see LodgeCore in action?</h2>
+              <p style={{ color: "var(--text-secondary)", fontSize: 13, lineHeight: 1.7, marginBottom: 18 }}>Book a guided conversation and we&apos;ll tailor the walkthrough to your property, team and technology goals.</p>
+              <span className="btn btn-primary btn-sm" aria-current="page">Request a demo below ↓</span>
+            </div>
+            <div className="portal-card" style={{ padding: "24px 26px" }}>
+              <div style={{ color: "var(--mint)", fontFamily: "var(--font-mono)", fontSize: 10, letterSpacing: ".16em", textTransform: "uppercase" }}>Ready to explore now?</div>
+              <h2 style={{ fontFamily: "var(--font-display)", fontSize: 20, fontWeight: 700, color: "var(--text-primary)", margin: "12px 0 8px", letterSpacing: "-.04em" }}>Start a 7-day trial</h2>
+              <p style={{ color: "var(--text-muted)", fontSize: 12, lineHeight: 1.65, marginBottom: 16 }}>Self-serve access with no payment at activation. Sign in to choose your plan and start securely.</p>
+              <Link href="/portal/register" className="btn btn-outline btn-sm">Create trial account →</Link>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section style={{ paddingTop: 120, paddingBottom: 80 }}>
-        <div className="contain" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 80, alignItems: "start" }}>
+        <div className="contain book-demo-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 80, alignItems: "start" }}>
           {/* Left: pitch */}
           <div>
             <div className="section-kicker">Get in Touch</div>
@@ -95,6 +125,12 @@ export default function BookDemoPage() {
             </p>
 
             <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              <div>
+                <label style={{ display: "block", fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: ".15em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 6 }}>How can we help?</label>
+                <select name="requestType" defaultValue="PRODUCT_DEMO" style={{ width: "100%", background: "var(--bg-overlay)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "10px 12px", color: "var(--text-primary)", fontSize: 13, outline: "none", boxSizing: "border-box" }}>
+                  {REQUEST_TYPES.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
+                </select>
+              </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                 <div>
                   <label style={{ display: "block", fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: ".15em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 6 }}>First name</label>
@@ -174,6 +210,22 @@ export default function BookDemoPage() {
                 </div>
               </div>
 
+              <div className="book-demo-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <div>
+                  <label style={{ display: "block", fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: ".15em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 6 }}>Preferred date</label>
+                  <input name="preferredDate" type="date" style={{ width: "100%", background: "var(--bg-overlay)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "10px 12px", color: "var(--text-primary)", fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+                </div>
+                <div>
+                  <label style={{ display: "block", fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: ".15em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 6 }}>Preferred time</label>
+                  <select name="preferredTimeWindow" defaultValue="" style={{ width: "100%", background: "var(--bg-overlay)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "10px 12px", color: "var(--text-primary)", fontSize: 13, outline: "none", boxSizing: "border-box" }}>
+                    <option value="">Select a window…</option>
+                    <option value="09:00-12:00">Morning</option>
+                    <option value="12:00-15:00">Afternoon</option>
+                    <option value="15:00-17:00">Late afternoon</option>
+                  </select>
+                </div>
+              </div>
+
               <div>
                 <label style={{ display: "block", fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: ".15em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 6 }}>Tell us about your property</label>
                 <textarea name="message" rows={4} placeholder="Property name, number of rooms, current technology, what you're looking to improve…" style={{
@@ -183,17 +235,18 @@ export default function BookDemoPage() {
                 }} />
               </div>
 
+              <label style={{ display: "flex", gap: 9, alignItems: "flex-start", color: "var(--text-muted)", fontSize: 11, lineHeight: 1.5 }}>
+                <input name="consent" required type="checkbox" style={{ marginTop: 3, accentColor: "var(--accent)" }} />
+                <span>I agree that LodgeCore may use these details to respond to my request. See our <Link href="/privacy" style={{ color: "var(--accent)" }}>privacy policy</Link>.</span>
+              </label>
+
               <button disabled={status === "sending"} type="submit" className="btn btn-primary" style={{ width: "100%", border: "none", padding: "14px", fontSize: 14, fontWeight: 700, cursor: status === "sending" ? "wait" : "pointer", opacity: status === "sending" ? .65 : 1 }}>
                 {status === "sending" ? "Sending request…" : "Send request →"}
               </button>
 
               {status === "error" && <p role="alert" style={{ fontSize: 12, color: "#ff7b8e", textAlign: "center" }}>We could not submit your request. Please try again.</p>}
 
-              <p style={{ fontSize: 10, color: "var(--text-muted)", textAlign: "center", lineHeight: 1.5 }}>
-                By submitting, you agree to LodgeCore&apos;s{" "}
-                <Link href="/privacy" style={{ color: "var(--accent)" }}>privacy policy</Link>.
-                We&apos;ll never share your data.
-              </p>
+              <p style={{ fontSize: 10, color: "var(--text-muted)", textAlign: "center", lineHeight: 1.5 }}>We&apos;ll respond within one business day. Your details are never sold or shared.</p>
             </form>
           </div>
         </div>

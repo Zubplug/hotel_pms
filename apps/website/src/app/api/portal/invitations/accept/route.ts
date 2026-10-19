@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
     if (!invitation || invitation.acceptedAt || invitation.expiresAt <= new Date() || !invitation.userId) return NextResponse.json({ error: 'This invitation is invalid, expired, or already used.' }, { status: 400 });
     const passwordHash = await bcrypt.hash(parsed.data.password, 12);
     await prisma.$transaction([
-      prisma.user.update({ where: { id: invitation.userId }, data: { passwordHash, failedLoginAttempts: 0, lockedUntil: null, sessionVersion: { increment: 1 } } }),
+      prisma.user.update({ where: { id: invitation.userId }, data: { passwordHash, emailVerifiedAt: new Date(), failedLoginAttempts: 0, lockedUntil: null, sessionVersion: { increment: 1 } } }),
       prisma.customerInvitation.update({ where: { id: invitation.id }, data: { acceptedAt: new Date() } }),
     ]);
     return NextResponse.json({ ok: true, email: invitation.email });

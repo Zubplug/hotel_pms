@@ -70,6 +70,7 @@ type Property = {
 type Props = {
   data: {
     subscription: SubscriptionData;
+    trialExpired: boolean;
     entitlements: Entitlement[];
     properties: Property[];
     invoices: Invoice[];
@@ -90,6 +91,7 @@ type Props = {
   activeAddonCodes: string[];
   activeAddonPropertyIds: Record<string, string[]>;
   hasActiveBaseSubscription: boolean;
+  trialEligible: boolean;
   checkoutProperties: { id: string; name: string }[];
 };
 
@@ -233,7 +235,7 @@ function InvoiceStatusPip({ status }: { status: string }) {
 /* ─────────────────────────────────────────────────────────────
    MAIN WORKSPACE COMPONENT
 ───────────────────────────────────────────────────────────── */
-export default function SubscriptionWorkspace({ data, plans, addOns, activeAddonCodes, activeAddonPropertyIds, hasActiveBaseSubscription, checkoutProperties }: Props) {
+export default function SubscriptionWorkspace({ data, plans, addOns, activeAddonCodes, activeAddonPropertyIds, hasActiveBaseSubscription, trialEligible, checkoutProperties }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"overview" | "modules" | "billing" | "catalogue">(
@@ -380,6 +382,18 @@ export default function SubscriptionWorkspace({ data, plans, addOns, activeAddon
           <button className="btn btn-sm" style={{ background: "#ff5f72", color: "#fff", border: "none" }} onClick={requestBillingSupport} disabled={busy}>
             Resolve now →
           </button>
+        </div>
+      )}
+
+      {data.trialExpired && !data.subscription && (
+        <div className="sub-alert-banner" role="status">
+          <div className="sub-alert-icon">◷</div>
+          <div className="sub-alert-body">
+            <strong>Your 7-day trial has ended.</strong> Your data is preserved. Choose a plan below to restore operational access, or visit billing to review recovery options.
+          </div>
+          <Link href="#catalogue" className="btn btn-sm" style={{ background: "var(--accent)", color: "#050c14", border: "none" }}>
+            Choose a plan →
+          </Link>
         </div>
       )}
 
@@ -963,7 +977,7 @@ export default function SubscriptionWorkspace({ data, plans, addOns, activeAddon
       ═══════════════════════════════════════════════════ */}
       {activeTab === "catalogue" && (
         <div className="sub-tab-panel">
-          <SubscriptionCatalogue plans={plans} addOns={addOns} properties={checkoutProperties} activeAddonCodes={activeAddonCodes} activeAddonPropertyIds={activeAddonPropertyIds} currentPlanCode={data.subscription?.planCode ?? null} hasActiveBaseSubscription={hasActiveBaseSubscription} />
+          <div id="catalogue"><SubscriptionCatalogue plans={plans} addOns={addOns} properties={checkoutProperties} activeAddonCodes={activeAddonCodes} activeAddonPropertyIds={activeAddonPropertyIds} currentPlanCode={data.subscription?.planCode ?? null} hasActiveBaseSubscription={hasActiveBaseSubscription} trialEligible={trialEligible} /></div>
         </div>
       )}
     </div>

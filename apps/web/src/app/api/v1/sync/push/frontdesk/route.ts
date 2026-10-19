@@ -347,6 +347,12 @@ export async function POST(req: NextRequest) {
       "MODULE_OPERATIONS",
       propertyId,
     );
+    if (!professionalOperationsEnabled) {
+      return NextResponse.json(
+        { error: "Subscription expired or operations entitlement is unavailable" },
+        { status: 402 },
+      );
+    }
     if (await isNightAuditCutoverActive(propertyId)) {
       return NextResponse.json(
         {

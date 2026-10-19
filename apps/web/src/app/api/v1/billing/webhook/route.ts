@@ -1,9 +1,7 @@
 import { NextResponse } from 'next/server';
 import crypto from 'node:crypto';
 import prisma, { Prisma } from '@hotel-pms/db';
-import { subscriptionScope, verifyFlutterwaveLegacyWebhook, verifyFlutterwaveTransaction, verifyFlutterwaveWebhook } from '@hotel-pms/db';
-
-const GRACE_PERIOD_MS = 3 * 24 * 60 * 60 * 1000;
+import { markTrialConverted, reconcileOrganizationEntitlements, subscriptionScope, verifyFlutterwaveLegacyWebhook, verifyFlutterwaveTransaction, verifyFlutterwaveWebhook } from '@hotel-pms/db';
 
 function nextPeriod(interval: string, from: Date) {
   const end = new Date(from);
@@ -28,33 +26,6 @@ function websiteOrigins(metadata: unknown) {
   if (typeof domain !== 'string' || !domain.trim()) return [];
   const hostname = domain.trim().replace(/^https?:\/\//i, '').replace(/\/.*$/, '');
   return hostname ? [`https://${hostname}`, `https://www.${hostname}`] : [];
-}
-
-async function reconcileEntitlements(tx: Prisma.TransactionClient, organizationId: string) {
-  const graceCutoff = new Date(Date.now() - GRACE_PERIOD_MS);
-  const subscriptions = await tx.subscription.findMany({
-    where: { organizationId, OR: [{ status: { in: ['ACTIVE', 'TRIALING'] } }, { status: 'PAST_DUE', OR: [{ pastDueSince: null }, { pastDueSince: { gt: graceCutoff } }] }] },
-    include: { items: { include: { price: { include: { product: true } } } } },
-  });
-  const active = new Map<string, { productCode: string; propertyId: string | null; expiresAt: Date; startsAt: Date; quantity: number | null }>();
-  for (const subscription of subscriptions) {
-    const quantities = new Map<string, number | null>(subscription.items.map((item) => [item.price.product.code, item.quantity] as const));
-    if (subscription.planId) {
-      const plan = await tx.billingPlan.findUnique({ where: { id: subscription.planId }, include: { items: true } });
-      for (const item of plan?.items ?? []) quantities.set((await tx.billingProduct.findUniqueOrThrow({ where: { id: item.productId }, select: { code: true } })).code, item.includedQty ?? null);
-    }
-    for (const propertyId of (subscription.scopePropertyIds.length ? subscription.scopePropertyIds : [null])) {
-      for (const [productCode, quantity] of quantities) {
-        const scopeKey = `${organizationId}:${propertyId ?? '*'}:${productCode}`;
-        active.set(scopeKey, { productCode, propertyId, expiresAt: subscription.currentPeriodEnd, startsAt: subscription.currentPeriodStart, quantity });
-      }
-    }
-  }
-  const existing = await tx.entitlement.findMany({ where: { organizationId } });
-  for (const [scopeKey, entitlement] of active) {
-    await tx.entitlement.upsert({ where: { scopeKey }, create: { organizationId, propertyId: entitlement.propertyId, productCode: entitlement.productCode, scopeKey, status: 'ACTIVE', quantity: entitlement.quantity, startsAt: entitlement.startsAt, expiresAt: entitlement.expiresAt, metadata: { source: 'flutterwave' } }, update: { status: 'ACTIVE', quantity: entitlement.quantity, startsAt: entitlement.startsAt, expiresAt: entitlement.expiresAt, suspendedAt: null, suspensionReason: null, metadata: { source: 'flutterwave' } } });
-  }
-  for (const entitlement of existing) if (!active.has(entitlement.scopeKey)) await tx.entitlement.update({ where: { id: entitlement.id }, data: { status: 'SUSPENDED', suspendedAt: entitlement.suspendedAt ?? new Date(), suspensionReason: 'No active subscription' } });
 }
 
 async function reconcileReachPrograms(tx: Prisma.TransactionClient, organizationId: string) {
@@ -144,11 +115,19 @@ export async function POST(req: Request) {
     const currentPeriodEnd = parsedPeriodEnd && !Number.isNaN(parsedPeriodEnd.getTime()) && parsedPeriodEnd > now ? parsedPeriodEnd : nextPeriod(interval, now);
       let subscriptionRef: string | null = null;
       if (!isCustomWebsiteOneTime) {
-        const subscription = await tx.subscription.upsert({ where: { flutterwaveSubscriptionId: txRef }, create: { organizationId, planId, scopePropertyIds: propertyIds, flutterwaveSubscriptionId: txRef, status: successful ? 'ACTIVE' : 'PAST_DUE', currentPeriodStart: now, currentPeriodEnd, pastDueSince: successful ? null : now, cancelAtPeriodEnd: false }, update: { planId, scopePropertyIds: propertyIds, status: successful ? 'ACTIVE' : 'PAST_DUE', currentPeriodStart: now, currentPeriodEnd, pastDueSince: successful ? null : now } });
+        const existingProviderSubscription = await tx.subscription.findUnique({ where: { flutterwaveSubscriptionId: txRef }, select: { id: true } });
+        const effectivePeriodEnd = !successful && !existingProviderSubscription ? now : currentPeriodEnd;
+        const subscription = await tx.subscription.upsert({ where: { flutterwaveSubscriptionId: txRef }, create: { organizationId, planId, scopePropertyIds: propertyIds, flutterwaveSubscriptionId: txRef, status: successful ? 'ACTIVE' : 'PAST_DUE', currentPeriodStart: now, currentPeriodEnd: effectivePeriodEnd, pastDueSince: successful ? null : now, cancelAtPeriodEnd: false }, update: { planId, scopePropertyIds: propertyIds, status: successful ? 'ACTIVE' : 'PAST_DUE', currentPeriodStart: now, currentPeriodEnd: effectivePeriodEnd, pastDueSince: successful ? null : now } });
         subscriptionRef = subscription.flutterwaveSubscriptionId;
         for (const price of prices) await tx.subscriptionItem.upsert({ where: { subscriptionId_priceId: { subscriptionId: subscription.id, priceId: price.id } }, create: { subscriptionId: subscription.id, priceId: price.id, quantity: 1 }, update: { quantity: 1 } });
         if (successful && planId) await tx.subscription.updateMany({ where: { organizationId, planId: { not: null }, status: { in: ['ACTIVE', 'TRIALING', 'PAST_DUE'] }, id: { not: subscription.id } }, data: { status: 'CANCELED', canceledAt: now, cancelAtPeriodEnd: false } });
-        await reconcileEntitlements(tx, organizationId);
+        await reconcileOrganizationEntitlements(tx, organizationId, now);
+        if (successful) {
+          const trial = await tx.trialHistory.findUnique({ where: { organizationId }, select: { subscriptionId: true, status: true } });
+          if (trial?.status === 'STARTED' && trial.subscriptionId !== subscription.id) {
+            await markTrialConverted(tx, { subscriptionId: trial.subscriptionId, now });
+          }
+        }
         if (successful) await reconcileReachPrograms(tx, organizationId);
       }
       await tx.billingInvoice.upsert({ where: { flutterwaveInvoiceId: transactionId }, create: { organizationId, flutterwaveInvoiceId: transactionId, flutterwaveCustomerId: verified.customer?.email ?? null, flutterwaveSubscriptionId: subscriptionRef, status: successful ? 'paid' : 'failed', currency: verified.currency, subtotal: Math.round(verified.amount * 100), total: Math.round(verified.amount * 100), amountPaid: successful ? Math.round(verified.amount * 100) : 0, amountDue: successful ? 0 : Math.round(verified.amount * 100), periodStart: isCustomWebsiteOneTime ? null : now, periodEnd: isCustomWebsiteOneTime ? null : currentPeriodEnd, hostedInvoiceUrl: null, invoicePdf: null, payload: verified as unknown as Prisma.InputJsonValue }, update: { status: successful ? 'paid' : 'failed', amountPaid: successful ? Math.round(verified.amount * 100) : 0, amountDue: successful ? 0 : Math.round(verified.amount * 100), payload: verified as unknown as Prisma.InputJsonValue } });

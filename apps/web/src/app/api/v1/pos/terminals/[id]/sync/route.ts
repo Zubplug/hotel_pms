@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import prisma from '@hotel-pms/db';
+import prisma, { effectiveSubscriptionDeadline, getOperationalSubscription } from '@hotel-pms/db';
+import { hasEntitlement } from '@/lib/auth/entitlement';
 import { compare } from 'bcryptjs';
 import { requireOrganizationContext } from "@/lib/organization-access";
 
@@ -32,6 +33,14 @@ export async function GET(
     const isTokenValid = await compare(deviceToken, terminal.deviceCredentialHash);
     if (!isTokenValid) {
       return NextResponse.json({ error: 'Invalid device token' }, { status: 401 });
+    }
+
+    const [subscription, entitled] = await Promise.all([
+      getOperationalSubscription(prisma, terminal.organisationId),
+      hasEntitlement(terminal.organisationId, 'MODULE_PMS', terminal.propertyId),
+    ]);
+    if (!subscription || !entitled) {
+      return NextResponse.json({ error: 'Subscription expired or terminal entitlement is unavailable' }, { status: 402 });
     }
 
     // Update last sync time
@@ -76,7 +85,7 @@ export async function GET(
           name: terminal.name,
           terminalType: terminal.terminalType,
           licenseState: terminal.licenseState,
-          licenseExpiresAt: terminal.licenseExpiresAt,
+          licenseExpiresAt: effectiveSubscriptionDeadline(subscription),
           revokedAt: terminal.revokedAt,
           autoLockSeconds: terminal.autoLockSeconds ?? terminal.outlet.autoLockSeconds
         },

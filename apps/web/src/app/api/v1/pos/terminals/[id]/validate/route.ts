@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import prisma from '@hotel-pms/db';
+import prisma, { effectiveSubscriptionDeadline, getOperationalSubscription } from '@hotel-pms/db';
+import { hasEntitlement } from '@/lib/auth/entitlement';
 import { verifyDeviceCredential } from '@/lib/pos/device-credential';
 
 export async function POST(
@@ -28,17 +29,9 @@ export async function POST(
     }
 
     const now = new Date();
-    const [subscription, pmsEntitlement] = await Promise.all([
-      prisma.subscription.findFirst({
-        where: {
-          organizationId: terminal.organisationId,
-          status: { in: ['ACTIVE', 'TRIALING', 'PAST_DUE'] },
-          planId: { not: null },
-          currentPeriodEnd: { gt: now },
-        },
-        select: { currentPeriodEnd: true },
-        orderBy: { currentPeriodEnd: 'desc' },
-      }),
+    const [subscription, billingValid, pmsEntitlement] = await Promise.all([
+      getOperationalSubscription(prisma, terminal.organisationId, now),
+      hasEntitlement(terminal.organisationId, 'MODULE_PMS', terminal.propertyId),
       prisma.entitlement.findFirst({
         where: {
           organizationId: terminal.organisationId,
@@ -53,10 +46,11 @@ export async function POST(
       }),
     ]);
 
-    const billingValid = Boolean(subscription && pmsEntitlement);
+    // Subscription and entitlement deadlines are authoritative. Do not carry
+    // forward a terminal's cached expiry: a converted trial must receive the
+    // paid subscription deadline on its next validation.
     const expiryCandidates = [
-      terminal.licenseExpiresAt,
-      subscription?.currentPeriodEnd ?? null,
+      subscription ? effectiveSubscriptionDeadline(subscription) : null,
       pmsEntitlement?.expiresAt ?? null,
     ].filter((value): value is Date => value instanceof Date);
     const effectiveExpiry = expiryCandidates.length
@@ -90,7 +84,7 @@ export async function POST(
           revokedAt: terminal.revokedAt,
         }
       }
-    });
+    }, { status: effectiveLicenseState === 'VALID' ? 200 : 402 });
   } catch (error: unknown) {
     console.error('Terminal Validate Error:', error);
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Internal Server Error' }, { status: 500 });

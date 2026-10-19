@@ -78,6 +78,9 @@ ul, ol { list-style: none; }
 /* ── UTILITY ────────────────────────────────────────────── */
 .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); border:0; }
 .contain { max-width: 1240px; margin: 0 auto; padding: 0 28px; }
+@media (max-width: 760px) {
+  .book-demo-grid, .book-demo-paths { grid-template-columns: 1fr !important; gap: 28px !important; }
+}
 .section-gap { padding: 120px 0; }
 .section-gap-sm { padding: 80px 0; }
 

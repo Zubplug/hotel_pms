@@ -12,6 +12,9 @@ const leadSchema = z.object({
   roomCount: z.coerce.number().int().min(0).max(100000).optional(),
   message: z.string().trim().max(4000).optional().or(z.literal("")),
   source: z.string().trim().max(80).default("WEBSITE"),
+  requestType: z.enum(["PRODUCT_DEMO", "QUOTE", "DEPLOYMENT", "CONSULTATION"]).default("PRODUCT_DEMO"),
+  preferredDate: z.string().trim().max(30).optional().or(z.literal("")),
+  preferredTimeWindow: z.string().trim().max(40).optional().or(z.literal("")),
   consent: z.union([z.literal("true"), z.literal(true)]),
   propertyType: z.string().trim().max(100).optional().or(z.literal("")),
   interests: z.array(z.string().trim().max(80)).max(20).optional(),
@@ -36,7 +39,7 @@ export async function POST(request: NextRequest) {
       name: data.name, email: data.email, phone: data.phone || null, company: data.company || null,
       propertyName: data.propertyName || null, location: data.location || null, roomCount: data.roomCount,
       message: data.message || null, source: data.source, consentAt: new Date(), idempotencyKey,
-      metadata: { ...(data.metadata || {}), propertyType: data.propertyType || null, interests: data.interests || [], userAgent: request.headers.get("user-agent")?.slice(0, 500) || null },
+      metadata: { ...(data.metadata || {}), requestType: data.requestType, preferredDate: data.preferredDate || null, preferredTimeWindow: data.preferredTimeWindow || null, propertyType: data.propertyType || null, interests: data.interests || [], userAgent: request.headers.get("user-agent")?.slice(0, 500) || null },
     }, select: { id: true } });
     return NextResponse.json({ id: lead.id }, { status: 201 });
   } catch (error) {

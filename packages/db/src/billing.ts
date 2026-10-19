@@ -1,3 +1,5 @@
+import type { Prisma, PrismaClient } from '@prisma/client';
+
 export const ACTIVE_BILLING_STATUSES = ['ACTIVE', 'TRIALING', 'PAST_DUE'] as const;
 export const ADDON_ELIGIBLE_SUBSCRIPTION_STATUSES = ['ACTIVE', 'TRIALING'] as const;
 
@@ -10,7 +12,51 @@ type EntitlementReader = {
       quantity: number | null;
     } | null>;
   };
+  subscription?: {
+    findMany(args: { where: Record<string, unknown>; select?: Record<string, boolean> }): Promise<Array<{ id: string; status: string; trialEndsAt: Date | null; currentPeriodEnd: Date }>>;
+  };
 };
+
+export function effectiveSubscriptionDeadline(subscription: {
+  status: string;
+  trialEndsAt: Date | null;
+  currentPeriodEnd: Date;
+}): Date {
+  return subscription.status === 'TRIALING' && subscription.trialEndsAt
+    ? subscription.trialEndsAt
+    : subscription.currentPeriodEnd;
+}
+
+export async function getOperationalSubscription(
+  db: any,
+  organizationId: string,
+  now = new Date(),
+) {
+  const subscriptions = await db.subscription.findMany({
+    where: {
+      organizationId,
+      status: { in: [...ACTIVE_BILLING_STATUSES] },
+      planId: { not: null },
+      OR: [
+        { status: 'TRIALING', trialEndsAt: { gt: now } },
+        { status: { in: ['ACTIVE', 'PAST_DUE'] }, currentPeriodEnd: { gt: now } },
+      ],
+    },
+    orderBy: { currentPeriodEnd: 'desc' },
+  });
+  return subscriptions
+    .filter((subscription: any) => subscriptionIsOperational(subscription, now))
+    .sort((a: any, b: any) => effectiveSubscriptionDeadline(b).getTime() - effectiveSubscriptionDeadline(a).getTime())[0] ?? null;
+}
+
+function subscriptionIsOperational(subscription: {
+  status: string;
+  trialEndsAt: Date | null;
+  currentPeriodEnd: Date;
+}, now: Date): boolean {
+  return ACTIVE_BILLING_STATUSES.includes(subscription.status as typeof ACTIVE_BILLING_STATUSES[number])
+    && effectiveSubscriptionDeadline(subscription) > now;
+}
 
 export async function hasEntitlement(
   db: EntitlementReader,
@@ -33,7 +79,21 @@ export async function hasEntitlement(
     },
     orderBy: [{ propertyId: 'desc' }, { expiresAt: 'desc' }],
   });
-  return Boolean(entitlement);
+  if (!entitlement || entitlement.startsAt > now || (entitlement.expiresAt !== null && entitlement.expiresAt <= now)) return false;
+  if (!db.subscription) return true;
+  const subscriptions = await db.subscription.findMany({
+    where: {
+      organizationId: input.organizationId,
+      status: { in: [...ACTIVE_BILLING_STATUSES] },
+      OR: [
+        { status: 'TRIALING', trialEndsAt: { gt: now } },
+        { status: { in: ['ACTIVE', 'PAST_DUE'] }, currentPeriodEnd: { gt: now } },
+      ],
+    },
+    select: { id: true, status: true, trialEndsAt: true, currentPeriodEnd: true },
+  });
+  return subscriptions.some((subscription) => subscriptionIsOperational(subscription, now)
+    && (entitlement.expiresAt === null || entitlement.expiresAt <= effectiveSubscriptionDeadline(subscription)));
 }
 
 export async function requireEntitlementCapacity(
@@ -58,6 +118,22 @@ export async function requireEntitlementCapacity(
     orderBy: [{ propertyId: 'desc' }, { expiresAt: 'desc' }],
   });
   if (!entitlement) throw new Error(`Payment Required: active entitlement ${input.productCode} was not found`);
+  if (db.subscription) {
+    const subscriptions = await db.subscription.findMany({
+      where: {
+        organizationId: input.organizationId,
+        status: { in: [...ACTIVE_BILLING_STATUSES] },
+        OR: [
+          { status: 'TRIALING', trialEndsAt: { gt: now } },
+          { status: { in: ['ACTIVE', 'PAST_DUE'] }, currentPeriodEnd: { gt: now } },
+        ],
+      },
+      select: { id: true, status: true, trialEndsAt: true, currentPeriodEnd: true },
+    });
+    const validSubscription = subscriptions.some((subscription) => subscriptionIsOperational(subscription, now)
+      && (entitlement.expiresAt === null || entitlement.expiresAt <= effectiveSubscriptionDeadline(subscription)));
+    if (!validSubscription) throw new Error(`Payment Required: active subscription for ${input.productCode} was not found`);
+  }
   const requested = input.requestedQuantity ?? 1;
   if (entitlement.quantity !== null && requested > entitlement.quantity) {
     throw new Error(`Usage limit exceeded for ${input.productCode}: ${requested} requested, ${entitlement.quantity} allowed`);
@@ -188,11 +264,12 @@ export async function getEffectiveLimit(
   db: PrismaClient,
   input: { organizationId: string; limit: 'maxProperties' | 'maxRooms' | 'maxUsers' | 'maxOutlets' | 'maxIntegrations' | 'maxTerminals' },
 ): Promise<number | null> {
-  const subscriptions = await db.subscription.findMany({
+  const now = new Date();
+  const subscriptions = (await db.subscription.findMany({
     where: { organizationId: input.organizationId, status: { in: [...ACTIVE_BILLING_STATUSES] } },
     include: { plan: { select: { metadata: true } } },
     orderBy: { updatedAt: 'desc' },
-  });
+  })).filter((subscription) => subscriptionIsOperational(subscription, now));
   const limit = subscriptions.reduce<number | null>((best, subscription) => {
     const metadata = subscription.plan?.metadata;
     const value = metadata && typeof metadata === 'object' && !Array.isArray(metadata)
@@ -207,7 +284,6 @@ export async function getEffectiveLimit(
   if (limit === null) return null;
   if (!subscriptions.length) return 0;
 
-  const now = new Date();
   const capacityAddOns = await db.entitlement.findMany({
     where: {
       organizationId: input.organizationId,
@@ -230,6 +306,58 @@ export async function getEffectiveLimit(
   return effectiveLimit;
 }
 
+type BillingTx = Prisma.TransactionClient;
+
+/** Rebuilds derived entitlements from authoritative, non-expired subscriptions. */
+export async function reconcileOrganizationEntitlements(
+  tx: BillingTx,
+  organizationId: string,
+  now = new Date(),
+) {
+  const graceCutoff = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
+  const subscriptions = await tx.subscription.findMany({
+    where: {
+      organizationId,
+      OR: [
+        { status: 'TRIALING', trialEndsAt: { gt: now } },
+        { status: 'ACTIVE', currentPeriodEnd: { gt: now } },
+        { status: 'PAST_DUE', currentPeriodEnd: { gt: now }, OR: [{ pastDueSince: null }, { pastDueSince: { gt: graceCutoff } }] },
+      ],
+    },
+    include: {
+      items: { include: { price: { include: { product: true } } } },
+      plan: { include: { items: { include: { product: true } } } },
+    },
+  });
+  const active = new Map<string, { productCode: string; propertyId: string | null; expiresAt: Date; startsAt: Date; quantity: number | null }>();
+  for (const subscription of subscriptions) {
+    const expiresAt = effectiveSubscriptionDeadline(subscription);
+    const quantities = new Map<string, number | null>(subscription.items.map((item) => [item.price.product.code, item.quantity] as const));
+    for (const item of subscription.plan?.items ?? []) quantities.set(item.product.code, item.includedQty ?? null);
+    for (const propertyId of (subscription.scopePropertyIds.length ? subscription.scopePropertyIds : [null])) {
+      for (const [productCode, quantity] of quantities) {
+        const scopeKey = `${organizationId}:${propertyId ?? '*'}:${productCode}`;
+        const current = active.get(scopeKey);
+        if (!current || current.expiresAt < expiresAt) active.set(scopeKey, { productCode, propertyId, expiresAt, startsAt: subscription.currentPeriodStart, quantity });
+      }
+    }
+  }
+  const existing = await tx.entitlement.findMany({ where: { organizationId } });
+  for (const [scopeKey, entitlement] of active) {
+    await tx.entitlement.upsert({
+      where: { scopeKey },
+      create: { organizationId, propertyId: entitlement.propertyId, productCode: entitlement.productCode, scopeKey, status: 'ACTIVE', quantity: entitlement.quantity, startsAt: entitlement.startsAt, expiresAt: entitlement.expiresAt, metadata: { source: 'billing-reconciliation' } },
+      update: { status: 'ACTIVE', quantity: entitlement.quantity, startsAt: entitlement.startsAt, expiresAt: entitlement.expiresAt, suspendedAt: null, suspensionReason: null, metadata: { source: 'billing-reconciliation' } },
+    });
+  }
+  for (const entitlement of existing) {
+    if (!active.has(entitlement.scopeKey)) {
+      await tx.entitlement.update({ where: { id: entitlement.id }, data: { status: 'SUSPENDED', suspendedAt: entitlement.suspendedAt ?? now, suspensionReason: 'No active subscription' } });
+    }
+  }
+  return { subscriptions: subscriptions.length, entitlements: active.size };
+}
+
 export async function requirePlanLimit(
   db: PrismaClient,
   input: { organizationId: string; limit: 'maxProperties' | 'maxRooms' | 'maxUsers' | 'maxOutlets' | 'maxIntegrations' | 'maxTerminals'; currentQuantity: number; requestedQuantity?: number },
@@ -240,4 +368,3 @@ export async function requirePlanLimit(
   const requested = input.requestedQuantity ?? 1;
   if (input.currentQuantity + requested > limit) throw new Error(`${input.limit} limit exceeded: ${input.currentQuantity + requested} requested, ${limit} allowed`);
 }
-import type { PrismaClient } from '@prisma/client';

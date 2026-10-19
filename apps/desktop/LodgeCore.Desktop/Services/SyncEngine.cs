@@ -535,6 +535,11 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
     {
         using var scope = _serviceProvider.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<LocalDbContext>();
+        if (!await HasUsableLocalLicenseAsync(dbContext, stoppingToken))
+        {
+            _logger.LogWarning("[PUSH-POS] Skipping queued operations because the locally cached license is expired, revoked, or unavailable.");
+            return;
+        }
 
         var deadEvents = await dbContext.SyncEvents
             .Where(e => (e.Status == "PENDING" || e.Status == "FAILED") && e.AttemptCount >= 5
@@ -3150,6 +3155,24 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
         // remains searchable after checkout, cancellation, or no-show.
     }
 
+    /// <summary>
+    /// Offline use is bounded by the server-issued deadline. A cached
+    /// validation may survive a network outage, but it can never extend past
+    /// LicenseExpiresAt and is not valid when the snapshot is missing/revoked.
+    /// </summary>
+    private static async Task<bool> HasUsableLocalLicenseAsync(
+        LocalDbContext dbContext,
+        CancellationToken stoppingToken)
+    {
+        var terminal = await dbContext.PosTerminals.FirstOrDefaultAsync(stoppingToken);
+        return terminal != null
+            && terminal.RegistrationState == "REGISTERED"
+            && terminal.LicenseState == "VALID"
+            && terminal.RevokedAt == null
+            && terminal.LicenseExpiresAt.HasValue
+            && terminal.LicenseExpiresAt.Value.ToUniversalTime() > DateTime.UtcNow;
+    }
+
     private async Task RefreshTerminalLicenseAsync(
         LocalDbContext dbContext,
         SyncIdentity identity,
@@ -3165,7 +3188,21 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                 $"pos/terminals/{Uri.EscapeDataString(identity.TerminalId)}/validate");
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
             using var response = await _httpClient.SendAsync(request, stoppingToken);
-            if (!response.IsSuccessStatusCode) return;
+            if (!response.IsSuccessStatusCode)
+            {
+                if ((int)response.StatusCode == 402)
+                {
+                    var expiredTerminal = await dbContext.PosTerminals
+                        .FirstOrDefaultAsync(value => value.Id == identity.TerminalId, stoppingToken);
+                    if (expiredTerminal != null)
+                    {
+                        expiredTerminal.LicenseState = "EXPIRED";
+                        expiredTerminal.LicenseExpiresAt = DateTime.UtcNow;
+                        await dbContext.SaveChangesAsync(stoppingToken);
+                    }
+                }
+                return;
+            }
 
             using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync(stoppingToken));
             var terminalJson = document.RootElement
@@ -3293,6 +3330,11 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
     {
         using var scope = _serviceProvider.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<LocalDbContext>();
+        if (!await HasUsableLocalLicenseAsync(dbContext, stoppingToken))
+        {
+            _logger.LogWarning("[PUSH-FD] Skipping queued operations because the locally cached license is expired, revoked, or unavailable.");
+            return;
+        }
 
         var staleProcessingCutoff = DateTime.UtcNow.AddMinutes(-2);
         var staleProcessing = await dbContext.OutboxEvents

@@ -45,6 +45,7 @@ model Organization {
 
   billingCustomer        BillingCustomer?
   subscriptions          Subscription[]
+  trialHistory           TrialHistory?
   entitlements           Entitlement[]
   billingInvoices        BillingInvoice[]
   salesLeads             SalesLead[]
@@ -2187,6 +2188,7 @@ model User {
   staffId          String? @db.Uuid
   email            String  @unique
   passwordHash     String
+  emailVerifiedAt  DateTime? @db.Timestamptz
   // Deprecated compatibility alias. New code should use isLodgeCoreAdmin.
   isSuperAdmin     Boolean @default(false)
   isLodgeCoreAdmin Boolean @default(false)
@@ -2218,6 +2220,7 @@ model User {
   externalAuditorInvitations            ExternalAuditorInvitation[]  @relation("ExternalAuditorInvitationUser")
   sentExternalAuditorInvitations        ExternalAuditorInvitation[]  @relation("ExternalAuditorInvitationInvitedBy")
   customerInvitations                   CustomerInvitation[]         @relation("CustomerInvitationUser")
+  portalEmailVerifications              PortalEmailVerification[]
   sentCustomerInvitations               CustomerInvitation[]         @relation("CustomerInvitationCreatedBy")
   employeeInvitations                   EmployeeInvitation[]         @relation("EmployeeInvitationUser")
   sentEmployeeInvitations               EmployeeInvitation[]         @relation("EmployeeInvitationInvitedBy")
@@ -2613,6 +2616,18 @@ model CustomerInvitation {
 
   @@index([email, organizationId])
   @@index([expiresAt, acceptedAt])
+}
+
+model PortalEmailVerification {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @db.Uuid
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash  String   @unique
+  expiresAt  DateTime @db.Timestamptz
+  usedAt     DateTime? @db.Timestamptz
+  createdAt  DateTime @default(now()) @db.Timestamptz
+
+  @@index([userId, expiresAt, usedAt])
 }
 
 model EmployeeInvitation {
@@ -6524,7 +6539,10 @@ model Subscription {
   planId         String?      @db.Uuid
   plan           BillingPlan? @relation(fields: [planId], references: [id])
 
-  flutterwaveSubscriptionId String @unique
+  // Provider IDs are only present after a paid provider-backed subscription
+  // exists. Trials are internal records and use internalReference instead.
+  flutterwaveSubscriptionId String? @unique
+  internalReference         String  @unique @default(uuid())
   status                    String // 'TRIALING', 'ACTIVE', 'PAST_DUE', 'PAUSED', 'CANCELED', 'INCOMPLETE'
 
   currentPeriodStart DateTime  @db.Timestamptz
@@ -6536,11 +6554,34 @@ model Subscription {
   pastDueSince       DateTime? @db.Timestamptz
 
   items SubscriptionItem[]
+  trialHistory TrialHistory?
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
 
   @@index([organizationId, status])
+  @@index([status, trialEndsAt])
+}
+
+// Permanent record of an organisation's one allowed lifetime trial. The
+// unique organizationId is the database-level eligibility guarantee; the
+// service still uses a transaction and handles unique conflicts explicitly.
+model TrialHistory {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @unique @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  subscriptionId String       @unique @db.Uuid
+  subscription   Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
+  planCode       String
+  status         String       @default("STARTED") // STARTED | CONVERTED | EXPIRED | CANCELLED
+  startedAt      DateTime     @db.Timestamptz
+  endedAt        DateTime?    @db.Timestamptz
+  source         String       @default("SELF_SERVE")
+  metadata       Json?
+  createdAt      DateTime     @default(now()) @db.Timestamptz
+  updatedAt      DateTime     @updatedAt @db.Timestamptz
+
+  @@index([status, endedAt])
 }
 
 model SubscriptionItem {

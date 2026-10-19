@@ -167,14 +167,14 @@ export default function PortalLogin() {
           }}
         >
           <Link
-            href="/book-demo"
+            href="/portal/register"
             style={{
               fontSize: 11,
               color: "var(--text-muted)",
               transition: "color .2s",
             }}
           >
-            Not a customer? Book a demo →
+            New to LodgeCore? Start a 7-day trial →
           </Link>
           <Link
             href="/"

@@ -9,6 +9,7 @@ if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
 export * from '@prisma/client';
 export * from './src/crypto';
 export * from './src/billing';
+export * from './src/trials';
 export * from './src/flutterwave';
 export * from './src/reach-wallet';
 export * from './src/availability';
