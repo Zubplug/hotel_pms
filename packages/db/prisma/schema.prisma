@@ -8049,6 +8049,15 @@ model EmployeeProfile {
   employmentType String @default("PERMANENT") // PERMANENT | PROBATION | CONTRACT | CASUAL | INTERN
   status         String @default("ACTIVE") // ACTIVE | ON_LEAVE | SUSPENDED | PROBATION | TERMINATED | RESIGNED | RETIRED
 
+  // Payroll applicability and documented NTA 2026 eligible deductions.
+  pensionExempt             Boolean @default(false)
+  nhfExempt                 Boolean @default(false)
+  nhisMonthlyContribution  Decimal @default(0) @db.Decimal(18, 4)
+  annualRentPaid            Decimal @default(0) @db.Decimal(18, 4)
+  annualLifeAssurance       Decimal @default(0) @db.Decimal(18, 4)
+  annualMortgageInterest    Decimal @default(0) @db.Decimal(18, 4)
+  statutoryExemptionReason  String?
+
   confirmationDate  DateTime? @db.Date
   contractStartDate DateTime? @db.Date
   contractEndDate   DateTime? @db.Date
@@ -8647,6 +8656,7 @@ model StatutoryConfiguration {
   organizationId   String       @db.Uuid
   organization     Organization @relation(fields: [organizationId], references: [id])
   versionTag       String       @default("PITA_2020_CURRENT") // e.g. "PITA_2020_CURRENT", "FINANCE_REFORMS_2026"
+  taxRegime        String       @default("PITA_2011") // PITA_2011 | NTA_2026
   effectiveFrom    DateTime     @db.Date
   effectiveTo      DateTime?    @db.Date
   minimumWageFloor Decimal      @default(70000) @db.Decimal(18, 4)
@@ -8660,9 +8670,13 @@ model StatutoryConfiguration {
   // Pension Reform Act 2014
   pensionEmployeeRate Decimal @default(0.08) @db.Decimal(5, 4) // 8%
   pensionEmployerRate Decimal @default(0.10) @db.Decimal(5, 4) // 10%
+  pensionEnabled       Boolean @default(true)
+  pensionExemptionReason String?
 
   // Other statutory levies
   nhfRate   Decimal @default(0.025) @db.Decimal(5, 4) // 2.5% on basic
+  nhfEnabled Boolean @default(true)
+  nhfExemptionReason String?
   nsitfRate Decimal @default(0.01) @db.Decimal(5, 4) // 1% employer levy
   itfRate   Decimal @default(0.01) @db.Decimal(5, 4) // 1% employer levy
 

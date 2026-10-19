@@ -158,6 +158,7 @@ export async function POST(req: NextRequest) {
     }
 
     const statutoryRule: StatutoryConfigurationRule = {
+          taxRegime: statutoryConfigRecord.taxRegime,
           versionTag: statutoryConfigRecord.versionTag,
           craPercentGross: Number(statutoryConfigRecord.craPercentGross),
           craBaseAmount: Number(statutoryConfigRecord.craBaseAmount),
@@ -171,7 +172,11 @@ export async function POST(req: NextRequest) {
             : undefined,
           pensionEmployeeRate: Number(statutoryConfigRecord.pensionEmployeeRate),
           pensionEmployerRate: Number(statutoryConfigRecord.pensionEmployerRate),
+      pensionEnabled: statutoryConfigRecord.pensionEnabled,
+      pensionExemptionReason: statutoryConfigRecord.pensionExemptionReason,
           nhfRate: Number(statutoryConfigRecord.nhfRate),
+      nhfEnabled: statutoryConfigRecord.nhfEnabled,
+      nhfExemptionReason: statutoryConfigRecord.nhfExemptionReason,
           nsitfRate: Number(statutoryConfigRecord.nsitfRate),
           itfRate: Number(statutoryConfigRecord.itfRate),
           minimumWageFloor: Number(statutoryConfigRecord.minimumWageFloor),
@@ -318,6 +323,12 @@ export async function POST(req: NextRequest) {
         taxId: s.employeeProfile?.tin || '',
         rsaPin: salary?.pensionNumber || '',
         pfaName: salary?.pensionFundAdmin || '',
+        pensionApplicable: !s.employeeProfile?.pensionExempt,
+        nhfApplicable: !s.employeeProfile?.nhfExempt,
+        nhisMonthlyContribution: Number(s.employeeProfile?.nhisMonthlyContribution || 0),
+        annualRentPaid: Number(s.employeeProfile?.annualRentPaid || 0),
+        annualLifeAssurance: Number(s.employeeProfile?.annualLifeAssurance || 0),
+        annualMortgageInterest: Number(s.employeeProfile?.annualMortgageInterest || 0),
         baseSalary: basicSalary,
         housingAllowance,
         transportAllowance,

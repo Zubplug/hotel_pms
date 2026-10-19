@@ -29,6 +29,11 @@ export default function HrSettingsPage() {
   const [geofence, setGeofence] = useState({ latitude: '', longitude: '', radiusMeters: '150', minAccuracyMeters: '100', isEnabled: true });
   const [form, setForm] = useState({
     // Statutory settings
+    taxRegime: 'NTA_2026',
+    pensionEnabled: true,
+    pensionExemptionReason: '',
+    nhfEnabled: true,
+    nhfExemptionReason: '',
     pensionEmployeeRate: '8.0',
     pensionEmployerRate: '10.0',
     nhfRate: '2.5',
@@ -63,6 +68,11 @@ export default function HrSettingsPage() {
         if (data.config) {
           setForm((prev) => ({
             ...prev,
+            taxRegime: String(data.config.taxRegime ?? prev.taxRegime),
+            pensionEnabled: data.config.pensionEnabled !== false,
+            pensionExemptionReason: String(data.config.pensionExemptionReason ?? ''),
+            nhfEnabled: data.config.nhfEnabled !== false,
+            nhfExemptionReason: String(data.config.nhfExemptionReason ?? ''),
             pensionEmployeeRate: String(data.config.pensionEmployeeRate ?? prev.pensionEmployeeRate),
             pensionEmployerRate: String(data.config.pensionEmployerRate ?? prev.pensionEmployerRate),
             nhfRate: String(data.config.nhfRate ?? prev.nhfRate),
@@ -114,6 +124,11 @@ export default function HrSettingsPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          taxRegime: form.taxRegime,
+          pensionEnabled: form.pensionEnabled,
+          pensionExemptionReason: form.pensionExemptionReason,
+          nhfEnabled: form.nhfEnabled,
+          nhfExemptionReason: form.nhfExemptionReason,
           pensionEmployeeRate: parseFloat(form.pensionEmployeeRate),
           pensionEmployerRate: parseFloat(form.pensionEmployerRate),
           nhfRate: parseFloat(form.nhfRate),
@@ -254,6 +269,19 @@ export default function HrSettingsPage() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+            <div>
+              <label className="text-slate-400 block mb-1">Tax regime</label>
+              <select value={form.taxRegime} onChange={(e) => setForm({ ...form, taxRegime: e.target.value })} className="h-8 w-full rounded-md border border-slate-800 bg-slate-950 px-2 text-slate-100"><option value="NTA_2026">Nigeria Tax Act 2025 (2026)</option><option value="PITA_2011">Legacy PITA</option></select>
+              <span className="text-[10px] text-slate-500 mt-0.5 block">NTA 2026 removes the old CRA calculation.</span>
+            </div>
+            <div>
+              <label className="flex items-center gap-2 pt-1 text-slate-300"><input type="checkbox" checked={form.pensionEnabled} onChange={(e) => setForm({ ...form, pensionEnabled: e.target.checked })} /> Apply pension contributions</label>
+              {!form.pensionEnabled && <Input required placeholder="Reason pension is not applicable" value={form.pensionExemptionReason} onChange={(e) => setForm({ ...form, pensionExemptionReason: e.target.value })} className="mt-2 bg-slate-950 border-slate-800 text-slate-100 text-xs h-8" />}
+            </div>
+            <div>
+              <label className="flex items-center gap-2 pt-1 text-slate-300"><input type="checkbox" checked={form.nhfEnabled} onChange={(e) => setForm({ ...form, nhfEnabled: e.target.checked })} /> Apply NHF contributions</label>
+              {!form.nhfEnabled && <Input required placeholder="Reason NHF is not applicable" value={form.nhfExemptionReason} onChange={(e) => setForm({ ...form, nhfExemptionReason: e.target.value })} className="mt-2 bg-slate-950 border-slate-800 text-slate-100 text-xs h-8" />}
+            </div>
             <div>
               <label className="text-slate-400 block mb-1">Employee Pension Contribution (%)</label>
               <Input

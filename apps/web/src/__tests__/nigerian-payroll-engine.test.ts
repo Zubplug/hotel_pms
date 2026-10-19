@@ -38,6 +38,22 @@ describe('Nigerian Statutory Payroll Engine', () => {
       const tax = NigerianPayrollEngine.calculateAnnualPaye(annualGross, annualPension, annualNhf);
       expect(tax).toBeCloseTo(468440, 2);
     });
+
+    it('computes NTA 2026 bands after eligible deductions and without CRA', () => {
+      const tax = NigerianPayrollEngine.calculateAnnualPaye(
+        1560000,
+        124800,
+        39000,
+        {
+          taxRegime: 'NTA_2026',
+          taxBands: NigerianPayrollEngine.NTA_2026_TAX_BRACKETS,
+          minimumWageFloor: 70000,
+        },
+      );
+      // Chargeable income = 1,560,000 - 124,800 - 39,000 = 1,396,200.
+      // First 800,000 at 0%, remaining 596,200 at 15%.
+      expect(tax).toBe(89430);
+    });
   });
 
   describe('calculateEmployee', () => {
@@ -115,6 +131,17 @@ describe('Nigerian Statutory Payroll Engine', () => {
       expect(result.exceptions).toContain('Missing State Tax Identification Number (TIN)');
       expect(result.exceptions).toContain('Missing Pension RSA PIN');
       expect(result.exceptions).toContain('Invalid or missing bank account details');
+    });
+
+    it('supports documented organisation and employee non-applicability', () => {
+      const result = NigerianPayrollEngine.calculateEmployee({
+        staffId: 'staff-104', name: 'Exempt Worker', employeeCode: 'EMP-004', department: 'Operations', position: 'Assistant', baseSalary: 130000,
+        pensionApplicable: false, nhfApplicable: false,
+      }, { taxRegime: 'NTA_2026', pensionEnabled: true, nhfEnabled: true });
+      expect(result.pensionEmployee).toBe(0);
+      expect(result.pensionEmployer).toBe(0);
+      expect(result.nhfDeduction).toBe(0);
+      expect(result.payeTax).toBe(114000 / 12);
     });
 
     it('flags exception when total deductions exceed gross earnings resulting in negative net pay', () => {

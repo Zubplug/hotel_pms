@@ -26,6 +26,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ staf
       orderBy: { effectiveFrom: 'desc' },
     });
     const config: StatutoryConfigurationRule | undefined = statutory ? {
+      taxRegime: statutory.taxRegime,
       versionTag: statutory.versionTag,
       craPercentGross: Number(statutory.craPercentGross),
       craBaseAmount: Number(statutory.craBaseAmount),
@@ -33,7 +34,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ staf
       taxBands: Array.isArray(statutory.taxBands) ? (statutory.taxBands as any[]).map((band) => ({ cap: band.cap ?? band.threshold, threshold: band.threshold ?? band.cap, rate: Number(band.rate) })) : undefined,
       pensionEmployeeRate: Number(statutory.pensionEmployeeRate),
       pensionEmployerRate: Number(statutory.pensionEmployerRate),
+      pensionEnabled: statutory.pensionEnabled,
+      pensionExemptionReason: statutory.pensionExemptionReason,
       nhfRate: Number(statutory.nhfRate),
+      nhfEnabled: statutory.nhfEnabled,
+      nhfExemptionReason: statutory.nhfExemptionReason,
       nsitfRate: Number(statutory.nsitfRate),
       itfRate: Number(statutory.itfRate),
       minimumWageFloor: Number(statutory.minimumWageFloor),
@@ -53,6 +58,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ staf
       taxId: staff.employeeProfile?.tin || '',
       rsaPin: staff.salaryStructure.pensionNumber || '',
       bankAccountNumber: staff.salaryStructure.bankAccountNumber || '',
+      pensionApplicable: !staff.employeeProfile?.pensionExempt,
+      nhfApplicable: !staff.employeeProfile?.nhfExempt,
+      nhisMonthlyContribution: Number(staff.employeeProfile?.nhisMonthlyContribution || 0),
+      annualRentPaid: Number(staff.employeeProfile?.annualRentPaid || 0),
+      annualLifeAssurance: Number(staff.employeeProfile?.annualLifeAssurance || 0),
+      annualMortgageInterest: Number(staff.employeeProfile?.annualMortgageInterest || 0),
     }, config);
     return NextResponse.json({ calculation, currency: staff.salaryStructure.currency || 'NGN', statutoryVersion: statutory?.versionTag || 'Default payroll rules' });
   } catch (error: any) {

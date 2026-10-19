@@ -152,6 +152,13 @@ export async function PUT(
       emergencyContact,
       emergencyPhone,
       emergencyRelation,
+      pensionExempt,
+      nhfExempt,
+      nhisMonthlyContribution,
+      annualRentPaid,
+      annualLifeAssurance,
+      annualMortgageInterest,
+      statutoryExemptionReason,
     } = body;
 
     if (['TERMINATED', 'RESIGNED', 'RETIRED'].includes(String(employmentStatus || '').toUpperCase())) {
@@ -168,6 +175,8 @@ export async function PUT(
       baseSalary, housingAllowance: body.housingAllowance, transportAllowance: body.transportAllowance,
       otherAllowances: body.otherAllowances, nin, bvn, taxId, pfaName, rsaPin, bankName,
       bankAccountNumber, bankSortCode, bankAccountName, emergencyContact, emergencyPhone, emergencyRelation,
+      pensionExempt, nhfExempt, nhisMonthlyContribution, annualRentPaid, annualLifeAssurance, annualMortgageInterest,
+      statutoryExemptionReason,
     };
     const pendingChange = await prisma.employeeChangeRequest.findFirst({ where: { staffId: id, fieldName: 'staffProfile', status: { in: ['PENDING', 'CLARIFICATION'] } } });
     if (pendingChange?.status === 'PENDING') return NextResponse.json({ error: 'This employee already has a profile change awaiting General Manager review' }, { status: 409 });

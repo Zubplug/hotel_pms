@@ -73,6 +73,13 @@ export async function PATCH(req: NextRequest) {
           if (value.nin !== undefined) profileData.nin = String(value.nin || '').trim() || null;
           if (value.bvn !== undefined) profileData.bvn = String(value.bvn || '').trim() || null;
           if (value.taxId !== undefined) profileData.tin = String(value.taxId || '').trim() || null;
+          if (value.pensionExempt !== undefined) profileData.pensionExempt = Boolean(value.pensionExempt);
+          if (value.nhfExempt !== undefined) profileData.nhfExempt = Boolean(value.nhfExempt);
+          if (value.nhisMonthlyContribution !== undefined) profileData.nhisMonthlyContribution = Number(value.nhisMonthlyContribution) || 0;
+          if (value.annualRentPaid !== undefined) profileData.annualRentPaid = Number(value.annualRentPaid) || 0;
+          if (value.annualLifeAssurance !== undefined) profileData.annualLifeAssurance = Number(value.annualLifeAssurance) || 0;
+          if (value.annualMortgageInterest !== undefined) profileData.annualMortgageInterest = Number(value.annualMortgageInterest) || 0;
+          if (value.statutoryExemptionReason !== undefined) profileData.statutoryExemptionReason = String(value.statutoryExemptionReason || '').trim() || null;
           if (value.emergencyContact || value.emergencyPhone || value.emergencyRelation) profileData.emergencyContacts = [{ name: String(value.emergencyContact || '').trim(), phone: String(value.emergencyPhone || '').trim(), relationship: String(value.emergencyRelation || 'Emergency Contact').trim() }];
           await tx.employeeProfile.upsert({ where: { staffId: existing.staffId }, update: profileData, create: { staffId: existing.staffId, ...profileData } });
 

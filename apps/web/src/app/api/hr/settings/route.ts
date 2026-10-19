@@ -41,6 +41,11 @@ export async function GET(req: NextRequest) {
         penaltyPolicies: formattedPenaltyPolicies,
         config: {
           versionTag: 'PITA_2020_CURRENT',
+          taxRegime: 'PITA_2011',
+          pensionEnabled: true,
+          pensionExemptionReason: null,
+          nhfEnabled: true,
+          nhfExemptionReason: null,
           effectiveFrom: new Date().toISOString(),
           pensionEmployeeRate: 0.08,
           pensionEmployerRate: 0.10,
@@ -71,6 +76,11 @@ export async function GET(req: NextRequest) {
       penaltyPolicies: formattedPenaltyPolicies,
       config: {
         ...activeConfig,
+        taxRegime: activeConfig.taxRegime,
+        pensionEnabled: activeConfig.pensionEnabled,
+        pensionExemptionReason: activeConfig.pensionExemptionReason,
+        nhfEnabled: activeConfig.nhfEnabled,
+        nhfExemptionReason: activeConfig.nhfExemptionReason,
         pensionEmployeeRate: Number(activeConfig.pensionEmployeeRate) * 100,
         pensionEmployerRate: Number(activeConfig.pensionEmployerRate) * 100,
         nhfRate: Number(activeConfig.nhfRate) * 100,
@@ -136,6 +146,11 @@ export async function POST(req: NextRequest) {
     }
     const {
       versionTag = `CONFIG_${new Date().getFullYear()}_${Date.now().toString().slice(-4)}`,
+      taxRegime = 'PITA_2011',
+      pensionEnabled = true,
+      pensionExemptionReason = null,
+      nhfEnabled = true,
+      nhfExemptionReason = null,
       pensionEmployeeRate = 8.0,
       pensionEmployerRate = 10.0,
       nhfRate = 2.5,
@@ -164,16 +179,33 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid statutory effective date' }, { status: 400 });
     }
 
+    if (!['PITA_2011', 'NTA_2026'].includes(String(taxRegime))) {
+      return NextResponse.json({ error: 'Tax regime must be PITA_2011 or NTA_2026' }, { status: 400 });
+    }
+    if (!pensionEnabled && String(pensionExemptionReason || '').trim().length < 5) {
+      return NextResponse.json({ error: 'Provide a documented reason when pension contributions are disabled' }, { status: 400 });
+    }
+    if (!nhfEnabled && String(nhfExemptionReason || '').trim().length < 5) {
+      return NextResponse.json({ error: 'Provide a documented reason when NHF contributions are disabled' }, { status: 400 });
+    }
+
     // 1. Preserve true statutory history: Cap previous open-ended configs with effectiveTo
     // 2. Normalize tax bands so both cap and threshold are defined and compatible with the calculation engine
-    const rawBands = taxBands || [
+    const rawBands = taxBands || (taxRegime === 'NTA_2026' ? [
+      { cap: 800000, threshold: 800000, rate: 0 },
+      { cap: 2200000, threshold: 2200000, rate: 0.15 },
+      { cap: 9000000, threshold: 9000000, rate: 0.18 },
+      { cap: 13000000, threshold: 13000000, rate: 0.21 },
+      { cap: 25000000, threshold: 25000000, rate: 0.23 },
+      { cap: null, threshold: null, rate: 0.25 },
+    ] : [
       { cap: 300000, threshold: 300000, rate: 0.07 },
       { cap: 300000, threshold: 300000, rate: 0.11 },
       { cap: 500000, threshold: 500000, rate: 0.15 },
       { cap: 500000, threshold: 500000, rate: 0.19 },
       { cap: 1600000, threshold: 1600000, rate: 0.21 },
       { cap: null, threshold: null, rate: 0.24 },
-    ];
+    ]);
 
     const normalizedTaxBands = rawBands.map((b: any) => {
       const capValue = b.cap !== undefined && b.cap !== null
@@ -212,11 +244,16 @@ export async function POST(req: NextRequest) {
         data: {
           organizationId,
           versionTag: String(versionTag),
+          taxRegime: String(taxRegime),
           effectiveFrom: effectiveFromDate,
           minimumWageFloor: Number(minimumWageFloor),
           pensionEmployeeRate: Number(pensionEmployeeRate) / 100,
           pensionEmployerRate: Number(pensionEmployerRate) / 100,
+          pensionEnabled: Boolean(pensionEnabled),
+          pensionExemptionReason: pensionEnabled ? null : String(pensionExemptionReason || '').trim() || null,
           nhfRate: Number(nhfRate) / 100,
+          nhfEnabled: Boolean(nhfEnabled),
+          nhfExemptionReason: nhfEnabled ? null : String(nhfExemptionReason || '').trim() || null,
           nsitfRate: Number(nsitfRate) / 100,
           itfRate: Number(itfRate) / 100,
           craBaseAmount: Number(craFixedFloor),

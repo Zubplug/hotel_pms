@@ -38,6 +38,7 @@ export interface TaxBandRule {
 
 export interface StatutoryConfigurationRule {
   versionTag?: string;
+  taxRegime?: 'PITA_2011' | 'NTA_2026' | string;
   effectiveFrom?: Date | string;
   effectiveTo?: Date | string | null;
   craPercentGross?: number; // default 0.20
@@ -46,7 +47,11 @@ export interface StatutoryConfigurationRule {
   taxBands?: Array<TaxBandRule>;
   pensionEmployeeRate?: number; // default 0.08
   pensionEmployerRate?: number; // default 0.10
+  pensionEnabled?: boolean;
+  pensionExemptionReason?: string | null;
   nhfRate?: number; // default 0.025
+  nhfEnabled?: boolean;
+  nhfExemptionReason?: string | null;
   nsitfRate?: number; // default 0.01
   itfRate?: number; // default 0.01
   minimumTaxRate?: number; // default 0.01
@@ -79,6 +84,12 @@ export interface EmployeePayrollInput {
   salaryAdvanceRepayment?: number;
   penaltyDeduction?: number;
   hasNhf?: boolean;
+  pensionApplicable?: boolean;
+  nhfApplicable?: boolean;
+  nhisMonthlyContribution?: number;
+  annualRentPaid?: number;
+  annualLifeAssurance?: number;
+  annualMortgageInterest?: number;
 }
 
 export interface CalculatedPayslip {
@@ -111,6 +122,8 @@ export interface CalculatedPayslip {
   payeTax: number;
   pensionEmployee: number; // 8%
   nhfDeduction: number; // 2.5%
+  nhisDeduction: number;
+  eligibleReliefs: number;
 
   // Non-statutory Deductions
   loanRepayment: number;
@@ -159,6 +172,15 @@ export class NigerianPayrollEngine {
     { cap: Infinity, rate: 0.24 },
   ];
 
+  public static readonly NTA_2026_TAX_BRACKETS = [
+    { cap: 800000, rate: 0 },
+    { cap: 2200000, rate: 0.15 },
+    { cap: 9000000, rate: 0.18 },
+    { cap: 13000000, rate: 0.21 },
+    { cap: 25000000, rate: 0.23 },
+    { cap: Infinity, rate: 0.25 },
+  ];
+
   /**
    * Calculate Annual PITA PAYE tax given annual Gross and allowable reliefs.
    */
@@ -166,22 +188,40 @@ export class NigerianPayrollEngine {
     annualGross: number,
     annualEmployeePension: number,
     annualNhf: number,
-    config?: StatutoryConfigurationRule
+    config?: StatutoryConfigurationRule,
+    additionalEligibleDeductions = 0
   ): number {
     if (annualGross <= 0) return 0;
 
     // Minimum Wage Exemption (PITA Section 37 / Finance Act):
     // Individuals whose gross income is at or below the National Minimum Wage are exempt
     // from Personal Income Tax (including minimum tax)
-    if (config?.minimumWageFloor && config.minimumWageFloor > 0) {
+    if (config?.taxRegime !== 'NTA_2026' && config?.minimumWageFloor && config.minimumWageFloor > 0) {
       const annualMinimumWage = config.minimumWageFloor * 12;
       if (annualGross <= annualMinimumWage) {
         return 0;
       }
     }
 
+    const isNta2026 = config?.taxRegime === 'NTA_2026';
     const minTaxRate = config?.minimumTaxRate ?? 0.01;
     const minimumTax = annualGross * minTaxRate;
+
+    if (isNta2026) {
+      const chargeableIncome = Math.max(0, annualGross - annualEmployeePension - annualNhf - additionalEligibleDeductions);
+      if (chargeableIncome <= 0) return 0;
+      let remaining = chargeableIncome;
+      let tax = 0;
+      const brackets = config?.taxBands && config.taxBands.length > 0 ? config.taxBands : this.NTA_2026_TAX_BRACKETS;
+      for (const band of brackets) {
+        if (remaining <= 0) break;
+        const cap = band.cap === null || band.cap === undefined ? Infinity : Number(band.cap);
+        const taxableInBand = Math.min(remaining, cap);
+        tax += taxableInBand * Number(band.rate);
+        remaining -= taxableInBand;
+      }
+      return Math.round(tax * 100) / 100;
+    }
 
     // 1. Consolidated Relief Allowance (CRA)
     const craBase = config?.craBaseAmount ?? 200000;
@@ -255,26 +295,33 @@ export class NigerianPayrollEngine {
     const pensionEmoluments = basicSalary + housingAllowance + transportAllowance;
 
     // Pension rates
+    const pensionEnabled = config?.pensionEnabled !== false && input.pensionApplicable !== false;
     const empPensionRate = config?.pensionEmployeeRate ?? 0.08;
     const emprPensionRate = config?.pensionEmployerRate ?? 0.10;
-    const pensionEmployee = Math.round(pensionEmoluments * empPensionRate * 100) / 100;
-    const pensionEmployer = Math.round(pensionEmoluments * emprPensionRate * 100) / 100;
+    const pensionEmployee = pensionEnabled ? Math.round(pensionEmoluments * empPensionRate * 100) / 100 : 0;
+    const pensionEmployer = pensionEnabled ? Math.round(pensionEmoluments * emprPensionRate * 100) / 100 : 0;
 
     // NHF (2.5% of Basic)
+    const nhfEnabled = config?.nhfEnabled !== false && input.nhfApplicable !== false && input.hasNhf !== false;
     const nhfRate = config?.nhfRate ?? 0.025;
-    const nhfDeduction = input.hasNhf !== false ? Math.round(basicSalary * nhfRate * 100) / 100 : 0;
+    const nhfDeduction = nhfEnabled ? Math.round(basicSalary * nhfRate * 100) / 100 : 0;
 
     // Annualized figures for PITA calculation
     const annualGross = grossPay * 12;
     const annualPension = pensionEmployee * 12;
     const annualNhf = nhfDeduction * 12;
+    const annualNhis = (Number(input.nhisMonthlyContribution) || 0) * 12;
+    const annualRentRelief = Math.min(Math.max(0, Number(input.annualRentPaid) || 0) * 0.20, 500000);
+    const annualLifeAssurance = Math.max(0, Number(input.annualLifeAssurance) || 0);
+    const annualMortgageInterest = Math.max(0, Number(input.annualMortgageInterest) || 0);
+    const additionalEligibleDeductions = annualNhis + annualRentRelief + annualLifeAssurance + annualMortgageInterest;
 
     const effectiveConfig: StatutoryConfigurationRule = {
       minimumWageFloor: 70000,
       ...config,
     };
 
-    const annualPaye = this.calculateAnnualPaye(annualGross, annualPension, annualNhf, effectiveConfig);
+    const annualPaye = this.calculateAnnualPaye(annualGross, annualPension, annualNhf, effectiveConfig, additionalEligibleDeductions);
     const payeTax = Math.round((annualPaye / 12) * 100) / 100;
 
     // Employer On-Costs
@@ -290,7 +337,7 @@ export class NigerianPayrollEngine {
     const penaltyDeduction = Number(input.penaltyDeduction) || 0;
 
     const totalDeductions = Math.round(
-      (payeTax + pensionEmployee + nhfDeduction + loanRepayment + salaryAdvance + penaltyDeduction) * 100
+      (payeTax + pensionEmployee + nhfDeduction + annualNhis / 12 + loanRepayment + salaryAdvance + penaltyDeduction) * 100
     ) / 100;
 
     const netPay = Math.round((grossPay - totalDeductions) * 100) / 100;
@@ -312,9 +359,11 @@ export class NigerianPayrollEngine {
     const craBase = config?.craBaseAmount ?? 200000;
     const craHigherPct = config?.craHigherPercent ?? 0.01;
     const craPctGross = config?.craPercentGross ?? 0.20;
-    const annualCra = Math.max(craBase, annualGross * craHigherPct) + annualGross * craPctGross;
+    const annualCra = effectiveConfig.taxRegime === 'NTA_2026' ? 0 : Math.max(craBase, annualGross * craHigherPct) + annualGross * craPctGross;
     const cra = Math.round((annualCra / 12) * 100) / 100;
-    const taxableIncome = Math.max(0, Math.round((grossPay - (cra + pensionEmployee + nhfDeduction)) * 100) / 100);
+    const taxableIncome = effectiveConfig.taxRegime === 'NTA_2026'
+      ? Math.max(0, Math.round((annualGross - annualPension - annualNhf - additionalEligibleDeductions) * 100) / 100)
+      : Math.max(0, Math.round((grossPay - (cra + pensionEmployee + nhfDeduction)) * 100) / 100);
 
     return {
       staffId: input.staffId,
@@ -342,6 +391,8 @@ export class NigerianPayrollEngine {
       payeTax,
       pensionEmployee,
       nhfDeduction,
+      nhisDeduction: Math.round((annualNhis / 12) * 100) / 100,
+      eligibleReliefs: Math.round((additionalEligibleDeductions / 12) * 100) / 100,
       loanRepayment,
       salaryAdvance,
       penaltyDeduction,
