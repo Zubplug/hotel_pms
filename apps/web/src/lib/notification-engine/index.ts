@@ -254,7 +254,8 @@ async function evaluateEvent(
     case 'SHIFT_RETURNED':
     case 'SHIFT_APPROVED_WITH_VARIANCE': {
       const shiftType = event.metadata?.shiftType === 'POS' ? 'POS' : 'Front Desk';
-      const reference = String(event.metadata?.shiftReference || event.entityId);
+      const reference = String(event.metadata?.shiftReference || '').trim();
+      const shiftLabel = reference ? `${shiftType} shift ${reference}` : `${shiftType} shift`;
       const variance = Number(event.metadata?.variance || 0);
       const notes = String(event.metadata?.notes || '').trim();
       const isReturned = event.type === 'SHIFT_RETURNED';
@@ -266,10 +267,10 @@ async function evaluateEvent(
             ? `${shiftType} shift approved with variance`
             : `${shiftType} shift approved`,
         body: isReturned
-          ? `${reference} was returned for correction.${notes ? ` Note: ${notes}` : ''}`
-          : hasVariance
-            ? `${reference} was approved with an accepted variance of NGN ${Math.abs(variance).toLocaleString()}.${notes ? ` Note: ${notes}` : ''}`
-            : `${reference} was approved and is ready for the next control step.`,
+          ? `${shiftLabel} was returned for correction.${notes ? ` Note: ${notes}` : ''}`
+            : hasVariance
+            ? `${shiftLabel} was approved with a variance of NGN ${Math.abs(variance).toLocaleString()}.${notes ? ` Note: ${notes}` : ''}`
+            : `${shiftLabel} has been approved and is ready for cash handover.`,
         category: 'Operations',
         priority: isReturned || hasVariance ? 'High' : 'Normal',
       };
@@ -358,7 +359,7 @@ async function evaluateEvent(
     case "REFUND_ESCALATION": {
       return {
         subject: "Refund requires attention",
-        body: `Refund ${String(event.entityId).slice(0, 8)} has been waiting for more than ${Number(event.metadata?.ageHours || 48)} hours. Amount: ${event.metadata?.currency || 'NGN'} ${Number(event.metadata?.amount || 0).toLocaleString()}.`,
+        body: `A refund request has been waiting for more than ${Number(event.metadata?.ageHours || 48)} hours. Amount: ${event.metadata?.currency || 'NGN'} ${Number(event.metadata?.amount || 0).toLocaleString()}.`,
         category: "Finance",
         priority: "High",
       };
@@ -510,7 +511,7 @@ async function evaluateEvent(
         subject: event.metadata?.isVip
           ? `⭐ VIP Checked In — ${guestNameIn}`
           : `✅ Guest Checked In — ${guestNameIn}`,
-        body: `${event.metadata?.isVip ? "⭐ VIP " : ""}📋 Conf: ${resIn.confirmationNumber || event.entityId}\n👤 Guest: ${guestNameIn} | 📞 ${phoneIn}\n🏠 Room ${roomNumIn} (${roomTypeIn})\n🕒 Checked In: ${checkInTimeIn}\n📅 Check-out: ${checkOutIn} (${nightsIn} night${nightsIn !== 1 ? "s" : ""})\n👥 Adults: ${adultsIn}`,
+        body: `${event.metadata?.isVip ? "⭐ VIP " : ""}📋 Conf: ${resIn.confirmationNumber || "Reference pending"}\n👤 Guest: ${guestNameIn} | 📞 ${phoneIn}\n🏠 Room ${roomNumIn} (${roomTypeIn})\n🕒 Checked In: ${checkInTimeIn}\n📅 Check-out: ${checkOutIn} (${nightsIn} night${nightsIn !== 1 ? "s" : ""})\n👥 Adults: ${adultsIn}`,
         category: "Operations",
         priority: event.metadata?.isVip ? "High" : "Normal",
       };
@@ -573,7 +574,7 @@ async function evaluateEvent(
         subject: event.metadata?.isVip
           ? `⭐ VIP Checked Out — ${guestNameOut}`
           : `🚪 Guest Checked Out — ${guestNameOut}`,
-        body: `${event.metadata?.isVip ? "⭐ VIP " : ""}📋 Conf: ${resOut.confirmationNumber || event.entityId}\n👤 Guest: ${guestNameOut} | 📞 ${phoneOut}\n🏠 Room ${roomNumOut} (${roomTypeOut})\n🕒 Checked Out: ${checkOutTimeOut}\n📅 Stayed: ${checkInOut} (${nightsOut} night${nightsOut !== 1 ? "s" : ""})\n💰 Total Charged: ${totalOut}\n🧾 Balance: ${balanceOut}`,
+        body: `${event.metadata?.isVip ? "⭐ VIP " : ""}📋 Conf: ${resOut.confirmationNumber || "Reference pending"}\n👤 Guest: ${guestNameOut} | 📞 ${phoneOut}\n🏠 Room ${roomNumOut} (${roomTypeOut})\n🕒 Checked Out: ${checkOutTimeOut}\n📅 Stayed: ${checkInOut} (${nightsOut} night${nightsOut !== 1 ? "s" : ""})\n💰 Total Charged: ${totalOut}\n🧾 Balance: ${balanceOut}`,
         category: "Operations",
         priority: event.metadata?.isVip ? "High" : "Normal",
       };
@@ -669,7 +670,7 @@ async function evaluateEvent(
 
       return {
         subject: `New Reservation — ${guestName}`,
-        body: `📋 Conf: ${res.confirmationNumber || event.entityId}\n👤 Guest: ${guestName} | 📞 ${phone}\n🏠 ${roomDetails}\n📅 Check-in: ${checkIn} → Check-out: ${checkOut} (${nights} night${nights !== 1 ? "s" : ""})\n👥 Adults: ${adults}\n💰 Total: ${totalAmount}`,
+        body: `📋 Conf: ${res.confirmationNumber || "Reference pending"}\n👤 Guest: ${guestName} | 📞 ${phone}\n🏠 ${roomDetails}\n📅 Check-in: ${checkIn} → Check-out: ${checkOut} (${nights} night${nights !== 1 ? "s" : ""})\n👥 Adults: ${adults}\n💰 Total: ${totalAmount}`,
         category: "Operations",
         priority: "Normal",
       };
@@ -728,7 +729,7 @@ async function evaluateEvent(
 
       return {
         subject: `Reservation Cancelled — ${guestName}`,
-        body: `❌ Conf: ${res.confirmationNumber || event.entityId}\n👤 Guest: ${guestName} | 📞 ${phone}\n🏠 ${roomDetails || "N/A"}\n📅 Was: ${checkIn} → ${checkOut} (${nights} night${nights !== 1 ? "s" : ""})\n💰 Value: ${totalAmount}\n📝 Reason: ${cancelReason}`,
+        body: `❌ Conf: ${res.confirmationNumber || "Reference pending"}\n👤 Guest: ${guestName} | 📞 ${phone}\n🏠 ${roomDetails || "N/A"}\n📅 Was: ${checkIn} → ${checkOut} (${nights} night${nights !== 1 ? "s" : ""})\n💰 Value: ${totalAmount}\n📝 Reason: ${cancelReason}`,
         category: "Operations",
         priority: "High",
       };
@@ -784,7 +785,7 @@ async function evaluateEvent(
 
       return {
         subject: `📆 Stay Extended — ${guestName}`,
-        body: `📋 Conf: ${res.confirmationNumber || event.entityId}\n👤 Guest: ${guestName} | 📞 ${phone}\n🏠 Room ${roomNum} (${roomType})\n📅 Previous Check-out: ${prevCheckOut}\n📅 New Check-out: ${newCheckOut} (${totalNights} night${totalNights !== 1 ? "s" : ""} total)\n💰 Updated Total: ${totalAmount}`,
+        body: `📋 Conf: ${res.confirmationNumber || "Reference pending"}\n👤 Guest: ${guestName} | 📞 ${phone}\n🏠 Room ${roomNum} (${roomType})\n📅 Previous Check-out: ${prevCheckOut}\n📅 New Check-out: ${newCheckOut} (${totalNights} night${totalNights !== 1 ? "s" : ""} total)\n💰 Updated Total: ${totalAmount}`,
         category: "Operations",
         priority: "Normal",
       };
@@ -810,8 +811,8 @@ async function evaluateEvent(
 
     case "NIGHT_AUDIT_FAILED": {
       return {
-        subject: "Night Audit Failed!",
-        body: `CRITICAL: The property day could not close. Error: ${event.metadata?.error}`,
+        subject: "Night Audit Could Not Be Completed",
+        body: "The property day could not be closed. Please review the audit details and try again.",
         category: "Critical",
         priority: "Critical",
       };
@@ -852,7 +853,7 @@ async function evaluateEvent(
 
       return {
         subject: `${titlePrefix} — ${event.metadata?.outletName || "Outlet"}`,
-        body: `📋 Order: #${event.metadata?.orderNumber || event.entityId}${itemsText}\n💰 Total: ${event.metadata?.currency || "NGN"} ${amount.toLocaleString()}\n👨‍🍳 Server: ${event.metadata?.operatorName || "System"}`,
+        body: `📋 Order: #${event.metadata?.orderNumber || 'Reference pending'}${itemsText}\n💰 Total: ${event.metadata?.currency || "NGN"} ${amount.toLocaleString()}\n👨‍🍳 Server: ${event.metadata?.operatorName || "System"}`,
         category: "Operations",
         priority: "Normal",
       };
@@ -931,7 +932,7 @@ async function evaluateEvent(
       });
 
       const guestName = res?.primaryGuest?.firstName ? `${res.primaryGuest.firstName} ${res.primaryGuest.lastName}` : (event.metadata?.guestName || "Guest");
-      const confNumber = res?.confirmationNumber || event.metadata?.confirmationNumber || event.entityId;
+      const confNumber = res?.confirmationNumber || event.metadata?.confirmationNumber || 'Reference pending';
       const roomDetails = res?.reservationRooms?.map((rr: any) => `${rr.room?.number || 'N/A'}`).join(', ') || event.metadata?.roomNumber || "N/A";
 
       const reason = event.metadata?.reason || "No reason provided";

@@ -30,7 +30,8 @@ export async function emitShiftDecisionNotification(input: {
         ? 'SHIFT_APPROVED_WITH_VARIANCE'
         : input.decision === 'RETURNED' ? 'SHIFT_RETURNED' : 'SHIFT_APPROVED',
       shiftType: input.shiftType,
-      shiftReference: input.shiftReference || input.shiftId,
+      // Never expose the internal shift ID as a user-facing reference.
+      shiftReference: input.shiftReference || null,
       variance: input.variance ?? 0,
       notes: input.notes || null,
     },

@@ -30,7 +30,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ shi
     // Determine shift type and verify property access
     let type: 'POS' | 'FRONT_DESK';
     let propertyId: string;
-    const frontdesk = await prisma.frontdeskSession.findUnique({ where: { id: shiftId }, select: { propertyId: true } });
+    const frontdesk = await prisma.frontdeskSession.findUnique({ where: { id: shiftId }, select: { propertyId: true, shiftReference: true } });
     if (frontdesk) {
       type = 'FRONT_DESK';
       propertyId = frontdesk.propertyId;
@@ -64,6 +64,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ shi
           shiftId,
           shiftType: type,
           decision: decision === 'REJECTED' ? 'RETURNED' : decision,
+          shiftReference: type === 'FRONT_DESK' ? frontdesk?.shiftReference : null,
           variance: Number((updated as any)?.variance ?? 0),
           notes: reviewNotes,
           idempotencyKey: `shift_decision_${type}_${shiftId}_${decision}_${String((updated as any)?.updatedAt || '')}`,
