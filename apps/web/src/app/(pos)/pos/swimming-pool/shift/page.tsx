@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { formatMoney, formatDateTime } from '../_components/utils';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
+import { PrintPoolShiftButton } from '../_components/PoolPrintActions';
 
 interface ShiftData {
   shiftStart: string | null;
@@ -118,6 +119,7 @@ export default function ShiftPage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <PrintPoolShiftButton data={data} />
             <button onClick={load} className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-500 hover:text-slate-300 hover:bg-white/6">
               <RefreshCw className="w-3.5 h-3.5" />
             </button>

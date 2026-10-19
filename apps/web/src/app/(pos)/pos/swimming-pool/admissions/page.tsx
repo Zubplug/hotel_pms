@@ -13,6 +13,7 @@ import {
   ENTRY_STATUS_STYLES, POOL_API,
 } from '../_components/utils';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
+import { PrintPoolAdmissionButton, PrintPoolPaymentReceiptButton } from '../_components/PoolPrintActions';
 
 const STATUSES = ['RESERVED', 'ACTIVE', 'COMPLETED', 'CANCELLED'];
 
@@ -159,6 +160,8 @@ function EntryDetailPanel({ entry, onClose, onCheckout, onCheckin, busy }: {
 
       {/* Actions */}
       <div className="px-5 py-4 border-t shrink-0 space-y-2" style={{ borderColor: 'rgba(255,255,255,0.08)' }}>
+        <PrintPoolAdmissionButton entry={entry} />
+        <PrintPoolPaymentReceiptButton entry={entry} />
         {entry.status === 'RESERVED' && (
           <button
             onClick={onCheckin}

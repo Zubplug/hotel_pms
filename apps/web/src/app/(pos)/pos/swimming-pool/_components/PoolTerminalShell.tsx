@@ -11,7 +11,7 @@ import {
   Waves, Ticket, ScanLine, Users, LayoutGrid,
   ShieldCheck, BarChart3, Clock, Settings2, ScrollText,
   AlertTriangle, ChevronDown, RefreshCw, WifiOff, Wifi,
-  LogOut, ChevronLeft, Menu, X, ShoppingCart,
+  LogOut, ChevronLeft, Menu, X, ShoppingCart, Printer,
 } from 'lucide-react';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -211,6 +211,15 @@ function Sidebar({ shellData, collapsed, incidentCount, onFacilityChange, onLogo
         >
           <ShoppingCart className="w-4 h-4 shrink-0" />
           {!collapsed && <span className="flex-1 truncate">POS Terminal</span>}
+        </Link>
+        <Link
+          href="/pos/printer-settings"
+          title={collapsed ? 'Printer Settings' : undefined}
+          className="pool-nav-link"
+          style={collapsed ? { justifyContent: 'center', padding: '0.5rem' } : {}}
+        >
+          <Printer className="w-4 h-4 shrink-0" />
+          {!collapsed && <span className="flex-1 truncate">Printer Settings</span>}
         </Link>
         {NAV_ITEMS.map((item) => {
           const Icon = item.icon;
