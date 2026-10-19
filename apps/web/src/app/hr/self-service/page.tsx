@@ -363,6 +363,7 @@ export default function EmployeeSelfServicePage() {
           <div className="flex items-center gap-2">
             <Button size="sm" variant="outline" onClick={() => setProfileModalOpen(true)} className="h-9 !border-slate-700 !bg-slate-900 text-xs !text-slate-100 hover:!bg-slate-800">Update details</Button>
             <Button size="sm" variant="outline" onClick={() => setSupportModalOpen(true)} className="h-9 !border-slate-700 !bg-slate-900 text-xs !text-slate-100 hover:!bg-slate-800">Contact HR</Button>
+            <Link href="/hr/self-service/compensation" className="inline-flex h-9 items-center rounded-md border border-emerald-800 bg-emerald-950/40 px-3 text-xs text-emerald-200 hover:bg-emerald-900/50">Compensation</Link>
           <Button size="sm" onClick={() => handleAttendancePunch('CLOCK_IN')} className="h-9 bg-emerald-700 text-xs text-white hover:bg-emerald-600">Clock in</Button><Button size="sm" onClick={() => handleAttendancePunch('CLOCK_OUT')} className="h-9 bg-slate-700 text-xs text-white hover:bg-slate-600">Clock out</Button><Button size="sm" variant="outline" onClick={() => setAttendanceModalOpen(true)} className="h-9 !border-slate-700 !bg-slate-900 text-xs !text-slate-100 hover:!bg-slate-800">Report attendance issue</Button>
             <Button
               size="sm"
@@ -659,17 +660,22 @@ export default function EmployeeSelfServicePage() {
             { label: 'Time fix', icon: Clock, tone: 'text-amber-300 bg-amber-400/10', onClick: () => setAttendanceModalOpen(true) },
             { label: 'Loan', icon: CreditCard, tone: 'text-emerald-300 bg-emerald-400/10', onClick: () => setLoanModalOpen(true) },
             { label: 'Ask HR', icon: MessageSquare, tone: 'text-cyan-300 bg-cyan-400/10', onClick: () => setSupportModalOpen(true) },
-            { label: 'Profile', icon: User, tone: 'text-violet-300 bg-violet-400/10', onClick: () => setProfileModalOpen(true) },
             { label: 'Payslips', icon: Receipt, tone: 'text-sky-300 bg-sky-400/10', href: '/hr/self-service/pay' },
             { label: 'Compensation', icon: WalletCards, tone: 'text-emerald-300 bg-emerald-400/10', href: '/hr/self-service/compensation' },
             { label: 'Security', icon: ShieldCheck, tone: 'text-slate-200 bg-white/10', href: '/hr/self-service/security' },
             { label: 'Referrals', icon: Share2, tone: 'text-purple-300 bg-purple-400/10', href: '/hr/self-service/referrals' },
+            { label: 'Shift swaps', icon: CalendarRange, tone: 'text-cyan-300 bg-cyan-400/10', onClick: () => setSwapModalOpen(true) },
           ].map(({ label, icon: Icon, tone, onClick, href }) => {
             const inner = (<><span className={`flex h-12 w-12 items-center justify-center rounded-2xl ${tone}`}><Icon className="h-5 w-5" /></span><span className="text-[11px] font-semibold text-slate-300">{label}</span></>);
             const cls = 'flex flex-col items-center gap-1.5 rounded-2xl border border-white/5 bg-[#0b1624] py-3 transition active:scale-95 hover:border-white/15';
             return href ? <Link key={label} href={href} className={cls}>{inner}</Link> : <button key={label} type="button" onClick={onClick} className={cls}>{inner}</button>;
           })}
         </div>
+      </section>
+
+      <section aria-label="Mobile shift swaps" className="rounded-3xl border border-cyan-400/20 bg-gradient-to-br from-cyan-950/40 to-slate-950 p-4 lg:hidden">
+        <div className="flex items-center justify-between gap-3"><div><p className="text-[10px] font-bold uppercase tracking-wider text-cyan-300">Shift swaps</p><p className="mt-1 text-xs text-slate-400">Request, accept, or track a colleague swap.</p></div><Button type="button" onClick={() => setSwapModalOpen(true)} className="h-8 bg-cyan-700 px-3 text-xs text-white hover:bg-cyan-600">Request</Button></div>
+        <div className="mt-3 space-y-2">{swapRows.slice(0, 3).map((swap) => <div key={swap.id} className="rounded-xl border border-white/10 bg-slate-950/60 p-3 text-xs"><div className="flex items-center justify-between gap-2"><span className="truncate font-semibold text-white">{swap.requesterStaff?.firstName} ↔ {swap.targetStaff?.firstName}</span><span className="shrink-0 text-[10px] text-amber-300">{swap.status}</span></div><p className="mt-1 text-[10px] text-slate-500">{new Date(swap.requesterDate).toLocaleDateString()} ↔ {new Date(swap.targetDate).toLocaleDateString()}</p>{swap.status === 'PENDING_PEER' && swap.targetStaffId === data?.id && <div className="mt-2 flex gap-3"><button type="button" className="text-emerald-300" onClick={() => void handleSwapAction(swap.id, 'PEER_APPROVE')}>Accept</button><button type="button" className="text-rose-300" onClick={() => void handleSwapAction(swap.id, 'PEER_REJECT')}>Decline</button></div>}</div>)}{!swapRows.length && <p className="py-3 text-center text-xs text-slate-500">No shift swap requests.</p>}</div>
       </section>
 
       {/* Stats — swipeable on mobile */}
