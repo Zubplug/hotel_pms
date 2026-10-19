@@ -149,9 +149,10 @@ export function FrontDeskLayout({ children, enabledModules = [], licenseSnapshot
   }, [stopRoomChargeChime]);
 
   const dismissRoomChargeNotification = () => {
-    stopRoomChargeChime();
-    if (roomChargeNotification) {
-      acknowledgedRoomChargeNotificationIds.current.add(roomChargeNotification.id);
+      stopRoomChargeChime();
+      if (roomChargeNotification) {
+        acknowledgedRoomChargeNotificationIds.current.add(roomChargeNotification.id);
+        window.dispatchEvent(new CustomEvent('lodgecore:offline-notification-acknowledged', { detail: { id: roomChargeNotification.id } }));
       if (isDesktopMode && provider.system?.acknowledgeOfflineBookingNotification) {
         void provider.system.acknowledgeOfflineBookingNotification(propertyId, roomChargeNotification.id).catch(() => undefined);
       }
@@ -165,6 +166,21 @@ export function FrontDeskLayout({ children, enabledModules = [], licenseSnapshot
     }
     setRoomChargeNotification(null);
   };
+
+  useEffect(() => {
+    const handleAcknowledged = (event: Event) => {
+      const id = (event as CustomEvent<{ id?: string }>).detail?.id;
+      if (!id) return;
+      acknowledgedRoomChargeNotificationIds.current.add(id);
+      if (roomChargeNotification?.id === id) {
+        lastRoomChargeNotificationId.current = id;
+        stopRoomChargeChime();
+        setRoomChargeNotification(null);
+      }
+    };
+    window.addEventListener('lodgecore:offline-notification-acknowledged', handleAcknowledged);
+    return () => window.removeEventListener('lodgecore:offline-notification-acknowledged', handleAcknowledged);
+  }, [roomChargeNotification?.id, stopRoomChargeChime]);
 
   useEffect(() => {
     if ((!isOnline && !isDesktopMode) || !propertyId || status !== 'authenticated') return;

@@ -259,6 +259,7 @@ export default function PosApp() {
     if (!offlineBookingNotification) return;
     const notificationId = offlineBookingNotification.id;
     acknowledgedOfflineBookingNotificationIds.current.add(notificationId);
+    window.dispatchEvent(new CustomEvent('lodgecore:offline-notification-acknowledged', { detail: { id: notificationId } }));
     stopOfflineBookingChime();
     setOfflineBookingNotification(null);
     try {
@@ -274,6 +275,20 @@ export default function PosApp() {
       toast.error(error?.message || 'Could not acknowledge notification');
     }
   }, [offlineBookingNotification, propertyId, provider.system, stopOfflineBookingChime]);
+
+  useEffect(() => {
+    const handleAcknowledged = (event: Event) => {
+      const id = (event as CustomEvent<{ id?: string }>).detail?.id;
+      if (!id) return;
+      acknowledgedOfflineBookingNotificationIds.current.add(id);
+      if (offlineBookingNotification?.id === id) {
+        stopOfflineBookingChime();
+        setOfflineBookingNotification(null);
+      }
+    };
+    window.addEventListener('lodgecore:offline-notification-acknowledged', handleAcknowledged);
+    return () => window.removeEventListener('lodgecore:offline-notification-acknowledged', handleAcknowledged);
+  }, [offlineBookingNotification?.id, stopOfflineBookingChime]);
 
   // ── Orders ────────────────────────────────────────────────────────
   const [myActiveOrders, setMyActiveOrders] = useState<any[]>([]);

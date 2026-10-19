@@ -497,7 +497,11 @@ public class LocalRepository
         }
 
         var notification = notifications.FirstOrDefault(n => n.PropertyId == propertyId && n.Id == notificationId);
+        // Acknowledge is intentionally idempotent. Two desktop UI surfaces can
+        // race while closing the same alert; an already acknowledged row is a
+        // successful outcome and must not cause the alert to be replayed.
         if (notification == null) return false;
+        if (notification.Acknowledged) return true;
         notification.Acknowledged = true;
         metadata.OfflineNotificationsJson = JsonSerializer.Serialize(notifications);
         await _dbContext.SaveChangesAsync();
