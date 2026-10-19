@@ -27,6 +27,7 @@ const REQUEST_TYPES = [
 
 export default function BookDemoPage() {
   const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
+  const [showPathChooser, setShowPathChooser] = useState(true);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -69,26 +70,32 @@ export default function BookDemoPage() {
     <main className="site-shell">
       <PublicHeader />
 
-      <section style={{ paddingTop: 112, paddingBottom: 24 }}>
-        <div className="contain">
-          <div className="book-demo-paths" style={{ display: "grid", gridTemplateColumns: "1.15fr .85fr", gap: 16 }}>
-            <div className="portal-card" style={{ padding: "24px 26px", borderColor: "rgba(0,212,232,.28)", background: "linear-gradient(135deg, rgba(0,212,232,.12), rgba(12,22,36,.92))" }}>
-              <div className="section-kicker">Choose your path</div>
-              <h2 style={{ fontFamily: "var(--font-display)", fontSize: 22, fontWeight: 750, color: "var(--text-primary)", margin: "12px 0 8px", letterSpacing: "-.04em" }}>Need to see LodgeCore in action?</h2>
-              <p style={{ color: "var(--text-secondary)", fontSize: 13, lineHeight: 1.7, marginBottom: 18 }}>Book a guided conversation and we&apos;ll tailor the walkthrough to your property, team and technology goals.</p>
-              <span className="btn btn-primary btn-sm" aria-current="page">Request a demo below ↓</span>
+      {showPathChooser && (
+        <div role="dialog" aria-modal="true" aria-labelledby="path-chooser-title" onClick={() => setShowPathChooser(false)} style={{ position: "fixed", inset: 0, zIndex: 120, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, background: "rgba(2,7,19,.78)", backdropFilter: "blur(12px)" }}>
+          <div onClick={(event) => event.stopPropagation()} className="portal-card" style={{ width: "100%", maxWidth: 720, padding: "34px", boxShadow: "var(--shadow-lg)", borderColor: "rgba(0,212,232,.22)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 20, alignItems: "flex-start" }}>
+              <div><div className="section-kicker">Welcome to LodgeCore</div><h1 id="path-chooser-title" style={{ fontFamily: "var(--font-display)", fontSize: "clamp(1.8rem, 4vw, 2.7rem)", fontWeight: 800, color: "var(--text-primary)", letterSpacing: "-.06em", margin: "12px 0 8px" }}>How would you like to begin?</h1><p style={{ color: "var(--text-secondary)", fontSize: 14, lineHeight: 1.7 }}>Choose the path that best fits your property and we&apos;ll take you to the right next step.</p></div>
+              <button type="button" aria-label="Close choice dialog" onClick={() => setShowPathChooser(false)} style={{ color: "var(--text-muted)", fontSize: 24, lineHeight: 1 }}>×</button>
             </div>
-            <div className="portal-card" style={{ padding: "24px 26px" }}>
-              <div style={{ color: "var(--mint)", fontFamily: "var(--font-mono)", fontSize: 10, letterSpacing: ".16em", textTransform: "uppercase" }}>Ready to explore now?</div>
-              <h2 style={{ fontFamily: "var(--font-display)", fontSize: 20, fontWeight: 700, color: "var(--text-primary)", margin: "12px 0 8px", letterSpacing: "-.04em" }}>Start a 7-day trial</h2>
-              <p style={{ color: "var(--text-muted)", fontSize: 12, lineHeight: 1.65, marginBottom: 16 }}>Self-serve access with no payment at activation. Sign in to choose your plan and start securely.</p>
-              <Link href="/portal/register" className="btn btn-outline btn-sm">Create trial account →</Link>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginTop: 28 }} className="book-demo-paths">
+              <button type="button" onClick={() => { setShowPathChooser(false); window.setTimeout(() => document.getElementById("demo-request")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50); }} className="portal-card" style={{ padding: "22px", textAlign: "left", border: "1px solid rgba(0,212,232,.28)", background: "rgba(0,212,232,.08)", cursor: "pointer" }}>
+                <span style={{ color: "var(--accent)", fontFamily: "var(--font-mono)", fontSize: 10, letterSpacing: ".15em", textTransform: "uppercase" }}>Guided path</span>
+                <strong style={{ display: "block", color: "var(--text-primary)", fontFamily: "var(--font-display)", fontSize: 19, margin: "10px 0 7px" }}>Book a demo</strong>
+                <span style={{ display: "block", color: "var(--text-secondary)", fontSize: 12, lineHeight: 1.6 }}>Talk to our team about your property, software, hardware, or deployment needs.</span>
+                <span className="text-link" style={{ marginTop: 16 }}>Request a demo →</span>
+              </button>
+              <Link href="/portal/register" className="portal-card" style={{ padding: "22px", border: "1px solid rgba(62,245,160,.25)", background: "rgba(62,245,160,.07)" }}>
+                <span style={{ color: "var(--mint)", fontFamily: "var(--font-mono)", fontSize: 10, letterSpacing: ".15em", textTransform: "uppercase" }}>Self-serve path</span>
+                <strong style={{ display: "block", color: "var(--text-primary)", fontFamily: "var(--font-display)", fontSize: 19, margin: "10px 0 7px" }}>Start a 7-day trial</strong>
+                <span style={{ display: "block", color: "var(--text-secondary)", fontSize: 12, lineHeight: 1.6 }}>Create your portal account, verify your email, and explore LodgeCore without payment at activation.</span>
+                <span className="text-link" style={{ marginTop: 16, color: "var(--mint)" }}>Create trial account →</span>
+              </Link>
             </div>
           </div>
         </div>
-      </section>
+      )}
 
-      <section style={{ paddingTop: 120, paddingBottom: 80 }}>
+      <section id="demo-request" style={{ paddingTop: 120, paddingBottom: 80 }}>
         <div className="contain book-demo-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 80, alignItems: "start" }}>
           {/* Left: pitch */}
           <div>
