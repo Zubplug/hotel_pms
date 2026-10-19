@@ -96,6 +96,7 @@ export const HR_NAVIGATION: HrNavSection[] = [
     icon: Calculator,
     children: [
       { name: 'Payroll Runs', href: '/hr/payroll', icon: Calculator },
+      { name: 'Staff Salaries', href: '/hr/salaries', icon: Receipt },
       { name: 'Loans & Advances', href: '/hr/benefits', icon: Receipt },
       { name: 'Expense Claims', href: '/hr/expenses', icon: FileText },
       { name: 'Staff Referrals', href: '/hr/referral', icon: BadgePercent },

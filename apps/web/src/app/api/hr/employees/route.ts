@@ -114,6 +114,15 @@ export async function GET(req: NextRequest) {
         hireDate: s.hiredAt || s.createdAt,
         baseSalary: canViewSensitive ? rawSalary : 0,
         currency: s.salaryStructure?.currency || 'NGN',
+        salary: canViewSensitive && s.salaryStructure ? {
+          basicSalary: Number(s.salaryStructure.basicSalary || 0),
+          housingAllowance: Number(s.salaryStructure.housingAllowance || 0),
+          transportAllowance: Number(s.salaryStructure.transportAllowance || 0),
+          otherAllowances: Number(s.salaryStructure.otherAllowances || 0),
+          currency: s.salaryStructure.currency || 'NGN',
+          effectiveFrom: s.salaryStructure.effectiveFrom,
+          isActive: s.salaryStructure.isActive,
+        } : null,
         profile: {
           ...s.employeeProfile,
           bvn: canViewSensitive ? rawBvn : PiiMaskingService.maskBvn(rawBvn),

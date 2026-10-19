@@ -9,23 +9,28 @@ function errorResponse(error: any) {
   return NextResponse.json({ error: message }, { status: message.includes('Unauthorized') ? 401 : message.includes('Forbidden') ? 403 : 500 });
 }
 
-const GENERAL_MANAGER_ROLES = new Set(['GENERAL_MANAGER', 'SUPER_ADMIN', 'OWNER', 'ADMIN', 'CEO']);
+const GENERAL_MANAGER_ROLES = new Set(['GENERAL_MANAGER', 'HOTEL_MANAGER', 'DIRECTOR', 'SUPER_ADMIN', 'OWNER', 'ADMIN', 'CEO']);
 const EMPLOYMENT_STATUSES = new Set(['ACTIVE', 'ON_LEAVE', 'SUSPENDED', 'PROBATION', 'TERMINATED', 'RESIGNED', 'RETIRED']);
 const INACTIVE_EMPLOYMENT_STATUSES = new Set(['SUSPENDED', 'TERMINATED', 'RESIGNED', 'RETIRED']);
 
 export async function GET(req: NextRequest) {
   try {
     const context = await HrAuthorizationService.resolveAuthContext(req);
-    HrAuthorizationService.assertPermission(context, 'hr.employee.manage');
+    if (!HrAuthorizationService.can(context, 'hr.employee.manage') && !GENERAL_MANAGER_ROLES.has(context.role)) {
+      return NextResponse.json({ error: 'You are not authorized to view employee profile changes' }, { status: 403 });
+    }
     const requests = await prisma.employeeChangeRequest.findMany({ where: { staff: HrAuthorizationService.staffScope(context) }, include: { staff: { select: { firstName: true, lastName: true, employeeId: true, department: true } } }, orderBy: { createdAt: 'desc' }, take: 250 });
-    return NextResponse.json({ requests: requests.map((request) => redactProfileChangeRequest(request, context.canViewSensitive)) });
+    const canViewRequestDetails = context.canViewSensitive || GENERAL_MANAGER_ROLES.has(context.role);
+    return NextResponse.json({ requests: requests.map((request) => redactProfileChangeRequest(request, canViewRequestDetails)) });
   } catch (error) { return errorResponse(error); }
 }
 
 export async function PATCH(req: NextRequest) {
   try {
     const context = await HrAuthorizationService.resolveAuthContext(req);
-    HrAuthorizationService.assertPermission(context, 'hr.employee.manage');
+    if (!HrAuthorizationService.can(context, 'hr.employee.manage') && !GENERAL_MANAGER_ROLES.has(context.role)) {
+      return NextResponse.json({ error: 'You are not authorized to review employee profile changes' }, { status: 403 });
+    }
     if (!GENERAL_MANAGER_ROLES.has(context.role)) return NextResponse.json({ error: 'Only the General Manager can approve employee profile changes' }, { status: 403 });
     const body = await req.json();
     if (!body.id || !['APPROVED', 'REJECTED', 'CLARIFICATION'].includes(body.status)) return NextResponse.json({ error: 'Request ID and valid review status are required' }, { status: 400 });

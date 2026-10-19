@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { toast } from 'sonner';
 
 type ApprovalCenterProps = { audience: 'ACCOUNTING' | 'CASHIER' | 'MANAGEMENT' };
-type Item = { kind: 'EVENT_INVOICE' | 'REFUND' | 'POS' | 'STOCK_TRANSFER' | 'PURCHASE_ORDER' | 'EXPENSE' | 'EMPLOYEE_REIMBURSEMENT' | 'EMPLOYEE_BENEFIT'; value: any };
+type Item = { kind: 'EVENT_INVOICE' | 'REFUND' | 'POS' | 'STOCK_TRANSFER' | 'PURCHASE_ORDER' | 'EXPENSE' | 'EMPLOYEE_REIMBURSEMENT' | 'EMPLOYEE_BENEFIT' | 'EMPLOYEE_PROFILE_CHANGE'; value: any };
 
 const money = (value: unknown, currency = 'NGN') => new Intl.NumberFormat('en-NG', { style: 'currency', currency, maximumFractionDigits: 0 }).format(Number(value || 0));
 const label = (value: string) => value.replaceAll('_', ' ');
@@ -54,23 +54,27 @@ export function ApprovalControlCenter({ audience }: ApprovalCenterProps) {
   const load = async () => {
     setLoading(true);
     try {
-      const [approvalResponse, expenseResponse, reimbursementResponse, benefitsResponse] = await Promise.all([
+      const [approvalResponse, expenseResponse, reimbursementResponse, benefitsResponse, profileChangesResponse] = await Promise.all([
         fetch('/api/v1/approval-center', { cache: 'no-store' }),
         fetch('/api/v1/financial-control/expenses', { cache: 'no-store' }),
         fetch('/api/hr/expense-reimbursements', { cache: 'no-store' }),
         fetch('/api/hr/benefits', { cache: 'no-store' }),
+        audience === 'MANAGEMENT' ? fetch('/api/hr/profile-change-requests', { cache: 'no-store' }) : Promise.resolve(null),
       ]);
       const body = await approvalResponse.json();
       const expenseBody = await expenseResponse.json();
       const reimbursementBody = await reimbursementResponse.json();
       const benefitsBody = await benefitsResponse.json();
+      const profileChangesBody = profileChangesResponse ? await profileChangesResponse.json() : { requests: [] };
       if (!approvalResponse.ok) throw new Error(body.error || 'Unable to load approval center');
       if (!expenseResponse.ok) throw new Error(expenseBody.error || 'Unable to load expense approvals');
       if (!reimbursementResponse.ok) throw new Error(reimbursementBody.error || 'Unable to load employee reimbursements');
       if (!benefitsResponse.ok) throw new Error(benefitsBody.error || 'Unable to load employee benefits');
+      if (profileChangesResponse && !profileChangesResponse.ok) throw new Error(profileChangesBody.error || 'Unable to load employee profile changes');
       const expenseStage = audience === 'CASHIER' ? 'GENERAL_CASHIER' : audience === 'MANAGEMENT' ? 'GENERAL_MANAGER' : 'ACCOUNTANT';
       const employeeBenefits = audience === 'MANAGEMENT' ? [...(benefitsBody.loans || []).filter((item: any) => item.status === 'MANAGER_REVIEW').map((value: any) => ({ ...value, benefitType: 'LOAN', details: { name: `Employee loan · ${value.staffName}`, price: value.principalAmount } })), ...(benefitsBody.advances || []).filter((item: any) => item.status === 'MANAGER_REVIEW').map((value: any) => ({ ...value, benefitType: 'ADVANCE', details: { name: `Salary advance · ${value.staffName}`, price: value.amount } }))] : [];
-      setData({ ...(body.data || {}), expenses: (expenseBody.data || []).filter((expense: any) => expense.currentApprovalStage === expenseStage), employeeReimbursements: audience === 'MANAGEMENT' ? (reimbursementBody.claims || []).filter((claim: any) => claim.status === 'GENERAL_MANAGER_REVIEW') : [], employeeBenefits });
+      const employeeProfileChanges = audience === 'MANAGEMENT' ? (profileChangesBody.requests || []).filter((request: any) => ['PENDING', 'CLARIFICATION'].includes(request.status)).map((value: any) => ({ ...value, details: { name: `Staff profile change · ${value.staff?.firstName || ''} ${value.staff?.lastName || ''}`.trim(), price: 0 } })) : [];
+      setData({ ...(body.data || {}), expenses: (expenseBody.data || []).filter((expense: any) => expense.currentApprovalStage === expenseStage), employeeReimbursements: audience === 'MANAGEMENT' ? (reimbursementBody.claims || []).filter((claim: any) => claim.status === 'GENERAL_MANAGER_REVIEW') : [], employeeBenefits, employeeProfileChanges });
     } catch (error) { toast.error(error instanceof Error ? error.message : 'Unable to load approval center'); }
     finally { setLoading(false); }
   };
@@ -85,13 +89,14 @@ export function ApprovalControlCenter({ audience }: ApprovalCenterProps) {
     ...(data.expenses || []).map((value: any) => ({ kind: 'EXPENSE' as const, value })),
     ...(data.employeeReimbursements || []).map((value: any) => ({ kind: 'EMPLOYEE_REIMBURSEMENT' as const, value })),
     ...(data.employeeBenefits || []).map((value: any) => ({ kind: 'EMPLOYEE_BENEFIT' as const, value })),
+    ...(data.employeeProfileChanges || []).map((value: any) => ({ kind: 'EMPLOYEE_PROFILE_CHANGE' as const, value })),
   ].filter((item) => {
     if (tab !== 'ALL' && item.kind !== tab) return false;
     const query = search.trim().toLowerCase();
     return !query || JSON.stringify(item.value).toLowerCase().includes(query);
   }), [data, search, tab]);
 
-  const pending = items.filter((item) => item.kind === 'EXPENSE' ? Boolean(item.value.currentApprovalStage) : item.kind === 'EMPLOYEE_REIMBURSEMENT' ? item.value.status === 'GENERAL_MANAGER_REVIEW' : item.kind === 'EMPLOYEE_BENEFIT' ? item.value.status === 'MANAGER_REVIEW' : item.value.status === 'PENDING' || ['SUBMITTED', 'IN_REVIEW', 'APPROVED'].includes(item.value.workflowStatus) || ['PENDING_APPROVAL', 'ISSUED'].includes(item.value.status));
+  const pending = items.filter((item) => item.kind === 'EXPENSE' ? Boolean(item.value.currentApprovalStage) : item.kind === 'EMPLOYEE_REIMBURSEMENT' ? item.value.status === 'GENERAL_MANAGER_REVIEW' : item.kind === 'EMPLOYEE_BENEFIT' ? item.value.status === 'MANAGER_REVIEW' : item.kind === 'EMPLOYEE_PROFILE_CHANGE' ? ['PENDING', 'CLARIFICATION'].includes(item.value.status) : item.value.status === 'PENDING' || ['SUBMITTED', 'IN_REVIEW', 'APPROVED'].includes(item.value.workflowStatus) || ['PENDING_APPROVAL', 'ISSUED'].includes(item.value.status));
   const canAct = (item: Item) => {
     if (item.kind === 'EVENT_INVOICE') return audience === 'ACCOUNTING' ? ['SUBMITTED', 'IN_REVIEW'].includes(item.value.workflowStatus) : item.value.workflowStatus === 'APPROVED';
     if (item.kind === 'REFUND') {
@@ -103,6 +108,7 @@ export function ApprovalControlCenter({ audience }: ApprovalCenterProps) {
     if (item.kind === 'EXPENSE') return true;
     if (item.kind === 'EMPLOYEE_REIMBURSEMENT') return audience === 'MANAGEMENT' && item.value.status === 'GENERAL_MANAGER_REVIEW';
     if (item.kind === 'EMPLOYEE_BENEFIT') return audience === 'MANAGEMENT' && item.value.status === 'MANAGER_REVIEW';
+    if (item.kind === 'EMPLOYEE_PROFILE_CHANGE') return audience === 'MANAGEMENT' && ['PENDING', 'CLARIFICATION'].includes(item.value.status);
     const stage = item.value.details?.stage;
     return audience === 'CASHIER' ? stage === 'GENERAL_CASHIER_REVIEW' : stage === 'ACCOUNTANT_REVIEW';
   };
@@ -141,11 +147,14 @@ export function ApprovalControlCenter({ audience }: ApprovalCenterProps) {
         const type = selected.value.benefitType === 'LOAN' ? 'LOAN' : 'ADVANCE';
         url = '/api/hr/benefits';
         body = { id: selected.value.id, action: `${action === 'approve' ? 'APPROVE' : 'REJECT'}_${type}`, ...(action === 'reject' ? { reason } : {}) };
+      } else if (selected.kind === 'EMPLOYEE_PROFILE_CHANGE') {
+        url = '/api/hr/profile-change-requests';
+        body = { id: selected.value.id, status: action === 'approve' ? 'APPROVED' : 'REJECTED', reviewerNotes: reason };
       } else {
         url = `/api/manager/approvals/${selected.value.approval.id}/${action === 'approve' ? 'approve' : 'reject'}`;
         body = action === 'reject' ? { comment: reason } : { refundMethod: selected.value.requestedMethod || 'ORIGINAL_PAYMENT' };
       }
-      const response = await fetch(url, { method: selected.kind === 'EMPLOYEE_REIMBURSEMENT' || selected.kind === 'EMPLOYEE_BENEFIT' ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const response = await fetch(url, { method: selected.kind === 'EMPLOYEE_REIMBURSEMENT' || selected.kind === 'EMPLOYEE_BENEFIT' || selected.kind === 'EMPLOYEE_PROFILE_CHANGE' ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'Approval action failed');
       toast.success(action === 'issue' ? 'Invoice issued' : action === 'reject' ? 'Request rejected' : 'Approval recorded');
@@ -242,6 +251,15 @@ function RefundReview({ value }: { value: any }) {
   </div>;
 }
 
+function ProfileChangeReview({ value, reason, setReason }: { value: any; reason: string; setReason: (value: string) => void }) {
+  let current: any = value.currentValue;
+  let proposed: any = value.proposedValue;
+  try { current = JSON.parse(value.currentValue || 'null'); } catch { /* scalar value */ }
+  try { proposed = JSON.parse(value.proposedValue || 'null'); } catch { /* scalar value */ }
+  const renderValue = (item: any) => item && typeof item === 'object' ? Object.entries(item).map(([key, fieldValue]) => <div key={key} className="rounded-lg border border-white/10 bg-white/[.03] p-3"><p className="text-[10px] font-semibold uppercase tracking-[.14em] text-slate-500">{label(key)}</p><p className="mt-1 whitespace-pre-wrap break-words text-sm text-white">{typeof fieldValue === 'object' ? JSON.stringify(fieldValue, null, 2) : String(fieldValue ?? '—')}</p></div>) : <p className="text-sm text-slate-200">{String(item ?? '—')}</p>;
+  return <div className="space-y-5"><section className="grid gap-4 rounded-xl border border-violet-400/20 bg-violet-400/[.06] p-5 text-sm sm:grid-cols-2 lg:grid-cols-4"><Detail label="Employee" value={`${value.staff?.firstName || ''} ${value.staff?.lastName || ''}`.trim() || '—'} /><Detail label="Employee ID" value={value.staff?.employeeId || '—'} /><Detail label="Department" value={value.staff?.department || '—'} /><Detail label="Field" value={label(value.fieldName || 'Profile change')} /><Detail label="Requested" value={dateTime(value.createdAt)} /><Detail label="Requested by" value={value.requestedBy || '—'} /><Detail label="Status" value={label(value.status || 'PENDING')} /></section><section className="grid gap-5 lg:grid-cols-2"><div className="rounded-xl border border-white/10 bg-white/[.03] p-5"><h3 className="font-semibold text-white">Current information</h3><div className="mt-4 grid gap-2">{renderValue(current)}</div></div><div className="rounded-xl border border-emerald-400/20 bg-emerald-400/[.05] p-5"><h3 className="font-semibold text-emerald-100">Proposed information</h3><div className="mt-4 grid gap-2">{renderValue(proposed)}</div></div></section><section className="rounded-xl border border-white/10 bg-white/[.03] p-5"><h3 className="font-semibold text-white">Employee reason</h3><p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-300">{value.reason || 'No reason provided.'}</p></section><label className="block text-sm text-slate-300">Decision note or rejection reason<textarea value={reason} onChange={(event) => setReason(event.target.value)} className="mt-2 min-h-24 w-full rounded-lg border border-white/10 bg-white/[.05] p-3 text-white" placeholder="A reason is required if you reject this request." /></label></div>;
+}
+
 function ApprovalReviewDialog({ selected, audience, busy, reason, setReason, lineDiscounts, setLineDiscounts, lineReasons, setLineReasons, transferQuantities, setTransferQuantities, saveTransferAdjustment, canAct, onAction, onClose }: { selected: Item; audience: ApprovalCenterProps['audience']; busy: boolean; reason: string; setReason: (value: string) => void; lineDiscounts: Record<string, string>; setLineDiscounts: (value: Record<string, string>) => void; lineReasons: Record<string, string>; setLineReasons: (value: Record<string, string>) => void; transferQuantities: Record<string, string>; setTransferQuantities: (value: Record<string, string>) => void; saveTransferAdjustment: () => Promise<void>; canAct: boolean; onAction: (action: 'approve' | 'reject' | 'issue') => Promise<void>; onClose: () => void }) {
   const invoice = selected.kind === 'EVENT_INVOICE' ? selected.value : null;
   const showDiscounts = invoice ? hasDiscountRequest(invoice) : false;
@@ -264,6 +282,7 @@ function ApprovalReviewDialog({ selected, audience, busy, reason, setReason, lin
       {selected.kind === 'PURCHASE_ORDER' && <PurchaseOrderReview value={selected.value} />}
       {selected.kind === 'POS' && <div className="rounded-xl border border-orange-400/15 bg-orange-400/[.06] p-5"><p className="text-xs uppercase tracking-wider text-orange-300">{label(selected.value.type)}</p><p className="mt-2 text-2xl font-semibold text-white">{selected.value.details?.productName || selected.value.details?.name || 'F&B item'}</p><p className="mt-2 text-sm text-slate-300">{money(selected.value.details?.newPrice ?? selected.value.details?.price)} requested price</p><label className="mt-5 block text-sm text-slate-300">Approval note<textarea value={reason} onChange={(event) => setReason(event.target.value)} className="mt-2 min-h-24 w-full rounded-lg border border-white/10 bg-white/[.05] p-3 text-white" /></label></div>}
       {selected.kind === 'EMPLOYEE_BENEFIT' && <div className="space-y-5"><section className="grid gap-4 rounded-xl border border-cyan-400/20 bg-cyan-400/[.06] p-5 text-sm sm:grid-cols-2 lg:grid-cols-4"><Detail label="Type" value={selected.value.benefitType === 'LOAN' ? 'Employee loan' : 'Salary advance'} /><Detail label="Employee" value={selected.value.staffName || '—'} /><Detail label="Department" value={selected.value.department || '—'} /><Detail label="Position" value={selected.value.position || '—'} /><Detail label="Amount" value={money(selected.value.benefitType === 'LOAN' ? selected.value.principalAmount : selected.value.amount)} /><Detail label="Requested" value={dateTime(selected.value.createdAt)} /><Detail label="Requested by" value={selected.value.requestedBy || '—'} /><Detail label="HR reviewed" value={dateTime(selected.value.hrApprovedAt)} /></section><section className="rounded-xl border border-white/10 bg-white/[.03] p-5"><h3 className="font-semibold text-white">Request details</h3><p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-300">{selected.value.reason || 'No justification provided.'}</p>{selected.value.benefitType === 'LOAN' && <div className="mt-4 grid gap-3 border-t border-white/10 pt-4 text-sm sm:grid-cols-3"><Detail label="Loan number" value={selected.value.loanNumber || '—'} /><Detail label="Term" value={`${selected.value.tenorMonths || 0} months`} /><Detail label="Monthly deduction" value={money(selected.value.monthlyDeduction)} /></div>}</section><label className="block text-sm text-slate-300">Decision note or rejection reason<textarea value={reason} onChange={(event) => setReason(event.target.value)} className="mt-2 min-h-24 w-full rounded-lg border border-white/10 bg-white/[.05] p-3 text-white" placeholder="A reason is required if you reject this request." /></label></div>}
+      {selected.kind === 'EMPLOYEE_PROFILE_CHANGE' && <ProfileChangeReview value={selected.value} reason={reason} setReason={setReason} />}
       {selected.kind === 'EXPENSE' && <div className="space-y-4"><div className="grid gap-3 rounded-xl border border-violet-400/20 bg-violet-400/[.06] p-5 text-sm sm:grid-cols-3"><Detail label="Payee" value={selected.value.payee} /><Detail label="Category" value={selected.value.category} /><Detail label="Total" value={money(selected.value.amount, selected.value.currency)} /></div><p className="text-sm text-slate-300">{selected.value.description}</p><div className="overflow-hidden rounded-xl border border-white/10"><div className="grid grid-cols-[1fr_70px_110px_110px] gap-2 bg-white/[.04] px-4 py-2 text-xs font-semibold text-slate-400"><span>Item / service</span><span>Qty</span><span>Unit price</span><span className="text-right">Total</span></div>{(selected.value.lineItems || []).map((line: any, index: number) => <div key={`${line.description}-${index}`} className="grid grid-cols-[1fr_70px_110px_110px] gap-2 border-t border-white/10 px-4 py-3 text-sm"><span>{line.description}{line.unit ? ` · ${line.unit}` : ''}</span><span>{line.quantity}</span><span>{money(line.unitPrice, selected.value.currency)}</span><span className="text-right font-semibold">{money(line.total, selected.value.currency)}</span></div>)}<div className="flex justify-between border-t border-white/10 bg-white/[.04] px-4 py-3 font-bold"><span>Invoice total</span><span>{money(selected.value.amount, selected.value.currency)}</span></div></div><label className="block text-sm text-slate-300">Review note or rejection reason<textarea value={reason} onChange={(event) => setReason(event.target.value)} className="mt-2 min-h-24 w-full rounded-lg border border-white/10 bg-white/[.05] p-3 text-white" placeholder="A reason is required if you reject this invoice." /></label></div>}
       {selected.kind === 'EMPLOYEE_REIMBURSEMENT' && <div className="space-y-5"><section className="grid gap-4 rounded-xl border border-violet-400/20 bg-violet-400/[.06] p-5 text-sm sm:grid-cols-2 lg:grid-cols-4"><Detail label="Employee" value={selected.value.staffName || '—'} /><Detail label="Employee ID" value={selected.value.employeeId || '—'} /><Detail label="Category" value={selected.value.category || '—'} /><Detail label="Claim amount" value={money(selected.value.amount, selected.value.currency)} /></section><section className="grid gap-4 rounded-xl border border-white/10 bg-white/[.03] p-5 text-sm sm:grid-cols-2"><Detail label="Requested payment" value={label(selected.value.requestedPaymentMethod || 'CASH')} /><Detail label="Submitted" value={dateTime(selected.value.createdAt)} /><div className="sm:col-span-2"><p className="text-[10px] font-semibold uppercase tracking-[.14em] text-slate-500">Business justification</p><p className="mt-1 leading-6 text-slate-200">{selected.value.description || 'No description provided.'}</p></div>{selected.value.receiptUrl && <div className="sm:col-span-2"><a href={selected.value.receiptUrl} target="_blank" rel="noreferrer" className="text-sm text-cyan-300 underline underline-offset-4">View supporting receipt</a></div>}</section><label className="block text-sm text-slate-300">Decision note or rejection reason<textarea value={reason} onChange={(event) => setReason(event.target.value)} className="mt-2 min-h-24 w-full rounded-lg border border-white/10 bg-white/[.05] p-3 text-white" placeholder="A reason is required if you reject this claim." /></label></div>}
       {selected.kind === 'STOCK_TRANSFER' && <div className="space-y-5">
