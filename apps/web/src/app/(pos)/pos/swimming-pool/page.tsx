@@ -475,8 +475,8 @@ function NewAdmissionDialog({ data, onClose, onSuccess }: {
           {state.step === 'guest' && (
             <div className="space-y-4">
               <div>
-                <label className="block text-[11px] font-bold uppercase tracking-wider mb-1.5" style={{ color: '#64748b' }}>Search hotel guest (optional)</label>
-                <input type="text" placeholder="Name, phone, reservation number…" value={state.guestSearch} onChange={(e) => set({ guestSearch: e.target.value, selectedGuest: null })} className="w-full px-3 py-2.5 rounded-xl text-sm" style={{ background: '#0a1220', border: '1px solid rgba(255,255,255,0.12)', color: '#f8fafc' }} autoFocus />
+                <label className="block text-[11px] font-bold uppercase tracking-wider mb-1.5" style={{ color: '#64748b' }}>Search checked-in guest (optional)</label>
+                <input type="text" placeholder="Name or phone…" value={state.guestSearch} onChange={(e) => set({ guestSearch: e.target.value, selectedGuest: null })} className="w-full px-3 py-2.5 rounded-xl text-sm" style={{ background: '#0a1220', border: '1px solid rgba(255,255,255,0.12)', color: '#f8fafc' }} autoFocus />
               </div>
               {guestMatches.length > 0 && (
                 <div className="space-y-1.5">
@@ -495,7 +495,7 @@ function NewAdmissionDialog({ data, onClose, onSuccess }: {
               {state.guestSearch.length > 0 && guestMatches.length === 0 && (
                 <div className="text-center py-4 text-sm" style={{ color: '#475569' }}>
                   <User className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                  No guests found — you can continue as a walk-in guest.
+                  No checked-in guests found — you can continue as a walk-in guest.
                 </div>
               )}
               {!state.selectedGuest && (

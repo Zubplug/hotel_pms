@@ -61,7 +61,7 @@ export async function GET(req: NextRequest) {
       prisma.poolEntry.findMany({ where: todayWhere, include: { guest: true, passType: true }, orderBy: { createdAt: 'desc' }, take: 200 }),
       prisma.poolIncident.findMany({ where: { propertyId, ...(selectedFacilityId ? { facilityId: selectedFacilityId } : {}), status: { not: 'RESOLVED' } }, orderBy: { createdAt: 'desc' }, take: 20 }),
       selectedFacilityId ? prisma.poolSafetyCheck.findFirst({ where: { propertyId, facilityId: selectedFacilityId }, orderBy: { checkedAt: 'desc' } }) : null,
-      search && search.length >= 2 ? prisma.guest.findMany({ where: { propertyId, deletedAt: null, OR: [{ firstName: { contains: search, mode: 'insensitive' } }, { lastName: { contains: search, mode: 'insensitive' } }, { phone: { contains: search } }] }, select: { id: true, firstName: true, lastName: true, phone: true, reservations: { where: { status: { in: ['CHECKED_IN', 'CONFIRMED'] }, checkIn: { lte: businessDate }, checkOut: { gt: businessDate } }, select: { id: true, confirmationNumber: true, status: true, checkIn: true, checkOut: true, folios: { where: { status: 'OPEN' }, select: { id: true, folioNumber: true, balance: true }, take: 1 } }, take: 3 } }, take: 20 }) : [],
+      search && search.length >= 2 ? prisma.guest.findMany({ where: { propertyId, deletedAt: null, reservations: { some: { status: 'CHECKED_IN', checkIn: { lte: businessDate }, checkOut: { gt: businessDate } } }, OR: [{ firstName: { contains: search, mode: 'insensitive' } }, { lastName: { contains: search, mode: 'insensitive' } }, { phone: { contains: search } }] }, select: { id: true, firstName: true, lastName: true, phone: true, reservations: { where: { status: 'CHECKED_IN', checkIn: { lte: businessDate }, checkOut: { gt: businessDate } }, select: { id: true, confirmationNumber: true, status: true, checkIn: true, checkOut: true, folios: { where: { status: 'OPEN' }, select: { id: true, folioNumber: true, balance: true }, take: 1 } }, take: 3 } }, take: 20 }) : [],
     ]);
 
     const facility = facilities.find((item) => item.id === selectedFacilityId);
@@ -79,6 +79,7 @@ export async function GET(req: NextRequest) {
       facility: facility || null,
       facilities,
       metrics: { occupancy, capacity: facility?.capacity || 0, available: Math.max(0, (facility?.capacity || 0) - occupancy), admissions: todayEntries.length, revenue: Number(revenue._sum.total || 0) },
+      passTypes: facility?.passTypes ?? [],
       activeEntries,
       todayEntries,
       incidents,
