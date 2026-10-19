@@ -19,7 +19,23 @@ export async function POST(req: NextRequest) {
         let reqPropertyId = body?.propertyId;
         if (reqPropertyId && !ctx.propertyIds.includes(reqPropertyId)) return NextResponse.json({ error: 'Forbidden property' }, { status: 403 });
         let reqOutletId = body?.outletId;
-        if (reqOutletId && !ctx.outletIds.includes(reqOutletId)) return NextResponse.json({ error: 'Forbidden outlet' }, { status: 403 });
+        if (reqOutletId && !ctx.outletIds.includes(reqOutletId)) {
+          // The staff profile is the authoritative POS outlet assignment. Use
+          // it as a narrow fallback when an older organization-context
+          // projection has not yet picked up a newly assigned outlet.
+          const sessionStaffId = (session.user as any).staffId as string | undefined;
+          const directAccess = sessionStaffId
+            ? await prisma.staffPosOutletAccess.findFirst({
+                where: {
+                  staffId: sessionStaffId,
+                  outletId: reqOutletId,
+                  outlet: { propertyId: reqPropertyId || undefined, isActive: true },
+                },
+                select: { id: true },
+              })
+            : null;
+          if (!directAccess) return NextResponse.json({ error: 'Forbidden outlet' }, { status: 403 });
+        }
     const { staffId, pin, propertyId } = body;
     const sessionId = body.sessionId || undefined;
     let outletId = body.outletId || undefined;
