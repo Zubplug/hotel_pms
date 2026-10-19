@@ -198,7 +198,11 @@ export function FrontDeskLayout({ children, enabledModules = [], licenseSnapshot
         // When the desktop is online, keep the live queue as a fallback for
         // POS room-charge alerts and any notification that has not reached the
         // next local sync yet.
-        if (!next && isOnline) {
+        // In desktop mode the local SQLite queue is authoritative. Once an
+        // operator acknowledges an alert locally, falling back to the cloud
+        // unread queue would resurrect the same notification on every sync
+        // because the cloud row is not marked read by the offline action.
+        if (!next && isOnline && !isDesktopMode) {
           const response = await fetch(`/api/v1/frontdesk/notifications?propertyId=${encodeURIComponent(propertyId)}`, { cache: 'no-store' });
           if (!response.ok) return;
           const result = await response.json();
