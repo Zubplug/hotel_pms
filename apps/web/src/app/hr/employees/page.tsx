@@ -14,6 +14,8 @@ import {
   Calendar,
   DollarSign,
   ChevronRight,
+  ChevronDown,
+  Check,
   Shield,
   FileText,
   Clock,
@@ -42,6 +44,141 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+
+type BankOption = { code: string; name: string };
+
+function SearchableBankSelect({
+  banks,
+  value,
+  onChange,
+}: {
+  banks: BankOption[];
+  value: string;
+  onChange: (bank: BankOption) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const selectedBank = banks.find((bank) => bank.code === value);
+  const filteredBanks = banks.filter((bank) => bank.name.toLowerCase().includes(query.trim().toLowerCase()));
+
+  return (
+    <Popover open={open} onOpenChange={(nextOpen) => { setOpen(nextOpen); if (!nextOpen) setQuery(''); }}>
+      <PopoverTrigger
+        render={
+          <button
+            type="button"
+            className="flex h-8 w-full items-center justify-between rounded-lg border border-slate-800 bg-slate-950 px-2.5 text-left text-xs text-slate-300 outline-none transition hover:border-slate-700 focus-visible:ring-2 focus-visible:ring-teal-500/40"
+            aria-label="Select bank"
+          />
+        }
+      >
+        <span className={selectedBank ? 'truncate text-slate-100' : 'truncate text-slate-500'}>
+          {selectedBank?.name || 'Select bank from Flutterwave'}
+        </span>
+        <ChevronDown className="ml-2 h-3.5 w-3.5 shrink-0 text-slate-500" />
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-[min(360px,calc(100vw-3rem))] overflow-hidden rounded-xl border-slate-700 bg-slate-900 p-0 text-slate-100 shadow-2xl">
+        <div className="border-b border-slate-800 p-2">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
+            <input
+              autoFocus
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search banks..."
+              className="h-8 w-full rounded-lg border border-slate-800 bg-slate-950 pl-8 pr-2.5 text-xs text-slate-100 outline-none placeholder:text-slate-600 focus:border-teal-500"
+            />
+          </div>
+        </div>
+        <div className="max-h-60 overflow-y-auto p-1.5" role="listbox" aria-label="Banks">
+          {filteredBanks.length > 0 ? filteredBanks.map((bank) => (
+            <button
+              key={bank.code}
+              type="button"
+              role="option"
+              aria-selected={bank.code === value}
+              onClick={() => { onChange(bank); setOpen(false); setQuery(''); }}
+              className="flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-xs text-slate-300 transition hover:bg-slate-800 hover:text-white"
+            >
+              <span className="truncate">{bank.name}</span>
+              {bank.code === value && <Check className="h-3.5 w-3.5 shrink-0 text-teal-400" />}
+            </button>
+          )) : (
+            <p className="px-2.5 py-3 text-xs text-slate-500">No matching banks found.</p>
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function SearchableSelect({
+  options,
+  value,
+  onChange,
+  placeholder,
+}: {
+  options: { value: string; label: string }[];
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const selectedOption = options.find((option) => option.value === value);
+  const filteredOptions = options.filter((option) => option.label.toLowerCase().includes(query.trim().toLowerCase()));
+
+  return (
+    <Popover open={open} onOpenChange={(nextOpen) => { setOpen(nextOpen); if (!nextOpen) setQuery(''); }}>
+      <PopoverTrigger
+        render={
+          <button
+            type="button"
+            className="flex h-8 w-full items-center justify-between rounded-lg border border-slate-800 bg-slate-950 px-2.5 text-left text-xs text-slate-300 outline-none transition hover:border-slate-700 focus-visible:ring-2 focus-visible:ring-teal-500/40"
+            aria-label={placeholder}
+          />
+        }
+      >
+        <span className={selectedOption ? 'truncate text-slate-100' : 'truncate text-slate-500'}>
+          {selectedOption?.label || placeholder}
+        </span>
+        <ChevronDown className="ml-2 h-3.5 w-3.5 shrink-0 text-slate-500" />
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-[min(360px,calc(100vw-3rem))] overflow-hidden rounded-xl border-slate-700 bg-slate-900 p-0 text-slate-100 shadow-2xl">
+        <div className="border-b border-slate-800 p-2">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
+            <input
+              autoFocus
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder={`Search ${placeholder.toLowerCase()}...`}
+              className="h-8 w-full rounded-lg border border-slate-800 bg-slate-950 pl-8 pr-2.5 text-xs text-slate-100 outline-none placeholder:text-slate-600 focus:border-teal-500"
+            />
+          </div>
+        </div>
+        <div className="max-h-60 overflow-y-auto p-1.5" role="listbox" aria-label={placeholder}>
+          {filteredOptions.length > 0 ? filteredOptions.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              role="option"
+              aria-selected={option.value === value}
+              onClick={() => { onChange(option.value); setOpen(false); setQuery(''); }}
+              className="flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-xs text-slate-300 transition hover:bg-slate-800 hover:text-white"
+            >
+              <span className="truncate">{option.label}</span>
+              {option.value === value && <Check className="h-3.5 w-3.5 shrink-0 text-teal-400" />}
+            </button>
+          )) : (
+            <p className="px-2.5 py-3 text-xs text-slate-500">No matching options found.</p>
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 export default function EmployeesPage() {
   const [employees, setEmployees] = useState<any[]>([]);
@@ -870,7 +1007,7 @@ export default function EmployeesPage() {
           <form onSubmit={submitSeparation} className="space-y-4 text-xs">
             <p className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 text-[11px] leading-5 text-amber-100">This submits a formal request. The employee remains active until a General Manager approves it.</p>
             <div><label className="mb-1 block text-slate-400">Employee</label><p className="font-semibold text-white">{separationEmployee?.name}</p><p className="text-[11px] text-slate-500">{separationEmployee?.department} · {separationEmployee?.position}</p></div>
-            <div><label className="mb-1 block text-slate-400">Separation type</label><select value={separationForm.separationType} onChange={(e) => setSeparationForm({ ...separationForm, separationType: e.target.value })} className="h-8 w-full rounded-lg border border-slate-800 bg-slate-950 px-2.5 text-slate-300 outline-none"><option value="TERMINATED">Termination / dismissal</option><option value="RESIGNED">Resignation</option><option value="RETIRED">Retirement</option></select></div>
+            <div><label className="mb-1 block text-slate-400">Separation type</label><SearchableSelect options={[{ value: 'TERMINATED', label: 'Termination / dismissal' }, { value: 'RESIGNED', label: 'Resignation' }, { value: 'RETIRED', label: 'Retirement' }]} value={separationForm.separationType} onChange={(separationType) => setSeparationForm({ ...separationForm, separationType })} placeholder="Select separation type" /></div>
             <div><label className="mb-1 block text-slate-400">Effective date</label><Input required type="date" value={separationForm.effectiveDate} onChange={(e) => setSeparationForm({ ...separationForm, effectiveDate: e.target.value })} className="h-8 border-slate-800 bg-slate-950 text-xs text-slate-100" /></div>
             <div><label className="mb-1 block text-slate-400">Reason and supporting record *</label><textarea required minLength={10} value={separationForm.reason} onChange={(e) => setSeparationForm({ ...separationForm, reason: e.target.value })} placeholder="Document the factual reason, prior warnings or resignation notice, and any relevant handover details." className="min-h-24 w-full rounded-lg border border-slate-800 bg-slate-950 p-2.5 text-xs text-slate-100 outline-none focus:border-rose-500" /></div>
             <DialogFooter className="pt-2"><Button type="button" variant="outline" onClick={() => setSeparationModalOpen(false)} className="border-slate-800 text-xs">Cancel</Button><Button type="submit" disabled={submitting || separationForm.reason.trim().length < 10} className="bg-rose-600 text-xs text-white hover:bg-rose-500">{submitting ? 'Submitting…' : 'Submit for GM approval'}</Button></DialogFooter>
@@ -880,7 +1017,7 @@ export default function EmployeesPage() {
 
       {/* Add Employee Dialog Modal */}
       <Dialog open={addModalOpen} onOpenChange={setAddModalOpen}>
-        <DialogContent className="max-w-2xl bg-slate-900 border-slate-800 text-slate-100 max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-4xl bg-slate-900 border-slate-800 text-slate-100 max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-base font-bold text-white flex items-center gap-2">
               <Plus className="w-5 h-5 text-teal-400" />
@@ -941,72 +1078,55 @@ export default function EmployeesPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-slate-400 mb-1 block">Department</label>
-                  <select
+                  <SearchableSelect
                     value={form.departmentId}
-                    onChange={(e) => {
-                      const dept = departments.find((d) => d.id === e.target.value);
+                    onChange={(departmentId) => {
+                      const dept = departments.find((d) => d.id === departmentId);
                       setForm({
                         ...form,
-                        departmentId: e.target.value,
+                        departmentId,
                         departmentName: dept?.name || '',
                         jobPositionId: '',
                         positionTitle: '',
                       });
                     }}
-                    className="w-full bg-slate-950 border border-slate-800 text-slate-300 rounded-lg text-xs px-2.5 h-8 outline-none"
-                  >
-                    <option value="">Select Department</option>
-                    {departments.map((d) => (
-                      <option key={d.id} value={d.id}>{d.name}</option>
-                    ))}
-                  </select>
+                    options={departments.map((d) => ({ value: d.id, label: d.name }))}
+                    placeholder="Select department"
+                  />
                 </div>
                 <div>
                   <label className="text-slate-400 mb-1 block">Job Position</label>
-                  <select
+                  <SearchableSelect
                     value={form.jobPositionId}
-                    onChange={(e) => {
-                      const pos = positions.find((p) => p.id === e.target.value);
+                    onChange={(jobPositionId) => {
+                      const pos = positions.find((p) => p.id === jobPositionId);
                       setForm({
                         ...form,
-                        jobPositionId: e.target.value,
+                        jobPositionId,
                         positionTitle: pos?.title || '',
                       });
                     }}
-                    className="w-full bg-slate-950 border border-slate-800 text-slate-300 rounded-lg text-xs px-2.5 h-8 outline-none"
-                  >
-                    <option value="">Select Position</option>
-                    {positions.filter((p) => !form.departmentId || p.departmentId === form.departmentId).map((p) => (
-                      <option key={p.id} value={p.id}>{p.title}</option>
-                    ))}
-                  </select>
+                    options={positions.filter((p) => !form.departmentId || p.departmentId === form.departmentId).map((p) => ({ value: p.id, label: p.title }))}
+                    placeholder="Select position"
+                  />
                 </div>
                 <div>
                   <label className="text-slate-400 mb-1 block">Employment Type</label>
-                  <select
+                  <SearchableSelect
                     value={form.employmentType}
-                    onChange={(e) => setForm({ ...form, employmentType: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-800 text-slate-300 rounded-lg text-xs px-2.5 h-8 outline-none"
-                  >
-                    <option value="FULL_TIME">Full Time</option>
-                    <option value="PART_TIME">Part Time</option>
-                    <option value="CONTRACT">Contract</option>
-                    <option value="CASUAL">Casual</option>
-                    <option value="INTERN">Intern</option>
-                  </select>
+                    onChange={(employmentType) => setForm({ ...form, employmentType })}
+                    options={[{ value: 'FULL_TIME', label: 'Full Time' }, { value: 'PART_TIME', label: 'Part Time' }, { value: 'CONTRACT', label: 'Contract' }, { value: 'CASUAL', label: 'Casual' }, { value: 'INTERN', label: 'Intern' }]}
+                    placeholder="Select employment type"
+                  />
                 </div>
                 <div>
                   <label className="text-slate-400 mb-1 block">Employment Status</label>
-                  <select
+                  <SearchableSelect
                     value={form.employmentStatus}
-                    onChange={(e) => setForm({ ...form, employmentStatus: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-800 text-slate-300 rounded-lg text-xs px-2.5 h-8 outline-none"
-                  >
-                    <option value="ACTIVE">Active</option>
-                    <option value="PROBATION">Probation</option>
-                    <option value="ON_LEAVE">On leave</option>
-                    <option value="SUSPENDED">Suspended</option>
-                  </select>
+                    onChange={(employmentStatus) => setForm({ ...form, employmentStatus })}
+                    options={[{ value: 'ACTIVE', label: 'Active' }, { value: 'PROBATION', label: 'Probation' }, { value: 'ON_LEAVE', label: 'On leave' }, { value: 'SUSPENDED', label: 'Suspended' }]}
+                    placeholder="Select employment status"
+                  />
                 </div>
                 <div>
                   <label className="text-slate-400 mb-1 block">Hire Date</label>
@@ -1094,10 +1214,11 @@ export default function EmployeesPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-slate-400 mb-1 block">Bank Name</label>
-                  <select value={form.bankSortCode} onChange={(e) => { const bank = banks.find(item => item.code === e.target.value); setForm({ ...form, bankSortCode: e.target.value, bankName: bank?.name || '' }); }} className="w-full rounded-md bg-slate-950 border border-slate-800 text-slate-100 text-xs h-8 px-2">
-                    <option value="">Select bank from Flutterwave</option>
-                    {banks.map(bank => <option key={bank.code} value={bank.code}>{bank.name} ({bank.code})</option>)}
-                  </select>
+                  <SearchableBankSelect
+                    banks={banks}
+                    value={form.bankSortCode}
+                    onChange={(bank) => setForm({ ...form, bankSortCode: bank.code, bankName: bank.name })}
+                  />
                 </div>
                 <div>
                   <label className="text-slate-400 mb-1 block">Account Number</label>
