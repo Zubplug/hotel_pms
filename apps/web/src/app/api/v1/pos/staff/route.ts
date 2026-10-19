@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
         'MANAGER', 'GENERAL_MANAGER', 'FNB_MANAGER', 'HOTEL_MANAGER',
         'FRONT_DESK_MANAGER', 'FINANCE_MANAGER', 'GENERAL_CASHIER',
         'NIGHT_AUDITOR', 'CEO', 'OWNER', 'ADMIN', 'SUPER_ADMIN',
-        'POOL_OPERATOR', 'POOL_MANAGER',
+        'POOL_OPERATOR', 'POOL_MANAGER', 'Swimming Pool Operator', 'Pool Manager',
       ];
       if (outletId) {
       // Outlet-scoped: only return staff explicitly assigned to this outlet.
