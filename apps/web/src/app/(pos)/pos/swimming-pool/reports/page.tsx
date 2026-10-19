@@ -125,9 +125,12 @@ export default function ReportsPage() {
 
   if (!data) return null;
 
-  const dailyAdmissions = buildDailyAdmissions(data.entries);
-  const dailyRevenue = buildDailyRevenue(data.posOrders);
-  const byPassData = Object.entries(data.byPass).map(([name, count]) => ({ name, count }));
+  const entries = data.entries ?? [];
+  const posOrders = data.posOrders ?? [];
+  const byPass = data.byPass ?? {};
+  const dailyAdmissions = buildDailyAdmissions(entries);
+  const dailyRevenue = buildDailyRevenue(posOrders);
+  const byPassData = Object.entries(byPass).map(([name, count]) => ({ name, count }));
 
   return (
     <div className="p-4 md:p-6 space-y-5">
@@ -258,12 +261,12 @@ export default function ReportsPage() {
 
           <div className="space-y-2">
             {[
-              { l: 'Total POS orders (pool outlet)', v: data.posOrders.length, colour: '#94a3b8' },
-              { l: 'Paid orders', v: data.posOrders.filter(o => o.paymentStatus === 'PAID').length, colour: '#34d399' },
-              { l: 'Unpaid / pending', v: data.posOrders.filter(o => o.paymentStatus !== 'PAID').length, colour: '#fcd34d' },
-              { l: 'Gross revenue (paid)', v: formatMoney(data.posOrders.filter(o => o.paymentStatus === 'PAID').reduce((s, o) => s + Number(o.total), 0), currency), colour: '#38bdf8' },
-              { l: 'Admissions with POS order linked', v: data.entries.filter(e => e.status !== 'CANCELLED').length, colour: '#a78bfa' },
-              { l: 'Complimentary / unlinked', v: Math.max(0, data.summary.totalAdmissions - data.posOrders.length), colour: '#64748b' },
+              { l: 'Total POS orders (pool outlet)', v: posOrders.length, colour: '#94a3b8' },
+              { l: 'Paid orders', v: posOrders.filter(o => o.paymentStatus === 'PAID').length, colour: '#34d399' },
+              { l: 'Unpaid / pending', v: posOrders.filter(o => o.paymentStatus !== 'PAID').length, colour: '#fcd34d' },
+              { l: 'Gross revenue (paid)', v: formatMoney(posOrders.filter(o => o.paymentStatus === 'PAID').reduce((s, o) => s + Number(o.total), 0), currency), colour: '#38bdf8' },
+              { l: 'Admissions with POS order linked', v: entries.filter(e => e.status !== 'CANCELLED').length, colour: '#a78bfa' },
+              { l: 'Complimentary / unlinked', v: Math.max(0, (data.summary?.totalAdmissions ?? 0) - posOrders.length), colour: '#64748b' },
             ].map(({ l, v, colour }) => (
               <div key={l} className="flex items-center justify-between px-3 py-2.5 rounded-xl" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
                 <span className="text-[12px]" style={{ color: '#94a3b8' }}>{l}</span>

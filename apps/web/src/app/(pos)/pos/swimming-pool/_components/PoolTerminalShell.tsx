@@ -3,11 +3,13 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
+import { useSession } from 'next-auth/react';
+import { useLogout } from '@/hooks/useLogout';
 import {
   Waves, Ticket, ScanLine, Users, LayoutGrid,
   ShieldCheck, BarChart3, Clock, Settings2, ScrollText,
   AlertTriangle, ChevronDown, RefreshCw, WifiOff, Wifi,
-  LogOut, ChevronLeft, Menu, X, Zap,
+  LogOut, ChevronLeft, Menu, X,
 } from 'lucide-react';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -125,9 +127,12 @@ interface SidebarProps {
   collapsed: boolean;
   incidentCount: number;
   onFacilityChange: (id: string) => void;
+  onLogout: () => void;
+  userDisplayName: string;
+  userInitials: string;
 }
 
-function Sidebar({ shellData, collapsed, incidentCount, onFacilityChange }: SidebarProps) {
+function Sidebar({ shellData, collapsed, incidentCount, onFacilityChange, onLogout, userDisplayName, userInitials }: SidebarProps) {
   const pathname = usePathname();
   const [facilityOpen, setFacilityOpen] = useState(false);
 
@@ -220,19 +225,31 @@ function Sidebar({ shellData, collapsed, incidentCount, onFacilityChange }: Side
         })}
       </nav>
 
-      {/* Footer */}
-      {!collapsed && (
-        <div className="px-2.5 py-3 border-t shrink-0" style={{ borderColor: 'rgba(255,255,255,0.07)' }}>
-          <Link
-            href="/pos"
-            className="flex items-center gap-2 px-2.5 py-2 rounded-lg text-[11px] font-medium transition-colors"
-            style={{ color: '#64748b' }}
-          >
-            <ChevronLeft className="w-3.5 h-3.5" />
-            <span>Back to POS</span>
-          </Link>
-        </div>
-      )}
+      {/* Footer — user identity + logout */}
+      <div className="px-2.5 py-3 border-t shrink-0 space-y-1" style={{ borderColor: 'rgba(255,255,255,0.07)' }}>
+        {!collapsed && (
+          <div className="flex items-center gap-2.5 px-2.5 py-2 rounded-xl mb-1" style={{ background: 'rgba(255,255,255,0.04)' }}>
+            <div
+              className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 text-[11px] font-black"
+              style={{ background: 'rgba(56,189,248,0.18)', color: '#38bdf8' }}
+            >
+              {userInitials}
+            </div>
+            <p className="text-[11px] font-semibold text-white truncate flex-1">{userDisplayName}</p>
+          </div>
+        )}
+        <button
+          onClick={onLogout}
+          title="Sign out"
+          className="w-full flex items-center gap-2 px-2.5 py-2 rounded-xl text-[11px] font-semibold transition-colors group"
+          style={{ color: '#64748b' }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(244,63,94,0.10)'; (e.currentTarget as HTMLElement).style.color = '#fda4af'; }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = '#64748b'; }}
+        >
+          <LogOut className="w-3.5 h-3.5 shrink-0" />
+          {!collapsed && <span>Sign out</span>}
+        </button>
+      </div>
     </aside>
   );
 }
@@ -258,6 +275,10 @@ export function PoolTerminalShell({ children }: PoolTerminalShellProps) {
     }
   );
   const [incidentCount, setIncidentCount] = useState(0);
+  const logout = useLogout();
+  const { data: session } = useSession();
+  const userDisplayName = (session?.user as { name?: string } | undefined)?.name ?? 'Pool Staff';
+  const userInitials = userDisplayName.split(' ').map((p: string) => p[0]).join('').slice(0, 2).toUpperCase();
 
   const fetchShell = useCallback(async (fid?: string | null) => {
     try {
@@ -314,6 +335,9 @@ export function PoolTerminalShell({ children }: PoolTerminalShellProps) {
           collapsed={collapsed}
           incidentCount={incidentCount}
           onFacilityChange={handleFacilityChange}
+          onLogout={logout}
+          userDisplayName={userDisplayName}
+          userInitials={userInitials}
         />
       </div>
 
@@ -327,6 +351,9 @@ export function PoolTerminalShell({ children }: PoolTerminalShellProps) {
               collapsed={false}
               incidentCount={incidentCount}
               onFacilityChange={handleFacilityChange}
+              onLogout={logout}
+              userDisplayName={userDisplayName}
+              userInitials={userInitials}
             />
           </div>
           <button
