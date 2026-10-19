@@ -5,7 +5,7 @@ import { z } from 'zod';
 import prisma from '@hotel-pms/db';
 import { sendPortalVerificationEmail } from '@/lib/email/send-portal-verification';
 
-const schema = z.object({ name: z.string().trim().min(2).max(120), email: z.string().trim().email().max(254), propertyName: z.string().trim().min(2).max(160), password: z.string().min(12).max(200), consent: z.literal(true) });
+const schema = z.object({ firstName: z.string().trim().min(1).max(60), lastName: z.string().trim().min(1).max(60), email: z.string().trim().email().max(254), propertyName: z.string().trim().min(2).max(160), password: z.string().min(12).max(200), consent: z.literal(true) });
 function slugify(value: string) { return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 70) || 'customer'; }
 
 export async function POST(request: NextRequest) {
