@@ -950,3 +950,161 @@ body:has(.fnb-dark-surface) [data-slot='dialog-footer'] { border-color: rgba(255
     @apply font-sans;
   }
 }
+
+/* ────────────────────────────────────────────────────────────────────────────
+   SWIMMING POOL TERMINAL — Dark operational workspace.
+   Accent: cyan-400 (#38BDF8). Same surface architecture as the other dark PMS
+   shells; scoped to .pool-dark-surface so it never bleeds into other routes.
+   ──────────────────────────────────────────────────────────────────────────── */
+.pool-dark-surface {
+  background: #070d16;
+  color: #e2e8f0;
+  --background: #070d16;
+  --foreground: #e2e8f0;
+  --card: #0d1724;
+  --card-foreground: #f8fafc;
+  --popover: #0d1724;
+  --popover-foreground: #e2e8f0;
+  --primary: #38bdf8;
+  --primary-foreground: #070d16;
+  --secondary: #14263d;
+  --secondary-foreground: #e2e8f0;
+  --muted: #0f1e30;
+  --muted-foreground: #94a3b8;
+  --accent: #14263d;
+  --accent-foreground: #f8fafc;
+  --border: rgba(255, 255, 255, 0.10);
+  --input: rgba(255, 255, 255, 0.12);
+  --ring: #38bdf8;
+  --sidebar: #060b13;
+  --sidebar-foreground: #e2e8f0;
+  --sidebar-accent: #14263d;
+  --sidebar-accent-foreground: #f8fafc;
+  --sidebar-border: rgba(255, 255, 255, 0.09);
+}
+
+/* Overlay / portal components render outside the shell node — scope via body:has() */
+body:has(.pool-dark-surface) [data-slot='dialog-overlay'] { background: rgba(2, 6, 23, 0.80) !important; backdrop-filter: blur(6px); }
+body:has(.pool-dark-surface) [data-slot='dialog-content'],
+body:has(.pool-dark-surface) [data-slot='popover-content'],
+body:has(.pool-dark-surface) [data-slot='dropdown-menu-content'],
+body:has(.pool-dark-surface) [data-slot='select-content'],
+body:has(.pool-dark-surface) [data-slot='command'] {
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  background: #0d1724 !important;
+  color: #e2e8f0 !important;
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.55) !important;
+}
+body:has(.pool-dark-surface) [data-slot='dialog-title'] { color: #f8fafc !important; }
+body:has(.pool-dark-surface) [data-slot='dialog-description'] { color: #94a3b8 !important; }
+body:has(.pool-dark-surface) [data-slot='dialog-content'] input,
+body:has(.pool-dark-surface) [data-slot='dialog-content'] textarea,
+body:has(.pool-dark-surface) [data-slot='dialog-content'] select { background: #0a1220 !important; border-color: rgba(255,255,255,.12) !important; color: #f8fafc !important; }
+body:has(.pool-dark-surface) [data-slot='dialog-footer'] { border-color: rgba(255,255,255,.10) !important; background: #060e1a !important; }
+body:has(.pool-dark-surface) [data-slot='select-item']:focus,
+body:has(.pool-dark-surface) [data-slot='select-item'][data-highlighted] { background: rgba(56,189,248,.14); color: #e0f2fe; }
+
+/* Within-shell structural overrides — keep semantic status colours alive */
+.pool-dark-surface .bg-white,
+.pool-dark-surface .bg-white\/80,
+.pool-dark-surface .bg-white\/90 { background-color: #0d1724 !important; }
+.pool-dark-surface .bg-slate-50,
+.pool-dark-surface .bg-slate-50\/30,
+.pool-dark-surface .bg-slate-50\/50,
+.pool-dark-surface .bg-slate-50\/80,
+.pool-dark-surface .bg-slate-100,
+.pool-dark-surface .bg-gray-50,
+.pool-dark-surface .bg-gray-100 { background-color: rgba(255, 255, 255, 0.04) !important; }
+.pool-dark-surface .bg-slate-200 { background-color: rgba(148, 163, 184, 0.16) !important; }
+.pool-dark-surface .border-slate-100,
+.pool-dark-surface .border-slate-200,
+.pool-dark-surface .border-gray-100,
+.pool-dark-surface .border-gray-200 { border-color: rgba(255, 255, 255, 0.09) !important; }
+.pool-dark-surface .divide-slate-100 > :not([hidden]) ~ :not([hidden]),
+.pool-dark-surface .divide-slate-200 > :not([hidden]) ~ :not([hidden]) { border-color: rgba(255, 255, 255, 0.07) !important; }
+.pool-dark-surface .text-slate-950,
+.pool-dark-surface .text-slate-900,
+.pool-dark-surface .text-slate-800,
+.pool-dark-surface .text-gray-900 { color: #f8fafc !important; }
+.pool-dark-surface .text-slate-700,
+.pool-dark-surface .text-slate-600,
+.pool-dark-surface .text-gray-700 { color: #cbd5e1 !important; }
+.pool-dark-surface .text-slate-500,
+.pool-dark-surface .text-slate-400,
+.pool-dark-surface .text-gray-500 { color: #94a3b8 !important; }
+.pool-dark-surface input,
+.pool-dark-surface textarea,
+.pool-dark-surface select,
+.pool-dark-surface [role='combobox'] { background-color: #0a1220; border-color: rgba(255,255,255,.12); color: #f8fafc; }
+.pool-dark-surface input::placeholder,
+.pool-dark-surface textarea::placeholder { color: #64748b; }
+.pool-dark-surface table { color: #cbd5e1; }
+.pool-dark-surface thead { background-color: rgba(255,255,255,.04); color: #94a3b8; }
+.pool-dark-surface thead th { color: #94a3b8; }
+.pool-dark-surface tbody { border-color: rgba(255,255,255,.07); }
+.pool-dark-surface tbody tr:hover { background-color: rgba(255,255,255,.04); }
+/* Status semantic colours */
+.pool-dark-surface .bg-emerald-50,
+.pool-dark-surface .bg-green-50,
+.pool-dark-surface .bg-emerald-100 { background-color: rgba(16, 185, 129, 0.14) !important; }
+.pool-dark-surface .bg-sky-50,
+.pool-dark-surface .bg-cyan-50,
+.pool-dark-surface .bg-blue-50 { background-color: rgba(56, 189, 248, 0.12) !important; }
+.pool-dark-surface .bg-amber-50,
+.pool-dark-surface .bg-amber-100,
+.pool-dark-surface .bg-yellow-50 { background-color: rgba(245, 158, 11, 0.14) !important; }
+.pool-dark-surface .bg-rose-50,
+.pool-dark-surface .bg-red-50,
+.pool-dark-surface .bg-red-100 { background-color: rgba(244, 63, 94, 0.14) !important; }
+.pool-dark-surface .bg-indigo-50 { background-color: rgba(99, 102, 241, 0.14) !important; }
+.pool-dark-surface .bg-violet-50 { background-color: rgba(139, 92, 246, 0.14) !important; }
+.pool-dark-surface .bg-slate-100 { background-color: rgba(148, 163, 184, 0.10) !important; }
+.pool-dark-surface .text-emerald-700,
+.pool-dark-surface .text-emerald-600,
+.pool-dark-surface .text-green-700 { color: #6ee7b7 !important; }
+.pool-dark-surface .text-sky-700,
+.pool-dark-surface .text-cyan-700,
+.pool-dark-surface .text-blue-700 { color: #7dd3fc !important; }
+.pool-dark-surface .text-amber-700,
+.pool-dark-surface .text-amber-600 { color: #fcd34d !important; }
+.pool-dark-surface .text-rose-700,
+.pool-dark-surface .text-red-700,
+.pool-dark-surface .text-red-600 { color: #fda4af !important; }
+.pool-dark-surface .text-indigo-700 { color: #a5b4fc !important; }
+.pool-dark-surface .hover\:bg-slate-50:hover,
+.pool-dark-surface .hover\:bg-slate-100:hover,
+.pool-dark-surface .hover\:bg-white:hover { background-color: rgba(255, 255, 255, 0.06) !important; }
+.pool-dark-surface button[data-slot='button'].bg-background,
+.pool-dark-surface button[data-slot='button'].bg-white { background-color: #14263d !important; color: #e2e8f0 !important; border-color: rgba(255,255,255,.14) !important; }
+
+/* Pool sidebar nav */
+.pool-nav-link { display: flex; align-items: center; gap: 0.625rem; padding: 0.5rem 0.75rem; border-radius: 0.625rem; font-size: 0.8125rem; font-weight: 500; color: #94a3b8; transition: background-color 0.15s, color 0.15s; cursor: pointer; white-space: nowrap; }
+.pool-nav-link:hover { background-color: rgba(255,255,255,.06); color: #e2e8f0; }
+.pool-nav-link.active { background-color: rgba(56,189,248,.12); color: #38bdf8; font-weight: 600; }
+.pool-nav-link.active svg { color: #38bdf8; }
+
+/* Pool metric card */
+.pool-metric { border: 1px solid rgba(255,255,255,.09); border-radius: 0.875rem; background: rgba(13,23,36,.82); padding: 1rem 1.25rem; transition: border-color 0.15s; }
+.pool-metric:hover { border-color: rgba(56,189,248,.2); }
+
+/* Pool table rows */
+.pool-entry-row { border-bottom: 1px solid rgba(255,255,255,.06); transition: background-color 0.12s; }
+.pool-entry-row:hover { background-color: rgba(56,189,248,.05); }
+.pool-entry-row:last-child { border-bottom: none; }
+
+/* Pool status gate banner */
+.pool-gate-banner { display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 1rem; border-radius: 0.75rem; border: 1px solid; font-size: 0.8125rem; font-weight: 500; }
+.pool-gate-banner.warning { background: rgba(245,158,11,.10); border-color: rgba(245,158,11,.30); color: #fcd34d; }
+.pool-gate-banner.danger { background: rgba(244,63,94,.10); border-color: rgba(244,63,94,.28); color: #fda4af; }
+
+/* Pool occupancy gauge ring */
+@keyframes pool-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .55; } }
+.pool-live-dot { width: 0.45rem; height: 0.45rem; border-radius: 9999px; background: #34d399; box-shadow: 0 0 0 4px rgba(52,211,153,.14); animation: pool-pulse 2.2s ease-in-out infinite; }
+
+/* Recharts overrides inside pool shell */
+.pool-dark-surface .recharts-cartesian-axis-tick-value { fill: #64748b; font-size: 11px; }
+.pool-dark-surface .recharts-cartesian-grid-horizontal line,
+.pool-dark-surface .recharts-cartesian-grid-vertical line { stroke: rgba(255,255,255,.06); }
+.pool-dark-surface .recharts-tooltip-wrapper .recharts-default-tooltip { background: #0d1724 !important; border-color: rgba(255,255,255,.12) !important; border-radius: 0.625rem; box-shadow: 0 12px 40px rgba(0,0,0,.40); }
+.pool-dark-surface .recharts-legend-item-text { color: #94a3b8 !important; font-size: 12px; }
+
