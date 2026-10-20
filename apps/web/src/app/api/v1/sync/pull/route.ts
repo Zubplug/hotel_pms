@@ -871,6 +871,7 @@ export async function GET(req: NextRequest) {
         const roleProvidesPosAccess = new Set([
           'WAITER', 'WAITRESS', 'CASHIER', 'POS', 'POSOPERATOR', 'POSCASHIER',
           'FNBMANAGER', 'MANAGER', 'HOTELMANAGER', 'POOLOPERATOR', 'POOLMANAGER',
+          'SWIMMINGPOOLOPERATOR', 'SWIMMINGPOOLMANAGER',
           'RECEPTIONIST', 'FRONTDESK', 'FRONTDESKOPERATOR', 'FRONTDESKMANAGER',
           'GENERALCASHIER', 'NIGHTAUDITOR', 'ADMIN', 'SUPERADMIN', 'CEO', 'OWNER',
         ]).has(normalizedPosition);

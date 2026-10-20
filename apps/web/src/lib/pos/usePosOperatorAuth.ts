@@ -52,7 +52,8 @@ export function usePosOperatorAuth({
   onAuthenticated,
   allowedRoles = [
     'WAITER', 'WAITRESS', 'CASHIER', 'POS', 'POS_OPERATOR', 'POS_CASHIER',
-    'FNB_MANAGER', 'MANAGER', 'HOTEL_MANAGER', 'POOL_OPERATOR', 'POOL_MANAGER',
+    'FNB_MANAGER', 'MANAGER', 'HOTEL_MANAGER',
+    'POOL_OPERATOR', 'POOL_MANAGER', 'SWIMMING_POOL_OPERATOR', 'SWIMMING_POOL_MANAGER',
   ],
 }: {
   isOpen: boolean;
