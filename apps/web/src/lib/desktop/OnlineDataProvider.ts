@@ -378,7 +378,10 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
       return apiFetchResult(`/api/v1/pos/categories?propertyId=${propertyId}${qs}`);
     },
     getActiveStaff: async (propertyId: string, outletId?: string) => {
-      const qs = outletId ? `&outletId=${outletId}` : '';
+      const deviceId = typeof window !== 'undefined'
+        ? localStorage.getItem('lodgecore_pos_device_id')
+        : null;
+      const qs = `${outletId ? `&outletId=${encodeURIComponent(outletId)}` : ''}${deviceId ? `&deviceId=${encodeURIComponent(deviceId)}` : ''}`;
       return apiFetchResult(`/api/v1/pos/staff?propertyId=${propertyId}${qs}`);
     },
     getCurrentOperator: async (sessionId: string, operatorToken?: string | null) => {

@@ -864,7 +864,17 @@ export async function GET(req: NextRequest) {
       finalStaff.map(async (staff: any) => {
         let permissions: string[] = [];
         let roleName = '';
-        let hasPosAccess = false;
+        const normalizedPosition = String(staff.position ?? '')
+          .trim()
+          .toUpperCase()
+          .replace(/[^A-Z0-9]/g, '');
+        const roleProvidesPosAccess = new Set([
+          'WAITER', 'WAITRESS', 'CASHIER', 'POS', 'POSOPERATOR', 'POSCASHIER',
+          'FNBMANAGER', 'MANAGER', 'HOTELMANAGER', 'POOLOPERATOR', 'POOLMANAGER',
+          'RECEPTIONIST', 'FRONTDESK', 'FRONTDESKOPERATOR', 'FRONTDESKMANAGER',
+          'GENERALCASHIER', 'NIGHTAUDITOR', 'ADMIN', 'SUPERADMIN', 'CEO', 'OWNER',
+        ]).has(normalizedPosition);
+        let hasPosAccess = roleProvidesPosAccess;
         
         if (staff.userId) {
           const userRoles = await prisma.userRole.findMany({
@@ -877,9 +887,9 @@ export async function GET(req: NextRequest) {
           ));
           roleName = userRoles[0]?.role?.name ?? staff.position;
 
-          hasPosAccess = permissions.some(p =>
+          hasPosAccess = roleProvidesPosAccess || permissions.some(p =>
             p === 'ACCESS_POS' || p === 'ACCESS_FRONT_DESK' || p.startsWith('ACCESS_KEYCARD')
-          ) || ['RECEPTIONIST', 'MANAGER', 'ADMIN', 'WAITER', 'FNB_MANAGER', 'HOTEL_MANAGER', 'SUPER_ADMIN'].includes(staff.position?.toUpperCase() ?? '');
+          );
         }
 
         // Fetch which outlets this staff member can operate in
@@ -893,7 +903,10 @@ export async function GET(req: NextRequest) {
           id:              staff.id,
           firstName:       staff.firstName,
           lastName:        staff.lastName,
-          role:            roleName || staff.position,
+          // The operational position is the stable role used by offline POS
+          // login. Permission role names can be generic (for example MEMBER)
+          // and would otherwise hide valid operators after sync.
+          role:            staff.position || roleName,
           posPinHash:      staff.posPinHash ?? null,
           posTokenVersion: staff.posTokenVersion,
           isActive:        staff.isActive,
