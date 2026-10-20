@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import prisma from '@hotel-pms/db';
 import { requireHQAdmin } from '@/lib/auth/hq';
@@ -28,7 +28,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   }
   if (lead.organizationId && lead.status === 'CONVERTED') return NextResponse.json({ error: 'Lead has already been converted' }, { status: 409 });
 
-  const organizationName = String(body.organizationName || lead.propertyName || lead.company || `${lead.name}'s organization`).trim().slice(0, 160);
+  const organizationName = String(body.organizationName || lead.organizationName || lead.company || `${lead.name}'s organization`).trim().slice(0, 160);
   const rawToken = randomBytes(32).toString('hex');
   const tokenHash = createHash('sha256').update(rawToken).digest('hex');
   const expiresAt = new Date(Date.now() + 72 * 60 * 60 * 1000);
@@ -47,8 +47,28 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       const existing = await tx.user.findUnique({ where: { email: lead.email.toLowerCase() }, include: { membership: true } });
       if (existing?.membership && existing.membership.organizationId !== organization.id) throw new Error('This email already belongs to another organization.');
       const contactName = splitContactName(lead.name);
-      const account = existing || await tx.user.create({ data: { email: lead.email.toLowerCase(), firstName: contactName.firstName, lastName: contactName.lastName, passwordHash: await bcrypt.hash(randomBytes(32).toString('hex'), 12) } });
+      const account = existing || await tx.user.create({ data: { email: lead.email.toLowerCase(), firstName: lead.firstName || contactName.firstName, middleName: lead.middleName || null, lastName: lead.lastName || contactName.lastName, passwordHash: await bcrypt.hash(randomBytes(32).toString('hex'), 12) } });
       await tx.organizationMembership.upsert({ where: { userId: account.id }, update: { organizationId: organization.id, role: 'OWNER', status: 'ACTIVE' }, create: { userId: account.id, organizationId: organization.id, role: 'OWNER', status: 'ACTIVE' } });
+      const property = await tx.property.findFirst({ where: { organizationId: organization.id }, select: { id: true } });
+      if (!property) {
+        await tx.property.create({ data: {
+          organizationId: organization.id,
+          name: lead.propertyName || organization.name,
+          code: `PROP-${randomUUID().slice(0, 8).toUpperCase()}`,
+          address: lead.address || '',
+          city: lead.city || lead.location || '',
+          state: lead.state || '',
+          country: lead.country || 'Nigeria',
+          phone: lead.phone || '',
+          email: lead.email.toLowerCase(),
+          website: lead.website || null,
+          baseCurrency: 'NGN',
+          supportedCurrencies: ['NGN'],
+          businessDate: new Date(),
+          auditStatus: 'OPEN',
+          settings: { onboarding: { needsCompletion: !(lead.address && lead.city && lead.state && lead.country && lead.phone), source: 'HQ_LEAD_CONVERSION' } },
+        } });
+      }
       await tx.customerInvitation.updateMany({ where: { email: lead.email.toLowerCase(), organizationId: organization.id, acceptedAt: null }, data: { expiresAt: new Date() } });
       await tx.customerInvitation.create({ data: { email: lead.email.toLowerCase(), organizationId: organization.id, userId: account.id, tokenHash, expiresAt, createdById: admin.id } });
       const updatedLead = await tx.salesLead.update({ where: { id: lead.id }, data: { organizationId: organization.id, status: 'INVITE_PENDING', assignedTo: admin.id } });

@@ -4,10 +4,19 @@ import prisma from "@hotel-pms/db";
 
 const leadSchema = z.object({
   name: z.string().trim().min(2).max(120),
+  firstName: z.string().trim().max(60).optional().or(z.literal("")),
+  middleName: z.string().trim().max(60).optional().or(z.literal("")),
+  lastName: z.string().trim().max(60).optional().or(z.literal("")),
   email: z.string().trim().email().max(254),
   phone: z.string().trim().max(40).optional().or(z.literal("")),
   company: z.string().trim().max(160).optional().or(z.literal("")),
+  organizationName: z.string().trim().max(160).optional().or(z.literal("")),
   propertyName: z.string().trim().max(160).optional().or(z.literal("")),
+  address: z.string().trim().max(240).optional().or(z.literal("")),
+  city: z.string().trim().max(100).optional().or(z.literal("")),
+  state: z.string().trim().max(100).optional().or(z.literal("")),
+  country: z.string().trim().max(100).optional().or(z.literal("")),
+  website: z.string().trim().max(200).optional().or(z.literal("")),
   location: z.string().trim().max(160).optional().or(z.literal("")),
   roomCount: z.coerce.number().int().min(0).max(100000).optional(),
   message: z.string().trim().max(4000).optional().or(z.literal("")),
@@ -36,8 +45,10 @@ export async function POST(request: NextRequest) {
       if (existing) return NextResponse.json({ id: existing.id, duplicate: true }, { status: 200 });
     }
     const lead = await prisma.salesLead.create({ data: {
-      name: data.name, email: data.email, phone: data.phone || null, company: data.company || null,
-      propertyName: data.propertyName || null, location: data.location || null, roomCount: data.roomCount,
+      name: data.name, firstName: data.firstName || null, middleName: data.middleName || null, lastName: data.lastName || null,
+      email: data.email, phone: data.phone || null, company: data.company || null, organizationName: data.organizationName || null,
+      propertyName: data.propertyName || null, address: data.address || null, city: data.city || null, state: data.state || null,
+      country: data.country || null, website: data.website || null, location: data.location || null, roomCount: data.roomCount,
       message: data.message || null, source: data.source, consentAt: new Date(), idempotencyKey,
       metadata: { ...(data.metadata || {}), requestType: data.requestType, preferredDate: data.preferredDate || null, preferredTimeWindow: data.preferredTimeWindow || null, propertyType: data.propertyType || null, interests: data.interests || [], userAgent: request.headers.get("user-agent")?.slice(0, 500) || null },
     }, select: { id: true } });

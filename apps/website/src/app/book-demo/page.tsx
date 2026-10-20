@@ -35,6 +35,7 @@ export default function BookDemoPage() {
     const form = event.currentTarget;
     const values = new FormData(form);
     const firstName = String(values.get("firstName") || "").trim();
+    const middleName = String(values.get("middleName") || "").trim();
     const lastName = String(values.get("lastName") || "").trim();
     const interests = values.getAll("interest").map(String);
     try {
@@ -42,11 +43,20 @@ export default function BookDemoPage() {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          name: `${firstName} ${lastName}`.trim(),
+          name: `${firstName} ${middleName} ${lastName}`.trim(),
+          firstName,
+          middleName,
+          lastName,
           email: values.get("email"),
           phone: values.get("phone"),
-          company: values.get("propertyName"),
+          company: values.get("organizationName"),
+          organizationName: values.get("organizationName"),
           propertyName: values.get("propertyName"),
+          address: values.get("address"),
+          city: values.get("city"),
+          state: values.get("state"),
+          country: values.get("country"),
+          website: values.get("website"),
           propertyType: values.get("propertyType"),
           roomCount: values.get("roomCount"),
           message: values.get("message"),
@@ -158,6 +168,11 @@ export default function BookDemoPage() {
               </div>
 
               <div>
+                <label style={{ display: "block", fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: ".15em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 6 }}>Middle name (optional)</label>
+                <input name="middleName" type="text" placeholder="Marie" style={{ width: "100%", background: "var(--bg-overlay)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "10px 12px", color: "var(--text-primary)", fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+              </div>
+
+              <div>
                 <label style={{ display: "block", fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: ".15em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 6 }}>Work email</label>
                 <input name="email" required type="email" placeholder="jane@yourhotel.com" style={{
                   width: "100%", background: "var(--bg-overlay)", border: "1px solid var(--border)",
@@ -176,12 +191,32 @@ export default function BookDemoPage() {
               </div>
 
               <div>
+                <label style={{ display: "block", fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: ".15em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 6 }}>Organization name</label>
+                <input name="organizationName" required type="text" placeholder="Your company or organization" style={{ width: "100%", background: "var(--bg-overlay)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "10px 12px", color: "var(--text-primary)", fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+              </div>
+
+              <div>
                 <label style={{ display: "block", fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: ".15em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 6 }}>Property name</label>
-                <input name="propertyName" type="text" placeholder="Your property name" style={{
+                <input name="propertyName" required type="text" placeholder="Your property name" style={{
                   width: "100%", background: "var(--bg-overlay)", border: "1px solid var(--border)",
                   borderRadius: "var(--radius-sm)", padding: "10px 12px", color: "var(--text-primary)",
                   fontSize: 13, outline: "none", boxSizing: "border-box",
                 }} />
+              </div>
+
+              <div>
+                <label style={{ display: "block", fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: ".15em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 6 }}>Property address</label>
+                <input name="address" required type="text" placeholder="12 Marina Road" autoComplete="street-address" style={{ width: "100%", background: "var(--bg-overlay)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "10px 12px", color: "var(--text-primary)", fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+              </div>
+
+              <div className="book-demo-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <input name="city" required type="text" placeholder="City" autoComplete="address-level2" style={{ width: "100%", background: "var(--bg-overlay)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "10px 12px", color: "var(--text-primary)", fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+                <input name="state" required type="text" placeholder="State" autoComplete="address-level1" style={{ width: "100%", background: "var(--bg-overlay)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "10px 12px", color: "var(--text-primary)", fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+              </div>
+
+              <div className="book-demo-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <input name="country" required defaultValue="Nigeria" type="text" placeholder="Country" autoComplete="country-name" style={{ width: "100%", background: "var(--bg-overlay)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "10px 12px", color: "var(--text-primary)", fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+                <input name="website" type="url" placeholder="Property website (optional)" autoComplete="url" style={{ width: "100%", background: "var(--bg-overlay)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", padding: "10px 12px", color: "var(--text-primary)", fontSize: 13, outline: "none", boxSizing: "border-box" }} />
               </div>
 
               <div>

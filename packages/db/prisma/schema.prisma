@@ -6702,10 +6702,19 @@ model SalesLead {
   source         String        @default("WEBSITE")
   status         String        @default("NEW")
   name           String
+  firstName      String?
+  middleName     String?
+  lastName       String?
   email          String
   phone          String?
   company        String?
+  organizationName String?
   propertyName   String?
+  address        String?
+  city           String?
+  state          String?
+  country        String?
+  website        String?
   location       String?
   roomCount      Int?
   message        String?
