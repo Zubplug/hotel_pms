@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import prisma from '@hotel-pms/db';
@@ -25,6 +25,22 @@ export async function POST(request: NextRequest) {
       const organization = await tx.organization.create({ data: { name: parsed.data.propertyName, slug } });
       const user = await tx.user.create({ data: { email, passwordHash, emailVerifiedAt: null } });
       await tx.organizationMembership.create({ data: { userId: user.id, organizationId: organization.id, role: 'OWNER', status: 'ACTIVE' } });
+      await tx.property.create({ data: {
+        organizationId: organization.id,
+        name: parsed.data.propertyName,
+        code: `PROP-${randomUUID().slice(0, 8).toUpperCase()}`,
+        address: '',
+        city: '',
+        state: '',
+        country: 'Nigeria',
+        phone: '',
+        email,
+        baseCurrency: 'NGN',
+        supportedCurrencies: ['NGN'],
+        businessDate: new Date(),
+        auditStatus: 'OPEN',
+        settings: { onboarding: { needsCompletion: true, source: 'PORTAL_REGISTRATION' } },
+      } });
       const verification = await tx.portalEmailVerification.create({ data: { userId: user.id, tokenHash, expiresAt } });
       return { organization, user, verification };
     });
