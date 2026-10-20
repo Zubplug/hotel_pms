@@ -39,6 +39,22 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // A pool/restaurant terminal can already have an open POS session before
+    // the operator PIN screen is shown. Use that session as the authoritative
+    // outlet source when the browser did not send an outlet or device id.
+    if (sessionId) {
+      const existingSession = await prisma.posSession.findFirst({
+        where: { id: sessionId, propertyId: propertyId || undefined },
+        select: { outletId: true },
+      });
+      if (existingSession?.outletId) {
+        if (outletId && outletId !== existingSession.outletId) {
+          return NextResponse.json({ error: 'POS session does not match the requested outlet' }, { status: 403 });
+        }
+        outletId = existingSession.outletId;
+      }
+    }
+
     if (!staffId || !pin) {
       return NextResponse.json({ error: 'Missing required fields: staffId, pin' }, { status: 400 });
     }
