@@ -1,0 +1,16 @@
+'use client';
+
+import { useState } from 'react';
+
+type Property = { id: string; name: string };
+export function TeamManager({ properties }: { properties: Property[] }) {
+  const [selected, setSelected] = useState<string[]>(properties.map(property => property.id));
+  const [status, setStatus] = useState('');
+  const [saving, setSaving] = useState(false);
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault(); setSaving(true); setStatus(''); const form = new FormData(event.currentTarget);
+    const response = await fetch('/api/portal/team/general-manager', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ firstName: form.get('firstName'), middleName: form.get('middleName'), lastName: form.get('lastName'), email: form.get('email'), phone: form.get('phone'), propertyIds: selected }) });
+    const data = await response.json().catch(() => ({})); setSaving(false); if (!response.ok) { setStatus(data.error || 'Unable to create account.'); return; } setStatus('General Manager invitation sent successfully.'); event.currentTarget.reset();
+  }
+  return <div className="portal-card"><div className="portal-card-title">Create General Manager account</div><p style={{ color: 'var(--text-muted)', fontSize: 13, lineHeight: 1.7, marginBottom: 18 }}>The General Manager will receive an activation email, then sign in through the PMS login page with management access to the selected properties.</p><form onSubmit={submit} style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))' }}><label className="form-group"><span className="form-label">First name</span><input required name="firstName" className="form-input" /></label><label className="form-group"><span className="form-label">Middle name (optional)</span><input name="middleName" className="form-input" /></label><label className="form-group"><span className="form-label">Last name</span><input required name="lastName" className="form-input" /></label><label className="form-group"><span className="form-label">Work email</span><input required type="email" name="email" className="form-input" /></label><label className="form-group"><span className="form-label">Phone (optional)</span><input name="phone" type="tel" className="form-input" /></label><div style={{ gridColumn: '1/-1' }}><span className="form-label">Property access</span><div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 8 }}>{properties.map(property => <label key={property.id} style={{ display: 'flex', gap: 8, alignItems: 'center', color: 'var(--text-secondary)', fontSize: 13 }}><input type="checkbox" checked={selected.includes(property.id)} onChange={() => setSelected(current => current.includes(property.id) ? current.filter(id => id !== property.id) : [...current, property.id])} />{property.name}</label>)}</div></div><div style={{ gridColumn: '1/-1', display: 'flex', alignItems: 'center', gap: 12 }}><button disabled={saving || selected.length === 0} className="btn btn-primary btn-sm">{saving ? 'Creating…' : 'Create and send invitation →'}</button>{status && <span style={{ fontSize: 12, color: status.includes('successfully') ? 'var(--mint)' : '#ff7b8e' }}>{status}</span>}</div></form></div>;
+}

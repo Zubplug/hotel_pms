@@ -123,7 +123,7 @@ export default async function SettingsPage() {
           To add or remove a team member, raise a support ticket.
         </p>
         <div style={{ marginTop: 14, display: "flex", gap: 10 }}>
-          <Link href="/portal/support" className="btn btn-primary btn-sm" style={{ border: "none" }}>Add team member →</Link>
+          <Link href="/portal/team" className="btn btn-primary btn-sm" style={{ border: "none" }}>Manage team access →</Link>
           <Link href="/portal/support" className="btn btn-outline btn-sm">Remove access</Link>
         </div>
       </div>
