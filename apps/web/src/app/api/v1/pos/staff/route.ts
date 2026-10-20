@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
         where: { identifier: deviceIdentifier },
         select: { propertyId: true, outletId: true },
       });
-      if (device?.propertyId === propertyId) outletId = device.outletId;
+      if (device && device.propertyId === propertyId) outletId = device.outletId;
     }
     if (outletId && !ctx.outletIds.includes(outletId)) {
       return NextResponse.json({ error: 'Outlet access required' }, { status: 403 });
