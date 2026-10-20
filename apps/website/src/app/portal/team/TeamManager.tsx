@@ -16,13 +16,14 @@ type Manager = {
   employeeInvitations: { createdAt: string; expiresAt: string; acceptedAt: string | null }[];
 };
 
-export function TeamManager({ properties, allProperties, managers }: { properties: Property[]; allProperties: (Property & { isActive: boolean })[]; managers: Manager[] }) {
+export function TeamManager({ properties, allProperties, managers, assignedPropertyIds }: { properties: Property[]; allProperties: (Property & { isActive: boolean })[]; managers: Manager[]; assignedPropertyIds: string[] }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<string[]>(properties.map(property => property.id));
   const [status, setStatus] = useState('');
   const [saving, setSaving] = useState(false);
   const [resending, setResending] = useState<string | null>(null);
+  const availableProperties = properties.filter(property => !assignedPropertyIds.includes(property.id));
 
   const close = () => {
     if (!saving) setOpen(false);
@@ -89,9 +90,9 @@ export function TeamManager({ properties, allProperties, managers }: { propertie
         </p>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
           <div style={{ color: 'var(--text-secondary)', fontSize: 12 }}>
-            {properties.length} {properties.length === 1 ? 'property is' : 'properties are'} available for assignment.
+            {availableProperties.length} {availableProperties.length === 1 ? 'property is' : 'properties are'} available for assignment. Each property can have one property administrator.
           </div>
-          <button type="button" className="btn btn-primary btn-sm" onClick={() => { setSelected(properties.map(property => property.id)); setStatus(''); setOpen(true); }} disabled={!properties.length}>
+          <button type="button" className="btn btn-primary btn-sm" onClick={() => { setSelected(availableProperties.map(property => property.id)); setStatus(''); setOpen(true); }} disabled={!availableProperties.length}>
             Create property administrator →
           </button>
         </div>
@@ -147,9 +148,10 @@ export function TeamManager({ properties, allProperties, managers }: { propertie
                 <span className="form-label">Property access</span>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 8 }}>
                   {properties.map(property => (
-                    <label key={property.id} style={{ display: 'flex', gap: 8, alignItems: 'center', color: 'var(--text-secondary)', fontSize: 13 }}>
-                      <input type="checkbox" checked={selected.includes(property.id)} onChange={() => setSelected(current => current.includes(property.id) ? current.filter(id => id !== property.id) : [...current, property.id])} />
+                    <label key={property.id} style={{ display: 'flex', gap: 8, alignItems: 'center', color: assignedPropertyIds.includes(property.id) ? 'var(--text-muted)' : 'var(--text-secondary)', fontSize: 13 }}>
+                      <input type="checkbox" checked={selected.includes(property.id)} disabled={assignedPropertyIds.includes(property.id)} onChange={() => setSelected(current => current.includes(property.id) ? current.filter(id => id !== property.id) : [...current, property.id])} />
                       {property.name}
+                      {assignedPropertyIds.includes(property.id) && <span style={{ fontSize: 11 }}>(assigned)</span>}
                     </label>
                   ))}
                 </div>

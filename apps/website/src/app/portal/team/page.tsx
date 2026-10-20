@@ -9,6 +9,7 @@ export default async function TeamPage() {
   const user = session?.user as { organizationId?: string; name?: string | null; email?: string | null } | undefined;
   if (!user?.organizationId) redirect('/portal/login');
   const properties = await prisma.property.findMany({ where: { organizationId: user.organizationId }, select: { id: true, name: true, isActive: true }, orderBy: { name: 'asc' } });
+  const propertyAdministratorAssignments = await prisma.userRole.findMany({ where: { propertyId: { in: properties.map(property => property.id) }, role: { organizationId: user.organizationId, name: 'SUPER_ADMIN' } }, select: { propertyId: true } });
   const managers = await prisma.staff.findMany({
     where: { organizationId: user.organizationId, position: { in: ['Property Administrator', 'General Manager'] }, isActive: true, deletedAt: null },
     select: {
@@ -33,5 +34,5 @@ export default async function TeamPage() {
     employeeInvitations: manager.employeeInvitations.map(invitation => ({ ...invitation, createdAt: invitation.createdAt.toISOString(), expiresAt: invitation.expiresAt.toISOString(), acceptedAt: invitation.acceptedAt?.toISOString() ?? null })),
   }));
   const activeProperties = properties.filter(property => property.isActive);
-  return <PortalShell userName={user.name ?? user.email ?? undefined}><div className="portal-page-header"><div><div className="portal-page-kicker">Customer workspace</div><h1 className="portal-page-title">Team access</h1><p className="portal-page-sub" style={{ marginBottom: 0 }}>Manage property-scoped PMS administration for your organization.</p></div></div>{activeProperties.length ? <TeamManager properties={activeProperties} allProperties={properties} managers={managerDetails} /> : <div className="portal-empty"><div className="portal-empty-title">Add a property first</div><div className="portal-empty-body">A property administrator must be assigned to at least one active property.</div></div>}</PortalShell>;
+  return <PortalShell userName={user.name ?? user.email ?? undefined}><div className="portal-page-header"><div><div className="portal-page-kicker">Customer workspace</div><h1 className="portal-page-title">Team access</h1><p className="portal-page-sub" style={{ marginBottom: 0 }}>Manage property-scoped PMS administration for your organization.</p></div></div>{activeProperties.length ? <TeamManager properties={activeProperties} allProperties={properties} managers={managerDetails} assignedPropertyIds={propertyAdministratorAssignments.flatMap(assignment => assignment.propertyId ? [assignment.propertyId] : [])} /> : <div className="portal-empty"><div className="portal-empty-title">Add a property first</div><div className="portal-empty-body">A property administrator must be assigned to at least one active property.</div></div>}</PortalShell>;
 }

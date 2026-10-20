@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
-import prisma, { getEffectiveLimit } from '@hotel-pms/db';
+import prisma, { getEffectiveLimit, Prisma } from '@hotel-pms/db';
 import { requirePortalAdmin } from '@/lib/portal-authorization';
 import { sendEmployeeInvitationEmail } from '@/lib/email/send-employee-invitation';
 
@@ -13,6 +13,7 @@ export async function POST(request: NextRequest) {
     const { userId, organizationId } = await requirePortalAdmin();
     const parsed = schema.safeParse(await request.json());
     if (!parsed.success) return NextResponse.json({ error: 'Complete the property administrator details and select at least one property.' }, { status: 400 });
+    if (new Set(parsed.data.propertyIds).size !== parsed.data.propertyIds.length) return NextResponse.json({ error: 'Each property may be selected only once.' }, { status: 400 });
     const properties = await prisma.property.findMany({ where: { organizationId, id: { in: parsed.data.propertyIds }, isActive: true }, select: { id: true } });
     if (properties.length !== parsed.data.propertyIds.length) return NextResponse.json({ error: 'One or more selected properties are not in your organization.' }, { status: 400 });
     const limit = await getEffectiveLimit(prisma, { organizationId, limit: 'maxUsers' });
@@ -22,6 +23,8 @@ export async function POST(request: NextRequest) {
     const token = randomBytes(32).toString('hex');
     const expiresAt = new Date(Date.now() + 72 * 60 * 60 * 1000);
     const result = await prisma.$transaction(async tx => {
+      const occupiedProperties = await tx.userRole.findMany({ where: { propertyId: { in: parsed.data.propertyIds }, role: { organizationId, name: 'SUPER_ADMIN' } }, select: { propertyId: true } });
+      if (occupiedProperties.length) throw new Error('Each property can have only one property administrator. Remove the already assigned property and try again.');
       const existing = await tx.user.findUnique({ where: { email }, include: { membership: true } });
       if (existing?.membership && existing.membership.organizationId !== organizationId) throw new Error('This email already belongs to another organization.');
       if (existing?.staffId) throw new Error('This email already belongs to an employee account.');
@@ -41,7 +44,7 @@ export async function POST(request: NextRequest) {
       await tx.employeeInvitation.create({ data: { staffId: staff.id, userId: user.id, organizationId, tokenHash: createHash('sha256').update(token).digest('hex'), expiresAt, invitedById: userId } });
       const organization = await tx.organization.findUnique({ where: { id: organizationId }, select: { name: true } });
       return { staff, organizationName: organization?.name || 'LodgeCore' };
-    });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     const appOrigin = process.env.PMS_APP_URL || process.env.NEXT_PUBLIC_PMS_URL || 'https://lodgecore.vercel.app';
     let invitationSent = true;
     let invitationWarning: string | undefined;
