@@ -146,7 +146,7 @@ function MobileGroup({ label, items, close }: {
 }
 
 /* ─── Header ─────────────────────────────────────────────── */
-export function PublicHeader() {
+export function PublicHeader({ onSignIn }: { onSignIn?: () => void } = {}) {
   const [scrolled, setScrolled] = useState(false);
   const [scrollPct, setScrollPct] = useState(0);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -235,7 +235,7 @@ export function PublicHeader() {
 
           {/* Desktop Actions */}
           <div className="header-actions">
-            <Link href="/portal" className="header-signin">Sign in</Link>
+            {onSignIn ? <button type="button" className="header-signin" onClick={onSignIn}>Sign in</button> : <Link href="/portal" className="header-signin">Sign in</Link>}
             <Link href="/partners" className="header-signin">Become a partner</Link>
             <Link href="/book-demo" className="btn btn-primary btn-sm">
               Talk to LodgeCore <span className="btn-arrow">→</span>
@@ -301,7 +301,7 @@ export function PublicHeader() {
           <Link href="/integrations" className="drawer-link" onClick={closeDrawer}>Integrations <span>→</span></Link>
           <div className="drawer-actions">
             <Link href="/partners" className="btn btn-outline" style={{ width: "100%", justifyContent: "center" }} onClick={closeDrawer}>Become a partner →</Link>
-            <Link href="/portal" className="btn btn-outline" style={{ width: "100%", justifyContent: "center" }} onClick={closeDrawer}>Sign in</Link>
+            {onSignIn ? <button type="button" className="btn btn-outline" style={{ width: "100%", justifyContent: "center" }} onClick={() => { closeDrawer(); onSignIn(); }}>Sign in</button> : <Link href="/portal" className="btn btn-outline" style={{ width: "100%", justifyContent: "center" }} onClick={closeDrawer}>Sign in</Link>}
             <Link href="/book-demo" className="btn btn-primary" style={{ width: "100%", justifyContent: "center" }} onClick={closeDrawer}>Talk to LodgeCore →</Link>
           </div>
         </div>

@@ -1,21 +1,11 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
 
-export function EntryChoiceModal() {
-  const [open, setOpen] = useState(false);
-
-  useEffect(() => {
-    if (window.sessionStorage.getItem('lodgecore-entry-choice-seen') !== 'true') {
-      const timer = window.setTimeout(() => setOpen(true), 450);
-      return () => window.clearTimeout(timer);
-    }
-  }, []);
+export function EntryChoiceModal({ open, onClose }: { open: boolean; onClose: () => void }) {
 
   const close = () => {
-    window.sessionStorage.setItem('lodgecore-entry-choice-seen', 'true');
-    setOpen(false);
+    onClose();
   };
 
   if (!open) return null;

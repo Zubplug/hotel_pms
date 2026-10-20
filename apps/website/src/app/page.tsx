@@ -181,10 +181,11 @@ function Reveal({ children, delay = 0 }: { children: React.ReactNode; delay?: nu
 
 /* ─── Page ──────────────────────────────────────────────── */
 export default function HomePage() {
+  const [workspaceOpen, setWorkspaceOpen] = useState(false);
   return (
     <main className="site-shell">
-      <PublicHeader />
-      <EntryChoiceModal />
+      <PublicHeader onSignIn={() => setWorkspaceOpen(true)} />
+      <EntryChoiceModal open={workspaceOpen} onClose={() => setWorkspaceOpen(false)} />
 
       {/* ══════════════════════════════════════════════════════
           SECTION 1 — HERO
