@@ -63,7 +63,11 @@ export default auth(async (request) => {
     return response;
   }
 
-  if (!request.nextUrl.pathname.startsWith("/portal/") || request.nextUrl.pathname === "/portal/login") return NextResponse.next();
+  const publicPortalPath = request.nextUrl.pathname === "/portal/login"
+    || request.nextUrl.pathname === "/portal/register"
+    || request.nextUrl.pathname.startsWith("/portal/verify-email/")
+    || request.nextUrl.pathname.startsWith("/portal/invite/");
+  if (!request.nextUrl.pathname.startsWith("/portal/") || publicPortalPath) return NextResponse.next();
   if (request.auth?.user) return NextResponse.next();
   const login = new URL("/portal/login", request.nextUrl);
   login.searchParams.set("callbackUrl", request.nextUrl.pathname);
