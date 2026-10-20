@@ -3,6 +3,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { PublicHeader, PublicFooter } from "@/components/public-shell";
+import { EntryChoiceModal } from "@/components/entry-choice-modal";
 
 /* ─── Types ─────────────────────────────────────────────── */
 type DivisionType = {
@@ -183,6 +184,7 @@ export default function HomePage() {
   return (
     <main className="site-shell">
       <PublicHeader />
+      <EntryChoiceModal />
 
       {/* ══════════════════════════════════════════════════════
           SECTION 1 — HERO
