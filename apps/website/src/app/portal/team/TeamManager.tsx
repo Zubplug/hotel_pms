@@ -23,6 +23,9 @@ export function TeamManager({ properties, allProperties, managers, assignedPrope
   const [status, setStatus] = useState('');
   const [saving, setSaving] = useState(false);
   const [resending, setResending] = useState<string | null>(null);
+  const [emailEditor, setEmailEditor] = useState<Manager | null>(null);
+  const [emailValue, setEmailValue] = useState('');
+  const [emailSaving, setEmailSaving] = useState(false);
   const availableProperties = properties.filter(property => !assignedPropertyIds.includes(property.id));
 
   const close = () => {
@@ -72,6 +75,20 @@ export function TeamManager({ properties, allProperties, managers, assignedPrope
     router.refresh();
   }
 
+  async function updateEmail(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!emailEditor) return;
+    setEmailSaving(true);
+    setStatus('');
+    const response = await fetch(`/api/portal/team/general-manager/${emailEditor.id}/email`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: emailValue }) });
+    const data = await response.json().catch(() => ({}));
+    setEmailSaving(false);
+    if (!response.ok) { setStatus(data.error || 'Unable to update the email address.'); return; }
+    setEmailEditor(null);
+    setStatus(data.invitationSent === false ? (data.invitationWarning || 'Email updated, but the activation email could not be sent.') : 'Email updated and a new activation link has been sent.');
+    router.refresh();
+  }
+
   const propertyName = (id: string) => allProperties.find(property => property.id === id)?.name || 'Unknown property';
   const invitationState = (manager: Manager) => {
     const invitation = manager.employeeInvitations[0];
@@ -105,6 +122,7 @@ export function TeamManager({ properties, allProperties, managers, assignedPrope
         {managers.length ? <div style={{ display: 'grid', gap: 12 }}>{managers.map(manager => {
           const state = invitationState(manager);
           const invitation = manager.employeeInvitations[0];
+          const pending = Boolean(invitation && !invitation.acceptedAt && new Date(invitation.expiresAt) > new Date());
           const fullName = [manager.firstName, manager.user?.middleName, manager.lastName].filter(Boolean).join(' ');
           return <div key={manager.id} style={{ border: '1px solid var(--border)', borderRadius: 12, padding: 16 }}>
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
@@ -114,11 +132,20 @@ export function TeamManager({ properties, allProperties, managers, assignedPrope
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 13 }}>{manager.propertyAccess.map(id => <span key={id} className="portal-badge">{propertyName(id)}</span>)}</div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
               <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>{invitation ? invitation.acceptedAt ? `Activated ${new Date(invitation.acceptedAt).toLocaleDateString()}` : `Link expires ${new Date(invitation.expiresAt).toLocaleString()}` : 'No invitation record'}</div>
-              {!invitation?.acceptedAt && <button type="button" className="btn btn-outline btn-sm" onClick={() => resendInvitation(manager.id)} disabled={resending === manager.id}>{resending === manager.id ? 'Sending…' : 'Resend activation link'}</button>}
+              {pending && <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}><button type="button" className="btn btn-outline btn-sm" onClick={() => { setEmailEditor(manager); setEmailValue(manager.email); setStatus(''); }} disabled={resending === manager.id || emailSaving}>Edit email</button><button type="button" className="btn btn-outline btn-sm" onClick={() => resendInvitation(manager.id)} disabled={resending === manager.id}>{resending === manager.id ? 'Sending…' : 'Resend activation link'}</button></div>}
             </div>
           </div>;
         })}</div> : <div className="portal-empty"><div className="portal-empty-title">No property administrators yet</div><div className="portal-empty-body">Create an administrator account to grant scoped PMS access.</div></div>}
       </div>
+
+      {emailEditor && (
+        <div role="dialog" aria-modal="true" aria-labelledby="email-modal-title" onClick={() => { if (!emailSaving) setEmailEditor(null); }} style={{ position: 'fixed', inset: 0, zIndex: 110, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 18, background: 'rgba(2,7,19,.78)', backdropFilter: 'blur(10px)' }}>
+          <div className="portal-card" onClick={event => event.stopPropagation()} style={{ width: '100%', maxWidth: 520, padding: '28px 26px', boxShadow: 'var(--shadow-lg)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, marginBottom: 22 }}><div><div className="section-kicker">Pending invitation</div><h2 id="email-modal-title" style={{ margin: '8px 0 0', fontFamily: 'var(--font-display)', color: 'var(--text-primary)', fontSize: 24 }}>Update email address</h2><p style={{ margin: '7px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>The current activation link will be replaced and sent to the new address.</p></div><button type="button" aria-label="Close email dialog" onClick={() => setEmailEditor(null)} disabled={emailSaving} style={{ color: 'var(--text-muted)', fontSize: 24, lineHeight: 1 }}>×</button></div>
+            <form onSubmit={updateEmail} style={{ display: 'grid', gap: 14 }}><label className="form-group"><span className="form-label">New work email</span><input required type="email" className="form-input" value={emailValue} onChange={event => setEmailValue(event.target.value)} /></label>{status && <p role="alert" className="form-error" style={{ margin: 0 }}>{status}</p>}<div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, borderTop: '1px solid var(--border)', paddingTop: 18 }}><button type="button" className="btn btn-outline btn-sm" onClick={() => setEmailEditor(null)} disabled={emailSaving}>Cancel</button><button className="btn btn-primary btn-sm" disabled={emailSaving}>{emailSaving ? 'Updating…' : 'Update and resend link'}</button></div></form>
+          </div>
+        </div>
+      )}
 
       {open && (
         <div
