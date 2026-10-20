@@ -11,10 +11,10 @@ export async function POST(request: NextRequest, context: { params: Promise<{ st
     const token = randomBytes(32).toString('hex');
     const expiresAt = new Date(Date.now() + 72 * 60 * 60 * 1000);
     const result = await prisma.$transaction(async tx => {
-      const staff = await tx.staff.findFirst({ where: { id: staffId, organizationId, position: 'General Manager', isActive: true, deletedAt: null }, include: { user: true } });
-      if (!staff || !staff.user) throw new Error('General Manager account not found.');
+      const staff = await tx.staff.findFirst({ where: { id: staffId, organizationId, position: 'General Manager', isActive: true, deletedAt: null } });
+      if (!staff?.userId) throw new Error('General Manager account not found.');
       await tx.employeeInvitation.updateMany({ where: { staffId: staff.id, acceptedAt: null, expiresAt: { gt: new Date() } }, data: { expiresAt: new Date() } });
-      await tx.employeeInvitation.create({ data: { staffId: staff.id, userId: staff.user.id, organizationId, tokenHash: createHash('sha256').update(token).digest('hex'), expiresAt, invitedById: userId } });
+      await tx.employeeInvitation.create({ data: { staffId: staff.id, userId: staff.userId, organizationId, tokenHash: createHash('sha256').update(token).digest('hex'), expiresAt, invitedById: userId } });
       const organization = await tx.organization.findUnique({ where: { id: organizationId }, select: { name: true } });
       return { email: staff.email, employeeName: `${staff.firstName} ${staff.lastName}`, organizationName: organization?.name || 'LodgeCore' };
     });

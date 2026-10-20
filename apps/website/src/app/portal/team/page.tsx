@@ -18,16 +18,18 @@ export default async function TeamPage() {
       email: true,
       phone: true,
       propertyAccess: true,
+      userId: true,
       createdAt: true,
-      user: { select: { middleName: true } },
       employeeInvitations: { orderBy: { createdAt: 'desc' }, take: 1, select: { createdAt: true, expiresAt: true, acceptedAt: true } },
     },
     orderBy: { createdAt: 'desc' },
   });
+  const users = await prisma.user.findMany({ where: { id: { in: managers.flatMap(manager => manager.userId ? [manager.userId] : []) } }, select: { id: true, middleName: true } });
+  const middleNames = new Map(users.map(managerUser => [managerUser.id, managerUser.middleName]));
   const managerDetails = managers.map(manager => ({
     ...manager,
     createdAt: manager.createdAt.toISOString(),
-    user: manager.user,
+    user: { middleName: manager.userId ? middleNames.get(manager.userId) ?? null : null },
     employeeInvitations: manager.employeeInvitations.map(invitation => ({ ...invitation, createdAt: invitation.createdAt.toISOString(), expiresAt: invitation.expiresAt.toISOString(), acceptedAt: invitation.acceptedAt?.toISOString() ?? null })),
   }));
   const activeProperties = properties.filter(property => property.isActive);
