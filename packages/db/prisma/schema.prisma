@@ -2189,6 +2189,7 @@ model User {
   email            String  @unique
   passwordHash     String
   firstName        String?
+  middleName       String?
   lastName         String?
   emailVerifiedAt  DateTime? @db.Timestamptz
   // Deprecated compatibility alias. New code should use isLodgeCoreAdmin.
