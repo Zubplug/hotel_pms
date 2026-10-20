@@ -54,7 +54,7 @@ export function TeamManager({ properties, allProperties, managers }: { propertie
       return;
     }
 
-    setStatus(data.invitationWarning || 'General Manager invitation sent successfully.');
+    setStatus(data.invitationWarning || 'Property administrator invitation sent successfully.');
     event.currentTarget.reset();
     setOpen(false);
     router.refresh();
@@ -82,9 +82,9 @@ export function TeamManager({ properties, allProperties, managers }: { propertie
   return (
     <>
       <div className="portal-card">
-        <div className="portal-card-title">General Manager access</div>
+        <div className="portal-card-title">Property administrator access</div>
         <p style={{ color: 'var(--text-muted)', fontSize: 13, lineHeight: 1.7, marginBottom: 18 }}>
-          Create a PMS account for a General Manager and assign access to one or more properties.
+          Create a property administrator account with full PMS administration rights limited to the selected properties.
           They will receive an activation invitation and sign in through the PMS login page.
         </p>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
@@ -92,15 +92,15 @@ export function TeamManager({ properties, allProperties, managers }: { propertie
             {properties.length} {properties.length === 1 ? 'property is' : 'properties are'} available for assignment.
           </div>
           <button type="button" className="btn btn-primary btn-sm" onClick={() => { setSelected(properties.map(property => property.id)); setStatus(''); setOpen(true); }} disabled={!properties.length}>
-            Create General Manager →
+            Create property administrator →
           </button>
         </div>
         {status && <p role="status" style={{ margin: '16px 0 0', color: status.includes('successfully') ? 'var(--mint)' : '#ff7b8e', fontSize: 12 }}>{status}</p>}
       </div>
 
       <div className="portal-card" style={{ marginTop: 18 }}>
-        <div className="portal-card-title">General Managers</div>
-        <p style={{ color: 'var(--text-muted)', fontSize: 13, lineHeight: 1.7, marginBottom: 18 }}>Review account details, property access, and activation status.</p>
+        <div className="portal-card-title">Property administrators</div>
+        <p style={{ color: 'var(--text-muted)', fontSize: 13, lineHeight: 1.7, marginBottom: 18 }}>Review administrator details, property scope, and activation status.</p>
         {managers.length ? <div style={{ display: 'grid', gap: 12 }}>{managers.map(manager => {
           const state = invitationState(manager);
           const invitation = manager.employeeInvitations[0];
@@ -116,7 +116,7 @@ export function TeamManager({ properties, allProperties, managers }: { propertie
               {!invitation?.acceptedAt && <button type="button" className="btn btn-outline btn-sm" onClick={() => resendInvitation(manager.id)} disabled={resending === manager.id}>{resending === manager.id ? 'Sending…' : 'Resend activation link'}</button>}
             </div>
           </div>;
-        })}</div> : <div className="portal-empty"><div className="portal-empty-title">No General Managers yet</div><div className="portal-empty-body">Create a manager account to grant PMS access.</div></div>}
+        })}</div> : <div className="portal-empty"><div className="portal-empty-title">No property administrators yet</div><div className="portal-empty-body">Create an administrator account to grant scoped PMS access.</div></div>}
       </div>
 
       {open && (
@@ -131,10 +131,10 @@ export function TeamManager({ properties, allProperties, managers }: { propertie
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, marginBottom: 22 }}>
               <div>
                 <div className="section-kicker">PMS access management</div>
-                <h2 id="general-manager-modal-title" style={{ margin: '8px 0 0', fontFamily: 'var(--font-display)', color: 'var(--text-primary)', fontSize: 24 }}>Create General Manager</h2>
-                <p style={{ margin: '7px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>Set up the manager’s identity and property access.</p>
+                <h2 id="general-manager-modal-title" style={{ margin: '8px 0 0', fontFamily: 'var(--font-display)', color: 'var(--text-primary)', fontSize: 24 }}>Create property administrator</h2>
+                <p style={{ margin: '7px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>Set up the administrator’s identity and property scope.</p>
               </div>
-              <button type="button" aria-label="Close General Manager dialog" onClick={close} disabled={saving} style={{ color: 'var(--text-muted)', fontSize: 24, lineHeight: 1 }}>×</button>
+              <button type="button" aria-label="Close property administrator dialog" onClick={close} disabled={saving} style={{ color: 'var(--text-muted)', fontSize: 24, lineHeight: 1 }}>×</button>
             </div>
 
             <form onSubmit={submit} style={{ display: 'grid', gap: 14, gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))' }}>
