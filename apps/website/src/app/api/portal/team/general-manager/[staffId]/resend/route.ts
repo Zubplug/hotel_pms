@@ -18,7 +18,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ st
       const organization = await tx.organization.findUnique({ where: { id: organizationId }, select: { name: true } });
       return { email: staff.email, employeeName: `${staff.firstName} ${staff.lastName}`, organizationName: organization?.name || 'LodgeCore' };
     });
-    const appOrigin = process.env.NEXT_PUBLIC_APP_URL || process.env.WEBSITE_URL || request.nextUrl.origin;
+    const appOrigin = process.env.PMS_APP_URL || process.env.NEXT_PUBLIC_PMS_URL || 'https://lodgecore.vercel.app';
     try {
       await sendEmployeeInvitationEmail({ to: result.email, inviteUrl: `${appOrigin}/employee/invite/${token}`, expiresAt, employeeName: result.employeeName, organizationName: result.organizationName, roleTitle: 'Property Administrator' });
       return NextResponse.json({ ok: true, invitationSent: true, invitationExpiresAt: expiresAt });
