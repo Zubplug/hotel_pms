@@ -9,6 +9,11 @@ function slugify(value: string) {
   return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 70) || 'customer';
 }
 
+function splitContactName(value: string) {
+  const parts = value.trim().split(/\s+/).filter(Boolean);
+  return { firstName: parts[0] || null, lastName: parts.slice(1).join(' ') || null };
+}
+
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ leadId: string }> }) {
   const admin = await requireHQAdmin();
   const leadId = (await params).leadId;
@@ -41,7 +46,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       }
       const existing = await tx.user.findUnique({ where: { email: lead.email.toLowerCase() }, include: { membership: true } });
       if (existing?.membership && existing.membership.organizationId !== organization.id) throw new Error('This email already belongs to another organization.');
-      const account = existing || await tx.user.create({ data: { email: lead.email.toLowerCase(), passwordHash: await bcrypt.hash(randomBytes(32).toString('hex'), 12) } });
+      const contactName = splitContactName(lead.name);
+      const account = existing || await tx.user.create({ data: { email: lead.email.toLowerCase(), firstName: contactName.firstName, lastName: contactName.lastName, passwordHash: await bcrypt.hash(randomBytes(32).toString('hex'), 12) } });
       await tx.organizationMembership.upsert({ where: { userId: account.id }, update: { organizationId: organization.id, role: 'OWNER', status: 'ACTIVE' }, create: { userId: account.id, organizationId: organization.id, role: 'OWNER', status: 'ACTIVE' } });
       await tx.customerInvitation.updateMany({ where: { email: lead.email.toLowerCase(), organizationId: organization.id, acceptedAt: null }, data: { expiresAt: new Date() } });
       await tx.customerInvitation.create({ data: { email: lead.email.toLowerCase(), organizationId: organization.id, userId: account.id, tokenHash, expiresAt, createdById: admin.id } });
@@ -58,4 +64,3 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Unable to convert lead' }, { status: 400 });
   }
 }
-

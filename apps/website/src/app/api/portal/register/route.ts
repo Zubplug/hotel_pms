@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
       let slug = baseSlug;
       for (let index = 2; await tx.organization.findUnique({ where: { slug }, select: { id: true } }); index += 1) slug = `${baseSlug}-${index}`;
       const organization = await tx.organization.create({ data: { name: parsed.data.propertyName, slug } });
-      const user = await tx.user.create({ data: { email, passwordHash, emailVerifiedAt: null } });
+      const user = await tx.user.create({ data: { email, firstName: parsed.data.firstName, lastName: parsed.data.lastName, passwordHash, emailVerifiedAt: null } });
       await tx.organizationMembership.create({ data: { userId: user.id, organizationId: organization.id, role: 'OWNER', status: 'ACTIVE' } });
       await tx.property.create({ data: {
         organizationId: organization.id,

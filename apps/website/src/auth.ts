@@ -26,7 +26,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({ ...authConfig,
       
       if (!organizationId) return null;
       
-      return { id: user.id, email: user.email, name: staff ? `${staff.firstName} ${staff.lastName}`.trim() : user.email, organizationId, isLodgeCoreAdmin: false, isSuperAdmin: false };
+      const displayName = staff ? `${staff.firstName} ${staff.lastName}`.trim() : `${user.firstName || ''} ${user.lastName || ''}`.trim();
+      return { id: user.id, email: user.email, name: displayName || user.email, organizationId, isLodgeCoreAdmin: false, isSuperAdmin: false };
     },
   })],
 });
