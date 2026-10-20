@@ -5,7 +5,7 @@ import { z } from 'zod';
 import prisma from '@hotel-pms/db';
 import { sendPortalVerificationEmail } from '@/lib/email/send-portal-verification';
 
-const schema = z.object({ firstName: z.string().trim().min(1).max(60), middleName: z.string().trim().max(60).optional().or(z.literal('')), lastName: z.string().trim().min(1).max(60), email: z.string().trim().email().max(254), organizationName: z.string().trim().min(2).max(160), propertyName: z.string().trim().min(2).max(160), password: z.string().min(12).max(200), consent: z.literal(true) });
+const schema = z.object({ firstName: z.string().trim().min(1).max(60), middleName: z.string().trim().max(60).optional().or(z.literal('')), lastName: z.string().trim().min(1).max(60), email: z.string().trim().email().max(254), organizationName: z.string().trim().min(2).max(160), propertyName: z.string().trim().min(2).max(160), address: z.string().trim().min(3).max(240), city: z.string().trim().min(2).max(100), state: z.string().trim().min(2).max(100), country: z.string().trim().min(2).max(100), phone: z.string().trim().min(7).max(30), website: z.string().trim().max(200).optional().or(z.literal('')), password: z.string().min(12).max(200), consent: z.literal(true) });
 function slugify(value: string) { return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 70) || 'customer'; }
 
 export async function POST(request: NextRequest) {
@@ -29,12 +29,13 @@ export async function POST(request: NextRequest) {
         organizationId: organization.id,
         name: parsed.data.propertyName,
         code: `PROP-${randomUUID().slice(0, 8).toUpperCase()}`,
-        address: '',
-        city: '',
-        state: '',
-        country: 'Nigeria',
-        phone: '',
+        address: parsed.data.address,
+        city: parsed.data.city,
+        state: parsed.data.state,
+        country: parsed.data.country,
+        phone: parsed.data.phone,
         email,
+        website: parsed.data.website || null,
         baseCurrency: 'NGN',
         supportedCurrencies: ['NGN'],
         businessDate: new Date(),
