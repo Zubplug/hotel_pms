@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
 
     const propertyId = req.nextUrl.searchParams.get('propertyId');
     const dateValue = req.nextUrl.searchParams.get('businessDate');
-    if (!propertyId || !dateValue) return errorResponse('BAD_REQUEST', 'Missing propertyId or businessDate', 400);
+    if (!propertyId || !dateValue || !/^\d{4}-\d{2}-\d{2}$/.test(dateValue)) return errorResponse('BAD_REQUEST', 'propertyId and businessDate (YYYY-MM-DD) are required', 400);
 
     const context = await requireOrganizationContext(session.user.id);
     if (!context.propertyIds.includes(propertyId)) return errorResponse('FORBIDDEN', 'Property access denied', 403);
@@ -28,11 +28,17 @@ export async function GET(req: NextRequest) {
       prisma.nightAuditFinancialSnapshot.findFirst({ where: { nightAudit: { propertyId, businessDate } } }),
       prisma.folioItem.findMany({
         where: { folio: { propertyId }, businessDate, voidedAt: null },
-        select: { type: true, source: true, revenueCategory: true, amount: true, posTransactionId: true },
+        select: { type: true, source: true, revenueCategory: true, revenueClass: true, amount: true, posTransactionId: true },
       }),
       prisma.posOrder.findMany({
         where: { propertyId, businessDate, status: 'CLOSED', paymentStatus: 'PAID' },
-        select: { id: true, total: true, payments: { where: { status: 'CONFIRMED' }, select: { amount: true, method: true } } },
+        select: {
+          id: true,
+          total: true,
+          outlet: { select: { type: true } },
+          items: { select: { subtotal: true, quantity: true, unitPrice: true, product: { select: { itemCode: true } } } },
+          payments: { where: { status: { in: ['CONFIRMED', 'PAID'] } }, select: { amount: true, method: true } },
+        },
       }),
       prisma.payment.groupBy({
         by: ['method'],
@@ -65,6 +71,7 @@ export async function GET(req: NextRequest) {
 
     let roomRevenue = 0;
     let fnbRevenue = 0;
+    let poolRevenue = 0;
     let otherRevenue = 0;
     let taxes = 0;
     let discounts = 0;
@@ -74,6 +81,7 @@ export async function GET(req: NextRequest) {
       const amount = Number(item.amount || 0);
       if (item.type === 'CHARGE') {
         if (item.source === 'ROOM_CHARGE' || item.source === 'DAY_USE_ROOM_CHARGE' || item.revenueCategory === 'ROOM') roomRevenue += amount;
+        else if (String(item.revenueClass || '').toUpperCase() === 'POOL') poolRevenue += amount;
         else if (item.source === 'POS' || item.source === 'RESTAURANT' || item.source === 'BAR' || item.revenueCategory === 'FNB') fnbRevenue += amount;
         else if (item.revenueCategory === 'TAX') taxes += amount;
         else otherRevenue += amount;
@@ -89,7 +97,17 @@ export async function GET(req: NextRequest) {
       const complimentary = order.payments
         .filter((payment) => String(payment.method).toUpperCase() === 'COMPLIMENTARY')
         .reduce((sum, payment) => sum + Number(payment.amount), 0);
-      directPosOrders += Math.max(0, Number(order.total) - complimentary);
+      const netPaid = Math.max(0, Number(order.total) - complimentary);
+      const allocatedRevenue = order.items.reduce((sum, item) => sum + Math.max(0, Number(item.subtotal || 0) || Number(item.quantity || 0) * Number(item.unitPrice || 0)), 0);
+      const poolRevenueBase = order.items.reduce((sum, item) => {
+        const subtotal = Math.max(0, Number(item.subtotal || 0) || Number(item.quantity || 0) * Number(item.unitPrice || 0));
+        const isPoolItem = String(order.outlet?.type || '').toUpperCase() === 'RECREATION'
+          || String(item.product?.itemCode || '').toUpperCase().startsWith('REC-POOL');
+        return sum + (isPoolItem ? subtotal : 0);
+      }, 0);
+      const revenueRatio = allocatedRevenue > 0 ? Math.min(netPaid, allocatedRevenue) / allocatedRevenue : 0;
+      poolRevenue += poolRevenueBase * revenueRatio;
+      directPosOrders += Math.max(0, netPaid - poolRevenueBase * revenueRatio);
     }
     fnbRevenue += directPosOrders;
 
@@ -98,7 +116,8 @@ export async function GET(req: NextRequest) {
     const sourceTotals = {
       roomRevenue: round(roomRevenue),
       fnbRevenue: round(fnbRevenue),
-      otherRevenue: round(otherRevenue),
+      otherRevenue: round(otherRevenue + poolRevenue),
+      poolRevenue: round(poolRevenue),
       taxes: round(taxes),
       discounts: round(discounts),
       refunds: round(refunds),
@@ -109,7 +128,7 @@ export async function GET(req: NextRequest) {
     };
 
     const snapshotTotals = snapshot ? {
-      roomRevenue: Number(snapshot.roomRevenue), fnbRevenue: Number(snapshot.fnbRevenue), otherRevenue: Number(snapshot.otherRevenue),
+      roomRevenue: Number(snapshot.roomRevenue), fnbRevenue: Number(snapshot.fnbRevenue), otherRevenue: Number(snapshot.otherRevenue), poolRevenue: Number((snapshot as any).paymentTotals?.poolRevenue || 0),
       taxes: Number(snapshot.taxes), discounts: Number(snapshot.discounts), refunds: Number(snapshot.refunds),
       grossRevenue: Number(snapshot.grossRevenue), netRevenue: Number(snapshot.netRevenue),
       guestAmenityCost: Number((snapshot as any).guestAmenityCost || 0),

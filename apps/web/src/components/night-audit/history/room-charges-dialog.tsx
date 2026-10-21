@@ -18,6 +18,7 @@ import { useProperty } from '@/components/PropertyProvider';
 interface RoomChargesDialogProps {
   businessDate: string | Date;
   auditId: string;
+  currency?: string;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
   showTrigger?: boolean;
@@ -26,6 +27,7 @@ interface RoomChargesDialogProps {
 export function RoomChargesDialog({
   businessDate,
   auditId,
+  currency = 'NGN',
   open: controlledOpen,
   onOpenChange,
   showTrigger = true,
@@ -67,7 +69,7 @@ export function RoomChargesDialog({
     },
     {
       label: 'Average Charge',
-      value: loading ? '—' : formatCurrency(averageCharge),
+      value: loading ? '—' : formatCurrency(averageCharge, currency),
       sub: 'Per posted entry',
       icon: TrendingUp,
       accent: 'border-emerald-400/25 bg-emerald-400/10 text-emerald-300',
@@ -75,8 +77,8 @@ export function RoomChargesDialog({
     },
     {
       label: 'Total Billed',
-      value: loading ? '—' : formatCurrency(totalAmount),
-      sub: `Highest: ${loading ? '—' : formatCurrency(highestCharge)}`,
+      value: loading ? '—' : formatCurrency(totalAmount, currency),
+      sub: `Highest: ${loading ? '—' : formatCurrency(highestCharge, currency)}`,
       icon: ReceiptText,
       accent: 'border-violet-400/25 bg-violet-400/10 text-violet-300',
       iconBg: 'border-violet-400/20 bg-violet-400/10 text-violet-400',
@@ -199,7 +201,7 @@ export function RoomChargesDialog({
                         <TableCell className="text-sm font-medium text-slate-300">{charge.guestName}</TableCell>
                         <TableCell className="text-sm text-slate-500">{charge.description}</TableCell>
                         <TableCell className="text-right text-sm font-bold text-white tabular-nums">
-                          {formatCurrency(charge.amount)}
+                          {formatCurrency(charge.amount, currency)}
                         </TableCell>
                       </TableRow>
                     ))
@@ -212,7 +214,7 @@ export function RoomChargesDialog({
                         Total Billed
                       </TableCell>
                       <TableCell className="text-right text-base font-bold text-white tabular-nums">
-                        {formatCurrency(totalAmount)}
+                        {formatCurrency(totalAmount, currency)}
                       </TableCell>
                     </TableRow>
                   </TableFooter>

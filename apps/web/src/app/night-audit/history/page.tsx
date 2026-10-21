@@ -24,8 +24,8 @@ const formatDuration = (start: string | null, end: string | null) => {
   return `${Math.floor(s / 60)}m ${s % 60}s`;
 };
 
-const formatCurrency = (amount: number) =>
-  new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', maximumFractionDigits: 0 }).format(amount);
+const formatCurrency = (amount: number, currency = 'NGN') =>
+  new Intl.NumberFormat('en-NG', { style: 'currency', currency, maximumFractionDigits: 0 }).format(amount);
 
 /* ── Status badge ──────────────────────────────────────────────────────────── */
 function StatusBadge({ status }: { status: string }) {
@@ -113,6 +113,7 @@ export default function AuditHistoryPage() {
   }, [history, searchQuery, dateRange, statusFilter]);
 
   const latestAudit = history[0];
+  const currency = latestAudit?.currency || 'NGN';
   const failedCount = history.filter((audit) => audit.status === 'FAILED').length;
   const activeFilterCount = Number(Boolean(dateRange.from || dateRange.to)) + Number(statusFilter !== 'ALL');
 
@@ -205,7 +206,7 @@ export default function AuditHistoryPage() {
     },
     {
       label: 'Audited Revenue',
-      value: formatCurrency(insights.totalRevenue),
+      value: formatCurrency(insights.totalRevenue, currency),
       sub: 'Cumulative recorded revenue',
       icon: TrendingUp,
       accent: 'border-amber-400/20 bg-amber-400/[0.07] text-amber-300',
@@ -215,7 +216,7 @@ export default function AuditHistoryPage() {
     },
     {
       label: 'Latest Revenue',
-      value: formatCurrency(insights.latestRevenue),
+      value: formatCurrency(insights.latestRevenue, currency),
       sub: 'Most recent completed date',
       icon: BarChart3,
       accent: 'border-violet-400/20 bg-violet-400/[0.07] text-violet-300',
@@ -225,7 +226,7 @@ export default function AuditHistoryPage() {
     },
     {
       label: 'Amenity COGS',
-      value: formatCurrency(insights.totalAmenityCost),
+      value: formatCurrency(insights.totalAmenityCost, currency),
       sub: 'Housekeeping/laundry inventory cost',
       icon: Package,
       accent: 'border-rose-400/20 bg-rose-400/[0.07] text-rose-300',
@@ -537,14 +538,14 @@ export default function AuditHistoryPage() {
                       {/* Revenue */}
                       <td className="px-5 py-4 text-right">
                         <span className="text-sm font-bold text-white tabular-nums">
-                          {formatCurrency(audit.totalRevenue || 0)}
+                          {formatCurrency(audit.totalRevenue || 0, audit.currency)}
                         </span>
                       </td>
 
                       {/* Amenity COGS */}
                       <td className="px-5 py-4 text-right">
                         <span className="text-sm font-semibold text-rose-200 tabular-nums">
-                          {formatCurrency(audit.guestAmenityCost || 0)}
+                          {formatCurrency(audit.guestAmenityCost || 0, audit.currency)}
                         </span>
                       </td>
 
@@ -686,7 +687,7 @@ export default function AuditHistoryPage() {
                     <div className="mt-4 flex items-end justify-between border-b border-white/[0.07] pb-5">
                       <div>
                         <p className="text-3xl font-bold text-white tabular-nums">
-                          {formatCurrency(Number(selectedAudit.totalRevenue) || 0)}
+                          {formatCurrency(Number(selectedAudit.totalRevenue) || 0, currency)}
                         </p>
                         <p className="mt-1 text-sm text-slate-500">Total Daily Revenue</p>
                       </div>
@@ -705,7 +706,7 @@ export default function AuditHistoryPage() {
                             </span>
                             <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">{label}</span>
                           </div>
-                          <p className="mt-3 text-lg font-bold text-white tabular-nums">{formatCurrency(Number(val))}</p>
+                          <p className="mt-3 text-lg font-bold text-white tabular-nums">{formatCurrency(Number(val), currency)}</p>
                         </div>
                       ))}
                     </div>
@@ -723,8 +724,8 @@ export default function AuditHistoryPage() {
                     <div className="grid grid-cols-3 gap-4">
                       {[
                         { label: 'Occupancy', value: `${selectedAudit.occupancy || 0}%` },
-                        { label: 'ADR', value: formatCurrency(selectedAudit.adr || 0) },
-                        { label: 'RevPAR', value: formatCurrency(selectedAudit.revpar || 0) },
+                        { label: 'ADR', value: formatCurrency(selectedAudit.adr || 0, currency) },
+                        { label: 'RevPAR', value: formatCurrency(selectedAudit.revpar || 0, currency) },
                       ].map(({ label, value }) => (
                         <div key={label}>
                           <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-slate-600">{label}</p>
@@ -814,6 +815,7 @@ export default function AuditHistoryPage() {
           <RoomChargesDialog
             businessDate={selectedChargesAudit.businessDate}
             auditId={selectedChargesAudit.id}
+            currency={selectedChargesAudit.currency || currency}
             open
             showTrigger={false}
             onOpenChange={(open) => { if (!open) setSelectedChargesAudit(null); }}

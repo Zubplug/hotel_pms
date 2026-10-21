@@ -24,7 +24,7 @@ function StatCard({ label, value, detail, accent }: { label: string; value: stri
   );
 }
 
-function VarianceBadge({ variance }: { variance: number | null }) {
+function VarianceBadge({ variance, currency }: { variance: number | null; currency: string }) {
   if (variance === null) return <span className="text-slate-600">—</span>;
   const ok = Math.abs(variance) < 0.01;
   return (
@@ -32,7 +32,7 @@ function VarianceBadge({ variance }: { variance: number | null }) {
       ok ? 'border-emerald-400/30 bg-emerald-400/10 text-emerald-300' : 'border-rose-400/30 bg-rose-400/10 text-rose-300'
     }`}>
       {ok ? <CheckCircle2 className="h-2.5 w-2.5" /> : <AlertTriangle className="h-2.5 w-2.5" />}
-      {money(variance)}
+      {money(variance, currency)}
     </span>
   );
 }
@@ -67,7 +67,11 @@ export default function ReconciliationPage() {
   const currency = data?.property?.baseCurrency || 'NGN';
   const source = data?.sourceTotals;
   const snapshot = data?.snapshot;
-  const isBalanced = data?.variance?.status === 'BALANCED' && data?.ledger?.status === 'BALANCED';
+  const proofRows = data?.balanceProof || [];
+  const isBalanced = data?.variance?.status === 'BALANCED'
+    && data?.ledger?.status === 'BALANCED'
+    && proofRows.length > 0
+    && proofRows.every((row: any) => row.status === 'PROVEN');
   const paymentTotal = useMemo(() => (data?.payments || []).reduce((sum: number, item: any) => sum + Number(item.amount || 0), 0), [data]);
 
   if (loading && !data) return (
@@ -219,7 +223,7 @@ export default function ReconciliationPage() {
                         <td className="px-5 py-3.5 text-sm font-medium text-slate-300">{label}</td>
                         <td className="px-5 py-3.5 text-right text-sm font-semibold tabular-nums text-white">{money(source?.[key], currency)}</td>
                         <td className="px-5 py-3.5 text-right text-sm tabular-nums text-slate-500">{snapshot ? money(snapshot[key], currency) : '—'}</td>
-                        <td className="px-5 py-3.5 text-right"><VarianceBadge variance={variance} /></td>
+                        <td className="px-5 py-3.5 text-right"><VarianceBadge variance={variance} currency={currency} /></td>
                       </tr>
                     );
                   })}
@@ -327,7 +331,7 @@ export default function ReconciliationPage() {
                       </td>
                       <td className="px-5 py-4 text-right text-sm tabular-nums text-slate-400">{money(row.expectedClosing, currency)}</td>
                       <td className="px-5 py-4 text-right text-sm font-semibold tabular-nums text-white">{row.actualClosing !== null ? money(row.actualClosing, currency) : '—'}</td>
-                      <td className="px-5 py-4 text-right"><VarianceBadge variance={row.variance} /></td>
+                      <td className="px-5 py-4 text-right"><VarianceBadge variance={row.variance} currency={currency} /></td>
                       <td className="px-5 py-4 text-right">
                         <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider ${
                           isProven ? 'border-emerald-400/30 bg-emerald-400/10 text-emerald-300'

@@ -10,6 +10,8 @@ export async function getNightAuditHistory(propertyId: string) {
   const { requireOrganizationContext } = await import('@/lib/organization-access');
   const ctx = await requireOrganizationContext(session.user.id);
   if (!ctx.propertyIds.includes(propertyId)) throw new Error('FORBIDDEN');
+  const property = await prisma.property.findUnique({ where: { id: propertyId }, select: { baseCurrency: true } });
+  if (!property) throw new Error('NOT_FOUND');
   
   const audits = await prisma.nightAudit.findMany({
     where: { propertyId },
@@ -35,7 +37,7 @@ export async function getNightAuditHistory(propertyId: string) {
           folio: { propertyId },
           nightAuditRunId: { in: audits.map((audit) => audit.id) },
           type: 'CHARGE',
-          source: 'ROOM_CHARGE',
+          source: { in: ['ROOM_CHARGE', 'DAY_USE_ROOM_CHARGE'] },
           voidedAt: null,
         },
         _sum: { amount: true },
@@ -88,6 +90,7 @@ export async function getNightAuditHistory(propertyId: string) {
     revpar: Number(audit.revpar || 0),
     guestAmenityCost: amenityCostMap.get(new Date(audit.businessDate).toISOString().slice(0, 10)) || Number((audit.financialSnapshot as any)?.guestAmenityCost || 0),
     netRoomContribution: Number(roomRevenueMap.get(audit.id) || (audit.financialSnapshot as any)?.roomRevenue || 0) - (amenityCostMap.get(new Date(audit.businessDate).toISOString().slice(0, 10)) || Number((audit.financialSnapshot as any)?.guestAmenityCost || 0)),
+    currency: property.baseCurrency || 'NGN',
     financialSnapshot: audit.financialSnapshot && roomRevenueMap.has(audit.id)
       ? { ...audit.financialSnapshot, roomRevenue: roomRevenueMap.get(audit.id) }
       : audit.financialSnapshot,
@@ -160,6 +163,8 @@ export async function getNightAuditRoomCharges(propertyId: string, auditId: stri
     where: {
       folio: { propertyId },
       nightAuditRunId: auditId,
+      type: 'CHARGE',
+      source: { in: ['ROOM_CHARGE', 'DAY_USE_ROOM_CHARGE'] },
       voidedAt: null,
     },
     include: {
@@ -224,8 +229,15 @@ export async function getNightAuditRoomCharges(propertyId: string, auditId: stri
 
 export async function getRoomAndGuestControl(propertyId: string): Promise<any> {
   if (!propertyId) throw new Error('Property ID required');
+  const session = await auth();
+  if (!session?.user?.id) throw new Error('UNAUTHORIZED');
+  const { requireOrganizationContext } = await import('@/lib/organization-access');
+  const ctx = await requireOrganizationContext(session.user.id);
+  if (!ctx.propertyIds.includes(propertyId)) throw new Error('FORBIDDEN');
+
   const property = await prisma.property.findUnique({
     where: { id: propertyId },
+    select: { businessDate: true, baseCurrency: true },
   });
   if (!property) throw new Error('Property not found');
   
@@ -236,7 +248,7 @@ export async function getRoomAndGuestControl(propertyId: string): Promise<any> {
     where: {
       propertyId,
       status: { in: ['CONFIRMED', 'PENDING', 'INQUIRY'] },
-      checkIn: { lte: businessDate }
+      checkIn: businessDate,
     },
     include: {
       primaryGuest: true,
@@ -279,8 +291,9 @@ export async function getRoomAndGuestControl(propertyId: string): Promise<any> {
         include: {
           items: {
             where: {
-              source: 'ROOM_CHARGE',
-              businessDate: businessDate
+              source: { in: ['ROOM_CHARGE', 'DAY_USE_ROOM_CHARGE'] },
+              businessDate,
+              voidedAt: null,
             }
           }
         }
@@ -323,7 +336,7 @@ export async function getRoomAndGuestControl(propertyId: string): Promise<any> {
      const corporateRes = inHouseReservations.filter(r => r.corporateAccountId);
      const corporateChargeKeys = corporateRes.map(r => `ROOM_CHARGE_${r.id}_${businessDateStr}`);
      const existingCorporateCharges = await prisma.folioItem.findMany({
-       where: { folio: { propertyId }, operationId: { in: corporateChargeKeys } },
+       where: { folio: { propertyId }, operationId: { in: corporateChargeKeys }, voidedAt: null },
        select: { operationId: true }
      });
      const foundKeys = new Set(existingCorporateCharges.map(c => c.operationId));
@@ -335,7 +348,7 @@ export async function getRoomAndGuestControl(propertyId: string): Promise<any> {
   }
 
   const allRooms = await prisma.room.findMany({
-    where: { propertyId },
+    where: { propertyId, isActive: true, deletedAt: null },
     include: {
       reservationRooms: {
         where: { status: 'ACTIVE', reservation: { status: 'CHECKED_IN' } },
@@ -408,6 +421,7 @@ export async function getRoomAndGuestControl(propertyId: string): Promise<any> {
 
   return {
     businessDate,
+    currency: property.baseCurrency || 'NGN',
     pendingArrivals,
     pendingDepartures,
     noShows,
@@ -424,18 +438,21 @@ export async function getRoomAndGuestControl(propertyId: string): Promise<any> {
 }
 
 export async function getAccountsReceivable(propertyId: string) {
-  if (!propertyId) return [];
+  if (!propertyId) return { folios: [], currency: 'NGN' };
   const session = await auth();
   if (!session?.user?.id) throw new Error('UNAUTHORIZED');
   const { requireOrganizationContext } = await import('@/lib/organization-access');
   const ctx = await requireOrganizationContext(session.user.id);
   if (!ctx.propertyIds.includes(propertyId)) throw new Error('FORBIDDEN');
+  const property = await prisma.property.findUnique({ where: { id: propertyId }, select: { baseCurrency: true } });
+  if (!property) throw new Error('NOT_FOUND');
   
   const folios = await prisma.folio.findMany({
     where: { 
       propertyId,
       balance: { gt: 0 },
-      status: { not: 'VOID' }
+      status: { not: 'VOID' },
+      type: { not: 'CITY_LEDGER' },
     },
     include: {
       guest: true,
@@ -450,7 +467,7 @@ export async function getAccountsReceivable(propertyId: string) {
     },
     orderBy: { balance: 'desc' }
   });
-  return folios;
+  return { folios, currency: property.baseCurrency || 'NGN' };
 }
 
 export async function getAccountsPayable(propertyId: string) {
@@ -460,6 +477,8 @@ export async function getAccountsPayable(propertyId: string) {
   const { requireOrganizationContext } = await import('@/lib/organization-access');
   const ctx = await requireOrganizationContext(session.user.id);
   if (!ctx.propertyIds.includes(propertyId)) throw new Error('FORBIDDEN');
+  const property = await prisma.property.findUnique({ where: { id: propertyId }, select: { baseCurrency: true } });
+  if (!property) throw new Error('NOT_FOUND');
   
   const negativeFolios = await prisma.folio.findMany({
     where: { 
@@ -523,5 +542,5 @@ export async function getAccountsPayable(propertyId: string) {
     }))
     .filter((entry) => entry.remainingAmount > 0.01);
 
-  return { negativeFolios, credits, corporateAdvances };
+  return { negativeFolios, credits, corporateAdvances, currency: property.baseCurrency || 'NGN' };
 }

@@ -66,7 +66,7 @@ export default function NightAuditRoomsControlPage() {
 
   const { data: allRoomsData } = useQuery({
     queryKey: ['frontdesk', 'rooms', propertyId],
-    queryFn: () => provider.rooms.list(propertyId, { page: '1', pageSize: '100' } as any),
+    queryFn: () => provider.rooms.list(propertyId, { page: '1', pageSize: '500' } as any),
     enabled: !!propertyId,
   });
 
@@ -88,14 +88,14 @@ export default function NightAuditRoomsControlPage() {
     businessDate, pendingArrivals, pendingDepartures, noShows,
     unassignedArrivals, inHouseGuestCount, inHouseReservationCount,
     missingRoomCharges, folioBalanceExceptions, creditLimitExceptions,
-    roomStatusMismatches, assignmentIntegrity, unbalancedFolios,
+    roomStatusMismatches, assignmentIntegrity, unbalancedFolios, currency,
   } = data as any;
 
   const exceptionCount =
     pendingDepartures.length + missingRoomCharges.length +
     folioBalanceExceptions.length + roomStatusMismatches.length +
     unassignedArrivals.length + creditLimitExceptions.length +
-    assignmentIntegrity.length + unbalancedFolios.length;
+    assignmentIntegrity.length + unbalancedFolios.length + noShows.length;
 
   const totalChecks = inHouseReservationCount + exceptionCount;
   const percentClear = totalChecks > 0 ? Math.round(((totalChecks - exceptionCount) / totalChecks) * 100) : 100;
@@ -116,6 +116,12 @@ export default function NightAuditRoomsControlPage() {
       details: 'Arriving Today',
       actionLabel: 'Assign Room', onAction: () => setViewingReservationId(r.id),
     }));
+    noShows.forEach((r: any) => exceptionsList.push({
+      type: 'No-Show', critical: false,
+      guest: `${r.primaryGuest.firstName} ${r.primaryGuest.lastName}`,
+      details: 'Expected arrival was not checked in',
+      actionLabel: 'Review Reservation', onAction: () => setViewingReservationId(r.id),
+    }));
   }
 
   if (activeTab === 'ALL' || activeTab === 'FINANCIAL') {
@@ -129,13 +135,13 @@ export default function NightAuditRoomsControlPage() {
     folioBalanceExceptions.forEach((r: any) => exceptionsList.push({
       type: 'Departure Balance', critical: true,
       guest: `${r.primaryGuest.firstName} ${r.primaryGuest.lastName}`,
-      details: `Outstanding balance: ${formatCurrency(Number(r.folios[0]?.balance || 0), 'NGN')}`,
+      details: `Outstanding balance: ${formatCurrency(Number(r.folios[0]?.balance || 0), currency)}`,
       actionLabel: 'Settle Balance', onAction: () => setViewingFolioId(r.folios[0]?.id),
     }));
     creditLimitExceptions.forEach((r: any) => exceptionsList.push({
       type: 'Credit Limit Breach', critical: false,
       guest: `${r.primaryGuest.firstName} ${r.primaryGuest.lastName}`,
-      details: `Balance ${formatCurrency(Number(r.folios[0]?.balance || 0), 'NGN')} exceeds limit ${formatCurrency(Number(r.corporateAccount?.creditLimit || 0), 'NGN')}`,
+      details: `Balance ${formatCurrency(Number(r.folios[0]?.balance || 0), currency)} exceeds limit ${formatCurrency(Number(r.corporateAccount?.creditLimit || 0), currency)}`,
       actionLabel: 'View Folio', onAction: () => setViewingFolioId(r.folios[0]?.id),
     }));
     unbalancedFolios.forEach((e: any) => exceptionsList.push({
@@ -176,6 +182,7 @@ export default function NightAuditRoomsControlPage() {
     { label: 'Arrivals Pending',      value: pendingArrivals.length,       icon: DoorOpen, accent: 'border-sky-400/20 bg-sky-400/[0.07]',    iconCls: 'border-sky-400/20 bg-sky-400/10 text-sky-400' },
     { label: 'Departures Pending',    value: pendingDepartures.length,     icon: LogOut,   accent: 'border-amber-400/20 bg-amber-400/[0.07]', iconCls: 'border-amber-400/20 bg-amber-400/10 text-amber-400' },
     { label: 'Unposted Room Charges', value: missingRoomCharges.length,    icon: FileText, accent: missingRoomCharges.length > 0 ? 'border-rose-400/25 bg-rose-400/[0.07]' : 'border-white/[0.06] bg-white/[0.025]', iconCls: missingRoomCharges.length > 0 ? 'border-rose-400/20 bg-rose-400/10 text-rose-400' : 'border-white/[0.07] bg-white/[0.04] text-slate-500' },
+    { label: 'No-Shows',              value: noShows.length,                icon: AlertTriangle, accent: noShows.length > 0 ? 'border-amber-400/20 bg-amber-400/[0.07]' : 'border-white/[0.06] bg-white/[0.025]', iconCls: noShows.length > 0 ? 'border-amber-400/20 bg-amber-400/10 text-amber-400' : 'border-white/[0.07] bg-white/[0.04] text-slate-500' },
   ];
 
   const CRITICAL_CHECKS = [
@@ -187,6 +194,7 @@ export default function NightAuditRoomsControlPage() {
   const WARNING_CHECKS = [
     { label: 'Room Status Mismatches', count: roomStatusMismatches.length },
     { label: 'Unassigned Arrivals',    count: unassignedArrivals.length },
+    { label: 'No-Shows',               count: noShows.length },
     { label: 'Credit Limit Breaches',  count: creditLimitExceptions.length },
     { label: 'Assignment Integrity',   count: assignmentIntegrity.length },
   ];
@@ -232,7 +240,7 @@ export default function NightAuditRoomsControlPage() {
         </header>
 
         {/* ── Stat cards ── */}
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
           {SUMMARY_STATS.map(({ label, value, icon: Icon, accent, iconCls }) => (
             <div key={label} className={`flex items-center justify-between rounded-[20px] border p-5 ${accent}`}>
               <div>

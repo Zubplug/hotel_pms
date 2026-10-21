@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useProperty } from '@/components/PropertyProvider';
 import {
   AlertTriangle, CheckCircle2, ChevronRight, Loader2, Utensils,
-  Receipt, Wallet, Store, MonitorSmartphone
+  Receipt, Wallet, Store, MonitorSmartphone, RefreshCw
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -18,6 +18,7 @@ export default function FnbControlPage() {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [refreshToken, setRefreshToken] = useState(0);
 
   useEffect(() => {
     if (!propertyId) return;
@@ -31,7 +32,7 @@ export default function FnbControlPage() {
       .then(setData)
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
-  }, [propertyId]);
+  }, [propertyId, refreshToken]);
 
   if (loading && !data) return (
     <div className="flex min-h-[60vh] items-center justify-center" style={PAGE_BG}>
@@ -86,23 +87,33 @@ export default function FnbControlPage() {
               Business Date:
               <span className="font-mono font-bold text-slate-300">{format(new Date(businessDate), 'dd MMM yyyy')}</span>
             </p>
+            <p className="mt-1 text-[11px] text-slate-600">POS control totals; folio-posted F&B is included in Revenue Reconciliation.</p>
           </div>
 
-          <div className={`flex flex-col items-end rounded-[20px] border px-6 py-4 ${
-            totalExceptions > 0 ? 'border-amber-400/25 bg-amber-400/[0.07]' : 'border-emerald-400/20 bg-emerald-400/[0.06]'
-          }`}>
-            <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-slate-500">F&B Status</p>
-            <p className={`mt-1 text-3xl font-bold tabular-nums ${totalExceptions > 0 ? 'text-amber-300' : 'text-emerald-300'}`}>
-              {totalExceptions} <span className="text-base font-semibold">exception{totalExceptions !== 1 ? 's' : ''}</span>
-            </p>
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              onClick={() => setRefreshToken((value) => value + 1)}
+              className="inline-flex h-10 items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 text-sm font-semibold text-slate-400 transition hover:bg-white/[0.06] hover:text-slate-200"
+            >
+              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+              Refresh
+            </button>
+            <div className={`flex flex-col items-end rounded-[20px] border px-6 py-4 ${
+              totalExceptions > 0 ? 'border-amber-400/25 bg-amber-400/[0.07]' : 'border-emerald-400/20 bg-emerald-400/[0.06]'
+            }`}>
+              <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-slate-500">F&B Status</p>
+              <p className={`mt-1 text-3xl font-bold tabular-nums ${totalExceptions > 0 ? 'text-amber-300' : 'text-emerald-300'}`}>
+                {totalExceptions} <span className="text-base font-semibold">exception{totalExceptions !== 1 ? 's' : ''}</span>
+              </p>
+            </div>
           </div>
         </header>
 
         {/* ── First-Class Metrics ── */}
         <section className="grid gap-3 sm:grid-cols-3 xl:grid-cols-6">
           {[
-            { label: 'Net F&B', value: money(metrics.netRevenue, currency), accent: 'border-emerald-400/20 bg-emerald-400/[0.07] text-emerald-300' },
-            { label: 'Gross Sales', value: money(metrics.grossSales, currency), accent: 'border-slate-600/40 bg-slate-600/10 text-slate-300' },
+            { label: 'POS Net Revenue', value: money(metrics.netRevenue, currency), accent: 'border-emerald-400/20 bg-emerald-400/[0.07] text-emerald-300' },
+            { label: 'POS Gross Sales', value: money(metrics.grossSales, currency), accent: 'border-slate-600/40 bg-slate-600/10 text-slate-300' },
             { label: 'Payments', value: money(metrics.payments, currency), accent: 'border-indigo-400/20 bg-indigo-400/[0.07] text-indigo-300' },
             { label: 'Discounts', value: money(metrics.discounts, currency), accent: 'border-amber-400/20 bg-amber-400/[0.07] text-amber-300' },
             { label: 'Comps', value: money(metrics.comps, currency), accent: 'border-rose-400/20 bg-rose-400/[0.07] text-rose-300' },
@@ -241,7 +252,7 @@ export default function FnbControlPage() {
                         <td className="px-4 py-3 text-xs tabular-nums text-slate-400">{s.openedAt ? format(new Date(s.openedAt), 'HH:mm') : '—'}</td>
                         <td className="px-4 py-3 text-xs tabular-nums text-slate-400">{s.closedAt ? format(new Date(s.closedAt), 'HH:mm') : '—'}</td>
                         <td className="px-4 py-3 text-right text-sm tabular-nums text-slate-300">{money(s.expectedCash, currency)}</td>
-                        <td className="px-4 py-3 text-right text-sm tabular-nums text-slate-300">{money(s.actualCash, currency)}</td>
+                        <td className="px-4 py-3 text-right text-sm tabular-nums text-slate-300">{s.actualCash === null ? '—' : money(s.actualCash, currency)}</td>
                         <td className={`px-4 py-3 text-right text-sm font-bold tabular-nums ${Math.abs(s.variance) > 0.01 ? 'text-rose-400' : 'text-slate-500'}`}>
                           {money(s.variance, currency)}
                         </td>

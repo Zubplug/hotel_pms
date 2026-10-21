@@ -92,8 +92,8 @@ export async function GET(req: NextRequest) {
 
     const trendStart = new Date(businessDate);
     trendStart.setUTCDate(trendStart.getUTCDate() - 6);
-    const [rooms, inHouseGuests, charges, payments, latePostings, sessions, trend, activityFeed, financialSnapshot, journalTotals, accountingPeriod, transactionExceptions, refundTotals, folioActivity] = await Promise.all([
-      prisma.room.findMany({ where: { propertyId, isActive: true }, select: { status: true } }),
+    const [rooms, inHouseGuests, charges, payments, latePostings, sessions, trend, activityFeed, financialSnapshot, journalTotals, accountingPeriod, transactionExceptions, refundTotals, folioActivity, posOrdersForAnalytics, representedPosFolioItems] = await Promise.all([
+      prisma.room.findMany({ where: { propertyId, isActive: true, deletedAt: null }, select: { status: true } }),
       prisma.reservation.count({
         where: {
           propertyId,
@@ -211,8 +211,25 @@ export async function GET(req: NextRequest) {
         where: { folio: { propertyId }, businessDate, voidedAt: null },
         _sum: { amount: true },
         _count: { id: true },
+      }),
+      prisma.posOrder.findMany({
+        where: { propertyId, businessDate, status: 'CLOSED', paymentStatus: 'PAID' },
+        select: { id: true, total: true, payments: { where: { status: { in: ['CONFIRMED', 'PAID'] } }, select: { amount: true, method: true } } },
+      }),
+      prisma.folioItem.findMany({
+        where: { folio: { propertyId }, businessDate, type: 'CHARGE', source: 'POS', posTransactionId: { not: null }, voidedAt: null },
+        select: { posTransactionId: true },
       })
     ]);
+
+    const representedPosOrderIds = new Set(representedPosFolioItems.map((item) => item.posTransactionId).filter((id): id is string => Boolean(id)));
+    const directPosRevenue = posOrdersForAnalytics.reduce((sum, order) => {
+      if (representedPosOrderIds.has(order.id)) return sum;
+      const complimentary = order.payments
+        .filter((payment) => String(payment.method).toUpperCase() === 'COMPLIMENTARY')
+        .reduce((paymentSum, payment) => paymentSum + Number(payment.amount || 0), 0);
+      return sum + Math.max(0, Number(order.total || 0) - complimentary);
+    }, 0);
 
     const roomAnalysis = rooms.reduce((result: Record<string, number>, room) => {
       result[room.status] = (result[room.status] || 0) + 1;
@@ -354,7 +371,10 @@ export async function GET(req: NextRequest) {
       auditDue: !activeAudit && (property.auditStatus === 'FAILED' || businessDate < localToday),
       isBusinessDayAudited: !activeAudit && property.auditStatus !== 'FAILED' && businessDate >= localToday,
       analytics: {
-        revenue: Number(charges._sum.amount || 0),
+        // Folio charges do not include paid POS orders that have not yet been
+        // mirrored into a folio item. Add only those unrepresented orders so
+        // POS revenue is neither omitted nor double-counted.
+        revenue: Number(charges._sum.amount || 0) + directPosRevenue,
         payments: Number(payments._sum.amount || 0),
         cashVariance: Number(sessions._sum.variance || 0),
         latePostings,

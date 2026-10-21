@@ -15,7 +15,7 @@ export default function AccountsReceivableLedgerPage() {
   const { propertyId } = useProperty();
   const [viewingFolioId, setViewingFolioId] = useState<string | null>(null);
 
-  const { data: folios, isLoading, error } = useQuery({
+  const { data, isLoading, error } = useQuery({
     queryKey: ['night-audit', 'ar-ledger', propertyId],
     queryFn: () => getAccountsReceivable(propertyId),
     enabled: !!propertyId,
@@ -28,7 +28,7 @@ export default function AccountsReceivableLedgerPage() {
     </div>
   );
 
-  if (error || !folios) return (
+  if (error || !data) return (
     <div className="min-h-full px-5 pb-12 pt-8" style={PAGE_BG}>
       <div className="mx-auto max-w-3xl rounded-2xl border border-rose-400/20 bg-rose-400/[0.07] p-5 text-sm text-rose-300">
         Failed to load Accounts Receivable. Please try again.
@@ -36,6 +36,8 @@ export default function AccountsReceivableLedgerPage() {
     </div>
   );
 
+  const folios = data?.folios || [];
+  const currency = data?.currency || 'NGN';
   const totalOutstanding = folios.reduce((sum: number, f: any) => sum + Number(f.balance || 0), 0);
 
   return (
@@ -59,14 +61,14 @@ export default function AccountsReceivableLedgerPage() {
               Accounts Receivable
             </h1>
             <p className="mt-2 text-sm leading-relaxed text-slate-500">
-              Outstanding guest balances owed to the property.
+              Outstanding guest folios only. City-ledger receivables are controlled separately.
             </p>
           </div>
 
           {/* Total hero */}
           <div className="flex flex-col items-end rounded-[20px] border border-amber-400/20 bg-amber-400/[0.07] px-6 py-4">
             <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-slate-500">Total Outstanding</p>
-            <p className="mt-1 text-3xl font-bold tabular-nums text-amber-300">{formatCurrency(totalOutstanding, 'NGN')}</p>
+            <p className="mt-1 text-3xl font-bold tabular-nums text-amber-300">{formatCurrency(totalOutstanding, currency)}</p>
             <p className="mt-0.5 text-[11px] text-slate-600">
               {folios.length} open folio{folios.length !== 1 ? 's' : ''}
             </p>
@@ -135,7 +137,7 @@ export default function AccountsReceivableLedgerPage() {
                         </td>
                         <td className="px-5 py-4 text-right">
                           <span className="inline-flex items-center rounded-full border border-amber-400/30 bg-amber-400/10 px-3 py-1 text-sm font-bold tabular-nums text-amber-300">
-                            {formatCurrency(Number(folio.balance), 'NGN')}
+                            {formatCurrency(Number(folio.balance), currency)}
                           </span>
                         </td>
                         <td className="px-5 py-4 text-right">

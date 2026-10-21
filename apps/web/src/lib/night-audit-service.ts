@@ -840,11 +840,15 @@ export async function getFnbControl(ctx: TenantContext, propertyId: string) {
       outlet: { select: { id: true, name: true } },
       serverStaff: { select: { firstName: true, lastName: true } },
       items: { select: { total: true, voidReason: true } },
+      payments: { select: { amount: true, method: true, status: true } },
     }
   });
 
+  const isSettledOrder = (order: typeof rawOrders[number]) =>
+    order.status === 'CLOSED' && order.payments.some((payment: any) => ['PAID', 'CONFIRMED'].includes(String(payment.status)));
+  const settledOrders = rawOrders.filter(isSettledOrder);
   const openOrders = rawOrders.filter(o =>
-    (o.status !== 'CLOSED' && o.paymentStatus !== 'PAID')
+    (o.status !== 'CLOSED' || !isSettledOrder(o))
     && (o.items.length === 0 || o.items.some(item => !item.voidReason && Number(item.total || 0) > 0))
   );
   
@@ -859,33 +863,34 @@ export async function getFnbControl(ctx: TenantContext, propertyId: string) {
   
   const voids = await prisma.posVoid.findMany({
     where: { businessDate, order: { propertyId } },
-    include: { order: { select: { orderNumber: true, outlet: { select: { name: true } } } } }
+    include: { order: { select: { id: true, orderNumber: true, outlet: { select: { id: true, name: true } } } } }
   });
   const unreviewedVoids = voids.filter(v => !v.authorizerId);
 
   const discounts = await prisma.posDiscount.findMany({
     where: { businessDate, order: { propertyId } },
-    include: { order: { select: { orderNumber: true, outlet: { select: { name: true } } } } }
+    include: { order: { select: { id: true, orderNumber: true, outlet: { select: { id: true, name: true } } } } }
   });
 
   const payments = await prisma.posPayment.findMany({
     where: { businessDate, order: { propertyId }, status: { in: ['PAID', 'CONFIRMED', 'REFUNDED'] } },
-    include: { order: { select: { orderNumber: true, outlet: { select: { id: true, name: true } } } } }
+    include: { order: { select: { id: true, orderNumber: true, outlet: { select: { id: true, name: true } } } } }
   });
 
-  const comps = payments.filter(p => p.method === 'COMPLIMENTARY');
+  const comps = payments.filter(p => p.method === 'COMPLIMENTARY' && ['PAID', 'CONFIRMED'].includes(String(p.status)));
   const refunds = payments.filter(p => p.status === 'REFUNDED');
   const collectedPayments = payments.filter(p => p.status === 'PAID' || p.status === 'CONFIRMED');
 
-  const grossSales = rawOrders.reduce((sum, o) => sum + Number(o.subtotal || 0), 0);
-  const totalDiscounts = discounts.reduce((sum, d) => sum + Number(d.amount || 0), 0);
+  const settledOrderIds = new Set(settledOrders.map((order) => order.id));
+  const grossSales = settledOrders.reduce((sum, o) => sum + Number(o.subtotal || 0), 0);
+  const totalDiscounts = discounts.filter((discount) => settledOrderIds.has(discount.order.id)).reduce((sum, d) => sum + Number(d.amount || 0), 0);
   
   const outlets = Array.from(new Set(rawOrders.map(o => o.outlet.id))).map(outletId => {
-    const oOrders = rawOrders.filter(o => o.outlet.id === outletId);
-    const outletName = oOrders[0].outlet.name;
-    const oDiscounts = discounts.filter(d => d.order.outlet.name === outletName);
-    const oPayments = collectedPayments.filter(p => p.order.outlet.id === outletId);
-    const oComps = comps.filter(p => p.order.outlet.id === outletId);
+    const oOrders = settledOrders.filter(o => o.outlet.id === outletId);
+    const outletName = rawOrders.find((order) => order.outlet.id === outletId)?.outlet.name || 'Unknown Outlet';
+    const oDiscounts = discounts.filter(d => settledOrderIds.has(d.order.id) && d.order.outlet.id === outletId);
+    const oPayments = collectedPayments.filter(p => settledOrderIds.has(p.order.id) && p.order.outlet.id === outletId);
+    const oComps = comps.filter(p => settledOrderIds.has(p.order.id) && p.order.outlet.id === outletId);
     const oSessions = rawSessions.filter(s => s.outletId === outletId);
     const variance = oSessions.reduce((sum, s) => sum + Number(s.variance || 0), 0);
 
@@ -896,14 +901,24 @@ export async function getFnbControl(ctx: TenantContext, propertyId: string) {
       gross: oOrders.reduce((sum, o) => sum + Number(o.subtotal || 0), 0),
       discounts: oDiscounts.reduce((sum, d) => sum + Number(d.amount || 0), 0),
       comps: oComps.reduce((sum, c) => sum + Number(c.amount || 0), 0),
-      net: oOrders.reduce((sum, o) => sum + Number(o.total || 0), 0),
+      net: oOrders.reduce((sum, o) => {
+        const complimentary = o.payments
+          .filter((payment: any) => payment.method === 'COMPLIMENTARY' && ['PAID', 'CONFIRMED'].includes(String(payment.status)))
+          .reduce((paymentSum: number, payment: any) => paymentSum + Number(payment.amount || 0), 0);
+        return sum + Math.max(0, Number(o.total || 0) - complimentary);
+      }, 0),
       payments: oPayments.reduce((sum, p) => sum + Number(p.amount || 0), 0),
       variance
     };
   });
 
   const totalComps = comps.reduce((sum, c) => sum + Number(c.amount || 0), 0);
-  const netRevenue = rawOrders.reduce((sum, o) => sum + Number(o.total || 0), 0);
+  const netRevenue = settledOrders.reduce((sum, o) => {
+    const complimentary = o.payments
+      .filter((payment: any) => payment.method === 'COMPLIMENTARY' && ['PAID', 'CONFIRMED'].includes(String(payment.status)))
+      .reduce((paymentSum: number, payment: any) => paymentSum + Number(payment.amount || 0), 0);
+    return sum + Math.max(0, Number(o.total || 0) - complimentary);
+  }, 0);
   const totalPayments = collectedPayments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
   const totalRefunds = refunds.reduce((sum, r) => sum + Number(r.amount || 0), 0);
   const totalVariance = rawSessions.reduce((sum, s) => sum + Number(s.variance || 0), 0);
@@ -921,7 +936,7 @@ export async function getFnbControl(ctx: TenantContext, propertyId: string) {
       closedAt: s.closedAt,
       openingCash: Number(s.openingCash || 0),
       expectedCash: Number(s.expectedCash || 0),
-      actualCash: Number(s.actualCash || 0),
+      actualCash: s.actualCash === null ? null : Number(s.actualCash),
       variance: Number(s.variance || 0),
       status: s.status
     }))

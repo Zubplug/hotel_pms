@@ -49,7 +49,7 @@ export default function AccountsPayableLedgerPage() {
     </div>
   );
 
-  const { negativeFolios, credits, corporateAdvances = [] } = data as any;
+  const { negativeFolios, credits, corporateAdvances = [], currency = 'NGN' } = data as any;
   const totalRefundsOwed = negativeFolios.reduce((sum: number, f: any) => sum + Math.abs(Number(f.balance || 0)), 0);
   const totalUnappliedCredits = credits.reduce((sum: number, c: any) => sum + Number(c.remainingAmount || 0), 0)
     + corporateAdvances.reduce((sum: number, c: any) => sum + Number(c.remainingAmount || 0), 0);
@@ -83,7 +83,7 @@ export default function AccountsPayableLedgerPage() {
           {/* Total liability hero */}
           <div className="flex flex-col items-end rounded-[20px] border border-violet-400/20 bg-violet-400/[0.07] px-6 py-4">
             <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-slate-500">Total Liability</p>
-            <p className="mt-1 text-3xl font-bold tabular-nums text-violet-300">{formatCurrency(totalLiability, 'NGN')}</p>
+            <p className="mt-1 text-3xl font-bold tabular-nums text-violet-300">{formatCurrency(totalLiability, currency)}</p>
             <p className="mt-0.5 text-[11px] text-slate-600">
               {negativeFolios.length} credit folio{negativeFolios.length !== 1 ? 's' : ''} · {credits.length + corporateAdvances.length} deposit{credits.length + corporateAdvances.length !== 1 ? 's' : ''}
             </p>
@@ -98,7 +98,7 @@ export default function AccountsPayableLedgerPage() {
             </span>
             <div>
               <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-slate-500">Folio Credit Balances</p>
-              <p className="mt-1 text-lg font-bold tabular-nums text-white">{formatCurrency(totalRefundsOwed, 'NGN')}</p>
+              <p className="mt-1 text-lg font-bold tabular-nums text-white">{formatCurrency(totalRefundsOwed, currency)}</p>
             </div>
           </div>
           <div className="flex items-center gap-4 rounded-[20px] border border-sky-400/20 bg-sky-400/[0.06] px-5 py-4">
@@ -107,7 +107,7 @@ export default function AccountsPayableLedgerPage() {
             </span>
             <div>
               <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-slate-500">Unapplied Deposits</p>
-              <p className="mt-1 text-lg font-bold tabular-nums text-white">{formatCurrency(totalUnappliedCredits, 'NGN')}</p>
+              <p className="mt-1 text-lg font-bold tabular-nums text-white">{formatCurrency(totalUnappliedCredits, currency)}</p>
             </div>
           </div>
         </div>
@@ -123,7 +123,7 @@ export default function AccountsPayableLedgerPage() {
                 <h2 className="text-sm font-bold text-white">Folio Credit Balances</h2>
               </div>
               <span className="rounded-full border border-emerald-400/25 bg-emerald-400/10 px-2.5 py-0.5 text-[10px] font-bold text-emerald-300">
-                {formatCurrency(totalRefundsOwed, 'NGN')}
+                {formatCurrency(totalRefundsOwed, currency)}
               </span>
             </div>
 
@@ -149,7 +149,7 @@ export default function AccountsPayableLedgerPage() {
                           <td className="px-5 py-3.5 text-sm font-bold text-white">{folio.folioNumber}</td>
                           <td className="px-5 py-3.5 text-sm font-semibold text-slate-300">{name}</td>
                           <td className="px-5 py-3.5 text-right text-sm font-bold tabular-nums text-emerald-300">
-                            {formatCurrency(Math.abs(Number(folio.balance)), 'NGN')}
+                            {formatCurrency(Math.abs(Number(folio.balance)), currency)}
                           </td>
                           <td className="px-5 py-3.5 text-right">
                             <button
@@ -176,7 +176,7 @@ export default function AccountsPayableLedgerPage() {
                 <h2 className="text-sm font-bold text-white">Unapplied Advance Deposits</h2>
               </div>
               <span className="rounded-full border border-sky-400/25 bg-sky-400/10 px-2.5 py-0.5 text-[10px] font-bold text-sky-300">
-                {formatCurrency(totalUnappliedCredits, 'NGN')}
+                {formatCurrency(totalUnappliedCredits, currency)}
               </span>
             </div>
 
@@ -208,7 +208,7 @@ export default function AccountsPayableLedgerPage() {
                             <p className="text-[10px] text-slate-600">{credit.folio?.folioNumber}</p>
                           </td>
                           <td className="px-5 py-3.5 text-right text-sm font-bold tabular-nums text-emerald-300">
-                            {formatCurrency(Number(credit.remainingAmount), 'NGN')}
+                            {formatCurrency(Number(credit.remainingAmount), currency)}
                           </td>
                           <td className="px-5 py-3.5 text-right">
                             <button
