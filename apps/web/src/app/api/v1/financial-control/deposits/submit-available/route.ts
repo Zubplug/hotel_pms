@@ -14,8 +14,11 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { propertyId, amount, bankAccountId, bankReceiptUrl, bankReference, notes } = body;
+    const { propertyId, amount, bankAccountId, bankReceiptUrl, bankReference, notes, idempotencyKey } = body;
     if (!propertyId || !bankAccountId) return NextResponse.json({ error: 'Property and bank account are required' }, { status: 400 });
+    if (typeof idempotencyKey !== 'string' || !/^[A-Za-z0-9._:-]{8,128}$/.test(idempotencyKey)) {
+      return NextResponse.json({ error: 'A stable idempotencyKey is required (8-128 safe characters).' }, { status: 400 });
+    }
     const ctx = await requireOrganizationContext(actor.user.id);
     if (!ctx.propertyIds.includes(propertyId)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     if (await isNightAuditTransactionLocked(propertyId)) {
@@ -24,8 +27,9 @@ export async function POST(request: NextRequest) {
 
     const deposit = await BankDepositService.submitAvailableCash(ctx, {
       propertyId,
-      amount: Number(amount),
+      amount: String(amount),
       bankAccountId,
+      idempotencyKey,
       bankReceiptUrl,
       bankReference,
       notes,

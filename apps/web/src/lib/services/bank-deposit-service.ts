@@ -7,6 +7,7 @@ import {
 } from './cash-account-service';
 import { TenantContext } from '../organization-access';
 import { GeneralLedgerService } from './general-ledger-service';
+import { decimalDifference, decimalIsZero, sumSignedDecimal } from '../finance/billing-contracts';
 export class BankDepositService {
   /**
    * General Cashier bundles handed-over shifts into a Bank Deposit.
@@ -138,13 +139,17 @@ export class BankDepositService {
    */
   static async submitAvailableCash(ctx: TenantContext, params: {
     propertyId: string;
-    amount: number;
+    amount: string;
     bankAccountId: string;
+    idempotencyKey: string;
     bankReceiptUrl?: string;
     bankReference?: string;
     notes?: string;
   }) {
-    return prisma.$transaction(async tx => {
+    const requestHash = crypto.createHash('sha256').update(`${params.propertyId}:${params.idempotencyKey}`).digest('hex').slice(0, 32);
+    const depositReference = `DEP-REQ-${requestHash}`;
+    try {
+      return await prisma.$transaction(async tx => {
       if (!ctx.propertyIds.includes(params.propertyId)) {
         throw new ShiftControlError('Access denied to property.', 'FORBIDDEN');
       }
@@ -175,7 +180,16 @@ export class BankDepositService {
       if (!safeAccount.glAccountId) throw new ShiftControlError('The General Cashier Safe account must be mapped to a GL Chart of Account.', 'BAD_REQUEST', 400);
       if (transitBalance > 0 && !transitAccount.glAccountId) throw new ShiftControlError('The Cash In Transit account must be mapped to a GL Chart of Account.', 'BAD_REQUEST', 400);
 
-      const depositReference = `DEP-${Date.now()}-${crypto.randomBytes(2).toString('hex').toUpperCase()}`;
+      const operationId = `available-deposit-request-${requestHash}`;
+      const existingMovement = await tx.posCashMovement.findUnique({ where: { operationId } });
+      if (existingMovement) {
+        const existingDeposit = await tx.bankDeposit.findFirst({ where: { propertyId: params.propertyId, depositReference } });
+        if (!existingDeposit) throw new ShiftControlError('Idempotency record is incomplete; retry with support assistance.', 'CONFLICT', 409);
+        if (Number(existingDeposit.expectedAmount) !== amount || existingDeposit.bankAccountId !== bankAccount.id || (existingDeposit.bankReference || '') !== (params.bankReference || '')) {
+          throw new ShiftControlError('The idempotency key was reused with different deposit details.', 'CONFLICT', 409);
+        }
+        return existingDeposit;
+      }
       const deposit = await tx.bankDeposit.create({
         data: {
           id: crypto.randomUUID(),
@@ -213,7 +227,7 @@ export class BankDepositService {
             destinationAccountId: bankAccount.id,
             reasonCode: 'BANK_DEPOSIT_SUBMITTED',
             receiptReference: depositReference,
-            operationId: `available-deposit-transit-${deposit.id}`,
+            operationId,
           },
         });
         remaining -= transitApplied;
@@ -231,7 +245,7 @@ export class BankDepositService {
             destinationAccountId: bankAccount.id,
             reasonCode: 'BANK_DEPOSIT_SUBMITTED',
             receiptReference: depositReference,
-            operationId: `available-deposit-safe-${deposit.id}`,
+            operationId: `${operationId}-safe`,
           },
         });
       }
@@ -256,7 +270,20 @@ export class BankDepositService {
       }, tx);
 
       return deposit;
-    });
+      }, { timeout: 30000 });
+    } catch (error: any) {
+      if (error?.code === 'P2002') {
+        const existing = await prisma.bankDeposit.findFirst({ where: { propertyId: params.propertyId, depositReference } });
+        if (existing) {
+          const requestedAmount = Number(params.amount);
+          if (Number(existing.expectedAmount) !== requestedAmount || existing.bankAccountId !== params.bankAccountId || (existing.bankReference || '') !== (params.bankReference || '')) {
+            throw new ShiftControlError('The idempotency key was reused with different deposit details.', 'CONFLICT', 409);
+          }
+          return existing;
+        }
+      }
+      throw error;
+    }
   }
 
   static async submitDeposit(ctx: TenantContext, params: { depositId: string, bankAccountId: string, bankReceiptUrl?: string, bankReference?: string, depositDate?: Date }) {
@@ -377,22 +404,23 @@ export class BankDepositService {
   /**
    * Finance Manager completes verification. If bank amount != expected amount, marks as EXCEPTION.
    */
-  static async verifyAndReconcile(ctx: TenantContext, params: { depositId: string, bankConfirmedAmount: number, notes?: string }) {
+  static async verifyAndReconcile(ctx: TenantContext, params: { depositId: string, bankConfirmedAmount: string, notes?: string }) {
     return prisma.$transaction(async tx => {
       // ENFORCE OWNERSHIP PATH
       const deposit = await tx.bankDeposit.findUnique({ where: { id: params.depositId }, include: { allocations: true } });
       if (!deposit || !ctx.propertyIds.includes(deposit.propertyId)) throw new ShiftControlError('Deposit not found or access denied', 'NOT_FOUND', 404);
       if (!['UNDER_RECONCILIATION', 'EXCEPTION'].includes(deposit.status)) throw new ShiftControlError(`Cannot reconcile from status ${deposit.status}`, 'BAD_REQUEST');
 
-      const expected = Number(deposit.expectedAmount);
-      const diff = params.bankConfirmedAmount - expected;
-      const isException = diff !== 0;
+      const confirmed = sumSignedDecimal([params.bankConfirmedAmount]);
+      const expected = sumSignedDecimal([String(deposit.expectedAmount)]);
+      const diff = decimalDifference(confirmed, expected);
+      const isException = !decimalIsZero(diff);
 
       const updated = await tx.bankDeposit.update({
         where: { id: params.depositId },
         data: {
           status: isException ? 'EXCEPTION' : 'RECONCILED',
-          bankConfirmedAmount: params.bankConfirmedAmount,
+          bankConfirmedAmount: confirmed,
           difference: diff,
           reconciledById: isException ? null : ctx.userId,
           reconciledAt: isException ? null : new Date(),

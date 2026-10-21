@@ -1,3 +1,5 @@
+import { decimalDifference, decimalFromNumber, decimalIsZero } from './finance/billing-contracts';
+
 type Account = { id: string; code: string; name: string };
 
 const ACCOUNT_CODES = {
@@ -438,7 +440,8 @@ function makeCashBalanceRow(previous: any, cashClosing: any, frontdeskCashClosin
   const opening = previous ? Number(previous.expectedClosing) : expectedCash - journalActivity;
   const activity = journalActivity;
   const expected = opening + activity;
-  return { ledgerType: 'CASH', accountKey: 'CASH_ACCOUNTS', openingBalance: opening, activityDebit: Math.max(activity, 0), activityCredit: Math.max(-activity, 0), expectedClosing: expected, actualClosing: actualCash, variance: actualCash - expected, status: Math.abs(actualCash - expected) < 0.01 ? 'PROVEN' : 'HAS_VARIANCE', resolution: 'Cash expected and declared balances are sourced from dated POS and front-desk sessions and checked against the posted GL activity.' };
+  const variance = decimalDifference(decimalFromNumber(actualCash), decimalFromNumber(expected));
+  return { ledgerType: 'CASH', accountKey: 'CASH_ACCOUNTS', openingBalance: opening, activityDebit: Math.max(activity, 0), activityCredit: Math.max(-activity, 0), expectedClosing: expected, actualClosing: actualCash, variance: Number(variance), status: decimalIsZero(variance) ? 'PROVEN' : 'HAS_VARIANCE', resolution: 'Cash expected and declared balances are sourced from dated POS and front-desk sessions and checked against the posted GL activity. Exact four-decimal comparison; no tolerance is applied.' };
 }
 
 function makeJournalBalanceRow(ledgerType: string, accountKey: string, previous: any, current: { before: number; daily: number; through: number; postCloseCorrection?: number }, resolution: string) {
@@ -447,7 +450,8 @@ function makeJournalBalanceRow(ledgerType: string, accountKey: string, previous:
     : current.before;
   const expected = opening + current.daily;
   const actual = current.through;
-  return { ledgerType, accountKey, openingBalance: opening, activityDebit: Math.max(current.daily, 0), activityCredit: Math.max(-current.daily, 0), expectedClosing: expected, actualClosing: actual, variance: actual - expected, status: Math.abs(actual - expected) < 0.01 ? 'PROVEN' : 'HAS_VARIANCE', resolution };
+  const variance = decimalDifference(decimalFromNumber(actual), decimalFromNumber(expected));
+  return { ledgerType, accountKey, openingBalance: opening, activityDebit: Math.max(current.daily, 0), activityCredit: Math.max(-current.daily, 0), expectedClosing: expected, actualClosing: actual, variance: Number(variance), status: decimalIsZero(variance) ? 'PROVEN' : 'HAS_VARIANCE', resolution: `${resolution} Exact four-decimal comparison; no tolerance is applied.` };
 }
 
 function makeBalanceRow(ledgerType: string, accountKey: string, previous: any, activity: number, actual: number, resolution: string) {
@@ -459,12 +463,12 @@ function makeBalanceRow(ledgerType: string, accountKey: string, previous: any, a
   // the business date.
   const opening = previous ? Number(previous.actualClosing ?? previous.expectedClosing) : actual - activity;
   const expected = opening + activity;
-  const variance = actual - expected;
   const priorVariance = previous ? Number(previous.variance || 0) : 0;
-  const historicalNote = Math.abs(priorVariance) > 0.01
+  const historicalNote = !decimalIsZero(decimalFromNumber(priorVariance))
     ? ` Prior close carried an unresolved variance of ${priorVariance.toFixed(2)}; it is retained historically and is not counted as today's movement.`
     : '';
-  return { ledgerType, accountKey, openingBalance: opening, activityDebit: Math.max(activity, 0), activityCredit: Math.max(-activity, 0), expectedClosing: expected, actualClosing: actual, variance, status: Math.abs(variance) < 0.01 ? 'PROVEN' : 'HAS_VARIANCE', resolution: previous ? `${resolution}${historicalNote}` : `${resolution} Opening balance was established from the first dated close subledger.` };
+  const exactVariance = decimalDifference(decimalFromNumber(actual), decimalFromNumber(expected));
+  return { ledgerType, accountKey, openingBalance: opening, activityDebit: Math.max(activity, 0), activityCredit: Math.max(-activity, 0), expectedClosing: expected, actualClosing: actual, variance: Number(exactVariance), status: decimalIsZero(exactVariance) ? 'PROVEN' : 'HAS_VARIANCE', resolution: `${previous ? `${resolution}${historicalNote}` : `${resolution} Opening balance was established from the first dated close subledger.`} Exact four-decimal comparison; no tolerance is applied.` };
 }
 
 function makeUnavailableBalanceRow(ledgerType: string, accountKey: string, previous: any, resolution: string) {

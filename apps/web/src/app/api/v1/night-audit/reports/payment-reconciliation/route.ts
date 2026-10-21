@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requireOrganizationContext } from '@/lib/organization-access';
+import { getBillingScope } from '@/lib/services/billing-read-model';
 import { NextRequest } from 'next/server';
 import { auth } from '@/lib/auth';
 import { successResponse, errorResponse } from '@/lib/api-response';
@@ -15,7 +15,8 @@ export async function GET(req: NextRequest) {
     const businessDateStr = searchParams.get('businessDate');
 
     if (!propertyId || !businessDateStr) return errorResponse('BAD_REQUEST', 'Missing propertyId or businessDate', 400);
-    if (!(await requireOrganizationContext(session.user.id)).propertyIds.includes(propertyId)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    try { await getBillingScope(session.user.id, propertyId); }
+    catch { return NextResponse.json({ error: "Forbidden" }, { status: 403 }); }
 
     const businessDate = new Date(businessDateStr);
 

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requireOrganizationContext } from '@/lib/organization-access';
+import { getBillingScope } from '@/lib/services/billing-read-model';
 import { NextRequest } from 'next/server';
 import prisma from '@hotel-pms/db';
 import { auth } from '@/lib/auth';
@@ -16,10 +16,8 @@ export async function GET(request: NextRequest) {
     if (!propertyId || !startDate || !endDate) {
       return errorResponse('BAD_REQUEST', 'propertyId, startDate, and endDate are required', 400);
     }
-    const allowedProperties = (await requireOrganizationContext(session.user.id)).propertyIds;
-    if (!allowedProperties.includes(propertyId)) {
-      return errorResponse('FORBIDDEN', 'No access to this property', 403);
-    }
+    try { await getBillingScope(session.user.id, propertyId); }
+    catch { return errorResponse('FORBIDDEN', 'Insufficient permissions for Front Desk reconciliation', 403); }
     const start = new Date(startDate);
     const end = new Date(endDate);
     if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {

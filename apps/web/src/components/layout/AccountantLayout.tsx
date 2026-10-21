@@ -37,6 +37,9 @@ const ACCOUNTANT_NAV = [
     icon: LayoutDashboard,
     children: [
       { name: 'Overview', href: '/accountant' },
+      { name: 'Billing & Invoicing', href: '/accountant/billing' },
+      { name: 'Payments Received', href: '/accountant/billing/payments' },
+      { name: 'Receivables', href: '/accountant/billing/receivables' },
       { name: 'Revenue Accounting', href: '/accountant/revenue' },
       { name: 'Accounts Receivable', href: '/accountant/receivables' },
       { name: 'City Ledger', href: '/accountant/city-ledger' },

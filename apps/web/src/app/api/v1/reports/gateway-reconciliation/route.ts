@@ -1,9 +1,8 @@
-import { requireOrganizationContext } from '@/lib/organization-access';
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
-import { hasPermission } from '@/lib/rbac';
+import { getBillingScope } from '@/lib/services/billing-read-model';
 import { PaystackProvider } from '@/lib/payment-providers/paystack';
 import crypto from 'crypto';
 export async function GET(req: NextRequest) {
@@ -18,15 +17,8 @@ export async function GET(req: NextRequest) {
     if (!propertyId || !startDate || !endDate) {
       return errorResponse('BAD_REQUEST', 'Missing required query parameters: propertyId, startDate, endDate', 400);
     }
-    const allowedPropertyIds = (await requireOrganizationContext(session.user.id)).propertyIds;
-    if (!allowedPropertyIds.includes(propertyId)) {
-      return errorResponse('FORBIDDEN', 'No access to this property', 403);
-    }
-    const canReadReports = await hasPermission(session.user.id, 'reports', 'read', propertyId);
-    if (!canReadReports && !(session.user as any).isSuperAdmin) {
-      // Allow if they have report access or are super admin
-      return errorResponse('FORBIDDEN', 'Insufficient permissions for gateway reconciliation', 403);
-    }
+    try { await getBillingScope(session.user.id, propertyId); }
+    catch { return errorResponse('FORBIDDEN', 'Insufficient permissions for gateway reconciliation', 403); }
     const start = new Date(startDate);
     const end = new Date(endDate);
     // 1. Fetch Local PMS Gateway Payments

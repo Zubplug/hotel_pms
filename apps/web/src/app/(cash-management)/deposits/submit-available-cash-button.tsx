@@ -23,6 +23,7 @@ export function SubmitAvailableCashButton({ propertyId, availableAmount }: { pro
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+  const [idempotencyKey, setIdempotencyKey] = useState(() => `available-cash-${crypto.randomUUID()}`);
 
   useEffect(() => {
     if (!open) return;
@@ -48,7 +49,7 @@ export function SubmitAvailableCashButton({ propertyId, availableAmount }: { pro
     try {
       const response = await fetch('/api/v1/financial-control/deposits/submit-available', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ propertyId, amount: value, bankAccountId, bankReference: bankReference.trim() || undefined, bankReceiptUrl: receiptUrl.trim() || undefined, notes: notes.trim() || undefined }),
+        body: JSON.stringify({ propertyId, amount, bankAccountId, idempotencyKey, bankReference: bankReference.trim() || undefined, bankReceiptUrl: receiptUrl.trim() || undefined, notes: notes.trim() || undefined }),
       });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error || 'Unable to submit cash');
@@ -59,7 +60,7 @@ export function SubmitAvailableCashButton({ propertyId, availableAmount }: { pro
   };
 
   return <>
-    <Button onClick={() => { setError(''); setSuccess(false); setOpen(true); }} className="gap-2 rounded-xl bg-emerald-600 font-semibold shadow-sm hover:bg-emerald-700">
+    <Button onClick={() => { setError(''); setSuccess(false); setIdempotencyKey(`available-cash-${crypto.randomUUID()}`); setOpen(true); }} className="gap-2 rounded-xl bg-emerald-600 font-semibold shadow-sm hover:bg-emerald-700">
       <Upload className="h-4 w-4" /> Submit available cash
     </Button>
     <Dialog open={open} onOpenChange={(next) => !loading && setOpen(next)}>

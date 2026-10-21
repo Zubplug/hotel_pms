@@ -42,15 +42,19 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ dep
     if (!staff) return NextResponse.json({ error: 'Staff record not found' }, { status: 401 });
     const body = await request.json();
     const { bankConfirmedAmount, notes } = body;
-    if (bankConfirmedAmount === undefined) {
+    if (bankConfirmedAmount === undefined || typeof bankConfirmedAmount !== 'string' && typeof bankConfirmedAmount !== 'number') {
       return NextResponse.json({ error: 'bankConfirmedAmount is required' }, { status: 400 });
+    }
+    const confirmedText = String(bankConfirmedAmount);
+    if (!/^\d+(?:\.\d{1,4})?$/.test(confirmedText)) {
+      return NextResponse.json({ error: 'bankConfirmedAmount must be a non-negative amount with up to four decimal places' }, { status: 400 });
     }
     if (await isNightAuditTransactionLocked(deposit.propertyId)) {
       return NextResponse.json({ error: 'Bank deposit cannot be reconciled while Night Audit is posting. Retry after the new business date is active.', code: 'NIGHT_AUDIT_IN_PROGRESS' }, { status: 409 });
     }
     const result = await BankDepositService.verifyAndReconcile(await requireOrganizationContext(actor.user.id), {
       depositId,
-      bankConfirmedAmount: Number(bankConfirmedAmount),
+      bankConfirmedAmount: confirmedText,
       notes
     });
     return NextResponse.json({ data: result });

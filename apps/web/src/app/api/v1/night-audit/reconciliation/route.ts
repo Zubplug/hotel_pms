@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { auth } from '@/lib/auth';
-import { requireOrganizationContext } from '@/lib/organization-access';
+import { getBillingScope } from '@/lib/services/billing-read-model';
 import prisma from '@hotel-pms/db';
 import { errorResponse, successResponse } from '@/lib/api-response';
 import { buildNightAuditBalanceProof } from '@/lib/night-audit-accounting';
@@ -16,8 +16,8 @@ export async function GET(req: NextRequest) {
     const dateValue = req.nextUrl.searchParams.get('businessDate');
     if (!propertyId || !dateValue || !/^\d{4}-\d{2}-\d{2}$/.test(dateValue)) return errorResponse('BAD_REQUEST', 'propertyId and businessDate (YYYY-MM-DD) are required', 400);
 
-    const context = await requireOrganizationContext(session.user.id);
-    if (!context.propertyIds.includes(propertyId)) return errorResponse('FORBIDDEN', 'Property access denied', 403);
+    try { await getBillingScope(session.user.id, propertyId); }
+    catch { return errorResponse('FORBIDDEN', 'Property or financial-report access denied', 403); }
 
     const businessDate = new Date(`${dateValue}T00:00:00.000Z`);
     if (Number.isNaN(businessDate.getTime())) return errorResponse('BAD_REQUEST', 'Invalid businessDate', 400);

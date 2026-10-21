@@ -1,14 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
+import { auth } from '@/lib/auth';
+import { getBillingScope } from '@/lib/services/billing-read-model';
 
 export async function GET(req: NextRequest) {
   try {
+    const session = await auth();
+    if (!session?.user) return NextResponse.json({ error: { code: 'UNAUTHORIZED', message: 'Authentication required' } }, { status: 401 });
     const { searchParams } = new URL(req.url);
     const propertyId = searchParams.get('propertyId');
     const status = searchParams.get('status');
 
     if (!propertyId) {
       return NextResponse.json({ error: { code: 'BAD_REQUEST', message: 'Property ID is required' } }, { status: 400 });
+    }
+
+    try {
+      await getBillingScope(session.user.id, propertyId);
+    } catch {
+      return NextResponse.json({ error: { code: 'FORBIDDEN', message: 'Insufficient permission for transaction exceptions' } }, { status: 403 });
     }
 
     const whereClause: any = { propertyId };
