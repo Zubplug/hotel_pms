@@ -431,7 +431,10 @@ export async function getBillingDocumentPresentation(scope: BillingScope, source
     const document = normalizeCityInvoice(row, scope.ctx.organizationId, scope.asOf);
     const entries = await (prisma as any).cityLedgerEntry.findMany({
       where: { invoiceId: row.id, propertyId: scope.propertyId },
-      select: { folioId: true, reservationId: true, guestId: true },
+      include: {
+        guest: true,
+        reservation: { include: { primaryGuest: true, reservationRooms: { include: { room: { select: { number: true } } } } } },
+      },
     });
     const folioIds = Array.from(new Set(entries.map((entry: any) => entry.folioId).filter(Boolean)));
     const folios = folioIds.length ? await (prisma as any).folio.findMany({
@@ -439,12 +442,13 @@ export async function getBillingDocumentPresentation(scope: BillingScope, source
       include: { guest: true, reservation: { include: { reservationRooms: { include: { room: { select: { number: true } } } } } } },
     }) : [];
     const linkedFolio = folios[0];
+    const linkedEntry = entries.find((entry: any) => entry.folioId === linkedFolio?.id) || entries[0];
     const folioItems = folioIds.length ? await (prisma as any).folioItem.findMany({
       where: { folioId: { in: folioIds }, type: { not: 'PAYMENT' } },
       orderBy: [{ businessDate: 'asc' }, { createdAt: 'asc' }],
     }) : [];
-    const linkedGuest = linkedFolio?.guest;
-    const linkedReservation = linkedFolio?.reservation;
+    const linkedGuest = linkedFolio?.guest || linkedEntry?.guest || linkedEntry?.reservation?.primaryGuest;
+    const linkedReservation = linkedFolio?.reservation || linkedEntry?.reservation;
     const guestName = linkedGuest ? `${linkedGuest.firstName} ${linkedGuest.lastName}`.trim() : undefined;
     return {
       document,
