@@ -19,6 +19,13 @@ export type CorporateStatement = {
     allocatedAmount: string;
     outstandingAmount: string;
     allocationVariance: string;
+    context: {
+      guestName?: string;
+      roomNumbers: string[];
+      confirmationNumber?: string;
+      checkIn?: string | null;
+      checkOut?: string | null;
+    };
   }>;
   payments: Array<{
     id: string;
@@ -59,6 +66,59 @@ export async function getCorporateStatement(scope: BillingScope, accountId: stri
   });
   if (!account) return null;
 
+  const invoiceIds = account.invoices.map((invoice: any) => invoice.id);
+  const invoiceEntries = invoiceIds.length ? await (prisma as any).cityLedgerEntry.findMany({
+    where: { invoiceId: { in: invoiceIds }, propertyId: scope.propertyId },
+    orderBy: { createdAt: 'asc' },
+    include: {
+      guest: true,
+      reservation: {
+        include: {
+          primaryGuest: true,
+          reservationRooms: { include: { room: { select: { number: true } } }, orderBy: { checkIn: 'asc' } },
+        },
+      },
+      folio: {
+        include: {
+          guest: true,
+          reservation: {
+            include: {
+              primaryGuest: true,
+              reservationRooms: { include: { room: { select: { number: true } } }, orderBy: { checkIn: 'asc' } },
+            },
+          },
+        },
+      },
+    },
+  }) : [];
+  const displayRoomNumber = (value: unknown) => {
+    const text = String(value || '').trim();
+    return text ? text.split('.').pop() || text : '';
+  };
+  const contextByInvoice = new Map<string, {
+    guestName?: string;
+    roomNumbers: string[];
+    confirmationNumber?: string;
+    checkIn?: string | null;
+    checkOut?: string | null;
+  }>();
+  for (const entry of invoiceEntries) {
+    const reservation = entry.reservation || entry.folio?.reservation;
+    const guest = entry.guest || entry.folio?.guest || reservation?.primaryGuest;
+    const guestName = guest ? `${guest.firstName || ''} ${guest.lastName || ''}`.trim() : undefined;
+    const context = {
+      guestName: guestName || undefined,
+      roomNumbers: (reservation?.reservationRooms || []).map((room: any) => displayRoomNumber(room.room?.number)).filter(Boolean),
+      confirmationNumber: reservation?.confirmationNumber || undefined,
+      checkIn: reservation?.checkIn ? new Date(reservation.checkIn).toISOString() : null,
+      checkOut: reservation?.checkOut ? new Date(reservation.checkOut).toISOString() : null,
+    };
+    const existing = contextByInvoice.get(entry.invoiceId);
+    if (!existing || (!existing.guestName && context.guestName) || existing.roomNumbers.length === 0 && context.roomNumbers.length > 0) {
+      contextByInvoice.set(entry.invoiceId, context);
+    }
+  }
+
   const invoices = account.invoices.map((invoice: any) => {
     const allocatedAmount = sumDecimal((invoice.allocations || []).map((allocation: any) => decimal(allocation.amount)));
     const sourcePaidAmount = decimal(invoice.paidAmount);
@@ -75,6 +135,7 @@ export async function getCorporateStatement(scope: BillingScope, accountId: stri
       allocatedAmount,
       outstandingAmount: decimal(invoice.outstandingAmount),
       allocationVariance: sumSignedDecimal([allocatedAmount, `-${sourcePaidAmount}`]),
+      context: contextByInvoice.get(invoice.id) || { roomNumbers: [] },
     };
   });
 
