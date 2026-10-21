@@ -67,6 +67,11 @@ function searchText(query: string | undefined) {
   return value ? { contains: value, mode: 'insensitive' } : undefined;
 }
 
+function searchValue(query: string | undefined) {
+  const value = query?.trim();
+  return value || undefined;
+}
+
 function baseWhere(filters: BillingFilters, dateField = 'createdAt') {
   return {
     propertyId: filters.propertyId,
@@ -199,6 +204,7 @@ export async function listBillingDocuments(scope: BillingScope, filters: Omit<Bi
   const full = { ...filters, propertyId: scope.propertyId };
   const limit = Math.min(Math.max(filters.limit || 25, 1), BILLING_PAGE_SIZE_MAX);
   const q = searchText(filters.query);
+  const queryText = searchValue(filters.query);
   const sourceSet = filters.source ? [filters.source] : BILLING_SOURCES;
   const cursor = decodeBillingCursor(filters.cursor);
   const filterKey = registerFilterKey(filters);
@@ -206,7 +212,7 @@ export async function listBillingDocuments(scope: BillingScope, filters: Omit<Bi
   const [folios, cityInvoices, eventInvoices] = await Promise.all([
     sourceSet.includes('FOLIO') ? (prisma as any).folio.findMany({ where: { ...baseWhere(full), ...keysetWhere('FOLIO', cursor, 'createdAt'), type: { not: 'CITY_LEDGER' }, status: { not: 'VOID' }, ...(q ? { OR: [{ folioNumber: q }, { guest: { firstName: q } }, { guest: { lastName: q } }] } : {}) }, include: { guest: true, corporateAccount: { select: { id: true, name: true } }, payments: { select: { id: true } }, credits: { select: { id: true } }, refunds: { select: { id: true } } }, orderBy: [{ createdAt: 'desc' }, { id: 'asc' }], take: limit + 1 }) : [],
     sourceSet.includes('CITY_LEDGER_INVOICE') ? (prisma as any).cityLedgerInvoice.findMany({ where: { ...baseWhere(full, 'issueDate'), ...keysetWhere('CITY_LEDGER_INVOICE', cursor, 'issueDate'), ...(filters.status ? { status: filters.status } : {}), ...(q ? { OR: [{ invoiceNumber: q }, { description: q }, { account: { name: q } }] } : {}) }, include: { account: { select: { id: true, name: true } }, allocations: { select: { id: true } } }, orderBy: [{ issueDate: 'desc' }, { id: 'asc' }], take: limit + 1 }) : [],
-    sourceSet.includes('EVENT_INVOICE') ? (prisma as any).eventInvoice.findMany({ where: { ...baseWhere(full), ...keysetWhere('EVENT_INVOICE', cursor, 'createdAt'), cityLedgerInvoice: null, ...(filters.status ? { status: filters.status } : {}), ...(q ? { OR: [...(isUuid(q) ? [{ id: q }] : []), { event: { name: q } }] } : {}) }, include: { event: { include: { guest: true, corporateAccount: { select: { id: true, name: true } } } }, leaseBillingSchedule: { select: { dueDate: true } }, payments: { select: { id: true } } }, orderBy: [{ createdAt: 'desc' }, { id: 'asc' }], take: limit + 1 }) : [],
+    sourceSet.includes('EVENT_INVOICE') ? (prisma as any).eventInvoice.findMany({ where: { ...baseWhere(full), ...keysetWhere('EVENT_INVOICE', cursor, 'createdAt'), cityLedgerInvoice: null, ...(filters.status ? { status: filters.status } : {}), ...(queryText ? { OR: [...(isUuid(queryText) ? [{ id: queryText }] : []), { event: { name: queryText } }] } : {}) }, include: { event: { include: { guest: true, corporateAccount: { select: { id: true, name: true } } } }, leaseBillingSchedule: { select: { dueDate: true } }, payments: { select: { id: true } } }, orderBy: [{ createdAt: 'desc' }, { id: 'asc' }], take: limit + 1 }) : [],
   ]);
   const all = [
     ...(folios as any[]).map(row => ({ document: normalizeFolio(row, scope.ctx.organizationId, scope.asOf), sortDate: registerSortDate('FOLIO', row) })),
