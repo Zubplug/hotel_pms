@@ -55,7 +55,7 @@ export async function GET(req: NextRequest) {
         include: {
           acknowledgements: true,
           closePackage: true,
-          journalEntries: { where: { status: 'POSTED' }, select: { id: true } },
+          journalEntries: { where: { status: 'POSTED', isReversed: false }, select: { id: true } },
         }
       }),
       prisma.nightAudit.findFirst({
@@ -190,7 +190,7 @@ export async function GET(req: NextRequest) {
       })(),
       currentAudit ? prisma.nightAuditFinancialSnapshot.findUnique({ where: { nightAuditId: currentAudit.id } }) : Promise.resolve(null),
       prisma.journalEntry.aggregate({
-        where: { propertyId, ...(currentAudit ? { nightAuditId: currentAudit.id } : { entryDate: businessDate }), status: 'POSTED' },
+        where: { propertyId, ...(currentAudit ? { nightAuditId: currentAudit.id } : { entryDate: businessDate }), status: 'POSTED', isReversed: false },
         _sum: { totalDebit: true, totalCredit: true },
         _count: { id: true },
       }),

@@ -28,6 +28,11 @@ export async function POST(req: NextRequest) {
     const session = await auth();
     if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+    return NextResponse.json(
+      { error: 'Payroll preparation is owned by the HR payroll workflow. Use /hr/payroll to create and calculate a period; Accountant is read-only control and reconciliation.' },
+      { status: 409 },
+    );
+
     const body = await req.json();
     const { propertyId, name, startDate, endDate } = body;
     if (!propertyId || !name || !startDate || !endDate) {

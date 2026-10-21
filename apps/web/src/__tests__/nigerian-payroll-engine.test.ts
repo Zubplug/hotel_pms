@@ -54,6 +54,21 @@ describe('Nigerian Statutory Payroll Engine', () => {
       // First 800,000 at 0%, remaining 596,200 at 15%.
       expect(tax).toBe(89430);
     });
+
+    it('exempts national-minimum-wage income under the NTA 2026 regime', () => {
+      const tax = NigerianPayrollEngine.calculateAnnualPaye(
+        840000,
+        0,
+        0,
+        {
+          taxRegime: 'NTA_2026',
+          minimumWageFloor: 70000,
+          taxBands: NigerianPayrollEngine.NTA_2026_TAX_BRACKETS,
+        },
+      );
+
+      expect(tax).toBe(0);
+    });
   });
 
   describe('calculateEmployee', () => {

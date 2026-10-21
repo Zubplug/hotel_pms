@@ -41,6 +41,7 @@ export async function POST(req: NextRequest) {
 
     const input = {
       ...body,
+      lines: Array.isArray(body.lines) ? body.lines : [],
       periodStart: new Date(body.periodStart),
       periodEnd: new Date(body.periodEnd),
     };

@@ -60,7 +60,7 @@ export async function GET(request: NextRequest) {
 
     const journalRows = journals.flatMap(entry => entry.lines.map(line => [entry.entryNumber, iso(entry.entryDate), entry.status, entry.source, entry.description, line.account.code, line.account.name, line.account.type, amount(line.debit), amount(line.credit)]));
     const accountMap = new Map<string, { code: string; name: string; type: string; debit: number; credit: number; lines: number }>();
-    for (const entry of journals.filter(item => item.status === 'POSTED')) for (const line of entry.lines) {
+    for (const entry of journals.filter(item => item.status === 'POSTED' && !item.isReversed)) for (const line of entry.lines) {
       const existing = accountMap.get(line.accountId) || { code: line.account.code, name: line.account.name, type: line.account.type, debit: 0, credit: 0, lines: 0 };
       existing.debit += Number(line.debit); existing.credit += Number(line.credit); existing.lines += 1; accountMap.set(line.accountId, existing);
     }

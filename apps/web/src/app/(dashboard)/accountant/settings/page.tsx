@@ -1,6 +1,8 @@
 import React from 'react';
 import { auth } from '@/lib/auth';
 import { prisma } from '@hotel-pms/db';
+import { redirect } from 'next/navigation';
+import { requireOrganizationContext } from '@/lib/organization-access';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Settings, BookOpen, Calendar, Calculator, ShieldCheck, UtensilsCrossed, Package } from 'lucide-react';
 import { AddAccountModal } from '@/components/accountant/AddAccountModal';
@@ -10,17 +12,21 @@ import { GuestAmenitySettings } from '@/components/accountant/GuestAmenitySettin
 
 export default async function SettingsPage() {
   const session = await auth();
-  const propertyId = session?.user?.propertyId;
+  if (!session?.user?.id) redirect('/login?callbackUrl=%2Faccountant%2Fsettings');
+  const context = await requireOrganizationContext(session.user.id);
+  const propertyId = session.user.propertyId && context.propertyIds.includes(session.user.propertyId) ? session.user.propertyId : context.propertyIds[0];
+  if (!propertyId) return <div className="p-8 text-slate-400">No property is assigned to this account.</div>;
 
-  const accounts = propertyId ? await prisma.chartOfAccount.findMany({ 
-    where: { propertyId },
-    orderBy: { code: 'asc' }
-  }) : [];
-
-  const periods = propertyId ? await prisma.accountingPeriod.findMany({
-    where: { propertyId },
-    orderBy: { periodStart: 'desc' }
-  }) : [];
+  const [property, accounts, periods, taxes] = await Promise.all([
+    prisma.property.findUnique({ where: { id: propertyId }, select: { name: true, baseCurrency: true, businessDate: true } }),
+    prisma.chartOfAccount.findMany({ where: { propertyId }, orderBy: { code: 'asc' } }),
+    prisma.accountingPeriod.findMany({ where: { propertyId }, orderBy: { periodStart: 'desc' } }),
+    prisma.tax.findMany({ where: { propertyId, isActive: true }, select: { id: true } }),
+  ]);
+  const businessDate = property?.businessDate || new Date();
+  const currentPeriod = periods.find(period => period.periodStart <= businessDate && period.periodEnd >= businessDate);
+  const requiredCodes = ['1000', '1100', '1110', '1130', '1140', '1150', '1135', '2160', '2200', '2210', '2300', '4050', '4250', '4300', '4400', '4900', '4950'];
+  const missingMappings = requiredCodes.filter(code => !accounts.some(account => account.code === code && account.isActive));
 
   return (
     <div className="p-8 space-y-8 bg-slate-950 min-h-screen text-slate-50">
@@ -33,6 +39,13 @@ export default async function SettingsPage() {
           <p className="text-slate-400 mt-1">Configure global accounting rules, charts, and fiscal periods.</p>
         </div>
       </div>
+
+      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="rounded-xl border border-white/10 bg-white/[.04] p-4"><p className="text-[10px] uppercase tracking-wider text-slate-500">Property</p><p className="mt-2 font-semibold text-white">{property?.name || 'Unknown property'}</p><p className="mt-1 text-xs text-slate-500">{property?.baseCurrency || 'NGN'} · {businessDate.toISOString().slice(0, 10)}</p></div>
+        <div className="rounded-xl border border-white/10 bg-white/[.04] p-4"><p className="text-[10px] uppercase tracking-wider text-slate-500">Chart of accounts</p><p className="mt-2 font-semibold text-white">{accounts.filter(account => account.isActive).length} active accounts</p><p className="mt-1 text-xs text-slate-500">{missingMappings.length ? `${missingMappings.length} required mappings missing` : 'Required control accounts present'}</p></div>
+        <div className="rounded-xl border border-white/10 bg-white/[.04] p-4"><p className="text-[10px] uppercase tracking-wider text-slate-500">Current period</p><p className="mt-2 font-semibold text-white">{currentPeriod?.name || 'No period'}</p><p className="mt-1 text-xs text-slate-500">{currentPeriod?.status || 'Create an accounting period'}</p></div>
+        <div className="rounded-xl border border-white/10 bg-white/[.04] p-4"><p className="text-[10px] uppercase tracking-wider text-slate-500">Tax rules</p><p className="mt-2 font-semibold text-white">{taxes.length} active rules</p><p className="mt-1 text-xs text-slate-500"><a href="/accountant/taxes" className="text-amber-300 hover:text-amber-200">Open tax control</a></p></div>
+      </section>
 
       <Tabs defaultValue="coa" className="w-full">
         <TabsList className="bg-slate-900 border-white/10 p-1 rounded-xl gap-2 overflow-x-auto w-full justify-start h-14">
@@ -62,7 +75,7 @@ export default async function SettingsPage() {
               <h2 className="text-xl font-semibold">Chart of Accounts</h2>
               <p className="text-sm text-slate-400">Manage all master ledger accounts.</p>
             </div>
-            <AddAccountModal />
+            <AddAccountModal propertyId={propertyId} />
           </div>
           <div className="bg-white/5 border border-white/10 rounded-xl backdrop-blur-sm overflow-hidden">
             <table className="w-full text-left text-sm whitespace-nowrap">

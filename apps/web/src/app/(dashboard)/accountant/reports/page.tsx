@@ -23,17 +23,22 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
   if (!propertyId) return <EmptyState title="No property assigned" />;
 
   const property = await prisma.property.findUnique({ where: { id: propertyId }, select: { name: true, baseCurrency: true, businessDate: true } });
-  const businessDate = resolvedSearchParams?.businessDate ? new Date(resolvedSearchParams.businessDate) : property?.businessDate || new Date();
+  const propertyBusinessDate = property?.businessDate || new Date();
+  const requestedBusinessDate = resolvedSearchParams?.businessDate ? new Date(`${resolvedSearchParams.businessDate}T00:00:00.000Z`) : propertyBusinessDate;
+  const businessDate = Number.isNaN(requestedBusinessDate.getTime()) ? propertyBusinessDate : requestedBusinessDate;
+  const defaultStart = new Date(Date.UTC(businessDate.getUTCFullYear(), businessDate.getUTCMonth(), 1));
+  const requestedStart = resolvedSearchParams?.startDate ? new Date(`${resolvedSearchParams.startDate}T00:00:00.000Z`) : defaultStart;
+  const requestedEnd = resolvedSearchParams?.endDate ? new Date(`${resolvedSearchParams.endDate}T23:59:59.999Z`) : businessDate;
+  const startDate = Number.isNaN(requestedStart.getTime()) ? defaultStart : requestedStart;
+  const endDate = Number.isNaN(requestedEnd.getTime()) ? businessDate : new Date(Math.min(requestedEnd.getTime(), businessDate.getTime()));
   const [postedLines, cashierSettlement, arAging, inventoryValuation] = await Promise.all([
-    prisma.journalEntryLine.findMany({ where: { entry: { propertyId, status: 'POSTED' } }, select: { debit: true, credit: true, account: { select: { category: true } } } }),
+    prisma.journalEntryLine.findMany({ where: { entry: { propertyId, status: 'POSTED', isReversed: false, entryDate: { lte: businessDate } } }, select: { debit: true, credit: true, account: { select: { category: true } } } }),
     DailyAccountingService.getCashierSettlement(propertyId, businessDate),
     ReceivablesService.getARAgingSummary(propertyId, businessDate),
     InventoryService.getInventoryValuation(propertyId),
   ]);
 
   const currency = property?.baseCurrency || 'NGN';
-  const startDate = resolvedSearchParams?.startDate || new Date(Date.UTC(businessDate.getUTCFullYear(), businessDate.getUTCMonth(), 1)).toISOString().slice(0, 10);
-  const endDate = resolvedSearchParams?.endDate || businessDate.toISOString().slice(0, 10);
   const totalDebit = postedLines.reduce((sum, line) => sum + Number(line.debit), 0);
   const totalCredit = postedLines.reduce((sum, line) => sum + Number(line.credit), 0);
   const difference = Number((totalDebit - totalCredit).toFixed(2));
@@ -50,7 +55,7 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
     ar: { status: Math.abs(arSubledger - arGl) < 0.01 ? 'RECONCILED' : 'VARIANCE', subledger: arSubledger, gl: arGl, diff: arSubledger - arGl },
     inventory: { status: Math.abs(inventorySubledger - inventoryGl) < 0.01 ? 'RECONCILED' : 'VARIANCE', subledger: inventorySubledger, gl: inventoryGl, diff: inventorySubledger - inventoryGl }
   };
-  const query = `?businessDate=${encodeURIComponent(businessDate.toISOString().slice(0, 10))}&startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}`;
+  const query = `?businessDate=${encodeURIComponent(businessDate.toISOString().slice(0, 10))}&startDate=${encodeURIComponent(startDate.toISOString().slice(0, 10))}&endDate=${encodeURIComponent(endDate.toISOString().slice(0, 10))}`;
 
   return (
     <main className="min-h-full bg-[#08111f] px-3 py-5 text-slate-200 sm:px-6 sm:py-6 lg:px-8 lg:py-8">
@@ -72,8 +77,8 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
           <div className="flex items-center gap-2 text-slate-400">
             <label className="flex flex-col gap-1">Business date<input name="businessDate" type="date" defaultValue={businessDate.toISOString().slice(0, 10)} className="rounded-lg border border-white/10 bg-slate-900 px-3 py-2 text-slate-200" /></label>
           </div>
-          <label className="flex flex-col gap-1 text-slate-400">From<input name="startDate" type="date" defaultValue={startDate} className="rounded-lg border border-white/10 bg-slate-900 px-3 py-2 text-slate-200" /></label>
-          <label className="flex flex-col gap-1 text-slate-400">To<input name="endDate" type="date" defaultValue={endDate} className="rounded-lg border border-white/10 bg-slate-900 px-3 py-2 text-slate-200" /></label>
+          <label className="flex flex-col gap-1 text-slate-400">From<input name="startDate" type="date" defaultValue={startDate.toISOString().slice(0, 10)} className="rounded-lg border border-white/10 bg-slate-900 px-3 py-2 text-slate-200" /></label>
+          <label className="flex flex-col gap-1 text-slate-400">To<input name="endDate" type="date" defaultValue={endDate.toISOString().slice(0, 10)} className="rounded-lg border border-white/10 bg-slate-900 px-3 py-2 text-slate-200" /></label>
           <div className="flex flex-col gap-1 text-slate-400"><span>Property</span><strong className="rounded-lg border border-white/10 bg-slate-900 px-3 py-2 text-slate-200">{property?.name}</strong></div>
           <button type="submit" className="rounded-lg bg-cyan-500/20 px-4 py-2 font-semibold text-cyan-300 hover:bg-cyan-500/30">Apply filters</button>
         </form>

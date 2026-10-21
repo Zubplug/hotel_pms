@@ -28,16 +28,17 @@ export default async function BudgetsPage() {
   const year = businessDate.getUTCFullYear();
   const startOfYear = new Date(Date.UTC(year, 0, 1));
   const endOfYear = new Date(Date.UTC(year, 11, 31, 23, 59, 59, 999));
+  const asOf = businessDate < endOfYear ? businessDate : endOfYear;
   const [budgets, paidExpenses, revenueItems, openBills] = await Promise.all([
     prisma.budget.findMany({ where: { propertyId }, include: { lines: true }, orderBy: { periodStart: 'desc' } }),
-    prisma.cashExpense.findMany({ where: { propertyId, status: 'PAID', paidAt: { gte: startOfYear, lte: endOfYear } }, select: { amount: true, category: true, costCenter: true, paidAt: true } }),
-    prisma.folioItem.findMany({ where: { folio: { propertyId }, type: 'CHARGE', voidedAt: null, businessDate: { gte: startOfYear, lte: endOfYear } }, select: { amount: true, businessDate: true, revenueCategory: true } }),
+    prisma.cashExpense.findMany({ where: { propertyId, status: 'PAID', paidAt: { gte: startOfYear, lte: asOf } }, select: { amount: true, category: true, costCenter: true, paidAt: true } }),
+    prisma.folioItem.findMany({ where: { folio: { propertyId }, type: 'CHARGE', voidedAt: null, businessDate: { gte: startOfYear, lte: asOf } }, select: { amount: true, businessDate: true, revenueCategory: true } }),
     prisma.supplierInvoice.findMany({ where: { propertyId, outstandingAmount: { gt: 0 } }, select: { outstandingAmount: true, dueDate: true } })
   ]);
-  const actuals = await Promise.all(budgets.map(budget => BudgetService.getActuals(propertyId, budget.id)));
+  const actuals = await Promise.all(budgets.map(budget => BudgetService.getActuals(propertyId, budget.id, businessDate)));
   const activeIndex = budgets.findIndex(budget => budget.periodStart <= businessDate && budget.periodEnd >= businessDate && ['APPROVED', 'ACTIVE'].includes(budget.status));
-  const activeBudget = budgets[activeIndex] || budgets.find(budget => budget.periodStart <= businessDate && budget.periodEnd >= businessDate) || budgets[0];
-  const activeActuals = activeIndex >= 0 ? actuals[activeIndex] : activeBudget ? await BudgetService.getActuals(propertyId, activeBudget.id) : null;
+  const activeBudget = activeIndex >= 0 ? budgets[activeIndex] : null;
+  const activeActuals = activeIndex >= 0 ? actuals[activeIndex] : null;
   const revenueBudget = activeActuals?.budgetedRevenue || 0;
   const expenseBudget = activeActuals?.budgetedExpense || 0;
   const actualRevenue = activeActuals?.actualRevenue || 0;

@@ -38,6 +38,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ ent
       if (!entry || !ctx.propertyIds.includes(entry.propertyId) || (isCorporateAdvance ? !validCorporateAdvance : !validGuestCredit)) throw new Error('NOT_FOUND');
       if (isCorporateAdvance && requestedMethod === 'ORIGINAL_PAYMENT') throw new Error('PAYMENT_NOT_FOUND');
       const property = await tx.property.findUnique({ where: { id: entry.propertyId }, select: { organizationId: true } });
+      await tx.$queryRaw`SELECT id FROM "CityLedgerEntry" WHERE id = ${entry.id}::uuid FOR UPDATE`;
       const payment = entry.folioId ? await tx.payment.findFirst({ where: { folioId: entry.folioId, status: 'COMPLETED' }, orderBy: { createdAt: 'asc' } }) : null;
       if (!isCorporateAdvance && !payment && requestedMethod === 'ORIGINAL_PAYMENT') throw new Error('PAYMENT_NOT_FOUND');
       const allocated = entry.allocations.reduce((sum, allocation) => sum + Number(allocation.amount), 0);

@@ -28,6 +28,11 @@ export async function POST(req: NextRequest) {
     const session = await auth();
     if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+    return NextResponse.json(
+      { error: 'Compensation setup is owned by the HR employee master. Accountant is read-only control and reconciliation.' },
+      { status: 409 },
+    );
+
     const body = await req.json();
     const { propertyId, staffId, ...rest } = body;
     if (!propertyId || !staffId) return NextResponse.json({ error: 'Missing propertyId or staffId' }, { status: 400 });

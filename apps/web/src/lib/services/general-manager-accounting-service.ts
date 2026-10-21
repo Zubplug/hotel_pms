@@ -46,9 +46,9 @@ export class GeneralManagerAccountingService {
       prisma.nightAudit.findMany({ where: { propertyId, businessDate: { gte: fourteenDaysAgo, lte: businessDate } }, select: { businessDate: true, status: true, completedAt: true, posUnresolvedVariances: true, posSessionsPending: true, closePackage: { select: { status: true, finalizedAt: true } } }, orderBy: { businessDate: 'asc' } }),
       prisma.auditLog.findMany({ where: { propertyId, createdAt: { gte: fourteenDaysAgo, lte: dayEnd } }, select: { id: true, action: true, resource: true, resourceId: true, createdAt: true, userEmail: true, userRole: true }, orderBy: { createdAt: 'desc' }, take: 20 }),
       Promise.all([
-        prisma.journalEntry.count({ where: { propertyId, entryDate: { gte: periodStart, lte: dayEnd }, status: 'POSTED' } }),
+        prisma.journalEntry.count({ where: { propertyId, entryDate: { gte: periodStart, lte: dayEnd }, status: 'POSTED', isReversed: false } }),
         prisma.journalEntry.count({ where: { propertyId, status: 'DRAFT' } }),
-        prisma.journalEntry.aggregate({ where: { propertyId, entryDate: { gte: periodStart, lte: dayEnd }, status: 'POSTED' }, _sum: { totalDebit: true, totalCredit: true } }),
+        prisma.journalEntry.aggregate({ where: { propertyId, entryDate: { gte: periodStart, lte: dayEnd }, status: 'POSTED', isReversed: false }, _sum: { totalDebit: true, totalCredit: true } }),
       ]),
       prisma.bankDeposit.groupBy({ by: ['status'], where: { propertyId }, _count: { _all: true }, _sum: { expectedAmount: true, difference: true } }),
       prisma.cityLedgerInvoice.groupBy({ by: ['status'], where: { propertyId }, _count: { _all: true }, _sum: { outstandingAmount: true } }),
@@ -61,11 +61,11 @@ export class GeneralManagerAccountingService {
 
     const [profitAndLoss, balanceSheet, trialBalance, cashFlow, glReconciliation] = statements;
     const currentBudget = budgets.find((budget) => budget.status === 'APPROVED') || budgets[0] || null;
-    const budgetActuals = currentBudget ? await BudgetService.getActuals(propertyId, currentBudget.id) : null;
+    const budgetActuals = currentBudget ? await BudgetService.getActuals(propertyId, currentBudget.id, businessDate) : null;
     const postedDebit = asNumber(journals[2]._sum.totalDebit);
     const postedCredit = asNumber(journals[2]._sum.totalCredit);
     const taxCollected = taxRemittances.reduce((sum, row) => sum + asNumber(row.collectedAmount), 0);
-    const taxRemitted = taxRemittances.reduce((sum, row) => sum + asNumber(row.remittedAmount), 0);
+    const taxRemitted = taxRemittances.filter((row) => row.status === 'REMITTED').reduce((sum, row) => sum + asNumber(row.remittedAmount), 0);
 
     return {
       property,

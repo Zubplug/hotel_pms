@@ -44,10 +44,9 @@ export default async function GeneralLedgerPage() {
       where: { propertyId },
       include: { lines: { include: { account: { select: { code: true, name: true, type: true, normalBalance: true } } } }, period: { select: { name: true } } },
       orderBy: [{ entryDate: 'desc' }, { createdAt: 'desc' }],
-      take: 500,
     }),
     prisma.journalEntryLine.findMany({
-      where: { entry: { propertyId, status: 'POSTED' } },
+      where: { entry: { propertyId, status: 'POSTED', isReversed: false } },
       select: { debit: true, credit: true, sourceType: true, accountId: true, entry: { select: { entryDate: true, source: true } } },
     }),
   ]);
@@ -56,7 +55,7 @@ export default async function GeneralLedgerPage() {
   const businessDate = property?.businessDate || new Date();
   const activePeriod = periods.find(period => period.periodStart <= businessDate && period.periodEnd >= businessDate);
   const openPeriods = periods.filter(period => period.status === 'OPEN');
-  const postedJournals = journals.filter(entry => entry.status === 'POSTED');
+  const postedJournals = journals.filter(entry => entry.status === 'POSTED' && !entry.isReversed);
   const draftJournals = journals.filter(entry => entry.status === 'DRAFT');
   const postedDebits = postedLines.reduce((sum, line) => sum + Number(line.debit), 0);
   const postedCredits = postedLines.reduce((sum, line) => sum + Number(line.credit), 0);

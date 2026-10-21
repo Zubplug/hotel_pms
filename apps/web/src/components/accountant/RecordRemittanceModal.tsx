@@ -17,7 +17,7 @@ const schema = z.object({
   periodStart: z.string().min(1, "Period start is required"),
   periodEnd: z.string().min(1, "Period end is required"),
   collectedAmount: z.coerce.number().min(0, "Amount must be positive"),
-  remittedAmount: z.coerce.number().min(0, "Amount must be positive"),
+  remittedAmount: z.coerce.number().gt(0, "Amount must be greater than zero"),
   remittanceDate: z.string().min(1, "Date is required"),
   notes: z.string().optional()
 });

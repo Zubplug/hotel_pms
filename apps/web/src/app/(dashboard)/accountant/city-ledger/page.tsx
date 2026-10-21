@@ -38,8 +38,8 @@ export default async function CityLedgerPage({ allowNightAudit = false }: { allo
   const now = asAt.getTime();
   const [property, accounts, invoices, payments, arControl, creditFolios, corporateAccounts, refundEntries] = await Promise.all([
     prisma.property.findUnique({ where: { id: propertyId }, select: { name: true, baseCurrency: true } }),
-    prisma.cityLedgerAccount.findMany({ where: { propertyId }, orderBy: { name: 'asc' } }),
-    prisma.cityLedgerInvoice.findMany({ where: { propertyId, status: { in: ['OPEN', 'PARTIALLY_PAID'] } }, include: { account: { select: { id: true, name: true, type: true, currency: true } } }, orderBy: [{ dueDate: 'asc' }, { issueDate: 'asc' }] }),
+    prisma.cityLedgerAccount.findMany({ where: { propertyId, status: 'ACTIVE' }, orderBy: { name: 'asc' } }),
+    prisma.cityLedgerInvoice.findMany({ where: { propertyId, issueDate: { lte: asAt }, status: { in: ['OPEN', 'PARTIALLY_PAID'] } }, include: { account: { select: { id: true, name: true, type: true, currency: true } } }, orderBy: [{ dueDate: 'asc' }, { issueDate: 'asc' }] }),
     prisma.cityLedgerEntry.findMany({ where: { propertyId, type: 'PAYMENT', status: { not: 'REVERSED' } }, include: { account: { select: { name: true, currency: true, type: true } }, allocations: { select: { amount: true } } }, orderBy: { createdAt: 'desc' } }),
     prisma.chartOfAccount.findFirst({ where: { propertyId, code: '1140', isActive: true }, select: { id: true, code: true, name: true } }),
     prisma.folio.findMany({ where: { propertyId, balance: { lt: 0 }, status: { not: 'VOID' }, type: { not: 'CITY_LEDGER' } }, select: { id: true, folioNumber: true, balance: true, currency: true, guest: { select: { firstName: true, lastName: true } } }, orderBy: { balance: 'asc' }, take: 10 }),
@@ -103,7 +103,7 @@ export default async function CityLedgerPage({ allowNightAudit = false }: { allo
     return { label: new Intl.DateTimeFormat('en-NG', { month: 'short', day: 'numeric' }).format(new Date(end)), amount: payments.filter(payment => payment.createdAt.getTime() >= start && payment.createdAt.getTime() < end).reduce((sum, payment) => sum + Number(payment.amount), 0) };
   });
   const maxWeekly = Math.max(...weekly.map(item => item.amount), 1);
-  const glLines = arControl ? await prisma.journalEntryLine.aggregate({ where: { accountId: arControl.id, entry: { propertyId, status: 'POSTED' } }, _sum: { debit: true, credit: true } }) : null;
+  const glLines = arControl ? await prisma.journalEntryLine.aggregate({ where: { accountId: arControl.id, entry: { propertyId, status: 'POSTED', isReversed: false } }, _sum: { debit: true, credit: true } }) : null;
   const glBalance = glLines ? Number(glLines._sum.debit || 0) - Number(glLines._sum.credit || 0) : null;
   const variance = glBalance === null ? null : glBalance - totalOutstanding;
 

@@ -99,7 +99,15 @@ export class TaxRemittanceService {
     }
   ) {
     if (!ctx.propertyIds.includes(input.propertyId)) throw new Error('Unauthorized');
-    if (input.remittedAmount <= 0) throw new Error('Remitted amount must be greater than zero');
+    if (!input.taxType.trim()) throw new Error('Tax type is required');
+    if (!(input.periodStart instanceof Date) || Number.isNaN(input.periodStart.getTime()) || !(input.periodEnd instanceof Date) || Number.isNaN(input.periodEnd.getTime()) || !(input.remittanceDate instanceof Date) || Number.isNaN(input.remittanceDate.getTime())) throw new Error('Tax period or remittance date is invalid');
+    if (input.periodStart > input.periodEnd) throw new Error('Tax period start must be before its end');
+    if (!Number.isFinite(input.collectedAmount) || input.collectedAmount < 0) throw new Error('Collected amount must be a non-negative number');
+    if (!Number.isFinite(input.remittedAmount) || input.remittedAmount <= 0) throw new Error('Remitted amount must be greater than zero');
+    if (input.taxId) {
+      const tax = await prisma.tax.findFirst({ where: { id: input.taxId, propertyId: input.propertyId, isActive: true }, select: { id: true } });
+      if (!tax) throw new Error('Selected tax rule is not configured for this property');
+    }
 
     return prisma.$transaction(async (tx) => {
       const remittance = await tx.taxRemittance.create({

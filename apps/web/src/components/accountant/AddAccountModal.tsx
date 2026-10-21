@@ -12,12 +12,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
 const schema = z.object({
-  accountCode: z.string().min(1, "Account code is required"),
+  code: z.string().min(1, "Account code is required"),
   name: z.string().min(1, "Name is required"),
   type: z.string().min(1, "Type is required"),
+  category: z.string().min(1, "Category is required"),
+  normalBalance: z.enum(['DEBIT', 'CREDIT']),
 });
 
-export function AddAccountModal() {
+export function AddAccountModal({ propertyId }: { propertyId: string }) {
   const [open, setOpen] = useState(false);
   const router = useRouter();
   const { register, handleSubmit, formState: { errors, isSubmitting }, reset } = useForm<z.infer<typeof schema>>({
@@ -29,7 +31,7 @@ export function AddAccountModal() {
       const res = await fetch('/api/v1/accountant/gl/accounts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
+        body: JSON.stringify({ ...data, propertyId })
       });
       if (!res.ok) throw new Error('Failed to create account');
       toast.success('Account created successfully');
@@ -53,8 +55,8 @@ export function AddAccountModal() {
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 mt-4">
           <div className="space-y-2">
             <Label>Account Code</Label>
-            <Input {...register('accountCode')} placeholder="e.g. 1001" className="bg-slate-950 border-white/10 text-white" />
-            {errors.accountCode && <p className="text-red-400 text-xs">{errors.accountCode.message}</p>}
+            <Input {...register('code')} placeholder="e.g. 1001" className="bg-slate-950 border-white/10 text-white" />
+            {errors.code && <p className="text-red-400 text-xs">{errors.code.message}</p>}
           </div>
           <div className="space-y-2">
             <Label>Name</Label>
@@ -73,6 +75,7 @@ export function AddAccountModal() {
             </select>
             {errors.type && <p className="text-red-400 text-xs">{errors.type.message}</p>}
           </div>
+          <div className="grid grid-cols-2 gap-4"><div className="space-y-2"><Label>Category</Label><Input {...register('category')} placeholder="e.g. Current Assets" className="bg-slate-950 border-white/10 text-white" />{errors.category && <p className="text-red-400 text-xs">{errors.category.message}</p>}</div><div className="space-y-2"><Label>Normal balance</Label><select {...register('normalBalance')} defaultValue="DEBIT" className="flex h-9 w-full rounded-md border border-white/10 bg-slate-950 px-3 py-1 text-sm text-white"><option value="DEBIT">Debit</option><option value="CREDIT">Credit</option></select></div></div>
           <div className="flex justify-end pt-4">
             <Button type="submit" disabled={isSubmitting} className="bg-emerald-600 hover:bg-emerald-700 text-white">
               {isSubmitting ? 'Saving...' : 'Add Account'}

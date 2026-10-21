@@ -11,6 +11,11 @@ export async function POST(
     const session = await auth();
     if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+    return NextResponse.json(
+      { error: 'Payroll calculation is owned by the HR payroll workflow. Accountant is read-only control and reconciliation.' },
+      { status: 409 },
+    );
+
     const ctx = await requireOrganizationContext(session.user.id);
     const result = await PayrollService.processPayroll(ctx, (await params).id);
     return NextResponse.json(result);

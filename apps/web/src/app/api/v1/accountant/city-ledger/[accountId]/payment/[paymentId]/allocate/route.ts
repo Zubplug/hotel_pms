@@ -41,7 +41,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ acc
       const outstanding = Number(invoice.outstandingAmount) - amount;
       await tx.cityLedgerInvoice.update({ where: { id: invoiceId }, data: { paidAmount: { increment: amount }, outstandingAmount: outstanding, status: outstanding <= 0.01 ? 'PAID' : 'PARTIALLY_PAID' } });
       const allocation = await tx.cityLedgerAllocation.create({ data: { paymentId, invoiceId, amount, currency: payment.currency, createdBy: session.user.id } });
-      await tx.cityLedgerAccount.update({ where: { id: accountId }, data: { balance: { increment: amount } } });
+      // Applying an advance reduces the customer's remaining AR exposure. The
+      // invoice is reduced above, so the account balance must move in the
+      // same direction; incrementing it creates a subledger drift.
+      await tx.cityLedgerAccount.update({ where: { id: accountId }, data: { balance: { decrement: amount } } });
       const advancesAccountId = await GLMappingService.getCorporateAdvancesAccount(account.propertyId);
       const cityLedgerAccountId = await GLMappingService.getCityLedgerAccount(account.propertyId);
       await GeneralLedgerService.postJournal({ userId: session.user.id, propertyIds: [account.propertyId], organizationId: account.property.organizationId, role, permissions: [], outletIds: [] }, {
@@ -52,7 +55,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ acc
         sourceModule: 'AR',
         lines: [
           { accountId: advancesAccountId, description: 'Release unapplied corporate advance', debit: amount, credit: 0, sourceType: 'AR_ALLOCATION', sourceId: allocation.id },
-          { accountId: cityLedgerAccountId, description: 'Increase city-ledger receivable for applied advance', debit: 0, credit: amount, sourceType: 'AR_ALLOCATION', sourceId: allocation.id },
+          { accountId: cityLedgerAccountId, description: 'Reduce city-ledger receivable for applied advance', debit: 0, credit: amount, sourceType: 'AR_ALLOCATION', sourceId: allocation.id },
         ],
       }, tx);
       if (remainingPayment - amount <= 0.01) await tx.cityLedgerEntry.update({ where: { id: paymentId }, data: { status: 'SETTLED', reason: 'Allocated city ledger payment' } });

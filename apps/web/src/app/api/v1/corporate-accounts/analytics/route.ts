@@ -54,16 +54,16 @@ export async function GET(req: NextRequest) {
         _count: { _all: true },
       }),
       prisma.reservation.findMany({
-        where: { propertyId, corporateAccountId: { not: null }, checkIn: { gte: trendStart }, status: { notIn: ['CANCELLED', 'NO_SHOW'] } },
+        where: { propertyId, corporateAccountId: { not: null }, checkIn: { gte: trendStart, lte: now }, status: { notIn: ['CANCELLED', 'NO_SHOW'] } },
         select: { corporateAccountId: true, checkIn: true },
         orderBy: { checkIn: 'asc' },
       }),
       prisma.folioItem.findMany({
-        where: { folio: { propertyId, corporateAccountId: { not: null } }, businessDate: { gte: trendStart }, type: 'CHARGE', voidedAt: null },
+        where: { folio: { propertyId, corporateAccountId: { not: null } }, businessDate: { gte: trendStart, lte: now }, type: 'CHARGE', voidedAt: null },
         select: { businessDate: true, amount: true },
       }),
       prisma.cityLedgerInvoice.findMany({
-        where: { propertyId, status: { in: ['OPEN', 'PARTIALLY_PAID'] } },
+        where: { propertyId, issueDate: { lte: now }, status: { in: ['OPEN', 'PARTIALLY_PAID'] } },
         select: { id: true, accountId: true, invoiceNumber: true, issueDate: true, dueDate: true, outstandingAmount: true, currency: true, status: true, account: { select: { name: true, type: true } } },
         orderBy: { dueDate: 'asc' },
       }),
@@ -88,7 +88,9 @@ export async function GET(req: NextRequest) {
     const openSharedFolioCounts = new Map(openSharedFolios.map(row => [row.corporateAccountId!, row._count._all]));
     const checkedInGuestCounts = new Map(checkedInGuests.map(row => [row.corporateAccountId!, row._count._all]));
     const accountByLedger = new Map(ledgerAccounts.map(account => [account.id, account]));
-    const corporateInvoices = invoices.filter(invoice => accountByLedger.has(invoice.accountId));
+    // This dashboard is corporate-only. Skipper/walk-out and other city-ledger
+    // invoices must not inflate corporate ageing, overdue alerts, or activity.
+    const corporateInvoices = invoices.filter(invoice => accountByLedger.get(invoice.accountId)?.type === 'CORPORATE');
     const unappliedAdvanceByLedger = new Map<string, number>();
     for (const payment of paymentEntries) {
       const unapplied = Math.max(0, Number(payment.amount) - payment.allocations.reduce((sum, allocation) => sum + Number(allocation.amount), 0));

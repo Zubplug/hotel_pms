@@ -45,7 +45,8 @@ export async function GET(req: NextRequest) {
         where: {
           propertyId,
           entryDate: { lte: businessDate },
-          status: 'POSTED'
+          status: 'POSTED',
+          isReversed: false
         },
         select: {
           id: true,

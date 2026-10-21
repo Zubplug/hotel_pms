@@ -36,6 +36,11 @@ export class BudgetService {
     }
   ) {
     if (!ctx.propertyIds.includes(input.propertyId)) throw new Error('Unauthorized');
+    if (!input.name.trim()) throw new Error('Budget name is required');
+    if (!(input.periodStart instanceof Date) || Number.isNaN(input.periodStart.getTime()) || !(input.periodEnd instanceof Date) || Number.isNaN(input.periodEnd.getTime())) throw new Error('Budget period dates are invalid');
+    if (input.periodStart > input.periodEnd) throw new Error('Budget period start must be before its end');
+    if (!input.lines.length) throw new Error('At least one budget line is required');
+    if (input.lines.some(line => !Number.isFinite(line.amount) || line.amount < 0)) throw new Error('Budget line amounts must be non-negative numbers');
 
     let totalRev = 0;
     let totalExp = 0;
@@ -94,9 +99,24 @@ export class BudgetService {
       throw new Error(`Cannot submit budget with status ${budget.status}`);
     }
 
-    return prisma.budget.update({
-      where: { id: budgetId },
-      data: { status: 'SUBMITTED' }
+    return prisma.$transaction(async (tx) => {
+      const submitted = await tx.budget.update({
+        where: { id: budgetId, status: 'DRAFT' },
+        data: { status: 'SUBMITTED' }
+      });
+      await tx.auditLog.create({
+        data: {
+          organizationId: ctx.organizationId,
+          propertyId: budget.propertyId,
+          userId: ctx.userId,
+          action: 'BUDGET_SUBMITTED',
+          resource: 'Budget',
+          resourceId: budget.id,
+          requestId: randomUUID(),
+          newValue: { status: 'SUBMITTED' }
+        }
+      });
+      return submitted;
     });
   }
 
@@ -141,12 +161,14 @@ export class BudgetService {
     });
   }
 
-  static async getActuals(propertyId: string, budgetId: string) {
+  static async getActuals(propertyId: string, budgetId: string, asOfDate?: Date) {
     const budget = await prisma.budget.findUnique({ where: { id: budgetId }, include: { lines: true } });
     if (!budget) throw new Error('Budget not found');
+    if (budget.propertyId !== propertyId) throw new Error('Budget does not belong to this property');
 
     const start = startOfDay(budget.periodStart);
-    const end = endOfDay(budget.periodEnd);
+    const periodEnd = endOfDay(budget.periodEnd);
+    const end = asOfDate ? new Date(Math.min(periodEnd.getTime(), endOfDay(asOfDate).getTime())) : periodEnd;
 
     // This is a naive actuals calculation - in a full implementation, you would sum up mapped GL accounts.
     // For now, we sum FolioItems for Revenue and CashExpenses for Expenses.

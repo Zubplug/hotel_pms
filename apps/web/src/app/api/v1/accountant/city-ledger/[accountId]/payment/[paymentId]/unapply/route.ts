@@ -36,7 +36,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ acc
       const outstanding = Number(invoice.outstandingAmount) + amount;
       await tx.cityLedgerInvoice.update({ where: { id: invoice.id }, data: { paidAmount: { decrement: amount }, outstandingAmount: outstanding, status: 'OPEN' } });
       await tx.cityLedgerAllocation.delete({ where: { id: allocationId } });
-      await tx.cityLedgerAccount.update({ where: { id: accountId }, data: { balance: { decrement: amount } } });
+      // Unapplying restores the invoice exposure that was previously reduced.
+      await tx.cityLedgerAccount.update({ where: { id: accountId }, data: { balance: { increment: amount } } });
       const cityLedgerAccountId = await GLMappingService.getCityLedgerAccount(account.propertyId);
       const advancesAccountId = await GLMappingService.getCorporateAdvancesAccount(account.propertyId);
       await GeneralLedgerService.postJournal({ userId: session.user.id, propertyIds: [account.propertyId], organizationId: account.property.organizationId, role, permissions: [], outletIds: [] }, {

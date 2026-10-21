@@ -36,6 +36,9 @@ export class AccountingPeriodService {
 
   static async create(ctx: TenantContext, input: { propertyId: string; name: string; periodStart: Date; periodEnd: Date; notes?: string }) {
     if (!ctx.propertyIds.includes(input.propertyId)) throw new Error('Unauthorized');
+    if (!input.name.trim()) throw new Error('Period name is required');
+    if (!(input.periodStart instanceof Date) || Number.isNaN(input.periodStart.getTime()) || !(input.periodEnd instanceof Date) || Number.isNaN(input.periodEnd.getTime())) throw new Error('Period dates are invalid');
+    if (input.periodStart > input.periodEnd) throw new Error('Period start must be before its end');
 
     // Check for overlapping periods
     const overlap = await prisma.accountingPeriod.findFirst({

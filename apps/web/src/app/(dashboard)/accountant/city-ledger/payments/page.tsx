@@ -20,9 +20,9 @@ export default async function CityLedgerPaymentsPage() {
   const canManagerCorrect = ['MANAGER', 'HOTEL_MANAGER', 'FINANCE_MANAGER', 'ADMIN', 'SUPER_ADMIN'].includes(String(session.user.role || '').toUpperCase());
   const [property, payments, accounts, invoices] = await Promise.all([
     prisma.property.findUnique({ where: { id: propertyId }, select: { name: true, baseCurrency: true } }),
-    prisma.cityLedgerEntry.findMany({ where: { propertyId, type: 'PAYMENT' }, include: { account: { select: { id: true, name: true, type: true } }, allocations: { include: { invoice: { select: { invoiceNumber: true } } } } }, orderBy: { createdAt: 'desc' } }),
+    prisma.cityLedgerEntry.findMany({ where: { propertyId, type: 'PAYMENT', status: { not: 'REVERSED' } }, include: { account: { select: { id: true, name: true, type: true } }, allocations: { include: { invoice: { select: { invoiceNumber: true } } } } }, orderBy: { createdAt: 'desc' } }),
     prisma.cityLedgerAccount.findMany({ where: { propertyId, status: 'ACTIVE' }, select: { id: true, name: true, type: true }, orderBy: { name: 'asc' } }),
-    prisma.cityLedgerInvoice.findMany({ where: { propertyId, status: { in: ['OPEN', 'PARTIALLY_PAID'] }, outstandingAmount: { gt: 0 } }, select: { id: true, accountId: true, invoiceNumber: true, outstandingAmount: true, currency: true }, orderBy: [{ dueDate: 'asc' }, { issueDate: 'asc' }] }),
+    prisma.cityLedgerInvoice.findMany({ where: { propertyId, issueDate: { lte: new Date() }, status: { in: ['OPEN', 'PARTIALLY_PAID'] }, outstandingAmount: { gt: 0 } }, select: { id: true, accountId: true, invoiceNumber: true, outstandingAmount: true, currency: true }, orderBy: [{ dueDate: 'asc' }, { issueDate: 'asc' }] }),
   ]);
   const currency = property?.baseCurrency || payments[0]?.currency || 'NGN';
   const unapplied = payments.map(payment => ({ payment, unappliedAmount: Math.max(0, Number(payment.amount) - payment.allocations.reduce((sum, allocation) => sum + Number(allocation.amount), 0)) })).filter(item => item.unappliedAmount > 0.01);

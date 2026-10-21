@@ -18,13 +18,13 @@ export default async function OpenInvoicesPage() {
   if (!session?.user) redirect('/login?callbackUrl=%2Faccountant%2Fcity-ledger%2Finvoices');
   const propertyId = session.user.propertyId;
   if (!propertyId) return <EmptyState title="No property assigned" message="Your user account is not assigned to a property." />;
+  const asAt = new Date();
 
   const [property, invoices] = await Promise.all([
     prisma.property.findUnique({ where: { id: propertyId }, select: { name: true, baseCurrency: true } }),
-    prisma.cityLedgerInvoice.findMany({ where: { propertyId, status: { in: ['OPEN', 'PARTIALLY_PAID'] } }, include: { account: { select: { id: true, name: true, type: true, currency: true } } }, orderBy: [{ dueDate: 'asc' }, { issueDate: 'asc' }] }),
+    prisma.cityLedgerInvoice.findMany({ where: { propertyId, issueDate: { lte: asAt }, status: { in: ['OPEN', 'PARTIALLY_PAID'] } }, include: { account: { select: { id: true, name: true, type: true, currency: true } } }, orderBy: [{ dueDate: 'asc' }, { issueDate: 'asc' }] }),
   ]);
   const currency = property?.baseCurrency || invoices[0]?.currency || 'NGN';
-  const asAt = new Date();
   const now = asAt.getTime();
   const overdue = invoices.filter(invoice => invoice.dueDate.getTime() < now);
   const overdueAmount = overdue.reduce((sum, invoice) => sum + Number(invoice.outstandingAmount), 0);

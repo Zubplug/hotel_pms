@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
     if (!entitled) return errorResponse('PAYMENT_REQUIRED', 'An active Operations entitlement is required for Corporate Accounts.', 402);
     
     const visiblePropertyIds = propertyId
-      ? [propertyId]
+      ? (await hasPermission(session.user.id, propertyId, 'corporate_account:view') ? [propertyId] : [])
       : (await Promise.all(propertyIds.map(async id => (
           await hasPermission(session.user.id, id, 'corporate_account:view') ? id : null
         )))).filter((id): id is string => Boolean(id));

@@ -196,7 +196,10 @@ export class NigerianPayrollEngine {
     // Minimum Wage Exemption (PITA Section 37 / Finance Act):
     // Individuals whose gross income is at or below the National Minimum Wage are exempt
     // from Personal Income Tax (including minimum tax)
-    if (config?.taxRegime !== 'NTA_2026' && config?.minimumWageFloor && config.minimumWageFloor > 0) {
+    // The Nigeria Tax Act exemption is regime-independent: employment income
+    // at or below the national minimum wage is exempt from PIT. Keep the
+    // legacy fallback for callers that do not provide a configuration.
+    if (config?.minimumWageFloor && config.minimumWageFloor > 0) {
       const annualMinimumWage = config.minimumWageFloor * 12;
       if (annualGross <= annualMinimumWage) {
         return 0;

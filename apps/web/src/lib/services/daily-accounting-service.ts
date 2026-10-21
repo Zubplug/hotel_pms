@@ -72,7 +72,7 @@ export class DailyAccountingService {
         COALESCE(SUM(l.debit), 0) - COALESCE(SUM(l.credit), 0) as "netCollected"
       FROM "JournalEntryLine" l
       JOIN "ChartOfAccount" c ON l."accountId" = c.id
-      JOIN "JournalEntry" e ON e.id = l."entryId" AND e.status = 'POSTED' AND e."entryDate" = ${businessDate}
+      JOIN "JournalEntry" e ON e.id = l."entryId" AND e.status = 'POSTED' AND e."isReversed" = false AND e."entryDate" = ${businessDate}
       WHERE c."propertyId" = ${propertyId}::uuid AND c.category IN ('Cash', 'Bank', 'Credit Card', 'Receivables')
       GROUP BY c.code, c.name, c.category
       ORDER BY c.category ASC, c.name ASC

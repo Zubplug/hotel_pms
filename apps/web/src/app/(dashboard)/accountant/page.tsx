@@ -126,7 +126,9 @@ export default function AccountantOverviewPage() {
   const currentHour = new Date().getHours();
   const greeting = currentHour < 12 ? 'Good morning' : currentHour < 17 ? 'Good afternoon' : 'Good evening';
   const totalIssues = Object.values(flags).reduce((sum: number, value: unknown) => sum + Number(value || 0), 0);
-  const closeReady = totalIssues === 0 && kpis.audit?.lastAuditStatus === 'COMPLETED';
+  const auditDate = kpis.audit?.lastAuditDate ? new Date(kpis.audit.lastAuditDate) : null;
+  const auditIsCurrent = Boolean(auditDate && auditDate.toISOString().slice(0, 10) === businessDate.toISOString().slice(0, 10));
+  const closeReady = totalIssues === 0 && kpis.audit?.lastAuditStatus === 'COMPLETED' && auditIsCurrent;
   const netCash = cashFlow.at(-1)?.net || 0;
 
   const controls = [
@@ -174,7 +176,7 @@ export default function AccountantOverviewPage() {
           <Panel>
             <div className="border-b border-white/[0.07] px-5 py-4"><div className="flex items-center gap-2 text-sm font-semibold text-white"><CircleDollarSign className="h-4 w-4 text-blue-300" /> Revenue mix</div><p className="mt-1 text-xs text-slate-500">Today by operating department</p></div>
             <div className="flex items-center gap-4 p-5"><div className="h-[166px] w-[166px] shrink-0"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={revenueMix.length ? revenueMix : [{ name: 'No revenue', value: 1, color: '#334155' }]} dataKey="value" innerRadius={53} outerRadius={76} paddingAngle={3} stroke="none">{(revenueMix.length ? revenueMix : [{ color: '#334155' }]).map((entry, index) => <Cell key={index} fill={entry.color} />)}</Pie><Tooltip contentStyle={tooltipStyle} formatter={(value: any) => money(Number(value))} /></PieChart></ResponsiveContainer></div><div className="min-w-0 flex-1 space-y-3">{(revenueMix.length ? revenueMix : [{ name: 'No activity', value: 0, color: '#334155' }]).map(item => <div key={item.name} className="flex items-center justify-between gap-3 text-xs"><span className="flex items-center gap-2 text-slate-400"><span className="h-2 w-2 rounded-full" style={{ background: item.color }} />{item.name}</span><span className="font-medium text-slate-200">{money(item.value, true)}</span></div>)}</div></div>
-            <div className="mx-5 mb-5 rounded-xl border border-white/[0.07] bg-white/[0.025] p-3"><div className="flex items-center justify-between text-xs"><span className="text-slate-500">Tax liability this month</span><span className="font-semibold text-amber-200">{money(balances.taxLiability?.total, true)}</span></div><div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-800"><div className="h-full w-[68%] rounded-full bg-gradient-to-r from-amber-300 to-orange-400" /></div></div>
+            <div className="mx-5 mb-5 rounded-xl border border-white/[0.07] bg-white/[0.025] p-3"><div className="flex items-center justify-between text-xs"><span className="text-slate-500">Tax liability this month</span><span className="font-semibold text-amber-200">{money(balances.taxLiability?.total, true)}</span></div><div className="mt-2 text-[10px] text-slate-600">Calculated from audited and live tax records</div></div>
           </Panel>
         </div>
 

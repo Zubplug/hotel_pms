@@ -27,7 +27,8 @@ export async function GET(req: NextRequest) {
       where: {
         propertyId,
         type: 'REFUND_OWED',
-        status: 'OPEN'
+        status: 'OPEN',
+        account: { type: 'REFUND_PAYABLE', status: 'ACTIVE' }
       },
       include: {
         guest: {
@@ -35,6 +36,10 @@ export async function GET(req: NextRequest) {
         },
         allocations: {
           select: { id: true, amount: true, folioId: true }
+        },
+        refundRequests: {
+          where: { status: { in: ['PENDING_APPROVAL', 'APPROVED', 'PROCESSING'] } },
+          select: { requestedAmount: true }
         }
       },
       orderBy: { createdAt: 'asc' }
@@ -60,7 +65,8 @@ export async function GET(req: NextRequest) {
       if (!guestId) continue;
 
       const allocated = entry.allocations.reduce((s: number, a: any) => s + Number(a.amount), 0);
-      const available = Number(entry.amount) - allocated;
+      const pending = entry.refundRequests.reduce((s: number, request: any) => s + Number(request.requestedAmount), 0);
+      const available = Number(entry.amount) - allocated - pending;
 
       if (available <= 0.01) continue;
 

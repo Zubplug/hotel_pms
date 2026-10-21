@@ -39,9 +39,9 @@ export default async function ReceivablesPage() {
   const now = asAt.getTime();
   const [property, accounts, invoices, payments, controlAccount] = await Promise.all([
     prisma.property.findUnique({ where: { id: propertyId }, select: { name: true, baseCurrency: true } }),
-    prisma.cityLedgerAccount.findMany({ where: { propertyId }, orderBy: { name: 'asc' } }),
+    prisma.cityLedgerAccount.findMany({ where: { propertyId, status: 'ACTIVE' }, orderBy: { name: 'asc' } }),
     prisma.cityLedgerInvoice.findMany({
-      where: { propertyId, status: { in: ['OPEN', 'PARTIALLY_PAID'] } },
+      where: { propertyId, issueDate: { lte: asAt }, status: { in: ['OPEN', 'PARTIALLY_PAID'] } },
       include: { account: { select: { id: true, name: true, type: true, currency: true } } },
       orderBy: [{ dueDate: 'asc' }, { issueDate: 'asc' }],
     }),
@@ -63,7 +63,12 @@ export default async function ReceivablesPage() {
   }
 
   const getTrueBalance = (account: { id: string; type: string; balance: any; }) => {
-    return Math.max(0, Number(account.balance)) - (unappliedByAccount.get(account.id) || 0);
+    const balance = Number(account.balance);
+    const unapplied = unappliedByAccount.get(account.id) || 0;
+    // Positive account balances are reduced by unapplied receipts. A negative
+    // ledger balance already represents a credit and must not be reduced a
+    // second time by the same receipt.
+    return balance > 0 ? balance - unapplied : balance < 0 ? balance : -unapplied;
   };
 
   const arAccounts = accounts.filter(account => account.type !== 'REFUND_PAYABLE');
@@ -79,22 +84,24 @@ export default async function ReceivablesPage() {
     count: openInvoiceRows.filter(row => row.bucket === key).length,
   }));
   const overdueAmount = aging.filter(item => item.key !== 'CURRENT').reduce((sum, item) => sum + item.amount, 0);
-  const weightedDays = totalOutstanding ? openInvoiceRows.reduce((sum, row) => sum + Number(row.invoice.outstandingAmount) * row.days, 0) / totalOutstanding : 0;
+  const invoiceOutstandingTotal = openInvoiceRows.reduce((sum, row) => sum + Number(row.invoice.outstandingAmount), 0);
+  const weightedDays = invoiceOutstandingTotal ? openInvoiceRows.reduce((sum, row) => sum + Number(row.invoice.outstandingAmount) * row.days, 0) / invoiceOutstandingTotal : 0;
   
   const unappliedAmount = unappliedPayments.reduce((sum, payment) => sum + Number(payment.amount) - payment.allocations.reduce((allocationSum, allocation) => allocationSum + Number(allocation.amount), 0), 0);
   
+  const appliedAmount = (payment: typeof payments[number]) => payment.allocations.reduce((sum, allocation) => sum + Number(allocation.amount), 0);
   const payments90 = payments.filter(payment => payment.createdAt.getTime() >= now - 90 * 86_400_000);
-  const collected90 = payments90.reduce((sum, payment) => sum + Number(payment.amount), 0);
+  const collected90 = payments90.reduce((sum, payment) => sum + appliedAmount(payment), 0);
   const focusInvoices = openInvoiceRows.slice().sort((a, b) => Number(b.invoice.outstandingAmount) - Number(a.invoice.outstandingAmount)).slice(0, 6);
   const focusAccounts = positiveAccounts.slice().sort((a, b) => getTrueBalance(b) - getTrueBalance(a)).slice(0, 6);
   const weekly = Array.from({ length: 8 }, (_, index) => {
     const end = now - (7 - index) * 7 * 86_400_000;
     const start = end - 7 * 86_400_000;
-    return { label: new Intl.DateTimeFormat('en-NG', { month: 'short', day: 'numeric' }).format(new Date(end)), amount: payments.filter(payment => payment.createdAt.getTime() >= start && payment.createdAt.getTime() < end).reduce((sum, payment) => sum + Number(payment.amount), 0) };
+    return { label: new Intl.DateTimeFormat('en-NG', { month: 'short', day: 'numeric' }).format(new Date(end)), amount: payments.filter(payment => payment.createdAt.getTime() >= start && payment.createdAt.getTime() < end).reduce((sum, payment) => sum + appliedAmount(payment), 0) };
   });
   const maxWeekly = Math.max(...weekly.map(item => item.amount), 1);
   const glControl = controlAccount ? await prisma.journalEntryLine.aggregate({
-    where: { accountId: controlAccount.id, entry: { propertyId, status: 'POSTED' } },
+    where: { accountId: controlAccount.id, entry: { propertyId, status: 'POSTED', isReversed: false } },
     _sum: { debit: true, credit: true },
   }) : null;
   const glBalance = glControl ? Number(glControl._sum.debit || 0) - Number(glControl._sum.credit || 0) : null;

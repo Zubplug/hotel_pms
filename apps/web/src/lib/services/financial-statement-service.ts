@@ -16,7 +16,7 @@ export class FinancialStatementService {
         COALESCE(SUM(l.debit), 0) as "sumDebit",
         COALESCE(SUM(l.credit), 0) as "sumCredit"
       FROM "ChartOfAccount" c
-      LEFT JOIN ("JournalEntryLine" l INNER JOIN "JournalEntry" e ON e.id = l."entryId" AND e.status = 'POSTED' AND e."entryDate" <= ${businessDate}) ON l."accountId" = c.id
+      LEFT JOIN ("JournalEntryLine" l INNER JOIN "JournalEntry" e ON e.id = l."entryId" AND e.status = 'POSTED' AND e."isReversed" = false AND e."entryDate" <= ${businessDate}) ON l."accountId" = c.id
       WHERE c."propertyId" = ${propertyId}::uuid
       GROUP BY c.id, c.code, c.name, c.type, c.category
       ORDER BY c.code ASC
@@ -84,7 +84,7 @@ export class FinancialStatementService {
         COALESCE(SUM(l.credit), 0) as "sumCredit"
       FROM "ChartOfAccount" c
       JOIN "JournalEntryLine" l ON l."accountId" = c.id
-      JOIN "JournalEntry" e ON e.id = l."entryId" AND e.status = 'POSTED' AND e."entryDate" >= ${startDate} AND e."entryDate" <= ${endDate} AND COALESCE(e.reference, '') NOT LIKE 'REVERSAL-EVENT-INVOICE-%'
+      JOIN "JournalEntry" e ON e.id = l."entryId" AND e.status = 'POSTED' AND e."isReversed" = false AND e."entryDate" >= ${startDate} AND e."entryDate" <= ${endDate} AND COALESCE(e.reference, '') NOT LIKE 'REVERSAL-EVENT-INVOICE-%'
       WHERE c."propertyId" = ${propertyId}::uuid AND c.type IN ('REVENUE', 'EXPENSE')
       GROUP BY c.code, c.name, c.type, c.category
       ORDER BY c.type DESC, c.code ASC
@@ -140,7 +140,7 @@ export class FinancialStatementService {
         COALESCE(SUM(l.debit), 0) as "sumDebit",
         COALESCE(SUM(l.credit), 0) as "sumCredit"
       FROM "ChartOfAccount" c
-      LEFT JOIN ("JournalEntryLine" l INNER JOIN "JournalEntry" e ON e.id = l."entryId" AND e.status = 'POSTED' AND e."entryDate" <= ${businessDate}) ON l."accountId" = c.id
+      LEFT JOIN ("JournalEntryLine" l INNER JOIN "JournalEntry" e ON e.id = l."entryId" AND e.status = 'POSTED' AND e."isReversed" = false AND e."entryDate" <= ${businessDate}) ON l."accountId" = c.id
       WHERE c."propertyId" = ${propertyId}::uuid AND c.type IN ('ASSET', 'LIABILITY', 'EQUITY', 'REVENUE', 'EXPENSE')
       GROUP BY c.code, c.name, c.type, c.category
       ORDER BY c.type ASC, c.code ASC
@@ -208,6 +208,7 @@ export class FinancialStatementService {
       where: {
         propertyId,
         status: 'POSTED',
+        isReversed: false,
         entryDate: { gte: startDate, lte: endDate }
       },
       include: {
@@ -262,7 +263,7 @@ export class FinancialStatementService {
         COALESCE(SUM(l.credit), 0) as "cashOut"
       FROM "ChartOfAccount" c
       JOIN "JournalEntryLine" l ON l."accountId" = c.id
-      JOIN "JournalEntry" e ON e.id = l."entryId" AND e.status = 'POSTED' AND e."entryDate" >= ${startDate} AND e."entryDate" <= ${endDate}
+      JOIN "JournalEntry" e ON e.id = l."entryId" AND e.status = 'POSTED' AND e."isReversed" = false AND e."entryDate" >= ${startDate} AND e."entryDate" <= ${endDate}
       WHERE c."propertyId" = ${propertyId}::uuid AND (c.category ILIKE '%cash%' OR c.category ILIKE '%bank%')
       GROUP BY c.code, c.name, e.source
       ORDER BY c.code ASC

@@ -24,7 +24,7 @@ const key = (date: Date) => date.toISOString().slice(0, 10);
 
 function amountForItem(item: { type: string; amount: unknown }) {
   const amount = Number(item.amount || 0);
-  if (item.type === 'DISCOUNT' || item.type === 'COMPLIMENTARY') return -Math.abs(amount);
+  if (item.type === 'DISCOUNT' || item.type === 'COMPLIMENTARY' || item.type === 'REFUND') return -Math.abs(amount);
   return amount;
 }
 
@@ -34,7 +34,7 @@ function asRecord(value: unknown): Record<string, unknown> {
 
 function resolveAccountCode(
   propertyId: string,
-  item: { source: string; revenueCategory: string; revenueClass?: string | null; type: string },
+  item: { source: string; revenueCategory: string; revenueClass?: string | null; type: string; description?: string },
   accounts: Map<string, AccountRow>,
   accountingConfig: Record<string, unknown>,
 ): string {
@@ -63,10 +63,23 @@ function resolveAccountCode(
     return resolved;
   }
 
-  if (item.source === 'ROOM_CHARGE' || item.source === 'DAY_USE_ROOM_CHARGE' || item.source === 'ROOM_UPGRADE' || item.source === 'ROOM_DOWNGRADE_CREDIT' || item.revenueCategory === 'ROOM') {
-    const resolved = activeCode('4050') || findByName('room revenue', 'rooms revenue') || activeCode('4400');
-    if (!resolved) throw new Error(`Missing room revenue account for property ${propertyId}`);
+  if (item.type === 'REFUND') {
+    const resolved = activeCode('4910') || findByName('refund', 'revenue adjustment');
+    if (!resolved) throw new Error(`Missing refund and revenue adjustment account for property ${propertyId}`);
     return resolved;
+  }
+
+  const description = item.description?.toLowerCase() || '';
+
+  if (item.source === 'ROOM_CHARGE' || item.source === 'DAY_USE_ROOM_CHARGE' || item.source === 'ROOM_UPGRADE' || item.source === 'ROOM_DOWNGRADE_CREDIT' || item.revenueCategory === 'ROOM') {
+    if (item.revenueCategory === 'FNB' || description.includes('breakfast')) {
+      // Continue through the F&B mapping below for breakfast allocations that
+      // were persisted with a legacy OTHER category.
+    } else {
+      const resolved = activeCode('4050') || findByName('room revenue', 'rooms revenue') || activeCode('4400');
+      if (!resolved) throw new Error(`Missing room revenue account for property ${propertyId}`);
+      return resolved;
+    }
   }
 
   if (item.source === 'LAUNDRY') {
@@ -75,7 +88,13 @@ function resolveAccountCode(
     return resolved;
   }
 
-  if (item.source === 'POS' || item.source === 'RESTAURANT' || item.source === 'BAR' || item.source === 'MINIBAR' || item.revenueCategory === 'FNB') {
+  if (item.source === 'RECREATION') {
+    const resolved = activeCode('4100') || findByName('swimming pool', 'recreation');
+    if (!resolved) throw new Error(`Missing recreation revenue account for property ${propertyId}`);
+    return resolved;
+  }
+
+  if (item.source === 'POS' || item.source === 'RESTAURANT' || item.source === 'BAR' || item.source === 'MINIBAR' || item.revenueCategory === 'FNB' || description.includes('breakfast')) {
     const configured = item.source === 'BAR' ? revenueAccounts.BEVERAGE : revenueAccounts.FOOD;
     // 4250 is the canonical F&B revenue account. Prefer it before legacy
     // name-based matching, otherwise an old 4100 account labelled "F&B
@@ -118,19 +137,26 @@ export async function GET(req: NextRequest) {
         where: {
           folio: { propertyId },
           businessDate: { gte: queryStart, lte: businessDate },
-          type: { in: ['CHARGE', 'DISCOUNT', 'COMPLIMENTARY'] },
+          type: { in: ['CHARGE', 'DISCOUNT', 'COMPLIMENTARY', 'REFUND'] },
           voidedAt: null,
         },
-        select: { businessDate: true, source: true, type: true, amount: true, revenueCategory: true, revenueClass: true },
+        select: { businessDate: true, source: true, type: true, amount: true, revenueCategory: true, revenueClass: true, description: true },
       }),
       prisma.posOrder.findMany({
-        where: { propertyId, businessDate: { gte: queryStart, lte: businessDate }, status: { not: 'VOIDED' }, folioId: null },
+        where: {
+          propertyId,
+          businessDate: { gte: queryStart, lte: businessDate },
+          status: 'CLOSED',
+          payments: { some: { status: 'CONFIRMED' } },
+          folioId: null,
+        },
         select: {
           id: true,
           businessDate: true,
           subtotal: true,
           discount: true,
           total: true,
+          outlet: { select: { type: true } },
         },
       }),
       // Corporate/event invoices are posted directly to the general ledger
@@ -222,6 +248,12 @@ export async function GET(req: NextRequest) {
 
     for (const item of items) {
       const itemDate = dateOnly(new Date(item.businessDate));
+      const description = item.description.toLowerCase();
+      // Service charge is a liability, not hotel operating revenue. Plain
+      // city-ledger credits are receivable movements; event revenue carries
+      // an explicit revenueClass and is handled separately above.
+      if (item.revenueClass === 'SERVICE_CHARGE' || description.includes('service charge')) continue;
+      if (item.source === 'CITY_LEDGER' && !item.revenueClass) continue;
       const value = amountForItem(item);
       const accountCode = resolveAccountCode(propertyId, item, accounts, accountingConfig);
       if (!accountCode) continue;
@@ -266,7 +298,11 @@ export async function GET(req: NextRequest) {
     for (const order of posOrders) {
       if (!order.businessDate) continue;
       const orderDate = dateOnly(new Date(order.businessDate));
-      const revenueAccountCode = resolveAccountCode(propertyId, { source: 'POS', revenueCategory: 'FNB', type: 'CHARGE' }, accounts, accountingConfig);
+      const revenueAccountCode = resolveAccountCode(propertyId, {
+        source: order.outlet.type === 'RECREATION' ? 'RECREATION' : 'POS',
+        revenueCategory: order.outlet.type === 'RECREATION' ? 'OTHER' : 'FNB',
+        type: 'CHARGE',
+      }, accounts, accountingConfig);
       if (!revenueAccountCode) continue;
 
       // POS accounting posts the item subtotal to revenue. Tax and service

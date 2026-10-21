@@ -1,7 +1,8 @@
 import { prisma } from '@hotel-pms/db';
 import { TenantContext } from '../organization-access';
 import { getPropertyBusinessDate, calculateDailyRevenue, getExecutiveRevenueTrend } from '../kpi';
-import { subDays, startOfDay, endOfDay } from 'date-fns';
+import { addDays, subDays } from 'date-fns';
+import { fromZonedTime, toZonedTime } from 'date-fns-tz';
 import { TaxRemittanceService } from './tax-remittance-service';
 
 export class AccountantAnalyticsService {
@@ -12,6 +13,9 @@ export class AccountantAnalyticsService {
     if (!ctx.propertyIds.includes(propertyId)) throw new Error('Unauthorized');
 
     const businessDate = await getPropertyBusinessDate(propertyId);
+    const property = await prisma.property.findUnique({ where: { id: propertyId }, select: { timezone: true } });
+    if (!property) throw new Error('Property not found');
+    const timezone = property.timezone || 'Africa/Lagos';
     const yesterday = subDays(businessDate, 1);
 
     // 1. Revenue today & yesterday (from kpi.ts)
@@ -87,18 +91,21 @@ export class AccountantAnalyticsService {
     
     // Cash flow trend (last 7 days)
     const cashFlowStart = subDays(businessDate, 7);
+    const dayStart = fromZonedTime(`${cashFlowStart.toISOString().slice(0, 10)}T00:00:00`, timezone);
+    const dayAfterBusinessDate = addDays(businessDate, 1);
+    const rangeEnd = fromZonedTime(`${dayAfterBusinessDate.toISOString().slice(0, 10)}T00:00:00`, timezone);
     
     const [inflows, outflows, supplierPayments] = await Promise.all([
       prisma.payment.findMany({
-        where: { folio: { propertyId }, createdAt: { gte: startOfDay(cashFlowStart), lte: endOfDay(businessDate) }, status: 'COMPLETED' },
+        where: { folio: { propertyId }, createdAt: { gte: dayStart, lt: rangeEnd }, status: 'COMPLETED' },
         select: { createdAt: true, amount: true }
       }),
       prisma.cashExpense.findMany({
-        where: { propertyId, paidAt: { gte: startOfDay(cashFlowStart), lte: endOfDay(businessDate) }, status: 'PAID' },
+        where: { propertyId, paidAt: { gte: dayStart, lt: rangeEnd }, status: 'PAID' },
         select: { paidAt: true, amount: true }
       }),
       prisma.supplierPayment.findMany({
-        where: { propertyId, paymentDate: { gte: startOfDay(cashFlowStart), lte: endOfDay(businessDate) } },
+        where: { propertyId, paymentDate: { gte: dayStart, lt: rangeEnd } },
         select: { paymentDate: true, amount: true }
       })
     ]);
@@ -106,11 +113,11 @@ export class AccountantAnalyticsService {
     // Format cashflow
     const cashFlow = Array.from({ length: 8 }).map((_, i) => {
       const date = subDays(businessDate, 7 - i);
-      const dateStr = date.toISOString().split('T')[0];
+      const dateStr = toZonedTime(date, timezone).toISOString().split('T')[0];
       
-      const dayIn = inflows.filter(x => x.createdAt.toISOString().split('T')[0] === dateStr).reduce((sum, item) => sum + Number(item.amount ?? 0), 0);
-      const expenseOut = outflows.filter(x => x.paidAt?.toISOString().split('T')[0] === dateStr).reduce((sum, item) => sum + Number(item.amount ?? 0), 0);
-      const supplierOut = supplierPayments.filter(x => x.paymentDate.toISOString().split('T')[0] === dateStr).reduce((sum, item) => sum + Number(item.amount ?? 0), 0);
+      const dayIn = inflows.filter(x => toZonedTime(x.createdAt, timezone).toISOString().split('T')[0] === dateStr).reduce((sum, item) => sum + Number(item.amount ?? 0), 0);
+      const expenseOut = outflows.filter(x => x.paidAt && toZonedTime(x.paidAt, timezone).toISOString().split('T')[0] === dateStr).reduce((sum, item) => sum + Number(item.amount ?? 0), 0);
+      const supplierOut = supplierPayments.filter(x => toZonedTime(x.paymentDate, timezone).toISOString().split('T')[0] === dateStr).reduce((sum, item) => sum + Number(item.amount ?? 0), 0);
       
       return {
         date: dateStr,

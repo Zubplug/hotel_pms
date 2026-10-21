@@ -23,7 +23,7 @@ export default async function AssetsPage() {
     prisma.property.findUnique({ where: { id: propertyId }, select: { name: true, baseCurrency: true, businessDate: true } }),
     prisma.fixedAsset.findMany({ where: { propertyId }, include: { category: true }, orderBy: { acquisitionDate: 'desc' } }),
     prisma.fixedAssetCategory.findMany({ where: { propertyId, isActive: true }, orderBy: { name: 'asc' } }),
-    prisma.assetDepreciation.findMany({ where: { propertyId }, orderBy: { depreciationDate: 'desc' }, take: 500 }),
+    prisma.assetDepreciation.findMany({ where: { propertyId, status: 'POSTED' }, orderBy: { depreciationDate: 'desc' } }),
     prisma.accountingPeriod.findMany({ where: { propertyId }, orderBy: { periodStart: 'desc' }, take: 12 }),
   ]);
   const currency = property?.baseCurrency || 'NGN';
@@ -32,14 +32,15 @@ export default async function AssetsPage() {
   const activeAssets = assets.filter(asset => asset.status === 'ACTIVE');
   const disposedAssets = assets.filter(asset => asset.status === 'DISPOSED');
   const fullyDepreciated = assets.filter(asset => asset.status === 'FULLY_DEPRECIATED');
-  const cost = assets.reduce((sum, asset) => sum + Number(asset.acquisitionCost), 0);
-  const accumulated = assets.reduce((sum, asset) => sum + Number(asset.accumulatedDepreciation), 0);
-  const bookValue = assets.reduce((sum, asset) => sum + Number(asset.currentBookValue), 0);
+  const heldAssets = assets.filter(asset => asset.status !== 'DISPOSED');
+  const cost = heldAssets.reduce((sum, asset) => sum + Number(asset.acquisitionCost), 0);
+  const accumulated = heldAssets.reduce((sum, asset) => sum + Number(asset.accumulatedDepreciation), 0);
+  const bookValue = heldAssets.reduce((sum, asset) => sum + Number(asset.currentBookValue), 0);
   const currentMonth = businessDate.getUTCMonth();
   const currentYear = businessDate.getUTCFullYear();
   const monthlyDepreciation = depreciation.filter(item => item.depreciationDate.getUTCMonth() === currentMonth && item.depreciationDate.getUTCFullYear() === currentYear).reduce((sum, item) => sum + Number(item.amount), 0);
   const warrantyDue = activeAssets.filter(asset => asset.warrantyExpiry && asset.warrantyExpiry >= businessDate && asset.warrantyExpiry <= new Date(businessDate.getTime() + 90 * 86400000));
-  const categoryMix = Array.from(assets.reduce((map, asset) => map.set(asset.category.name, (map.get(asset.category.name) || 0) + Number(asset.currentBookValue)), new Map<string, number>()).entries()).sort((a, b) => b[1] - a[1]).slice(0, 6);
+  const categoryMix = Array.from(heldAssets.reduce((map, asset) => map.set(asset.category.name, (map.get(asset.category.name) || 0) + Number(asset.currentBookValue)), new Map<string, number>()).entries()).sort((a, b) => b[1] - a[1]).slice(0, 6);
   const maxCategory = Math.max(...categoryMix.map(([, amount]) => amount), 1);
 
   return <main className="min-h-full bg-[#08111f] px-4 py-6 text-slate-200 sm:px-6 lg:px-8 lg:py-8"><div className="mx-auto max-w-[1540px] space-y-6">

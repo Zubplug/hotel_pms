@@ -22,6 +22,15 @@ export type KPISnapshot = {
 };
 
 /**
+ * Folio discounts are stored as negative amounts in production. Normalize
+ * both legacy positive discounts and current negative discounts to a single
+ * contra-revenue value so revenue is never overstated.
+ */
+export function signedRevenueAmount(type: string, amount: number): number {
+  return type === 'DISCOUNT' ? -Math.abs(amount) : amount;
+}
+
+/**
  * Authoritative function to get the current business date of a property.
  * If the property does not have a manually rolled businessDate, it falls back
  * to the current date in the property's configured timezone.
@@ -74,9 +83,7 @@ export async function calculateDailyRevenue(propertyId: string, businessDate: Da
   let otherRevenue = 0;
 
   for (const item of folioItems) {
-    const amt = Number(item.amount);
-    const sign = item.type === 'CHARGE' ? 1 : -1;
-    const value = amt * sign;
+    const value = signedRevenueAmount(item.type, Number(item.amount));
 
     if (['ROOM_CHARGE', 'DAY_USE_ROOM_CHARGE', 'ROOM_UPGRADE', 'ROOM_DOWNGRADE_CREDIT'].includes(item.source)) {
       roomRevenue += value;
@@ -289,9 +296,7 @@ export async function getExecutiveRevenueTrend(propertyId: string, endBusinessDa
   for (const item of folioItems) {
     if (!item.businessDate) continue;
     const dateStr = format(item.businessDate, 'yyyy-MM-dd');
-    const amt = Number(item.amount);
-    const sign = item.type === 'CHARGE' ? 1 : -1;
-    const value = amt * sign;
+    const value = signedRevenueAmount(item.type, Number(item.amount));
 
     dailyTotals.set(dateStr, (dailyTotals.get(dateStr) || 0) + value);
     // Don't add total revenue here, we only want the exact N days requested.

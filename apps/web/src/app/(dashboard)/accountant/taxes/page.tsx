@@ -25,7 +25,7 @@ export default async function TaxesPage() {
 
   const [property, remittances, taxes, periods] = await Promise.all([
     prisma.property.findUnique({ where: { id: propertyId }, select: { name: true, baseCurrency: true, businessDate: true } }),
-    prisma.taxRemittance.findMany({ where: { propertyId }, include: { tax: true }, orderBy: [{ periodStart: 'desc' }, { createdAt: 'desc' }], take: 250 }),
+    prisma.taxRemittance.findMany({ where: { propertyId }, include: { tax: true }, orderBy: [{ periodStart: 'desc' }, { createdAt: 'desc' }] }),
     prisma.tax.findMany({ where: { propertyId, isActive: true }, orderBy: { name: 'asc' } }),
     prisma.accountingPeriod.findMany({ where: { propertyId }, orderBy: { periodStart: 'desc' }, take: 12 }),
   ]);

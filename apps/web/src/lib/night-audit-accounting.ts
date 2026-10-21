@@ -376,7 +376,7 @@ export async function buildNightAuditBalanceProof(tx: any, input: {
     tx.posSession.aggregate({ where: { propertyId: input.propertyId, businessDate: input.businessDate }, _sum: { expectedCash: true, actualCash: true, variance: true } }),
     tx.frontdeskSession.aggregate({ where: { propertyId: input.propertyId, businessDate: input.businessDate }, _sum: { systemExpectedCash: true, declaredCash: true, variance: true } }),
     tx.journalEntry.findMany({
-      where: { propertyId: input.propertyId, status: 'POSTED', entryDate: { lte: input.businessDate } },
+      where: { propertyId: input.propertyId, status: 'POSTED', isReversed: false, entryDate: { lte: input.businessDate } },
       select: { entryDate: true, createdAt: true, lines: { select: { debit: true, credit: true, account: { select: { code: true } } } } },
     }),
   ]);

@@ -37,24 +37,22 @@ export default async function AccountantExpensesPage() {
   if (!session?.user) redirect('/login?callbackUrl=%2Faccountant%2Fexpenses');
 
   const propertyIds = (await requireOrganizationContext(session.user.id)).propertyIds;
-  if (!propertyIds.length) return <EmptyState title="No property assigned" />;
+  const propertyId = session.user.propertyId;
+  if (!propertyId || !propertyIds.includes(propertyId)) return <EmptyState title="No property assigned" />;
 
   // The dashboard is intentionally property-scoped. The operational workspace
   // supports one selected property; use the first authorized property here.
-  const propertyId = propertyIds[0];
   const [property, cashExpenses, supplierInvoices, budgets, categories, costCenters, suppliers, cashAccounts] = await Promise.all([
     prisma.property.findUnique({ where: { id: propertyId }, select: { name: true, baseCurrency: true, businessDate: true } }),
     prisma.cashExpense.findMany({
       where: { propertyId },
       include: { journal: true, cashAccount: { select: { name: true } }, lineItems: { orderBy: { createdAt: 'asc' } } },
       orderBy: { createdAt: 'desc' },
-      take: 500,
     }),
     prisma.supplierInvoice.findMany({
       where: { propertyId },
       include: { supplier: { select: { name: true } } },
       orderBy: [{ dueDate: 'asc' }, { createdAt: 'desc' }],
-      take: 500,
     }),
     prisma.budget.findMany({
       where: { propertyId, status: { in: ['ACTIVE', 'APPROVED'] } },

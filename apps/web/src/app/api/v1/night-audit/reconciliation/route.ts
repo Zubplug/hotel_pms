@@ -51,7 +51,7 @@ export async function GET(req: NextRequest) {
         _count: { id: true },
       }),
       prisma.journalEntry.aggregate({
-        where: { propertyId, entryDate: businessDate, status: 'POSTED' },
+        where: { propertyId, entryDate: businessDate, status: 'POSTED', isReversed: false },
         _sum: { totalDebit: true, totalCredit: true },
         _count: { id: true },
       }),

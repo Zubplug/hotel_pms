@@ -14,6 +14,7 @@ export default async function CityLedgerDetailPage(props: { params: Promise<{ id
   if (session.user.role === 'NIGHT_AUDITOR' && !props.allowNightAudit) redirect(`/night-audit/city-ledger/${params.id}`);
   
   const ctx = await requireOrganizationContext(session.user.id);
+  const asAtDate = new Date();
 
   const account = await prisma.cityLedgerAccount.findUnique({
     where: { id: params.id },
@@ -21,6 +22,7 @@ export default async function CityLedgerDetailPage(props: { params: Promise<{ id
       CorporateAccount: true,
       invoices: {
         where: {
+          issueDate: { lte: asAtDate },
           status: { in: ['OPEN', 'PARTIALLY_PAID'] },
         },
         orderBy: { dueDate: 'asc' }
@@ -47,7 +49,7 @@ export default async function CityLedgerDetailPage(props: { params: Promise<{ id
 
   // Calculate some summaries
   const totalOutstanding = account.invoices.reduce((sum, inv) => sum + Number(inv.outstandingAmount), 0);
-  const asAt = new Date().getTime();
+  const asAt = asAtDate.getTime();
 
   let trueBalance = Number(account.balance);
   if (account.type === 'REFUND_PAYABLE') {

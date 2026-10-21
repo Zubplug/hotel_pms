@@ -22,17 +22,21 @@ export default async function GenericReportViewerPage({ params, searchParams }: 
 
   const property = await prisma.property.findUnique({ where: { id: propertyId }, select: { name: true, baseCurrency: true, businessDate: true } });
 
-  const bDateStr = query.businessDate || property?.businessDate?.toISOString().slice(0, 10) || new Date().toISOString().slice(0, 10);
-  const businessDate = new Date(bDateStr);
-
-  const sDateStr = query.startDate || new Date(businessDate.getFullYear(), businessDate.getMonth(), 1).toISOString().slice(0, 10);
-  const startDate = new Date(sDateStr);
-  const endDate = businessDate;
+  const propertyDate = property?.businessDate || new Date();
+  const requestedBusinessDate = query.businessDate ? new Date(`${query.businessDate}T00:00:00.000Z`) : propertyDate;
+  const businessDate = Number.isNaN(requestedBusinessDate.getTime()) ? propertyDate : requestedBusinessDate;
+  const bDateStr = businessDate.toISOString().slice(0, 10);
+  const defaultStart = new Date(Date.UTC(businessDate.getUTCFullYear(), businessDate.getUTCMonth(), 1));
+  const requestedStart = query.startDate ? new Date(`${query.startDate}T00:00:00.000Z`) : defaultStart;
+  const startDate = Number.isNaN(requestedStart.getTime()) ? defaultStart : requestedStart;
+  const requestedEnd = query.endDate ? new Date(`${query.endDate}T23:59:59.999Z`) : businessDate;
+  const endDate = Number.isNaN(requestedEnd.getTime()) ? businessDate : new Date(Math.min(requestedEnd.getTime(), businessDate.getTime()));
+  const sDateStr = startDate.toISOString().slice(0, 10);
 
   let reportData: ReportData | null = null;
   const generatedAt = new Date();
   const generatedBy = session.user.name || session.user.email || 'System User';
-  const filtersHash = Buffer.from(`${propertyId}-${bDateStr}-${sDateStr}`).toString('base64').substring(0, 12);
+  const filtersHash = Buffer.from(`${propertyId}-${bDateStr}-${sDateStr}-${endDate.toISOString().slice(0, 10)}`).toString('base64').substring(0, 12);
   const deterministicId = `${reportId.toUpperCase()}-${propertyId.slice(0, 8).toUpperCase()}-${bDateStr.replace(/-/g, '')}-${filtersHash}`;
 
   switch (reportId) {

@@ -26,6 +26,9 @@ export async function GET(req: NextRequest) {
       ...(fromDateStr && { fromDate: new Date(fromDateStr) }),
       ...(toDateStr && { toDate: new Date(toDateStr) })
     };
+    for (const value of [filters.fromDate, filters.toDate]) {
+      if (value && Number.isNaN(value.getTime())) return NextResponse.json({ error: 'Invalid tax date filter' }, { status: 400 });
+    }
 
     const result = await TaxRemittanceService.list(ctx, propertyId, filters);
     return NextResponse.json(result);

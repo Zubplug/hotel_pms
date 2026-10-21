@@ -1,6 +1,7 @@
 import { prisma } from '@hotel-pms/db';
 import { TenantContext } from '../organization-access';
 import { randomUUID } from 'crypto';
+import { NigerianPayrollEngine, StatutoryConfigurationRule } from './payroll-engine-service';
 
 export class PayrollService {
   /**
@@ -38,12 +39,27 @@ export class PayrollService {
   ) {
     if (!ctx.propertyIds.includes(input.propertyId)) throw new Error('Unauthorized');
 
-    const staff = await prisma.staff.findUnique({ where: { id: staffId } });
+    const staff = await prisma.staff.findFirst({
+      where: {
+        id: staffId,
+        organizationId: ctx.organizationId,
+        propertyAccess: { has: input.propertyId },
+        isActive: true,
+        deletedAt: null,
+      },
+    });
     if (!staff) throw new Error('Staff not found');
+
+    const existing = await prisma.salaryStructure.findUnique({ where: { staffId } });
+    if (existing && existing.propertyId !== input.propertyId) {
+      throw new Error('Salary structure belongs to a different property');
+    }
 
     return prisma.salaryStructure.upsert({
       where: { staffId },
       update: {
+        organizationId: ctx.organizationId,
+        propertyId: input.propertyId,
         basicSalary: input.basicSalary,
         housingAllowance: input.housingAllowance ?? 0,
         transportAllowance: input.transportAllowance ?? 0,
@@ -77,7 +93,7 @@ export class PayrollService {
   static async listPeriods(ctx: TenantContext, propertyId: string) {
     if (!ctx.propertyIds.includes(propertyId)) throw new Error('Unauthorized');
     return prisma.payrollPeriod.findMany({
-      where: { propertyId },
+      where: { organizationId: ctx.organizationId, propertyId },
       orderBy: { startDate: 'desc' },
     });
   }
@@ -91,9 +107,13 @@ export class PayrollService {
     input: { propertyId: string; name: string; startDate: Date; endDate: Date }
   ) {
     if (!ctx.propertyIds.includes(input.propertyId)) throw new Error('Unauthorized');
+    if (!input.name.trim() || Number.isNaN(input.startDate.getTime()) || Number.isNaN(input.endDate.getTime()) || input.startDate > input.endDate) {
+      throw new Error('Invalid payroll period');
+    }
 
     const overlap = await prisma.payrollPeriod.findFirst({
       where: {
+        organizationId: ctx.organizationId,
         propertyId: input.propertyId,
         OR: [{ startDate: { lte: input.endDate }, endDate: { gte: input.startDate } }],
       },
@@ -130,41 +150,6 @@ export class PayrollService {
   }
 
   /**
-   * Nigerian Payroll Calculation.
-   * Returns monthly amounts.
-   */
-  static calculateNigerianTaxes(grossIncome: number, basicSalary: number) {
-    const pension = grossIncome * 0.08;          // 8% employee pension
-    const pensionEmployer = grossIncome * 0.10;  // 10% employer pension
-    const nhf = basicSalary * 0.025;             // 2.5% NHF on basic
-    const nsitf = grossIncome * 0.01;            // 1% NSITF
-
-    const statutoryDeductions = pension + nhf;
-    const cra = Math.max(200000 / 12, grossIncome * 0.01) + grossIncome * 0.2;
-    const taxableIncome = Math.max(0, grossIncome - statutoryDeductions - cra);
-
-    // PAYE bands (monthly equivalent of annual bands)
-    let paye = 0;
-    let remaining = taxableIncome;
-    const bands = [
-      { limit: 300000 / 12, rate: 0.07 },
-      { limit: 300000 / 12, rate: 0.11 },
-      { limit: 500000 / 12, rate: 0.15 },
-      { limit: 500000 / 12, rate: 0.19 },
-      { limit: 1600000 / 12, rate: 0.21 },
-      { limit: Infinity, rate: 0.24 },
-    ];
-    for (const band of bands) {
-      if (remaining <= 0) break;
-      const taxable = Math.min(remaining, band.limit);
-      paye += taxable * band.rate;
-      remaining -= taxable;
-    }
-
-    return { pension, pensionEmployer, nhf, nsitf, paye };
-  }
-
-  /**
    * Generate payslips for all active staff in a property for a period.
    */
   static async processPayroll(ctx: TenantContext, periodId: string) {
@@ -173,10 +158,57 @@ export class PayrollService {
     if (!ctx.propertyIds.includes(period.propertyId)) throw new Error('Unauthorized');
     if (period.status !== 'DRAFT') throw new Error(`Cannot process payroll in status ${period.status}`);
 
+    const statutory = await prisma.statutoryConfiguration.findFirst({
+      where: {
+        organizationId: ctx.organizationId,
+        effectiveFrom: { lte: period.startDate },
+        OR: [{ effectiveTo: null }, { effectiveTo: { gte: period.startDate } }],
+      },
+      orderBy: { effectiveFrom: 'desc' },
+    });
+    if (!statutory) throw new Error('No effective statutory configuration exists for this payroll period');
+    const statutoryRule: StatutoryConfigurationRule = {
+      taxRegime: statutory.taxRegime,
+      versionTag: statutory.versionTag,
+      craPercentGross: Number(statutory.craPercentGross),
+      craBaseAmount: Number(statutory.craBaseAmount),
+      craHigherPercent: Number(statutory.craHigherPercent),
+      taxBands: Array.isArray(statutory.taxBands)
+        ? (statutory.taxBands as any[]).map((band) => ({
+          cap: band.cap !== undefined && band.cap !== null ? Number(band.cap) : (band.threshold !== undefined && band.threshold !== null ? Number(band.threshold) : null),
+          threshold: band.threshold !== undefined && band.threshold !== null ? Number(band.threshold) : (band.cap !== undefined && band.cap !== null ? Number(band.cap) : null),
+          rate: Number(band.rate),
+        }))
+        : undefined,
+      pensionEmployeeRate: Number(statutory.pensionEmployeeRate),
+      pensionEmployerRate: Number(statutory.pensionEmployerRate),
+      pensionEnabled: statutory.pensionEnabled,
+      pensionExemptionReason: statutory.pensionExemptionReason,
+      nhfRate: Number(statutory.nhfRate),
+      nhfEnabled: statutory.nhfEnabled,
+      nhfExemptionReason: statutory.nhfExemptionReason,
+      nsitfRate: Number(statutory.nsitfRate),
+      itfRate: Number(statutory.itfRate),
+      minimumWageFloor: Number(statutory.minimumWageFloor),
+    };
+
     // Get salary structures for this property
     const structures = await prisma.salaryStructure.findMany({
-      where: { propertyId: period.propertyId, isActive: true },
-      include: { staff: true },
+      where: {
+        organizationId: ctx.organizationId,
+        propertyId: period.propertyId,
+        isActive: true,
+        staff: { is: { organizationId: ctx.organizationId, propertyAccess: { has: period.propertyId }, isActive: true, deletedAt: null } },
+      },
+      include: {
+        staff: {
+          include: {
+            employeeProfile: true,
+            employeeLoans: { where: { status: 'ACTIVE', propertyId: period.propertyId } },
+            salaryAdvances: { where: { status: 'APPROVED', propertyId: period.propertyId } },
+          },
+        },
+      },
     });
 
     const referralCommissions = await prisma.referralCommission.findMany({
@@ -216,9 +248,41 @@ export class PayrollService {
         const referralCommission = referralByStaff.get(struct.staffId)?.total || 0;
         const gross = basic + housing + transport + other + referralCommission;
 
-        const { pension, pensionEmployer, nhf, nsitf, paye } = this.calculateNigerianTaxes(gross, basic);
-        const totalDed = pension + nhf + nsitf + paye;
-        const net = gross - totalDed;
+        const profile = struct.staff.employeeProfile;
+        const loanRepayment = struct.staff.employeeLoans.reduce((sum, loan) => sum + Number(loan.monthlyDeduction || 0), 0);
+        const salaryAdvanceRepayment = struct.staff.salaryAdvances.reduce((sum, advance) => sum + Number(advance.amount || 0), 0);
+        const calculated = NigerianPayrollEngine.calculateEmployee({
+          staffId: struct.staffId,
+          name: `${struct.staff.firstName} ${struct.staff.lastName}`.trim() || struct.staff.email,
+          employeeCode: struct.staff.employeeId || `EMP-${struct.staffId.slice(0, 8).toUpperCase()}`,
+          department: struct.staff.department || 'General',
+          position: struct.staff.position || 'Staff',
+          bankName: struct.bankName || '',
+          bankAccountNumber: struct.bankAccountNumber || '',
+          bankSortCode: struct.bankSortCode || '',
+          bankAccountName: struct.bankAccountName || `${struct.staff.firstName} ${struct.staff.lastName}`,
+          bvn: profile?.bvn || '',
+          nin: profile?.nin || '',
+          taxId: profile?.tin || '',
+          rsaPin: struct.pensionNumber || '',
+          pfaName: struct.pensionFundAdmin || '',
+          baseSalary: basic,
+          housingAllowance: housing,
+          transportAllowance: transport,
+          otherAllowances: other,
+          bonuses: referralCommission,
+          loanRepayment,
+          salaryAdvanceRepayment,
+          pensionApplicable: !profile?.pensionExempt,
+          nhfApplicable: !profile?.nhfExempt,
+          nhisMonthlyContribution: Number(profile?.nhisMonthlyContribution || 0),
+          annualRentPaid: Number(profile?.annualRentPaid || 0),
+          annualLifeAssurance: Number(profile?.annualLifeAssurance || 0),
+          annualMortgageInterest: Number(profile?.annualMortgageInterest || 0),
+        }, statutoryRule);
+        const { pensionEmployee: pension, pensionEmployer, nhfDeduction, nsitfEmployer: nsitf, payeTax: paye, itfEmployer: itf } = calculated;
+        const totalDed = calculated.totalDeductions;
+        const net = calculated.netPay;
 
         periodGross += gross;
         periodNet += net;
@@ -240,8 +304,9 @@ export class PayrollService {
             payeTax: paye,
             pensionEmployee: pension,
             pensionEmployer,
-            nhf,
+            nhf: nhfDeduction,
             nsitf,
+            loanDeductions: calculated.loanRepayment + calculated.salaryAdvance,
             totalDeductions: totalDed,
             netPay: net,
             bankName: struct.bankName,
@@ -256,9 +321,11 @@ export class PayrollService {
           ...(other > 0 ? [{ payslipId: payslip.id, type: 'EARNING', name: 'Other Allowances', amount: other }] : []),
           ...(referralCommission > 0 ? [{ payslipId: payslip.id, type: 'EARNING', name: 'Referral Commission', amount: referralCommission }] : []),
           { payslipId: payslip.id, type: 'STATUTORY', name: 'PAYE Tax', amount: paye },
-          { payslipId: payslip.id, type: 'STATUTORY', name: 'Pension (Employee 8%)', amount: pension },
-          { payslipId: payslip.id, type: 'STATUTORY', name: 'NHF (2.5%)', amount: nhf },
-          { payslipId: payslip.id, type: 'STATUTORY', name: 'NSITF (1%)', amount: nsitf },
+          { payslipId: payslip.id, type: 'STATUTORY', name: 'NHF', amount: nhfDeduction },
+          { payslipId: payslip.id, type: 'EMPLOYER_CONTRIBUTION', name: 'NSITF (Employer)', amount: nsitf },
+          { payslipId: payslip.id, type: 'EMPLOYER_CONTRIBUTION', name: 'ITF (Employer)', amount: itf },
+          { payslipId: payslip.id, type: 'DEDUCTION', name: 'Loan Recovery', amount: calculated.loanRepayment },
+          { payslipId: payslip.id, type: 'DEDUCTION', name: 'Salary Advance Recovery', amount: calculated.salaryAdvance },
         ];
 
         await tx.payslipComponent.createMany({ data: components });

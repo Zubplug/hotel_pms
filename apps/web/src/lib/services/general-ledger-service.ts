@@ -17,6 +17,9 @@ export class GeneralLedgerService {
     input: { propertyId: string; code: string; name: string; type: AccountType; category: string; normalBalance: 'DEBIT' | 'CREDIT'; description?: string; parentAccountId?: string; isActive?: boolean }
   ) {
     if (!ctx.propertyIds.includes(input.propertyId)) throw new Error('Unauthorized');
+    if (!input.code.trim() || !input.name.trim() || !input.category.trim()) throw new Error('Account code, name, and category are required');
+    if (!['ASSET', 'LIABILITY', 'EQUITY', 'REVENUE', 'EXPENSE'].includes(input.type)) throw new Error('Invalid account type');
+    if (!['DEBIT', 'CREDIT'].includes(input.normalBalance)) throw new Error('Invalid normal balance');
 
     const existing = await prisma.chartOfAccount.findUnique({
       where: { propertyId_code: { propertyId: input.propertyId, code: input.code } }
@@ -40,6 +43,7 @@ export class GeneralLedgerService {
     const where: Prisma.JournalEntryWhereInput = {
       propertyId,
       ...(filters?.status && { status: filters.status }),
+      ...(filters?.status === 'POSTED' && { isReversed: false }),
       ...(filters?.periodId && { periodId: filters.periodId })
     };
 

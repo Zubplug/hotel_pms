@@ -19,7 +19,7 @@ export default async function GuestCreditsPage({ allowNightAudit = false }: { al
   if (!propertyId) return <EmptyState title="No property assigned" />;
   const [property, entries] = await Promise.all([
     prisma.property.findUnique({ where: { id: propertyId }, select: { name: true, baseCurrency: true } }),
-    prisma.cityLedgerEntry.findMany({ where: { propertyId, type: 'REFUND_OWED', status: 'OPEN' }, include: { guest: { select: { firstName: true, lastName: true, phone: true, email: true } }, account: { select: { name: true, type: true } }, allocations: { select: { amount: true } }, refundRequests: { where: { status: { in: ['PENDING_APPROVAL', 'APPROVED', 'PROCESSING'] } }, select: { status: true, requestedAmount: true } } }, orderBy: { createdAt: 'asc' } }),
+    prisma.cityLedgerEntry.findMany({ where: { propertyId, type: 'REFUND_OWED', status: 'OPEN', account: { type: 'REFUND_PAYABLE', status: 'ACTIVE' } }, include: { guest: { select: { firstName: true, lastName: true, phone: true, email: true } }, account: { select: { name: true, type: true } }, allocations: { select: { amount: true } }, refundRequests: { where: { status: { in: ['PENDING_APPROVAL', 'APPROVED', 'PROCESSING'] } }, select: { status: true, requestedAmount: true } } }, orderBy: { createdAt: 'asc' } }),
   ]);
   const currency = property?.baseCurrency || entries[0]?.currency || 'NGN';
   const now = Date.now();

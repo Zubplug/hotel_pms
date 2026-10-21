@@ -48,19 +48,19 @@ export default async function CashBankPage() {
   const [property, cashAccounts, deposits, expenses, posSessions, frontdeskSessions, payments, posPayments, supplierPayments, pendingJournals] = await Promise.all([
     prisma.property.findUnique({ where: { id: propertyId }, select: { name: true, baseCurrency: true, businessDate: true } }),
     prisma.cashAccount.findMany({ where: { propertyId, isActive: true }, include: { glAccount: { select: { code: true, name: true, type: true } } }, orderBy: [{ type: 'asc' }, { name: 'asc' }] }),
-    prisma.bankDeposit.findMany({ where: { propertyId }, include: { allocations: { select: { id: true } } }, orderBy: { createdAt: 'desc' }, take: 10 }),
-    prisma.cashExpense.findMany({ where: { propertyId }, include: { cashAccount: { select: { name: true } }, journal: { select: { id: true } } }, orderBy: { createdAt: 'desc' }, take: 10 }),
-    prisma.posSession.findMany({ where: { outlet: { propertyId } }, include: { outlet: true, primaryOperator: true }, orderBy: { businessDate: 'desc' }, take: 12 }),
-    prisma.frontdeskSession.findMany({ where: { propertyId }, include: { staff: true, cashAccount: true }, orderBy: { businessDate: 'desc' }, take: 12 }),
-    prisma.payment.findMany({ where: { propertyId, status: { in: ['COMPLETED', 'PARTIALLY_REFUNDED'] } }, select: { amount: true, businessDate: true, method: true }, orderBy: { businessDate: 'desc' }, take: 1000 }),
-    prisma.posPayment.findMany({ where: { order: { propertyId }, status: 'CONFIRMED' }, select: { amount: true, businessDate: true, method: true }, orderBy: { businessDate: 'desc' }, take: 1000 }),
-    prisma.supplierPayment.findMany({ where: { propertyId }, select: { amount: true, paymentDate: true, paymentMethod: true }, orderBy: { paymentDate: 'desc' }, take: 500 }),
+    prisma.bankDeposit.findMany({ where: { propertyId }, include: { allocations: { select: { id: true } } }, orderBy: { createdAt: 'desc' } }),
+    prisma.cashExpense.findMany({ where: { propertyId }, include: { cashAccount: { select: { name: true } }, journal: { select: { id: true } } }, orderBy: { createdAt: 'desc' } }),
+    prisma.posSession.findMany({ where: { outlet: { propertyId } }, include: { outlet: true, primaryOperator: true }, orderBy: { businessDate: 'desc' } }),
+    prisma.frontdeskSession.findMany({ where: { propertyId }, include: { staff: true, cashAccount: true }, orderBy: { businessDate: 'desc' } }),
+    prisma.payment.findMany({ where: { propertyId, status: { in: ['COMPLETED', 'PARTIALLY_REFUNDED'] } }, select: { amount: true, businessDate: true, method: true }, orderBy: { businessDate: 'desc' } }),
+    prisma.posPayment.findMany({ where: { order: { propertyId }, status: 'CONFIRMED' }, select: { amount: true, businessDate: true, method: true }, orderBy: { businessDate: 'desc' } }),
+    prisma.supplierPayment.findMany({ where: { propertyId }, select: { amount: true, paymentDate: true, paymentMethod: true }, orderBy: { paymentDate: 'desc' } }),
     prisma.journalEntry.count({ where: { propertyId, status: 'DRAFT' } }),
   ]);
 
   const currency = property?.baseCurrency || 'NGN';
   const businessDate = property?.businessDate || new Date();
-  const cashBalance = cashAccounts.filter(account => account.type !== 'BANK_ACCOUNT' && account.type !== 'EXTERNAL').reduce((sum, account) => sum + Number(account.balance), 0);
+  const cashBalance = cashAccounts.filter(account => !['BANK_ACCOUNT', 'EXTERNAL', 'CASH_IN_TRANSIT'].includes(account.type)).reduce((sum, account) => sum + Number(account.balance), 0);
   const bankBalance = cashAccounts.filter(account => account.type === 'BANK_ACCOUNT').reduce((sum, account) => sum + Number(account.balance), 0);
   const transitBalance = cashAccounts.filter(account => account.type === 'CASH_IN_TRANSIT').reduce((sum, account) => sum + Number(account.balance), 0);
   const openDepositStatuses = ['PENDING_HANDOVER', 'HANDED_OVER', 'UNDER_RECONCILIATION', 'EXCEPTION'];
@@ -111,7 +111,7 @@ export default async function CashBankPage() {
 
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
           {[
-            { label: 'Cash custody', value: money(cashBalance, currency), detail: `${cashAccounts.filter(a => a.type !== 'BANK_ACCOUNT' && a.type !== 'EXTERNAL').length} active control accounts`, icon: Wallet, tone: 'text-emerald-300 bg-emerald-400/10' },
+            { label: 'Cash custody', value: money(cashBalance, currency), detail: `${cashAccounts.filter(a => !['BANK_ACCOUNT', 'EXTERNAL', 'CASH_IN_TRANSIT'].includes(a.type)).length} active control accounts`, icon: Wallet, tone: 'text-emerald-300 bg-emerald-400/10' },
             { label: 'Operating bank', value: money(bankBalance, currency), detail: `${cashAccounts.filter(a => a.type === 'BANK_ACCOUNT').length} configured bank accounts`, icon: Landmark, tone: 'text-cyan-300 bg-cyan-400/10' },
             { label: 'Cash in transit', value: money(transitBalance, currency), detail: `${pendingDeposits.length} deposits not reconciled`, icon: Banknote, tone: 'text-amber-300 bg-amber-400/10' },
             { label: 'Today net movement', value: money(todayInflow - todayOutflow, currency), detail: `${money(todayInflow, currency)} in · ${money(todayOutflow, currency)} out`, icon: todayInflow >= todayOutflow ? ArrowUpRight : ArrowDownRight, tone: todayInflow >= todayOutflow ? 'text-emerald-300 bg-emerald-400/10' : 'text-rose-300 bg-rose-400/10' },
