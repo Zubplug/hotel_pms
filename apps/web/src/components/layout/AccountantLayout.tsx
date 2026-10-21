@@ -38,8 +38,6 @@ const ACCOUNTANT_NAV = [
     children: [
       { name: 'Overview', href: '/accountant' },
       { name: 'Billing & Invoicing', href: '/accountant/billing' },
-      { name: 'Payments Received', href: '/accountant/billing/payments' },
-      { name: 'Receivables', href: '/accountant/billing/receivables' },
       { name: 'Revenue Accounting', href: '/accountant/revenue' },
       { name: 'Accounts Receivable', href: '/accountant/receivables' },
       { name: 'City Ledger', href: '/accountant/city-ledger' },
@@ -194,9 +192,9 @@ export function AccountantLayout({ children, enabledModules = [] }: { children: 
   );
 
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-950 text-slate-50">
+    <div className="flex h-screen overflow-hidden bg-slate-950 text-slate-50 print:h-auto print:overflow-visible">
       {/* Desktop Sidebar */}
-      <aside className="hidden w-64 shrink-0 lg:block border-r border-white/5">
+      <aside className="hidden w-64 shrink-0 border-r border-white/5 lg:block print:hidden">
         <Sidebar />
       </aside>
 
@@ -219,7 +217,7 @@ export function AccountantLayout({ children, enabledModules = [] }: { children: 
 
       {/* Main Content Area */}
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="sticky top-0 z-40 flex h-14 shrink-0 items-center justify-between border-b border-white/5 bg-[#07111f]/95 px-3 backdrop-blur sm:px-6 lg:h-16">
+        <header className="sticky top-0 z-40 flex h-14 shrink-0 items-center justify-between border-b border-white/5 bg-[#07111f]/95 px-3 backdrop-blur sm:px-6 lg:h-16 print:hidden">
           <div className="flex min-w-0 items-center gap-2">
             <Button variant="outline" size="icon" onClick={() => setSidebarOpen(true)} className="h-10 w-10 shrink-0 border-white/10 bg-white/[.04] text-slate-300 hover:bg-white/[.1] lg:hidden" aria-label="Open finance navigation">
               <Menu className="h-4 w-4" />
@@ -232,7 +230,7 @@ export function AccountantLayout({ children, enabledModules = [] }: { children: 
           <PropertySelector className="max-w-[150px] sm:max-w-[240px]" />
         </header>
 
-        <main className="flex-1 overflow-auto bg-slate-950">
+        <main className="flex-1 overflow-auto bg-slate-950 print:overflow-visible print:bg-white">
           {children}
         </main>
       </div>

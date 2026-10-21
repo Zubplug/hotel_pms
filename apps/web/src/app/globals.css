@@ -1108,3 +1108,15 @@ body:has(.pool-dark-surface) [data-slot='select-item'][data-highlighted] { backg
 .pool-dark-surface .recharts-tooltip-wrapper .recharts-default-tooltip { background: #0d1724 !important; border-color: rgba(255,255,255,.12) !important; border-radius: 0.625rem; box-shadow: 0 12px 40px rgba(0,0,0,.40); }
 .pool-dark-surface .recharts-legend-item-text { color: #94a3b8 !important; font-size: 12px; }
 
+/* Billing documents use the browser print pipeline for A4/PDF output. Keep
+   the rule scoped so ordinary Accountant pages retain their existing print
+   behavior. */
+@media print {
+  @page { size: A4; margin: 12mm; }
+  body:has(.billing-print-document) { background: #fff !important; }
+  body:has(.billing-print-document) * { animation: none !important; transition: none !important; }
+  .billing-print-document table { page-break-inside: auto; }
+  .billing-print-document tr { page-break-inside: avoid; page-break-after: auto; }
+  .billing-print-document thead { display: table-header-group; }
+  .billing-print-document tfoot { display: table-footer-group; }
+}

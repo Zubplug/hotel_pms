@@ -48,6 +48,16 @@ export type BillingScope = {
   propertyId: string;
   currency: string | null;
   asOf: Date;
+  property: {
+    name: string;
+    address: string;
+    city: string;
+    state: string;
+    country: string;
+    phone: string;
+    email: string;
+    website: string | null;
+  };
 };
 
 function iso(value: Date | null | undefined) { return value ? new Date(value).toISOString() : null; }
@@ -195,9 +205,9 @@ export async function getBillingScope(userId: string, propertyId: string, asOf =
   });
   const roles = [ctx.role, ...assignedRoles.map((assignment: any) => assignment.role.name)];
   if (!roles.some(canReadBilling)) throw new Error('FORBIDDEN');
-  const property = await prisma.property.findUnique({ where: { id: propertyId }, select: { baseCurrency: true, organizationId: true } });
+  const property = await prisma.property.findUnique({ where: { id: propertyId }, select: { baseCurrency: true, organizationId: true, name: true, address: true, city: true, state: true, country: true, phone: true, email: true, website: true } });
   if (!property || property.organizationId !== ctx.organizationId) throw new Error('FORBIDDEN');
-  return { ctx, propertyId, currency: property.baseCurrency, asOf };
+  return { ctx, propertyId, currency: property.baseCurrency, asOf, property: { name: property.name, address: property.address, city: property.city, state: property.state, country: property.country, phone: property.phone, email: property.email, website: property.website } };
 }
 
 export async function listBillingDocuments(scope: BillingScope, filters: Omit<BillingFilters, 'propertyId'> = {}) {
@@ -289,6 +299,140 @@ export async function getBillingDocumentHistory(scope: BillingScope, document: B
     (prisma as any).auditLog.findMany({ where: { propertyId: scope.propertyId, resourceId: { in: sourceIds } }, select: { id: true, action: true, resource: true, resourceId: true, userEmail: true, userRole: true, createdAt: true, newValue: true }, orderBy: { createdAt: 'desc' }, take: 100 }),
   ]);
   return { payments, allocations, refunds, refundRequests, credits, journals, audit };
+}
+
+export type BillingPresentationItem = {
+  id: string;
+  date: string | null;
+  description: string;
+  type: string;
+  quantity: string;
+  unitAmount: string;
+  amount: string;
+  currency: string;
+  source?: string;
+};
+
+export type BillingDocumentPresentation = {
+  document: BillingDocument;
+  property: BillingScope['property'];
+  customer: {
+    kind: BillingDocument['customer']['kind'];
+    id?: string;
+    name: string;
+    email?: string | null;
+    phone?: string | null;
+    address?: string | null;
+  };
+  items: BillingPresentationItem[];
+  context: {
+    reservationId?: string;
+    confirmationNumber?: string;
+    checkIn?: string | null;
+    checkOut?: string | null;
+    roomNumbers: string[];
+    folioType?: string;
+    eventName?: string;
+  };
+  history: Awaited<ReturnType<typeof getBillingDocumentHistory>>;
+};
+
+function addressOf(value: { addressLine1?: string | null; addressLine2?: string | null; city?: string | null; state?: string | null; country?: string | null } | null | undefined) {
+  if (!value) return null;
+  return [value.addressLine1, value.addressLine2, value.city, value.state, value.country].filter(Boolean).join(', ') || null;
+}
+
+function presentationItem(row: any, fallbackCurrency: string): BillingPresentationItem {
+  return {
+    id: row.id,
+    date: iso(row.businessDate || row.createdAt || row.issuedAt),
+    description: row.description || row.category || 'Financial item',
+    type: row.type || row.category || 'ITEM',
+    quantity: amount(row.quantity ?? 1),
+    unitAmount: amount(row.unitAmount ?? row.unitPrice ?? row.totalPrice ?? row.amount),
+    amount: amount(row.amount ?? row.totalPrice ?? row.totalAmount),
+    currency: row.currency || fallbackCurrency,
+    source: row.source,
+  };
+}
+
+export async function getBillingDocumentPresentation(scope: BillingScope, source: BillingSource, id: string): Promise<BillingDocumentPresentation | null> {
+  if (source === 'FOLIO') {
+    const row = await (prisma as any).folio.findFirst({
+      where: { id, propertyId: scope.propertyId },
+      include: {
+        property: { select: { name: true, address: true, city: true, state: true, country: true, phone: true, email: true, website: true } },
+        guest: true,
+        corporateAccount: { select: { id: true, name: true } },
+        reservation: { include: { primaryGuest: true, reservationRooms: { include: { room: { select: { number: true } } }, orderBy: { checkIn: 'asc' } } } },
+        payments: true,
+        credits: { include: { applications: true } },
+        refunds: true,
+        items: { orderBy: [{ businessDate: 'asc' }, { createdAt: 'asc' }] },
+      },
+    });
+    if (!row) return null;
+    const document = normalizeFolio(row, scope.ctx.organizationId, scope.asOf);
+    const guest = row.guest;
+    const customer = guest
+      ? { kind: 'GUEST' as const, id: guest.id, name: `${guest.firstName} ${guest.lastName}`.trim(), email: guest.email, phone: guest.phone, address: addressOf(guest) }
+      : row.corporateAccount
+        ? { kind: 'CORPORATE' as const, id: row.corporateAccount.id, name: row.corporateAccount.name, email: null, phone: null, address: null }
+        : { kind: 'UNKNOWN' as const, name: 'Unassigned account', email: null, phone: null, address: null };
+    return {
+      document,
+      property: scope.property,
+      customer,
+      items: (row.items || []).map((item: any) => presentationItem(item, row.currency)),
+      context: {
+        reservationId: row.reservation?.id,
+        confirmationNumber: row.reservation?.confirmationNumber,
+        checkIn: iso(row.reservation?.checkIn),
+        checkOut: iso(row.reservation?.checkOut),
+        roomNumbers: (row.reservation?.reservationRooms || []).map((room: any) => room.room?.number).filter(Boolean),
+        folioType: row.type,
+      },
+      history: await getBillingDocumentHistory(scope, document),
+    };
+  }
+
+  if (source === 'CITY_LEDGER_INVOICE') {
+    const row = await (prisma as any).cityLedgerInvoice.findFirst({
+      where: { id, propertyId: scope.propertyId },
+      include: { account: true, allocations: { include: { payment: true } }, entries: true },
+    });
+    if (!row) return null;
+    const document = normalizeCityInvoice(row, scope.ctx.organizationId, scope.asOf);
+    return {
+      document,
+      property: scope.property,
+      customer: { kind: 'CORPORATE', id: row.account.id, name: row.account.name, email: null, phone: null, address: null },
+      items: [{ id: row.id, date: iso(row.issueDate), description: row.description, type: 'INVOICE', quantity: '1', unitAmount: amount(row.amount), amount: amount(row.amount), currency: row.currency }],
+      context: {},
+      history: await getBillingDocumentHistory(scope, document),
+    };
+  }
+
+  const row = await (prisma as any).eventInvoice.findFirst({
+    where: { id, propertyId: scope.propertyId },
+    include: { event: { include: { guest: true, corporateAccount: true } }, items: true, payments: true, cityLedgerInvoice: { include: { allocations: true } } },
+  });
+  if (!row) return null;
+  const document = normalizeEventInvoice(row, scope.ctx.organizationId, scope.asOf);
+  const guest = row.event?.guest;
+  const customer = guest
+    ? { kind: 'GUEST' as const, id: guest.id, name: `${guest.firstName} ${guest.lastName}`.trim(), email: guest.email, phone: guest.phone, address: addressOf(guest) }
+    : row.event?.corporateAccount
+      ? { kind: 'CORPORATE' as const, id: row.event.corporateAccount.id, name: row.event.corporateAccount.name, email: row.event.corporateAccount.contactEmail, phone: row.event.corporateAccount.contactPhone, address: null }
+      : { kind: 'EVENT' as const, id: row.event?.id, name: row.event?.name || 'Event client', email: row.event?.contactEmail, phone: row.event?.contactPhone, address: null };
+  return {
+    document,
+    property: scope.property,
+    customer,
+    items: (row.items || []).map((item: any) => presentationItem({ ...item, amount: item.totalPrice, type: item.category }, row.currency)),
+    context: { eventName: row.event?.name },
+    history: await getBillingDocumentHistory(scope, document),
+  };
 }
 
 export { allocationState };
