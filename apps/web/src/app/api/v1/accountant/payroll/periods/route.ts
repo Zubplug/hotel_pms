@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
     if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     return NextResponse.json(
-      { error: 'Payroll preparation is owned by the HR payroll workflow. Use /hr/payroll to create and calculate a period; Accountant is read-only control and reconciliation.' },
+      { error: 'Payroll preparation is restricted to the authorized payroll operations workflow; Accountant is read-only control and reconciliation.' },
       { status: 409 },
     );
   } catch (error: any) {

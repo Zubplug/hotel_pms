@@ -10,7 +10,7 @@ export async function POST(
     if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     return NextResponse.json(
-      { error: 'Payroll approval is owned by the HR payroll workflow. Accountant is read-only control and reconciliation.' },
+      { error: 'Payroll approval is restricted to the authorized payroll operations workflow; Accountant is read-only control and reconciliation.' },
       { status: 409 },
     );
   } catch (error: any) {

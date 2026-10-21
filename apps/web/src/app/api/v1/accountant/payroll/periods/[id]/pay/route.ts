@@ -7,7 +7,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     return NextResponse.json(
-      { error: 'Payroll settlement is owned by the HR payroll workflow. Accountant is read-only control and reconciliation.' },
+      { error: 'Payroll settlement is restricted to the authorized payroll operations workflow; Accountant is read-only control and reconciliation.' },
       { status: 409 },
     );
   } catch (error: unknown) {

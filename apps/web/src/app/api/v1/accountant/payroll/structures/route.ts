@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
     if (!session?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     return NextResponse.json(
-      { error: 'Compensation setup is owned by the HR employee master. Accountant is read-only control and reconciliation.' },
+      { error: 'Compensation setup is restricted to the authorized employee master workflow; Accountant is read-only control and reconciliation.' },
       { status: 409 },
     );
   } catch (error: any) {
