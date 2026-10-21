@@ -408,7 +408,7 @@ export async function getBillingDocumentPresentation(scope: BillingScope, source
       property: scope.property,
       customer: { kind: 'CORPORATE', id: row.account.id, name: row.account.name, email: null, phone: null, address: null },
       items: [{ id: row.id, date: iso(row.issueDate), description: row.description, type: 'INVOICE', quantity: '1', unitAmount: amount(row.amount), amount: amount(row.amount), currency: row.currency }],
-      context: {},
+      context: { roomNumbers: [] },
       history: await getBillingDocumentHistory(scope, document),
     };
   }
@@ -430,7 +430,7 @@ export async function getBillingDocumentPresentation(scope: BillingScope, source
     property: scope.property,
     customer,
     items: (row.items || []).map((item: any) => presentationItem({ ...item, amount: item.totalPrice, type: item.category }, row.currency)),
-    context: { eventName: row.event?.name },
+    context: { roomNumbers: [], eventName: row.event?.name },
     history: await getBillingDocumentHistory(scope, document),
   };
 }
