@@ -352,6 +352,13 @@ function addressOf(value: { addressLine1?: string | null; addressLine2?: string 
   return [value.addressLine1, value.addressLine2, value.city, value.state, value.country].filter(Boolean).join(', ') || null;
 }
 
+function displayRoomNumber(value: unknown) {
+  const room = String(value || '').trim();
+  if (!room) return null;
+  const segments = room.split('.');
+  return segments[segments.length - 1] || room;
+}
+
 function presentationItem(row: any, fallbackCurrency: string): BillingPresentationItem {
   return {
     id: row.id,
@@ -408,7 +415,7 @@ export async function getBillingDocumentPresentation(scope: BillingScope, source
         confirmationNumber: row.reservation?.confirmationNumber,
         checkIn: iso(row.reservation?.checkIn),
         checkOut: iso(row.reservation?.checkOut),
-        roomNumbers: (row.reservation?.reservationRooms || []).map((room: any) => room.room?.number).filter(Boolean),
+        roomNumbers: (row.reservation?.reservationRooms || []).map((room: any) => displayRoomNumber(room.room?.number)).filter(Boolean),
         folioType: row.type,
       },
       history: await getBillingDocumentHistory(scope, document),
@@ -445,7 +452,7 @@ export async function getBillingDocumentPresentation(scope: BillingScope, source
       customer: { kind: 'CORPORATE', id: row.account.id, name: row.account.name, email: null, phone: null, address: null },
       items: folioItems.length ? folioItems.map((item: any) => presentationItem(item, row.currency)) : [{ id: row.id, date: iso(row.issueDate), description: row.description, type: 'INVOICE', quantity: '1', unitAmount: amount(row.amount), amount: amount(row.amount), currency: row.currency }],
       context: {
-        roomNumbers: (linkedReservation?.reservationRooms || []).map((room: any) => room.room?.number).filter(Boolean),
+        roomNumbers: (linkedReservation?.reservationRooms || []).map((room: any) => displayRoomNumber(room.room?.number)).filter(Boolean),
         guestName,
         reservationId: linkedReservation?.id,
         confirmationNumber: linkedReservation?.confirmationNumber,
