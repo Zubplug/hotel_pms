@@ -2224,6 +2224,7 @@ model User {
   sentExternalAuditorInvitations        ExternalAuditorInvitation[]  @relation("ExternalAuditorInvitationInvitedBy")
   customerInvitations                   CustomerInvitation[]         @relation("CustomerInvitationUser")
   portalEmailVerifications              PortalEmailVerification[]
+  passwordResetTokens                   PasswordResetToken[]
   sentCustomerInvitations               CustomerInvitation[]         @relation("CustomerInvitationCreatedBy")
   employeeInvitations                   EmployeeInvitation[]         @relation("EmployeeInvitationUser")
   sentEmployeeInvitations               EmployeeInvitation[]         @relation("EmployeeInvitationInvitedBy")
@@ -2622,6 +2623,18 @@ model CustomerInvitation {
 }
 
 model PortalEmailVerification {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @db.Uuid
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash  String   @unique
+  expiresAt  DateTime @db.Timestamptz
+  usedAt     DateTime? @db.Timestamptz
+  createdAt  DateTime @default(now()) @db.Timestamptz
+
+  @@index([userId, expiresAt, usedAt])
+}
+
+model PasswordResetToken {
   id         String   @id @default(uuid()) @db.Uuid
   userId     String   @db.Uuid
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)

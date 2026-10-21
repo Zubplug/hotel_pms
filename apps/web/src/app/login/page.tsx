@@ -5,6 +5,7 @@ import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { Loader2, Hotel, Eye, EyeOff, User, ArrowLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import Link from 'next/link';
 
 // Compile-time constant — no runtime mismatch
 const IS_DESKTOP = process.env.NEXT_PUBLIC_IS_DESKTOP === 'true';
@@ -278,6 +279,14 @@ export default function LoginPage() {
             </button>
           </div>
         </div>
+
+        {loginMode === 'account' && (
+          <div className="-mt-2 text-right">
+            <Link href="/forgot-password" className="text-xs text-slate-400 transition-colors hover:text-white">
+              Forgot password?
+            </Link>
+          </div>
+        )}
 
         <button
           type="submit"

@@ -123,6 +123,12 @@ export default function PortalLogin() {
             />
           </div>
 
+          <div style={{ textAlign: "right", marginTop: -8 }}>
+            <Link href="/portal/forgot-password" style={{ fontSize: 12, color: "var(--text-muted)" }}>
+              Forgot password?
+            </Link>
+          </div>
+
           {/* Password */}
           <div className="form-group">
             <label htmlFor="login-password" className="form-label">Password</label>
