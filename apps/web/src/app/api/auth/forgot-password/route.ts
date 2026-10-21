@@ -10,10 +10,13 @@ export async function POST(request: NextRequest) {
   const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
   if (!email || !email.includes('@') || email.length > 254) return NextResponse.json(genericResponse);
 
-  const user = await prisma.user.findFirst({
-    where: { OR: [{ email }, { staff: { email } }] },
-    select: { id: true, email: true },
-  });
+  let user = await prisma.user.findUnique({ where: { email }, select: { id: true, email: true } });
+  if (!user) {
+    const staff = await prisma.staff.findUnique({ where: { email }, select: { userId: true } });
+    user = staff?.userId
+      ? await prisma.user.findUnique({ where: { id: staff.userId }, select: { id: true, email: true } })
+      : null;
+  }
   if (!user) return NextResponse.json(genericResponse);
 
   const rawToken = randomBytes(32).toString('hex');

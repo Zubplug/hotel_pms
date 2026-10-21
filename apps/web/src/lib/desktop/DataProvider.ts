@@ -85,7 +85,7 @@ export interface LodgeCoreDataProvider {
     reassignRoom(id: string, data: any): Promise<any>;
   };
   rooms: {
-    list(propertyId: string, params?: { filter?: string }): Promise<any>;
+    list(propertyId: string, params?: { filter?: string; page?: string; pageSize?: string }): Promise<any>;
     getAvailable(propertyId: string, roomTypeId: string, checkIn: string, checkOut: string): Promise<any>;
     getActiveReservation(roomId: string): Promise<any | null>;
     updateStatus(roomId: string, newStatus: string, source: string): Promise<any>;
