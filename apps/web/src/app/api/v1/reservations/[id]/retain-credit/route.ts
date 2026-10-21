@@ -53,7 +53,7 @@ export async function POST(
     const txResult = await prisma.$transaction(async (tx: any) => {
       // 1. Lock Folios and Calculate Net Authoritative Balance
       const folios = await tx.$queryRaw<any[]>`
-        SELECT id, balance, version 
+        SELECT id, balance, version, currency
         FROM "Folio" 
         WHERE "reservationId" = ${id}::uuid AND status = 'OPEN'
         FOR UPDATE
@@ -68,6 +68,9 @@ export async function POST(
       if (totalBalance >= 0) {
         throw new Error('INVALID_BALANCE');
       }
+      if (folios.some((folio: any) => Number(folio.balance) > 0.01)) {
+        throw new Error('INVALID_BALANCE');
+      }
 
       creditAmount = Math.abs(totalBalance);
       const businessDate = new Date(); // In reality, fetch active night audit date
@@ -75,11 +78,10 @@ export async function POST(
 
       // 2. Zero Out the Folios via Retention Charge and Close Them
       // We apply the retention charge to the first open folio (or distribute it)
-      let chargeApplied = false;
       for (const folio of folios) {
         const folioBalance = Number(folio.balance);
         
-        if (!chargeApplied && folioBalance < 0) {
+        if (folioBalance < -0.01) {
           // Post the retention charge to offset the credit
           await tx.folioItem.create({
             data: {
@@ -91,17 +93,20 @@ export async function POST(
               quantity: 1,
               unitAmount: Math.abs(folioBalance),
               amount: Math.abs(folioBalance),
-              currency: 'NGN',
+              currency: folio.currency || 'NGN',
               baseAmount: Math.abs(folioBalance),
+              postedBy: session.user.id,
+              reservationId: id,
+              guestId: reservation.primaryGuestId,
             }
           });
-          chargeApplied = true; // Simplified: applying full offset to the main credit folio
         }
 
         await tx.folio.update({
           where: { id: folio.id, version: folio.version },
           data: {
             balance: 0,
+            ...(folioBalance < -0.01 ? { totalCharges: { increment: Math.abs(folioBalance) } } : {}),
             status: 'CLOSED',
             closedAt: new Date(),
             closedBy: session.user.id,

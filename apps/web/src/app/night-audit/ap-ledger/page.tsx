@@ -49,7 +49,7 @@ export default function AccountsPayableLedgerPage() {
     </div>
   );
 
-  const { negativeFolios, credits, corporateAdvances = [], currency = 'NGN' } = data as any;
+  const { negativeFolios, credits, corporateAdvances = [], gatewayRefunds = [], currency = 'NGN' } = data as any;
   const totalRefundsOwed = negativeFolios.reduce((sum: number, f: any) => sum + Math.abs(Number(f.balance || 0)), 0);
   const totalUnappliedCredits = credits.reduce((sum: number, c: any) => sum + Number(c.remainingAmount || 0), 0)
     + corporateAdvances.reduce((sum: number, c: any) => sum + Number(c.remainingAmount || 0), 0);
@@ -110,6 +110,47 @@ export default function AccountsPayableLedgerPage() {
               <p className="mt-1 text-lg font-bold tabular-nums text-white">{formatCurrency(totalUnappliedCredits, currency)}</p>
             </div>
           </div>
+        </div>
+
+        <div className="rounded-[20px] border border-sky-400/20 bg-sky-400/[0.05] p-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-bold text-white">Gateway Refunds in Progress</h2>
+              <p className="mt-1 text-xs leading-relaxed text-slate-500">
+                Original-payment refunds are sent through the gateway automatically. Bank details are not required.
+                These requests are shown as a control queue and are not added again to Total Liability because the underlying folio credit is already represented above.
+              </p>
+            </div>
+            <span className="rounded-full border border-sky-400/25 bg-sky-400/10 px-2.5 py-1 text-[10px] font-bold text-sky-300">
+              {gatewayRefunds.length} pending
+            </span>
+          </div>
+          {gatewayRefunds.length > 0 && (
+            <div className="mt-4 overflow-x-auto rounded-xl border border-white/[0.06]">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-white/[0.06] bg-white/[0.03]">
+                    {['Guest', 'Provider', 'Amount', 'Status', 'Requested'].map((heading) => (
+                      <th key={heading} className="px-4 py-3 text-left text-[9px] font-bold uppercase tracking-[0.16em] text-slate-500">{heading}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/[0.04]">
+                  {gatewayRefunds.map((refund: any) => (
+                    <tr key={refund.id}>
+                      <td className="px-4 py-3 text-sm font-semibold text-slate-200">
+                        {refund.reservation?.primaryGuest ? `${refund.reservation.primaryGuest.firstName} ${refund.reservation.primaryGuest.lastName}` : 'Guest refund'}
+                      </td>
+                      <td className="px-4 py-3 text-xs uppercase text-slate-400">{refund.payment?.provider || 'Gateway'}</td>
+                      <td className="px-4 py-3 text-sm font-bold tabular-nums text-sky-200">{formatCurrency(Number(refund.requestedAmount), refund.currency || currency)}</td>
+                      <td className="px-4 py-3 text-xs font-bold uppercase text-amber-300">{String(refund.status).replaceAll('_', ' ')}</td>
+                      <td className="px-4 py-3 text-xs tabular-nums text-slate-500">{format(new Date(refund.createdAt), 'dd MMM yyyy')}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
 
         {/* ── Two-panel grid ── */}

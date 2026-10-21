@@ -34,17 +34,26 @@ export async function applyRefundToFolio(
     });
   }
 
-  const folio = await tx.folio.findUnique({ where: { id: request.folioId } });
+  const folio = await tx.folio.findUnique({
+    where: { id: request.folioId },
+    select: { id: true, version: true, balance: true, reservation: { select: { status: true } } },
+  });
   if (!folio) throw new Error('NOT_FOUND');
+  const nextBalance = Number(folio.balance) + amount - reversedCharges;
+  const zeroBalance = Math.abs(nextBalance) <= 0.01;
+  const closesFolio = zeroBalance && folio.reservation?.status === 'CHECKED_OUT';
   const updated = await tx.folio.updateMany({
     where: { id: folio.id, version: folio.version },
     data: {
       version: { increment: 1 },
       totalCharges: { decrement: reversedCharges },
       totalPayments: { decrement: amount },
-      balance: { increment: amount - reversedCharges },
+      balance: zeroBalance ? 0 : { increment: amount - reversedCharges },
+      ...(closesFolio
+        ? { status: 'CLOSED', closedAt: new Date(), closedBy: actorId }
+        : {}),
     },
   });
   if (updated.count !== 1) throw new Error('CONFLICT');
-  return { reversedCharges };
+  return { reversedCharges, closesFolio };
 }

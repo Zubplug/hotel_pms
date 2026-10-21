@@ -67,18 +67,8 @@ export default function NightAuditRoomsControlPage() {
   const { data: allRoomsData } = useQuery({
     queryKey: ['frontdesk', 'rooms', propertyId],
     queryFn: async () => {
-      const rooms: any[] = [];
-      let page = 1;
-      const pageSize = 100;
-
-      while (true) {
-        const result = await provider.rooms.list(propertyId, { page: String(page), pageSize: String(pageSize) });
-        const pageRooms = Array.isArray(result?.data) ? result.data : Array.isArray(result) ? result : [];
-        rooms.push(...pageRooms);
-        if (pageRooms.length < pageSize) break;
-        page += 1;
-      }
-
+      const result = await provider.rooms.list(propertyId, { filter: 'ALL' });
+      const rooms = Array.isArray(result?.data) ? result.data : Array.isArray(result) ? result : [];
       return { success: true, data: rooms };
     },
     enabled: !!propertyId,

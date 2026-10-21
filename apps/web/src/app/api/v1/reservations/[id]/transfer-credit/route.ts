@@ -145,6 +145,9 @@ export async function POST(
               amount: Math.abs(folioBalance),
               currency: folio.currency || refundAccount.currency,
               baseAmount: Math.abs(folioBalance),
+              postedBy: session.user.id,
+              reservationId: id,
+              guestId: reservation.primaryGuestId,
             }
           });
         }

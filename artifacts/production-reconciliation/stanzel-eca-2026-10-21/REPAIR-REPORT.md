@@ -7,8 +7,8 @@ Currency: NGN
 
 ## Scope and safety status
 
-- This is a read-only reconciliation report.
-- No production rows, balances, invoices, allocations, or journals were changed.
+- The ECA reconciliation section below is a historical reconciliation record.
+- The separate refund-folio repair recorded below changed only the verified folio status metadata; no production balances, invoices, allocations, or journals were changed.
 - `/accountant/receivables` remains city-ledger-only per the approved scope.
 - A recovery export was created at `/private/tmp/stanzel-eca-reconciliation-2026-10-21/`.
 
@@ -64,6 +64,89 @@ The corrected transaction-level review confirms:
 | WCV | (1,044,000.00) | (1,044,000.00) unapplied legacy corporate credit | No repair required |
 
 WCV's negative balance is a valid corporate credit/prepayment position. Other unapplied corporate receipts remain in the application/advance workflow and were not incorrectly converted into receivable or expense adjustments.
+
+## Production refund-folio closure repair
+
+A read-only production scan identified 412 checked-out reservations with `OPEN` folios. Most were ordinary legacy zero-balance folios and were intentionally left untouched. The repair rule was narrowed to a folio that was simultaneously:
+
+- linked to a `CHECKED_OUT` reservation;
+- still `OPEN`;
+- at an effectively zero balance; and
+- associated with a `COMPLETED` refund.
+
+Exactly one folio matched all four conditions:
+
+| Folio | Reservation | Refund | Pre-repair state | Repair |
+|---|---|---:|---|---|
+| `FOL-466179` | `RES-970868-182` | NGN 33,000.00 | `OPEN`, balance NGN 0.00 | `CLOSED`, balance NGN 0.00 |
+
+The repair was committed atomically on 2026-10-21 at 10:22:41 UTC. It incremented the folio version from 3 to 4, set `closedAt`, set `closedBy` to the authorized refund actor, and created audit action `FOLIO_REPAIRED_CLOSED_AFTER_COMPLETED_REFUND` with request ID `efd108d5-f002-43a3-88cb-e4fe2125523e`. No GL entry or payment amount was altered.
+
+Post-repair verification found 0 checked-out open folios with a completed refund, including refunds linked through either the folio or its payment.
+
+## Checked-out folio closure repair
+
+Per the approved operational rule that checkout closes the guest folio, the remaining production population was repaired as a separate status-only batch:
+
+- Candidates: 411 open folios linked to `CHECKED_OUT` reservations across Stanzel Grand Resort and Bally’s Place.
+- Distribution: 369 Stanzel folios and 42 Bally’s folios.
+- Balance mix: 378 zero-balance folios, 12 debit-balance folios, and 21 credit-balance folios.
+- Net balance before repair: NGN (140,800.00).
+- Updated: all 411 folios to `CLOSED`.
+- Preserved: every existing `balance`, payment, charge, credit, invoice, and GL record.
+- Audit trail: 411 `FOLIO_CLOSED_AFTER_CHECKOUT_REPAIR` records under request ID `c6d3cce9-5be3-4db8-b2e8-3e8ad7cf3b92`.
+
+Final production verification: 0 open folios remain for checked-out reservations. The 33 non-zero balances were closed without being zeroed or written off; they remain available for receivables/credit workflows.
+
+## Current debt and credit verification
+
+The current checked-out, closed, non-zero folios were reconciled against their source counters rather than relying on the cached balance alone:
+
+- 24 positive folios totaling NGN 1,002,021.27 agree exactly with `totalCharges - totalPayments` and are genuine guest debt.
+- 21 negative folios totaling NGN 783,800.00 agree exactly with available `FolioCredit.remainingAmount` and are genuine guest credits.
+- One positive folio is fully transferred to City Ledger.
+- One positive folio has only a partial City Ledger transfer: NGN 5,000 transferred against a NGN 28,000 balance.
+- The remaining 23 positive exposures have no complete City Ledger transfer.
+- None of the 21 guest-credit folios has a corresponding `REFUND_OWED` City Ledger entry.
+
+This confirms that the remaining issue is settlement routing, not balance calculation. No additional production transfer or GL posting was made by this verification.
+
+## Checkout settlement repair
+
+The verified checkout exceptions were repaired using the existing property accounts and the shared city-ledger accounting service:
+
+- 24 genuine debit folios totaling NGN 1,002,021.27 were routed to `Skippers / Walk-Outs` through `TRANSFER_IN` entries and AR invoices.
+- 21 genuine credit folios totaling NGN 783,800.00 were routed to `Pending Guest Refunds` through `REFUND_OWED` entries.
+- Each folio received an offsetting folio item and was normalized to balance `0.00` without changing the underlying charge/payment history.
+- 45 audit records were created under request prefix `checkout-settlement-repair-2026-10-21:`.
+- 45 balanced AR GL journals were posted: 90 lines, total debits equal total credits, with zero journal imbalance.
+- Final verification: no checked-out closed folio remains with a non-zero balance.
+
+The 45 transfers are settlement routing, not debt forgiveness or credit cancellation. Positive balances remain collectible in the Skipper city ledger; negative balances remain payable through the guest refund workflow.
+
+## Approved legacy settlement posting
+
+The approved instruction was to clear only the 45 entries created by the checkout repair on 2026-10-21, excluding older records with similar references. The posting was restricted to the exact repair batch window (`2026-10-21T11:27:00Z` through `2026-10-21T11:34:30Z`) and validated against the expected totals before posting.
+
+- 24 asserted historical Skipper collections were posted as settled PAYMENT entries totaling NGN 1,002,021.27; all 24 linked invoices are `PAID` with NGN 0.00 outstanding.
+- 21 asserted historical guest refunds were allocated and posted as settled `REFUND_OWED` entries totaling NGN 783,800.00.
+- A dedicated asset control account, `1190 Legacy Settlement Clearing`, was created for each affected property because no suitable existing clearing account was available. `6700 Miscellaneous Operations` was not used.
+- 45 balanced GL journals and 90 lines were posted under the `legacy-checkout-settlement-2026-10-21-` reference family. Total debits and credits are both NGN 1,785,821.27; journal imbalance is NGN 0.00.
+- 45 `LEGACY_SETTLEMENT_POSTED` audit records were created. Each record identifies the original entry, settlement type, clearing account, and actor.
+
+The clearing account remains an explicit control balance pending documentary support or final accounting disposition; this posting does not claim to independently prove a bank collection or an external refund. The resulting net clearing balances are NGN 708,021.27 debit for Stanzel Grand Resort and NGN 489,800.00 credit for Bally’s Place.
+
+## Approved corporate legacy refund settlements
+
+Following explicit approval that the historical corporate refunds had already been paid, the open payment entries for the requested accounts were settled:
+
+- Worldwide Commercial Venture LTD (WCV-LTD): NGN 1,044,000.00.
+- EZIENYI BROTHERS ASSOCIATION: NGN 60,000.00 across two payments, including the residual NGN 30,000.00 on a partially allocated payment.
+- Total: NGN 1,104,000.00.
+
+The existing EZIENYI invoice allocation was preserved and the residual payment amounts were allocated without changing the invoice history. Each payment was marked `SETTLED`, and both corporate account balances are now NGN 0.00. Three balanced GL journals were posted: debit `2300 Advanced Deposits` and credit `1190 Legacy Settlement Clearing`, with total debits and credits of NGN 1,104,000.00. Three `LEGACY_CORPORATE_REFUND_SETTLEMENT_POSTED` audit records were created.
+
+The WCV historical open `ADJUSTMENT` reversal record remains untouched because it is not an open payment or refund obligation; it is retained as part of the original correction trail.
 
 ## Recovery export hashes
 

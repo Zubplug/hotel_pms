@@ -119,6 +119,35 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
                    await tx.room.update({ where: { id: roomIdToOccupy }, data: { status: "OCCUPIED" } });
                 }
              } else if (edgeEvent.eventType === 'CHECK_OUT') {
+                const checkoutFolios = await tx.folio.findMany({
+                  where: {
+                    propertyId: conflict.propertyId,
+                    status: 'OPEN',
+                    OR: [
+                      { reservationId: r.id },
+                      ...(r.corporateAccountId
+                        ? [{ corporateAccountId: r.corporateAccountId, type: 'CITY_LEDGER' }]
+                        : []),
+                    ],
+                  },
+                  select: { id: true, balance: true, version: true },
+                });
+                const unsettledBalance = checkoutFolios.reduce((sum: number, folio: any) => sum + Number(folio.balance || 0), 0);
+                if (Math.abs(unsettledBalance) > 0.01) {
+                  throw new Error('DOMAIN_ERROR: CHECK_OUT_REQUIRES_FINANCIAL_SETTLEMENT');
+                }
+                for (const folio of checkoutFolios) {
+                  await tx.folio.update({
+                    where: { id: folio.id, version: folio.version },
+                    data: {
+                      status: 'CLOSED',
+                      balance: 0,
+                      closedAt: new Date(),
+                      closedBy: session.user?.id || null,
+                      version: { increment: 1 },
+                    },
+                  });
+                }
                 await tx.reservation.update({ where: { id: r.id }, data: { status: 'CHECKED_OUT', version: { increment: 1 } } });
              } else if (edgeEvent.eventType === 'KEYCARD_ENCODE') {
                 const roomId = payload.roomId || undefined;

@@ -471,7 +471,7 @@ export async function getAccountsReceivable(propertyId: string) {
 }
 
 export async function getAccountsPayable(propertyId: string) {
-  if (!propertyId) return { negativeFolios: [], credits: [] };
+  if (!propertyId) return { negativeFolios: [], credits: [], corporateAdvances: [], gatewayRefunds: [], currency: 'NGN' };
   const session = await auth();
   if (!session?.user?.id) throw new Error('UNAUTHORIZED');
   const { requireOrganizationContext } = await import('@/lib/organization-access');
@@ -501,7 +501,7 @@ export async function getAccountsPayable(propertyId: string) {
     orderBy: { balance: 'asc' } // Most negative first
   });
 
-  const [credits, corporateAdvanceEntries] = await Promise.all([
+  const [credits, corporateAdvanceEntries, gatewayRefunds] = await Promise.all([
     prisma.folioCredit.findMany({
     where: {
       propertyId,
@@ -532,6 +532,24 @@ export async function getAccountsPayable(propertyId: string) {
       },
       orderBy: { createdAt: 'desc' },
     }),
+    prisma.refundRequest.findMany({
+      where: {
+        propertyId,
+        requestedMethod: 'ORIGINAL_PAYMENT',
+        status: { in: ['PENDING_APPROVAL', 'APPROVED', 'PROCESSING'] },
+        payment: { method: 'PAYMENT_GATEWAY' },
+      },
+      select: {
+        id: true,
+        requestedAmount: true,
+        currency: true,
+        status: true,
+        createdAt: true,
+        payment: { select: { provider: true, providerTransactionId: true } },
+        reservation: { select: { primaryGuest: { select: { firstName: true, lastName: true } } } },
+      },
+      orderBy: { createdAt: 'desc' },
+    }),
   ]);
 
   const corporateAdvances = corporateAdvanceEntries
@@ -542,5 +560,5 @@ export async function getAccountsPayable(propertyId: string) {
     }))
     .filter((entry) => entry.remainingAmount > 0.01);
 
-  return { negativeFolios, credits, corporateAdvances, currency: property.baseCurrency || 'NGN' };
+  return { negativeFolios, credits, corporateAdvances, gatewayRefunds, currency: property.baseCurrency || 'NGN' };
 }
