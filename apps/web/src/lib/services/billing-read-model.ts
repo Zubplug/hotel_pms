@@ -139,6 +139,15 @@ function keysetWhere(source: BillingSource, cursor: BillingCursor | null, dateFi
   return { OR: [dateBefore, { AND: [{ [dateField]: date }, { id: { gt: cursor.sourceId } }] }] };
 }
 
+const folioHasActivity = {
+  OR: [
+    { items: { some: {} } },
+    { payments: { some: {} } },
+    { credits: { some: {} } },
+    { refunds: { some: {} } },
+  ],
+};
+
 function registerSortDate(source: BillingSource, row: any) {
   return source === 'CITY_LEDGER_INVOICE' ? new Date(row.issueDate) : new Date(row.createdAt);
 }
@@ -220,7 +229,7 @@ export async function listBillingDocuments(scope: BillingScope, filters: Omit<Bi
   const filterKey = registerFilterKey(filters);
   if (filters.cursor && (!cursor || cursor.filterKey !== filterKey)) throw new Error('INVALID_CURSOR');
   const [folios, cityInvoices, eventInvoices] = await Promise.all([
-    sourceSet.includes('FOLIO') ? (prisma as any).folio.findMany({ where: { ...baseWhere(full), ...keysetWhere('FOLIO', cursor, 'createdAt'), type: { not: 'CITY_LEDGER' }, status: { not: 'VOID' }, ...(q ? { OR: [{ folioNumber: q }, { guest: { firstName: q } }, { guest: { lastName: q } }] } : {}) }, include: { guest: true, corporateAccount: { select: { id: true, name: true } }, payments: { select: { id: true } }, credits: { select: { id: true } }, refunds: { select: { id: true } } }, orderBy: [{ createdAt: 'desc' }, { id: 'asc' }], take: limit + 1 }) : [],
+    sourceSet.includes('FOLIO') ? (prisma as any).folio.findMany({ where: { ...baseWhere(full), ...keysetWhere('FOLIO', cursor, 'createdAt'), ...(q ? { AND: [folioHasActivity, { OR: [{ folioNumber: q }, { guest: { firstName: q } }, { guest: { lastName: q } }] }] } : folioHasActivity), type: { not: 'CITY_LEDGER' }, status: { not: 'VOID' } }, include: { guest: true, corporateAccount: { select: { id: true, name: true } }, payments: { select: { id: true } }, credits: { select: { id: true } }, refunds: { select: { id: true } } }, orderBy: [{ createdAt: 'desc' }, { id: 'asc' }], take: limit + 1 }) : [],
     sourceSet.includes('CITY_LEDGER_INVOICE') ? (prisma as any).cityLedgerInvoice.findMany({ where: { ...baseWhere(full, 'issueDate'), ...keysetWhere('CITY_LEDGER_INVOICE', cursor, 'issueDate'), ...(filters.status ? { status: filters.status } : {}), ...(q ? { OR: [{ invoiceNumber: q }, { description: q }, { account: { name: q } }] } : {}) }, include: { account: { select: { id: true, name: true } }, allocations: { select: { id: true } } }, orderBy: [{ issueDate: 'desc' }, { id: 'asc' }], take: limit + 1 }) : [],
     sourceSet.includes('EVENT_INVOICE') ? (prisma as any).eventInvoice.findMany({ where: { ...baseWhere(full), ...keysetWhere('EVENT_INVOICE', cursor, 'createdAt'), cityLedgerInvoice: null, ...(filters.status ? { status: filters.status } : {}), ...(queryText ? { OR: [...(isUuid(queryText) ? [{ id: queryText }] : []), { event: { name: queryText } }] } : {}) }, include: { event: { include: { guest: true, corporateAccount: { select: { id: true, name: true } } } }, leaseBillingSchedule: { select: { dueDate: true } }, payments: { select: { id: true } } }, orderBy: [{ createdAt: 'desc' }, { id: 'asc' }], take: limit + 1 }) : [],
   ]);
@@ -240,12 +249,12 @@ export async function getBillingOverview(scope: BillingScope, filters: Omit<Bill
   const result = await listBillingDocuments(scope, { ...filters, limit: 8 });
   const queryBase = baseWhere({ ...filters, propertyId: scope.propertyId });
   const [folioAggregate, cityAggregate, eventAggregate, overdueAggregate, currencyRows] = await Promise.all([
-    (prisma as any).folio.aggregate({ where: { ...queryBase, type: { not: 'CITY_LEDGER' }, status: { not: 'VOID' } }, _count: { _all: true }, _sum: { totalCharges: true, totalPayments: true, balance: true } }),
+    (prisma as any).folio.aggregate({ where: { ...queryBase, ...folioHasActivity, type: { not: 'CITY_LEDGER' }, status: { not: 'VOID' } }, _count: { _all: true }, _sum: { totalCharges: true, totalPayments: true, balance: true } }),
     (prisma as any).cityLedgerInvoice.aggregate({ where: { ...queryBase, status: { not: 'VOID' } }, _count: { _all: true }, _sum: { amount: true, paidAmount: true, outstandingAmount: true } }),
     (prisma as any).eventInvoice.aggregate({ where: { ...queryBase, status: { not: 'VOID' }, workflowStatus: { not: 'DRAFT' }, cityLedgerInvoice: null }, _count: { _all: true }, _sum: { totalAmount: true, paidAmount: true } }),
     (prisma as any).cityLedgerInvoice.aggregate({ where: { ...queryBase, status: { in: ['OPEN', 'PARTIALLY_PAID'] }, dueDate: { lt: scope.asOf }, outstandingAmount: { gt: 0 } }, _sum: { outstandingAmount: true }, _count: { _all: true } }),
     Promise.all([
-      (prisma as any).folio.findMany({ where: queryBase, select: { currency: true }, distinct: ['currency'] }),
+      (prisma as any).folio.findMany({ where: { ...queryBase, ...folioHasActivity }, select: { currency: true }, distinct: ['currency'] }),
       (prisma as any).cityLedgerInvoice.findMany({ where: queryBase, select: { currency: true }, distinct: ['currency'] }),
       (prisma as any).eventInvoice.findMany({ where: queryBase, select: { currency: true }, distinct: ['currency'] }),
     ]),
@@ -331,6 +340,7 @@ export type BillingDocumentPresentation = {
     checkIn?: string | null;
     checkOut?: string | null;
     roomNumbers: string[];
+    guestName?: string;
     folioType?: string;
     eventName?: string;
   };
@@ -372,6 +382,15 @@ export async function getBillingDocumentPresentation(scope: BillingScope, source
       },
     });
     if (!row) return null;
+    // Read the ledger rows explicitly after the scoped Folio lookup. This keeps
+    // the document presentation reliable even when a generated Prisma client's
+    // nested relation payload is stale or incomplete; the folio property scope
+    // remains the authorization boundary for this query.
+    const folioItems = await (prisma as any).folioItem.findMany({
+      where: { folioId: row.id },
+      orderBy: [{ businessDate: 'asc' }, { createdAt: 'asc' }],
+    });
+    if (!folioItems.length && !row.payments?.length && !row.credits?.length && !row.refunds?.length) return null;
     const document = normalizeFolio(row, scope.ctx.organizationId, scope.asOf);
     const guest = row.guest;
     const customer = guest
@@ -383,7 +402,7 @@ export async function getBillingDocumentPresentation(scope: BillingScope, source
       document,
       property: scope.property,
       customer,
-      items: (row.items || []).map((item: any) => presentationItem(item, row.currency)),
+      items: (folioItems || []).map((item: any) => presentationItem(item, row.currency)),
       context: {
         reservationId: row.reservation?.id,
         confirmationNumber: row.reservation?.confirmationNumber,
@@ -403,12 +422,37 @@ export async function getBillingDocumentPresentation(scope: BillingScope, source
     });
     if (!row) return null;
     const document = normalizeCityInvoice(row, scope.ctx.organizationId, scope.asOf);
+    const entries = await (prisma as any).cityLedgerEntry.findMany({
+      where: { invoiceId: row.id, propertyId: scope.propertyId },
+      select: { folioId: true, reservationId: true, guestId: true },
+    });
+    const folioIds = Array.from(new Set(entries.map((entry: any) => entry.folioId).filter(Boolean)));
+    const folios = folioIds.length ? await (prisma as any).folio.findMany({
+      where: { id: { in: folioIds }, propertyId: scope.propertyId },
+      include: { guest: true, reservation: { include: { reservationRooms: { include: { room: { select: { number: true } } } } } } },
+    }) : [];
+    const linkedFolio = folios[0];
+    const folioItems = folioIds.length ? await (prisma as any).folioItem.findMany({
+      where: { folioId: { in: folioIds }, type: { not: 'PAYMENT' } },
+      orderBy: [{ businessDate: 'asc' }, { createdAt: 'asc' }],
+    }) : [];
+    const linkedGuest = linkedFolio?.guest;
+    const linkedReservation = linkedFolio?.reservation;
+    const guestName = linkedGuest ? `${linkedGuest.firstName} ${linkedGuest.lastName}`.trim() : undefined;
     return {
       document,
       property: scope.property,
       customer: { kind: 'CORPORATE', id: row.account.id, name: row.account.name, email: null, phone: null, address: null },
-      items: [{ id: row.id, date: iso(row.issueDate), description: row.description, type: 'INVOICE', quantity: '1', unitAmount: amount(row.amount), amount: amount(row.amount), currency: row.currency }],
-      context: { roomNumbers: [] },
+      items: folioItems.length ? folioItems.map((item: any) => presentationItem(item, row.currency)) : [{ id: row.id, date: iso(row.issueDate), description: row.description, type: 'INVOICE', quantity: '1', unitAmount: amount(row.amount), amount: amount(row.amount), currency: row.currency }],
+      context: {
+        roomNumbers: (linkedReservation?.reservationRooms || []).map((room: any) => room.room?.number).filter(Boolean),
+        guestName,
+        reservationId: linkedReservation?.id,
+        confirmationNumber: linkedReservation?.confirmationNumber,
+        checkIn: iso(linkedReservation?.checkIn),
+        checkOut: iso(linkedReservation?.checkOut),
+        folioType: linkedFolio?.type,
+      },
       history: await getBillingDocumentHistory(scope, document),
     };
   }
