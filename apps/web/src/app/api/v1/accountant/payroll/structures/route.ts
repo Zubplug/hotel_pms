@@ -32,22 +32,6 @@ export async function POST(req: NextRequest) {
       { error: 'Compensation setup is owned by the HR employee master. Accountant is read-only control and reconciliation.' },
       { status: 409 },
     );
-
-    const body = await req.json();
-    const { propertyId, staffId, ...rest } = body;
-    if (!propertyId || !staffId) return NextResponse.json({ error: 'Missing propertyId or staffId' }, { status: 400 });
-
-    if (rest.effectiveFrom) {
-      rest.effectiveFrom = new Date(rest.effectiveFrom);
-    } else {
-      rest.effectiveFrom = new Date(); // fallback
-    }
-
-    const ctx = await requireOrganizationContext(session.user.id);
-    if (!ctx.propertyIds.includes(propertyId)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-
-    const result = await PayrollService.updateStructure(ctx, staffId, { propertyId, ...rest });
-    return NextResponse.json(result, { status: 201 });
   } catch (error: any) {
     console.error('API Error:', error);
     return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });

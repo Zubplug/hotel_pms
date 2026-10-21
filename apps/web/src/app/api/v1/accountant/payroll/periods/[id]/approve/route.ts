@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
-import { requireOrganizationContext } from '@/lib/organization-access';
-import { PayrollService } from '@/lib/services/payroll-service';
 
 export async function POST(
   req: NextRequest,
@@ -15,10 +13,6 @@ export async function POST(
       { error: 'Payroll approval is owned by the HR payroll workflow. Accountant is read-only control and reconciliation.' },
       { status: 409 },
     );
-
-    const ctx = await requireOrganizationContext(session.user.id);
-    const result = await PayrollService.approvePeriod(ctx, (await params).id);
-    return NextResponse.json(result);
   } catch (error: any) {
     console.error('API Error:', error);
     return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
