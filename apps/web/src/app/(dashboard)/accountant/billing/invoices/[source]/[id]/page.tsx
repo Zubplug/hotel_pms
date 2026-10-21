@@ -1,8 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import Link from 'next/link';
-import { ArrowLeft, ExternalLink, FileText, History, LockKeyhole, Printer, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, ExternalLink, FileText, History, LockKeyhole, ShieldCheck } from 'lucide-react';
 import { redirect } from 'next/navigation';
 import { auth } from '@/lib/auth';
+import { BillingPrintButton } from '@/components/accountant/BillingPrintButton';
 import { BILLING_SOURCES, getBillingDocumentPresentation, getBillingScope } from '@/lib/services/billing-read-model';
 
 export const dynamic = 'force-dynamic';
@@ -39,7 +40,7 @@ function DocumentView({ presentation }: { presentation: Awaited<ReturnType<typeo
           </Link>
           <div className="flex flex-wrap items-center gap-2">
             <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[.04] px-3 py-2 text-xs text-slate-400"><LockKeyhole className="h-3.5 w-3.5" /> Read-only</span>
-            <button type="button" onClick={() => window.print()} className="inline-flex items-center gap-2 rounded-xl bg-cyan-400 px-3.5 py-2 text-xs font-bold text-slate-950 hover:bg-cyan-300"><Printer className="h-3.5 w-3.5" /> Print / Save PDF</button>
+            <BillingPrintButton />
           </div>
         </header>
 
