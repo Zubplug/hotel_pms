@@ -55,7 +55,13 @@ export function sumSignedDecimal(values: readonly string[]): string {
 
 /** Exact, four-decimal accounting comparison helpers. No tolerance is applied. */
 export function decimalDifference(left: string, right: string): string {
-  return sumSignedDecimal([left, `-${right}`]);
+  const normalizedRight = String(right).trim();
+  // Negating a signed decimal needs to remove an existing minus sign first;
+  // prefixing '-' blindly turns a negative operand into an invalid `--value`.
+  const subtractedRight = normalizedRight.startsWith('-')
+    ? normalizedRight.slice(1)
+    : `-${normalizedRight}`;
+  return sumSignedDecimal([left, subtractedRight]);
 }
 
 export function decimalIsZero(value: string): boolean {

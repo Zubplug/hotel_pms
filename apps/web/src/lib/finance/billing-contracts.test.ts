@@ -66,5 +66,7 @@ describe('Billing Phase 1 financial contracts', () => {
     expect(decimalIsZero(decimalDifference('100.0050', '100.005'))).toBe(true);
     expect(decimalDifference('100.0051', '100.005')).toBe('0.0001');
     expect(decimalIsZero(decimalDifference('100.0051', '100.005'))).toBe(false);
+    expect(decimalDifference('-954757.46', '-726500')).toBe('-228257.46');
+    expect(decimalDifference('-726500', '-726500')).toBe('0');
   });
 });
