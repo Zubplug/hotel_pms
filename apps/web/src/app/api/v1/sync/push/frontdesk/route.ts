@@ -355,6 +355,13 @@ export async function POST(req: NextRequest) {
         { status: 402 },
       );
     }
+    // Operations remains an optional capability inside the PMS sync payload;
+    // it controls professional rate breakdowns without blocking core sync.
+    const professionalOperationsEnabled = await hasEntitlement(
+      property.organizationId,
+      "MODULE_OPERATIONS",
+      propertyId,
+    );
     if (await isNightAuditCutoverActive(propertyId)) {
       return NextResponse.json(
         {
