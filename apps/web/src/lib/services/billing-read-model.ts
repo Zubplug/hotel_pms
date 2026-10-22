@@ -437,6 +437,10 @@ export async function getBillingDocumentPresentation(scope: BillingScope, source
       },
     });
     const folioIds = Array.from(new Set(entries.map((entry: any) => entry.folioId).filter(Boolean)));
+    // A corporate folio can contain multiple reservations. A city-ledger
+    // invoice is created for the reservation represented by its ledger entry,
+    // so do not render every room charge from the shared folio on each invoice.
+    const reservationIds = Array.from(new Set(entries.map((entry: any) => entry.reservationId).filter(Boolean)));
     const folios = folioIds.length ? await (prisma as any).folio.findMany({
       where: { id: { in: folioIds }, propertyId: scope.propertyId },
       include: { guest: true, reservation: { include: { reservationRooms: { include: { room: { select: { number: true } } } } } } },
@@ -444,7 +448,11 @@ export async function getBillingDocumentPresentation(scope: BillingScope, source
     const linkedFolio = folios[0];
     const linkedEntry = entries.find((entry: any) => entry.folioId === linkedFolio?.id) || entries[0];
     const folioItems = folioIds.length ? await (prisma as any).folioItem.findMany({
-      where: { folioId: { in: folioIds }, type: { not: 'PAYMENT' } },
+      where: {
+        folioId: { in: folioIds },
+        type: { not: 'PAYMENT' },
+        ...(reservationIds.length ? { reservationId: { in: reservationIds } } : {}),
+      },
       orderBy: [{ businessDate: 'asc' }, { createdAt: 'asc' }],
     }) : [];
     const linkedGuest = linkedFolio?.guest || linkedEntry?.guest || linkedEntry?.reservation?.primaryGuest;
