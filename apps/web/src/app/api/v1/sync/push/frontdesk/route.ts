@@ -342,14 +342,16 @@ export async function POST(req: NextRequest) {
         { status: 404 },
       );
     }
-    const professionalOperationsEnabled = await hasEntitlement(
+    // Front Desk synchronization is a core PMS capability. The sync transport
+    // itself must remain available to Starter/PMS properties.
+    const pmsEnabled = await hasEntitlement(
       property.organizationId,
-      "MODULE_OPERATIONS",
+      "MODULE_PMS",
       propertyId,
     );
-    if (!professionalOperationsEnabled) {
+    if (!pmsEnabled) {
       return NextResponse.json(
-        { error: "Subscription expired or operations entitlement is unavailable" },
+        { error: "Subscription expired or PMS entitlement is unavailable" },
         { status: 402 },
       );
     }
