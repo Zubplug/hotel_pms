@@ -17,6 +17,15 @@ describe('Billing Phase 1 financial contracts', () => {
     expect(sumSignedDecimal(['100.10', '-0.10', '2.25'])).toBe('102.25');
   });
 
+  it('supports signed ledger aggregates without weakening allocation validation', () => {
+    expect(sumDecimal(['-726500', '100000'])).toBe('-626500');
+    expect(() => assertAllocationWithinAvailable({
+      receiptAmount: '100',
+      existingAllocations: ['-10'],
+      requestedAmount: '10',
+    })).toThrow('Invalid non-negative decimal: -10');
+  });
+
   it('rejects allocation beyond the receipt available balance', () => {
     expect(() => assertAllocationWithinAvailable({
       receiptAmount: '100000.00',

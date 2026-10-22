@@ -22,6 +22,17 @@ function decimalUnits(value: string): bigint {
 }
 
 export function sumDecimal(values: readonly string[]): string {
+  // Aggregated ledger balances may legitimately be negative (for example,
+  // an overpaid folio or a City Ledger credit balance). Keep this generic
+  // exact summation helper sign-safe; callers enforcing a non-negative
+  // accounting invariant should use sumNonNegativeDecimal instead.
+  if (values.some((value) => String(value).trim().startsWith('-'))) {
+    return sumSignedDecimal(values);
+  }
+  return sumNonNegativeDecimal(values);
+}
+
+export function sumNonNegativeDecimal(values: readonly string[]): string {
   const total = values.reduce((sum, value) => sum + decimalUnits(value), BigInt(0));
   const whole = total / UNIT;
   const fraction = (total % UNIT).toString().padStart(Number(SCALE), '0').replace(/0+$/, '');
@@ -62,7 +73,7 @@ export function assertAllocationWithinAvailable(input: {
   requestedAmount: string;
   invoiceOutstanding?: string;
 }): void {
-  const allocated = decimalUnits(sumDecimal(input.existingAllocations));
+  const allocated = decimalUnits(sumNonNegativeDecimal(input.existingAllocations));
   const requested = decimalUnits(input.requestedAmount);
   const receipt = decimalUnits(input.receiptAmount);
   const invoiceOutstanding = input.invoiceOutstanding === undefined
@@ -79,7 +90,7 @@ export function assertAllocationWithinAvailable(input: {
 
 export function allocationState(receiptAmount: string, allocations: readonly string[]): AllocationState {
   const receipt = decimalUnits(receiptAmount);
-  const allocated = decimalUnits(sumDecimal(allocations));
+  const allocated = decimalUnits(sumNonNegativeDecimal(allocations));
   if (allocated === BigInt(0)) return 'UNALLOCATED';
   if (allocated >= receipt) return 'FULL';
   return 'PARTIAL';
