@@ -3,6 +3,8 @@
 import React, { useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { SearchableSelect } from '@/components/ui/searchable-select';
+import { EventDateTimePicker, EventTimePicker } from '@/components/ui/event-date-time-picker';
 import { User, CalendarDays, Box, FileText } from 'lucide-react';
 import { createFullEventBooking } from '@/lib/events/booking-actions';
 import { BookingWizardShell } from './BookingWizardShell';
@@ -175,16 +177,7 @@ export function HallOnlyWizard({ initialHalls, equipmentList, guests, corporateA
             <div className="space-y-4 max-w-md">
               <div className="space-y-2">
                  <Label htmlFor="clientType">Booking Client Type</Label>
-                 <select
-                   id="clientType"
-                   name="clientType"
-                   value={formData.clientType}
-                   onChange={handleChange}
-                   className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                 >
-                   <option value="INDIVIDUAL">Individual</option>
-                   <option value="CORPORATE">Corporate</option>
-                 </select>
+                 <SearchableSelect value={formData.clientType} onChange={(value) => setFormData((current) => ({ ...current, clientType: value as 'INDIVIDUAL' | 'CORPORATE', clientId: '' }))} options={[{ value: 'INDIVIDUAL', label: 'Individual' }, { value: 'CORPORATE', label: 'Corporate' }]} />
               </div>
 
               <div className="flex items-center space-x-2">
@@ -195,10 +188,7 @@ export function HallOnlyWizard({ initialHalls, equipmentList, guests, corporateA
               {formData.isExisting ? (
                  <div className="space-y-2">
                     <Label htmlFor="clientId">Existing {formData.clientType === 'INDIVIDUAL' ? 'guest' : 'corporate account'}</Label>
-                    <select id="clientId" name="clientId" value={formData.clientId} onChange={handleChange} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
-                      <option value="">-- Select --</option>
-                      {(formData.clientType === 'INDIVIDUAL' ? guests : corporateAccounts).map((client: any) => <option key={client.id} value={client.id}>{formData.clientType === 'INDIVIDUAL' ? `${client.firstName} ${client.lastName}${client.email ? ` (${client.email})` : ''}` : `${client.name} (${client.code})`}</option>)}
-                    </select>
+                    <SearchableSelect value={formData.clientId} onChange={(value) => setFormData((current) => ({ ...current, clientId: value }))} placeholder="Select a client" searchPlaceholder="Search clients…" options={(formData.clientType === 'INDIVIDUAL' ? guests : corporateAccounts).map((client: any) => ({ value: client.id, label: formData.clientType === 'INDIVIDUAL' ? `${client.firstName} ${client.lastName}${client.email ? ` (${client.email})` : ''}` : `${client.name} (${client.code})`, searchText: client.email || client.code }))} />
                  </div>
               ) : (
                 formData.clientType === 'INDIVIDUAL' ? (
@@ -257,30 +247,19 @@ export function HallOnlyWizard({ initialHalls, equipmentList, guests, corporateA
             <div className="space-y-4 max-w-md">
               <div className="space-y-2">
                 <Label htmlFor="hallId">Select Hall</Label>
-                <select
-                  id="hallId"
-                  name="hallId"
-                  value={formData.hallId}
-                  onChange={handleChange}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                >
-                  <option value="">-- Select a Hall --</option>
-                  {initialHalls.map(h => (
-                    <option key={h.id} value={h.id}>{h.name} (Cap: {h.capacity}) - NGN {Number(h.rate || 0).toLocaleString()}</option>
-                  ))}
-                </select>
+                <SearchableSelect value={formData.hallId} onChange={(value) => setFormData((current) => ({ ...current, hallId: value }))} placeholder="Select a hall" searchPlaceholder="Search halls…" options={initialHalls.map((hall) => ({ value: hall.id, label: `${hall.name} · Capacity ${hall.capacity} · NGN ${Number(hall.rate || 0).toLocaleString()}`, searchText: hall.code }))} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="startTime">Start Time</Label>
-                <Input id="startTime" name="startTime" type="datetime-local" value={formData.startTime} onChange={handleChange} />
+                <EventDateTimePicker value={formData.startTime} onChange={(value) => setFormData((current) => ({ ...current, startTime: value }))} required />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="endTime">End Time</Label>
-                <Input id="endTime" name="endTime" type="datetime-local" value={formData.endTime} onChange={handleChange} />
+                <EventDateTimePicker value={formData.endTime} onChange={(value) => setFormData((current) => ({ ...current, endTime: value }))} required />
               </div>
               <div className="rounded-xl border border-orange-200 bg-orange-50/50 p-4 space-y-3">
                 <div className="flex items-center justify-between"><div><p className="text-sm font-bold">Additional halls and recurring days</p><p className="text-xs text-muted-foreground">Assign each space its own time and optional weekly day.</p></div><button type="button" className="text-xs font-bold text-orange-700" onClick={() => setAdditionalHallRows((rows) => [...rows, { hallId: '', startTime: formData.startTime, endTime: formData.endTime, repeatDay: '' }])}>+ Add hall</button></div>
-                {additionalHallRows.map((row, index) => <div key={index} className="grid gap-2 rounded-lg border bg-white p-3"><select value={row.hallId} onChange={(event) => setAdditionalHallRows((rows) => rows.map((item, i) => i === index ? { ...item, hallId: event.target.value } : item))} className="h-10 rounded-md border border-input bg-background px-3 text-sm"><option value="">Select hall</option>{initialHalls.map((hall) => <option key={hall.id} value={hall.id}>{hall.name}</option>)}</select><Input type="datetime-local" value={row.startTime} onChange={(event) => setAdditionalHallRows((rows) => rows.map((item, i) => i === index ? { ...item, startTime: event.target.value } : item))} /><Input type="datetime-local" value={row.endTime} onChange={(event) => setAdditionalHallRows((rows) => rows.map((item, i) => i === index ? { ...item, endTime: event.target.value } : item))} /><select value={row.repeatDay} onChange={(event) => setAdditionalHallRows((rows) => rows.map((item, i) => i === index ? { ...item, repeatDay: event.target.value } : item))} className="h-10 rounded-md border border-input bg-background px-3 text-sm"><option value="">One time</option><option value="0">Sunday weekly</option><option value="1">Monday weekly</option><option value="2">Tuesday weekly</option><option value="3">Wednesday weekly</option><option value="4">Thursday weekly</option><option value="5">Friday weekly</option><option value="6">Saturday weekly</option></select><button type="button" className="text-xs font-bold text-red-600" onClick={() => setAdditionalHallRows((rows) => rows.filter((_, i) => i !== index))}>Remove</button></div>)}
+                {additionalHallRows.map((row, index) => <div key={index} className="grid gap-2 rounded-lg border bg-white p-3"><SearchableSelect value={row.hallId} onChange={(value) => setAdditionalHallRows((rows) => rows.map((item, i) => i === index ? { ...item, hallId: value } : item))} placeholder="Select hall" searchPlaceholder="Search halls…" options={initialHalls.map((hall) => ({ value: hall.id, label: hall.name }))} /><EventDateTimePicker value={row.startTime} onChange={(value) => setAdditionalHallRows((rows) => rows.map((item, i) => i === index ? { ...item, startTime: value } : item))} required /><EventDateTimePicker value={row.endTime} onChange={(value) => setAdditionalHallRows((rows) => rows.map((item, i) => i === index ? { ...item, endTime: value } : item))} required /><SearchableSelect value={row.repeatDay} onChange={(value) => setAdditionalHallRows((rows) => rows.map((item, i) => i === index ? { ...item, repeatDay: value } : item))} placeholder="One time" searchPlaceholder="Search repeat pattern…" options={[{ value: '', label: 'One time' }, ...['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map((day, dayIndex) => ({ value: String(dayIndex), label: `${day} weekly` }))]} /><button type="button" className="text-xs font-bold text-red-600" onClick={() => setAdditionalHallRows((rows) => rows.filter((_, i) => i !== index))}>Remove</button></div>)}
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -297,17 +276,7 @@ export function HallOnlyWizard({ initialHalls, equipmentList, guests, corporateA
               <div className="pt-4 border-t space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="repeatFrequency">Repeat Booking?</Label>
-                  <select
-                    id="repeatFrequency"
-                    name="repeatFrequency"
-                    value={formData.repeatFrequency}
-                    onChange={handleChange}
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  >
-                    <option value="NONE">Does not repeat</option>
-                    <option value="DAILY">Daily</option>
-                    <option value="WEEKLY">Weekly</option>
-                  </select>
+                  <SearchableSelect value={formData.repeatFrequency} onChange={(value) => setFormData((current) => ({ ...current, repeatFrequency: value }))} options={[{ value: 'NONE', label: 'Does not repeat' }, { value: 'DAILY', label: 'Daily' }, { value: 'WEEKLY', label: 'Weekly' }]} />
                 </div>
 
                 {formData.repeatFrequency === 'WEEKLY' && (
@@ -339,7 +308,7 @@ export function HallOnlyWizard({ initialHalls, equipmentList, guests, corporateA
                 {formData.repeatFrequency !== 'NONE' && (
                   <div className="space-y-2">
                     <Label htmlFor="repeatUntil">Repeat Until</Label>
-                    <Input id="repeatUntil" name="repeatUntil" type="date" value={formData.repeatUntil} onChange={handleChange} />
+                    <EventDateTimePicker value={formData.repeatUntil} onChange={(value) => setFormData((current) => ({ ...current, repeatUntil: value }))} dateOnly />
                   </div>
                 )}
               </div>
