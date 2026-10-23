@@ -254,6 +254,12 @@ export async function POST(req: NextRequest) {
     }
   } catch (err) {
     console.error(`[Booking Webhook] ${bpt.provider} verify failed:`, err);
+    // A provider 5xx is transient. Return non-2xx so Flutterwave/Paystack
+    // retries the signed webhook instead of permanently acknowledging a
+    // payment that is still pending local verification.
+    if (err instanceof Error && /\((?:500|502|503|504)\)/.test(err.message)) {
+      return NextResponse.json({ error: 'Payment provider temporarily unavailable' }, { status: 503 });
+    }
     return new NextResponse('OK', { status: 200 });
   }
 
