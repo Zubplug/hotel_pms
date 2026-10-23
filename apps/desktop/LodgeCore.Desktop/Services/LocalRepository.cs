@@ -1031,7 +1031,10 @@ public class LocalRepository
                          && (rr.Reservation.Status == "CONFIRMED" || rr.Reservation.Status == "CHECKED_IN")
                          && rr.Status != "CANCELLED"
                          && rr.Status != "NO_SHOW"
-                         && rr.CheckInDate < newCheckOut
+                         // Treat the next arrival date as occupied. An
+                         // extension ending on that boundary leaves no safe
+                         // handover window for the future reservation.
+                         && rr.CheckInDate <= newCheckOut
                          && rr.CheckOutDate > res.CheckOutDate)
                 .AnyAsync();
 
@@ -1106,6 +1109,24 @@ public class LocalRepository
         // If room type unavailable offline, return a zero-rate preview so the UI can still proceed
         var ratePerNight = roomType?.BasePrice ?? 0m;
         var currency = roomType?.Currency ?? res.Currency ?? "NGN";
+
+        var assignedRoomId = res.Rooms.FirstOrDefault()?.RoomId;
+        if (!string.IsNullOrEmpty(assignedRoomId))
+        {
+            var conflict = await _dbContext.ReservationRooms
+                .Where(rr => rr.ReservationId != reservationId
+                         && rr.RoomId == assignedRoomId
+                         && rr.Reservation != null
+                         && (rr.Reservation.Status == "CONFIRMED" || rr.Reservation.Status == "CHECKED_IN")
+                         && rr.Status != "CANCELLED"
+                         && rr.Status != "NO_SHOW"
+                         && rr.CheckInDate <= newCheckOut
+                         && rr.CheckOutDate > res.CheckOutDate)
+                .AnyAsync();
+
+            if (conflict)
+                throw new InvalidOperationException("The room is not available through the future reservation boundary.");
+        }
 
         return new
         {
