@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { auth } from '@/lib/auth';
 import prisma from '@hotel-pms/db';
 import { successResponse, errorResponse } from '@/lib/api-response';
@@ -7,11 +7,16 @@ import { isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
 import { ShiftControlService } from '@/lib/services/shift-control-service';
 import { requireOrganizationContext } from "@/lib/organization-access";
 
+const normalizeRole = (value: unknown) => String(value || '')
+  .trim()
+  .toUpperCase()
+  .replace(/[^A-Z0-9]+/g, '_');
+
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await auth();
     if (!session?.user?.id) return errorResponse('UNAUTHORIZED', 'Unauthorized', 401);
-    const ctx = await requireOrganizationContext((session.user as any).id || (session as any).user.id);
+    const ctx = await requireOrganizationContext(session.user.id);
     const { id } = await params;
     const { declaredCash } = await req.json();
     const staff = await prisma.staff.findFirst({ where: { userId: session.user.id } });
@@ -24,8 +29,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (current.status !== 'OPEN' && current.controlStatus !== 'RETURNED') {
       return errorResponse('BAD_REQUEST', `Cannot close session in status ${current.status}`, 400);
     }
-    const privilegedPositions = new Set(['MANAGER', 'HOTEL_MANAGER', 'FINANCE_MANAGER', 'ADMIN', 'SUPER_ADMIN', 'CEO', 'NIGHT_AUDITOR', 'GENERAL_CASHIER']);
-    const isPrivileged = privilegedPositions.has(String(staff.position || '').toUpperCase());
+    const privilegedPositions = new Set([
+      'MANAGER', 'HOTEL_MANAGER', 'FINANCE_MANAGER', 'ADMIN', 'SUPER_ADMIN',
+      'CEO', 'DIRECTOR', 'GENERAL_MANAGER', 'NIGHT_AUDITOR', 'NIGHT_AUDIT',
+      'AUDITOR', 'GENERAL_CASHIER',
+    ]);
+    // Staff.position is a free-text HR field and may not match the system
+    // role identifier (for example, "Night Auditor" vs "NIGHT_AUDITOR").
+    // The session role is the authoritative RBAC signal for web users.
+    const sessionRole = normalizeRole(session.user.role);
+    const isPrivileged = privilegedPositions.has(normalizeRole(staff.position))
+      || privilegedPositions.has(sessionRole)
+      || session.user.isSuperAdmin;
     if (current.staffId !== staff.id && !isPrivileged) return errorResponse('FORBIDDEN', 'You can only close your own session unless you are a manager/auditor', 403);
     if (['APPROVED', 'APPROVED_WITH_VARIANCE', 'HANDOVER_PENDING', 'HANDED_OVER', 'DEPOSITED', 'RECONCILED'].includes(String(current.controlStatus))) {
       return errorResponse('CONFLICT', 'A financially controlled shift cannot be closed again', 409);
