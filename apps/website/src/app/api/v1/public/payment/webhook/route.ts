@@ -15,6 +15,21 @@ import { getFlutterwaveTransfer } from '@hotel-pms/db';
 import { GeneralLedgerService } from '@/lib/services/general-ledger-service';
 import type { TenantContext } from '@/lib/organization-access';
 
+function validFlutterwaveSignature(
+  rawBody: string,
+  signatures: Array<string | null | undefined>,
+  additionalSecrets: Array<string | null | undefined> = [],
+) {
+  const secrets = additionalSecrets
+    .map((value) => value?.trim())
+    .filter((value): value is string => Boolean(value));
+
+  return signatures.some((signature) => {
+    const candidate = signature?.trim();
+    return Boolean(candidate && secrets.some((secret) => new FlutterwaveProvider('signature-check', secret).validateWebhookSignature(rawBody, candidate)));
+  });
+}
+
 export async function POST(req: NextRequest) {
   const rawBody = await req.text();
 
@@ -78,13 +93,15 @@ export async function POST(req: NextRequest) {
   const flutterwaveLegacySignature = req.headers.get('verif-hash')?.trim() ?? '';
   const validSignature = bpt.provider === 'FLUTTERWAVE'
     ? (() => {
-      const provider = new FlutterwaveProvider(providerSecret, webhookSecret);
       // Flutterwave currently supports HMAC-SHA256 (`flutterwave-signature`)
       // and the legacy plain secret hash (`verif-hash`). Accept either valid
       // header independently because some dashboard/manual deliveries include
       // both headers.
-      return provider.validateWebhookSignature(rawBody, flutterwaveSignature)
-        || provider.validateWebhookSignature(rawBody, flutterwaveLegacySignature);
+      return validFlutterwaveSignature(
+        rawBody,
+        [flutterwaveSignature, flutterwaveLegacySignature],
+        [webhookSecret],
+      );
     })()
     : (() => {
       const signature = req.headers.get('x-paystack-signature') ?? '';
@@ -392,10 +409,9 @@ async function handleFlutterwaveTransferWebhook(req: NextRequest, rawBody: strin
   }
   if (!credentials) return new NextResponse('Payment provider is not configured', { status: 503 });
 
-  const provider = new FlutterwaveProvider(credentials.secretKey, credentials.webhookSecret);
   const signature = req.headers.get('flutterwave-signature')?.trim() || '';
   const legacySignature = req.headers.get('verif-hash')?.trim() || '';
-  if (!provider.validateWebhookSignature(rawBody, signature) && !provider.validateWebhookSignature(rawBody, legacySignature)) {
+  if (!validFlutterwaveSignature(rawBody, [signature, legacySignature], [credentials.webhookSecret])) {
     return new NextResponse('Forbidden', { status: 403 });
   }
 
@@ -591,10 +607,9 @@ async function handleFlutterwaveRefundWebhook(req: NextRequest, rawBody: string,
   } catch {
     return new NextResponse('Payment provider is not configured', { status: 503 });
   }
-  const provider = new FlutterwaveProvider(providerSecret, secret);
   const signature = req.headers.get('flutterwave-signature')?.trim() || '';
   const legacySignature = req.headers.get('verif-hash')?.trim() || '';
-  if (!provider.validateWebhookSignature(rawBody, signature) && !provider.validateWebhookSignature(rawBody, legacySignature)) {
+  if (!validFlutterwaveSignature(rawBody, [signature, legacySignature], [secret])) {
     return new NextResponse('Forbidden', { status: 403 });
   }
 
