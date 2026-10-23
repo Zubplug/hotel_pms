@@ -30,38 +30,81 @@ function validFlutterwaveSignature(
   });
 }
 
+function logPublicPaymentWebhook(requestId: string, stage: string, details: Record<string, unknown> = {}) {
+  console.info(JSON.stringify({
+    scope: 'public.booking.payment.webhook',
+    requestId,
+    stage,
+    at: new Date().toISOString(),
+    ...details,
+  }));
+}
+
 export async function POST(req: NextRequest) {
+  const startedAt = Date.now();
+  const requestId = req.headers.get('x-request-id') || req.headers.get('x-vercel-id') || crypto.randomUUID();
   const rawBody = await req.text();
+  logPublicPaymentWebhook(requestId, 'received', {
+    url: req.url,
+    bodyBytes: Buffer.byteLength(rawBody),
+    hasFlutterwaveSignature: Boolean(req.headers.get('flutterwave-signature')),
+    hasLegacySignature: Boolean(req.headers.get('verif-hash')),
+    hasPaystackSignature: Boolean(req.headers.get('x-paystack-signature')),
+  });
 
   let event: any;
   try {
     event = JSON.parse(rawBody);
   } catch {
+    logPublicPaymentWebhook(requestId, 'rejected_invalid_json', { durationMs: Date.now() - startedAt });
     return new NextResponse('Bad Request', { status: 400 });
   }
 
+  logPublicPaymentWebhook(requestId, 'payload_parsed', {
+    eventType: String(event?.event || event?.type || ''),
+    providerTransactionId: String(event?.data?.id ?? event?.data?.transaction_id ?? ''),
+    providerReference: String(event?.data?.reference ?? event?.data?.tx_ref ?? ''),
+    providerStatus: String(event?.data?.status ?? ''),
+  });
+
   if (isFlutterwaveRefundEvent(event)) {
+    logPublicPaymentWebhook(requestId, 'classified_refund');
     return handleFlutterwaveRefundWebhook(req, rawBody, event);
   }
 
   if (isFlutterwaveTransferEvent(event)) {
+    logPublicPaymentWebhook(requestId, 'classified_transfer');
     return handleFlutterwaveTransferWebhook(req, rawBody, event);
   }
 
   if (event.event !== 'charge.success' && event.event !== 'charge.completed') {
+    logPublicPaymentWebhook(requestId, 'ignored_event', { eventType: event.event, durationMs: Date.now() - startedAt });
     return new NextResponse('OK', { status: 200 });
   }
 
   const providerRef: string = event.data?.reference ?? event.data?.tx_ref;
-  if (!providerRef) return new NextResponse('OK', { status: 200 });
+  if (!providerRef) {
+    logPublicPaymentWebhook(requestId, 'ack_missing_provider_reference', { durationMs: Date.now() - startedAt });
+    return new NextResponse('OK', { status: 200 });
+  }
+  logPublicPaymentWebhook(requestId, 'charge_reference_resolved', { providerRef });
 
   const bpt = await prisma.bookingPaymentTransaction.findFirst({
     where: { providerRef },
   });
 
   if (!bpt) {
+    logPublicPaymentWebhook(requestId, 'ack_unknown_payment_reference', { providerRef, durationMs: Date.now() - startedAt });
     return new NextResponse('OK', { status: 200 });
   }
+  logPublicPaymentWebhook(requestId, 'payment_record_found', {
+    paymentId: bpt.id,
+    propertyId: bpt.propertyId,
+    organizationId: bpt.organizationId,
+    provider: bpt.provider,
+    paymentStatus: bpt.status,
+    webhookVerified: bpt.webhookVerified,
+  });
 
   const notifyPaymentFailure = async (amount: number, currency: string) => {
     if (!bpt.reservationId) return;
@@ -86,6 +129,7 @@ export async function POST(req: NextRequest) {
     providerSecret = account?.secret ?? resolveSecretRef(account?.secretRef, bpt.provider === 'FLUTTERWAVE' ? 'FLW_SECRET_KEY' : 'PAYSTACK_SECRET_KEY');
     webhookSecret = account?.webhookSecret ?? resolveSecretRef(account?.webhookSecretRef || account?.secretRef, bpt.provider === 'FLUTTERWAVE' ? 'FLW_WEBHOOK_SECRET_HASH' : 'PAYSTACK_SECRET_KEY');
   } catch {
+    logPublicPaymentWebhook(requestId, 'payment_credentials_unavailable', { propertyId: bpt.propertyId, provider: bpt.provider });
     return new NextResponse('Payment provider is not configured', { status: 503 });
   }
 
@@ -108,9 +152,14 @@ export async function POST(req: NextRequest) {
       const expected = crypto.createHmac('sha512', webhookSecret).update(rawBody).digest('hex');
       return signature.length === expected.length && crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
     })();
-  if (!validSignature) return new NextResponse('Forbidden', { status: 403 });
+  logPublicPaymentWebhook(requestId, 'signature_checked', { provider: bpt.provider, valid: validSignature });
+  if (!validSignature) {
+    logPublicPaymentWebhook(requestId, 'rejected_invalid_signature', { providerRef, durationMs: Date.now() - startedAt });
+    return new NextResponse('Forbidden', { status: 403 });
+  }
 
   if (bpt.webhookVerified || bpt.status === 'SUCCESS') {
+    logPublicPaymentWebhook(requestId, 'duplicate_payment_acknowledged', { paymentId: bpt.id, durationMs: Date.now() - startedAt });
     return new NextResponse('OK', { status: 200 });
   }
 
@@ -143,7 +192,9 @@ export async function POST(req: NextRequest) {
       verifiedCurrency = verifyData.data.currency;
       providerTxId = String(verifyData.data.id);
     }
+    logPublicPaymentWebhook(requestId, 'provider_payment_verified', { providerRef, providerTxId, amount: verifiedAmount, currency: verifiedCurrency });
     if (Math.abs(verifiedAmount - Number(bpt.amount)) > 0.01 || verifiedCurrency.toUpperCase() !== bpt.currency.toUpperCase()) {
+      logPublicPaymentWebhook(requestId, 'rejected_amount_or_currency_mismatch', { providerRef, expectedAmount: bpt.amount, expectedCurrency: bpt.currency, verifiedAmount, verifiedCurrency });
       await prisma.bookingPaymentTransaction.update({
         where: { id: bpt.id },
         data: { status: 'FAILED', webhookVerified: true, webhookPayload: event, metadata: { reason: 'AMOUNT_OR_CURRENCY_MISMATCH', verifiedAmount, verifiedCurrency } as any },
@@ -152,6 +203,7 @@ export async function POST(req: NextRequest) {
       return new NextResponse('OK', { status: 200 });
     }
   } catch (err) {
+    logPublicPaymentWebhook(requestId, 'provider_verification_failed', { providerRef, provider: bpt.provider, error: err instanceof Error ? err.message : String(err), durationMs: Date.now() - startedAt });
     console.error(`[Booking Webhook] ${bpt.provider} verify failed:`, err);
     return new NextResponse('OK', { status: 200 });
   }
@@ -337,8 +389,10 @@ export async function POST(req: NextRequest) {
       await sendPaymentReceiptEmail({ to: paidReservation.primaryGuest.email, propertyName: paidReservation.property.name, confirmationNumber: paidReservation.confirmationNumber, amount: verifiedAmount, currency: verifiedCurrency, roomNumber: paidReservation.reservationRooms[0]?.room?.number }).catch((e) => console.error('[Booking Webhook] receipt email failed', e));
     }
 
+    logPublicPaymentWebhook(requestId, 'booking_payment_reconciled', { paymentId: bpt.id, reservationId: bpt.reservationId, providerRef, durationMs: Date.now() - startedAt });
     return new NextResponse('OK', { status: 200 });
   } catch (err: any) {
+    logPublicPaymentWebhook(requestId, 'booking_reconciliation_failed', { paymentId: bpt.id, reservationId: bpt.reservationId, providerRef, error: err?.message || String(err), durationMs: Date.now() - startedAt });
     console.error('[Booking Webhook] Failed to post payment:', err);
     await prisma.bookingPaymentTransaction.update({
       where: { id: bpt.id },
