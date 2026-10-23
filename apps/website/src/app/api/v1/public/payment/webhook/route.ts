@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
     }).catch((emailError) => console.error('[Booking Webhook] failure email failed', emailError));
   };
 
-  const account = await getBookingPaymentAccount(bpt.propertyId);
+  const account = await getBookingPaymentAccount(bpt.propertyId, 'BOOKING_ENGINE');
   let providerSecret: string;
   let webhookSecret: string;
   try {
@@ -577,7 +577,7 @@ async function handleFlutterwaveRefundWebhook(req: NextRequest, rawBody: string,
   });
   if (!refund?.providerRefundId) return new NextResponse('OK', { status: 200 });
 
-  const account = await getBookingPaymentAccount(refund.propertyId);
+  const account = await getBookingPaymentAccount(refund.propertyId, 'BOOKING_ENGINE');
   if (!account || account.provider !== 'FLUTTERWAVE') return new NextResponse('OK', { status: 200 });
   let secret: string;
   try {

@@ -162,7 +162,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const account = await getBookingPaymentAccount(ctx.propertyId);
+    const account = await getBookingPaymentAccount(ctx.propertyId, 'BOOKING_ENGINE');
     if (!account) throw new Error('No reservation payment account is configured');
     const secretKey = account.secret ?? resolveSecretRef(account.secretRef, account.provider === 'FLUTTERWAVE' ? 'FLW_SECRET_KEY' : 'PAYSTACK_SECRET_KEY');
     const provider = account.provider === 'FLUTTERWAVE'

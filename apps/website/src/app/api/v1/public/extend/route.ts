@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
   if (existing?.metadata && (existing.metadata as any).authorizationUrl) return successResponse({ authorizationUrl: (existing.metadata as any).authorizationUrl, amount: Number(existing.amount), currency: existing.currency, idempotent: true });
   if (existing) return errorResponse('CONFLICT', 'This extension payment is already being processed', 409);
 
-  const account = await getBookingPaymentAccount(ctx.propertyId);
+  const account = await getBookingPaymentAccount(ctx.propertyId, 'BOOKING_ENGINE');
   if (!account) return errorResponse('SERVICE_UNAVAILABLE', 'No property payment account is configured', 503);
   const providerRef = `EXT-${reservation.id.slice(0, 8)}-${crypto.randomBytes(5).toString('hex').toUpperCase()}`;
   const transaction = await prisma.bookingPaymentTransaction.create({ data: { organizationId: ctx.organizationId, propertyId: ctx.propertyId, reservationId: reservation.id, provider: account.provider, providerRef, amount, currency: quote.currency, status: 'PENDING', idempotencyKey, metadata: { type: 'EXTENSION', newCheckOut, additionalNights: quote.nights, quote: quote.snapshot, returnUrl } as any } });

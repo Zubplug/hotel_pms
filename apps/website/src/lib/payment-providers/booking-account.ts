@@ -19,10 +19,8 @@ export async function getPaystackBookingAccount(propertyId: string) {
   });
 }
 
-export async function getBookingPaymentAccount(propertyId: string) {
-  const account = await prisma.bookingPaymentAccount.findFirst({
-    where: { propertyId, isActive: true },
-    select: {
+export async function getBookingPaymentAccount(propertyId: string, preferredTarget = 'BOOKING_ENGINE') {
+  const select = {
       provider: true,
       mode: true,
       publicKey: true,
@@ -30,7 +28,16 @@ export async function getBookingPaymentAccount(propertyId: string) {
       webhookSecretRef: true,
       secretCiphertext: true,
       webhookSecretCiphertext: true,
-    },
+    } as const;
+  // Payroll credentials may be active at the same time as booking credentials.
+  // Never let a booking payment accidentally resolve the payroll account.
+  const account = await prisma.bookingPaymentAccount.findFirst({
+    where: { propertyId, isActive: true, target: preferredTarget },
+    select,
+  }) ?? await prisma.bookingPaymentAccount.findFirst({
+    where: { propertyId, isActive: true, target: { not: 'PAYROLL' } },
+    orderBy: { updatedAt: 'desc' },
+    select,
   });
   if (!account) return null;
   return {
