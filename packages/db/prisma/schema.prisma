@@ -1347,6 +1347,9 @@ model Refund {
   authorizedBy     String  @db.Uuid
   providerRefundId String?
 
+  bookingPaymentTransactionId String? @unique @db.Uuid
+  bookingPaymentTransaction   BookingPaymentTransaction? @relation("BookingPaymentLateRefund", fields: [bookingPaymentTransactionId], references: [id])
+
   status         String // 'PENDING' | 'COMPLETED' | 'FAILED'
   businessDate   DateTime @db.Date
   idempotencyKey String?  @unique
@@ -7345,6 +7348,8 @@ model BookingPaymentTransaction {
   paymentId String? @db.Uuid
 
   metadata Json?
+
+  lateRefund Refund? @relation("BookingPaymentLateRefund")
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz

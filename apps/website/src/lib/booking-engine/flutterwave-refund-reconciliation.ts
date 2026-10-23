@@ -1,6 +1,7 @@
 import prisma from '@hotel-pms/db';
 import crypto from 'node:crypto';
 import { sendBookingRefundCompletedEmail } from '@/lib/email/booking-emails';
+import { NotificationEngine } from '@/lib/notification-engine';
 
 const FINAL_STATUSES = new Set(['completed-bank-transfer', 'completed-momo', 'completed-mpgs', 'completed-offline', 'completed-preauth', 'successful', 'succeeded']);
 const FAILED_STATUSES = new Set(['failed', 'cancelled', 'canceled']);
@@ -26,7 +27,7 @@ export async function reconcileFlutterwaveRefund(input: {
   const nextStatus = normalizeFlutterwaveRefundStatus(input.status);
   const refund = await prisma.refund.findFirst({
     where: { providerRefundId: input.providerRefundId },
-    include: { refundRequest: { include: { reservation: { include: { primaryGuest: true, property: { select: { name: true } } } } } }, payment: true, property: { select: { organizationId: true, businessDate: true } } },
+    include: { refundRequest: { include: { reservation: { include: { primaryGuest: true, property: { select: { name: true } } } } } }, payment: true, bookingPaymentTransaction: true, property: { select: { organizationId: true, businessDate: true } } },
   });
   if (!refund) return { matched: false, status: nextStatus };
 
@@ -35,7 +36,7 @@ export async function reconcileFlutterwaveRefund(input: {
   if (refund.status === nextStatus) return { matched: true, status: nextStatus, idempotent: true };
 
   await prisma.$transaction(async (tx: any) => {
-    const current = await tx.refund.findUnique({ where: { id: refund.id }, include: { refundRequest: true, payment: true } });
+    const current = await tx.refund.findUnique({ where: { id: refund.id }, include: { refundRequest: true, payment: true, bookingPaymentTransaction: true } });
     if (!current || current.status === 'COMPLETED' || current.status === 'FAILED' && nextStatus === 'PROCESSING') return;
 
     if (nextStatus === 'COMPLETED') {
@@ -73,6 +74,16 @@ export async function reconcileFlutterwaveRefund(input: {
     }
 
     await tx.refund.update({ where: { id: current.id }, data: { status: nextStatus } });
+    if (current.bookingPaymentTransaction) {
+      const metadata = (current.bookingPaymentTransaction.metadata as Record<string, unknown> | null) ?? {};
+      await tx.bookingPaymentTransaction.update({
+        where: { id: current.bookingPaymentTransaction.id },
+        data: {
+          status: nextStatus === 'COMPLETED' ? 'REFUNDED' : 'SUCCESSFUL_LATE',
+          metadata: { ...metadata, latePayment: true, refundStatus: nextStatus, providerRefundId: input.providerRefundId },
+        },
+      });
+    }
     await tx.auditLog.create({
       data: {
         organizationId: refund.property.organizationId,
@@ -99,6 +110,17 @@ export async function reconcileFlutterwaveRefund(input: {
       currency: refund.currency,
       method: refund.method,
     }).catch((error) => console.error('[Flutterwave refund] completion email failed', error));
+  }
+  if (nextStatus === 'FAILED' && refund.bookingPaymentTransaction) {
+    await NotificationEngine.emit({
+      type: 'LATE_PAYMENT_REFUND_FAILED',
+      organizationId: refund.property.organizationId,
+      propertyId: refund.propertyId,
+      entityType: 'refund',
+      entityId: refund.id,
+      idempotencyKey: `late-payment-refund-failed:${refund.id}`,
+      metadata: { amount: Number(refund.amount), currency: refund.currency, providerRefundId: input.providerRefundId },
+    });
   }
   return { matched: true, status: nextStatus, idempotent: false };
 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@hotel-pms/db';
 import { getBookingPaymentAccount, resolveSecretRef } from '@/lib/payment-providers/booking-account';
 import { FlutterwaveProvider } from '@/lib/payment-providers/flutterwave';
+import { PaystackProvider } from '@/lib/payment-providers/paystack';
 import { reconcileFlutterwaveRefund } from '@/lib/booking-engine/flutterwave-refund-reconciliation';
 
 export const dynamic = 'force-dynamic';
@@ -12,8 +13,15 @@ export async function GET(req: NextRequest) {
   if (!cronSecret || authorization !== `Bearer ${cronSecret}`) return new NextResponse('Unauthorized', { status: 401 });
 
   const refunds = await prisma.refund.findMany({
-    where: { status: 'PROCESSING', providerRefundId: { not: null }, payment: { provider: 'FLUTTERWAVE' } },
-    select: { id: true, propertyId: true, providerRefundId: true },
+    where: {
+      status: 'PROCESSING',
+      providerRefundId: { not: null },
+      OR: [
+        { payment: { provider: { in: ['FLUTTERWAVE', 'PAYSTACK'] } } },
+        { bookingPaymentTransaction: { provider: { in: ['FLUTTERWAVE', 'PAYSTACK'] } } },
+      ],
+    },
+    select: { id: true, propertyId: true, providerRefundId: true, payment: { select: { provider: true } }, bookingPaymentTransaction: { select: { provider: true } } },
     orderBy: { updatedAt: 'asc' },
     take: 100,
   });
@@ -24,7 +32,9 @@ export async function GET(req: NextRequest) {
       const account = await getBookingPaymentAccount(refund.propertyId);
       if (!account || account.provider !== 'FLUTTERWAVE' || !refund.providerRefundId) continue;
       const secret = account.secret ?? resolveSecretRef(account.secretRef, 'FLW_SECRET_KEY');
-      const provider = new FlutterwaveProvider(secret, account.webhookSecret ?? undefined);
+      const provider = refund.payment?.provider === 'PAYSTACK' || refund.bookingPaymentTransaction?.provider === 'PAYSTACK'
+        ? new PaystackProvider(secret)
+        : new FlutterwaveProvider(secret, account.webhookSecret ?? undefined);
       const providerRefund = await provider.fetchRefund(refund.providerRefundId);
       if (!providerRefund) continue;
       const reconciled = await reconcileFlutterwaveRefund({

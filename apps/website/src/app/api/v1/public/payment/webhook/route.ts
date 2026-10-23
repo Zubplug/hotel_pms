@@ -3,11 +3,12 @@ import prisma from '@hotel-pms/db';
 import crypto from 'crypto';
 import { getOrCreateBookingSystemActor } from '@/lib/booking-engine/system-actor';
 import { getPropertyBusinessDate } from '@/lib/date-utils';
-import { sendBookingConfirmedEmail, sendPaymentReceiptEmail } from '@/lib/email/booking-emails';
+import { sendBookingConfirmedEmail, sendPaymentReceiptEmail, sendBookingRefundCompletedEmail } from '@/lib/email/booking-emails';
 import { sendBookingPaymentFailedEmail } from '@/lib/email/booking-emails';
 import { getBookingPaymentAccount, resolveSecretRef } from '@/lib/payment-providers/booking-account';
 import { decryptPaymentCredential } from '@/lib/payment-providers/credentials';
 import { FlutterwaveProvider } from '@/lib/payment-providers/flutterwave';
+import { PaystackProvider } from '@/lib/payment-providers/paystack';
 import { postBookingAdvanceDeposit } from '@/lib/booking-engine/financial-service';
 import { reconcileFlutterwaveRefund } from '@/lib/booking-engine/flutterwave-refund-reconciliation';
 import { NotificationEngine } from '@/lib/notification-engine';
@@ -38,6 +39,58 @@ function logPublicPaymentWebhook(requestId: string, stage: string, details: Reco
     at: new Date().toISOString(),
     ...details,
   }));
+}
+
+async function refundLateBookingPayment(input: {
+  bpt: any;
+  providerSecret: string;
+  providerTxId: string;
+  amount: number;
+  currency: string;
+}) {
+  const idempotencyKey = `late_booking_payment_refund:${input.bpt.id}`;
+  let refund = await prisma.refund.findUnique({ where: { idempotencyKey } });
+  if (refund && refund.status !== 'FAILED') return refund;
+
+  const [property, actorId] = await Promise.all([
+    prisma.property.findUnique({ where: { id: input.bpt.propertyId }, select: { businessDate: true } }),
+    getOrCreateBookingSystemActor(prisma as any, input.bpt.organizationId),
+  ]);
+  if (!property) throw new Error(`Property ${input.bpt.propertyId} was not found for late payment refund`);
+
+  const refundRecord = refund
+    ? await prisma.refund.update({ where: { id: refund.id }, data: { status: 'PROCESSING' } })
+    : await prisma.refund.create({
+      data: {
+        propertyId: input.bpt.propertyId,
+        bookingPaymentTransactionId: input.bpt.id,
+        amount: input.amount,
+        currency: input.currency,
+        method: 'ORIGINAL_PAYMENT',
+        reason: 'Payment received after reservation payment window expired.',
+        authorizedBy: actorId,
+        status: 'PROCESSING',
+        businessDate: property.businessDate ?? new Date(),
+        idempotencyKey,
+      },
+    });
+
+  try {
+    const provider = input.bpt.provider === 'FLUTTERWAVE'
+      ? new FlutterwaveProvider(input.providerSecret)
+      : new PaystackProvider(input.providerSecret);
+    const result = await provider.refundTransaction(input.providerTxId, input.amount, input.currency, 'Late payment received after reservation expiry');
+    return await prisma.refund.update({
+      where: { id: refundRecord.id },
+      data: {
+        status: result.status,
+        providerRefundId: result.providerRefundId ?? null,
+      },
+    });
+  } catch (error) {
+    await prisma.refund.update({ where: { id: refundRecord.id }, data: { status: 'FAILED' } });
+    throw error;
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -158,7 +211,8 @@ export async function POST(req: NextRequest) {
     return new NextResponse('Forbidden', { status: 403 });
   }
 
-  if (bpt.webhookVerified || bpt.status === 'SUCCESS') {
+  const lateRefundStatus = (bpt.metadata as any)?.refundStatus;
+  if ((bpt.webhookVerified && !(bpt.status === 'SUCCESSFUL_LATE' && lateRefundStatus === 'FAILED')) || ['SUCCESS', 'REFUNDED'].includes(bpt.status)) {
     logPublicPaymentWebhook(requestId, 'duplicate_payment_acknowledged', { paymentId: bpt.id, durationMs: Date.now() - startedAt });
     return new NextResponse('OK', { status: 200 });
   }
@@ -200,6 +254,61 @@ export async function POST(req: NextRequest) {
         data: { status: 'FAILED', webhookVerified: true, webhookPayload: event, metadata: { reason: 'AMOUNT_OR_CURRENCY_MISMATCH', verifiedAmount, verifiedCurrency } as any },
       });
       await notifyPaymentFailure(verifiedAmount, verifiedCurrency);
+      return new NextResponse('OK', { status: 200 });
+    }
+
+    const reservation = bpt.reservationId
+      ? await prisma.reservation.findUnique({
+        where: { id: bpt.reservationId },
+        select: { status: true, confirmationNumber: true, primaryGuest: { select: { email: true } }, property: { select: { name: true } } },
+      })
+      : null;
+    const isExtension = (bpt.metadata as any)?.type === 'EXTENSION';
+    const isLatePayment = !isExtension && (!reservation || !['PENDING', 'CONFIRMED'].includes(reservation.status));
+    if (isLatePayment) {
+      logPublicPaymentWebhook(requestId, 'late_payment_detected', {
+        paymentId: bpt.id,
+        reservationId: bpt.reservationId,
+        reservationStatus: reservation?.status ?? 'MISSING',
+        providerTxId,
+      });
+
+      let refundStatus = 'FAILED';
+      let providerRefundId: string | null = null;
+      try {
+        const refund = await refundLateBookingPayment({ bpt, providerSecret, providerTxId, amount: verifiedAmount, currency: verifiedCurrency });
+        refundStatus = refund.status;
+        providerRefundId = refund.providerRefundId ?? null;
+        if (refundStatus === 'COMPLETED' && reservation?.primaryGuest.email) {
+          await sendBookingRefundCompletedEmail({
+            to: reservation.primaryGuest.email,
+            propertyName: reservation.property.name,
+            confirmationNumber: reservation.confirmationNumber,
+            amount: verifiedAmount,
+            currency: verifiedCurrency,
+            method: 'ORIGINAL_PAYMENT',
+          });
+        }
+      } catch (refundError) {
+        console.error('[Booking Webhook] late payment refund failed:', refundError);
+      }
+
+      await prisma.bookingPaymentTransaction.update({
+        where: { id: bpt.id },
+        data: {
+          status: refundStatus === 'COMPLETED' ? 'REFUNDED' : 'SUCCESSFUL_LATE',
+          providerTxId,
+          webhookVerified: true,
+          webhookPayload: event,
+          metadata: {
+            ...((bpt.metadata as any) || {}),
+            latePayment: true,
+            refundStatus,
+            providerRefundId,
+          } as any,
+        },
+      });
+      logPublicPaymentWebhook(requestId, 'late_payment_refund_queued', { paymentId: bpt.id, refundStatus, providerRefundId, durationMs: Date.now() - startedAt });
       return new NextResponse('OK', { status: 200 });
     }
   } catch (err) {

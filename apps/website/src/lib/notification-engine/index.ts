@@ -308,6 +308,17 @@ async function evaluateEvent(
       };
     }
 
+    case "LATE_PAYMENT_REFUND_FAILED": {
+      const amount = Number(event.metadata?.amount || 0);
+      const currency = String(event.metadata?.currency || '');
+      return {
+        subject: "Late Payment Refund Requires Action",
+        body: `A late booking payment refund failed: ${currency} ${amount.toLocaleString()}. Review the refund and process it manually.`,
+        category: "Finance",
+        priority: "Critical",
+      };
+    }
+
     case "CASH_VARIANCE": {
       if (!policy.cashVarianceThreshold) return null;
       const amount = event.metadata?.varianceAmount;

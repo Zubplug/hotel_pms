@@ -96,6 +96,15 @@ export class PaystackProvider implements PaymentProvider {
     };
   }
 
+  async fetchRefund(providerRefundId: string): Promise<{ providerRefundId: string; status: string } | null> {
+    const response = await fetch(`https://api.paystack.co/refund/${encodeURIComponent(providerRefundId)}`, {
+      headers: { Authorization: `Bearer ${this.secretKey}` },
+    });
+    const data = await response.json();
+    if (!data.status || !data.data) return null;
+    return { providerRefundId: String(data.data.id ?? providerRefundId), status: String(data.data.status ?? '') };
+  }
+
   validateWebhookSignature(payload: string, signature: string): boolean {
     const hash = crypto.createHmac('sha512', this.secretKey).update(payload).digest('hex');
     return hash === signature;
