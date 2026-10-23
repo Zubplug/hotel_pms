@@ -92,8 +92,14 @@ export async function POST(
         roomId: resRoom.roomId,
         reservationId: { not: reservation.id },
         status: { notIn: ['CANCELLED', 'NO_SHOW'] },
-        checkIn: { lt: requestedCheckOut },
+        // A future arrival on the checkout boundary is a conflict too. An
+        // extension ending on the same date as the next arrival leaves no
+        // operational handover window and was the source of a prior overbook.
+        checkIn: { lte: requestedCheckOut },
         checkOut: { gt: currentCheckOut },
+        reservation: {
+          status: { notIn: ['CHECKED_OUT', 'CANCELLED', 'NO_SHOW'] },
+        },
       }
     });
 

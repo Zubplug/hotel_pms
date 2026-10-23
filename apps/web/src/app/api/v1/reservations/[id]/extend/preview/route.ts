@@ -65,8 +65,13 @@ export async function POST(
         roomId: resRoom.roomId,
         reservationId: { not: reservation.id },
         status: { notIn: ['CANCELLED', 'NO_SHOW'] },
-        checkIn: { lt: requestedCheckOut },
+        // Treat the next arrival date as occupied so the preview cannot
+        // approve an extension that reaches a future reservation boundary.
+        checkIn: { lte: requestedCheckOut },
         checkOut: { gt: currentCheckOut },
+        reservation: {
+          status: { notIn: ['CHECKED_OUT', 'CANCELLED', 'NO_SHOW'] },
+        },
       }
     });
 

@@ -3887,7 +3887,9 @@ export async function POST(req: NextRequest) {
                   status: { notIn: ["INACTIVE", "CANCELLED", "NO_SHOW"] },
                   reservationId: { not: aggregateId },
                   AND: [
-                    { checkIn: { lt: newCheckOut } },
+                    // Do not extend through the next arrival boundary. An
+                    // exact-date handoff still needs a protected room ledger.
+                    { checkIn: { lte: newCheckOut } },
                     { checkOut: { gt: res.checkOut } },
                   ],
                 },
