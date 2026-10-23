@@ -332,6 +332,26 @@ export async function PATCH(
 
     // Begin atomic transaction
     const updated = await prisma.$transaction(async (tx: any) => {
+      // Re-check inside the transaction. The earlier availability check is
+      // useful for fast feedback, but cannot prevent two terminals from
+      // selecting the same room concurrently.
+      if (needsAvailabilityCheck && newRoomId) {
+        const transactionalOverlap = await tx.reservationRoom.findFirst({
+          where: {
+            roomId: newRoomId,
+            reservationId: { not: id },
+            reservation: { status: { in: ['CONFIRMED', 'CHECKED_IN'] } },
+            status: { notIn: ['CANCELLED', 'NO_SHOW', 'INACTIVE'] },
+            checkIn: { lt: newCheckOutDate },
+            checkOut: { gt: newCheckInDate },
+          },
+          select: { id: true },
+        });
+        if (transactionalOverlap) {
+          throw new Error('The selected room is no longer available for these dates');
+        }
+      }
+
       // 1. Update ReservationRoom
       const updatedResRoom = await tx.reservationRoom.update({
         where: { id: existingReservation.reservationRooms[0].id },

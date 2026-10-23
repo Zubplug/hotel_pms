@@ -36,6 +36,30 @@ public class LocalRepository
             throw new InvalidOperationException("NIGHT_AUDIT_IN_PROGRESS: This business date is temporarily locked while Night Audit is posting.");
     }
 
+    private async Task AssertLocalRoomAvailableAsync(
+        string reservationId,
+        string roomId,
+        DateTime checkIn,
+        DateTime checkOut,
+        bool blockFutureArrivalBoundary = false)
+    {
+        var conflict = await _dbContext.ReservationRooms
+            .Where(rr => rr.ReservationId != reservationId
+                && rr.RoomId == roomId
+                && rr.Reservation != null
+                && (rr.Reservation.Status == "CONFIRMED" || rr.Reservation.Status == "CHECKED_IN")
+                && rr.Status != "CANCELLED"
+                && rr.Status != "NO_SHOW"
+                && (blockFutureArrivalBoundary
+                    ? rr.CheckInDate <= checkOut
+                    : rr.CheckInDate < checkOut)
+                && rr.CheckOutDate > checkIn)
+            .AnyAsync();
+
+        if (conflict)
+            throw new InvalidOperationException("The room is not available for the requested stay because another reservation occupies the room during those dates.");
+    }
+
     private async Task AssertCanOpenShiftAsync(string propertyId)
     {
         var property = await _dbContext.Properties.FindAsync(propertyId);
@@ -654,9 +678,15 @@ public class LocalRepository
     
     public async Task<bool> AssignRoomAsync(string reservationId, string roomId, string roomNumber, string userId, string deviceId)
     {
-        var res = await _dbContext.Reservations.FindAsync(reservationId);
+        var res = await _dbContext.Reservations
+            .Include(r => r.Rooms)
+            .FirstOrDefaultAsync(r => r.Id == reservationId);
         if (res == null) return false;
         await AssertNightAuditAllowsAsync(res.PropertyId);
+
+        var currentRoom = res.Rooms.FirstOrDefault(rr => rr.Status == "ACTIVE") ?? res.Rooms.FirstOrDefault();
+        if (currentRoom != null)
+            await AssertLocalRoomAvailableAsync(reservationId, roomId, currentRoom.CheckInDate, currentRoom.CheckOutDate);
 
         var oldRoomId = res.RoomId;
         res.RoomId = roomId;
@@ -1232,12 +1262,32 @@ public class LocalRepository
 
     public async Task<bool> EditReservationAsync(string reservationId, LocalReservationPatch patch, string userId, string deviceId)
     {
-        var res = await _dbContext.Reservations.FindAsync(reservationId);
+        var res = await _dbContext.Reservations
+            .Include(r => r.Rooms)
+            .FirstOrDefaultAsync(r => r.Id == reservationId);
         if (res == null) return false;
         await AssertNightAuditAllowsAsync(res.PropertyId);
 
         if (res.Status == "CHECKED_OUT" || res.Status == "CANCELLED")
             throw new InvalidOperationException($"Cannot edit a {res.Status} reservation.");
+
+        var currentRoom = res.Rooms.FirstOrDefault(rr => rr.Status == "ACTIVE") ?? res.Rooms.FirstOrDefault();
+        var requestedRoomId = patch.RoomId ?? currentRoom?.RoomId;
+        var requestedCheckIn = patch.CheckIn ?? currentRoom?.CheckInDate ?? res.CheckInDate;
+        var requestedCheckOut = patch.CheckOut ?? currentRoom?.CheckOutDate ?? res.CheckOutDate;
+        if (requestedCheckOut <= requestedCheckIn)
+            throw new InvalidOperationException("Check-out must be after check-in.");
+
+        if (currentRoom != null
+            && !string.IsNullOrWhiteSpace(requestedRoomId)
+            && (patch.RoomId != null || patch.CheckIn != null || patch.CheckOut != null))
+        {
+            await AssertLocalRoomAvailableAsync(
+                reservationId,
+                requestedRoomId!,
+                requestedCheckIn,
+                requestedCheckOut);
+        }
 
         // Apply non-null patches
         if (patch.GuestId        != null) res.GuestId         = patch.GuestId;
@@ -1251,6 +1301,20 @@ public class LocalRepository
 
         if (res.CheckOutDate <= res.CheckInDate)
             throw new InvalidOperationException("Check-out must be after check-in.");
+
+        // Keep the denormalized reservation header and its active assignment
+        // aligned. Otherwise an offline date edit could pass validation while
+        // the room row retained the old dates and later sync produced a
+        // different availability result than the desktop displayed.
+        if (currentRoom != null)
+        {
+            if (patch.RoomId != null) currentRoom.RoomId = patch.RoomId;
+            if (patch.RoomTypeId != null) currentRoom.RoomTypeId = patch.RoomTypeId;
+            if (patch.CheckIn != null) currentRoom.CheckInDate = patch.CheckIn.Value;
+            if (patch.CheckOut != null) currentRoom.CheckOutDate = patch.CheckOut.Value;
+            if (patch.Adults != null) currentRoom.Adults = patch.Adults.Value;
+            if (patch.Children != null) currentRoom.Children = patch.Children.Value;
+        }
 
         res.UpdatedAt = DateTime.UtcNow;
         res.IsDirty = true;

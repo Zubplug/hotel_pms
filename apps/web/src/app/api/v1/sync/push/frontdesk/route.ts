@@ -4039,6 +4039,10 @@ export async function POST(req: NextRequest) {
                   roomId: newRoomId,
                   reservationId: { not: aggregateId },
                   status: { notIn: ["INACTIVE", "CANCELLED", "NO_SHOW"] },
+                  reservation: {
+                    propertyId,
+                    status: { in: ["CONFIRMED", "CHECKED_IN"] },
+                  },
                   AND: [
                     { checkIn: { lt: newCheckOut } },
                     { checkOut: { gt: newCheckIn } },
