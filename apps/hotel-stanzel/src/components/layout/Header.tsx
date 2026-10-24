@@ -11,7 +11,6 @@ const NAV_LINKS = [
   { label: 'Gallery', href: '/gallery' },
   { label: 'About', href: '/about' },
   { label: 'Contact', href: '/contact' },
-  { label: 'Corporate', href: '/corporate' },
 ];
 
 export function Header() {

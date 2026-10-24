@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import bcrypt from 'bcryptjs';
 import prisma from '@hotel-pms/db';
 
 const LOGIN_TTL_MS = 15 * 60 * 1000;
@@ -16,6 +17,38 @@ function rawToken(prefix: string): string {
 
 export function hashCorporatePortalToken(token: string): string {
   return crypto.createHash('sha256').update(token).digest('hex');
+}
+
+async function createPortalSession(identityId: string) {
+  const now = new Date();
+  return prisma.$transaction(async (tx) => {
+    const identity = await tx.corporatePortalIdentity.findFirst({
+      where: { id: identityId, status: 'ACTIVE', corporateAccount: { isActive: true } },
+      include: { corporateAccount: { select: { id: true, organizationId: true, propertyId: true, name: true, code: true, contactPerson: true, contactEmail: true } } },
+    });
+    if (!identity) return null;
+    const sessionToken = rawToken('lc_portal_session');
+    const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
+    await tx.corporatePortalSession.create({ data: { identityId, tokenHash: hashCorporatePortalToken(sessionToken), expiresAt } });
+    await tx.corporatePortalIdentity.update({ where: { id: identityId }, data: { lastLoginAt: now } });
+    return { sessionToken, expiresAt, identity };
+  });
+}
+
+export async function authenticateCorporatePortalPassword(input: { organizationId: string; propertyId: string; email: string; password: string }) {
+  const identity = await prisma.corporatePortalIdentity.findFirst({
+    where: { organizationId: input.organizationId, propertyId: input.propertyId, email: input.email.trim().toLowerCase(), status: 'ACTIVE', corporateAccount: { isActive: true } },
+    select: { id: true, passwordHash: true },
+  });
+  if (!identity?.passwordHash || !(await bcrypt.compare(input.password, identity.passwordHash))) return null;
+  return createPortalSession(identity.id);
+}
+
+export async function setCorporatePortalPassword(input: { organizationId: string; propertyId: string; sessionToken: string; password: string }) {
+  const session = await prisma.corporatePortalSession.findFirst({ where: { tokenHash: hashCorporatePortalToken(input.sessionToken), revokedAt: null, expiresAt: { gt: new Date() }, identity: { organizationId: input.organizationId, propertyId: input.propertyId, status: 'ACTIVE', corporateAccount: { isActive: true } } }, select: { identityId: true } });
+  if (!session) return false;
+  await prisma.corporatePortalIdentity.update({ where: { id: session.identityId }, data: { passwordHash: await bcrypt.hash(input.password, 12), passwordSetAt: new Date() } });
+  return true;
 }
 
 export async function createCorporatePortalLoginRequest(input: { organizationId: string; propertyId: string; email: string }) {

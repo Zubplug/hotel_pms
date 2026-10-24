@@ -338,6 +338,8 @@ model CorporatePortalIdentity {
   propertyId         String    @db.Uuid
   corporateAccountId String    @unique @db.Uuid
   email              String
+  passwordHash       String?
+  passwordSetAt      DateTime? @db.Timestamptz
   status             String    @default("ACTIVE") // ACTIVE | SUSPENDED | REVOKED
   lastLoginAt        DateTime? @db.Timestamptz
   createdAt          DateTime  @default(now()) @db.Timestamptz
@@ -856,6 +858,9 @@ model CorporateAccount {
   contactPerson         String?
   contactEmail          String?
   contactPhone          String?
+  companyAddress        String?
+  companyCity           String?
+  companyCountry        String?
   creditLimit           Decimal @default(0) @db.Decimal(18, 4)
   exemptFromHighBalance Boolean @default(false)
   depositPolicy         String  @default("WAIVED") // 'WAIVED', 'STANDARD'
@@ -7682,6 +7687,9 @@ model CorporateBookingApplication {
   contactPerson      String
   contactEmail       String
   contactPhone       String?
+  companyAddress     String?
+  companyCity        String?
+  companyCountry     String?
   status             String   @default("PENDING") // PENDING | CONVERTED | REJECTED | EXPIRED
   paymentMode        String
   requestedCurrency  String
