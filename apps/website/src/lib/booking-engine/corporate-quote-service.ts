@@ -137,7 +137,7 @@ function assertDateRange(input: CorporateQuoteRequest): void {
   if (!Number.isInteger(input.adults) || input.adults < 1 || !Number.isInteger(input.children) || input.children < 0) {
     throw new CorporateQuoteError('QUOTE_TAMPERED', 'Occupancy is invalid');
   }
-  if (input.roomCount != null && (!Number.isInteger(input.roomCount) || input.roomCount < 1 || input.roomCount > 20)) {
+  if (input.roomCount != null && (!Number.isInteger(input.roomCount) || input.roomCount < 1)) {
     throw new CorporateQuoteError('QUOTE_TAMPERED', 'Room count is invalid');
   }
 }
@@ -311,7 +311,7 @@ async function buildQuoteSnapshot(
   const paymentMode = normalizePaymentMode(input.paymentMode);
   if (input.roomSelections?.length) {
     const selections = input.roomSelections.filter((selection) => selection.roomCount > 0);
-    if (!selections.length || selections.length > 20 || selections.reduce((sum, selection) => sum + selection.roomCount, 0) > 20) throw new CorporateQuoteError('QUOTE_TAMPERED', 'Room selections are invalid');
+    if (!selections.length) throw new CorporateQuoteError('QUOTE_TAMPERED', 'Room selections are invalid');
     const lines = await Promise.all(selections.map((selection) => {
       const checkIn = selection.checkIn ? new Date(`${selection.checkIn}T00:00:00.000Z`) : input.checkIn;
       const checkOut = selection.checkOut ? new Date(`${selection.checkOut}T00:00:00.000Z`) : input.checkOut;
