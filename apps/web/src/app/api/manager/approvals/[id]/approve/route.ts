@@ -64,6 +64,22 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         throw new Error('FORBIDDEN');
       }
 
+      if (approval.type === 'CORPORATE_CONTRACT') {
+        if (approval.status !== 'PENDING') throw new Error('CONFLICT');
+        const details = (approval.details || {}) as Record<string, any>;
+        const isManagement = ['GENERAL_MANAGER', 'HOTEL_MANAGER', 'MANAGER', 'DIRECTOR', 'CEO', 'ADMIN', 'SUPER_ADMIN'].includes(String(user.role)) || user.isSuperAdmin;
+        if (details.stage !== 'MANAGEMENT_REVIEW' || (!isManagement && !user.isSuperAdmin)) throw new Error('CORPORATE_MANAGEMENT_REQUIRED');
+        const contract = await tx.corporateContract.findFirst({ where: { id: details.contractId, defaultPropertyId: approval.propertyId, isPropertyDefault: true, status: 'SUBMITTED' }, include: { versions: { where: { id: details.versionId, status: 'SUBMITTED' }, include: { rules: true } } } });
+        if (!contract || contract.versions.length !== 1) throw new Error('NOT_FOUND');
+        const now = new Date();
+        const version = contract.versions[0];
+        await tx.corporateContract.update({ where: { id: contract.id }, data: { status: 'ACTIVE' } });
+        await tx.corporateContractVersion.update({ where: { id: version.id }, data: { status: 'ACTIVE', approvedBy: user.id, approvedAt: now } });
+        const updated = await tx.approvalRequest.update({ where: { id: approval.id }, data: { status: 'APPROVED', reviewedBy: user.id, reviewedAt: now, details: { ...details, stage: 'FINAL_APPROVED', managerApprovedBy: user.id, managerApprovedAt: now.toISOString(), managerNote: String(body.comment || body.notes || '').trim() || null } } });
+        await tx.auditLog.create({ data: { organizationId: contract.organizationId, propertyId: approval.propertyId, userId: user.id, action: 'CORPORATE_CONTRACT_APPROVED', resource: 'CorporateContract', resourceId: contract.id, newValue: { approvalId: approval.id, contractStatus: 'ACTIVE', versionId: version.id }, ipAddress: req.headers.get('x-forwarded-for') || '', userAgent: req.headers.get('user-agent') || '', requestId: crypto.randomUUID() } });
+        return { status: 'APPROVED', approval: updated, contractId: contract.id, versionId: version.id };
+      }
+
       if (approval.type === 'POS_PRICE_CHANGE') {
         if (approval.status !== 'PENDING') throw new Error('CONFLICT');
         if (!['GENERAL_MANAGER', 'HOTEL_MANAGER', 'ADMIN', 'CEO', 'SUPER_ADMIN'].includes(user.role) && !user.isSuperAdmin) throw new Error('MANAGER_APPROVAL_REQUIRED');

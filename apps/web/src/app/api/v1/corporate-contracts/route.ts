@@ -81,7 +81,21 @@ export async function GET(req: NextRequest) {
     const { propertyIds, organizationId } = await requireOrganizationContext((session.user as any).id);
     const accountId = req.nextUrl.searchParams.get('corporateAccountId');
     const applicationId = req.nextUrl.searchParams.get('corporateBookingApplicationId');
-    if (Boolean(accountId) === Boolean(applicationId)) return errorResponse('BAD_REQUEST', 'Provide exactly one corporateAccountId or corporateBookingApplicationId', 400);
+    const propertyId = req.nextUrl.searchParams.get('propertyId');
+    if (!accountId && !applicationId && !propertyId) return errorResponse('BAD_REQUEST', 'Provide a propertyId, corporateAccountId, or corporateBookingApplicationId', 400);
+    if ((accountId && applicationId) || (accountId && propertyId) || (applicationId && propertyId)) return errorResponse('BAD_REQUEST', 'Provide only one contract scope', 400);
+    if (propertyId) {
+      const property = await prisma.property.findFirst({ where: { id: { equals: propertyId, in: [...propertyIds] }, organizationId }, select: { id: true } });
+      if (!property) return errorResponse('NOT_FOUND', 'Property not found', 404);
+      if (!(await hasEntitlement(organizationId, 'ADDON_CORPORATE_API', property.id))) return errorResponse('PAYMENT_REQUIRED', 'An active Corporate API add-on is required for corporate API contracts.', 402);
+      if (!(await hasPermission(session.user.id, property.id, 'corporate_account:view'))) return errorResponse('FORBIDDEN', 'Missing corporate account permission', 403);
+      const contracts = await prisma.corporateContract.findMany({
+        where: { organizationId, isPropertyDefault: true, defaultPropertyId: property.id },
+        orderBy: { createdAt: 'desc' },
+        include: { defaultProperty: { select: { name: true, code: true } }, versions: { orderBy: { version: 'desc' }, select: { id: true, version: true, status: true, effectiveFrom: true, effectiveTo: true, submittedAt: true, approvedAt: true, rules: { select: { id: true, roomTypeId: true, amount: true, currency: true, minAdults: true, maxAdults: true, minChildren: true, maxChildren: true, minOccupancy: true, maxOccupancy: true, minStay: true, maxStay: true, minRooms: true, maxRooms: true, pricingFactors: true, sourceRatePlanId: true } } } } },
+      });
+      return successResponse(contracts);
+    }
     const account = accountId ? await prisma.corporateAccount.findFirst({ where: { id: accountId, organizationId, propertyId: { in: [...propertyIds] } }, select: { propertyId: true } }) : null;
     const application = applicationId ? await prisma.corporateBookingApplication.findFirst({ where: { id: applicationId, organizationId, propertyId: { in: [...propertyIds] } }, select: { propertyId: true } }) : null;
     const identityPropertyId = account?.propertyId || application?.propertyId;
@@ -162,6 +176,7 @@ export async function POST(req: NextRequest) {
       const duplicate = await tx.corporateContract.findFirst({ where: { organizationId, reference: body.reference } });
       if (duplicate) throw Object.assign(new Error('A contract with this reference already exists'), { code: 'DUPLICATE_REFERENCE' });
 
+      const isApprovalRoutedDefault = body.isPropertyDefault;
       const contract = await tx.corporateContract.create({ data: {
         organizationId,
         corporateAccountId: account?.id || null,
@@ -170,7 +185,7 @@ export async function POST(req: NextRequest) {
         defaultPropertyId: body.isPropertyDefault ? identityPropertyId : null,
         reference: body.reference,
         name: body.name,
-        status: 'DRAFT',
+        status: isApprovalRoutedDefault ? 'SUBMITTED' : 'DRAFT',
         defaultCurrency: body.defaultCurrency,
         paymentMode: body.paymentMode,
         negotiationEnabled,
@@ -180,7 +195,7 @@ export async function POST(req: NextRequest) {
         effectiveFrom,
         effectiveTo,
         properties: { create: { propertyId: identityPropertyId, status: 'ACTIVE', effectiveFrom, effectiveTo } },
-        versions: { create: { version: 1, status: 'DRAFT', effectiveFrom, effectiveTo, termsSnapshot: { channel: 'CORPORATE_API', scope: body.isPropertyDefault ? 'PROPERTY_DEFAULT' : 'IDENTITY_NEGOTIATED', paymentMode: body.paymentMode, negotiationEnabled, negotiationMinRooms, negotiationMinNights, createdBy: session.user.id } } },
+        versions: { create: { version: 1, status: isApprovalRoutedDefault ? 'SUBMITTED' : 'DRAFT', effectiveFrom, effectiveTo, submittedBy: isApprovalRoutedDefault ? session.user.id : null, submittedAt: isApprovalRoutedDefault ? new Date() : null, termsSnapshot: { channel: 'CORPORATE_API', scope: body.isPropertyDefault ? 'PROPERTY_DEFAULT' : 'IDENTITY_NEGOTIATED', paymentMode: body.paymentMode, negotiationEnabled, negotiationMinRooms, negotiationMinNights, createdBy: session.user.id } } },
       }, include: { versions: true } });
       const version = contract.versions[0];
       const defaultSourceRatePlanId = accountRatePlanId;
@@ -211,7 +226,10 @@ export async function POST(req: NextRequest) {
         pricingFactors: (rule.pricingFactors ?? (body.isPropertyDefault ? PROPERTY_DEFAULT_PRICING_FACTORS : null)) as any,
       })) });
       await tx.auditLog.create({ data: { organizationId, propertyId: identityPropertyId, userId: session.user.id, action: 'CREATE', resource: 'corporate_contract_draft', resourceId: contract.id, newValue: { contractId: contract.id, versionId: version.id, corporateAccountId: account?.id || null, corporateBookingApplicationId: application?.id || null, reference: body.reference }, requestId: crypto.randomUUID() } });
-      return { id: contract.id, versionId: version.id, status: contract.status };
+      if (isApprovalRoutedDefault) {
+        await tx.approvalRequest.create({ data: { propertyId: identityPropertyId, type: 'CORPORATE_CONTRACT', status: 'PENDING', requestedBy: session.user.id, reason: `Review property default Corporate API contract ${body.reference}`, details: { contractId: contract.id, versionId: version.id, stage: 'MANAGEMENT_REVIEW', reference: body.reference, contractType: 'PROPERTY_DEFAULT' }, snapshot: { contractId: contract.id, versionId: version.id, reference: body.reference, name: body.name, defaultCurrency: body.defaultCurrency, paymentMode: body.paymentMode, rules: body.rules as any } } });
+      }
+      return { id: contract.id, versionId: version.id, status: contract.status, approvalStage: isApprovalRoutedDefault ? 'MANAGEMENT_REVIEW' : null };
     });
     return successResponse(result, 201);
   } catch (error: any) {

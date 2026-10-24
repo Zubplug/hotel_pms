@@ -28,6 +28,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       if (!approval || approval.status !== 'PENDING') throw new Error('CONFLICT');
       if (!user.allowedProperties.includes(approval.propertyId)) throw new Error('FORBIDDEN');
       const details = (approval.details || {}) as { refundRequestId?: string; approverId?: string; approverRoleId?: string; stage?: string };
+      if (approval.type === 'CORPORATE_CONTRACT') {
+        const isManagement = ['GENERAL_MANAGER', 'HOTEL_MANAGER', 'MANAGER', 'DIRECTOR', 'CEO', 'ADMIN', 'SUPER_ADMIN'].includes(String(user.role)) || user.isSuperAdmin;
+        if (details.stage !== 'MANAGEMENT_REVIEW' || !isManagement) throw new Error('CORPORATE_STAGE_REQUIRED');
+        const contract = await tx.corporateContract.findFirst({ where: { id: (details as any).contractId, defaultPropertyId: approval.propertyId, isPropertyDefault: true, status: 'SUBMITTED' }, include: { versions: { where: { id: (details as any).versionId, status: 'SUBMITTED' } } } });
+        if (!contract || contract.versions.length !== 1) throw new Error('NOT_FOUND');
+        await tx.corporateContract.update({ where: { id: contract.id }, data: { status: 'REJECTED' } });
+        await tx.corporateContractVersion.update({ where: { id: contract.versions[0].id }, data: { status: 'REJECTED' } });
+        return tx.approvalRequest.update({ where: { id }, data: { status: 'REJECTED', reviewedBy: user.id, reviewedAt: new Date(), details: { ...details, stage: 'REJECTED', rejectionComment: comment } } });
+      }
       let refundStage: string | undefined;
       if (approval.type === 'REFUND' && details.refundRequestId && !user.isSuperAdmin) {
         const refundRequest = await tx.refundRequest.findUnique({ where: { id: details.refundRequestId }, select: { currentApprovalStep: true } });
@@ -81,6 +90,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (error.message === 'ASSIGNED_APPROVER_REQUIRED') return errorResponse('FORBIDDEN', 'This request is assigned to another approver.', 403);
     if (error.message === 'ASSIGNED_ROLE_REQUIRED') return errorResponse('FORBIDDEN', 'You do not hold the approval role assigned to this refund.', 403);
     if (error.message === 'REFUND_STAGE_ROLE_REQUIRED') return errorResponse('FORBIDDEN', 'This refund is not at your approval stage.', 403);
+    if (error.message === 'CORPORATE_STAGE_REQUIRED') return errorResponse('FORBIDDEN', 'This contract is not at your approval stage.', 403);
     if (error.message === 'CONFLICT') return errorResponse('CONFLICT', 'Approval is no longer pending.', 409);
     console.error('[Manager Reject API]', error);
     return errorResponse('INTERNAL_ERROR', 'Unable to reject approval', 500);
