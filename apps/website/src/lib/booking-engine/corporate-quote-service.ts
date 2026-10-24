@@ -30,7 +30,7 @@ export type CorporateQuoteRequest = Readonly<{
   paymentMode?: string;
   ttlSeconds?: number;
   roomCount?: number;
-  roomSelections?: readonly { roomTypeId: string; roomCount: number }[];
+  roomSelections?: readonly { roomTypeId: string; roomCount: number; checkIn?: string; checkOut?: string }[];
 }>;
 
 export type CorporateTaxLine = Readonly<{
@@ -52,7 +52,7 @@ export type CorporateQuoteSnapshot = Readonly<{
     children: number;
     roomCount: number;
     paymentMode: string;
-    roomSelections?: readonly { roomTypeId: string; roomCount: number }[];
+    roomSelections?: readonly { roomTypeId: string; roomCount: number; checkIn?: string; checkOut?: string }[];
   };
   roomSelections?: readonly CorporateQuoteSnapshot[];
   principalId: string;
@@ -227,7 +227,11 @@ async function buildQuoteSnapshot(
   if (input.roomSelections?.length) {
     const selections = input.roomSelections.filter((selection) => selection.roomCount > 0);
     if (!selections.length || selections.length > 20 || selections.reduce((sum, selection) => sum + selection.roomCount, 0) > 20) throw new CorporateQuoteError('QUOTE_TAMPERED', 'Room selections are invalid');
-    const lines = await Promise.all(selections.map((selection) => buildQuoteSnapshot(tx, principal, { ...input, roomTypeId: selection.roomTypeId, roomCount: selection.roomCount, roomSelections: undefined, paymentMode })));
+    const lines = await Promise.all(selections.map((selection) => {
+      const checkIn = selection.checkIn ? new Date(`${selection.checkIn}T00:00:00.000Z`) : input.checkIn;
+      const checkOut = selection.checkOut ? new Date(`${selection.checkOut}T00:00:00.000Z`) : input.checkOut;
+      return buildQuoteSnapshot(tx, principal, { ...input, roomTypeId: selection.roomTypeId, roomCount: selection.roomCount, checkIn, checkOut, roomSelections: undefined, paymentMode });
+    }));
     if (new Set(lines.map((line) => line.totals.currency)).size !== 1) throw new CorporateQuoteError('CORPORATE_RATE_UNAVAILABLE', 'Mixed room selections must use one settlement currency');
     const first = lines[0];
     const subtotal = round2(lines.reduce((sum, line) => sum + line.totals.subtotal, 0));
