@@ -140,6 +140,7 @@ function ManagersFlash({ flashData, data }: { flashData: any; data: NightAuditDa
 export default function NightAuditDashboard({ managerMode = false }: { managerMode?: boolean }) {
   const { propertyId, isLoading: propertyLoading } = useProperty();
   const [data, setData] = useState<NightAuditData | null>(null);
+  const [accountingDepartments, setAccountingDepartments] = useState<Array<{ accountCode?: string; accountName: string; today: number }>>([]);
   const [flashData, setFlashData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -163,6 +164,15 @@ export default function NightAuditDashboard({ managerMode = false }: { managerMo
       if (!res.ok) throw new Error(json.error?.message || 'Unable to load audit status');
       setData(json.data);
       setLastRefresh(new Date());
+
+      // Reuse the accountant's authoritative revenue mapping. It includes
+      // event invoice journals as well as folio revenue, including before the
+      // current night-audit close package has been finalized.
+      try {
+        const accountingResponse = await fetch(`/api/v1/accountant/revenue?propertyId=${propertyId}`, { cache: 'no-store' });
+        const accountingJson = await accountingResponse.json();
+        if (accountingResponse.ok) setAccountingDepartments(accountingJson.data?.departments || accountingJson.departments || []);
+      } catch { /* Night Audit snapshot remains the fallback. */ }
 
       const blockers = [
         ...(json.data.system?.openPosSessions || []), ...(json.data.system?.openFrontdeskSessions || []),
@@ -291,7 +301,7 @@ export default function NightAuditDashboard({ managerMode = false }: { managerMo
         {/* ── 4. Analytics row: Revenue trend + Metric cards ──────────────── */}
         <div className="grid gap-4 xl:grid-cols-[2fr_3fr]">
           <RevenueTrendChart trend={data.analytics.trend} baseCurrency={data.property.baseCurrency} />
-          <MetricCards data={data} />
+          <MetricCards data={data} accountingDepartments={accountingDepartments} />
         </div>
 
         {/* ── 5. Activity timeline ────────────────────────────────────────── */}
