@@ -52,7 +52,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
     const effectiveFrom = day(terms.checkIn, new Date());
     const effectiveTo = day(terms.checkOut, new Date(effectiveFrom.getTime() + 24 * 60 * 60 * 1000));
     const account = request.corporateAccountId ? await prisma.corporateAccount.findUnique({ where: { id: request.corporateAccountId }, select: { id: true, ratePlanId: true } }) : null;
-    const defaultRules = await prisma.corporateRateRule.findMany({ where: { propertyId: request.propertyId, contractVersion: { status: 'ACTIVE' }, contract: { isPropertyDefault: true, defaultPropertyId: request.propertyId, status: 'ACTIVE' } }, select: { roomTypeId: true, sourceRatePlanId: true } });
+    const defaultRules = await prisma.corporateRateRule.findMany({ where: { propertyId: request.propertyId, contractVersion: { status: 'ACTIVE', contract: { isPropertyDefault: true, defaultPropertyId: request.propertyId, status: 'ACTIVE' } } }, select: { roomTypeId: true, sourceRatePlanId: true } });
     const corporatePlans = await prisma.ratePlan.findMany({ where: { propertyId: request.propertyId, type: { in: ['STANDARD', 'CORPORATE'] }, isActive: true, deletedAt: null }, select: { id: true } });
     const planIds = new Set(corporatePlans.map(plan => plan.id));
     const sourceByRoom = new Map(defaultRules.map(rule => [rule.roomTypeId, rule.sourceRatePlanId]));

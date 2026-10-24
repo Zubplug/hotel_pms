@@ -243,9 +243,8 @@ export function computeRateBreakdown(
 
   // Per-room-type overrides (accountant can set different amounts per type)
   const typeKey = resolvedTypeName?.toUpperCase();
-  const override = typeKey && resolvedConfig.roomTypeOverrides
-    ? resolvedConfig.roomTypeOverrides[typeKey]
-    : undefined;
+  const roomTypeOverrides = resolvedConfig.roomTypeOverrides ?? {};
+  const override = typeKey ? roomTypeOverrides[typeKey] : undefined;
   const vatRate = override?.vatRate ?? resolvedConfig.vatRate;
   const serviceChargeRate = override?.serviceChargeRate ?? resolvedConfig.serviceChargeRate;
   const baseFoodAmount = override?.complimentaryFoodAmount ?? resolvedConfig.complimentaryFoodAmount;
