@@ -17,6 +17,18 @@ export async function publicCorporateApplication<T>(path: string, init: RequestI
   return { ok: true as const, data: responseBody?.data ?? responseBody, status: response.status, applicationId, applicationToken, hasApplicationCredentials: true };
 }
 
+export async function publicCorporateAvailabilityRequest<T>(path: string, init: RequestInit = {}) {
+  const baseUrl = (process.env.CORPORATE_API_URL || 'https://getlodgecore.vercel.app').replace(/\/$/, '');
+  const key = process.env.LC_PUBLISHABLE_KEY;
+  if (!key) return { ok: false as const, error: 'Public booking API is not configured.', status: 503 };
+  try {
+    const response = await fetch(new URL(path, `${baseUrl}/`), { ...init, headers: { 'x-publishable-key': key, accept: 'application/json', 'content-type': 'application/json', ...(init.headers || {}) }, cache: 'no-store' });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) return { ok: false as const, error: body?.error?.message || body?.message || 'Corporate availability request failed.', status: response.status };
+    return { ok: true as const, data: body?.data ?? body, status: response.status };
+  } catch { return { ok: false as const, error: 'Corporate API is temporarily unavailable.' }; }
+}
+
 /** A Stanzel application session is deliberately exclusive of a portal session. */
 export async function hasPublicCorporateApplication() {
   const jar = await cookies();
