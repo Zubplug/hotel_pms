@@ -189,6 +189,7 @@ function RoomsPageContent() {
   useEffect(() => { fetchAvailability(); }, [fetchAvailability]);
 
   const nights = availability?.nights ?? 0;
+  const roomTypes = availability?.data ?? [];
   const availableRooms = availability?.data.filter(r => r.availability.isAvailable) ?? [];
   const unavailableRooms = availability?.data.filter(r => !r.availability.isAvailable) ?? [];
   const availableInventory = availableRooms.reduce((total, room) => total + room.availability.available, 0);
@@ -259,24 +260,23 @@ function RoomsPageContent() {
               <h1 style={{ fontSize: 'var(--text-3xl)', marginBottom: 'var(--space-3)' }}>
                 {availableRooms.length > 0
                   ? `${availableInventory} room${availableInventory === 1 ? '' : 's'} available`
-                  : 'No Rooms Available'}
+                  : 'All rooms are currently sold out'}
               </h1>
               <p style={{ color: 'var(--text-muted)', marginBottom: 'var(--space-10)' }}>
                 {availableRooms.length > 0
                   ? `${availableRooms.length} room type${availableRooms.length === 1 ? '' : 's'} available for your dates. Select your preferred room and rate plan to continue.`
-                  : 'No rooms match your criteria. Try different dates or occupancy.'}
+                  : 'The room types below are available at the resort, but none have availability for your selected dates.'}
               </p>
 
               {availableRooms.length === 0 && (
-                <div style={{ textAlign: 'center', padding: 'var(--space-16)', background: 'var(--color-ivory-dark)', borderRadius: 'var(--radius-xl)' }}>
-                  <p style={{ fontSize: 'var(--text-5xl)', marginBottom: 'var(--space-4)' }}>🏨</p>
-                  <h2 style={{ fontSize: 'var(--text-2xl)', marginBottom: 'var(--space-4)' }}>No availability for these dates</h2>
-                  <p style={{ color: 'var(--text-muted)', marginBottom: 'var(--space-8)', maxWidth: 480, margin: '0 auto var(--space-8)' }}>
-                    Please try different dates or contact us directly and we'll do our best to accommodate you.
-                  </p>
-                  <div style={{ display: 'flex', gap: 'var(--space-4)', justifyContent: 'center', flexWrap: 'wrap' }}>
-                    <Link href="/booking" className="btn btn-secondary">Change Dates</Link>
-                    <Link href="/contact" className="btn btn-outline-dark">Contact Us</Link>
+                <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-4)', marginBottom: 'var(--space-10)', padding: 'var(--space-5) var(--space-6)', background: 'var(--color-ivory-dark)', borderRadius: 'var(--radius-xl)', border: '1px solid var(--border)' }}>
+                  <div>
+                    <p style={{ fontWeight: 700, color: 'var(--color-green)', marginBottom: 'var(--space-1)' }}>No availability for these dates</p>
+                    <p style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)', margin: 0 }}>Review the room types below, or try different dates.</p>
+                  </div>
+                  <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
+                    <Link href="/booking" className="btn btn-secondary btn-sm">Change Dates</Link>
+                    <Link href="/contact" className="btn btn-outline-dark btn-sm">Contact Us</Link>
                   </div>
                 </div>
               )}
@@ -287,10 +287,10 @@ function RoomsPageContent() {
                 ))}
               </div>
 
-              {unavailableRooms.length > 0 && availableRooms.length > 0 && (
+              {unavailableRooms.length > 0 && (
                 <div style={{ marginTop: 'var(--space-12)' }}>
                   <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', marginBottom: 'var(--space-6)', fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-                    Also at Stanzel Grand Resort — Currently Unavailable
+                    {availableRooms.length > 0 ? 'Also at Stanzel Grand Resort — Currently Unavailable' : `${roomTypes.length} room types — Sold out for these dates`}
                   </p>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 'var(--space-8)', opacity: 0.6 }}>
                     {unavailableRooms.map(room => (
