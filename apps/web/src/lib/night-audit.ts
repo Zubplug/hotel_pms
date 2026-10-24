@@ -369,7 +369,7 @@ export async function executeNightAudit(
             }
             const roomChargeKey = `ROOM_CHARGE_${reservation.id}_${businessDate.toISOString().split('T')[0]}`;
             
-            const isCorporateCharge = Boolean(reservation.corporateAccountId);
+            const isCorporateCharge = Boolean(reservation.corporateAccountId || reservation.corporateBookingApplicationId);
 
             // Corporate rooms share one CITY_LEDGER folio. Their idempotency
             // must therefore be reservation-specific; checking only the folio
@@ -483,7 +483,13 @@ export async function executeNightAudit(
               // Corporate reservations keep the originally selected rate on
               // ReservationRoom. Resolve the negotiated corporate rate for
               // the room type and audit date before posting the charge.
-              if (isCorporateCharge && activeRoom && reservation.corporateAccount?.ratePlanId) {
+              const lockedCorporateNight = isCorporateCharge && activeRoom
+                ? ((reservation.ratePlanSnapshot as any)?.nightlyBreakdown || []).find((night: any) => night.date === businessDate.toISOString().slice(0, 10))
+                : null;
+              if (lockedCorporateNight?.grossRate != null) {
+                originalRate = Number(lockedCorporateNight.grossRate);
+                chargeCurrency = activeRoom.currency || chargeCurrency;
+              } else if (isCorporateCharge && activeRoom && reservation.corporateAccount?.ratePlanId) {
                 const corporateRate = await tx.rate.findFirst({
                   where: {
                     propertyId,
@@ -613,13 +619,25 @@ export async function executeNightAudit(
               // they must not lose their breakfast allocation.
               const corporateRatePlan = reservation.corporateAccount?.ratePlan || null;
               const corporateFoodAllocationOverride = corporateRatePlan ? Boolean(corporateRatePlan.includeFoodAllocation) : null;
-              const breakdown = computeRateBreakdown(
-                grossRoomCharge,
-                breakdownConfig,
-                isDiscountedStay,
-                roomTypeName,
-                corporateFoodAllocationOverride,
-              );
+              const breakdown = lockedCorporateNight
+                ? {
+                    ...lockedCorporateNight,
+                    grossRate: grossRoomCharge,
+                    totalReconciled: Number(lockedCorporateNight.componentTotal || grossRoomCharge),
+                    balanced: true,
+                    vat: Number(lockedCorporateNight.vatAmount || 0),
+                    serviceCharge: Number(lockedCorporateNight.serviceChargeAmount || 0),
+                    complimentaryFoodAllocation: Number(lockedCorporateNight.complimentaryFoodAmount || 0),
+                    isComplimentaryFoodAllocated: Number(lockedCorporateNight.complimentaryFoodAmount || 0) > 0,
+                    corporateOverrideApplied: true,
+                  }
+                : computeRateBreakdown(
+                    grossRoomCharge,
+                    breakdownConfig,
+                    isDiscountedStay,
+                    roomTypeName,
+                    corporateFoodAllocationOverride,
+                  );
 
               // 1. Net Accommodation → GL 4050 (ROOM revenue)
               await tx.folioItem.create({

@@ -14,4 +14,5 @@ export * from './src/flutterwave';
 export * from './src/reach-wallet';
 export * from './src/availability';
 export * from './src/corporate-application';
+export * from './src/canonical-room-rate-breakdown';
 export default prisma;

@@ -1,3 +1,5 @@
+import { computeCanonicalRoomRateBreakdown } from '@hotel-pms/db';
+
 /**
  * Room Rate Breakdown Engine
  * ──────────────────────────
@@ -197,6 +199,26 @@ export function computeRateBreakdown(
     resolvedTypeName = roomTypeName;
     corporateOverride = corporateFoodAllocationOverride;
   }
+
+  // The accounting implementation is shared with the Corporate API. Keep
+  // this adapter's public result shape for existing PMS/offline callers.
+  const canonical = computeCanonicalRoomRateBreakdown({
+    grossRate,
+    config: resolvedConfig,
+    roomTypeName: resolvedTypeName,
+    hasApprovedDiscount: discounted,
+    corporateFoodAllocationOverride: corporateOverride,
+  });
+  return {
+    ...canonical,
+    vat: canonical.vatAmount,
+    serviceCharge: canonical.serviceChargeAmount,
+    complimentaryFoodAllocation: canonical.complimentaryFoodAmount,
+    isComplimentaryFoodAllocated: canonical.complimentaryFoodAmount > 0,
+    corporateOverrideApplied: typeof corporateOverride === 'boolean',
+    balanced: Math.abs(canonical.componentTotal - canonical.grossRate) < 0.02,
+    totalReconciled: canonical.componentTotal,
+  };
 
   if (!resolvedConfig.enabled || grossRate <= 0) {
     return {

@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import type { Prisma, PrismaClient } from '@hotel-pms/db';
+import { computeCanonicalRoomRateBreakdown, DEFAULT_CANONICAL_ROOM_RATE_BREAKDOWN_CONFIG, type CanonicalRoomRateBreakdown } from '@hotel-pms/db';
 import { AuthoritativeAvailabilityService } from './availability-service';
 import { ReservationPricingService, type PricingQuote, type PricingSnapshot } from './pricing-service';
 import { validateBookingPolicy } from './booking-policy-service';
@@ -41,6 +42,14 @@ export type CorporateTaxLine = Readonly<{
   included: boolean;
 }>;
 
+export type CorporateFeeLine = Readonly<{
+  id: string;
+  name: string;
+  code: string;
+  amount: number;
+  included: boolean;
+}>;
+
 export type CorporateQuoteSnapshot = Readonly<{
     version: 1 | 2;
   request: {
@@ -74,7 +83,17 @@ export type CorporateQuoteSnapshot = Readonly<{
   };
   pricing: PricingSnapshot;
   taxes: readonly CorporateTaxLine[];
-  fees: readonly [];
+  fees: readonly CorporateFeeLine[];
+  roomChargeBreakdown: {
+    grossRate: number;
+    netAccommodation: number;
+    vatAmount: number;
+    serviceChargeAmount: number;
+    complimentaryFoodAmount: number;
+    complimentaryAllocationName: string;
+    foodAllocationSuppressed: boolean;
+  };
+  nightlyBreakdown: readonly ({ date: string } & Omit<CanonicalRoomRateBreakdown, 'grossRate'> & { grossRate: number })[];
   inclusions: readonly string[];
   cancellationPolicy: Record<string, unknown> | null;
   totals: {
@@ -214,6 +233,42 @@ async function taxLines(tx: TxClient, propertyId: string, subtotal: number): Pro
     });
 }
 
+async function canonicalBreakdown(
+  tx: TxClient,
+  propertyId: string,
+  pricing: PricingSnapshot,
+  roomTypeName: string,
+  includeFoodAllocation: boolean,
+) {
+  const property = await tx.property.findUnique({ where: { id: propertyId }, select: { settings: true } });
+  const saved = ((property?.settings as any)?.roomRateBreakdown || {}) as Record<string, any>;
+  const config = {
+    ...DEFAULT_CANONICAL_ROOM_RATE_BREAKDOWN_CONFIG,
+    ...saved,
+    roomTypeOverrides: saved.roomTypeOverrides || DEFAULT_CANONICAL_ROOM_RATE_BREAKDOWN_CONFIG.roomTypeOverrides,
+  };
+  const nightly = pricing.nightlyRates.map((rate) => ({
+    date: rate.date.toISOString().slice(0, 10),
+    ...computeCanonicalRoomRateBreakdown({
+      grossRate: Number(rate.amount),
+      config,
+      roomTypeName,
+      corporateFoodAllocationOverride: includeFoodAllocation,
+    }),
+  }));
+  const sum = (key: keyof CanonicalRoomRateBreakdown) => round2(nightly.reduce((total, item) => total + Number(item[key] || 0), 0));
+  return {
+    grossRate: sum('grossRate'),
+    netAccommodation: sum('netAccommodation'),
+    vatAmount: sum('vatAmount'),
+    serviceChargeAmount: sum('serviceChargeAmount'),
+    complimentaryFoodAmount: sum('complimentaryFoodAmount'),
+    complimentaryAllocationName: config.complimentaryAllocationName,
+    foodAllocationSuppressed: nightly.every((item) => item.foodAllocationSuppressed),
+    nightlyBreakdown: nightly,
+  };
+}
+
 /** Checks overlapping room lines together, not only one line at a time. */
 async function assertCombinedRoomSelectionAvailability(
   tx: TxClient,
@@ -266,6 +321,15 @@ async function buildQuoteSnapshot(
     const first = lines[0];
     const subtotal = round2(lines.reduce((sum, line) => sum + line.totals.subtotal, 0));
     const taxesTotal = round2(lines.reduce((sum, line) => sum + line.totals.taxes, 0));
+    const breakdown = {
+      grossRate: round2(lines.reduce((sum, line) => sum + line.roomChargeBreakdown.grossRate, 0)),
+      netAccommodation: round2(lines.reduce((sum, line) => sum + line.roomChargeBreakdown.netAccommodation, 0)),
+      vatAmount: round2(lines.reduce((sum, line) => sum + line.roomChargeBreakdown.vatAmount, 0)),
+      serviceChargeAmount: round2(lines.reduce((sum, line) => sum + line.roomChargeBreakdown.serviceChargeAmount, 0)),
+      complimentaryFoodAmount: round2(lines.reduce((sum, line) => sum + line.roomChargeBreakdown.complimentaryFoodAmount, 0)),
+      complimentaryAllocationName: first.roomChargeBreakdown.complimentaryAllocationName,
+      foodAllocationSuppressed: lines.every((line) => line.roomChargeBreakdown.foodAllocationSuppressed),
+    };
     const total = round2(lines.reduce((sum, line) => sum + line.totals.total, 0));
     const deposit = round2(lines.reduce((sum, line) => sum + line.pricing.depositAmount, 0));
     return {
@@ -275,6 +339,9 @@ async function buildQuoteSnapshot(
       roomSelections: lines,
       pricing: { ...first.pricing, subtotal, depositAmount: deposit, nightlyRates: lines.flatMap((line) => line.pricing.nightlyRates) },
       taxes: lines.flatMap((line) => line.taxes),
+      fees: lines.flatMap((line) => line.fees),
+      roomChargeBreakdown: breakdown,
+      nightlyBreakdown: lines.flatMap((line) => line.nightlyBreakdown),
       totals: { ...first.totals, subtotal, taxes: taxesTotal, total },
     } as CorporateQuoteSnapshot;
   }
@@ -356,8 +423,21 @@ async function buildQuoteSnapshot(
     subtotal: scaledSubtotal,
     depositAmount: round2(pricing.depositAmount * roomCount),
   };
-  const taxes = await taxLines(tx, input.propertyId, scaledSubtotal);
-  const payableTaxes = taxes.filter((tax) => !tax.included).reduce((sum, tax) => sum + tax.amount, 0);
+  const perRoomBreakdown = await canonicalBreakdown(tx, input.propertyId, pricing.snapshot, pricing.snapshot.roomTypeName, Boolean(ratePlan.includeFoodAllocation));
+  const breakdown = {
+    ...perRoomBreakdown,
+    grossRate: round2(perRoomBreakdown.grossRate * roomCount),
+    netAccommodation: round2(perRoomBreakdown.netAccommodation * roomCount),
+    vatAmount: round2(perRoomBreakdown.vatAmount * roomCount),
+    serviceChargeAmount: round2(perRoomBreakdown.serviceChargeAmount * roomCount),
+    complimentaryFoodAmount: round2(perRoomBreakdown.complimentaryFoodAmount * roomCount),
+  };
+  const taxes: CorporateTaxLine[] = breakdown.vatAmount > 0
+    ? [{ id: 'ROOM_RATE_VAT', name: 'VAT', code: 'VAT', amount: breakdown.vatAmount, included: true }]
+    : [];
+  const fees: CorporateFeeLine[] = breakdown.serviceChargeAmount > 0
+    ? [{ id: 'ROOM_RATE_SERVICE_CHARGE', name: 'Service charge', code: 'SERVICE_CHARGE', amount: breakdown.serviceChargeAmount, included: true }]
+    : [];
 
   return {
     version: 1,
@@ -387,16 +467,18 @@ async function buildQuoteSnapshot(
     },
     pricing: scaledPricing,
     taxes,
-    fees: [],
+    fees,
+    roomChargeBreakdown: breakdown,
+    nightlyBreakdown: breakdown.nightlyBreakdown,
     inclusions: ratePlan.includeFoodAllocation ? ['FOOD_ALLOCATION'] : [],
     cancellationPolicy: ratePlan.cancellationPolicy
       ? JSON.parse(JSON.stringify(ratePlan.cancellationPolicy, decimalReplacer))
       : null,
     totals: {
       subtotal: scaledSubtotal,
-      taxes: round2(payableTaxes),
-      fees: 0,
-      total: round2(scaledSubtotal + payableTaxes),
+      taxes: round2(breakdown.vatAmount),
+      fees: round2(breakdown.serviceChargeAmount),
+      total: round2(scaledSubtotal),
       currency: pricing.currency,
     },
   };
