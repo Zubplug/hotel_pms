@@ -214,6 +214,35 @@ async function taxLines(tx: TxClient, propertyId: string, subtotal: number): Pro
     });
 }
 
+/** Checks overlapping room lines together, not only one line at a time. */
+async function assertCombinedRoomSelectionAvailability(
+  tx: TxClient,
+  propertyId: string,
+  lines: readonly CorporateQuoteSnapshot[],
+) {
+  const byRoomType = new Map<string, CorporateQuoteSnapshot[]>();
+  for (const line of lines) {
+    const current = byRoomType.get(line.request.roomTypeId) ?? [];
+    current.push(line);
+    byRoomType.set(line.request.roomTypeId, current);
+  }
+  for (const [roomTypeId, roomLines] of byRoomType) {
+    const boundaries = [...new Set(roomLines.flatMap((line) => [line.request.checkIn, line.request.checkOut]))].sort();
+    for (let index = 0; index < boundaries.length - 1; index += 1) {
+      const checkIn = new Date(`${boundaries[index]}T00:00:00.000Z`);
+      const checkOut = new Date(`${boundaries[index + 1]}T00:00:00.000Z`);
+      const demand = roomLines
+        .filter((line) => line.request.checkIn < boundaries[index + 1] && line.request.checkOut > boundaries[index])
+        .reduce((sum, line) => sum + (line.request.roomCount ?? 1), 0);
+      if (demand < 1) continue;
+      const availability = await AuthoritativeAvailabilityService.check(tx, { propertyId, roomTypeId, checkIn, checkOut });
+      if (availability.availableRooms < demand) {
+        throw new CorporateQuoteError('CORPORATE_RATE_UNAVAILABLE', 'The selected room lines overlap beyond the available inventory');
+      }
+    }
+  }
+}
+
 async function buildQuoteSnapshot(
   tx: TxClient,
   principal: CorporatePrincipal,
@@ -232,6 +261,7 @@ async function buildQuoteSnapshot(
       const checkOut = selection.checkOut ? new Date(`${selection.checkOut}T00:00:00.000Z`) : input.checkOut;
       return buildQuoteSnapshot(tx, principal, { ...input, roomTypeId: selection.roomTypeId, roomCount: selection.roomCount, checkIn, checkOut, roomSelections: undefined, paymentMode });
     }));
+    await assertCombinedRoomSelectionAvailability(tx, input.propertyId, lines);
     if (new Set(lines.map((line) => line.totals.currency)).size !== 1) throw new CorporateQuoteError('CORPORATE_RATE_UNAVAILABLE', 'Mixed room selections must use one settlement currency');
     const first = lines[0];
     const subtotal = round2(lines.reduce((sum, line) => sum + line.totals.subtotal, 0));
