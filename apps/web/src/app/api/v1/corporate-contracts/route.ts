@@ -6,6 +6,7 @@ import { auth } from '@/lib/auth';
 import { errorResponse, successResponse } from '@/lib/api-response';
 import { requireOrganizationContext } from '@/lib/organization-access';
 import { hasPermission } from '@/lib/permissions';
+import { hasEntitlement } from '@/lib/auth/entitlement';
 
 const ruleSchema = z.object({
   roomTypeId: z.string().uuid(),
@@ -30,8 +31,10 @@ const ruleSchema = z.object({
 });
 
 const draftSchema = z.object({
+  propertyId: z.string().uuid(),
   corporateAccountId: z.string().uuid().optional(),
   corporateBookingApplicationId: z.string().uuid().optional(),
+  isPropertyDefault: z.boolean().default(false),
   reference: z.string().trim().min(2).max(80),
   name: z.string().trim().min(2).max(160),
   defaultCurrency: z.string().regex(/^[A-Z]{3}$/),
@@ -39,7 +42,9 @@ const draftSchema = z.object({
   effectiveFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   effectiveTo: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
   rules: z.array(ruleSchema).min(1),
-}).refine((value) => Boolean(value.corporateAccountId) !== Boolean(value.corporateBookingApplicationId), { message: 'Provide exactly one corporate account or booking application identity' });
+}).refine((value) => value.isPropertyDefault
+  ? !value.corporateAccountId && !value.corporateBookingApplicationId
+  : Boolean(value.corporateAccountId) !== Boolean(value.corporateBookingApplicationId), { message: 'Provide either one corporate identity or a property default contract' });
 
 function validDate(value: string): Date {
   const date = new Date(`${value}T00:00:00.000Z`);
@@ -59,6 +64,7 @@ export async function GET(req: NextRequest) {
     const application = applicationId ? await prisma.corporateBookingApplication.findFirst({ where: { id: applicationId, organizationId, propertyId: { in: [...propertyIds] } }, select: { propertyId: true } }) : null;
     const identityPropertyId = account?.propertyId || application?.propertyId;
     if (!identityPropertyId) return errorResponse('NOT_FOUND', 'Corporate identity not found', 404);
+    if (!(await hasEntitlement(organizationId, 'ADDON_CORPORATE_API', identityPropertyId))) return errorResponse('PAYMENT_REQUIRED', 'An active Corporate API add-on is required for corporate API contracts.', 402);
     if (!(await hasPermission(session.user.id, identityPropertyId, 'corporate_account:view'))) return errorResponse('FORBIDDEN', 'Missing corporate account permission', 403);
     const contracts = await prisma.corporateContract.findMany({
       where: { organizationId, ...(accountId ? { corporateAccountId: accountId } : { corporateBookingApplicationId: applicationId }) },
@@ -83,8 +89,10 @@ export async function POST(req: NextRequest) {
 
     const account = body.corporateAccountId ? await prisma.corporateAccount.findFirst({ where: { id: body.corporateAccountId, organizationId, propertyId: { in: [...propertyIds] } }, select: { id: true, propertyId: true, isActive: true, ratePlanId: true } }) : null;
     const application = body.corporateBookingApplicationId ? await prisma.corporateBookingApplication.findFirst({ where: { id: body.corporateBookingApplicationId, organizationId, propertyId: { in: [...propertyIds] } }, select: { id: true, propertyId: true, status: true } }) : null;
-    const identityPropertyId = account?.propertyId || application?.propertyId;
+    const property = await prisma.property.findFirst({ where: { id: { equals: body.propertyId, in: [...propertyIds] }, organizationId }, select: { id: true } });
+    const identityPropertyId = body.isPropertyDefault ? property?.id : (account?.propertyId || application?.propertyId);
     if (!identityPropertyId) return errorResponse('NOT_FOUND', 'Corporate identity not found', 404);
+    if (!(await hasEntitlement(organizationId, 'ADDON_CORPORATE_API', identityPropertyId))) return errorResponse('PAYMENT_REQUIRED', 'An active Corporate API add-on is required for corporate API contracts.', 402);
     if (!(await hasPermission(session.user.id, identityPropertyId, 'corporate_account:edit'))) return errorResponse('FORBIDDEN', 'Missing corporate contract edit permission', 403);
     if (account && !account.isActive) return errorResponse('CONFLICT', 'Inactive corporate accounts cannot receive API contract drafts', 409);
     if (application && application.status !== 'PENDING') return errorResponse('CONFLICT', 'Only pending corporate applications can receive a new contract draft', 409);
@@ -118,6 +126,14 @@ export async function POST(req: NextRequest) {
         if (!sourceRatePlanId || !allowedCorporateRatePlanIds.has(sourceRatePlanId)) throw Object.assign(new Error('Each contract rule must reference an active CORPORATE rate plan'), { code: 'INVALID_RATE_PLAN' });
       }
 
+      if (body.isPropertyDefault) {
+        await tx.$queryRaw`SELECT id FROM "Property" WHERE id = ${identityPropertyId}::uuid FOR UPDATE`;
+        const existingDefault = await tx.corporateContract.findFirst({
+          where: { organizationId, isPropertyDefault: true, defaultPropertyId: identityPropertyId, status: { in: ['DRAFT', 'SUBMITTED', 'APPROVED', 'ACTIVE', 'SUSPENDED'] } },
+          select: { reference: true },
+        });
+        if (existingDefault) throw Object.assign(new Error(`This property already has a default corporate contract (${existingDefault.reference})`), { code: 'DUPLICATE_DEFAULT' });
+      }
       const duplicate = await tx.corporateContract.findFirst({ where: { organizationId, reference: body.reference } });
       if (duplicate) throw Object.assign(new Error('A contract with this reference already exists'), { code: 'DUPLICATE_REFERENCE' });
 
@@ -125,6 +141,8 @@ export async function POST(req: NextRequest) {
         organizationId,
         corporateAccountId: account?.id || null,
         corporateBookingApplicationId: application?.id || null,
+        isPropertyDefault: body.isPropertyDefault,
+        defaultPropertyId: body.isPropertyDefault ? identityPropertyId : null,
         reference: body.reference,
         name: body.name,
         status: 'DRAFT',
@@ -134,7 +152,7 @@ export async function POST(req: NextRequest) {
         effectiveFrom,
         effectiveTo,
         properties: { create: { propertyId: identityPropertyId, status: 'ACTIVE', effectiveFrom, effectiveTo } },
-        versions: { create: { version: 1, status: 'DRAFT', effectiveFrom, effectiveTo, termsSnapshot: { channel: 'CORPORATE_API', paymentMode: body.paymentMode, createdBy: session.user.id } } },
+        versions: { create: { version: 1, status: 'DRAFT', effectiveFrom, effectiveTo, termsSnapshot: { channel: 'CORPORATE_API', scope: body.isPropertyDefault ? 'PROPERTY_DEFAULT' : 'IDENTITY_NEGOTIATED', paymentMode: body.paymentMode, createdBy: session.user.id } } },
       }, include: { versions: true } });
       const version = contract.versions[0];
       const defaultSourceRatePlanId = accountRatePlanId;
@@ -169,7 +187,7 @@ export async function POST(req: NextRequest) {
     });
     return successResponse(result, 201);
   } catch (error: any) {
-    if (['INVALID_SCOPE', 'INVALID_CURRENCY', 'INVALID_RULE', 'INVALID_RATE_PLAN', 'DUPLICATE_REFERENCE'].includes(error?.code)) return errorResponse('BAD_REQUEST', error.message, 400);
+    if (['INVALID_SCOPE', 'INVALID_CURRENCY', 'INVALID_RULE', 'INVALID_RATE_PLAN', 'DUPLICATE_REFERENCE', 'DUPLICATE_DEFAULT'].includes(error?.code)) return errorResponse('BAD_REQUEST', error.message, 400);
     console.error('[corporate-contracts/post]', error);
     return errorResponse('INTERNAL_ERROR', 'Unable to create corporate API contract draft', 500);
   }

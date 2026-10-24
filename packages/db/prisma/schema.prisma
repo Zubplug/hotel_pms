@@ -113,6 +113,7 @@ model Property {
   corporateAccounts                CorporateAccount[]
   corporatePortalIdentities        CorporatePortalIdentity[]
   corporateContractProperties      CorporateContractProperty[]
+  corporateDefaultContracts        CorporateContract[] @relation("CorporateContractDefaultProperty")
   corporateRateRules               CorporateRateRule[]
   corporateRateNegotiationRequests CorporateRateNegotiationRequest[]
   apiPartnerCorporateAccounts      ApiPartnerCorporateAccount[]
@@ -897,6 +898,8 @@ model CorporateContract {
   organizationId                String    @db.Uuid
   corporateAccountId            String?   @db.Uuid
   corporateBookingApplicationId String?   @db.Uuid
+  isPropertyDefault             Boolean   @default(false)
+  defaultPropertyId             String?   @db.Uuid
   reference                     String
   name                          String
   status                        String    @default("DRAFT") // DRAFT | SUBMITTED | APPROVED | ACTIVE | SUSPENDED | EXPIRED
@@ -909,6 +912,7 @@ model CorporateContract {
   organization                Organization                      @relation(fields: [organizationId], references: [id])
   corporateAccount            CorporateAccount?                 @relation(fields: [corporateAccountId], references: [id])
   corporateBookingApplication CorporateBookingApplication?      @relation(fields: [corporateBookingApplicationId], references: [id])
+  defaultProperty             Property?                        @relation("CorporateContractDefaultProperty", fields: [defaultPropertyId], references: [id])
   properties                  CorporateContractProperty[]
   versions                    CorporateContractVersion[]
   negotiationRequests         CorporateRateNegotiationRequest[]

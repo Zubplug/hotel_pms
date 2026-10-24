@@ -138,7 +138,7 @@ export async function resolveApprovedCorporateRate(
     ? { corporateAccountId: principal.corporateAccountId }
     : { corporateBookingApplicationId: principal.corporateApplicationId };
 
-  const contracts = await db.corporateContract.findMany({
+  let contracts = await db.corporateContract.findMany({
     where: {
       organizationId: principal.organizationId,
       ...identityWhere,
@@ -167,10 +167,54 @@ export async function resolveApprovedCorporateRate(
     },
   });
 
-  const candidates = contracts.flatMap((contract: any) => contract.versions.map((version: any) => ({ contract, version })));
+  // Account/application contracts are the negotiated override. If none of
+  // them has an eligible rule, fall back to the property's single default
+  // corporate API contract. This never applies to non-corporate principals;
+  // the caller has already required a corporate identity above.
+  const loadDefaultContracts = async () => db.corporateContract.findMany({
+    where: {
+      organizationId: principal.organizationId,
+      isPropertyDefault: true,
+      defaultPropertyId: input.propertyId,
+      status: 'ACTIVE',
+      effectiveFrom: { lte: input.checkIn },
+      OR: [{ effectiveTo: null }, { effectiveTo: { gte: input.checkOut } }],
+      properties: {
+        some: {
+          propertyId: input.propertyId,
+          status: 'ACTIVE',
+          effectiveFrom: { lte: input.checkIn },
+          OR: [{ effectiveTo: null }, { effectiveTo: { gte: input.checkOut } }],
+        },
+      },
+    },
+    include: {
+      versions: {
+        where: {
+          status: 'ACTIVE',
+          effectiveFrom: { lte: input.checkIn },
+          OR: [{ effectiveTo: null }, { effectiveTo: { gte: input.checkOut } }],
+        },
+        orderBy: { version: 'desc' },
+        include: { rules: { where: { propertyId: input.propertyId, roomTypeId: input.roomTypeId } } },
+      },
+    },
+  });
+
+  let candidates = contracts.flatMap((contract: any) => contract.versions.map((version: any) => ({ contract, version })));
+  if (candidates.length === 0) {
+    contracts = await loadDefaultContracts();
+    candidates = contracts.flatMap((contract: any) => contract.versions.map((version: any) => ({ contract, version })));
+  }
   if (candidates.length === 0) throw new CorporateRateResolutionError('CORPORATE_CONTRACT_UNAVAILABLE', 'No approved corporate contract is active for this property and stay');
 
-  const matches: Array<{ contract: any; version: any; rule: CorporateRateRuleLike }> = candidates.flatMap(({ contract, version }: { contract: any; version: any }) => version.rules.map((rule: CorporateRateRuleLike) => ({ contract, version, rule })));
+  let matches: Array<{ contract: any; version: any; rule: CorporateRateRuleLike }> = candidates.flatMap(({ contract, version }: { contract: any; version: any }) => version.rules.map((rule: CorporateRateRuleLike) => ({ contract, version, rule })));
+  const hasEligibleMatch = matches.some(({ rule }) => isCorporateRateRuleEligible(rule, input));
+  if (!hasEligibleMatch && contracts.some((contract: any) => !contract.isPropertyDefault)) {
+    const defaults = await loadDefaultContracts();
+    matches = defaults.flatMap((contract: any) => contract.versions.flatMap((version: any) => version.rules.map((rule: CorporateRateRuleLike) => ({ contract, version, rule }))));
+  }
+  if (matches.length === 0) throw new CorporateRateResolutionError('CORPORATE_RATE_UNAVAILABLE', 'No approved corporate rate matches the requested room type');
   const selected = selectCorporateRateRule(matches.map((item: { rule: CorporateRateRuleLike }) => item.rule), input);
   const resolved = matches.find((item: { rule: CorporateRateRuleLike }) => item.rule.id === selected.id);
   if (!resolved) throw new CorporateRateResolutionError('CORPORATE_RATE_UNAVAILABLE', 'The approved corporate rate could not be resolved');

@@ -2,6 +2,8 @@
 import React from 'react';
 import { auth } from '@/lib/auth';
 import { hasPermission } from '@/lib/permissions';
+import { hasEntitlement } from '@/lib/auth/entitlement';
+import { requireOrganizationContext } from '@/lib/organization-access';
 import { CorporateAccountManagement } from '@/components/corporate/CorporateAccountManagement';
 import { redirect } from 'next/navigation';
 
@@ -15,6 +17,7 @@ export async function CorporatePage() {
   }
 
   const userId = session.user.id;
+  const { organizationId } = await requireOrganizationContext(userId);
   const canView = await hasPermission(userId, propertyId, 'corporate_account:view');
   if (!canView) {
     return <div className="p-6 text-white">You do not have permission to view corporate accounts.</div>;
@@ -26,7 +29,7 @@ export async function CorporatePage() {
   const canChangeDepositPolicy = await hasPermission(userId, propertyId, 'corporate_account:change_deposit_policy');
   const canDeactivate = await hasPermission(userId, propertyId, 'corporate_account:deactivate');
   const canViewCityLedger = await hasPermission(userId, propertyId, 'corporate_account:view_city_ledger');
-  const corporateContractsEnabled = process.env.CORPORATE_CONTRACTS_ENABLED === 'true';
+  const corporateContractsEnabled = await hasEntitlement(organizationId, 'ADDON_CORPORATE_API', propertyId);
 
   return (
     <div>
