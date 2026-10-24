@@ -6,7 +6,7 @@ import { corsHeaders, resolvePublicApiContext, isErrorResponse, checkRateLimit, 
 import { resolvePublicCorporateApplication } from '@/lib/booking-engine/corporate-public-auth';
 import { createCorporateQuote } from '@/lib/booking-engine/corporate-quote-service';
 
-const schema = z.object({ applicationId: z.string().uuid(), applicationToken: z.string().min(20).max(200), roomTypeId: z.string().uuid(), checkIn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), checkOut: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), adults: z.number().int().min(1).max(20), children: z.number().int().min(0).max(20), roomCount: z.number().int().min(1).max(20).default(1), paymentMode: z.string().optional(), ttlSeconds: z.number().int().optional() });
+const schema = z.object({ applicationId: z.string().uuid(), applicationToken: z.string().min(20).max(200), roomTypeId: z.string().uuid().optional(), roomSelections: z.array(z.object({ roomTypeId: z.string().uuid(), roomCount: z.number().int().min(1).max(20) })).min(1).max(20).optional(), checkIn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), checkOut: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), adults: z.number().int().min(1).max(20), children: z.number().int().min(0).max(20), roomCount: z.number().int().min(1).max(20).default(1), paymentMode: z.string().optional(), ttlSeconds: z.number().int().optional() }).refine((value) => Boolean(value.roomSelections?.length) || Boolean(value.roomTypeId), { message: 'Select at least one room type' });
 
 export async function POST(req: NextRequest) {
   const ctx = await resolvePublicApiContext(req);
@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
     const body = parsed.data;
     const application = await resolvePublicCorporateApplication(prisma as any, { applicationId: body.applicationId, token: body.applicationToken, organizationId: ctx.organizationId, propertyId: ctx.propertyId });
     const principal = { id: application.principalId || `PUBLIC_CORPORATE:${application.id}`, organizationId: ctx.organizationId, propertyIds: [ctx.propertyId], corporateApplicationId: application.id };
-    const quote = await createCorporateQuote(prisma as any, principal, { ...body, propertyId: ctx.propertyId, checkIn: new Date(`${body.checkIn}T00:00:00.000Z`), checkOut: new Date(`${body.checkOut}T00:00:00.000Z`) });
+    const quote = await createCorporateQuote(prisma as any, principal, { ...body, roomTypeId: body.roomTypeId || body.roomSelections![0].roomTypeId, propertyId: ctx.propertyId, checkIn: new Date(`${body.checkIn}T00:00:00.000Z`), checkOut: new Date(`${body.checkOut}T00:00:00.000Z`) });
     const response = successResponse({ quoteId: quote.id, expiresAt: quote.expiresAt, snapshot: quote.snapshot }, 201);
     Object.entries(corsHeaders(req, ctx.allowedOrigins)).forEach(([key, value]) => response.headers.set(key, value));
     return response;

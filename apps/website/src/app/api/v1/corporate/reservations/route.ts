@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
     const reservations = await prisma.reservation.findMany({
       where: { corporateAccountId: principal.corporateAccountId, propertyId, source: 'CORPORATE', property: { organizationId: auth.principal.organizationId } },
       orderBy: { createdAt: 'desc' }, take: limit,
-      select: { id: true, confirmationNumber: true, status: true, checkIn: true, checkOut: true, adults: true, children: true, currency: true, ratePlanSnapshot: true, primaryGuest: { select: { firstName: true, lastName: true, email: true } }, reservationRooms: { where: { status: 'ACTIVE' }, select: { roomTypeId: true, roomId: true, adults: true, children: true, rateAmount: true, currency: true } } },
+      select: { id: true, confirmationNumber: true, status: true, checkIn: true, checkOut: true, adults: true, children: true, currency: true, ratePlanSnapshot: true, primaryGuest: { select: { firstName: true, lastName: true, email: true, phone: true, country: true } }, reservationRooms: { where: { status: 'ACTIVE' }, select: { roomTypeId: true, roomId: true, room: { select: { number: true } }, adults: true, children: true, rateAmount: true, currency: true } } },
     });
     return withRequestId(successResponse({ reservations }), auth.requestId);
   } catch (error) { return corporateError(error, auth.requestId); }

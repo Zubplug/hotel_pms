@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
     const body = parsed.data;
     const application = await resolvePublicCorporateApplication(prisma as any, { applicationId: body.applicationId, token: body.applicationToken, organizationId: ctx.organizationId, propertyId: ctx.propertyId });
     const principal = { id: application.principalId || `PUBLIC_CORPORATE:${application.id}`, organizationId: ctx.organizationId, propertyIds: [ctx.propertyId], corporateApplicationId: application.id };
-    const result = await createCorporateReservation(prisma as any, principal, { quoteId: body.quoteId, guests: body.guests, specialRequests: body.specialRequests, externalReference: body.externalReference, idempotencyKey });
+    const result = await createCorporateReservation(prisma as any, principal, { quoteId: body.quoteId, guests: body.guests, deferGuestDetails: body.deferGuestDetails, specialRequests: body.specialRequests, externalReference: body.externalReference, idempotencyKey });
     const response = successResponse(result, result.idempotent ? 200 : 201);
     Object.entries(corsHeaders(req, ctx.allowedOrigins)).forEach(([key, value]) => response.headers.set(key, value));
     return response;

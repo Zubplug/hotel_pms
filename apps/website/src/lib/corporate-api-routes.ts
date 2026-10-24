@@ -13,6 +13,7 @@ import {
 import { CorporateQuoteError, type CorporatePrincipal } from './booking-engine/corporate-quote-service';
 import { CorporateBookingError } from './booking-engine/corporate-booking-service';
 import { CorporateCancellationError } from './booking-engine/corporate-cancellation-service';
+import { CorporateGuestError } from './booking-engine/corporate-guest-service';
 import { BookingPolicyError } from './booking-engine/booking-policy-service';
 
 export function requestId(req: NextRequest): string {
@@ -75,6 +76,10 @@ export function corporateError(error: unknown, id: string): NextResponse {
   }
   if (error instanceof CorporateCancellationError) {
     const status = error.code === 'NOT_FOUND' ? 404 : 409;
+    return withRequestId(errorResponse(error.code, error.message, status), id);
+  }
+  if (error instanceof CorporateGuestError) {
+    const status = error.code === 'NOT_FOUND' ? 404 : error.code === 'INVALID_GUEST' ? 400 : 409;
     return withRequestId(errorResponse(error.code, error.message, status), id);
   }
   if (error instanceof CorporateRequestBodyError) return withRequestId(errorResponse('PAYLOAD_TOO_LARGE', error.message, 413), id);

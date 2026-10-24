@@ -30,6 +30,7 @@ export type CorporateQuoteRequest = Readonly<{
   paymentMode?: string;
   ttlSeconds?: number;
   roomCount?: number;
+  roomSelections?: readonly { roomTypeId: string; roomCount: number }[];
 }>;
 
 export type CorporateTaxLine = Readonly<{
@@ -41,7 +42,7 @@ export type CorporateTaxLine = Readonly<{
 }>;
 
 export type CorporateQuoteSnapshot = Readonly<{
-  version: 1;
+    version: 1 | 2;
   request: {
     propertyId: string;
     roomTypeId: string;
@@ -51,7 +52,9 @@ export type CorporateQuoteSnapshot = Readonly<{
     children: number;
     roomCount: number;
     paymentMode: string;
+    roomSelections?: readonly { roomTypeId: string; roomCount: number }[];
   };
+  roomSelections?: readonly CorporateQuoteSnapshot[];
   principalId: string;
   corporateAccount: {
     id: string;
@@ -138,6 +141,7 @@ export function requestFingerprint(input: CorporateQuoteRequest): string {
     adults: input.adults,
     children: input.children,
     roomCount: input.roomCount ?? 1,
+    roomSelections: input.roomSelections ?? null,
     paymentMode: (input.paymentMode ?? 'PAY_LATER').toUpperCase(),
   };
   return crypto.createHash('sha256').update(canonical(normalized)).digest('hex');
@@ -220,6 +224,26 @@ async function buildQuoteSnapshot(
     if (config) validateBookingPolicy(input, config);
   }
   const paymentMode = normalizePaymentMode(input.paymentMode);
+  if (input.roomSelections?.length) {
+    const selections = input.roomSelections.filter((selection) => selection.roomCount > 0);
+    if (!selections.length || selections.length > 20 || selections.reduce((sum, selection) => sum + selection.roomCount, 0) > 20) throw new CorporateQuoteError('QUOTE_TAMPERED', 'Room selections are invalid');
+    const lines = await Promise.all(selections.map((selection) => buildQuoteSnapshot(tx, principal, { ...input, roomTypeId: selection.roomTypeId, roomCount: selection.roomCount, roomSelections: undefined, paymentMode })));
+    if (new Set(lines.map((line) => line.totals.currency)).size !== 1) throw new CorporateQuoteError('CORPORATE_RATE_UNAVAILABLE', 'Mixed room selections must use one settlement currency');
+    const first = lines[0];
+    const subtotal = round2(lines.reduce((sum, line) => sum + line.totals.subtotal, 0));
+    const taxesTotal = round2(lines.reduce((sum, line) => sum + line.totals.taxes, 0));
+    const total = round2(lines.reduce((sum, line) => sum + line.totals.total, 0));
+    const deposit = round2(lines.reduce((sum, line) => sum + line.pricing.depositAmount, 0));
+    return {
+      ...first,
+      version: 2 as const,
+      request: { ...first.request, roomCount: selections.reduce((sum, selection) => sum + selection.roomCount, 0), roomSelections: selections },
+      roomSelections: lines,
+      pricing: { ...first.pricing, subtotal, depositAmount: deposit, nightlyRates: lines.flatMap((line) => line.pricing.nightlyRates) },
+      taxes: lines.flatMap((line) => line.taxes),
+      totals: { ...first.totals, subtotal, taxes: taxesTotal, total },
+    } as CorporateQuoteSnapshot;
+  }
   const eligibility = await resolveEligibility(tx, principal, { ...input, paymentMode });
   let contractRate: Awaited<ReturnType<typeof resolveApprovedCorporateRate>> | null = null;
   try {
@@ -312,6 +336,7 @@ async function buildQuoteSnapshot(
       children: input.children,
       roomCount,
       paymentMode,
+      roomSelections: undefined,
     },
     principalId: principal.id,
     corporateAccount: eligibility.account,
@@ -427,6 +452,7 @@ export async function revalidateCorporateQuote(
     children: snapshot.request.children,
     roomCount: snapshot.request.roomCount,
     paymentMode: snapshot.request.paymentMode,
+    roomSelections: snapshot.request.roomSelections,
   };
   if (requestFingerprint(input) !== quote.requestFingerprint) {
     throw new CorporateQuoteError('QUOTE_TAMPERED', 'Quote request fingerprint does not match its immutable request');
@@ -443,6 +469,7 @@ export async function revalidateCorporateQuote(
 
 export function priceSnapshotFingerprint(snapshot: CorporateQuoteSnapshot): string {
   return crypto.createHash('sha256').update(canonical({
+    roomSelections: snapshot.roomSelections?.map((line) => ({ request: line.request, rateDecision: line.rateDecision, pricing: line.pricing, taxes: line.taxes, totals: line.totals })),
     rateDecision: snapshot.rateDecision,
     pricing: snapshot.pricing,
     taxes: snapshot.taxes,

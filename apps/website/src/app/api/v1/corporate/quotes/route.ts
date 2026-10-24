@@ -5,7 +5,7 @@ import { checkCorporateRateLimit } from '@/lib/corporate-api-auth';
 import { createCorporateQuote } from '@/lib/booking-engine/corporate-quote-service';
 import { corporateError, corporatePrincipalForApplication, corporatePrincipalForProperty, jsonBody, prisma, requireCorporateApi, withRequestId } from '@/lib/corporate-api-routes';
 
-const quoteSchema = z.object({ propertyId: z.string().min(1), applicationId: z.string().uuid().optional(), roomTypeId: z.string().min(1), checkIn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), checkOut: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), adults: z.number().int().min(1).max(20), children: z.number().int().min(0).max(20), roomCount: z.number().int().min(1).max(20).default(1), paymentMode: z.string().optional(), ttlSeconds: z.number().int().optional() });
+const quoteSchema = z.object({ propertyId: z.string().min(1), applicationId: z.string().uuid().optional(), roomTypeId: z.string().min(1).optional(), roomSelections: z.array(z.object({ roomTypeId: z.string().min(1), roomCount: z.number().int().min(1).max(20) })).min(1).max(20).optional(), checkIn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), checkOut: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), adults: z.number().int().min(1).max(20), children: z.number().int().min(0).max(20), roomCount: z.number().int().min(1).max(20).default(1), paymentMode: z.string().optional(), ttlSeconds: z.number().int().optional() }).refine((value) => Boolean(value.roomSelections?.length) || Boolean(value.roomTypeId), { message: 'Select at least one room type' });
 
 export async function POST(req: NextRequest) {
   const auth = await requireCorporateApi(req, 'quotes:create');
@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
     const principal = body.applicationId
       ? await corporatePrincipalForApplication(auth.principal, body.applicationId)
       : await corporatePrincipalForProperty(auth.principal, body.propertyId, 'quotes:create');
-    const quote = await createCorporateQuote(prisma as any, principal, { ...body, checkIn, checkOut });
+    const quote = await createCorporateQuote(prisma as any, principal, { ...body, roomTypeId: body.roomTypeId || body.roomSelections![0].roomTypeId, checkIn, checkOut });
     return withRequestId(successResponse({ quoteId: quote.id, expiresAt: quote.expiresAt, snapshot: quote.snapshot }, 201), auth.requestId);
   } catch (error) { return corporateError(error, auth.requestId); }
 }

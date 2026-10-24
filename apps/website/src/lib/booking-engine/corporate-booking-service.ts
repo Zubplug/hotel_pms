@@ -147,7 +147,8 @@ async function runBookingTransaction(
     const validated = await revalidateCorporateQuote(tx, principal, input.quoteId, now);
     const snapshot = validated.current;
     const requestedGuests = normalizedGuests(input);
-    const roomCount = snapshot.request.roomCount ?? 1;
+    const roomLines = snapshot.roomSelections?.length ? snapshot.roomSelections : [snapshot];
+    const roomCount = roomLines.reduce((sum, line) => sum + (line.request.roomCount ?? 1), 0);
     if (requestedGuests.length > 0 && requestedGuests.length !== roomCount) {
       throw new CorporateBookingError('BOOKING_INPUT_INVALID', `This quote requires exactly ${roomCount} guest${roomCount === 1 ? '' : 's'}`);
     }
@@ -182,13 +183,15 @@ async function runBookingTransaction(
       throw new CorporateBookingError('QUOTE_CONSUMED', 'Quote was already consumed; use the original idempotency key to retrieve the booking');
     }
 
-    const availability = await AuthoritativeAvailabilityService.assertAvailable(tx, {
-      propertyId,
-      roomTypeId: snapshot.request.roomTypeId,
-      checkIn: new Date(`${snapshot.request.checkIn}T00:00:00.000Z`),
-      checkOut: new Date(`${snapshot.request.checkOut}T00:00:00.000Z`),
-    });
-    if (availability.availableRooms < roomCount) throw new CorporateQuoteError('QUOTE_PRICE_CHANGED', 'The requested number of rooms is no longer available');
+    for (const line of roomLines) {
+      const availability = await AuthoritativeAvailabilityService.assertAvailable(tx, {
+        propertyId,
+        roomTypeId: line.request.roomTypeId,
+        checkIn: new Date(`${line.request.checkIn}T00:00:00.000Z`),
+        checkOut: new Date(`${line.request.checkOut}T00:00:00.000Z`),
+      });
+      if (availability.availableRooms < (line.request.roomCount ?? 1)) throw new CorporateQuoteError('QUOTE_PRICE_CHANGED', 'One of the requested room types is no longer available');
+    }
 
     const paymentRequired = isPaymentRequired(snapshot);
     const payLater = snapshot.request.paymentMode.toUpperCase() === 'PAY_LATER';
@@ -209,59 +212,71 @@ async function runBookingTransaction(
         throw new CorporateBookingError('BOOKING_INPUT_INVALID', 'Corporate credit limit would be exceeded');
       }
     }
-    const perReservationTotal = snapshot.totals.total / roomCount;
-    const reservations: Array<{ id: string; confirmationNumber: string; status: string }> = [];
-    for (const [index, guest] of guests.entries()) {
+    const reservations: Array<{ id: string; confirmationNumber: string; status: string; amount: number }> = [];
+    let reservationIndex = 0;
+    for (const line of roomLines) {
+      const lineRoomCount = line.request.roomCount ?? 1;
+      const perReservationTotal = line.totals.total / lineRoomCount;
+      for (let lineIndex = 0; lineIndex < lineRoomCount; lineIndex += 1) {
+      const guest = guests[reservationIndex];
+      const reservationGuest = input.deferGuestDetails && requestedGuests.length === 0
+        ? { ...guest, firstName: `Corporate Guest ${reservationIndex + 1}`, lastName: 'Pending' }
+        : guest;
+      const assignedRoom = await AuthoritativeAvailabilityService.findAssignableRoom(tx, {
+        propertyId,
+        roomTypeId: line.request.roomTypeId,
+        checkIn: new Date(`${line.request.checkIn}T00:00:00.000Z`),
+        checkOut: new Date(`${line.request.checkOut}T00:00:00.000Z`),
+      });
+      if (!assignedRoom) throw new CorporateQuoteError('QUOTE_PRICE_CHANGED', 'A physical room is no longer available for one of the selected room types');
       const reservation = await SharedReservationService.createReservation({
       propertyId,
       organizationId: principal.organizationId,
-      guestDetails: guest,
-      checkIn: new Date(`${snapshot.request.checkIn}T00:00:00.000Z`),
-      checkOut: new Date(`${snapshot.request.checkOut}T00:00:00.000Z`),
-      roomTypeId: snapshot.request.roomTypeId,
-      // Physical room assignment is deliberately deferred to Front Desk.
-      roomId: null,
-      adults: snapshot.request.adults,
-      children: snapshot.request.children,
+      guestDetails: reservationGuest,
+      checkIn: new Date(`${line.request.checkIn}T00:00:00.000Z`),
+      checkOut: new Date(`${line.request.checkOut}T00:00:00.000Z`),
+      roomTypeId: line.request.roomTypeId,
+      // Corporate reservations follow the normal PMS allocation invariant:
+      // reserve a physical room now; Front Desk only completes the guest
+      // identity/check-in workflow later.
+      roomId: assignedRoom.id,
+      adults: line.request.adults,
+      children: line.request.children,
       corporateAccountId: principal.corporateAccountId,
       corporateBookingApplicationId: principal.corporateApplicationId,
-      ratePlanId: snapshot.rateDecision.ratePlanId,
+      ratePlanId: line.rateDecision.ratePlanId,
       overrideTotalAmount: perReservationTotal,
-      currency: snapshot.totals.currency,
+      currency: line.totals.currency,
       source: 'CORPORATE',
       status: paymentRequired || payLater ? 'PENDING' : 'CONFIRMED',
       specialRequests: input.specialRequests,
       createdByType: 'SYSTEM',
-      userEmail: guest.email,
+      userEmail: reservationGuest.email,
       userRole: 'CORPORATE_API',
-      requestId: `${scopedKey}:${index + 1}`,
+      requestId: `${scopedKey}:${reservationIndex + 1}`,
       tx,
       });
 
-      const fullSnapshot = reservationSnapshot({
-        ...snapshot,
-        pricing: { ...snapshot.pricing, subtotal: snapshot.pricing.subtotal / roomCount, depositAmount: snapshot.pricing.depositAmount / roomCount },
-        totals: {
-          ...snapshot.totals,
-          subtotal: snapshot.totals.subtotal / roomCount,
-          taxes: snapshot.totals.taxes / roomCount,
-          total: perReservationTotal,
-        },
-      });
       const updatedReservation = await tx.reservation.update({
       where: { id: reservation.id },
       data: {
-        ratePlanSnapshot: fullSnapshot,
-        bookingChannelRef: `${input.externalReference ?? `CORPORATE:${scopedKey}`}:${index + 1}`,
+        ratePlanSnapshot: reservationSnapshot({
+          ...line,
+          pricing: { ...line.pricing, subtotal: line.pricing.subtotal / lineRoomCount, depositAmount: line.pricing.depositAmount / lineRoomCount },
+          totals: { ...line.totals, subtotal: line.totals.subtotal / lineRoomCount, taxes: line.totals.taxes / lineRoomCount, total: perReservationTotal },
+        }),
+        bookingChannelRef: `${input.externalReference ?? `CORPORATE:${scopedKey}`}:${reservationIndex + 1}`,
         paymentExpiresAt: paymentRequired
           ? new Date(now.getTime() + 15 * 60 * 1000)
           : payLater
             ? new Date(now.getTime() + 24 * 60 * 60 * 1000)
             : null,
       },
-      select: { id: true, confirmationNumber: true, status: true },
+      select: { id: true, confirmationNumber: true, status: true, ratePlanSnapshot: true },
       });
-      reservations.push(updatedReservation);
+      reservations.push({ ...updatedReservation, amount: perReservationTotal });
+      reservationIndex += 1;
+      }
     }
     const reservationIds = reservations.map((reservation) => reservation.id);
     await tx.bookingQuote.update({ where: { id: input.quoteId }, data: { reservationId: reservationIds[0] } });
@@ -295,7 +310,7 @@ async function runBookingTransaction(
           status: 'PENDING',
           executionStatus: 'NOT_APPLIED',
           requestedBy: actorId,
-          amount: perReservationTotal,
+          amount: reservation.amount,
           currency: snapshot.totals.currency,
           reason: 'Corporate pay-later reservation requires property management approval',
           details: { reservationId: reservation.id, corporateAccountId: principal.corporateAccountId, corporateBookingApplicationId: principal.corporateApplicationId, partnerId: principal.id, confirmationNumber: reservation.confirmationNumber },

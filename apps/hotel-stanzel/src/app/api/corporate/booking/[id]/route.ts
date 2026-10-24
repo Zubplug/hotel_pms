@@ -21,3 +21,13 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
   const result = await corporateApiRequest(`/api/v1/corporate/bookings/${encodeURIComponent(id)}/cancel`, { method: 'POST', body: JSON.stringify(body) });
   return NextResponse.json(result.ok ? result.data : { error: result.error }, { status: result.ok ? result.status : result.status || 502 });
 }
+
+export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const id = (await context.params).id;
+  const body = await request.json().catch(() => ({}));
+  const application = await publicCorporateApplication(`/api/v1/public/corporate/bookings/${encodeURIComponent(id)}/guest`, { method: 'PATCH', body: JSON.stringify(body) });
+  if (application.ok) return NextResponse.json(application.data, { status: application.status });
+  if (await hasPublicCorporateApplication()) return NextResponse.json({ error: application.error }, { status: application.status });
+  const result = await corporateApiRequest(`/api/v1/corporate/bookings/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(body) });
+  return NextResponse.json(result.ok ? result.data : { error: result.error }, { status: result.ok ? result.status : result.status || 502 });
+}

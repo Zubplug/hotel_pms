@@ -22,7 +22,7 @@ export function hashCorporatePortalToken(token: string): string {
 async function createPortalSession(identityId: string) {
   const now = new Date();
   return prisma.$transaction(async (tx) => {
-    const identity = await tx.corporatePortalIdentity.findFirst({
+    const identity = await (tx.corporatePortalIdentity as any).findFirst({
       where: { id: identityId, status: 'ACTIVE', corporateAccount: { isActive: true } },
       include: { corporateAccount: { select: { id: true, organizationId: true, propertyId: true, name: true, code: true, contactPerson: true, contactEmail: true } } },
     });
@@ -36,7 +36,7 @@ async function createPortalSession(identityId: string) {
 }
 
 export async function authenticateCorporatePortalPassword(input: { organizationId: string; propertyId: string; email: string; password: string }) {
-  const identity = await prisma.corporatePortalIdentity.findFirst({
+  const identity = await (prisma.corporatePortalIdentity as any).findFirst({
     where: { organizationId: input.organizationId, propertyId: input.propertyId, email: input.email.trim().toLowerCase(), status: 'ACTIVE', corporateAccount: { isActive: true } },
     select: { id: true, passwordHash: true },
   });
@@ -47,7 +47,7 @@ export async function authenticateCorporatePortalPassword(input: { organizationI
 export async function setCorporatePortalPassword(input: { organizationId: string; propertyId: string; sessionToken: string; password: string }) {
   const session = await prisma.corporatePortalSession.findFirst({ where: { tokenHash: hashCorporatePortalToken(input.sessionToken), revokedAt: null, expiresAt: { gt: new Date() }, identity: { organizationId: input.organizationId, propertyId: input.propertyId, status: 'ACTIVE', corporateAccount: { isActive: true } } }, select: { identityId: true } });
   if (!session) return false;
-  await prisma.corporatePortalIdentity.update({ where: { id: session.identityId }, data: { passwordHash: await bcrypt.hash(input.password, 12), passwordSetAt: new Date() } });
+  await (prisma.corporatePortalIdentity as any).update({ where: { id: session.identityId }, data: { passwordHash: await bcrypt.hash(input.password, 12), passwordSetAt: new Date() } });
   return true;
 }
 
