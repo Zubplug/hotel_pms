@@ -7,6 +7,7 @@ import { corporateError, corporatePrincipalForApplication, corporatePrincipalFor
 const schema = z.object({
   propertyId: z.string().uuid(),
   applicationId: z.string().uuid().optional(),
+  quoteId: z.string().uuid().optional(),
   reference: z.string().trim().max(80).optional(),
   requestedTerms: z.record(z.string(), z.unknown()),
   proposedRates: z.array(z.object({
@@ -39,6 +40,7 @@ export async function POST(req: NextRequest) {
         corporateAccountId: principal.corporateAccountId,
         corporateBookingApplicationId: principal.corporateApplicationId,
         requestedByType: 'CORPORATE',
+        quoteId: parsed.data.quoteId,
         requestedById: principal.id,
         reference: parsed.data.reference,
         requestedTerms: parsed.data.requestedTerms as any,

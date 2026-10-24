@@ -224,6 +224,11 @@ export async function resolveApprovedCorporateRate(
     contractVersionId: resolved.version.id as string,
     contractVersion: resolved.version.version as number,
     paymentMode: String(resolved.contract.paymentMode || '').toUpperCase(),
+    negotiation: {
+      enabled: Boolean(resolved.contract.negotiationEnabled),
+      minRooms: resolved.contract.negotiationMinRooms == null ? null : Number(resolved.contract.negotiationMinRooms),
+      minNights: resolved.contract.negotiationMinNights == null ? null : Number(resolved.contract.negotiationMinNights),
+    },
     rule: resolved.rule,
   };
 }

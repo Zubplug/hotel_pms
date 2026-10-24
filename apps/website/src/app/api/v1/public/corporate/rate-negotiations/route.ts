@@ -8,6 +8,7 @@ import { resolvePublicCorporateApplication } from '@/lib/booking-engine/corporat
 const schema = z.object({
   applicationId: z.string().uuid(),
   applicationToken: z.string().min(20).max(200),
+  quoteId: z.string().uuid().optional(),
   reference: z.string().trim().max(80).optional(),
   requestedTerms: z.record(z.string(), z.unknown()),
   proposedRates: z.array(z.object({
@@ -31,7 +32,11 @@ export async function POST(req: NextRequest) {
     if (body.proposedRates.some((rate) => !supported.has(rate.currency.toUpperCase()))) return errorResponse('BAD_REQUEST', 'A proposed rate uses an unsupported property currency', 400);
     const roomTypes = await prisma.roomType.findMany({ where: { propertyId: ctx.propertyId, isActive: true, deletedAt: null, id: { in: body.proposedRates.map((rate) => rate.roomTypeId) } }, select: { id: true } });
     if (roomTypes.length !== new Set(body.proposedRates.map((rate) => rate.roomTypeId)).size) return errorResponse('BAD_REQUEST', 'Every proposed rate must reference an active room type in this property', 400);
-    const request = await prisma.corporateRateNegotiationRequest.create({ data: { organizationId: ctx.organizationId, propertyId: ctx.propertyId, corporateBookingApplicationId: application.id, requestedByType: 'CORPORATE', requestedById: application.principalId || `PUBLIC_CORPORATE:${application.id}`, reference: body.reference, requestedTerms: body.requestedTerms as any, proposedRates: body.proposedRates, status: 'SUBMITTED' }, select: { id: true, status: true, createdAt: true } });
+    if (body.quoteId) {
+      const quote = await prisma.bookingQuote.findFirst({ where: { id: body.quoteId, organizationId: ctx.organizationId, propertyId: ctx.propertyId, corporateBookingApplicationId: application.id, principalId: application.principalId || `PUBLIC_CORPORATE:${application.id}`, status: 'ACTIVE', expiresAt: { gt: new Date() } }, select: { id: true } });
+      if (!quote) return errorResponse('QUOTE_NOT_FOUND', 'The quote is no longer active. Please prepare a new quote.', 409);
+    }
+    const request = await prisma.corporateRateNegotiationRequest.create({ data: { organizationId: ctx.organizationId, propertyId: ctx.propertyId, corporateBookingApplicationId: application.id, quoteId: body.quoteId, requestedByType: 'CORPORATE', requestedById: application.principalId || `PUBLIC_CORPORATE:${application.id}`, reference: body.reference, requestedTerms: body.requestedTerms as any, proposedRates: body.proposedRates, status: 'SUBMITTED' }, select: { id: true, status: true, createdAt: true } });
     const response = successResponse(request, 201);
     Object.entries(corsHeaders(req, ctx.allowedOrigins)).forEach(([key, value]) => response.headers.set(key, value));
     return response;

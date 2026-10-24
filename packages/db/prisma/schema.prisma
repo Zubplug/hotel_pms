@@ -898,6 +898,8 @@ model CorporateContract {
   organizationId                String    @db.Uuid
   corporateAccountId            String?   @db.Uuid
   corporateBookingApplicationId String?   @db.Uuid
+  quoteId                       String?   @db.Uuid
+  approvedQuoteId               String?   @db.Uuid
   isPropertyDefault             Boolean   @default(false)
   defaultPropertyId             String?   @db.Uuid
   reference                     String
@@ -905,6 +907,9 @@ model CorporateContract {
   status                        String    @default("DRAFT") // DRAFT | SUBMITTED | APPROVED | ACTIVE | SUSPENDED | EXPIRED
   defaultCurrency               String
   paymentMode                   String    @default("PAY_LATER")
+  negotiationEnabled            Boolean   @default(false)
+  negotiationMinRooms           Int?
+  negotiationMinNights          Int?
   fallbackPolicy                String    @default("NONE") // NONE | EXPLICIT_RULE_ONLY
   effectiveFrom                 DateTime  @db.Date
   effectiveTo                   DateTime? @db.Date
@@ -1047,6 +1052,8 @@ model CorporateRateNegotiationRequest {
   @@index([propertyId, corporateAccountId, status])
   @@index([propertyId, corporateBookingApplicationId, status])
   @@index([organizationId, status, createdAt])
+  @@index([quoteId])
+  @@index([approvedQuoteId])
 }
 
 model Reservation {

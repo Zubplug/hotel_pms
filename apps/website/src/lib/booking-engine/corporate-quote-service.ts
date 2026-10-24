@@ -80,6 +80,7 @@ export type CorporateQuoteSnapshot = Readonly<{
     contractVersionId?: string;
     contractVersion?: number;
     ruleId?: string;
+    negotiation?: { enabled: boolean; minRooms: number | null; minNights: number | null };
   };
   pricing: PricingSnapshot;
   taxes: readonly CorporateTaxLine[];
@@ -464,6 +465,7 @@ async function buildQuoteSnapshot(
       contractVersionId: contractRate.contractVersionId,
       contractVersion: contractRate.contractVersion,
       ruleId: contractRate.rule.id,
+      negotiation: contractRate.negotiation,
     },
     pricing: scaledPricing,
     taxes,
