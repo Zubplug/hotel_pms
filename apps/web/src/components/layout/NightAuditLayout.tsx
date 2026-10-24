@@ -242,9 +242,11 @@ export function NightAuditLayout({ children }: { children: React.ReactNode }) {
   const NavItem = ({
     item,
     onNavigate,
+    isCollapsed = collapsed,
   }: {
     item: typeof NIGHT_AUDIT_NAV[number];
     onNavigate?: () => void;
+    isCollapsed?: boolean;
   }) => {
     const isActive = pathname === item.href || (item.href !== '/night-audit' && pathname.startsWith(`${item.href}/`));
     const Icon = item.icon;
@@ -254,10 +256,10 @@ export function NightAuditLayout({ children }: { children: React.ReactNode }) {
         <Link
           href={item.href}
           onClick={onNavigate}
-          title={collapsed ? item.name : undefined}
+          title={isCollapsed ? item.name : undefined}
           className={cn(
             'relative flex items-center gap-3 overflow-hidden transition-all duration-200',
-            collapsed ? 'justify-center rounded-xl p-2.5 mx-1' : 'rounded-xl px-3 py-2.5',
+            isCollapsed ? 'justify-center rounded-xl p-2.5 mx-1' : 'rounded-xl px-3 py-2.5',
             isActive
               ? 'text-white'
               : 'text-slate-500 hover:text-slate-200',
@@ -273,7 +275,7 @@ export function NightAuditLayout({ children }: { children: React.ReactNode }) {
           )}
 
           {/* Active left bar */}
-          {isActive && !collapsed && (
+          {isActive && !isCollapsed && (
             <span
               className="absolute inset-y-[8px] left-0 w-[3px] rounded-full"
               style={{
@@ -287,7 +289,7 @@ export function NightAuditLayout({ children }: { children: React.ReactNode }) {
           <span
             className={cn(
               'relative z-10 flex shrink-0 items-center justify-center rounded-lg border transition-all duration-200',
-              collapsed ? 'h-8 w-8' : 'h-7 w-7',
+              isCollapsed ? 'h-8 w-8' : 'h-7 w-7',
               isActive
                 ? 'border-amber-400/30 bg-amber-400/15 text-amber-300'
                 : 'border-transparent text-slate-500 group-hover/item:border-white/[0.07] group-hover/item:bg-white/[0.05] group-hover/item:text-slate-300',
@@ -297,7 +299,7 @@ export function NightAuditLayout({ children }: { children: React.ReactNode }) {
           </span>
 
           {/* Label (hidden when collapsed) */}
-          {!collapsed && (
+          {!isCollapsed && (
             <span className="relative z-10 flex-1 text-[13px] font-medium leading-none">
               {item.name}
             </span>
@@ -309,13 +311,13 @@ export function NightAuditLayout({ children }: { children: React.ReactNode }) {
             </span>
           )}
 
-          {!collapsed && isActive && (
+          {!isCollapsed && isActive && (
             <ChevronRight className="relative z-10 h-3.5 w-3.5 text-amber-400/60" />
           )}
         </Link>
 
         {/* Tooltip for collapsed mode */}
-        {collapsed && (
+        {isCollapsed && (
           <div
             className="pointer-events-none absolute left-full top-1/2 z-50 ml-3 -translate-y-1/2 rounded-xl border border-white/[0.1] px-3 py-2 text-xs font-semibold text-white opacity-0 shadow-2xl transition-all duration-150 group-hover/item:opacity-100 group-hover/item:translate-x-0 translate-x-[-4px] whitespace-nowrap"
             style={{ background: 'rgba(15, 23, 42, 0.97)', backdropFilter: 'blur(12px)' }}
@@ -329,7 +331,12 @@ export function NightAuditLayout({ children }: { children: React.ReactNode }) {
   };
 
   /* ─── Sidebar content ───────────────────────────────────────────────────── */
-  const renderSidebarContent = ({ onNavigate }: { onNavigate?: () => void }) => (
+  const renderSidebarContent = ({ onNavigate, mobile = false }: { onNavigate?: () => void; mobile?: boolean }) => {
+    // Mobile uses a fixed 260px drawer, so it should never inherit the
+    // desktop icon-only preference from localStorage.
+    const isCollapsed = mobile ? false : collapsed;
+
+    return (
     <div
       className="relative flex h-full min-h-0 flex-col overflow-hidden"
       style={{ background: 'linear-gradient(180deg, #07090f 0%, #080b14 100%)' }}
@@ -343,7 +350,7 @@ export function NightAuditLayout({ children }: { children: React.ReactNode }) {
       <div
         className={cn(
           'relative flex shrink-0 items-center border-b border-white/[0.06] transition-all duration-300',
-          collapsed ? 'h-[64px] justify-center px-0' : 'h-[64px] gap-3 px-5',
+          isCollapsed ? 'h-[64px] justify-center px-0' : 'h-[64px] gap-3 px-5',
         )}
       >
         <Link
@@ -361,7 +368,7 @@ export function NightAuditLayout({ children }: { children: React.ReactNode }) {
             <span className="pointer-events-none absolute -inset-1 rounded-[14px] border border-violet-400/30 opacity-70 animate-[spin_8s_linear_infinite]" />
             <Hotel className="h-4 w-4 text-white" strokeWidth={1.8} />
           </div>
-          {!collapsed && (
+          {!isCollapsed && (
             <div className="flex min-w-0 flex-col leading-none">
               <span className="text-[15px] font-bold tracking-tight text-white">LodgeCore</span>
               <span className="mt-0.5 text-[9px] font-bold uppercase tracking-[0.22em] text-amber-400/70">Night Audit</span>
@@ -371,7 +378,7 @@ export function NightAuditLayout({ children }: { children: React.ReactNode }) {
       </div>
 
       {/* ── Status bar ───────────────────────────────────────────────────── */}
-      {!collapsed && (
+      {!isCollapsed && (
         <div className="relative px-4 pt-4">
           <div
             className="relative overflow-hidden rounded-2xl border border-white/[0.07] p-3.5"
@@ -411,7 +418,7 @@ export function NightAuditLayout({ children }: { children: React.ReactNode }) {
       {/* ── Navigation ───────────────────────────────────────────────────── */}
       <nav className={cn(
         'relative min-h-0 flex-1 overflow-y-auto overscroll-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
-        collapsed ? 'py-4' : 'px-2 py-4',
+        isCollapsed ? 'py-4' : 'px-2 py-4',
       )}>
         <div className="flex flex-col gap-4">
           {GROUPS.map((group) => {
@@ -422,17 +429,17 @@ export function NightAuditLayout({ children }: { children: React.ReactNode }) {
             const meta = GROUP_META[group];
             return (
               <div key={group}>
-                {!collapsed && (
+                {!isCollapsed && (
                   <p className={cn('mb-1.5 px-3 text-[9px] font-bold uppercase tracking-[0.22em]', meta.accent)}>
                     {meta.label}
                   </p>
                 )}
-                {collapsed && (
+                {isCollapsed && (
                   <div className="mx-2 mb-2 border-t border-white/[0.05]" />
                 )}
                 <div className="flex flex-col gap-0.5">
                   {items.map((item) => (
-                    <NavItem key={item.href} item={item} onNavigate={onNavigate} />
+                    <NavItem key={item.href} item={item} onNavigate={onNavigate} isCollapsed={isCollapsed} />
                   ))}
                 </div>
               </div>
@@ -442,33 +449,35 @@ export function NightAuditLayout({ children }: { children: React.ReactNode }) {
       </nav>
 
       {/* ── Collapse toggle ───────────────────────────────────────────────── */}
-      <div className="relative shrink-0 border-t border-white/[0.06] p-2">
-        <button
-          onClick={toggleCollapsed}
-          className={cn(
-            'group flex items-center gap-2 rounded-xl border border-white/[0.07] px-3 py-2.5 text-xs font-semibold text-slate-500 transition-all duration-200 hover:border-white/[0.12] hover:bg-white/[0.05] hover:text-slate-300',
-            collapsed ? 'w-full justify-center px-0' : 'w-full',
-          )}
-        >
-          {collapsed
-            ? <PanelLeftOpen className="h-4 w-4" />
-            : (
-              <>
-                <PanelLeftClose className="h-4 w-4" />
-                <span>Collapse sidebar</span>
-              </>
-            )
-          }
-        </button>
-      </div>
+      {!mobile && (
+        <div className="relative shrink-0 border-t border-white/[0.06] p-2">
+          <button
+            onClick={toggleCollapsed}
+            className={cn(
+              'group flex items-center gap-2 rounded-xl border border-white/[0.07] px-3 py-2.5 text-xs font-semibold text-slate-500 transition-all duration-200 hover:border-white/[0.12] hover:bg-white/[0.05] hover:text-slate-300',
+              isCollapsed ? 'w-full justify-center px-0' : 'w-full',
+            )}
+          >
+            {isCollapsed
+              ? <PanelLeftOpen className="h-4 w-4" />
+              : (
+                <>
+                  <PanelLeftClose className="h-4 w-4" />
+                  <span>Collapse sidebar</span>
+                </>
+              )
+            }
+          </button>
+        </div>
+      )}
 
       {/* ── User footer ───────────────────────────────────────────────────── */}
-      <div className={cn('relative shrink-0 border-t border-white/[0.06] p-3', collapsed && 'flex justify-center')}>
+      <div className={cn('relative shrink-0 border-t border-white/[0.06] p-3', isCollapsed && 'flex justify-center')}>
         <DropdownMenu>
           <DropdownMenuTrigger
             className={cn(
               'group relative flex cursor-pointer items-center gap-3 overflow-hidden rounded-2xl border border-white/[0.07] outline-none transition-all duration-200 hover:border-white/[0.12] hover:bg-white/[0.05]',
-              collapsed ? 'p-2' : 'w-full px-3 py-3',
+              isCollapsed ? 'p-2' : 'w-full px-3 py-3',
             )}
           >
             {/* Avatar */}
@@ -483,7 +492,7 @@ export function NightAuditLayout({ children }: { children: React.ReactNode }) {
               />
             </div>
 
-            {!collapsed && (
+            {!isCollapsed && (
               <>
                 <div className="flex min-w-0 flex-1 flex-col items-start">
                   <span className="w-full truncate text-left text-[13px] font-semibold text-slate-200 transition-colors group-hover:text-white">
@@ -498,7 +507,7 @@ export function NightAuditLayout({ children }: { children: React.ReactNode }) {
             )}
           </DropdownMenuTrigger>
           <DropdownMenuContent
-            align={collapsed ? 'center' : 'start'}
+            align={isCollapsed ? 'center' : 'start'}
             side="top"
             sideOffset={10}
             className="w-[240px] rounded-xl border border-white/[0.08] p-1.5 shadow-2xl"
@@ -534,7 +543,8 @@ export function NightAuditLayout({ children }: { children: React.ReactNode }) {
         </DropdownMenu>
       </div>
     </div>
-  );
+    );
+  };
 
   /* ─── Page shell ────────────────────────────────────────────────────────── */
   const sidebarWidth = collapsed ? 72 : 260;
@@ -559,7 +569,7 @@ export function NightAuditLayout({ children }: { children: React.ReactNode }) {
             >
               <X className="h-4 w-4" />
             </button>
-            {renderSidebarContent({ onNavigate: () => setSidebarOpen(false) })}
+            {renderSidebarContent({ onNavigate: () => setSidebarOpen(false), mobile: true })}
           </div>
         </div>
       )}

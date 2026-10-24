@@ -3,9 +3,9 @@ import React from 'react';
 import { format } from 'date-fns';
 import { NightAuditData } from '@/types/night-audit';
 import {
-  CheckCircle2, Clock3, Loader2, MoonStar, Play,
-  AlertTriangle, FileCheck2, Sparkles, CalendarDays, Radio, ChevronRight,
-  ShieldCheck, FileText, Lock, BarChart2, Zap
+  CheckCircle2, Clock3, Loader2, MoonStar, Play, AlertTriangle, FileCheck2,
+  CalendarDays, ChevronRight, ShieldCheck, FileText, Lock, BarChart2, Zap,
+  UserRound, History, Timer, ShieldAlert,
 } from 'lucide-react';
 
 interface StatusBannerProps {
@@ -17,77 +17,97 @@ interface StatusBannerProps {
 }
 
 const AUDIT_STEPS = [
-  { id: 1, label: 'Pre-check', short: 'Pre-check', icon: ShieldCheck },
-  { id: 2, label: 'Post Charges', short: 'Charges', icon: Zap },
-  { id: 3, label: 'Reconcile', short: 'Reconcile', icon: BarChart2 },
-  { id: 4, label: 'Roll Date', short: 'Roll Date', icon: Lock },
-  { id: 5, label: 'Reports', short: 'Reports', icon: FileText },
+  { id: 1, label: 'Pre-check', icon: ShieldCheck },
+  { id: 2, label: 'Post charges', icon: Zap },
+  { id: 3, label: 'Reconcile', icon: BarChart2 },
+  { id: 4, label: 'Roll date', icon: Lock },
+  { id: 5, label: 'Reports', icon: FileText },
 ];
 
-function getActiveStep(auditState: string, hasBlockers: boolean): number {
+function getActiveStep(auditState: string): number {
   if (auditState === 'COMPLETED') return 5;
   if (auditState === 'IN_PROGRESS' || auditState === 'POSTING') return 2;
-  if (hasBlockers) return 1;
-  if (auditState === 'OVERDUE') return 1;
-  return 1; // PENDING / READY
+  return 1;
 }
 
-function AuditStepper({ auditState, hasBlockers }: { auditState: string; hasBlockers: boolean }) {
-  const activeStep = getActiveStep(auditState, hasBlockers);
+type Tone = 'amber' | 'emerald' | 'sky' | 'rose' | 'indigo';
+
+const TONE: Record<Tone, { pill: string; dot: string; accent: string; btn: string }> = {
+  amber:   { pill: 'border-amber-400/25 bg-amber-400/[0.08] text-amber-200',     dot: 'bg-amber-400',   accent: '#f59e0b', btn: 'bg-amber-500 hover:bg-amber-400 text-slate-950' },
+  emerald: { pill: 'border-emerald-400/25 bg-emerald-400/[0.08] text-emerald-200', dot: 'bg-emerald-400', accent: '#10b981', btn: 'bg-emerald-500 hover:bg-emerald-400 text-slate-950' },
+  sky:     { pill: 'border-sky-400/25 bg-sky-400/[0.08] text-sky-200',           dot: 'bg-sky-400',     accent: '#38bdf8', btn: 'bg-sky-500 hover:bg-sky-400 text-slate-950' },
+  rose:    { pill: 'border-rose-400/25 bg-rose-400/[0.08] text-rose-200',        dot: 'bg-rose-400',    accent: '#f43f5e', btn: 'bg-rose-500 hover:bg-rose-400 text-white' },
+  indigo:  { pill: 'border-indigo-400/25 bg-indigo-400/[0.08] text-indigo-200',  dot: 'bg-indigo-400',  accent: '#818cf8', btn: 'bg-indigo-500 hover:bg-indigo-400 text-white' },
+};
+
+function AuditStepper({ auditState, tone }: { auditState: string; tone: Tone }) {
+  const activeStep = getActiveStep(auditState);
   const isCompleted = auditState === 'COMPLETED';
+  const running = auditState === 'IN_PROGRESS' || auditState === 'POSTING';
+  const accent = TONE[tone].accent;
 
   return (
-    <div className="relative mt-8">
-      {/* Connecting line */}
-      <div className="absolute left-0 right-0 top-[18px] h-px" style={{ background: 'rgba(255,255,255,0.06)' }} />
-      <div
-        className="absolute left-0 top-[18px] h-px transition-all duration-700 ease-out"
-        style={{
-          width: isCompleted ? '100%' : `${((activeStep - 1) / (AUDIT_STEPS.length - 1)) * 100}%`,
-          background: 'linear-gradient(90deg, #f59e0b, #d97706)',
-          boxShadow: '0 0 8px rgba(245,158,11,0.5)',
-        }}
-      />
-
-      <div className="relative flex items-start justify-between">
-        {AUDIT_STEPS.map((step) => {
-          const done = isCompleted || step.id < activeStep;
-          const active = !isCompleted && step.id === activeStep;
-          const Icon = step.icon;
-
-          return (
-            <div key={step.id} className="flex flex-col items-center gap-2" style={{ flex: 1 }}>
-              <div
-                className="relative z-10 flex h-9 w-9 items-center justify-center rounded-full border-2 transition-all duration-500"
+    <ol className="flex min-w-0 flex-1 items-center gap-1.5" aria-label="Audit progress">
+      {AUDIT_STEPS.map((step, i) => {
+        const done = isCompleted || step.id < activeStep;
+        const active = !isCompleted && step.id === activeStep;
+        const Icon = step.icon;
+        return (
+          <li key={step.id} className="flex min-w-0 flex-1 items-center gap-1.5">
+            <div
+              className={`flex min-w-0 items-center gap-1.5 rounded-md px-2 py-1 text-[11px] font-semibold transition-colors ${
+                active ? 'bg-white/[0.06] text-white' : done ? 'text-slate-300' : 'text-slate-600'
+              }`}
+              aria-current={active ? 'step' : undefined}
+            >
+              <span
+                className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full"
                 style={{
-                  borderColor: done ? '#d97706' : active ? '#f59e0b' : 'rgba(255,255,255,0.08)',
-                  background: done
-                    ? 'linear-gradient(135deg, #d97706, #b45309)'
-                    : active
-                    ? 'rgba(245,158,11,0.15)'
-                    : 'rgba(255,255,255,0.03)',
-                  boxShadow: active ? '0 0 16px rgba(245,158,11,0.5)' : done ? '0 0 8px rgba(217,119,6,0.3)' : 'none',
+                  background: done ? accent : active ? `${accent}26` : 'rgba(255,255,255,0.05)',
+                  boxShadow: active ? `0 0 0 1px ${accent}80` : undefined,
                 }}
               >
-                {done && !active ? (
-                  <CheckCircle2 className="h-4 w-4 text-amber-300" />
-                ) : active && (auditState === 'IN_PROGRESS' || auditState === 'POSTING') ? (
-                  <Loader2 className="h-4 w-4 animate-spin text-amber-300" />
+                {done ? (
+                  <CheckCircle2 className="h-3 w-3 text-slate-950" strokeWidth={3} />
+                ) : active && running ? (
+                  <Loader2 className="h-2.5 w-2.5 animate-spin" style={{ color: accent }} />
                 ) : (
-                  <Icon className={`h-4 w-4 ${active ? 'text-amber-300' : 'text-slate-600'}`} />
+                  <Icon className="h-2.5 w-2.5" style={{ color: active ? accent : undefined }} />
                 )}
-              </div>
-              <div className="text-center">
-                <p className={`text-[10px] font-bold hidden sm:block ${done || active ? 'text-slate-300' : 'text-slate-600'}`}>
-                  {step.label}
-                </p>
-                <p className={`text-[10px] font-bold sm:hidden ${done || active ? 'text-slate-300' : 'text-slate-600'}`}>
-                  {step.short}
-                </p>
-              </div>
+              </span>
+              <span className="hidden truncate md:inline">{step.label}</span>
             </div>
-          );
-        })}
+            {i < AUDIT_STEPS.length - 1 && (
+              <span
+                className="h-px min-w-[8px] flex-1 rounded-full"
+                style={{ background: done ? `${accent}99` : 'rgba(255,255,255,0.07)' }}
+              />
+            )}
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+function Counter({ icon: Icon, label, value, tone }: { icon: React.ElementType; label: string; value: number; tone: 'rose' | 'amber' | 'emerald' }) {
+  const color = { rose: 'text-rose-300', amber: 'text-amber-300', emerald: 'text-emerald-300' }[tone];
+  return (
+    <div className="flex items-center gap-2 rounded-lg border border-white/[0.06] bg-white/[0.02] px-2.5 py-1.5">
+      <Icon className={`h-3.5 w-3.5 ${color}`} />
+      <span className={`font-mono text-sm font-bold tabular-nums ${color}`}>{value}</span>
+      <span className="text-[11px] font-medium text-slate-500">{label}</span>
+    </div>
+  );
+}
+
+function Meta({ icon: Icon, label, value }: { icon: React.ElementType; label: string; value: string }) {
+  return (
+    <div className="flex items-center gap-2" title={label}>
+      <Icon className="h-3.5 w-3.5 text-slate-500" />
+      <div className="leading-tight">
+        <p className="text-[9.5px] font-semibold uppercase tracking-[0.14em] text-slate-600">{label}</p>
+        <p className="text-xs font-medium text-slate-200">{value}</p>
       </div>
     </div>
   );
@@ -107,295 +127,100 @@ export function StatusBanner({
   const owner = auditRecord?.runByStaff;
   const ownerName = owner
     ? `${owner.firstName || ''} ${owner.lastName || ''}`.trim()
-    : auditRecord?.runBy
-    ? 'Assigned auditor'
-    : 'Auto / unassigned';
+    : auditRecord?.runBy ? 'Assigned auditor' : 'Unassigned';
 
-  type StateConfig = {
-    badge: string;
-    dot: string;
-    icon: React.ReactNode;
-    text: string;
-    sub: string;
-    pulse: boolean;
-    glow: string;
-  };
-
-  let cfg: StateConfig = {
-    badge: 'border-amber-400/40 bg-amber-400/10 text-amber-200',
-    dot: 'bg-amber-400',
-    icon: <Clock3 className="h-4 w-4" />,
-    text: 'Audit Pending',
-    sub: 'Awaiting daily close',
-    pulse: false,
-    glow: 'rgba(245,158,11,0.15)',
-  };
+  let tone: Tone = 'amber';
+  let statusText = 'Pending';
+  let statusSub = 'Awaiting daily close';
+  let StatusIcon: React.ElementType = Clock3;
+  let pulse = false;
 
   if (data.auditState === 'COMPLETED') {
-    cfg = {
-      badge: 'border-emerald-400/40 bg-emerald-400/10 text-emerald-200',
-      dot: 'bg-emerald-400',
-      icon: <CheckCircle2 className="h-4 w-4" />,
-      text: 'Audit Complete',
-      sub: 'Business day closed',
-      pulse: false,
-      glow: 'rgba(16,185,129,0.12)',
-    };
+    tone = 'emerald'; statusText = 'Closed'; statusSub = 'Business day closed'; StatusIcon = CheckCircle2;
   } else if (isAuditInProgress) {
-    cfg = {
-      badge: 'border-sky-400/40 bg-sky-400/10 text-sky-200',
-      dot: 'bg-sky-400',
-      icon: <Loader2 className="h-4 w-4 animate-spin" />,
-      text: 'Audit In Progress',
-      sub: 'Processing charges…',
-      pulse: true,
-      glow: 'rgba(56,189,248,0.12)',
-    };
+    tone = 'sky'; statusText = 'In progress'; statusSub = 'Posting charges'; StatusIcon = Loader2; pulse = true;
   } else if (data.auditState === 'OVERDUE') {
-    cfg = {
-      badge: 'border-rose-400/40 bg-rose-400/10 text-rose-200',
-      dot: 'bg-rose-400',
-      icon: <AlertTriangle className="h-4 w-4" />,
-      text: 'Audit Overdue',
-      sub: 'Close immediately',
-      pulse: true,
-      glow: 'rgba(244,63,94,0.12)',
-    };
+    tone = 'rose'; statusText = 'Overdue'; statusSub = 'Close immediately'; StatusIcon = AlertTriangle; pulse = true;
   } else if (isReady) {
-    cfg = {
-      badge: 'border-indigo-400/40 bg-indigo-400/10 text-indigo-200',
-      dot: 'bg-indigo-400',
-      icon: <FileCheck2 className="h-4 w-4" />,
-      text: 'Audit Ready',
-      sub: 'All clear to run',
-      pulse: false,
-      glow: 'rgba(99,102,241,0.12)',
-    };
+    tone = 'indigo'; statusText = 'Ready'; statusSub = 'All clear to run'; StatusIcon = FileCheck2;
   }
 
   const ctaLabel =
-    isAuditInProgress ? 'Resume Audit' :
-    data.auditState === 'COMPLETED' ? 'View Report' :
-    data.auditState === 'OVERDUE' ? 'Run Audit Now' :
-    'Begin Audit';
+    isAuditInProgress ? 'Resume audit' :
+    data.auditState === 'COMPLETED' ? 'View report' :
+    data.auditState === 'OVERDUE' ? 'Run audit now' :
+    'Begin audit';
 
-  const ctaVariant =
-    data.auditState === 'OVERDUE' ? 'rose' :
-    data.auditState === 'COMPLETED' ? 'emerald' :
-    'amber';
-
-  const ctaStyles: Record<string, React.CSSProperties> = {
-    amber: {
-      background: 'linear-gradient(135deg, #d97706 0%, #b45309 100%)',
-      boxShadow: '0 0 32px rgba(217,119,6,0.45), 0 4px 16px rgba(0,0,0,0.4)',
-    },
-    rose: {
-      background: 'linear-gradient(135deg, #e11d48 0%, #be123c 100%)',
-      boxShadow: '0 0 32px rgba(225,29,72,0.45), 0 4px 16px rgba(0,0,0,0.4)',
-    },
-    emerald: {
-      background: 'linear-gradient(135deg, #059669 0%, #047857 100%)',
-      boxShadow: '0 0 32px rgba(5,150,105,0.35), 0 4px 16px rgba(0,0,0,0.4)',
-    },
-  };
+  const t = TONE[tone];
 
   return (
-    <div
-      className="relative overflow-hidden rounded-[28px] border border-white/[0.07]"
-      style={{
-        background: 'linear-gradient(145deg, #0a1020 0%, #0f172a 45%, #12103a 100%)',
-        boxShadow: '0 40px 80px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.05)',
-      }}
+    <section
+      aria-labelledby="night-audit-heading"
+      className="relative overflow-hidden rounded-2xl border border-white/[0.07] bg-[#0b111e]/90 shadow-[0_1px_0_rgba(255,255,255,0.04)_inset,0_12px_32px_-12px_rgba(0,0,0,0.6)] backdrop-blur"
     >
-      {/* Background decorative layers */}
-      <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        {/* Ambient glow based on state */}
-        <div
-          className="absolute -top-24 -right-24 h-72 w-72 rounded-full blur-3xl transition-all duration-1000"
-          style={{ background: cfg.glow }}
-        />
-        <div className="absolute -bottom-20 -left-16 h-64 w-64 rounded-full bg-indigo-700/8 blur-3xl" />
-        <div className="absolute top-1/3 left-1/3 h-96 w-96 rounded-full bg-violet-800/5 blur-3xl" />
-        {/* Subtle dot grid */}
-        <div
-          className="absolute inset-0 opacity-[0.025]"
-          style={{
-            backgroundImage: 'radial-gradient(rgba(255,255,255,0.8) 1px, transparent 1px)',
-            backgroundSize: '24px 24px',
-          }}
-        />
-        {/* Corner line accent */}
-        <div
-          className="absolute top-0 left-0 h-px w-1/3"
-          style={{ background: 'linear-gradient(90deg, rgba(245,158,11,0.6), transparent)' }}
-        />
-        <div
-          className="absolute top-0 left-0 w-px h-1/4"
-          style={{ background: 'linear-gradient(180deg, rgba(245,158,11,0.6), transparent)' }}
-        />
-      </div>
+      {/* State accent line */}
+      <span className="absolute inset-x-0 top-0 h-[2px]" style={{ background: `linear-gradient(90deg, ${t.accent}, ${t.accent}00 70%)` }} />
 
-      <div className="relative z-10 p-6 md:p-8 lg:p-10">
-        {/* Top strip */}
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-2.5">
-            <span className="flex h-8 w-8 items-center justify-center rounded-xl border border-amber-400/30 bg-amber-500/10 text-amber-300">
-              <MoonStar className="h-4 w-4" />
-            </span>
-            <span className="text-[11px] font-bold uppercase tracking-[0.22em] text-amber-300/70">
-              Night Audit · Command Centre
-            </span>
-          </div>
-          <div className="flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.04] px-3 py-1.5 backdrop-blur-md">
-            <Radio className="h-3 w-3 text-emerald-400" />
-            <span className="text-[11px] font-semibold text-emerald-300">Server verified</span>
-            <span className="mx-1.5 h-3 w-px bg-white/15" />
-            <CalendarDays className="h-3 w-3 text-slate-400" />
-            <span className="text-[11px] font-medium text-slate-300">
-              {format(businessDate, 'dd MMM yyyy')}
-            </span>
-          </div>
-        </div>
-
-        {/* Main content row */}
-        <div className="mt-6 flex flex-col gap-8 xl:flex-row xl:items-end xl:justify-between">
-          <div className="max-w-2xl">
-            {/* Date heading */}
-            <h1 className="text-[2.4rem] font-bold leading-[1.05] tracking-[-0.04em] text-white md:text-5xl">
-              <span
-                className="block text-[13px] font-bold uppercase tracking-[0.2em] mb-2"
-                style={{ color: 'rgba(245,158,11,0.7)' }}
-              >
-                {format(businessDate, 'EEEE')}
+      {/* Tier 1 — identity, status, meta, action */}
+      <div className="flex flex-col gap-4 px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex min-w-0 items-center gap-3.5">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/[0.08] bg-gradient-to-br from-indigo-500/20 to-violet-500/10 text-indigo-200">
+            <MoonStar className="h-[18px] w-[18px]" />
+          </span>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <h1 id="night-audit-heading" className="text-[17px] font-semibold tracking-tight text-white">
+                Night Audit
+              </h1>
+              <span className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${t.pill}`}>
+                <span className="relative flex h-1.5 w-1.5">
+                  {pulse && <span className={`absolute inline-flex h-full w-full animate-ping rounded-full opacity-75 ${t.dot}`} />}
+                  <span className={`relative inline-flex h-1.5 w-1.5 rounded-full ${t.dot}`} />
+                </span>
+                <StatusIcon className={`h-3 w-3 ${isAuditInProgress ? 'animate-spin' : ''}`} />
+                {statusText}
               </span>
-              {format(businessDate, 'dd MMMM yyyy')}
-            </h1>
-            <p className="mt-3 text-base text-slate-400">
-              {data.property.name || 'Property'}&nbsp;&middot;&nbsp;
-              <span className={data.auditState === 'OVERDUE' ? 'text-rose-400' : 'text-slate-400'}>
-                {data.auditState === 'OVERDUE'
-                  ? 'Immediate attention required'
-                  : data.auditState === 'COMPLETED'
-                  ? 'Business date closed successfully'
-                  : 'Operations online and tracking'}
-              </span>
+            </div>
+            <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-slate-400">
+              <CalendarDays className="h-3 w-3 text-slate-500" />
+              <span className="font-medium text-slate-200">{format(businessDate, 'EEE, dd MMM yyyy')}</span>
+              <span className="text-slate-600">·</span>
+              <span className="truncate">{data.property.name || 'Property'}</span>
+              <span className="text-slate-600">·</span>
+              <span className={tone === 'rose' ? 'text-rose-300' : 'text-slate-500'}>{statusSub}</span>
             </p>
-
-            {/* Meta row */}
-            <div className="mt-6 flex flex-wrap gap-5 text-xs text-slate-400">
-              {[
-                { label: 'Auditor', value: ownerName },
-                {
-                  label: 'Started',
-                  value: auditRecord?.startedAt ? format(new Date(auditRecord.startedAt), 'dd MMM, HH:mm') : 'Not started',
-                },
-                {
-                  label: 'Last Closed',
-                  value: lastCompleted?.completedAt ? format(new Date(lastCompleted.completedAt), 'dd MMM, HH:mm') : '—',
-                },
-              ].map((item) => (
-                <div key={item.label} className="flex flex-col gap-1">
-                  <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-600">
-                    {item.label}
-                  </span>
-                  <span className="font-medium text-slate-200">{item.value}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Status + CTA */}
-          <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center xl:flex-col xl:items-end">
-            {/* Status chip */}
-            <div className={`flex items-center gap-2.5 rounded-2xl border px-4 py-3 backdrop-blur-md ${cfg.badge}`}>
-              <span className="relative flex h-2.5 w-2.5">
-                {cfg.pulse && (
-                  <span className={`absolute inline-flex h-full w-full animate-ping rounded-full opacity-75 ${cfg.dot}`} />
-                )}
-                <span className={`relative inline-flex h-2.5 w-2.5 rounded-full ${cfg.dot}`} />
-              </span>
-              <span className="flex items-center gap-1.5">
-                {cfg.icon}
-                <span className="text-sm font-bold text-white">{cfg.text}</span>
-              </span>
-              <span className="ml-1 text-[11px] opacity-60">{cfg.sub}</span>
-            </div>
-
-            {/* CTA Button */}
-            {!managerMode && (
-              <button
-                onClick={onOpenWizard}
-                disabled={isAuditInProgress || refreshing}
-                className="group relative flex items-center gap-2.5 overflow-hidden rounded-2xl px-7 py-4 text-sm font-bold text-white transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
-                style={ctaStyles[ctaVariant]}
-              >
-                {/* Shine sweep */}
-                <span className="absolute inset-0 translate-x-[-100%] bg-gradient-to-r from-transparent via-white/20 to-transparent transition-transform duration-600 group-hover:translate-x-[100%]" />
-                <Play className="h-4 w-4 fill-current" />
-                {ctaLabel}
-                <ChevronRight className="h-4 w-4 opacity-70 transition-transform group-hover:translate-x-0.5" />
-              </button>
-            )}
           </div>
         </div>
 
-        {/* Audit Stepper */}
-        <AuditStepper auditState={data.auditState} hasBlockers={data.summary.blockers > 0} />
-
-        {/* Bottom KPI strip */}
-        <div className="mt-8 grid gap-3 sm:grid-cols-4">
-          {[
-            {
-              icon: <Sparkles className="h-3.5 w-3.5" />,
-              label: 'Blockers',
-              value: data.summary.blockers,
-              tone: data.summary.blockers > 0 ? 'rose' : 'emerald',
-              sub: data.summary.blockers > 0 ? 'Must resolve' : 'All clear',
-            },
-            {
-              icon: <AlertTriangle className="h-3.5 w-3.5" />,
-              label: 'Warnings',
-              value: data.summary.warnings,
-              tone: data.summary.warnings > 0 ? 'amber' : 'emerald',
-              sub: data.summary.warnings > 0 ? 'Review needed' : 'No warnings',
-            },
-            {
-              icon: <CalendarDays className="h-3.5 w-3.5" />,
-              label: 'Business Date',
-              value: format(businessDate, 'dd MMM'),
-              tone: 'indigo',
-              sub: 'Active audit date',
-            },
-            {
-              icon: <Radio className="h-3.5 w-3.5" />,
-              label: 'Audit State',
-              value: data.auditState.replaceAll('_', ' '),
-              tone: data.auditState === 'COMPLETED' ? 'emerald' : data.auditState === 'OVERDUE' ? 'rose' : 'amber',
-              sub: 'System verified',
-            },
-          ].map((s) => {
-            const toneMap: Record<string, string> = {
-              rose: 'border-rose-400/20 bg-rose-400/[0.06] text-rose-300',
-              amber: 'border-amber-400/20 bg-amber-400/[0.06] text-amber-300',
-              emerald: 'border-emerald-400/20 bg-emerald-400/[0.06] text-emerald-300',
-              indigo: 'border-indigo-400/20 bg-indigo-400/[0.06] text-indigo-300',
-            };
-            return (
-              <div
-                key={s.label}
-                className={`rounded-2xl border px-4 py-3.5 transition-all duration-200 hover:brightness-110 ${toneMap[s.tone] || toneMap.amber}`}
-              >
-                <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.18em] opacity-80">
-                  {s.icon}
-                  {s.label}
-                </div>
-                <div className="mt-2 text-xl font-bold tracking-tight text-white">{s.value}</div>
-                <div className="mt-0.5 text-[11px] opacity-50">{s.sub}</div>
-              </div>
-            );
-          })}
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+          <div className="hidden items-center gap-5 border-r border-white/[0.06] pr-6 xl:flex">
+            <Meta icon={UserRound} label="Auditor" value={ownerName} />
+            <Meta icon={Timer} label="Started" value={auditRecord?.startedAt ? format(new Date(auditRecord.startedAt), 'dd MMM, HH:mm') : 'Not started'} />
+            <Meta icon={History} label="Last closed" value={lastCompleted?.completedAt ? format(new Date(lastCompleted.completedAt), 'dd MMM, HH:mm') : '—'} />
+          </div>
+          {!managerMode && (
+            <button
+              id="night-audit-primary-cta"
+              onClick={onOpenWizard}
+              disabled={isAuditInProgress || refreshing}
+              className={`group inline-flex h-9 items-center gap-2 rounded-lg px-4 text-[13px] font-semibold shadow-sm transition-all active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40 disabled:cursor-not-allowed disabled:opacity-50 ${t.btn}`}
+            >
+              <Play className="h-3.5 w-3.5 fill-current" />
+              {ctaLabel}
+              <ChevronRight className="h-3.5 w-3.5 opacity-70 transition-transform group-hover:translate-x-0.5" />
+            </button>
+          )}
         </div>
       </div>
-    </div>
+
+      {/* Tier 2 — progress + readiness counters */}
+      <div className="flex flex-col gap-3 border-t border-white/[0.05] bg-white/[0.015] px-5 py-2.5 md:flex-row md:items-center md:gap-6">
+        <AuditStepper auditState={data.auditState} tone={tone} />
+        <div className="flex shrink-0 items-center gap-2">
+          <Counter icon={ShieldAlert} label="Blockers" value={data.summary.blockers} tone={data.summary.blockers > 0 ? 'rose' : 'emerald'} />
+          <Counter icon={AlertTriangle} label="Warnings" value={data.summary.warnings} tone={data.summary.warnings > 0 ? 'amber' : 'emerald'} />
+        </div>
+      </div>
+    </section>
   );
 }

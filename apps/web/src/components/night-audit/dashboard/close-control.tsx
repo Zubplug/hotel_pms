@@ -1,227 +1,166 @@
+'use client';
 import React from 'react';
-import {
-  AlertTriangle, BookOpenCheck, CheckCircle2, CircleDollarSign,
-  FileWarning, LockKeyhole, Zap, TrendingUp, ShieldCheck
-} from 'lucide-react';
+import { AlertTriangle, BookOpenCheck, CheckCircle2, CircleDollarSign, FileWarning, LockKeyhole, Zap, ShieldCheck } from 'lucide-react';
 import { NightAuditData } from '@/types/night-audit';
+import { Panel, PanelHeader, Badge, cx, TONE_HEX, money } from './ui';
 
-const STATUS_META: Record<string, { label: string; tone: 'emerald' | 'amber' | 'rose' | 'indigo' | 'sky' }> = {
-  READY: { label: 'Ready to start', tone: 'indigo' },
+const STATUS_DEF: Record<string, { label: string; tone: 'emerald' | 'amber' | 'rose' | 'indigo' | 'sky' }> = {
+  READY: { label: 'Ready', tone: 'indigo' },
   BLOCKED: { label: 'Blocked', tone: 'rose' },
   CANNOT_CLOSE: { label: 'Cannot close', tone: 'rose' },
-  HAS_VARIANCE: { label: 'Has variance', tone: 'amber' },
-  HAS_UNRESOLVED_EXCEPTIONS: { label: 'Unresolved exceptions', tone: 'amber' },
+  HAS_VARIANCE: { label: 'Variance', tone: 'amber' },
+  HAS_UNRESOLVED_EXCEPTIONS: { label: 'Exceptions', tone: 'amber' },
   IN_PROGRESS: { label: 'In progress', tone: 'sky' },
   COMPLETED: { label: 'Completed', tone: 'emerald' },
   COMPLETED_WITH_EXCEPTIONS: { label: 'Closed w/ exceptions', tone: 'amber' },
   FAILED: { label: 'Failed', tone: 'rose' },
 };
 
-const TONE_CLASSES = {
-  emerald: {
-    badge: 'border-emerald-400/30 bg-emerald-400/[0.08] text-emerald-300',
-    tile: 'border-emerald-400/20 bg-emerald-400/[0.06]',
-    value: 'text-emerald-300',
-    icon: 'border-emerald-400/25 bg-emerald-400/15 text-emerald-400',
-    bar: '#10b981',
-    alert: 'border-emerald-400/20 bg-emerald-400/[0.06] text-emerald-300',
-  },
-  amber: {
-    badge: 'border-amber-400/30 bg-amber-400/[0.08] text-amber-300',
-    tile: 'border-amber-400/20 bg-amber-400/[0.06]',
-    value: 'text-amber-300',
-    icon: 'border-amber-400/25 bg-amber-400/15 text-amber-400',
-    bar: '#f59e0b',
-    alert: 'border-amber-400/20 bg-amber-400/[0.06] text-amber-300',
-  },
-  rose: {
-    badge: 'border-rose-400/30 bg-rose-400/[0.08] text-rose-300',
-    tile: 'border-rose-400/20 bg-rose-400/[0.06]',
-    value: 'text-rose-300',
-    icon: 'border-rose-400/25 bg-rose-400/15 text-rose-400',
-    bar: '#f43f5e',
-    alert: 'border-rose-400/20 bg-rose-400/[0.06] text-rose-300',
-  },
-  indigo: {
-    badge: 'border-indigo-400/30 bg-indigo-400/[0.08] text-indigo-300',
-    tile: 'border-indigo-400/20 bg-indigo-400/[0.06]',
-    value: 'text-indigo-300',
-    icon: 'border-indigo-400/25 bg-indigo-400/15 text-indigo-400',
-    bar: '#6366f1',
-    alert: 'border-indigo-400/20 bg-indigo-400/[0.06] text-indigo-300',
-  },
-  sky: {
-    badge: 'border-sky-400/30 bg-sky-400/[0.08] text-sky-300',
-    tile: 'border-sky-400/20 bg-sky-400/[0.06]',
-    value: 'text-sky-300',
-    icon: 'border-sky-400/25 bg-sky-400/15 text-sky-400',
-    bar: '#0ea5e9',
-    alert: 'border-sky-400/20 bg-sky-400/[0.06] text-sky-300',
-  },
-};
+interface Row { label: string; value: string; sub: string; ok: boolean; icon: React.ElementType }
 
 export function CloseControl({ data }: { data: NightAuditData }) {
   const close = data.closeControl;
-  const statusDef = STATUS_META[close?.status || 'READY'] || STATUS_META.READY;
-  const tone = TONE_CLASSES[statusDef.tone];
   const journal = data.accounting?.journal;
   const insights = data.insights || [];
+  const cur = data.property.baseCurrency;
+  const statusDef = STATUS_DEF[close?.status || 'READY'] || STATUS_DEF.READY;
 
-  const controlMetrics = [
+  const rows: Row[] = [
     {
-      icon: BookOpenCheck,
-      label: 'GL Control',
+      label: 'GL Control', icon: BookOpenCheck,
       value: journal?.status || 'NOT RUN',
-      detail: `${journal?.postedEntryCount || 0} posted entries`,
-      progress: journal?.status === 'BALANCED' ? 100 : 40,
-      tone: journal?.status === 'BALANCED' ? 'emerald' : 'amber',
+      sub: `${journal?.postedEntryCount ?? 0} entries posted`,
+      ok: journal?.status === 'BALANCED',
     },
     {
-      icon: FileWarning,
-      label: 'Open Exceptions',
-      value: String(data.accounting?.transactionExceptions || 0),
-      detail: 'Payment exceptions',
-      progress: data.accounting?.transactionExceptions ? 0 : 100,
-      tone: data.accounting?.transactionExceptions ? 'rose' : 'emerald',
+      label: 'Open Exceptions', icon: FileWarning,
+      value: String(data.accounting?.transactionExceptions ?? 0),
+      sub: 'Payment exceptions',
+      ok: !data.accounting?.transactionExceptions,
     },
     {
-      icon: BookOpenCheck,
-      label: 'Acctg Period',
+      label: 'Acctg Period', icon: BookOpenCheck,
       value: data.accounting?.period?.status || 'NOT SET',
-      detail: data.accounting?.period?.name || 'No active period',
-      progress: data.accounting?.period?.status === 'OPEN' ? 100 : 50,
-      tone: data.accounting?.period?.status === 'OPEN' ? 'emerald' : 'amber',
+      sub: data.accounting?.period?.name || 'No active period',
+      ok: data.accounting?.period?.status === 'OPEN',
     },
     {
-      icon: CircleDollarSign,
-      label: 'Balance Proof',
+      label: 'Balance Proof', icon: CircleDollarSign,
       value: close?.hasOpeningClosingBalance ? 'Available' : 'Pending',
-      detail: close?.hasOpeningClosingBalance ? 'Date-scoped ledger' : 'Enhancement required',
-      progress: close?.hasOpeningClosingBalance ? 100 : 30,
-      tone: close?.hasOpeningClosingBalance ? 'emerald' : 'amber',
+      sub: close?.hasOpeningClosingBalance ? 'Ledger reconciled' : 'Enhancement required',
+      ok: !!close?.hasOpeningClosingBalance,
     },
-  ] as const;
+  ];
 
+  const journal_debit = Number(journal?.debit ?? 0);
+  const journal_credit = Number(journal?.credit ?? 0);
+  const journal_diff = Number(journal?.difference ?? 0);
   const postedEntries = journal?.postedEntryCount || 0;
   const expectedEntries = Math.max(postedEntries, Number((journal as any)?.expectedEntryCount || 0));
 
   return (
     <div className="space-y-4">
-      {/* Main close control panel */}
-      <div
-        className="rounded-[24px] border border-white/[0.06] p-6 sm:p-7"
-        style={{ background: 'rgba(255,255,255,0.025)' }}
-      >
-        {/* Header */}
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-indigo-400/25 bg-indigo-400/[0.12] text-indigo-400">
-              <LockKeyhole className="h-5 w-5" />
-            </span>
-            <div>
-              <h3 className="text-lg font-bold text-white">Financial Close Control</h3>
-              <p className="text-sm text-slate-400">Controller view · current business-date close</p>
-            </div>
-          </div>
-          <span className={`rounded-full border px-3.5 py-1.5 text-xs font-bold ${tone.badge}`}>
-            {statusDef.label}
-          </span>
-        </div>
+      {/* Close control panel */}
+      <Panel>
+        <PanelHeader
+          icon={LockKeyhole}
+          title="Financial Close Control"
+          subtitle="Controller view · current business-date close"
+          tone="indigo"
+          actions={<Badge tone={statusDef.tone}>{statusDef.label}</Badge>}
+        />
 
-        {/* Control metric tiles */}
-        <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {controlMetrics.map((m) => {
-            const tc = TONE_CLASSES[m.tone];
-            const Icon = m.icon;
-            return (
-              <div key={m.label} className={`rounded-2xl border p-4 transition-all duration-200 hover:brightness-110 ${tc.tile}`}>
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">{m.label}</span>
-                  <span className={`flex h-6 w-6 items-center justify-center rounded-lg border ${tc.icon}`}>
-                    <Icon className="h-3.5 w-3.5" />
-                  </span>
-                </div>
-                <p className={`mt-3 text-xl font-bold tracking-tight ${tc.value}`}>{m.value}</p>
-                <p className="mt-1 text-[11px] text-slate-500">{m.detail}</p>
-                {/* Progress bar */}
-                <div className="mt-3 h-1 overflow-hidden rounded-full" style={{ background: 'rgba(255,255,255,0.06)' }}>
-                  <div
-                    className="h-full rounded-full transition-all duration-700"
-                    style={{ width: `${m.progress}%`, background: tc.bar }}
-                  />
-                </div>
+        {/* Ledger summary */}
+        {(journal_debit > 0 || journal_credit > 0) && (
+          <div className="grid grid-cols-3 gap-px border-b border-white/[0.05] bg-white/[0.04]">
+            {[
+              { label: 'Debit', value: money(journal_debit, cur, true), color: TONE_HEX.indigo },
+              { label: 'Credit', value: money(journal_credit, cur, true), color: TONE_HEX.emerald },
+              { label: 'Difference', value: money(Math.abs(journal_diff), cur, true), color: Math.abs(journal_diff) < 1 ? TONE_HEX.emerald : TONE_HEX.rose },
+            ].map((col) => (
+              <div key={col.label} className="bg-[#0b111e] px-3 py-2 text-center">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-600">{col.label}</p>
+                <p className="mt-0.5 font-mono text-[13px] font-bold tabular-nums" style={{ color: col.color }}>{col.value}</p>
               </div>
+            ))}
+          </div>
+        )}
+
+        {/* Control rows */}
+        <ul className="divide-y divide-white/[0.04]">
+          {rows.map((r) => {
+            const Icon = r.icon;
+            const color = r.ok ? TONE_HEX.emerald : TONE_HEX.amber;
+            const StatusIcon = r.ok ? CheckCircle2 : AlertTriangle;
+            return (
+              <li key={r.label} className="flex items-center gap-3 px-4 py-2.5">
+                <Icon className="h-3.5 w-3.5 shrink-0 text-slate-500" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-[11px] font-semibold text-slate-400">{r.label}</p>
+                  <p className="truncate text-[12.5px] font-bold text-white">{r.value}</p>
+                </div>
+                <div className="flex items-center gap-1 text-[11px]">
+                  <StatusIcon className="h-3.5 w-3.5" style={{ color }} />
+                  <span className="text-slate-500">{r.sub}</span>
+                </div>
+              </li>
             );
           })}
-        </div>
+        </ul>
 
-        {/* Balance proof banner */}
-        <div
-          className={`mt-4 flex items-start gap-3 rounded-2xl border p-4 text-sm ${close?.hasOpeningClosingBalance ? TONE_CLASSES.emerald.alert : TONE_CLASSES.amber.alert}`}
-        >
-          {close?.hasOpeningClosingBalance
-            ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
-            : <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />}
-          <p className="leading-relaxed">
-            {close?.hasOpeningClosingBalance
-              ? 'Opening, activity, and closing balances agree for all available dated ledgers.'
-              : 'Balance proof is incomplete or contains a variance. Unavailable ledgers remain explicitly identified in the close package.'}
-          </p>
-        </div>
-
-        <div className="mt-4 rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4">
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">GL journal coverage</span>
-            <span className="font-mono text-xs font-bold text-slate-300">{postedEntries}{expectedEntries ? ` / ${expectedEntries}` : ''}</span>
-          </div>
-          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/[0.07]">
-            <div className="h-full rounded-full bg-cyan-400 transition-all duration-700" style={{ width: `${expectedEntries ? Math.min(100, (postedEntries / expectedEntries) * 100) : 0}%` }} />
-          </div>
-          <p className="mt-1.5 text-[10px] text-slate-500">Posted entries included in the current close package</p>
-        </div>
-      </div>
-
-      {/* Smart Audit Signals */}
-      <div
-        className="rounded-[24px] border border-white/[0.06] p-6 sm:p-7"
-        style={{ background: 'rgba(255,255,255,0.025)' }}
-      >
-        <div className="flex items-center gap-2.5 mb-5">
-          <span className="flex h-8 w-8 items-center justify-center rounded-xl border border-violet-400/25 bg-violet-400/[0.12] text-violet-400">
-            <Zap className="h-4 w-4" />
-          </span>
-          <div>
-            <h3 className="text-sm font-bold text-white">Smart Signals</h3>
-            <p className="text-[10px] text-slate-500">Deterministic audit insights</p>
-          </div>
-        </div>
-
-        <div className="space-y-2.5">
-          {insights.length ? (
-            insights.map((insight) => (
-              <div
-                key={`${insight.title}-${insight.metric}`}
-                className={`flex items-start gap-2.5 rounded-xl border-l-[3px] bg-white/[0.03] p-3.5 ${
-                  insight.severity === 'HIGH' ? 'border-rose-400' : 'border-amber-400'
-                }`}
-              >
-                {insight.severity === 'HIGH'
-                  ? <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-rose-400" />
-                  : <FileWarning className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />}
-                <div>
-                  <p className="text-sm font-semibold text-white">{insight.title}</p>
-                  <p className="mt-0.5 text-[11px] leading-relaxed text-slate-400">{insight.detail}</p>
-                </div>
-              </div>
-            ))
-          ) : (
-            <div className="flex items-center gap-3 rounded-2xl border border-l-[3px] border-emerald-400/30 bg-emerald-400/[0.06] p-4">
-              <ShieldCheck className="h-5 w-5 text-emerald-400 shrink-0" />
-              <p className="text-sm font-medium text-emerald-300">No abnormal signals detected.</p>
+        {/* GL coverage bar */}
+        {expectedEntries > 0 && (
+          <div className="border-t border-white/[0.05] px-4 py-2.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[10.5px] font-semibold text-slate-600">GL journal coverage</span>
+              <span className="font-mono text-[11px] font-semibold text-slate-300">{postedEntries} / {expectedEntries}</span>
             </div>
-          )}
+            <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-white/[0.05]">
+              <div className="h-full rounded-full bg-sky-400 transition-all duration-700"
+                style={{ width: `${Math.min(100, (postedEntries / expectedEntries) * 100)}%` }} />
+            </div>
+          </div>
+        )}
+
+        {/* Balance proof line */}
+        <div className={cx(
+          'flex items-center gap-2 border-t border-white/[0.05] px-4 py-2.5 text-[11.5px]',
+          close?.hasOpeningClosingBalance ? 'text-emerald-300' : 'text-amber-300',
+        )}>
+          {close?.hasOpeningClosingBalance
+            ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+            : <AlertTriangle className="h-3.5 w-3.5 shrink-0" />}
+          <span>{close?.hasOpeningClosingBalance
+            ? 'Opening, activity, and closing balances agree for all dated ledgers.'
+            : 'Balance proof incomplete. Review before closing the business date.'}</span>
         </div>
-      </div>
+      </Panel>
+
+      {/* Smart Signals */}
+      <Panel>
+        <PanelHeader icon={Zap} title="Smart Signals" subtitle="Deterministic audit insights" tone="violet" />
+        <div className="space-y-1 p-3">
+          {insights.length === 0 ? (
+            <div className="flex items-center gap-2 rounded-lg border border-emerald-400/20 bg-emerald-400/[0.05] px-3 py-2.5 text-[12px] font-medium text-emerald-300">
+              <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
+              No abnormal signals detected
+            </div>
+          ) : insights.map((ins: any) => (
+            <div
+              key={`${ins.title}-${ins.metric}`}
+              className={cx('flex items-start gap-2.5 rounded-lg border-l-[2px] bg-white/[0.02] px-3 py-2', ins.severity === 'HIGH' ? 'border-rose-400' : 'border-amber-400')}
+            >
+              {ins.severity === 'HIGH'
+                ? <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-rose-400" />
+                : <FileWarning className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-400" />}
+              <div>
+                <p className="text-[12.5px] font-semibold text-white">{ins.title}</p>
+                <p className="mt-0.5 text-[11px] leading-relaxed text-slate-400">{ins.detail}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </Panel>
     </div>
   );
 }
