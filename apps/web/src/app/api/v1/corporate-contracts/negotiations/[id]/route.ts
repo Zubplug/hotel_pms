@@ -6,7 +6,6 @@ import { auth } from '@/lib/auth';
 import { errorResponse, successResponse } from '@/lib/api-response';
 import { requireOrganizationContext } from '@/lib/organization-access';
 import { hasPermission } from '@/lib/permissions';
-import { createCorporateQuote } from '@/lib/booking-engine/corporate-quote-service';
 
 const rateSchema = z.object({
   roomTypeId: z.string().uuid(), amount: z.number().positive(), currency: z.string().regex(/^[A-Z]{3}$/),
@@ -67,16 +66,10 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       const contract = await tx.corporateContract.create({ data: { organizationId, corporateAccountId: request.corporateAccountId, corporateBookingApplicationId: request.corporateBookingApplicationId, reference, name: `Negotiated corporate rate ${request.reference || request.id.slice(0, 8)}`, status: 'ACTIVE', defaultCurrency: String(rates[0].currency).toUpperCase(), paymentMode: parsed.data.paymentMode || String(terms.paymentMode || 'PAY_LATER').toUpperCase(), fallbackPolicy: 'NONE', effectiveFrom, effectiveTo, properties: { create: { propertyId: request.propertyId, status: 'ACTIVE', effectiveFrom, effectiveTo } }, versions: { create: { version: 1, status: 'ACTIVE', effectiveFrom, effectiveTo, approvedBy: session.user.id, approvedAt: new Date(), termsSnapshot: { channel: 'CORPORATE_API_NEGOTIATION', negotiationRequestId: request.id, approvedBy: session.user.id } } } }, include: { versions: true } });
       const version = contract.versions[0];
       await tx.corporateRateRule.createMany({ data: rates.map(rate => ({ contractVersionId: version.id, propertyId: request.propertyId, roomTypeId: rate.roomTypeId, sourceRatePlanId: sourceFor(rate), rateMethod: 'FIXED_NIGHTLY', amount: rate.amount, currency: String(rate.currency).toUpperCase(), priority: 200, minAdults: rate.minAdults || 1, maxAdults: rate.maxAdults ?? null, minChildren: rate.minChildren || 0, maxChildren: rate.maxChildren ?? null, minOccupancy: (rate.minAdults || 1) + (rate.minChildren || 0), maxOccupancy: (rate.maxAdults ?? rate.minAdults ?? 20) + (rate.maxChildren ?? rate.minChildren ?? 20), minStay: rate.minStay || 1, maxStay: rate.maxStay ?? null, minLeadTimeHours: 0, maxAdvanceDays: null, minRooms: rate.minRooms || 1, maxRooms: rate.maxRooms ?? null, weekdays: [], blackoutDates: [], fallbackAllowed: false })) });
-      let approvedQuoteId: string | null = null;
-      if (request.quoteId && request.corporateBookingApplicationId) {
-        const originalQuote = await tx.bookingQuote.findFirst({ where: { id: request.quoteId, organizationId, propertyId: request.propertyId, corporateBookingApplicationId: request.corporateBookingApplicationId }, select: { snapshot: true } });
-        const quoteRequest = (originalQuote?.snapshot as any)?.request;
-        if (quoteRequest?.checkIn && quoteRequest?.checkOut) {
-          const principal = { id: request.requestedById || `PUBLIC_CORPORATE:${request.corporateBookingApplicationId}`, organizationId, propertyIds: [request.propertyId], corporateApplicationId: request.corporateBookingApplicationId };
-          const approvedQuote = await createCorporateQuote(tx as any, principal, { propertyId: request.propertyId, roomTypeId: quoteRequest.roomTypeId, checkIn: new Date(`${quoteRequest.checkIn}T00:00:00.000Z`), checkOut: new Date(`${quoteRequest.checkOut}T00:00:00.000Z`), adults: quoteRequest.adults, children: quoteRequest.children, roomCount: quoteRequest.roomCount, paymentMode: quoteRequest.paymentMode, roomSelections: quoteRequest.roomSelections });
-          approvedQuoteId = approvedQuote.id;
-        }
-      }
+      // Quote creation belongs to the website booking engine. The public
+      // client creates a fresh quote after approval so it uses this newly
+      // active negotiated contract and current availability.
+      const approvedQuoteId: string | null = null;
       const updated = await tx.corporateRateNegotiationRequest.update({ where: { id }, data: { status: 'APPROVED', proposedRates: rates, reviewerNotes: parsed.data.reviewerNotes || null, reviewedBy: session.user.id, reviewedAt: new Date(), resultingContractId: contract.id, approvedQuoteId } });
       await tx.auditLog.create({ data: { organizationId, propertyId: request.propertyId, userId: session.user.id, action: 'APPROVE', resource: 'corporate_rate_negotiation', resourceId: request.id, newValue: { negotiationRequestId: request.id, contractId: contract.id, status: 'APPROVED' }, requestId: crypto.randomUUID() } });
       return { negotiationRequestId: updated.id, contractId: contract.id, approvedQuoteId, status: updated.status, effectiveFrom, effectiveTo };
