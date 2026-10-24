@@ -619,7 +619,7 @@ export async function executeNightAudit(
               // they must not lose their breakfast allocation.
               const corporateRatePlan = reservation.corporateAccount?.ratePlan || null;
               const corporateFoodAllocationOverride = corporateRatePlan ? Boolean(corporateRatePlan.includeFoodAllocation) : null;
-              const breakdown = lockedCorporateNight
+              const breakdown = lockedCorporateNight && discountDeduction <= 0
                 ? {
                     ...lockedCorporateNight,
                     grossRate: grossRoomCharge,

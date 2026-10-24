@@ -36,7 +36,7 @@ export async function POST(
     const reservation = await prisma.reservation.findUnique({
       where: { id },
       select: { 
-        id: true, status: true, propertyId: true, corporateAccountId: true, primaryGuestId: true, confirmationNumber: true, checkIn: true, checkOut: true, 
+        id: true, status: true, propertyId: true, corporateAccountId: true, corporateBookingApplicationId: true, primaryGuestId: true, confirmationNumber: true, checkIn: true, checkOut: true, ratePlanSnapshot: true,
         primaryGuest: { select: { firstName: true, lastName: true, phone: true } },
         corporateAccount: {
           select: {
@@ -143,23 +143,38 @@ export async function POST(
         if (!chargeAlreadyPosted) {
           const targetFolio = folios[0];
           for (const room of reservation.reservationRooms.filter((item: any) => item.status === 'ACTIVE')) {
-            const grossAmount = Number(room.rateAmount || 0);
+            const lockedCorporateNight = (reservation.corporateAccountId || reservation.corporateBookingApplicationId)
+              ? ((reservation.ratePlanSnapshot as any)?.nightlyBreakdown || []).find((night: any) => night.date === operationalDate.toISOString().slice(0, 10))
+              : null;
+            const grossAmount = Number(lockedCorporateNight?.grossRate ?? room.rateAmount ?? 0);
             if (grossAmount <= 0) continue;
             const discount = await getApprovedRoomDiscount(tx, room, grossAmount);
             const amount = Math.max(0, grossAmount - discount);
             if (amount <= 0) continue;
             const operationId = `${auditKeyPrefix}${reservation.checkIn.toISOString().slice(0, 10)}:DAY_USE:${room.id}`;
             const breakdownConfig = resolveBreakdownConfig((checkoutProperty.settings as any) || {});
-            const breakdown = computeRateBreakdown(
-              discount > 0 ? grossAmount : amount,
-              {
-                ...breakdownConfig,
-                enabled: breakdownConfig.enabled && professionalOperationsEnabled,
-              },
-              discount > 0,
-              room.roomTypeId,
-              reservation.corporateAccount?.ratePlan?.includeFoodAllocation ?? null,
-            );
+            const breakdown = lockedCorporateNight && discount <= 0
+              ? {
+                  ...lockedCorporateNight,
+                  grossRate: discount > 0 ? grossAmount : amount,
+                  totalReconciled: Number(lockedCorporateNight.componentTotal || amount),
+                  balanced: true,
+                  vat: Number(lockedCorporateNight.vatAmount || 0),
+                  serviceCharge: Number(lockedCorporateNight.serviceChargeAmount || 0),
+                  complimentaryFoodAllocation: Number(lockedCorporateNight.complimentaryFoodAmount || 0),
+                  isComplimentaryFoodAllocated: Number(lockedCorporateNight.complimentaryFoodAmount || 0) > 0,
+                  corporateOverrideApplied: true,
+                }
+              : computeRateBreakdown(
+                  discount > 0 ? grossAmount : amount,
+                  {
+                    ...breakdownConfig,
+                    enabled: breakdownConfig.enabled && professionalOperationsEnabled,
+                  },
+                  discount > 0,
+                  room.roomTypeId,
+                  reservation.corporateAccount?.ratePlan?.includeFoodAllocation ?? null,
+                );
             const chargeLines = [
               {
                 type: 'CHARGE',
