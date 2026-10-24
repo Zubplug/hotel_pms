@@ -6,6 +6,7 @@ import prisma from '@hotel-pms/db';
 import { getOrCreateBookingSystemActor } from '@/lib/booking-engine/system-actor';
 import { sendBookingExpiredEmail } from '@/lib/email/booking-emails';
 import { NotificationEngine } from '@/lib/notification-engine';
+import { queueCorporateGatewayRefundRequests } from '@/lib/booking-engine/refund-service';
 
 export const dynamic = 'force-dynamic';
 
@@ -138,7 +139,7 @@ async function expire(req: NextRequest) {
   // approval deadline.
   const corporatePending = await prisma.reservation.findMany({
     where: { source: 'CORPORATE', status: 'PENDING', paymentExpiresAt: { lt: now } },
-    select: { id: true, propertyId: true, confirmationNumber: true, property: { select: { organizationId: true } }, corporatePaymentGroupReservations: { select: { groupId: true } }, reservationRooms: { select: { roomId: true, checkIn: true, checkOut: true } } },
+    select: { id: true, primaryGuestId: true, propertyId: true, confirmationNumber: true, property: { select: { id: true, organizationId: true } }, corporatePaymentGroupReservations: { select: { groupId: true } }, reservationRooms: { select: { roomId: true, checkIn: true, checkOut: true } } },
     orderBy: { paymentExpiresAt: 'asc' },
     take: 100,
   });
@@ -154,7 +155,7 @@ async function expire(req: NextRequest) {
           await tx.$queryRaw`SELECT id FROM "CorporatePaymentGroup" WHERE id = ${paymentGroupId}::uuid FOR UPDATE`;
           const group = await tx.corporatePaymentGroup.findUnique({
             where: { id: paymentGroupId },
-            include: { reservations: { include: { reservation: { select: { id: true, propertyId: true, confirmationNumber: true, status: true, paymentExpiresAt: true, ratePlanSnapshot: true, property: { select: { organizationId: true } }, reservationRooms: { select: { roomId: true, checkIn: true, checkOut: true } } } } } } },
+            include: { reservations: { include: { reservation: { select: { id: true, primaryGuestId: true, propertyId: true, confirmationNumber: true, status: true, paymentExpiresAt: true, ratePlanSnapshot: true, property: { select: { id: true, organizationId: true } }, reservationRooms: { select: { roomId: true, checkIn: true, checkOut: true } } } } } } },
           });
           if (!group) return;
           const pendingReservations = group.reservations.map((link: any) => link.reservation).filter((item: any) => item.status === 'PENDING' && item.paymentExpiresAt && item.paymentExpiresAt < now);
@@ -171,7 +172,8 @@ async function expire(req: NextRequest) {
             const reason = paymentMode === 'PAY_LATER' ? 'APPROVAL_WINDOW_EXPIRED' : 'PAYMENT_WINDOW_EXPIRED';
             await tx.approvalRequest.updateMany({ where: { propertyId: pendingReservation.propertyId, type: 'CORPORATE_CREDIT', status: 'PENDING', details: { path: ['reservationId'], equals: pendingReservation.id } }, data: { status: 'EXPIRED', executionStatus: 'FAILED' } });
             await tx.auditLog.create({ data: { organizationId: pendingReservation.property.organizationId, propertyId: pendingReservation.propertyId, userId: actorId, userEmail: 'booking.system@lodgecore.internal', userRole: 'SYSTEM', action: 'CORPORATE_RESERVATION_EXPIRED', resource: 'Reservation', resourceId: pendingReservation.id, newValue: { status: 'EXPIRED', reason, paymentGroupId }, requestId: `expire-corporate-payment:${pendingReservation.id}` } });
-            await tx.outboxEvent.create({ data: { organizationId: pendingReservation.property.organizationId, propertyId: pendingReservation.propertyId, eventType: 'CORPORATE_RESERVATION_EXPIRED', aggregateType: 'RESERVATION', aggregateId: pendingReservation.id, payload: { reservationId: pendingReservation.id, confirmationNumber: pendingReservation.confirmationNumber, reason, paymentGroupId } } });
+            const refundRequests = await queueCorporateGatewayRefundRequests({ tx, reservation: pendingReservation, property: pendingReservation.property, paymentGroupId, reason: `Corporate reservation expired before ${reason === 'PAYMENT_WINDOW_EXPIRED' ? 'required payment' : 'approval'} completed.` });
+            await tx.outboxEvent.create({ data: { organizationId: pendingReservation.property.organizationId, propertyId: pendingReservation.propertyId, eventType: 'CORPORATE_RESERVATION_EXPIRED', aggregateType: 'RESERVATION', aggregateId: pendingReservation.id, payload: { reservationId: pendingReservation.id, confirmationNumber: pendingReservation.confirmationNumber, reason, paymentGroupId, refundRequestIds: refundRequests.map((refund: any) => refund.id) } } });
           }
           await tx.corporatePaymentGroup.update({ where: { id: paymentGroupId }, data: { status: 'EXPIRED' } });
           return;
@@ -190,7 +192,8 @@ async function expire(req: NextRequest) {
           : 'PAYMENT_WINDOW_EXPIRED';
         await tx.approvalRequest.updateMany({ where: { propertyId: reservation.propertyId, type: 'CORPORATE_CREDIT', status: 'PENDING', details: { path: ['reservationId'], equals: reservation.id } }, data: { status: 'EXPIRED', executionStatus: 'FAILED' } });
         await tx.auditLog.create({ data: { organizationId: reservation.property.organizationId, propertyId: reservation.propertyId, userId: actorId, userEmail: 'booking.system@lodgecore.internal', userRole: 'SYSTEM', action: 'CORPORATE_RESERVATION_EXPIRED', resource: 'Reservation', resourceId: reservation.id, newValue: { status: 'EXPIRED', reason }, requestId: `expire-corporate-payment:${reservation.id}` } });
-        await tx.outboxEvent.create({ data: { organizationId: reservation.property.organizationId, propertyId: reservation.propertyId, eventType: 'CORPORATE_RESERVATION_EXPIRED', aggregateType: 'RESERVATION', aggregateId: reservation.id, payload: { reservationId: reservation.id, confirmationNumber: reservation.confirmationNumber, reason } } });
+        const refundRequests = await queueCorporateGatewayRefundRequests({ tx, reservation, property: reservation.property, reason: `Corporate reservation expired before ${reason === 'PAYMENT_WINDOW_EXPIRED' ? 'required payment' : 'approval'} completed.` });
+        await tx.outboxEvent.create({ data: { organizationId: reservation.property.organizationId, propertyId: reservation.propertyId, eventType: 'CORPORATE_RESERVATION_EXPIRED', aggregateType: 'RESERVATION', aggregateId: reservation.id, payload: { reservationId: reservation.id, confirmationNumber: reservation.confirmationNumber, reason, refundRequestIds: refundRequests.map((refund: any) => refund.id) } } });
       }, { isolationLevel: 'Serializable' });
     } catch (error) {
       console.error(`[Cron: expire-corporate-payments] ${reservation.id}`, error);

@@ -101,3 +101,29 @@ export async function queueBookingRefundRequests(input: {
   }
   return requests;
 }
+
+/**
+ * Corporate gateway payments settle through a shared City Ledger folio, so
+ * they are not always reachable through Reservation.folios. Build the same
+ * native refund requests from the durable BookingPaymentTransaction links.
+ */
+export async function queueCorporateGatewayRefundRequests(input: {
+  tx: any;
+  reservation: any;
+  property: any;
+  paymentGroupId?: string;
+  reason: string;
+}) {
+  const transactions = await input.tx.bookingPaymentTransaction.findMany({
+    where: input.paymentGroupId
+      ? { corporatePaymentGroupId: input.paymentGroupId, status: 'SUCCESS', paymentId: { not: null } }
+      : { reservationId: input.reservation.id, status: 'SUCCESS', paymentId: { not: null } },
+    select: { paymentId: true },
+  });
+  const paymentIds = [...new Set(transactions.map((transaction: any) => transaction.paymentId).filter(Boolean))];
+  if (!paymentIds.length) return [];
+  const payments = await input.tx.payment.findMany({ where: { id: { in: paymentIds }, status: 'COMPLETED' }, include: { refunds: true } });
+  const folios = payments.filter((payment: any) => payment.folioId).map((payment: any) => ({ id: payment.folioId, payments: [payment] }));
+  const totalPaid = payments.reduce((sum: number, payment: any) => sum + Number(payment.amount), 0);
+  return queueBookingRefundRequests({ tx: input.tx, reservation: { ...input.reservation, folios }, property: input.property, totalPaid, cancellationPenalty: 0, reason: input.reason });
+}
