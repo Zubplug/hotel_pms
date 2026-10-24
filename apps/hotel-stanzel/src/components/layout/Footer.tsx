@@ -18,6 +18,10 @@ const FOOTER_LINKS = {
     { label: 'Location', href: '/location' },
     { label: 'Contact', href: '/contact' },
   ],
+  'Corporate': [
+    { label: 'Corporate Booking', href: '/corporate/apply' },
+    { label: 'Corporate Portal', href: '/corporate/login' },
+  ],
   'Legal': [
     { label: 'Privacy Policy', href: '/privacy' },
     { label: 'Terms & Conditions', href: '/terms' },

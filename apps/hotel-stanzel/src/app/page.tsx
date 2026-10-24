@@ -358,6 +358,38 @@ export default async function HomePage() {
           </div>
         </section>
 
+        {/* ── Corporate stays ───────────────────────────────────── */}
+        <section id="corporate" aria-labelledby="corporate-heading" style={{ background: 'var(--color-green-dark)', padding: 'var(--space-24) 0' }}>
+          <div className="container">
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 'var(--space-16)', alignItems: 'center' }}>
+              <div>
+                <p className="eyebrow" style={{ color: 'var(--color-gold-light)' }}>For organisations &amp; business travellers</p>
+                <h2 id="corporate-heading" style={{ color: 'var(--color-ivory)', marginTop: 'var(--space-4)' }}>A better way to arrange every business stay.</h2>
+                <span className="gold-divider" />
+                <p style={{ color: 'rgba(250,248,244,0.75)', lineHeight: 1.75, maxWidth: 560 }}>
+                  From executive visits to team travel, Stanzel corporate services bring dependable rooms, preferred rates and a seamless booking relationship together in one place.
+                </p>
+                <div style={{ display: 'flex', gap: 'var(--space-4)', flexWrap: 'wrap', marginTop: 'var(--space-8)' }}>
+                  <Link href="/corporate/apply" className="btn btn-primary">Apply for corporate booking</Link>
+                  <Link href="/corporate" className="btn btn-outline-light">Explore corporate services</Link>
+                </div>
+              </div>
+              <div style={{ display: 'grid', gap: 14 }}>
+                {[
+                  ['01', 'Preferred accommodation', 'Comfortable rooms and attentive service for your people.'],
+                  ['02', 'Commercial clarity', 'Approved rates and arrangements designed around your travel needs.'],
+                  ['03', 'Connected support', 'A dedicated corporate relationship from booking through arrival.'],
+                ].map(([number, title, description]) => (
+                  <div key={number} style={{ display: 'flex', gap: 18, alignItems: 'flex-start', padding: '18px 0', borderBottom: '1px solid rgba(250,248,244,0.12)' }}>
+                    <span style={{ color: 'var(--color-gold)', fontFamily: 'var(--font-serif)', fontSize: 25, lineHeight: 1 }}>{number}</span>
+                    <div><h3 style={{ color: 'var(--color-ivory)', fontSize: 'var(--text-lg)' }}>{title}</h3><p style={{ color: 'rgba(250,248,244,0.62)', fontSize: 'var(--text-sm)', marginTop: 5 }}>{description}</p></div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+
         {/* ── Gallery strip ─────────────────────────────────────── */}
         <section id="gallery" className="section" aria-labelledby="gallery-heading"
           style={{ background: 'var(--color-ivory-dark)' }}>

@@ -1,6 +1,4 @@
 import { Suspense } from 'react';
-import { Header } from '@/components/layout/Header';
-import { Footer } from '@/components/layout/Footer';
 import CorporateVerifyClient from './CorporateVerifyClient';
 
 const cardStyle = {
@@ -27,14 +25,8 @@ function LoadingCard() {
 
 export default function CorporateVerifyPage() {
   return (
-    <>
-      <Header />
-      <main style={{ minHeight: '65vh', padding: 'calc(var(--nav-height) + 60px) 20px 70px', background: 'var(--color-ivory-dark)' }}>
-        <Suspense fallback={<LoadingCard />}>
-          <CorporateVerifyClient cardStyle={cardStyle} />
-        </Suspense>
-      </main>
-      <Footer />
-    </>
+    <Suspense fallback={<LoadingCard />}>
+      <CorporateVerifyClient cardStyle={cardStyle} />
+    </Suspense>
   );
 }

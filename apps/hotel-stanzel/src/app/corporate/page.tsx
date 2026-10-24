@@ -1,4 +1,120 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { corporateApi } from '@/lib/corporate-portal';
 
-export default async function CorporatePage() { const [account, invoices, reservations] = await Promise.all([corporateApi<any>('/api/v1/corporate/account'), corporateApi<any>('/api/v1/corporate/invoices'), corporateApi<any>('/api/v1/corporate/reservations')]); if (!account.ok) return <div style={{ display: 'grid', gap: 18, maxWidth: 760 }}><div style={{ background: 'var(--color-white)', border: '1px solid var(--border)', borderRadius: 18, padding: 30 }}><p className="eyebrow">For new corporate bookers</p><h2>Book rooms for your organisation</h2><p style={{ color: 'var(--text-muted)', lineHeight: 1.7 }}>Start a Stanzel corporate application and continue through the public LodgeCore Corporate API.</p><div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 15 }}><Link href="/corporate/apply" className="btn btn-primary">Start corporate booking</Link><Link href="/corporate/login" className="btn btn-outline-dark">Sign in to existing account</Link></div></div></div>; const data = account.data.account; const invoiceRows = invoices.ok ? invoices.data.invoices || [] : []; const reservationRows = reservations.ok ? reservations.data.reservations || [] : []; const outstanding = invoiceRows.reduce((sum: number, row: any) => sum + Number(row.outstandingAmount || 0), 0); return <><p style={{ color: 'var(--text-muted)', maxWidth: 680 }}>Manage corporate stays, approved contract rates and City Ledger receivables through the same LodgeCore PMS records used by Stanzel front desk.</p><div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginTop: 28 }}><section className="card"><p className="eyebrow">Account</p><h2 style={{ margin: '8px 0' }}>{data.name}</h2><p style={{ color: 'var(--text-muted)', fontSize: 13 }}>{data.code} · {data.contactEmail || 'No contact email recorded'}</p></section><section className="card"><p className="eyebrow">Ledger balance</p><h2 style={{ margin: '8px 0' }}>{data.cityLedgerAccount?.currency || 'NGN'} {outstanding.toLocaleString()}</h2><p style={{ color: 'var(--text-muted)', fontSize: 13 }}>{invoiceRows.length} invoice(s)</p></section><section className="card"><p className="eyebrow">Reservations</p><h2 style={{ margin: '8px 0' }}>{reservationRows.length}</h2><p style={{ color: 'var(--text-muted)', fontSize: 13 }}>New stays reuse this account and create a new reservation.</p></section></div><section className="card" style={{ marginTop: 18 }}><h2>Corporate controls</h2><p style={{ color: 'var(--text-muted)', lineHeight: 1.7 }}>Room availability and negotiated pricing are resolved by the Corporate API. Financial posting remains in the PMS City Ledger and front-desk settlement workflow.</p><div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 20 }}><Link href="/corporate/book" className="btn btn-primary">New booking</Link><Link href="/corporate/reservations" className="btn btn-outline-dark">View reservations</Link><Link href="/corporate/invoices" className="btn btn-outline-dark">View City Ledger</Link><Link href="/corporate/rates" className="btn btn-outline-dark">Request a rate</Link></div></section></>; }
+export const metadata: Metadata = {
+  title: 'Corporate Stays & Business Travel',
+  description: 'Corporate accommodation, negotiated rates and simple City Ledger management at Stanzel Grand Resort.',
+};
+
+const publicCardStyle = {
+  background: 'var(--color-white)',
+  border: '1px solid var(--border)',
+  borderRadius: 18,
+  padding: 'clamp(22px, 4vw, 34px)',
+};
+
+function PublicCorporatePage() {
+  return (
+    <div>
+      <section style={{
+        background: 'linear-gradient(135deg, var(--color-green-dark), var(--color-green))',
+        borderRadius: 22,
+        padding: 'clamp(32px, 7vw, 72px) clamp(24px, 6vw, 72px)',
+        color: 'var(--color-ivory)',
+        position: 'relative',
+        overflow: 'hidden',
+      }}>
+        <div style={{ position: 'relative', zIndex: 1, maxWidth: 720 }}>
+          <p className="eyebrow" style={{ color: 'var(--color-gold-light)' }}>Stanzel Grand Resort · Corporate</p>
+          <h2 style={{ color: 'var(--color-ivory)', fontSize: 'clamp(2.2rem, 5vw, 4.2rem)', lineHeight: 1.05, marginTop: 12 }}>
+            Business travel, made beautifully simple.
+          </h2>
+          <p style={{ color: 'rgba(250,248,244,0.78)', fontSize: 'clamp(1rem, 2vw, 1.2rem)', lineHeight: 1.75, maxWidth: 620, marginTop: 22 }}>
+            A more considered way to arrange stays for your team, clients and guests. Enjoy dependable accommodation, approved corporate rates and one clear relationship with Stanzel.
+          </p>
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 30 }}>
+            <Link href="/corporate/apply" className="btn btn-primary">Apply for corporate booking</Link>
+            <Link href="/corporate/login" className="btn btn-outline-light">Corporate portal</Link>
+          </div>
+        </div>
+        <div aria-hidden="true" style={{ position: 'absolute', width: 300, height: 300, borderRadius: '50%', border: '1px solid rgba(201,169,110,0.25)', right: -80, bottom: -140 }} />
+        <div aria-hidden="true" style={{ position: 'absolute', width: 190, height: 190, borderRadius: '50%', border: '1px solid rgba(201,169,110,0.18)', right: 40, bottom: -85 }} />
+      </section>
+
+      <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16, marginTop: 22 }}>
+        {[
+          ['Preferred stays', 'Comfortable rooms and thoughtful service for every business visit.'],
+          ['One connected record', 'Bookings, guest details and financial activity stay aligned with the Stanzel PMS.'],
+          ['Flexible arrangements', 'Choose approved contract rates, pay-as-you-go stays or City Ledger billing where available.'],
+        ].map(([title, description]) => (
+          <article key={title} style={publicCardStyle}>
+            <p className="eyebrow">{title}</p>
+            <p style={{ color: 'var(--text-muted)', lineHeight: 1.7, marginTop: 10 }}>{description}</p>
+          </article>
+        ))}
+      </section>
+
+      <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 18, marginTop: 36, alignItems: 'stretch' }}>
+        <div style={publicCardStyle}>
+          <p className="eyebrow">New to Stanzel corporate services?</p>
+          <h3 style={{ marginTop: 8 }}>Start an application</h3>
+          <p style={{ color: 'var(--text-muted)', lineHeight: 1.7, marginTop: 10 }}>
+            Tell us about your organisation and your stay. We will guide you through availability, rate options and the right payment arrangement.
+          </p>
+          <Link href="/corporate/apply" className="btn btn-primary" style={{ marginTop: 20 }}>Start corporate application</Link>
+        </div>
+        <div style={{ ...publicCardStyle, background: 'var(--color-ivory-dark)' }}>
+          <p className="eyebrow">Already approved?</p>
+          <h3 style={{ marginTop: 8 }}>Access your workspace</h3>
+          <p style={{ color: 'var(--text-muted)', lineHeight: 1.7, marginTop: 10 }}>
+            Sign in securely to create reservations, review stays, request rates and manage your corporate City Ledger wallet.
+          </p>
+          <Link href="/corporate/login" className="btn btn-outline-dark" style={{ marginTop: 20 }}>Open corporate portal</Link>
+        </div>
+      </section>
+
+      <section style={{ marginTop: 42, padding: '26px 0 8px', borderTop: '1px solid var(--border)' }}>
+        <p className="eyebrow">How it works</p>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 22, marginTop: 20 }}>
+          {[
+            ['01', 'Apply', 'Share your company and booking requirements.'],
+            ['02', 'Review', 'We confirm availability and the best commercial arrangement.'],
+            ['03', 'Stay', 'Your team arrives with every reservation ready for Front Desk.'],
+          ].map(([number, title, description]) => (
+            <div key={number}>
+              <span style={{ color: 'var(--color-gold-dark)', fontFamily: 'var(--font-serif)', fontSize: 28 }}>{number}</span>
+              <h3 style={{ marginTop: 4 }}>{title}</h3>
+              <p style={{ color: 'var(--text-muted)', lineHeight: 1.65, marginTop: 6, fontSize: 14 }}>{description}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+export default async function CorporatePage() {
+  const [account, invoices, reservations] = await Promise.all([
+    corporateApi<any>('/api/v1/corporate/account'),
+    corporateApi<any>('/api/v1/corporate/invoices'),
+    corporateApi<any>('/api/v1/corporate/reservations'),
+  ]);
+
+  if (!account.ok) return <PublicCorporatePage />;
+
+  const data = account.data.account;
+  const invoiceRows = invoices.ok ? invoices.data.invoices || [] : [];
+  const reservationRows = reservations.ok ? reservations.data.reservations || [] : [];
+  const outstanding = invoiceRows.reduce((sum: number, row: any) => sum + Number(row.outstandingAmount || 0), 0);
+
+  return <>
+    <p style={{ color: 'var(--text-muted)', maxWidth: 680 }}>Manage corporate stays, approved contract rates and City Ledger receivables through the same LodgeCore PMS records used by Stanzel front desk.</p>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 16, marginTop: 28 }}>
+      <section className="card"><p className="eyebrow">Account</p><h2 style={{ margin: '8px 0' }}>{data.name}</h2><p style={{ color: 'var(--text-muted)', fontSize: 13 }}>{data.code} · {data.contactEmail || 'No contact email recorded'}</p></section>
+      <section className="card"><p className="eyebrow">Ledger balance</p><h2 style={{ margin: '8px 0' }}>{data.cityLedgerAccount?.currency || 'NGN'} {outstanding.toLocaleString()}</h2><p style={{ color: 'var(--text-muted)', fontSize: 13 }}>{invoiceRows.length} invoice(s)</p></section>
+      <section className="card"><p className="eyebrow">Reservations</p><h2 style={{ margin: '8px 0' }}>{reservationRows.length}</h2><p style={{ color: 'var(--text-muted)', fontSize: 13 }}>New stays reuse this account.</p></section>
+    </div>
+    <section className="card" style={{ marginTop: 18 }}><h2>Corporate controls</h2><p style={{ color: 'var(--text-muted)', lineHeight: 1.7 }}>Room availability and negotiated pricing are resolved by the Corporate API. Financial posting remains in the PMS City Ledger and front-desk settlement workflow.</p><div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 20 }}><Link href="/corporate/book" className="btn btn-primary">New booking</Link><Link href="/corporate/reservations" className="btn btn-outline-dark">View reservations</Link><Link href="/corporate/invoices" className="btn btn-outline-dark">View City Ledger</Link><Link href="/corporate/rates" className="btn btn-outline-dark">Request a rate</Link></div></section>
+  </>;
+}

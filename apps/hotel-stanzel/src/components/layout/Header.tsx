@@ -11,6 +11,7 @@ const NAV_LINKS = [
   { label: 'Gallery', href: '/gallery' },
   { label: 'About', href: '/about' },
   { label: 'Contact', href: '/contact' },
+  { label: 'Corporate', href: '/corporate' },
 ];
 
 export function Header() {
@@ -118,6 +119,10 @@ export function Header() {
 
           {/* Book CTA + burger */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
+            <Link href="/corporate" className="btn btn-secondary btn-sm header-corporate-link"
+              style={{ whiteSpace: 'nowrap' }}>
+              Corporate
+            </Link>
             <Link href="/booking" id="header-book-btn" className="btn btn-primary btn-sm"
               style={{ whiteSpace: 'nowrap' }}>
               Book Now
@@ -210,6 +215,7 @@ export function Header() {
         @media (max-width: 900px) {
           .desktop-nav { display: none !important; }
           .burger-btn { display: block !important; }
+          .header-corporate-link { display: none; }
         }
       `}</style>
     </>
