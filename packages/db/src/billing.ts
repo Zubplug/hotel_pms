@@ -238,6 +238,22 @@ export async function validateCheckoutSelection(
     return metadata && typeof metadata === 'object' && !Array.isArray(metadata) && (metadata as Record<string, unknown>).unit === 'PROPERTY';
   });
   if (propertyScopedAddOns.length && !propertyIds.length) throw new Error('Select at least one property for this add-on');
+  const requiredProducts = prices.flatMap((price) => {
+    const metadata = price.product.metadata;
+    if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return [];
+    const values = metadata as Record<string, unknown>;
+    return Array.isArray(values.requiresProducts)
+      ? values.requiresProducts.filter((code): code is string => typeof code === 'string' && code.length > 0)
+      : [];
+  });
+  for (const productCode of new Set(requiredProducts)) {
+    const scopes = propertyIds.length ? propertyIds : [null];
+    for (const propertyId of scopes) {
+      if (!(await hasEntitlement(db, { organizationId: input.organizationId, productCode, propertyId }))) {
+        throw new Error(`An active ${productCode} entitlement is required before purchasing this add-on`);
+      }
+    }
+  }
   if (propertyScopedAddOns.length) {
     const activeEntitlements = await db.entitlement.findMany({
       where: {

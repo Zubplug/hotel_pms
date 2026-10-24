@@ -17,8 +17,8 @@ export default async function HQProductsPage() {
       where: { active: true },
       orderBy: { createdAt: 'desc' },
     }),
-    prisma.billingPlan.findMany({ where: { active: true }, include: { items: { include: { product: { select: { id: true, name: true, code: true, prices: { select: { amount: true, interval: true } } } } } } }, orderBy: { displayOrder: 'asc' } }),
-    prisma.subscription.findMany({ where: { status: { in: ['ACTIVE', 'TRIALING', 'PAST_DUE', 'PAUSED'] } }, include: { plan: { select: { id: true, name: true, code: true, items: { select: { productId: true, required: true, product: { select: { prices: { select: { amount: true, interval: true } } } } } } } }, items: { include: { price: { include: { product: { select: { id: true, name: true, code: true } } } } } } } }),
+    prisma.billingPlan.findMany({ where: { active: true }, include: { items: { include: { product: { select: { id: true, name: true, code: true, catalogVersion: true, prices: { select: { amount: true, interval: true, catalogVersion: true } } } } } } }, orderBy: { displayOrder: 'asc' } }),
+    prisma.subscription.findMany({ where: { status: { in: ['ACTIVE', 'TRIALING', 'PAST_DUE', 'PAUSED'] } }, include: { plan: { select: { id: true, name: true, code: true, items: { select: { productId: true, required: true, product: { select: { catalogVersion: true, prices: { select: { amount: true, interval: true, catalogVersion: true } } } } } } } }, items: { include: { price: { include: { product: { select: { id: true, name: true, code: true } } } } } } } }),
     prisma.billingInvoice.findMany({ where: { createdAt: { gte: since } }, select: { total: true, amountPaid: true, amountDue: true, status: true, currency: true, createdAt: true }, orderBy: { createdAt: 'desc' } }),
     prisma.organization.findMany({ select: { id: true, name: true, createdAt: true, subscriptions: { orderBy: { createdAt: 'desc' }, take: 1, select: { status: true } } } }),
     prisma.billingInvoice.findMany({ take: 6, orderBy: { createdAt: 'desc' }, select: { id: true, total: true, amountDue: true, status: true, currency: true, createdAt: true, organization: { select: { name: true } } } }),
@@ -31,7 +31,8 @@ export default async function HQProductsPage() {
     if (isLive && subscription.plan) for (const planItem of subscription.plan.items) {
       const current = productUsage.get(planItem.productId) ?? { accounts: new Set<string>(), quantity: 0, mrr: 0 };
       current.accounts.add(subscription.organizationId);
-      const planPrice = planItem.product.prices.find((price) => price.interval === 'month') ?? planItem.product.prices.find((price) => price.interval === 'year');
+      const planPrices = planItem.product.prices.filter((price) => price.catalogVersion === planItem.product.catalogVersion);
+      const planPrice = planPrices.find((price) => price.interval === 'month') ?? planPrices.find((price) => price.interval === 'year');
       if (planPrice) current.mrr += planPrice.interval === 'year' ? Math.round(planPrice.amount / 12) : planPrice.amount;
       productUsage.set(planItem.productId, current);
     }
@@ -47,7 +48,9 @@ export default async function HQProductsPage() {
 
   const totalMrr = activeSubscriptions.reduce((total, subscription) => {
     if (subscription.items.length) return total + subscription.items.reduce((subtotal, item) => subtotal + (item.price.interval === 'year' ? Math.round(item.price.amount / 12) : item.price.amount), 0);
-    const planPrice = subscription.plan?.items.find((item) => item.required)?.product.prices.find((price) => price.interval === 'month') ?? subscription.plan?.items.find((item) => item.required)?.product.prices.find((price) => price.interval === 'year');
+    const planProduct = subscription.plan?.items.find((item) => item.required)?.product;
+    const planPrices = planProduct?.prices.filter((price) => price.catalogVersion === planProduct.catalogVersion) ?? [];
+    const planPrice = planPrices.find((price) => price.interval === 'month') ?? planPrices.find((price) => price.interval === 'year');
     return total + (planPrice ? (planPrice.interval === 'year' ? Math.round(planPrice.amount / 12) : planPrice.amount) : 0);
   }, 0);
   const collected = invoices.reduce((total, invoice) => total + invoice.amountPaid, 0);
@@ -61,9 +64,10 @@ export default async function HQProductsPage() {
     code: product.code,
     type: product.type,
     active: product.active,
+    metadata: product.metadata,
     flutterwaveProductId: product.flutterwaveProductId,
     createdAt: product.createdAt.toISOString(),
-    prices: product.prices.map((price) => ({ id: price.id, amount: price.amount, currency: price.currency, interval: price.interval, flutterwavePriceId: price.flutterwavePriceId })),
+    prices: product.prices.filter((price) => price.catalogVersion === product.catalogVersion).map((price) => ({ id: price.id, amount: price.amount, currency: price.currency, interval: price.interval, flutterwavePriceId: price.flutterwavePriceId })),
     adoption: productUsage.get(product.id)?.accounts.size ?? 0,
     quantity: productUsage.get(product.id)?.quantity ?? 0,
     mrr: productUsage.get(product.id)?.mrr ?? 0,

@@ -11,6 +11,13 @@ function codeToken(value: string) {
   return value.toUpperCase().replace(/[^A-Z0-9]+/g, '').slice(0, 8) || 'CORP';
 }
 
+function parseBoolean(value: unknown, fallback = false): boolean {
+  if (typeof value === 'boolean') return value;
+  if (value === 'true' || value === '1') return true;
+  if (value === 'false' || value === '0') return false;
+  return fallback;
+}
+
 async function generateCorporateCode(tx: any, propertyId: string, name: string) {
   const prefix = codeToken(name);
   for (let index = 1; index <= 99; index += 1) {
@@ -109,29 +116,79 @@ export async function POST(req: NextRequest) {
     // accidentally applying guest deposit rules; an existing account's policy
     // can still be changed through the audited edit workflow.
     const depositPolicy = 'WAIVED';
-    if (!name || !Number.isFinite(creditLimit) || creditLimit < 0 || !['WAIVED', 'STANDARD'].includes(depositPolicy)) {
+    if (name.length < 2 || name.length > 200 || (requestedCode && !/^[A-Z0-9][A-Z0-9_-]{1,31}$/.test(requestedCode)) || (body.contactEmail != null && (typeof body.contactEmail !== 'string' || !/^\S+@\S+\.\S+$/.test(body.contactEmail.trim()))) || !Number.isFinite(creditLimit) || creditLimit < 0 || !['WAIVED', 'STANDARD'].includes(depositPolicy)) {
       return errorResponse('BAD_REQUEST', 'Invalid corporate account details', 400);
     }
 
     const result = await prisma.$transaction(async tx => {
+      const property = await tx.property.findFirst({
+        where: { id: body.propertyId, organizationId },
+        select: { baseCurrency: true, supportedCurrencies: true },
+      });
+      if (!property) throw Object.assign(new Error('Invalid property'), { code: 'INVALID_PROPERTY' });
+
+      const requestedCurrency = typeof body.currency === 'string' ? body.currency.trim().toUpperCase() : property.baseCurrency;
+      const supportedCurrencies = new Set((property.supportedCurrencies ?? []).map((currency: string) => currency.toUpperCase()));
+      supportedCurrencies.add(property.baseCurrency.toUpperCase());
+      if (!/^[A-Z]{3}$/.test(requestedCurrency) || !supportedCurrencies.has(requestedCurrency)) {
+        throw Object.assign(new Error('Currency is not supported by this property'), { code: 'INVALID_CURRENCY' });
+      }
+
+      let ratePlanId = body.ratePlanId ? String(body.ratePlanId) : null;
+      if (ratePlanId) {
+        const ratePlan = await tx.ratePlan.findFirst({
+          where: {
+            id: ratePlanId,
+            propertyId: body.propertyId,
+            isActive: true,
+            deletedAt: null,
+            property: { organizationId },
+          },
+          select: { id: true },
+        });
+        if (!ratePlan) throw Object.assign(new Error('Rate plan is not active for this property'), { code: 'INVALID_RATE_PLAN' });
+      }
+
       const code = requestedCode || await generateCorporateCode(tx, body.propertyId, name);
       let cityLedgerAccountId = body.cityLedgerAccountId as string | undefined;
       if (cityLedgerAccountId) {
         const ledger = await tx.cityLedgerAccount.findFirst({
           where: { id: cityLedgerAccountId, propertyId: body.propertyId, organizationId, type: 'CORPORATE', status: 'ACTIVE' },
-          select: { id: true },
+          select: { id: true, currency: true },
         });
         if (!ledger) throw Object.assign(new Error('Invalid City Ledger account'), { code: 'INVALID_LEDGER' });
+        if (ledger.currency.toUpperCase() !== requestedCurrency) {
+          throw Object.assign(new Error('City Ledger currency does not match the property booking currency'), { code: 'CURRENCY_MISMATCH' });
+        }
       } else {
+        // Serialize same-name ledger resolution inside the transaction. The
+        // CityLedgerAccount table intentionally remains compatible with old
+        // data and has no global name uniqueness constraint.
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`corporate-ledger:${body.propertyId}:${name.toLowerCase()}`}))`;
         const ledger = await tx.cityLedgerAccount.findFirst({
           where: { propertyId: body.propertyId, organizationId, type: 'CORPORATE', name },
-          select: { id: true },
+          select: { id: true, currency: true },
         });
-        cityLedgerAccountId = ledger?.id ?? (await tx.cityLedgerAccount.create({
-          data: { organizationId, propertyId: body.propertyId, name, type: 'CORPORATE', status: 'ACTIVE', currency: body.currency || 'NGN' },
-          select: { id: true },
-        })).id;
+        if (ledger) {
+          if (ledger.currency.toUpperCase() !== requestedCurrency) {
+            throw Object.assign(new Error('Existing City Ledger currency does not match the property booking currency'), { code: 'CURRENCY_MISMATCH' });
+          }
+          cityLedgerAccountId = ledger.id;
+        } else {
+          cityLedgerAccountId = (await tx.cityLedgerAccount.create({
+            data: { organizationId, propertyId: body.propertyId, name, type: 'CORPORATE', status: 'ACTIVE', currency: requestedCurrency },
+            select: { id: true },
+          })).id;
+        }
       }
+
+      await tx.$queryRaw`SELECT id FROM "CityLedgerAccount" WHERE id = ${cityLedgerAccountId}::uuid FOR UPDATE`;
+
+      const ledgerOwner = await tx.corporateAccount.findFirst({
+        where: { cityLedgerAccountId },
+        select: { id: true },
+      });
+      if (ledgerOwner) throw Object.assign(new Error('City Ledger account is already linked to a corporate account'), { code: 'LEDGER_IN_USE' });
 
       const account = await tx.corporateAccount.create({ data: {
             organizationId,
@@ -141,9 +198,9 @@ export async function POST(req: NextRequest) {
             contactEmail: typeof body.contactEmail === 'string' ? body.contactEmail.trim() || null : null,
             contactPhone: typeof body.contactPhone === 'string' ? body.contactPhone.trim() || null : null,
             creditLimit,
-            exemptFromHighBalance: Boolean(body.exemptFromHighBalance),
+            exemptFromHighBalance: parseBoolean(body.exemptFromHighBalance),
             depositPolicy,
-            ratePlanId: body.ratePlanId || null,
+            ratePlanId,
             cityLedgerAccountId,
           } });
       await tx.auditLog.create({ data: {
@@ -159,7 +216,7 @@ export async function POST(req: NextRequest) {
     if (err.code === 'P2002') {
         return errorResponse('CONFLICT', 'A corporate account with this code already exists for this property.', 409);
     }
-    if (err.code === 'INVALID_LEDGER') return errorResponse('BAD_REQUEST', err.message, 400);
+    if (['INVALID_PROPERTY', 'INVALID_RATE_PLAN', 'INVALID_LEDGER', 'CURRENCY_MISMATCH', 'LEDGER_IN_USE', 'INVALID_CURRENCY'].includes(err.code)) return errorResponse('BAD_REQUEST', err.message, 400);
     return errorResponse('INTERNAL_ERROR', 'An unexpected error occurred', 500);
   }
 }

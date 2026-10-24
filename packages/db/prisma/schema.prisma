@@ -35,6 +35,7 @@ model Organization {
   refundRequests             RefundRequest[]
   memberships                OrganizationMembership[]
   corporateAccounts          CorporateAccount[]
+  corporatePortalIdentities  CorporatePortalIdentity[]
   outboxEvents               OutboxEvent[]
   channelConnections         ChannelConnection[]
   channelSyncEvents          ChannelSyncEvent[]
@@ -43,24 +44,30 @@ model Organization {
   customerInvitations        CustomerInvitation[]
   employeeInvitations        EmployeeInvitation[]
 
-  billingCustomer        BillingCustomer?
-  subscriptions          Subscription[]
-  trialHistory           TrialHistory?
-  entitlements           Entitlement[]
-  billingInvoices        BillingInvoice[]
-  salesLeads             SalesLead[]
-  proposals              Proposal[]
-  implementationProjects ImplementationProject[]
-  hardwareInventory      HardwareInventory[]
-  hardwareInstallations  HardwareInstallation[]
-  supportTickets         SupportTicket[]
-  integrationDefinitions IntegrationDefinition[]
-  installedIntegrations  InstalledIntegration[]
-  portalApiKeys          PortalApiKey[]
-  propertyIntegrations   PropertyIntegration[]
-  websiteProjects        WebsiteProject[]
-  usageRecords           Usage[]
-  posActivationKeys      PosActivationKey[]
+  billingCustomer                  BillingCustomer?
+  subscriptions                    Subscription[]
+  trialHistory                     TrialHistory?
+  entitlements                     Entitlement[]
+  billingInvoices                  BillingInvoice[]
+  salesLeads                       SalesLead[]
+  proposals                        Proposal[]
+  implementationProjects           ImplementationProject[]
+  hardwareInventory                HardwareInventory[]
+  hardwareInstallations            HardwareInstallation[]
+  supportTickets                   SupportTicket[]
+  integrationDefinitions           IntegrationDefinition[]
+  installedIntegrations            InstalledIntegration[]
+  portalApiKeys                    PortalApiKey[]
+  apiPartners                      ApiPartner[]
+  corporateContracts               CorporateContract[]
+  corporateRateNegotiationRequests CorporateRateNegotiationRequest[]
+  corporatePartnerMappings         ApiPartnerCorporateAccount[]
+  corporatePaymentGroups           CorporatePaymentGroup[]
+  corporateBookingApplications     CorporateBookingApplication[]
+  propertyIntegrations             PropertyIntegration[]
+  websiteProjects                  WebsiteProject[]
+  usageRecords                     Usage[]
+  posActivationKeys                PosActivationKey[]
 
   // Booking Engine
   bookingEngineConfigs       BookingEngineConfig[]
@@ -103,7 +110,14 @@ model Property {
   attendanceGeofence AttendanceGeofence?
   posActivationKeys  PosActivationKey[]
 
-  corporateAccounts CorporateAccount[]
+  corporateAccounts                CorporateAccount[]
+  corporatePortalIdentities        CorporatePortalIdentity[]
+  corporateContractProperties      CorporateContractProperty[]
+  corporateRateRules               CorporateRateRule[]
+  corporateRateNegotiationRequests CorporateRateNegotiationRequest[]
+  apiPartnerCorporateAccounts      ApiPartnerCorporateAccount[]
+  corporatePaymentGroups           CorporatePaymentGroup[]
+  corporateBookingApplications     CorporateBookingApplication[]
 
   name         String
   code         String  @unique
@@ -191,6 +205,7 @@ model Property {
   installedIntegrations    InstalledIntegration[]
   hardwareAgents           HardwareAgent[]
   propertyIntegrations     PropertyIntegration[]
+  apiPartnerProperties     ApiPartnerProperty[]
   websiteProjects          WebsiteProject[]
   lockOperations           LockOperation[]
   lockEvents               LockEvent[]
@@ -314,6 +329,57 @@ model Property {
   compensationChangeRequests   CompensationChangeRequest[]
 }
 
+/// Human portal identity for an approved PMS CorporateAccount. This is
+/// separate from server-to-server API credentials and is scoped to one
+/// corporate account and property.
+model CorporatePortalIdentity {
+  id                 String    @id @default(uuid()) @db.Uuid
+  organizationId     String    @db.Uuid
+  propertyId         String    @db.Uuid
+  corporateAccountId String    @unique @db.Uuid
+  email              String
+  status             String    @default("ACTIVE") // ACTIVE | SUSPENDED | REVOKED
+  lastLoginAt        DateTime? @db.Timestamptz
+  createdAt          DateTime  @default(now()) @db.Timestamptz
+  updatedAt          DateTime  @updatedAt @db.Timestamptz
+
+  organization     Organization                @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  property         Property                    @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  corporateAccount CorporateAccount            @relation(fields: [corporateAccountId], references: [id], onDelete: Cascade)
+  loginTokens      CorporatePortalLoginToken[]
+  sessions         CorporatePortalSession[]
+
+  @@unique([propertyId, email])
+  @@index([organizationId, propertyId, status])
+}
+
+model CorporatePortalLoginToken {
+  id         String    @id @default(uuid()) @db.Uuid
+  identityId String    @db.Uuid
+  tokenHash  String    @unique
+  expiresAt  DateTime  @db.Timestamptz
+  usedAt     DateTime? @db.Timestamptz
+  createdAt  DateTime  @default(now()) @db.Timestamptz
+
+  identity CorporatePortalIdentity @relation(fields: [identityId], references: [id], onDelete: Cascade)
+
+  @@index([identityId, expiresAt, usedAt])
+}
+
+model CorporatePortalSession {
+  id         String    @id @default(uuid()) @db.Uuid
+  identityId String    @db.Uuid
+  tokenHash  String    @unique
+  expiresAt  DateTime  @db.Timestamptz
+  revokedAt  DateTime? @db.Timestamptz
+  lastUsedAt DateTime? @db.Timestamptz
+  createdAt  DateTime  @default(now()) @db.Timestamptz
+
+  identity CorporatePortalIdentity @relation(fields: [identityId], references: [id], onDelete: Cascade)
+
+  @@index([identityId, expiresAt, revokedAt])
+}
+
 model Building {
   id          String   @id @default(uuid()) @db.Uuid
   propertyId  String   @db.Uuid
@@ -370,11 +436,12 @@ model RoomType {
   referralCommissionMode  String   @default("PERCENT") // PERCENT | AMOUNT
   referralCommissionValue Decimal  @default(0) @db.Decimal(18, 4)
 
-  rooms            Room[]
-  rates            Rate[]
-  seasonalRates    SeasonalRate[]
-  referralBookings ReferralBooking[]
-  reachMedia       ReachPropertyMedia[]
+  rooms              Room[]
+  rates              Rate[]
+  seasonalRates      SeasonalRate[]
+  referralBookings   ReferralBooking[]
+  reachMedia         ReachPropertyMedia[]
+  corporateRateRules CorporateRateRule[]
 
   createdAt DateTime  @default(now()) @db.Timestamptz
   updatedAt DateTime  @updatedAt @db.Timestamptz
@@ -567,9 +634,10 @@ model RatePlan {
   noShowPolicyId       String?             @db.Uuid
   noShowPolicy         NoShowPolicy?       @relation(fields: [noShowPolicyId], references: [id])
 
-  rates         Rate[]
-  seasonalRates SeasonalRate[]
-  reservations  Reservation[]
+  rates              Rate[]
+  seasonalRates      SeasonalRate[]
+  corporateRateRules CorporateRateRule[]
+  reservations       Reservation[]
 
   createdAt        DateTime           @default(now()) @db.Timestamptz
   updatedAt        DateTime           @updatedAt @db.Timestamptz
@@ -624,8 +692,9 @@ model CancellationPolicy {
   penaltyType        String // 'NONE' | 'FIRST_NIGHT' | 'PERCENTAGE' | 'FLAT'
   penaltyValue       Decimal  @db.Decimal(18, 4)
 
-  ratePlans    RatePlan[]
-  reservations Reservation[]
+  ratePlans          RatePlan[]
+  reservations       Reservation[]
+  corporateRateRules CorporateRateRule[]
 }
 
 model DepositPolicy {
@@ -638,8 +707,9 @@ model DepositPolicy {
   value        Decimal  @db.Decimal(18, 4)
   dueAtBooking Boolean
 
-  ratePlans    RatePlan[]
-  reservations Reservation[]
+  ratePlans          RatePlan[]
+  reservations       Reservation[]
+  corporateRateRules CorporateRateRule[]
 }
 
 model NoShowPolicy {
@@ -656,8 +726,9 @@ model NoShowPolicy {
   reinstatementRequiresApproval Boolean  @default(true)
   exceptionRequiresApproval     Boolean  @default(true)
 
-  ratePlans    RatePlan[]
-  reservations Reservation[]
+  ratePlans          RatePlan[]
+  reservations       Reservation[]
+  corporateRateRules CorporateRateRule[]
 }
 
 model ExchangeRate {
@@ -797,15 +868,176 @@ model CorporateAccount {
   ratePlan          RatePlan?          @relation(fields: [ratePlanId], references: [id])
   cityLedgerAccount CityLedgerAccount? @relation(fields: [cityLedgerAccountId], references: [id])
 
-  reservations   Reservation[]
-  folios         Folio[]
-  events         Event[]
-  leaseContracts LeaseContract[]
+  reservations                 Reservation[]
+  folios                       Folio[]
+  events                       Event[]
+  leaseContracts               LeaseContract[]
+  corporateContracts           CorporateContract[]
+  rateNegotiationRequests      CorporateRateNegotiationRequest[]
+  apiPartnerMappings           ApiPartnerCorporateAccount[]
+  corporatePaymentGroups       CorporatePaymentGroup[]
+  corporateBookingApplications CorporateBookingApplication[]
+  portalIdentity               CorporatePortalIdentity?
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
 
   @@unique([propertyId, code])
+}
+
+/// Commercial agreement for a PMS CorporateAccount. This is intentionally
+/// separate from the legacy CorporateAccount.ratePlanId compatibility link.
+model CorporateContract {
+  id                            String    @id @default(uuid()) @db.Uuid
+  organizationId                String    @db.Uuid
+  corporateAccountId            String?   @db.Uuid
+  corporateBookingApplicationId String?   @db.Uuid
+  reference                     String
+  name                          String
+  status                        String    @default("DRAFT") // DRAFT | SUBMITTED | APPROVED | ACTIVE | SUSPENDED | EXPIRED
+  defaultCurrency               String
+  paymentMode                   String    @default("PAY_LATER")
+  fallbackPolicy                String    @default("NONE") // NONE | EXPLICIT_RULE_ONLY
+  effectiveFrom                 DateTime  @db.Date
+  effectiveTo                   DateTime? @db.Date
+
+  organization                Organization                      @relation(fields: [organizationId], references: [id])
+  corporateAccount            CorporateAccount?                 @relation(fields: [corporateAccountId], references: [id])
+  corporateBookingApplication CorporateBookingApplication?      @relation(fields: [corporateBookingApplicationId], references: [id])
+  properties                  CorporateContractProperty[]
+  versions                    CorporateContractVersion[]
+  negotiationRequests         CorporateRateNegotiationRequest[]
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@unique([organizationId, reference])
+  @@index([corporateAccountId, status, effectiveFrom, effectiveTo])
+  @@index([corporateBookingApplicationId, status, effectiveFrom, effectiveTo])
+}
+
+/// Property scope for a corporate contract. Eligibility must match this row;
+/// organization membership alone is never sufficient.
+model CorporateContractProperty {
+  id            String    @id @default(uuid()) @db.Uuid
+  contractId    String    @db.Uuid
+  propertyId    String    @db.Uuid
+  status        String    @default("ACTIVE")
+  effectiveFrom DateTime  @db.Date
+  effectiveTo   DateTime? @db.Date
+
+  contract CorporateContract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  property Property          @relation(fields: [propertyId], references: [id])
+
+  @@unique([contractId, propertyId])
+  @@index([propertyId, status, effectiveFrom, effectiveTo])
+}
+
+/// Immutable commercial version. Approved versions are never edited in place.
+model CorporateContractVersion {
+  id            String    @id @default(uuid()) @db.Uuid
+  contractId    String    @db.Uuid
+  version       Int
+  status        String    @default("DRAFT") // DRAFT | SUBMITTED | APPROVED | ACTIVE | REJECTED | EXPIRED
+  effectiveFrom DateTime  @db.Date
+  effectiveTo   DateTime? @db.Date
+  termsSnapshot Json?
+  submittedBy   String?   @db.Uuid
+  submittedAt   DateTime? @db.Timestamptz
+  approvedBy    String?   @db.Uuid
+  approvedAt    DateTime? @db.Timestamptz
+
+  contract CorporateContract   @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  rules    CorporateRateRule[]
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+
+  @@unique([contractId, version])
+  @@index([contractId, status, effectiveFrom, effectiveTo])
+}
+
+/// A deterministic negotiated-rate rule belonging to an immutable contract
+/// version. Cross-row overlap/conflict checks remain transactional service
+/// validation because ordinary unique constraints cannot express them.
+model CorporateRateRule {
+  id                   String     @id @default(uuid()) @db.Uuid
+  contractVersionId    String     @db.Uuid
+  propertyId           String     @db.Uuid
+  roomTypeId           String     @db.Uuid
+  sourceRatePlanId     String?    @db.Uuid
+  rateMethod           String // FIXED_NIGHTLY | PERCENTAGE_DISCOUNT | DERIVED_RATE
+  amount               Decimal?   @db.Decimal(18, 4)
+  discountPercent      Decimal?   @db.Decimal(9, 4)
+  currency             String
+  priority             Int        @default(100)
+  minAdults            Int        @default(1)
+  maxAdults            Int?
+  minChildren          Int        @default(0)
+  maxChildren          Int?
+  minOccupancy         Int        @default(1)
+  maxOccupancy         Int?
+  minStay              Int        @default(1)
+  maxStay              Int?
+  minLeadTimeHours     Int        @default(0)
+  maxAdvanceDays       Int?
+  minRooms             Int        @default(1)
+  maxRooms             Int?
+  weekdays             Int[]
+  blackoutDates        DateTime[] @db.Date
+  fallbackAllowed      Boolean    @default(false)
+  /// Optional, validated factor tiers for stay length, room count, and payment mode.
+  /// Example: {"stayLength":[{"minNights":7,"adjustmentType":"PERCENT_DISCOUNT","value":10}]}
+  pricingFactors       Json?
+  inclusions           Json?
+  taxTreatment         Json?
+  cancellationPolicyId String?    @db.Uuid
+  depositPolicyId      String?    @db.Uuid
+  noShowPolicyId       String?    @db.Uuid
+
+  contractVersion    CorporateContractVersion @relation(fields: [contractVersionId], references: [id], onDelete: Cascade)
+  property           Property                 @relation(fields: [propertyId], references: [id])
+  roomType           RoomType                 @relation(fields: [roomTypeId], references: [id])
+  sourceRatePlan     RatePlan?                @relation(fields: [sourceRatePlanId], references: [id])
+  cancellationPolicy CancellationPolicy?      @relation(fields: [cancellationPolicyId], references: [id])
+  depositPolicy      DepositPolicy?           @relation(fields: [depositPolicyId], references: [id])
+  noShowPolicy       NoShowPolicy?            @relation(fields: [noShowPolicyId], references: [id])
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+
+  @@index([propertyId, roomTypeId, priority])
+  @@index([contractVersionId, priority])
+}
+
+/// A commercial request for a new or revised negotiated corporate rate.
+/// This is a request workflow only; it never activates pricing by itself.
+model CorporateRateNegotiationRequest {
+  id                            String    @id @default(uuid()) @db.Uuid
+  organizationId                String    @db.Uuid
+  propertyId                    String    @db.Uuid
+  corporateAccountId            String?   @db.Uuid
+  corporateBookingApplicationId String?   @db.Uuid
+  status                        String    @default("DRAFT") // DRAFT | SUBMITTED | UNDER_REVIEW | APPROVED | REJECTED | WITHDRAWN
+  requestedByType               String    @default("CORPORATE") // CORPORATE | STAFF
+  requestedById                 String?
+  reference                     String?
+  requestedTerms                Json
+  proposedRates                 Json
+  reviewerNotes                 String?
+  reviewedBy                    String?   @db.Uuid
+  reviewedAt                    DateTime? @db.Timestamptz
+  resultingContractId           String?   @db.Uuid
+  createdAt                     DateTime  @default(now()) @db.Timestamptz
+  updatedAt                     DateTime  @updatedAt @db.Timestamptz
+
+  organization                Organization                 @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  property                    Property                     @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  corporateAccount            CorporateAccount?            @relation(fields: [corporateAccountId], references: [id], onDelete: Cascade)
+  corporateBookingApplication CorporateBookingApplication? @relation(fields: [corporateBookingApplicationId], references: [id], onDelete: Cascade)
+  resultingContract           CorporateContract?           @relation(fields: [resultingContractId], references: [id], onDelete: SetNull)
+
+  @@index([propertyId, corporateAccountId, status])
+  @@index([propertyId, corporateBookingApplicationId, status])
+  @@index([organizationId, status, createdAt])
 }
 
 model Reservation {
@@ -814,15 +1046,19 @@ model Reservation {
   property           Property @relation(fields: [propertyId], references: [id])
   confirmationNumber String   @unique
 
-  primaryGuestId     String            @db.Uuid
-  primaryGuest       Guest             @relation(fields: [primaryGuestId], references: [id])
-  companyId          String?           @db.Uuid // Legacy field
-  corporateAccountId String?           @db.Uuid
-  corporateAccount   CorporateAccount? @relation(fields: [corporateAccountId], references: [id])
+  primaryGuestId                String                       @db.Uuid
+  primaryGuest                  Guest                        @relation(fields: [primaryGuestId], references: [id])
+  companyId                     String?                      @db.Uuid // Legacy field
+  corporateAccountId            String?                      @db.Uuid
+  corporateAccount              CorporateAccount?            @relation(fields: [corporateAccountId], references: [id])
+  corporateBookingApplicationId String?                      @db.Uuid
+  corporateBookingApplication   CorporateBookingApplication? @relation(fields: [corporateBookingApplicationId], references: [id])
 
-  source     ReservationSource
-  channelRef String?
-  status     ReservationStatus
+  source           ReservationSource
+  channelRef       String?
+  status           ReservationStatus
+  /// Deadline for corporate prepaid/deposit reservations awaiting verified payment.
+  paymentExpiresAt DateTime?         @db.Timestamptz
 
   checkIn  DateTime @db.Date
   checkOut DateTime @db.Date
@@ -881,18 +1117,19 @@ model Reservation {
   guestConfirmationTokenHash String? @unique
   guestCancellationTokenHash String? @unique
 
-  reservationGuests ReservationGuest[]
-  reservationRooms  ReservationRoom[]
-  folios            Folio[]
-  payments          Payment[]
-  folioCredits      FolioCredit[]
-  refundRequests    RefundRequest[]
-  guestServiceReqs  GuestServiceRequest[]
-  lockCredentials   LockCredential[]
-  lockOperations    LockOperation[]
-  priorities        ReservationPriority[]
-  referralBookings  ReferralBooking[]
-  CheckInBypass     CheckInBypass[]
+  reservationGuests                 ReservationGuest[]
+  reservationRooms                  ReservationRoom[]
+  folios                            Folio[]
+  payments                          Payment[]
+  corporatePaymentGroupReservations CorporatePaymentGroupReservation[]
+  folioCredits                      FolioCredit[]
+  refundRequests                    RefundRequest[]
+  guestServiceReqs                  GuestServiceRequest[]
+  lockCredentials                   LockCredential[]
+  lockOperations                    LockOperation[]
+  priorities                        ReservationPriority[]
+  referralBookings                  ReferralBooking[]
+  CheckInBypass                     CheckInBypass[]
 
   createdAt                     DateTime                     @default(now()) @db.Timestamptz
   updatedAt                     DateTime                     @updatedAt @db.Timestamptz
@@ -1347,7 +1584,7 @@ model Refund {
   authorizedBy     String  @db.Uuid
   providerRefundId String?
 
-  bookingPaymentTransactionId String? @unique @db.Uuid
+  bookingPaymentTransactionId String?                    @unique @db.Uuid
   bookingPaymentTransaction   BookingPaymentTransaction? @relation("BookingPaymentLateRefund", fields: [bookingPaymentTransactionId], references: [id])
 
   status         String // 'PENDING' | 'COMPLETED' | 'FAILED'
@@ -2187,17 +2424,17 @@ model StaffPosOutletAccess {
 }
 
 model User {
-  id               String  @id @default(uuid()) @db.Uuid
-  staffId          String? @db.Uuid
-  email            String  @unique
+  id               String    @id @default(uuid()) @db.Uuid
+  staffId          String?   @db.Uuid
+  email            String    @unique
   passwordHash     String
   firstName        String?
   middleName       String?
   lastName         String?
   emailVerifiedAt  DateTime? @db.Timestamptz
   // Deprecated compatibility alias. New code should use isLodgeCoreAdmin.
-  isSuperAdmin     Boolean @default(false)
-  isLodgeCoreAdmin Boolean @default(false)
+  isSuperAdmin     Boolean   @default(false)
+  isLodgeCoreAdmin Boolean   @default(false)
 
   lastLoginAt DateTime? @db.Timestamptz
   lastLoginIp String?
@@ -2626,25 +2863,25 @@ model CustomerInvitation {
 }
 
 model PortalEmailVerification {
-  id         String   @id @default(uuid()) @db.Uuid
-  userId     String   @db.Uuid
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tokenHash  String   @unique
-  expiresAt  DateTime @db.Timestamptz
-  usedAt     DateTime? @db.Timestamptz
-  createdAt  DateTime @default(now()) @db.Timestamptz
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime  @db.Timestamptz
+  usedAt    DateTime? @db.Timestamptz
+  createdAt DateTime  @default(now()) @db.Timestamptz
 
   @@index([userId, expiresAt, usedAt])
 }
 
 model PasswordResetToken {
-  id         String   @id @default(uuid()) @db.Uuid
-  userId     String   @db.Uuid
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tokenHash  String   @unique
-  expiresAt  DateTime @db.Timestamptz
-  usedAt     DateTime? @db.Timestamptz
-  createdAt  DateTime @default(now()) @db.Timestamptz
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime  @db.Timestamptz
+  usedAt    DateTime? @db.Timestamptz
+  createdAt DateTime  @default(now()) @db.Timestamptz
 
   @@index([userId, expiresAt, usedAt])
 }
@@ -5105,6 +5342,7 @@ model CityLedgerInvoice {
   eventInvoice EventInvoice?          @relation(fields: [eventInvoiceId], references: [id])
   entries      CityLedgerEntry[]
   allocations  CityLedgerAllocation[] @relation("InvoiceAllocations")
+  gatewayPaymentTransactions BookingPaymentTransaction[]
 
   @@unique([propertyId, invoiceNumber])
   @@index([propertyId, dueDate])
@@ -5129,13 +5367,14 @@ model CityLedgerEntry {
 
   createdBy String @db.Uuid // Staff ID
 
-  account        CityLedgerAccount      @relation(fields: [accountId], references: [id])
-  guest          Guest?                 @relation(fields: [guestId], references: [id])
-  reservation    Reservation?           @relation(fields: [reservationId], references: [id])
-  folio          Folio?                 @relation(fields: [folioId], references: [id])
-  invoice        CityLedgerInvoice?     @relation(fields: [invoiceId], references: [id])
-  allocations    CityLedgerAllocation[] @relation("PaymentAllocations")
-  refundRequests RefundRequest[]
+  account                     CityLedgerAccount          @relation(fields: [accountId], references: [id])
+  guest                       Guest?                     @relation(fields: [guestId], references: [id])
+  reservation                 Reservation?               @relation(fields: [reservationId], references: [id])
+  folio                       Folio?                     @relation(fields: [folioId], references: [id])
+  invoice                     CityLedgerInvoice?         @relation(fields: [invoiceId], references: [id])
+  allocations                 CityLedgerAllocation[]     @relation("PaymentAllocations")
+  refundRequests              RefundRequest[]
+  corporatePaymentTransaction BookingPaymentTransaction? @relation("CorporateSettlementEntry")
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
@@ -6572,7 +6811,7 @@ model Subscription {
   scopePropertyIds   String[]  @default([]) @db.Uuid
   pastDueSince       DateTime? @db.Timestamptz
 
-  items SubscriptionItem[]
+  items        SubscriptionItem[]
   trialHistory TrialHistory?
 
   createdAt DateTime @default(now()) @db.Timestamptz
@@ -6712,36 +6951,36 @@ model BillingPlanItem {
 }
 
 model SalesLead {
-  id             String        @id @default(uuid()) @db.Uuid
-  organizationId String?       @db.Uuid
-  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
-  source         String        @default("WEBSITE")
-  status         String        @default("NEW")
-  name           String
-  firstName      String?
-  middleName     String?
-  lastName       String?
-  email          String
-  phone          String?
-  company        String?
+  id               String        @id @default(uuid()) @db.Uuid
+  organizationId   String?       @db.Uuid
+  organization     Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  source           String        @default("WEBSITE")
+  status           String        @default("NEW")
+  name             String
+  firstName        String?
+  middleName       String?
+  lastName         String?
+  email            String
+  phone            String?
+  company          String?
   organizationName String?
-  propertyName   String?
-  address        String?
-  city           String?
-  state          String?
-  country        String?
-  website        String?
-  location       String?
-  roomCount      Int?
-  message        String?
-  consentAt      DateTime?     @db.Timestamptz
-  sourceCampaign String?
-  idempotencyKey String?       @unique
-  assignedTo     String?
-  convertedAt    DateTime?     @db.Timestamptz
-  metadata       Json?
-  createdAt      DateTime      @default(now()) @db.Timestamptz
-  updatedAt      DateTime      @updatedAt @db.Timestamptz
+  propertyName     String?
+  address          String?
+  city             String?
+  state            String?
+  country          String?
+  website          String?
+  location         String?
+  roomCount        Int?
+  message          String?
+  consentAt        DateTime?     @db.Timestamptz
+  sourceCampaign   String?
+  idempotencyKey   String?       @unique
+  assignedTo       String?
+  convertedAt      DateTime?     @db.Timestamptz
+  metadata         Json?
+  createdAt        DateTime      @default(now()) @db.Timestamptz
+  updatedAt        DateTime      @updatedAt @db.Timestamptz
 
   proposals Proposal[]
 
@@ -7108,6 +7347,90 @@ model PortalApiKey {
   @@index([organizationId, revokedAt])
 }
 
+// Dedicated server-to-server corporate API identity. This is intentionally
+// separate from property-local CorporateAccount and public PublishableKey.
+model ApiPartner {
+  id                    String       @id @default(uuid()) @db.Uuid
+  organizationId        String       @db.Uuid
+  organization          Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name                  String
+  status                String       @default("ACTIVE") // ACTIVE, SUSPENDED, REVOKED
+  environment           String       @default("LIVE") // TEST, LIVE
+  scopes                String[]     @default([])
+  rateLimitPerMinute    Int          @default(60)
+  requestSizeLimitBytes Int          @default(1048576)
+  expiresAt             DateTime?    @db.Timestamptz
+
+  credentials       ApiCredential[]
+  properties        ApiPartnerProperty[]
+  corporateAccounts ApiPartnerCorporateAccount[]
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@index([organizationId, status])
+  @@index([organizationId, environment, status])
+}
+
+/// Explicit authorization from an API partner to a PMS corporate account.
+/// This replaces unsafe account inference once mappings are provisioned.
+model ApiPartnerCorporateAccount {
+  id                 String    @id @default(uuid()) @db.Uuid
+  partnerId          String    @db.Uuid
+  corporateAccountId String    @db.Uuid
+  organizationId     String    @db.Uuid
+  propertyId         String    @db.Uuid
+  status             String    @default("ACTIVE") // ACTIVE | SUSPENDED | REVOKED
+  scopes             String[]
+  effectiveFrom      DateTime  @db.Date
+  effectiveTo        DateTime? @db.Date
+
+  partner          ApiPartner       @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  corporateAccount CorporateAccount @relation(fields: [corporateAccountId], references: [id], onDelete: Cascade)
+  organization     Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  property         Property         @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@unique([partnerId, corporateAccountId, propertyId])
+  @@index([partnerId, propertyId, status, effectiveFrom, effectiveTo])
+  @@index([corporateAccountId, propertyId, status])
+}
+
+model ApiPartnerProperty {
+  id         String     @id @default(uuid()) @db.Uuid
+  partnerId  String     @db.Uuid
+  partner    ApiPartner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  propertyId String     @db.Uuid
+  property   Property   @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  createdAt  DateTime   @default(now()) @db.Timestamptz
+
+  @@unique([partnerId, propertyId])
+  @@index([propertyId])
+}
+
+model ApiCredential {
+  id          String     @id @default(uuid()) @db.Uuid
+  partnerId   String     @db.Uuid
+  partner     ApiPartner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  prefix      String     @unique
+  secretHash  String
+  environment String     @default("LIVE") // TEST, LIVE
+  scopes      String[]   @default([])
+  status      String     @default("ACTIVE") // ACTIVE, REVOKED, ROTATED
+  expiresAt   DateTime?  @db.Timestamptz
+  revokedAt   DateTime?  @db.Timestamptz
+  lastUsedAt  DateTime?  @db.Timestamptz
+  lastUsedIp  String?
+  rotatedAt   DateTime?  @db.Timestamptz
+  createdAt   DateTime   @default(now()) @db.Timestamptz
+  updatedAt   DateTime   @updatedAt @db.Timestamptz
+
+  @@index([partnerId, status])
+  @@index([prefix, status])
+}
+
 model Module {
   id          String          @id @default(uuid()) @db.Uuid
   productId   String?         @db.Uuid
@@ -7316,6 +7639,114 @@ model BookingHold {
   @@index([status, expiresAt])
 }
 
+/// Immutable, short-lived corporate pricing result.
+///
+/// `principalId` is the authenticated corporate/API principal resolved by the
+/// server. It is intentionally opaque until the partner credential model is
+/// finalized; callers must never be able to choose it from request payloads.
+model BookingQuote {
+  id                            String                       @id @default(uuid()) @db.Uuid
+  organizationId                String                       @db.Uuid
+  propertyId                    String                       @db.Uuid
+  principalId                   String
+  corporateAccountId            String?                      @db.Uuid
+  corporateBookingApplicationId String?                      @db.Uuid
+  corporateBookingApplication   CorporateBookingApplication? @relation(fields: [corporateBookingApplicationId], references: [id], onDelete: SetNull)
+  requestFingerprint            String
+  status                        String                       @default("ACTIVE") // ACTIVE | EXPIRED | CONSUMED | INVALIDATED
+  expiresAt                     DateTime                     @db.Timestamptz
+  consumedAt                    DateTime?                    @db.Timestamptz
+  invalidatedAt                 DateTime?                    @db.Timestamptz
+  reservationId                 String?                      @db.Uuid
+
+  /// Full immutable contract, rate, tax/fee, inclusion, and policy snapshot.
+  snapshot Json
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@index([principalId, propertyId, status, expiresAt])
+  @@index([organizationId, propertyId, requestFingerprint])
+  @@index([corporateAccountId, status, expiresAt])
+  @@index([corporateBookingApplicationId, status, expiresAt])
+}
+
+/// Short-lived identity for a corporate website/API buyer. A permanent PMS
+/// CorporateAccount and City Ledger account are materialized only after a
+/// verified prepaid settlement or an authorized pay-later approval.
+model CorporateBookingApplication {
+  id                 String   @id @default(uuid()) @db.Uuid
+  organizationId     String   @db.Uuid
+  propertyId         String   @db.Uuid
+  companyName        String
+  contactPerson      String
+  contactEmail       String
+  contactPhone       String?
+  status             String   @default("PENDING") // PENDING | CONVERTED | REJECTED | EXPIRED
+  paymentMode        String
+  requestedCurrency  String
+  sourceChannel      String // CORPORATE_API | STANDALONE_CORPORATE_WEBSITE
+  principalId        String?
+  accessTokenHash    String?  @unique
+  expiresAt          DateTime @db.Timestamptz
+  corporateAccountId String?  @db.Uuid
+
+  organization            Organization                      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  property                Property                          @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  corporateAccount        CorporateAccount?                 @relation(fields: [corporateAccountId], references: [id], onDelete: SetNull)
+  quotes                  BookingQuote[]
+  reservations            Reservation[]
+  paymentGroups           CorporatePaymentGroup[]
+  contracts               CorporateContract[]
+  rateNegotiationRequests CorporateRateNegotiationRequest[]
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@index([organizationId, propertyId, status, expiresAt])
+  @@index([propertyId, contactEmail, status])
+}
+
+/// Payment boundary for one or more corporate reservations. Gateway payment
+/// remains one economic payment and is settled once into City Ledger; the join
+/// rows identify the reservations covered by that payment requirement.
+model CorporatePaymentGroup {
+  id                            String  @id @default(uuid()) @db.Uuid
+  organizationId                String  @db.Uuid
+  propertyId                    String  @db.Uuid
+  corporateAccountId            String? @db.Uuid
+  corporateBookingApplicationId String? @db.Uuid
+  requiredAmount                Decimal @db.Decimal(18, 4)
+  currency                      String
+  status                        String  @default("PENDING") // PENDING | PARTIALLY_SETTLED | SETTLED | EXPIRED | FAILED
+
+  organization                Organization                       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  property                    Property                           @relation(fields: [propertyId], references: [id])
+  corporateAccount            CorporateAccount?                  @relation(fields: [corporateAccountId], references: [id])
+  corporateBookingApplication CorporateBookingApplication?       @relation(fields: [corporateBookingApplicationId], references: [id])
+  reservations                CorporatePaymentGroupReservation[]
+  transactions                BookingPaymentTransaction[]
+
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @updatedAt @db.Timestamptz
+
+  @@index([propertyId, status, createdAt])
+  @@index([corporateAccountId, status])
+  @@index([corporateBookingApplicationId, status])
+}
+
+model CorporatePaymentGroupReservation {
+  id             String  @id @default(uuid()) @db.Uuid
+  groupId        String  @db.Uuid
+  reservationId  String  @unique @db.Uuid
+  amountRequired Decimal @db.Decimal(18, 4)
+
+  group       CorporatePaymentGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  reservation Reservation           @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, reservationId])
+}
+
 /// Gateway-level record for a payment transaction initiated via the Booking Engine.
 /// On success, this drives creation of a native Payment record in the existing
 /// Folio/accounting pipeline. It is NOT a parallel accounting system.
@@ -7325,6 +7756,7 @@ model BookingPaymentTransaction {
   propertyId     String  @db.Uuid
   reservationId  String? @db.Uuid
   holdId         String? @db.Uuid
+  cityLedgerInvoiceId String? @unique @db.Uuid
 
   /// PAYSTACK | FLUTTERWAVE
   provider     String
@@ -7347,6 +7779,16 @@ model BookingPaymentTransaction {
   /// Set after a successful webhook: the ID of the Payment record created in the folio
   paymentId String? @db.Uuid
 
+  /// Set only for CORPORATE_API settlements. This is the durable one-to-one
+  /// link between the verified gateway transaction and its City Ledger
+  /// payment entry. It prevents a retry from creating a second spendable
+  /// corporate advance.
+  cityLedgerEntryId       String?                @unique @db.Uuid
+  cityLedgerEntry         CityLedgerEntry?       @relation("CorporateSettlementEntry", fields: [cityLedgerEntryId], references: [id])
+  corporatePaymentGroupId String?                @db.Uuid
+  corporatePaymentGroup   CorporatePaymentGroup? @relation(fields: [corporatePaymentGroupId], references: [id])
+  cityLedgerInvoice       CityLedgerInvoice?      @relation(fields: [cityLedgerInvoiceId], references: [id])
+
   metadata Json?
 
   lateRefund Refund? @relation("BookingPaymentLateRefund")
@@ -7357,6 +7799,7 @@ model BookingPaymentTransaction {
   @@index([providerRef])
   @@index([reservationId])
   @@index([idempotencyKey])
+  @@index([corporatePaymentGroupId, status])
 }
 
 /// Idempotency guard for the reservation creation step of the booking flow.
@@ -7364,17 +7807,24 @@ model BookingPaymentTransaction {
 /// double-clicks. One record per booking attempt keyed by a client-generated UUID.
 model BookingRequest {
   /// Client-generated UUID, unique per booking attempt
-  idempotencyKey String @id
-  propertyId     String @db.Uuid
+  idempotencyKey     String  @id
+  propertyId         String  @db.Uuid
+  /// Authenticated corporate/API principal for non-public booking attempts.
+  principalId        String?
+  operation          String?
+  requestFingerprint String?
 
   /// PROCESSING | COMPLETED | FAILED
-  status        String
-  reservationId String? @db.Uuid
-  errorMessage  String?
+  status         String
+  reservationId  String? @db.Uuid
+  /// All reservations created by a multi-room corporate booking, in creation order.
+  reservationIds Json?
+  errorMessage   String?
 
   createdAt DateTime @default(now()) @db.Timestamptz
 
   @@index([propertyId, createdAt])
+  @@index([principalId, propertyId, operation, createdAt])
 }
 
 /// Payment provider account configuration for the Booking Engine.
@@ -8121,13 +8571,13 @@ model EmployeeProfile {
   status         String @default("ACTIVE") // ACTIVE | ON_LEAVE | SUSPENDED | PROBATION | TERMINATED | RESIGNED | RETIRED
 
   // Payroll applicability and documented NTA 2026 eligible deductions.
-  pensionExempt             Boolean @default(false)
-  nhfExempt                 Boolean @default(false)
+  pensionExempt            Boolean @default(false)
+  nhfExempt                Boolean @default(false)
   nhisMonthlyContribution  Decimal @default(0) @db.Decimal(18, 4)
-  annualRentPaid            Decimal @default(0) @db.Decimal(18, 4)
-  annualLifeAssurance       Decimal @default(0) @db.Decimal(18, 4)
-  annualMortgageInterest    Decimal @default(0) @db.Decimal(18, 4)
-  statutoryExemptionReason  String?
+  annualRentPaid           Decimal @default(0) @db.Decimal(18, 4)
+  annualLifeAssurance      Decimal @default(0) @db.Decimal(18, 4)
+  annualMortgageInterest   Decimal @default(0) @db.Decimal(18, 4)
+  statutoryExemptionReason String?
 
   confirmationDate  DateTime? @db.Date
   contractStartDate DateTime? @db.Date
@@ -8739,17 +9189,17 @@ model StatutoryConfiguration {
   taxBands         Json // [{ limit: 300000, rate: 0.07 }, { limit: 300000, rate: 0.11 }, ...]
 
   // Pension Reform Act 2014
-  pensionEmployeeRate Decimal @default(0.08) @db.Decimal(5, 4) // 8%
-  pensionEmployerRate Decimal @default(0.10) @db.Decimal(5, 4) // 10%
-  pensionEnabled       Boolean @default(true)
+  pensionEmployeeRate    Decimal @default(0.08) @db.Decimal(5, 4) // 8%
+  pensionEmployerRate    Decimal @default(0.10) @db.Decimal(5, 4) // 10%
+  pensionEnabled         Boolean @default(true)
   pensionExemptionReason String?
 
   // Other statutory levies
-  nhfRate   Decimal @default(0.025) @db.Decimal(5, 4) // 2.5% on basic
-  nhfEnabled Boolean @default(true)
+  nhfRate            Decimal @default(0.025) @db.Decimal(5, 4) // 2.5% on basic
+  nhfEnabled         Boolean @default(true)
   nhfExemptionReason String?
-  nsitfRate Decimal @default(0.01) @db.Decimal(5, 4) // 1% employer levy
-  itfRate   Decimal @default(0.01) @db.Decimal(5, 4) // 1% employer levy
+  nsitfRate          Decimal @default(0.01) @db.Decimal(5, 4) // 1% employer levy
+  itfRate            Decimal @default(0.01) @db.Decimal(5, 4) // 1% employer levy
 
   standardWorkWeekHours     Decimal @default(40) @db.Decimal(5, 2)
   overtimeRateMultiplier    Decimal @default(1.5) @db.Decimal(5, 2)

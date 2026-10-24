@@ -44,6 +44,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         await tx.refundRequest.update({ where: { id: details.refundRequestId, status: 'PENDING_APPROVAL' }, data: { status: 'REJECTED' } });
         await tx.refundApproval.create({ data: { refundRequestId: details.refundRequestId, approverId: user.id, decision: 'REJECTED', comments: comment } });
       }
+      if (approval.type === 'CORPORATE_CREDIT' && (details as any).reservationId) {
+        const reservationId = (details as any).reservationId as string;
+        const reservation = await tx.reservation.findFirst({ where: { id: reservationId, propertyId: approval.propertyId, status: 'PENDING' }, include: { reservationRooms: true } });
+        if (reservation) {
+          await tx.reservation.update({ where: { id: reservation.id }, data: { status: 'EXPIRED', cancellationReason: 'Corporate credit approval rejected.' } });
+          await tx.reservationRoom.updateMany({ where: { reservationId: reservation.id, status: 'ACTIVE' }, data: { status: 'CANCELLED' } });
+          for (const room of reservation.reservationRooms) {
+            if (!room.roomId) continue;
+            const otherActive = await tx.reservationRoom.findFirst({ where: { roomId: room.roomId, status: 'ACTIVE', reservationId: { not: reservation.id }, checkIn: { lt: room.checkOut }, checkOut: { gt: room.checkIn } } });
+            if (!otherActive) await tx.room.update({ where: { id: room.roomId }, data: { status: 'AVAILABLE' } });
+          }
+        }
+      }
       const property = await tx.property.findUnique({ where: { id: approval.propertyId } });
       await tx.auditLog.create({
         data: {

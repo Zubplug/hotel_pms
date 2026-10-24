@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { CorporateAccountDialog } from './CorporateAccountDialog';
 import { toast } from 'sonner';
 
-interface Props { propertyId: string; canCreate: boolean; canEdit: boolean; canChangeFinancials: boolean; canChangeDepositPolicy: boolean; canDeactivate: boolean; canViewCityLedger: boolean; }
+interface Props { propertyId: string; canCreate: boolean; canEdit: boolean; canChangeFinancials: boolean; canChangeDepositPolicy: boolean; canDeactivate: boolean; canViewCityLedger: boolean; corporateContractsEnabled: boolean; }
 const money = (value: number, currency = 'NGN') => new Intl.NumberFormat('en-NG', { style: 'currency', currency, maximumFractionDigits: 0 }).format(value);
 const shortMoney = (value: number) => value >= 1_000_000 ? `₦${(value / 1_000_000).toFixed(1)}m` : value >= 1_000 ? `₦${Math.round(value / 1_000)}k` : `₦${Math.round(value)}`;
 const tooltipStyle = { borderRadius: 14, border: '1px solid #dbe4f0', boxShadow: '0 12px 32px rgba(15,23,42,.1)' };
@@ -21,7 +21,7 @@ function Metric({ label, value, detail, icon: Icon, tone = 'blue' }: { label: st
   return <div className="rounded-2xl border border-slate-800 bg-[#101827] p-5 shadow-xl shadow-black/10"><div className="flex items-start justify-between"><div><p className="text-xs font-semibold uppercase tracking-[.13em] text-slate-500">{label}</p><p className="mt-2 text-2xl font-bold tracking-tight text-white">{value}</p></div><div className={`rounded-xl p-2.5 ${toneClass}`}><Icon className="h-5 w-5" /></div></div><p className="mt-3 text-xs text-slate-500">{detail}</p></div>;
 }
 
-export function CorporateAccountManagement({ propertyId, canCreate, canEdit, canChangeFinancials, canChangeDepositPolicy, canDeactivate, canViewCityLedger }: Props) {
+export function CorporateAccountManagement({ propertyId, canCreate, canEdit, canChangeFinancials, canChangeDepositPolicy, canDeactivate, canViewCityLedger, corporateContractsEnabled }: Props) {
   const [data, setData] = useState<any>(null); const [loading, setLoading] = useState(true); const [query, setQuery] = useState(''); const [status, setStatus] = useState('active');
   const [activeTab, setActiveTab] = useState<'overview' | 'credit'>('overview');
   const [dialogOpen, setDialogOpen] = useState(false); const [selected, setSelected] = useState<any>(null);
@@ -69,6 +69,6 @@ export function CorporateAccountManagement({ propertyId, canCreate, canEdit, can
         </DialogFooter>
       </DialogContent>
     </Dialog>
-    <CorporateAccountDialog open={dialogOpen} onOpenChange={setDialogOpen} onSaved={() => void load()} account={selected} propertyId={propertyId} canEdit={canEdit} canChangeFinancials={canChangeFinancials} canChangeDepositPolicy={canChangeDepositPolicy} />
+    <CorporateAccountDialog open={dialogOpen} onOpenChange={setDialogOpen} onSaved={() => void load()} account={selected} propertyId={propertyId} canEdit={canEdit} canChangeFinancials={canChangeFinancials} canChangeDepositPolicy={canChangeDepositPolicy} canManageContracts={corporateContractsEnabled} />
   </div>;
 }

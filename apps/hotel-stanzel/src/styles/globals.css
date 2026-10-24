@@ -455,6 +455,24 @@ p { line-height: 1.75; color: var(--text-muted); }
 .text-muted  { color: var(--text-muted); }
 
 .bg-green  { background: var(--color-green); }
+
+/* Stanzel corporate workspace */
+.corporate-hero { display: grid; grid-template-columns: 1.25fr .75fr; gap: 28px; align-items: stretch; }
+.corporate-hero-copy { padding: 34px; border-radius: 22px; color: var(--color-white); background: linear-gradient(135deg, var(--color-green-dark), var(--color-green)); box-shadow: 0 18px 45px rgba(16, 38, 32, .16); }
+.corporate-hero-copy h2 { max-width: 620px; margin: 8px 0 14px; font-family: var(--font-display); font-size: clamp(30px, 4vw, 48px); letter-spacing: -.04em; line-height: 1.04; }
+.corporate-hero-copy p { max-width: 590px; color: rgba(255,255,255,.76); line-height: 1.8; }
+.corporate-hero-card { padding: 28px; border: 1px solid var(--border); border-radius: 22px; background: var(--color-white); box-shadow: var(--shadow-sm); }
+.corporate-hero-card h3 { margin: 8px 0 12px; font-family: var(--font-display); font-size: 24px; }
+.corporate-trust-row { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 24px; color: rgba(255,255,255,.76); font-size: 12px; }
+.corporate-trust-row span { display: inline-flex; align-items: center; gap: 7px; }
+.corporate-step-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 22px; }
+.corporate-step { padding: 18px; border: 1px solid var(--border); border-radius: 15px; background: var(--color-white); }
+.corporate-step-number { display: inline-flex; width: 27px; height: 27px; align-items: center; justify-content: center; border-radius: 50%; background: var(--color-green); color: var(--color-white); font-size: 12px; font-weight: 700; }
+.corporate-step h3 { margin: 13px 0 6px; font-size: 15px; }
+.corporate-step p { margin: 0; color: var(--text-muted); font-size: 13px; line-height: 1.65; }
+.corporate-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.corporate-form-full { grid-column: 1 / -1; }
+@media (max-width: 760px) { .corporate-hero, .corporate-step-grid, .corporate-form-grid { grid-template-columns: 1fr; } .corporate-hero-copy, .corporate-hero-card { padding: 24px; } .corporate-form-full { grid-column: auto; } }
 .bg-gold   { background: var(--color-gold); }
 .bg-ivory  { background: var(--color-ivory); }
 .bg-dark   { background: var(--color-ivory-dark); }

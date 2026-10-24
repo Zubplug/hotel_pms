@@ -22,6 +22,7 @@ import {
 import { AuthoritativeAvailabilityService } from '@/lib/booking-engine/availability-service';
 import { ReservationPricingService } from '@/lib/booking-engine/pricing-service';
 import { CreateHoldRequestSchema } from '@hotel-pms/types';
+import { validateBookingPolicy } from '@/lib/booking-engine/booking-policy-service';
 
 const HOLD_TTL_MINUTES = 12;
 
@@ -82,49 +83,12 @@ export async function POST(req: NextRequest) {
   const checkIn = new Date(checkInStr);
   const checkOut = new Date(checkOutStr);
 
-  // Date sanity checks
-  if (isNaN(checkIn.getTime()) || isNaN(checkOut.getTime()) || checkOut <= checkIn) {
-    const res = errorResponse('BAD_REQUEST', 'checkOut must be after checkIn', 400);
+  let nights: number;
+  try { nights = validateBookingPolicy({ checkIn, checkOut }, config); }
+  catch (error: any) {
+    const res = errorResponse('BAD_REQUEST', error.message, 400);
     Object.entries(corsHeaders(req, ctx.allowedOrigins)).forEach(([k, v]) => res.headers.set(k, v));
     return res;
-  }
-
-  const nights = Math.ceil((checkOut.getTime() - checkIn.getTime()) / 86_400_000);
-
-  // Enforce booking engine constraints
-  if (nights < config.minStay) {
-    const res = errorResponse('BAD_REQUEST', `Minimum stay is ${config.minStay} night(s)`, 400);
-    Object.entries(corsHeaders(req, ctx.allowedOrigins)).forEach(([k, v]) => res.headers.set(k, v));
-    return res;
-  }
-  if (config.maxStay && nights > config.maxStay) {
-    const res = errorResponse('BAD_REQUEST', `Maximum stay is ${config.maxStay} night(s)`, 400);
-    Object.entries(corsHeaders(req, ctx.allowedOrigins)).forEach(([k, v]) => res.headers.set(k, v));
-    return res;
-  }
-  if (config.bookingLeadTimeHours > 0) {
-    const earliestCheckIn = new Date(Date.now() + config.bookingLeadTimeHours * 3_600_000);
-    if (checkIn < earliestCheckIn) {
-      const res = errorResponse(
-        'BAD_REQUEST',
-        `Bookings must be made at least ${config.bookingLeadTimeHours} hour(s) in advance`,
-        400
-      );
-      Object.entries(corsHeaders(req, ctx.allowedOrigins)).forEach(([k, v]) => res.headers.set(k, v));
-      return res;
-    }
-  }
-  if (config.maxAdvanceDays) {
-    const latestCheckIn = new Date(Date.now() + config.maxAdvanceDays * 86_400_000);
-    if (checkIn > latestCheckIn) {
-      const res = errorResponse(
-        'BAD_REQUEST',
-        `Bookings cannot be made more than ${config.maxAdvanceDays} days in advance`,
-        400
-      );
-      Object.entries(corsHeaders(req, ctx.allowedOrigins)).forEach(([k, v]) => res.headers.set(k, v));
-      return res;
-    }
   }
 
   // Validate the room type belongs to this property and is active

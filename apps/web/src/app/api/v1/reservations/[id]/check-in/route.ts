@@ -6,6 +6,7 @@ import { assertPropertyAccess } from '@/lib/property-access';
 import { hasPermission } from '@/lib/rbac';
 import { isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
 import { requireOrganizationContext } from "@/lib/organization-access";
+import { CityLedgerAccountingService } from '@/lib/services/city-ledger-accounting-service';
 
 export async function POST(
   req: NextRequest,
@@ -139,6 +140,19 @@ export async function POST(
             credits: { where: { status: { in: ['AVAILABLE', 'PARTIALLY_APPLIED'] }, remainingAmount: { gt: 0 } } },
           }
         });
+
+        if (reservation.corporateAccount?.cityLedgerAccountId) {
+          await tx.$queryRaw<any[]>`
+            SELECT id
+            FROM "CityLedgerAccount"
+            WHERE id = ${reservation.corporateAccount.cityLedgerAccountId}::uuid
+            FOR UPDATE
+          `;
+          totalCredit += await CityLedgerAccountingService.getAvailableCorporateAdvance(tx, {
+            accountId: reservation.corporateAccount.cityLedgerAccountId,
+            currency: reservation.currency,
+          });
+        }
         
         for (const f of dbFolios) {
           if (reservation.corporateAccount) {

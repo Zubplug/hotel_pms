@@ -7,6 +7,13 @@ import { requireOrganizationContext } from '@/lib/organization-access';
 import { hasPermission } from '@/lib/permissions';
 import { hasPropertyModuleEntitlement } from '@/lib/auth/service-entitlement';
 
+function parseBoolean(value: unknown, fallback = false): boolean {
+  if (typeof value === 'boolean') return value;
+  if (value === 'true' || value === '1') return true;
+  if (value === 'false' || value === '0') return false;
+  return fallback;
+}
+
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await auth();
@@ -15,8 +22,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const { propertyIds, organizationId } = await requireOrganizationContext((session.user as any).id);
     const { id } = await params;
 
-    const account = await prisma.corporateAccount.findUnique({
-        where: { id }
+    const account = await prisma.corporateAccount.findFirst({
+        where: { id, organizationId, propertyId: { in: [...propertyIds] } }
     });
 
     if (!account || !propertyIds.includes(account.propertyId)) {
@@ -48,6 +55,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       if (ratePlanLocked && requestedRatePlanId !== account.ratePlanId) {
         return errorResponse('CONFLICT', 'Negotiated rate plan is locked while the account has an open shared folio or checked-in guest', 409);
       }
+      if (requestedRatePlanId) {
+        const ratePlan = await prisma.ratePlan.findFirst({
+          where: { id: requestedRatePlanId, propertyId: account.propertyId, isActive: true, deletedAt: null, property: { organizationId } },
+          select: { id: true },
+        });
+        if (!ratePlan) return errorResponse('BAD_REQUEST', 'Rate plan is not active for this property', 400);
+      }
     }
 
     const allowedProfileFields = ['contactPerson', 'contactEmail', 'contactPhone', 'ratePlanId'];
@@ -58,12 +72,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
     const data: Record<string, unknown> = {};
     for (const field of allowedProfileFields) {
-      if (field in body) data[field] = typeof body[field] === 'string' ? body[field].trim() || null : body[field];
+      if (field in body) {
+        if (field === 'ratePlanId') data[field] = body[field] === 'none' || !body[field] ? null : String(body[field]);
+        else data[field] = typeof body[field] === 'string' ? body[field].trim() || null : body[field];
+      }
     }
 
     const financialChange = ('creditLimit' in body && Number(body.creditLimit) !== Number(account.creditLimit))
       || ('depositPolicy' in body && body.depositPolicy !== account.depositPolicy)
-      || ('exemptFromHighBalance' in body && Boolean(body.exemptFromHighBalance) !== account.exemptFromHighBalance);
+      || ('exemptFromHighBalance' in body && parseBoolean(body.exemptFromHighBalance, account.exemptFromHighBalance) !== account.exemptFromHighBalance);
     const reason = typeof body.reason === 'string' ? body.reason.trim() : '';
     if (financialChange && reason.length < 5) {
       return errorResponse('BAD_REQUEST', 'A reason of at least 5 characters is required for financial-control changes', 400);
@@ -78,10 +95,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       if (!['WAIVED', 'STANDARD'].includes(body.depositPolicy)) return errorResponse('BAD_REQUEST', 'Invalid deposit policy', 400);
       data.depositPolicy = body.depositPolicy;
     }
-    if ('exemptFromHighBalance' in body) data.exemptFromHighBalance = Boolean(body.exemptFromHighBalance);
+    if ('exemptFromHighBalance' in body) data.exemptFromHighBalance = parseBoolean(body.exemptFromHighBalance, account.exemptFromHighBalance);
 
     // Check specific capabilities for financial fields
-    if (('creditLimit' in body && Number(body.creditLimit) !== Number(account.creditLimit)) || ('exemptFromHighBalance' in body && Boolean(body.exemptFromHighBalance) !== account.exemptFromHighBalance)) {
+    if (('creditLimit' in body && Number(body.creditLimit) !== Number(account.creditLimit)) || ('exemptFromHighBalance' in body && parseBoolean(body.exemptFromHighBalance, account.exemptFromHighBalance) !== account.exemptFromHighBalance)) {
         const canChangeCreditLimit = await hasPermission(session.user.id, account.propertyId, 'corporate_account:change_credit_limit');
         if (!canChangeCreditLimit) {
             return errorResponse('FORBIDDEN', 'Missing required permission: corporate_account:change_credit_limit', 403);
@@ -124,8 +141,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const { propertyIds, organizationId } = await requireOrganizationContext((session.user as any).id);
     const { id } = await params;
     
-    const account = await prisma.corporateAccount.findUnique({
-        where: { id }
+    const account = await prisma.corporateAccount.findFirst({
+        where: { id, organizationId, propertyId: { in: [...propertyIds] } }
     });
 
     if (!account || !propertyIds.includes(account.propertyId)) {

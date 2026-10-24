@@ -13,4 +13,5 @@ export * from './src/trials';
 export * from './src/flutterwave';
 export * from './src/reach-wallet';
 export * from './src/availability';
+export * from './src/corporate-application';
 export default prisma;

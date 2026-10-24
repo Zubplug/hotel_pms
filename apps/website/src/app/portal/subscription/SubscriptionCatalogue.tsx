@@ -37,15 +37,22 @@ function addOnFeatures(product: Product): string[] {
     ADDON_OTA_CHANNEL_MANAGER: ["OTA channel availability sync", "Reservation import automation", "Rate & inventory distribution", "Channel performance reporting"],
     ADDON_BEDS24: ["Beds24 API synchronization", "Automated booking import", "Live availability updates", "Dynamic rate push"],
     ADDON_BOOKING_ENGINE: ["Direct booking website", "Live room availability", "Rate-plan and seasonal pricing", "Guest holds and secure checkout"],
+    ADDON_CORPORATE_API: ["Partner-ready corporate booking API", "Secure partner credentials and scopes", "Contracted corporate rates", "Quotes, bookings and cancellations", "Corporate payments and invoices", "Reservation and invoice visibility"],
     ADDON_CUSTOM_DOMAIN: ["Branded booking URL", "DNS ownership verification", "Vercel domain attachment", "Automatic SSL provisioning"],
     ADDON_CUSTOM_WEBSITE_API: ["Standalone custom website", "LodgeCore public API integration", "Brand-led visual direction", "HQ design and launch support"],
     ADDON_CUSTOM_WEBSITE_PMS: ["PMS-connected custom website", "Live LodgeCore PMS integration", "Brand-led visual direction", "HQ design and launch support"],
+    ADDON_REACH: ["LodgeCore referral network listing", "Trackable referral campaigns", "Property-level booking attribution", "Referral performance reporting"],
   };
   return mapped[code] || product.modules?.map(m => m.name) || ["Extended capability module"];
 }
 
 function isPropertyScoped(product: Product) {
   return product.metadata && typeof product.metadata === "object" && !Array.isArray(product.metadata) && (product.metadata as Record<string, unknown>).unit === "PROPERTY";
+}
+
+function isRecommended(product: Product) {
+  return Boolean(product.metadata && typeof product.metadata === "object" && !Array.isArray(product.metadata)
+    && (product.metadata as Record<string, unknown>).recommended === true);
 }
 
 function planFeatures(plan: Plan): { feature: string; included: boolean }[] {
@@ -738,6 +745,7 @@ function AddOnCard({
         </div>
         <div>
           <div className="sub-addon-name">{product.name}</div>
+          {isRecommended(product) && <span className="sub-addon-status" style={{ color: "#f5c542" }}>Recommended</span>}
           {isActive && <span className="sub-addon-status">Active</span>}
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--accent)", letterSpacing: "0.12em", marginTop: 2 }}>
             {product.code}

@@ -12,6 +12,7 @@ import {
 import { AuthoritativeAvailabilityService } from '@/lib/booking-engine/availability-service';
 import { ReservationPricingService } from '@/lib/booking-engine/pricing-service';
 import { AvailabilityQuerySchema } from '@hotel-pms/types';
+import { validateBookingPolicy } from '@/lib/booking-engine/booking-policy-service';
 
 export async function OPTIONS(req: NextRequest) {
   return await corsPreflightResponse(req);
@@ -49,41 +50,9 @@ export async function GET(req: NextRequest) {
   if (isNaN(checkIn.getTime()) || isNaN(checkOut.getTime())) {
     return errorResponse('BAD_REQUEST', 'Invalid date format. Use YYYY-MM-DD', 400);
   }
-  if (checkOut <= checkIn) {
-    return errorResponse('BAD_REQUEST', 'checkOut must be after checkIn', 400);
-  }
-
-  const nights = Math.ceil((checkOut.getTime() - checkIn.getTime()) / 86_400_000);
-  if (nights < config.minStay) {
-    return errorResponse('BAD_REQUEST', `Minimum stay is ${config.minStay} night(s)`, 400);
-  }
-  if (config.maxStay && nights > config.maxStay) {
-    return errorResponse('BAD_REQUEST', `Maximum stay is ${config.maxStay} night(s)`, 400);
-  }
-
-  // Validate lead time
-  if (config.bookingLeadTimeHours > 0) {
-    const earliestCheckIn = new Date(Date.now() + config.bookingLeadTimeHours * 3_600_000);
-    if (checkIn < earliestCheckIn) {
-      return errorResponse(
-        'BAD_REQUEST',
-        `Bookings must be made at least ${config.bookingLeadTimeHours} hour(s) in advance`,
-        400
-      );
-    }
-  }
-
-  // Validate advance booking window
-  if (config.maxAdvanceDays) {
-    const latestCheckIn = new Date(Date.now() + config.maxAdvanceDays * 86_400_000);
-    if (checkIn > latestCheckIn) {
-      return errorResponse(
-        'BAD_REQUEST',
-        `Bookings cannot be made more than ${config.maxAdvanceDays} days in advance`,
-        400
-      );
-    }
-  }
+  let nights: number;
+  try { nights = validateBookingPolicy({ checkIn, checkOut }, config); }
+  catch (error: any) { return errorResponse('BAD_REQUEST', error.message, 400); }
 
   const ratePlanWhere: any = {
     propertyId: ctx.propertyId,

@@ -2,6 +2,28 @@ import { GLMappingService } from './gl-mapping-service';
 import { GeneralLedgerService } from './general-ledger-service';
 
 export class CityLedgerAccountingService {
+  /** Returns unapplied corporate gateway/AR advances without creating a
+   * second folio credit representation. Allocations include invoice, folio,
+   * and refund consumption, so one economic payment is counted once. */
+  static async getAvailableCorporateAdvance(
+    tx: any,
+    input: { accountId: string; currency: string },
+  ) {
+    const entries = await tx.cityLedgerEntry.findMany({
+      where: {
+        accountId: input.accountId,
+        type: 'PAYMENT',
+        currency: input.currency,
+        status: { not: 'REVERSED' },
+      },
+      include: { allocations: { select: { amount: true } } },
+    });
+    return entries.reduce((total: number, entry: any) => {
+      const allocated = entry.allocations.reduce((sum: number, allocation: any) => sum + Number(allocation.amount), 0);
+      return total + Math.max(0, Number(entry.amount) - allocated);
+    }, 0);
+  }
+
   /**
    * Applies existing unapplied corporate receipts to a newly-created city
    * ledger invoice. This is intentionally transaction-scoped so lease/event

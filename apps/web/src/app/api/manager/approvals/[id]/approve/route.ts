@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import prisma from '@hotel-pms/db';
+import { materializeCorporateAccountForApplication } from '@hotel-pms/db';
 import crypto from 'crypto';
 import { successResponse, errorResponse } from '@/lib/api-response';
 import { resolveUser } from '@/lib/resolve-user';
@@ -288,6 +289,46 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       // 3. Idempotency Check (Only allow PENDING to APPROVED)
       if (approval.status !== 'PENDING') {
         throw new Error('CONFLICT');
+      }
+
+      if (approval.type === 'CORPORATE_CREDIT') {
+        if (!['GENERAL_MANAGER', 'HOTEL_MANAGER', 'MANAGER', 'DIRECTOR', 'CEO', 'ADMIN', 'SUPER_ADMIN'].includes(String(user.role).toUpperCase()) && !user.isSuperAdmin) throw new Error('MANAGER_APPROVAL_REQUIRED');
+        const details = (approval.details || {}) as { reservationId?: string };
+        if (!details.reservationId) throw new Error('CORPORATE_RESERVATION_NOT_FOUND');
+        if (approval.expiresAt && approval.expiresAt <= new Date()) {
+          await tx.approvalRequest.update({ where: { id: approval.id }, data: { status: 'EXPIRED', executionStatus: 'FAILED', reviewedBy: user.id, reviewedAt: new Date() } });
+          throw new Error('CORPORATE_APPROVAL_EXPIRED');
+        }
+          const reservationForCredit = await tx.reservation.findUnique({ where: { id: details.reservationId }, select: { corporateAccountId: true, corporateBookingApplicationId: true, ratePlanId: true, ratePlanSnapshot: true, propertyId: true } });
+        if (!reservationForCredit) throw new Error('CORPORATE_RESERVATION_NOT_FOUND');
+        if (!reservationForCredit.corporateAccountId && reservationForCredit.corporateBookingApplicationId) {
+          const property = await tx.property.findUnique({ where: { id: approval.propertyId }, select: { organizationId: true } });
+          const account = await materializeCorporateAccountForApplication(tx as any, { applicationId: reservationForCredit.corporateBookingApplicationId, organizationId: property?.organizationId || '', propertyId: approval.propertyId, ratePlanId: reservationForCredit.ratePlanId, actorId: user.id });
+          if (account) {
+            await tx.reservation.update({ where: { id: details.reservationId }, data: { corporateAccountId: account.id } });
+            await tx.folio.updateMany({ where: { reservationId: details.reservationId, type: 'CITY_LEDGER' }, data: { corporateAccountId: account.id } });
+          }
+          reservationForCredit.corporateAccountId = account?.id || null;
+        }
+        if (!reservationForCredit.corporateAccountId) throw new Error('CORPORATE_RESERVATION_NOT_FOUND');
+        const corporateAccount = await tx.corporateAccount.findUnique({ where: { id: reservationForCredit.corporateAccountId }, select: { cityLedgerAccountId: true, creditLimit: true, exemptFromHighBalance: true } });
+        if (!corporateAccount?.cityLedgerAccountId) throw new Error('CORPORATE_LEDGER_NOT_AVAILABLE');
+        await tx.$queryRaw<any[]>`SELECT id FROM "CityLedgerAccount" WHERE id = ${corporateAccount.cityLedgerAccountId}::uuid FOR UPDATE`;
+        if (Number(corporateAccount.creditLimit) > 0 && !corporateAccount.exemptFromHighBalance) {
+          const ledger = await tx.cityLedgerAccount.findUnique({ where: { id: corporateAccount.cityLedgerAccountId }, select: { balance: true } });
+          const active = await tx.reservation.findMany({ where: { corporateAccountId: reservationForCredit.corporateAccountId, propertyId: approval.propertyId, status: { in: ['CONFIRMED', 'CHECKED_IN'] }, id: { not: details.reservationId } }, select: { ratePlanSnapshot: true } });
+          const committed = active.reduce((sum: number, reservation: any) => {
+            const snapshot = reservation.ratePlanSnapshot as any;
+            const mode = String(snapshot?.paymentMode || snapshot?.request?.paymentMode || '').toUpperCase();
+            return sum + (mode === 'PAY_LATER' ? Number(snapshot?.total ?? snapshot?.totals?.total ?? 0) : 0);
+          }, 0);
+          if (Number(ledger?.balance || 0) + committed + Number(approval.amount || 0) > Number(corporateAccount.creditLimit)) throw new Error('CREDIT_LIMIT_EXCEEDED');
+        }
+        const reservation = await tx.reservation.updateMany({ where: { id: details.reservationId, propertyId: approval.propertyId, status: 'PENDING' }, data: { status: 'CONFIRMED', paymentExpiresAt: null } });
+        if (reservation.count !== 1) throw new Error('CORPORATE_RESERVATION_NOT_PENDING');
+        const updated = await tx.approvalRequest.update({ where: { id: approval.id }, data: { status: 'APPROVED', executionStatus: 'APPLIED', reviewedBy: user.id, reviewedAt: new Date() } });
+        await tx.auditLog.create({ data: { organizationId: (await tx.property.findUnique({ where: { id: approval.propertyId }, select: { organizationId: true } }))?.organizationId || '', propertyId: approval.propertyId, userId: user.id, action: 'CORPORATE_CREDIT_APPROVED', resource: 'Reservation', resourceId: details.reservationId, newValue: { status: 'CONFIRMED', approvalId: approval.id }, ipAddress: req.headers.get('x-forwarded-for') || '', userAgent: req.headers.get('user-agent') || '', requestId: crypto.randomUUID() } });
+        return { status: 'EXECUTED', approval: updated, reservationId: details.reservationId };
       }
 
       if (approval.type === 'ADVANCE_DEPOSIT' || approval.type === 'CREDIT_ADJUSTMENT') {

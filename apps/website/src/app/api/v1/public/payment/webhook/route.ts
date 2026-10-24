@@ -10,6 +10,7 @@ import { decryptPaymentCredential } from '@/lib/payment-providers/credentials';
 import { FlutterwaveProvider } from '@/lib/payment-providers/flutterwave';
 import { PaystackProvider } from '@/lib/payment-providers/paystack';
 import { postBookingAdvanceDeposit } from '@/lib/booking-engine/financial-service';
+import { settleCorporateAdvancePayment, settleCorporateInvoicePayment, settleCorporatePayment } from '@/lib/booking-engine/corporate-settlement-service';
 import { reconcileFlutterwaveRefund } from '@/lib/booking-engine/flutterwave-refund-reconciliation';
 import { NotificationEngine } from '@/lib/notification-engine';
 import { getFlutterwaveTransfer } from '@hotel-pms/db';
@@ -132,7 +133,8 @@ export async function POST(req: NextRequest) {
     }).catch((emailError) => console.error('[Booking Webhook] failure email failed', emailError));
   };
 
-  const account = await getBookingPaymentAccount(bpt.propertyId, 'BOOKING_ENGINE');
+  const paymentTarget = (bpt.metadata as any)?.paymentTarget === 'STANDALONE_API' ? 'STANDALONE_API' : 'BOOKING_ENGINE';
+  const account = await getBookingPaymentAccount(bpt.propertyId, paymentTarget);
   let providerSecret: string;
   let webhookSecret: string;
   try {
@@ -209,11 +211,12 @@ export async function POST(req: NextRequest) {
     const reservation = bpt.reservationId
       ? await prisma.reservation.findUnique({
         where: { id: bpt.reservationId },
-        select: { status: true, confirmationNumber: true, primaryGuest: { select: { email: true } }, property: { select: { name: true } } },
+        select: { status: true, paymentExpiresAt: true, confirmationNumber: true, primaryGuest: { select: { email: true } }, property: { select: { name: true } } },
       })
       : null;
     const isExtension = (bpt.metadata as any)?.type === 'EXTENSION';
-    const isLatePayment = !isExtension && (!reservation || !['PENDING', 'CONFIRMED'].includes(reservation.status));
+    const isInvoicePayment = (bpt.metadata as any)?.invoicePayment === true;
+    const isLatePayment = !isInvoicePayment && !isExtension && (!reservation || !['PENDING', 'CONFIRMED'].includes(reservation.status) || Boolean(reservation.paymentExpiresAt && reservation.paymentExpiresAt <= new Date()));
     if (isLatePayment) {
       let refundStatus = 'FAILED';
       let providerRefundId: string | null = null;
@@ -265,6 +268,33 @@ export async function POST(req: NextRequest) {
 
   try {
     await prisma.$transaction(async (tx) => {
+      if ((bpt.metadata as any)?.channel === 'CORPORATE_API') {
+        const property = await tx.property.findUnique({
+          where: { id: bpt.propertyId },
+          select: { businessDate: true, timezone: true, organizationId: true },
+        });
+        if (!property) throw new Error(`Property ${bpt.propertyId} was not found for corporate settlement`);
+        const systemActorId = await getOrCreateBookingSystemActor(
+          prisma as any,
+          property.organizationId,
+        );
+        const settlementInput = {
+          tx,
+          bookingPaymentTransactionId: bpt.id,
+          providerRef,
+          providerTransactionId: providerTxId,
+          verifiedAmount,
+          verifiedCurrency,
+          businessDate: property.businessDate ?? getPropertyBusinessDate(property.timezone ?? 'UTC'),
+          systemActorId,
+          requestId: crypto.randomUUID(),
+        };
+        if ((bpt.metadata as any)?.walletCredit) await settleCorporateAdvancePayment(settlementInput);
+        else if ((bpt.metadata as any)?.invoicePayment) await settleCorporateInvoicePayment(settlementInput);
+        else await settleCorporatePayment(settlementInput);
+        return;
+      }
+
       const reservation = await (tx as any).reservation.findFirst({
         where: { id: bpt.reservationId, propertyId: bpt.propertyId },
         include: {
@@ -342,7 +372,7 @@ export async function POST(req: NextRequest) {
 
       await (tx as any).reservation.update({
         where: { id: reservation.id },
-        data: { status: 'CONFIRMED' },
+        data: { status: 'CONFIRMED', paymentExpiresAt: null },
       });
 
       // Payment completes the booking-hold lifecycle. Until this point the

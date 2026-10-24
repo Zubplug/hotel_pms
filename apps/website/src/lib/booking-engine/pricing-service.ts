@@ -9,7 +9,7 @@ type TxClient = Prisma.TransactionClient | PrismaClient;
 export interface NightlyRate {
   date: Date;          // The night being priced (checkIn date of that night)
   amount: number;      // Resolved rate in property currency
-  source: 'SEASONAL' | 'RATE' | 'BASE_RATE';
+  source: 'SEASONAL' | 'RATE' | 'BASE_RATE' | 'CORPORATE_CONTRACT';
   seasonalRateName?: string;
 }
 
@@ -78,6 +78,7 @@ export const ReservationPricingService = {
       checkOut: Date;
       /** Override the booking-engine payment mode from BookingEngineConfig */
       paymentMode?: string;
+      corporateNightlyRate?: { amount: number; currency: string };
     }
   ): Promise<PricingQuote> {
     const { propertyId, ratePlanId, roomTypeId, checkIn, checkOut } = opts;
@@ -120,7 +121,7 @@ export const ReservationPricingService = {
       throw new Error(`RoomType ${roomTypeId} not found`);
     }
 
-    const currency: string = ratePlan.rates[0]?.currency ?? roomType.currency ?? 'NGN';
+    const currency: string = opts.corporateNightlyRate?.currency ?? ratePlan.rates[0]?.currency ?? roomType.currency ?? 'NGN';
 
     // --- Resolve nightly rates ---
     const nights = nightCount(checkIn, checkOut);
@@ -128,7 +129,9 @@ export const ReservationPricingService = {
 
     for (let i = 0; i < nights; i++) {
       const night = addDays(checkIn, i);
-      nightlyRates.push(resolveNightlyRate(night, ratePlan, roomType, currency));
+      nightlyRates.push(opts.corporateNightlyRate
+        ? { date: night, amount: opts.corporateNightlyRate.amount, source: 'CORPORATE_CONTRACT' }
+        : resolveNightlyRate(night, ratePlan, roomType, currency));
     }
 
     const subtotal = nightlyRates.reduce((sum, n) => sum + n.amount, 0);
@@ -313,4 +316,3 @@ function addDays(date: Date, days: number): Date {
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
-

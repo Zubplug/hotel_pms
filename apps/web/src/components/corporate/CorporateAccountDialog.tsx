@@ -13,6 +13,7 @@ import { useSWRConfig } from 'swr';
 import useSWR from 'swr';
 import { toast } from 'sonner';
 import { Building2, Coffee, CreditCard, Landmark, Mail, Phone, Plus, ShieldAlert, Tag, UserRound } from 'lucide-react';
+import { CorporateApiContractDialog } from './CorporateApiContractDialog';
 
 const dialogInput = 'border-white/10 bg-white/[.045] text-slate-100 placeholder:text-slate-600 shadow-inner shadow-black/10 focus-visible:border-indigo-400 focus-visible:ring-indigo-400/20 disabled:cursor-not-allowed disabled:opacity-50';
 const dialogSelect = 'border-white/10 bg-white/[.045] text-slate-100 shadow-inner shadow-black/10 focus:ring-indigo-400/20 data-[placeholder]:text-slate-500';
@@ -249,6 +250,7 @@ interface CorporateAccountDialogProps {
   canChangeFinancials?: boolean;
   canChangeDepositPolicy?: boolean;
   canManageRates?: boolean;
+  canManageContracts?: boolean;
 }
 
 export function CorporateAccountDialog({
@@ -260,11 +262,13 @@ export function CorporateAccountDialog({
   canEdit = false,
   canChangeFinancials = false,
   canChangeDepositPolicy = false,
-  canManageRates = true // default to true if they have access to this feature, or pass down from parent
+  canManageRates = true,
+  canManageContracts = false,
 }: CorporateAccountDialogProps) {
   const isEditing = !!account;
   const { mutate } = useSWRConfig();
   const [quickRateOpen, setQuickRateOpen] = useState(false);
+  const [apiContractOpen, setApiContractOpen] = useState(false);
   const [financialReasonOpen, setFinancialReasonOpen] = useState(false);
   const [financialReason, setFinancialReason] = useState('');
   const [pendingFormData, setPendingFormData] = useState<any>(null);
@@ -414,6 +418,7 @@ export function CorporateAccountDialog({
         onSaved={handleRateCreated}
         propertyId={propertyId}
       />
+      {isEditing && canManageContracts && <CorporateApiContractDialog open={apiContractOpen} onOpenChange={setApiContractOpen} accountId={account.id} propertyId={propertyId} accountName={account.name} />}
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="!max-h-[calc(100vh-2rem)] !w-[calc(100vw-2rem)] !max-w-[1180px] overflow-hidden rounded-2xl border-white/10 bg-[#0a0f1c] p-0 text-slate-100 shadow-[0_30px_100px_rgba(0,0,0,.65)]">
           <DialogHeader className="border-b border-white/[.08] bg-gradient-to-r from-indigo-950/80 via-[#0f172a] to-[#0a0f1c] px-6 py-5">
@@ -488,6 +493,13 @@ export function CorporateAccountDialog({
                 )}
               </div>
             </div>
+
+            {isEditing && canManageContracts && <div className="mt-4 rounded-xl border border-cyan-400/20 bg-cyan-400/[.035] p-4">
+              <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+                <div><p className="text-sm font-semibold text-cyan-100">Corporate API contract rates</p><p className="mt-1 text-xs leading-5 text-slate-400">Separate negotiated rates for verified API or corporate website bookings. This does not change PMS walk-in pricing.</p></div>
+                {canEdit && <Button type="button" variant="outline" className="border-cyan-400/30 bg-cyan-500/10 text-cyan-200 hover:bg-cyan-500/20" onClick={() => setApiContractOpen(true)}><Plus className="mr-2 h-4 w-4" />Create API draft</Button>}
+              </div>
+            </div>}
 
             {ratePlanId && ratePlanId !== 'none' && (
               (() => {

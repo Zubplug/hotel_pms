@@ -20,6 +20,7 @@ export interface CreateReservationParams {
   adults: number;
   children: number;
   corporateAccountId?: string | null;
+  corporateBookingApplicationId?: string | null;
   
   // Rate & Financial
   ratePlanId?: string;
@@ -60,7 +61,7 @@ export const SharedReservationService = {
     const {
       propertyId, organizationId, guestId, guestDetails,
       checkIn, checkOut, roomTypeId, roomId, adults, children,
-      corporateAccountId, ratePlanId, overrideTotalAmount,
+      corporateAccountId, corporateBookingApplicationId, ratePlanId, overrideTotalAmount,
       adjustmentType, adjustmentValue, adjustmentReason,
       acknowledgedByStaffId,
       source = 'WALK_IN', status = 'CONFIRMED',
@@ -77,7 +78,8 @@ export const SharedReservationService = {
 
     // A corporate booking is a distinct reservation source even when the
     // caller omitted source (the normal front-desk default is WALK_IN).
-    const reservationSource = corporateAccountId ? 'CORPORATE' : source;
+    const isCorporateReservation = Boolean(corporateAccountId || corporateBookingApplicationId);
+    const reservationSource = isCorporateReservation ? 'CORPORATE' : source;
 
     const nights = Math.max(1, Math.ceil((checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60 * 24)));
 
@@ -173,6 +175,7 @@ export const SharedReservationService = {
           ratePlanSnapshot: { baseRate, total: totalAmount, currency },
           currency: currency,
           corporateAccountId: corporateAccountId || null,
+          corporateBookingApplicationId: corporateBookingApplicationId || null,
           createdBy: createdBy || null,
           createdByType: createdByType as any,
         },
@@ -327,7 +330,7 @@ export const SharedReservationService = {
           propertyId,
           guestId: corporateAccountId ? null : finalGuestId,
           folioNumber: 'FOL-' + Math.floor(Math.random() * 1000000).toString().padStart(6, '0'),
-          type: corporateAccountId ? 'CITY_LEDGER' : 'ROOM',
+          type: isCorporateReservation ? 'CITY_LEDGER' : 'ROOM',
           status: 'OPEN',
           currency,
           totalCharges: 0,

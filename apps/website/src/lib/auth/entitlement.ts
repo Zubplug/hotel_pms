@@ -1,9 +1,5 @@
-import prisma from '@hotel-pms/db';
+import prisma, { hasEntitlement as hasDatabaseEntitlement } from '@hotel-pms/db';
 
 export async function hasEntitlement(organizationId: string, productCode: string, propertyId?: string | null): Promise<boolean> {
-  const entitlement = await (prisma as any).entitlement.findFirst({
-    where: { organizationId, productCode, status: 'ACTIVE', ...(propertyId ? { OR: [{ propertyId }, { propertyId: null }] } : {}) },
-    select: { id: true },
-  });
-  return Boolean(entitlement);
+  return hasDatabaseEntitlement(prisma as any, { organizationId, productCode, propertyId });
 }

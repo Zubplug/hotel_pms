@@ -26,6 +26,7 @@ export async function CorporatePage() {
   const canChangeDepositPolicy = await hasPermission(userId, propertyId, 'corporate_account:change_deposit_policy');
   const canDeactivate = await hasPermission(userId, propertyId, 'corporate_account:deactivate');
   const canViewCityLedger = await hasPermission(userId, propertyId, 'corporate_account:view_city_ledger');
+  const corporateContractsEnabled = process.env.CORPORATE_CONTRACTS_ENABLED === 'true';
 
   return (
     <div>
@@ -37,6 +38,7 @@ export async function CorporatePage() {
         canChangeDepositPolicy={canChangeDepositPolicy}
         canDeactivate={canDeactivate}
         canViewCityLedger={canViewCityLedger}
+        corporateContractsEnabled={corporateContractsEnabled}
       />
     </div>
   );

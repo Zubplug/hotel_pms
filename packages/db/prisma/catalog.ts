@@ -1,4 +1,4 @@
-export const CATALOG_VERSION = 1;
+export const CATALOG_VERSION = 2;
 
 export type CatalogProduct = {
   code: string;
@@ -29,6 +29,7 @@ export const catalogProducts: CatalogProduct[] = [
   { code: 'ADDON_BEDS24', name: 'Beds24 Channel Integration', type: 'ADDON', active: true, metadata: { family: 'CONNECTIVITY', provider: 'BEDS24', unit: 'PROPERTY', sellable: true, offlineCapable: false, version: CATALOG_VERSION } },
   { code: 'ADDON_CHANNEL_MANAGER', name: 'Channel Manager', type: 'ADDON', active: false, metadata: { family: 'CONNECTIVITY', unit: 'PROPERTY', sellable: false, offlineCapable: false, version: CATALOG_VERSION } },
   { code: 'ADDON_BOOKING_ENGINE', name: 'Booking Engine', type: 'ADDON', active: true, metadata: { family: 'CONNECTIVITY', unit: 'PROPERTY', sellable: true, offlineCapable: false, version: CATALOG_VERSION } },
+  { code: 'ADDON_CORPORATE_API', name: 'Corporate API', type: 'ADDON', active: true, metadata: { family: 'CONNECTIVITY', mode: 'CORPORATE_API', unit: 'PROPERTY', sellable: true, offlineCapable: false, requiresApproval: true, requiresProducts: ['MODULE_OPERATIONS'], recommended: true, version: CATALOG_VERSION } },
   { code: 'ADDON_CUSTOM_DOMAIN', name: 'Custom Booking Domain', type: 'ADDON', active: true, metadata: { family: 'CONNECTIVITY', unit: 'PROPERTY', sellable: true, offlineCapable: false, requiresApproval: true, version: CATALOG_VERSION } },
   { code: 'ADDON_CUSTOM_WEBSITE_DESIGN', name: 'Custom Website Design Service (legacy)', type: 'ADDON', active: false, metadata: { family: 'SERVICES', unit: 'PROJECT', sellable: false, offlineCapable: false, oneTime: true, retired: true, version: CATALOG_VERSION } },
   { code: 'ADDON_CUSTOM_WEBSITE_API', name: 'Standalone API Website Development', type: 'ADDON', active: true, metadata: { family: 'SERVICES', mode: 'STANDALONE_API', unit: 'PROJECT', sellable: true, offlineCapable: false, requiresApproval: true, oneTime: true, version: CATALOG_VERSION } },
@@ -60,6 +61,7 @@ export const oneTimePrices = [
 
 export const addOnPrices = [
   { code: 'ADDON_BEDS24', month: 2500000, year: 25000000, currency: 'ngn' }, // ₦25,000/month or ₦250,000/year per property
+  { code: 'ADDON_CORPORATE_API', month: 15000000, year: 150000000, currency: 'ngn' }, // ₦150,000/month or ₦1,500,000/year per property
 ] as const;
 
 export const catalogPlans: CatalogPlan[] = [
