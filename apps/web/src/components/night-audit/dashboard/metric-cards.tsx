@@ -3,7 +3,7 @@ import React from 'react';
 import { NightAuditData } from '@/types/night-audit';
 import {
   TrendingUp, Banknote, Users, ArrowUpRight, ArrowDownRight,
-  Minus, BedDouble, CalendarDays, CreditCard, Tag, Percent,
+  Minus, BedDouble, CalendarDays, CreditCard, Tag, Percent, Building2,
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -106,6 +106,12 @@ export function MetricCards({ data }: { data: NightAuditData }) {
   const curRevenue = revenueBreakdown({ financialSnapshot: snap || last?.financialSnapshot, closePackage: data.currentAudit?.closePackage || last?.closePackage });
   const deptSeries = Array.from(new Map([...chartData.flatMap((d: any) => d.departments || []), ...curRevenue.departments].map((dep: any) => [dep.key, dep])).values());
   const donutData = curRevenue.departments.map((d) => ({ ...d, pct: curRevenue.departments.reduce((s, x) => s + x.value, 0) > 0 ? (d.value / curRevenue.departments.reduce((s, x) => s + x.value, 0)) * 100 : 0 }));
+  const isEventDepartment = (name: string) => /^(event|events\s*[·-])/i.test(name);
+  const eventDepartments = curRevenue.departments.filter((d) => isEventDepartment(d.name));
+  const eventRevenue = eventDepartments.reduce((sum, d) => sum + d.value, 0);
+  const hallRevenue = eventDepartments.filter((d) => /hall/i.test(d.name)).reduce((sum, d) => sum + d.value, 0);
+  const equipmentRevenue = eventDepartments.filter((d) => /equipment/i.test(d.name)).reduce((sum, d) => sum + d.value, 0);
+  const eventFoodRevenue = eventDepartments.filter((d) => /food/i.test(d.name)).reduce((sum, d) => sum + d.value, 0);
 
   return (
     <div className="space-y-4">
@@ -158,7 +164,11 @@ export function MetricCards({ data }: { data: NightAuditData }) {
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
         <MetricCard label="Room Revenue" value={money(curRevenue.roomRevenue, cur, true)} sub={money(curRevenue.roomRevenue, cur)} icon={BedDouble} color={TONE_HEX.indigo} />
         <MetricCard label="F&B / POS" value={money(curRevenue.fnbRevenue, cur, true)} sub="Food & beverage" icon={Banknote} color={TONE_HEX.amber} />
-        {curRevenue.departments.filter((d) => d.name !== 'Rooms' && d.name !== 'F&B/POS' && d.name !== 'F&B / POS').map((d) => (
+        <MetricCard label="Event Revenue" value={money(eventRevenue, cur, true)} sub="Events total" icon={CalendarDays} color={TONE_HEX.violet} />
+        <MetricCard label="Hall Revenue" value={money(hallRevenue, cur, true)} sub="Event halls" icon={Building2} color={TONE_HEX.sky} />
+        <MetricCard label="Event Equipment" value={money(equipmentRevenue, cur, true)} sub="Event equipment" icon={Tag} color={TONE_HEX.emerald} />
+        <MetricCard label="Event Food" value={money(eventFoodRevenue, cur, true)} sub="Event catering" icon={Banknote} color={TONE_HEX.amber} />
+        {curRevenue.departments.filter((d) => d.name !== 'Rooms' && d.name !== 'F&B/POS' && d.name !== 'F&B / POS' && !isEventDepartment(d.name)).map((d) => (
           <MetricCard key={d.key} label={d.name} value={money(d.value, cur, true)} sub="Revenue dept" icon={TrendingUp} color={d.color} />
         ))}
         <MetricCard label="Taxes" value={money(snap?.taxes ?? (last?.financialSnapshot ? Number(last.financialSnapshot.taxes) : 0), cur, true)} sub="Posted taxes" icon={Percent} color="#64748b" />

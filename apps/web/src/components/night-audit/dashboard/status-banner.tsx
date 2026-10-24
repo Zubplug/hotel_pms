@@ -1,6 +1,7 @@
 'use client';
 import React from 'react';
 import { format } from 'date-fns';
+import { useSession } from 'next-auth/react';
 import { NightAuditData } from '@/types/night-audit';
 import {
   CheckCircle2, Clock3, Loader2, MoonStar, Play, AlertTriangle, FileCheck2,
@@ -120,14 +121,20 @@ export function StatusBanner({
   refreshing,
   managerMode = false,
 }: StatusBannerProps) {
+  const { data: session } = useSession();
   const businessDate = data.businessDate ? new Date(data.businessDate) : new Date();
   const isReady = data.summary.blockers === 0 && !isAuditInProgress && data.auditState !== 'COMPLETED';
   const auditRecord = data.activeAudit || data.currentAudit;
   const lastCompleted = data.lastCompletedAudit || (data.currentAudit?.status === 'COMPLETED' ? data.currentAudit : null);
   const owner = auditRecord?.runByStaff;
+  const currentUserName = session?.user?.name || session?.user?.email || '';
   const ownerName = owner
     ? `${owner.firstName || ''} ${owner.lastName || ''}`.trim()
-    : auditRecord?.runBy ? 'Assigned auditor' : 'Unassigned';
+    : auditRecord?.runBy
+      ? currentUserName || 'Assigned auditor'
+      : auditRecord?.status === 'COMPLETED'
+        ? 'System'
+        : currentUserName || 'Current auditor';
 
   let tone: Tone = 'amber';
   let statusText = 'Pending';
