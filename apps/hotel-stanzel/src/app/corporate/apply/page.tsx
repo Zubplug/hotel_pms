@@ -1,113 +1,47 @@
 'use client';
 
-import { FormEvent, useEffect, useRef, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 type Option = { value: string; label: string; description?: string };
+type Room = { id: string; name: string; availability: { available: number; isAvailable: boolean }; rate: { currency: string; subtotal: number } | null };
+type Guest = { firstName: string; lastName: string; email: string; phone: string };
 
 const paymentOptions: Option[] = [
   { value: 'PAY_LATER', label: 'Pay later', description: 'Subject to corporate approval' },
-  { value: 'FULL', label: 'Pay in full', description: 'Settle the booking before arrival' },
-  { value: 'DEPOSIT', label: 'Pay a deposit', description: 'Deposit terms confirmed by Stanzel' },
+  { value: 'FULL', label: 'Pay in full', description: 'Settle before arrival' },
+  { value: 'DEPOSIT', label: 'Pay a deposit', description: 'Terms confirmed by Stanzel' },
 ];
+const countryOptions: Option[] = ['Nigeria', 'Ghana', 'Kenya', 'South Africa', 'United Kingdom', 'United States', 'Other country'].map((label) => ({ value: label, label }));
+const emptyGuest = (): Guest => ({ firstName: '', lastName: '', email: '', phone: '' });
 
-const countryOptions: Option[] = [
-  { value: 'Nigeria', label: 'Nigeria' },
-  { value: 'Ghana', label: 'Ghana' },
-  { value: 'Kenya', label: 'Kenya' },
-  { value: 'South Africa', label: 'South Africa' },
-  { value: 'United Kingdom', label: 'United Kingdom' },
-  { value: 'United States', label: 'United States' },
-  { value: 'Other', label: 'Other country' },
-];
-
-function SearchableSelect({ name, label, options, defaultValue, hint }: { name: string; label: string; options: Option[]; defaultValue: string; hint?: string }) {
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState('');
-  const [value, setValue] = useState(defaultValue);
-  const rootRef = useRef<HTMLDivElement>(null);
+function SearchableSelect({ name, label, options, defaultValue, onValueChange }: { name: string; label: string; options: Option[]; defaultValue: string; onValueChange?: (value: string) => void }) {
+  const [open, setOpen] = useState(false); const [query, setQuery] = useState(''); const [value, setValue] = useState(defaultValue); const rootRef = useRef<HTMLDivElement>(null);
   const selected = options.find((option) => option.value === value) || options[0];
   const filtered = options.filter((option) => `${option.label} ${option.description || ''}`.toLowerCase().includes(query.toLowerCase()));
-
-  useEffect(() => {
-    function close(event: MouseEvent) {
-      if (rootRef.current && !rootRef.current.contains(event.target as Node)) setOpen(false);
-    }
-    document.addEventListener('mousedown', close);
-    return () => document.removeEventListener('mousedown', close);
-  }, []);
-
-  return <div ref={rootRef} style={{ position: 'relative' }}>
-    <label className="field-label">{label}{hint && <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}> · {hint}</span>}</label>
-    <input type="hidden" name={name} value={value} required />
-    <button type="button" aria-haspopup="listbox" aria-expanded={open} onClick={() => setOpen((current) => !current)} style={{ width: '100%', marginTop: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center', textAlign: 'left', background: 'var(--color-white)', border: `1px solid ${open ? 'var(--color-gold-dark)' : 'var(--border)'}`, borderRadius: 8, padding: '12px 14px', color: 'var(--text)', font: 'inherit' }}>
-      <span>{selected.label}</span>
-      <span aria-hidden="true" style={{ color: 'var(--text-muted)', transform: open ? 'rotate(180deg)' : undefined }}>⌄</span>
-    </button>
-    {open && <div role="listbox" aria-label={label} style={{ position: 'absolute', zIndex: 20, left: 0, right: 0, top: 'calc(100% + 6px)', background: 'var(--color-white)', border: '1px solid var(--border)', borderRadius: 12, boxShadow: 'var(--shadow-lg)', padding: 8 }}>
-      <input autoFocus aria-label={`Search ${label.toLowerCase()}`} value={query} onChange={(event) => setQuery(event.target.value)} placeholder={`Search ${label.toLowerCase()}…`} className="field-input" style={{ marginBottom: 6 }} />
-      <div style={{ maxHeight: 210, overflowY: 'auto' }}>
-        {filtered.map((option) => <button key={option.value} type="button" role="option" aria-selected={option.value === value} onClick={() => { setValue(option.value); setQuery(''); setOpen(false); }} style={{ width: '100%', display: 'block', textAlign: 'left', background: option.value === value ? 'var(--color-ivory-dark)' : 'transparent', border: 0, borderRadius: 8, padding: '10px 12px', color: 'var(--text)', font: 'inherit' }}><strong style={{ display: 'block', fontSize: 13 }}>{option.label}</strong>{option.description && <small style={{ color: 'var(--text-muted)' }}>{option.description}</small>}</button>)}
-        {!filtered.length && <p style={{ padding: '10px 12px', color: 'var(--text-muted)', fontSize: 13 }}>No matches found.</p>}
-      </div>
-    </div>}
-  </div>;
+  useEffect(() => { const close = (event: MouseEvent) => { if (rootRef.current && !rootRef.current.contains(event.target as Node)) setOpen(false); }; document.addEventListener('mousedown', close); return () => document.removeEventListener('mousedown', close); }, []);
+  return <div ref={rootRef} style={{ position: 'relative' }}><label className="field-label">{label}</label><input type="hidden" name={name} value={value} required /><button type="button" aria-haspopup="listbox" aria-expanded={open} onClick={() => setOpen((current) => !current)} style={{ width: '100%', marginTop: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center', textAlign: 'left', background: 'var(--color-white)', border: `1px solid ${open ? 'var(--color-gold-dark)' : 'var(--border)'}`, borderRadius: 8, padding: '12px 14px', color: 'var(--text)', font: 'inherit' }}><span>{selected.label}</span><span aria-hidden="true">⌄</span></button>{open && <div role="listbox" style={{ position: 'absolute', zIndex: 20, left: 0, right: 0, top: 'calc(100% + 6px)', background: 'var(--color-white)', border: '1px solid var(--border)', borderRadius: 12, boxShadow: 'var(--shadow-lg)', padding: 8 }}><input autoFocus aria-label={`Search ${label.toLowerCase()}`} value={query} onChange={(event) => setQuery(event.target.value)} placeholder={`Search ${label.toLowerCase()}…`} className="field-input" style={{ marginBottom: 6 }} /><div style={{ maxHeight: 190, overflowY: 'auto' }}>{filtered.map((option) => <button key={option.value} type="button" onClick={() => { setValue(option.value); onValueChange?.(option.value); setQuery(''); setOpen(false); }} style={{ width: '100%', display: 'block', textAlign: 'left', background: option.value === value ? 'var(--color-ivory-dark)' : 'transparent', border: 0, borderRadius: 8, padding: '10px 12px', color: 'var(--text)', font: 'inherit' }}><strong style={{ display: 'block', fontSize: 13 }}>{option.label}</strong>{option.description && <small style={{ color: 'var(--text-muted)' }}>{option.description}</small>}</button>)}</div></div>}</div>;
 }
 
 export default function CorporateApplyPage() {
   const router = useRouter();
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
+  const [stage, setStage] = useState<1 | 2 | 3>(1); const [form, setForm] = useState({ checkIn: '', checkOut: '', adults: '1', children: '0', roomCount: '1', paymentMode: 'PAY_LATER' });
+  const [rooms, setRooms] = useState<Room[]>([]); const [roomTypeId, setRoomTypeId] = useState(''); const [quote, setQuote] = useState<any>(null); const [guests, setGuests] = useState<Guest[]>([emptyGuest()]);
+  const [error, setError] = useState(''); const [busy, setBusy] = useState(false); const roomCount = Math.max(1, Math.min(20, Number(form.roomCount) || 1));
+  const selectedRoom = useMemo(() => rooms.find((room) => room.id === roomTypeId), [rooms, roomTypeId]);
+  const update = (key: string, value: string) => { setForm((current) => ({ ...current, [key]: value })); if (key === 'roomCount') { const count = Math.max(1, Math.min(20, Number(value) || 1)); setGuests((current) => Array.from({ length: count }, (_, index) => current[index] || emptyGuest())); } };
 
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setBusy(true);
-    setError('');
-    const body = Object.fromEntries(new FormData(event.currentTarget).entries());
-    const response = await fetch('/api/corporate/apply', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
-    const result = await response.json().catch(() => ({}));
-    if (!response.ok) setError(result.error || 'Unable to start corporate booking.');
-    else router.push(result.redirectTo || '/corporate/book?mode=application');
-    setBusy(false);
-  }
+  async function search(event: FormEvent) { event.preventDefault(); setBusy(true); setError(''); setQuote(null); try { const response = await fetch(`/api/corporate/availability?${new URLSearchParams(form)}`); const body = await response.json(); if (!response.ok) throw new Error(body.error || 'Availability unavailable.'); const available = body.rooms || []; setRooms(available); setRoomTypeId(available.find((room: Room) => room.rate && room.availability.isAvailable)?.id || ''); setStage(2); } catch (e) { setError(e instanceof Error ? e.message : 'Could not search availability.'); } finally { setBusy(false); } }
 
-  return <div style={{ maxWidth: 1040 }}>
-    <div className="corporate-hero" style={{ marginBottom: 24 }}>
-      <div className="corporate-hero-copy">
-        <p className="eyebrow" style={{ color: 'var(--color-gold-light)' }}>Stanzel Grand Resort · Corporate services</p>
-        <h2>Make every business stay feel considered.</h2>
-        <p>Tell us about your organisation and we will help you arrange dependable accommodation, preferred rates and a seamless arrival experience for your guests.</p>
-        <div className="corporate-trust-row"><span>✓ Contract-rate pricing</span><span>✓ Secure booking</span><span>✓ Front desk ready</span></div>
-      </div>
-      <div className="corporate-hero-card">
-        <p className="eyebrow">Step 1 of 2 · Corporate application</p>
-        <h3>Tell us about your organisation</h3>
-        <p style={{ color: 'var(--text-muted)', lineHeight: 1.7, fontSize: 14 }}>Your details create a secure, short-lived booking workspace. A permanent PMS corporate account is created or reused only after the booking is approved or settled.</p>
-        <form onSubmit={submit} style={{ display: 'grid', gap: 16, marginTop: 24 }}>
-          <div className="corporate-form-grid">
-            <label className="field-label">Company name<input className="field-input" name="companyName" required minLength={2} autoComplete="organization" /></label>
-            <label className="field-label">Contact person<input className="field-input" name="contactPerson" required minLength={2} autoComplete="name" /></label>
-          </div>
-          <div className="corporate-form-grid">
-            <label className="field-label">Corporate email<input className="field-input" name="contactEmail" type="email" required autoComplete="email" /></label>
-            <label className="field-label">Phone number<input className="field-input" name="contactPhone" type="tel" required minLength={7} autoComplete="tel" placeholder="+234 800 000 0000" /></label>
-          </div>
-          <label className="field-label">Business address<input className="field-input" name="companyAddress" required minLength={5} autoComplete="street-address" placeholder="Street address, building or suite" /></label>
-          <div className="corporate-form-grid">
-            <label className="field-label">City<input className="field-input" name="companyCity" required minLength={2} autoComplete="address-level2" /></label>
-            <SearchableSelect name="companyCountry" label="Country" options={countryOptions} defaultValue="Nigeria" />
-          </div>
-          <div className="corporate-form-grid">
-            <SearchableSelect name="paymentMode" label="Payment arrangement" options={paymentOptions} defaultValue="PAY_LATER" />
-            <div style={{ display: 'flex', alignItems: 'flex-end' }}><p style={{ color: 'var(--text-muted)', fontSize: 12, lineHeight: 1.6, margin: 0 }}>All Stanzel corporate applications are currently quoted and settled in Nigerian Naira.</p></div>
-          </div>
-          <input type="hidden" name="currency" value="NGN" />
-          {error && <p role="alert" style={{ color: '#b42318', fontSize: 13, margin: 0 }}>{error}</p>}
-          <button className="btn btn-primary" disabled={busy} style={{ width: '100%', marginTop: 4 }}>{busy ? 'Opening secure booking…' : 'Continue to room selection'}</button>
-          <p style={{ color: 'var(--text-muted)', fontSize: 12, lineHeight: 1.6, margin: 0 }}>Your information is used to prepare this corporate booking and connect it to Stanzel’s PMS workflow.</p>
-        </form>
-      </div>
-    </div>
-    <div className="corporate-step-grid"><div className="corporate-step"><span className="corporate-step-number">1</span><h3>Share your details</h3><p>Give us the organisation and contact information needed to support your stay.</p></div><div className="corporate-step"><span className="corporate-step-number">2</span><h3>Review your rate</h3><p>Availability and corporate pricing come from LodgeCore’s protected Corporate API.</p></div><div className="corporate-step"><span className="corporate-step-number">3</span><h3>Reserve with confidence</h3><p>Your reservation is created in the same PMS workflow used by Stanzel front desk.</p></div></div>
-  </div>;
+  async function createApplication(event: FormEvent<HTMLFormElement>) { event.preventDefault(); if (!roomTypeId) return; setBusy(true); setError(''); const body = Object.fromEntries(new FormData(event.currentTarget).entries()); try { const application = await fetch('/api/corporate/apply', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }); const applicationBody = await application.json(); if (!application.ok) throw new Error(applicationBody.error || 'Unable to create corporate application.'); const quoteResponse = await fetch('/api/corporate/quote', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ roomTypeId, checkIn: form.checkIn, checkOut: form.checkOut, adults: Number(form.adults), children: Number(form.children), roomCount, paymentMode: form.paymentMode }) }); const quoteBody = await quoteResponse.json(); if (!quoteResponse.ok) throw new Error(quoteBody.error || 'Corporate rate unavailable.'); setQuote(quoteBody); setStage(3); } catch (e) { setError(e instanceof Error ? e.message : 'Could not prepare your reservation.'); } finally { setBusy(false); } }
+  async function book() { if (!quote?.quoteId || guests.some((guest) => !guest.firstName || !guest.lastName || !guest.email)) return; setBusy(true); setError(''); try { const response = await fetch('/api/corporate/booking', { method: 'POST', headers: { 'content-type': 'application/json', 'x-idempotency-key': crypto.randomUUID() }, body: JSON.stringify({ quoteId: quote.quoteId, guests, specialRequests: 'Corporate website application booking' }) }); const body = await response.json(); if (!response.ok) throw new Error(body.error || 'Could not create reservation.'); if (body.paymentRequired && body.reservationId) { const payment = await fetch(`/api/corporate/payment?reservationId=${encodeURIComponent(body.reservationId)}`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-idempotency-key': `payment-${crypto.randomUUID()}` }, body: JSON.stringify({ email: guests[0].email }) }); const paymentBody = await payment.json(); if (!payment.ok) throw new Error(paymentBody.error || 'Could not initialize payment.'); if (paymentBody.authorizationUrl) { window.location.href = paymentBody.authorizationUrl; return; } } router.push('/corporate/reservations'); } catch (e) { setError(e instanceof Error ? e.message : 'Could not complete reservation.'); } finally { setBusy(false); } }
+  const stepLabels = ['Search dates', 'Choose rooms', 'Review reservation'];
+
+  return <div style={{ maxWidth: 1040 }}><div className="corporate-hero" style={{ marginBottom: 24 }}><div className="corporate-hero-copy"><p className="eyebrow" style={{ color: 'var(--color-gold-light)' }}>Stanzel Grand Resort · Corporate services</p><h2>Plan your organisation’s stay with confidence.</h2><p>Check availability first, select the right room arrangement, then provide your organisation details before reviewing the final corporate rate.</p><div className="corporate-trust-row"><span>✓ Live availability</span><span>✓ Corporate rates</span><span>✓ PMS-connected booking</span></div></div><div className="corporate-hero-card"><div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 24 }}>{stepLabels.map((label, index) => <div key={label} style={{ textAlign: 'center', color: index + 1 <= stage ? 'var(--color-green)' : 'var(--text-muted)', fontSize: 11, fontWeight: 600 }}><span style={{ display: 'grid', placeItems: 'center', width: 28, height: 28, margin: '0 auto 6px', borderRadius: '50%', background: index + 1 <= stage ? 'var(--color-gold)' : 'var(--color-ivory-dark)' }}>{index + 1}</span>{label}</div>)}</div>
+    {stage === 1 && <><p className="eyebrow">Step 1 · Search availability</p><h3>Find rooms for your team</h3><form onSubmit={search} style={{ display: 'grid', gap: 15, marginTop: 20 }}><div className="corporate-form-grid"><label className="field-label">Check-in<input className="field-input" type="date" required value={form.checkIn} onChange={(e) => update('checkIn', e.target.value)} /></label><label className="field-label">Check-out<input className="field-input" type="date" required value={form.checkOut} onChange={(e) => update('checkOut', e.target.value)} /></label></div><div className="corporate-form-grid"><label className="field-label">Adults per room<input className="field-input" type="number" min="1" required value={form.adults} onChange={(e) => update('adults', e.target.value)} /></label><label className="field-label">Children per room<input className="field-input" type="number" min="0" required value={form.children} onChange={(e) => update('children', e.target.value)} /></label></div><label className="field-label">Rooms required<input className="field-input" type="number" min="1" max="20" required value={form.roomCount} onChange={(e) => update('roomCount', e.target.value)} /></label><SearchableSelect name="paymentMode" label="Payment arrangement" options={paymentOptions} defaultValue={form.paymentMode} onValueChange={(value) => update('paymentMode', value)} /><button className="btn btn-primary" disabled={busy}>{busy ? 'Checking live availability…' : 'Check availability'}</button></form></>}
+    {stage === 2 && <><p className="eyebrow">Step 2 · Choose your rooms</p><h3>Available room types</h3><p style={{ color: 'var(--text-muted)', fontSize: 13, lineHeight: 1.6, marginTop: 6 }}>{form.checkIn} to {form.checkOut} · {roomCount} room(s) · {form.adults} adult(s) and {form.children} child(ren) per room</p><div style={{ display: 'grid', gap: 10, marginTop: 18 }}>{rooms.map((room) => <label key={room.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 14, padding: 15, border: `1px solid ${roomTypeId === room.id ? 'var(--color-green)' : 'var(--border)'}`, borderRadius: 12, opacity: room.rate && room.availability.isAvailable ? 1 : .5 }}><span><input type="radio" disabled={!room.rate || !room.availability.isAvailable} checked={roomTypeId === room.id} onChange={() => setRoomTypeId(room.id)} /> <strong style={{ marginLeft: 8 }}>{room.name}</strong><small style={{ display: 'block', margin: '5px 0 0 22px', color: 'var(--text-muted)' }}>{room.availability.available} available</small></span><strong>{room.rate ? `${room.rate.currency} ${Number(room.rate.subtotal).toLocaleString()}` : 'Unavailable'}</strong></label>)}</div>{!rooms.length && <p style={{ color: 'var(--text-muted)', marginTop: 18 }}>No room types are available for these dates.</p>}<div style={{ display: 'flex', gap: 10, marginTop: 20 }}><button className="btn btn-outline-dark" onClick={() => setStage(1)}>Change search</button><button className="btn btn-primary" disabled={!selectedRoom || busy} onClick={() => setStage(3)}>Continue with this room type</button></div></>}
+    {stage === 3 && !quote && <><p className="eyebrow">Step 3 · Organisation details</p><h3>Complete your corporate reservation</h3><p style={{ color: 'var(--text-muted)', lineHeight: 1.6, fontSize: 13, marginTop: 6 }}>Your selected room and dates are held in this secure application while we calculate the corporate quote.</p><form onSubmit={createApplication} style={{ display: 'grid', gap: 14, marginTop: 20 }}><div className="corporate-form-grid"><label className="field-label">Company name<input className="field-input" name="companyName" required minLength={2} autoComplete="organization" /></label><label className="field-label">Contact person<input className="field-input" name="contactPerson" required minLength={2} autoComplete="name" /></label></div><div className="corporate-form-grid"><label className="field-label">Corporate email<input className="field-input" name="contactEmail" type="email" required autoComplete="email" /></label><label className="field-label">Phone number<input className="field-input" name="contactPhone" type="tel" required minLength={7} autoComplete="tel" /></label></div><label className="field-label">Business address<input className="field-input" name="companyAddress" required minLength={5} autoComplete="street-address" /></label><div className="corporate-form-grid"><label className="field-label">City<input className="field-input" name="companyCity" required minLength={2} autoComplete="address-level2" /></label><SearchableSelect name="companyCountry" label="Country" options={countryOptions} defaultValue="Nigeria" /></div><input type="hidden" name="currency" value="NGN" /><div style={{ display: 'flex', gap: 10, marginTop: 4 }}><button type="button" className="btn btn-outline-dark" onClick={() => setStage(2)}>Back to rooms</button><button className="btn btn-primary" disabled={busy}>{busy ? 'Calculating corporate rate…' : 'Review corporate reservation'}</button></div></form></>}
+    {stage === 3 && quote && <><p className="eyebrow">Review corporate reservation</p><h3>{selectedRoom?.name}</h3><div style={{ background: 'var(--color-ivory-dark)', borderRadius: 12, padding: 16, marginTop: 14 }}><p style={{ color: 'var(--text-muted)', fontSize: 13 }}>Stay: {form.checkIn} to {form.checkOut} · {roomCount} room(s)</p><p style={{ fontSize: 22, fontFamily: 'var(--font-serif)', marginTop: 6 }}>{quote.snapshot?.totals?.currency} {Number(quote.snapshot?.totals?.total || 0).toLocaleString()}</p><p style={{ color: 'var(--text-muted)', fontSize: 12, marginTop: 4 }}>Quote expires {new Date(quote.expiresAt).toLocaleString()}.</p></div><p style={{ color: 'var(--text-muted)', fontSize: 13, marginTop: 18 }}>Add one guest per room. Physical rooms are assigned by Front Desk at arrival.</p><div style={{ display: 'grid', gap: 12, marginTop: 12 }}>{guests.map((guest, index) => <fieldset key={index} style={{ border: '1px solid var(--border)', borderRadius: 12, padding: 14, display: 'grid', gap: 10 }}><legend>Room {index + 1} guest</legend><input required className="field-input" placeholder="First name" value={guest.firstName} onChange={(e) => setGuests((current) => current.map((row, i) => i === index ? { ...row, firstName: e.target.value } : row))} /><input required className="field-input" placeholder="Last name" value={guest.lastName} onChange={(e) => setGuests((current) => current.map((row, i) => i === index ? { ...row, lastName: e.target.value } : row))} /><input required className="field-input" type="email" placeholder="Guest email" value={guest.email} onChange={(e) => setGuests((current) => current.map((row, i) => i === index ? { ...row, email: e.target.value } : row))} /></fieldset>)}</div><button className="btn btn-primary" disabled={busy || guests.some((guest) => !guest.firstName || !guest.lastName || !guest.email)} onClick={book} style={{ width: '100%', marginTop: 16 }}>{busy ? 'Creating reservation…' : 'Confirm corporate reservation'}</button></>}
+    {error && <p role="alert" style={{ color: '#b42318', marginTop: 16, fontSize: 13 }}>{error}</p>}
+  </div></div><div className="corporate-step-grid"><div className="corporate-step"><span className="corporate-step-number">1</span><h3>Search first</h3><p>Choose dates, occupancy and the number of rooms your team needs.</p></div><div className="corporate-step"><span className="corporate-step-number">2</span><h3>Select rooms</h3><p>Review live room availability and the applicable corporate rate.</p></div><div className="corporate-step"><span className="corporate-step-number">3</span><h3>Review and reserve</h3><p>Provide company details, review the calculated quote and confirm.</p></div></div></div>;
 }
