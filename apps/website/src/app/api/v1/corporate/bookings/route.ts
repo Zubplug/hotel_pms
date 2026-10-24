@@ -12,9 +12,10 @@ const bookingSchema = z.object({
   // should send one guest per requested room in `guests`.
   guest: guestSchema.optional(),
   guests: z.array(guestSchema).min(1).max(20).optional(),
+  deferGuestDetails: z.boolean().optional(),
   specialRequests: z.string().max(2000).optional(),
   externalReference: z.string().max(128).optional(),
-}).refine((value) => Boolean(value.guest) !== Boolean(value.guests), { message: 'Provide either guest or guests, but not both' });
+}).refine((value) => (Boolean(value.guest) !== Boolean(value.guests)) || value.deferGuestDetails === true, { message: 'Provide guests or defer guest details to the corporate portal or Front Desk' });
 
 export async function POST(req: NextRequest) {
   const auth = await requireCorporateApi(req, 'bookings:create');

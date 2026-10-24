@@ -24,10 +24,12 @@ export type CorporateBookingInput = Readonly<{
   guests?: readonly CorporateGuestInput[];
   specialRequests?: string;
   externalReference?: string;
+  deferGuestDetails?: boolean;
 }>;
 
 function normalizedGuests(input: CorporateBookingInput): readonly CorporateGuestInput[] {
   const guests = input.guests ?? (input.guest ? [input.guest] : []);
+  if (input.deferGuestDetails && guests.length === 0) return [];
   if (guests.length < 1 || guests.length > 20) {
     throw new CorporateBookingError('BOOKING_INPUT_INVALID', 'Provide between 1 and 20 guests');
   }
@@ -60,6 +62,7 @@ function bookingFingerprint(input: CorporateBookingInput): string {
     quoteId: input.quoteId,
     guests,
     specialRequests: input.specialRequests ?? null,
+    deferGuestDetails: input.deferGuestDetails ?? false,
     externalReference: input.externalReference ?? null,
   })).digest('hex');
 }
@@ -69,7 +72,7 @@ function validateInput(input: CorporateBookingInput): void {
     throw new CorporateBookingError('BOOKING_INPUT_INVALID', 'Idempotency key must be 8–128 safe characters');
   }
   const guests = normalizedGuests(input);
-  if (!input.quoteId || guests.some((guest) => !guest.firstName.trim() || !guest.lastName.trim() || !/^\S+@\S+\.\S+$/.test(guest.email.trim()))) {
+  if (!input.quoteId || (!input.deferGuestDetails && guests.some((guest) => !guest.firstName.trim() || !guest.lastName.trim() || !/^\S+@\S+\.\S+$/.test(guest.email.trim())))) {
     throw new CorporateBookingError('BOOKING_INPUT_INVALID', 'Guest and quote details are invalid');
   }
   if (input.externalReference && input.externalReference.length > 128) {
@@ -143,11 +146,24 @@ async function runBookingTransaction(
 
     const validated = await revalidateCorporateQuote(tx, principal, input.quoteId, now);
     const snapshot = validated.current;
-    const guests = normalizedGuests(input);
+    const requestedGuests = normalizedGuests(input);
     const roomCount = snapshot.request.roomCount ?? 1;
-    if (guests.length !== roomCount) {
+    if (requestedGuests.length > 0 && requestedGuests.length !== roomCount) {
       throw new CorporateBookingError('BOOKING_INPUT_INVALID', `This quote requires exactly ${roomCount} guest${roomCount === 1 ? '' : 's'}`);
     }
+    const owner = input.deferGuestDetails && requestedGuests.length === 0
+      ? principal.corporateAccountId
+        ? await tx.corporateAccount.findUnique({ where: { id: principal.corporateAccountId }, select: { name: true, contactPerson: true, contactEmail: true, contactPhone: true } })
+        : principal.corporateApplicationId
+          ? await tx.corporateBookingApplication.findUnique({ where: { id: principal.corporateApplicationId }, select: { companyName: true, contactPerson: true, contactEmail: true, contactPhone: true } })
+          : null
+      : null;
+    const guests = requestedGuests.length > 0 ? requestedGuests : Array.from({ length: roomCount }, () => ({
+      firstName: owner?.contactPerson || ('companyName' in (owner || {}) ? owner?.companyName : undefined) || snapshot.corporateAccount.name,
+      lastName: 'Corporate guest',
+      email: owner?.contactEmail || `corporate-${principal.id}@lodgecore.invalid`,
+      phone: owner?.contactPhone || undefined,
+    }));
     const propertyId = snapshot.request.propertyId;
 
     const consumed = await tx.bookingQuote.updateMany({

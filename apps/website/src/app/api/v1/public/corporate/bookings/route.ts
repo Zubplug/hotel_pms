@@ -7,7 +7,7 @@ import { resolvePublicCorporateApplication } from '@/lib/booking-engine/corporat
 import { createCorporateReservation } from '@/lib/booking-engine/corporate-booking-service';
 
 const guest = z.object({ firstName: z.string().trim().min(1).max(100), lastName: z.string().trim().min(1).max(100), email: z.string().email().max(320), phone: z.string().max(50).optional(), country: z.string().max(2).optional() });
-const schema = z.object({ applicationId: z.string().uuid(), applicationToken: z.string().min(20).max(200), quoteId: z.string().uuid(), guests: z.array(guest).min(1).max(20), specialRequests: z.string().max(2000).optional(), externalReference: z.string().max(128).optional() });
+const schema = z.object({ applicationId: z.string().uuid(), applicationToken: z.string().min(20).max(200), quoteId: z.string().uuid(), guests: z.array(guest).min(1).max(20).optional(), deferGuestDetails: z.boolean().optional(), specialRequests: z.string().max(2000).optional(), externalReference: z.string().max(128).optional() }).refine((value) => Boolean(value.guests?.length) || value.deferGuestDetails === true, { message: 'Provide guests or defer guest details to the corporate portal or Front Desk' });
 
 export async function POST(req: NextRequest) {
   const ctx = await resolvePublicApiContext(req);
