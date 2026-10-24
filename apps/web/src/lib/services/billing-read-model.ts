@@ -31,6 +31,23 @@ export type BillingDocument = {
   related: { paymentIds: string[]; allocationIds: string[]; creditIds: string[]; refundIds: string[]; journalIds: string[] };
 };
 
+export type ActiveCorporateFolio = {
+  id: string;
+  propertyId: string;
+  reference: string;
+  corporateAccountId: string;
+  corporateName: string;
+  currency: string;
+  totalCharges: string;
+  totalPayments: string;
+  outstandingAmount: string;
+  linkedReservationCount: number;
+  chargeLineCount: number;
+  latePostingCount: number;
+  status: string;
+  createdAt: string | null;
+};
+
 export type BillingFilters = {
   propertyId: string;
   source?: BillingSource;
@@ -243,6 +260,43 @@ export async function listBillingDocuments(scope: BillingScope, filters: Omit<Bi
   const hasMore = all.length > limit;
   const last = all[limit - 1];
   return { documents, hasMore, nextCursor: hasMore && last ? encodeBillingCursor({ sortDate: last.sortDate.toISOString(), source: last.document.source, sourceId: last.document.sourceId, filterKey }) : null, scope: { organizationId: scope.ctx.organizationId, propertyId: scope.propertyId, currency: scope.currency, asOf: scope.asOf.toISOString(), postingBasis: 'SOURCE_AUTHORITATIVE_BALANCE', ordering: 'sortDate DESC, source ASC, sourceId ASC', cursorVersion: 1 } };
+}
+
+export async function listActiveCorporateFolios(scope: BillingScope, query?: string): Promise<ActiveCorporateFolio[]> {
+  const q = query?.trim();
+  const rows = await (prisma as any).folio.findMany({
+    where: {
+      propertyId: scope.propertyId,
+      type: 'CITY_LEDGER',
+      status: 'OPEN',
+      corporateAccountId: { not: null },
+      ...(q ? { OR: [{ folioNumber: { contains: q, mode: 'insensitive' } }, { corporateAccount: { name: { contains: q, mode: 'insensitive' } } }] } : {}),
+    },
+    include: {
+      corporateAccount: { select: { id: true, name: true } },
+      items: { where: { voidedAt: null }, select: { reservationId: true, isLatePosting: true } },
+    },
+    orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],
+  });
+  return rows.map((row: any) => {
+    const balance = getFolioBalance({ balance: row.balance, totalCharges: row.totalCharges, totalPayments: row.totalPayments });
+    return {
+      id: row.id,
+      propertyId: row.propertyId,
+      reference: row.folioNumber,
+      corporateAccountId: row.corporateAccount.id,
+      corporateName: row.corporateAccount.name,
+      currency: row.currency,
+      totalCharges: amount(row.totalCharges),
+      totalPayments: amount(row.totalPayments),
+      outstandingAmount: amount(balance.debit.toFixed(4)),
+      linkedReservationCount: new Set(row.items.map((item: any) => item.reservationId).filter(Boolean)).size,
+      chargeLineCount: row.items.length,
+      latePostingCount: row.items.filter((item: any) => item.isLatePosting).length,
+      status: row.status,
+      createdAt: iso(row.createdAt),
+    };
+  });
 }
 
 export async function getBillingOverview(scope: BillingScope, filters: Omit<BillingFilters, 'propertyId' | 'limit'> = {}) {

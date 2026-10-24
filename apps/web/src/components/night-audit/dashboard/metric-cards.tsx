@@ -170,7 +170,7 @@ export function MetricCards({ data, accountingDepartments = [] }: { data: NightA
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
         <MetricCard label="Room Revenue" value={money(curRevenue.roomRevenue, cur, true)} sub={money(curRevenue.roomRevenue, cur)} icon={BedDouble} color={TONE_HEX.indigo} />
         <MetricCard label="F&B / POS" value={money(curRevenue.fnbRevenue, cur, true)} sub="Food & beverage" icon={Banknote} color={TONE_HEX.amber} />
-        <MetricCard label="Event / Banquet Revenue" value={money(eventRevenue, cur, true)} sub={accountingEventDepartments[0]?.accountCode ? `Account ${accountingEventDepartments[0].accountCode}` : 'Accounting department'} icon={CalendarDays} color={TONE_HEX.violet} />
+        <MetricCard label="Event / Banquet Revenue" value={money(eventRevenue, cur, true)} sub="Mapped revenue department" icon={CalendarDays} color={TONE_HEX.violet} />
         {curRevenue.departments.filter((d) => d.name !== 'Rooms' && d.name !== 'F&B/POS' && d.name !== 'F&B / POS' && !isEventDepartment(d.name)).map((d) => (
           <MetricCard key={d.key} label={d.name} value={money(d.value, cur, true)} sub="Revenue dept" icon={TrendingUp} color={d.color} />
         ))}
