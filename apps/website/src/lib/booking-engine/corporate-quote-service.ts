@@ -367,9 +367,10 @@ async function buildQuoteSnapshot(
     throw error;
   }
   if (!contractRate) throw new CorporateQuoteError('CORPORATE_RATE_UNAVAILABLE', 'An approved corporate API rate is required for this property and stay');
-  if (contractRate.paymentMode && contractRate.paymentMode !== paymentMode) {
-    throw new CorporateQuoteError('CORPORATE_RATE_UNAVAILABLE', `This approved corporate contract requires ${contractRate.paymentMode} payment`);
-  }
+  // The contract payment mode is a default/reference for the property or
+  // negotiated terms. Corporate users may choose any supported payment mode
+  // for each reservation; the selected mode is carried in the quote snapshot
+  // and is used by ReservationPricingService and the booking service below.
 
   // The selected PMS rate plan is the single base-rate source for the
   // property-default Corporate API contract. Legacy identity contracts may
