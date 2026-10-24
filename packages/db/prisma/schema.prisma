@@ -1040,6 +1040,8 @@ model CorporateRateNegotiationRequest {
   reviewedBy                    String?   @db.Uuid
   reviewedAt                    DateTime? @db.Timestamptz
   resultingContractId           String?   @db.Uuid
+  quoteId                       String?   @db.Uuid
+  approvedQuoteId               String?   @db.Uuid
   createdAt                     DateTime  @default(now()) @db.Timestamptz
   updatedAt                     DateTime  @updatedAt @db.Timestamptz
 
@@ -1048,6 +1050,8 @@ model CorporateRateNegotiationRequest {
   corporateAccount            CorporateAccount?            @relation(fields: [corporateAccountId], references: [id], onDelete: Cascade)
   corporateBookingApplication CorporateBookingApplication? @relation(fields: [corporateBookingApplicationId], references: [id], onDelete: Cascade)
   resultingContract           CorporateContract?           @relation(fields: [resultingContractId], references: [id], onDelete: SetNull)
+  quote                       BookingQuote?                @relation("CorporateRateNegotiationQuote", fields: [quoteId], references: [id], onDelete: SetNull)
+  approvedQuote               BookingQuote?                @relation("CorporateRateNegotiationApprovedQuote", fields: [approvedQuoteId], references: [id], onDelete: SetNull)
 
   @@index([propertyId, corporateAccountId, status])
   @@index([propertyId, corporateBookingApplicationId, status])
@@ -7668,6 +7672,8 @@ model BookingQuote {
   corporateAccountId            String?                      @db.Uuid
   corporateBookingApplicationId String?                      @db.Uuid
   corporateBookingApplication   CorporateBookingApplication? @relation(fields: [corporateBookingApplicationId], references: [id], onDelete: SetNull)
+  corporateRateNegotiations       CorporateRateNegotiationRequest[] @relation("CorporateRateNegotiationQuote")
+  approvedCorporateNegotiations   CorporateRateNegotiationRequest[] @relation("CorporateRateNegotiationApprovedQuote")
   requestFingerprint            String
   status                        String                       @default("ACTIVE") // ACTIVE | EXPIRED | CONSUMED | INVALIDATED
   expiresAt                     DateTime                     @db.Timestamptz

@@ -486,6 +486,10 @@ export async function executeNightAudit(
               const lockedCorporateNight = isCorporateCharge && activeRoom
                 ? ((reservation.ratePlanSnapshot as any)?.nightlyBreakdown || []).find((night: any) => night.date === businessDate.toISOString().slice(0, 10))
                 : null;
+              const isCorporateApiSnapshot = (reservation.ratePlanSnapshot as any)?.rateDecision?.kind === 'CORPORATE_CONTRACT_RULE';
+              if (isCorporateApiSnapshot && !lockedCorporateNight) {
+                throw new Error(`BLOCKER:Corporate API reservation ${reservation.id} has no locked room-charge breakdown for ${businessDate.toISOString().slice(0, 10)}.`);
+              }
               if (lockedCorporateNight?.grossRate != null) {
                 originalRate = Number(lockedCorporateNight.grossRate);
                 chargeCurrency = activeRoom.currency || chargeCurrency;

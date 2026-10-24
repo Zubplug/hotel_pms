@@ -1,4 +1,5 @@
 import { Prisma, PrismaClient } from '@hotel-pms/db';
+import { calculateCorporateNightlyRate, type CorporatePricingFactors } from './corporate-rate-calculator';
 
 type TxClient = Prisma.TransactionClient | PrismaClient;
 
@@ -79,6 +80,8 @@ export const ReservationPricingService = {
       /** Override the booking-engine payment mode from BookingEngineConfig */
       paymentMode?: string;
       corporateNightlyRate?: { amount: number; currency: string };
+      corporatePricingFactors?: CorporatePricingFactors | null;
+      corporateRoomCount?: number;
     }
   ): Promise<PricingQuote> {
     const { propertyId, ratePlanId, roomTypeId, checkIn, checkOut } = opts;
@@ -134,12 +137,25 @@ export const ReservationPricingService = {
         : resolveNightlyRate(night, ratePlan, roomType, currency));
     }
 
-    const subtotal = nightlyRates.reduce((sum, n) => sum + n.amount, 0);
+    const pricedNightlyRates = opts.corporatePricingFactors
+      ? nightlyRates.map((night) => ({
+        ...night,
+        amount: calculateCorporateNightlyRate({
+          baseNightlyAmount: night.amount,
+          nights,
+          roomCount: opts.corporateRoomCount,
+          paymentMode,
+          factors: opts.corporatePricingFactors,
+        }),
+        source: 'CORPORATE_CONTRACT' as const,
+      }))
+      : nightlyRates;
+    const subtotal = pricedNightlyRates.reduce((sum, n) => sum + n.amount, 0);
 
     // --- Resolve deposit ---
     const { depositAmount, depositType } = resolveDeposit(
       subtotal,
-      nightlyRates,
+      pricedNightlyRates,
       ratePlan.depositPolicy,
       paymentMode
     );
@@ -156,7 +172,7 @@ export const ReservationPricingService = {
       depositAmount,
       depositType,
       paymentMode,
-      nightlyRates,
+      nightlyRates: pricedNightlyRates,
       capturedAt: new Date().toISOString(),
     };
 

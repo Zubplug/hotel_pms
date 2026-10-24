@@ -371,17 +371,17 @@ async function buildQuoteSnapshot(
     throw new CorporateQuoteError('CORPORATE_RATE_UNAVAILABLE', `This approved corporate contract requires ${contractRate.paymentMode} payment`);
   }
 
-  // A contract rule is the commercial price source. The rate plan below is
-  // only the PMS rate-plan reference required by the existing reservation and
-  // folio schema; it must be explicitly marked CORPORATE and can never be a
-  // STANDARD/public fallback.
+  // The selected PMS rate plan is the single base-rate source for the
+  // property-default Corporate API contract. Legacy identity contracts may
+  // still use an explicit corporate rate anchor, but a public/normal anchor
+  // is intentionally allowed for the property-default flow.
   const ratePlanId = contractRate.rule.sourceRatePlanId;
-  if (!ratePlanId) throw new CorporateQuoteError('CORPORATE_RATE_UNAVAILABLE', 'The approved corporate rule has no explicit CORPORATE PMS rate-plan anchor');
+  if (!ratePlanId) throw new CorporateQuoteError('CORPORATE_RATE_UNAVAILABLE', 'The approved corporate rule has no PMS rate-plan anchor');
   const ratePlan = await tx.ratePlan.findFirst({
-      where: { id: ratePlanId, propertyId: input.propertyId, type: 'CORPORATE', isActive: true, deletedAt: null },
+      where: { id: ratePlanId, propertyId: input.propertyId, type: { in: ['STANDARD', 'CORPORATE'] }, isActive: true, deletedAt: null },
       select: { id: true, code: true, name: true, propertyId: true, includeFoodAllocation: true, cancellationPolicy: true, rates: { select: { currency: true }, take: 1 } },
     });
-  if (!ratePlan) throw new CorporateQuoteError('CORPORATE_RATE_UNAVAILABLE', 'No active CORPORATE rate plan is configured for the approved API rule');
+  if (!ratePlan) throw new CorporateQuoteError('CORPORATE_RATE_UNAVAILABLE', 'No active PMS rate plan is configured for the approved API rule');
   await AuthoritativeAvailabilityService.assertAvailable(tx, {
     propertyId: input.propertyId,
     roomTypeId: input.roomTypeId,
@@ -407,7 +407,8 @@ async function buildQuoteSnapshot(
       factors: contractRate.rule.pricingFactors as any,
     })
     : undefined;
-  if (corporateNightlyRate == null) throw new CorporateQuoteError('CORPORATE_RATE_UNAVAILABLE', 'The approved corporate rate method is not supported');
+  if (!['FIXED_NIGHTLY', 'DERIVED_RATE'].includes(contractRate.rule.rateMethod)) throw new CorporateQuoteError('CORPORATE_RATE_UNAVAILABLE', 'The approved corporate rate method is not supported');
+  if (contractRate.rule.rateMethod === 'FIXED_NIGHTLY' && corporateNightlyRate == null) throw new CorporateQuoteError('CORPORATE_RATE_UNAVAILABLE', 'The approved fixed corporate rate is incomplete');
   const pricing = await ReservationPricingService.quote(tx, {
     propertyId: input.propertyId,
     ratePlanId: ratePlan.id,
@@ -415,7 +416,9 @@ async function buildQuoteSnapshot(
     checkIn: input.checkIn,
     checkOut: input.checkOut,
     paymentMode,
-    corporateNightlyRate: { amount: corporateNightlyRate, currency: contractRate.rule.currency },
+    ...(corporateNightlyRate != null
+      ? { corporateNightlyRate: { amount: corporateNightlyRate, currency: contractRate.rule.currency } }
+      : { corporatePricingFactors: contractRate.rule.pricingFactors as any, corporateRoomCount: input.roomCount }),
   });
   const roomCount = input.roomCount ?? 1;
   const scaledSubtotal = round2(pricing.subtotal * roomCount);

@@ -47,8 +47,8 @@ export async function materializeCorporateAccountForApplication(tx: TxClient, in
   } else ledger = await tx.cityLedgerAccount.create({ data: { organizationId: app.organizationId, propertyId: app.propertyId, name: ledgerName, type: 'CORPORATE', status: 'ACTIVE', currency }, select: { id: true, currency: true, status: true } });
 
   if (input.ratePlanId) {
-    const ratePlan = await tx.ratePlan.findFirst({ where: { id: input.ratePlanId, propertyId: app.propertyId, type: 'CORPORATE', isActive: true, deletedAt: null, property: { organizationId: app.organizationId } }, select: { id: true } });
-    if (!ratePlan) throw new CorporateApplicationError('APPLICATION_RATE_PLAN_INVALID', 'The settlement rate-plan anchor is not an active corporate plan for this property');
+    const ratePlan = await tx.ratePlan.findFirst({ where: { id: input.ratePlanId, propertyId: app.propertyId, type: { in: ['STANDARD', 'CORPORATE'] }, isActive: true, deletedAt: null, property: { organizationId: app.organizationId } }, select: { id: true } });
+    if (!ratePlan) throw new CorporateApplicationError('APPLICATION_RATE_PLAN_INVALID', 'The settlement rate-plan anchor is not an active normal or corporate plan for this property');
   }
   const account = await tx.corporateAccount.create({ data: { organizationId: app.organizationId, propertyId: app.propertyId, name: app.companyName, code: codeFor(app.companyName, app.id), contactPerson: app.contactPerson, contactEmail: app.contactEmail, contactPhone: app.contactPhone, companyAddress: app.companyAddress, companyCity: app.companyCity, companyCountry: app.companyCountry, creditLimit: 0, exemptFromHighBalance: false, depositPolicy: 'WAIVED', ratePlanId: input.ratePlanId || null, cityLedgerAccountId: ledger.id } });
   await tx.corporateBookingApplication.update({ where: { id: app.id }, data: { status: 'CONVERTED', corporateAccountId: account.id } });

@@ -11,7 +11,7 @@ import { hasEntitlement } from '@/lib/auth/entitlement';
 const ruleSchema = z.object({
   roomTypeId: z.string().uuid(),
   sourceRatePlanId: z.string().uuid().optional(),
-  amount: z.number().finite().positive(),
+  amount: z.number().finite().positive().nullable().optional(),
   currency: z.string().regex(/^[A-Z]{3}$/),
   minAdults: z.number().int().min(1).max(20),
   maxAdults: z.number().int().min(1).max(20).nullable(),
@@ -39,21 +39,40 @@ const draftSchema = z.object({
   name: z.string().trim().min(2).max(160),
   defaultCurrency: z.string().regex(/^[A-Z]{3}$/),
   paymentMode: z.enum(['PAY_LATER', 'FULL', 'DEPOSIT', 'PREPAID']),
-  negotiationEnabled: z.boolean().default(false),
-  negotiationMinRooms: z.number().int().min(1).nullable().default(null),
-  negotiationMinNights: z.number().int().min(1).nullable().default(null),
+  negotiationEnabled: z.boolean().optional(),
+  negotiationMinRooms: z.number().int().min(1).nullable().optional(),
+  negotiationMinNights: z.number().int().min(1).nullable().optional(),
   effectiveFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   effectiveTo: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
   rules: z.array(ruleSchema).min(1),
 }).refine((value) => value.isPropertyDefault
   ? !value.corporateAccountId && !value.corporateBookingApplicationId
-  : Boolean(value.corporateAccountId) !== Boolean(value.corporateBookingApplicationId), { message: 'Provide either one corporate identity or a property default contract' });
+  : Boolean(value.corporateAccountId) !== Boolean(value.corporateBookingApplicationId), { message: 'Provide either one corporate identity or a property default contract' })
+  .refine((value) => value.isPropertyDefault
+    ? value.rules.every((rule) => rule.amount == null)
+    : value.rules.every((rule) => rule.amount != null), { message: 'Property-default rules use the selected PMS rate plan; identity contracts require explicit rates' });
 
 function validDate(value: string): Date {
   const date = new Date(`${value}T00:00:00.000Z`);
   if (Number.isNaN(date.getTime())) throw new Error('Invalid contract date');
   return date;
 }
+
+const PROPERTY_DEFAULT_PRICING_FACTORS = {
+  roomCount: [
+    { minRooms: 1, maxRooms: 3, adjustmentType: 'PERCENT_DISCOUNT', value: 0 },
+    { minRooms: 4, maxRooms: 7, adjustmentType: 'PERCENT_DISCOUNT', value: 3 },
+    { minRooms: 8, maxRooms: null, adjustmentType: 'PERCENT_DISCOUNT', value: 5 },
+  ],
+  stayLength: [
+    { minNights: 1, maxNights: 2, adjustmentType: 'PERCENT_DISCOUNT', value: 0 },
+    { minNights: 3, maxNights: 6, adjustmentType: 'PERCENT_DISCOUNT', value: 2 },
+    { minNights: 7, maxNights: null, adjustmentType: 'PERCENT_DISCOUNT', value: 5 },
+  ],
+  paymentMode: {
+    FULL: { adjustmentType: 'FIXED_NIGHTLY_ADJUSTMENT', value: -2000 },
+  },
+} as const;
 
 export async function GET(req: NextRequest) {
   try {
@@ -89,6 +108,9 @@ export async function POST(req: NextRequest) {
     const parsed = draftSchema.safeParse(await req.json());
     if (!parsed.success) return errorResponse('BAD_REQUEST', 'Invalid corporate API contract draft', 400, parsed.error.flatten());
     const body = parsed.data;
+    const negotiationEnabled = body.negotiationEnabled ?? body.isPropertyDefault;
+    const negotiationMinRooms = body.negotiationMinRooms ?? (body.isPropertyDefault ? 10 : null);
+    const negotiationMinNights = body.negotiationMinNights ?? (body.isPropertyDefault ? 3 : null);
 
     const account = body.corporateAccountId ? await prisma.corporateAccount.findFirst({ where: { id: body.corporateAccountId, organizationId, propertyId: { in: [...propertyIds] } }, select: { id: true, propertyId: true, isActive: true, ratePlanId: true } }) : null;
     const application = body.corporateBookingApplicationId ? await prisma.corporateBookingApplication.findFirst({ where: { id: body.corporateBookingApplicationId, organizationId, propertyId: { in: [...propertyIds] } }, select: { id: true, propertyId: true, status: true } }) : null;
@@ -121,7 +143,7 @@ export async function POST(req: NextRequest) {
       const roomTypes = await tx.roomType.findMany({ where: { id: { in: body.rules.map(rule => rule.roomTypeId) }, propertyId: identityPropertyId, isActive: true, deletedAt: null }, select: { id: true } });
       if (roomTypes.length !== new Set(body.rules.map(rule => rule.roomTypeId)).size) throw Object.assign(new Error('Every contract rule must reference an active room type in this property'), { code: 'INVALID_RULE' });
 
-      const corporateRatePlans = await tx.ratePlan.findMany({ where: { propertyId: identityPropertyId, type: 'CORPORATE', isActive: true, deletedAt: null }, select: { id: true } });
+      const corporateRatePlans = await tx.ratePlan.findMany({ where: { propertyId: identityPropertyId, type: body.isPropertyDefault ? 'STANDARD' : 'CORPORATE', isActive: true, deletedAt: null }, select: { id: true } });
       const allowedCorporateRatePlanIds = new Set(corporateRatePlans.map((plan: { id: string }) => plan.id));
       const accountRatePlanId = account?.ratePlanId || null;
       for (const rule of body.rules) {
@@ -151,14 +173,14 @@ export async function POST(req: NextRequest) {
         status: 'DRAFT',
         defaultCurrency: body.defaultCurrency,
         paymentMode: body.paymentMode,
-        negotiationEnabled: body.negotiationEnabled,
-        negotiationMinRooms: body.negotiationMinRooms,
-        negotiationMinNights: body.negotiationMinNights,
+        negotiationEnabled,
+        negotiationMinRooms,
+        negotiationMinNights,
         fallbackPolicy: 'NONE',
         effectiveFrom,
         effectiveTo,
         properties: { create: { propertyId: identityPropertyId, status: 'ACTIVE', effectiveFrom, effectiveTo } },
-        versions: { create: { version: 1, status: 'DRAFT', effectiveFrom, effectiveTo, termsSnapshot: { channel: 'CORPORATE_API', scope: body.isPropertyDefault ? 'PROPERTY_DEFAULT' : 'IDENTITY_NEGOTIATED', paymentMode: body.paymentMode, createdBy: session.user.id } } },
+        versions: { create: { version: 1, status: 'DRAFT', effectiveFrom, effectiveTo, termsSnapshot: { channel: 'CORPORATE_API', scope: body.isPropertyDefault ? 'PROPERTY_DEFAULT' : 'IDENTITY_NEGOTIATED', paymentMode: body.paymentMode, negotiationEnabled, negotiationMinRooms, negotiationMinNights, createdBy: session.user.id } } },
       }, include: { versions: true } });
       const version = contract.versions[0];
       const defaultSourceRatePlanId = accountRatePlanId;
@@ -167,8 +189,8 @@ export async function POST(req: NextRequest) {
         propertyId: identityPropertyId,
         roomTypeId: rule.roomTypeId,
         sourceRatePlanId: rule.sourceRatePlanId || defaultSourceRatePlanId || null,
-        rateMethod: 'FIXED_NIGHTLY',
-        amount: rule.amount,
+        rateMethod: body.isPropertyDefault ? 'DERIVED_RATE' : 'FIXED_NIGHTLY',
+        amount: body.isPropertyDefault ? null : rule.amount,
         currency: rule.currency,
         priority: 100,
         minAdults: rule.minAdults,
@@ -186,7 +208,7 @@ export async function POST(req: NextRequest) {
         weekdays: rule.weekdays,
         blackoutDates: rule.blackoutDates.map(validDate),
         fallbackAllowed: false,
-        pricingFactors: rule.pricingFactors as any,
+        pricingFactors: (rule.pricingFactors ?? (body.isPropertyDefault ? PROPERTY_DEFAULT_PRICING_FACTORS : null)) as any,
       })) });
       await tx.auditLog.create({ data: { organizationId, propertyId: identityPropertyId, userId: session.user.id, action: 'CREATE', resource: 'corporate_contract_draft', resourceId: contract.id, newValue: { contractId: contract.id, versionId: version.id, corporateAccountId: account?.id || null, corporateBookingApplicationId: application?.id || null, reference: body.reference }, requestId: crypto.randomUUID() } });
       return { id: contract.id, versionId: version.id, status: contract.status };
