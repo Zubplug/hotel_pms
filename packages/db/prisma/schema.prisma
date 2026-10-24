@@ -898,8 +898,6 @@ model CorporateContract {
   organizationId                String    @db.Uuid
   corporateAccountId            String?   @db.Uuid
   corporateBookingApplicationId String?   @db.Uuid
-  quoteId                       String?   @db.Uuid
-  approvedQuoteId               String?   @db.Uuid
   isPropertyDefault             Boolean   @default(false)
   defaultPropertyId             String?   @db.Uuid
   reference                     String
