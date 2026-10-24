@@ -428,7 +428,10 @@ async function buildQuoteSnapshot(
     subtotal: scaledSubtotal,
     depositAmount: round2(pricing.depositAmount * roomCount),
   };
-  const perRoomBreakdown = await canonicalBreakdown(tx, input.propertyId, pricing.snapshot, pricing.snapshot.roomTypeName, Boolean(ratePlan.includeFoodAllocation));
+  const pricingFactors = contractRate.rule.pricingFactors as any;
+  const foodAllocationOverride = typeof pricingFactors?.foodAllocation === 'boolean' ? pricingFactors.foodAllocation : null;
+  const includeFoodAllocation = foodAllocationOverride ?? Boolean(ratePlan.includeFoodAllocation);
+  const perRoomBreakdown = await canonicalBreakdown(tx, input.propertyId, pricing.snapshot, pricing.snapshot.roomTypeName, includeFoodAllocation);
   const breakdown = {
     ...perRoomBreakdown,
     grossRate: round2(perRoomBreakdown.grossRate * roomCount),
@@ -476,7 +479,7 @@ async function buildQuoteSnapshot(
     fees,
     roomChargeBreakdown: breakdown,
     nightlyBreakdown: breakdown.nightlyBreakdown,
-    inclusions: ratePlan.includeFoodAllocation ? ['FOOD_ALLOCATION'] : [],
+    inclusions: includeFoodAllocation ? ['FOOD_ALLOCATION'] : [],
     cancellationPolicy: ratePlan.cancellationPolicy
       ? JSON.parse(JSON.stringify(ratePlan.cancellationPolicy, decimalReplacer))
       : null,
