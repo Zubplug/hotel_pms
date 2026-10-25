@@ -12,13 +12,13 @@ export async function initializeCorporateAdvanceGatewayPayment(db: any, input: {
   propertyId: string;
   corporateAccountId: string;
   idempotencyKey: string;
-  email: string;
+  email?: string;
   amount: number;
 }) {
   if (!Number.isFinite(input.amount) || input.amount <= 0) throw new CorporatePaymentInitializationError('INVALID_AMOUNT', 'A positive wallet credit amount is required');
   const corporateAccount = await db.corporateAccount.findFirst({
     where: { id: input.corporateAccountId, organizationId: input.organizationId, propertyId: input.propertyId, isActive: true },
-    select: { id: true, cityLedgerAccountId: true, cityLedgerAccount: { select: { status: true, currency: true } } },
+    select: { id: true, contactEmail: true, cityLedgerAccountId: true, cityLedgerAccount: { select: { status: true, currency: true } } },
   });
   if (!corporateAccount?.cityLedgerAccountId || corporateAccount.cityLedgerAccount.status !== 'ACTIVE') throw new CorporatePaymentInitializationError('INVALID_AMOUNT', 'The corporate City Ledger account is unavailable');
   const existing = await db.bookingPaymentTransaction.findUnique({ where: { idempotencyKey: input.idempotencyKey } });
@@ -29,6 +29,8 @@ export async function initializeCorporateAdvanceGatewayPayment(db: any, input: {
   }
   const account = await getBookingPaymentAccount(input.propertyId, 'STANDALONE_API');
   if (!account) throw new CorporatePaymentInitializationError('NO_PAYMENT_ACCOUNT', 'No payment account is configured for this property');
+  const gatewayEmail = input.email || corporateAccount.contactEmail;
+  if (!gatewayEmail) throw new CorporatePaymentInitializationError('INVALID_AMOUNT', 'A contact person email is required on the corporate account');
   const providerRef = `CORP-WALLET-${corporateAccount.id.slice(0, 8)}-${crypto.randomBytes(5).toString('hex').toUpperCase()}`;
   const metadata = { channel: 'CORPORATE_API', paymentMode: 'WALLET_CREDIT', paymentTarget: 'STANDALONE_API', walletCredit: true, corporateAccountId: corporateAccount.id };
   const transaction = await db.bookingPaymentTransaction.create({ data: { organizationId: input.organizationId, propertyId: input.propertyId, provider: account.provider, providerRef, amount: input.amount, currency: corporateAccount.cityLedgerAccount.currency, status: 'PENDING', idempotencyKey: input.idempotencyKey, metadata } });
@@ -36,7 +38,7 @@ export async function initializeCorporateAdvanceGatewayPayment(db: any, input: {
     const secret = account.secret ?? resolveSecretRef(account.secretRef, account.provider === 'FLUTTERWAVE' ? 'FLW_SECRET_KEY' : 'PAYSTACK_SECRET_KEY');
     const provider = account.provider === 'FLUTTERWAVE' ? new FlutterwaveProvider(secret, account.webhookSecret ?? resolveSecretRef(account.webhookSecretRef, 'FLW_WEBHOOK_SECRET_HASH')) : new PaystackProvider(secret);
     const callbackUrl = process.env.CORPORATE_API_PAYMENT_CALLBACK_URL || `${process.env.NEXT_PUBLIC_APP_URL || ''}/corporate/payment/return`;
-    const initialized = await provider.initializeTransaction({ amount: input.amount, currency: corporateAccount.cityLedgerAccount.currency, email: input.email, reference: providerRef, callbackUrl });
+    const initialized = await provider.initializeTransaction({ amount: input.amount, currency: corporateAccount.cityLedgerAccount.currency, email: gatewayEmail, reference: providerRef, callbackUrl });
     await db.bookingPaymentTransaction.update({ where: { id: transaction.id }, data: { metadata: { ...metadata, authorizationUrl: initialized.authorizationUrl } } });
     return { providerRef, authorizationUrl: initialized.authorizationUrl, amount: input.amount, currency: corporateAccount.cityLedgerAccount.currency, idempotent: false };
   } catch (error: any) {
@@ -131,7 +133,8 @@ export async function initializeCorporateGatewayPayment(db: any, input: {
   try {
     const secret = account.secret ?? resolveSecretRef(account.secretRef, account.provider === 'FLUTTERWAVE' ? 'FLW_SECRET_KEY' : 'PAYSTACK_SECRET_KEY');
     const provider = account.provider === 'FLUTTERWAVE' ? new FlutterwaveProvider(secret, account.webhookSecret ?? resolveSecretRef(account.webhookSecretRef, 'FLW_WEBHOOK_SECRET_HASH')) : new PaystackProvider(secret);
-    const callbackUrl = process.env.CORPORATE_API_PAYMENT_CALLBACK_URL || `${process.env.NEXT_PUBLIC_APP_URL || ''}/corporate/payment/return`;
+    const callbackBase = process.env.CORPORATE_API_PAYMENT_CALLBACK_URL || `${process.env.NEXT_PUBLIC_APP_URL || ''}/corporate/payment/return`;
+    const callbackUrl = `${callbackBase}${callbackBase.includes('?') ? '&' : '?'}reservationId=${encodeURIComponent(reservation.id)}&reference=${encodeURIComponent(providerRef)}`;
     const initialized = await provider.initializeTransaction({ amount, currency: reservation.currency, email, reference: providerRef, callbackUrl });
     await db.bookingPaymentTransaction.update({ where: { id: transaction.id }, data: { metadata: { ...metadata, authorizationUrl: initialized.authorizationUrl } } });
     return { providerRef, authorizationUrl: initialized.authorizationUrl, amount, currency: reservation.currency, expiresAt: reservation.paymentExpiresAt, idempotent: false };

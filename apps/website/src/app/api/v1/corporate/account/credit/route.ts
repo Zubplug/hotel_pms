@@ -5,7 +5,7 @@ import { checkCorporateRateLimit } from '@/lib/corporate-api-auth';
 import { corporateError, corporatePrincipalForProperty, jsonBody, prisma, requireCorporateApi, withRequestId } from '@/lib/corporate-api-routes';
 import { CorporatePaymentInitializationError, initializeCorporateAdvanceGatewayPayment } from '@/lib/booking-engine/corporate-payment-service';
 
-const bodySchema = z.object({ propertyId: z.string().uuid().optional(), email: z.string().email(), amount: z.number().positive() });
+const bodySchema = z.object({ propertyId: z.string().uuid().optional(), amount: z.number().positive() });
 
 export async function POST(req: NextRequest) {
   const auth = await requireCorporateApi(req, 'invoices:pay');
@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
     if (!propertyId) return withRequestId(errorResponse('BAD_REQUEST', 'Property ID is required', 400), auth.requestId);
     const principal = await corporatePrincipalForProperty(auth.principal, propertyId, 'invoices:pay');
     if (!principal.corporateAccountId) return withRequestId(errorResponse('CORPORATE_ACCOUNT_UNAVAILABLE', 'No active corporate account is mapped to this property', 409), auth.requestId);
-    const result = await initializeCorporateAdvanceGatewayPayment(prisma as any, { organizationId: auth.principal.organizationId, propertyId, corporateAccountId: principal.corporateAccountId, idempotencyKey, email: parsed.data.email, amount: parsed.data.amount });
+    const result = await initializeCorporateAdvanceGatewayPayment(prisma as any, { organizationId: auth.principal.organizationId, propertyId, corporateAccountId: principal.corporateAccountId, idempotencyKey, amount: parsed.data.amount });
     return withRequestId(successResponse(result), auth.requestId);
   } catch (error) {
     if (error instanceof CorporatePaymentInitializationError) {

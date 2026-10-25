@@ -113,6 +113,27 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+.corporate-payment-return { min-height: 70vh; display: grid; place-items: center; padding: 48px 20px; background: #f4f7f4; }
+.corporate-payment-card { width: min(100%, 560px); padding: 42px; border: 1px solid #dfe6e1; border-radius: 24px; background: #fff; box-shadow: 0 18px 50px rgb(23 61 50 / .1); text-align: center; }
+.corporate-payment-mark { width: 58px; height: 58px; display: grid; place-items: center; margin: 0 auto 20px; border-radius: 50%; color: #fff; background: #245c4a; font-size: 28px; font-weight: 800; }
+.corporate-payment-card.is-pending .corporate-payment-mark,
+.corporate-payment-card.is-loading .corporate-payment-mark { color: #7d5a23; background: #f6eee2; }
+.corporate-payment-card.is-failed .corporate-payment-mark,
+.corporate-payment-card.is-expired .corporate-payment-mark,
+.corporate-payment-card.is-error .corporate-payment-mark,
+.corporate-payment-card.is-missing .corporate-payment-mark { color: #8f4039; background: #fff1ef; }
+.corporate-payment-card .booking-section-kicker { color: #a27b41; }
+.corporate-payment-card h1 { margin: 8px 0 10px; color: #1b352d; font-size: clamp(28px, 5vw, 42px); }
+.corporate-payment-card > p { max-width: 430px; margin: 0 auto; color: #68756f; font-size: 14px; line-height: 1.7; }
+.corporate-payment-reference { display: grid; gap: 4px; margin: 24px auto 0; padding: 14px; border-radius: 13px; background: #f4f7f4; }
+.corporate-payment-reference span { color: #87958e; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
+.corporate-payment-reference strong { color: #315a4b; font-size: 17px; letter-spacing: .04em; }
+.corporate-payment-provider-reference { display: block; margin-top: 13px; color: #9aa8a2; font-size: 10px; overflow-wrap: anywhere; }
+.corporate-payment-actions { display: flex; justify-content: center; gap: 10px; margin-top: 26px; }
+.corporate-payment-actions a { display: inline-flex; align-items: center; justify-content: center; min-height: 46px; padding: 13px 17px; border-radius: 11px; font-size: 13px; font-weight: 800; }
+.corporate-payment-actions .booking-secondary-button { color: #284f41; border: 1px solid #cbdcd3; background: #fff; }
+@media (max-width: 600px) { .corporate-payment-card { padding: 30px 20px; } .corporate-payment-actions { flex-direction: column; } .corporate-payment-actions a { width: 100%; } }
+
 img, video { display: block; max-width: 100%; }
 a { color: inherit; text-decoration: none; }
 button { cursor: pointer; font-family: inherit; }
@@ -378,8 +399,11 @@ p { line-height: 1.75; color: var(--text-muted); }
 .portal-page-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 22px; margin-bottom: 30px; }
 .portal-page-kicker { display: block; margin-bottom: 7px; color: #84948e; font-size: 10px; font-weight: 700; letter-spacing: .17em; text-transform: uppercase; }
 .portal-page-heading h1 { margin: 0; color: #172622; font-size: clamp(2rem, 4vw, 3rem); letter-spacing: -.02em; }
+.portal-heading-actions { display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
 .portal-primary-action { display: inline-flex; align-items: center; gap: 9px; padding: 12px 17px; border-radius: 8px; color: var(--color-green-dark); background: var(--color-gold); box-shadow: 0 5px 14px rgb(169 134 78 / .18); font-size: 11px; font-weight: 700; letter-spacing: .04em; transition: transform var(--duration-sm) var(--ease), background var(--duration-sm) var(--ease); }
 .portal-primary-action:hover { transform: translateY(-1px); background: var(--color-gold-light); }
+.portal-secondary-action { display: inline-flex; align-items: center; gap: 9px; padding: 11px 16px; border: 1px solid #d6e3dd; border-radius: 8px; color: #315b4d; background: #fff; font-size: 11px; font-weight: 700; letter-spacing: .04em; transition: transform var(--duration-sm) var(--ease), background var(--duration-sm) var(--ease), border-color var(--duration-sm) var(--ease); }
+.portal-secondary-action:hover { transform: translateY(-1px); border-color: #b6cec2; background: #f4f8f5; }
 .portal-menu-button, .portal-close-button { display: none; border: 0; color: inherit; background: transparent; }
 .portal-mobile-scrim { display: none; }
 .portal-welcome-banner { display: flex; align-items: center; justify-content: space-between; gap: 25px; padding: clamp(23px, 4vw, 35px); border: 1px solid #dfe9e4; border-radius: 14px; background: linear-gradient(110deg, #eaf2ee, #f8f4ea); }
@@ -759,7 +783,8 @@ p { line-height: 1.75; color: var(--text-muted); }
   .portal-user-chip { padding-left: 0; border-left: 0; }
   .portal-content { padding: 28px 17px 50px; }
   .portal-page-heading { align-items: flex-start; flex-direction: column; margin-bottom: 24px; }
-  .portal-primary-action { align-self: stretch; }
+  .portal-heading-actions { width: 100%; align-items: stretch; flex-direction: column; }
+  .portal-primary-action, .portal-secondary-action { justify-content: center; }
   .portal-metric-card { padding: 16px; }
   .portal-panel-heading, .portal-reservation-row { padding-inline: 16px; }
   .portal-status-pill { display: none; }
