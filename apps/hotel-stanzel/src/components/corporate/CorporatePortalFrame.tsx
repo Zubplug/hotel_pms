@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useState } from 'react';
+import CorporateWalletCreditModal from './CorporateWalletCreditModal';
 
 type IconName = 'grid' | 'calendar' | 'receipt' | 'wallet' | 'sparkles' | 'menu' | 'arrow' | 'logout' | 'close';
 
@@ -67,7 +68,7 @@ export default function CorporatePortalFrame({ children }: { children: React.Rea
     </aside>
     <div className="portal-main-area">
       <header className="portal-topbar"><button className="portal-menu-button" aria-label="Open navigation" onClick={() => setMobileOpen(true)}><Icon name="menu" size={21} /></button><div className="portal-breadcrumb"><span>Corporate portal</span><Icon name="arrow" size={13} /><strong>{page.label}</strong></div><div className="portal-topbar-actions"><span className="portal-live-status"><span /> Live account</span><div className="portal-user-chip"><span className="portal-user-avatar">C</span><span className="portal-user-label">Company account</span></div></div></header>
-      <main className="portal-content"><div className="portal-page-heading"><div><span className="portal-page-kicker">{page.description}</span><h1>{page.label}</h1></div>{pathname === '/corporate/dashboard' && <div className="portal-heading-actions"><Link href="/corporate/invoices#credit-wallet" className="portal-secondary-action"><Icon name="wallet" size={17} /> Credit corporate wallet</Link><Link href="/corporate/book" className="portal-primary-action"><Icon name="calendar" size={17} /> New booking</Link></div>}</div>{children}</main>
+      <main className="portal-content"><div className="portal-page-heading"><div><span className="portal-page-kicker">{page.description}</span><h1>{page.label}</h1></div>{pathname === '/corporate/dashboard' && <div className="portal-heading-actions"><CorporateWalletCreditModal /><Link href="/corporate/book" className="portal-primary-action"><Icon name="calendar" size={17} /> New booking</Link></div>}</div>{children}</main>
     </div>
   </div>;
 }
