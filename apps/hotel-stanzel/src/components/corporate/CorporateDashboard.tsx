@@ -24,7 +24,7 @@ export function CorporateDashboard({
   return <>
     <section className="portal-welcome-banner"><div><span className="portal-welcome-kicker">Welcome back</span><h2>{account.name}</h2><p>Everything your team needs to arrange stays and keep corporate travel moving.</p></div><div className="portal-account-reference"><span>Account reference</span><strong>{account.code}</strong></div></section>
     <div className="portal-metrics-grid">
-      <section className="portal-metric-card"><MetricIcon type="account" /><div><span>Account contact</span><strong>{account.contactEmail || 'Not recorded'}</strong><small>Primary company contact</small></div></section>
+      <section className="portal-metric-card"><MetricIcon type="account" /><div><span>Account contact</span><strong>{account.contactPerson || 'Contact not recorded'}</strong><small>{account.contactEmail || 'Email not recorded'}</small></div></section>
       <section className="portal-metric-card"><MetricIcon type="ledger" /><div><span>Outstanding balance</span><strong>{account.cityLedgerAccount?.currency || 'NGN'} {outstanding.toLocaleString()}</strong><small>{invoices.length} invoice{invoices.length === 1 ? '' : 's'} on City Ledger</small></div></section>
       <section className="portal-metric-card"><MetricIcon type="stays" /><div><span>Active reservations</span><strong>{reservations.length}</strong><small>Stays linked to your account</small></div></section>
     </div>

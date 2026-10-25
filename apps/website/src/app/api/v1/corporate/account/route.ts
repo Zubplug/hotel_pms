@@ -10,17 +10,6 @@ export async function GET(req: NextRequest) {
   if (!propertyId) return withRequestId(errorResponse('BAD_REQUEST', 'propertyId is required', 400), auth.requestId);
   if (!(await checkCorporateRateLimit(auth.principal, 'account'))) return withRequestId(errorResponse('TOO_MANY_REQUESTS', 'Too many requests', 429), auth.requestId);
   try {
-    const property = await prisma.property.findUnique({
-      where: { id: propertyId },
-      select: {
-        baseCurrency: true,
-        roomTypes: {
-          where: { isActive: true, deletedAt: null },
-          orderBy: { name: 'asc' },
-          select: { id: true, name: true, code: true, baseRate: true, currency: true },
-        },
-      },
-    });
     const principal = await corporatePrincipalForProperty(auth.principal, propertyId, 'account:read');
     const account = await prisma.corporateAccount.findFirst({
       where: { id: principal.corporateAccountId, organizationId: auth.principal.organizationId, propertyId, isActive: true },
@@ -32,6 +21,43 @@ export async function GET(req: NextRequest) {
       },
     });
     if (!account) return withRequestId(errorResponse('NOT_FOUND', 'Corporate account not found', 404), auth.requestId);
-    return withRequestId(successResponse({ account, defaultRates: property?.roomTypes || [], defaultRateCurrency: property?.baseCurrency || 'NGN' }), auth.requestId);
+    const today = new Date();
+    const defaultContract = await prisma.corporateContract.findFirst({
+      where: {
+        organizationId: auth.principal.organizationId,
+        isPropertyDefault: true,
+        defaultPropertyId: propertyId,
+        status: 'ACTIVE',
+        effectiveFrom: { lte: today },
+        OR: [{ effectiveTo: null }, { effectiveTo: { gte: today } }],
+      },
+      orderBy: { updatedAt: 'desc' },
+      select: {
+        id: true,
+        reference: true,
+        name: true,
+        defaultCurrency: true,
+        effectiveFrom: true,
+        effectiveTo: true,
+        versions: {
+          where: { status: 'ACTIVE', effectiveFrom: { lte: today }, OR: [{ effectiveTo: null }, { effectiveTo: { gte: today } }] },
+          orderBy: { version: 'desc' },
+          take: 1,
+          select: {
+            version: true,
+            rules: {
+              orderBy: { priority: 'asc' },
+              select: { id: true, roomTypeId: true, roomType: { select: { name: true, code: true } }, rateMethod: true, amount: true, discountPercent: true, currency: true, minStay: true, maxStay: true, minRooms: true, maxRooms: true, pricingFactors: true },
+            },
+          },
+        },
+      },
+    });
+    const defaultCorporateRates = defaultContract?.versions[0]?.rules.map((rule) => ({
+      ...rule,
+      amount: rule.amount == null ? null : Number(rule.amount),
+      discountPercent: rule.discountPercent == null ? null : Number(rule.discountPercent),
+    })) || [];
+    return withRequestId(successResponse({ account, defaultCorporateContract: defaultContract ? { id: defaultContract.id, reference: defaultContract.reference, name: defaultContract.name, defaultCurrency: defaultContract.defaultCurrency, effectiveFrom: defaultContract.effectiveFrom, effectiveTo: defaultContract.effectiveTo, version: defaultContract.versions[0]?.version || null } : null, defaultCorporateRates }), auth.requestId);
   } catch (error) { return corporateError(error, auth.requestId); }
 }
