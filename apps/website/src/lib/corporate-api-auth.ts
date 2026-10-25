@@ -136,10 +136,10 @@ export async function authenticateCorporateApiRequest(
   request: { headers: { get(name: string): string | null } },
   options: { requiredEnvironment: 'TEST' | 'LIVE'; now?: Date; db?: any; ip?: string },
 ): Promise<CorporateApiPrincipal> {
-  const parsed = parseCorporateBearerToken(request.headers.get('authorization'));
-  if (!parsed) throw new CorporateApiAuthError(401, GENERIC_AUTH_MESSAGE);
-  if (parsed.prefix === 'lc_portal_session') {
-    const session = await resolveCorporatePortalSession(`${parsed.prefix}.${parsed.secret}`);
+  const authorization = request.headers.get('authorization');
+  const portalSession = authorization?.match(/^Bearer\s+(lc_portal_session_[^\s]+)$/i)?.[1];
+  if (portalSession) {
+    const session = await resolveCorporatePortalSession(portalSession);
     if (!session) throw new CorporateApiAuthError(401, GENERIC_AUTH_MESSAGE);
     const account = session.identity.corporateAccountId;
     if (!(await hasCorporateApiEntitlement(session.identity.organizationId, session.identity.propertyId))) {
@@ -157,6 +157,8 @@ export async function authenticateCorporateApiRequest(
       corporateAccountId: account,
     };
   }
+  const parsed = parseCorporateBearerToken(request.headers.get('authorization'));
+  if (!parsed) throw new CorporateApiAuthError(401, GENERIC_AUTH_MESSAGE);
   const db = options.db ?? prisma;
   const now = options.now ?? new Date();
   const credential = await db.apiCredential.findUnique({
