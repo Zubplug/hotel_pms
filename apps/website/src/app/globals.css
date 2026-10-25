@@ -2169,6 +2169,94 @@ textarea.form-input { resize: vertical; min-height: 90px; }
 .portal-area-desc { font-size: 12px; color: var(--text-muted); line-height: 1.55; flex: 1; }
 .portal-area-arrow { margin-top: 16px; font-family: var(--font-mono); font-size: 10px; color: var(--accent); }
 
+/* Customer portal dashboard composition */
+.portal-dashboard-hero { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; margin: -8px 0 28px; padding: 26px 28px; border: 1px solid var(--border-card); border-radius: var(--radius-lg); background: radial-gradient(circle at 87% 12%, rgba(0,212,232,.13), transparent 30%), linear-gradient(120deg, rgba(255,255,255,.035), transparent 62%), var(--bg-card); box-shadow: var(--shadow-card); }
+.portal-dashboard-hero-copy { min-width: 0; }
+.portal-dashboard-eyebrow { margin-bottom: 10px; color: var(--accent); font: 9px var(--font-mono); letter-spacing: .18em; text-transform: uppercase; }
+.portal-dashboard-hero h1 { margin: 0; color: var(--text-primary); font: 800 clamp(1.7rem, 3vw, 2.35rem) var(--font-display); letter-spacing: -.06em; }
+.portal-dashboard-hero h1 span { font-size: .78em; }
+.portal-dashboard-hero p { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 9px; color: var(--text-muted); font-size: 13px; }
+.portal-dashboard-hero-aside { display: flex; align-items: center; gap: 10px; min-width: 205px; padding: 13px 15px; border: 1px solid rgba(62,245,160,.2); border-radius: var(--radius-md); background: rgba(62,245,160,.045); }
+.portal-dashboard-hero-aside > div { display: grid; gap: 3px; flex: 1; }
+.portal-dashboard-hero-aside strong { color: var(--text-primary); font: 600 11px var(--font-display); }
+.portal-dashboard-hero-aside small { color: var(--text-muted); font: 10px var(--font-mono); }
+.portal-hero-status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--mint); box-shadow: 0 0 0 4px rgba(62,245,160,.1); }
+.portal-hero-arrow { color: var(--mint); font-size: 16px; }
+.portal-dashboard-actions { background: linear-gradient(100deg, rgba(0,212,232,.04), transparent 65%), var(--bg-card) !important; }
+.portal-dashboard-actions .btn-primary { box-shadow: 0 7px 20px rgba(0,212,232,.13); }
+.portal-dashboard-area-label { margin-top: 30px; color: var(--accent) !important; }
+.portal-dashboard-areas { margin-top: 0 !important; }
+.portal-dashboard-help { background: linear-gradient(100deg, rgba(62,245,160,.04), transparent 62%), var(--bg-overlay) !important; }
+
+@media (max-width: 900px) {
+  .portal-dashboard-stats, .portal-dashboard-areas { grid-template-columns: repeat(2, 1fr) !important; }
+}
+@media (max-width: 620px) {
+  .portal-dashboard-hero { align-items: flex-start; flex-direction: column; margin-top: 0; padding: 21px 19px; }
+  .portal-dashboard-hero-aside { width: 100%; box-sizing: border-box; }
+  .portal-dashboard-stats { grid-template-columns: 1fr 1fr !important; gap: 9px !important; }
+  .portal-dashboard-areas { grid-template-columns: 1fr !important; }
+  .portal-dashboard-actions { align-items: flex-start !important; padding: 18px !important; }
+  .portal-dashboard-actions > div:last-child { width: 100%; }
+  .portal-dashboard-actions .btn { flex: 1; justify-content: center; }
+}
+
+/* Reach wallet — primary dashboard funding action */
+.reach-wallet-card { position: relative; overflow: hidden; margin-bottom: 24px; padding: 24px 26px; border: 1px solid rgba(0,212,232,.28); border-radius: var(--radius-lg); background: radial-gradient(circle at 88% 0, rgba(0,212,232,.14), transparent 34%), linear-gradient(135deg, rgba(0,212,232,.08), transparent 58%), var(--bg-card); box-shadow: var(--shadow-card); }
+.reach-wallet-card::after { position: absolute; right: 8%; bottom: -105px; width: 270px; height: 190px; border: 1px solid rgba(0,212,232,.12); border-radius: 50%; transform: rotate(-14deg); content: ''; }
+.reach-wallet-topline, .reach-wallet-body, .reach-wallet-footer, .reach-wallet-debts { position: relative; z-index: 1; }
+.reach-wallet-topline { display: flex; align-items: center; gap: 10px; }
+.reach-wallet-mark { display: grid; place-items: center; width: 34px; height: 34px; border: 1px solid rgba(0,212,232,.35); border-radius: 10px; color: var(--accent); background: rgba(0,212,232,.08); font: 800 15px var(--font-display); }
+.reach-wallet-kicker { color: var(--text-primary); font: 700 12px var(--font-display); letter-spacing: -.02em; }
+.reach-wallet-kicker span { display: inline-flex; align-items: center; gap: 6px; margin-left: 8px; color: var(--mint); font: 10px var(--font-mono); font-weight: 500; letter-spacing: .04em; text-transform: uppercase; }
+.reach-wallet-kicker i { width: 5px; height: 5px; border-radius: 50%; background: var(--mint); box-shadow: 0 0 0 4px rgba(62,245,160,.1); }
+.reach-wallet-body { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; margin-top: 23px; }
+.reach-wallet-body h2 { max-width: 500px; margin: 0; color: var(--text-primary); font: 800 clamp(1.2rem, 2.2vw, 1.55rem) var(--font-display); letter-spacing: -.045em; }
+.reach-wallet-body p { max-width: 570px; margin-top: 7px; color: var(--text-muted); font-size: 12px; line-height: 1.6; }
+.reach-wallet-balance { min-width: 185px; padding-left: 22px; border-left: 1px solid var(--border); text-align: right; }
+.reach-wallet-balance span, .reach-wallet-balance small { display: block; color: var(--text-muted); font: 10px var(--font-mono); }
+.reach-wallet-balance strong { display: block; margin: 5px 0 3px; color: var(--accent); font: 800 1.45rem var(--font-display); letter-spacing: -.055em; }
+.reach-wallet-footer { display: flex; align-items: center; justify-content: space-between; gap: 15px; margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--border); color: var(--text-muted); font-size: 11px; }
+.reach-wallet-footer .btn { min-width: 136px; justify-content: center; }
+.reach-wallet-debts { display: grid; gap: 6px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
+.reach-wallet-debts div { display: flex; justify-content: space-between; gap: 12px; color: var(--text-secondary); font-size: 11px; }
+.reach-wallet-debts .is-danger { color: var(--danger, #ff7b8b); }
+.reach-wallet-debts strong { color: var(--text-primary); font-weight: 600; }
+.reach-wallet-modal-backdrop { position: fixed; z-index: 100; inset: 0; display: grid; place-items: center; padding: 18px; background: rgba(3,10,16,.7); backdrop-filter: blur(8px); }
+.reach-wallet-modal { width: min(100%, 470px); padding: 28px; border: 1px solid var(--border-strong); border-radius: var(--radius-xl); background: var(--bg-card); box-shadow: 0 24px 80px rgba(0,0,0,.42); }
+.reach-wallet-modal-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
+.reach-wallet-modal-head .portal-page-kicker { margin-bottom: 7px; }
+.reach-wallet-modal h2 { margin: 0; color: var(--text-primary); font: 800 23px var(--font-display); letter-spacing: -.05em; }
+.reach-wallet-close { display: grid; place-items: center; width: 30px; height: 30px; border: 1px solid var(--border); border-radius: 50%; color: var(--text-muted); background: var(--bg-overlay); font-size: 21px; line-height: 1; }
+.reach-wallet-close:hover { color: var(--text-primary); border-color: var(--border-strong); }
+.reach-wallet-modal-copy { margin: 15px 0 22px; color: var(--text-muted); font-size: 12px; line-height: 1.65; }
+.reach-wallet-form { display: grid; gap: 16px; }
+.reach-wallet-field { display: grid; gap: 7px; color: var(--text-secondary); font: 10px var(--font-mono); letter-spacing: .1em; text-transform: uppercase; }
+.reach-wallet-field > div { position: relative; display: flex; align-items: center; }
+.reach-wallet-field > div > span { position: absolute; left: 13px; color: var(--accent); font: 700 11px var(--font-mono); letter-spacing: .03em; }
+.reach-wallet-field input { width: 100%; box-sizing: border-box; padding: 14px 13px 14px 62px; border: 1px solid var(--border-strong); border-radius: var(--radius-md); outline: none; color: var(--text-primary); background: var(--bg-input, var(--bg-overlay)); font: 700 18px var(--font-display); }
+.reach-wallet-field input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(0,212,232,.1); }
+.reach-wallet-presets { display: flex; flex-wrap: wrap; gap: 8px; margin-top: -5px; }
+.reach-wallet-presets button { padding: 7px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-secondary); background: var(--bg-overlay); font: 10px var(--font-mono); }
+.reach-wallet-presets button:hover { color: var(--accent); border-color: rgba(0,212,232,.4); background: rgba(0,212,232,.06); }
+.reach-wallet-secure { display: flex; align-items: center; gap: 7px; margin: -3px 0 0; color: var(--text-muted); font-size: 11px; }
+.reach-wallet-secure span { display: grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; color: var(--mint); background: rgba(62,245,160,.1); font-weight: 800; }
+.reach-wallet-error { margin: 0; color: var(--danger, #ff7b8b); font-size: 12px; }
+.reach-wallet-actions { display: flex; justify-content: flex-end; gap: 9px; padding-top: 2px; }
+
+@media (max-width: 680px) {
+  .reach-wallet-body { align-items: flex-start; flex-direction: column; }
+  .reach-wallet-balance { width: 100%; padding: 14px 0 0; border-top: 1px solid var(--border); border-left: 0; text-align: left; }
+}
+@media (max-width: 480px) {
+  .reach-wallet-card { padding: 20px 18px; }
+  .reach-wallet-footer { align-items: flex-start; flex-direction: column; }
+  .reach-wallet-footer .btn { width: 100%; }
+  .reach-wallet-modal { padding: 23px 19px; }
+  .reach-wallet-actions { flex-direction: column-reverse; }
+  .reach-wallet-actions .btn { width: 100%; justify-content: center; }
+}
+
 /* ── TABLE ───────────────────────────────────────────── */
 .portal-table-wrap {
   border: 1px solid var(--border-card);

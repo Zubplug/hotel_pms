@@ -110,20 +110,13 @@ export default async function PortalDashboard() {
   return (
     <PortalShell orgName={org?.name} userName={user.name ?? user.email ?? undefined}>
       {/* ── PAGE HEADER ──────────────────────────────────── */}
-      <div style={{ marginBottom: 36 }}>
-        <div style={{
-          fontFamily: "var(--font-mono)", fontSize: 10, letterSpacing: ".18em",
-          textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 8,
-        }}>
+      <div className="portal-dashboard-hero">
+        <div className="portal-dashboard-hero-copy">
+          <div className="portal-dashboard-eyebrow">
           {dateStr}
-        </div>
-        <h1 style={{
-          fontFamily: "var(--font-display)", fontSize: "clamp(1.6rem,3vw,2.2rem)",
-          fontWeight: 800, letterSpacing: "-.05em", color: "var(--text-primary)", marginBottom: 8,
-        }}>
-          {greeting}, {firstName} 👋
-        </h1>
-        <p style={{ fontSize: 14, color: "var(--text-muted)", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          </div>
+          <h1>{greeting}, {firstName} <span aria-hidden="true">👋</span></h1>
+          <p>
           <span style={{ fontWeight: 600, color: "var(--text-secondary)" }}>{org?.name ?? "Your organisation"}</span>
           {subscription?.status && (
             <>
@@ -139,13 +132,15 @@ export default async function PortalDashboard() {
               </span>
             </>
           )}
-        </p>
+          </p>
+        </div>
+        <div className="portal-dashboard-hero-aside"><span className="portal-hero-status-dot" /><div><strong>Workspace online</strong><small>All systems operational</small></div><span className="portal-hero-arrow">↗</span></div>
       </div>
 
       <ReachWalletCard />
 
       {/* ── STATS ROW ─────────────────────────────────────── */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12, marginBottom: 24 }}>
+      <div className="portal-dashboard-stats" style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12, marginBottom: 24 }}>
         {STATS.map((s) => (
           <Link key={s.label} href={s.href} style={{ textDecoration: "none" }}>
             <div style={{
@@ -190,7 +185,7 @@ export default async function PortalDashboard() {
       </div>
 
       {/* ── QUICK ACTIONS ─────────────────────────────────── */}
-      <div style={{
+      <div className="portal-dashboard-actions" style={{
         background: "var(--bg-card)", border: "1px solid var(--border-card)",
         borderRadius: "var(--radius-lg)", padding: "20px 24px",
         display: "flex", alignItems: "center", justifyContent: "space-between",
@@ -213,13 +208,13 @@ export default async function PortalDashboard() {
       </div>
 
       {/* ── WORKSPACE GRID ────────────────────────────────── */}
-      <div style={{
+      <div className="portal-dashboard-area-label" style={{
         fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: ".18em",
         textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 14,
       }}>
         Workspace Areas
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10 }}>
+      <div className="portal-dashboard-areas" style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10 }}>
         {AREA_CARDS.map((card) => (
           <Link
             key={card.href}
@@ -266,7 +261,7 @@ export default async function PortalDashboard() {
       </div>
 
       {/* ── FOOTER HELP STRIP ─────────────────────────────── */}
-      <div style={{
+      <div className="portal-dashboard-help" style={{
         marginTop: 28, padding: "18px 24px",
         border: "1px solid var(--border-card)",
         borderRadius: "var(--radius-lg)",
