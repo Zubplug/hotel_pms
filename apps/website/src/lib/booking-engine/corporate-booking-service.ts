@@ -167,6 +167,21 @@ async function runBookingTransaction(
     }));
     const propertyId = snapshot.request.propertyId;
 
+    // Keep new public applications application-only until their payment is
+    // verified or a manager approves pay-later. The settlement and approval
+    // boundaries materialize the waived corporate account at that point.
+    // Already-converted applications can safely reuse their existing account.
+    let corporateAccountId = principal.corporateAccountId;
+    let applicationWasPending = false;
+    if (!corporateAccountId && principal.corporateApplicationId) {
+      const application = await tx.corporateBookingApplication.findUnique({
+        where: { id: principal.corporateApplicationId },
+        select: { status: true, corporateAccountId: true },
+      });
+      applicationWasPending = application?.status === 'PENDING';
+      corporateAccountId = application?.corporateAccountId || null;
+    }
+
     const consumed = await tx.bookingQuote.updateMany({
       where: {
         id: input.quoteId,
@@ -195,8 +210,9 @@ async function runBookingTransaction(
 
     const paymentRequired = isPaymentRequired(snapshot);
     const payLater = snapshot.request.paymentMode.toUpperCase() === 'PAY_LATER';
-    if (payLater && principal.corporateAccountId) {
-      const accountId = principal.corporateAccountId;
+    const requiresCreditApproval = payLater && applicationWasPending;
+    if (payLater && corporateAccountId) {
+      const accountId = corporateAccountId;
       await tx.$queryRaw<any[]>`
         SELECT cla.id
         FROM "CityLedgerAccount" cla
@@ -204,7 +220,7 @@ async function runBookingTransaction(
         WHERE ca.id = ${accountId}::uuid
         FOR UPDATE
       `;
-      const account = await tx.corporateAccount.findUnique({ where: { id: principal.corporateAccountId }, select: { cityLedgerAccountId: true, creditLimit: true, exemptFromHighBalance: true, cityLedgerAccount: { select: { status: true, balance: true } } } });
+      const account = await tx.corporateAccount.findUnique({ where: { id: accountId }, select: { cityLedgerAccountId: true, creditLimit: true, exemptFromHighBalance: true, cityLedgerAccount: { select: { status: true, balance: true } } } });
       if (!account?.cityLedgerAccountId || account.cityLedgerAccount?.status !== 'ACTIVE') {
         throw new CorporateBookingError('BOOKING_INPUT_INVALID', 'Corporate pay-later bookings require an active City Ledger account');
       }
@@ -242,13 +258,13 @@ async function runBookingTransaction(
       roomId: assignedRoom.id,
       adults: line.request.adults,
       children: line.request.children,
-      corporateAccountId: principal.corporateAccountId,
+      corporateAccountId,
       corporateBookingApplicationId: principal.corporateApplicationId,
       ratePlanId: line.rateDecision.ratePlanId,
       overrideTotalAmount: perReservationTotal,
       currency: line.totals.currency,
       source: 'CORPORATE',
-      status: paymentRequired || payLater ? 'PENDING' : 'CONFIRMED',
+      status: paymentRequired || requiresCreditApproval ? 'PENDING' : 'CONFIRMED',
       specialRequests: input.specialRequests,
       createdByType: 'SYSTEM',
       userEmail: reservationGuest.email,
@@ -268,7 +284,7 @@ async function runBookingTransaction(
         bookingChannelRef: `${input.externalReference ?? `CORPORATE:${scopedKey}`}:${reservationIndex + 1}`,
         paymentExpiresAt: paymentRequired
           ? new Date(now.getTime() + 15 * 60 * 1000)
-          : payLater
+          : requiresCreditApproval
             ? new Date(now.getTime() + 24 * 60 * 60 * 1000)
             : null,
       },
@@ -288,7 +304,7 @@ async function runBookingTransaction(
         data: {
           organizationId: principal.organizationId,
           propertyId,
-          corporateAccountId: principal.corporateAccountId,
+          corporateAccountId,
           corporateBookingApplicationId: principal.corporateApplicationId,
           requiredAmount,
           currency: snapshot.totals.currency,
@@ -301,7 +317,7 @@ async function runBookingTransaction(
         },
       });
     }
-    if (payLater) {
+    if (requiresCreditApproval) {
       const actorId = await getOrCreateBookingSystemActor(tx, principal.organizationId);
       for (const reservation of reservations) await tx.approvalRequest.create({
         data: {
@@ -313,7 +329,7 @@ async function runBookingTransaction(
           amount: reservation.amount,
           currency: snapshot.totals.currency,
           reason: 'Corporate pay-later reservation requires property management approval',
-          details: { reservationId: reservation.id, corporateAccountId: principal.corporateAccountId, corporateBookingApplicationId: principal.corporateApplicationId, partnerId: principal.id, confirmationNumber: reservation.confirmationNumber },
+          details: { reservationId: reservation.id, corporateAccountId, corporateBookingApplicationId: principal.corporateApplicationId, partnerId: principal.id, confirmationNumber: reservation.confirmationNumber },
           expiresAt: new Date(now.getTime() + 24 * 60 * 60 * 1000),
           idempotencyKey: `corporate-credit:${reservation.id}`,
         },
@@ -347,7 +363,7 @@ async function runBookingTransaction(
       },
     });
 
-    return { reservationId: reservationIds[0], reservationIds, confirmationNumber: reservations[0].confirmationNumber, status: reservations[0].status, paymentRequired, approvalRequired: payLater, idempotent: false };
+    return { reservationId: reservationIds[0], reservationIds, confirmationNumber: reservations[0].confirmationNumber, status: reservations[0].status, paymentRequired, approvalRequired: requiresCreditApproval, idempotent: false };
   }, { isolationLevel: 'Serializable' });
 }
 
