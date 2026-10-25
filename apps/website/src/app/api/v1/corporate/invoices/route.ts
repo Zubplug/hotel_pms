@@ -14,8 +14,40 @@ export async function GET(req: NextRequest) {
     const invoices = await prisma.cityLedgerInvoice.findMany({
       where: { account: { CorporateAccount: { some: { id: principal.corporateAccountId, organizationId: auth.principal.organizationId, propertyId } } }, propertyId },
       orderBy: [{ status: 'asc' }, { dueDate: 'asc' }],
-      select: { id: true, invoiceNumber: true, issueDate: true, dueDate: true, description: true, amount: true, paidAmount: true, outstandingAmount: true, currency: true, status: true },
+      select: {
+        id: true, invoiceNumber: true, issueDate: true, dueDate: true,
+        description: true, amount: true, paidAmount: true, outstandingAmount: true,
+        currency: true, status: true,
+        entries: {
+          orderBy: { createdAt: 'asc' },
+          take: 1,
+          select: {
+            guest: { select: { firstName: true, lastName: true } },
+            reservation: {
+              select: {
+                confirmationNumber: true,
+                primaryGuest: { select: { firstName: true, lastName: true } },
+                reservationRooms: { select: { room: { select: { number: true } } } },
+              },
+            },
+          },
+        },
+      },
     });
-    return withRequestId(successResponse({ invoices }), auth.requestId);
+    const presentationInvoices = invoices.map((invoice) => {
+      const entry = invoice.entries[0];
+      const guest = entry?.guest || entry?.reservation?.primaryGuest;
+      const guestName = guest ? `${guest.firstName} ${guest.lastName}`.trim() : null;
+      const roomNumbers = entry?.reservation?.reservationRooms.map((room) => room.room?.number).filter(Boolean) || [];
+      return {
+        ...invoice,
+        entries: undefined,
+        displayTitle: guestName ? `Corporate stay for ${guestName}` : 'Corporate accommodation stay',
+        displayContext: entry?.reservation
+          ? `Reservation ${entry.reservation.confirmationNumber}${roomNumbers.length ? ` · Room ${roomNumbers.join(', ')}` : ''}`
+          : 'Corporate account charge',
+      };
+    });
+    return withRequestId(successResponse({ invoices: presentationInvoices }), auth.requestId);
   } catch (error) { return corporateError(error, auth.requestId); }
 }
