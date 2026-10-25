@@ -47,17 +47,62 @@ export async function GET(req: NextRequest) {
             version: true,
             rules: {
               orderBy: { priority: 'asc' },
-              select: { id: true, roomTypeId: true, roomType: { select: { name: true, code: true } }, rateMethod: true, amount: true, discountPercent: true, currency: true, minStay: true, maxStay: true, minRooms: true, maxRooms: true, pricingFactors: true },
+              select: { id: true, roomTypeId: true, roomType: { select: { name: true, code: true } }, sourceRatePlanId: true, rateMethod: true, amount: true, discountPercent: true, currency: true, minStay: true, maxStay: true, minRooms: true, maxRooms: true, pricingFactors: true },
             },
           },
         },
       },
     });
-    const defaultCorporateRates = defaultContract?.versions[0]?.rules.map((rule) => ({
-      ...rule,
-      amount: rule.amount == null ? null : Number(rule.amount),
-      discountPercent: rule.discountPercent == null ? null : Number(rule.discountPercent),
-    })) || [];
+    const defaultRules = defaultContract?.versions[0]?.rules || [];
+    const sourceRatePlanIds = Array.from(new Set(defaultRules.map((rule) => rule.sourceRatePlanId).filter((id): id is string => Boolean(id))));
+    const roomTypeIds = Array.from(new Set(defaultRules.map((rule) => rule.roomTypeId)));
+    const todayDayOfWeek = today.getUTCDay();
+    const baseRates = sourceRatePlanIds.length
+      ? await prisma.rate.findMany({
+        where: {
+          propertyId,
+          ratePlanId: { in: sourceRatePlanIds },
+          roomTypeId: { in: roomTypeIds },
+          effectiveFrom: { lte: today },
+          OR: [{ effectiveTo: null }, { effectiveTo: { gte: today } }],
+          dayOfWeek: { has: todayDayOfWeek },
+        },
+        orderBy: { effectiveFrom: 'desc' },
+        select: { ratePlanId: true, roomTypeId: true, amount: true, currency: true },
+      })
+      : [];
+    const baseRateByRule = new Map<string, { amount: number; currency: string }>();
+    for (const rate of baseRates) {
+      const key = `${rate.ratePlanId}:${rate.roomTypeId}`;
+      if (!baseRateByRule.has(key)) baseRateByRule.set(key, { amount: Number(rate.amount), currency: rate.currency });
+    }
+    const defaultCorporateRates = defaultRules.map((rule) => {
+      const configuredAmount = rule.amount == null ? null : Number(rule.amount);
+      const base = rule.sourceRatePlanId ? baseRateByRule.get(`${rule.sourceRatePlanId}:${rule.roomTypeId}`) : undefined;
+      const estimatedRate = configuredAmount != null
+        ? configuredAmount
+        : base
+          ? rule.rateMethod === 'PERCENTAGE_DISCOUNT'
+            ? Math.max(0, base.amount * (1 - Number(rule.discountPercent || 0) / 100))
+            : base.amount
+          : null;
+      return {
+        ...rule,
+        amount: configuredAmount,
+        discountPercent: rule.discountPercent == null ? null : Number(rule.discountPercent),
+        baseRate: base?.amount ?? null,
+        baseRateCurrency: base?.currency || rule.currency || defaultContract?.defaultCurrency || 'NGN',
+        estimatedRate,
+        estimatedCurrency: rule.currency || base?.currency || defaultContract?.defaultCurrency || 'NGN',
+        estimateBasis: estimatedRate == null
+          ? 'UNAVAILABLE'
+          : configuredAmount != null
+            ? 'CONFIGURED_CORPORATE_RATE'
+            : rule.rateMethod === 'PERCENTAGE_DISCOUNT'
+              ? 'PMS_RATE_LESS_CORPORATE_DISCOUNT'
+              : 'PMS_RATE_PLAN',
+      };
+    });
     return withRequestId(successResponse({ account, defaultCorporateContract: defaultContract ? { id: defaultContract.id, reference: defaultContract.reference, name: defaultContract.name, defaultCurrency: defaultContract.defaultCurrency, effectiveFrom: defaultContract.effectiveFrom, effectiveTo: defaultContract.effectiveTo, version: defaultContract.versions[0]?.version || null } : null, defaultCorporateRates }), auth.requestId);
   } catch (error) { return corporateError(error, auth.requestId); }
 }
