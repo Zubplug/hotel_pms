@@ -10,7 +10,7 @@ type Room = {
   photos?: string[];
   amenities?: string[];
   availability: { available: number; isAvailable: boolean };
-  rate: { currency: string; subtotal?: number; corporateFactors?: { stayLength?: any[]; roomCount?: any[]; paymentMode?: Record<string, any> }; appliedAdjustments?: { stayLength?: any; roomCount?: any; paymentMode?: any } } | null;
+  rate: { currency: string; subtotal?: number; baseNightlyRate?: number | null; nightlyRate?: number | null; corporateFactors?: { stayLength?: any[]; roomCount?: any[]; paymentMode?: Record<string, any> }; appliedAdjustments?: { stayLength?: any; roomCount?: any; paymentMode?: any } } | null;
 };
 
 type QuoteLine = any;
@@ -88,6 +88,21 @@ function adjustmentLabel(adjustment: any) {
   if (adjustment.adjustmentType === 'PERCENT_DISCOUNT') return value > 0 ? `${value}% discount` : '';
   if (adjustment.adjustmentType === 'FIXED_NIGHTLY_ADJUSTMENT') return value < 0 ? `${money(Math.abs(value))} discount / night` : '';
   return '';
+}
+
+function displayedNightlyRate(baseRate: number | null | undefined, factors: any, nights: number, rooms: number, paymentMode: string) {
+  if (baseRate == null || !Number.isFinite(Number(baseRate))) return null;
+  const adjustments = [
+    matchingAdjustment(factors?.stayLength, nights, rooms),
+    matchingAdjustment(factors?.roomCount, nights, rooms),
+    factors?.paymentMode?.[paymentMode],
+  ].filter(Boolean);
+  return adjustments.reduce((amount: number, adjustment: any) => {
+    const value = Number(adjustment.value || 0);
+    if (adjustment.adjustmentType === 'PERCENT_DISCOUNT') return amount * (1 - value / 100);
+    if (adjustment.adjustmentType === 'MULTIPLIER') return amount * value;
+    return amount + value;
+  }, Number(baseRate));
 }
 
 function nightsBetween(checkIn: string, checkOut: string) {
@@ -301,10 +316,11 @@ export default function CorporateApplyPage() {
             const roomDiscount = count > 0 ? matchingAdjustment(factors?.roomCount, nights, count) : null;
             const paymentDiscount = factors?.paymentMode?.[form.paymentMode];
             const discountLabels = [adjustmentLabel(stayDiscount) && `${nights}-night stay: ${adjustmentLabel(stayDiscount)}`, adjustmentLabel(roomDiscount) && `${count} rooms: ${adjustmentLabel(roomDiscount)}`, adjustmentLabel(paymentDiscount) && `${selectedPaymentWithDiscount.label}: ${adjustmentLabel(paymentDiscount)}`].filter(Boolean) as string[];
+            const nightlyRate = displayedNightlyRate(room.rate?.baseNightlyRate, factors, nights, count || 1, form.paymentMode) ?? room.rate?.nightlyRate;
             return <article className={'corp-room ' + (count ? 'selected ' : '') + (!available ? 'unavailable' : '')} key={room.id}>
               <div className="corp-room-image"><img src={image} alt={room.name} /><span className="corp-room-badge">{available ? 'Available' : 'Unavailable'}</span></div>
               <div className="corp-room-body">
-                <div className="corp-room-top"><div><h3>{room.name}</h3><p className="corp-room-sub">{room.description || 'Comfortable accommodation prepared for business and group stays.'}</p></div><div className="corp-room-price"><strong>{room.rate?.subtotal != null ? money(room.rate.subtotal, room.rate.currency) : 'Corporate rate'}</strong><span>{room.rate?.subtotal != null ? 'from searched dates' : 'calculated next'}</span></div></div>
+                <div className="corp-room-top"><div><h3>{room.name}</h3><p className="corp-room-sub">{room.description || 'Comfortable accommodation prepared for business and group stays.'}</p></div><div className="corp-room-price"><strong>{nightlyRate != null ? money(nightlyRate, room.rate?.currency) : 'Corporate rate'}</strong><span>{nightlyRate != null ? 'per room / night' : 'calculated next'}</span></div></div>
                 <div className="corp-discount-note"><strong>Default corporate price</strong>{discountLabels.length > 0 ? discountLabels.map((discount) => <span key={discount}>✓ {discount}</span>) : <span>✓ Contract pricing is applied to this room type.</span>}</div>
                 <div className="corp-amenities">{(amenityList.length ? amenityList : ['PMS-connected stay', 'Flexible terms', 'Front desk support']).map((amenity) => <span key={amenity}>{amenity}</span>)}</div>
                 <div className="corp-room-bottom"><span className={'corp-availability ' + (available ? (room.availability.available < 3 ? 'low' : '') : 'none')}>{available ? room.availability.available + ' room' + (room.availability.available === 1 ? '' : 's') + ' remaining' : 'Not available for these dates'}</span><div className="corp-quantity"><label htmlFor={'rooms-' + room.id}>Rooms</label><input id={'rooms-' + room.id} className="corp-input" type="number" min="0" max={room.availability.available} disabled={!available} value={count || ''} placeholder="0" onFocus={(event) => { if (count === 0) event.currentTarget.value = ''; }} onClick={(event) => { if (count === 0) event.currentTarget.value = ''; }} onChange={(event) => { const value = event.target.value === '' ? 0 : Number(event.target.value); setRoomSelections((current) => ({ ...current, [room.id]: Number.isFinite(value) ? Math.max(0, value) : 0 })); setRoomSelectionError(''); }} /></div></div>
