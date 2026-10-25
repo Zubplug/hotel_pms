@@ -16,7 +16,7 @@ export default async function HQOrganizationsPage() {
       select: {
         id: true, name: true, slug: true, defaultCurrency: true, defaultTimezone: true, createdAt: true,
         properties: { select: { id: true, name: true, city: true, country: true, isActive: true, businessDate: true, auditStatus: true, createdAt: true } },
-        subscriptions: { orderBy: { createdAt: 'desc' }, take: 1, select: { status: true, plan: { select: { name: true } }, currentPeriodEnd: true } },
+        subscriptions: { where: { planId: { not: null } }, orderBy: { createdAt: 'desc' }, take: 1, select: { status: true, plan: { select: { name: true } }, currentPeriodEnd: true } },
         entitlements: { where: { status: 'ACTIVE' }, select: { productCode: true } },
         memberships: { where: { status: 'ACTIVE' }, select: { id: true } },
       },

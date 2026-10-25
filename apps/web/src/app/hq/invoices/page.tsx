@@ -4,6 +4,14 @@ import { InvoiceControlCenter } from './InvoiceControlCenter';
 
 const DAY = 24 * 60 * 60 * 1000;
 
+function invoiceProductCodes(payload: unknown): string[] {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return [];
+  const root = payload as Record<string, unknown>;
+  const meta = root.meta && typeof root.meta === 'object' && !Array.isArray(root.meta) ? root.meta as Record<string, unknown> : null;
+  const value = meta?.productCodes;
+  return typeof value === 'string' ? value.split(',').map((code) => code.trim()).filter(Boolean) : [];
+}
+
 export default async function HQInvoicesPage() {
   await requireHQAdmin();
   const now = new Date();
@@ -12,8 +20,14 @@ export default async function HQInvoicesPage() {
     where: { createdAt: { gte: since } },
     orderBy: { createdAt: 'desc' },
     take: 500,
-    select: { id: true, organizationId: true, flutterwaveInvoiceId: true, flutterwaveSubscriptionId: true, status: true, currency: true, subtotal: true, total: true, amountPaid: true, amountDue: true, periodStart: true, periodEnd: true, hostedInvoiceUrl: true, invoicePdf: true, createdAt: true, updatedAt: true, organization: { select: { name: true, slug: true, defaultCurrency: true, subscriptions: { orderBy: { createdAt: 'desc' }, take: 1, select: { status: true, plan: { select: { name: true } } } } } } },
+    select: { id: true, organizationId: true, flutterwaveInvoiceId: true, flutterwaveSubscriptionId: true, status: true, currency: true, subtotal: true, total: true, amountPaid: true, amountDue: true, periodStart: true, periodEnd: true, hostedInvoiceUrl: true, invoicePdf: true, payload: true, createdAt: true, updatedAt: true, organization: { select: { name: true, slug: true, defaultCurrency: true, subscriptions: { where: { planId: { not: null } }, orderBy: { createdAt: 'desc' }, take: 1, select: { status: true, plan: { select: { name: true } } } } } } },
   });
+
+  const productCodes = [...new Set(invoices.flatMap((invoice) => invoiceProductCodes(invoice.payload)))];
+  const products = productCodes.length
+    ? await prisma.billingProduct.findMany({ where: { code: { in: productCodes } }, select: { code: true, name: true, type: true } })
+    : [];
+  const productByCode = new Map(products.map((product) => [product.code, product]));
 
   const currencyTotals = new Map<string, { billed: number; collected: number; due: number }>();
   const statusCounts = new Map<string, number>();
@@ -34,7 +48,12 @@ export default async function HQInvoicesPage() {
     org.billed += invoice.total; org.collected += invoice.amountPaid; org.due += invoice.amountDue; org.invoices += 1; if (['FAILED', 'UNCOLLECTIBLE', 'PAST_DUE'].includes(status)) org.failed += 1; if (org.latestStatus === 'PAID' && status !== 'PAID') org.latestStatus = status; organizationTotals.set(invoice.organizationId, org);
   }
 
-  const rows = invoices.map((invoice) => ({ id: invoice.id, organizationId: invoice.organizationId, organizationName: invoice.organization.name, organizationSlug: invoice.organization.slug, currency: invoice.currency.toUpperCase(), invoiceId: invoice.flutterwaveInvoiceId, subscriptionId: invoice.flutterwaveSubscriptionId, status: invoice.status.toUpperCase(), subtotal: invoice.subtotal, total: invoice.total, amountPaid: invoice.amountPaid, amountDue: invoice.amountDue, periodStart: invoice.periodStart?.toISOString() ?? null, periodEnd: invoice.periodEnd?.toISOString() ?? null, hostedInvoiceUrl: invoice.hostedInvoiceUrl, invoicePdf: invoice.invoicePdf, createdAt: invoice.createdAt.toISOString(), updatedAt: invoice.updatedAt.toISOString(), plan: invoice.organization.subscriptions[0]?.plan?.name ?? 'Unconfigured', subscriptionStatus: invoice.organization.subscriptions[0]?.status ?? 'NO PLAN' }));
+  const rows = invoices.map((invoice) => {
+    const invoiceProducts = invoiceProductCodes(invoice.payload).map((code) => productByCode.get(code)).filter(Boolean);
+    const addOnNames = invoiceProducts.filter((product) => product?.type === 'ADDON').map((product) => product?.name).filter(Boolean);
+    const isAddOn = addOnNames.length > 0;
+    return { id: invoice.id, organizationId: invoice.organizationId, organizationName: invoice.organization.name, organizationSlug: invoice.organization.slug, currency: invoice.currency.toUpperCase(), invoiceId: invoice.flutterwaveInvoiceId, subscriptionId: invoice.flutterwaveSubscriptionId, status: invoice.status.toUpperCase(), subtotal: invoice.subtotal, total: invoice.total, amountPaid: invoice.amountPaid, amountDue: invoice.amountDue, periodStart: invoice.periodStart?.toISOString() ?? null, periodEnd: invoice.periodEnd?.toISOString() ?? null, hostedInvoiceUrl: invoice.hostedInvoiceUrl, invoicePdf: invoice.invoicePdf, createdAt: invoice.createdAt.toISOString(), updatedAt: invoice.updatedAt.toISOString(), plan: isAddOn ? addOnNames.join(' · ') : invoice.organization.subscriptions[0]?.plan?.name ?? 'Unconfigured', subscriptionStatus: isAddOn ? 'ADD-ON' : invoice.organization.subscriptions[0]?.status ?? 'NO PLAN' };
+  });
   const statusMix = [...statusCounts.entries()].map(([status, count]) => ({ status, count }));
   const exposure = [...organizationTotals.entries()].map(([id, value]) => ({ id, ...value })).sort((a, b) => b.due - a.due);
   const formattedTotals = [...currencyTotals.entries()].map(([currency, value]) => ({ currency, ...value }));
