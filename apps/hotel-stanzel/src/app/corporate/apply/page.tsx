@@ -123,8 +123,6 @@ export default function CorporateApplyPage() {
   const [country, setCountry] = useState('Nigeria');
   const [rooms, setRooms] = useState<Room[]>([]);
   const [roomSelections, setRoomSelections] = useState<Record<string, number>>({});
-  const [roomDates, setRoomDates] = useState<Record<string, { checkIn: string; checkOut: string }>>({});
-  const [additionalLines, setAdditionalLines] = useState<Array<{ roomTypeId: string; roomCount: number; checkIn: string; checkOut: string }>>([]);
   const [quote, setQuote] = useState<any>(null);
   const [bookingMode, setBookingMode] = useState<'STANDARD' | 'NEGOTIATE'>('STANDARD');
   const [negotiatedAmounts, setNegotiatedAmounts] = useState<Record<string, string>>({});
@@ -132,7 +130,7 @@ export default function CorporateApplyPage() {
   const [error, setError] = useState('');
   const [roomSelectionError, setRoomSelectionError] = useState('');
   const [busy, setBusy] = useState(false);
-  const selectedRoomCount = Object.values(roomSelections).reduce((sum, count) => sum + count, 0) + additionalLines.reduce((sum, line) => sum + line.roomCount, 0);
+  const selectedRoomCount = Object.values(roomSelections).reduce((sum, count) => sum + count, 0);
   const update = (key: string, value: string) => {
     setForm((current) => ({ ...current, [key]: value }));
     if (key === 'checkIn' || key === 'checkOut') setRooms([]);
@@ -162,8 +160,7 @@ export default function CorporateApplyPage() {
       const body = await response.json();
       if (!response.ok) throw new Error(body.error || 'Availability unavailable.');
       const available = body.rooms || [];
-      setRooms(available); setRoomSelections({}); setAdditionalLines([]); setRoomSelectionError('');
-      setRoomDates(Object.fromEntries(available.map((room: Room) => [room.id, { checkIn: form.checkIn, checkOut: form.checkOut }])));
+      setRooms(available); setRoomSelections({}); setRoomSelectionError('');
       setStage(2);
     } catch (e) { setError(e instanceof Error ? e.message : 'Could not search availability.'); }
     finally { setBusy(false); }
@@ -174,10 +171,7 @@ export default function CorporateApplyPage() {
       const count = Number(roomSelections[room.id] || 0);
       if (!Number.isInteger(count) || count < 0) return `Enter a valid whole number of rooms for ${room.name}.`;
       if (count > room.availability.available) return `${room.name} has only ${room.availability.available} room${room.availability.available === 1 ? '' : 's'} available for these dates.`;
-      if (count > 0) {
-        const dates = roomDates[room.id] || { checkIn: form.checkIn, checkOut: form.checkOut };
-        if (!dates.checkIn || !dates.checkOut || dates.checkOut <= dates.checkIn) return `Choose a departure date after arrival for ${room.name}.`;
-      }
+      if (count > 0 && (!form.checkIn || !form.checkOut || form.checkOut <= form.checkIn)) return 'Choose a valid stay date range in Step 1.';
     }
     if (selectedRoomCount < 1) return 'Select at least one available room to continue.';
     return '';
@@ -194,10 +188,9 @@ export default function CorporateApplyPage() {
     if (!selectedRoomCount) return;
     setBusy(true); setError('');
     const body = Object.fromEntries(new FormData(event.currentTarget).entries());
-    const selections = [
-      ...Object.entries(roomSelections).filter(([, count]) => count > 0).map(([roomTypeId, roomCount]) => ({ roomTypeId, roomCount, ...roomDates[roomTypeId] })),
-      ...additionalLines.filter((line) => line.roomCount > 0),
-    ];
+    const selections = Object.entries(roomSelections)
+      .filter(([, count]) => count > 0)
+      .map(([roomTypeId, roomCount]) => ({ roomTypeId, roomCount, checkIn: form.checkIn, checkOut: form.checkOut }));
     try {
       const application = await fetch('/api/corporate/apply', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
       const applicationBody = await application.json();
@@ -291,7 +284,7 @@ export default function CorporateApplyPage() {
     <div className="corp-layout">
       <section className="corp-panel corp-main">
         {stage === 1 && <div>
-          <div className="corp-title-row"><div><p className="corp-kicker">Step 1 · Search availability</p><h2>Find rooms for your team</h2><p>Start with the dates and occupancy. You can select different room types and arrival dates next.</p></div><span className="corp-icon">01</span></div>
+          <div className="corp-title-row"><div><p className="corp-kicker">Step 1 · Search availability</p><h2>Find rooms for your team</h2><p>Select one stay period for the whole room arrangement, then choose the room types your team needs.</p></div><span className="corp-icon">01</span></div>
           <form className="corp-form" onSubmit={search}>
             <div className="corp-grid">
               <div className="corp-field"><label htmlFor="check-in">Check-in</label><input id="check-in" className="corp-input" type="date" required value={form.checkIn} onChange={(e) => update('checkIn', e.target.value)} /></div>
@@ -309,11 +302,10 @@ export default function CorporateApplyPage() {
         </div>}
 
         {stage === 2 && <div>
-          <div className="corp-title-row"><div><p className="corp-kicker">Step 2 · Choose rooms</p><h2>Build your room arrangement</h2><p>Compare room types, select quantities and add different stay dates when your team arrives in waves.</p></div><span className="corp-icon">02</span></div>
+          <div className="corp-title-row"><div><p className="corp-kicker">Step 2 · Choose rooms</p><h2>Build your room arrangement</h2><p>Compare room types and select quantities for your stay from {formatDate(form.checkIn)} to {formatDate(form.checkOut)}.</p></div><span className="corp-icon">02</span></div>
           <div style={{ marginTop: 22, maxWidth: 520 }}><ProfessionalSelect name="paymentMode" label="Payment arrangement · default corporate pricing" value={form.paymentMode} options={paymentOptionsWithDiscounts} onChange={(value) => update('paymentMode', value)} /></div>
           {rooms.length === 0 ? <div className="corp-empty">No rooms are available for these dates. Try a different date range.</div> : <div className="corp-room-list">{rooms.map((room, index) => {
             const count = roomSelections[room.id] || 0;
-            const dates = roomDates[room.id] || { checkIn: form.checkIn, checkOut: form.checkOut };
             const available = room.availability.isAvailable && room.availability.available > 0;
             const image = room.photos?.[0] || fallbackImages[index % fallbackImages.length];
             const amenityList = (room.amenities || []).slice(0, 3);
@@ -331,7 +323,6 @@ export default function CorporateApplyPage() {
                 <div className="corp-discount-note"><strong>Default corporate price</strong>{discountLabels.length > 0 ? discountLabels.map((discount) => <span key={discount}>✓ {discount}</span>) : <span>✓ Contract pricing is applied to this room type.</span>}</div>
                 <div className="corp-amenities">{(amenityList.length ? amenityList : ['PMS-connected stay', 'Flexible terms', 'Front desk support']).map((amenity) => <span key={amenity}>{amenity}</span>)}</div>
                 <div className="corp-room-bottom"><span className={'corp-availability ' + (available ? (room.availability.available < 3 ? 'low' : '') : 'none')}>{available ? room.availability.available + ' room' + (room.availability.available === 1 ? '' : 's') + ' remaining' : 'Not available for these dates'}</span><div className="corp-quantity"><label htmlFor={'rooms-' + room.id}>Rooms</label><input id={'rooms-' + room.id} className="corp-input" type="number" min="0" max={room.availability.available} disabled={!available} value={count || ''} placeholder="0" onFocus={(event) => { if (count === 0) event.currentTarget.value = ''; }} onClick={(event) => { if (count === 0) event.currentTarget.value = ''; }} onChange={(event) => { const value = event.target.value === '' ? 0 : Number(event.target.value); setRoomSelections((current) => ({ ...current, [room.id]: Number.isFinite(value) ? Math.max(0, value) : 0 })); setRoomSelectionError(''); }} /></div></div>
-                {count > 0 && <div className="corp-extra"><div className="corp-extra-title">Stay dates for this room type</div><div className="corp-grid"><div className="corp-field"><label>Arrival</label><input className="corp-input" type="date" required value={dates.checkIn} onChange={(event) => { setRoomDates((current) => ({ ...current, [room.id]: { ...dates, checkIn: event.target.value } })); setRoomSelectionError(''); }} /></div><div className="corp-field"><label>Departure</label><input className="corp-input" type="date" required min={dates.checkIn} value={dates.checkOut} onChange={(event) => { setRoomDates((current) => ({ ...current, [room.id]: { ...dates, checkOut: event.target.value } })); setRoomSelectionError(''); }} /></div></div></div>}
               </div>
             </article>;
           })}</div>}
