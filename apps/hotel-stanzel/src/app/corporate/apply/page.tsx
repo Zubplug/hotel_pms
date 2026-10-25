@@ -112,7 +112,26 @@ export default function CorporateApplyPage() {
   const [roomSelectionError, setRoomSelectionError] = useState('');
   const [busy, setBusy] = useState(false);
   const selectedRoomCount = Object.values(roomSelections).reduce((sum, count) => sum + count, 0) + additionalLines.reduce((sum, line) => sum + line.roomCount, 0);
-  const update = (key: string, value: string) => setForm((current) => ({ ...current, [key]: value }));
+  const update = (key: string, value: string) => {
+    setForm((current) => ({ ...current, [key]: value }));
+    if (key === 'checkIn' || key === 'checkOut') setRooms([]);
+  };
+
+  useEffect(() => {
+    if (stage !== 1 || !form.checkIn || !form.checkOut || form.checkOut <= form.checkIn) return;
+    let active = true;
+    const preview = async () => {
+      try {
+        const response = await fetch('/api/corporate/availability?' + new URLSearchParams({ ...form, roomCount: '1' }));
+        const body = await response.json();
+        if (active && response.ok) setRooms(body.rooms || []);
+      } catch {
+        // The full availability search remains the source of truth on submit.
+      }
+    };
+    void preview();
+    return () => { active = false; };
+  }, [stage, form.checkIn, form.checkOut, form.adults, form.children]);
 
   async function search(event: FormEvent) {
     event.preventDefault();
