@@ -660,6 +660,11 @@ p { line-height: 1.75; color: var(--text-muted); }
 .transaction-metrics strong { display: block; margin: 8px 0 5px; color: #315547; font-size: 17px; }
 .transaction-metrics .transaction-credit-text, .transaction-amount.credit, .transaction-detail-side-card .credit { color: #2b8061; }
 .transaction-metrics .transaction-debit-text, .transaction-amount.debit, .transaction-detail-side-card .debit { color: #b42318; }
+.transaction-balance-text.outstanding, .transaction-running.outstanding { color: #b42318; }
+.transaction-balance-text.credit, .transaction-running.credit { color: #2b8061; }
+.transaction-balance-text.settled, .transaction-running.settled { color: #557568; }
+.transaction-running strong, .transaction-running small { display: block; }
+.transaction-running small { margin-top: 3px; color: #94a39c; font-size: 9px; font-weight: 400; }
 .transaction-metrics .transaction-status { color: #a17a40; font-size: 14px; text-transform: capitalize; }
 .transaction-register { overflow: hidden; }
 .transaction-table-wrap { overflow-x: auto; padding: 0 14px 14px; }
@@ -680,6 +685,9 @@ p { line-height: 1.75; color: var(--text-muted); }
 .transaction-status-pill.reversed, .transaction-status-pill.void { color: #a8332a; background: #fce9e7; }
 .transaction-amount { font-weight: 700; white-space: nowrap; }
 .transaction-running { color: #315547 !important; font-weight: 700; white-space: nowrap; }
+.transaction-running.outstanding { color: #b42318 !important; }
+.transaction-running.credit { color: #2b8061 !important; }
+.transaction-running.settled { color: #557568 !important; }
 .align-right { text-align: right !important; }
 .transaction-view a, .transaction-invoice-link { color: #a17a40; font-size: 10px; font-weight: 700; white-space: nowrap; }
 .transaction-detail-breadcrumb { display: flex; align-items: center; gap: 9px; margin-bottom: 22px; color: #9aa8a2; font-size: 11px; }
@@ -705,6 +713,9 @@ p { line-height: 1.75; color: var(--text-muted); }
 .transaction-receipt-total > strong.debit { color: #b42318; }
 .transaction-receipt-total small { color: #9aa8a2; font-size: 10px; text-transform: capitalize; }
 .transaction-receipt-section { padding: 24px 0; border-bottom: 1px solid #e7eeea; }
+.transaction-section-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.transaction-section-heading h3 { margin: 6px 0 0; color: #234b3d; font-size: 16px; letter-spacing: -.015em; }
+.transaction-receipt-date { color: #82928c; font-size: 10px; text-align: right; white-space: nowrap; }
 .transaction-context-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 11px; margin-top: 15px; }
 .transaction-context-grid > div { display: grid; gap: 4px; padding: 13px; border: 1px solid #e5ece8; border-radius: 9px; background: #f9fbfa; }
 .transaction-context-grid small { color: #94a39c; font-size: 9px; letter-spacing: .08em; text-transform: uppercase; }
@@ -837,6 +848,8 @@ p { line-height: 1.75; color: var(--text-muted); }
   .invoice-paper-header { padding-top: 0; }
   .transaction-detail-layout { display: block; margin: 0; }
   .transaction-receipt { border: 0; box-shadow: none; }
+  .transaction-receipt-total { padding: 22px 0; }
+  .transaction-receipt-section { padding: 18px 0; }
 }
 .portal-empty-state { display: grid; justify-items: center; padding: 28px 20px 30px; text-align: center; }
 .portal-empty-icon { width: 38px; height: 38px; display: grid; place-items: center; margin-bottom: 10px; border-radius: 50%; color: #a8864e; background: #f8f0df; }
