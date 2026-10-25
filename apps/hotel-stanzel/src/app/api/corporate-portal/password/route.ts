@@ -9,5 +9,5 @@ export async function POST(request: NextRequest) {
   if (!token || !password) return NextResponse.json({ error: 'A valid session and password are required.' }, { status: 400 });
   const result = await publicCorporateAuthRequest('/api/v1/public/corporate/auth/password', { method: 'POST', body: JSON.stringify({ accessToken: token, password }) });
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status || 502 });
-  return NextResponse.json({ ok: true, redirectTo: '/corporate' });
+  return NextResponse.json({ ok: true, redirectTo: '/corporate/dashboard' });
 }

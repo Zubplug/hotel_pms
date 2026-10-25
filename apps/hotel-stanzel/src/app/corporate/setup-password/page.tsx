@@ -16,7 +16,7 @@ export default function CorporateSetupPasswordPage() {
     setBusy(true);
     const response = await fetch('/api/corporate-portal/password', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ password }) });
     const body = await response.json().catch(() => ({}));
-    if (!response.ok) setError(body.error || 'Unable to save your password.'); else router.push(body.redirectTo || '/corporate');
+    if (!response.ok) setError(body.error || 'Unable to save your password.'); else router.push(body.redirectTo || '/corporate/dashboard');
     setBusy(false);
   }
 

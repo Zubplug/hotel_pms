@@ -29,7 +29,7 @@ export default function CorporateVerifyClient({ cardStyle }: Props) {
           setError(body.error || 'This login link is invalid or expired.');
           return;
         }
-        window.location.href = body.redirectTo || '/corporate';
+        window.location.href = body.redirectTo || '/corporate/dashboard';
       })
       .catch(() => setError('Corporate portal is temporarily unavailable.'));
   }, [token]);
