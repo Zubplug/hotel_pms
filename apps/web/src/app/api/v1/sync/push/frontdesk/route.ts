@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authenticateSyncRequest } from "@/lib/sync-auth";
-import prisma, { PaymentMethod } from "@hotel-pms/db";
+import prisma, { readCorporateCreditExposure, PaymentMethod } from "@hotel-pms/db";
 import { createHash, randomUUID } from "crypto";
 import { compare } from "bcryptjs";
 import { NotificationEngine } from "@/lib/notification-engine";
@@ -2035,6 +2035,78 @@ export async function POST(req: NextRequest) {
 
             if (folio.type === "CITY_LEDGER" && (!chargeReservationId || !chargeGuestId)) {
               throw new Error("Corporate room charge requires a valid reservationId and guestId");
+            }
+
+            if (folio.type === "CITY_LEDGER" && amount > 0) {
+              const corporateReservation = await tx.reservation.findFirst({
+                where: { id: chargeReservationId, propertyId },
+                select: { corporateAccountId: true },
+              });
+              if (!corporateReservation?.corporateAccountId) {
+                throw new Error("CORPORATE_RESERVATION_NOT_FOUND");
+              }
+              // The desktop is replaying a charge that was already incurred
+              // offline. Never discard that accounting event because the
+              // account is now over limit; record a durable warning instead.
+              try {
+                const exposure = await readCorporateCreditExposure(tx, {
+                  corporateAccountId: corporateReservation.corporateAccountId,
+                  propertyId,
+                  additionalAmount: amount,
+                  excludeReservationId: chargeReservationId,
+                });
+                if (
+                  exposure.creditLimit > 0 &&
+                  !exposure.exemptFromHighBalance &&
+                  exposure.projectedExposure > exposure.creditLimit + 0.01
+                ) {
+                  await tx.auditLog.create({
+                    data: {
+                      organizationId: property.organizationId,
+                      propertyId,
+                      userId: null,
+                      userEmail: `offline-device:${device.id}`,
+                      userRole: 'OFFLINE_FRONT_DESK',
+                      action: 'CORPORATE_CREDIT_LIMIT_WARNING',
+                      resource: 'CorporateAccount',
+                      resourceId: corporateReservation.corporateAccountId,
+                      newValue: {
+                        source: 'OFFLINE_FRONT_DESK_REPLAY',
+                        reservationId: chargeReservationId,
+                        folioId: aggregateId,
+                        operationId: idempotencyKey,
+                        chargeAmount: amount,
+                        projectedExposure: exposure.projectedExposure,
+                        creditLimit: exposure.creditLimit,
+                        message: 'Incurred charge posted; manager follow-up required.',
+                      },
+                      requestId,
+                    },
+                  });
+                }
+              } catch (creditError) {
+                await tx.auditLog.create({
+                  data: {
+                    organizationId: property.organizationId,
+                    propertyId,
+                    userId: null,
+                    userEmail: `offline-device:${device.id}`,
+                    userRole: 'OFFLINE_FRONT_DESK',
+                    action: 'CORPORATE_CREDIT_REVIEW_WARNING',
+                    resource: 'CorporateAccount',
+                    resourceId: corporateReservation.corporateAccountId,
+                    newValue: {
+                      source: 'OFFLINE_FRONT_DESK_REPLAY',
+                      reservationId: chargeReservationId,
+                      folioId: aggregateId,
+                      operationId: idempotencyKey,
+                      chargeAmount: amount,
+                      message: `Exposure could not be evaluated: ${creditError instanceof Error ? creditError.message : String(creditError)}. Incurred charge posted; manager review required.`,
+                    },
+                    requestId,
+                  },
+                });
+              }
             }
 
             await tx.folioItem.create({

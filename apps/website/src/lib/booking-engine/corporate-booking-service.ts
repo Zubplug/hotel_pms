@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import type { Prisma, PrismaClient } from '@hotel-pms/db';
+import { assertCorporateCreditAvailable, type Prisma, type PrismaClient } from '@hotel-pms/db';
 import { AuthoritativeAvailabilityService } from './availability-service';
 import { CorporateQuoteError, revalidateCorporateQuote, type CorporatePrincipal, type CorporateQuoteSnapshot } from './corporate-quote-service';
 import { SharedReservationService } from '../services/reservation-service';
@@ -228,19 +228,20 @@ async function runBookingTransaction(
     const requiresCreditApproval = payLater;
     if (payLater && corporateAccountId) {
       const accountId = corporateAccountId;
-      await tx.$queryRaw<any[]>`
-        SELECT cla.id
-        FROM "CityLedgerAccount" cla
-        JOIN "CorporateAccount" ca ON ca."cityLedgerAccountId" = cla.id
-        WHERE ca.id = ${accountId}::uuid
-        FOR UPDATE
-      `;
-      const account = await tx.corporateAccount.findUnique({ where: { id: accountId }, select: { cityLedgerAccountId: true, creditLimit: true, exemptFromHighBalance: true, cityLedgerAccount: { select: { status: true, balance: true } } } });
-      if (!account?.cityLedgerAccountId || account.cityLedgerAccount?.status !== 'ACTIVE') {
-        throw new CorporateBookingError('BOOKING_INPUT_INVALID', 'Corporate pay-later bookings require an active City Ledger account');
-      }
-      if (Number(account.creditLimit) > 0 && !account.exemptFromHighBalance && Number(account.cityLedgerAccount.balance) + snapshot.totals.total > Number(account.creditLimit)) {
-        throw new CorporateBookingError('BOOKING_INPUT_INVALID', 'Corporate credit limit would be exceeded');
+      try {
+        await assertCorporateCreditAvailable(tx, {
+          corporateAccountId: accountId,
+          propertyId,
+          additionalAmount: snapshot.totals.total,
+        });
+      } catch (error: any) {
+        if (error?.message === 'CORPORATE_LEDGER_NOT_AVAILABLE') {
+          throw new CorporateBookingError('BOOKING_INPUT_INVALID', 'Corporate pay-later bookings require an active City Ledger account');
+        }
+        if (error?.message === 'CREDIT_LIMIT_EXCEEDED') {
+          throw new CorporateBookingError('BOOKING_INPUT_INVALID', 'Corporate credit limit would be exceeded');
+        }
+        throw error;
       }
     }
     const reservations: Array<{ id: string; confirmationNumber: string; status: string; amount: number }> = [];

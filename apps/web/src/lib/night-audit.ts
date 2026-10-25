@@ -1,4 +1,4 @@
-import prisma from '@hotel-pms/db';
+import prisma, { readCorporateCreditExposure } from '@hotel-pms/db';
 import { getPropertyBusinessDate, getNextBusinessDate } from '@/lib/date-utils';
 import crypto from 'crypto';
 import { NotificationEngine } from '@/lib/notification-engine';
@@ -247,7 +247,7 @@ export async function executeNightAudit(
     confirmationNumber: string;
     guestName: string;
     roomNumber: string | null;
-    stage: 'ROOM_CHARGE' | 'GUEST_AMENITIES' | 'HOUSEKEEPING';
+    stage: 'ROOM_CHARGE' | 'GUEST_AMENITIES' | 'HOUSEKEEPING' | 'CORPORATE_CREDIT_WARNING';
     message: string;
   }> = [];
   let leaseBilling = { processedCount: 0 };
@@ -602,8 +602,47 @@ export async function executeNightAudit(
               // Guest Complimentary (contra-revenue) is debited for the
               // approved concession. The folio balance remains net.
               const grossRoomCharge = discountDeduction > 0 ? originalRate : effectiveRate;
-              if (isCorporateCharge && reservation.corporateAccount && Number(reservation.corporateAccount.creditLimit) > 0 && !reservation.corporateAccount.exemptFromHighBalance && Number(mainFolio.balance) + grossRoomCharge > Number(reservation.corporateAccount.creditLimit)) {
-                throw new Error(`CREDIT_LIMIT_EXCEEDED: Night Audit room charge exceeds corporate account credit limit for reservation ${reservation.id}`);
+              if (isCorporateCharge && reservation.corporateAccount) {
+                // This charge has already been incurred by the guest. Credit
+                // exposure is therefore a warning at Night Audit, never a
+                // reason to suppress the accounting entry.
+                try {
+                  const exposure = await readCorporateCreditExposure(tx, {
+                    corporateAccountId: reservation.corporateAccount.id,
+                    propertyId,
+                    additionalAmount: grossRoomCharge,
+                    excludeReservationId: reservation.id,
+                  });
+                  if (
+                    exposure.creditLimit > 0 &&
+                    !exposure.exemptFromHighBalance &&
+                    exposure.projectedExposure > exposure.creditLimit + 0.01
+                  ) {
+                    postingExceptions.push({
+                      reservationId: reservation.id,
+                      confirmationNumber: reservation.confirmationNumber,
+                      guestName: reservation.primaryGuest
+                        ? `${reservation.primaryGuest.firstName} ${reservation.primaryGuest.lastName}`.trim()
+                        : 'Unknown Guest',
+                      roomNumber: activeRoom?.room?.number || null,
+                      stage: 'CORPORATE_CREDIT_WARNING',
+                      message: `Corporate account is over its credit limit after an incurred room charge (${exposure.projectedExposure.toFixed(2)} exposure against ${exposure.creditLimit.toFixed(2)} limit). Charge posted; manager follow-up required.`,
+                    });
+                  }
+                } catch (error: any) {
+                  // A consumed stay must remain financially complete even if
+                  // the corporate account cannot currently be evaluated.
+                  postingExceptions.push({
+                    reservationId: reservation.id,
+                    confirmationNumber: reservation.confirmationNumber,
+                    guestName: reservation.primaryGuest
+                      ? `${reservation.primaryGuest.firstName} ${reservation.primaryGuest.lastName}`.trim()
+                      : 'Unknown Guest',
+                    roomNumber: activeRoom?.room?.number || null,
+                    stage: 'CORPORATE_CREDIT_WARNING',
+                    message: `Corporate credit exposure could not be evaluated (${error instanceof Error ? error.message : String(error)}). Charge posted; manager review required.`,
+                  });
+                }
               }
 
               // ── Room Rate Breakdown (VAT + SC + Complimentary Breakfast Allocation) ──

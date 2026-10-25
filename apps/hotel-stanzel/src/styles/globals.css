@@ -434,6 +434,7 @@ p { line-height: 1.75; color: var(--text-muted); }
 .portal-metric-card > div:last-child { min-width: 0; display: grid; gap: 3px; }
 .portal-metric-card span { color: #82928c; font-size: 10px; font-weight: 600; letter-spacing: .09em; text-transform: uppercase; }
 .portal-metric-card strong { overflow: hidden; color: #243c35; font-size: 14px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.portal-metric-card strong.outstanding-balance { color: #b42318; }
 .portal-metric-card small { color: #8c9c96; font-size: 11px; }
 .portal-dashboard-grid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(300px, .65fr); gap: 17px; margin-top: 17px; }
 .portal-panel { border: 1px solid #e1e9e5; border-radius: 12px; background: #fff; }
@@ -569,6 +570,7 @@ p { line-height: 1.75; color: var(--text-muted); }
 .invoice-metrics span { color: #82928c; font-size: 10px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }
 .invoice-metrics strong { color: #24463a; font-size: 22px; letter-spacing: -.02em; }
 .invoice-metrics small { color: #8c9c96; font-size: 11px; }
+.invoice-metrics strong.outstanding-balance { color: #b42318; }
 .invoice-register { overflow: hidden; }
 .invoice-register-heading { align-items: center; border-bottom: 1px solid #eef2f0; }
 .invoice-register-heading h3 { margin-bottom: 4px; }
@@ -591,6 +593,7 @@ p { line-height: 1.75; color: var(--text-muted); }
 .invoice-list-balance { display: grid; justify-items: end; gap: 4px; border-left: 1px solid #edf1ef; padding-left: 18px; }
 .invoice-list-balance > span { color: #95a39d; font-size: 10px; }
 .invoice-list-balance strong { color: #2b5546; font-size: 15px; }
+.invoice-list-balance strong.outstanding-balance { color: #b42318; }
 .invoice-details-link { display: inline-flex; align-items: center; gap: 5px; margin-top: 7px; color: #a17a40; font-size: 11px; font-weight: 700; }
 .invoice-details-link:hover { color: #6f512b; }
 .invoice-detail-breadcrumb { display: flex; align-items: center; gap: 9px; margin-bottom: 22px; color: #9aa8a2; font-size: 11px; }
@@ -631,12 +634,14 @@ p { line-height: 1.75; color: var(--text-muted); }
 .invoice-paper-totals strong { color: #315547; }
 .invoice-paper-balance { margin-top: 3px; padding-top: 13px; border-top: 1px solid #dce7e1; color: #315547 !important; font-size: 14px !important; }
 .invoice-paper-balance strong { color: #17473a; font-size: 17px; }
+.invoice-paper-balance strong { color: #b42318; }
 .invoice-paper-footer { margin-top: 28px; padding-top: 16px; border-top: 1px solid #e7eeea; color: #91a098; font-size: 10px; line-height: 1.6; }
 .invoice-detail-rail { display: grid; gap: 13px; }
 .invoice-balance-card, .invoice-detail-side-card { padding: 21px; border: 1px solid #e1e9e5; border-radius: 13px; background: #fff; }
 .invoice-balance-card { color: #fff; border-color: #17473a; background: #17473a; }
 .invoice-balance-card .reservation-rail-label { color: #a8c5b8; }
 .invoice-balance-card > strong { display: block; margin-top: 14px; color: #f0d29c; font-size: 25px; }
+.invoice-balance-card > strong { color: #ffb4ad; }
 .invoice-balance-card small { display: block; margin-top: 9px; color: #c3d8cd; font-size: 10px; }
 .invoice-progress { height: 6px; margin-top: 20px; overflow: hidden; border-radius: 5px; background: rgb(255 255 255 / .16); }
 .invoice-progress span { display: block; height: 100%; border-radius: inherit; background: #e2bd7c; }

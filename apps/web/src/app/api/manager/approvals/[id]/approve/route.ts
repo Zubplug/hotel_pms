@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import prisma from '@hotel-pms/db';
-import { attachReservationToCorporateFolio, materializeCorporateAccountForApplication } from '@hotel-pms/db';
+import { assertCorporateCreditAvailable, attachReservationToCorporateFolio, materializeCorporateAccountForApplication } from '@hotel-pms/db';
 import crypto from 'crypto';
 import { successResponse, errorResponse } from '@/lib/api-response';
 import { resolveUser } from '@/lib/resolve-user';
@@ -329,19 +329,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           reservationForCredit.corporateAccountId = account?.id || null;
         }
         if (!reservationForCredit.corporateAccountId) throw new Error('CORPORATE_RESERVATION_NOT_FOUND');
-        const corporateAccount = await tx.corporateAccount.findUnique({ where: { id: reservationForCredit.corporateAccountId }, select: { cityLedgerAccountId: true, creditLimit: true, exemptFromHighBalance: true } });
-        if (!corporateAccount?.cityLedgerAccountId) throw new Error('CORPORATE_LEDGER_NOT_AVAILABLE');
-        await tx.$queryRaw<any[]>`SELECT id FROM "CityLedgerAccount" WHERE id = ${corporateAccount.cityLedgerAccountId}::uuid FOR UPDATE`;
-        if (Number(corporateAccount.creditLimit) > 0 && !corporateAccount.exemptFromHighBalance) {
-          const ledger = await tx.cityLedgerAccount.findUnique({ where: { id: corporateAccount.cityLedgerAccountId }, select: { balance: true } });
-          const active = await tx.reservation.findMany({ where: { corporateAccountId: reservationForCredit.corporateAccountId, propertyId: approval.propertyId, status: { in: ['CONFIRMED', 'CHECKED_IN'] }, id: { not: details.reservationId } }, select: { ratePlanSnapshot: true } });
-          const committed = active.reduce((sum: number, reservation: any) => {
-            const snapshot = reservation.ratePlanSnapshot as any;
-            const mode = String(snapshot?.paymentMode || snapshot?.request?.paymentMode || '').toUpperCase();
-            return sum + (mode === 'PAY_LATER' ? Number(snapshot?.total ?? snapshot?.totals?.total ?? 0) : 0);
-          }, 0);
-          if (Number(ledger?.balance || 0) + committed + Number(approval.amount || 0) > Number(corporateAccount.creditLimit)) throw new Error('CREDIT_LIMIT_EXCEEDED');
-        }
+        await assertCorporateCreditAvailable(tx, {
+          corporateAccountId: reservationForCredit.corporateAccountId,
+          propertyId: approval.propertyId,
+          additionalAmount: Number(approval.amount || 0),
+          excludeReservationId: details.reservationId,
+        });
         const reservation = await tx.reservation.updateMany({ where: { id: details.reservationId, propertyId: approval.propertyId, status: 'PENDING' }, data: { status: 'CONFIRMED', paymentExpiresAt: null } });
         if (reservation.count !== 1) throw new Error('CORPORATE_RESERVATION_NOT_PENDING');
         const updated = await tx.approvalRequest.update({ where: { id: approval.id }, data: { status: 'APPROVED', executionStatus: 'APPLIED', reviewedBy: user.id, reviewedAt: new Date() } });

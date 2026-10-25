@@ -15,4 +15,5 @@ export * from './src/reach-wallet';
 export * from './src/availability';
 export * from './src/corporate-application';
 export * from './src/canonical-room-rate-breakdown';
+export * from './corporate-credit-exposure';
 export default prisma;
