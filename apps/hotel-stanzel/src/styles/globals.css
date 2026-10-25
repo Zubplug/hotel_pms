@@ -668,6 +668,14 @@ p { line-height: 1.75; color: var(--text-muted); }
 .commercial-principles p { margin: 3px 0 0; color: #7c9187; font-size: 11px; }
 .commercial-principles > span { margin-left: auto; color: #478064; font-size: 10px; font-weight: 700; white-space: nowrap; }
 .commercial-contracts-panel { overflow: hidden; }
+.commercial-default-rate-list { display: grid; gap: 10px; padding: 14px; background: #fbfcfb; }
+.commercial-default-rate-card { display: grid; grid-template-columns: 42px minmax(0, 1fr) auto; gap: 15px; align-items: center; padding: 17px; border: 1px solid #e1e9e5; border-radius: 12px; background: #fff; }
+.commercial-default-rate-card > div:nth-child(2) { min-width: 0; }
+.commercial-default-rate-card span { color: #a17a40; font-size: 9px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+.commercial-default-rate-card h4 { margin: 4px 0 3px; color: #234b3d; font-size: 16px; }
+.commercial-default-rate-card p { margin: 0; color: #82928c; font-size: 11px; }
+.commercial-default-rate-card > strong { display: grid; justify-items: end; color: #2b5546; font-size: 16px; white-space: nowrap; }
+.commercial-default-rate-card > strong small { margin-top: 3px; color: #95a39d; font-size: 10px; font-weight: 400; }
 .commercial-contracts-heading { align-items: center; border-bottom: 1px solid #eef2f0; }
 .commercial-contracts-heading h3 { margin-bottom: 4px; }
 .commercial-contracts-heading p { margin: 0; color: #8a9993; font-size: 11px; }
@@ -1581,6 +1589,8 @@ input[type="date"]::-webkit-date-and-time-value {
   article[class*="grid-template-columns"] {
     grid-template-columns: 1fr !important;
   }
+  .commercial-default-rate-card { grid-template-columns: 42px minmax(0, 1fr); }
+  .commercial-default-rate-card > strong { grid-column: 2; justify-items: start; }
 }
 
 /* ── Scroll-driven section reveals — only on desktop ─────────── */

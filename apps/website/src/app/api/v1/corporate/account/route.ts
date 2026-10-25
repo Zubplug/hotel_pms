@@ -10,6 +10,17 @@ export async function GET(req: NextRequest) {
   if (!propertyId) return withRequestId(errorResponse('BAD_REQUEST', 'propertyId is required', 400), auth.requestId);
   if (!(await checkCorporateRateLimit(auth.principal, 'account'))) return withRequestId(errorResponse('TOO_MANY_REQUESTS', 'Too many requests', 429), auth.requestId);
   try {
+    const property = await prisma.property.findUnique({
+      where: { id: propertyId },
+      select: {
+        baseCurrency: true,
+        roomTypes: {
+          where: { isActive: true, deletedAt: null },
+          orderBy: { name: 'asc' },
+          select: { id: true, name: true, code: true, baseRate: true, currency: true },
+        },
+      },
+    });
     const principal = await corporatePrincipalForProperty(auth.principal, propertyId, 'account:read');
     const account = await prisma.corporateAccount.findFirst({
       where: { id: principal.corporateAccountId, organizationId: auth.principal.organizationId, propertyId, isActive: true },
@@ -21,6 +32,6 @@ export async function GET(req: NextRequest) {
       },
     });
     if (!account) return withRequestId(errorResponse('NOT_FOUND', 'Corporate account not found', 404), auth.requestId);
-    return withRequestId(successResponse({ account }), auth.requestId);
+    return withRequestId(successResponse({ account, defaultRates: property?.roomTypes || [], defaultRateCurrency: property?.baseCurrency || 'NGN' }), auth.requestId);
   } catch (error) { return corporateError(error, auth.requestId); }
 }
