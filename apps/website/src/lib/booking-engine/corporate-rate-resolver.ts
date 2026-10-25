@@ -223,7 +223,6 @@ export async function resolveApprovedCorporateRate(
     contractId: resolved.contract.id as string,
     contractVersionId: resolved.version.id as string,
     contractVersion: resolved.version.version as number,
-    paymentMode: String(resolved.contract.paymentMode || '').toUpperCase(),
     depositMinimumPercent: resolved.contract.depositMinimumPercent == null ? null : Number(resolved.contract.depositMinimumPercent),
     negotiation: {
       enabled: Boolean(resolved.contract.negotiationEnabled),

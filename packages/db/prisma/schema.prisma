@@ -904,7 +904,6 @@ model CorporateContract {
   name                          String
   status                        String    @default("DRAFT") // DRAFT | SUBMITTED | APPROVED | ACTIVE | SUSPENDED | EXPIRED
   defaultCurrency               String
-  paymentMode                   String    @default("PAY_LATER")
   depositMinimumPercent         Decimal?  @db.Decimal(5, 2)
   negotiationEnabled            Boolean   @default(false)
   negotiationMinRooms           Int?

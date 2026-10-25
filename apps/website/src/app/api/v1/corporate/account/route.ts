@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
         id: true, name: true, code: true, contactPerson: true, contactEmail: true, contactPhone: true,
         creditLimit: true, depositPolicy: true, propertyId: true, ratePlanId: true,
         cityLedgerAccount: { select: { id: true, name: true, currency: true, balance: true, status: true } },
-        corporateContracts: { where: { status: { in: ['APPROVED', 'ACTIVE'] } }, select: { id: true, reference: true, name: true, status: true, defaultCurrency: true, paymentMode: true, effectiveFrom: true, effectiveTo: true }, orderBy: { effectiveFrom: 'desc' } },
+        corporateContracts: { where: { status: { in: ['APPROVED', 'ACTIVE'] } }, select: { id: true, reference: true, name: true, status: true, defaultCurrency: true, effectiveFrom: true, effectiveTo: true }, orderBy: { effectiveFrom: 'desc' } },
       },
     });
     if (!account) return withRequestId(errorResponse('NOT_FOUND', 'Corporate account not found', 404), auth.requestId);
