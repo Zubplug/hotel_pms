@@ -171,7 +171,33 @@ export async function POST(req: NextRequest) {
         const existing = await tx.corporateContract.findFirst({ where: { id: body.editContractId, organizationId, isPropertyDefault: true, defaultPropertyId: identityPropertyId, status: 'ACTIVE' }, include: { versions: { orderBy: { version: 'desc' }, take: 1, select: { version: true } } } });
         if (!existing) throw Object.assign(new Error('The active property default contract could not be found'), { code: 'NOT_FOUND' });
         const version = await tx.corporateContractVersion.create({ data: { contractId: existing.id, version: (existing.versions[0]?.version || 0) + 1, status: 'SUBMITTED', effectiveFrom, effectiveTo, submittedBy: session.user.id, submittedAt: new Date(), termsSnapshot: { channel: 'CORPORATE_API', scope: 'PROPERTY_DEFAULT_EDIT', name: body.name, defaultCurrency: body.defaultCurrency, paymentMode: body.paymentMode, depositMinimumPercent: body.depositMinimumPercent ?? null, negotiationEnabled, negotiationMinRooms, negotiationMinNights } } });
-        await tx.corporateRateRule.createMany({ data: body.rules.map(rule => ({ contractVersionId: version.id, propertyId: identityPropertyId, roomTypeId: rule.roomTypeId, sourceRatePlanId: rule.sourceRatePlanId || null, rateMethod: 'DERIVED_RATE', amount: null, currency: rule.currency, priority: 100, minAdults: rule.minAdults, maxAdults: rule.maxAdults, minChildren: rule.minChildren, maxChildren: rule.maxChildren, minOccupancy: rule.minOccupancy, maxOccupancy: rule.maxOccupancy, minStay: rule.minStay, maxStay: rule.maxStay, minLeadTimeHours: rule.minLeadTimeHours, maxAdvanceDays: rule.maxAdvanceDays, minRooms: rule.minRooms, maxRooms: rule.maxRooms, weekdays: rule.weekdays, blackoutDates: rule.blackoutDates.map(validDate), fallbackAllowed: false, pricingFactors: rule.pricingFactors as any })) }));
+        const editRules = body.rules.map(rule => ({
+          contractVersionId: version.id,
+          propertyId: identityPropertyId,
+          roomTypeId: rule.roomTypeId,
+          sourceRatePlanId: rule.sourceRatePlanId || null,
+          rateMethod: 'DERIVED_RATE',
+          amount: null,
+          currency: rule.currency,
+          priority: 100,
+          minAdults: rule.minAdults,
+          maxAdults: rule.maxAdults,
+          minChildren: rule.minChildren,
+          maxChildren: rule.maxChildren,
+          minOccupancy: rule.minOccupancy,
+          maxOccupancy: rule.maxOccupancy,
+          minStay: rule.minStay,
+          maxStay: rule.maxStay,
+          minLeadTimeHours: rule.minLeadTimeHours,
+          maxAdvanceDays: rule.maxAdvanceDays,
+          minRooms: rule.minRooms,
+          maxRooms: rule.maxRooms,
+          weekdays: rule.weekdays,
+          blackoutDates: rule.blackoutDates.map(validDate),
+          fallbackAllowed: false,
+          pricingFactors: rule.pricingFactors as any,
+        }));
+        await tx.corporateRateRule.createMany({ data: editRules });
         await tx.approvalRequest.create({ data: { propertyId: identityPropertyId, type: 'CORPORATE_CONTRACT', status: 'PENDING', requestedBy: session.user.id, reason: `Review edited property default Corporate API contract ${existing.reference}`, details: { contractId: existing.id, versionId: version.id, stage: 'MANAGEMENT_REVIEW', reference: existing.reference, contractType: 'PROPERTY_DEFAULT', editExisting: true, proposedTerms: { name: body.name, defaultCurrency: body.defaultCurrency, paymentMode: body.paymentMode, depositMinimumPercent: body.depositMinimumPercent ?? null, negotiationEnabled, negotiationMinRooms, negotiationMinNights, effectiveFrom: body.effectiveFrom, effectiveTo: body.effectiveTo } }, snapshot: { contractId: existing.id, versionId: version.id, reference: existing.reference, name: body.name, defaultCurrency: body.defaultCurrency, paymentMode: body.paymentMode, depositMinimumPercent: body.depositMinimumPercent ?? null, rules: body.rules as any } } });
         return { id: existing.id, versionId: version.id, status: 'ACTIVE', approvalStage: 'MANAGEMENT_REVIEW', editExisting: true };
       }
