@@ -655,9 +655,9 @@ p { line-height: 1.75; color: var(--text-muted); }
 .booking-room-footer .booking-secondary-button { min-width: 220px; color: #fff; background: var(--booking-forest); border-color: var(--booking-forest); box-shadow: 0 8px 18px rgb(23 61 50 / .12); }
 .booking-room-footer .booking-secondary-button:hover:not(:disabled) { background: var(--booking-forest-2); border-color: var(--booking-forest-2); }
 .booking-room-footer .booking-secondary-button:disabled { color: #789087; background: #edf4ef; border-color: #d5e4da; box-shadow: none; opacity: 1; }
-.booking-room-footer { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 24px; }
+.booking-room-footer { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 24px; padding-bottom: 26px; }
 .booking-room-footer .booking-back-button { color: #5e766b; font-size: 14px; font-weight: 700; white-space: nowrap; }
-.booking-room-footer > span { font-size: 14px; text-align: center; }
+.booking-room-footer > span { max-width: none; margin-inline: auto; font-size: 13px; line-height: 1.45; text-align: center; white-space: nowrap; }
 .booking-room-footer .booking-secondary-button { min-width: 280px; min-height: 62px; padding: 16px 28px; border-radius: 15px; font-size: 15px; letter-spacing: -.01em; }
 .booking-room-footer .booking-secondary-button:focus-visible,
 .booking-room-footer .booking-back-button:focus-visible { outline: 3px solid rgb(184 139 72 / .35); outline-offset: 3px; }
@@ -674,8 +674,8 @@ p { line-height: 1.75; color: var(--text-muted); }
   .booking-room-option { grid-template-columns: 1fr; }
   .booking-room-select { width: 100%; }
   .booking-room-image { min-height: 175px; }
-  .booking-room-footer { margin: 24px 17px 0; }
-  .booking-room-footer > span { text-align: center; }
+  .booking-room-footer { margin: 24px 17px 0; padding-bottom: 20px; }
+  .booking-room-footer > span { text-align: center; white-space: normal; }
   .booking-room-footer { grid-template-columns: 1fr; gap: 12px; }
   .booking-room-footer .booking-back-button,
   .booking-room-footer .booking-secondary-button { width: 100%; }
