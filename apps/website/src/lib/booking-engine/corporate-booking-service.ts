@@ -81,7 +81,7 @@ function validateInput(input: CorporateBookingInput): void {
 }
 
 function isPaymentRequired(snapshot: CorporateQuoteSnapshot): boolean {
-  return ['FULL', 'DEPOSIT', 'PREPAID'].includes(snapshot.request.paymentMode.toUpperCase());
+  return ['FULL', 'DEPOSIT'].includes(snapshot.request.paymentMode.toUpperCase());
 }
 
 function reservationSnapshot(snapshot: CorporateQuoteSnapshot) {

@@ -101,7 +101,7 @@ export async function initializeCorporateGatewayPayment(db: any, input: {
   const reservation = input.reservation;
   const snapshot = (reservation.ratePlanSnapshot || {}) as any;
   const mode = String(snapshot.paymentMode || snapshot.request?.paymentMode || '').toUpperCase();
-  if (!['FULL', 'DEPOSIT', 'PREPAID'].includes(mode)) throw new CorporatePaymentInitializationError('INVALID_AMOUNT', 'This reservation does not require prepaid payment');
+  if (!['FULL', 'DEPOSIT'].includes(mode)) throw new CorporatePaymentInitializationError('INVALID_AMOUNT', 'This reservation does not require advance payment');
   const link = await db.corporatePaymentGroupReservation.findUnique({ where: { reservationId: reservation.id }, include: { group: true } });
   const group = link?.group ?? null;
   const requiredAmount = group ? Number(group.requiredAmount) : (mode === 'DEPOSIT' ? Number(snapshot.depositAmount ?? snapshot.pricing?.depositAmount ?? 0) : Number(snapshot.total ?? snapshot.totals?.total ?? 0));

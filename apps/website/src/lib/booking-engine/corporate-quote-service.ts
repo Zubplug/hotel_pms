@@ -177,7 +177,7 @@ function clampTtl(seconds: number | undefined): number {
 
 function normalizePaymentMode(mode: string | undefined): string {
   const normalized = (mode ?? 'PAY_LATER').toUpperCase();
-  if (!['PAY_LATER', 'FULL', 'DEPOSIT', 'PREPAID'].includes(normalized)) throw new CorporateQuoteError('QUOTE_TAMPERED', 'Unsupported corporate payment mode');
+  if (!['PAY_LATER', 'FULL', 'DEPOSIT'].includes(normalized)) throw new CorporateQuoteError('QUOTE_TAMPERED', 'Unsupported corporate payment mode');
   return normalized;
 }
 
@@ -417,6 +417,7 @@ async function buildQuoteSnapshot(
     checkIn: input.checkIn,
     checkOut: input.checkOut,
     paymentMode,
+    depositMinimumPercent: contractRate.depositMinimumPercent,
     ...(corporateNightlyRate != null
       ? { corporateNightlyRate: { amount: corporateNightlyRate, currency: contractRate.rule.currency } }
       : { corporatePricingFactors: contractRate.rule.pricingFactors as any, corporateRoomCount: input.roomCount }),

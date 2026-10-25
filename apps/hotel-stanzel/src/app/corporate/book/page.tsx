@@ -79,7 +79,7 @@ export default function CorporateBookPage() {
     <form onSubmit={search} style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginTop: 22 }}>
       <label className="field-label">Check-in<input className="field-input" type="date" required value={form.checkIn} onChange={(e) => update('checkIn', e.target.value)} /></label>
       <label className="field-label">Check-out<input className="field-input" type="date" required value={form.checkOut} onChange={(e) => update('checkOut', e.target.value)} /></label>
-      <label className="field-label">Payment<select className="field-input" value={form.paymentMode} onChange={(e) => update('paymentMode', e.target.value)}><option value="PAY_LATER">Pay later — approval required</option><option value="FULL">Prepaid in full</option><option value="DEPOSIT">Deposit</option></select></label>
+      <label className="field-label">Payment<select className="field-input" value={form.paymentMode} onChange={(e) => update('paymentMode', e.target.value)}><option value="PAY_LATER">Pay later — approval required</option><option value="FULL">Pay in full</option><option value="DEPOSIT">Deposit</option></select></label>
       <label className="field-label">Adults per room<input className="field-input" type="number" min="1" value={form.adults} onChange={(e) => update('adults', e.target.value)} /></label>
       <label className="field-label">Children per room<input className="field-input" type="number" min="0" value={form.children} onChange={(e) => update('children', e.target.value)} /></label>
       <label className="field-label">Rooms<input className="field-input" type="number" min="1" max="20" value={form.roomCount} onChange={(e) => update('roomCount', e.target.value)} /></label>

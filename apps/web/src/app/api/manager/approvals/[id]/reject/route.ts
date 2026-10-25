@@ -31,9 +31,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       if (approval.type === 'CORPORATE_CONTRACT') {
         const isManagement = ['GENERAL_MANAGER', 'HOTEL_MANAGER', 'MANAGER', 'DIRECTOR', 'CEO', 'ADMIN', 'SUPER_ADMIN'].includes(String(user.role)) || user.isSuperAdmin;
         if (details.stage !== 'MANAGEMENT_REVIEW' || !isManagement) throw new Error('CORPORATE_STAGE_REQUIRED');
-        const contract = await tx.corporateContract.findFirst({ where: { id: (details as any).contractId, defaultPropertyId: approval.propertyId, isPropertyDefault: true, status: 'SUBMITTED' }, include: { versions: { where: { id: (details as any).versionId, status: 'SUBMITTED' } } } });
+        const contract = await tx.corporateContract.findFirst({ where: { id: (details as any).contractId, defaultPropertyId: approval.propertyId, isPropertyDefault: true, status: { in: ['SUBMITTED', 'ACTIVE'] } }, include: { versions: { where: { id: (details as any).versionId, status: 'SUBMITTED' } } } });
         if (!contract || contract.versions.length !== 1) throw new Error('NOT_FOUND');
-        await tx.corporateContract.update({ where: { id: contract.id }, data: { status: 'REJECTED' } });
+        if (!(details as any).editExisting) await tx.corporateContract.update({ where: { id: contract.id }, data: { status: 'REJECTED' } });
         await tx.corporateContractVersion.update({ where: { id: contract.versions[0].id }, data: { status: 'REJECTED' } });
         return tx.approvalRequest.update({ where: { id }, data: { status: 'REJECTED', reviewedBy: user.id, reviewedAt: new Date(), details: { ...details, stage: 'REJECTED', rejectionComment: comment } } });
       }

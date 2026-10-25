@@ -18,7 +18,7 @@ const schema = z.object({
   action: z.enum(['UNDER_REVIEW', 'APPROVE', 'REJECT']),
   reviewerNotes: z.string().trim().max(2000).optional(),
   proposedRates: z.array(rateSchema).min(1).optional(),
-  paymentMode: z.enum(['PAY_LATER', 'FULL', 'DEPOSIT', 'PREPAID']).optional(),
+  paymentMode: z.enum(['PAY_LATER', 'FULL', 'DEPOSIT']).optional(),
 });
 
 function day(value: unknown, fallback: Date) {

@@ -14,7 +14,7 @@ const schema = z.object({
   companyCity: z.string().trim().min(2).max(100).optional(),
   companyCountry: z.string().trim().min(2).max(100).optional(),
   currency: z.string().regex(/^[A-Za-z]{3}$/).optional(),
-  paymentMode: z.enum(['FULL', 'DEPOSIT', 'PREPAID', 'PAY_LATER']).default('PAY_LATER'),
+  paymentMode: z.enum(['FULL', 'DEPOSIT', 'PAY_LATER']).default('PAY_LATER'),
 });
 
 /** Creates only a short-lived application. It never creates a PMS account. */

@@ -79,6 +79,7 @@ export const ReservationPricingService = {
       checkOut: Date;
       /** Override the booking-engine payment mode from BookingEngineConfig */
       paymentMode?: string;
+      depositMinimumPercent?: number | null;
       corporateNightlyRate?: { amount: number; currency: string };
       corporatePricingFactors?: CorporatePricingFactors | null;
       corporateRoomCount?: number;
@@ -157,7 +158,8 @@ export const ReservationPricingService = {
       subtotal,
       pricedNightlyRates,
       ratePlan.depositPolicy,
-      paymentMode
+      paymentMode,
+      opts.depositMinimumPercent
     );
 
     const snapshot: PricingSnapshot = {
@@ -281,11 +283,16 @@ function resolveDeposit(
   subtotal: number,
   nightlyRates: NightlyRate[],
   depositPolicy: any | null,
-  paymentMode: string
+  paymentMode: string,
+  minimumPercent: number | null = null
 ): { depositAmount: number; depositType: string | null } {
   // PAY_LATER = no online payment required at booking
-  if (paymentMode === 'PAY_LATER' || !depositPolicy || !depositPolicy.required) {
+  if (paymentMode === 'PAY_LATER') {
     return { depositAmount: 0, depositType: null };
+  }
+
+  if (!depositPolicy || !depositPolicy.required) {
+    return { depositAmount: round2(subtotal * Math.max(0, Number(minimumPercent || 0)) / 100), depositType: minimumPercent ? 'PERCENTAGE' : null };
   }
 
   if (paymentMode === 'FULL') {
@@ -297,19 +304,19 @@ function resolveDeposit(
     case 'PERCENTAGE': {
       const pct = Number(depositPolicy.value) / 100;
       return {
-        depositAmount: round2(subtotal * pct),
+        depositAmount: round2(Math.max(subtotal * pct, subtotal * Math.max(0, Number(minimumPercent || 0)) / 100)),
         depositType: 'PERCENTAGE',
       };
     }
     case 'FLAT': {
       return {
-        depositAmount: Math.min(Number(depositPolicy.value), subtotal),
+        depositAmount: Math.min(Math.max(Number(depositPolicy.value), subtotal * Math.max(0, Number(minimumPercent || 0)) / 100), subtotal),
         depositType: 'FLAT',
       };
     }
     case 'FIRST_NIGHT': {
       const firstNight = nightlyRates[0]?.amount ?? 0;
-      return { depositAmount: firstNight, depositType: 'FIRST_NIGHT' };
+      return { depositAmount: Math.min(Math.max(firstNight, subtotal * Math.max(0, Number(minimumPercent || 0)) / 100), subtotal), depositType: 'FIRST_NIGHT' };
     }
     default:
       return { depositAmount: 0, depositType: null };

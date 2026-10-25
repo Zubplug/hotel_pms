@@ -7,7 +7,7 @@ import { validateBookingPolicy } from '@/lib/booking-engine/booking-policy-servi
 import { previewCorporateQuoteSnapshot } from '@/lib/booking-engine/corporate-quote-service';
 import { corporateError, corporatePrincipalForProperty, prisma, requireCorporateApi, withRequestId } from '@/lib/corporate-api-routes';
 
-const querySchema = z.object({ propertyId: z.string().uuid(), checkIn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), checkOut: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), adults: z.coerce.number().int().min(1).max(20), children: z.coerce.number().int().min(0).max(20), roomCount: z.coerce.number().int().min(1).max(20).default(1), paymentMode: z.enum(['PAY_LATER', 'FULL', 'DEPOSIT', 'PREPAID']).default('PAY_LATER') });
+const querySchema = z.object({ propertyId: z.string().uuid(), checkIn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), checkOut: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), adults: z.coerce.number().int().min(1).max(20), children: z.coerce.number().int().min(0).max(20), roomCount: z.coerce.number().int().min(1).max(20).default(1), paymentMode: z.enum(['PAY_LATER', 'FULL', 'DEPOSIT']).default('PAY_LATER') });
 
 export async function GET(req: NextRequest) {
   const auth = await requireCorporateApi(req, 'availability:read');

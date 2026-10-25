@@ -6,7 +6,7 @@ import { successResponse, errorResponse } from '@/lib/api-response';
 import { resolvePublicApiContext, isErrorResponse, corsHeaders, checkRateLimit, rateLimitIdentity } from '@/lib/booking-engine/middleware';
 import { hashCorporateApplicationToken } from '@/lib/booking-engine/corporate-public-auth';
 
-const schema = z.object({ companyName: z.string().trim().min(2).max(160), contactPerson: z.string().trim().min(2).max(120), contactEmail: z.string().email().max(320), contactPhone: z.string().trim().max(50).optional(), companyAddress: z.string().trim().min(5).max(240), companyCity: z.string().trim().min(2).max(100), companyCountry: z.string().trim().min(2).max(100), currency: z.string().regex(/^[A-Za-z]{3}$/).optional(), paymentMode: z.enum(['FULL', 'DEPOSIT', 'PREPAID', 'PAY_LATER']).default('PAY_LATER') });
+const schema = z.object({ companyName: z.string().trim().min(2).max(160), contactPerson: z.string().trim().min(2).max(120), contactEmail: z.string().email().max(320), contactPhone: z.string().trim().max(50).optional(), companyAddress: z.string().trim().min(5).max(240), companyCity: z.string().trim().min(2).max(100), companyCountry: z.string().trim().min(2).max(100), currency: z.string().regex(/^[A-Za-z]{3}$/).optional(), paymentMode: z.enum(['FULL', 'DEPOSIT', 'PAY_LATER']).default('PAY_LATER') });
 
 export async function POST(req: NextRequest) {
   const ctx = await resolvePublicApiContext(req);
