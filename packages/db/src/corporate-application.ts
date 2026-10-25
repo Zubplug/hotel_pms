@@ -55,3 +55,29 @@ export async function materializeCorporateAccountForApplication(tx: TxClient, in
   await tx.auditLog.create({ data: { organizationId: app.organizationId, propertyId: app.propertyId, userId: input.actorId || null, userRole: 'SYSTEM', action: 'CORPORATE_APPLICATION_CONVERTED', resource: 'CorporateAccount', resourceId: account.id, newValue: { applicationId: app.id, accountId: account.id, cityLedgerAccountId: ledger.id }, requestId: `corporate-application:${app.id}` } });
   return account;
 }
+
+/**
+ * Promotes the temporary application folio to the account-level City Ledger
+ * folio used by normal PMS corporate reservations. Pending application
+ * reservations cannot have posted charges yet, so an already-existing shared
+ * folio can safely replace the temporary empty folio.
+ */
+export async function attachReservationToCorporateFolio(tx: TxClient, input: { reservationId: string; propertyId: string; corporateAccountId: string }) {
+  const reservationFolio = await tx.folio.findFirst({
+    where: { reservationId: input.reservationId, propertyId: input.propertyId, type: 'CITY_LEDGER', status: 'OPEN' },
+    select: { id: true },
+  });
+  if (!reservationFolio) return null;
+
+  const sharedFolio = await tx.folio.findFirst({
+    where: { propertyId: input.propertyId, corporateAccountId: input.corporateAccountId, type: 'CITY_LEDGER', status: 'OPEN', id: { not: reservationFolio.id } },
+    select: { id: true },
+  });
+  if (sharedFolio) {
+    await tx.folio.update({ where: { id: reservationFolio.id }, data: { status: 'VOID', reservationId: null, guestId: null } });
+    return sharedFolio.id;
+  }
+
+  await tx.folio.update({ where: { id: reservationFolio.id }, data: { corporateAccountId: input.corporateAccountId, reservationId: null, guestId: null } });
+  return reservationFolio.id;
+}

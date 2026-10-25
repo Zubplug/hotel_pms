@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import prisma from '@hotel-pms/db';
-import { materializeCorporateAccountForApplication } from '@hotel-pms/db';
+import { attachReservationToCorporateFolio, materializeCorporateAccountForApplication } from '@hotel-pms/db';
 import crypto from 'crypto';
 import { successResponse, errorResponse } from '@/lib/api-response';
 import { resolveUser } from '@/lib/resolve-user';
@@ -324,7 +324,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           const account = await materializeCorporateAccountForApplication(tx as any, { applicationId: reservationForCredit.corporateBookingApplicationId, organizationId: property?.organizationId || '', propertyId: approval.propertyId, ratePlanId: reservationForCredit.ratePlanId, actorId: user.id });
           if (account) {
             await tx.reservation.update({ where: { id: details.reservationId }, data: { corporateAccountId: account.id } });
-            await tx.folio.updateMany({ where: { reservationId: details.reservationId, type: 'CITY_LEDGER' }, data: { corporateAccountId: account.id } });
+            await attachReservationToCorporateFolio(tx, { reservationId: details.reservationId, propertyId: approval.propertyId, corporateAccountId: account.id });
           }
           reservationForCredit.corporateAccountId = account?.id || null;
         }

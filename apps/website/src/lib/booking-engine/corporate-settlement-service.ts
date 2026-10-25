@@ -1,7 +1,7 @@
 import type { Prisma, PrismaClient } from '@hotel-pms/db';
 import { GLMappingService } from '../services/gl-mapping-service';
 import { GeneralLedgerService } from '../services/general-ledger-service';
-import { materializeCorporateAccountForApplication } from '@hotel-pms/db';
+import { attachReservationToCorporateFolio, materializeCorporateAccountForApplication } from '@hotel-pms/db';
 
 type TxClient = Prisma.TransactionClient | PrismaClient | any;
 
@@ -126,7 +126,7 @@ export async function lockCorporateSettlement(
     corporateAccountId = materialized?.id || null;
     if (corporateAccountId) {
       await tx.reservation.update({ where: { id: reservation.id }, data: { corporateAccountId } });
-      await tx.folio.updateMany({ where: { reservationId: reservation.id, type: 'CITY_LEDGER' }, data: { corporateAccountId } });
+      await attachReservationToCorporateFolio(tx, { reservationId: reservation.id, propertyId: reservation.propertyId, corporateAccountId });
       reservation.corporateAccountId = corporateAccountId;
     }
   }
