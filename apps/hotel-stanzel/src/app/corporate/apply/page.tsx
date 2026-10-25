@@ -144,7 +144,7 @@ export default function CorporateApplyPage() {
     let active = true;
     const preview = async () => {
       try {
-        const response = await fetch('/api/corporate/availability?' + new URLSearchParams({ ...form, roomCount: '1' }));
+        const response = await fetch('/api/corporate/availability?' + new URLSearchParams({ ...form, roomCount: '1', defaultCorporate: 'true' }));
         const body = await response.json();
         if (active && response.ok) setRooms(body.rooms || []);
       } catch {
@@ -159,7 +159,7 @@ export default function CorporateApplyPage() {
     event.preventDefault();
     setBusy(true); setError(''); setQuote(null);
     try {
-      const response = await fetch('/api/corporate/availability?' + new URLSearchParams(form));
+      const response = await fetch('/api/corporate/availability?' + new URLSearchParams({ ...form, defaultCorporate: 'true' }));
       const body = await response.json();
       if (!response.ok) throw new Error(body.error || 'Availability unavailable.');
       const available = body.rooms || [];
