@@ -65,6 +65,7 @@ const styles = [
   '.corp-summary-head{display:flex;justify-content:space-between;align-items:center;gap:10px}.corp-summary-head h3{font-size:15px;margin:0}.corp-secure{font-size:10px;color:#287252;font-weight:800}.corp-summary-card{margin-top:15px;padding:14px;border-radius:14px;background:var(--soft);display:grid;gap:11px}.corp-summary-row{display:flex;justify-content:space-between;gap:12px;font-size:12px;color:var(--muted)}.corp-summary-row strong{color:var(--ink);text-align:right}.corp-summary-total{border-top:1px solid var(--line);padding-top:12px;font-size:15px;color:var(--ink)}.corp-side-note{margin-top:18px;padding-top:17px;border-top:1px solid var(--line);font-size:11px;color:var(--muted);line-height:1.6}.corp-side-note strong{display:block;color:var(--ink);font-size:12px;margin-bottom:5px}',
   '.corp-review{display:grid;gap:18px}.corp-review-table{overflow:auto;border:1px solid var(--line);border-radius:14px}.corp-review table{width:100%;border-collapse:collapse;min-width:650px;font-size:12px}.corp-review th,.corp-review td{text-align:left;padding:12px;border-bottom:1px solid var(--line)}.corp-review th{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);background:var(--soft)}.corp-review tr:last-child td{border-bottom:0}.corp-review-total{margin-left:auto;max-width:360px;display:grid;gap:9px}.corp-review-total .corp-summary-row.total{border-top:1px solid var(--line);padding-top:12px;font-size:18px;color:var(--ink)}.corp-alert{margin-top:18px;padding:13px 15px;border-radius:11px;background:#fff2f0;border:1px solid #f0c9c2;color:#98443c;font-size:12px}.corp-empty{padding:38px 20px;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:15px;font-size:13px}.corp-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:24px}.corp-actions .corp-button{flex:1}.corp-footer-note{margin-top:25px;text-align:center;font-size:11px;color:var(--muted)}',
   '.corp-rate-detail{padding:15px;background:linear-gradient(135deg,#f7faf7,#f1f6f2);border:1px solid #dce8df;border-radius:14px}.corp-rate-detail-head{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;margin-bottom:12px}.corp-rate-detail-head strong{font-size:12px}.corp-rate-detail-head span{font-size:10px;color:#287252;font-weight:800}.corp-rate-detail table{width:100%;border-collapse:collapse;font-size:11px}.corp-rate-detail th,.corp-rate-detail td{padding:8px 6px;border-bottom:1px solid #dce8df;text-align:right}.corp-rate-detail th:first-child,.corp-rate-detail td:first-child{text-align:left}.corp-rate-detail tr:last-child td{border-bottom:0}.corp-rate-detail th{font-size:9px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}.corp-rate-saving{color:#287252;font-weight:800}.corp-rate-rules{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}.corp-rate-rules span{padding:5px 8px;border-radius:999px;background:#e5f1e8;color:#35644b;font-size:10px;font-weight:700}.corp-rate-unavailable{font-size:11px;color:var(--muted);line-height:1.5}',
+  '.corp-factor-analysis{display:grid;gap:7px;margin-top:14px;padding-top:13px;border-top:1px solid #dce8df}.corp-factor-title{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:800;margin-bottom:2px}.corp-factor-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto auto;gap:10px;align-items:center;font-size:11px}.corp-factor-row small{display:block;color:var(--muted);font-size:10px;margin-top:2px}.corp-factor-before{color:var(--muted)}.corp-factor-after{font-weight:800;color:var(--ink)}.corp-factor-change{min-width:86px;text-align:right;color:#287252;font-weight:800}.corp-factor-change.surcharge{color:#9b6b22}.corp-rate-unavailable{font-size:11px;color:var(--muted);line-height:1.5}',
   '@media(max-width:850px){.corp-layout{grid-template-columns:1fr}.corp-side{position:static;order:-1}.corp-room{grid-template-columns:145px minmax(0,1fr)}.corp-room-image{min-height:175px}}',
   '@media(max-width:560px){.corp-page{padding-top:0}.corp-hero{border-radius:20px;padding:26px 20px}.corp-step{font-size:0}.corp-step-dot{font-size:11px}.corp-step-line{margin:0 7px}.corp-grid{grid-template-columns:1fr}.corp-main{padding:19px 16px}.corp-room{grid-template-columns:1fr}.corp-room-image{height:175px;min-height:0}.corp-room-body{padding:15px}.corp-room-top{display:block}.corp-room-price{text-align:left;margin-top:10px}.corp-room-bottom{align-items:flex-start;flex-direction:column}.corp-quantity{width:100%;justify-content:space-between}.corp-quantity input{width:86px}.corp-actions{flex-direction:column}.corp-actions .corp-button{width:100%}}',
 ].join('\n');
@@ -80,6 +81,10 @@ function formatDate(value: string) {
 
 function matchingAdjustment(factors: any[] | undefined, nights: number, rooms: number) {
   return (factors || []).find((factor) => (factor.minNights == null || nights >= Number(factor.minNights)) && (factor.maxNights == null || nights <= Number(factor.maxNights)) && (factor.minRooms == null || rooms >= Number(factor.minRooms)) && (factor.maxRooms == null || rooms <= Number(factor.maxRooms))) || null;
+}
+
+function matchingAdjustments(factors: any[] | undefined, nights: number, rooms: number) {
+  return (factors || []).filter((factor) => (factor.minNights == null || nights >= Number(factor.minNights)) && (factor.maxNights == null || nights <= Number(factor.maxNights)) && (factor.minRooms == null || rooms >= Number(factor.minRooms)) && (factor.maxRooms == null || rooms <= Number(factor.maxRooms)));
 }
 
 function adjustmentLabel(adjustment: any) {
@@ -110,6 +115,34 @@ function displayedNightlyRate(baseRate: number | null | undefined, factors: any,
     if (adjustment.adjustmentType === 'MULTIPLIER') return amount * value;
     return amount + value;
   }, Number(baseRate));
+}
+
+function factorAnalysis(baseRate: number, factors: any, nights: number, rooms: number, paymentMode: string) {
+  const adjustments = [
+    ...matchingAdjustments(factors?.stayLength, nights, rooms).map((adjustment) => ({ category: 'Stay length', adjustment })),
+    ...matchingAdjustments(factors?.roomCount, nights, rooms).map((adjustment) => ({ category: 'Room count', adjustment })),
+    ...(paymentAdjustmentFor(factors, paymentMode) ? [{ category: 'Payment mode', adjustment: paymentAdjustmentFor(factors, paymentMode) }] : []),
+  ];
+  let current = baseRate;
+  return adjustments.map(({ category, adjustment }: any) => {
+    const value = Number(adjustment.value || 0);
+    const next = adjustment.adjustmentType === 'PERCENT_DISCOUNT'
+      ? current * (1 - value / 100)
+      : adjustment.adjustmentType === 'MULTIPLIER'
+        ? current * value
+        : current + value;
+    const result = { category, adjustment, before: current, change: current - next, after: next };
+    current = next;
+    return result;
+  });
+}
+
+function adjustmentDescription(adjustment: any, currency: string) {
+  if (!adjustment) return 'Contract adjustment';
+  const value = Number(adjustment.value || 0);
+  if (adjustment.adjustmentType === 'PERCENT_DISCOUNT') return `${value}% discount`;
+  if (adjustment.adjustmentType === 'MULTIPLIER') return `× ${value}`;
+  return `${value < 0 ? '− ' : '+ '}${money(Math.abs(value), currency)} per night`;
 }
 
 function nightsBetween(checkIn: string, checkOut: string) {
@@ -367,18 +400,10 @@ export default function CorporateApplyPage() {
               const standardLineTotal = hasStandardRate ? standardRate * roomCount * lineNights : 0;
               const saving = hasStandardRate ? Math.max(0, standardLineTotal - Number(line.totals?.subtotal || 0)) : 0;
               const factors = room?.rate?.corporateFactors;
-              const rules = [
-                adjustmentLabel(matchingAdjustment(factors?.stayLength, lineNights, roomCount)) && `${lineNights}-night stay`,
-                adjustmentLabel(matchingAdjustment(factors?.roomCount, lineNights, roomCount)) && `${roomCount} room${roomCount === 1 ? '' : 's'}`,
-                adjustmentLabel(paymentAdjustmentFor(factors, mode)) && `${selectedPayment.label} arrangement`,
-              ].filter(Boolean) as string[];
+              const factorRows = hasStandardRate ? factorAnalysis(standardRate, factors, lineNights, roomCount, mode) : [];
               return <Fragment key={line.request.roomTypeId + '-' + index}>
                 <tr><td><strong>{line.pricing?.roomTypeName || 'Room'}</strong><br /><span style={{ color: 'var(--muted)', fontSize: 11 }}>{line.rateDecision?.ratePlanName || 'Corporate rate'}</span></td><td>{formatDate(line.request?.checkIn)} – {formatDate(line.request?.checkOut)}</td><td>{roomCount}</td><td>{lineNights}</td><td><strong>{money(averageCorporateRate, currency)}</strong><br /><span style={{ color: 'var(--muted)', fontSize: 10 }}>per room / night</span></td><td><strong>{money(lineTotal, currency)}</strong></td></tr>
-                <tr><td colSpan={6}><div className="corp-rate-detail"><div className="corp-rate-detail-head"><strong>{line.pricing?.roomTypeName || 'Room'} · per-room nightly analysis</strong>{saving > 0 ? <span>You save {money(saving, currency)} across {roomCount} room{roomCount === 1 ? '' : 's'}</span> : <span>Contract pricing applied</span>}</div><table><thead><tr><th>Night</th><th>Default contract rate</th><th>Discount / room</th><th>Final rate / room</th></tr></thead><tbody>{(nightlyRates.length ? nightlyRates : [{ date: line.request?.checkIn, amount: averageCorporateRate }]).map((rate: any, rateIndex: number) => {
-                  const corporateRate = Number(rate.amount || 0);
-                  const nightlySaving = hasStandardRate ? Math.max(0, standardRate - corporateRate) : 0;
-                  return <tr key={`${rate.date || rateIndex}`}><td>{formatDate(String(rate.date || '').slice(0, 10))}</td><td>{hasStandardRate ? money(standardRate, currency) : 'Included in contract'}</td><td className="corp-rate-saving">{nightlySaving > 0 ? `− ${money(nightlySaving, currency)}` : '—'}</td><td><strong>{money(corporateRate, currency)}</strong></td></tr>;
-                })}</tbody></table>{rules.length > 0 && <div className="corp-rate-rules">{rules.map((rule) => <span key={rule}>✓ {rule}</span>)}</div>}{!hasStandardRate && <p className="corp-rate-unavailable">Your negotiated corporate contract rate is shown directly. The standard public rate is not available for comparison.</p>}</div></td></tr>
+                <tr><td colSpan={6}><div className="corp-rate-detail"><div className="corp-rate-detail-head"><strong>{line.pricing?.roomTypeName || 'Room'} · per-room nightly analysis</strong>{saving > 0 ? <span>You save {money(saving, currency)} across {roomCount} room{roomCount === 1 ? '' : 's'}</span> : <span>Contract pricing applied</span>}</div>{hasStandardRate && <div className="corp-factor-row"><div><strong>Default contract rate</strong><small>Starting rate per room / night</small></div><span className="corp-factor-before">{money(standardRate, currency)}</span><span className="corp-factor-change">—</span><span className="corp-factor-after">{money(standardRate, currency)}</span></div>}{factorRows.length > 0 && <div className="corp-factor-analysis"><div className="corp-factor-title">Applied discount factors</div>{factorRows.map((factor: any, factorIndex: number) => { const savingAmount = factor.change; const isSaving = savingAmount > 0.005; return <div className="corp-factor-row" key={`${factor.category}-${factorIndex}`}><div><strong>{factor.category}</strong><small>{adjustmentDescription(factor.adjustment, currency)}</small></div><span className="corp-factor-before">{money(factor.before, currency)}</span><span className={'corp-factor-change ' + (isSaving ? '' : 'surcharge')}>{isSaving ? '− ' : '+ '}{money(Math.abs(savingAmount), currency)}</span><span className="corp-factor-after">{money(factor.after, currency)}</span></div>; })}</div>}<div className="corp-factor-row" style={{ marginTop: 7, paddingTop: 10, borderTop: '1px solid #dce8df' }}><div><strong>Final corporate rate</strong><small>Per room / night</small></div><span className="corp-factor-before">{hasStandardRate ? money(standardRate, currency) : 'Contract rate'}</span><span className="corp-factor-change">{hasStandardRate && averageCorporateRate < standardRate ? `− ${money(standardRate - averageCorporateRate, currency)}` : '—'}</span><span className="corp-factor-after">{money(averageCorporateRate, currency)}</span></div>{!hasStandardRate && <p className="corp-rate-unavailable">Your negotiated corporate contract rate is shown directly. The standard public rate is not available for comparison.</p>}</div></td></tr>
               </Fragment>;
             })}</tbody></table></div>
             <div className="corp-review-total"><div className="corp-summary-row"><span>Accommodation subtotal</span><strong>{money(snapshot.totals?.subtotal, snapshot.totals?.currency)}</strong></div><div className="corp-summary-row"><span>VAT and service charge</span><strong>{money(Number(snapshot.roomChargeBreakdown?.vatAmount || 0) + Number(snapshot.roomChargeBreakdown?.serviceChargeAmount || 0), snapshot.totals?.currency)}</strong></div><div className="corp-summary-row total"><span>Total reservation value</span><strong>{money(snapshot.totals?.total, snapshot.totals?.currency)}</strong></div><div className="corp-summary-row"><span>{dueNow > 0 ? 'Due now' : 'Payment arrangement'}</span><strong>{dueNow > 0 ? money(dueNow, snapshot.totals?.currency) : selectedPayment.label}</strong></div></div>
