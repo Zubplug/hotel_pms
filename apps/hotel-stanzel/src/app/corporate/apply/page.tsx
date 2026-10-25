@@ -85,9 +85,16 @@ function matchingAdjustment(factors: any[] | undefined, nights: number, rooms: n
 function adjustmentLabel(adjustment: any) {
   if (!adjustment) return '';
   const value = Number(adjustment.value || 0);
-  if (adjustment.adjustmentType === 'PERCENT_DISCOUNT') return value > 0 ? `${value}% discount` : '';
-  if (adjustment.adjustmentType === 'FIXED_NIGHTLY_ADJUSTMENT') return value < 0 ? `${money(Math.abs(value))} discount / night` : '';
+  const type = String(adjustment.adjustmentType || '').toUpperCase();
+  if (type === 'PERCENT_DISCOUNT' || type === 'PERCENTAGE_DISCOUNT') return value > 0 ? `${value}% discount` : '';
+  if (type === 'FIXED_NIGHTLY_ADJUSTMENT' || type === 'FIXED_DISCOUNT') return value < 0 ? `${money(Math.abs(value))} discount / night` : value > 0 ? `${money(value)} adjustment / night` : '';
   return '';
+}
+
+function paymentAdjustmentFor(factors: any, paymentMode: string) {
+  const paymentFactors = factors?.paymentMode || {};
+  const entry = Object.entries(paymentFactors).find(([key]) => key.toUpperCase() === paymentMode.toUpperCase());
+  return entry?.[1] || null;
 }
 
 function displayedNightlyRate(baseRate: number | null | undefined, factors: any, nights: number, rooms: number, paymentMode: string) {
@@ -95,7 +102,7 @@ function displayedNightlyRate(baseRate: number | null | undefined, factors: any,
   const adjustments = [
     matchingAdjustment(factors?.stayLength, nights, rooms),
     matchingAdjustment(factors?.roomCount, nights, rooms),
-    factors?.paymentMode?.[paymentMode],
+    paymentAdjustmentFor(factors, paymentMode),
   ].filter(Boolean);
   return adjustments.reduce((amount: number, adjustment: any) => {
     const value = Number(adjustment.value || 0);
@@ -259,9 +266,10 @@ export default function CorporateApplyPage() {
   const selectedPayment = paymentOptions.find((item) => item.value === form.paymentMode) || paymentOptions[0];
   const searchNights = nightsBetween(form.checkIn, form.checkOut);
   const paymentOptionsWithDiscounts = paymentOptions.map((option) => {
-    const adjustment = rooms.map((room) => room.rate?.corporateFactors?.paymentMode?.[option.value]).find(Boolean);
+    const adjustment = rooms.map((room) => paymentAdjustmentFor(room.rate?.corporateFactors, option.value)).find(Boolean);
     const discount = adjustmentLabel(adjustment);
-    return { ...option, hint: discount ? `${option.hint} · ${discount}` : option.hint };
+    const paymentHint = rooms.length ? (discount || 'No additional payment discount') : 'Discount shown after dates are checked';
+    return { ...option, hint: `${option.hint} · ${paymentHint}` };
   });
   const selectedPaymentWithDiscount = paymentOptionsWithDiscounts.find((item) => item.value === form.paymentMode) || paymentOptionsWithDiscounts[0];
 
@@ -314,7 +322,7 @@ export default function CorporateApplyPage() {
             const factors = room.rate?.corporateFactors;
             const stayDiscount = matchingAdjustment(factors?.stayLength, nights, count || 1);
             const roomDiscount = count > 0 ? matchingAdjustment(factors?.roomCount, nights, count) : null;
-            const paymentDiscount = factors?.paymentMode?.[form.paymentMode];
+            const paymentDiscount = paymentAdjustmentFor(factors, form.paymentMode);
             const discountLabels = [adjustmentLabel(stayDiscount) && `${nights}-night stay: ${adjustmentLabel(stayDiscount)}`, adjustmentLabel(roomDiscount) && `${count} rooms: ${adjustmentLabel(roomDiscount)}`, adjustmentLabel(paymentDiscount) && `${selectedPaymentWithDiscount.label}: ${adjustmentLabel(paymentDiscount)}`].filter(Boolean) as string[];
             const nightlyRate = displayedNightlyRate(room.rate?.baseNightlyRate, factors, nights, count || 1, form.paymentMode) ?? room.rate?.nightlyRate;
             return <article className={'corp-room ' + (count ? 'selected ' : '') + (!available ? 'unavailable' : '')} key={room.id}>
