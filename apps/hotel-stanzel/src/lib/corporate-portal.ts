@@ -1,4 +1,5 @@
 import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
 
 function configuration() {
   const baseUrl = process.env.CORPORATE_API_URL || 'https://getlodgecore.vercel.app';
@@ -16,7 +17,10 @@ async function resolvePropertyId(baseUrl: string, token: string, configuredId: s
 }
 
 export async function corporateApi<T>(path: string): Promise<{ ok: true; data: T; status: number } | { ok: false; error: string; status?: number }> {
-  return corporateApiRequest<T>(path);
+  if (!(await cookies()).get('stanzel_corporate_token')?.value) redirect('/corporate/login');
+  const result = await corporateApiRequest<T>(path);
+  if (!result.ok && result.status === 401) redirect('/corporate/login');
+  return result;
 }
 
 export async function corporateApiRequest<T>(path: string, init: RequestInit = {}): Promise<{ ok: true; data: T; status: number } | { ok: false; error: string; status?: number }> {
