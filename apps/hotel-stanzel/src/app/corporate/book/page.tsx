@@ -173,6 +173,10 @@ export default function CorporateBookPage() {
         if (!payment.ok) throw new Error(paymentBody.error || 'Could not initialize payment.');
         if (paymentBody.authorizationUrl) { window.location.href = paymentBody.authorizationUrl; return; }
       }
+      if (body.approvalRequired) {
+        router.push('/corporate/reservations?notice=approval-required');
+        return;
+      }
       router.push('/corporate/reservations');
     } catch (e) { setError(e instanceof Error ? e.message : 'Could not complete reservation.'); }
     finally { setBusy(false); }

@@ -456,6 +456,9 @@ p { line-height: 1.75; color: var(--text-muted); }
 .portal-status-pill.pending { color: #9b773e; background: #fcf5e7; }
 .portal-status-pill.cancelled, .portal-status-pill.failed { color: #a65f56; background: #fbeeed; }
 .reservations-intro { display: flex; align-items: flex-end; justify-content: space-between; gap: 28px; padding: 28px 31px; border: 1px solid #dfe9e4; border-radius: 15px; background: linear-gradient(110deg, #eaf2ee, #f8f4ea); }
+.portal-notice { margin-bottom: 16px; padding: 16px 19px; border: 1px solid #cfe2d7; border-radius: 12px; background: #eef8f1; color: #315f4c; }
+.portal-notice strong { display: block; color: #1f6548; font-size: 13px; }
+.portal-notice p { margin: 5px 0 0; color: #668277; font-size: 12px; line-height: 1.55; }
 .reservations-intro h2 { margin: 0; color: #17362e; font-size: clamp(1.65rem, 3vw, 2.35rem); letter-spacing: -.025em; }
 .reservations-intro p { max-width: 650px; margin: 9px 0 0; color: #60766e; font-size: 13px; }
 .reservations-metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 13px; margin: 17px 0; }

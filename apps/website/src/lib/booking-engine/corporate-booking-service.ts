@@ -115,7 +115,19 @@ async function runBookingTransaction(
         const reservationIds = Array.isArray(existing.reservationIds)
           ? existing.reservationIds as string[]
           : [existing.reservationId];
-        return { reservationId: reservationIds[0], reservationIds, status: 'COMPLETED', idempotent: true, paymentRequired: null };
+        const reservation = await tx.reservation.findFirst({
+          where: { id: { in: reservationIds.filter((id): id is string => Boolean(id)) } },
+          select: { status: true, ratePlanSnapshot: true },
+        });
+        const paymentMode = String((reservation?.ratePlanSnapshot as any)?.paymentMode || (reservation?.ratePlanSnapshot as any)?.request?.paymentMode || '').toUpperCase();
+        return {
+          reservationId: reservationIds[0],
+          reservationIds,
+          status: reservation?.status || 'COMPLETED',
+          idempotent: true,
+          paymentRequired: ['FULL', 'DEPOSIT'].includes(paymentMode),
+          approvalRequired: paymentMode === 'PAY_LATER' && reservation?.status === 'PENDING',
+        };
       }
       throw new CorporateBookingError('BOOKING_IN_PROGRESS', 'A booking with this idempotency key is already being processed');
     }
@@ -167,18 +179,17 @@ async function runBookingTransaction(
     }));
     const propertyId = snapshot.request.propertyId;
 
-    // Keep new public applications application-only until their payment is
-    // verified or a manager approves pay-later. The settlement and approval
-    // boundaries materialize the waived corporate account at that point.
-    // Already-converted applications can safely reuse their existing account.
+    // Keep pay-later bookings pending until a property manager approves the
+    // corporate credit request. This applies to both new applicants and
+    // returning corporate clients with an existing account. The approval
+    // boundary materializes a new account, when required, and attaches the
+    // reservation to the shared corporate City Ledger folio.
     let corporateAccountId = principal.corporateAccountId;
-    let applicationWasPending = false;
     if (!corporateAccountId && principal.corporateApplicationId) {
       const application = await tx.corporateBookingApplication.findUnique({
         where: { id: principal.corporateApplicationId },
-        select: { status: true, corporateAccountId: true },
+        select: { corporateAccountId: true },
       });
-      applicationWasPending = application?.status === 'PENDING';
       corporateAccountId = application?.corporateAccountId || null;
     }
 
@@ -210,7 +221,11 @@ async function runBookingTransaction(
 
     const paymentRequired = isPaymentRequired(snapshot);
     const payLater = snapshot.request.paymentMode.toUpperCase() === 'PAY_LATER';
-    const requiresCreditApproval = payLater && applicationWasPending;
+    // Every corporate pay-later booking is a credit decision, including
+    // bookings made by returning clients. Never confirm one before management
+    // approval; night audit remains responsible for posting the actual stay
+    // charges after check-in.
+    const requiresCreditApproval = payLater;
     if (payLater && corporateAccountId) {
       const accountId = corporateAccountId;
       await tx.$queryRaw<any[]>`
