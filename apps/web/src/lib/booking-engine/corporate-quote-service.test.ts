@@ -113,4 +113,9 @@ describe('corporate quote contract', () => {
     const snapshot: any = { rateDecision: { ratePlanId: 'rate-1' }, pricing: { subtotal: 90000 }, taxes: [], fees: [], inclusions: [], cancellationPolicy: null, totals: { total: 90000 } };
     expect(priceSnapshotFingerprint(snapshot)).not.toBe(priceSnapshotFingerprint({ ...snapshot, totals: { total: 95000 } }));
   });
+
+  it('ignores undefined fields removed by JSON snapshot persistence', () => {
+    const snapshot: any = { rateDecision: { ratePlanId: 'rate-1' }, pricing: { subtotal: 90000, roomSelections: undefined }, taxes: [], fees: [], inclusions: [], cancellationPolicy: null, totals: { total: 90000 } };
+    expect(priceSnapshotFingerprint(snapshot)).toBe(priceSnapshotFingerprint(JSON.parse(JSON.stringify(snapshot))));
+  });
 });
