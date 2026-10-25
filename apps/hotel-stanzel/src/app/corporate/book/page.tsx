@@ -11,7 +11,7 @@ type Room = {
   photos?: string[];
   amenities?: string[];
   availability: { available: number; isAvailable: boolean };
-  rate: { currency: string; subtotal?: number; nightlyRate?: number; baseNightlyRate?: number; corporateFactors?: { stayLength?: any[]; roomCount?: any[]; paymentMode?: Record<string, any> } } | null;
+  rate: { currency: string; subtotal?: number; nightlyRate?: number; baseNightlyRate?: number; corporateFactors?: { stayLength?: any[]; roomCount?: any[]; paymentMode?: Record<string, any> }; rateDecision?: { pricingFactors?: Record<string, any>; baseNightlyRate?: number } } | null;
 };
 
 const emptyGuest = (): Guest => ({ firstName: '', lastName: '', email: '', phone: '' });
@@ -135,7 +135,7 @@ export default function CorporateBookPage() {
       const response = await fetch(`/api/corporate/availability?${new URLSearchParams(form)}`);
       const body = await response.json();
       if (!response.ok) throw new Error(body.error || 'Availability unavailable.');
-      const available = body.rooms || [];
+      const available = (body.rooms || []).map((room: Room) => room.rate ? { ...room, rate: { ...room.rate, corporateFactors: room.rate.corporateFactors || room.rate.rateDecision?.pricingFactors, baseNightlyRate: room.rate.baseNightlyRate ?? room.rate.rateDecision?.baseNightlyRate } } : room);
       setRooms(available);
       setRoomSelections({});
       setGuests([emptyGuest()]);

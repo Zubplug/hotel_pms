@@ -80,6 +80,8 @@ export type CorporateQuoteSnapshot = Readonly<{
     contractVersionId?: string;
     contractVersion?: number;
     ruleId?: string;
+    pricingFactors?: Record<string, unknown>;
+    baseNightlyRate?: number;
     negotiation?: { enabled: boolean; minRooms: number | null; minNights: number | null };
   };
   pricing: PricingSnapshot;
@@ -473,6 +475,8 @@ async function buildQuoteSnapshot(
       contractVersionId: contractRate.contractVersionId,
       contractVersion: contractRate.contractVersion,
       ruleId: contractRate.rule.id,
+      pricingFactors: (contractRate.rule.pricingFactors as Record<string, unknown>) || {},
+      ...(contractRate.rule.rateMethod === 'FIXED_NIGHTLY' && contractRate.rule.amount != null ? { baseNightlyRate: Number(contractRate.rule.amount) } : {}),
       negotiation: contractRate.negotiation,
     },
     pricing: scaledPricing,
