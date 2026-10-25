@@ -21,6 +21,7 @@ type Price = { id: string; amount: number; currency: string; interval: string };
 };
 type PlanItem = { id: string; required: boolean; includedQty: number | null; product: Product };
 type Plan = { id: string; code: string; name: string; description: string | null; metadata: unknown; items: PlanItem[] };
+type BillingDiscount = { planId: string | null; productId: string | null; percentage: number; reason: string | null };
 
 /* ─────────────────────────────────────────────────────────────
    HELPERS
@@ -558,6 +559,7 @@ function PlanCard({
   currentPlanCode,
   isHighestPlan,
   trialEligible,
+  discount,
 }: {
   plan: Plan;
   interval: "month" | "year";
@@ -568,6 +570,7 @@ function PlanCard({
   currentPlanCode: string | null;
   isHighestPlan: boolean;
   trialEligible: boolean;
+  discount?: BillingDiscount;
 }) {
   // Modules are bundled into a plan and intentionally have no standalone
   // prices. Only the plan product itself contributes to the checkout total.
@@ -575,6 +578,7 @@ function PlanCard({
   const prices = billableItems.map(item => item.product.prices.find(p => p.interval === interval)).filter(Boolean) as Price[];
   const complete = prices.length === billableItems.length && billableItems.length > 0;
   const total = prices.reduce((s, p) => s + p.amount, 0);
+  const discountedTotal = discount ? Math.round(total * (1 - discount.percentage / 100)) : total;
   const tier = getPlanTier(plan.code);
   const features = planFeatures(plan).filter(f => f.included).slice(0, 6);
   const limits = planLimits(plan);
@@ -626,10 +630,10 @@ function PlanCard({
           </div>
         ) : complete ? (
           <>
-            <span className="sub-plan-price-amount" style={{ color: tier.color }}>
-              {money(total, prices[0]?.currency.toUpperCase() ?? "NGN")}
-            </span>
+            {discount && <div style={{ color: "var(--text-muted)", fontSize: 12, textDecoration: "line-through", marginBottom: 3 }}>{money(total, prices[0]?.currency.toUpperCase() ?? "NGN")}</div>}
+            <span className="sub-plan-price-amount" style={{ color: tier.color }}>{money(discountedTotal, prices[0]?.currency.toUpperCase() ?? "NGN")}</span>
             <span className="sub-plan-price-interval">/ {interval}</span>
+            {discount && <div style={{ color: "var(--mint)", fontSize: 10, marginTop: 5, fontWeight: 700 }}>{discount.percentage}% organisation discount{discount.reason ? ` · ${discount.reason}` : ""}</div>}
           </>
         ) : (
           <span className="sub-plan-price-pending">Price pending</span>
@@ -714,6 +718,7 @@ function AddOnCard({
   canSubscribe,
   scopeReady,
   isActive,
+  discount,
 }: {
   product: Product;
   interval: "month" | "year";
@@ -724,12 +729,14 @@ function AddOnCard({
   canSubscribe: boolean;
   scopeReady: boolean;
   isActive: boolean;
+  discount?: BillingDiscount;
 }) {
   const price = product.prices.find(p => p.interval === interval) ?? product.prices.find(p => p.interval === "one_time") ?? product.prices[0];
   const isPropertyPriced = product.metadata && typeof product.metadata === "object" && !Array.isArray(product.metadata) && (product.metadata as Record<string, unknown>).unit === "PROPERTY";
   const key = `addon-${product.id}`;
   const features = addOnFeatures(product);
   const isReach = product.code === "ADDON_REACH";
+  const discountedAmount = price && discount ? Math.round(price.amount * (1 - discount.percentage / 100)) : price?.amount;
 
   return (
     <div className={`sub-addon-card${isActive ? " sub-addon-card--active" : ""}`}>
@@ -765,8 +772,10 @@ function AddOnCard({
       <div className="sub-addon-price">
         {price ? (
           <>
-            <span className="sub-addon-price-amount">{money(price.amount, price.currency.toUpperCase())}</span>
+            {discount && <div style={{ color: "var(--text-muted)", fontSize: 12, textDecoration: "line-through", marginBottom: 3 }}>{money(price.amount, price.currency.toUpperCase())}</div>}
+            <span className="sub-addon-price-amount">{money(discountedAmount ?? price.amount, price.currency.toUpperCase())}</span>
             <span className="sub-addon-price-interval">{price.interval === "one_time" ? "one-time" : isPropertyPriced ? `/ property / ${price.interval}` : `/ ${price.interval}`}</span>
+            {discount && <div style={{ color: "var(--mint)", fontSize: 10, marginTop: 5, fontWeight: 700 }}>{discount.percentage}% organisation discount{discount.reason ? ` · ${discount.reason}` : ""}</div>}
           </>
         ) : (
           <span style={{ color: "var(--text-muted)", fontSize: 13 }}>Price pending</span>
@@ -794,6 +803,7 @@ function AddOnCard({
 export default function SubscriptionCatalogue({
   plans,
   addOns,
+  discounts,
   properties,
   activeAddonCodes,
   activeAddonPropertyIds,
@@ -803,6 +813,7 @@ export default function SubscriptionCatalogue({
 }: {
   plans: Plan[];
   addOns: Product[];
+  discounts: BillingDiscount[];
   properties: { id: string; name: string }[];
   activeAddonCodes: string[];
   activeAddonPropertyIds: Record<string, string[]>;
@@ -933,6 +944,7 @@ export default function SubscriptionCatalogue({
             currentPlanCode={currentPlanCode}
             isHighestPlan={planRank(plan.code) === Math.max(...plans.map(candidate => planRank(candidate.code)))}
             trialEligible={trialEligible}
+            discount={discounts.find(discount => discount.planId === plan.id)}
           />
         ))}
       </div>
@@ -975,6 +987,7 @@ export default function SubscriptionCatalogue({
                 canSubscribe={hasActiveBaseSubscription}
                 scopeReady={!isPropertyScoped(product) || properties.length > 0}
                 isActive={isPropertyScoped(product) ? properties.length > 0 && properties.every(property => (activeAddonPropertyIds[product.code] ?? []).includes(property.id)) : activeAddonCodes.includes(product.code)}
+                discount={discounts.find(discount => discount.productId === product.id)}
                 onDetails={() => setDetails({ kind: "addon", value: product })}
               />
             ))}

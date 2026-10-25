@@ -67,6 +67,13 @@ type Property = {
   ready: boolean;
 };
 
+type BillingDiscount = {
+  planId: string | null;
+  productId: string | null;
+  percentage: number;
+  reason: string | null;
+};
+
 type Props = {
   data: {
     subscription: SubscriptionData;
@@ -88,6 +95,7 @@ type Props = {
   };
   plans: any[];
   addOns: any[];
+  discounts: BillingDiscount[];
   activeAddonCodes: string[];
   activeAddonPropertyIds: Record<string, string[]>;
   hasActiveBaseSubscription: boolean;
@@ -235,7 +243,7 @@ function InvoiceStatusPip({ status }: { status: string }) {
 /* ─────────────────────────────────────────────────────────────
    MAIN WORKSPACE COMPONENT
 ───────────────────────────────────────────────────────────── */
-export default function SubscriptionWorkspace({ data, plans, addOns, activeAddonCodes, activeAddonPropertyIds, hasActiveBaseSubscription, trialEligible, checkoutProperties }: Props) {
+export default function SubscriptionWorkspace({ data, plans, addOns, discounts, activeAddonCodes, activeAddonPropertyIds, hasActiveBaseSubscription, trialEligible, checkoutProperties }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"overview" | "modules" | "billing" | "catalogue">(
@@ -977,7 +985,7 @@ export default function SubscriptionWorkspace({ data, plans, addOns, activeAddon
       ═══════════════════════════════════════════════════ */}
       {activeTab === "catalogue" && (
         <div className="sub-tab-panel">
-          <div id="catalogue"><SubscriptionCatalogue plans={plans} addOns={addOns} properties={checkoutProperties} activeAddonCodes={activeAddonCodes} activeAddonPropertyIds={activeAddonPropertyIds} currentPlanCode={data.subscription?.planCode ?? null} hasActiveBaseSubscription={hasActiveBaseSubscription} trialEligible={trialEligible} /></div>
+          <div id="catalogue"><SubscriptionCatalogue plans={plans} addOns={addOns} discounts={discounts} properties={checkoutProperties} activeAddonCodes={activeAddonCodes} activeAddonPropertyIds={activeAddonPropertyIds} currentPlanCode={data.subscription?.planCode ?? null} hasActiveBaseSubscription={hasActiveBaseSubscription} trialEligible={trialEligible} /></div>
         </div>
       )}
     </div>

@@ -46,6 +46,7 @@ model Organization {
 
   billingCustomer                  BillingCustomer?
   subscriptions                    Subscription[]
+  billingDiscounts                 OrganizationBillingDiscount[]
   trialHistory                     TrialHistory?
   entitlements                     Entitlement[]
   billingInvoices                  BillingInvoice[]
@@ -6774,6 +6775,7 @@ model BillingProduct {
   entitlements Entitlement[]
   planItems    BillingPlanItem[]
   modules      Module[]
+  organizationDiscounts OrganizationBillingDiscount[]
 
   createdAt DateTime @default(now()) @db.Timestamptz
   updatedAt DateTime @updatedAt @db.Timestamptz
@@ -6950,8 +6952,31 @@ model BillingPlan {
   metadata      Json?
   items         BillingPlanItem[]
   subscriptions Subscription[]
+  organizationDiscounts OrganizationBillingDiscount[]
   createdAt     DateTime          @default(now()) @db.Timestamptz
   updatedAt     DateTime          @updatedAt @db.Timestamptz
+}
+
+model OrganizationBillingDiscount {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  planId         String?      @db.Uuid
+  plan           BillingPlan? @relation(fields: [planId], references: [id], onDelete: Cascade)
+  productId      String?      @db.Uuid
+  product        BillingProduct? @relation(fields: [productId], references: [id], onDelete: Cascade)
+  percentage     Decimal      @db.Decimal(5, 2)
+  reason         String?
+  active         Boolean      @default(true)
+  startsAt       DateTime     @default(now()) @db.Timestamptz
+  endsAt         DateTime?    @db.Timestamptz
+  createdByUserId String?     @db.Uuid
+  createdAt      DateTime     @default(now()) @db.Timestamptz
+  updatedAt      DateTime     @updatedAt @db.Timestamptz
+
+  @@index([organizationId, active])
+  @@index([organizationId, planId])
+  @@index([organizationId, productId])
 }
 
 model BillingPlanItem {

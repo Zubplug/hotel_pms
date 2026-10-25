@@ -55,10 +55,33 @@ export async function POST(request: NextRequest) {
   }
   const site = process.env.NEXT_PUBLIC_SITE_URL || "https://getlodgecore.vercel.app";
   const upgrade = (body as Record<string, unknown>).__upgrade as { chargeAmount: number; upgradeCredit: number; periodEnd: string } | undefined;
-  const metadata = billingMetadata({ organizationId, planId: plan?.id, propertyIds, productCodes: prices.map((price) => price.product.code), priceIds: prices.map((price) => price.id), customDomainRequestId, customWebsiteRequestId, upgradeCredit: upgrade?.upgradeCredit, upgradePeriodEnd: upgrade?.periodEnd });
   const email = sessionUser?.email;
   if (!email) return NextResponse.json({ error: "A billing email is required" }, { status: 400 });
-  const checkoutTotal = billingTotal(prices, propertyIds);
-  const checkout = await createFlutterwaveCheckout({ amount: Math.round((upgrade?.chargeAmount ?? checkoutTotal) / 100), currency: prices[0]?.currency || "NGN", txRef: `lodgecore-${organizationId}-${randomUUID()}`, redirectUrl: sameOrigin(body.successUrl, `${site}/portal/subscription?success=true`), customer: { email, name: organization.name }, meta: metadata });
+  const discountRows = await prisma.organizationBillingDiscount.findMany({
+    where: {
+      organizationId,
+      active: true,
+      startsAt: { lte: new Date() },
+      OR: [{ endsAt: null }, { endsAt: { gt: new Date() } }],
+      AND: [{ OR: [{ planId: plan?.id || undefined }, { productId: { in: prices.map((price) => price.productId) } }] }],
+    },
+    select: { planId: true, productId: true, percentage: true },
+  });
+  const planDiscount = plan ? Math.max(0, ...discountRows.filter((discount) => discount.planId === plan.id).map((discount) => Number(discount.percentage))) : 0;
+  const discountPercentages = prices.map((price) => {
+    const productDiscount = Math.max(0, ...discountRows.filter((discount) => discount.productId === price.productId).map((discount) => Number(discount.percentage)));
+    return productDiscount || planDiscount;
+  });
+  const checkoutTotal = prices.reduce((total, price, index) => {
+    const metadataValue = price.product.metadata && typeof price.product.metadata === 'object' && !Array.isArray(price.product.metadata) ? (price.product.metadata as Record<string, unknown>).unit : undefined;
+    const gross = price.amount * (metadataValue === 'PROPERTY' ? Math.max(propertyIds.length, 1) : 1);
+    return total + Math.max(0, gross - Math.round(gross * discountPercentages[index] / 100));
+  }, 0);
+  const payableTotal = upgrade
+    ? Math.max(0, upgrade.chargeAmount - Math.round(upgrade.chargeAmount * planDiscount / 100))
+    : checkoutTotal;
+  const discountAmount = billingTotal(prices, propertyIds) - payableTotal;
+  const checkoutMetadata = billingMetadata({ organizationId, planId: plan?.id, propertyIds, productCodes: prices.map((price) => price.product.code), priceIds: prices.map((price) => price.id), customDomainRequestId, customWebsiteRequestId, upgradeCredit: upgrade?.upgradeCredit, upgradePeriodEnd: upgrade?.periodEnd, discountAmount, discountPercentages });
+  const checkout = await createFlutterwaveCheckout({ amount: Math.round(payableTotal / 100), currency: prices[0]?.currency || "NGN", txRef: `lodgecore-${organizationId}-${randomUUID()}`, redirectUrl: sameOrigin(body.successUrl, `${site}/portal/subscription?success=true`), customer: { email, name: organization.name }, meta: checkoutMetadata });
   return NextResponse.json({ url: checkout.link });
 }
