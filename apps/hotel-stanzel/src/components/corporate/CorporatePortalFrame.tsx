@@ -24,7 +24,7 @@ const navItems: { href: string; label: string; description: string; icon: IconNa
   { href: '/corporate/dashboard', label: 'Overview', description: 'Account snapshot', icon: 'grid' },
   { href: '/corporate/book', label: 'New booking', description: 'Reserve a stay', icon: 'calendar' },
   { href: '/corporate/reservations', label: 'Reservations', description: 'Manage your stays', icon: 'receipt' },
-  { href: '/corporate/invoices', label: 'City Ledger', description: 'Invoices and balance', icon: 'wallet' },
+  { href: '/corporate/invoices', label: 'Invoices', description: 'Invoices and balance', icon: 'wallet' },
   { href: '/corporate/rates', label: 'Rate requests', description: 'Talk to our team', icon: 'sparkles' },
 ];
 
