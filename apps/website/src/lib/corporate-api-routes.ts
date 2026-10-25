@@ -28,9 +28,6 @@ export async function requireCorporateApi(req: NextRequest, scope: CorporateApiS
   { principal: CorporateApiPrincipal; requestId: string } | NextResponse
 > {
   const id = requestId(req);
-  if (process.env.NODE_ENV === 'production' && process.env.CORPORATE_API_ENABLED !== 'true') {
-    return withRequestId(errorResponse('SERVICE_UNAVAILABLE', 'Corporate API is not enabled', 503), id);
-  }
   try {
     const principal = await authenticateCorporateApiRequest(req, { requiredEnvironment: environment(), ip: req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() });
     assertCorporateApiScope(principal, scope);
