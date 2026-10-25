@@ -575,6 +575,24 @@ p { line-height: 1.75; color: var(--text-muted); }
 .booking-room-footer > span { color: #8b9c94; font-size: 11px; }
 .booking-room-footer strong { color: #335a4b; }
 .booking-review-layout { display: grid; grid-template-columns: minmax(280px, .75fr) minmax(0, 1.25fr); gap: 18px; padding: 22px 28px; }
+.booking-guest-step .booking-review-card { display: none; }
+.booking-guest-step-content { display: grid; gap: 18px; padding: 0 34px 24px; }
+.booking-guest-step-note { display: flex; gap: 10px; align-items: flex-start; padding: 14px 15px; border: 1px solid #dce8df; border-radius: 12px; color: #687c73; background: #f4f8f5; font-size: 12px; line-height: 1.55; }
+.booking-guest-step-note p { margin: 0; color: inherit; }
+.booking-guest-step-content .booking-guest-list { max-height: none; padding-right: 0; }
+.booking-guest-step-footer { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin: 0 34px; padding: 18px 0 26px; border-top: 1px solid #edf2ef; }
+.booking-guest-step-footer > div { display: flex; gap: 10px; }
+.booking-guest-step-footer .booking-secondary-button,
+.booking-guest-step-footer .booking-primary-button { min-height: 46px; padding: 13px 17px; border-radius: 11px; font-size: 13px; }
+.booking-guest-step-footer .booking-secondary-button { color: #284f41; border: 1px solid #cbdcd3; background: #fff; }
+.booking-workspace:not(.booking-guest-step) .booking-review-card .booking-guests-panel { display: none; }
+.booking-workspace:not(.booking-guest-step) .booking-review-card .booking-review-layout { grid-template-columns: 1fr; }
+.booking-workspace:not(.booking-guest-step) .booking-review-card .booking-section-kicker { font-size: 0; }
+.booking-workspace:not(.booking-guest-step) .booking-review-card .booking-section-kicker::after { content: 'Step 4 · Invoice & summary'; font-size: 10px; }
+.booking-workspace:not(.booking-guest-step) .booking-review-card .booking-card-heading h3 { font-size: 0; }
+.booking-workspace:not(.booking-guest-step) .booking-review-card .booking-card-heading h3::after { content: 'Your corporate invoice is ready'; font-size: 24px; }
+.booking-workspace:not(.booking-guest-step) .booking-review-card .booking-step-count { font-size: 0; }
+.booking-workspace:not(.booking-guest-step) .booking-review-card .booking-step-count::after { content: '04 / 04'; font-size: 10px; }
 .booking-summary-panel, .booking-guests-panel { padding: 18px; border: 1px solid #e0e9e4; border-radius: 10px; background: #fbfcfb; }
 .booking-summary-title { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-bottom: 14px; border-bottom: 1px solid #e6eee9; color: #385a4d; font-size: 12px; font-weight: 800; }
 .booking-summary-title em { color: #9aa8a2; font-size: 10px; font-style: normal; font-weight: 500; }
@@ -679,6 +697,12 @@ p { line-height: 1.75; color: var(--text-muted); }
   .booking-room-footer { grid-template-columns: 1fr; gap: 12px; }
   .booking-room-footer .booking-back-button,
   .booking-room-footer .booking-secondary-button { width: 100%; }
+  .booking-guest-step-content { padding-inline: 17px; }
+  .booking-guest-step-footer { align-items: stretch; flex-direction: column; margin-inline: 17px; }
+  .booking-guest-step-footer > div { flex-direction: column; }
+  .booking-guest-step-footer .booking-back-button,
+  .booking-guest-step-footer .booking-secondary-button,
+  .booking-guest-step-footer .booking-primary-button { width: 100%; }
 }
 
 @media (max-width: 900px) {

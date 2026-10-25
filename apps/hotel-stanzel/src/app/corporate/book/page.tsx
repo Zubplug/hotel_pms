@@ -108,6 +108,7 @@ export default function CorporateBookPage() {
   const [guests, setGuests] = useState<Guest[]>([emptyGuest()]);
   const [quote, setQuote] = useState<any>(null);
   const [stage, setStage] = useState<1 | 2 | 3>(1);
+  const [guestStepComplete, setGuestStepComplete] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const nights = nightsBetween(form.checkIn, form.checkOut);
@@ -153,6 +154,7 @@ export default function CorporateBookPage() {
       const body = await response.json();
       if (!response.ok) throw new Error(body.error || 'Corporate rate unavailable.');
       setQuote(body);
+      setGuestStepComplete(false);
       setStage(3);
     } catch (e) { setError(e instanceof Error ? e.message : 'Could not create quote.'); }
     finally { setBusy(false); }
@@ -176,13 +178,35 @@ export default function CorporateBookPage() {
     finally { setBusy(false); }
   }
 
+  function continueFromGuestDetails() {
+    if (guests.some((guest) => !guest.firstName.trim() || !guest.lastName.trim() || !guest.email.trim())) {
+      setError('Add a first name, last name, and email for each guest, or skip this step to use temporary corporate guest details.');
+      return;
+    }
+    setError('');
+    setGuestStepComplete(true);
+  }
+
+  function skipGuestDetails() {
+    setGuests(Array.from({ length: Math.max(1, roomCount) }, (_, index) => ({
+      firstName: 'Corporate',
+      lastName: `Guest ${index + 1}`,
+      email: 'corporate.booking@stanzelgrandresort.com',
+      phone: '',
+    })));
+    setError('');
+    setGuestStepComplete(true);
+  }
+
   const quoteTotal = quote?.snapshot?.totals?.total || quote?.snapshot?.total || 0;
   const quoteCurrency = quote?.snapshot?.totals?.currency || selectedRoom?.rate?.currency || 'NGN';
 
-  return <div className="booking-workspace">
+  return <div className={`booking-workspace${stage === 3 && quote && !guestStepComplete ? ' booking-guest-step' : ''}`}>
     <section className="booking-intro"><div><span className="booking-kicker">Stanzel Grand Resort · Corporate services</span><h2>Plan your team stay with confidence.</h2><p>Live availability, transparent corporate pricing and a PMS-connected reservation journey for your organisation.</p></div><div className="booking-assurance"><span>✓ Live room inventory</span><span>✓ Corporate terms</span><span>✓ Secure reservation</span></div></section>
     <nav className="booking-progress" aria-label="Reservation progress"><span className={stage >= 1 ? 'is-active' : ''}><b>1</b> Search dates</span><i /><span className={stage >= 2 ? 'is-active' : ''}><b>2</b> Choose rooms</span><i /><span className={stage >= 3 ? 'is-active' : ''}><b>3</b> Review & reserve</span></nav>
     <div className="booking-layout"><div className="booking-main">
+
+    {stage === 3 && quote && !guestStepComplete && <section className="booking-card booking-guest-step-card"><div className="booking-card-heading"><div><span className="booking-section-kicker">Step 3 · Guest information</span><h3>Add your guest information</h3><p>Provide one primary guest for each room. You can skip this step and use temporary corporate guest details for now.</p></div><span className="booking-step-count">03 / 04</span></div><div className="booking-guest-step-content"><div className="booking-guest-step-note"><span className="booking-sidebar-icon">i</span><p>Guest names and contact details can be updated later from Reservations or at Front Desk.</p></div><div className="booking-guest-list">{guests.map((guest, index) => <fieldset className="booking-guest-card" key={index}><legend>Room {index + 1}</legend><div className="booking-guest-fields"><input required placeholder="First name" value={guest.firstName} onChange={(event) => updateGuest(index, 'firstName', event.target.value)} /><input required placeholder="Last name" value={guest.lastName} onChange={(event) => updateGuest(index, 'lastName', event.target.value)} /><input required type="email" placeholder="Email address" value={guest.email} onChange={(event) => updateGuest(index, 'email', event.target.value)} /><input placeholder="Phone (optional)" value={guest.phone} onChange={(event) => updateGuest(index, 'phone', event.target.value)} /></div></fieldset>)}</div></div><div className="booking-guest-step-footer"><button type="button" className="booking-back-button" onClick={() => setStage(2)}>← Change room selection</button><div><button type="button" className="booking-secondary-button" onClick={skipGuestDetails}>Skip for now</button><button type="button" className="booking-primary-button" onClick={continueFromGuestDetails}>Continue to invoice →</button></div></div></section>}
 
     {stage === 1 && <section className="booking-card booking-search-card"><div className="booking-card-heading"><div><span className="booking-section-kicker">Step 1 · Search availability</span><h3>Find rooms for your team</h3><p>Select one stay period for the whole room arrangement, then choose the room types your team needs.</p></div><span className="booking-step-count">01 / 03</span></div><form className="booking-form" onSubmit={search}><label className="booking-field booking-field-date"><span>Check-in</span><input type="date" required value={form.checkIn} onChange={(event) => update('checkIn', event.target.value)} /><small>{form.checkIn ? dateLabel(form.checkIn) : 'Select arrival date'}</small></label><label className="booking-field booking-field-date"><span>Check-out</span><input type="date" required value={form.checkOut} min={form.checkIn || undefined} onChange={(event) => update('checkOut', event.target.value)} /><small>{nights ? `${nights} night${nights === 1 ? '' : 's'}` : 'Select departure date'}</small></label><label className="booking-field"><span>Adults per room</span><input type="number" min="1" max="20" required value={form.adults} onChange={(event) => update('adults', event.target.value)} /><small>Guests aged 13+</small></label><label className="booking-field"><span>Children per room</span><input type="number" min="0" max="20" required value={form.children} onChange={(event) => update('children', event.target.value)} /><small>Guests aged 0–12</small></label><div className="booking-payment-field"><span>Payment arrangement</span><div className="booking-payment-options">{paymentOptions.map((option) => <button type="button" key={option.value} className={form.paymentMode === option.value ? 'is-selected' : ''} onClick={() => update('paymentMode', option.value)}><span className="booking-radio" /><span><strong>{option.label}</strong><small>{option.description}</small></span></button>)}</div></div>{nights > 0 && <div className="booking-promo"><span>✦</span><div><strong>{nights} night{nights === 1 ? '' : 's'} planned — unlock your default corporate savings</strong>{nights >= 7 ? 'Extended stays are being evaluated for the best available long-stay rate.' : 'Longer stays can qualify for additional contract savings. We will show the exact eligible discount with your available rooms.'}</div></div>}<div className="booking-form-footer"><span className="booking-form-note"><b>i</b> Your corporate rate is applied before the quote is created.</span><button className="booking-primary-button" disabled={busy}>{busy ? 'Checking availability…' : <>Check availability <span>→</span></>}</button></div></form></section>}
 
