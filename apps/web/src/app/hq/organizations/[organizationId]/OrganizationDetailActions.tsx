@@ -1,8 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { MailPlus, Pencil, Percent, X } from 'lucide-react';
-import { inviteOrganizationPortalUser, saveOrganizationDiscount, updateOrganization, updateOrganizationPortalUser, updateOrganizationProperty } from '../actions';
+import { Clock3, MailPlus, Pencil, Percent, X } from 'lucide-react';
+import { activateOrganizationTrial, inviteOrganizationPortalUser, saveOrganizationDiscount, updateOrganization, updateOrganizationPortalUser, updateOrganizationProperty } from '../actions';
 
 type Property = { id: string; name: string; city: string; country: string; isActive: boolean };
 type Target = { id: string; name: string; code: string };
@@ -13,14 +13,16 @@ export default function OrganizationDetailActions({
   addOns,
   properties,
   portalUsers,
+  trialEligible,
 }: {
   organization: { id: string; name: string; slug: string; defaultCurrency: string; defaultTimezone: string };
   plans: Target[];
   addOns: Target[];
   properties: Property[];
   portalUsers: { id: string; email: string; firstName: string | null; lastName: string | null; emailVerifiedAt: string | null }[];
+  trialEligible: boolean;
 }) {
-  const [modal, setModal] = useState<'discount' | 'organization' | 'property' | 'invite' | 'portal-user' | null>(null);
+  const [modal, setModal] = useState<'discount' | 'organization' | 'property' | 'invite' | 'portal-user' | 'trial' | null>(null);
   const [selectedPropertyId, setSelectedPropertyId] = useState(properties[0]?.id ?? '');
   const [targetType, setTargetType] = useState<'PLAN' | 'ADDON'>('PLAN');
   const targets = targetType === 'PLAN' ? plans : addOns;
@@ -29,6 +31,7 @@ export default function OrganizationDetailActions({
     <>
       <div className="flex flex-wrap gap-2">
         <button type="button" onClick={() => setModal('discount')} className="inline-flex items-center gap-2 rounded-xl bg-cyan-300 px-4 py-2.5 text-xs font-bold text-[#06202a] shadow-[0_10px_30px_rgba(103,232,249,.14)] transition hover:bg-cyan-200"><Percent className="size-4" /> Apply discount</button>
+        {trialEligible && <button type="button" onClick={() => setModal('trial')} className="inline-flex items-center gap-2 rounded-xl border border-amber-300/20 bg-amber-300/10 px-4 py-2.5 text-xs font-semibold text-amber-200 transition hover:bg-amber-300/20"><Clock3 className="size-3.5" /> Activate trial</button>}
         {!portalUsers.some((user) => user.emailVerifiedAt) && <button type="button" onClick={() => setModal('invite')} className="inline-flex items-center gap-2 rounded-xl border border-emerald-300/20 bg-emerald-300/10 px-4 py-2.5 text-xs font-semibold text-emerald-200 transition hover:bg-emerald-300/20"><MailPlus className="size-3.5" /> {portalUsers.length ? 'Resend portal invite' : 'Invite portal user'}</button>}
         {portalUsers.length > 0 && <button type="button" onClick={() => setModal('portal-user')} className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[.05] px-4 py-2.5 text-xs font-semibold text-slate-200 transition hover:bg-white/[.1]"><Pencil className="size-3.5" /> Edit portal user</button>}
         <button type="button" onClick={() => setModal('organization')} className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[.05] px-4 py-2.5 text-xs font-semibold text-slate-200 transition hover:bg-white/[.1]"><Pencil className="size-3.5" /> Edit organisation</button>
@@ -37,7 +40,9 @@ export default function OrganizationDetailActions({
 
       {modal && <div className="fixed inset-0 z-[80] flex items-end justify-center bg-[#020713]/80 p-0 backdrop-blur-md sm:items-center sm:p-5" role="dialog" aria-modal="true">
         <div className="max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-t-3xl border border-white/10 bg-[#101b2f] p-5 shadow-[0_30px_100px_rgba(0,0,0,.55)] sm:rounded-3xl sm:p-7">
-          <div className="flex items-start justify-between gap-4 border-b border-white/8 pb-5"><div><p className="text-[10px] font-bold uppercase tracking-[.2em] text-cyan-300">HQ control</p><h2 className="mt-2 text-xl font-semibold tracking-tight text-white">{modal === 'discount' ? 'Apply organisation discount' : modal === 'organization' ? 'Edit organisation' : modal === 'invite' ? 'Invite portal user' : modal === 'portal-user' ? 'Edit portal user' : 'Edit property'}</h2><p className="mt-1 text-xs leading-5 text-slate-500">{modal === 'discount' ? 'Choose a plan or add-on and set the commercial rate for future checkouts.' : modal === 'organization' ? 'Keep the organisation identity and billing defaults accurate.' : modal === 'invite' ? 'Create customer portal access and send a secure password setup link.' : modal === 'portal-user' ? 'Update the organisation’s single customer portal account.' : 'Update the property profile and operational availability.'}</p></div><button type="button" onClick={() => setModal(null)} aria-label="Close" className="rounded-xl p-2 text-slate-500 hover:bg-white/5 hover:text-white"><X className="size-5" /></button></div>
+          <div className="flex items-start justify-between gap-4 border-b border-white/8 pb-5"><div><p className="text-[10px] font-bold uppercase tracking-[.2em] text-cyan-300">HQ control</p><h2 className="mt-2 text-xl font-semibold tracking-tight text-white">{modal === 'discount' ? 'Apply organisation discount' : modal === 'trial' ? 'Activate trial subscription' : modal === 'organization' ? 'Edit organisation' : modal === 'invite' ? 'Invite portal user' : modal === 'portal-user' ? 'Edit portal user' : 'Edit property'}</h2><p className="mt-1 text-xs leading-5 text-slate-500">{modal === 'discount' ? 'Choose a plan or add-on and set the commercial rate for future checkouts.' : modal === 'trial' ? 'Start the organisation’s one-time 7-day trial. This cannot be repeated after use.' : modal === 'organization' ? 'Keep the organisation identity and billing defaults accurate.' : modal === 'invite' ? 'Create customer portal access and send a secure password setup link.' : modal === 'portal-user' ? 'Update the organisation’s single customer portal account.' : 'Update the property profile and operational availability.'}</p></div><button type="button" onClick={() => setModal(null)} aria-label="Close" className="rounded-xl p-2 text-slate-500 hover:bg-white/5 hover:text-white"><X className="size-5" /></button></div>
+
+          {modal === 'trial' && <form action={activateOrganizationTrial} className="mt-6 space-y-4" onSubmit={() => setTimeout(() => setModal(null), 300)}><input type="hidden" name="organizationId" value={organization.id} /><div className="rounded-2xl border border-amber-300/15 bg-amber-300/[.06] p-4 text-xs leading-5 text-amber-100">The trial lasts 7 days and uses the selected plan’s monthly product prices. The organisation can use this lifetime trial only once.</div><label className="block text-xs font-medium text-slate-400">Trial plan<select name="planCode" defaultValue={plans.find((plan) => plan.code === 'ESSENTIAL')?.code ?? plans[0]?.code} required className="mt-2 h-11 w-full rounded-xl border border-white/10 bg-[#0b1628] px-3 text-sm text-white outline-none">{plans.length ? plans.map((plan) => <option key={plan.id} value={plan.code}>{plan.name} · {plan.code}</option>) : <option value="">No active plans available</option>}</select></label><div className="flex justify-end gap-2 border-t border-white/8 pt-5"><button type="button" onClick={() => setModal(null)} className="rounded-xl border border-white/10 px-4 py-2.5 text-xs font-semibold text-slate-300 hover:bg-white/5">Cancel</button><button type="submit" disabled={!plans.length} className="rounded-xl bg-amber-300 px-4 py-2.5 text-xs font-bold text-[#261800] hover:bg-amber-200 disabled:cursor-not-allowed disabled:opacity-50">Activate 7-day trial</button></div></form>}
 
           {modal === 'discount' && <form action={saveOrganizationDiscount} className="mt-6 space-y-4" onSubmit={() => setTimeout(() => setModal(null), 300)}>
             <input type="hidden" name="organizationId" value={organization.id} />

@@ -6,6 +6,33 @@ import prisma from '@hotel-pms/db';
 import { revalidatePath } from 'next/cache';
 import { requireHQAdmin } from '@/lib/auth/hq';
 import { sendCustomerInvitationEmail } from '@/lib/email/send-customer-invitation';
+import { activateTrial } from '@hotel-pms/db';
+
+export async function activateOrganizationTrial(formData: FormData) {
+  const admin = await requireHQAdmin();
+  const organizationId = String(formData.get('organizationId') || '');
+  const planCode = String(formData.get('planCode') || 'ESSENTIAL').trim().toUpperCase();
+  if (!organizationId || !planCode) throw new Error('Select an organisation and trial plan.');
+
+  const organization = await prisma.organization.findUnique({ where: { id: organizationId }, select: { id: true, name: true } });
+  if (!organization) throw new Error('Organisation not found.');
+
+  const subscription = await activateTrial(prisma, { organizationId, planCode, source: 'HQ_ADMIN' });
+  await prisma.auditLog.create({
+    data: {
+      organizationId,
+      userId: admin.id,
+      userEmail: admin.email || undefined,
+      action: 'ORGANIZATION_TRIAL_ACTIVATED',
+      resource: 'Subscription',
+      resourceId: subscription.id,
+      requestId: `hq-trial-${Date.now()}`,
+      newValue: { planCode, source: 'HQ_ADMIN' },
+    },
+  });
+  revalidatePath('/hq/organizations');
+  revalidatePath(`/hq/organizations/${organizationId}`);
+}
 
 export async function saveOrganizationDiscount(formData: FormData) {
   const admin = await requireHQAdmin();
