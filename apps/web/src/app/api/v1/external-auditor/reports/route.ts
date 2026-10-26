@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
     let rows: unknown[][];
     let headers: string[];
     if (kind === 'management') {
-      headers = ['Section', 'Metric', 'Today', 'Last 7 days', 'MTD', 'YTD'];
+      headers = ['Metric', 'Today', 'Last 7 days', 'MTD', 'YTD'];
       const [occupancySnapshots, audits, payments, complimentary, posOrders] = await Promise.all([
         prisma.occupancySnapshot.findMany({ where: { propertyId, businessDate: { gte: reportStart, lt: reportEnd } }, select: { businessDate: true, totalRooms: true, availableRooms: true, occupiedRooms: true, occupancyPct: true, adr: true, revpar: true } }),
         prisma.nightAudit.findMany({ where: { propertyId, businessDate: { gte: reportStart, lt: reportEnd } }, select: { businessDate: true, totalRoomRevenue: true, totalRevenue: true } }),
@@ -54,7 +54,8 @@ export async function GET(request: NextRequest) {
       const key = (value: Date) => value.toISOString().slice(0, 10);
       const inPeriod = (value: Date, period: { start: Date }) => { const dateKey = key(value); return dateKey >= key(period.start) && dateKey <= todayKey; };
       const sum = <T extends { businessDate: Date }>(items: T[], period: { start: Date }, value: (item: T) => number) => items.filter(item => inPeriod(item.businessDate, period)).reduce((total, item) => total + value(item), 0);
-      const section = (label: string) => [label, '', '', '', '', ''];
+      const section = (label: string) => [label, '', '', '', ''];
+      const metric = (label: string, values: number[]) => [label, ...values];
       const departmentsByPeriod = (period: { start: Date }) => {
         const totals = new Map<string, number>();
         for (const entry of entries) if (inPeriod(entry.entryDate, period)) for (const line of entry.lines) if (line.account.type === 'REVENUE') totals.set(line.account.name, (totals.get(line.account.name) || 0) + Number(line.credit) - Number(line.debit));
@@ -63,37 +64,37 @@ export async function GET(request: NextRequest) {
       const roomRevenue = (period: { start: Date }) => sum(audits, period, item => Number(item.totalRoomRevenue));
       const availableRooms = (period: { start: Date }) => sum(occupancySnapshots, period, item => item.availableRooms);
       const occupiedRooms = (period: { start: Date }) => sum(occupancySnapshots, period, item => item.occupiedRooms);
-      const revenueRows = [...new Set(periods.flatMap(period => [...departmentsByPeriod(period).keys()]))].sort().map(department => ['REVENUE BY DEPARTMENT', department, ...periods.map(period => departmentsByPeriod(period).get(department) || 0)]);
+      const revenueRows = [...new Set(periods.flatMap(period => [...departmentsByPeriod(period).keys()]))].sort().map(department => metric(department, periods.map(period => departmentsByPeriod(period).get(department) || 0)));
       const outletNames = [...new Set(posOrders.map(order => order.outlet.name))].sort();
       const outletRows = outletNames.flatMap(outlet => [
-        ['FOOD AND BEVERAGE REVENUE', `${outlet} revenue`, ...periods.map(period => sum(posOrders, period, order => order.outlet.name === outlet ? Number(order.total) : 0))],
-        ['FOOD AND BEVERAGE REVENUE', `${outlet} covers`, ...periods.map(period => sum(posOrders, period, order => order.outlet.name === outlet ? order.guestCount : 0))],
+        metric(`${outlet} revenue`, periods.map(period => sum(posOrders, period, order => order.outlet.name === outlet ? Number(order.total) : 0))),
+        metric(`${outlet} covers`, periods.map(period => sum(posOrders, period, order => order.outlet.name === outlet ? order.guestCount : 0))),
       ]);
       const totalFnb = periods.map(period => sum(posOrders, period, order => Number(order.total)));
       const totalCovers = periods.map(period => sum(posOrders, period, order => order.guestCount));
       rows = [
         section('ROOM STATISTICS'),
-        ['ROOM STATISTICS', 'Total rooms availability', ...periods.map(period => availableRooms(period))],
-        ['ROOM STATISTICS', 'Total occupied rooms', ...periods.map(period => occupiedRooms(period))],
-        ['ROOM STATISTICS', 'Total vacant rooms', ...periods.map(period => Math.max(availableRooms(period) - occupiedRooms(period), 0))],
-        ['ROOM STATISTICS', 'Total sold rooms', ...periods.map(period => occupiedRooms(period))],
-        ['ROOM STATISTICS', 'Total complimentary rooms', ...periods.map(() => 0)],
-        ['ROOM STATISTICS', 'Total occupancy %', ...periods.map(period => { const available = availableRooms(period); return available ? (occupiedRooms(period) / available) * 100 : 0; })],
-        ['ROOM STATISTICS', 'Total sold rooms %', ...periods.map(period => { const available = availableRooms(period); return available ? (occupiedRooms(period) / available) * 100 : 0; })],
-        ['ROOM STATISTICS', 'Total complimentary rooms %', ...periods.map(() => 0)],
-        ['ROOM STATISTICS', 'Total rooms revenue', ...periods.map(period => roomRevenue(period))],
-        ['ROOM STATISTICS', 'Average room rate', ...periods.map(period => { const occupied = occupiedRooms(period); return occupied ? roomRevenue(period) / occupied : 0; })],
-        ['ROOM STATISTICS', 'Revenue per available room', ...periods.map(period => { const available = availableRooms(period); return available ? roomRevenue(period) / available : 0; })],
+        metric('Total rooms availability', periods.map(period => availableRooms(period))),
+        metric('Total occupied rooms', periods.map(period => occupiedRooms(period))),
+        metric('Total vacant rooms', periods.map(period => Math.max(availableRooms(period) - occupiedRooms(period), 0))),
+        metric('Total sold rooms', periods.map(period => occupiedRooms(period))),
+        metric('Total complimentary rooms', periods.map(() => 0)),
+        metric('Total occupancy %', periods.map(period => { const available = availableRooms(period); return available ? (occupiedRooms(period) / available) * 100 : 0; })),
+        metric('Total sold rooms %', periods.map(period => { const available = availableRooms(period); return available ? (occupiedRooms(period) / available) * 100 : 0; })),
+        metric('Total complimentary rooms %', periods.map(() => 0)),
+        metric('Total rooms revenue', periods.map(period => roomRevenue(period))),
+        metric('Average room rate', periods.map(period => { const occupied = occupiedRooms(period); return occupied ? roomRevenue(period) / occupied : 0; })),
+        metric('Revenue per available room', periods.map(period => { const available = availableRooms(period); return available ? roomRevenue(period) / available : 0; })),
         section('REVENUE BY DEPARTMENT'),
         ...revenueRows,
-        ['REVENUE BY DEPARTMENT', 'Total hotel revenue', ...periods.map(period => sum(audits, period, item => Number(item.totalRevenue)) || departmentsByPeriod(period).values().reduce((total, amount) => total + amount, 0))],
+        metric('Total hotel revenue', periods.map(period => sum(audits, period, item => Number(item.totalRevenue)) || departmentsByPeriod(period).values().reduce((total, amount) => total + amount, 0))),
         section('FOOD AND BEVERAGE REVENUE'),
         ...outletRows,
-        ['FOOD AND BEVERAGE REVENUE', 'Total food & beverage revenue', ...totalFnb],
-        ['FOOD AND BEVERAGE REVENUE', 'Total covers', ...totalCovers],
+        metric('Total food & beverage revenue', totalFnb),
+        metric('Total covers', totalCovers),
         section('PAYMENT SUMMARY'),
-        ...['CASH', 'BANK_TRANSFER', 'POS', 'CARD', 'CARD_OFFLINE', 'PAYMENT_GATEWAY', 'MOBILE_PAYMENT'].map(method => ['PAYMENT SUMMARY', method.replaceAll('_', ' '), ...periods.map(period => sum(payments, period, item => String(item.method) === method ? Number(item.amount) : 0))]),
-        ['PAYMENT SUMMARY', 'Complimentary revenue', ...periods.map(period => sum(complimentary, period, item => Number(item.complAmount)))],
+        ...['CASH', 'BANK_TRANSFER', 'POS', 'CARD', 'CARD_OFFLINE', 'PAYMENT_GATEWAY', 'MOBILE_PAYMENT'].map(method => metric(method.replaceAll('_', ' '), periods.map(period => sum(payments, period, item => String(item.method) === method ? Number(item.amount) : 0)))),
+        metric('Complimentary revenue', periods.map(period => sum(complimentary, period, item => Number(item.complAmount)))),
       ];
     } else if (kind === 'general-ledger') {
       headers = ['Entry', 'Date', 'Status', 'Source', 'Description', 'Account', 'Account name', 'Debit', 'Credit'];
