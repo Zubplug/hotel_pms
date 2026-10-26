@@ -60,6 +60,37 @@ export async function saveOrganizationDiscount(formData: FormData) {
   revalidatePath(`/hq/organizations/${organizationId}`);
 }
 
+export async function removeOrganizationDiscount(formData: FormData) {
+  const admin = await requireHQAdmin();
+  const organizationId = String(formData.get('organizationId') || '');
+  const discountId = String(formData.get('discountId') || '');
+  if (!organizationId || !discountId) throw new Error('Organisation discount could not be identified.');
+
+  const discount = await prisma.organizationBillingDiscount.findFirst({
+    where: { id: discountId, organizationId, active: true },
+    select: { id: true, planId: true, productId: true, percentage: true },
+  });
+  if (!discount) throw new Error('Active organisation discount not found.');
+
+  await prisma.$transaction(async (tx) => {
+    await tx.organizationBillingDiscount.update({ where: { id: discount.id }, data: { active: false, endsAt: new Date() } });
+    await tx.auditLog.create({
+      data: {
+        organizationId,
+        userId: admin.id,
+        userEmail: admin.email || undefined,
+        action: 'BILLING_DISCOUNT_REMOVED',
+        resource: discount.planId ? 'BillingPlan' : 'BillingProduct',
+        resourceId: discount.planId ?? discount.productId ?? discount.id,
+        requestId: `hq-discount-remove-${Date.now()}`,
+        newValue: { discountId: discount.id, percentage: Number(discount.percentage), planId: discount.planId, productId: discount.productId },
+      },
+    });
+  });
+  revalidatePath('/hq/organizations');
+  revalidatePath(`/hq/organizations/${organizationId}`);
+}
+
 export async function updateOrganization(formData: FormData) {
   const admin = await requireHQAdmin();
   const organizationId = String(formData.get('organizationId') || '');
