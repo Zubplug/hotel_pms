@@ -43,6 +43,7 @@ function addOnFeatures(product: Product): string[] {
     ADDON_CUSTOM_WEBSITE_API: ["Standalone custom website", "LodgeCore public API integration", "Brand-led visual direction", "HQ design and launch support"],
     ADDON_CUSTOM_WEBSITE_PMS: ["PMS-connected custom website", "Live LodgeCore PMS integration", "Brand-led visual direction", "HQ design and launch support"],
     ADDON_REACH: ["LodgeCore referral network listing", "Trackable referral campaigns", "Property-level booking attribution", "Referral performance reporting"],
+    ADDON_EXTRA_TERMINAL: ["One additional licensed POS terminal", "Central terminal entitlement tracking", "Recurring billing per terminal", "Fast activation after payment"],
   };
   return mapped[code] || product.modules?.map(m => m.name) || ["Extended capability module"];
 }
@@ -708,6 +709,14 @@ function PlanCard({
 /* ─────────────────────────────────────────────────────────────
    ADD-ON CARD
 ───────────────────────────────────────────────────────────── */
+function ExtraTerminalDialog({ product, interval, busy, onClose, onCheckout }: { product?: Product; interval: "month" | "year"; busy: string | null; onClose: () => void; onCheckout: (quantity: number) => void }) {
+  const [quantity, setQuantity] = useState(1);
+  const price = product?.prices.find(item => item.interval === interval) ?? product?.prices[0];
+  if (!product || !price) return null;
+  const total = price.amount * quantity;
+  return createPortal(<div className="sub-modal-backdrop" onClick={onClose} role="dialog" aria-modal="true"><div className="sub-modal" onClick={event => event.stopPropagation()}><div className="sub-modal-header"><div><div className="sub-section-kicker">POS capacity</div><h2 className="sub-modal-title">Add POS terminals</h2><p className="sub-modal-copy">Extend your Professional workspace with additional terminals. Each terminal is billed separately on the selected billing interval.</p></div><button className="sub-modal-close" onClick={onClose} aria-label="Close">×</button></div><div className="sub-scope-summary"><div><div className="sub-scope-summary-label">Unit price</div><div className="sub-scope-summary-value">{money(price.amount, price.currency)} / {interval}</div></div><div><div className="sub-scope-summary-label">Quantity</div><div className="sub-scope-summary-value"><input type="number" min={1} max={25} value={quantity} onChange={event => setQuantity(Math.max(1, Math.min(25, Number(event.target.value) || 1)))} style={{ width: 70, border: '1px solid var(--border)', borderRadius: 8, background: 'rgba(255,255,255,.04)', color: 'var(--text-primary)', padding: '7px 8px' }} /></div></div><div><div className="sub-scope-summary-label">New recurring total</div><div className="sub-scope-summary-value sub-scope-summary-total">{money(total, price.currency)} / {interval}</div></div></div><div style={{ padding: 14, border: '1px solid var(--border)', borderRadius: 12, color: 'var(--text-muted)', fontSize: 12, lineHeight: 1.6 }}>Your current terminals remain included. This purchase adds {quantity} extra licensed terminal{quantity === 1 ? '' : 's'} to your organisation after successful Flutterwave payment.</div><div className="sub-modal-actions"><button className="btn btn-outline btn-sm" onClick={onClose} disabled={busy !== null}>Cancel</button><button className="btn btn-primary btn-sm" onClick={() => onCheckout(quantity)} disabled={busy !== null}>{busy ? 'Opening checkout…' : `Continue to payment · ${money(total, price.currency)}`}</button></div></div></div>, document.body);
+}
+
 function AddOnCard({
   product,
   interval,
@@ -723,7 +732,7 @@ function AddOnCard({
   product: Product;
   interval: "month" | "year";
   busy: string | null;
-  onCheckout: (key: string, priceIds: string[]) => void;
+  onCheckout: (key: string, priceIds: string[], quantity?: number) => void;
   onSpecialAddon?: () => void;
   onDetails: () => void;
   canSubscribe: boolean;
@@ -736,6 +745,7 @@ function AddOnCard({
   const key = `addon-${product.id}`;
   const features = addOnFeatures(product);
   const isReach = product.code === "ADDON_REACH";
+  const isExtraTerminal = product.code === "ADDON_EXTRA_TERMINAL";
   const discountedAmount = price && discount ? Math.round(price.amount * (1 - discount.percentage / 100)) : price?.amount;
 
   return (
@@ -790,7 +800,7 @@ function AddOnCard({
           disabled={busy !== null || !price || !canSubscribe || !scopeReady || isActive}
           onClick={() => price && (onSpecialAddon ? onSpecialAddon() : onCheckout(key, [price.id]))}
         >
-          {busy === key ? "Opening…" : isActive ? "Active add-on" : isReach ? "Configure Reach →" : !canSubscribe ? "Base plan required" : !scopeReady ? "No property available" : price ? ["ADDON_CUSTOM_WEBSITE_API", "ADDON_CUSTOM_WEBSITE_PMS"].includes(product.code) ? "Design my website →" : product.code === "ADDON_CUSTOM_DOMAIN" ? "Check domain →" : "Add on →" : "Unavailable"}
+          {busy === key ? "Opening…" : isActive ? "Active add-on" : isReach ? "Configure Reach →" : isExtraTerminal ? "Choose terminals →" : !canSubscribe ? "Base plan required" : !scopeReady ? "No property available" : price ? ["ADDON_CUSTOM_WEBSITE_API", "ADDON_CUSTOM_WEBSITE_PMS"].includes(product.code) ? "Design my website →" : product.code === "ADDON_CUSTOM_DOMAIN" ? "Check domain →" : "Add on →" : "Unavailable"}
         </button>
       </div>
     </div>
@@ -830,8 +840,9 @@ export default function SubscriptionCatalogue({
   const [websiteModalOpen, setWebsiteModalOpen] = useState(false);
   const [domainModalOpen, setDomainModalOpen] = useState(false);
   const [reachModalOpen, setReachModalOpen] = useState(false);
+  const [terminalModalOpen, setTerminalModalOpen] = useState(false);
 
-  async function checkout(key: string, priceIds: string[], planId?: string, requestedPropertyIds = selectedPropertyIds.slice(0, 1)) {
+  async function checkout(key: string, priceIds: string[], planId?: string, requestedPropertyIds = selectedPropertyIds.slice(0, 1), quantity = 1) {
     if (!priceIds.length) return setError("This option does not have a published price for the selected billing interval yet.");
     setBusy(key);
     setError(null);
@@ -841,6 +852,7 @@ export default function SubscriptionCatalogue({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           priceIds,
+          quantities: priceIds.map(() => quantity),
           planId,
           propertyIds: requestedPropertyIds,
           successUrl: `${window.location.origin}/portal/subscription?success=true`,
@@ -875,11 +887,11 @@ export default function SubscriptionCatalogue({
     }
   }
 
-  function startAddonCheckout(product: Product, key: string, priceIds: string[]) {
+  function startAddonCheckout(product: Product, key: string, priceIds: string[], quantity = 1) {
     const propertyPriced = isPropertyScoped(product);
-    if (!propertyPriced) return checkout(key, priceIds, undefined, []);
+    if (!propertyPriced) return checkout(key, priceIds, undefined, [], quantity);
     if (!properties.length) return setError("Add a property before purchasing this add-on.");
-    if (properties.length === 1) return checkout(key, priceIds, undefined, [properties[0].id]);
+    if (properties.length === 1) return checkout(key, priceIds, undefined, [properties[0].id], quantity);
     const activeProperties = new Set(activeAddonPropertyIds[product.code] ?? []);
     const availableProperties = properties.filter(property => !activeProperties.has(property.id));
     setSelectedPropertyIds((availableProperties.length ? availableProperties : properties).map(property => property.id));
@@ -982,11 +994,11 @@ export default function SubscriptionCatalogue({
                 product={product}
                 interval={interval}
                 busy={busy}
-                onCheckout={(key, priceIds) => startAddonCheckout(product, key, priceIds)}
-                onSpecialAddon={["ADDON_CUSTOM_WEBSITE_API", "ADDON_CUSTOM_WEBSITE_PMS"].includes(product.code) ? () => setWebsiteModalOpen(true) : product.code === "ADDON_CUSTOM_DOMAIN" ? () => setDomainModalOpen(true) : product.code === "ADDON_REACH" ? () => setReachModalOpen(true) : undefined}
+                onCheckout={(key, priceIds, quantity) => startAddonCheckout(product, key, priceIds, quantity)}
+                onSpecialAddon={["ADDON_CUSTOM_WEBSITE_API", "ADDON_CUSTOM_WEBSITE_PMS"].includes(product.code) ? () => setWebsiteModalOpen(true) : product.code === "ADDON_CUSTOM_DOMAIN" ? () => setDomainModalOpen(true) : product.code === "ADDON_REACH" ? () => setReachModalOpen(true) : product.code === "ADDON_EXTRA_TERMINAL" ? () => setTerminalModalOpen(true) : undefined}
                 canSubscribe={hasActiveBaseSubscription}
                 scopeReady={!isPropertyScoped(product) || properties.length > 0}
-                isActive={isPropertyScoped(product) ? properties.length > 0 && properties.every(property => (activeAddonPropertyIds[product.code] ?? []).includes(property.id)) : activeAddonCodes.includes(product.code)}
+                isActive={product.code === "ADDON_EXTRA_TERMINAL" ? false : isPropertyScoped(product) ? properties.length > 0 && properties.every(property => (activeAddonPropertyIds[product.code] ?? []).includes(property.id)) : activeAddonCodes.includes(product.code)}
                 discount={discounts.find(discount => discount.productId === product.id)}
                 onDetails={() => setDetails({ kind: "addon", value: product })}
               />
@@ -1017,6 +1029,7 @@ export default function SubscriptionCatalogue({
       {websiteModalOpen && <CustomWebsiteAddonModal properties={properties} websitePrices={{ standalone: addOns.find(product => product.code === "ADDON_CUSTOM_WEBSITE_API")?.prices.find(price => price.interval === "one_time"), pms: addOns.find(product => product.code === "ADDON_CUSTOM_WEBSITE_PMS")?.prices.find(price => price.interval === "one_time") }} domainPrice={addOns.find(product => product.code === "ADDON_CUSTOM_DOMAIN")?.prices.find(price => price.interval === "month") ?? addOns.find(product => product.code === "ADDON_CUSTOM_DOMAIN")?.prices.find(price => price.interval === "year")} onError={message => setError(message || null)} initiallyOpen onClose={() => setWebsiteModalOpen(false)} />}
       {domainModalOpen && <CustomDomainAddonModal properties={properties} domainPrice={addOns.find(product => product.code === "ADDON_CUSTOM_DOMAIN")?.prices.find(price => price.interval === "month") ?? addOns.find(product => product.code === "ADDON_CUSTOM_DOMAIN")?.prices.find(price => price.interval === "year")} onError={message => setError(message || null)} onClose={() => setDomainModalOpen(false)} />}
       {reachModalOpen && <ReachActivationDialog onClose={() => setReachModalOpen(false)} />}
+      {terminalModalOpen && <ExtraTerminalDialog product={addOns.find(product => product.code === "ADDON_EXTRA_TERMINAL")} interval={interval} busy={busy} onClose={() => setTerminalModalOpen(false)} onCheckout={(quantity) => { const product = addOns.find(item => item.code === "ADDON_EXTRA_TERMINAL"); const price = product?.prices.find(item => item.interval === interval) ?? product?.prices[0]; if (product && price) { setTerminalModalOpen(false); void startAddonCheckout(product, `addon-${product.id}`, [price.id], quantity); } }} />}
       <style>{`.sub-property-scope-modal{max-width:520px}.sub-scope-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:14px;border:1px solid var(--border);border-radius:12px;background:rgba(255,255,255,.025);margin-bottom:24px}.sub-scope-summary-label{font:10px var(--font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted)}.sub-scope-summary-value{margin-top:6px;color:var(--text-primary);font-size:13px;font-weight:650}.sub-scope-summary-total{color:var(--accent)}.sub-scope-dialog-heading{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;color:var(--text-secondary);font-size:12px;font-weight:650}.sub-scope-dialog-heading span+span{color:var(--text-muted);font:10px var(--font-mono)}.sub-scope-dialog-list{display:grid;gap:8px;max-height:260px;overflow:auto}.sub-scope-dialog-option{display:flex;align-items:center;gap:10px;padding:13px 14px;border:1px solid var(--border);border-radius:10px;background:rgba(255,255,255,.018);color:var(--text-secondary);font-size:13px;cursor:pointer;transition:border-color .2s,background .2s}.sub-scope-dialog-option:hover,.sub-scope-dialog-option.selected{border-color:rgba(0,212,232,.42);background:rgba(0,212,232,.07)}.sub-scope-dialog-option input{position:absolute;opacity:0;pointer-events:none}.sub-scope-dialog-check{display:flex;align-items:center;justify-content:center;width:18px;height:18px;border:1px solid rgba(255,255,255,.18);border-radius:5px;color:#06121c;background:transparent;font-size:11px;font-weight:800}.sub-scope-dialog-option.selected .sub-scope-dialog-check{border-color:var(--accent);background:var(--accent)}.sub-scope-dialog-note{margin-top:16px;color:var(--text-muted);font-size:11px;line-height:1.5}.sub-modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:22px;padding-top:18px;border-top:1px solid var(--border)}@media (max-width:600px){.sub-scope-summary{grid-template-columns:1fr}.sub-modal-actions{flex-direction:column-reverse}.sub-modal-actions .btn{width:100%}}`}</style>
     </div>
   );

@@ -11,6 +11,7 @@ export async function POST(request: NextRequest) {
   if (!organizationId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (!process.env.FLW_SECRET_KEY) return NextResponse.json({ error: "Flutterwave billing is not configured" }, { status: 503 });
   const body = await request.json(); const requestedPriceIds = billingPriceIds(body.priceId, body.priceIds);
+  const requestedQuantities = Array.isArray(body.quantities) ? body.quantities.map((value: unknown) => Math.max(1, Math.min(25, Math.floor(Number(value) || 1)))) : [];
   const organization = await prisma.organization.findUnique({ where: { id: organizationId }, select: { id: true, name: true } });
   if (!organization) return NextResponse.json({ error: "Organization not found" }, { status: 404 });
   const customDomainRequestId = typeof body.customDomainRequestId === "string" ? body.customDomainRequestId : null;
@@ -36,6 +37,10 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Invalid billing selection" }, { status: 400 });
   }
+  const quantities = prices.map((price, index) => {
+    const quantity = requestedQuantities[index] ?? 1;
+    return price.product.code === 'ADDON_EXTRA_TERMINAL' ? quantity : 1;
+  });
   if (plan) {
     const current = await prisma.subscription.findFirst({ where: { organizationId, status: { in: ["ACTIVE", "TRIALING", "PAST_DUE"] }, planId: { not: null } }, orderBy: { createdAt: "desc" }, include: { plan: { select: { code: true } }, items: { include: { price: { include: { product: { select: { code: true } } } } } } } });
     if (current?.plan && planRank(current.plan.code) > planRank(plan.code)) {
@@ -74,14 +79,14 @@ export async function POST(request: NextRequest) {
   });
   const checkoutTotal = prices.reduce((total, price, index) => {
     const metadataValue = price.product.metadata && typeof price.product.metadata === 'object' && !Array.isArray(price.product.metadata) ? (price.product.metadata as Record<string, unknown>).unit : undefined;
-    const gross = price.amount * (metadataValue === 'PROPERTY' ? Math.max(propertyIds.length, 1) : 1);
+    const gross = price.amount * quantities[index] * (metadataValue === 'PROPERTY' ? Math.max(propertyIds.length, 1) : 1);
     return total + Math.max(0, gross - Math.round(gross * discountPercentages[index] / 100));
   }, 0);
   const payableTotal = upgrade
     ? Math.max(0, upgrade.chargeAmount - Math.round(upgrade.chargeAmount * planDiscount / 100))
     : checkoutTotal;
-  const discountAmount = billingTotal(prices, propertyIds) - payableTotal;
-  const checkoutMetadata = billingMetadata({ organizationId, planId: plan?.id, propertyIds, productCodes: prices.map((price) => price.product.code), priceIds: prices.map((price) => price.id), customDomainRequestId, customWebsiteRequestId, upgradeCredit: upgrade?.upgradeCredit, upgradePeriodEnd: upgrade?.periodEnd, discountAmount, discountPercentages });
+  const discountAmount = billingTotal(prices, propertyIds, quantities) - payableTotal;
+  const checkoutMetadata = billingMetadata({ organizationId, planId: plan?.id, propertyIds, productCodes: prices.map((price) => price.product.code), priceIds: prices.map((price) => price.id), quantities, customDomainRequestId, customWebsiteRequestId, upgradeCredit: upgrade?.upgradeCredit, upgradePeriodEnd: upgrade?.periodEnd, discountAmount, discountPercentages });
   const checkout = await createFlutterwaveCheckout({ amount: Math.round(payableTotal / 100), currency: prices[0]?.currency || "NGN", txRef: `lodgecore-${organizationId}-${randomUUID()}`, redirectUrl: sameOrigin(body.successUrl, `${site}/portal/subscription?success=true`), customer: { email, name: organization.name }, meta: checkoutMetadata });
   return NextResponse.json({ url: checkout.link });
 }

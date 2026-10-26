@@ -163,13 +163,14 @@ export function billingPriceIds(priceId: unknown, priceIds: unknown): string[] {
   ].filter((value): value is string => typeof value === 'string' && value.length > 0)));
 }
 
-export function billingMetadata(input: { organizationId: string; planId?: string | null; propertyIds: readonly string[]; productCodes: readonly string[]; priceIds?: readonly string[]; customDomainRequestId?: string | null; customWebsiteRequestId?: string | null; upgradeCredit?: number | null; upgradePeriodEnd?: string | null; discountAmount?: number | null; discountPercentages?: readonly number[] }) {
+export function billingMetadata(input: { organizationId: string; planId?: string | null; propertyIds: readonly string[]; productCodes: readonly string[]; priceIds?: readonly string[]; quantities?: readonly number[]; customDomainRequestId?: string | null; customWebsiteRequestId?: string | null; upgradeCredit?: number | null; upgradePeriodEnd?: string | null; discountAmount?: number | null; discountPercentages?: readonly number[] }) {
   return {
     organizationId: input.organizationId,
     planId: input.planId ?? '',
     propertyIds: input.propertyIds.join(','),
     productCodes: input.productCodes.join(','),
     priceIds: (input.priceIds ?? []).join(','),
+    quantities: (input.quantities ?? []).join(','),
     propertyCount: String(input.propertyIds.length),
     billingDescription: input.productCodes.length === 1 && input.productCodes[0] === 'ADDON_BEDS24'
       ? `Beds24 Channel Integration x ${input.propertyIds.length} propert${input.propertyIds.length === 1 ? 'y' : 'ies'}`
@@ -183,13 +184,13 @@ export function billingMetadata(input: { organizationId: string; planId?: string
   };
 }
 
-export function billingTotal(prices: Array<{ amount: number; product: { metadata: unknown } }>, propertyIds: readonly string[]) {
-  return prices.reduce((total, price) => {
+export function billingTotal(prices: Array<{ amount: number; product: { metadata: unknown } }>, propertyIds: readonly string[], quantities: readonly number[] = []) {
+  return prices.reduce((total, price, index) => {
     const metadata = price.product.metadata;
     const unit = metadata && typeof metadata === 'object' && !Array.isArray(metadata)
       ? (metadata as Record<string, unknown>).unit
       : undefined;
-    return total + price.amount * (unit === 'PROPERTY' ? Math.max(propertyIds.length, 1) : 1);
+    return total + price.amount * Math.max(1, quantities[index] ?? 1) * (unit === 'PROPERTY' ? Math.max(propertyIds.length, 1) : 1);
   }, 0);
 }
 
@@ -347,16 +348,23 @@ export async function reconcileOrganizationEntitlements(
       plan: { include: { items: { include: { product: true } } } },
     },
   });
-  const active = new Map<string, { productCode: string; propertyId: string | null; expiresAt: Date; startsAt: Date; quantity: number | null }>();
+  const active = new Map<string, { productCode: string; propertyId: string | null; expiresAt: Date; startsAt: Date; quantity: number | null; additive: boolean }>();
   for (const subscription of subscriptions) {
     const expiresAt = effectiveSubscriptionDeadline(subscription);
-    const quantities = new Map<string, number | null>(subscription.items.map((item) => [item.price.product.code, item.quantity] as const));
-    for (const item of subscription.plan?.items ?? []) quantities.set(item.product.code, item.includedQty ?? null);
+    const quantities = new Map<string, { quantity: number | null; additive: boolean }>(subscription.items.map((item) => {
+      const metadata = item.price.product.metadata;
+      const additive = Boolean(metadata && typeof metadata === 'object' && !Array.isArray(metadata) && (metadata as Record<string, unknown>).capacityKey);
+      return [item.price.product.code, { quantity: item.quantity, additive }] as const;
+    }));
+    for (const item of subscription.plan?.items ?? []) quantities.set(item.product.code, { quantity: item.includedQty ?? null, additive: false });
     for (const propertyId of (subscription.scopePropertyIds.length ? subscription.scopePropertyIds : [null])) {
-      for (const [productCode, quantity] of quantities) {
+      for (const [productCode, entry] of quantities) {
         const scopeKey = `${organizationId}:${propertyId ?? '*'}:${productCode}`;
         const current = active.get(scopeKey);
-        if (!current || current.expiresAt < expiresAt) active.set(scopeKey, { productCode, propertyId, expiresAt, startsAt: subscription.currentPeriodStart, quantity });
+        if (current?.additive && entry.additive && current.expiresAt >= subscription.currentPeriodStart) {
+          current.quantity = current.quantity === null || entry.quantity === null ? null : current.quantity + entry.quantity;
+          if (expiresAt > current.expiresAt) current.expiresAt = expiresAt;
+        } else if (!current || current.expiresAt < expiresAt) active.set(scopeKey, { productCode, propertyId, expiresAt, startsAt: subscription.currentPeriodStart, quantity: entry.quantity, additive: entry.additive });
       }
     }
   }

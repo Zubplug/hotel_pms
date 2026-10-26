@@ -95,6 +95,7 @@ export async function POST(req: Request) {
     const txRef = verified.tx_ref || String(data.tx_ref || transactionId);
     const productCodes = metadataValue(meta, 'productCodes').split(',').filter(Boolean);
     const priceIds = metadataValue(meta, 'priceIds').split(',').filter(Boolean);
+    const quantities = metadataValue(meta, 'quantities').split(',').map((value) => Math.max(1, Math.min(25, Math.floor(Number(value) || 1))));
     const propertyIds = subscriptionScope(metadataValue(meta, 'propertyIds').split(','));
     const planId = metadataValue(meta, 'planId') || null;
     const customDomainRequestId = metadataValue(meta, 'customDomainRequestId') || null;
@@ -119,7 +120,11 @@ export async function POST(req: Request) {
         const effectivePeriodEnd = !successful && !existingProviderSubscription ? now : currentPeriodEnd;
         const subscription = await tx.subscription.upsert({ where: { flutterwaveSubscriptionId: txRef }, create: { organizationId, planId, scopePropertyIds: propertyIds, flutterwaveSubscriptionId: txRef, status: successful ? 'ACTIVE' : 'PAST_DUE', currentPeriodStart: now, currentPeriodEnd: effectivePeriodEnd, pastDueSince: successful ? null : now, cancelAtPeriodEnd: false }, update: { planId, scopePropertyIds: propertyIds, status: successful ? 'ACTIVE' : 'PAST_DUE', currentPeriodStart: now, currentPeriodEnd: effectivePeriodEnd, pastDueSince: successful ? null : now } });
         subscriptionRef = subscription.flutterwaveSubscriptionId;
-        for (const price of prices) await tx.subscriptionItem.upsert({ where: { subscriptionId_priceId: { subscriptionId: subscription.id, priceId: price.id } }, create: { subscriptionId: subscription.id, priceId: price.id, quantity: 1 }, update: { quantity: 1 } });
+        for (const price of prices) {
+          const requestedQuantity = quantities[priceIds.indexOf(price.id)] ?? 1;
+          const quantity = price.product.code === 'ADDON_EXTRA_TERMINAL' ? requestedQuantity : 1;
+          await tx.subscriptionItem.upsert({ where: { subscriptionId_priceId: { subscriptionId: subscription.id, priceId: price.id } }, create: { subscriptionId: subscription.id, priceId: price.id, quantity }, update: { quantity } });
+        }
         if (successful && planId) await tx.subscription.updateMany({ where: { organizationId, planId: { not: null }, status: { in: ['ACTIVE', 'TRIALING', 'PAST_DUE'] }, id: { not: subscription.id } }, data: { status: 'CANCELED', canceledAt: now, cancelAtPeriodEnd: false } });
         await reconcileOrganizationEntitlements(tx, organizationId, now);
         if (successful) {

@@ -92,6 +92,7 @@ model Organization {
   reachPropertyDebts         ReachPropertyDebt[]
   customDomainRequests       CustomDomainRequest[]
   customWebsiteRequests      CustomWebsiteRequest[]
+  organizationApprovalRequests OrganizationApprovalRequest[] @relation("OrganizationApprovalRequests")
 
   // Enterprise HR Suite
   statutoryConfigurations      StatutoryConfiguration[]
@@ -331,6 +332,28 @@ model Property {
   disciplinaryRecords          DisciplinaryRecord[]
   serviceDeskTickets           HrServiceDeskTicket[]
   compensationChangeRequests   CompensationChangeRequest[]
+}
+
+model OrganizationApprovalRequest {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  organization   Organization @relation("OrganizationApprovalRequests", fields: [organizationId], references: [id], onDelete: Cascade)
+  requestedById  String   @db.Uuid
+  requestedBy    User     @relation("OrganizationApprovalRequestedBy", fields: [requestedById], references: [id])
+  reviewedById   String?  @db.Uuid
+  reviewedBy     User?    @relation("OrganizationApprovalReviewedBy", fields: [reviewedById], references: [id])
+  type           String
+  status         String   @default("PENDING")
+  reason         String?
+  payload        Json
+  reviewNotes    String?
+  requestedAt    DateTime @default(now()) @db.Timestamptz
+  reviewedAt     DateTime? @db.Timestamptz
+  createdAt      DateTime @default(now()) @db.Timestamptz
+  updatedAt      DateTime @updatedAt @db.Timestamptz
+
+  @@index([organizationId, status])
+  @@index([requestedById, status])
 }
 
 /// Human portal identity for an approved PMS CorporateAccount. This is
@@ -2472,6 +2495,8 @@ model User {
 
   membership                            OrganizationMembership?
   portalOwnerOrganizations             Organization[]              @relation("OrganizationPortalOwner")
+  requestedOrganizationApprovals       OrganizationApprovalRequest[] @relation("OrganizationApprovalRequestedBy")
+  reviewedOrganizationApprovals        OrganizationApprovalRequest[] @relation("OrganizationApprovalReviewedBy")
   roles                                 UserRole[]
   requestedRefunds                      RefundRequest[]              @relation("RefundRequestedBy")
   assignedRefunds                       RefundRequest[]              @relation("RefundCurrentApprover")

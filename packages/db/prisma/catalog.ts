@@ -39,7 +39,7 @@ export const catalogProducts: CatalogProduct[] = [
   { code: 'ADDON_SMS', name: 'SMS Notifications', type: 'ADDON', active: false, metadata: { family: 'CONNECTIVITY', unit: 'USAGE', sellable: false, offlineCapable: false, version: CATALOG_VERSION } },
   { code: 'ADDON_API', name: 'API and Integrations', type: 'ADDON', active: false, metadata: { family: 'CONNECTIVITY', unit: 'FLAT', sellable: false, offlineCapable: false, version: CATALOG_VERSION } },
   { code: 'ADDON_EXTRA_PROPERTY', name: 'Additional Property', type: 'ADDON', active: false, metadata: { family: 'SCALE', unit: 'PROPERTY', capacityKey: 'maxProperties', capacityAmount: 1, sellable: false, offlineCapable: true, version: CATALOG_VERSION } },
-  { code: 'ADDON_EXTRA_TERMINAL', name: 'Additional POS Terminal', type: 'ADDON', active: false, metadata: { family: 'SCALE', unit: 'TERMINAL', capacityKey: 'maxTerminals', capacityAmount: 1, sellable: false, offlineCapable: true, version: CATALOG_VERSION } },
+  { code: 'ADDON_EXTRA_TERMINAL', name: 'Additional POS Terminal', type: 'ADDON', active: true, metadata: { family: 'SCALE', unit: 'TERMINAL', capacityKey: 'maxTerminals', capacityAmount: 1, sellable: true, offlineCapable: true, requiresProducts: ['MODULE_OPERATIONS'], version: CATALOG_VERSION } },
   { code: 'ADDON_EXTRA_USER_PACK', name: 'Additional User Pack', type: 'ADDON', active: false, metadata: { family: 'SCALE', unit: 'USER_PACK', capacityKey: 'maxUsers', capacityAmount: 5, sellable: false, offlineCapable: true, version: CATALOG_VERSION } },
   { code: 'ADDON_PREMIUM_SUPPORT', name: 'Premium Support', type: 'ADDON', active: false, metadata: { family: 'SERVICES', unit: 'FLAT', sellable: false, offlineCapable: false, version: CATALOG_VERSION } },
   { code: 'ADDON_DEDICATED_SLA', name: 'Dedicated Support and SLA', type: 'ADDON', active: false, metadata: { family: 'SERVICES', unit: 'FLAT', sellable: false, offlineCapable: false, version: CATALOG_VERSION } },
@@ -62,6 +62,7 @@ export const oneTimePrices = [
 export const addOnPrices = [
   { code: 'ADDON_BEDS24', month: 2500000, year: 25000000, currency: 'ngn' }, // ₦25,000/month or ₦250,000/year per property
   { code: 'ADDON_CORPORATE_API', month: 15000000, year: 150000000, currency: 'ngn' }, // ₦150,000/month or ₦1,500,000/year per property
+  { code: 'ADDON_EXTRA_TERMINAL', month: 1000000, year: 10000000, currency: 'ngn' }, // ₦10,000/month or ₦100,000/year per terminal
 ] as const;
 
 export const catalogPlans: CatalogPlan[] = [

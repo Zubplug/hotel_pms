@@ -9,7 +9,10 @@ export async function requirePortalAdmin() {
 
   const membership = await prisma.organizationMembership.findUnique({ where: { userId } });
   if (!membership || membership.organizationId !== organizationId || membership.status !== 'ACTIVE') throw new Error('UNAUTHORIZED');
-  if (!['OWNER', 'ADMIN', 'SUPER_ADMIN'].includes(membership.role)) throw new Error('FORBIDDEN');
+  if (!['OWNER', 'ADMIN', 'SUPER_ADMIN'].includes(membership.role)) {
+    const organization = await prisma.organization.findUnique({ where: { id: organizationId }, select: { portalOwnerUserId: true } });
+    if (organization?.portalOwnerUserId !== userId) throw new Error('FORBIDDEN');
+  }
   return { userId, organizationId, membership };
 }
 

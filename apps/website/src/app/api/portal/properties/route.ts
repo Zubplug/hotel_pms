@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import prisma from '@hotel-pms/db';
 import { portalPropertyLimit, requirePortalAdmin } from '@/lib/portal-authorization';
@@ -15,8 +14,11 @@ const propertySchema = z.object({
 export async function GET() {
   try {
     const { organizationId } = await requirePortalAdmin();
-    const properties = await prisma.property.findMany({ where: { organizationId }, orderBy: { createdAt: 'asc' }, select: { id: true, name: true, code: true, address: true, city: true, state: true, country: true, phone: true, email: true, website: true, isActive: true, createdAt: true } });
-    return NextResponse.json({ properties, limit: await portalPropertyLimit(organizationId) });
+    const [properties, requests] = await Promise.all([
+      prisma.property.findMany({ where: { organizationId }, orderBy: { createdAt: 'asc' }, select: { id: true, name: true, code: true, address: true, city: true, state: true, country: true, phone: true, email: true, website: true, isActive: true, createdAt: true } }),
+      prisma.organizationApprovalRequest.findMany({ where: { organizationId, type: 'PROPERTY_CREATE' }, orderBy: { requestedAt: 'desc' }, select: { id: true, status: true, payload: true, reviewNotes: true, requestedAt: true } }),
+    ]);
+    return NextResponse.json({ properties, requests, limit: await portalPropertyLimit(organizationId) });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error && error.message === 'FORBIDDEN' ? 'Only organization administrators can manage properties.' : 'Unauthorized' }, { status: error instanceof Error && error.message === 'FORBIDDEN' ? 403 : 401 });
   }
@@ -24,14 +26,13 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const { organizationId } = await requirePortalAdmin();
+    const { organizationId, userId } = await requirePortalAdmin();
     const parsed = propertySchema.safeParse(await request.json());
     if (!parsed.success) return NextResponse.json({ error: 'Complete all property details.' }, { status: 400 });
-    const limit = await portalPropertyLimit(organizationId);
-    const activeCount = await prisma.property.count({ where: { organizationId, isActive: true } });
-    if (limit !== null && activeCount + 1 > limit) return NextResponse.json({ error: `Your subscription allows ${limit} active propert${limit === 1 ? 'y' : 'ies'}. Upgrade your plan to add another.` }, { status: 402 });
-    const property = await prisma.property.create({ data: { ...parsed.data, email: parsed.data.email || '', website: parsed.data.website || null, organizationId, code: `PROP-${randomUUID().slice(0, 8).toUpperCase()}`, baseCurrency: 'NGN', supportedCurrencies: ['NGN'], businessDate: new Date(), auditStatus: 'OPEN', settings: { onboarding: { needsCompletion: false, source: 'PORTAL_PROPERTY_MANAGEMENT' } } } });
-    return NextResponse.json({ property }, { status: 201 });
+    const pending = await prisma.organizationApprovalRequest.findFirst({ where: { organizationId, requestedById: userId, type: 'PROPERTY_CREATE', status: 'PENDING' }, select: { id: true } });
+    if (pending) return NextResponse.json({ error: 'A property request is already awaiting HQ approval.' }, { status: 409 });
+    const approvalRequest = await prisma.organizationApprovalRequest.create({ data: { organizationId, requestedById: userId, type: 'PROPERTY_CREATE', reason: 'Customer requested a new property from the portal.', payload: { ...parsed.data, email: parsed.data.email || '', website: parsed.data.website || null } }, select: { id: true, status: true, payload: true, requestedAt: true } });
+    return NextResponse.json({ request: approvalRequest, message: 'Property request submitted for HQ approval.' }, { status: 202 });
   } catch (error) {
     console.error('[portal.properties.create]', error);
     return NextResponse.json({ error: error instanceof Error && error.message === 'FORBIDDEN' ? 'Only organization administrators can manage properties.' : 'Unable to create property.' }, { status: error instanceof Error && error.message === 'FORBIDDEN' ? 403 : 401 });

@@ -1,6 +1,6 @@
 'use server';
 
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import prisma from '@hotel-pms/db';
 import { revalidatePath } from 'next/cache';
@@ -119,6 +119,34 @@ export async function updateOrganizationProperty(formData: FormData) {
   if (!property) throw new Error('Property not found for this organisation.');
   await prisma.property.update({ where: { id: propertyId }, data: { name, city, country, isActive, suspendedAt: isActive ? null : new Date() } });
   await prisma.auditLog.create({ data: { organizationId, userId: admin.id, userEmail: admin.email || undefined, action: 'PROPERTY_UPDATED', resource: 'Property', resourceId: propertyId, requestId: `hq-property-${Date.now()}`, newValue: { name, city, country, isActive } } });
+  revalidatePath('/hq/organizations');
+  revalidatePath(`/hq/organizations/${organizationId}`);
+}
+
+export async function addOrganizationProperty(formData: FormData) {
+  const admin = await requireHQAdmin();
+  const organizationId = String(formData.get('organizationId') || '');
+  const name = String(formData.get('name') || '').trim();
+  const address = String(formData.get('address') || '').trim();
+  const city = String(formData.get('city') || '').trim();
+  const state = String(formData.get('state') || '').trim();
+  const country = String(formData.get('country') || '').trim();
+  const phone = String(formData.get('phone') || '').trim();
+  const email = String(formData.get('email') || '').trim().toLowerCase();
+  const website = String(formData.get('website') || '').trim() || null;
+  const baseCurrency = String(formData.get('baseCurrency') || 'NGN').trim().toUpperCase();
+  const timezone = String(formData.get('timezone') || 'Africa/Lagos').trim();
+  if (!organizationId || !name || !address || !city || !state || !country || !phone || !/^\S+@\S+\.\S+$/.test(email)) throw new Error('Complete all required property details.');
+
+  await prisma.$transaction(async (tx) => {
+    const organization = await tx.organization.findUnique({ where: { id: organizationId }, select: { id: true, defaultCurrency: true, defaultTimezone: true } });
+    if (!organization) throw new Error('Organisation not found.');
+    const existingProperty = await tx.property.findFirst({ where: { organizationId }, select: { id: true } });
+    if (existingProperty) throw new Error('This organisation already has a property.');
+    const currency = baseCurrency || organization.defaultCurrency;
+    const property = await tx.property.create({ data: { organizationId, name, code: `PROP-${randomUUID().slice(0, 8).toUpperCase()}`, address, city, state, country, phone, email, website, baseCurrency: currency, supportedCurrencies: [currency], timezone: timezone || organization.defaultTimezone, businessDate: new Date(), auditStatus: 'OPEN', settings: { onboarding: { needsCompletion: false, source: 'HQ_MANUAL_CREATION' } } } });
+    await tx.auditLog.create({ data: { organizationId, userId: admin.id, userEmail: admin.email || undefined, action: 'PROPERTY_CREATED', resource: 'Property', resourceId: property.id, requestId: `hq-property-create-${Date.now()}`, newValue: { name, city, state, country, baseCurrency: currency } } });
+  });
   revalidatePath('/hq/organizations');
   revalidatePath(`/hq/organizations/${organizationId}`);
 }
