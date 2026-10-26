@@ -5,7 +5,10 @@ import { Clock3, MailPlus, Pencil, Percent, X } from 'lucide-react';
 import { activateOrganizationTrial, inviteOrganizationPortalUser, saveOrganizationDiscount, updateOrganization, updateOrganizationPortalUser, updateOrganizationProperty } from '../actions';
 
 type Property = { id: string; name: string; city: string; country: string; isActive: boolean };
-type Target = { id: string; name: string; code: string };
+type Price = { amount: number; currency: string; interval: string };
+type Target = { id: string; name: string; code: string; prices: Price[] };
+
+const money = (amount: number, currency: string) => new Intl.NumberFormat('en-NG', { style: 'currency', currency: currency.toUpperCase(), maximumFractionDigits: 0 }).format(amount / 100);
 
 export default function OrganizationDetailActions({
   organization,
@@ -25,7 +28,11 @@ export default function OrganizationDetailActions({
   const [modal, setModal] = useState<'discount' | 'organization' | 'property' | 'invite' | 'portal-user' | 'trial' | null>(null);
   const [selectedPropertyId, setSelectedPropertyId] = useState(properties[0]?.id ?? '');
   const [targetType, setTargetType] = useState<'PLAN' | 'ADDON'>('PLAN');
+  const [selectedTargetId, setSelectedTargetId] = useState(plans[0]?.id ?? '');
+  const [discountPercentage, setDiscountPercentage] = useState('');
   const targets = targetType === 'PLAN' ? plans : addOns;
+  const selectedTarget = targets.find((target) => target.id === selectedTargetId) ?? targets[0];
+  const percentage = Number(discountPercentage);
 
   return (
     <>
@@ -47,8 +54,9 @@ export default function OrganizationDetailActions({
           {modal === 'discount' && <form action={saveOrganizationDiscount} className="mt-6 space-y-4" onSubmit={() => setTimeout(() => setModal(null), 300)}>
             <input type="hidden" name="organizationId" value={organization.id} />
             <div className="rounded-2xl border border-cyan-300/15 bg-cyan-300/[.06] p-4 text-xs leading-5 text-cyan-100">This discount is scoped to <strong>{organization.name}</strong> and will be applied by the secure checkout service.</div>
-            <div className="grid gap-4 sm:grid-cols-2"><label className="text-xs font-medium text-slate-400">Applies to<select name="targetType" value={targetType} onChange={(event) => setTargetType(event.target.value as 'PLAN' | 'ADDON')} className="mt-2 h-11 w-full rounded-xl border border-white/10 bg-[#0b1628] px-3 text-sm text-white outline-none"><option value="PLAN">Subscription plan</option><option value="ADDON">Add-on</option></select></label><label className="text-xs font-medium text-slate-400">Discount percentage<input name="percentage" required type="number" min="0.01" max="99.99" step="0.01" placeholder="10" className="mt-2 h-11 w-full rounded-xl border border-white/10 bg-[#0b1628] px-3 text-sm text-white outline-none" /></label></div>
-            <label className="block text-xs font-medium text-slate-400">Select {targetType === 'PLAN' ? 'plan' : 'add-on'}<select name="targetId" required className="mt-2 h-11 w-full rounded-xl border border-white/10 bg-[#0b1628] px-3 text-sm text-white outline-none">{targets.length ? targets.map((target) => <option key={target.id} value={target.id}>{target.name} · {target.code}</option>) : <option value="">No active {targetType === 'PLAN' ? 'plans' : 'add-ons'} available</option>}</select></label>
+            <div className="grid gap-4 sm:grid-cols-2"><label className="text-xs font-medium text-slate-400">Applies to<select name="targetType" value={targetType} onChange={(event) => { const nextType = event.target.value as 'PLAN' | 'ADDON'; setTargetType(nextType); setSelectedTargetId((nextType === 'PLAN' ? plans : addOns)[0]?.id ?? ''); }} className="mt-2 h-11 w-full rounded-xl border border-white/10 bg-[#0b1628] px-3 text-sm text-white outline-none"><option value="PLAN">Subscription plan</option><option value="ADDON">Add-on</option></select></label><label className="text-xs font-medium text-slate-400">Discount percentage<input name="percentage" required type="number" min="0.01" max="99.99" step="0.01" placeholder="10" value={discountPercentage} onChange={(event) => setDiscountPercentage(event.target.value)} className="mt-2 h-11 w-full rounded-xl border border-white/10 bg-[#0b1628] px-3 text-sm text-white outline-none" /></label></div>
+            <label className="block text-xs font-medium text-slate-400">Select {targetType === 'PLAN' ? 'plan' : 'add-on'}<select name="targetId" required value={selectedTarget?.id ?? ''} onChange={(event) => setSelectedTargetId(event.target.value)} className="mt-2 h-11 w-full rounded-xl border border-white/10 bg-[#0b1628] px-3 text-sm text-white outline-none">{targets.length ? targets.map((target) => <option key={target.id} value={target.id}>{target.name} · {target.code}</option>) : <option value="">No active {targetType === 'PLAN' ? 'plans' : 'add-ons'} available</option>}</select></label>
+            {selectedTarget && <div className="rounded-2xl border border-white/8 bg-white/[.025] p-4"><div className="mb-3 flex items-center justify-between gap-3"><div><p className="text-xs font-semibold text-white">Discount preview</p><p className="mt-1 text-[10px] text-slate-500">Estimated checkout pricing for {selectedTarget.name}</p></div><span className="rounded-full bg-emerald-300/10 px-2.5 py-1 text-[10px] font-semibold text-emerald-300">{Number.isFinite(percentage) && percentage > 0 ? `${percentage}% off` : 'Enter a percentage'}</span></div>{selectedTarget.prices.length ? <div className="space-y-2">{selectedTarget.prices.map((price) => { const discountAmount = Number.isFinite(percentage) && percentage > 0 ? Math.round(price.amount * percentage / 100) : 0; return <div key={`${price.currency}-${price.interval}`} className="grid grid-cols-[1fr_auto] items-center gap-3 rounded-xl border border-white/8 bg-[#0b1628] px-3 py-2.5"><div><p className="text-[10px] uppercase tracking-wider text-slate-500">{price.interval === 'one_time' ? 'One-time' : price.interval} price</p><p className="mt-1 text-xs text-slate-400">Original <span className="font-semibold text-slate-200">{money(price.amount, price.currency)}</span></p></div><div className="text-right"><p className="text-sm font-bold text-emerald-300">{money(price.amount - discountAmount, price.currency)}</p><p className="mt-1 text-[10px] text-slate-500">Save {money(discountAmount, price.currency)}</p></div></div>; })}</div> : <p className="text-xs text-amber-200">No current catalogue price is configured for this target.</p>}</div>}
             <div className="flex justify-end gap-2 border-t border-white/8 pt-5"><button type="button" onClick={() => setModal(null)} className="rounded-xl border border-white/10 px-4 py-2.5 text-xs font-semibold text-slate-300 hover:bg-white/5">Cancel</button><button type="submit" disabled={!targets.length} className="rounded-xl bg-cyan-300 px-4 py-2.5 text-xs font-bold text-[#06202a] hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-50">Save discount</button></div>
           </form>}
 
