@@ -1465,3 +1465,158 @@ body:has(.pool-dark-surface) [data-slot='select-item'][data-highlighted] { backg
 .ea-root .recharts-cartesian-axis-tick-value { fill: #475569; font-size: 11px; }
 .ea-root .recharts-cartesian-grid line { stroke: rgba(255,255,255,.06); }
 
+/* ── Financial Integrity Table ──────────────────────────────────────── */
+.ea-integrity-table {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid rgba(255,255,255,.06);
+  border-radius: 0.875rem;
+  overflow: hidden;
+}
+.ea-integrity-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto auto;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid rgba(255,255,255,.05);
+  transition: background 0.18s;
+  cursor: pointer;
+}
+.ea-integrity-row:last-child { border-bottom: none; }
+.ea-integrity-row:hover { background: rgba(255,255,255,.04); }
+.ea-integrity-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  transition: box-shadow 0.2s;
+}
+.ea-integrity-name {
+  font-size: 0.8125rem;
+  color: #cbd5e1;
+  font-weight: 500;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ea-integrity-risk {
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 0.18rem 0.5rem;
+  border-radius: 999px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.ea-integrity-count {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  min-width: 2.5rem;
+  text-align: right;
+  flex-shrink: 0;
+}
+.ea-integrity-arrow {
+  width: 0.875rem;
+  height: 0.875rem;
+  color: #334155;
+  flex-shrink: 0;
+  transition: color 0.18s;
+}
+.ea-integrity-row:hover .ea-integrity-arrow { color: #94a3b8; }
+
+/* ── Engagement Workspace Cards ─────────────────────────────────────── */
+.ea-engage-card {
+  background: rgba(255,255,255,.03);
+  border: 1px solid rgba(255,255,255,.07);
+  border-radius: 1.1rem;
+  padding: 1rem 1.125rem;
+}
+.ea-engage-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+.ea-engage-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #475569;
+}
+.ea-engage-stats { display: flex; flex-direction: column; gap: 0.25rem; }
+.ea-engage-stat {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.5rem 0.625rem;
+  border-radius: 0.625rem;
+  transition: background 0.18s;
+}
+.ea-engage-stat:hover { background: rgba(255,255,255,.05); }
+.ea-engage-stat-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 0.45rem;
+  flex-shrink: 0;
+}
+.ea-engage-stat-label { font-size: 0.7rem; color: #475569; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; }
+.ea-engage-stat-value { font-size: 1rem; font-weight: 700; color: #e2e8f0; font-variant-numeric: tabular-nums; line-height: 1.2; }
+
+/* ── Controls Exposure Rows ─────────────────────────────────────────── */
+.ea-ctrl-row {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.5rem 0.625rem;
+  border-radius: 0.625rem;
+  transition: background 0.18s;
+  cursor: pointer;
+}
+.ea-ctrl-row:hover { background: rgba(255,255,255,.05); }
+.ea-ctrl-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.ea-ctrl-label { font-size: 0.8125rem; color: #94a3b8; flex: 1; min-width: 0; }
+.ea-ctrl-amount {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: #e2e8f0;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ── Quick Navigate Grid ────────────────────────────────────────────── */
+.ea-quicknav-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+.ea-quicknav-tile {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(255,255,255,.04);
+  border: 1px solid rgba(255,255,255,.07);
+  border-radius: 0.625rem;
+  padding: 0.625rem 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #94a3b8;
+  transition: background 0.18s, border-color 0.18s, color 0.18s;
+}
+.ea-quicknav-tile:hover {
+  background: rgba(255,255,255,.08);
+  border-color: rgba(255,255,255,.14);
+  color: #f1f5f9;
+}

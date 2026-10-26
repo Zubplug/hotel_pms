@@ -16,7 +16,6 @@ import {
   ShieldCheck,
   TrendingUp,
   BadgePercent,
-  Gift,
   CalendarRange,
   SlidersHorizontal,
   Activity,
@@ -25,12 +24,18 @@ import {
   TrendingDown,
   ChevronRight,
   Layers,
-  GitMerge,
   PieChart as PieChartIcon,
+  BookOpen,
+  Flag,
+  UploadCloud,
+  ClipboardList,
+  GitCompareArrows,
 } from 'lucide-react';
 import {
   Area,
   AreaChart,
+  Bar,
+  BarChart,
   CartesianGrid,
   Cell,
   Pie,
@@ -626,104 +631,186 @@ export default function ExternalAuditorDashboard() {
         </div>
       </div>
 
-      {/* ── EXCEPTIONS & CONTROLS ROW ────────────────────────────────── */}
+      {/* ── FINANCIAL INTEGRITY + ENGAGEMENT WORKSPACE ───────────────── */}
       <div className="ea-lower-row">
-        {/* Exceptions Queue */}
-        <div className="ea-panel ea-panel--wide">
+
+        {/* ── LEFT: Financial Integrity Overview ── */}
+        <div className="ea-panel">
           <div className="ea-panel-header">
             <div>
-              <p className="ea-chart-eyebrow">Control Review Queue</p>
-              <h2 className="ea-chart-title">Exceptions Requiring Attention</h2>
-              <p className="ea-panel-sub">
-                {exceptionTotal
-                  ? `${exceptionTotal} records flagged across the authorized period.`
-                  : 'No exceptions are currently flagged across this period.'}
-              </p>
+              <p className="ea-chart-eyebrow">Financial Integrity</p>
+              <h2 className="ea-chart-title">Transaction Risk Signals</h2>
+              <p className="ea-panel-sub">Real-time flags derived from posted ledger activity across the authorized period.</p>
             </div>
-            <Link
-              href={`/external-auditor/evidence?propertyId=${scope.propertyId}`}
-              className="ea-link-arrow"
-            >
-              Evidence explorer
+            <Link href={`/external-auditor/assurance?propertyId=${scope.propertyId}`} className="ea-link-arrow">
+              Reconciliation center
               <ArrowUpRight className="h-3.5 w-3.5" />
             </Link>
           </div>
-          <div className="ea-exceptions-grid">
-            {data.exceptions.map((item) => (
-              <Link
-                key={item.key}
-                href={
-                  item.key === 'discounts' || item.key === 'complimentary'
-                    ? `/external-auditor/controls?propertyId=${scope.propertyId}&kind=${item.key}`
-                    : `/external-auditor/evidence?propertyId=${scope.propertyId}&q=${encodeURIComponent(item.label)}`
-                }
-                className="ea-exception-card"
-                data-risk={item.risk}
-              >
-                <div className="ea-exception-top">
-                  <span className="ea-exception-name">{item.label}</span>
-                  <span
-                    className="ea-exception-count"
-                    style={{ color: item.count ? RISK_COLORS[item.risk] : '#34d399', background: item.count ? `${RISK_COLORS[item.risk]}18` : '#34d39918' }}
-                  >
-                    {item.count}
+
+          {/* Risk signal rows */}
+          <div className="ea-integrity-table">
+            {data.exceptions.map((item) => {
+              const hasIssue = item.count > 0;
+              const color = hasIssue ? (RISK_COLORS[item.risk] || '#94a3b8') : '#34d399';
+              return (
+                <Link
+                  key={item.key}
+                  href={
+                    item.key === 'discounts' || item.key === 'complimentary'
+                      ? `/external-auditor/controls?propertyId=${scope.propertyId}&kind=${item.key}`
+                      : `/external-auditor/evidence?propertyId=${scope.propertyId}&q=${encodeURIComponent(item.label)}`
+                  }
+                  className="ea-integrity-row"
+                >
+                  <span className="ea-integrity-dot" style={{ background: color, boxShadow: `0 0 6px ${color}60` }} />
+                  <span className="ea-integrity-name">{item.label}</span>
+                  <span className="ea-integrity-risk" style={{ color, background: `${color}12` }}>{item.risk}</span>
+                  <span className="ea-integrity-count" style={{ color: hasIssue ? color : '#475569' }}>
+                    {item.count.toLocaleString()}
                   </span>
-                </div>
-                <div className="ea-exception-bottom">
-                  <span
-                    className="ea-risk-badge"
-                    style={{ color: RISK_COLORS[item.risk] || '#94a3b8', background: `${RISK_COLORS[item.risk] || '#94a3b8'}18` }}
-                  >
-                    {item.risk}
-                  </span>
-                  <ChevronRight className="h-3.5 w-3.5 text-slate-600 group-hover:text-white transition-colors" />
-                </div>
-              </Link>
-            ))}
+                  <ChevronRight className="ea-integrity-arrow" />
+                </Link>
+              );
+            })}
           </div>
+
+          {/* Daily exception bar chart */}
+          {data.trend.length > 0 && (
+            <div>
+              <p className="ea-chart-eyebrow" style={{ marginBottom: '0.75rem' }}>Daily Exception Frequency</p>
+              <div style={{ height: 110 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={data.trend} margin={{ top: 4, right: 4, left: -28, bottom: 0 }} barSize={8}>
+                    <CartesianGrid stroke="#ffffff08" vertical={false} />
+                    <XAxis
+                      dataKey="date"
+                      tickFormatter={(v: string) => new Date(v).toLocaleDateString('en', { month: 'short', day: 'numeric' })}
+                      tick={{ fill: '#475569', fontSize: 10 }}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <YAxis tick={{ fill: '#475569', fontSize: 10 }} axisLine={false} tickLine={false} allowDecimals={false} />
+                    <Tooltip
+                      contentStyle={{ background: '#0b1628', border: '1px solid rgba(255,255,255,.12)', borderRadius: 10, fontSize: 12 }}
+                      formatter={(v: number) => [v, 'Exceptions']}
+                      labelFormatter={(label: string) => new Date(label).toLocaleDateString()}
+                    />
+                    <Bar dataKey="exceptions" radius={[4, 4, 0, 0]}>
+                      {data.trend.map((entry, index) => (
+                        <Cell
+                          key={`cell-${index}`}
+                          fill={entry.exceptions > 0 ? (entry.exceptions > 3 ? '#f43f5e' : '#f59e0b') : '#34d399'}
+                          opacity={0.85}
+                        />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Controls & Quick Stats */}
+        {/* ── RIGHT: Engagement Workspace ── */}
         <div className="ea-panel-stack">
-          {/* Discounts */}
-          <Link
-            href={`/external-auditor/controls?propertyId=${scope.propertyId}&kind=discounts`}
-            className="ea-control-card ea-control-card--amber"
-          >
-            <div className="ea-control-top">
-              <BadgePercent className="h-5 w-5 text-amber-400" />
-              <ChevronRight className="h-4 w-4 text-slate-600 group-hover:text-amber-400 transition-colors" />
-            </div>
-            <p className="ea-control-amount">{money(data.controls.discountAmount, scope.currency)}</p>
-            <p className="ea-control-label">Discounts Granted</p>
-            <p className="ea-control-hint">Review operator, approver & reason trail →</p>
-          </Link>
 
-          {/* Complimentary */}
-          <Link
-            href={`/external-auditor/controls?propertyId=${scope.propertyId}&kind=complimentary`}
-            className="ea-control-card ea-control-card--violet"
-          >
-            <div className="ea-control-top">
-              <Gift className="h-5 w-5 text-violet-400" />
-              <ChevronRight className="h-4 w-4 text-slate-600 group-hover:text-violet-400 transition-colors" />
+          {/* Fieldwork Counters */}
+          <div className="ea-engage-card">
+            <div className="ea-engage-header">
+              <ClipboardList className="h-4 w-4 text-emerald-400" />
+              <span className="ea-engage-title">Engagement Fieldwork</span>
             </div>
-            <p className="ea-control-amount">{money(data.controls.complimentaryAmount, scope.currency)}</p>
-            <p className="ea-control-label">Complimentary Value</p>
-            <p className="ea-control-hint">Review operator, approver & verification trail →</p>
-          </Link>
-
-          {/* Reconciliation Status */}
-          <div className={`ea-control-card ea-control-card--status ${isReconciled ? 'ea-control-card--ok' : 'ea-control-card--warn'}`}>
-            <div className="ea-control-top">
-              <GitMerge className={`h-5 w-5 ${isReconciled ? 'text-emerald-400' : 'text-amber-400'}`} />
+            <div className="ea-engage-stats">
+              <Link href={`/external-auditor/operations?tab=findings&propertyId=${scope.propertyId}`} className="ea-engage-stat">
+                <div className="ea-engage-stat-icon" style={{ background: 'rgba(244,63,94,.1)', color: '#f43f5e' }}>
+                  <Flag className="h-3.5 w-3.5" />
+                </div>
+                <div>
+                  <p className="ea-engage-stat-label">Findings</p>
+                  <p className="ea-engage-stat-value">—</p>
+                </div>
+                <ChevronRight className="h-3.5 w-3.5 text-slate-700 ml-auto" />
+              </Link>
+              <Link href={`/external-auditor/operations?tab=workpapers&propertyId=${scope.propertyId}`} className="ea-engage-stat">
+                <div className="ea-engage-stat-icon" style={{ background: 'rgba(167,139,250,.1)', color: '#a78bfa' }}>
+                  <BookOpen className="h-3.5 w-3.5" />
+                </div>
+                <div>
+                  <p className="ea-engage-stat-label">Workpapers</p>
+                  <p className="ea-engage-stat-value">—</p>
+                </div>
+                <ChevronRight className="h-3.5 w-3.5 text-slate-700 ml-auto" />
+              </Link>
+              <Link href={`/external-auditor/operations?tab=requests&propertyId=${scope.propertyId}`} className="ea-engage-stat">
+                <div className="ea-engage-stat-icon" style={{ background: 'rgba(56,189,248,.1)', color: '#38bdf8' }}>
+                  <UploadCloud className="h-3.5 w-3.5" />
+                </div>
+                <div>
+                  <p className="ea-engage-stat-label">Evidence Requests</p>
+                  <p className="ea-engage-stat-value">—</p>
+                </div>
+                <ChevronRight className="h-3.5 w-3.5 text-slate-700 ml-auto" />
+              </Link>
             </div>
-            <p className="ea-control-amount capitalize">{closeLabel}</p>
-            <p className="ea-control-label">Reconciliation Status</p>
-            {kpis.closeFinalizedAt && (
-              <p className="ea-control-hint">Closed {new Date(kpis.closeFinalizedAt).toLocaleDateString()}</p>
-            )}
           </div>
+
+          {/* Controls Exposure */}
+          <div className="ea-engage-card">
+            <div className="ea-engage-header">
+              <BadgePercent className="h-4 w-4 text-amber-400" />
+              <span className="ea-engage-title">Revenue Controls Exposure</span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.625rem', marginTop: '0.5rem' }}>
+              <Link
+                href={`/external-auditor/controls?propertyId=${scope.propertyId}&kind=discounts`}
+                className="ea-ctrl-row"
+              >
+                <span className="ea-ctrl-dot" style={{ background: '#f59e0b' }} />
+                <span className="ea-ctrl-label">Discounts Granted</span>
+                <span className="ea-ctrl-amount">{money(data.controls.discountAmount, scope.currency)}</span>
+                <ChevronRight className="h-3.5 w-3.5 text-slate-700" />
+              </Link>
+              <Link
+                href={`/external-auditor/controls?propertyId=${scope.propertyId}&kind=complimentary`}
+                className="ea-ctrl-row"
+              >
+                <span className="ea-ctrl-dot" style={{ background: '#a78bfa' }} />
+                <span className="ea-ctrl-label">Complimentary Value</span>
+                <span className="ea-ctrl-amount">{money(data.controls.complimentaryAmount, scope.currency)}</span>
+                <ChevronRight className="h-3.5 w-3.5 text-slate-700" />
+              </Link>
+              <div className="ea-ctrl-row" style={{ cursor: 'default' }}>
+                <span className="ea-ctrl-dot" style={{ background: isReconciled ? '#34d399' : '#f59e0b' }} />
+                <span className="ea-ctrl-label">Reconciliation</span>
+                <span className="ea-ctrl-amount" style={{ color: isReconciled ? '#34d399' : '#f59e0b', textTransform: 'capitalize' }}>
+                  {closeLabel}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Quick Navigate */}
+          <div className="ea-engage-card">
+            <div className="ea-engage-header">
+              <GitCompareArrows className="h-4 w-4 text-sky-400" />
+              <span className="ea-engage-title">Quick Navigate</span>
+            </div>
+            <div className="ea-quicknav-grid">
+              {[
+                { label: 'Evidence', href: `/external-auditor/evidence?propertyId=${scope.propertyId}`, color: '#38bdf8', icon: FileSearch },
+                { label: 'Reports', href: `/external-auditor/reports?propertyId=${scope.propertyId}`, color: '#34d399', icon: FileText },
+                { label: 'Assurance', href: `/external-auditor/assurance?propertyId=${scope.propertyId}`, color: '#a78bfa', icon: GitCompareArrows },
+                { label: 'Operations', href: `/external-auditor/operations?propertyId=${scope.propertyId}`, color: '#fbbf24', icon: ClipboardList },
+              ].map(({ label, href, color, icon: Icon }) => (
+                <Link key={label} href={href} className="ea-quicknav-tile" style={{ '--ea-qn-color': color } as React.CSSProperties}>
+                  <Icon className="h-4 w-4" style={{ color }} />
+                  <span>{label}</span>
+                </Link>
+              ))}
+            </div>
+          </div>
+
         </div>
       </div>
 
