@@ -128,6 +128,17 @@ export default function PosApp() {
   const [showPrinterSettings, setShowPrinterSettings] = useState(false);
   const [showSyncCenter, setShowSyncCenter] = useState(false);
 
+  const lockOperator = useCallback(() => {
+    operatorSwitchOverride.current = true;
+    setActiveOperator(null);
+    setOperatorToken(null);
+    localStorage.removeItem('lodgecore_pos_operator_token');
+    // Clear the trusted offline operator context as well as the React state.
+    // The POS session/till remains open; only the staff identity is locked.
+    void provider.auth.lock?.();
+    setShowSwitchPad(true);
+  }, [provider.auth]);
+
   // ── Modals ────────────────────────────────────────────────────────
   const [modifierTarget, setModifierTarget] = useState<any | null>(null);
   const [showSplitModal, setShowSplitModal] = useState(false);
@@ -794,6 +805,10 @@ export default function PosApp() {
       setTableRefreshTrigger(Date.now());
       const batchCount = res.data?.productionBatches?.length ?? 0;
       toast.success(`Order sent! ${batchCount > 0 ? `${batchCount} production ticket(s) created 🔥` : 'Items queued for service ⚡'}`);
+      // The order and its production tickets are accepted/queued by the
+      // offline engine at this point. Lock immediately so the next staff
+      // member must authenticate before using this terminal.
+      lockOperator();
     } catch (err: any) {
       toast.error(err.message || 'Failed to send order');
     } finally {
@@ -835,6 +850,7 @@ export default function PosApp() {
       // prints the waiter slip on the receipt printer, then marks the KOT
       // as PRINTED so it is never sent twice.
       toast.success(`${itemsToFire.length} item(s) fired! ${batchCount > 0 ? `${batchCount} ticket(s) queued 🔥` : ''}`);
+      lockOperator();
     } catch (err: any) {
       toast.error(err.message || 'Failed to fire items');
     } finally {
@@ -942,6 +958,9 @@ export default function PosApp() {
                 message: `Payment of ${formatCurrency(total)} via ${method} has been processed successfully.`,
               }
         );
+        // Payment and receipt processing are complete (or queued locally for
+        // offline printing). Require the next operator to authenticate.
+        lockOperator();
         setTableRefreshTrigger(Date.now());
       } else {
         throw new Error(res.error);
@@ -971,6 +990,7 @@ export default function PosApp() {
         paymentMethod: 'UNPAID'
       }));
       toast.success('Customer receipt sent to printer');
+      lockOperator();
     } catch (err: any) {
       toast.error(err.message || 'Failed to print customer receipt');
     } finally {
@@ -1136,13 +1156,7 @@ export default function PosApp() {
   return (
     <AutoLockScreen
       isLocked={!activeOperator || showSwitchPad}
-      onLock={() => {
-        operatorSwitchOverride.current = true;
-        setActiveOperator(null);
-        setOperatorToken(null);
-        localStorage.removeItem('lodgecore_pos_operator_token');
-        setShowSwitchPad(true);
-      }}
+      onLock={lockOperator}
     >
       <div className="flex h-screen bg-slate-100 overflow-hidden text-slate-800 font-sans">
         
@@ -1157,13 +1171,7 @@ export default function PosApp() {
           onOpenKitchen={() => setShowKitchenModal(true)}
           onOpenPrinterSettings={() => setShowPrinterSettings(true)}
           onOpenSyncCenter={() => setShowSyncCenter(true)}
-          onLock={() => {
-            operatorSwitchOverride.current = true;
-            setActiveOperator(null); 
-            setOperatorToken(null);
-            localStorage.removeItem('lodgecore_pos_operator_token');
-            setShowSwitchPad(true); 
-          }}
+          onLock={lockOperator}
           onEmergencyOverride={
             (bankingModel === 'CENTRAL_CASHIER' && !posSessionId)
               ? () => setShowEmergencyModal(true)

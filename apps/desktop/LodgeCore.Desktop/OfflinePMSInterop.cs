@@ -443,6 +443,9 @@ public class OfflinePMSInterop
         try
         {
             _authManager.ClearAuthData();
+            // Clear the trusted offline POS operator context too. The till
+            // remains open, but the next staff member must enter their PIN.
+            await _sessionManager.ClearOperatorSessionAsync();
             return JsonSerializer.Serialize(new { success = true }, _jsonOptions);
         }
         catch (Exception ex)
