@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { ArrowLeft, ArrowUpRight, Building2, CreditCard, Globe2, Users, WalletCards } from 'lucide-react';
 import prisma from '@hotel-pms/db';
 import { requireHQAdmin } from '@/lib/auth/hq';
+import { removeOrganizationDiscount } from '../actions';
 import OrganizationDetailActions from './OrganizationDetailActions';
 
 export default async function OrganizationDetailsPage({ params }: { params: Promise<{ organizationId: string }> }) {
