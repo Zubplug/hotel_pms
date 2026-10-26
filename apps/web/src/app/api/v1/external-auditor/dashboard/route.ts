@@ -52,7 +52,7 @@ export async function GET(request: NextRequest) {
       prisma.posSettlement.count({ where: { propertyId, businessDate: date, status: { not: 'SETTLED' } } }),
       prisma.nightAuditFinancialSnapshot.count({ where: { nightAudit: { propertyId, businessDate: date }, cashVariance: { not: 0 } } }),
       prisma.nightAudit.findMany({ where: { propertyId, businessDate: date }, select: { businessDate: true, status: true, totalRevenue: true, occupancy: true, adr: true, revpar: true, errors: true, posUnresolvedVariances: true }, orderBy: { businessDate: 'asc' } }),
-      prisma.journalEntryLine.findMany({ where: { account: { type: 'REVENUE' }, entry: { propertyId, entryDate: date, status: 'POSTED' } }, select: { debit: true, credit: true, account: { select: { code: true, name: true } } } }),
+      prisma.journalEntryLine.findMany({ where: { account: { type: 'REVENUE', category: 'Operating Revenue' }, entry: { propertyId, entryDate: date, status: 'POSTED' } }, select: { debit: true, credit: true, account: { select: { code: true, name: true } } } }),
     ]);
     if (!property) return NextResponse.json({ error: 'Property not found' }, { status: 404 });
 

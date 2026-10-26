@@ -84,7 +84,10 @@ const money = (value: number, currency: string) =>
   new Intl.NumberFormat('en', { style: 'currency', currency, maximumFractionDigits: 0 }).format(value);
 const date = (value: string) => new Date(value).toLocaleDateString('en', { month: 'short', day: 'numeric' });
 
-type PeriodKey = 'engagement' | 'today' | '7d' | 'mtd' | 'ytd' | 'custom';
+type PeriodKey = '7d' | 'mtd' | 'ytd' | 'custom';
+const PERIOD_STORAGE_KEY = 'lodgecore:external-auditor:period';
+const CUSTOM_START_STORAGE_KEY = 'lodgecore:external-auditor:custom-start';
+const CUSTOM_END_STORAGE_KEY = 'lodgecore:external-auditor:custom-end';
 
 const dateKey = (value: Date) => {
   const y = value.getFullYear();
@@ -140,15 +143,20 @@ export default function ExternalAuditorDashboard() {
   const [data, setData] = useState<Dashboard | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [period, setPeriod] = useState<PeriodKey>('engagement');
-  const [customStart, setCustomStart] = useState('');
-  const [customEnd, setCustomEnd] = useState('');
+  const [period, setPeriod] = useState<PeriodKey>(() => {
+    if (typeof window === 'undefined') return '7d';
+    const saved = window.localStorage.getItem(PERIOD_STORAGE_KEY) as PeriodKey | null;
+    return saved && ['7d', 'mtd', 'ytd', 'custom'].includes(saved) ? saved : '7d';
+  });
+  const [customStart, setCustomStart] = useState(() =>
+    typeof window === 'undefined' ? '' : window.localStorage.getItem(CUSTOM_START_STORAGE_KEY) || '',
+  );
+  const [customEnd, setCustomEnd] = useState(() =>
+    typeof window === 'undefined' ? '' : window.localStorage.getItem(CUSTOM_END_STORAGE_KEY) || '',
+  );
 
-  const periodRange = (key: PeriodKey, scope?: Scope) => {
+  const periodRange = (key: PeriodKey) => {
     const today = new Date();
-    if (key === 'engagement' && scope)
-      return { start: scope.auditPeriodStart.slice(0, 10), end: scope.auditPeriodEnd.slice(0, 10) };
-    if (key === 'today') return { start: dateKey(today), end: dateKey(today) };
     if (key === '7d') {
       const start = new Date(today);
       start.setDate(start.getDate() - 6);
@@ -160,9 +168,8 @@ export default function ExternalAuditorDashboard() {
   };
 
   const load = (propertyId: string, selectedPeriod = period, selectedStart = customStart, selectedEnd = customEnd) => {
-    const selectedScope = scopes.find((item) => item.propertyId === propertyId);
     const range =
-      selectedPeriod === 'custom' ? { start: selectedStart, end: selectedEnd } : periodRange(selectedPeriod, selectedScope);
+      selectedPeriod === 'custom' ? { start: selectedStart, end: selectedEnd } : periodRange(selectedPeriod);
     const params = new URLSearchParams({ propertyId });
     if (range.start) params.set('startDate', range.start);
     if (range.end) params.set('endDate', range.end);
@@ -180,13 +187,19 @@ export default function ExternalAuditorDashboard() {
   };
 
   useEffect(() => {
+    window.localStorage.setItem(PERIOD_STORAGE_KEY, period);
+    if (customStart) window.localStorage.setItem(CUSTOM_START_STORAGE_KEY, customStart);
+    if (customEnd) window.localStorage.setItem(CUSTOM_END_STORAGE_KEY, customEnd);
+  }, [period, customStart, customEnd]);
+
+  useEffect(() => {
     void fetch('/api/v1/external-auditor/context')
       .then(async (r) => {
         const value = await r.json();
         if (!r.ok || !value.scopes?.length) throw new Error(value.error || 'No active engagement');
         setScopes(value.scopes);
         const first = value.scopes[0] as Scope;
-        load(first.propertyId, 'engagement');
+        load(first.propertyId, period, customStart, customEnd);
       })
       .catch((e) => setError(e.message));
   }, []);
@@ -228,7 +241,7 @@ export default function ExternalAuditorDashboard() {
   const { kpis, scope } = data;
   const isReconciled = kpis.reconciliationStatus === 'COMPLETED';
   const closeLabel = isReconciled ? 'Reconciled' : kpis.reconciliationStatus.replaceAll('_', ' ');
-  const currentRange = periodRange(period, scope);
+  const currentRange = periodRange(period);
   const displayRange = formatPeriod(
     currentRange.start || scope.auditPeriodStart.slice(0, 10),
     currentRange.end || scope.auditPeriodEnd.slice(0, 10),
@@ -253,8 +266,7 @@ export default function ExternalAuditorDashboard() {
             <select
               value={scope.propertyId}
               onChange={(e) => {
-                setPeriod('engagement');
-                load(e.target.value, 'engagement');
+                load(e.target.value, period, customStart, customEnd);
               }}
               className="ea-select"
             >
@@ -265,14 +277,6 @@ export default function ExternalAuditorDashboard() {
               ))}
             </select>
           )}
-          <Link href={`/external-auditor/evidence?propertyId=${scope.propertyId}`} className="ea-btn-ghost">
-            <FileSearch className="h-4 w-4" />
-            Evidence
-          </Link>
-          <Link href={`/external-auditor/reports?propertyId=${scope.propertyId}`} className="ea-btn-primary">
-            <FileText className="h-4 w-4" />
-            Reports
-          </Link>
         </div>
       </div>
 
@@ -282,9 +286,7 @@ export default function ExternalAuditorDashboard() {
           <CalendarRange className="h-4 w-4 text-emerald-400 shrink-0" />
           <div>
             <span className="ea-period-label">
-              {period === 'engagement'
-                ? 'Full Engagement Period'
-                : period === 'custom'
+              {period === 'custom'
                   ? 'Custom Review Window'
                   : 'Preset Window'}
             </span>
@@ -294,8 +296,6 @@ export default function ExternalAuditorDashboard() {
         <div className="ea-period-tabs">
           {(
             [
-              ['engagement', 'Engagement'],
-              ['today', 'Today'],
               ['7d', '7 Days'],
               ['mtd', 'MTD'],
               ['ytd', 'YTD'],
@@ -693,8 +693,8 @@ export default function ExternalAuditorDashboard() {
                     <YAxis tick={{ fill: '#475569', fontSize: 10 }} axisLine={false} tickLine={false} allowDecimals={false} />
                     <Tooltip
                       contentStyle={{ background: '#0b1628', border: '1px solid rgba(255,255,255,.12)', borderRadius: 10, fontSize: 12 }}
-                      formatter={(v: number) => [v, 'Exceptions']}
-                      labelFormatter={(label: string) => new Date(label).toLocaleDateString()}
+                      formatter={(v) => [Number(v ?? 0), 'Exceptions']}
+                      labelFormatter={(label) => new Date(String(label)).toLocaleDateString()}
                     />
                     <Bar dataKey="exceptions" radius={[4, 4, 0, 0]}>
                       {data.trend.map((entry, index) => (
