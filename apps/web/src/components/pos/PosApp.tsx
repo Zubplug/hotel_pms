@@ -46,6 +46,7 @@ import { OfflineSyncQueue } from '@/lib/pos/OfflineSyncQueue';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { readAcknowledgements, rememberAcknowledgement } from '@/lib/notifications/acknowledgement-store';
+import { invokeDesktop } from '@/lib/desktop/IpcBridge';
 
 type OrderItemModifier = { id: string; name: string; price: number };
 
@@ -118,6 +119,9 @@ export default function PosApp() {
   const [isPrintingCustomerReceipt, setIsPrintingCustomerReceipt] = useState(false);
   const [activeOrderType, setActiveOrderType] = useState<string>('TABLE');
   const [activeDisplayName, setActiveDisplayName] = useState<string>('');
+  const [customerDisplayEnabled, setCustomerDisplayEnabled] = useState(false);
+  const [customerDisplaySupported, setCustomerDisplaySupported] = useState(false);
+  const [customerDisplayPayment, setCustomerDisplayPayment] = useState<{ amount: number; change: number; method: string } | null>(null);
 
   const [showKitchenModal, setShowKitchenModal] = useState(false);
   const [showPrinterSettings, setShowPrinterSettings] = useState(false);
@@ -858,6 +862,12 @@ export default function PosApp() {
     if (!operatorToken) { toast.error('No operator authenticated'); return; }
     if (!currentOrderId) { toast.error('No active order to charge'); return; }
     setIsProcessing(true);
+    if (isDesktopMode) {
+      void invokeDesktop('customerDisplay.update', {
+        state: 'PAYMENT_PROCESSING', items: cart.map((item) => ({ name: item.name, quantity: item.quantity, unitPrice: item.price, total: item.price * item.quantity })),
+        subtotal, tax, total, currency: 'NGN', paymentMessage: 'Please wait while your payment is confirmed.'
+      });
+    }
     try {
       const paymentData: Record<string, any> = {
         method,
@@ -878,6 +888,9 @@ export default function PosApp() {
 
       const res = await provider.pos.payOrder(currentOrderId, paymentData, operatorToken);
       if (!res.error) {
+        const paidAmount = total;
+        setCustomerDisplayPayment({ amount: paidAmount, change: 0, method });
+        window.setTimeout(() => setCustomerDisplayPayment(null), 6000);
         // Auto print receipt if on desktop
         if (HardwareBridge.isAvailable()) {
           try {
@@ -977,6 +990,43 @@ export default function PosApp() {
     0
   );
   const total = subtotal;
+
+  useEffect(() => {
+    if (!isDesktopMode) return;
+    void invokeDesktop('customerDisplay.status').then((status: any) => {
+      setCustomerDisplayEnabled(Boolean(status?.enabled));
+      setCustomerDisplaySupported(Boolean(status?.supported));
+    }).catch(() => undefined);
+  }, [isDesktopMode]);
+
+  useEffect(() => {
+    if (!isDesktopMode || !customerDisplayEnabled) return;
+    const state = customerDisplayPayment ? 'PAYMENT_CONFIRMED' : cart.length > 0 ? 'ORDER' : 'IDLE';
+    void invokeDesktop('customerDisplay.update', {
+      state,
+      currency: 'NGN',
+      items: cart.map((item) => ({ name: item.name, quantity: item.quantity, unitPrice: item.price, total: item.price * item.quantity })),
+      subtotal,
+      tax,
+      total: customerDisplayPayment?.amount ?? total,
+      amountPaid: customerDisplayPayment?.amount ?? 0,
+      changeDue: customerDisplayPayment?.change ?? 0,
+      paymentMethod: customerDisplayPayment?.method,
+      paymentMessage: customerDisplayPayment ? 'Thank you for your payment.' : undefined,
+    }).catch(() => undefined);
+  }, [cart, customerDisplayEnabled, customerDisplayPayment, isDesktopMode, subtotal, tax, total]);
+
+  const toggleCustomerDisplay = async () => {
+    if (!customerDisplaySupported) return;
+    const next = !customerDisplayEnabled;
+    try {
+      await invokeDesktop('customerDisplay.setEnabled', { enabled: next });
+      setCustomerDisplayEnabled(next);
+      toast.success(next ? 'Customer display enabled' : 'Customer display disabled');
+    } catch (error: any) {
+      toast.error(error?.message || 'Could not update customer display');
+    }
+  };
 
 
   const filteredProducts = products.filter(
@@ -1194,6 +1244,18 @@ export default function PosApp() {
                     }`} />
                     {isOnline ? 'Online' : 'Offline'}
                   </div>
+
+                  {isDesktopMode && customerDisplaySupported && (
+                    <button
+                      type="button"
+                      onClick={() => void toggleCustomerDisplay()}
+                      className={`hidden md:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] font-bold uppercase tracking-wide ${customerDisplayEnabled ? 'bg-cyan-50 border-cyan-200 text-cyan-700' : 'bg-white border-slate-200 text-slate-500'}`}
+                      title="Toggle customer-facing second screen"
+                    >
+                      <span className={`w-1.5 h-1.5 rounded-full ${customerDisplayEnabled ? 'bg-cyan-500' : 'bg-slate-300'}`} />
+                      Display {customerDisplayEnabled ? 'On' : 'Off'}
+                    </button>
+                  )}
 
                   {/* Cart toggle */}
                   <button

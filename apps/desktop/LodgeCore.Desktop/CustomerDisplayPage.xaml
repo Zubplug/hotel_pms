@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="LodgeCore.Desktop.CustomerDisplayPage"
+             BackgroundColor="#0b1220">
+    <Grid Padding="48" RowDefinitions="Auto,*,Auto" RowSpacing="28">
+        <Label x:Name="BrandLabel" Text="LodgeCore" TextColor="#94a3b8" FontSize="22" FontAttributes="Bold" />
+        <VerticalStackLayout Grid.Row="1" Spacing="22" VerticalOptions="Center">
+            <Label x:Name="StateLabel" Text="Welcome" TextColor="White" FontSize="42" FontAttributes="Bold" HorizontalOptions="Center" />
+            <CollectionView x:Name="ItemsView" ItemsSource="{Binding Items}" SelectionMode="None">
+                <CollectionView.ItemTemplate>
+                    <DataTemplate>
+                        <Grid ColumnDefinitions="*,Auto,Auto" Padding="0,10" ColumnSpacing="24">
+                            <Label Text="{Binding Name}" TextColor="#e2e8f0" FontSize="24" />
+                            <Label Grid.Column="1" Text="{Binding Quantity, StringFormat='x {0:0.##}'}" TextColor="#94a3b8" FontSize="22" />
+                            <Label Grid.Column="2" Text="{Binding Total, StringFormat='₦ {0:N2}'}" TextColor="White" FontSize="24" />
+                        </Grid>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+            </CollectionView>
+            <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto" RowSpacing="8">
+                <Label Text="Subtotal" TextColor="#94a3b8" FontSize="20" />
+                <Label x:Name="SubtotalLabel" Grid.Column="1" TextColor="#e2e8f0" FontSize="20" />
+                <Label Grid.Row="1" Text="Tax &amp; charges" TextColor="#94a3b8" FontSize="20" />
+                <Label x:Name="TaxLabel" Grid.Row="1" Grid.Column="1" TextColor="#e2e8f0" FontSize="20" />
+                <Label Grid.Row="2" Text="Total" TextColor="White" FontSize="30" FontAttributes="Bold" />
+                <Label x:Name="TotalLabel" Grid.Row="2" Grid.Column="1" TextColor="#67e8f9" FontSize="30" FontAttributes="Bold" />
+            </Grid>
+        </VerticalStackLayout>
+        <Label x:Name="FooterLabel" Grid.Row="2" Text="Your order will appear here" TextColor="#64748b" FontSize="18" HorizontalOptions="Center" />
+    </Grid>
+</ContentPage>

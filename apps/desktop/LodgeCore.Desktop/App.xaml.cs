@@ -19,6 +19,7 @@ public partial class App : Application
         try 
         {
             var serviceManager = activationState?.Context?.Services?.GetService<LodgeCore.Desktop.Services.DesktopServiceManager>();
+            var customerDisplay = activationState?.Context?.Services?.GetService<LodgeCore.Desktop.Services.CustomerDisplayManager>();
             if (serviceManager != null)
             {
                 // Start asynchronously without blocking window creation
@@ -32,6 +33,7 @@ public partial class App : Application
                 // to prevent closing one window from tearing down all background services.
                 window.Destroying += (s, e) => 
                 {
+                    customerDisplay?.Close();
                     // Fire and forget the graceful shutdown sequence
                     _ = serviceManager.StopAllAsync();
                 };

@@ -89,6 +89,7 @@ public static class MauiProgram
         });
         builder.Services.AddSingleton<LodgeCore.Desktop.Services.ICredentialStorageService, LodgeCore.Desktop.Services.DpapiCredentialStorageService>();
         builder.Services.AddSingleton<LodgeCore.Desktop.Services.TerminalBootstrapService>();
+        builder.Services.AddSingleton<LodgeCore.Desktop.Services.CustomerDisplayManager>();
 
 #if DEBUG
         builder.Logging.AddDebug();

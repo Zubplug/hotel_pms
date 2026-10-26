@@ -166,6 +166,48 @@ public partial class MainPage : ContentPage
 
                     switch (method)
                     {
+                case "customerDisplay.update":
+                    if (parameters != null)
+                    {
+                        var projection = parameters.Deserialize<CustomerDisplayProjection>(new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                        if (projection != null)
+                        {
+                            services.GetRequiredService<CustomerDisplayManager>().Publish(projection);
+                        }
+                    }
+                    responseData = JsonSerializer.Serialize(new { success = true });
+                    break;
+                case "customerDisplay.status":
+                    var displayManager = services.GetRequiredService<CustomerDisplayManager>();
+                    var terminalStatus = await services.GetRequiredService<TerminalBootstrapService>().GetTerminalStatusAsync();
+                    var terminalNode = JsonSerializer.SerializeToNode(terminalStatus);
+                    var modules = terminalNode?["enabledModules"]?.AsArray()
+                        .Select(value => value?.GetValue<string>())
+                        .Where(value => !string.IsNullOrWhiteSpace(value))
+                        .ToHashSet(StringComparer.OrdinalIgnoreCase) ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    var entitled = modules.Contains("MODULE_PMS") || modules.Contains("MODULE_OPERATIONS");
+                    responseData = JsonSerializer.Serialize(new
+                    {
+                        success = true,
+                        enabled = displayManager.IsEnabled,
+                        open = displayManager.IsOpen,
+                        supported = OperatingSystem.IsWindows() && entitled && displayManager.HasSecondaryDisplay,
+                        experience = modules.Contains("MODULE_OPERATIONS") ? "FULL" : "BASIC"
+                    });
+                    break;
+                case "customerDisplay.setEnabled":
+                    var manager = services.GetRequiredService<CustomerDisplayManager>();
+                    var currentTerminalStatus = await services.GetRequiredService<TerminalBootstrapService>().GetTerminalStatusAsync();
+                    var currentNode = JsonSerializer.SerializeToNode(currentTerminalStatus);
+                    var currentModules = currentNode?["enabledModules"]?.AsArray()
+                        .Select(value => value?.GetValue<string>())
+                        .Where(value => !string.IsNullOrWhiteSpace(value))
+                        .ToHashSet(StringComparer.OrdinalIgnoreCase) ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    if (!currentModules.Contains("MODULE_PMS") && !currentModules.Contains("MODULE_OPERATIONS"))
+                        throw new UnauthorizedAccessException("Customer display is not included in this terminal plan.");
+                    manager.SetEnabled(parameters?["enabled"]?.GetValue<bool>() ?? false);
+                    responseData = JsonSerializer.Serialize(new { success = true, enabled = manager.IsEnabled });
+                    break;
                 case "system.getTerminalStatus":
                     responseData = await pmsInterop.GetTerminalStatusAsync();
                     break;

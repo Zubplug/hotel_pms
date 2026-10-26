@@ -86,7 +86,9 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
     },
     retryDeadLetters: async () => {
       return invokeDesktop('sync.retryDeadLetters');
-    }
+    },
+    customerDisplayStatus: async () => invokeDesktop('customerDisplay.status'),
+    setCustomerDisplayEnabled: async (enabled: boolean) => invokeDesktop('customerDisplay.setEnabled', { enabled }),
   },
   frontdesk: {
     listCashAccounts: async (propertyId: string) => invokeDesktop('frontdesk.cashAccounts.list', { propertyId }),

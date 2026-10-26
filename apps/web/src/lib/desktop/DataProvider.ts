@@ -10,6 +10,8 @@ export interface LodgeCoreDataProvider {
   };
   system?: {
     getTerminalStatus?: () => Promise<any>;
+    customerDisplayStatus?: () => Promise<any>;
+    setCustomerDisplayEnabled?: (enabled: boolean) => Promise<any>;
     provisionTerminal?: (data: any) => Promise<any>;
     forceSync?: () => Promise<any>;
     getSyncHealth?: () => Promise<any>;
