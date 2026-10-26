@@ -4,27 +4,6 @@ import prisma from '@hotel-pms/db';
 import { requireHQAdmin } from '@/lib/auth/hq';
 import { revalidatePath } from 'next/cache';
 
-const verificationStatuses = new Set(['PENDING', 'VERIFIED', 'REJECTED']);
-const partnerStatuses = new Set(['ACTIVE', 'SUSPENDED', 'CLOSED']);
-
-export async function reviewReachPartner(formData: FormData) {
-  await requireHQAdmin();
-  const partnerId = String(formData.get('partnerId') || '');
-  const verificationStatus = String(formData.get('verificationStatus') || '');
-  const status = String(formData.get('status') || '');
-  if (!partnerId || !verificationStatuses.has(verificationStatus)) return;
-  if (status && !partnerStatuses.has(status)) return;
-
-  await prisma.referralPartner.update({
-    where: { id: partnerId },
-    data: {
-      verificationStatus,
-      ...(status ? { status } : verificationStatus === 'VERIFIED' ? { status: 'ACTIVE' } : {}),
-    },
-  });
-  revalidatePath('/hq/reach');
-}
-
 export async function setReachProgramEnabled(formData: FormData) {
   await requireHQAdmin();
   const programId = String(formData.get('programId') || '');

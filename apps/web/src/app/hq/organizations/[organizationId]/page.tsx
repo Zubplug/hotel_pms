@@ -4,8 +4,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
-import { ShieldAlert, Users, Home } from 'lucide-react';
-import { startImpersonation } from '@/lib/auth/hq';
+import { ShieldAlert, Home } from 'lucide-react';
 import { requireHQAdmin } from '@/lib/auth/hq';
 import { saveOrganizationDiscount } from '../actions';
 
@@ -20,7 +19,6 @@ export default async function TenantControlPage({
     where: { id: organizationId },
     include: {
       properties: true,
-      memberships: { include: { user: { select: { id: true, email: true, roles: { include: { role: true } } } } } },
       subscriptions: { include: { items: { include: { price: { include: { product: true } } } } } },
       entitlements: { include: { product: true } }
     }
@@ -34,16 +32,6 @@ export default async function TenantControlPage({
     prisma.organizationBillingDiscount.findMany({ where: { organizationId, active: true }, include: { plan: { select: { name: true, code: true } }, product: { select: { name: true, code: true } } }, orderBy: { createdAt: 'desc' } }),
   ]);
 
-  const users = org.memberships.map((m: any) => m.user);
-
-  // Handle server action for impersonation inline for simplicity
-  async function handleImpersonate(formData: FormData) {
-    'use server';
-    const targetUserId = formData.get('userId') as string;
-    await startImpersonation(targetUserId, 'HQ Admin support session');
-    // Redirects should normally happen here, but for now we just rely on standard app behavior
-  }
-
   async function handleDiscount(formData: FormData) {
     'use server';
     await saveOrganizationDiscount(formData);
@@ -56,7 +44,7 @@ export default async function TenantControlPage({
         <p className="text-zinc-500 mt-1">Tenant ID: {org.id}</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-zinc-500">Properties</CardTitle>
@@ -69,16 +57,6 @@ export default async function TenantControlPage({
         
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-zinc-500">Users</CardTitle>
-            <Users className="w-4 h-4 text-zinc-400" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{users.length}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-zinc-500">Status</CardTitle>
             <ShieldAlert className="w-4 h-4 text-zinc-400" />
           </CardHeader>
@@ -88,7 +66,7 @@ export default async function TenantControlPage({
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 gap-8">
         <div className="space-y-6">
           <Card>
             <CardHeader>
@@ -154,31 +132,6 @@ export default async function TenantControlPage({
           </Card>
         </div>
 
-        <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>User Administration & Impersonation</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {users.map((user: any) => (
-                  <div key={user.id} className="flex justify-between items-center py-2 border-b last:border-0">
-                    <div>
-                        <div className="font-medium text-sm">{user.email}</div>
-                      <div className="text-xs text-zinc-500">{user.email} • {user.roles?.[0]?.role?.name || 'User'}</div>
-                    </div>
-                    <form action={handleImpersonate}>
-                      <input type="hidden" name="userId" value={user.id} />
-                      <Button variant="outline" size="sm" type="submit">
-                        Impersonate
-                      </Button>
-                    </form>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
       </div>
     </div>
   );
