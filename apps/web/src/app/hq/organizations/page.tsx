@@ -18,7 +18,7 @@ export default async function HQOrganizationsPage() {
         properties: { select: { id: true, name: true, city: true, country: true, isActive: true, businessDate: true, auditStatus: true, createdAt: true } },
         subscriptions: { where: { planId: { not: null } }, orderBy: { createdAt: 'desc' }, take: 1, select: { status: true, plan: { select: { name: true } }, currentPeriodEnd: true } },
         entitlements: { where: { status: 'ACTIVE' }, select: { productCode: true } },
-        memberships: { where: { status: 'ACTIVE', role: 'OWNER' }, select: { id: true } },
+        portalOwner: { select: { id: true, email: true, emailVerifiedAt: true } },
       },
     }),
     prisma.billingInvoice.findMany({ where: { createdAt: { gte: monthStart } }, select: { organizationId: true, status: true, amountDue: true, amountPaid: true } }),
@@ -56,7 +56,7 @@ export default async function HQOrganizationsPage() {
     const readiness = properties.length > 0 && properties.every((property) => property.lifecycle === 'Operational');
     const billingAttention = !subscription || ['PAST_DUE', 'PAUSED', 'INCOMPLETE', 'CANCELED'].includes(subscription.status) || invoice.attention;
     const state = !properties.length ? 'No properties' : billingAttention ? 'Billing attention' : !readiness ? 'Setup in progress' : channel.issues ? 'Integration attention' : 'Operational';
-    return { id: org.id, name: org.name, slug: org.slug, currency: org.defaultCurrency, timezone: org.defaultTimezone, createdAt: org.createdAt.toISOString(), properties: properties.length, activeProperties: properties.filter((property) => property.isActive).length, portalUsers: org.memberships.length, plan: subscription?.plan?.name ?? 'Unconfigured', subscriptionStatus: subscription?.status ?? 'NO PLAN', periodEnd: subscription?.currentPeriodEnd?.toISOString() ?? null, entitlements: org.entitlements.map((item) => item.productCode), channelTotal: channel.total, channelIssues: channel.issues, staleChannels: channel.stale, invoiceDue: invoice.due, invoicePaid: invoice.paid, readiness, billingAttention, state, propertyRows: properties };
+    return { id: org.id, name: org.name, slug: org.slug, currency: org.defaultCurrency, timezone: org.defaultTimezone, createdAt: org.createdAt.toISOString(), properties: properties.length, activeProperties: properties.filter((property) => property.isActive).length, portalUsers: org.portalOwner ? 1 : 0, plan: subscription?.plan?.name ?? 'Unconfigured', subscriptionStatus: subscription?.status ?? 'NO PLAN', periodEnd: subscription?.currentPeriodEnd?.toISOString() ?? null, entitlements: org.entitlements.map((item) => item.productCode), channelTotal: channel.total, channelIssues: channel.issues, staleChannels: channel.stale, invoiceDue: invoice.due, invoicePaid: invoice.paid, readiness, billingAttention, state, propertyRows: properties };
   });
 
   const growth = Array.from({ length: 6 }, (_, index) => { const date = new Date(growthStart); date.setMonth(growthStart.getMonth() + index); return { label: date.toLocaleDateString('en-US', { month: 'short' }), organizations: organizations.filter((org) => org.createdAt.getFullYear() === date.getFullYear() && org.createdAt.getMonth() === date.getMonth()).length, properties: propertyRows.filter((property) => new Date(property.createdAt).getFullYear() === date.getFullYear() && new Date(property.createdAt).getMonth() === date.getMonth()).length }; });

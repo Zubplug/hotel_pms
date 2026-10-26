@@ -25,6 +25,8 @@ model Organization {
   defaultTimezone String  @default("Africa/Lagos")
   defaultLocale   String  @default("en-NG")
   settings        Json?
+  portalOwnerUserId String? @db.Uuid
+  portalOwner      User?    @relation("OrganizationPortalOwner", fields: [portalOwnerUserId], references: [id], onDelete: SetNull)
 
   properties                 Property[]
   guests                     Guest[]
@@ -2469,6 +2471,7 @@ model User {
   updatedAt DateTime @updatedAt @db.Timestamptz
 
   membership                            OrganizationMembership?
+  portalOwnerOrganizations             Organization[]              @relation("OrganizationPortalOwner")
   roles                                 UserRole[]
   requestedRefunds                      RefundRequest[]              @relation("RefundRequestedBy")
   assignedRefunds                       RefundRequest[]              @relation("RefundCurrentApprover")

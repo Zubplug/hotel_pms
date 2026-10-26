@@ -73,21 +73,23 @@ export async function inviteOrganizationPortalUser(formData: FormData) {
   const lastName = String(formData.get('lastName') || '').trim() || null;
   if (!organizationId || !/^\S+@\S+\.\S+$/.test(email)) throw new Error('Enter a valid portal user email.');
 
-  const organization = await prisma.organization.findUnique({ where: { id: organizationId }, select: { id: true, name: true } });
+  const organization = await prisma.organization.findUnique({ where: { id: organizationId }, select: { id: true, name: true, portalOwnerUserId: true, portalOwner: { select: { email: true, emailVerifiedAt: true } } } });
   if (!organization) throw new Error('Organisation not found.');
   const rawToken = randomBytes(32).toString('hex');
   const tokenHash = createHash('sha256').update(rawToken).digest('hex');
   const expiresAt = new Date(Date.now() + 72 * 60 * 60 * 1000);
 
   await prisma.$transaction(async (tx) => {
-    const organizationMemberships = await tx.organizationMembership.findMany({ where: { organizationId, role: 'OWNER', status: 'ACTIVE' }, include: { user: { select: { email: true, emailVerifiedAt: true } } } });
-    if (organizationMemberships.some((membership) => membership.user.emailVerifiedAt)) throw new Error('This organisation already has an active verified portal user. Edit that user instead.');
-    if (organizationMemberships.some((membership) => membership.user.email !== email)) throw new Error('Only one portal user is allowed for an organisation. Use the existing portal user email.');
+    const currentOwner = await tx.organization.findUnique({ where: { id: organizationId }, select: { portalOwnerUserId: true, portalOwner: { select: { email: true, emailVerifiedAt: true } } } });
+    if (currentOwner?.portalOwner?.emailVerifiedAt) throw new Error('This organisation already has an active verified portal user. Edit that user instead.');
+    if (currentOwner?.portalOwner && currentOwner.portalOwner.email !== email) throw new Error('Only one portal user is allowed for an organisation. Use the existing portal user email.');
     const existing = await tx.user.findUnique({ where: { email }, include: { membership: true } });
+    if (existing?.isLodgeCoreAdmin || existing?.isSuperAdmin) throw new Error('LodgeCore administrator accounts cannot be invited as customer portal users.');
     if (existing?.membership && existing.membership.organizationId !== organizationId) throw new Error('This email already belongs to another organisation.');
     if (existing?.membership && existing.membership.organizationId === organizationId && existing.membership.role !== 'OWNER') throw new Error('This email already belongs to an organisation staff account. Use another portal email.');
     const account = existing || await tx.user.create({ data: { email, firstName, lastName, passwordHash: await bcrypt.hash(randomBytes(32).toString('hex'), 12) } });
     await tx.organizationMembership.upsert({ where: { userId: account.id }, update: { organizationId, status: 'ACTIVE', role: existing?.membership?.role || 'OWNER' }, create: { userId: account.id, organizationId, status: 'ACTIVE', role: 'OWNER' } });
+    await tx.organization.update({ where: { id: organizationId }, data: { portalOwnerUserId: account.id } });
     await tx.customerInvitation.updateMany({ where: { email, organizationId, acceptedAt: null }, data: { expiresAt: new Date() } });
     await tx.customerInvitation.create({ data: { email, organizationId, userId: account.id, tokenHash, expiresAt, createdById: admin.id } });
     await tx.auditLog.create({ data: { organizationId, userId: admin.id, userEmail: admin.email || undefined, action: 'CUSTOMER_PORTAL_INVITED', resource: 'CustomerInvitation', resourceId: tokenHash, requestId: `hq-portal-invite-${Date.now()}`, newValue: { email, userId: account.id } } });
@@ -105,11 +107,13 @@ export async function updateOrganizationPortalUser(formData: FormData) {
   const firstName = String(formData.get('firstName') || '').trim() || null;
   const lastName = String(formData.get('lastName') || '').trim() || null;
   if (!organizationId || !userId || !/^\S+@\S+\.\S+$/.test(email)) throw new Error('Enter valid portal user information.');
-  const membership = await prisma.organizationMembership.findFirst({ where: { organizationId, userId, role: 'OWNER', status: 'ACTIVE' }, select: { id: true, user: { select: { email: true } } } });
-  if (!membership) throw new Error('Portal user not found for this organisation.');
+  const organization = await prisma.organization.findUnique({ where: { id: organizationId }, select: { portalOwnerUserId: true } });
+  if (!organization || organization.portalOwnerUserId !== userId) throw new Error('Portal user not found for this organisation.');
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true } });
+  if (!user) throw new Error('Portal user not found.');
   const duplicate = await prisma.user.findFirst({ where: { email, NOT: { id: userId } }, select: { id: true } });
   if (duplicate) throw new Error('That email address is already in use.');
-  const emailChanged = membership.user.email !== email;
+  const emailChanged = user.email !== email;
   await prisma.user.update({ where: { id: userId }, data: { email, firstName, lastName, ...(emailChanged ? { emailVerifiedAt: null } : {}) } });
   await prisma.auditLog.create({ data: { organizationId, userId: admin.id, userEmail: admin.email || undefined, action: 'CUSTOMER_PORTAL_USER_UPDATED', resource: 'User', resourceId: userId, requestId: `hq-portal-user-${Date.now()}`, newValue: { email, firstName, lastName, emailChanged } } });
   revalidatePath(`/hq/organizations/${organizationId}`);
