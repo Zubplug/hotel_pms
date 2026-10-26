@@ -36,11 +36,19 @@ export async function GET(request: NextRequest) {
   try {
     const scope = await getExternalAuditorScope(session.user.id, propertyId);
     const start = new Date(scope.auditPeriodStart);
-    const end = new Date(scope.auditPeriodEnd);
-    end.setUTCDate(end.getUTCDate() + 1);
-    const requestedStart = dateFrom && !Number.isNaN(new Date(`${dateFrom}T00:00:00.000Z`).getTime()) ? new Date(`${dateFrom}T00:00:00.000Z`) : start;
-    const requestedEnd = dateTo && !Number.isNaN(new Date(`${dateTo}T00:00:00.000Z`).getTime()) ? new Date(`${dateTo}T00:00:00.000Z`) : end;
-    const date = { gte: requestedStart > start ? requestedStart : start, lt: requestedEnd < end ? new Date(requestedEnd.getTime() + 86400000) : end };
+    const endInclusive = new Date(scope.auditPeriodEnd);
+    const parseDate = (value: string | null, fallback: Date) => {
+      if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return fallback;
+      const parsed = new Date(`${value}T00:00:00.000Z`);
+      return Number.isNaN(parsed.getTime()) ? fallback : parsed;
+    };
+    const requestedStart = parseDate(dateFrom, start);
+    const requestedEnd = parseDate(dateTo, endInclusive);
+    // Date filters are intersected with the authorized engagement window.
+    const effectiveStart = new Date(Math.max(start.getTime(), requestedStart.getTime()));
+    const effectiveEnd = new Date(Math.min(endInclusive.getTime(), requestedEnd.getTime()));
+    if (effectiveEnd < effectiveStart) return NextResponse.json({ error: 'Selected period is outside the authorized engagement window.' }, { status: 400 });
+    const date = { gte: effectiveStart, lt: new Date(effectiveEnd.getTime() + 86400000) };
 
     const [discountItems, complimentaryRecords, complimentaryFolioItems, posComplimentary, fdComplimentary] = await Promise.all([
       kind === 'complimentary' ? Promise.resolve([]) : prisma.folioItem.findMany({

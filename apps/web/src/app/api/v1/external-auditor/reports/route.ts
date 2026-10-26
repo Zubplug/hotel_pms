@@ -16,18 +16,86 @@ export async function GET(request: NextRequest) {
   const kind = request.nextUrl.searchParams.get('kind') || 'general-ledger';
   const format = request.nextUrl.searchParams.get('format') || 'json';
   if (!propertyId) return NextResponse.json({ error: 'propertyId is required' }, { status: 400 });
-  if (!['general-ledger', 'trial-balance', 'revenue', 'night-audit'].includes(kind)) return NextResponse.json({ error: 'Unsupported report' }, { status: 400 });
+  if (!['management', 'general-ledger', 'trial-balance', 'revenue', 'night-audit'].includes(kind)) return NextResponse.json({ error: 'Unsupported report' }, { status: 400 });
 
   try {
     const scope = await getExternalAuditorScope(session.user.id, propertyId);
-    const start = new Date(scope.auditPeriodStart);
-    const end = new Date(scope.auditPeriodEnd);
-    end.setUTCDate(end.getUTCDate() + 1);
-    const entries = await prisma.journalEntry.findMany({ where: { propertyId, entryDate: { gte: start, lt: end } }, include: { lines: { include: { account: { select: { code: true, name: true, type: true } } } } }, orderBy: [{ entryDate: 'asc' }, { entryNumber: 'asc' }] });
+    const parseDate = (value: string | null, fallback: Date) => {
+      if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return fallback;
+      const parsed = new Date(`${value}T00:00:00.000Z`);
+      return Number.isNaN(parsed.getTime()) ? fallback : parsed;
+    };
+    const scopeStart = new Date(scope.auditPeriodStart);
+    const scopeEnd = new Date(scope.auditPeriodEnd);
+    const requestedStart = parseDate(request.nextUrl.searchParams.get('startDate'), scopeStart);
+    const requestedEnd = parseDate(request.nextUrl.searchParams.get('endDate'), scopeEnd);
+    const start = new Date(Math.max(scopeStart.getTime(), requestedStart.getTime()));
+    const endInclusive = new Date(Math.min(scopeEnd.getTime(), requestedEnd.getTime()));
+    if (endInclusive < start) return NextResponse.json({ error: 'Selected period is outside the authorized engagement window.' }, { status: 400 });
+    const end = new Date(endInclusive.getTime() + 86400000);
+    const reportStart = kind === 'management' ? scopeStart : start;
+    const reportEnd = kind === 'management' ? new Date(scopeEnd.getTime() + 86400000) : end;
+    const entries = await prisma.journalEntry.findMany({ where: { propertyId, entryDate: { gte: reportStart, lt: reportEnd } }, include: { lines: { include: { account: { select: { code: true, name: true, type: true } } } } }, orderBy: [{ entryDate: 'asc' }, { entryNumber: 'asc' }] });
 
     let rows: unknown[][];
     let headers: string[];
-    if (kind === 'general-ledger') {
+    if (kind === 'management') {
+      headers = ['Section', 'Metric', 'Today', 'Last 7 days', 'MTD', 'YTD'];
+      const [occupancySnapshots, audits, payments, complimentary, posOrders] = await Promise.all([
+        prisma.occupancySnapshot.findMany({ where: { propertyId, businessDate: { gte: reportStart, lt: reportEnd } }, select: { businessDate: true, totalRooms: true, availableRooms: true, occupiedRooms: true, occupancyPct: true, adr: true, revpar: true } }),
+        prisma.nightAudit.findMany({ where: { propertyId, businessDate: { gte: reportStart, lt: reportEnd } }, select: { businessDate: true, totalRoomRevenue: true, totalRevenue: true } }),
+        prisma.payment.findMany({ where: { propertyId, businessDate: { gte: reportStart, lt: reportEnd }, status: { in: ['COMPLETED', 'PARTIALLY_REFUNDED'] } }, select: { businessDate: true, method: true, amount: true } }),
+        prisma.complimentaryRecord.findMany({ where: { propertyId, businessDate: { gte: reportStart, lt: reportEnd } }, select: { businessDate: true, complAmount: true } }),
+        prisma.posOrder.findMany({ where: { propertyId, businessDate: { gte: reportStart, lt: reportEnd }, status: { notIn: ['VOIDED', 'CANCELLED'] } }, select: { businessDate: true, total: true, guestCount: true, outlet: { select: { name: true } } } }),
+      ]);
+      const periods = [{ label: 'Today', start: new Date() }, { label: 'Last 7 days', start: new Date() }, { label: 'MTD', start: new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1)) }, { label: 'YTD', start: new Date(Date.UTC(new Date().getUTCFullYear(), 0, 1)) }];
+      periods[1].start.setUTCDate(periods[1].start.getUTCDate() - 6);
+      const todayKey = new Date().toISOString().slice(0, 10);
+      const key = (value: Date) => value.toISOString().slice(0, 10);
+      const inPeriod = (value: Date, period: { start: Date }) => { const dateKey = key(value); return dateKey >= key(period.start) && dateKey <= todayKey; };
+      const sum = <T extends { businessDate: Date }>(items: T[], period: { start: Date }, value: (item: T) => number) => items.filter(item => inPeriod(item.businessDate, period)).reduce((total, item) => total + value(item), 0);
+      const section = (label: string) => [label, '', '', '', '', ''];
+      const departmentsByPeriod = (period: { start: Date }) => {
+        const totals = new Map<string, number>();
+        for (const entry of entries) if (inPeriod(entry.entryDate, period)) for (const line of entry.lines) if (line.account.type === 'REVENUE') totals.set(line.account.name, (totals.get(line.account.name) || 0) + Number(line.credit) - Number(line.debit));
+        return totals;
+      };
+      const roomRevenue = (period: { start: Date }) => sum(audits, period, item => Number(item.totalRoomRevenue));
+      const availableRooms = (period: { start: Date }) => sum(occupancySnapshots, period, item => item.availableRooms);
+      const occupiedRooms = (period: { start: Date }) => sum(occupancySnapshots, period, item => item.occupiedRooms);
+      const revenueRows = [...new Set(periods.flatMap(period => [...departmentsByPeriod(period).keys()]))].sort().map(department => ['REVENUE BY DEPARTMENT', department, ...periods.map(period => departmentsByPeriod(period).get(department) || 0)]);
+      const outletNames = [...new Set(posOrders.map(order => order.outlet.name))].sort();
+      const outletRows = outletNames.flatMap(outlet => [
+        ['FOOD AND BEVERAGE REVENUE', `${outlet} revenue`, ...periods.map(period => sum(posOrders, period, order => order.outlet.name === outlet ? Number(order.total) : 0))],
+        ['FOOD AND BEVERAGE REVENUE', `${outlet} covers`, ...periods.map(period => sum(posOrders, period, order => order.outlet.name === outlet ? order.guestCount : 0))],
+      ]);
+      const totalFnb = periods.map(period => sum(posOrders, period, order => Number(order.total)));
+      const totalCovers = periods.map(period => sum(posOrders, period, order => order.guestCount));
+      rows = [
+        section('ROOM STATISTICS'),
+        ['ROOM STATISTICS', 'Total rooms availability', ...periods.map(period => availableRooms(period))],
+        ['ROOM STATISTICS', 'Total occupied rooms', ...periods.map(period => occupiedRooms(period))],
+        ['ROOM STATISTICS', 'Total vacant rooms', ...periods.map(period => Math.max(availableRooms(period) - occupiedRooms(period), 0))],
+        ['ROOM STATISTICS', 'Total sold rooms', ...periods.map(period => occupiedRooms(period))],
+        ['ROOM STATISTICS', 'Total complimentary rooms', ...periods.map(() => 0)],
+        ['ROOM STATISTICS', 'Total occupancy %', ...periods.map(period => { const available = availableRooms(period); return available ? (occupiedRooms(period) / available) * 100 : 0; })],
+        ['ROOM STATISTICS', 'Total sold rooms %', ...periods.map(period => { const available = availableRooms(period); return available ? (occupiedRooms(period) / available) * 100 : 0; })],
+        ['ROOM STATISTICS', 'Total complimentary rooms %', ...periods.map(() => 0)],
+        ['ROOM STATISTICS', 'Total rooms revenue', ...periods.map(period => roomRevenue(period))],
+        ['ROOM STATISTICS', 'Average room rate', ...periods.map(period => { const occupied = occupiedRooms(period); return occupied ? roomRevenue(period) / occupied : 0; })],
+        ['ROOM STATISTICS', 'Revenue per available room', ...periods.map(period => { const available = availableRooms(period); return available ? roomRevenue(period) / available : 0; })],
+        section('REVENUE BY DEPARTMENT'),
+        ...revenueRows,
+        ['REVENUE BY DEPARTMENT', 'Total hotel revenue', ...periods.map(period => sum(audits, period, item => Number(item.totalRevenue)) || departmentsByPeriod(period).values().reduce((total, amount) => total + amount, 0))],
+        section('FOOD AND BEVERAGE REVENUE'),
+        ...outletRows,
+        ['FOOD AND BEVERAGE REVENUE', 'Total food & beverage revenue', ...totalFnb],
+        ['FOOD AND BEVERAGE REVENUE', 'Total covers', ...totalCovers],
+        section('PAYMENT SUMMARY'),
+        ...['CASH', 'BANK_TRANSFER', 'POS', 'CARD', 'CARD_OFFLINE', 'PAYMENT_GATEWAY', 'MOBILE_PAYMENT'].map(method => ['PAYMENT SUMMARY', method.replaceAll('_', ' '), ...periods.map(period => sum(payments, period, item => String(item.method) === method ? Number(item.amount) : 0))]),
+        ['PAYMENT SUMMARY', 'Complimentary revenue', ...periods.map(period => sum(complimentary, period, item => Number(item.complAmount)))],
+      ];
+    } else if (kind === 'general-ledger') {
       headers = ['Entry', 'Date', 'Status', 'Source', 'Description', 'Account', 'Account name', 'Debit', 'Credit'];
       rows = entries.flatMap(entry => entry.lines.map(line => [entry.entryNumber, entry.entryDate.toISOString().slice(0, 10), entry.status, entry.source, entry.description, line.account.code, line.account.name, Number(line.debit), Number(line.credit)]));
     } else if (kind === 'trial-balance') {

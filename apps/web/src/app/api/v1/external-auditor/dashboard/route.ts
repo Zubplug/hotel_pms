@@ -14,8 +14,24 @@ export async function GET(request: NextRequest) {
 
   try {
     const scope = await getExternalAuditorScope(session.user.id, propertyId);
-    const start = new Date(scope.auditPeriodStart);
-    const end = new Date(scope.auditPeriodEnd);
+    const requestedStart = request.nextUrl.searchParams.get('startDate');
+    const requestedEnd = request.nextUrl.searchParams.get('endDate');
+    const scopeStart = new Date(scope.auditPeriodStart);
+    const scopeEnd = new Date(scope.auditPeriodEnd);
+    const parseDate = (value: string | null, fallback: Date) => {
+      if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return fallback;
+      const parsed = new Date(`${value}T00:00:00.000Z`);
+      return Number.isNaN(parsed.getTime()) ? fallback : parsed;
+    };
+    // Dashboard filters are always intersected with the authorized engagement window.
+    // A requested period can never widen an auditor's read-only scope.
+    const requestedStartDate = parseDate(requestedStart, scopeStart);
+    const requestedEndDate = parseDate(requestedEnd, scopeEnd);
+    const start = new Date(Math.max(scopeStart.getTime(), requestedStartDate.getTime()));
+    const end = new Date(Math.min(scopeEnd.getTime(), requestedEndDate.getTime()));
+    if (end < start) {
+      return NextResponse.json({ error: 'Selected period is outside the authorized engagement window.' }, { status: 400 });
+    }
     end.setUTCDate(end.getUTCDate() + 1);
     assertAuditorAccess(scope, propertyId, scope.auditPeriodStart);
     const date = { gte: start, lt: end };

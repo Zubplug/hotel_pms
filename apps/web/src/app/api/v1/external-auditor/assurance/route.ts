@@ -13,7 +13,21 @@ export async function GET(request: NextRequest) {
   if (!propertyId) return NextResponse.json({ error: 'propertyId is required' }, { status: 400 });
   try {
     const scope = await getExternalAuditorScope(session.user.id, propertyId);
-    const start = new Date(scope.auditPeriodStart); const end = new Date(scope.auditPeriodEnd); end.setUTCDate(end.getUTCDate() + 1); const date = { gte: start, lt: end };
+    const startParam = request.nextUrl.searchParams.get('startDate');
+    const endParam = request.nextUrl.searchParams.get('endDate');
+    const scopeStart = new Date(scope.auditPeriodStart);
+    const scopeEnd = new Date(scope.auditPeriodEnd);
+    const parseDate = (value: string | null, fallback: Date) => {
+      if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return fallback;
+      const parsed = new Date(`${value}T00:00:00.000Z`);
+      return Number.isNaN(parsed.getTime()) ? fallback : parsed;
+    };
+    const requestedStart = parseDate(startParam, scopeStart);
+    const requestedEnd = parseDate(endParam, scopeEnd);
+    const start = new Date(Math.max(scopeStart.getTime(), requestedStart.getTime()));
+    const endInclusive = new Date(Math.min(scopeEnd.getTime(), requestedEnd.getTime()));
+    if (endInclusive < start) return NextResponse.json({ error: 'Selected period is outside the authorized engagement window.' }, { status: 400 });
+    const date = { gte: start, lt: new Date(endInclusive.getTime() + 86400000) };
     const [property, folio, revenueLines, snapshots, pos, closePackages] = await Promise.all([
       prisma.property.findUnique({ where: { id: propertyId }, select: { name: true, baseCurrency: true } }),
       prisma.folioItem.aggregate({ where: { folio: { propertyId }, businessDate: date, type: 'CHARGE', voidedAt: null }, _sum: { amount: true } }),
