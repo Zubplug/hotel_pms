@@ -4570,7 +4570,7 @@ public class LocalRepository
                         id = item.Id,
                         confirmationNumber = item.ConfirmationNumber ?? "Reference pending",
                         status = item.Status,
-                        folios = item.Folio == null ? Array.Empty<object>() : new[] { new { id = item.Folio.Id, folioNumber = item.Folio.FolioNumber, balance = item.Folio.OutstandingBalance } },
+                        folios = item.Folio == null ? Array.Empty<object>() : new[] { new { id = item.Folio.Id, folioNumber = item.Folio.Id, balance = item.Folio.OutstandingBalance } },
                     }).ToArray(),
                 };
             })

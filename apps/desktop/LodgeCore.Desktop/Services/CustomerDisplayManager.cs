@@ -21,7 +21,7 @@ public sealed class CustomerDisplayManager
         get
         {
 #if WINDOWS
-            return Screen.All().Count(monitor => !monitor.IsPrimary) > 0;
+            return Monitor.All().Count(monitor => !monitor.IsPrimary) > 0;
 #else
             return false;
 #endif
@@ -72,8 +72,8 @@ public sealed class CustomerDisplayManager
         {
             if (window.Handler?.PlatformView is not Microsoft.UI.Xaml.Window nativeWindow) return;
             var hwnd = WindowNative.GetWindowHandle(nativeWindow);
-            var appWindow = AppWindow.GetFromWindowId(Win32Interop.GetWindowIdFromWindow(hwnd));
-            var monitors = Screen.All();
+            var appWindow = AppWindow.GetFromWindowId(Microsoft.UI.Win32Interop.GetWindowIdFromWindow(hwnd));
+            var monitors = Monitor.All();
             var target = monitors.FirstOrDefault(m => !m.IsPrimary) ?? monitors.FirstOrDefault();
             if (target == null) return;
             appWindow.MoveAndResize(new Windows.Graphics.RectInt32(target.Left, target.Top, target.Width, target.Height));
@@ -87,7 +87,7 @@ public sealed class CustomerDisplayManager
         public static IEnumerable<Monitor> All()
         {
             var result = new List<Monitor>();
-            EnumDisplayMonitors(IntPtr.Zero, IntPtr.Zero, (h, deviceContext, ref RECT r, IntPtr data) =>
+            EnumDisplayMonitors(IntPtr.Zero, IntPtr.Zero, (IntPtr h, IntPtr deviceContext, ref RECT r, IntPtr data) =>
             {
                 var info = new MONITORINFO { cbSize = Marshal.SizeOf<MONITORINFO>() };
                 GetMonitorInfo(h, ref info);
