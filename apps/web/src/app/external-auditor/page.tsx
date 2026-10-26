@@ -2,53 +2,772 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, ArrowUpRight, BarChart3, Building2, CalendarDays, CheckCircle2, CircleDollarSign, FileSearch, FileText, RefreshCw, ShieldCheck, TrendingUp, BadgePercent, Gift, CalendarRange, SlidersHorizontal } from 'lucide-react';
-import { Area, AreaChart, CartesianGrid, Cell, Line, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import {
+  AlertTriangle,
+  ArrowUpRight,
+  BarChart3,
+  Building2,
+  CalendarDays,
+  CheckCircle2,
+  CircleDollarSign,
+  FileSearch,
+  FileText,
+  RefreshCw,
+  ShieldCheck,
+  TrendingUp,
+  BadgePercent,
+  Gift,
+  CalendarRange,
+  SlidersHorizontal,
+  Activity,
+  Scale,
+  Clock,
+  TrendingDown,
+  ChevronRight,
+  Layers,
+  GitMerge,
+  PieChart as PieChartIcon,
+} from 'lucide-react';
+import {
+  Area,
+  AreaChart,
+  CartesianGrid,
+  Cell,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
 
-type Scope = { propertyId: string; propertyName: string; currency: string; auditPeriodStart: string; auditPeriodEnd: string };
-type Dashboard = { scope: Scope; kpis: { totalRevenue: number; cashCollected: number; averageOccupancy: number; adr: number; reconciliationStatus: string; closeFinalizedAt: string | null }; controls: { discountAmount: number; complimentaryAmount: number }; exceptions: Array<{ key: string; label: string; count: number; risk: string }>; trend: Array<{ date: string; revenue: number; occupancy: number; adr: number; revpar: number; status: string; exceptions: number }>; revenueMix: Array<{ category: string; name: string; amount: number }>; review: { evidenceRecords: number; journalEntries: number; auditEvents: number } };
-const COLORS = ['#34d399', '#38bdf8', '#a78bfa', '#fbbf24'];
+type Scope = {
+  propertyId: string;
+  propertyName: string;
+  currency: string;
+  auditPeriodStart: string;
+  auditPeriodEnd: string;
+};
+type Dashboard = {
+  scope: Scope;
+  kpis: {
+    totalRevenue: number;
+    cashCollected: number;
+    averageOccupancy: number;
+    adr: number;
+    reconciliationStatus: string;
+    closeFinalizedAt: string | null;
+  };
+  controls: { discountAmount: number; complimentaryAmount: number };
+  exceptions: Array<{ key: string; label: string; count: number; risk: string }>;
+  trend: Array<{
+    date: string;
+    revenue: number;
+    occupancy: number;
+    adr: number;
+    revpar: number;
+    status: string;
+    exceptions: number;
+  }>;
+  revenueMix: Array<{ category: string; name: string; amount: number }>;
+  review: { evidenceRecords: number; journalEntries: number; auditEvents: number };
+};
+
+const PALETTE = ['#34d399', '#38bdf8', '#a78bfa', '#fbbf24', '#fb923c'];
 const compact = new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 });
-const money = (value: number, currency: string) => new Intl.NumberFormat('en', { style: 'currency', currency, maximumFractionDigits: 0 }).format(value);
+const money = (value: number, currency: string) =>
+  new Intl.NumberFormat('en', { style: 'currency', currency, maximumFractionDigits: 0 }).format(value);
 const date = (value: string) => new Date(value).toLocaleDateString('en', { month: 'short', day: 'numeric' });
+
 type PeriodKey = 'engagement' | 'today' | '7d' | 'mtd' | 'ytd' | 'custom';
-const dateKey = (value: Date) => { const year = value.getFullYear(); const month = `${value.getMonth() + 1}`.padStart(2, '0'); const day = `${value.getDate()}`.padStart(2, '0'); return `${year}-${month}-${day}`; };
+
+const dateKey = (value: Date) => {
+  const y = value.getFullYear();
+  const m = `${value.getMonth() + 1}`.padStart(2, '0');
+  const d = `${value.getDate()}`.padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
 const startOfMonth = (value: Date) => new Date(value.getFullYear(), value.getMonth(), 1);
 const startOfYear = (value: Date) => new Date(value.getFullYear(), 0, 1);
-const formatPeriod = (start: string, end: string) => `${new Date(`${start}T00:00:00`).toLocaleDateString('en', { month: 'short', day: 'numeric', year: 'numeric' })} – ${new Date(`${end}T00:00:00`).toLocaleDateString('en', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+const formatPeriod = (start: string, end: string) =>
+  `${new Date(`${start}T00:00:00`).toLocaleDateString('en', { month: 'short', day: 'numeric', year: 'numeric' })} – ${new Date(`${end}T00:00:00`).toLocaleDateString('en', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+
+const RISK_COLORS: Record<string, string> = {
+  HIGH: '#f43f5e',
+  MEDIUM: '#f59e0b',
+  LOW: '#34d399',
+};
+
+// Custom tooltip for Recharts
+function AuditTooltip({
+  active,
+  payload,
+  label,
+  currency,
+}: {
+  active?: boolean;
+  payload?: Array<{ name: string; value: number; color: string }>;
+  label?: string;
+  currency: string;
+}) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="ea-tooltip">
+      <p className="ea-tooltip-label">{label ? new Date(String(label)).toLocaleDateString() : ''}</p>
+      {payload.map((entry) => (
+        <p key={entry.name} className="ea-tooltip-row" style={{ color: entry.color }}>
+          <span>{entry.name === 'revenue' ? 'Revenue' : entry.name === 'occupancy' ? 'Occupancy' : entry.name}</span>
+          <span>
+            {entry.name === 'revenue'
+              ? money(entry.value, currency)
+              : entry.name === 'occupancy'
+                ? `${entry.value.toFixed(1)}%`
+                : compact.format(entry.value)}
+          </span>
+        </p>
+      ))}
+    </div>
+  );
+}
 
 export default function ExternalAuditorDashboard() {
-  const [scopes, setScopes] = useState<Scope[]>([]); const [data, setData] = useState<Dashboard | null>(null); const [error, setError] = useState(''); const [loading, setLoading] = useState(false);
-  const [period, setPeriod] = useState<PeriodKey>('engagement'); const [customStart, setCustomStart] = useState(''); const [customEnd, setCustomEnd] = useState('');
-  const periodRange = (key: PeriodKey, scope?: Scope) => { const today = new Date(); if (key === 'engagement' && scope) return { start: scope.auditPeriodStart.slice(0, 10), end: scope.auditPeriodEnd.slice(0, 10) }; if (key === 'today') return { start: dateKey(today), end: dateKey(today) }; if (key === '7d') { const start = new Date(today); start.setDate(start.getDate() - 6); return { start: dateKey(start), end: dateKey(today) }; } if (key === 'mtd') return { start: dateKey(startOfMonth(today)), end: dateKey(today) }; if (key === 'ytd') return { start: dateKey(startOfYear(today)), end: dateKey(today) }; return { start: customStart, end: customEnd }; };
-  const load = (propertyId: string, selectedPeriod = period, selectedStart = customStart, selectedEnd = customEnd) => { const selectedScope = scopes.find(item => item.propertyId === propertyId); const range = selectedPeriod === 'custom' ? { start: selectedStart, end: selectedEnd } : periodRange(selectedPeriod, selectedScope); const params = new URLSearchParams({ propertyId }); if (range.start) params.set('startDate', range.start); if (range.end) params.set('endDate', range.end); setLoading(true); setError(''); void fetch(`/api/v1/external-auditor/dashboard?${params}`).then(async r => { const value = await r.json(); if (!r.ok) throw new Error(value.error || 'Unable to load engagement'); return value; }).then(setData).catch(e => setError(e.message)).finally(() => setLoading(false)); };
-  useEffect(() => { void fetch('/api/v1/external-auditor/context').then(async r => { const value = await r.json(); if (!r.ok || !value.scopes?.length) throw new Error(value.error || 'No active engagement'); setScopes(value.scopes); const first = value.scopes[0] as Scope; load(first.propertyId, 'engagement'); }).catch(e => setError(e.message)); }, []);
+  const [scopes, setScopes] = useState<Scope[]>([]);
+  const [data, setData] = useState<Dashboard | null>(null);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [period, setPeriod] = useState<PeriodKey>('engagement');
+  const [customStart, setCustomStart] = useState('');
+  const [customEnd, setCustomEnd] = useState('');
+
+  const periodRange = (key: PeriodKey, scope?: Scope) => {
+    const today = new Date();
+    if (key === 'engagement' && scope)
+      return { start: scope.auditPeriodStart.slice(0, 10), end: scope.auditPeriodEnd.slice(0, 10) };
+    if (key === 'today') return { start: dateKey(today), end: dateKey(today) };
+    if (key === '7d') {
+      const start = new Date(today);
+      start.setDate(start.getDate() - 6);
+      return { start: dateKey(start), end: dateKey(today) };
+    }
+    if (key === 'mtd') return { start: dateKey(startOfMonth(today)), end: dateKey(today) };
+    if (key === 'ytd') return { start: dateKey(startOfYear(today)), end: dateKey(today) };
+    return { start: customStart, end: customEnd };
+  };
+
+  const load = (propertyId: string, selectedPeriod = period, selectedStart = customStart, selectedEnd = customEnd) => {
+    const selectedScope = scopes.find((item) => item.propertyId === propertyId);
+    const range =
+      selectedPeriod === 'custom' ? { start: selectedStart, end: selectedEnd } : periodRange(selectedPeriod, selectedScope);
+    const params = new URLSearchParams({ propertyId });
+    if (range.start) params.set('startDate', range.start);
+    if (range.end) params.set('endDate', range.end);
+    setLoading(true);
+    setError('');
+    void fetch(`/api/v1/external-auditor/dashboard?${params}`)
+      .then(async (r) => {
+        const value = await r.json();
+        if (!r.ok) throw new Error(value.error || 'Unable to load engagement');
+        return value;
+      })
+      .then(setData)
+      .catch((e) => setError(e.message))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    void fetch('/api/v1/external-auditor/context')
+      .then(async (r) => {
+        const value = await r.json();
+        if (!r.ok || !value.scopes?.length) throw new Error(value.error || 'No active engagement');
+        setScopes(value.scopes);
+        const first = value.scopes[0] as Scope;
+        load(first.propertyId, 'engagement');
+      })
+      .catch((e) => setError(e.message));
+  }, []);
+
   const exceptionTotal = useMemo(() => data?.exceptions.reduce((sum, item) => sum + item.count, 0) || 0, [data]);
-  if (error) return <div className="rounded-2xl border border-red-400/20 bg-red-400/[.08] p-6 text-red-200"><p className="font-semibold">Unable to load audit workspace</p><p className="mt-1 text-sm text-red-200/70">{error}</p></div>;
-  if (!data) return <div className="flex min-h-[50vh] items-center justify-center text-sm text-slate-400"><RefreshCw className="mr-2 h-4 w-4 animate-spin" /> Loading verified audit data…</div>;
+  const highRiskCount = useMemo(
+    () => data?.exceptions.filter((e) => e.risk === 'HIGH' && e.count > 0).length || 0,
+    [data],
+  );
+  const revenueTrend = useMemo(() => {
+    if (!data?.trend.length) return null;
+    const last = data.trend[data.trend.length - 1];
+    const prev = data.trend[data.trend.length - 2];
+    if (!prev || prev.revenue === 0) return null;
+    return ((last.revenue - prev.revenue) / prev.revenue) * 100;
+  }, [data]);
+
+  if (error)
+    return (
+      <div className="ea-error-card">
+        <div className="ea-error-icon">
+          <AlertTriangle className="h-5 w-5" />
+        </div>
+        <div>
+          <p className="ea-error-title">Unable to load audit workspace</p>
+          <p className="ea-error-desc">{error}</p>
+        </div>
+      </div>
+    );
+
+  if (!data)
+    return (
+      <div className="ea-loading">
+        <div className="ea-loading-spinner" />
+        <p>Loading secure audit workspace…</p>
+      </div>
+    );
+
   const { kpis, scope } = data;
-  const status = kpis.reconciliationStatus.replaceAll('_', ' ');
-  const closeLabel = kpis.reconciliationStatus === 'COMPLETED' ? 'Completed' : status;
-  return <div className="space-y-6 pb-8">
-    <section className="relative overflow-hidden rounded-3xl border border-white/[.08] bg-gradient-to-br from-[#132a2d] via-[#101d2d] to-[#0d1524] p-6 shadow-2xl shadow-black/10 sm:p-7">
-      <div className="pointer-events-none absolute -right-20 -top-28 h-72 w-72 rounded-full bg-emerald-400/10 blur-3xl" />
-      <div className="relative flex flex-wrap items-start justify-between gap-6"><div><div className="mb-4 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[.2em] text-emerald-300"><ShieldCheck className="h-4 w-4" /> Independent assurance workspace</div><h1 className="max-w-2xl text-3xl font-semibold tracking-tight text-white sm:text-4xl">Audit command center</h1><p className="mt-3 max-w-xl text-sm leading-6 text-slate-400">A live view of financial integrity, close controls, and review priorities for the authorized engagement.</p></div><div className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[.05] px-3 py-2 text-xs text-slate-300"><CalendarDays className="h-4 w-4 text-emerald-300" />{new Date(scope.auditPeriodStart).toLocaleDateString()} — {new Date(scope.auditPeriodEnd).toLocaleDateString()}</div></div>
-      <div className="relative mt-7 flex flex-wrap items-end justify-between gap-4"><div><p className="text-xs text-slate-500">Engagement property</p><p className="mt-1 flex items-center gap-2 text-lg font-medium text-white"><Building2 className="h-4 w-4 text-emerald-300" />{scope.propertyName}</p></div><div className="flex flex-wrap gap-2">{scopes.length > 1 && <select value={scope.propertyId} onChange={e => { setPeriod('engagement'); load(e.target.value, 'engagement'); }} className="rounded-xl border border-white/10 bg-slate-950/50 px-3 py-2 text-sm text-slate-200 outline-none"><option value="">Select property</option>{scopes.map(item => <option key={item.propertyId} value={item.propertyId}>{item.propertyName}</option>)}</select>}<Link href={`/external-auditor/evidence?propertyId=${scope.propertyId}`} className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[.06] px-3 py-2 text-sm font-medium text-slate-200 transition hover:bg-white/[.1]"><FileSearch className="h-4 w-4 text-sky-300" /> Evidence</Link><Link href={`/external-auditor/reports?propertyId=${scope.propertyId}`} className="inline-flex items-center gap-2 rounded-xl bg-emerald-300 px-3 py-2 text-sm font-semibold text-slate-950 transition hover:bg-emerald-200"><FileText className="h-4 w-4" /> Reports</Link></div></div>
-    </section>
-    <section className="rounded-2xl border border-white/[.08] bg-white/[.035] p-4 shadow-xl shadow-black/5 sm:p-5"><div className="flex flex-wrap items-center justify-between gap-3"><div className="flex items-center gap-2"><CalendarRange className="h-4 w-4 text-emerald-300" /><div><p className="text-sm font-semibold text-white">Audit period</p><p className="text-xs text-slate-500">{period === 'engagement' ? 'Full authorized engagement' : period === 'custom' ? 'Custom review window' : 'Preset review window'} · {formatPeriod((periodRange(period, scope)).start || scope.auditPeriodStart.slice(0, 10), (periodRange(period, scope)).end || scope.auditPeriodEnd.slice(0, 10))}</p></div></div><div className="flex flex-wrap items-center gap-1 rounded-xl border border-white/[.07] bg-slate-950/40 p-1">{([['engagement', 'Engagement'], ['today', 'Today'], ['7d', 'Last 7 days'], ['mtd', 'MTD'], ['ytd', 'YTD']] as [PeriodKey, string][]).map(([key, label]) => <button key={key} type="button" onClick={() => { setPeriod(key); load(scope.propertyId, key); }} className={`rounded-lg px-3 py-2 text-xs font-semibold transition ${period === key ? 'bg-emerald-300 text-slate-950 shadow-sm' : 'text-slate-400 hover:bg-white/[.07] hover:text-white'}`}>{label}</button>)}<button type="button" onClick={() => setPeriod('custom')} className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition ${period === 'custom' ? 'bg-white/[.12] text-white' : 'text-slate-400 hover:bg-white/[.07] hover:text-white'}`}><SlidersHorizontal className="h-3.5 w-3.5" /> Custom</button></div></div>{period === 'custom' && <div className="mt-4 flex flex-wrap items-end gap-3 border-t border-white/[.06] pt-4"><label className="text-xs text-slate-500">From<input type="date" value={customStart} min={scope.auditPeriodStart.slice(0, 10)} max={scope.auditPeriodEnd.slice(0, 10)} onChange={e => setCustomStart(e.target.value)} className="mt-1 block rounded-lg border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white" /></label><label className="text-xs text-slate-500">To<input type="date" value={customEnd} min={scope.auditPeriodStart.slice(0, 10)} max={scope.auditPeriodEnd.slice(0, 10)} onChange={e => setCustomEnd(e.target.value)} className="mt-1 block rounded-lg border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white" /></label><button type="button" disabled={!customStart || !customEnd || customStart > customEnd} onClick={() => load(scope.propertyId, 'custom', customStart, customEnd)} className="rounded-lg bg-white/[.1] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40">Apply range</button></div>}</section>
-    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-      {[{ label: 'Audited revenue', value: money(kpis.totalRevenue, scope.currency), icon: CircleDollarSign, tone: 'text-emerald-300' }, { label: 'Average occupancy', value: `${kpis.averageOccupancy.toFixed(1)}%`, icon: Building2, tone: 'text-sky-300' }, { label: 'Cash collected', value: money(kpis.cashCollected, scope.currency), icon: TrendingUp, tone: 'text-violet-300' }, { label: 'Close status', value: closeLabel, icon: kpis.reconciliationStatus === 'COMPLETED' ? CheckCircle2 : AlertTriangle, tone: kpis.reconciliationStatus === 'COMPLETED' ? 'text-emerald-300' : 'text-amber-300' }].map(item => <div key={item.label} className="rounded-2xl border border-white/[.08] bg-white/[.035] p-5"><div className="flex items-center justify-between text-xs text-slate-500"><span>{item.label}</span><item.icon className={`h-4 w-4 ${item.tone}`} /></div><p className={`mt-3 font-semibold capitalize tracking-tight text-white ${item.label === 'Close status' ? 'text-xl' : 'truncate text-2xl'}`}>{item.value}</p></div>)}
+  const isReconciled = kpis.reconciliationStatus === 'COMPLETED';
+  const closeLabel = isReconciled ? 'Reconciled' : kpis.reconciliationStatus.replaceAll('_', ' ');
+  const currentRange = periodRange(period, scope);
+  const displayRange = formatPeriod(
+    currentRange.start || scope.auditPeriodStart.slice(0, 10),
+    currentRange.end || scope.auditPeriodEnd.slice(0, 10),
+  );
+
+  return (
+    <div className="ea-root">
+      {/* ── PAGE HEADER ─────────────────────────────────────────────── */}
+      <div className="ea-page-header">
+        <div className="ea-page-header-left">
+          <div className="ea-badge-verified">
+            <ShieldCheck className="h-3 w-3" />
+            Independent Audit Workspace · Read-only access
+          </div>
+          <h1 className="ea-page-title">Audit Command Center</h1>
+          <p className="ea-page-subtitle">
+            Financial integrity overview for <strong>{scope.propertyName}</strong> — {displayRange}
+          </p>
+        </div>
+        <div className="ea-page-header-right">
+          {scopes.length > 1 && (
+            <select
+              value={scope.propertyId}
+              onChange={(e) => {
+                setPeriod('engagement');
+                load(e.target.value, 'engagement');
+              }}
+              className="ea-select"
+            >
+              {scopes.map((item) => (
+                <option key={item.propertyId} value={item.propertyId}>
+                  {item.propertyName}
+                </option>
+              ))}
+            </select>
+          )}
+          <Link href={`/external-auditor/evidence?propertyId=${scope.propertyId}`} className="ea-btn-ghost">
+            <FileSearch className="h-4 w-4" />
+            Evidence
+          </Link>
+          <Link href={`/external-auditor/reports?propertyId=${scope.propertyId}`} className="ea-btn-primary">
+            <FileText className="h-4 w-4" />
+            Reports
+          </Link>
+        </div>
+      </div>
+
+      {/* ── PERIOD FILTER ────────────────────────────────────────────── */}
+      <div className="ea-period-bar">
+        <div className="ea-period-bar-info">
+          <CalendarRange className="h-4 w-4 text-emerald-400 shrink-0" />
+          <div>
+            <span className="ea-period-label">
+              {period === 'engagement'
+                ? 'Full Engagement Period'
+                : period === 'custom'
+                  ? 'Custom Review Window'
+                  : 'Preset Window'}
+            </span>
+            <span className="ea-period-range">· {displayRange}</span>
+          </div>
+        </div>
+        <div className="ea-period-tabs">
+          {(
+            [
+              ['engagement', 'Engagement'],
+              ['today', 'Today'],
+              ['7d', '7 Days'],
+              ['mtd', 'MTD'],
+              ['ytd', 'YTD'],
+            ] as [PeriodKey, string][]
+          ).map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => {
+                setPeriod(key);
+                load(scope.propertyId, key);
+              }}
+              className={`ea-period-tab ${period === key ? 'ea-period-tab--active' : ''}`}
+            >
+              {label}
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() => setPeriod('custom')}
+            className={`ea-period-tab ea-period-tab--custom ${period === 'custom' ? 'ea-period-tab--active' : ''}`}
+          >
+            <SlidersHorizontal className="h-3 w-3" />
+            Custom
+          </button>
+        </div>
+      </div>
+      {period === 'custom' && (
+        <div className="ea-custom-range">
+          <label className="ea-custom-range-label">
+            From
+            <input
+              type="date"
+              value={customStart}
+              min={scope.auditPeriodStart.slice(0, 10)}
+              max={scope.auditPeriodEnd.slice(0, 10)}
+              onChange={(e) => setCustomStart(e.target.value)}
+              className="ea-date-input"
+            />
+          </label>
+          <label className="ea-custom-range-label">
+            To
+            <input
+              type="date"
+              value={customEnd}
+              min={scope.auditPeriodStart.slice(0, 10)}
+              max={scope.auditPeriodEnd.slice(0, 10)}
+              onChange={(e) => setCustomEnd(e.target.value)}
+              className="ea-date-input"
+            />
+          </label>
+          <button
+            type="button"
+            disabled={!customStart || !customEnd || customStart > customEnd}
+            onClick={() => load(scope.propertyId, 'custom', customStart, customEnd)}
+            className="ea-btn-apply"
+          >
+            Apply range
+          </button>
+        </div>
+      )}
+
+      {/* ── KPI BENTO GRID ───────────────────────────────────────────── */}
+      <div className="ea-kpi-grid">
+        {/* Audited Revenue */}
+        <div className="ea-kpi-card">
+          <div className="ea-kpi-card-header">
+            <span className="ea-kpi-label">Audited Revenue</span>
+            <div className="ea-kpi-icon ea-kpi-icon--green">
+              <CircleDollarSign className="h-4 w-4" />
+            </div>
+          </div>
+          <p className="ea-kpi-value">{money(kpis.totalRevenue, scope.currency)}</p>
+          <div className="ea-kpi-footer">
+            {revenueTrend !== null ? (
+              <span className={`ea-kpi-trend ${revenueTrend >= 0 ? 'ea-kpi-trend--up' : 'ea-kpi-trend--down'}`}>
+                {revenueTrend >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+                {Math.abs(revenueTrend).toFixed(1)}% vs prior day
+              </span>
+            ) : (
+              <span className="ea-kpi-sub">Across authorized engagement</span>
+            )}
+          </div>
+        </div>
+
+        {/* Average Occupancy */}
+        <div className="ea-kpi-card">
+          <div className="ea-kpi-card-header">
+            <span className="ea-kpi-label">Avg. Occupancy</span>
+            <div className="ea-kpi-icon ea-kpi-icon--blue">
+              <Building2 className="h-4 w-4" />
+            </div>
+          </div>
+          <p className="ea-kpi-value">{kpis.averageOccupancy.toFixed(1)}%</p>
+          <div className="ea-kpi-footer">
+            <div className="ea-occupancy-bar-wrap">
+              <div className="ea-occupancy-bar">
+                <div className="ea-occupancy-fill" style={{ width: `${Math.min(kpis.averageOccupancy, 100)}%` }} />
+              </div>
+              <span className="ea-kpi-sub">{kpis.averageOccupancy < 70 ? 'Below target' : 'On track'}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Cash Collected */}
+        <div className="ea-kpi-card">
+          <div className="ea-kpi-card-header">
+            <span className="ea-kpi-label">Cash Collected</span>
+            <div className="ea-kpi-icon ea-kpi-icon--violet">
+              <TrendingUp className="h-4 w-4" />
+            </div>
+          </div>
+          <p className="ea-kpi-value">{money(kpis.cashCollected, scope.currency)}</p>
+          <div className="ea-kpi-footer">
+            <span className="ea-kpi-sub">
+              {kpis.totalRevenue > 0 ? `${((kpis.cashCollected / kpis.totalRevenue) * 100).toFixed(1)}% of total revenue` : 'Verified cash receipts'}
+            </span>
+          </div>
+        </div>
+
+        {/* ADR */}
+        <div className="ea-kpi-card">
+          <div className="ea-kpi-card-header">
+            <span className="ea-kpi-label">Average Daily Rate</span>
+            <div className="ea-kpi-icon ea-kpi-icon--amber">
+              <Scale className="h-4 w-4" />
+            </div>
+          </div>
+          <p className="ea-kpi-value">{money(kpis.adr, scope.currency)}</p>
+          <div className="ea-kpi-footer">
+            <span className="ea-kpi-sub">Per occupied room night</span>
+          </div>
+        </div>
+
+        {/* Close Status */}
+        <div className={`ea-kpi-card ea-kpi-card--status ${isReconciled ? 'ea-kpi-card--reconciled' : 'ea-kpi-card--pending'}`}>
+          <div className="ea-kpi-card-header">
+            <span className="ea-kpi-label">Night Audit Status</span>
+            {isReconciled ? (
+              <CheckCircle2 className="h-5 w-5 text-emerald-400" />
+            ) : (
+              <Clock className="h-5 w-5 text-amber-400" />
+            )}
+          </div>
+          <p className={`ea-kpi-value ea-kpi-value--status ${isReconciled ? 'ea-kpi-value--reconciled' : 'ea-kpi-value--pending'}`}>
+            {closeLabel}
+          </p>
+          <div className="ea-kpi-footer">
+            <span className="ea-kpi-sub">
+              {kpis.closeFinalizedAt
+                ? `Closed ${new Date(kpis.closeFinalizedAt).toLocaleDateString()}`
+                : 'Awaiting close finalization'}
+            </span>
+          </div>
+        </div>
+
+        {/* Exception Summary */}
+        <div className={`ea-kpi-card ea-kpi-card--exceptions ${exceptionTotal > 0 ? 'ea-kpi-card--has-exceptions' : ''}`}>
+          <div className="ea-kpi-card-header">
+            <span className="ea-kpi-label">Active Exceptions</span>
+            <div className={`ea-kpi-icon ${exceptionTotal > 0 ? (highRiskCount > 0 ? 'ea-kpi-icon--red' : 'ea-kpi-icon--amber') : 'ea-kpi-icon--green'}`}>
+              <Activity className="h-4 w-4" />
+            </div>
+          </div>
+          <p className={`ea-kpi-value ${exceptionTotal > 0 ? (highRiskCount > 0 ? 'text-rose-400' : 'text-amber-400') : 'text-emerald-400'}`}>
+            {exceptionTotal}
+          </p>
+          <div className="ea-kpi-footer">
+            {highRiskCount > 0 ? (
+              <span className="ea-badge-risk-high">{highRiskCount} HIGH priority</span>
+            ) : exceptionTotal > 0 ? (
+              <span className="ea-badge-risk-med">Requires review</span>
+            ) : (
+              <span className="ea-badge-risk-ok">All clear</span>
+            )}
+          </div>
+        </div>
+
+        {/* Audit Coverage */}
+        <div className="ea-kpi-card">
+          <div className="ea-kpi-card-header">
+            <span className="ea-kpi-label">Evidence Records</span>
+            <div className="ea-kpi-icon ea-kpi-icon--teal">
+              <FileSearch className="h-4 w-4" />
+            </div>
+          </div>
+          <p className="ea-kpi-value">{data.review.evidenceRecords.toLocaleString()}</p>
+          <div className="ea-kpi-footer">
+            <span className="ea-kpi-sub">
+              {data.review.journalEntries.toLocaleString()} journal lines · {data.review.auditEvents.toLocaleString()} events
+            </span>
+          </div>
+        </div>
+
+        {/* Controls */}
+        <div className="ea-kpi-card">
+          <div className="ea-kpi-card-header">
+            <span className="ea-kpi-label">Control Exposure</span>
+            <div className="ea-kpi-icon ea-kpi-icon--orange">
+              <Layers className="h-4 w-4" />
+            </div>
+          </div>
+          <p className="ea-kpi-value">
+            {money(data.controls.discountAmount + data.controls.complimentaryAmount, scope.currency)}
+          </p>
+          <div className="ea-kpi-footer">
+            <span className="ea-kpi-sub">
+              Discounts + Complimentary · {money(data.controls.discountAmount, scope.currency)} / {money(data.controls.complimentaryAmount, scope.currency)}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* ── CHARTS ROW ───────────────────────────────────────────────── */}
+      <div className="ea-charts-row">
+        {/* Revenue & Occupancy Trend */}
+        <div className="ea-chart-card ea-chart-card--wide">
+          <div className="ea-chart-header">
+            <div>
+              <p className="ea-chart-eyebrow">Operating Signal</p>
+              <h2 className="ea-chart-title">Revenue & Occupancy Trend</h2>
+            </div>
+            <div className="ea-chart-legend">
+              <span className="ea-legend-dot" style={{ background: '#34d399' }} />
+              <span>Revenue</span>
+              <span className="ea-legend-dot" style={{ background: '#38bdf8' }} />
+              <span>Occupancy</span>
+            </div>
+          </div>
+          <div className="ea-chart-body">
+            {data.trend.length ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={data.trend} margin={{ top: 6, right: 8, left: 0, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#34d399" stopOpacity={0.3} />
+                      <stop offset="100%" stopColor="#34d399" stopOpacity={0.02} />
+                    </linearGradient>
+                    <linearGradient id="occGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#38bdf8" stopOpacity={0.2} />
+                      <stop offset="100%" stopColor="#38bdf8" stopOpacity={0.02} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid stroke="#ffffff0d" vertical={false} />
+                  <XAxis
+                    dataKey="date"
+                    tickFormatter={date}
+                    tick={{ fill: '#475569', fontSize: 11 }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    yAxisId="revenue"
+                    tickFormatter={(v) => compact.format(v)}
+                    tick={{ fill: '#475569', fontSize: 11 }}
+                    axisLine={false}
+                    tickLine={false}
+                    width={44}
+                  />
+                  <YAxis
+                    yAxisId="occupancy"
+                    orientation="right"
+                    domain={[0, 100]}
+                    tickFormatter={(v) => `${v}%`}
+                    tick={{ fill: '#475569', fontSize: 11 }}
+                    axisLine={false}
+                    tickLine={false}
+                    width={40}
+                  />
+                  <Tooltip content={<AuditTooltip currency={scope.currency} />} />
+                  <Area yAxisId="revenue" type="monotone" dataKey="revenue" stroke="#34d399" strokeWidth={2} fill="url(#revGrad)" />
+                  <Area yAxisId="occupancy" type="monotone" dataKey="occupancy" stroke="#38bdf8" strokeWidth={2} fill="url(#occGrad)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="ea-chart-empty">No finalized observations in this period.</div>
+            )}
+          </div>
+        </div>
+
+        {/* Revenue Mix Donut */}
+        <div className="ea-chart-card ea-chart-card--narrow">
+          <div className="ea-chart-header">
+            <div>
+              <p className="ea-chart-eyebrow">Revenue Composition</p>
+              <h2 className="ea-chart-title">By Account</h2>
+            </div>
+            <PieChartIcon className="h-4 w-4 text-slate-600" />
+          </div>
+          <div className="ea-chart-body ea-chart-body--short">
+            {data.revenueMix.length ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={data.revenueMix}
+                    dataKey="amount"
+                    nameKey="name"
+                    innerRadius={52}
+                    outerRadius={78}
+                    paddingAngle={3}
+                    strokeWidth={0}
+                  >
+                    {data.revenueMix.map((item, index) => (
+                      <Cell key={item.category} fill={PALETTE[index % PALETTE.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    formatter={(value, name) => [money(Number(value), scope.currency), String(name)]}
+                    contentStyle={{ background: '#0b1628', border: '1px solid rgba(255,255,255,.12)', borderRadius: 10 }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="ea-chart-empty">No revenue accounts in this period.</div>
+            )}
+          </div>
+          <div className="ea-mix-list">
+            {data.revenueMix.map((item, index) => {
+              const total = data.revenueMix.reduce((sum, s) => sum + s.amount, 0);
+              const share = total ? (item.amount / total) * 100 : 0;
+              return (
+                <div key={item.category} className="ea-mix-row">
+                  <span className="ea-mix-dot" style={{ background: PALETTE[index % PALETTE.length] }} />
+                  <span className="ea-mix-name">{item.name}</span>
+                  <span className="ea-mix-pct">{share.toFixed(0)}%</span>
+                  <div className="ea-mix-bar-wrap">
+                    <div className="ea-mix-bar-fill" style={{ width: `${share}%`, background: PALETTE[index % PALETTE.length] }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* ── EXCEPTIONS & CONTROLS ROW ────────────────────────────────── */}
+      <div className="ea-lower-row">
+        {/* Exceptions Queue */}
+        <div className="ea-panel ea-panel--wide">
+          <div className="ea-panel-header">
+            <div>
+              <p className="ea-chart-eyebrow">Control Review Queue</p>
+              <h2 className="ea-chart-title">Exceptions Requiring Attention</h2>
+              <p className="ea-panel-sub">
+                {exceptionTotal
+                  ? `${exceptionTotal} records flagged across the authorized period.`
+                  : 'No exceptions are currently flagged across this period.'}
+              </p>
+            </div>
+            <Link
+              href={`/external-auditor/evidence?propertyId=${scope.propertyId}`}
+              className="ea-link-arrow"
+            >
+              Evidence explorer
+              <ArrowUpRight className="h-3.5 w-3.5" />
+            </Link>
+          </div>
+          <div className="ea-exceptions-grid">
+            {data.exceptions.map((item) => (
+              <Link
+                key={item.key}
+                href={
+                  item.key === 'discounts' || item.key === 'complimentary'
+                    ? `/external-auditor/controls?propertyId=${scope.propertyId}&kind=${item.key}`
+                    : `/external-auditor/evidence?propertyId=${scope.propertyId}&q=${encodeURIComponent(item.label)}`
+                }
+                className="ea-exception-card"
+                data-risk={item.risk}
+              >
+                <div className="ea-exception-top">
+                  <span className="ea-exception-name">{item.label}</span>
+                  <span
+                    className="ea-exception-count"
+                    style={{ color: item.count ? RISK_COLORS[item.risk] : '#34d399', background: item.count ? `${RISK_COLORS[item.risk]}18` : '#34d39918' }}
+                  >
+                    {item.count}
+                  </span>
+                </div>
+                <div className="ea-exception-bottom">
+                  <span
+                    className="ea-risk-badge"
+                    style={{ color: RISK_COLORS[item.risk] || '#94a3b8', background: `${RISK_COLORS[item.risk] || '#94a3b8'}18` }}
+                  >
+                    {item.risk}
+                  </span>
+                  <ChevronRight className="h-3.5 w-3.5 text-slate-600 group-hover:text-white transition-colors" />
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+
+        {/* Controls & Quick Stats */}
+        <div className="ea-panel-stack">
+          {/* Discounts */}
+          <Link
+            href={`/external-auditor/controls?propertyId=${scope.propertyId}&kind=discounts`}
+            className="ea-control-card ea-control-card--amber"
+          >
+            <div className="ea-control-top">
+              <BadgePercent className="h-5 w-5 text-amber-400" />
+              <ChevronRight className="h-4 w-4 text-slate-600 group-hover:text-amber-400 transition-colors" />
+            </div>
+            <p className="ea-control-amount">{money(data.controls.discountAmount, scope.currency)}</p>
+            <p className="ea-control-label">Discounts Granted</p>
+            <p className="ea-control-hint">Review operator, approver & reason trail →</p>
+          </Link>
+
+          {/* Complimentary */}
+          <Link
+            href={`/external-auditor/controls?propertyId=${scope.propertyId}&kind=complimentary`}
+            className="ea-control-card ea-control-card--violet"
+          >
+            <div className="ea-control-top">
+              <Gift className="h-5 w-5 text-violet-400" />
+              <ChevronRight className="h-4 w-4 text-slate-600 group-hover:text-violet-400 transition-colors" />
+            </div>
+            <p className="ea-control-amount">{money(data.controls.complimentaryAmount, scope.currency)}</p>
+            <p className="ea-control-label">Complimentary Value</p>
+            <p className="ea-control-hint">Review operator, approver & verification trail →</p>
+          </Link>
+
+          {/* Reconciliation Status */}
+          <div className={`ea-control-card ea-control-card--status ${isReconciled ? 'ea-control-card--ok' : 'ea-control-card--warn'}`}>
+            <div className="ea-control-top">
+              <GitMerge className={`h-5 w-5 ${isReconciled ? 'text-emerald-400' : 'text-amber-400'}`} />
+            </div>
+            <p className="ea-control-amount capitalize">{closeLabel}</p>
+            <p className="ea-control-label">Reconciliation Status</p>
+            {kpis.closeFinalizedAt && (
+              <p className="ea-control-hint">Closed {new Date(kpis.closeFinalizedAt).toLocaleDateString()}</p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ── ENGAGEMENT METRICS BAR ───────────────────────────────────── */}
+      <div className="ea-metrics-bar">
+        <Link href={`/external-auditor/evidence?propertyId=${scope.propertyId}`} className="ea-metric-tile">
+          <FileSearch className="h-4 w-4 text-sky-400" />
+          <div>
+            <p className="ea-metric-value">{data.review.evidenceRecords.toLocaleString()}</p>
+            <p className="ea-metric-label">Evidence Records</p>
+          </div>
+          <ChevronRight className="h-4 w-4 text-slate-700 ml-auto" />
+        </Link>
+        <Link href={`/external-auditor/reports?propertyId=${scope.propertyId}`} className="ea-metric-tile">
+          <BarChart3 className="h-4 w-4 text-violet-400" />
+          <div>
+            <p className="ea-metric-value">{data.review.journalEntries.toLocaleString()}</p>
+            <p className="ea-metric-label">Journal Entries</p>
+          </div>
+          <ChevronRight className="h-4 w-4 text-slate-700 ml-auto" />
+        </Link>
+        <div className="ea-metric-tile">
+          <ShieldCheck className="h-4 w-4 text-emerald-400" />
+          <div>
+            <p className="ea-metric-value">{data.review.auditEvents.toLocaleString()}</p>
+            <p className="ea-metric-label">Audit Events Logged</p>
+          </div>
+        </div>
+        <Link href={`/external-auditor/engagement?propertyId=${scope.propertyId}`} className="ea-metric-tile">
+          <CalendarDays className="h-4 w-4 text-emerald-300" />
+          <div>
+            <p className="ea-metric-value">{displayRange}</p>
+            <p className="ea-metric-label">Audit Period</p>
+          </div>
+          <ChevronRight className="h-4 w-4 text-slate-700 ml-auto" />
+        </Link>
+      </div>
+
+      {loading && (
+        <p className="ea-refresh-indicator">
+          <RefreshCw className="h-3 w-3 animate-spin" />
+          Refreshing engagement data…
+        </p>
+      )}
     </div>
-    <div className="grid gap-3 sm:grid-cols-2">
-      <Link href={`/external-auditor/controls?propertyId=${scope.propertyId}&kind=discounts`} className="rounded-2xl border border-amber-300/20 bg-amber-300/[.05] p-5 transition hover:bg-amber-300/[.09]"><div className="flex items-center justify-between"><div><p className="text-xs text-slate-500">Discounts granted</p><p className="mt-2 text-2xl font-semibold text-white">{money(data.controls.discountAmount, scope.currency)}</p></div><BadgePercent className="h-5 w-5 text-amber-300" /></div><p className="mt-2 text-xs text-slate-500">Review operator, approver, reason, and execution trail →</p></Link>
-      <Link href={`/external-auditor/controls?propertyId=${scope.propertyId}&kind=complimentary`} className="rounded-2xl border border-violet-300/20 bg-violet-300/[.05] p-5 transition hover:bg-violet-300/[.09]"><div className="flex items-center justify-between"><div><p className="text-xs text-slate-500">Complimentary value</p><p className="mt-2 text-2xl font-semibold text-white">{money(data.controls.complimentaryAmount, scope.currency)}</p></div><Gift className="h-5 w-5 text-violet-300" /></div><p className="mt-2 text-xs text-slate-500">Review operator, approver, reason, and verification trail →</p></Link>
-    </div>
-    <div className="grid gap-6 xl:grid-cols-[1.55fr_1fr]">
-      <section className="rounded-2xl border border-white/[.08] bg-white/[.035] p-5 sm:p-6"><div className="mb-4 flex items-start justify-between"><div><p className="text-xs font-semibold uppercase tracking-[.16em] text-slate-500">Operating signal</p><h2 className="mt-1 text-lg font-semibold text-white">Revenue and occupancy trend</h2></div><BarChart3 className="h-5 w-5 text-slate-500" /></div><div className="mb-3 flex items-center gap-4 text-[11px] text-slate-500"><span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-emerald-400" />Revenue</span><span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-sky-400" />Occupancy</span></div><div className="h-64">{data.trend.length ? <ResponsiveContainer width="100%" height="100%"><AreaChart data={data.trend}><defs><linearGradient id="revenueFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#34d399" stopOpacity={0.35} /><stop offset="100%" stopColor="#34d399" stopOpacity={0} /></linearGradient></defs><CartesianGrid stroke="#ffffff10" vertical={false} /><XAxis dataKey="date" tickFormatter={date} tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} /><YAxis yAxisId="revenue" tickFormatter={value => compact.format(value)} tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} width={42} /><YAxis yAxisId="occupancy" orientation="right" domain={[0, 100]} tickFormatter={value => `${value}%`} tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} width={38} /><Tooltip contentStyle={{ background: '#111c2d', border: '1px solid #ffffff18', borderRadius: 12, color: '#e2e8f0' }} labelFormatter={value => new Date(String(value)).toLocaleDateString()} formatter={(value, name) => [name === 'revenue' ? money(Number(value), scope.currency) : `${Number(value).toFixed(1)}%`, name === 'revenue' ? 'Revenue' : 'Occupancy']} /><Area yAxisId="revenue" type="monotone" dataKey="revenue" stroke="#34d399" fill="url(#revenueFill)" strokeWidth={2} /><Line yAxisId="occupancy" type="monotone" dataKey="occupancy" stroke="#38bdf8" strokeWidth={2} dot={false} /></AreaChart></ResponsiveContainer> : <div className="flex h-full items-center justify-center text-sm text-slate-500">No finalized night-audit observations in this period.</div>}</div></section>
-      <section className="rounded-2xl border border-white/[.08] bg-white/[.035] p-5 sm:p-6"><div className="mb-5 flex items-start justify-between"><div><p className="text-xs font-semibold uppercase tracking-[.16em] text-slate-500">Revenue composition</p><h2 className="mt-1 text-lg font-semibold text-white">Revenue by chart of account</h2><p className="mt-1 text-xs text-slate-500">Posted journal lines classified to revenue accounts. City Ledger and other balance-sheet accounts are excluded.</p></div><CircleDollarSign className="h-5 w-5 text-slate-500" /></div><div className="h-48">{data.revenueMix.length ? <ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={data.revenueMix} dataKey="amount" nameKey="name" innerRadius={55} outerRadius={78} paddingAngle={3}>{data.revenueMix.map((item, index) => <Cell key={item.category} fill={COLORS[index % COLORS.length]} />)}</Pie><Tooltip formatter={(value, name) => [money(Number(value), scope.currency), String(name)]} contentStyle={{ background: '#111c2d', border: '1px solid #ffffff18', borderRadius: 12 }} /></PieChart></ResponsiveContainer> : <div className="flex h-full items-center justify-center text-sm text-slate-500">No posted revenue-account activity in the authorized period.</div>}</div><div className="space-y-3">{data.revenueMix.map((item, index) => { const total = data.revenueMix.reduce((sum, stream) => sum + stream.amount, 0); const share = total ? (item.amount / total) * 100 : 0; return <div key={item.category}><div className="mb-1 flex items-center justify-between gap-3 text-xs"><span className="flex min-w-0 items-center gap-2 text-slate-300"><span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />{item.name} <span className="font-mono text-[10px] text-slate-600">{item.category}</span></span><span className="shrink-0 text-slate-200">{money(item.amount, scope.currency)} <span className="ml-1 text-slate-500">{share.toFixed(1)}%</span></span></div><div className="h-1.5 overflow-hidden rounded-full bg-white/[.06]"><div className="h-full rounded-full" style={{ width: `${share}%`, backgroundColor: COLORS[index % COLORS.length] }} /></div></div>; })}</div></section>
-    </div>
-    <section className="rounded-2xl border border-white/[.08] bg-white/[.035] p-5 sm:p-6"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-[.16em] text-slate-500">Control review queue</p><h2 className="mt-1 text-lg font-semibold text-white">Exceptions requiring attention</h2><p className="mt-1 text-sm text-slate-500">{exceptionTotal ? `${exceptionTotal} records are flagged across the authorized period.` : 'No exceptions are currently flagged.'}</p></div><Link href={`/external-auditor/evidence?propertyId=${scope.propertyId}`} className="inline-flex items-center gap-1.5 text-sm font-medium text-emerald-300 hover:text-emerald-200">Open evidence explorer <ArrowUpRight className="h-4 w-4" /></Link></div><div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{data.exceptions.map(item => <Link key={item.key} href={item.key === 'discounts' || item.key === 'complimentary' ? `/external-auditor/controls?propertyId=${scope.propertyId}&kind=${item.key}` : `/external-auditor/evidence?propertyId=${scope.propertyId}&q=${encodeURIComponent(item.label)}`} className={`group rounded-xl border border-white/[.07] border-l-2 bg-slate-950/25 p-4 transition hover:bg-white/[.05] ${item.risk === 'HIGH' ? 'border-l-red-400 hover:border-red-300/40' : item.risk === 'MEDIUM' ? 'border-l-amber-300 hover:border-amber-300/40' : 'border-l-slate-500 hover:border-emerald-300/30'}`}><div className="flex items-center justify-between"><span className="text-sm text-slate-300">{item.label}</span><span className={`rounded-full px-2 py-1 text-xs font-semibold ${item.count ? (item.risk === 'HIGH' ? 'bg-red-300/10 text-red-300' : 'bg-amber-300/10 text-amber-300') : 'bg-emerald-300/10 text-emerald-300'}`}>{item.count}</span></div><div className="mt-3 flex items-center justify-between text-xs text-slate-500"><span className={item.risk === 'HIGH' ? 'font-semibold text-red-300' : item.risk === 'MEDIUM' ? 'font-semibold text-amber-300' : ''}>{item.risk} review priority</span><ArrowUpRight className="h-3.5 w-3.5 opacity-0 transition group-hover:opacity-100" /></div></Link>)}</div></section>
-    <div className="grid gap-3 md:grid-cols-3"><Link href={`/external-auditor/evidence?propertyId=${scope.propertyId}`} className="rounded-2xl border border-white/[.08] bg-white/[.035] p-4 hover:bg-white/[.06]"><div className="flex items-center gap-3"><FileSearch className="h-5 w-5 text-sky-300" /><div><p className="text-xs text-slate-500">Evidence records</p><p className="mt-1 text-lg font-semibold text-white">{data.review.evidenceRecords.toLocaleString()}</p></div></div></Link><Link href={`/external-auditor/reports?propertyId=${scope.propertyId}`} className="rounded-2xl border border-white/[.08] bg-white/[.035] p-4 hover:bg-white/[.06]"><div className="flex items-center gap-3"><BarChart3 className="h-5 w-5 text-violet-300" /><div><p className="text-xs text-slate-500">Journal entries</p><p className="mt-1 text-lg font-semibold text-white">{data.review.journalEntries.toLocaleString()}</p></div></div></Link><div className="rounded-2xl border border-white/[.08] bg-white/[.035] p-4"><div className="flex items-center gap-3"><ShieldCheck className="h-5 w-5 text-emerald-300" /><div><p className="text-xs text-slate-500">Audit events</p><p className="mt-1 text-lg font-semibold text-white">{data.review.auditEvents.toLocaleString()}</p></div></div></div></div>
-    {loading && <p className="flex items-center justify-end gap-2 text-xs text-slate-500"><RefreshCw className="h-3 w-3 animate-spin" /> Refreshing engagement data…</p>}
-  </div>;
+  );
 }
