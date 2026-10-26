@@ -37,6 +37,33 @@ export async function POST(request: NextRequest) {
   await prisma.$transaction(async (tx) => {
     const claimed = await tx.referralActivationPayment.updateMany({ where: { id: payment.id, status: 'PENDING' }, data: { status: 'PAID', providerTransactionId: String(transactionId), paidAt: new Date() } });
     if (claimed.count !== 1) return;
+    const amountMinor = Math.round(Number(verified.amount) * 100);
+    await tx.billingInvoice.upsert({
+      where: { flutterwaveInvoiceId: String(transactionId) },
+      create: {
+        organizationId: payment.organizationId,
+        flutterwaveInvoiceId: String(transactionId),
+        flutterwaveCustomerId: verified.customer?.email ?? null,
+        flutterwaveSubscriptionId: null,
+        status: 'paid',
+        currency: verified.currency,
+        subtotal: amountMinor,
+        total: amountMinor,
+        amountPaid: amountMinor,
+        amountDue: 0,
+        periodStart: null,
+        periodEnd: null,
+        hostedInvoiceUrl: null,
+        invoicePdf: null,
+        payload: verified as any,
+      },
+      update: {
+        status: 'paid',
+        amountPaid: amountMinor,
+        amountDue: 0,
+        payload: verified as any,
+      },
+    });
     const journalId = await postActivationJournal(tx, payment.id, Number(payment.amount));
     await tx.referralActivationPayment.update({ where: { id: payment.id }, data: { hqJournalEntryId: journalId } });
     const now = new Date();

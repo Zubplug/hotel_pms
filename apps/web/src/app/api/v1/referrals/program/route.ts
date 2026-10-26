@@ -75,6 +75,9 @@ export async function PUT(req: NextRequest) {
     const activationPrice = await prisma.billingPrice.findFirst({ where: { product: { code: 'ADDON_REACH', active: true }, interval: 'one_time' }, orderBy: { createdAt: 'desc' } });
     const activationAmount = activationPrice ? activationPrice.amount / 100 : Number(existing?.activationFeeAmount ?? 50000);
     const activationCurrency = activationPrice?.currency || property.baseCurrency;
+    const discount = activationPrice ? await prisma.organizationBillingDiscount.findFirst({ where: { organizationId: context.organizationId, product: { code: 'ADDON_REACH' }, active: true, startsAt: { lte: new Date() }, OR: [{ endsAt: null }, { endsAt: { gt: new Date() } }] }, orderBy: { percentage: 'desc' }, select: { percentage: true } }) : null;
+    const discountPercentage = discount ? Number(discount.percentage) : 0;
+    const payableActivationAmount = activationPrice ? Math.max(0.01, Math.round(activationAmount * (1 - discountPercentage / 100) * 100) / 100) : activationAmount;
     const alreadyPaid = existing?.activationPaymentStatus === 'PAID' || activationAmount <= 0;
     if (enabled && !alreadyPaid) {
       const email = session.user.email;
@@ -82,13 +85,13 @@ export async function PUT(req: NextRequest) {
       if (!process.env.FLW_SECRET_KEY) return errorResponse('SERVICE_UNAVAILABLE', 'Flutterwave activation billing is not configured', 503);
       const program = await prisma.referralProgram.upsert({
         where: { propertyId: property.id },
-        create: { organizationId: context.organizationId, propertyId: property.id, enabled: false, attributionWindowDays, platformFeeBps, minimumPayout, activationFeeAmount: activationAmount, activationFeeCurrency: activationCurrency, activationPaymentStatus: 'PENDING' },
-        update: { attributionWindowDays, platformFeeBps, minimumPayout, activationFeeAmount: activationAmount, activationFeeCurrency: activationCurrency, activationPaymentStatus: 'PENDING' },
+        create: { organizationId: context.organizationId, propertyId: property.id, enabled: false, attributionWindowDays, platformFeeBps, minimumPayout, activationFeeAmount: payableActivationAmount, activationFeeCurrency: activationCurrency, activationPaymentStatus: 'PENDING' },
+        update: { attributionWindowDays, platformFeeBps, minimumPayout, activationFeeAmount: payableActivationAmount, activationFeeCurrency: activationCurrency, activationPaymentStatus: 'PENDING' },
       });
       const providerReference = `reach-activation-${property.id}-${randomUUID()}`;
-      const payment = await prisma.referralActivationPayment.create({ data: { organizationId: context.organizationId, propertyId: property.id, programId: program.id, amount: activationAmount, currency: activationCurrency, providerReference } });
-      const checkout = await createFlutterwaveCheckout({ amount: activationAmount, currency: activationCurrency, txRef: providerReference, redirectUrl: `${process.env.NEXT_PUBLIC_WEBSITE_URL || 'https://getlodgecore.vercel.app'}/portal/dashboard?reachActivation=true`, customer: { email, name: session.user.name || undefined }, meta: { lodgecore_source: 'reach_activation', organizationId: context.organizationId, propertyId: property.id, activationPaymentId: payment.id } });
-      return successResponse({ activationRequired: true, activationFee: activationAmount, currency: activationCurrency, checkoutUrl: checkout.link, program, eligibility: access }, 200);
+      const payment = await prisma.referralActivationPayment.create({ data: { organizationId: context.organizationId, propertyId: property.id, programId: program.id, amount: payableActivationAmount, currency: activationCurrency, providerReference } });
+      const checkout = await createFlutterwaveCheckout({ amount: payableActivationAmount, currency: activationCurrency, txRef: providerReference, redirectUrl: `${process.env.NEXT_PUBLIC_WEBSITE_URL || 'https://getlodgecore.vercel.app'}/portal/dashboard?reachActivation=true`, customer: { email, name: session.user.name || undefined }, meta: { lodgecore_source: 'reach_activation', organizationId: context.organizationId, propertyId: property.id, activationPaymentId: payment.id, productCodes: 'ADDON_REACH', priceIds: activationPrice?.id || '', originalAmount: String(activationAmount), discountPercentage: String(discountPercentage) } });
+      return successResponse({ activationRequired: true, activationFee: payableActivationAmount, currency: activationCurrency, checkoutUrl: checkout.link, program, eligibility: access }, 200);
     }
     const program = await prisma.referralProgram.upsert({
       where: { propertyId: property.id },
