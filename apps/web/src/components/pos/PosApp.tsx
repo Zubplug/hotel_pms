@@ -128,10 +128,46 @@ export default function PosApp() {
   const [showPrinterSettings, setShowPrinterSettings] = useState(false);
   const [showSyncCenter, setShowSyncCenter] = useState(false);
 
+  // Pool Operations is available only to terminals attached to a pool-type
+  // outlet. The outlet's saved type is authoritative; the POS terminal type
+  // must not make the pool link appear on restaurant, bar, or club outlets.
+  const outletType = String(sessionContext?.outlet?.type || '').trim().toUpperCase();
+  const isPoolOutlet = ['POOL', 'RECREATION', 'SWIMMING_POOL', 'SWIMMING_POOL_OUTLET'].includes(outletType);
+
   const lockOperator = useCallback(() => {
     operatorSwitchOverride.current = true;
     setActiveOperator(null);
     setOperatorToken(null);
+    // Reset transient workstation state before another staff member signs in.
+    // This prevents the next operator from inheriting the previous operator's
+    // open modal, cart, selected order, or customer-display state.
+    setCart([]);
+    setCurrentOrderId(null);
+    setActiveCheckId(null);
+    setOrderChecks([]);
+    setActiveTableId(null);
+    setActiveTableName(null);
+    setActiveOrderType('TABLE');
+    setActiveDisplayName('');
+    setViewMode('menu');
+    setModifierTarget(null);
+    setItemToModify(null);
+    setShowMySales(false);
+    setShowShiftBank(false);
+    setShowEmergencyModal(false);
+    setShowMyOrders(false);
+    setShowActiveOrders(false);
+    setShowChargeModal(false);
+    setShowVoidOrderModal(false);
+    setShowDiscountModal(false);
+    setShowKitchenModal(false);
+    setShowPrinterSettings(false);
+    setShowSyncCenter(false);
+    setShowRoomServiceAlert(false);
+    setShowSplitModal(false);
+    setSuccessDialog(null);
+    setCustomerDisplayPayment(null);
+    setIsVoidingOrder(false);
     localStorage.removeItem('lodgecore_pos_operator_token');
     // Clear the trusted offline operator context as well as the React state.
     // The POS session/till remains open; only the staff identity is locked.
@@ -1181,6 +1217,7 @@ export default function PosApp() {
           syncPending={syncPending}
           activeOperator={activeOperator}
           isDesktop={isDesktopMode}
+          isPoolOutlet={isPoolOutlet}
           pendingRoomServiceCount={pendingRoomServiceOrders.length}
           onOpenRoomService={() => setShowRoomServiceAlert(true)}
         />
@@ -1485,7 +1522,7 @@ export default function PosApp() {
                         <button
                           onClick={() => setItemToModify(item)}
                           className="absolute -top-2 -right-2 flex items-center gap-1 px-2 py-0.5 rounded-full bg-white border border-red-200 text-red-500 text-[10px] font-bold shadow-sm hover:bg-red-50 active:scale-95 transition-all z-10 touch-manipulation"
-                          title="Void or replace item"
+                          title="Void item"
                         >
                           <Trash2 className="w-2.5 h-2.5" />
                           VOID
@@ -1852,7 +1889,6 @@ export default function PosApp() {
         onClose={() => setItemToModify(null)}
         item={itemToModify}
         orderId={currentOrderId!}
-        allProducts={products}
         onSuccess={(updatedOrder) => {
           if (updatedOrder) {
             // If all items were voided individually the backend auto-voids the whole order
@@ -1871,7 +1907,7 @@ export default function PosApp() {
               // The offline repository returns its EF entities with PascalCase
               // fields and keeps voided lines in the order for audit history.
               // Rebuild the POS cart shape and exclude those audit-only lines;
-              // otherwise a successful void/replacement appears unchanged.
+              // otherwise a successful void appears unchanged.
               const rawItems = (updatedOrder.items ?? updatedOrder.Items) as any[];
               const currentByProduct = new Map(cart.map((entry) => [entry.productId, entry]));
               const refreshedItems: OrderItem[] = rawItems

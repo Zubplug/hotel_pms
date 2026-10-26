@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Save } from 'lucide-react';
+import FnbSettingsClient from './client';
 
 export const metadata: Metadata = {
   title: 'Settings | F&B Management',
@@ -62,6 +63,8 @@ export default function FnbSettingsPage() {
           </CardContent>
         </Card>
       </div>
+
+      <FnbSettingsClient />
     </div>
   );
 }

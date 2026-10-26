@@ -126,19 +126,24 @@ export function useGlobalTerminalAuth({
           // was locked or disconnected. Push that session and refresh its UI
           // queries as soon as the operator is authenticated again.
           if (selectedStaff.role?.toUpperCase() === 'RECEPTIONIST' || selectedStaff.role?.toUpperCase() === 'FRONT_DESK') {
-            try {
-              await provider.system?.forceSync?.();
-            } catch {
-              // Login remains available offline; the outbox will retry later.
+            // Do not make local login wait for cloud sync. A device may report
+            // online while the API is unreachable, and ForceSyncAsync waits
+            // for the complete cycle. Sync and UI refresh continue in the
+            // background while the local session opens immediately.
+            const syncPromise = provider.system?.forceSync?.();
+            if (syncPromise) {
+              void syncPromise.catch((syncError: unknown) => {
+                console.warn('[GlobalAuth] Background Front Desk sync unavailable; continuing with local login.', syncError);
+              });
             }
-            await queryClient.invalidateQueries({ queryKey: ['frontdesk'] });
-            await queryClient.invalidateQueries({ queryKey: ['frontdesk-session'] });
+            void queryClient.invalidateQueries({ queryKey: ['frontdesk'] });
+            void queryClient.invalidateQueries({ queryKey: ['frontdesk-session'] });
           }
           // Read back the terminal configuration to decide routing
           const statusRes = await provider.system?.getTerminalStatus?.();
           const mode = statusRes?.desktopMode || 'UNKNOWN';
-          await queryClient.invalidateQueries({ queryKey: ['desktop_auth'] });
-          await queryClient.refetchQueries({ queryKey: ['desktop_auth'] });
+          void queryClient.invalidateQueries({ queryKey: ['desktop_auth'] });
+          void queryClient.refetchQueries({ queryKey: ['desktop_auth'] });
           setStep('success');
           onAuthenticated(mode);
         } else {

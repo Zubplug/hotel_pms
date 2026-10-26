@@ -6118,7 +6118,14 @@ public class LocalRepository
             kots.Add(kot);
         }
 
-        AppendSyncEvent("POS_ORDER", order.Id, "ORDER_ITEMS_ADDED", new { order, kots }, deviceId, order.OutletId, order.SessionId, userId);
+        // Fire More adds the new lines directly to the DbSet, so EF's loaded
+        // order navigation still contains only the original lines. The
+        // incremental sync contract deliberately sends a complete snapshot;
+        // build that snapshot explicitly so the cloud and All Orders view see
+        // the original items plus every newly fired item exactly once.
+        var syncOrder = JsonSerializer.SerializeToNode(order)?.AsObject() ?? new JsonObject();
+        syncOrder["Items"] = JsonSerializer.SerializeToNode(order.Items.Concat(newItems).ToList());
+        AppendSyncEvent("POS_ORDER", order.Id, "ORDER_ITEMS_ADDED", new { order = syncOrder, kots }, deviceId, order.OutletId, order.SessionId, userId);
 
         await _dbContext.SaveChangesAsync();
         return (order, kots);
@@ -6504,6 +6511,8 @@ public class LocalRepository
     private async Task CommitLocalSaleAsync(LocalPosOrder order, string userId, string deviceId, string? authorizerId)
     {
         if (await _dbContext.StockTransactions.AnyAsync(t => t.ReferenceId == order.Id && t.Source == "SALE")) return;
+        var property = await _dbContext.Properties.FirstOrDefaultAsync(p => p.Id == order.PropertyId);
+        if (string.Equals(property?.FnbInventoryControlMode, "SALE_ONLY", StringComparison.OrdinalIgnoreCase)) return;
         var outletWarehouseId = await _dbContext.PosOutlets
             .Where(o => o.Id == order.OutletId)
             .Select(o => o.WarehouseId)
@@ -6607,7 +6616,6 @@ public class LocalRepository
         var templateItems = await _dbContext.StockItems
             .Where(s => requirements.Keys.Contains(s.Id) && s.PropertyId == order.PropertyId)
             .ToListAsync();
-        var property = await _dbContext.Properties.FirstOrDefaultAsync(p => p.Id == order.PropertyId);
         var kitchenWarehouseId = !string.IsNullOrWhiteSpace(property?.KitchenServiceOutletId)
             ? await _dbContext.PosOutlets.Where(o => o.Id == property.KitchenServiceOutletId).Select(o => o.WarehouseId).FirstOrDefaultAsync()
             : null;

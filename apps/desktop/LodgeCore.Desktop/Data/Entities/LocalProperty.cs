@@ -16,6 +16,11 @@ public class LocalProperty
     public string AuditStatus { get; set; } = "OPEN";
     public bool IsActive { get; set; }
     public string? KitchenServiceOutletId { get; set; }
+    /// <summary>
+    /// Approved F&B POS inventory policy. SALE_ONLY does not inspect stock;
+    /// DEDUCT validates and posts sale deductions.
+    /// </summary>
+    public string FnbInventoryControlMode { get; set; } = "DEDUCT";
     public string? RateBreakdownJson { get; set; }
     public int RateBreakdownConfigVersion { get; set; } = 1;
 

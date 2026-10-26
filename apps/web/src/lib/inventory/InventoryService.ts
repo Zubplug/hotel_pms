@@ -72,6 +72,12 @@ export class InventoryService {
     });
     if (!order) throw new Error('POS Order not found');
 
+    const property = await tx.property.findUnique({ where: { id: order.propertyId }, select: { baseCurrency: true, settings: true } });
+    if (!property) throw new Error('POS property is unavailable');
+    if (String((property.settings as any)?.fnb?.inventoryControl?.mode || 'DEDUCT').toUpperCase() === 'SALE_ONLY') {
+      return { success: true, message: 'Sale-only inventory policy: no stock validation or deduction applied' };
+    }
+
     const requirements = new Map<string, { quantity: number; centralKitchen: boolean }>();
     const productUsesKitchen = (product: any) => isKitchenProductionStation(
       product?.productionStation ?? product?.category?.productionStation,
@@ -103,9 +109,6 @@ export class InventoryService {
         addRequirement(modifier.stockItemId, Number(modifier.quantity) * conversion * Number(item.quantity), productUsesKitchen(item.product));
       }
     }
-
-    const property = await tx.property.findUnique({ where: { id: order.propertyId }, select: { baseCurrency: true, settings: true } });
-    if (!property) throw new Error('POS property is unavailable');
 
     const outletWarehouse = await tx.warehouse.findUnique({
       where: { posOutletId: order.outletId },

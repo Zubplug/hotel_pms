@@ -909,6 +909,13 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                     if (propEl.TryGetProperty("bankingModel", out var bm))
                         localProp.BankingModel = bm.GetString() ?? localProp.BankingModel;
 
+                    if (propEl.TryGetProperty("fnbInventoryControlMode", out var fnbInventoryMode)
+                        && fnbInventoryMode.ValueKind != System.Text.Json.JsonValueKind.Null)
+                    {
+                        var mode = fnbInventoryMode.GetString()?.ToUpperInvariant();
+                        if (mode is "SALE_ONLY" or "DEDUCT") localProp.FnbInventoryControlMode = mode;
+                    }
+
                     if (propEl.TryGetProperty("depositApprovalThreshold", out var dat) && dat.TryGetDecimal(out var depositThreshold))
                         localProp.DepositApprovalThreshold = depositThreshold;
                     if (propEl.TryGetProperty("creditAdjustmentApprovalThreshold", out var caat) && caat.TryGetDecimal(out var creditThreshold))
@@ -1024,6 +1031,7 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                         NoShowAllowReinstatement = !propEl.TryGetProperty("noShowAllowReinstatement", out var nsa2) || nsa2.ValueKind == System.Text.Json.JsonValueKind.True,
                         NoShowReinstatementRequiresApproval = !propEl.TryGetProperty("noShowReinstatementRequiresApproval", out var nsra2) || nsra2.ValueKind == System.Text.Json.JsonValueKind.True,
                         KitchenServiceOutletId = propEl.TryGetProperty("kitchenServiceOutletId", out var kitchenOutlet2) && kitchenOutlet2.ValueKind != System.Text.Json.JsonValueKind.Null ? kitchenOutlet2.GetString() : null,
+                        FnbInventoryControlMode = propEl.TryGetProperty("fnbInventoryControlMode", out var fnbInventoryMode2) && fnbInventoryMode2.ValueKind != System.Text.Json.JsonValueKind.Null && (fnbInventoryMode2.GetString()?.ToUpperInvariant() is "SALE_ONLY" or "DEDUCT") ? fnbInventoryMode2.GetString()!.ToUpperInvariant() : "DEDUCT",
                         AuditStatus = propEl.TryGetProperty("auditStatus", out var auditStatus2) && auditStatus2.ValueKind != System.Text.Json.JsonValueKind.Null ? auditStatus2.GetString() ?? "OPEN" : "OPEN",
                         BusinessDate = propEl.TryGetProperty("businessDate", out var bd2) && bd2.ValueKind != System.Text.Json.JsonValueKind.Null && DateTime.TryParse(bd2.GetString(), out var parsedDate2) ? parsedDate2 : DateTime.UtcNow.Date
                     };

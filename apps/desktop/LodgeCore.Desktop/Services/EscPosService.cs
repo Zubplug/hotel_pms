@@ -77,6 +77,21 @@ public class EscPosService
         return printer;
     }
 
+    /// <summary>
+    /// Resolves a printer for an operational role. The receipt printer is the
+    /// terminal's universal POS fallback, so a terminal can operate with only
+    /// one configured printer (for example, a club POS with no separate bar or
+    /// kitchen printer).
+    /// </summary>
+    private async Task<LocalPrinterConfig?> GetOperationalPrinterAsync(string role, string? outletId = null)
+    {
+        var printer = await GetPrinterByRoleAsync(role, outletId);
+        if (printer != null || string.Equals(role, "RECEIPT", StringComparison.OrdinalIgnoreCase))
+            return printer;
+
+        return await GetPrinterByRoleAsync("RECEIPT", outletId);
+    }
+
     public async Task<LocalPrinterConfig> SavePrinterAsync(LocalPrinterConfig config)
     {
         using var scope = _serviceProvider.CreateScope();
@@ -127,8 +142,7 @@ public class EscPosService
 
     public async Task<(bool success, string? error)> PrintRegistrationCardAsync(RegistrationCardData card, string? outletId = null)
     {
-        var printer = await GetPrinterByRoleAsync("FRONTDESK", outletId) 
-                      ?? await GetPrinterByRoleAsync("RECEIPT", outletId);
+        var printer = await GetOperationalPrinterAsync("FRONTDESK", outletId);
         
         if (printer == null)
             return (false, "No active FRONTDESK or RECEIPT printer configured.");
@@ -166,8 +180,7 @@ public class EscPosService
 
     public async Task<(bool success, string? error)> PrintGuestFolioAsync(GuestFolioData folio, string? outletId = null)
     {
-        var printer = await GetPrinterByRoleAsync("FRONTDESK", outletId) 
-                      ?? await GetPrinterByRoleAsync("RECEIPT", outletId);
+        var printer = await GetOperationalPrinterAsync("FRONTDESK", outletId);
         
         if (printer == null)
             return (false, "No active FRONTDESK or RECEIPT printer configured.");
@@ -245,8 +258,7 @@ public class EscPosService
 
     public async Task<(bool success, string? error)> PrintPaymentReceiptAsync(PaymentReceiptData payment, string? outletId = null)
     {
-        var printer = await GetPrinterByRoleAsync("FRONTDESK", outletId) 
-                      ?? await GetPrinterByRoleAsync("RECEIPT", outletId);
+        var printer = await GetOperationalPrinterAsync("FRONTDESK", outletId);
         
         if (printer == null)
             return (false, "No active FRONTDESK or RECEIPT printer configured.");
@@ -309,7 +321,7 @@ public class EscPosService
 
     public async Task<(bool success, string? error)> PrintShiftReportAsync(ShiftReportData report, string? outletId = null)
     {
-        var printer = await GetPrinterByRoleAsync("RECEIPT", outletId);
+        var printer = await GetOperationalPrinterAsync("RECEIPT", outletId);
         if (printer == null)
             return (false, "No active RECEIPT printer configured.");
 
@@ -418,7 +430,7 @@ public class EscPosService
 
     public async Task<(bool success, string? error)> PrintReceiptAsync(ReceiptData receipt, string? outletId = null)
     {
-        var printer = await GetPrinterByRoleAsync("RECEIPT", outletId);
+        var printer = await GetOperationalPrinterAsync("RECEIPT", outletId);
         if (printer == null)
             return (false, "No active RECEIPT printer configured for this terminal.");
 
@@ -494,8 +506,7 @@ public class EscPosService
     public async Task<(bool success, string? error)> PrintKotAsync(KotData kot, string? outletId = null)
     {
         var station = string.IsNullOrWhiteSpace(kot.Station) ? "KITCHEN" : kot.Station.Trim().ToUpperInvariant();
-        var printer = await GetPrinterByRoleAsync(station, outletId)
-                      ?? await GetPrinterByRoleAsync("RECEIPT", outletId);
+        var printer = await GetOperationalPrinterAsync(station, outletId);
         
         if (printer == null)
             return (false, $"No active {station} or RECEIPT printer configured.");
@@ -573,7 +584,7 @@ public class EscPosService
 
     public async Task<(bool success, string? error)> PrintWaiterSlipAsync(KotData kot, string? outletId = null)
     {
-        var printer = await GetPrinterByRoleAsync("RECEIPT", outletId);
+        var printer = await GetOperationalPrinterAsync("RECEIPT", outletId);
         if (printer == null)
             return (false, "No active RECEIPT printer configured for waiter slip.");
 
@@ -617,9 +628,7 @@ public class EscPosService
 
     public async Task<(bool success, string? error)> PrintLaundryTicketAsync(LaundryTicketData ticket, string? outletId = null)
     {
-        var printer = await GetPrinterByRoleAsync("LAUNDRY", outletId)
-                      ?? await GetPrinterByRoleAsync("FRONTDESK", outletId)
-                      ?? await GetPrinterByRoleAsync("RECEIPT", outletId);
+        var printer = await GetOperationalPrinterAsync("LAUNDRY", outletId);
         if (printer == null)
             return (false, "No active LAUNDRY, FRONTDESK, or RECEIPT printer configured.");
 
@@ -649,7 +658,7 @@ public class EscPosService
 
     public async Task<(bool success, string? error)> PrintLaundryCustomerDocumentsAsync(LaundryTicketData ticket, string? outletId = null)
     {
-        var printer = await GetPrinterByRoleAsync("RECEIPT", outletId)
+        var printer = await GetOperationalPrinterAsync("RECEIPT", outletId)
                       ?? await GetPrinterByRoleAsync("FRONTDESK", outletId);
         if (printer == null)
             return (false, "No active RECEIPT or FRONTDESK printer configured for customer laundry documents.");

@@ -90,6 +90,48 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Property not found' }, { status: 404 });
     }
 
+    // Front Desk and POS both use this sync endpoint. Ensure the property's
+    // current business date is covered by an accounting period before either
+    // client resumes posting offline transactions. This is intentionally
+    // idempotent and never reopens a period that was deliberately closed.
+    const accountingPeriod = await prisma.accountingPeriod.findFirst({
+      where: {
+        propertyId,
+        periodStart: { lte: property.businessDate },
+        periodEnd: { gte: property.businessDate },
+      },
+      select: { id: true },
+    });
+
+    if (!accountingPeriod) {
+      const businessDate = new Date(property.businessDate);
+      const periodStart = new Date(Date.UTC(businessDate.getUTCFullYear(), businessDate.getUTCMonth(), 1));
+      const periodEnd = new Date(Date.UTC(businessDate.getUTCFullYear(), businessDate.getUTCMonth() + 1, 0));
+      const periodName = new Intl.DateTimeFormat('en-US', {
+        month: 'long',
+        year: 'numeric',
+        timeZone: 'UTC',
+      }).format(businessDate);
+
+      try {
+        await prisma.accountingPeriod.create({
+          data: {
+            propertyId,
+            name: periodName,
+            periodStart,
+            periodEnd,
+            status: 'OPEN',
+            notes: 'Automatically created during Front Desk/POS synchronization.',
+          },
+          select: { id: true },
+        });
+      } catch (error: any) {
+        // Another Front Desk/POS sync may create the same period concurrently.
+        // The unique propertyId + periodStart constraint makes that race safe.
+        if (error?.code !== 'P2002') throw error;
+      }
+    }
+
     const noShowPolicy = await prisma.noShowPolicy.findFirst({
       where: { propertyId },
       orderBy: { name: 'asc' },
@@ -936,6 +978,7 @@ export async function GET(req: NextRequest) {
       kitchenServiceOutletId,
       earlyCheckinWindowHours: (settings.earlyCheckinWindowHours as number) ?? 2,
       bankingModel: ((settings.pos as any)?.bankingModel as string) ?? 'CENTRAL_CASHIER',
+      fnbInventoryControlMode: String((settings.fnb as any)?.inventoryControl?.mode || 'DEDUCT').toUpperCase() === 'SALE_ONLY' ? 'SALE_ONLY' : 'DEDUCT',
       depositApprovalThreshold: Number(financialControls.depositApprovalThreshold ?? 250000),
       creditAdjustmentApprovalThreshold: Number(financialControls.creditAdjustmentApprovalThreshold ?? 1),
       refundApprovalThreshold: Number(financialControls.refundApprovalThreshold ?? 1),

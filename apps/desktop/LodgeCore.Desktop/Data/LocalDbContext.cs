@@ -353,6 +353,7 @@ public class LocalDbContext : DbContext
         {
             "ALTER TABLE Properties ADD COLUMN RateBreakdownJson TEXT NULL",
             "ALTER TABLE Properties ADD COLUMN RateBreakdownConfigVersion INTEGER NOT NULL DEFAULT 1",
+            "ALTER TABLE Properties ADD COLUMN FnbInventoryControlMode TEXT NOT NULL DEFAULT 'DEDUCT'",
             "ALTER TABLE RatePlans ADD COLUMN IncludeFoodAllocation INTEGER NOT NULL DEFAULT 0",
         };
         foreach (var sql in columns)

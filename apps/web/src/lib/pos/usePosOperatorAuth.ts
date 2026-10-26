@@ -164,12 +164,16 @@ export function usePosOperatorAuth({
     setError(null);
 
     try {
-      // Refresh the local POS session projection before PIN authentication so
-      // a closed/submitted shift cannot be reopened from stale offline state.
+      // Never block local POS authentication on a cloud sync. A device can
+      // report online while the API is unreachable, and ForceSyncAsync waits
+      // for the complete cycle. The local SQLite projection is authoritative
+      // for login; sync can refresh approval state in the background.
       if (isDesktopMode && isOnline) {
-        const syncResult = await provider.system?.forceSync?.();
-        if (syncResult && (syncResult as any).success === false) {
-          throw new Error('Unable to refresh shift approval state. Check the terminal connection and try again.');
+        const syncPromise = provider.system?.forceSync?.();
+        if (syncPromise) {
+          void syncPromise.catch((syncError: unknown) => {
+            console.warn('[PosOperatorAuth] Background sync unavailable; continuing with local login.', syncError);
+          });
         }
       }
       const existingSessionId =

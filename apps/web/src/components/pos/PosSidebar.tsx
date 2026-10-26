@@ -25,6 +25,7 @@ interface PosSidebarProps {
   syncPending: number;
   activeOperator: any | null;
   isDesktop?: boolean;
+  isPoolOutlet?: boolean;
   pendingRoomServiceCount?: number;
 }
 
@@ -44,6 +45,7 @@ export function PosSidebar({
   syncPending,
   activeOperator,
   isDesktop = false,
+  isPoolOutlet = false,
   pendingRoomServiceCount = 0,
 }: PosSidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
@@ -157,19 +159,21 @@ export function PosSidebar({
         <NavItem icon={Receipt} label="All Orders" onClick={onOpenMyOrders} />
         <NavItem icon={TrendingUp} label="My Sales"     onClick={onOpenMySales} />
         <NavItem icon={Wallet}     label="Shift Bank"   onClick={onOpenShiftBank} />
-        <Link
-          href="/pos/swimming-pool"
-          title={collapsed ? 'Pool Terminal' : undefined}
-          className={`relative group flex items-center gap-3 w-full rounded-xl transition-all duration-150 font-semibold text-sm touch-manipulation text-slate-500 hover:bg-slate-100 hover:text-slate-800 ${collapsed ? 'justify-center px-0 py-3' : 'px-3 py-2.5'}`}
-        >
-          <Waves className={`shrink-0 text-slate-400 group-hover:text-sky-500 ${collapsed ? 'w-5 h-5' : 'w-[18px] h-[18px]'}`} />
-          {!collapsed && <span className="flex-1 text-left truncate">Pool Terminal</span>}
-          {collapsed && (
-            <span className="absolute left-full ml-2 px-2 py-1 rounded-lg bg-slate-800 text-white text-xs font-semibold whitespace-nowrap pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-50 shadow-lg">
-              Pool Terminal
-            </span>
-          )}
-        </Link>
+        {isPoolOutlet && (
+          <Link
+            href="/pos/swimming-pool"
+            title={collapsed ? 'Pool Terminal' : undefined}
+            className={`relative group flex items-center gap-3 w-full rounded-xl transition-all duration-150 font-semibold text-sm touch-manipulation text-slate-500 hover:bg-slate-100 hover:text-slate-800 ${collapsed ? 'justify-center px-0 py-3' : 'px-3 py-2.5'}`}
+          >
+            <Waves className={`shrink-0 text-slate-400 group-hover:text-sky-500 ${collapsed ? 'w-5 h-5' : 'w-[18px] h-[18px]'}`} />
+            {!collapsed && <span className="flex-1 text-left truncate">Pool Terminal</span>}
+            {collapsed && (
+              <span className="absolute left-full ml-2 px-2 py-1 rounded-lg bg-slate-800 text-white text-xs font-semibold whitespace-nowrap pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-50 shadow-lg">
+                Pool Terminal
+              </span>
+            )}
+          </Link>
+        )}
 
         <NavItem icon={ChefHat}    label="Kitchen"      onClick={onOpenKitchen} />
         {pendingRoomServiceCount > 0 && (
