@@ -45,7 +45,10 @@ const dirsToHide = [
   { src: path.join(process.cwd(), 'src/app/employee'), dest: path.join(process.cwd(), 'src/app/_employee') },
   // Portal integrations require an online session and provider credentials; never package them in offline desktop builds.
   { src: path.join(process.cwd(), 'src/app/portal'), dest: path.join(process.cwd(), 'src/app/_portal') },
-  { src: path.join(process.cwd(), 'src/app/(portal)'), dest: path.join(process.cwd(), 'src/app/_portal_group') }
+  { src: path.join(process.cwd(), 'src/app/(portal)'), dest: path.join(process.cwd(), 'src/app/_portal_group') },
+  // Password reset links contain arbitrary tokens and are web-only; they cannot
+  // be prerendered into the desktop static export.
+  { src: path.join(process.cwd(), 'src/app/reset-password'), dest: path.join(process.cwd(), 'src/app/_reset-password') }
 ];
 
 // These cashier pages reuse admin POS screens. When the admin route group is
