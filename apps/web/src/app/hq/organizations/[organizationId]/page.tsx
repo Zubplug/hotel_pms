@@ -1,138 +1,43 @@
-import prisma from '@hotel-pms/db';
+import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { format } from 'date-fns';
-import { ShieldAlert, Home } from 'lucide-react';
+import { ArrowLeft, ArrowUpRight, Building2, CreditCard, Globe2, Users, WalletCards } from 'lucide-react';
+import prisma from '@hotel-pms/db';
 import { requireHQAdmin } from '@/lib/auth/hq';
-import { saveOrganizationDiscount } from '../actions';
+import OrganizationDetailActions from './OrganizationDetailActions';
 
-export default async function TenantControlPage({
-  params
-}: {
-  params: Promise<{ organizationId: string }>
-}) {
+export default async function OrganizationDetailsPage({ params }: { params: Promise<{ organizationId: string }> }) {
   await requireHQAdmin();
   const { organizationId } = await params;
-  const org = await prisma.organization.findUnique({
-    where: { id: organizationId },
-    include: {
-      properties: true,
-      subscriptions: { include: { items: { include: { price: { include: { product: true } } } } } },
-      entitlements: { include: { product: true } }
-    }
-  }) as any;
-
-  if (!org) notFound();
-
-  const [discountPlans, discountAddons, organizationDiscounts] = await Promise.all([
+  const [organization, plans, addOns] = await Promise.all([
+    prisma.organization.findUnique({
+      where: { id: organizationId },
+      include: {
+        properties: { orderBy: { createdAt: 'asc' } },
+        subscriptions: { orderBy: { createdAt: 'desc' }, take: 5, include: { plan: { select: { name: true, code: true } } } },
+        entitlements: { where: { status: 'ACTIVE' }, include: { product: { select: { name: true, code: true } } }, orderBy: { createdAt: 'desc' } },
+        memberships: { where: { status: 'ACTIVE', role: 'OWNER' }, select: { id: true, role: true, createdAt: true, user: { select: { id: true, email: true, firstName: true, lastName: true, emailVerifiedAt: true } } } },
+        billingDiscounts: { where: { active: true }, include: { plan: { select: { name: true, code: true } }, product: { select: { name: true, code: true } } }, orderBy: { createdAt: 'desc' } },
+      },
+    }),
     prisma.billingPlan.findMany({ where: { active: true }, orderBy: { displayOrder: 'asc' }, select: { id: true, name: true, code: true } }),
     prisma.billingProduct.findMany({ where: { active: true, type: 'ADDON' }, orderBy: { name: 'asc' }, select: { id: true, name: true, code: true } }),
-    prisma.organizationBillingDiscount.findMany({ where: { organizationId, active: true }, include: { plan: { select: { name: true, code: true } }, product: { select: { name: true, code: true } } }, orderBy: { createdAt: 'desc' } }),
   ]);
+  if (!organization) notFound();
 
-  async function handleDiscount(formData: FormData) {
-    'use server';
-    await saveOrganizationDiscount(formData);
-  }
+  const activeSubscription = organization.subscriptions.find((subscription) => ['ACTIVE', 'TRIALING', 'PAST_DUE'].includes(subscription.status));
+  const activeProperties = organization.properties.filter((property) => property.isActive).length;
+  const operationalProperties = organization.properties.filter((property) => property.isActive && property.businessDate && property.auditStatus).length;
+  const organizationForActions = { id: organization.id, name: organization.name, slug: organization.slug, defaultCurrency: organization.defaultCurrency, defaultTimezone: organization.defaultTimezone };
 
-  return (
-    <div className="p-8 space-y-8">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight text-zinc-900 dark:text-white">{org.name}</h1>
-        <p className="text-zinc-500 mt-1">Tenant ID: {org.id}</p>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-zinc-500">Properties</CardTitle>
-            <Home className="w-4 h-4 text-zinc-400" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{org.properties.length}</div>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-zinc-500">Status</CardTitle>
-            <ShieldAlert className="w-4 h-4 text-zinc-400" />
-          </CardHeader>
-          <CardContent>
-            <Badge variant="outline" className="text-sm px-3 py-1">Active</Badge>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid grid-cols-1 gap-8">
-        <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Commercial discounts</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="mb-4 text-sm text-zinc-500">Set a percentage discount for this organisation’s future plan or add-on checkout. Existing invoices are not changed.</p>
-              <form action={handleDiscount} className="space-y-3">
-                <input type="hidden" name="organizationId" value={organizationId} />
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <label className="text-sm text-zinc-600 dark:text-zinc-400">Target type<select name="targetType" required className="mt-1 w-full rounded-md border bg-white p-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"><option value="PLAN">Subscription plan</option><option value="ADDON">Add-on</option></select></label>
-                  <label className="text-sm text-zinc-600 dark:text-zinc-400">Discount percentage<input name="percentage" required type="number" min="0.01" max="99.99" step="0.01" placeholder="10" className="mt-1 w-full rounded-md border bg-white p-2 text-sm dark:border-zinc-700 dark:bg-zinc-900" /></label>
-                </div>
-                <label className="block text-sm text-zinc-600 dark:text-zinc-400">Plan or add-on ID<select name="targetId" required className="mt-1 w-full rounded-md border bg-white p-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"><optgroup label="Plans">{discountPlans.map((plan) => <option key={plan.id} value={plan.id}>{plan.name} · {plan.code}</option>)}</optgroup><optgroup label="Add-ons">{discountAddons.map((addon) => <option key={addon.id} value={addon.id}>{addon.name} · {addon.code}</option>)}</optgroup></select></label>
-                <Button type="submit" size="sm">Save discount</Button>
-              </form>
-              <div className="mt-5 space-y-2 border-t pt-4 dark:border-zinc-800">{organizationDiscounts.length ? organizationDiscounts.map((discount) => <div key={discount.id} className="flex items-center justify-between gap-3 rounded-md bg-zinc-50 p-2 text-sm dark:bg-zinc-900"><span>{discount.plan?.name || discount.product?.name}</span><strong className="text-emerald-600">{Number(discount.percentage)}% off</strong></div>) : <p className="text-xs text-zinc-500">No organisation-specific discounts configured.</p>}</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle>Subscriptions</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {org.subscriptions.length === 0 ? (
-                <p className="text-zinc-500">No active subscriptions.</p>
-              ) : (
-                <ul className="space-y-4">
-                  {org.subscriptions.map((sub: any) => (
-                    <li key={sub.id} className="p-4 border rounded-lg flex justify-between items-center bg-zinc-50 dark:bg-zinc-900/50">
-                      <div>
-                        <div className="font-medium">Flutterwave: {sub.flutterwaveSubscriptionId.slice(0, 12)}...</div>
-                        <div className="text-sm text-zinc-500">
-                          Renews {format(new Date(sub.currentPeriodEnd), 'MMM d, yyyy')}
-                        </div>
-                      </div>
-                      <Badge variant={sub.status === 'ACTIVE' ? 'default' : 'destructive'}>{sub.status}</Badge>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Entitlements</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {org.entitlements.length === 0 ? (
-                <p className="text-zinc-500">No active entitlements.</p>
-              ) : (
-                <ul className="space-y-3">
-                  {org.entitlements.map((ent: any) => (
-                    <li key={ent.id} className="flex justify-between items-center py-2 border-b last:border-0">
-                      <div className="font-medium">{ent.product.name} ({ent.productCode})</div>
-                      <Badge variant={ent.status === 'ACTIVE' ? 'default' : 'destructive'}>{ent.status}</Badge>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-      </div>
-    </div>
-  );
+  return <main className="min-h-full bg-[#07111f] p-5 text-slate-200 sm:p-8 xl:p-10"><div className="mx-auto max-w-[1500px] space-y-6">
+    <div className="flex flex-wrap items-center justify-between gap-4"><Link href="/hq/organizations" className="inline-flex items-center gap-2 text-xs font-semibold text-slate-400 transition hover:text-white"><ArrowLeft className="size-4" /> Back to organisations</Link><span className="rounded-full border border-emerald-300/15 bg-emerald-300/[.06] px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[.14em] text-emerald-200">HQ detail view</span></div>
+    <header className="rounded-3xl border border-white/10 bg-[radial-gradient(circle_at_top_right,rgba(34,211,238,.13),transparent_34%),#101b2f] p-6 shadow-[0_18px_60px_rgba(0,0,0,.18)] sm:p-8"><div className="flex flex-col justify-between gap-7 lg:flex-row lg:items-end"><div><p className="text-[10px] font-bold uppercase tracking-[.24em] text-cyan-300">Organisation control plane</p><h1 className="mt-3 text-3xl font-semibold tracking-[-.05em] text-white sm:text-5xl">{organization.name}</h1><p className="mt-3 text-sm text-slate-400">{organization.slug} <span className="mx-2 text-slate-700">·</span> {organization.defaultTimezone} <span className="mx-2 text-slate-700">·</span> {organization.defaultCurrency}</p></div><OrganizationDetailActions organization={organizationForActions} plans={plans} addOns={addOns} properties={organization.properties.map((property) => ({ id: property.id, name: property.name, city: property.city, country: property.country, isActive: property.isActive }))} portalUsers={organization.memberships.map((membership) => ({ id: membership.user.id, email: membership.user.email, firstName: membership.user.firstName, lastName: membership.user.lastName, emailVerifiedAt: membership.user.emailVerifiedAt?.toISOString() ?? null }))} /></div></header>
+    <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">{[{ label: 'Properties', value: organization.properties.length, note: `${activeProperties} active`, icon: Building2, color: 'text-cyan-300' }, { label: 'Operational', value: operationalProperties, note: 'Ready for daily operations', icon: Globe2, color: 'text-emerald-300' }, { label: 'Subscription', value: activeSubscription?.plan?.name ?? 'Unconfigured', note: activeSubscription?.status ?? 'NO PLAN', icon: CreditCard, color: 'text-indigo-300' }, { label: 'Portal user', value: organization.memberships.length ? '1' : '0', note: 'One account across all properties', icon: Users, color: 'text-violet-300' }, { label: 'Discounts', value: organization.billingDiscounts.length, note: 'Active commercial rules', icon: WalletCards, color: 'text-amber-300' }].map((item) => <div key={item.label} className="rounded-2xl border border-white/10 bg-[#101b2f] p-4"><div className="flex items-start justify-between"><div><p className="text-[10px] uppercase tracking-[.14em] text-slate-500">{item.label}</p><p className="mt-3 truncate text-xl font-semibold text-white">{item.value}</p></div><item.icon className={`size-4 ${item.color}`} /></div><p className="mt-3 text-xs text-slate-500">{item.note}</p></div>)}</section>
+    <section className="grid gap-5 xl:grid-cols-[1.3fr_.7fr]"><div className="rounded-2xl border border-white/10 bg-[#101b2f] p-5 sm:p-6"><div className="flex items-end justify-between gap-4 border-b border-white/8 pb-5"><div><p className="text-sm font-semibold text-white">Property portfolio</p><p className="mt-1 text-xs text-slate-500">Update organisation property profiles and availability from the action bar above.</p></div><span className="text-xs text-slate-500">{organization.properties.length} records</span></div><div className="mt-5 grid gap-3 md:grid-cols-2">{organization.properties.map((property) => { const ready = property.isActive && property.businessDate && property.auditStatus; return <div key={property.id} className="rounded-2xl border border-white/8 bg-white/[.025] p-4"><div className="flex items-start justify-between gap-3"><div><p className="font-semibold text-slate-100">{property.name}</p><p className="mt-1 text-xs text-slate-500">{property.city}, {property.country}</p></div><span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${!property.isActive ? 'bg-rose-400/10 text-rose-300' : ready ? 'bg-emerald-400/10 text-emerald-300' : 'bg-amber-400/10 text-amber-300'}`}>{!property.isActive ? 'Suspended' : ready ? 'Operational' : 'Setup in progress'}</span></div><div className="mt-5 flex items-center justify-between border-t border-white/8 pt-3 text-[11px] text-slate-500"><span>Created {property.createdAt.toLocaleDateString('en-NG')}</span><span>{property.code}</span></div></div>; })}{!organization.properties.length && <p className="py-10 text-center text-sm text-slate-500 md:col-span-2">No properties are attached to this organisation.</p>}</div></div>
+      <div className="space-y-5"><div className="rounded-2xl border border-white/10 bg-[#101b2f] p-5 sm:p-6"><p className="text-sm font-semibold text-white">Commercial discounts</p><p className="mt-1 text-xs leading-5 text-slate-500">Discounts are applied automatically to future customer checkout sessions.</p><div className="mt-5 space-y-2">{organization.billingDiscounts.length ? organization.billingDiscounts.map((discount) => <div key={discount.id} className="flex items-center justify-between gap-3 rounded-xl border border-emerald-300/10 bg-emerald-300/[.05] p-3"><div><p className="text-xs font-semibold text-slate-200">{discount.plan?.name ?? discount.product?.name}</p><p className="mt-1 text-[10px] uppercase tracking-wider text-slate-500">{discount.plan ? 'Subscription plan' : 'Add-on'}</p></div><span className="rounded-full bg-emerald-300/10 px-2.5 py-1 text-xs font-bold text-emerald-300">{Number(discount.percentage)}% off</span></div>) : <p className="rounded-xl border border-dashed border-white/10 p-5 text-center text-xs text-slate-500">No active discounts configured.</p>}</div></div>
+        <div className="rounded-2xl border border-white/10 bg-[#101b2f] p-5 sm:p-6"><p className="text-sm font-semibold text-white">Customer portal users</p><p className="mt-1 text-xs leading-5 text-slate-500">These users can sign in at the customer portal and manage this organisation.</p><div className="mt-4 space-y-2">{organization.memberships.map((membership) => <div key={membership.id} className="rounded-xl border border-white/8 bg-white/[.025] p-3"><div className="flex items-center justify-between gap-2"><span className="truncate text-xs font-semibold text-slate-200">{[membership.user.firstName, membership.user.lastName].filter(Boolean).join(' ') || membership.user.email}</span><span className="text-[10px] uppercase tracking-wider text-cyan-300">{membership.role}</span></div><p className="mt-1 truncate text-[11px] text-slate-500">{membership.user.email}</p><p className="mt-2 text-[10px] text-slate-600">{membership.user.emailVerifiedAt ? 'Portal access active' : 'Invitation pending'}</p></div>)}{!organization.memberships.length && <p className="rounded-xl border border-dashed border-white/10 p-4 text-xs leading-5 text-slate-500">No portal user exists yet. Use <strong className="text-cyan-300">Invite portal user</strong> above to create access.</p>}</div></div>
+        <div className="rounded-2xl border border-white/10 bg-[#101b2f] p-5 sm:p-6"><p className="text-sm font-semibold text-white">Subscription status</p>{activeSubscription ? <div className="mt-4 rounded-xl border border-white/8 bg-white/[.025] p-4"><div className="flex items-center justify-between gap-3"><span className="text-sm font-semibold text-slate-100">{activeSubscription.plan?.name ?? 'Custom plan'}</span><span className="rounded-full bg-emerald-400/10 px-2.5 py-1 text-[10px] font-semibold text-emerald-300">{activeSubscription.status}</span></div><p className="mt-2 text-xs text-slate-500">Renews {activeSubscription.currentPeriodEnd.toLocaleDateString('en-NG')}</p></div> : <p className="mt-4 text-xs text-slate-500">No active base subscription is configured.</p>}</div></div>
+    </section>
+    <section className="rounded-2xl border border-white/10 bg-[#101b2f] p-5 sm:p-6"><div className="mb-5"><p className="text-sm font-semibold text-white">Active capabilities</p><p className="mt-1 text-xs text-slate-500">Products currently enabled for this organisation.</p></div><div className="flex flex-wrap gap-2">{organization.entitlements.length ? organization.entitlements.map((entitlement) => <span key={entitlement.id} className="rounded-xl border border-indigo-300/15 bg-indigo-300/[.06] px-3 py-2 text-xs text-indigo-100">{entitlement.product.name}</span>) : <span className="text-xs text-slate-500">No active add-ons.</span>}</div></section>
+  </div></main>;
 }
