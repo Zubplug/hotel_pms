@@ -90,6 +90,8 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Property not found' }, { status: 404 });
     }
 
+    const syncBusinessDate = property.businessDate ?? new Date();
+
     // Front Desk and POS both use this sync endpoint. Ensure the property's
     // current business date is covered by an accounting period before either
     // client resumes posting offline transactions. This is intentionally
@@ -97,14 +99,14 @@ export async function GET(req: NextRequest) {
     const accountingPeriod = await prisma.accountingPeriod.findFirst({
       where: {
         propertyId,
-        periodStart: { lte: property.businessDate },
-        periodEnd: { gte: property.businessDate },
+        periodStart: { lte: syncBusinessDate },
+        periodEnd: { gte: syncBusinessDate },
       },
       select: { id: true },
     });
 
     if (!accountingPeriod) {
-      const businessDate = new Date(property.businessDate);
+      const businessDate = new Date(syncBusinessDate);
       const periodStart = new Date(Date.UTC(businessDate.getUTCFullYear(), businessDate.getUTCMonth(), 1));
       const periodEnd = new Date(Date.UTC(businessDate.getUTCFullYear(), businessDate.getUTCMonth() + 1, 0));
       const periodName = new Intl.DateTimeFormat('en-US', {

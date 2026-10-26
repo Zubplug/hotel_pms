@@ -66,6 +66,22 @@ type OrderItem = {
   modifiers?: OrderItemModifier[];
 };
 
+const POS_NOTIFICATION_TYPES = new Set([
+  'SHIFT_APPROVED',
+  'SHIFT_RETURNED',
+  'SHIFT_APPROVED_WITH_VARIANCE',
+]);
+
+function isPosNotification(notification: any): boolean {
+  const notificationType = String(notification?.notificationType || '').toUpperCase();
+  if (!POS_NOTIFICATION_TYPES.has(notificationType)) return false;
+  let metadata = notification?.metadata;
+  if (!metadata && notification?.metadataJson) {
+    try { metadata = JSON.parse(notification.metadataJson); } catch { metadata = {}; }
+  }
+  return String(metadata?.shiftType || '').toUpperCase() === 'POS';
+}
+
 type ViewMode = 'menu' | 'tables';
 
 export default function PosApp() {
@@ -292,7 +308,7 @@ export default function PosApp() {
     if (!isDesktopMode || !propertyId || !provider.system?.getOfflineBookingNotifications) return;
     try {
       const result = await provider.system.getOfflineBookingNotifications(propertyId);
-      const next = result?.data?.[0];
+      const next = (result?.data || []).find(isPosNotification);
       if (!next || acknowledgedOfflineBookingNotificationIds.has(next.id)) return;
       if (offlineBookingNotification?.id !== next.id) {
         void unlockAudio();
@@ -2086,7 +2102,7 @@ export default function PosApp() {
                 <Bell className="h-4 w-4" />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-indigo-300">Front Desk notification</p>
+                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-indigo-300">POS notification</p>
                 <h3 className="mt-1 text-sm font-bold text-white">{offlineBookingNotification.subject || 'New booking notification'}</h3>
               </div>
             </div>

@@ -63,6 +63,29 @@ interface FrontDeskRoomChargeNotification {
   offline: boolean;
 }
 
+const FRONT_DESK_NOTIFICATION_TYPES = new Set([
+  'POS_ROOM_CHARGE_POSTED',
+  'RESERVATION_CREATED',
+  'RESERVATION_CANCELLED',
+  'RESERVATION_EXPIRED',
+  'RESERVATION_NO_SHOW',
+  'CHECK_IN',
+  'CHECK_OUT',
+  'PAYMENT_RECEIVED',
+]);
+
+function isFrontDeskNotification(notification: any): boolean {
+  const notificationType = String(notification?.notificationType || '').toUpperCase();
+  if (notificationType.startsWith('SHIFT_')) {
+    let metadata = notification?.metadata;
+    if (!metadata && notification?.metadataJson) {
+      try { metadata = JSON.parse(notification.metadataJson); } catch { metadata = {}; }
+    }
+    return String(metadata?.shiftType || '').toUpperCase() !== 'POS';
+  }
+  return FRONT_DESK_NOTIFICATION_TYPES.has(notificationType);
+}
+
 export function FrontDeskLayout({ children, enabledModules = [], licenseSnapshot }: {
   children: React.ReactNode;
   enabledModules?: readonly string[];
@@ -193,7 +216,7 @@ export function FrontDeskLayout({ children, enabledModules = [], licenseSnapshot
         let next: any;
         if (isDesktopMode && provider.system?.getOfflineBookingNotifications) {
           const result = await provider.system.getOfflineBookingNotifications(propertyId);
-          next = result?.data?.[0];
+          next = (result?.data || []).find(isFrontDeskNotification);
           if (next?.metadataJson) {
             try { next.metadata = JSON.parse(next.metadataJson); } catch { next.metadata = {}; }
           }
@@ -209,7 +232,7 @@ export function FrontDeskLayout({ children, enabledModules = [], licenseSnapshot
           const response = await fetch(`/api/v1/frontdesk/notifications?propertyId=${encodeURIComponent(propertyId)}`, { cache: 'no-store' });
           if (!response.ok) return;
           const result = await response.json();
-          next = result.data?.[0];
+          next = (result.data || []).find(isFrontDeskNotification);
         }
         if (!cancelled && next && !acknowledgedRoomChargeNotificationIds.has(next.id)) {
           if (lastRoomChargeNotificationId.current !== next.id) {
