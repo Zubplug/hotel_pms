@@ -26,9 +26,26 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const updated = await prisma.salesLead.update({ where: { id: lead.id }, data: { status: 'QUALIFIED', assignedTo: admin.id } });
     return NextResponse.json({ lead: updated });
   }
-  if (lead.organizationId && lead.status === 'CONVERTED') return NextResponse.json({ error: 'Lead has already been converted' }, { status: 409 });
+  if (lead.organizationId && ['CONVERTED', 'INVITE_PENDING'].includes(lead.status)) return NextResponse.json({ error: 'Lead conversion is already in progress or complete' }, { status: 409 });
 
-  const organizationName = String(body.organizationName || lead.organizationName || lead.company || `${lead.name}'s organization`).trim().slice(0, 160);
+  const organizationInput = body.organization && typeof body.organization === 'object' ? body.organization : {};
+  const propertyInput = body.property && typeof body.property === 'object' ? body.property : {};
+  const contactInput = body.contact && typeof body.contact === 'object' ? body.contact : {};
+  const organizationName = String(organizationInput.name || body.organizationName || lead.organizationName || lead.company || `${lead.name}'s organization`).trim().slice(0, 160);
+  const organizationSlug = String(organizationInput.slug || '').trim().slice(0, 70);
+  const defaultCurrency = String(organizationInput.defaultCurrency || 'NGN').trim().slice(0, 8) || 'NGN';
+  const defaultTimezone = String(organizationInput.defaultTimezone || 'Africa/Lagos').trim().slice(0, 80) || 'Africa/Lagos';
+  const propertyName = String(propertyInput.name || lead.propertyName || organizationName).trim().slice(0, 160);
+  const propertyAddress = String(propertyInput.address ?? lead.address ?? '').trim().slice(0, 240);
+  const propertyCity = String(propertyInput.city ?? lead.city ?? lead.location ?? '').trim().slice(0, 120);
+  const propertyState = String(propertyInput.state ?? lead.state ?? '').trim().slice(0, 120);
+  const propertyCountry = String(propertyInput.country ?? lead.country ?? 'Nigeria').trim().slice(0, 120) || 'Nigeria';
+  const propertyPhone = String(propertyInput.phone ?? lead.phone ?? '').trim().slice(0, 40);
+  const portalEmail = String(contactInput.email || propertyInput.email || lead.email).trim().toLowerCase();
+  const propertyWebsite = propertyInput.website ? String(propertyInput.website).trim().slice(0, 240) : (lead.website || null);
+  const firstName = String(contactInput.firstName || lead.firstName || splitContactName(lead.name).firstName || '').trim().slice(0, 80) || null;
+  const middleName = String(contactInput.middleName || lead.middleName || '').trim().slice(0, 80) || null;
+  const lastName = String(contactInput.lastName || lead.lastName || splitContactName(lead.name).lastName || '').trim().slice(0, 120) || null;
   const rawToken = randomBytes(32).toString('hex');
   const tokenHash = createHash('sha256').update(rawToken).digest('hex');
   const expiresAt = new Date(Date.now() + 72 * 60 * 60 * 1000);
@@ -38,45 +55,45 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const result = await prisma.$transaction(async (tx) => {
       let organization = organizationId ? await tx.organization.findUnique({ where: { id: organizationId } }) : null;
       if (!organization) {
-        const baseSlug = slugify(organizationName);
+        const baseSlug = slugify(organizationSlug || organizationName);
         let slug = baseSlug;
         for (let index = 2; await tx.organization.findUnique({ where: { slug } }); index += 1) slug = `${baseSlug}-${index}`;
-        organization = await tx.organization.create({ data: { name: organizationName, slug } });
+        organization = await tx.organization.create({ data: { name: organizationName, slug, defaultCurrency, defaultTimezone, settings: { onboarding: { source: 'HQ_LEAD_CONVERSION', leadId: lead.id } } } });
         organizationId = organization.id;
       }
-      const existing = await tx.user.findUnique({ where: { email: lead.email.toLowerCase() }, include: { membership: true } });
+      const existing = await tx.user.findUnique({ where: { email: portalEmail }, include: { membership: true } });
       if (existing?.membership && existing.membership.organizationId !== organization.id) throw new Error('This email already belongs to another organization.');
-      const contactName = splitContactName(lead.name);
-      const account = existing || await tx.user.create({ data: { email: lead.email.toLowerCase(), firstName: lead.firstName || contactName.firstName, middleName: lead.middleName || null, lastName: lead.lastName || contactName.lastName, passwordHash: await bcrypt.hash(randomBytes(32).toString('hex'), 12) } });
+      const account = existing || await tx.user.create({ data: { email: portalEmail, firstName, middleName, lastName, passwordHash: await bcrypt.hash(randomBytes(32).toString('hex'), 12) } });
       await tx.organizationMembership.upsert({ where: { userId: account.id }, update: { organizationId: organization.id, role: 'OWNER', status: 'ACTIVE' }, create: { userId: account.id, organizationId: organization.id, role: 'OWNER', status: 'ACTIVE' } });
+      if (!organization.portalOwnerUserId) await tx.organization.update({ where: { id: organization.id }, data: { portalOwnerUserId: account.id } });
       const property = await tx.property.findFirst({ where: { organizationId: organization.id }, select: { id: true } });
       if (!property) {
         await tx.property.create({ data: {
           organizationId: organization.id,
-          name: lead.propertyName || organization.name,
+          name: propertyName,
           code: `PROP-${randomUUID().slice(0, 8).toUpperCase()}`,
-          address: lead.address || '',
-          city: lead.city || lead.location || '',
-          state: lead.state || '',
-          country: lead.country || 'Nigeria',
-          phone: lead.phone || '',
-          email: lead.email.toLowerCase(),
-          website: lead.website || null,
-          baseCurrency: 'NGN',
-          supportedCurrencies: ['NGN'],
+          address: propertyAddress,
+          city: propertyCity,
+          state: propertyState,
+          country: propertyCountry,
+          phone: propertyPhone,
+          email: portalEmail,
+          website: propertyWebsite,
+          baseCurrency: defaultCurrency,
+          supportedCurrencies: [defaultCurrency],
           businessDate: new Date(),
           auditStatus: 'OPEN',
-          settings: { onboarding: { needsCompletion: !(lead.address && lead.city && lead.state && lead.country && lead.phone), source: 'HQ_LEAD_CONVERSION' } },
+          settings: { onboarding: { needsCompletion: !(propertyAddress && propertyCity && propertyState && propertyCountry && propertyPhone), source: 'HQ_LEAD_CONVERSION', leadId: lead.id, roomCount: propertyInput.roomCount ?? lead.roomCount } },
         } });
       }
-      await tx.customerInvitation.updateMany({ where: { email: lead.email.toLowerCase(), organizationId: organization.id, acceptedAt: null }, data: { expiresAt: new Date() } });
-      await tx.customerInvitation.create({ data: { email: lead.email.toLowerCase(), organizationId: organization.id, userId: account.id, tokenHash, expiresAt, createdById: admin.id } });
+      await tx.customerInvitation.updateMany({ where: { email: portalEmail, organizationId: organization.id, acceptedAt: null }, data: { expiresAt: new Date() } });
+      await tx.customerInvitation.create({ data: { email: portalEmail, organizationId: organization.id, userId: account.id, tokenHash, expiresAt, createdById: admin.id } });
       const updatedLead = await tx.salesLead.update({ where: { id: lead.id }, data: { organizationId: organization.id, status: 'INVITE_PENDING', assignedTo: admin.id } });
       return { organization, account, updatedLead };
     });
     userId = result.account.id;
     const websiteOrigin = process.env.WEBSITE_URL || process.env.NEXT_PUBLIC_WEBSITE_URL || 'https://getlodgecore.vercel.app';
-    await sendCustomerInvitationEmail({ to: lead.email, inviteUrl: `${websiteOrigin}/portal/invite/${rawToken}`, expiresAt, organizationName: result.organization.name });
+    await sendCustomerInvitationEmail({ to: portalEmail, inviteUrl: `${websiteOrigin}/portal/invite/${rawToken}`, expiresAt, organizationName: result.organization.name });
     const updatedLead = await prisma.salesLead.update({ where: { id: lead.id }, data: { status: 'CONVERTED', convertedAt: new Date() } });
     return NextResponse.json({ lead: updatedLead, organizationId: result.organization.id, userId });
   } catch (error) {
