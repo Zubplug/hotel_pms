@@ -1,4 +1,5 @@
 import { Prisma, PrismaClient } from '@prisma/client';
+import { reconcileOrganizationEntitlements } from './billing';
 
 export const TRIAL_DURATION_HOURS = 168;
 export const DEFAULT_TRIAL_PLAN_CODE = 'ESSENTIAL';
@@ -141,6 +142,11 @@ export async function activateTrial(
           metadata: (idempotencyKey ? { idempotencyKey, planCode } : undefined) as Prisma.InputJsonValue | undefined,
         },
       });
+
+      // Trial access is entitlement-backed just like paid access. Materialize
+      // the plan products before the transaction commits so provisioning and
+      // all entitlement guards see the trial immediately.
+      await reconcileOrganizationEntitlements(tx, input.organizationId, now);
 
       return subscription;
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });

@@ -35,8 +35,9 @@ function fakeDb() {
     id: 'plan-essential',
     code: 'ESSENTIAL',
     active: true,
-    items: [{ product: { prices: [{ id: 'price-starter-month', interval: 'month' }] } }],
+    items: [{ includedQty: 20, product: { code: 'PLAN_STARTER', prices: [{ id: 'price-starter-month', interval: 'month', product: { code: 'PLAN_STARTER', metadata: null } }] } }],
   };
+  const entitlements = new Map<string, any>();
   const tx: any = {
     trialHistory: {
       findUnique: async () => history ? { ...history, subscription: history.subscription } : null,
@@ -49,10 +50,26 @@ function fakeDb() {
     billingPlan: { findUnique: async () => plan },
     subscription: {
       findFirst: async () => null,
+      findMany: async () => createdSubscription ? [{ ...createdSubscription, items: [{ quantity: 1, price: { product: { code: 'PLAN_STARTER', metadata: null } } }], plan: { items: plan.items } }] : [],
       create: async ({ data }: any) => {
         subscriptionCount += 1;
         createdSubscription = { id: `subscription-${subscriptionCount}`, ...data };
         return createdSubscription;
+      },
+    },
+    entitlement: {
+      findMany: async () => Array.from(entitlements.values()),
+      upsert: async ({ where, create, update }: any) => {
+        const existing = entitlements.get(where.scopeKey);
+        const value = { ...(existing || create), ...(existing ? update : {}) };
+        entitlements.set(where.scopeKey, { ...value, scopeKey: where.scopeKey });
+        return value;
+      },
+      update: async ({ where, data }: any) => {
+        const existing = entitlements.get(where.id);
+        const value = { ...existing, ...data };
+        entitlements.set(where.id, value);
+        return value;
       },
     },
   };
@@ -62,6 +79,7 @@ function fakeDb() {
     db: { $transaction: async (callback: (transaction: any) => Promise<unknown>) => callback(tx) } as any,
     get history() { return history; },
     get subscriptionCount() { return subscriptionCount; },
+    get entitlements() { return Array.from(entitlements.values()); },
   };
 }
 
@@ -71,6 +89,7 @@ test('activation is idempotent for the same request key', async () => {
   const second: any = await activateTrial(fake.db, { organizationId: 'org-1', idempotencyKey: 'request-1', now: start });
   assert.equal(first.id, second.id);
   assert.equal(fake.subscriptionCount, 1);
+  assert.equal(fake.entitlements.length, 1);
 });
 
 test('activation rejects a second trial for the same organization', async () => {
