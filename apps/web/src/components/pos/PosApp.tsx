@@ -121,6 +121,7 @@ export default function PosApp() {
   const [activeDisplayName, setActiveDisplayName] = useState<string>('');
   const [customerDisplayEnabled, setCustomerDisplayEnabled] = useState(false);
   const [customerDisplaySupported, setCustomerDisplaySupported] = useState(false);
+  const [customerDisplayReason, setCustomerDisplayReason] = useState('');
   const [customerDisplayPayment, setCustomerDisplayPayment] = useState<{ amount: number; change: number; method: string } | null>(null);
 
   const [showKitchenModal, setShowKitchenModal] = useState(false);
@@ -996,7 +997,8 @@ export default function PosApp() {
     void invokeDesktop('customerDisplay.status').then((status: any) => {
       setCustomerDisplayEnabled(Boolean(status?.enabled));
       setCustomerDisplaySupported(Boolean(status?.supported));
-    }).catch(() => undefined);
+      setCustomerDisplayReason(status?.reason || '');
+    }).catch((error: any) => setCustomerDisplayReason(error?.message || 'Customer display status unavailable'));
   }, [isDesktopMode]);
 
   useEffect(() => {
@@ -1017,7 +1019,10 @@ export default function PosApp() {
   }, [cart, customerDisplayEnabled, customerDisplayPayment, isDesktopMode, subtotal, tax, total]);
 
   const toggleCustomerDisplay = async () => {
-    if (!customerDisplaySupported) return;
+    if (!customerDisplaySupported) {
+      toast.error(customerDisplayReason || 'Customer display is not available');
+      return;
+    }
     const next = !customerDisplayEnabled;
     try {
       await invokeDesktop('customerDisplay.setEnabled', { enabled: next });
@@ -1245,15 +1250,15 @@ export default function PosApp() {
                     {isOnline ? 'Online' : 'Offline'}
                   </div>
 
-                  {isDesktopMode && customerDisplaySupported && (
+                  {isDesktopMode && (
                     <button
                       type="button"
                       onClick={() => void toggleCustomerDisplay()}
-                      className={`hidden md:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] font-bold uppercase tracking-wide ${customerDisplayEnabled ? 'bg-cyan-50 border-cyan-200 text-cyan-700' : 'bg-white border-slate-200 text-slate-500'}`}
-                      title="Toggle customer-facing second screen"
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[10px] font-bold uppercase tracking-wide ${customerDisplayEnabled ? 'bg-cyan-50 border-cyan-200 text-cyan-700' : 'bg-white border-slate-200 text-slate-500'}`}
+                      title={customerDisplaySupported ? 'Toggle customer-facing second screen' : customerDisplayReason || 'Customer display unavailable'}
                     >
                       <span className={`w-1.5 h-1.5 rounded-full ${customerDisplayEnabled ? 'bg-cyan-500' : 'bg-slate-300'}`} />
-                      Display {customerDisplayEnabled ? 'On' : 'Off'}
+                      {customerDisplaySupported ? `Display ${customerDisplayEnabled ? 'On' : 'Off'}` : '2nd screen unavailable'}
                     </button>
                   )}
 

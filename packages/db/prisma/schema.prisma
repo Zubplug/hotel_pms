@@ -3765,6 +3765,9 @@ model PosOutlet {
   property        Property @relation(fields: [propertyId], references: [id])
   name            String
   type            String
+  /// The terminal family used when provisioning a desktop terminal for this outlet.
+  /// `type` remains the operational outlet classification used by reporting.
+  posType         PosTerminalType @default(RESTAURANT_POS)
   isActive        Boolean  @default(true)
   autoLockSeconds Int      @default(60)
 
@@ -4752,6 +4755,7 @@ model PosProductionBatchItem {
 enum PosTerminalType {
   RESTAURANT_POS
   BAR_POS
+  CLUB_POS
   FRONT_DESK
   KITCHEN_DISPLAY
   BACK_OFFICE

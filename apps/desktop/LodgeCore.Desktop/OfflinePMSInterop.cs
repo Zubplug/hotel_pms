@@ -73,11 +73,11 @@ public class OfflinePMSInterop
         catch (Exception ex) { return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions); }
     }
 
-    public async Task<string> ProvisionTerminalAsync(string email, string password, string propertyId, string outletId, string terminalName, string terminalType)
+    public async Task<string> ProvisionTerminalAsync(string email, string password, string propertyId, string outletId, string terminalName)
     {
         try
         {
-            var result = await _terminalBootstrap.ProvisionTerminalAsync(email, password, propertyId, outletId, terminalName, terminalType);
+            var result = await _terminalBootstrap.ProvisionTerminalAsync(email, password, propertyId, outletId, terminalName);
             return JsonSerializer.Serialize(result, _jsonOptions);
         }
         catch (Exception ex)

@@ -57,9 +57,14 @@ export async function POST(req: NextRequest) {
         if (reqOutletId && !ctx.outletIds.includes(reqOutletId)) return NextResponse.json({ error: 'Forbidden outlet' }, { status: 403 });
     const propertyId = data.propertyId || (session.user as any).propertyId;
     const { name, isActive } = data;
+    const allowedPosTypes = ['RESTAURANT_POS', 'BAR_POS', 'CLUB_POS', 'FRONT_DESK', 'KITCHEN_DISPLAY', 'BACK_OFFICE'];
+    const posType = data.posType ? String(data.posType) : 'RESTAURANT_POS';
 
     if (!propertyId || !name) {
       return NextResponse.json({ error: 'propertyId and name are required' }, { status: 400 });
+    }
+    if (!allowedPosTypes.includes(posType)) {
+      return NextResponse.json({ error: 'Invalid POS type' }, { status: 400 });
     }
     await requireEntitlement(ctx.organizationId, 'MODULE_OPERATIONS', String(propertyId));
 
@@ -71,6 +76,7 @@ export async function POST(req: NextRequest) {
         propertyId: String(propertyId),
         name: String(name),
         type: data.type ? String(data.type) : 'RESTAURANT',
+        posType: posType as any,
         isActive: isActive !== undefined ? Boolean(isActive) : true
       }
     });

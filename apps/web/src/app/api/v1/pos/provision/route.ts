@@ -6,7 +6,7 @@ import { requirePlanLimit } from '@/lib/auth/entitlement';
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { email, password, terminalType } = body;
+    const { email, password } = body;
     // Provisioning is commonly done by pasting IDs from the admin UI. Trim
     // those values before they reach Prisma's UUID columns; otherwise one
     // leading space produces the opaque "invalid character" UUID error.
@@ -54,6 +54,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'Invalid Property ID: Property not found' }, { status: 400 });
     }
 
+    // The outlet's saved POS type is authoritative. A client-supplied terminal
+    // type can disagree with the selected outlet, so it is never accepted.
+    const outlet = await prisma.posOutlet.findFirst({
+      where: { id: outletId, propertyId, isActive: true },
+      select: { id: true, name: true, type: true, posType: true },
+    });
+    if (!outlet) {
+      return NextResponse.json({ success: false, error: 'Invalid Outlet ID: outlet is not active or does not belong to this property' }, { status: 400 });
+    }
+
+    const terminalType = outlet.posType;
+
     // Serialize entitlement count + terminal creation at organization scope.
     // Without this lock, two retries can both observe capacity and create
     // duplicate terminals before either transaction is visible to the other.
@@ -87,7 +99,7 @@ export async function POST(req: NextRequest) {
         data: {
           terminalCode: `TERM-${Math.floor(1000 + Math.random() * 9000)}`,
           name: terminalName,
-          terminalType: (terminalType === 'STATIONARY' || !terminalType) ? 'RESTAURANT_POS' : terminalType,
+          terminalType,
           organisationId: adminStaff.organizationId,
           propertyId,
           outletId,
@@ -107,7 +119,6 @@ export async function POST(req: NextRequest) {
 
     const categories = await prisma.productCategory.findMany({ where: { outletId } });
     const products = await prisma.posProduct.findMany({ where: { propertyId } });
-    const outlet = await prisma.posOutlet.findUnique({ where: { id: outletId } });
     const entitlements = await prisma.entitlement.findMany({
       where: {
         organizationId: adminStaff.organizationId,

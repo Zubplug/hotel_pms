@@ -19,6 +19,7 @@ export default function PosSettingsPage() {
   
   const [showForm, setShowForm] = useState(false);
   const [newOutletName, setNewOutletName] = useState('');
+  const [newOutletPosType, setNewOutletPosType] = useState('RESTAURANT_POS');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
 
@@ -66,7 +67,7 @@ export default function PosSettingsPage() {
       const res = await fetch('/api/v1/pos/outlets', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ propertyId, name: newOutletName })
+        body: JSON.stringify({ propertyId, name: newOutletName, posType: newOutletPosType })
       });
       
       const json = await res.json();
@@ -75,6 +76,7 @@ export default function PosSettingsPage() {
       setOutlets(prev => [...prev, json.data].sort((a, b) => a.name.localeCompare(b.name)));
       setShowForm(false);
       setNewOutletName('');
+      setNewOutletPosType('RESTAURANT_POS');
       toast.success('Outlet created successfully');
     } catch (err: any) {
       setError(err.message);
@@ -195,8 +197,8 @@ export default function PosSettingsPage() {
                   <CardDescription>e.g., Main Restaurant, Pool Bar, Rooftop Lounge</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <form onSubmit={handleCreate} className="flex gap-4 items-end">
-                    <div className="flex-1 space-y-2">
+                  <form onSubmit={handleCreate} className="flex flex-wrap gap-4 items-end">
+                    <div className="min-w-[240px] flex-1 space-y-2">
                       <label className="text-sm font-medium">Outlet Name</label>
                       <input
                         type="text"
@@ -206,6 +208,19 @@ export default function PosSettingsPage() {
                         placeholder="Enter outlet name..."
                         autoFocus
                       />
+                    </div>
+                    <div className="w-56 space-y-2">
+                      <label className="text-sm font-medium">POS type</label>
+                      <Select value={newOutletPosType} onValueChange={(value) => setNewOutletPosType(value || 'RESTAURANT_POS')}>
+                        <SelectTrigger className="bg-white"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="RESTAURANT_POS">Restaurant POS</SelectItem>
+                          <SelectItem value="BAR_POS">Bar POS</SelectItem>
+                          <SelectItem value="CLUB_POS">Club POS</SelectItem>
+                          <SelectItem value="FRONT_DESK">Front Desk</SelectItem>
+                          <SelectItem value="KITCHEN_DISPLAY">Kitchen Display</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                     <Button type="submit" disabled={isSubmitting || !newOutletName.trim()} className="bg-indigo-600 hover:bg-indigo-700 text-white">
                       {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save Outlet'}
@@ -233,9 +248,8 @@ export default function PosSettingsPage() {
                           </div>
                           <div>
                             <h3 className="font-semibold text-slate-900">{outlet.name}</h3>
-                            <p className="text-xs text-slate-500 font-mono mt-1" title="Outlet ID">
-                              {outlet.id.split('-')[0]}...
-                            </p>
+                            <p className="text-xs text-slate-500 mt-1">{String(outlet.posType || 'RESTAURANT_POS').replace('_', ' ')}</p>
+                            <p className="text-[10px] text-slate-400 font-mono" title="Outlet ID">{outlet.id.split('-')[0]}...</p>
                           </div>
                         </div>
                         {outlet.isActive ? (

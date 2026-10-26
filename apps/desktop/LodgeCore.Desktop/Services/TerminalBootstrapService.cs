@@ -107,7 +107,7 @@ public class TerminalBootstrapService
         catch (JsonException) { return Array.Empty<object>(); }
     }
 
-    public async Task<object> ProvisionTerminalAsync(string email, string password, string propertyId, string outletId, string terminalName, string terminalType)
+    public async Task<object> ProvisionTerminalAsync(string email, string password, string propertyId, string outletId, string terminalName)
     {
         // 1. Call Cloud API
         var requestPayload = new
@@ -116,8 +116,7 @@ public class TerminalBootstrapService
             password,
             propertyId,
             outletId,
-            terminalName,
-            terminalType
+            terminalName
         };
 
         var response = await _httpClient.PostAsJsonAsync("pos/provision", requestPayload);

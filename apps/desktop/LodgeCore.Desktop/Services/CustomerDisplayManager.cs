@@ -32,6 +32,7 @@ public sealed class CustomerDisplayManager
     {
         Microsoft.Maui.Storage.Preferences.Default.Set("CustomerDisplayEnabled", enabled);
         if (!enabled) Close();
+        else EnsureOpen();
     }
 
     public void Publish(CustomerDisplayProjection projection)

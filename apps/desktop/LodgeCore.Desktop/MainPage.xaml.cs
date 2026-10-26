@@ -186,12 +186,16 @@ public partial class MainPage : ContentPage
                         .Where(value => !string.IsNullOrWhiteSpace(value))
                         .ToHashSet(StringComparer.OrdinalIgnoreCase) ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                     var entitled = modules.Contains("MODULE_PMS") || modules.Contains("MODULE_OPERATIONS");
+                    var hasSecondaryDisplay = displayManager.HasSecondaryDisplay;
                     responseData = JsonSerializer.Serialize(new
                     {
                         success = true,
                         enabled = displayManager.IsEnabled,
                         open = displayManager.IsOpen,
-                        supported = OperatingSystem.IsWindows() && entitled && displayManager.HasSecondaryDisplay,
+                        supported = OperatingSystem.IsWindows() && entitled && hasSecondaryDisplay,
+                        entitled,
+                        secondaryDisplayDetected = hasSecondaryDisplay,
+                        reason = !OperatingSystem.IsWindows() ? "Windows desktop is required" : !entitled ? "This terminal plan does not include customer display" : !hasSecondaryDisplay ? "Connect a second monitor and choose Extend in Windows display settings" : null,
                         experience = modules.Contains("MODULE_OPERATIONS") ? "FULL" : "BASIC"
                     });
                     break;
@@ -231,8 +235,7 @@ public partial class MainPage : ContentPage
                         parameters?["password"]?.ToString() ?? "",
                         parameters?["propertyId"]?.ToString() ?? "",
                         parameters?["outletId"]?.ToString() ?? "",
-                        parameters?["terminalName"]?.ToString() ?? "",
-                        parameters?["terminalType"]?.ToString() ?? ""
+                        parameters?["terminalName"]?.ToString() ?? ""
                     );
                     break;
                 case "auth.getSession":
