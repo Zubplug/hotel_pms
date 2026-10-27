@@ -58,7 +58,7 @@ export default function RevenueControlsPage() {
   const periodStart = filters.dateFrom;
   const periodEnd = filters.dateTo;
   const exportHref = scope ? `/api/v1/external-auditor/controls?${new URLSearchParams({ propertyId: scope.propertyId, kind, q: query, format: 'csv', ...Object.fromEntries(Object.entries(filters).filter(([, value]) => value)) })}` : '#';
-  const selectPeriod = (nextPeriod: PeriodKey) => { setPeriod(nextPeriod); const range = periodRange(nextPeriod); const nextFilters = nextPeriod === 'custom' ? filters : { ...filters, dateFrom: range.start, dateTo: range.end }; setFilters(nextFilters); if (scope) void load(scope.propertyId, kind, query, nextFilters); };
+  const selectPeriod = (nextPeriod: PeriodKey) => { setPeriod(nextPeriod); const range = periodRange(nextPeriod); const nextFilters = nextPeriod === 'custom' ? filters : { ...filters, dateFrom: range.dateFrom, dateTo: range.dateTo }; setFilters(nextFilters); if (scope) void load(scope.propertyId, kind, query, nextFilters); };
   const runSearch = () => { if (scope) void load(scope.propertyId, kind, query); };
 
   return <div className="space-y-6 pb-8">
