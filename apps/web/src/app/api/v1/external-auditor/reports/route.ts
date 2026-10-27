@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
     let headers: string[];
     if (kind === 'management') {
       headers = ['Metric', 'Last 7 days', 'MTD', 'YTD'];
-      const [occupancySnapshots, audits, payments, complimentary, discounts, refundsAndAdjustments, posOrders] = await Promise.all([
+      const [occupancySnapshots, audits, payments, complimentary, discounts, refundsAndAdjustments, posOrders, reservationRooms] = await Promise.all([
         prisma.occupancySnapshot.findMany({ where: { propertyId, businessDate: { gte: reportStart, lt: reportEnd } }, select: { businessDate: true, totalRooms: true, availableRooms: true, occupiedRooms: true, occupancyPct: true, adr: true, revpar: true } }),
         prisma.nightAudit.findMany({ where: { propertyId, businessDate: { gte: reportStart, lt: reportEnd } }, select: { businessDate: true, totalRoomRevenue: true, totalRevenue: true } }),
         prisma.payment.findMany({ where: { propertyId, businessDate: { gte: reportStart, lt: reportEnd }, status: { in: ['COMPLETED', 'PARTIALLY_REFUNDED'] } }, select: { businessDate: true, method: true, amount: true } }),
@@ -49,6 +49,7 @@ export async function GET(request: NextRequest) {
         prisma.folioItem.findMany({ where: { folio: { propertyId }, businessDate: { gte: reportStart, lt: reportEnd }, type: 'DISCOUNT', voidedAt: null }, select: { businessDate: true, amount: true } }),
         prisma.folioItem.findMany({ where: { folio: { propertyId }, businessDate: { gte: reportStart, lt: reportEnd }, type: { in: ['REFUND', 'ADJUSTMENT'] }, voidedAt: null }, select: { businessDate: true, amount: true } }),
         prisma.posOrder.findMany({ where: { propertyId, businessDate: { gte: reportStart, lt: reportEnd }, status: { notIn: ['VOIDED', 'CANCELLED'] } }, select: { businessDate: true, total: true, guestCount: true, outlet: { select: { name: true } } } }),
+        prisma.reservationRoom.findMany({ where: { reservation: { propertyId }, checkIn: { lt: reportEnd }, checkOut: { gt: reportStart }, status: { not: 'CANCELLED' } }, select: { checkIn: true, checkOut: true, adults: true, children: true, status: true, reservation: { select: { status: true } } } }),
       ]);
       const periods = [{ label: 'Last 7 days', start: new Date() }, { label: 'MTD', start: new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1)) }, { label: 'YTD', start: new Date(Date.UTC(new Date().getUTCFullYear(), 0, 1)) }];
       periods[0].start.setUTCDate(periods[0].start.getUTCDate() - 6);
@@ -58,14 +59,35 @@ export async function GET(request: NextRequest) {
       const sum = <T extends { businessDate: Date }>(items: T[], period: { start: Date }, value: (item: T) => number) => items.filter(item => inPeriod(item.businessDate, period)).reduce((total, item) => total + value(item), 0);
       const section = (label: string) => [label, '', '', '', ''];
       const metric = (label: string, values: number[]) => [label, ...values];
+      const isRevenueDepartment = (accountName: string) => {
+        const normalized = accountName.trim().toLowerCase().replace(/\s+/g, ' ');
+        return !normalized.startsWith('less ') && ![
+          'complimentary allowance',
+          'revenue rebates and discounts',
+          'refunds and revenue adjustments',
+        ].some((deduction) => normalized.includes(deduction));
+      };
       const departmentsByPeriod = (period: { start: Date }) => {
         const totals = new Map<string, number>();
-        for (const entry of entries) if (inPeriod(entry.entryDate, period)) for (const line of entry.lines) if (line.account.type === 'REVENUE') totals.set(line.account.name, (totals.get(line.account.name) || 0) + Number(line.credit) - Number(line.debit));
+        for (const entry of entries) if (inPeriod(entry.entryDate, period)) for (const line of entry.lines) if (line.account.type === 'REVENUE' && isRevenueDepartment(line.account.name)) totals.set(line.account.name, (totals.get(line.account.name) || 0) + Number(line.credit) - Number(line.debit));
         return totals;
       };
       const roomRevenue = (period: { start: Date }) => sum(audits, period, item => Number(item.totalRoomRevenue));
       const availableRooms = (period: { start: Date }) => sum(occupancySnapshots, period, item => item.availableRooms);
       const occupiedRooms = (period: { start: Date }) => sum(occupancySnapshots, period, item => item.occupiedRooms);
+      const outOfOrderRooms = (period: { start: Date }) => sum(occupancySnapshots, period, item => item.outOfOrderRooms);
+      const outOfServiceRooms = (period: { start: Date }) => sum(occupancySnapshots, period, item => item.outOfServiceRooms);
+      const blockedRooms = (period: { start: Date }) => sum(occupancySnapshots, period, item => item.blockedRooms);
+      const movementRooms = (period: { start: Date }, movement: 'ARRIVAL' | 'DEPARTURE' | 'NO_SHOW') => reservationRooms.filter((room) => {
+        const date = movement === 'DEPARTURE' ? room.checkOut : room.checkIn;
+        const inScope = inPeriod(date, period);
+        const noShow = room.status === 'NO_SHOW' || room.reservation.status === 'NO_SHOW';
+        if (movement === 'NO_SHOW') return inScope && noShow;
+        return inScope && !noShow && room.status !== 'CANCELLED' && room.reservation.status !== 'CANCELLED';
+      }).length;
+      const guestCount = (period: { start: Date }, field: 'adults' | 'children') => reservationRooms.filter((room) => {
+        return inPeriod(room.checkIn, period) && room.status !== 'CANCELLED' && room.status !== 'NO_SHOW' && room.reservation.status !== 'CANCELLED' && room.reservation.status !== 'NO_SHOW';
+      }).reduce((total, room) => total + room[field], 0);
       const revenueRows = [...new Set(periods.flatMap(period => [...departmentsByPeriod(period).keys()]))].sort().map(department => metric(department, periods.map(period => departmentsByPeriod(period).get(department) || 0)));
       const outletNames = [...new Set(posOrders.map(order => order.outlet.name))].sort();
       const outletRows = outletNames.flatMap(outlet => [
@@ -89,9 +111,17 @@ export async function GET(request: NextRequest) {
         metric('Total occupancy %', periods.map(period => { const available = availableRooms(period); return available ? (occupiedRooms(period) / available) * 100 : 0; })),
         metric('Total sold rooms %', periods.map(period => { const available = availableRooms(period); return available ? (occupiedRooms(period) / available) * 100 : 0; })),
         metric('Total complimentary rooms %', periods.map(() => 0)),
+        metric('Out of order rooms', periods.map(period => outOfOrderRooms(period))),
+        metric('Out of service rooms', periods.map(period => outOfServiceRooms(period))),
+        metric('Blocked rooms', periods.map(period => blockedRooms(period))),
         metric('Total rooms revenue', periods.map(period => roomRevenue(period))),
         metric('Average room rate', periods.map(period => { const occupied = occupiedRooms(period); return occupied ? roomRevenue(period) / occupied : 0; })),
         metric('Revenue per available room', periods.map(period => { const available = availableRooms(period); return available ? roomRevenue(period) / available : 0; })),
+        metric('Arrivals', periods.map(period => movementRooms(period, 'ARRIVAL'))),
+        metric('Departures', periods.map(period => movementRooms(period, 'DEPARTURE'))),
+        metric('No-shows', periods.map(period => movementRooms(period, 'NO_SHOW'))),
+        metric('Arrival adults', periods.map(period => guestCount(period, 'adults'))),
+        metric('Arrival children', periods.map(period => guestCount(period, 'children'))),
         section('REVENUE BY DEPARTMENT'),
         ...revenueRows,
         metric('Total hotel revenue', totalHotelRevenue),
