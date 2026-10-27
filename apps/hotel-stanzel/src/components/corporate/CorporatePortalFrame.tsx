@@ -5,12 +5,13 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useState } from 'react';
 import CorporateWalletCreditModal from './CorporateWalletCreditModal';
 
-type IconName = 'grid' | 'calendar' | 'receipt' | 'wallet' | 'sparkles' | 'menu' | 'arrow' | 'logout' | 'close';
+type IconName = 'grid' | 'calendar' | 'building' | 'receipt' | 'wallet' | 'sparkles' | 'menu' | 'arrow' | 'logout' | 'close';
 
 function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
   const common = { width: size, height: size, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const, 'aria-hidden': true };
   if (name === 'grid') return <svg {...common}><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></svg>;
   if (name === 'calendar') return <svg {...common}><rect x="3" y="4.5" width="18" height="17" rx="2" /><path d="M16 2.5v4M8 2.5v4M3 9.5h18" /></svg>;
+  if (name === 'building') return <svg {...common}><path d="M4 21V5l8-3 8 3v16M2 21h20M8 8h1M15 8h1M8 12h1M15 12h1M8 16h1M15 16h1" /></svg>;
   if (name === 'receipt') return <svg {...common}><path d="M5 3h14v18l-3-2-4 2-4-2-3 2V3Z" /><path d="M8 8h8M8 12h8M8 16h4" /></svg>;
   if (name === 'wallet') return <svg {...common}><path d="M4 6.5h15a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5.5a2 2 0 0 1 2-2h13" /><path d="M16 13h5M17 13a1 1 0 1 0 0 2 1 1 0 0 0 0-2Z" /></svg>;
   if (name === 'sparkles') return <svg {...common}><path d="m12 3 1.7 5.3L19 10l-5.3 1.7L12 17l-1.7-5.3L5 10l5.3-1.7L12 3ZM19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8L19 16Z" /></svg>;
@@ -23,6 +24,7 @@ function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
 const navItems: { href: string; label: string; description: string; icon: IconName }[] = [
   { href: '/corporate/dashboard', label: 'Overview', description: 'Account snapshot', icon: 'grid' },
   { href: '/corporate/book', label: 'New booking', description: 'Reserve a stay', icon: 'calendar' },
+  { href: '/corporate/events', label: 'Hall & events', description: 'Lease and book venues', icon: 'building' },
   { href: '/corporate/reservations', label: 'Reservations', description: 'Manage your stays', icon: 'receipt' },
   { href: '/corporate/transactions', label: 'Transactions', description: 'Wallet activity', icon: 'wallet' },
   { href: '/corporate/invoices', label: 'Invoices', description: 'Invoices and balance', icon: 'receipt' },
