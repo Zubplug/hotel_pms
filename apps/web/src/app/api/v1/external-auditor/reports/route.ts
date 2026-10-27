@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
     if (kind === 'management') {
       headers = ['Metric', 'Last 7 days', 'MTD', 'YTD'];
       const [occupancySnapshots, audits, payments, complimentary, discounts, refundsAndAdjustments, posOrders, reservationRooms] = await Promise.all([
-        prisma.occupancySnapshot.findMany({ where: { propertyId, businessDate: { gte: reportStart, lt: reportEnd } }, select: { businessDate: true, totalRooms: true, availableRooms: true, occupiedRooms: true, occupancyPct: true, adr: true, revpar: true } }),
+        prisma.occupancySnapshot.findMany({ where: { propertyId, businessDate: { gte: reportStart, lt: reportEnd } }, select: { businessDate: true, totalRooms: true, availableRooms: true, occupiedRooms: true, outOfOrderRooms: true, outOfServiceRooms: true, blockedRooms: true, occupancyPct: true, adr: true, revpar: true } }),
         prisma.nightAudit.findMany({ where: { propertyId, businessDate: { gte: reportStart, lt: reportEnd } }, select: { businessDate: true, totalRoomRevenue: true, totalRevenue: true } }),
         prisma.payment.findMany({ where: { propertyId, businessDate: { gte: reportStart, lt: reportEnd }, status: { in: ['COMPLETED', 'PARTIALLY_REFUNDED'] } }, select: { businessDate: true, method: true, amount: true } }),
         prisma.complimentaryRecord.findMany({ where: { propertyId, businessDate: { gte: reportStart, lt: reportEnd } }, select: { businessDate: true, complAmount: true } }),
