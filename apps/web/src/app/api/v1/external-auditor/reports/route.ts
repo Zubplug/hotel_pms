@@ -40,16 +40,18 @@ export async function GET(request: NextRequest) {
     let rows: unknown[][];
     let headers: string[];
     if (kind === 'management') {
-      headers = ['Metric', 'Today', 'Last 7 days', 'MTD', 'YTD'];
-      const [occupancySnapshots, audits, payments, complimentary, posOrders] = await Promise.all([
+      headers = ['Metric', 'Last 7 days', 'MTD', 'YTD'];
+      const [occupancySnapshots, audits, payments, complimentary, discounts, refundsAndAdjustments, posOrders] = await Promise.all([
         prisma.occupancySnapshot.findMany({ where: { propertyId, businessDate: { gte: reportStart, lt: reportEnd } }, select: { businessDate: true, totalRooms: true, availableRooms: true, occupiedRooms: true, occupancyPct: true, adr: true, revpar: true } }),
         prisma.nightAudit.findMany({ where: { propertyId, businessDate: { gte: reportStart, lt: reportEnd } }, select: { businessDate: true, totalRoomRevenue: true, totalRevenue: true } }),
         prisma.payment.findMany({ where: { propertyId, businessDate: { gte: reportStart, lt: reportEnd }, status: { in: ['COMPLETED', 'PARTIALLY_REFUNDED'] } }, select: { businessDate: true, method: true, amount: true } }),
         prisma.complimentaryRecord.findMany({ where: { propertyId, businessDate: { gte: reportStart, lt: reportEnd } }, select: { businessDate: true, complAmount: true } }),
+        prisma.folioItem.findMany({ where: { folio: { propertyId }, businessDate: { gte: reportStart, lt: reportEnd }, type: 'DISCOUNT', voidedAt: null }, select: { businessDate: true, amount: true } }),
+        prisma.folioItem.findMany({ where: { folio: { propertyId }, businessDate: { gte: reportStart, lt: reportEnd }, type: { in: ['REFUND', 'ADJUSTMENT'] }, voidedAt: null }, select: { businessDate: true, amount: true } }),
         prisma.posOrder.findMany({ where: { propertyId, businessDate: { gte: reportStart, lt: reportEnd }, status: { notIn: ['VOIDED', 'CANCELLED'] } }, select: { businessDate: true, total: true, guestCount: true, outlet: { select: { name: true } } } }),
       ]);
-      const periods = [{ label: 'Today', start: new Date() }, { label: 'Last 7 days', start: new Date() }, { label: 'MTD', start: new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1)) }, { label: 'YTD', start: new Date(Date.UTC(new Date().getUTCFullYear(), 0, 1)) }];
-      periods[1].start.setUTCDate(periods[1].start.getUTCDate() - 6);
+      const periods = [{ label: 'Last 7 days', start: new Date() }, { label: 'MTD', start: new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1)) }, { label: 'YTD', start: new Date(Date.UTC(new Date().getUTCFullYear(), 0, 1)) }];
+      periods[0].start.setUTCDate(periods[0].start.getUTCDate() - 6);
       const todayKey = new Date().toISOString().slice(0, 10);
       const key = (value: Date) => value.toISOString().slice(0, 10);
       const inPeriod = (value: Date, period: { start: Date }) => { const dateKey = key(value); return dateKey >= key(period.start) && dateKey <= todayKey; };
@@ -72,6 +74,11 @@ export async function GET(request: NextRequest) {
       ]);
       const totalFnb = periods.map(period => sum(posOrders, period, order => Number(order.total)));
       const totalCovers = periods.map(period => sum(posOrders, period, order => order.guestCount));
+      const totalHotelRevenue = periods.map(period => sum(audits, period, item => Number(item.totalRevenue)) || departmentsByPeriod(period).values().reduce((total, amount) => total + amount, 0));
+      const discountAllowances = periods.map(period => sum(discounts, period, item => Math.abs(Number(item.amount))));
+      const refundAndAdjustmentAllowances = periods.map(period => sum(refundsAndAdjustments, period, item => Math.abs(Number(item.amount))));
+      const complimentaryAllowances = periods.map(period => sum(complimentary, period, item => Math.abs(Number(item.complAmount))));
+      const netRevenue = periods.map((_, index) => totalHotelRevenue[index] - refundAndAdjustmentAllowances[index] - discountAllowances[index] - complimentaryAllowances[index]);
       rows = [
         section('ROOM STATISTICS'),
         metric('Total rooms availability', periods.map(period => availableRooms(period))),
@@ -87,14 +94,18 @@ export async function GET(request: NextRequest) {
         metric('Revenue per available room', periods.map(period => { const available = availableRooms(period); return available ? roomRevenue(period) / available : 0; })),
         section('REVENUE BY DEPARTMENT'),
         ...revenueRows,
-        metric('Total hotel revenue', periods.map(period => sum(audits, period, item => Number(item.totalRevenue)) || departmentsByPeriod(period).values().reduce((total, amount) => total + amount, 0))),
+        metric('Total hotel revenue', totalHotelRevenue),
+        section('REVENUE DEDUCTIONS'),
+        metric('Less: refunds and revenue adjustments', refundAndAdjustmentAllowances.map(value => -value)),
+        metric('Less: revenue rebates and discounts', discountAllowances.map(value => -value)),
+        metric('Less: complimentary allowance', complimentaryAllowances.map(value => -value)),
+        metric('Net revenue after deductions', netRevenue),
         section('FOOD AND BEVERAGE REVENUE'),
         ...outletRows,
         metric('Total food & beverage revenue', totalFnb),
         metric('Total covers', totalCovers),
         section('PAYMENT SUMMARY'),
         ...['CASH', 'BANK_TRANSFER', 'POS', 'CARD', 'CARD_OFFLINE', 'PAYMENT_GATEWAY', 'MOBILE_PAYMENT'].map(method => metric(method.replaceAll('_', ' '), periods.map(period => sum(payments, period, item => String(item.method) === method ? Number(item.amount) : 0)))),
-        metric('Complimentary revenue', periods.map(period => sum(complimentary, period, item => Number(item.complAmount)))),
       ];
     } else if (kind === 'general-ledger') {
       headers = ['Entry', 'Date', 'Status', 'Source', 'Description', 'Account', 'Account name', 'Debit', 'Credit'];
