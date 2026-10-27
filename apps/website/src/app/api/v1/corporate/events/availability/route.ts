@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
     const halls = await prisma.hall.findMany({
       where: { propertyId, isActive: true, capacity: { gte: guests } },
       orderBy: [{ capacity: 'asc' }, { name: 'asc' }],
-      select: { id: true, name: true, code: true, capacity: true, squareMeters: true, amenities: true, rate: true },
+      select: { id: true, name: true, code: true, capacity: true, squareMeters: true, amenities: true, photos: true, rate: true },
     });
     const bookings = halls.length ? await prisma.eventBooking.findMany({
       where: { hallId: { in: halls.map((hall) => hall.id) }, status: 'ACTIVE', startTime: { lt: end }, endTime: { gt: start }, event: { status: { not: 'CANCELLED' } } },
