@@ -44,9 +44,39 @@ function PrintedAnalytics({ report, kind, currency }: { report: Report; kind: Re
   return null;
 }
 
+function ScheduleTable({ headers, rows }: { headers: string[]; rows: unknown[][] }) {
+  return <div className="overflow-x-auto"><table className="w-full border-collapse text-[10px] leading-4"><thead className="bg-white"><tr>{headers.map((header) => <th key={header} className="border-b-2 border-slate-800 px-3 py-3 text-left font-bold uppercase tracking-[.08em] text-slate-700">{header}</th>)}</tr></thead><tbody>{rows.map((row, index) => <tr key={index} className="odd:bg-slate-50/80">{row.map((cell, cellIndex) => <td key={cellIndex} className="border-b border-slate-200 px-3 py-2.5 align-top text-slate-700">{cell == null || cell === '' ? '' : typeof cell === 'number' ? cell.toLocaleString('en-NG', { maximumFractionDigits: 2 }) : String(cell)}</td>)}</tr>)}</tbody></table>{!rows.length && <p className="py-16 text-center text-sm text-slate-500">No rows were returned for this authorized window.</p>}</div>;
+}
+
+function GuideBars({ rows, currency, percent = false }: { rows: unknown[][]; currency: string; percent?: boolean }) {
+  const items = rows.map((row) => ({ label: String(row[0]), values: row.slice(1, 4).map((value) => Number(value) || 0) })).filter((item) => item.values.some((value) => value > 0)).slice(0, 6);
+  const max = Math.max(...items.flatMap((item) => item.values), 1);
+  if (!items.length) return null;
+  const periods = ['Last 7 days', 'MTD', 'YTD'];
+  const colors = ['bg-emerald-500', 'bg-sky-500', 'bg-violet-500'];
+  return <div className="mb-5 rounded-xl border border-slate-200 bg-white p-4"><div className="mb-4 flex flex-wrap items-center justify-between gap-3"><p className="report-kicker">Guide bar chart</p><div className="flex flex-wrap gap-3">{periods.map((period, index) => <span key={period} className="flex items-center gap-1.5 text-[9px] font-semibold text-slate-500"><span className={`h-2 w-2 rounded-sm ${colors[index]}`} />{period}</span>)}</div></div><div className="space-y-4">{items.map((item) => <div key={item.label}><div className="mb-2 truncate text-[10px] font-semibold text-slate-700">{item.label}</div><div className="space-y-1.5">{item.values.map((value, index) => <div key={`${item.label}-${periods[index]}`} className="flex items-center gap-2"><span className="w-16 shrink-0 text-[9px] text-slate-400">{periods[index]}</span><div className="h-2 flex-1 rounded-full bg-slate-100"><div className={`h-full rounded-full ${colors[index]}`} style={{ width: `${Math.max(value > 0 ? 3 : 0, (value / max) * 100)}%` }} /></div><span className="w-20 shrink-0 text-right text-[9px] font-semibold text-slate-700">{percent ? `${value.toFixed(1)}%` : compact(value, currency)}</span></div>)}</div></div>)}</div></div>;
+}
+
+function ManagementSchedule({ report, currency }: { report: Report; currency: string }) {
+  const isSectionRow = (row: unknown[]) => row.length > 1 && row.slice(1).every((cell) => cell == null || cell === '');
+  const sections: { title: string; rows: unknown[][] }[] = [];
+  for (const row of report.rows) {
+    if (isSectionRow(row)) sections.push({ title: String(row[0]), rows: [] });
+    else if (sections.length) sections[sections.length - 1].rows.push(row);
+  }
+  const chartRows = (title: string, rows: unknown[][]) => {
+    if (title === 'ROOM STATISTICS') return <GuideBars rows={rows.filter((row) => String(row[0]).includes('occupancy %') || String(row[0]).includes('sold rooms %'))} currency={currency} percent />;
+    if (title === 'REVENUE DEDUCTIONS') return <GuideBars rows={rows.filter((row) => String(row[0]).startsWith('Less:'))} currency={currency} />;
+    if (title === 'PAYMENT SUMMARY') return <GuideBars rows={rows} currency={currency} />;
+    if (title === 'FOOD AND BEVERAGE REVENUE') return <GuideBars rows={rows.filter((row) => String(row[0]).includes('revenue') && !String(row[0]).includes('covers'))} currency={currency} />;
+    if (title === 'REVENUE BY DEPARTMENT') return <GuideBars rows={rows.filter((row) => !String(row[0]).toLowerCase().includes('total'))} currency={currency} />;
+    return null;
+  };
+  return <div className="space-y-7">{sections.map((section) => <section key={section.title} className="overflow-hidden rounded-2xl border border-slate-200 print:rounded-none print:border-0 print:break-inside-auto"><div className="border-b border-slate-200 bg-slate-50 px-4 py-3 sm:px-5 print:px-0"><p className="report-kicker">Report section</p><h3 className="mt-1 text-base font-bold tracking-tight text-slate-900">{section.title}</h3></div><div className="p-4 sm:p-5 print:px-0">{chartRows(section.title, section.rows)}<ScheduleTable headers={report.headers} rows={section.rows} /></div></section>)}</div>;
+}
+
 function ReportDocument({ report, definition, kind, scope, periodStart, periodEnd }: { report: Report; definition?: ReportDefinition; kind: ReportKey; scope: Scope | null; periodStart: string; periodEnd: string }) {
   const currency = scope?.currency || 'NGN';
-  const isSectionRow = (row: unknown[]) => row.length > 1 && row.slice(1).every((cell) => cell == null || cell === '');
   return <article className="report-document mx-auto w-full max-w-[1080px] overflow-hidden bg-white text-slate-900 shadow-2xl print:max-w-none print:shadow-none">
     <style>{`.report-kicker{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.15em;color:#64748b}.report-meta-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.14em;color:rgba(255,255,255,.45)}`}</style>
     <header className="relative overflow-hidden bg-[#102a2c] px-6 py-8 text-white sm:px-10 sm:py-10 print:px-0 print:py-0">
@@ -70,11 +100,7 @@ function ReportDocument({ report, definition, kind, scope, periodStart, periodEn
       <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="report-kicker">Report register</p><p className="mt-1 text-xs text-slate-500">Controlled source schedule · currency {currency}</p></div><span className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700">Scope verified</span></div>
     </div>
     <div className="px-6 py-7 sm:px-10 sm:py-9 print:px-0 print:py-7">
-      <PrintedAnalytics report={report} kind={kind} currency={currency} />
-      <section className="overflow-hidden rounded-2xl border border-slate-200 print:rounded-none print:border-0">
-        <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-3 print:px-0"><div><p className="report-kicker">Source schedule</p><p className="mt-1 text-xs text-slate-500">Detailed records returned for this authorized report.</p></div><Table2 className="h-4 w-4 text-slate-400" /></div>
-        <div className="overflow-x-auto"><table className="w-full border-collapse text-[10px] leading-4"><thead className="bg-white"><tr>{report.headers.map((header) => <th key={header} className="border-b-2 border-slate-800 px-3 py-3 text-left font-bold uppercase tracking-[.08em] text-slate-700">{header}</th>)}</tr></thead><tbody>{report.rows.map((row, index) => isSectionRow(row) ? <tr key={index}><td colSpan={report.headers.length} className="border-y border-slate-200 bg-slate-100 px-3 py-3 text-[10px] font-bold uppercase tracking-[.16em] text-slate-700">{String(row[0])}</td></tr> : <tr key={index} className="odd:bg-slate-50/80">{row.map((cell, cellIndex) => <td key={cellIndex} className="border-b border-slate-200 px-3 py-2.5 align-top text-slate-700">{cell == null || cell === '' ? '' : typeof cell === 'number' ? cell.toLocaleString('en-NG', { maximumFractionDigits: 2 }) : String(cell)}</td>)}</tr>)}</tbody></table>{!report.rows.length && <p className="py-16 text-center text-sm text-slate-500">No rows were returned for this authorized window.</p>}</div>
-      </section>
+      {kind === 'management' ? <ManagementSchedule report={report} currency={currency} /> : <><PrintedAnalytics report={report} kind={kind} currency={currency} /><section className="overflow-hidden rounded-2xl border border-slate-200 print:rounded-none print:border-0"><div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-3 print:px-0"><div><p className="report-kicker">Source schedule</p><p className="mt-1 text-xs text-slate-500">Detailed records returned for this authorized report.</p></div><Table2 className="h-4 w-4 text-slate-400" /></div><ScheduleTable headers={report.headers} rows={report.rows} /></section></>}
     </div>
     <footer className="flex flex-wrap justify-between gap-3 border-t border-slate-200 px-6 py-5 text-[9px] uppercase tracking-[.12em] text-slate-400 sm:px-10 print:px-0"><span>Generated from LodgeCore PMS source records</span><span>External auditor · read-only report</span></footer>
   </article>;
