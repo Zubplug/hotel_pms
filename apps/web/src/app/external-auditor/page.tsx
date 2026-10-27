@@ -25,10 +25,6 @@ import {
   ChevronRight,
   Layers,
   PieChart as PieChartIcon,
-  BookOpen,
-  Flag,
-  UploadCloud,
-  ClipboardList,
   GitCompareArrows,
 } from 'lucide-react';
 import {
@@ -373,7 +369,7 @@ export default function ExternalAuditorDashboard() {
             {revenueTrend !== null ? (
               <span className={`ea-kpi-trend ${revenueTrend >= 0 ? 'ea-kpi-trend--up' : 'ea-kpi-trend--down'}`}>
                 {revenueTrend >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-                {Math.abs(revenueTrend).toFixed(1)}% vs prior day
+                {Math.abs(revenueTrend).toFixed(1)}% vs prior audited date
               </span>
             ) : (
               <span className="ea-kpi-sub">Across authorized engagement</span>
@@ -395,7 +391,7 @@ export default function ExternalAuditorDashboard() {
               <div className="ea-occupancy-bar">
                 <div className="ea-occupancy-fill" style={{ width: `${Math.min(kpis.averageOccupancy, 100)}%` }} />
               </div>
-              <span className="ea-kpi-sub">{kpis.averageOccupancy < 70 ? 'Below target' : 'On track'}</span>
+              <span className="ea-kpi-sub">Period average from finalized audits</span>
             </div>
           </div>
         </div>
@@ -640,7 +636,7 @@ export default function ExternalAuditorDashboard() {
             <div>
               <p className="ea-chart-eyebrow">Financial Integrity</p>
               <h2 className="ea-chart-title">Transaction Risk Signals</h2>
-              <p className="ea-panel-sub">Real-time flags derived from posted ledger activity across the authorized period.</p>
+              <p className="ea-panel-sub">Exceptions detected in posted ledger activity within the authorized period.</p>
             </div>
             <Link href={`/external-auditor/assurance?propertyId=${scope.propertyId}`} className="ea-link-arrow">
               Reconciliation center
@@ -712,46 +708,45 @@ export default function ExternalAuditorDashboard() {
           )}
         </div>
 
-        {/* ── RIGHT: Engagement Workspace ── */}
+        {/* ── RIGHT: Audit review workspace ── */}
         <div className="ea-panel-stack">
 
-          {/* Fieldwork Counters */}
+          {/* Evidence coverage */}
           <div className="ea-engage-card">
             <div className="ea-engage-header">
-              <ClipboardList className="h-4 w-4 text-emerald-400" />
-              <span className="ea-engage-title">Engagement Fieldwork</span>
+              <FileSearch className="h-4 w-4 text-sky-400" />
+              <span className="ea-engage-title">Audit coverage</span>
             </div>
             <div className="ea-engage-stats">
-              <Link href={`/external-auditor/operations?tab=findings&propertyId=${scope.propertyId}`} className="ea-engage-stat">
-                <div className="ea-engage-stat-icon" style={{ background: 'rgba(244,63,94,.1)', color: '#f43f5e' }}>
-                  <Flag className="h-3.5 w-3.5" />
-                </div>
-                <div>
-                  <p className="ea-engage-stat-label">Findings</p>
-                  <p className="ea-engage-stat-value">—</p>
-                </div>
-                <ChevronRight className="h-3.5 w-3.5 text-slate-700 ml-auto" />
-              </Link>
-              <Link href={`/external-auditor/operations?tab=workpapers&propertyId=${scope.propertyId}`} className="ea-engage-stat">
-                <div className="ea-engage-stat-icon" style={{ background: 'rgba(167,139,250,.1)', color: '#a78bfa' }}>
-                  <BookOpen className="h-3.5 w-3.5" />
-                </div>
-                <div>
-                  <p className="ea-engage-stat-label">Workpapers</p>
-                  <p className="ea-engage-stat-value">—</p>
-                </div>
-                <ChevronRight className="h-3.5 w-3.5 text-slate-700 ml-auto" />
-              </Link>
-              <Link href={`/external-auditor/operations?tab=requests&propertyId=${scope.propertyId}`} className="ea-engage-stat">
+              <Link href={`/external-auditor/evidence?propertyId=${scope.propertyId}`} className="ea-engage-stat">
                 <div className="ea-engage-stat-icon" style={{ background: 'rgba(56,189,248,.1)', color: '#38bdf8' }}>
-                  <UploadCloud className="h-3.5 w-3.5" />
+                  <FileSearch className="h-3.5 w-3.5" />
                 </div>
                 <div>
-                  <p className="ea-engage-stat-label">Evidence Requests</p>
-                  <p className="ea-engage-stat-value">—</p>
+                  <p className="ea-engage-stat-label">Source records in scope</p>
+                  <p className="ea-engage-stat-value">{data.review.evidenceRecords.toLocaleString()}</p>
                 </div>
                 <ChevronRight className="h-3.5 w-3.5 text-slate-700 ml-auto" />
               </Link>
+              <Link href={`/external-auditor/reports?propertyId=${scope.propertyId}`} className="ea-engage-stat">
+                <div className="ea-engage-stat-icon" style={{ background: 'rgba(167,139,250,.1)', color: '#a78bfa' }}>
+                  <FileText className="h-3.5 w-3.5" />
+                </div>
+                <div>
+                  <p className="ea-engage-stat-label">Manual journal entries</p>
+                  <p className="ea-engage-stat-value">{data.review.journalEntries.toLocaleString()}</p>
+                </div>
+                <ChevronRight className="h-3.5 w-3.5 text-slate-700 ml-auto" />
+              </Link>
+              <div className="ea-engage-stat" style={{ cursor: 'default' }}>
+                <div className="ea-engage-stat-icon" style={{ background: 'rgba(52,211,153,.1)', color: '#34d399' }}>
+                  <Activity className="h-3.5 w-3.5" />
+                </div>
+                <div>
+                  <p className="ea-engage-stat-label">Audit events logged</p>
+                  <p className="ea-engage-stat-value">{data.review.auditEvents.toLocaleString()}</p>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -794,14 +789,14 @@ export default function ExternalAuditorDashboard() {
           <div className="ea-engage-card">
             <div className="ea-engage-header">
               <GitCompareArrows className="h-4 w-4 text-sky-400" />
-              <span className="ea-engage-title">Quick Navigate</span>
+              <span className="ea-engage-title">Review tools</span>
             </div>
             <div className="ea-quicknav-grid">
               {[
                 { label: 'Evidence', href: `/external-auditor/evidence?propertyId=${scope.propertyId}`, color: '#38bdf8', icon: FileSearch },
                 { label: 'Reports', href: `/external-auditor/reports?propertyId=${scope.propertyId}`, color: '#34d399', icon: FileText },
                 { label: 'Assurance', href: `/external-auditor/assurance?propertyId=${scope.propertyId}`, color: '#a78bfa', icon: GitCompareArrows },
-                { label: 'Operations', href: `/external-auditor/operations?propertyId=${scope.propertyId}`, color: '#fbbf24', icon: ClipboardList },
+                { label: 'Final pack', href: `/external-auditor/final-pack?propertyId=${scope.propertyId}`, color: '#fbbf24', icon: ShieldCheck },
               ].map(({ label, href, color, icon: Icon }) => (
                 <Link key={label} href={href} className="ea-quicknav-tile" style={{ '--ea-qn-color': color } as React.CSSProperties}>
                   <Icon className="h-4 w-4" style={{ color }} />
@@ -814,7 +809,7 @@ export default function ExternalAuditorDashboard() {
         </div>
       </div>
 
-      {/* ── ENGAGEMENT METRICS BAR ───────────────────────────────────── */}
+      {/* ── AUDIT COVERAGE BAR ───────────────────────────────────────── */}
       <div className="ea-metrics-bar">
         <Link href={`/external-auditor/evidence?propertyId=${scope.propertyId}`} className="ea-metric-tile">
           <FileSearch className="h-4 w-4 text-sky-400" />

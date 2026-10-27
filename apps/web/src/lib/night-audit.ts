@@ -1245,6 +1245,7 @@ export async function executeNightAudit(
     }) : [];
     
     const glCredit = (code: string) => journalLines.filter((line) => line.account.code === code).reduce((sum, line) => sum + Number(line.credit), 0);
+    const glDebit = (code: string) => journalLines.filter((line) => line.account.code === code).reduce((sum, line) => sum + Number(line.debit), 0);
     const revenueMap = (((property.settings as any)?.accountingConfig?.revenueAccounts || {}) as Record<string, string>);
     const eventHallCode = revenueMap.EVENT_HALL || '4300';
     const eventEquipmentCode = revenueMap.EVENT_EQUIPMENT || '4300';
@@ -1259,10 +1260,20 @@ export async function executeNightAudit(
     const otherRevenueTotal = otherRevenueVal + ancillaryRevenueTotal;
     const otherRevenueGl = glCredit('4400');
     const allocateOtherGl = (amount: number) => otherRevenueTotal > 0 ? otherRevenueGl * amount / otherRevenueTotal : 0;
+    // F&B GL 4250 contains gross POS/room-F&B credits. Complimentary POS
+    // sales are intentionally excluded from the source revenue total, so
+    // remove their 4950 contra-revenue debit before reconciling. Event Food
+    // shares 4250 and must receive only its proportional share; assigning the
+    // full GL balance to both departments creates a permanent false variance.
+    const netFnbGl = glCredit('4250') - glDebit('4950');
+    const fnbAndEventFoodSource = fnbRevenueVal + eventFoodRevenueVal;
+    const eventFoodGl = fnbAndEventFoodSource > 0
+      ? netFnbGl * (eventFoodRevenueVal / fnbAndEventFoodSource)
+      : 0;
     const departmentReconciliation = [
       { department: 'Rooms', source: roomRevenueVal, gl: glCredit('4050') },
-      { department: 'F&B/POS', source: fnbRevenueVal, gl: glCredit('4250') - eventFoodRevenueVal },
-      { department: 'Event Food', source: eventFoodRevenueVal, gl: glCredit('4250') },
+      { department: 'F&B/POS', source: fnbRevenueVal, gl: netFnbGl - eventFoodGl },
+      { department: 'Event Food', source: eventFoodRevenueVal, gl: eventFoodGl },
       { department: 'Recreation/Pool', source: poolRevenueVal, gl: glCredit('4100') },
       { department: 'Event Hall', source: eventHallRevenueVal, gl: eventHallGl },
       { department: 'Event Equipment', source: eventEquipmentRevenueVal, gl: eventEquipmentGl },

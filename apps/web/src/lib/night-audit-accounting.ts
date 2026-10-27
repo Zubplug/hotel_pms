@@ -182,7 +182,7 @@ export async function postNightAuditJournal(tx: any, input: {
         businessDate: input.businessDate,
         status: { in: ['COMPLETED', 'PARTIALLY_REFUNDED'] },
       },
-      select: { id: true, method: true, amount: true, folioId: true, reference: true, receiptNumber: true },
+      select: { id: true, method: true, amount: true, folioId: true, reference: true, receiptNumber: true, folio: { select: { type: true } } },
     }),
     tx.refund.findMany({
       where: { propertyId: input.propertyId, businessDate: input.businessDate, status: 'COMPLETED' },
@@ -304,7 +304,7 @@ export async function postNightAuditJournal(tx: any, input: {
       sourceId: payment.id,
     });
     addLine(lines, {
-      accountId: account('guestLedger').id,
+      accountId: payment.folio?.type === 'CITY_LEDGER' ? account('cityLedger').id : account('guestLedger').id,
       debit: 0,
       credit: amount,
       description: `Relieve Guest Ledger for Folio ${payment.folioId}`,
