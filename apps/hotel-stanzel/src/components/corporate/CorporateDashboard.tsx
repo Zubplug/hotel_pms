@@ -19,13 +19,17 @@ export function CorporateDashboard({
   reservations: any[];
 }) {
   const outstanding = invoices.reduce((sum, row) => sum + Number(row.outstandingAmount || 0), 0);
+  const advanceCredit = Number(account.cityLedgerAccount?.advanceCredit || 0);
+  const walletPosition = outstanding > 0
+    ? { label: 'Outstanding balance', amount: outstanding, className: 'outstanding-balance', detail: `${invoices.length} invoice${invoices.length === 1 ? '' : 's'} on City Ledger` }
+    : { label: 'Advance credit', amount: advanceCredit, className: 'advance-credit', detail: 'Available credit on your City Ledger' };
   const recentReservations = [...reservations].slice(0, 4);
 
   return <>
     <section className="portal-welcome-banner"><div><span className="portal-welcome-kicker">Welcome back</span><h2>{account.name}</h2><p>Everything your team needs to arrange stays and keep corporate travel moving.</p></div><div className="portal-account-reference"><span>Account reference</span><strong>{account.code}</strong></div></section>
     <div className="portal-metrics-grid">
       <section className="portal-metric-card"><MetricIcon type="account" /><div><span>Account contact</span><strong>{account.contactPerson || 'Contact not recorded'}</strong><small>{account.contactEmail || 'Email not recorded'}</small></div></section>
-      <section className="portal-metric-card"><MetricIcon type="ledger" /><div><span>Outstanding balance</span><strong className="outstanding-balance">{account.cityLedgerAccount?.currency || 'NGN'} {outstanding.toLocaleString()}</strong><small>{invoices.length} invoice{invoices.length === 1 ? '' : 's'} on City Ledger</small></div></section>
+      <section className="portal-metric-card"><MetricIcon type="ledger" /><div><span>Corporate wallet</span><strong className={walletPosition.className}>{account.cityLedgerAccount?.currency || 'NGN'} {walletPosition.amount.toLocaleString()}</strong><small>{walletPosition.label} · {walletPosition.detail}</small></div></section>
       <section className="portal-metric-card"><MetricIcon type="stays" /><div><span>Active reservations</span><strong>{reservations.length}</strong><small>Stays linked to your account</small></div></section>
     </div>
     <div className="portal-dashboard-grid">

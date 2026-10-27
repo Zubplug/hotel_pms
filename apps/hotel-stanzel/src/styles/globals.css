@@ -435,6 +435,7 @@ p { line-height: 1.75; color: var(--text-muted); }
 .portal-metric-card span { color: #82928c; font-size: 10px; font-weight: 600; letter-spacing: .09em; text-transform: uppercase; }
 .portal-metric-card strong { overflow: hidden; color: #243c35; font-size: 14px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
 .portal-metric-card strong.outstanding-balance { color: #b42318; }
+.portal-metric-card strong.advance-credit { color: #23745a; }
 .portal-metric-card small { color: #8c9c96; font-size: 11px; }
 .portal-dashboard-grid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(300px, .65fr); gap: 17px; margin-top: 17px; }
 .portal-panel { border: 1px solid #e1e9e5; border-radius: 12px; background: #fff; }

@@ -21,6 +21,25 @@ export async function GET(req: NextRequest) {
       },
     });
     if (!account) return withRequestId(errorResponse('NOT_FOUND', 'Corporate account not found', 404), auth.requestId);
+    const paymentEntries = account.cityLedgerAccount
+      ? await prisma.cityLedgerEntry.findMany({
+        where: { accountId: account.cityLedgerAccount.id, type: 'PAYMENT', status: { not: 'REVERSED' } },
+        select: { amount: true, allocations: { select: { amount: true } } },
+      })
+      : [];
+    const unappliedAdvanceCredit = paymentEntries.reduce((sum, payment) => {
+      const allocated = payment.allocations.reduce((total, allocation) => total + Number(allocation.amount || 0), 0);
+      return sum + Math.max(0, Number(payment.amount || 0) - allocated);
+    }, 0);
+    const advanceCredit = account.cityLedgerAccount
+      ? Math.max(0, -Number(account.cityLedgerAccount.balance || 0), unappliedAdvanceCredit)
+      : 0;
+    const accountWithCredit = {
+      ...account,
+      cityLedgerAccount: account.cityLedgerAccount
+        ? { ...account.cityLedgerAccount, advanceCredit }
+        : null,
+    };
     const today = new Date();
     const defaultContract = await prisma.corporateContract.findFirst({
       where: {
@@ -103,6 +122,6 @@ export async function GET(req: NextRequest) {
               : 'PMS_RATE_PLAN',
       };
     });
-    return withRequestId(successResponse({ account, defaultCorporateContract: defaultContract ? { id: defaultContract.id, reference: defaultContract.reference, name: defaultContract.name, defaultCurrency: defaultContract.defaultCurrency, effectiveFrom: defaultContract.effectiveFrom, effectiveTo: defaultContract.effectiveTo, version: defaultContract.versions[0]?.version || null } : null, defaultCorporateRates }), auth.requestId);
+    return withRequestId(successResponse({ account: accountWithCredit, defaultCorporateContract: defaultContract ? { id: defaultContract.id, reference: defaultContract.reference, name: defaultContract.name, defaultCurrency: defaultContract.defaultCurrency, effectiveFrom: defaultContract.effectiveFrom, effectiveTo: defaultContract.effectiveTo, version: defaultContract.versions[0]?.version || null } : null, defaultCorporateRates }), auth.requestId);
   } catch (error) { return corporateError(error, auth.requestId); }
 }
