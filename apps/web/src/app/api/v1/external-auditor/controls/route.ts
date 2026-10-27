@@ -73,7 +73,7 @@ export async function GET(request: NextRequest) {
       }),
       kind === 'discounts' ? Promise.resolve([]) : prisma.posPayment.findMany({
         where: { method: 'COMPLIMENTARY', order: { propertyId, businessDate: date } },
-        include: { order: { select: { orderNumber: true, serverStaff: { select: { firstName: true, lastName: true } } } } },
+        include: { order: { select: { orderNumber: true, displayName: true, folio: { select: { guest: { select: { firstName: true, lastName: true } } } }, serverStaff: { select: { firstName: true, lastName: true } } } } },
         orderBy: [{ businessDate: 'desc' }, { createdAt: 'desc' }], take: 1000,
       }),
       kind === 'discounts' ? Promise.resolve([]) : prisma.reservationRoom.findMany({
@@ -88,12 +88,27 @@ export async function GET(request: NextRequest) {
       .filter((id): id is string => typeof id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id));
     const approvals = approvalIds.length ? await prisma.approvalRequest.findMany({ where: { id: { in: approvalIds }, propertyId, type: 'DISCOUNT' }, select: { id: true, status: true, executionStatus: true, requestedBy: true, requestedAt: true, reviewedBy: true, reviewedAt: true, amount: true, currency: true, reason: true, details: true, snapshot: true } }) : [];
     const approvalById = new Map(approvals.map(item => [item.id, item]));
+    const isUuid = (value: unknown): value is string => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+    const acknowledgedIdFromJson = (value: unknown) => {
+      if (!value || typeof value !== 'object') return null;
+      const record = value as Record<string, unknown>;
+      return [record.acknowledgedByStaffId, record.acknowledgedBy, record.acknowledgedById].find(isUuid) || null;
+    };
+    const approvalAcknowledgedBy = (approval: typeof approvals[number]) => {
+      return acknowledgedIdFromJson(approval.details) || acknowledgedIdFromJson(approval.snapshot);
+    };
+    const complimentaryAcknowledgedBy = (notes?: string | null) => {
+      if (!notes) return null;
+      try { return acknowledgedIdFromJson(JSON.parse(notes)); } catch { return null; }
+    };
 
     const staffIds = Array.from(new Set([
       ...discountItems.map(item => item.postedBy),
       ...complimentaryFolioItems.map(item => item.postedBy),
       ...posComplimentary.map(item => item.processedById).filter((id): id is string => Boolean(id)),
       ...approvals.flatMap(item => [item.requestedBy, item.reviewedBy]).filter((id): id is string => Boolean(id)),
+      ...approvals.map(approvalAcknowledgedBy).filter((id): id is string => Boolean(id)),
+      ...complimentaryRecords.map(item => complimentaryAcknowledgedBy(item.notes)).filter((id): id is string => Boolean(id)),
     ]));
     const staff = staffIds.length ? await prisma.staff.findMany({ where: { OR: [{ id: { in: staffIds } }, { userId: { in: staffIds } }] }, select: { id: true, userId: true, firstName: true, lastName: true } }) : [];
     const staffById = new Map<string, string>();
@@ -117,11 +132,9 @@ export async function GET(request: NextRequest) {
         reference: item.folio.folioNumber || item.folioId, guestName: name(item.folio.guest) || 'Walk-in',
         amount: Number(item.amount), currency: item.currency, description: item.description,
         reason: approval?.reason || item.description, source: item.source, status: item.voidedAt ? 'VOIDED' : approval?.status || 'APPLIED',
-        operator: display(item.postedBy), approver: display(approval?.reviewedBy), requestedBy: display(approval?.requestedBy),
-        beneficiary: 'Not applicable',
-        // Approval review and acknowledgement are separate controls. ApprovalRequest
-        // has no acknowledgement field, so do not present the reviewer as an acknowledger.
-        acknowledgedBy: 'Not recorded', acknowledgedAt: null,
+        operator: display(approval?.requestedBy || item.postedBy), approver: display(approval?.reviewedBy), requestedBy: display(approval?.requestedBy),
+        beneficiary: name(item.folio.guest) || 'Customer not recorded',
+        acknowledgedBy: display(approval ? approvalAcknowledgedBy(approval) : null), acknowledgedAt: approval?.requestedAt || null,
         requestedAt: approval?.requestedAt || null, reviewedAt: approval?.reviewedAt || null,
         approvalStatus: approval?.status || 'NOT_LINKED', executionStatus: approval?.executionStatus || null, approvalId: approval?.id || null,
       };
@@ -131,7 +144,7 @@ export async function GET(request: NextRequest) {
     const [guests, compFolios, compOrders] = await Promise.all([
       guestIds.length ? prisma.guest.findMany({ where: { id: { in: guestIds } }, select: { id: true, firstName: true, lastName: true } }) : Promise.resolve([]),
       complimentaryRecords.map(item => item.folioItemId).filter((id): id is string => Boolean(id)).length ? prisma.folioItem.findMany({ where: { id: { in: complimentaryRecords.map(item => item.folioItemId).filter((id): id is string => Boolean(id)) } }, select: { id: true, folio: { select: { folioNumber: true } } } }) : Promise.resolve([]),
-      complimentaryRecords.map(item => item.posOrderId).filter((id): id is string => Boolean(id)).length ? prisma.posOrder.findMany({ where: { id: { in: complimentaryRecords.map(item => item.posOrderId).filter((id): id is string => Boolean(id)) } }, select: { id: true, orderNumber: true } }) : Promise.resolve([]),
+      complimentaryRecords.map(item => item.posOrderId).filter((id): id is string => Boolean(id)).length ? prisma.posOrder.findMany({ where: { id: { in: complimentaryRecords.map(item => item.posOrderId).filter((id): id is string => Boolean(id)) } }, select: { id: true, orderNumber: true, displayName: true, folio: { select: { guest: { select: { firstName: true, lastName: true } } } } } }) : Promise.resolve([]),
     ]);
     const guestById = new Map(guests.map(item => [item.id, `${item.firstName} ${item.lastName}`.trim()]));
     const folioByItemId = new Map(compFolios.map(item => [item.id, item.folio.folioNumber]));
@@ -144,26 +157,26 @@ export async function GET(request: NextRequest) {
       description: item.complType, reason: item.reason, source: item.sourceModule, status: item.status,
       operator: name(item.operator), approver: name(item.approver) || 'Not recorded', requestedBy: name(item.operator),
       requestedAt: item.createdAt, reviewedAt: item.verifiedAt, approvalStatus: item.status, executionStatus: null,
-      approvalId: null, beneficiary: name(item.staff) || 'No beneficiary recorded', nightAuditor: name(item.nightAuditor) || 'Not recorded', notes: item.notes,
-      acknowledgedBy: name(item.nightAuditor) || name(item.approver) || 'Not recorded', acknowledgedAt: item.verifiedAt,
+      approvalId: null, beneficiary: name(item.staff) || (item.guestId ? guestById.get(item.guestId) : null) || 'Customer not recorded', nightAuditor: name(item.nightAuditor) || 'Not recorded', notes: item.notes,
+      acknowledgedBy: display(complimentaryAcknowledgedBy(item.notes)), acknowledgedAt: complimentaryAcknowledgedBy(item.notes) ? item.createdAt : null,
       })),
       ...complimentaryFolioItems.filter(item => !verifiedComplimentaryFolioItemIds.has(item.id)).map(item => ({
         id: item.id, kind: 'COMPLIMENTARY', businessDate: item.businessDate, createdAt: item.createdAt, folioId: item.folioId, operationId: item.operationId,
         reference: item.folio.folioNumber || item.folioId, folioReference: item.folio.folioNumber || null, guestName: name(item.folio.guest) || 'Walk-in', amount: Number(item.amount), currency: item.currency,
         description: item.description, reason: item.description, source: item.source, status: item.voidedAt ? 'VOIDED' : 'POSTED',
         operator: display(item.postedBy), approver: 'Not recorded', requestedBy: display(item.postedBy),
-        beneficiary: 'No beneficiary recorded',
+        beneficiary: name(item.folio.guest) || 'Customer not recorded',
         requestedAt: item.createdAt, reviewedAt: null, approvalStatus: 'NOT_LINKED', executionStatus: null,
         approvalId: null, nightAuditor: 'Not recorded', notes: item.voidReason,
         acknowledgedBy: 'Not recorded', acknowledgedAt: null,
       })),
       ...posComplimentary.map(item => ({
         id: item.id, kind: 'COMPLIMENTARY', businessDate: item.businessDate, createdAt: item.createdAt, folioId: null, operationId: item.operationId,
-        reference: item.order.orderNumber || item.orderId, folioReference: null, guestName: 'POS Guest', amount: Number(item.amount), currency: item.currency,
+        reference: item.order.orderNumber || item.orderId, folioReference: null, guestName: name(item.order.folio?.guest) || item.order.displayName || 'POS Customer', amount: Number(item.amount), currency: item.currency,
         description: 'POS Complimentary', reason: 'Restaurant POS complimentary payment', source: 'POS', status: item.status,
-        operator: display(item.processedById), approver: 'Not recorded', requestedBy: display(item.processedById),
-        beneficiary: name(item.order.serverStaff) || 'No beneficiary recorded',
-        acknowledgedBy: display(item.processedById), acknowledgedAt: item.verifiedAt || item.paidAt || null,
+        operator: display(complimentaryRecords.find(record => record.posOrderId === item.orderId)?.operatorId || item.processedById), approver: name(complimentaryRecords.find(record => record.posOrderId === item.orderId)?.approver) || 'Not recorded', requestedBy: display(complimentaryRecords.find(record => record.posOrderId === item.orderId)?.operatorId || item.processedById),
+        beneficiary: name(item.order.folio?.guest) || item.order.displayName || 'Customer not recorded',
+        acknowledgedBy: display(complimentaryAcknowledgedBy(complimentaryRecords.find(record => record.posOrderId === item.orderId)?.notes)), acknowledgedAt: complimentaryAcknowledgedBy(complimentaryRecords.find(record => record.posOrderId === item.orderId)?.notes) ? complimentaryRecords.find(record => record.posOrderId === item.orderId)?.createdAt || item.verifiedAt || item.paidAt || item.createdAt || null : null,
         requestedAt: item.createdAt, reviewedAt: null, approvalStatus: 'NOT_LINKED', executionStatus: null,
         approvalId: null, nightAuditor: 'Not recorded', notes: null,
       })),
@@ -172,7 +185,7 @@ export async function GET(request: NextRequest) {
         reference: item.reservation.confirmationNumber || item.reservationId, folioReference: null, guestName: name(item.reservation.primaryGuest) || 'Frontdesk Guest', amount: Number(item.discountAmount || 0), currency: item.currency,
         description: 'Frontdesk Complimentary', reason: item.discountReason || 'Complimentary stay', source: 'FRONTDESK', status: item.status,
         operator: 'Not recorded', approver: 'Not recorded', requestedBy: 'Not recorded',
-        beneficiary: 'No beneficiary recorded',
+        beneficiary: name(item.reservation.primaryGuest) || 'Customer not recorded',
         acknowledgedBy: 'Not recorded', acknowledgedAt: null,
         requestedAt: item.createdAt, reviewedAt: null, approvalStatus: 'NOT_LINKED', executionStatus: null,
         approvalId: null, nightAuditor: 'Not recorded', notes: null,
