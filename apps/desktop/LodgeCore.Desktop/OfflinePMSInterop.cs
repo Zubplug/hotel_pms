@@ -1553,6 +1553,15 @@ public class OfflinePMSInterop
                 }
             }
 
+            res.ConcessionBeneficiaryType = root.TryGetProperty("compBeneficiaryType", out var beneficiaryType)
+                ? beneficiaryType.GetString() : "GUEST";
+            res.ConcessionBeneficiaryStaffId = root.TryGetProperty("compBeneficiaryStaffId", out var beneficiaryStaffId)
+                ? beneficiaryStaffId.GetString() : null;
+            res.ConcessionAcknowledgedByStaffId = root.TryGetProperty("acknowledgedByStaffId", out var acknowledgedByStaffId)
+                ? acknowledgedByStaffId.GetString() : null;
+            res.ConcessionSettlementType = root.TryGetProperty("compSettlementType", out var settlementType)
+                ? settlementType.GetString() : "DUTY_MANAGER";
+
             
             var ctx = await GetSecureContextAsync("reservation:create", "frontdesk:all");
             var created = await _repo.CreateReservationAsync(res, ctx.UserId, ctx.DeviceId);
@@ -1873,6 +1882,20 @@ public class OfflinePMSInterop
             var ctx = await _sessionManager.GetActiveContextAsync();
             var data = await _repo.GetInHouseGuestsAsync(ctx.PropertyId, query);
             return JsonSerializer.Serialize(new { success = true, data }, _jsonOptions);
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new { success = false, error = ex.Message }, _jsonOptions);
+        }
+    }
+
+    public async Task<string> GetBreakfastEntitlementAsync(string reservationId, string roomNumber)
+    {
+        try
+        {
+            var ctx = await _sessionManager.GetActiveContextAsync();
+            var result = await _repo.GetBreakfastEntitlementAsync(reservationId, roomNumber);
+            return JsonSerializer.Serialize(new { success = true, data = result }, _jsonOptions);
         }
         catch (Exception ex)
         {
@@ -2292,6 +2315,9 @@ public class OfflinePMSInterop
             string? checkId = paymentData.ContainsKey("checkId") ? paymentData["checkId"]?.ToString() : null;
             string? supervisorPin = paymentData.ContainsKey("supervisorPin") ? paymentData["supervisorPin"]?.ToString() : null;
             string? reference = paymentData.ContainsKey("reference") ? paymentData["reference"]?.ToString() : null;
+            string? complimentaryJson = null;
+            if (paymentData.TryGetValue("complimentary", out var complimentaryValue) && complimentaryValue is JsonElement complimentaryElement)
+                complimentaryJson = complimentaryElement.GetRawText();
 
             // Folio / reservation passed from the POS checkout state for ROOM_CHARGE / COMPLIMENTARY
             string? folioId = paymentData.ContainsKey("folioId") ? paymentData["folioId"]?.ToString() : null;
@@ -2347,7 +2373,8 @@ public class OfflinePMSInterop
                 folioId: folioId,
                 reservationId: reservationId,
                 reference: reference,
-                covers: covers);
+                covers: covers,
+                complimentaryJson: complimentaryJson);
 
             return JsonSerializer.Serialize(new { success = true, data = res }, _jsonOptions);
         }

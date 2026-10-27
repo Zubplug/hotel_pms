@@ -3,6 +3,25 @@ import { NextRequest } from 'next/server';
 import prisma from '@hotel-pms/db';
 import { errorResponse, successResponse } from '@/lib/api-response';
 import { resolveUser } from '@/lib/resolve-user';
+import { isConcessionManagementPosition } from '@/lib/concession-accountability';
+
+async function resolveOperatorStaffId(tx: any, userId: string, propertyId: string) {
+  const staff = await tx.staff.findFirst({
+    where: { OR: [{ userId }, { id: userId }], propertyAccess: { has: propertyId }, isActive: true },
+    select: { id: true },
+  });
+  if (!staff) throw new Error('STAFF_NOT_FOUND');
+  return staff.id;
+}
+
+async function resolveAcknowledgingStaff(tx: any, staffId: string, propertyId: string) {
+  const staff = await tx.staff.findFirst({
+    where: { id: staffId, propertyAccess: { has: propertyId }, isActive: true },
+    select: { id: true, position: true },
+  });
+  if (!staff || !isConcessionManagementPosition(staff.position)) throw new Error('INVALID_ACKNOWLEDGING_STAFF');
+  return staff;
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -29,8 +48,12 @@ export async function POST(req: NextRequest) {
     if (!acknowledgedByStaffId) {
       return errorResponse('BAD_REQUEST', 'acknowledgedByStaffId is required', 400);
     }
-    if (beneficiaryType === 'STAFF' || beneficiaryStaffId || settlementType === 'STAFF_PAY_LATER') {
-      return errorResponse('BAD_REQUEST', 'Complimentary benefits are for guests only', 400);
+    const normalizedBeneficiaryType = beneficiaryType === 'STAFF' ? 'STAFF' : 'GUEST';
+    if (normalizedBeneficiaryType === 'STAFF' && !beneficiaryStaffId) {
+      return errorResponse('BAD_REQUEST', 'beneficiaryStaffId is required for staff benefits', 400);
+    }
+    if (normalizedBeneficiaryType === 'GUEST' && beneficiaryStaffId) {
+      return errorResponse('BAD_REQUEST', 'Guest benefits cannot include a staff beneficiary', 400);
     }
 
     const idempotencyKey = `comp_${targetType}_${reservationRoomId || orderId}_${Date.now()}`;
@@ -53,8 +76,12 @@ export async function POST(req: NextRequest) {
 
         propertyId = resRoom.reservation?.propertyId ?? '';
         if (!user.allowedProperties.includes(propertyId)) throw new Error('FORBIDDEN');
-        const acknowledgingStaff = await tx.staff.findFirst({ where: { id: acknowledgedByStaffId, propertyAccess: { has: propertyId }, isActive: true }, select: { id: true } });
-        if (!acknowledgingStaff) throw new Error('INVALID_ACKNOWLEDGING_STAFF');
+        await resolveAcknowledgingStaff(tx, acknowledgedByStaffId, propertyId);
+        const operatorStaffId = await resolveOperatorStaffId(tx, user.id, propertyId);
+        const beneficiaryStaff = normalizedBeneficiaryType === 'STAFF'
+          ? await tx.staff.findFirst({ where: { id: beneficiaryStaffId, propertyAccess: { has: propertyId }, isActive: true }, select: { id: true } })
+          : null;
+        if (normalizedBeneficiaryType === 'STAFF' && !beneficiaryStaff) throw new Error('INVALID_BENEFICIARY_STAFF');
         roomId = resRoom.roomId ?? undefined;
         guestId = resRoom.reservation?.primaryGuestId ?? undefined;
         const property = await tx.property.findUnique({ where: { id: propertyId }, select: { organizationId: true, businessDate: true } });
@@ -74,13 +101,18 @@ export async function POST(req: NextRequest) {
             reference: `COMP_RES_${reservationRoomId}_${Date.now()}`,
             sourceModule: 'FRONT_DESK',
             roomId,
-            guestId,
-            staffId: null,
-            operatorId,
+            guestId: normalizedBeneficiaryType === 'STAFF' ? null : guestId,
+            staffId: beneficiaryStaff?.id ?? null,
+            beneficiaryType: normalizedBeneficiaryType,
+            acknowledgedByStaffId,
+            acknowledgedAt: new Date(),
+            operatorId: operatorStaffId,
             operationId: idempotencyKey,
             grossAmount: finalCompAmount,
             complAmount: finalCompAmount,
             netAmount: 0,
+            settlementType: normalizedBeneficiaryType === 'STAFF' && settlementType === 'STAFF_PAY_LATER' ? 'STAFF_PAY_LATER' : 'DUTY_MANAGER',
+            staffLiability: normalizedBeneficiaryType === 'STAFF' && settlementType === 'STAFF_PAY_LATER' ? finalCompAmount : 0,
             complType: compType === 'FULL' ? 'FULL' : 'PARTIAL',
             reason,
             notes: JSON.stringify({ acknowledgedByStaffId }),
@@ -96,8 +128,12 @@ export async function POST(req: NextRequest) {
         if (!order) throw new Error('POS order not found');
         propertyId = order.propertyId;
         if (!user.allowedProperties.includes(propertyId)) throw new Error('FORBIDDEN');
-        const acknowledgingStaff = await tx.staff.findFirst({ where: { id: acknowledgedByStaffId, propertyAccess: { has: propertyId }, isActive: true }, select: { id: true } });
-        if (!acknowledgingStaff) throw new Error('INVALID_ACKNOWLEDGING_STAFF');
+        await resolveAcknowledgingStaff(tx, acknowledgedByStaffId, propertyId);
+        const operatorStaffId = await resolveOperatorStaffId(tx, user.id, propertyId);
+        const beneficiaryStaff = normalizedBeneficiaryType === 'STAFF'
+          ? await tx.staff.findFirst({ where: { id: beneficiaryStaffId, propertyAccess: { has: propertyId }, isActive: true }, select: { id: true } })
+          : null;
+        if (normalizedBeneficiaryType === 'STAFF' && !beneficiaryStaff) throw new Error('INVALID_BENEFICIARY_STAFF');
         const property = await tx.property.findUnique({ where: { id: propertyId }, select: { organizationId: true } });
         const operator = await tx.staff.findFirst({ where: { userId: user.id, organizationId: property?.organizationId, isActive: true }, select: { id: true } });
         if (!operator) throw new Error('STAFF_NOT_FOUND');
@@ -112,12 +148,17 @@ export async function POST(req: NextRequest) {
             reference: `COMP_POS_${orderId}_${Date.now()}`,
             sourceModule: 'POS',
             posOrderId: orderId,
-            staffId: null,
-            operatorId,
+            staffId: beneficiaryStaff?.id ?? null,
+            beneficiaryType: normalizedBeneficiaryType,
+            acknowledgedByStaffId,
+            acknowledgedAt: new Date(),
+            operatorId: operatorStaffId,
             operationId: idempotencyKey,
             grossAmount: finalCompAmount,
             complAmount: finalCompAmount,
             netAmount: 0,
+            settlementType: normalizedBeneficiaryType === 'STAFF' && settlementType === 'STAFF_PAY_LATER' ? 'STAFF_PAY_LATER' : 'DUTY_MANAGER',
+            staffLiability: normalizedBeneficiaryType === 'STAFF' && settlementType === 'STAFF_PAY_LATER' ? finalCompAmount : 0,
             complType: compType === 'FULL' ? 'FULL' : 'PARTIAL',
             reason,
             notes: JSON.stringify({ acknowledgedByStaffId }),
@@ -135,7 +176,8 @@ export async function POST(req: NextRequest) {
     console.error('[Approvals Complimentary POST]', err);
     if (err.message === 'FORBIDDEN') return errorResponse('FORBIDDEN', 'No access to this property', 403);
     if (err.message === 'STAFF_NOT_FOUND') return errorResponse('FORBIDDEN', 'Authenticated user has no active staff profile', 403);
-    if (err.message === 'INVALID_ACKNOWLEDGING_STAFF') return errorResponse('BAD_REQUEST', 'Acknowledging staff member is not active for this property', 400);
+    if (err.message === 'INVALID_ACKNOWLEDGING_STAFF') return errorResponse('BAD_REQUEST', 'Acknowledging staff member must be active management staff for this property', 400);
+    if (err.message === 'INVALID_BENEFICIARY_STAFF') return errorResponse('BAD_REQUEST', 'Beneficiary staff member is not active for this property', 400);
     return errorResponse('INTERNAL_ERROR', err.message || 'Failed to apply complimentary', 500);
   }
 }

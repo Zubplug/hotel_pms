@@ -252,6 +252,7 @@ public class LocalRepository
             return (object)new
             {
                 reservationId = r.Id,
+                guestId = r.GuestId,
                 folioId = r.Folio?.Id,
                 // Keep the signed folio position for POS display:
                 // positive = amount due (debit), negative = guest credit.
@@ -268,6 +269,64 @@ public class LocalRepository
                 isVip = r.Guest?.IsVip ?? false
             };
         }).ToList();
+    }
+
+    public async Task<object> GetBreakfastEntitlementAsync(string reservationId, string roomNumber)
+    {
+        var reservation = await _dbContext.Reservations
+            .Include(r => r.Rooms)
+            .FirstOrDefaultAsync(r => r.Id == reservationId);
+        if (reservation == null || !string.Equals(reservation.Status, "CHECKED_IN", StringComparison.OrdinalIgnoreCase))
+        {
+            return new { eligible = false, reasonMessage = "No active checked-in reservation found." };
+        }
+
+        string? ratePlanId = reservation.RatePlanId;
+        if (string.IsNullOrEmpty(ratePlanId) && !string.IsNullOrEmpty(reservation.CorporateAccountId))
+        {
+            var corporate = await _dbContext.CorporateAccounts.FirstOrDefaultAsync(c => c.Id == reservation.CorporateAccountId);
+            ratePlanId = corporate?.RatePlanId;
+        }
+        if (!string.IsNullOrEmpty(ratePlanId) && !string.IsNullOrEmpty(reservation.CorporateAccountId))
+        {
+            var ratePlan = await _dbContext.RatePlans.FirstOrDefaultAsync(rp => rp.Id == ratePlanId);
+            if (ratePlan != null && !ratePlan.IncludeFoodAllocation)
+                return new { eligible = false, reasonMessage = "Breakfast is excluded under this corporate rate agreement." };
+        }
+
+        var activeRoom = reservation.Rooms.FirstOrDefault(r => r.Status == "ACTIVE") ?? reservation.Rooms.FirstOrDefault();
+        var discounted = activeRoom != null && (!string.IsNullOrEmpty(activeRoom.DiscountType)
+            || (activeRoom.DiscountAmount ?? 0m) > 0m || (activeRoom.DiscountPercent ?? 0m) > 0m);
+        if (discounted)
+        {
+            var property = await _dbContext.Properties.FirstOrDefaultAsync(p => p.Id == reservation.PropertyId);
+            var allowed = false;
+            if (!string.IsNullOrWhiteSpace(property?.RateBreakdownJson))
+            {
+                try
+                {
+                    using var doc = JsonDocument.Parse(property.RateBreakdownJson);
+                    allowed = doc.RootElement.TryGetProperty("allowComplimentaryFoodOnDiscountedRooms", out var value) && value.GetBoolean();
+                }
+                catch (JsonException) { return new { eligible = false, reasonMessage = "Room-rate configuration is unavailable. Sync the terminal before redeeming breakfast." }; }
+            }
+            if (!allowed) return new { eligible = false, reasonMessage = "Breakfast is suppressed for this discounted room rate." };
+        }
+
+        var businessDate = (await _dbContext.Properties.FirstOrDefaultAsync(p => p.Id == reservation.PropertyId))?.BusinessDate.Date ?? DateTime.UtcNow.Date;
+        var redeemed = await _dbContext.BreakfastRedemptions
+            .Where(r => r.ReservationId == reservationId && r.BusinessDate.Date == businessDate)
+            .SumAsync(r => (int?)r.CoversRedeemed) ?? 0;
+        var max = Math.Max(1, reservation.Adults);
+        var remaining = Math.Max(0, max - redeemed);
+        return new
+        {
+            eligible = remaining > 0,
+            maxCoversAllowed = max,
+            coversAlreadyRedeemed = redeemed,
+            remainingCovers = remaining,
+            reasonMessage = remaining > 0 ? null : "All breakfast covers for this stay have already been redeemed today."
+        };
     }
 
     public async Task<LocalReservation> CreateReservationAsync(LocalReservation reservation, string userId, string deviceId)
@@ -332,7 +391,7 @@ public class LocalRepository
                 }
             }
         }
-        
+
         if (reservation.CheckOutDate <= reservation.CheckInDate)
             throw new InvalidOperationException("Check-out must be after check-in.");
 
@@ -355,7 +414,7 @@ public class LocalRepository
         decimal totalAmount = baseRate * nights;
 
         reservation.Currency = currency;
-        
+
         if (reservation.Guest != null && _dbContext.Entry(reservation.Guest).State == EntityState.Detached)
         {
             _dbContext.Guests.Add(reservation.Guest);
@@ -439,6 +498,11 @@ public class LocalRepository
                     : reservation.Rooms.FirstOrDefault()?.DiscountPercent,
                 DiscountReason = reservation.Rooms.FirstOrDefault()?.DiscountReason,
                 DiscountApprovingManagerId = reservation.Rooms.FirstOrDefault()?.DiscountApprovingManagerId,
+                BeneficiaryType = reservation.ConcessionBeneficiaryType ?? "GUEST",
+                BeneficiaryStaffId = reservation.ConcessionBeneficiaryStaffId,
+                BeneficiaryGuestId = reservation.GuestId,
+                AcknowledgedByStaffId = reservation.ConcessionAcknowledgedByStaffId,
+                SettlementType = reservation.ConcessionSettlementType ?? "DUTY_MANAGER",
             })
         };
         
@@ -5021,10 +5085,22 @@ public class LocalRepository
         var root = document.RootElement;
         
         var targetType = root.TryGetProperty("targetType", out var tt) ? tt.GetString() : "POS_ORDER";
+        if (string.Equals(targetType, "POS_ORDER", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("POS discounts are disabled. Use Front Desk for room or folio discounts.");
         var discountType = root.TryGetProperty("discountType", out var dt) ? dt.GetString() : "PERCENTAGE";
         var amount = root.TryGetProperty("discountAmount", out var amt) ? amt.GetDouble() : 0.0;
         var percentage = root.TryGetProperty("discountPercent", out var pct) ? pct.GetDouble() : (root.TryGetProperty("percentage", out var oldPct) ? oldPct.GetDouble() : 0.0);
         var reason = root.TryGetProperty("reason", out var rsn) ? rsn.GetString() : "";
+        var beneficiaryType = root.TryGetProperty("beneficiaryType", out var bt) ? bt.GetString() : "GUEST";
+        var beneficiaryStaffId = root.TryGetProperty("beneficiaryStaffId", out var bsid) ? bsid.GetString() : null;
+        var acknowledgedByStaffId = root.TryGetProperty("acknowledgedByStaffId", out var ack) ? ack.GetString() : null;
+        if (string.IsNullOrWhiteSpace(acknowledgedByStaffId))
+            throw new InvalidOperationException("An acknowledging staff member is required.");
+        beneficiaryType = string.Equals(beneficiaryType, "STAFF", StringComparison.OrdinalIgnoreCase) ? "STAFF" : "GUEST";
+        if (beneficiaryType == "STAFF" && string.IsNullOrWhiteSpace(beneficiaryStaffId))
+            throw new InvalidOperationException("A staff beneficiary is required for staff discounts.");
+        if (beneficiaryType == "GUEST" && !string.IsNullOrWhiteSpace(beneficiaryStaffId))
+            throw new InvalidOperationException("A guest discount cannot include a staff beneficiary.");
         string propertyId = "";
         string aggregateId = "";
         var aggregateVersion = 1;
@@ -5054,6 +5130,10 @@ public class LocalRepository
         }
 
         if (string.IsNullOrEmpty(propertyId)) throw new Exception("Property context not found");
+        if (await _dbContext.Staff.FirstOrDefaultAsync(s => s.Id == acknowledgedByStaffId && s.PropertyId == propertyId && s.IsActive) == null)
+            throw new InvalidOperationException("The acknowledging staff member is not active for this property.");
+        if (beneficiaryType == "STAFF" && await _dbContext.Staff.FirstOrDefaultAsync(s => s.Id == beneficiaryStaffId && s.PropertyId == propertyId && s.IsActive) == null)
+            throw new InvalidOperationException("The selected staff beneficiary is not active for this property.");
         var approvalId = Guid.NewGuid().ToString();
 
         // Keep the request visible offline immediately, but mark it explicitly
@@ -5126,7 +5206,10 @@ public class LocalRepository
                 discountAmount = amount,
                 discountPercent = percentage,
                 reason,
-                acknowledgedByStaffId = root.TryGetProperty("acknowledgedByStaffId", out var discountAck) ? discountAck.GetString() : null,
+                beneficiaryType,
+                beneficiaryStaffId = beneficiaryType == "STAFF" ? beneficiaryStaffId : null,
+                beneficiaryGuestId = beneficiaryType == "GUEST" ? reservationSnapshot?.guest?.id : null,
+                acknowledgedByStaffId,
                 reservation = reservationSnapshot
             })
         });
@@ -5146,12 +5229,16 @@ public class LocalRepository
         
         var beneficiaryType = root.TryGetProperty("beneficiaryType", out var bt) ? bt.GetString() : "GUEST";
         var beneficiaryStaffId = root.TryGetProperty("beneficiaryStaffId", out var bsid) ? bsid.GetString() : null;
+        var acknowledgedByStaffId = root.TryGetProperty("acknowledgedByStaffId", out var ack) ? ack.GetString() : null;
+        if (string.IsNullOrWhiteSpace(acknowledgedByStaffId))
+            throw new InvalidOperationException("An acknowledging staff member is required.");
         var settlementType = root.TryGetProperty("settlementType", out var st) ? st.GetString() : "PAY_NOW";
 
-        if (string.Equals(beneficiaryType, "STAFF", StringComparison.OrdinalIgnoreCase)
-            || !string.IsNullOrWhiteSpace(beneficiaryStaffId)
-            || string.Equals(settlementType, "STAFF_PAY_LATER", StringComparison.OrdinalIgnoreCase))
-            throw new InvalidOperationException("Complimentary benefits are for guests only.");
+        beneficiaryType = string.Equals(beneficiaryType, "STAFF", StringComparison.OrdinalIgnoreCase) ? "STAFF" : "GUEST";
+        if (beneficiaryType == "STAFF" && string.IsNullOrWhiteSpace(beneficiaryStaffId))
+            throw new InvalidOperationException("A staff beneficiary is required for staff complimentary benefits.");
+        if (beneficiaryType == "GUEST" && !string.IsNullOrWhiteSpace(beneficiaryStaffId))
+            throw new InvalidOperationException("A guest complimentary benefit cannot include a staff beneficiary.");
 
         string propertyId = "";
         LocalPosOrder? posOrder = null;
@@ -5176,6 +5263,16 @@ public class LocalRepository
         }
 
         if (string.IsNullOrEmpty(propertyId)) throw new Exception("Property context not found");
+        if (await _dbContext.Staff.FirstOrDefaultAsync(s => s.Id == acknowledgedByStaffId && s.PropertyId == propertyId && s.IsActive) == null)
+            throw new InvalidOperationException("The acknowledging staff member is not active for this property.");
+
+        if (beneficiaryType == "STAFF")
+        {
+            var beneficiaryStaff = await _dbContext.Staff.FirstOrDefaultAsync(s =>
+                s.Id == beneficiaryStaffId && s.PropertyId == propertyId && s.IsActive);
+            if (beneficiaryStaff == null)
+                throw new InvalidOperationException("The selected staff beneficiary is not active for this property.");
+        }
 
         var approvalId = Guid.NewGuid().ToString();
         if (resRoom != null)
@@ -5233,7 +5330,10 @@ public class LocalRepository
                 compType,
                 compAmount,
                 reason,
-                acknowledgedByStaffId = root.TryGetProperty("acknowledgedByStaffId", out var complimentaryAck) ? complimentaryAck.GetString() : null,
+                beneficiaryType,
+                beneficiaryStaffId = beneficiaryType == "STAFF" ? beneficiaryStaffId : null,
+                settlementType = beneficiaryType == "STAFF" ? settlementType : "PAY_NOW",
+                acknowledgedByStaffId,
                 reservation = reservationSnapshot
             })
         };
@@ -6275,7 +6375,7 @@ public class LocalRepository
         return await _dbContext.Staff.FirstOrDefaultAsync(s => s.Id == staffId);
     }
 
-    public async Task<LocalPosPayment> PayOrderAsync(string orderId, string method, decimal amount, string currency, string checkId, string userId, string deviceId, string? authorizerId = null, string? folioId = null, string? reservationId = null, string? reference = null, int covers = 1)
+    public async Task<LocalPosPayment> PayOrderAsync(string orderId, string method, decimal amount, string currency, string checkId, string userId, string deviceId, string? authorizerId = null, string? folioId = null, string? reservationId = null, string? reference = null, int covers = 1, string? complimentaryJson = null)
     {
         var order = await _dbContext.PosOrders
             .Include(o => o.Items)
@@ -6289,6 +6389,71 @@ public class LocalRepository
             .FirstOrDefaultAsync(o => o.Id == orderId);
         if (order == null) throw new Exception("Order not found");
         await AssertPosSessionOpenAsync(order.SessionId);
+        var isBreakfastRedemption = reference != null && reference.StartsWith("BREAKFAST_ENTITLEMENT", StringComparison.OrdinalIgnoreCase);
+        if (string.Equals(method, "COMPLIMENTARY", StringComparison.OrdinalIgnoreCase) && !isBreakfastRedemption && Math.Abs(amount - order.Total) > 0.01m)
+            throw new InvalidOperationException("POS complimentary settlement must cover the full order total.");
+
+        // Validate the complete complimentary accountability package locally
+        // before creating the payment. The terminal must remain authoritative
+        // while offline; cloud validation happens again during sync.
+        string? complimentaryGuestId = null;
+        string? complimentaryGuestFolioId = null;
+        string? complimentaryGuestReservationId = null;
+        bool requiresStaffPayLaterApproval = false;
+        if (string.Equals(method, "COMPLIMENTARY", StringComparison.OrdinalIgnoreCase)
+            && !isBreakfastRedemption)
+        {
+            if (string.IsNullOrWhiteSpace(complimentaryJson))
+                throw new InvalidOperationException("Complimentary beneficiary, acknowledgement, and reason are required.");
+
+            using var complimentaryDocument = JsonDocument.Parse(complimentaryJson);
+            var complimentaryRoot = complimentaryDocument.RootElement;
+            var beneficiaryType = complimentaryRoot.TryGetProperty("beneficiaryType", out var typeElement)
+                ? typeElement.GetString() : null;
+            var acknowledgedByStaffId = complimentaryRoot.TryGetProperty("acknowledgedByStaffId", out var ackElement)
+                ? ackElement.GetString() : null;
+            var reason = complimentaryRoot.TryGetProperty("reason", out var reasonElement)
+                ? reasonElement.GetString() : null;
+            var settlementType = complimentaryRoot.TryGetProperty("settlementType", out var settlementElement)
+                ? settlementElement.GetString() : null;
+            requiresStaffPayLaterApproval = string.Equals(beneficiaryType, "STAFF", StringComparison.OrdinalIgnoreCase)
+                && string.Equals(settlementType, "STAFF_PAY_LATER", StringComparison.OrdinalIgnoreCase);
+
+            if (!string.Equals(beneficiaryType, "GUEST", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(beneficiaryType, "STAFF", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("A guest or staff beneficiary is required.");
+            if (string.IsNullOrWhiteSpace(acknowledgedByStaffId) || string.IsNullOrWhiteSpace(reason))
+                throw new InvalidOperationException("Acknowledging staff and a reason are required.");
+
+            var acknowledger = await _dbContext.Staff.FirstOrDefaultAsync(s =>
+                s.Id == acknowledgedByStaffId && s.PropertyId == order.PropertyId && s.IsActive);
+            if (acknowledger == null || !IsAuthorizerRole(acknowledger.Role, null))
+                throw new InvalidOperationException("The acknowledging staff member must be active management staff for this property.");
+
+            if (string.Equals(beneficiaryType, "STAFF", StringComparison.OrdinalIgnoreCase))
+            {
+                var beneficiaryStaffId = complimentaryRoot.TryGetProperty("beneficiaryStaffId", out var staffElement)
+                    ? staffElement.GetString() : null;
+                var beneficiaryStaff = await _dbContext.Staff.FirstOrDefaultAsync(s =>
+                    s.Id == beneficiaryStaffId && s.PropertyId == order.PropertyId && s.IsActive);
+                if (beneficiaryStaff == null)
+                    throw new InvalidOperationException("The staff beneficiary is not active for this property.");
+            }
+            else
+            {
+                var beneficiaryGuestId = complimentaryRoot.TryGetProperty("beneficiaryGuestId", out var guestElement)
+                    ? guestElement.GetString() : null;
+                var beneficiaryGuest = await _dbContext.Reservations.Include(r => r.Folio).FirstOrDefaultAsync(r =>
+                    r.PropertyId == order.PropertyId && r.GuestId == beneficiaryGuestId && r.Status == "CHECKED_IN");
+                if (beneficiaryGuest == null)
+                    throw new InvalidOperationException("The guest beneficiary must be an active checked-in guest.");
+                complimentaryGuestId = beneficiaryGuest.GuestId;
+                complimentaryGuestFolioId = beneficiaryGuest.Folio?.Id;
+                complimentaryGuestReservationId = beneficiaryGuest.Id;
+                if (string.IsNullOrWhiteSpace(complimentaryGuestFolioId))
+                    throw new InvalidOperationException("The checked-in guest does not have an active folio.");
+            }
+        }
 
         var payment = new LocalPosPayment
         {
@@ -6299,7 +6464,7 @@ public class LocalRepository
             Method = method,
             Amount = amount,
             Currency = currency,
-            Status = "CONFIRMED",
+            Status = requiresStaffPayLaterApproval ? "PENDING" : "CONFIRMED",
             OperationId = $"op_pay_{deviceId}_{DateTime.UtcNow.Ticks}",
             BusinessDate = order.BusinessDate,
             Reference = reference,
@@ -6308,6 +6473,38 @@ public class LocalRepository
         };
 
         _dbContext.PosPayments.Add(payment);
+
+        // Keep the guest's local folio visibly complete while offline. This is
+        // an audit-only complimentary line: it records the full benefit value
+        // without increasing the guest's collectible balance. The payment
+        // outbox carries the same link so cloud sync creates the FolioItem.
+        if (string.Equals(method, "COMPLIMENTARY", StringComparison.OrdinalIgnoreCase)
+            && !isBreakfastRedemption && !string.IsNullOrWhiteSpace(complimentaryGuestFolioId))
+        {
+            var guestFolio = await _dbContext.Folios.FindAsync(complimentaryGuestFolioId);
+            if (guestFolio != null)
+            {
+                UpdateFolioTransactionsJson(guestFolio, "items", new
+                {
+                    id = Guid.NewGuid().ToString(),
+                    amount,
+                    baseAmount = amount,
+                    description = $"POS Complimentary · Order #{order.OrderNumber}",
+                    type = "COMPLIMENTARY",
+                    source = "POS",
+                    revenueClass = "COMPLIMENTARY_ALLOWANCE",
+                    guestId = complimentaryGuestId,
+                    reservationId = complimentaryGuestReservationId,
+                    posTransactionId = payment.Id,
+                    operationId = $"COMP_POS_FOLIO_{payment.Id}",
+                    createdAt = DateTime.UtcNow,
+                });
+                guestFolio.IsDirty = true;
+                guestFolio.UpdatedAt = DateTime.UtcNow;
+                order.FolioId = guestFolio.Id;
+                order.ReservationId = complimentaryGuestReservationId;
+            }
+        }
 
         // ── ROOM CHARGE: atomically post the charge to the guest folio ────────────────
         if (string.Equals(method, "ROOM_CHARGE", StringComparison.OrdinalIgnoreCase))
@@ -6341,7 +6538,7 @@ public class LocalRepository
         }
         else if (string.Equals(method, "COMPLIMENTARY", StringComparison.OrdinalIgnoreCase))
         {
-            bool isBreakfast = reference != null && reference.StartsWith("BREAKFAST_ENTITLEMENT", StringComparison.OrdinalIgnoreCase);
+            bool isBreakfast = isBreakfastRedemption;
 
             if (isBreakfast && !string.IsNullOrEmpty(reservationId))
             {
@@ -6470,15 +6667,24 @@ public class LocalRepository
         }
         // ─────────────────────────────────────────────────────────────────────────────
 
-        AppendSyncEvent("POS_PAYMENT", payment.Id, "PAYMENT_RECORDED", payment, deviceId, order.OutletId, order.SessionId, userId);
+        object paymentEvent = payment;
+        if (string.Equals(method, "COMPLIMENTARY", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(complimentaryJson) && !(reference?.StartsWith("BREAKFAST_ENTITLEMENT", StringComparison.OrdinalIgnoreCase) ?? false))
+        {
+            var paymentPayload = JsonSerializer.Deserialize<Dictionary<string, object?>>(JsonSerializer.Serialize(payment)) ?? new Dictionary<string, object?>();
+            paymentPayload["complimentary"] = JsonSerializer.Deserialize<JsonElement>(complimentaryJson);
+            paymentEvent = paymentPayload;
+        }
+        AppendSyncEvent("POS_PAYMENT", payment.Id, requiresStaffPayLaterApproval ? "PAYMENT_PENDING_APPROVAL" : "PAYMENT_RECORDED", paymentEvent, deviceId, order.OutletId, order.SessionId, userId);
 
-        if (!string.IsNullOrEmpty(checkId))
+        // A staff pay-later complimentary payment is only a pending request;
+        // it must not close the check until an authorized reviewer approves it.
+        if (!requiresStaffPayLaterApproval && !string.IsNullOrEmpty(checkId))
         {
             var check = await _dbContext.PosChecks.FirstOrDefaultAsync(c => c.Id == checkId);
             if (check != null)
             {
                 var checkPaymentAmounts = await _dbContext.PosPayments
-                    .Where(p => p.CheckId == checkId)
+                    .Where(p => p.CheckId == checkId && p.Status == "CONFIRMED")
                     .Select(p => p.Amount)
                     .ToListAsync();
                 var checkPayments = checkPaymentAmounts.Sum();
@@ -6491,11 +6697,11 @@ public class LocalRepository
         }
 
         var orderPaymentAmounts = await _dbContext.PosPayments
-            .Where(p => p.OrderId == orderId)
+            .Where(p => p.OrderId == orderId && p.Status == "CONFIRMED")
             .Select(p => p.Amount)
             .ToListAsync();
         var orderPayments = orderPaymentAmounts.Sum();
-        if (orderPayments + amount >= order.Total)
+        if (!requiresStaffPayLaterApproval && orderPayments >= order.Total)
         {
             await CommitLocalSaleAsync(order, userId, deviceId, authorizerId);
             order.Status = "COMPLETED";

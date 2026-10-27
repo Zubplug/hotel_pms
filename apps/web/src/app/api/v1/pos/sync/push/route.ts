@@ -193,7 +193,7 @@ export async function POST(req: NextRequest) {
           // an auditor submitted the shift, so local state is not authoritative.
           const transactionEventTypes = new Set([
             'ORDER_CREATED', 'ORDER_UPDATED', 'ORDER_ITEMS_ADDED', 'ORDER_COMPLETED',
-            'ORDER_CLOSED', 'ORDER_CHECK_SPLIT', 'CHECK_PAID', 'PAYMENT_RECORDED',
+            'ORDER_CLOSED', 'ORDER_CHECK_SPLIT', 'CHECK_PAID', 'PAYMENT_RECORDED', 'PAYMENT_PENDING_APPROVAL',
             'POS_PAYMENT', 'POS_ORDER_ITEM', 'POS_KOT', 'POS_VOID', 'POS_CASH_MOVEMENT',
             'CASH_MOVEMENT', 'REFUND_REQUESTED', 'DISCOUNT_APPLIED',
             'BREAKFAST_REDEEMED', 'BREAKFAST_REDEMPTION', 'POOL_ENTRY_CREATED', 'POOL_ENTRY_UPDATED', 'POOL_OPERATION'
@@ -638,6 +638,7 @@ export async function POST(req: NextRequest) {
              }
           }
           else if (event.eventType === 'DISCOUNT_APPLIED') {
+              throw new Error('POS_DISCOUNTS_DISABLED: POS discounts are only available from Front Desk');
               const orderId = event.aggregateId;
               const { amount, percentage, reason, requestHash, approverId, newTotal } = payload;
               
@@ -654,7 +655,7 @@ export async function POST(req: NextRequest) {
                   throw new Error('SECURITY: Discount requires manager approval but none was provided');
               }
               
-              const expectedPayload = `${event.propertyId}:${terminal.outletId}:${event.deviceId}:${orderId}:${amount}:${percentage}:${reason}:${event.operatorId}:${approverId || ''}`;
+              const expectedPayload = `${event.propertyId}:${terminal!.outletId}:${event.deviceId}:${orderId}:${amount}:${percentage}:${reason}:${event.operatorId}:${approverId || ''}`;
               const expectedHash = crypto.createHash('sha256').update(expectedPayload).digest('hex');
               
               if (requestHash !== expectedHash) {
@@ -716,7 +717,7 @@ export async function POST(req: NextRequest) {
               }
               // ─────────────────────────────────────────────────────────────
           }
-          else if (event.eventType === 'PAYMENT_RECORDED') {
+          else if (event.eventType === 'PAYMENT_RECORDED' || event.eventType === 'PAYMENT_PENDING_APPROVAL') {
               const method = payload.Method || payload.method || 'CASH';
               const orderId = payload.OrderId || payload.orderId || event.aggregateId;
               const order = await tx.posOrder.findUnique({ 
@@ -733,6 +734,11 @@ export async function POST(req: NextRequest) {
               if (String(method).toUpperCase() === 'COMPLIMENTARY' && paymentAmount > Number(order.total) + 0.01) {
                   throw new Error('INVALID_COMPLIMENTARY_AMOUNT: Complimentary payment exceeds the POS order total');
               }
+              const isBreakfastRedemption = Boolean(payload.breakfastRedemption || payload.BreakfastRedemption) || String(payload.Reference || payload.reference || '').startsWith('BREAKFAST_ENTITLEMENT');
+              if (String(method).toUpperCase() === 'COMPLIMENTARY' && !isBreakfastRedemption && Math.abs(paymentAmount - Number(order.total)) > 0.01) {
+                  throw new Error('INVALID_COMPLIMENTARY_AMOUNT: POS complimentary settlement must cover the full order total');
+              }
+              const paymentPendingApproval = event.eventType === 'PAYMENT_PENDING_APPROVAL' || String(payload.Status || payload.status || '').toUpperCase() === 'PENDING';
               const payment = await tx.posPayment.create({
                   data: {
                       id: payload.Id || payload.id || crypto.randomUUID(), // If entityId was the order, payment needs its own ID
@@ -740,7 +746,7 @@ export async function POST(req: NextRequest) {
                       amount: paymentAmount,
                       method: method,
                       currency: payload.Currency || payload.currency || 'NGN',
-                      status: "CONFIRMED",
+                      status: paymentPendingApproval ? "PENDING" : "CONFIRMED",
                       operationId: event.idempotencyKey,
                       businessDate: order.businessDate,
                       sessionId: order.sessionId,
@@ -749,6 +755,69 @@ export async function POST(req: NextRequest) {
                       reference: payload.Reference || payload.reference || event.idempotencyKey
                   }
               });
+              const complimentary = payload.complimentary || payload.Complimentary;
+              if (String(method).toUpperCase() === 'COMPLIMENTARY' && complimentary && !payload.breakfastRedemption) {
+                const ackId = complimentary.acknowledgedByStaffId;
+                const beneficiaryType = complimentary.beneficiaryType === 'STAFF' ? 'STAFF' : 'GUEST';
+                const ack = isUuid(ackId) ? await tx.staff.findFirst({ where: { id: ackId, propertyAccess: { has: order.propertyId }, isActive: true }, select: { id: true, role: true } }) : null;
+                const ackRole = String(ack?.role || '').toUpperCase();
+                const managementRoles = new Set(['CEO', 'SUPER_ADMIN', 'ADMIN', 'DIRECTOR', 'GENERAL_MANAGER', 'HOTEL_MANAGER', 'MANAGER', 'FNB_MANAGER', 'RESTAURANT_MANAGER', 'BANQUET_MANAGER', 'EVENT_MANAGER', 'FINANCE_MANAGER', 'ACCOUNTANT', 'NIGHT_AUDITOR', 'OUTLET_MANAGER', 'DEPARTMENT_HEAD', 'HOD']);
+                if (!ack || !managementRoles.has(ackRole)) throw new Error('INVALID_ACKNOWLEDGING_STAFF');
+                const beneficiaryStaff = beneficiaryType === 'STAFF' && isUuid(complimentary.beneficiaryStaffId)
+                  ? await tx.staff.findFirst({ where: { id: complimentary.beneficiaryStaffId, propertyAccess: { has: order.propertyId }, isActive: true }, select: { id: true } })
+                  : null;
+                if (beneficiaryType === 'STAFF' && !beneficiaryStaff) throw new Error('INVALID_BENEFICIARY_STAFF');
+                const beneficiaryGuest = beneficiaryType === 'GUEST' && isUuid(complimentary.beneficiaryGuestId)
+                  ? await tx.reservation.findFirst({ where: { propertyId: order.propertyId, primaryGuestId: complimentary.beneficiaryGuestId, status: 'CHECKED_IN' }, select: { id: true, primaryGuestId: true } })
+                  : null;
+                if (beneficiaryType === 'GUEST' && !beneficiaryGuest) throw new Error('INVALID_BENEFICIARY_GUEST');
+                const beneficiaryFolio = beneficiaryType === 'GUEST'
+                  ? await tx.folio.findFirst({ where: { propertyId: order.propertyId, reservationId: beneficiaryGuest?.id }, select: { id: true, reservationId: true, currency: true } })
+                  : null;
+                if (beneficiaryType === 'GUEST' && !beneficiaryFolio) throw new Error('INVALID_BENEFICIARY_FOLIO');
+                const folioItem = beneficiaryFolio ? await tx.folioItem.create({ data: {
+                  folioId: beneficiaryFolio.id,
+                  reservationId: beneficiaryGuest?.id || beneficiaryFolio.reservationId,
+                  guestId: complimentary.beneficiaryGuestId,
+                  businessDate: order.businessDate,
+                  type: 'COMPLIMENTARY',
+                  source: 'POS',
+                  revenueCategory: 'FNB',
+                  revenueClass: 'COMPLIMENTARY_ALLOWANCE',
+                  description: `Audit-only complimentary allowance · POS order #${order.id}`,
+                  quantity: 1,
+                  unitAmount: paymentAmount,
+                  amount: paymentAmount,
+                  currency: beneficiaryFolio.currency || payload.Currency || payload.currency || 'NGN',
+                  baseAmount: paymentAmount,
+                  posTransactionId: payment.id,
+                  postedBy: operatorId,
+                  operationId: `COMP_POS_FOLIO_${payment.id}`,
+                  originalBusinessDate: order.businessDate,
+                } }) : null;
+                await tx.complimentaryRecord.create({ data: {
+                  propertyId: order.propertyId,
+                  businessDate: order.businessDate,
+                  reference: `COMP_POS_PAYMENT_${payment.id}`,
+                  sourceModule: 'POS',
+                  folioItemId: folioItem?.id || null,
+                  posOrderId: order.id,
+                  guestId: beneficiaryType === 'GUEST' ? beneficiaryGuest?.primaryGuestId || null : null,
+                  staffId: beneficiaryStaff?.id || null,
+                  beneficiaryType,
+                  settlementType: complimentary.settlementType === 'STAFF_PAY_LATER' ? 'STAFF_PAY_LATER' : 'DUTY_MANAGER',
+                  acknowledgedByStaffId: ack.id,
+                  acknowledgedAt: new Date(event.occurredAt),
+                  operatorId: operatorId,
+                  operationId: `COMP_POS_PAYMENT_${payment.id}`,
+                  grossAmount: paymentAmount,
+                  complAmount: paymentAmount,
+                  netAmount: 0,
+                  staffLiability: beneficiaryType === 'STAFF' && complimentary.settlementType === 'STAFF_PAY_LATER' ? paymentAmount : 0,
+                  complType: paymentAmount >= Number(order.total) ? 'FULL' : 'PARTIAL',
+                  reason: complimentary.reason || 'POS complimentary payment',
+                } });
+              }
               // Fetch full relations needed for double-entry GL logic
               const orderWithRelations = await tx.posOrder.findUnique({
                 where: { id: orderId },
@@ -759,7 +828,7 @@ export async function POST(req: NextRequest) {
               });
 
               // Safely construct double-entry GL inside the exact same sync transaction boundary
-              if (orderWithRelations) {
+              if (orderWithRelations && !paymentPendingApproval) {
                 await PosPaymentAccountingService.processPaymentAccounting(
                   tx,
                   payment,
@@ -780,7 +849,7 @@ export async function POST(req: NextRequest) {
               // separately. Keep the cloud order header authoritative as soon
               // as confirmed payments cover the order, even if the later
               // ORDER_COMPLETED event is delayed or lost.
-              if (!['CANCELLED', 'VOIDED'].includes(order.status)) {
+              if (!paymentPendingApproval && !['CANCELLED', 'VOIDED'].includes(order.status)) {
                   const confirmed = await tx.posPayment.aggregate({
                       where: { orderId, status: { in: ['CONFIRMED', 'PAID'] } },
                       _sum: { amount: true },
@@ -887,6 +956,7 @@ export async function POST(req: NextRequest) {
               // ─────────────────────────────────────────────────────────────
           }
           else if (event.eventType === 'OFFLINE_DISCOUNT_APPROVAL') {
+              throw new Error('POS_DISCOUNTS_DISABLED: POS discounts are only available from Front Desk');
               // 1. Cloud reconciliation of offline manager PIN approvals
               // The desktop POS verified the manager PIN. Now we validate and persist the approval.
               const amount = Math.abs(Number(payload.Amount ?? payload.amount ?? 0));
@@ -903,7 +973,7 @@ export async function POST(req: NextRequest) {
                  await tx.approvalRequest.create({
                     data: {
                        propertyId: propertyId,
-                       outletId: terminal.outletId,
+                       outletId: terminal!.outletId,
                        type: 'DISCOUNT',
                        // An offline approval is inherently APPROVED by the local manager PIN check.
                        // However, if the payload indicates a cloud validation failure later, this could change.
@@ -912,6 +982,11 @@ export async function POST(req: NextRequest) {
                        requestedBy: operatorId,
                        reviewedBy: isUuid(payload.ManagerId || payload.managerId) ? (payload.ManagerId || payload.managerId) : null,
                        reviewedAt: new Date(event.occurredAt),
+                       beneficiaryType: payload.beneficiaryType || 'GUEST',
+                       beneficiaryGuestId: payload.beneficiaryGuestId || null,
+                       beneficiaryStaffId: isUuid(payload.beneficiaryStaffId) ? payload.beneficiaryStaffId : null,
+                       acknowledgedByStaffId: isUuid(payload.acknowledgedByStaffId) ? payload.acknowledgedByStaffId : null,
+                       acknowledgedAt: isUuid(payload.acknowledgedByStaffId) ? new Date(event.occurredAt) : null,
                        amount: amount,
                        reason: payload.Reason || payload.reason || 'Offline Manager Approval',
                        snapshot: {

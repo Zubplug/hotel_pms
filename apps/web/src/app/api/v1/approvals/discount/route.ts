@@ -3,6 +3,25 @@ import { NextRequest } from 'next/server';
 import prisma from '@hotel-pms/db';
 import { errorResponse, successResponse } from '@/lib/api-response';
 import { resolveUser } from '@/lib/resolve-user';
+import { isConcessionManagementPosition } from '@/lib/concession-accountability';
+
+async function resolveOperatorStaffId(tx: any, userId: string, propertyId: string) {
+  const staff = await tx.staff.findFirst({
+    where: { OR: [{ userId }, { id: userId }], propertyAccess: { has: propertyId }, isActive: true },
+    select: { id: true },
+  });
+  if (!staff) throw new Error('STAFF_NOT_FOUND');
+  return staff.id;
+}
+
+async function resolveAcknowledgingStaff(tx: any, staffId: string, propertyId: string) {
+  const staff = await tx.staff.findFirst({
+    where: { id: staffId, propertyAccess: { has: propertyId }, isActive: true },
+    select: { id: true, position: true },
+  });
+  if (!staff || !isConcessionManagementPosition(staff.position)) throw new Error('INVALID_ACKNOWLEDGING_STAFF');
+  return staff;
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -20,6 +39,8 @@ export async function POST(req: NextRequest) {
       discountAmount,
       discountPercent,
       reason,
+      beneficiaryType,
+      beneficiaryStaffId,
       acknowledgedByStaffId,
     } = body;
 
@@ -28,6 +49,13 @@ export async function POST(req: NextRequest) {
     }
     if (!acknowledgedByStaffId) {
       return errorResponse('BAD_REQUEST', 'acknowledgedByStaffId is required', 400);
+    }
+    const normalizedBeneficiaryType = beneficiaryType === 'STAFF' ? 'STAFF' : 'GUEST';
+    if (normalizedBeneficiaryType === 'STAFF' && !beneficiaryStaffId) {
+      return errorResponse('BAD_REQUEST', 'beneficiaryStaffId is required for staff benefits', 400);
+    }
+    if (normalizedBeneficiaryType === 'GUEST' && beneficiaryStaffId) {
+      return errorResponse('BAD_REQUEST', 'Guest benefits cannot include a staff beneficiary', 400);
     }
 
     const idempotencyKey = body.idempotencyKey || `disc_${targetType}_${reservationRoomId || folioId || orderId}_${Date.now()}`;
@@ -47,8 +75,12 @@ export async function POST(req: NextRequest) {
 
         propertyId = resRoom.reservation?.propertyId ?? '';
         if (!user.allowedProperties.includes(propertyId)) throw new Error('FORBIDDEN');
-        const acknowledgingStaff = await tx.staff.findFirst({ where: { id: acknowledgedByStaffId, propertyAccess: { has: propertyId }, isActive: true }, select: { id: true } });
-        if (!acknowledgingStaff) throw new Error('INVALID_ACKNOWLEDGING_STAFF');
+        await resolveAcknowledgingStaff(tx, acknowledgedByStaffId, propertyId);
+        const operatorStaffId = await resolveOperatorStaffId(tx, user.id, propertyId);
+        const beneficiaryStaff = normalizedBeneficiaryType === 'STAFF'
+          ? await tx.staff.findFirst({ where: { id: beneficiaryStaffId, propertyAccess: { has: propertyId }, isActive: true }, select: { id: true } })
+          : null;
+        if (normalizedBeneficiaryType === 'STAFF' && !beneficiaryStaff) throw new Error('INVALID_BENEFICIARY_STAFF');
         currency = resRoom.currency ?? 'NGN';
 
         if (!['PERCENTAGE', 'FIXED_AMOUNT'].includes(discountType)) throw new Error('INVALID_DISCOUNT_TYPE');
@@ -67,7 +99,12 @@ export async function POST(req: NextRequest) {
             type: 'DISCOUNT',
             status: 'PENDING',
             executionStatus: 'NOT_APPLIED',
-            requestedBy: user.id,
+            requestedBy: operatorStaffId,
+            beneficiaryType: normalizedBeneficiaryType,
+            beneficiaryGuestId: normalizedBeneficiaryType === 'GUEST' ? resRoom.reservation?.primaryGuestId ?? null : null,
+            beneficiaryStaffId: beneficiaryStaff?.id ?? null,
+            acknowledgedByStaffId,
+            acknowledgedAt: new Date(),
             amount: discountType === 'FIXED_AMOUNT' ? amount : 0,
             currency,
             reason,
@@ -96,8 +133,12 @@ export async function POST(req: NextRequest) {
         if (!folio) throw new Error('Folio not found');
         propertyId = folio.propertyId;
         if (!user.allowedProperties.includes(propertyId)) throw new Error('FORBIDDEN');
-        const acknowledgingStaff = await tx.staff.findFirst({ where: { id: acknowledgedByStaffId, propertyAccess: { has: propertyId }, isActive: true }, select: { id: true } });
-        if (!acknowledgingStaff) throw new Error('INVALID_ACKNOWLEDGING_STAFF');
+        await resolveAcknowledgingStaff(tx, acknowledgedByStaffId, propertyId);
+        const operatorStaffId = await resolveOperatorStaffId(tx, user.id, propertyId);
+        const beneficiaryStaff = normalizedBeneficiaryType === 'STAFF'
+          ? await tx.staff.findFirst({ where: { id: beneficiaryStaffId, propertyAccess: { has: propertyId }, isActive: true }, select: { id: true } })
+          : null;
+        if (normalizedBeneficiaryType === 'STAFF' && !beneficiaryStaff) throw new Error('INVALID_BENEFICIARY_STAFF');
         currency = folio.currency ?? 'NGN';
 
         const approval = await tx.approvalRequest.create({
@@ -106,7 +147,12 @@ export async function POST(req: NextRequest) {
             type: 'DISCOUNT',
             status: 'PENDING',
             executionStatus: 'NOT_APPLIED',
-            requestedBy: user.id,
+            requestedBy: operatorStaffId,
+            beneficiaryType: normalizedBeneficiaryType,
+            beneficiaryGuestId: normalizedBeneficiaryType === 'GUEST' ? folio.guestId ?? null : null,
+            beneficiaryStaffId: beneficiaryStaff?.id ?? null,
+            acknowledgedByStaffId,
+            acknowledgedAt: new Date(),
             amount,
             currency,
             reason,
@@ -131,7 +177,13 @@ export async function POST(req: NextRequest) {
       return errorResponse('BAD_REQUEST', err.message, 400);
     }
     if (err.message === 'INVALID_ACKNOWLEDGING_STAFF') {
-      return errorResponse('BAD_REQUEST', 'Acknowledging staff member is not active for this property', 400);
+      return errorResponse('BAD_REQUEST', 'Acknowledging staff member must be active management staff for this property', 400);
+    }
+    if (err.message === 'STAFF_NOT_FOUND') {
+      return errorResponse('FORBIDDEN', 'Authenticated user has no active staff profile for this property', 403);
+    }
+    if (err.message === 'INVALID_BENEFICIARY_STAFF') {
+      return errorResponse('BAD_REQUEST', 'Beneficiary staff member is not active for this property', 400);
     }
     return errorResponse('INTERNAL_ERROR', err.message || 'Failed to apply discount', 500);
   }

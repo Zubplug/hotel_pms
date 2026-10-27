@@ -652,6 +652,9 @@ export const DesktopDataProvider: LodgeCoreDataProvider = {
     getInHouseGuests: async (query: string) => {
       return invokeDesktop('pos.getInHouseGuests', { query });
     },
+    getBreakfastEntitlement: async (reservationId: string, roomNumber: string) => {
+      return invokeDesktop('pos.getBreakfastEntitlement', { reservationId, roomNumber });
+    },
   },
   approvals: {
     requestItemModification: async (payload: any) => {

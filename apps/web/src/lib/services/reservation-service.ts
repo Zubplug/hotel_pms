@@ -1,6 +1,7 @@
 import prisma from '@hotel-pms/db';
 import crypto from 'crypto';
 import { Prisma } from '@hotel-pms/db';
+import { isConcessionManagementPosition } from '@/lib/concession-accountability';
 
 export interface CreateReservationParams {
   propertyId: string;
@@ -30,6 +31,9 @@ export interface CreateReservationParams {
   adjustmentValue?: number;
   adjustmentReason?: string;
   acknowledgedByStaffId?: string;
+  compBeneficiaryType?: 'GUEST' | 'STAFF';
+  compBeneficiaryStaffId?: string;
+  compSettlementType?: 'DUTY_MANAGER' | 'STAFF_PAY_LATER';
 
   // Metadata
   source?: string;
@@ -63,7 +67,7 @@ export const SharedReservationService = {
       checkIn, checkOut, roomTypeId, roomId, adults, children,
       corporateAccountId, corporateBookingApplicationId, ratePlanId, overrideTotalAmount,
       adjustmentType, adjustmentValue, adjustmentReason,
-      acknowledgedByStaffId,
+      acknowledgedByStaffId, compBeneficiaryType = 'GUEST', compBeneficiaryStaffId, compSettlementType = 'DUTY_MANAGER',
       source = 'WALK_IN', status = 'CONFIRMED',
       confirmationNumber, specialRequests,
       createdBy, createdByType = 'STAFF',
@@ -221,6 +225,13 @@ export const SharedReservationService = {
         if (!isStaffActor) {
           throw new Error('Discounts can only be applied by authenticated staff');
         }
+        const acknowledgingStaff = await tx.staff.findFirst({
+          where: { id: acknowledgedByStaffId, propertyAccess: { has: propertyId }, isActive: true },
+          select: { id: true, position: true },
+        });
+        if (!acknowledgingStaff || !isConcessionManagementPosition(acknowledgingStaff.position)) {
+          throw new Error('Acknowledging staff must be active management staff for this property');
+        }
         const operator = await tx.staff.findFirst({
           where: { id: createdBy, propertyAccess: { has: propertyId }, isActive: true },
           select: { id: true },
@@ -270,11 +281,22 @@ export const SharedReservationService = {
         if (!isStaffActor) {
           throw new Error('Complimentary adjustments can only be applied by authenticated staff');
         }
+        const acknowledgingStaff = await tx.staff.findFirst({
+          where: { id: acknowledgedByStaffId, propertyAccess: { has: propertyId }, isActive: true },
+          select: { id: true, position: true },
+        });
+        if (!acknowledgingStaff || !isConcessionManagementPosition(acknowledgingStaff.position)) {
+          throw new Error('Acknowledging staff must be active management staff for this property');
+        }
         const operator = await tx.staff.findFirst({
           where: { id: createdBy, propertyAccess: { has: propertyId }, isActive: true },
           select: { id: true },
         });
         if (!operator) throw new Error('Complimentary reservation operator is not an active staff member');
+        const beneficiaryStaff = compBeneficiaryType === 'STAFF'
+          ? await tx.staff.findFirst({ where: { id: compBeneficiaryStaffId || '', propertyAccess: { has: propertyId }, isActive: true }, select: { id: true } })
+          : null;
+        if (compBeneficiaryType === 'STAFF' && !beneficiaryStaff) throw new Error('Complimentary staff beneficiary is not active for this property');
         const complimentaryAmount = adjustmentType === 'COMP_FULL'
           ? Number(baseRate)
           : Number(adjustmentValue || 0);
@@ -289,7 +311,13 @@ export const SharedReservationService = {
             reference: `COMP_RES_${newRes.id}_${checkIn.toISOString().slice(0, 10)}`,
             sourceModule: 'FRONT_DESK',
             roomId: roomId || null,
-            guestId: finalGuestId,
+            guestId: compBeneficiaryType === 'STAFF' ? null : finalGuestId,
+            staffId: beneficiaryStaff?.id || null,
+            beneficiaryType: compBeneficiaryType,
+            settlementType: compBeneficiaryType === 'STAFF' && compSettlementType === 'STAFF_PAY_LATER' ? 'STAFF_PAY_LATER' : 'DUTY_MANAGER',
+            staffLiability: compBeneficiaryType === 'STAFF' && compSettlementType === 'STAFF_PAY_LATER' ? complimentaryAmount : 0,
+            acknowledgedByStaffId,
+            acknowledgedAt: new Date(),
             operatorId: operator.id,
             operationId: `COMP_CREATE_${newRes.id}`,
             grossAmount: complimentaryAmount,

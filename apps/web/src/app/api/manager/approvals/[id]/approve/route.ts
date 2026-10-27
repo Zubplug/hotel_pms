@@ -538,22 +538,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             });
             
         } else if (targetType === 'POS_ORDER') {
-            // Apply it to the POS order
-            const orderId = snapshot.orderId;
-            const amount = Number(snapshot.discountAmount || approval.amount || 0);
-            const percentage = Number(snapshot.discountPercent || snapshot.percentage || 0);
-            
-            const order = await tx.posOrder.findUnique({ where: { id: orderId } });
-            if (!order) throw new Error('ORDER_NOT_FOUND');
-            
-            const subtotal = Number(order.subtotal);
-            const effectiveDiscount = amount > 0 ? amount : subtotal * (percentage / 100);
-            const updatedTotal = subtotal + Number(order.tax) + Number(order.serviceCharge) - effectiveDiscount;
-            
-            await tx.posOrder.update({
-              where: { id: orderId },
-              data: { discount: effectiveDiscount, total: updatedTotal, updatedAt: new Date() }
-            });
+            throw new Error('POS_DISCOUNTS_DISABLED');
         }
         
         const updated = await tx.approvalRequest.update({

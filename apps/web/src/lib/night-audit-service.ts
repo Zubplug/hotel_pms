@@ -503,6 +503,8 @@ export async function getFinancialAudit(ctx: TenantContext, propertyId: string) 
       requestedBy: true,
       reviewedBy: true,
       reviewedAt: true,
+      acknowledgedByStaffId: true,
+      acknowledgedAt: true,
     }
   });
 
@@ -665,6 +667,7 @@ export async function getFinancialAudit(ctx: TenantContext, propertyId: string) 
     include: {
       operator: { select: { firstName: true, lastName: true } },
       approver: { select: { firstName: true, lastName: true } },
+      acknowledgedBy: { select: { firstName: true, lastName: true } },
       staff: { select: { firstName: true, lastName: true } }
     }
   });
@@ -697,6 +700,7 @@ export async function getFinancialAudit(ctx: TenantContext, propertyId: string) 
     where: {
       id: {
         in: unverifiedComplimentary.flatMap((record) => {
+          if (record.acknowledgedByStaffId) return [record.acknowledgedByStaffId];
           if (!record.notes) return [];
           try {
             const notes = JSON.parse(record.notes) as Record<string, unknown>;
@@ -709,11 +713,11 @@ export async function getFinancialAudit(ctx: TenantContext, propertyId: string) 
   });
   const complimentaryAcknowledgersById = new Map(complimentaryAcknowledgers.map((staff) => [staff.id, staff]));
   const enrichedComplimentary = unverifiedComplimentary.map((record) => {
-    let acknowledgedByStaffId: string | null = null;
-    if (record.notes) {
+    let acknowledgedByStaffId: string | null = record.acknowledgedByStaffId;
+    if (!acknowledgedByStaffId && record.notes) {
       try { acknowledgedByStaffId = (JSON.parse(record.notes) as Record<string, unknown>).acknowledgedByStaffId as string || null; } catch { /* legacy notes */ }
     }
-    const acknowledgedBy = record.approver || (acknowledgedByStaffId ? complimentaryAcknowledgersById.get(acknowledgedByStaffId) : null);
+    const acknowledgedBy = record.acknowledgedBy || (acknowledgedByStaffId ? complimentaryAcknowledgersById.get(acknowledgedByStaffId) : null);
     return {
       ...record,
       reservationRoom: record.roomId ? complimentaryRoomById.get(record.roomId) || null : null,

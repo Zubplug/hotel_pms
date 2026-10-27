@@ -4,6 +4,15 @@ namespace LodgeCore.Desktop.Data.Entities;
 
 public class LocalReservation
 {
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
+    public string? ConcessionBeneficiaryType { get; set; }
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
+    public string? ConcessionBeneficiaryStaffId { get; set; }
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
+    public string? ConcessionAcknowledgedByStaffId { get; set; }
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
+    public string? ConcessionSettlementType { get; set; }
+
     public string Id { get; set; } = Guid.NewGuid().ToString();
     public string PropertyId { get; set; } = string.Empty;
     public string? GuestId { get; set; }

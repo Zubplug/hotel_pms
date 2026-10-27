@@ -25,6 +25,8 @@ import {
 import { useProperty } from '@/components/PropertyProvider';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { useNavigationModules } from '@/lib/auth/useNavigationModules';
+import { COMPLIMENTARY_REASONS, complimentaryReasonLabel } from '@/lib/complimentary-reasons';
+import { isConcessionManagementPosition } from '@/lib/concession-accountability';
 
 /* ─────────────────────────────────────────────────────────────────────────────
    Zod schema (unchanged from original)
@@ -51,7 +53,7 @@ const formSchema = z.object({
   acknowledgedByStaffId: z.string().optional(),
   compBeneficiaryType: z.enum(['GUEST', 'STAFF']).optional(),
   compBeneficiaryStaffId: z.string().optional(),
-  compSettlementType: z.enum(['PAY_NOW', 'STAFF_PAY_LATER']).optional(),
+  compSettlementType: z.enum(['DUTY_MANAGER', 'STAFF_PAY_LATER']).optional(),
 }).refine((data) => data.checkOut > data.checkIn, {
   message: 'Check-out must be after check-in',
   path: ['checkOut'],
@@ -87,6 +89,14 @@ const formSchema = z.object({
 }, {
   message: 'Beneficiary type is required for complimentary',
   path: ['compBeneficiaryType'],
+}).refine((data) => {
+  if ((data.adjustmentType === 'COMP_FULL' || data.adjustmentType === 'COMP_PARTIAL') && data.compBeneficiaryType === 'STAFF') {
+    return !!data.compBeneficiaryStaffId && !!data.compSettlementType;
+  }
+  return true;
+}, {
+  message: 'Staff beneficiary and settlement are required',
+  path: ['compBeneficiaryStaffId'],
 });
 
 /* ─────────────────────────────────────────────────────────────────────────────
@@ -362,7 +372,7 @@ export function FrontDeskReservationForm({ isWalkIn = false, prefillGuestId }: F
       acknowledgedByStaffId: '',
       compBeneficiaryType: 'GUEST',
       compBeneficiaryStaffId: '',
-      compSettlementType: 'PAY_NOW',
+      compSettlementType: 'DUTY_MANAGER',
     },
   });
 
@@ -491,7 +501,8 @@ export function FrontDeskReservationForm({ isWalkIn = false, prefillGuestId }: F
     enabled: !!propertyId,
     staleTime: 300_000,
   });
-  const managers = (managersRes as any)?.data || [];
+  const managers = ((managersRes as any)?.data || []).filter((staff: any) => isConcessionManagementPosition(staff.position || staff.role));
+  const activeStaff = (managersRes as any)?.data || [];
 
   useEffect(() => { form.setValue('roomId', ''); }, [roomTypeId, checkIn, checkOut, form]);
 
@@ -510,7 +521,7 @@ export function FrontDeskReservationForm({ isWalkIn = false, prefillGuestId }: F
         propertyId,
         adjustmentType: (hasDiscount || hasComplimentary) ? values.adjustmentType : undefined,
         adjustmentValue: (hasDiscount || hasComplimentary) ? values.adjustmentValue : undefined,
-        adjustmentReason: (hasDiscount || hasComplimentary) ? values.adjustmentReason : undefined,
+        adjustmentReason: (hasDiscount || hasComplimentary) ? complimentaryReasonLabel(values.adjustmentReason || '') : undefined,
         acknowledgedByStaffId: (hasDiscount || hasComplimentary) ? values.acknowledgedByStaffId : undefined,
         compBeneficiaryType: hasComplimentary ? values.compBeneficiaryType : undefined,
         compBeneficiaryStaffId: hasComplimentary ? values.compBeneficiaryStaffId : undefined,
@@ -927,7 +938,7 @@ export function FrontDeskReservationForm({ isWalkIn = false, prefillGuestId }: F
                                     onChange={field.onChange}
                                     placeholder="Select staff member…"
                                     emptyMessage="No active staff found"
-                                    options={managers.map((m: any) => ({
+                                    options={activeStaff.map((m: any) => ({
                                       value: m.id,
                                       label: `${m.firstName} ${m.lastName}`,
                                       sublabel: m.role || m.position || 'Staff',
@@ -949,7 +960,7 @@ export function FrontDeskReservationForm({ isWalkIn = false, prefillGuestId }: F
                                     onChange={field.onChange}
                                     placeholder="Select settlement…"
                                     options={[
-                                      { value: 'PAY_NOW', label: 'Pay Now', sublabel: 'Collect outstanding balance immediately', icon: <Wallet className="h-4 w-4" />, badge: 'Immediate', badgeColor: 'bg-emerald-100 text-emerald-700' },
+                                      { value: 'DUTY_MANAGER', label: 'Duty Manager', sublabel: 'Free company-sponsored benefit', icon: <Wallet className="h-4 w-4" />, badge: 'Free', badgeColor: 'bg-emerald-100 text-emerald-700' },
                                       { value: 'STAFF_PAY_LATER', label: 'Staff Receivables', sublabel: 'Logged as staff debt — settled via payroll', icon: <Users className="h-4 w-4" />, badge: 'Deferred', badgeColor: 'bg-amber-100 text-amber-700' },
                                     ]}
                                   />
@@ -966,7 +977,7 @@ export function FrontDeskReservationForm({ isWalkIn = false, prefillGuestId }: F
                       <FormItem>
                         <FormLabel className="text-xs font-bold uppercase tracking-wider text-slate-500">Reason</FormLabel>
                         <FormControl>
-                          <Textarea placeholder="e.g. Loyalty guest, management approved, staff benefit…" className="rounded-xl border-slate-200 bg-white text-sm resize-none" rows={2} {...field} />
+                          <PremiumDropdown value={field.value ?? ''} onChange={field.onChange} placeholder="Select an approved reason…" emptyMessage="No approved reasons found" options={COMPLIMENTARY_REASONS.map((option) => ({ value: option.value, label: option.label, sublabel: 'Controlled audit classification', badge: 'Approved', badgeColor: 'bg-indigo-100 text-indigo-700' }))} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -981,7 +992,7 @@ export function FrontDeskReservationForm({ isWalkIn = false, prefillGuestId }: F
                             onChange={field.onChange}
                             placeholder="Select acknowledging staff…"
                             emptyMessage="No active staff found"
-                            options={managers.map((m: any) => ({
+                                    options={managers.map((m: any) => ({
                               value: m.id,
                               label: `${m.firstName} ${m.lastName}`,
                               sublabel: m.role || m.position || 'Staff',

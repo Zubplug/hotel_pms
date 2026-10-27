@@ -25,6 +25,8 @@ export function DiscountModal({ isOpen, orderId, orderTotal, onClose, onSuccess 
   const [isLoading, setIsLoading] = useState(false);
   
   const { propertyId } = useProperty();
+  const [beneficiaryType, setBeneficiaryType] = useState<'GUEST' | 'STAFF'>('GUEST');
+  const [beneficiaryStaffId, setBeneficiaryStaffId] = useState('');
   const [acknowledgedByStaffId, setAcknowledgedByStaffId] = useState('');
 
   const [mounted, setMounted] = useState(false);
@@ -59,6 +61,10 @@ export function DiscountModal({ isOpen, orderId, orderTotal, onClose, onSuccess 
       setError('Please select the staff member who acknowledged this discount.');
       return;
     }
+    if (beneficiaryType === 'STAFF' && !beneficiaryStaffId) {
+      setError('Please select the staff member receiving this discount.');
+      return;
+    }
 
     const numValue = Number(value);
     const amount = type === 'amount' ? numValue : 0;
@@ -75,6 +81,8 @@ export function DiscountModal({ isOpen, orderId, orderTotal, onClose, onSuccess 
         discountAmount: amount,
         discountPercent: percentage,
         reason: reasonCode === 'OTHER' ? `OTHER: ${reasonNote}` : reasonCode,
+        beneficiaryType,
+        beneficiaryStaffId: beneficiaryType === 'STAFF' ? beneficiaryStaffId : null,
         acknowledgedByStaffId
       };
 
@@ -185,8 +193,25 @@ export function DiscountModal({ isOpen, orderId, orderTotal, onClose, onSuccess 
             )}
 
             <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">Benefit recipient</label>
+              <div className="flex bg-slate-100 p-1 rounded-xl mb-3">
+                {(['GUEST', 'STAFF'] as const).map((kind) => (
+                  <button key={kind} type="button" onClick={() => { setBeneficiaryType(kind); if (kind === 'GUEST') setBeneficiaryStaffId(''); }} className={`flex-1 py-2 rounded-lg text-sm font-medium ${beneficiaryType === kind ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500'}`}>
+                    {kind === 'GUEST' ? 'Guest / customer' : 'Staff member'}
+                  </button>
+                ))}
+              </div>
+              {beneficiaryType === 'STAFF' && (
+                <Select value={beneficiaryStaffId} onValueChange={(val) => setBeneficiaryStaffId(val || '')}>
+                  <SelectTrigger className="w-full h-12 rounded-xl bg-slate-50 border-slate-200"><SelectValue placeholder="Select beneficiary staff" /></SelectTrigger>
+                  <SelectContent>{activeStaff.map((staff: any) => <SelectItem key={staff.id} value={staff.id}>{staff.firstName} {staff.lastName}</SelectItem>)}</SelectContent>
+                </Select>
+              )}
+            </div>
+
+            <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">
-                Acknowledged / Authorized By
+                Acknowledged by
               </label>
               <Select value={acknowledgedByStaffId} onValueChange={(val) => setAcknowledgedByStaffId(val || "")}>
                 <SelectTrigger className="w-full h-12 rounded-xl bg-slate-50 border-slate-200">

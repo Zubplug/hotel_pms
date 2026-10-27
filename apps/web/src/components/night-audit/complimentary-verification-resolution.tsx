@@ -37,7 +37,7 @@ export function ComplimentaryVerificationResolution({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [notes, setNotes] = useState('');
   const [mode, setMode] = useState<'VIEW' | 'QUESTION' | 'SUCCESS'>('VIEW');
-  const [successType, setSuccessType] = useState<'VERIFIED' | 'UNRESOLVED' | null>(null);
+  const [successType, setSuccessType] = useState<'VERIFIED' | 'REVERSED' | null>(null);
 
   // Filter transactions to only those that are PENDING
   const unverifiedRecords = records?.filter(t => t.status === 'PENDING_NIGHT_AUDIT' || t.status === 'UNRESOLVED') || [];
@@ -70,8 +70,8 @@ export function ComplimentaryVerificationResolution({
     }).format(amount);
   };
 
-  const handleVerify = async (status: 'VERIFIED' | 'UNRESOLVED') => {
-    if (status === 'UNRESOLVED' && !notes.trim()) {
+  const handleVerify = async (status: 'VERIFIED' | 'REVERSED') => {
+    if (status === 'REVERSED' && !notes.trim()) {
       alert('Please provide a reason for rejecting this complimentary transaction.');
       return;
     }
@@ -85,7 +85,7 @@ export function ComplimentaryVerificationResolution({
           propertyId,
           id: record.id,
           status,
-          rejectionReason: status === 'UNRESOLVED' ? notes : undefined,
+          rejectionReason: status === 'REVERSED' ? notes : undefined,
         }),
       });
 
@@ -98,7 +98,7 @@ export function ComplimentaryVerificationResolution({
       
       // Update local state without full reload
       record.status = status;
-      toast.success(status === 'VERIFIED' ? 'Complimentary transaction verified' : 'Transaction rejected and marked as unresolved');
+      toast.success(status === 'VERIFIED' ? 'Complimentary transaction verified' : 'Transaction rejected and POS order voided');
       
     } catch (error: any) {
       console.error(error);
@@ -168,7 +168,7 @@ export function ComplimentaryVerificationResolution({
                 )}
               </div>
               <div>
-                <h3 className="font-semibold text-lg text-white">{successType === 'VERIFIED' ? 'Verified Successfully' : 'Marked Unresolved'}</h3>
+                <h3 className="font-semibold text-lg text-white">{successType === 'VERIFIED' ? 'Verified Successfully' : 'Rejected and Voided'}</h3>
                 <p className="text-sm text-slate-400 mt-1">
                   {unverifiedRecords.length > 0 ? `${unverifiedRecords.length} remaining to review` : 'All records processed'}
                 </p>
@@ -217,9 +217,23 @@ export function ComplimentaryVerificationResolution({
                     </p>
                   </div>
                   <div>
-                    <p className="text-slate-500 text-[11px] mb-1">Beneficiary (Staff)</p>
+                    <p className="text-slate-500 text-[11px] mb-1">Beneficiary</p>
                     <p className="font-medium text-slate-200">
-                      {record.staff?.firstName ? `${record.staff.firstName} ${record.staff.lastName}` : 'N/A'}
+                      {record.beneficiaryType === 'STAFF'
+                        ? (record.staff?.firstName ? `${record.staff.firstName} ${record.staff.lastName} · Staff` : 'Unknown staff beneficiary')
+                        : (record.guest?.firstName ? `${record.guest.firstName} ${record.guest.lastName} · Guest` : record.guestId ? `Guest · ${record.guestId}` : 'Guest beneficiary')}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-slate-500 text-[11px] mb-1">Acknowledged by</p>
+                    <p className="font-medium text-slate-200">
+                      {record.acknowledgedBy?.firstName ? `${record.acknowledgedBy.firstName} ${record.acknowledgedBy.lastName}` : 'Not recorded'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-slate-500 text-[11px] mb-1">Settlement</p>
+                    <p className="font-medium text-slate-200">
+                      {record.settlementType === 'STAFF_PAY_LATER' ? 'Staff receivable · Pay later' : 'Duty Manager · Free benefit'}
                     </p>
                   </div>
                 </div>
@@ -258,7 +272,7 @@ export function ComplimentaryVerificationResolution({
                       rows={3}
                       autoFocus
                     />
-                    <p className="text-[11px] text-slate-400">This will mark the record as UNRESOLVED and block the Night Audit until financially reversed or accepted.</p>
+                    <p className="text-[11px] text-slate-400">This rejects the request, voids any pending POS payment and voids the linked POS order. No accounting or inventory posting is created.</p>
                   </div>
                   <div className="flex gap-3">
                     <button 
@@ -270,7 +284,7 @@ export function ComplimentaryVerificationResolution({
                     </button>
                     <button 
                       className="flex w-full items-center justify-center gap-2 rounded-xl border border-rose-400/30 bg-rose-400/10 px-4 py-2 text-sm font-bold text-rose-300 transition-all hover:bg-rose-400/20 disabled:opacity-50"
-                      onClick={() => handleVerify('UNRESOLVED')}
+                      onClick={() => handleVerify('REVERSED')}
                       disabled={isSubmitting || !notes.trim()}
                     >
                       {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}

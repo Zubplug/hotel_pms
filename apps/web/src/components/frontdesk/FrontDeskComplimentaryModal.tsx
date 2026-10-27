@@ -4,7 +4,9 @@ import { User } from 'lucide-react';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { useQuery } from '@tanstack/react-query';
 import { useProperty } from '@/components/PropertyProvider';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SearchableSelect } from '@/components/ui/searchable-select';
+import { COMPLIMENTARY_REASONS, complimentaryReasonLabel } from '@/lib/complimentary-reasons';
+import { isConcessionManagementPosition } from '@/lib/concession-accountability';
 
 type TargetType = 'RESERVATION_ROOM' | 'FOLIO_ITEM' | 'POS_ORDER';
 
@@ -24,6 +26,9 @@ export function FrontDeskComplimentaryModal({ isOpen, targetType, targetId, targ
   const [benefitType, setBenefitType] = useState<'FULL' | 'PARTIAL'>('FULL');
   const [amount, setAmount] = useState('');
   const [reason, setReason] = useState('');
+  const [beneficiaryType, setBeneficiaryType] = useState<'GUEST' | 'STAFF'>('GUEST');
+  const [beneficiaryStaffId, setBeneficiaryStaffId] = useState('');
+  const [settlementType, setSettlementType] = useState<'DUTY_MANAGER' | 'STAFF_PAY_LATER'>('DUTY_MANAGER');
   const [acknowledgedByStaffId, setAcknowledgedByStaffId] = useState('');
   
   const [error, setError] = useState('');
@@ -40,7 +45,9 @@ export function FrontDeskComplimentaryModal({ isOpen, targetType, targetId, targ
     enabled: !!propertyId && isOpen,
     staleTime: 300_000,
   });
-  const activeStaff = (managersRes as any)?.data || [];
+  const allActiveStaff = (managersRes as any)?.data || [];
+  const activeStaff = allActiveStaff;
+  const managementStaff = allActiveStaff.filter((staff: any) => isConcessionManagementPosition(staff.position || staff.role));
 
   if (!isOpen || !mounted) return null;
 
@@ -49,12 +56,16 @@ export function FrontDeskComplimentaryModal({ isOpen, targetType, targetId, targ
       setError('Please enter a valid partial complimentary amount.');
       return;
     }
-    if (!reason.trim()) {
-      setError('A reason is required.');
+    if (!reason) {
+      setError('Please select an approved reason.');
       return;
     }
     if (!acknowledgedByStaffId) {
       setError('Please select the staff member who acknowledged this complimentary request.');
+      return;
+    }
+    if (beneficiaryType === 'STAFF' && !beneficiaryStaffId) {
+      setError('Please select the staff member receiving this complimentary benefit.');
       return;
     }
 
@@ -70,7 +81,10 @@ export function FrontDeskComplimentaryModal({ isOpen, targetType, targetId, targ
         orderId: targetType === 'POS_ORDER' ? targetId : undefined,
         compType: benefitType,
         compAmount: numValue,
-        reason,
+        reason: complimentaryReasonLabel(reason),
+        beneficiaryType,
+        beneficiaryStaffId: beneficiaryType === 'STAFF' ? beneficiaryStaffId : undefined,
+        settlementType: beneficiaryType === 'STAFF' ? settlementType : 'DUTY_MANAGER',
         acknowledgedByStaffId,
       };
 
@@ -104,25 +118,36 @@ export function FrontDeskComplimentaryModal({ isOpen, targetType, targetId, targ
           )}
 
           <div className="flex items-center gap-2 rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
-            <User className="h-4 w-4" /> Complimentary benefit applies to the guest only.
+            <User className="h-4 w-4" /> Record the person receiving this complimentary benefit.
           </div>
+
+          <div>
+            <label className="mb-2 block text-sm font-medium text-slate-700">Benefit recipient</label>
+            <div className="grid grid-cols-2 gap-2">
+              {(['GUEST', 'STAFF'] as const).map((type) => (
+                <button key={type} type="button" onClick={() => { setBeneficiaryType(type); if (type === 'GUEST') { setBeneficiaryStaffId(''); setSettlementType('DUTY_MANAGER'); } }} className={`rounded-xl border px-3 py-3 text-sm font-semibold transition ${beneficiaryType === type ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'}`}>
+                  {type === 'GUEST' ? 'Guest / customer' : 'Staff member'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {beneficiaryType === 'STAFF' && <>
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">Staff beneficiary</label>
+              <SearchableSelect value={beneficiaryStaffId} onChange={setBeneficiaryStaffId} placeholder="Select staff beneficiary" searchPlaceholder="Search active staff…" inputClassName="h-12 rounded-xl bg-slate-50 border-slate-200" options={activeStaff.map((staff: any) => ({ value: staff.id, label: `${staff.firstName} ${staff.lastName}`, searchText: `${staff.firstName} ${staff.lastName} ${staff.role || ''}` }))} />
+            </div>
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">Staff settlement</label>
+              <SearchableSelect value={settlementType} onChange={(value) => setSettlementType(value as 'DUTY_MANAGER' | 'STAFF_PAY_LATER')} searchPlaceholder="Search settlement types…" inputClassName="h-12 rounded-xl bg-slate-50 border-slate-200" options={[{ value: 'DUTY_MANAGER', label: 'Duty Manager · Free benefit', searchText: 'company sponsored' }, { value: 'STAFF_PAY_LATER', label: 'Pay later · Staff receivable', searchText: 'pending approval' }]} />
+            </div>
+          </>}
 
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-2">
               Acknowledged By
             </label>
-            <Select value={acknowledgedByStaffId} onValueChange={(val) => setAcknowledgedByStaffId(val || '')}>
-              <SelectTrigger className="w-full h-12 rounded-xl bg-slate-50 border-slate-200">
-                <SelectValue placeholder="Select acknowledging staff" />
-              </SelectTrigger>
-              <SelectContent>
-                {activeStaff.map((staff: any) => (
-                  <SelectItem key={staff.id} value={staff.id}>
-                    {staff.firstName} {staff.lastName}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <SearchableSelect value={acknowledgedByStaffId} onChange={setAcknowledgedByStaffId} placeholder="Select acknowledging staff" searchPlaceholder="Search management staff…" inputClassName="h-12 rounded-xl bg-slate-50 border-slate-200" options={managementStaff.map((staff: any) => ({ value: staff.id, label: `${staff.firstName} ${staff.lastName}`, searchText: `${staff.firstName} ${staff.lastName} ${staff.position || staff.role || ''}` }))} />
           </div>
 
 
@@ -130,15 +155,7 @@ export function FrontDeskComplimentaryModal({ isOpen, targetType, targetId, targ
             <label className="block text-sm font-medium text-slate-700 mb-2">
               Benefit Type
             </label>
-            <Select value={benefitType} onValueChange={(val: any) => setBenefitType(val)}>
-              <SelectTrigger className="w-full h-12 rounded-xl bg-slate-50 border-slate-200">
-                <SelectValue placeholder="Select type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="FULL">Full Complimentary (100%)</SelectItem>
-                <SelectItem value="PARTIAL">Partial Complimentary</SelectItem>
-              </SelectContent>
-            </Select>
+            <SearchableSelect value={benefitType} onChange={(value) => setBenefitType(value as 'FULL' | 'PARTIAL')} searchPlaceholder="Search benefit types…" inputClassName="h-12 rounded-xl bg-slate-50 border-slate-200" options={[{ value: 'FULL', label: 'Full complimentary · 100%', searchText: 'full free benefit' }, { value: 'PARTIAL', label: 'Partial complimentary', searchText: 'partial benefit amount' }]} />
           </div>
 
           {benefitType === 'PARTIAL' && (
@@ -168,14 +185,7 @@ export function FrontDeskComplimentaryModal({ isOpen, targetType, targetId, targ
             <label className="block text-sm font-medium text-slate-700 mb-2">
               Reason
             </label>
-            <input
-              type="text"
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              className="block w-full px-4 py-3 rounded-xl border-slate-200 bg-slate-50 text-slate-900 focus:border-blue-500 focus:ring-blue-500 transition-colors"
-              placeholder="e.g., Promotion, Duty Meal"
-              maxLength={100}
-            />
+            <SearchableSelect value={reason} onChange={setReason} placeholder="Select an approved reason" searchPlaceholder="Search approved reasons…" inputClassName="h-12 rounded-xl bg-slate-50 border-slate-200" options={COMPLIMENTARY_REASONS.map((option) => ({ value: option.value, label: option.label, searchText: option.label }))} />
           </div>
 
         </div>
@@ -189,7 +199,7 @@ export function FrontDeskComplimentaryModal({ isOpen, targetType, targetId, targ
           </button>
           <button
             onClick={handleSubmit}
-            disabled={isLoading || !reason.trim() || !acknowledgedByStaffId}
+            disabled={isLoading || !reason || !acknowledgedByStaffId}
             className="flex-1 py-3 px-4 rounded-xl font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 transition-colors"
           >
             {isLoading ? 'Submitting...' : 'Submit for Night Audit'}

@@ -590,6 +590,9 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
       // Online mode: query the checked-in reservations endpoint
       return apiFetchResult(`/api/v1/reservations/in-house?search=${encodeURIComponent(query)}`);
     },
+    getBreakfastEntitlement: async (reservationId: string, roomNumber: string) => {
+      return apiFetchResult(`/api/v1/fnb/breakfast/entitlement?reservationId=${encodeURIComponent(reservationId)}&roomNumber=${encodeURIComponent(roomNumber)}`);
+    },
   },
 
   approvals: {

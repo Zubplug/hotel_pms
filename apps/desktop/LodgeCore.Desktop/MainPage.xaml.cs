@@ -932,6 +932,11 @@ public partial class MainPage : ContentPage
                     responseData = await pmsInterop.GetInHouseGuestsAsync(
                         parameters?["query"]?.ToString() ?? "");
                     break;
+                case "pos.getBreakfastEntitlement":
+                    responseData = await pmsInterop.GetBreakfastEntitlementAsync(
+                        parameters?["reservationId"]?.ToString() ?? "",
+                        parameters?["roomNumber"]?.ToString() ?? "");
+                    break;
 
 
                 // ── Printer Management ────────────────────────────────────────

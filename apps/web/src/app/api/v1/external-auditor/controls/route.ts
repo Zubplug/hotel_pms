@@ -61,6 +61,7 @@ export async function GET(request: NextRequest) {
         include: {
           operator: { select: { firstName: true, lastName: true } },
           approver: { select: { firstName: true, lastName: true } },
+          acknowledgedBy: { select: { firstName: true, lastName: true } },
           nightAuditor: { select: { firstName: true, lastName: true } },
           staff: { select: { firstName: true, lastName: true } },
         },
@@ -86,7 +87,7 @@ export async function GET(request: NextRequest) {
     const approvalIds = discountItems
       .map(item => item.discountApprovalId?.replace(/^PENDING:/, ''))
       .filter((id): id is string => typeof id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id));
-    const approvals = approvalIds.length ? await prisma.approvalRequest.findMany({ where: { id: { in: approvalIds }, propertyId, type: 'DISCOUNT' }, select: { id: true, status: true, executionStatus: true, requestedBy: true, requestedAt: true, reviewedBy: true, reviewedAt: true, amount: true, currency: true, reason: true, details: true, snapshot: true } }) : [];
+    const approvals = approvalIds.length ? await prisma.approvalRequest.findMany({ where: { id: { in: approvalIds }, propertyId, type: 'DISCOUNT' }, select: { id: true, status: true, executionStatus: true, requestedBy: true, requestedAt: true, reviewedBy: true, reviewedAt: true, beneficiaryType: true, beneficiaryGuestId: true, beneficiaryStaffId: true, acknowledgedByStaffId: true, acknowledgedAt: true, amount: true, currency: true, reason: true, details: true, snapshot: true } }) : [];
     const approvalById = new Map(approvals.map(item => [item.id, item]));
     const isUuid = (value: unknown): value is string => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
     const acknowledgedIdFromJson = (value: unknown) => {
@@ -95,7 +96,7 @@ export async function GET(request: NextRequest) {
       return [record.acknowledgedByStaffId, record.acknowledgedBy, record.acknowledgedById].find(isUuid) || null;
     };
     const approvalAcknowledgedBy = (approval: typeof approvals[number]) => {
-      return acknowledgedIdFromJson(approval.details) || acknowledgedIdFromJson(approval.snapshot);
+      return approval.acknowledgedByStaffId || acknowledgedIdFromJson(approval.details) || acknowledgedIdFromJson(approval.snapshot);
     };
     const complimentaryAcknowledgedBy = (notes?: string | null) => {
       if (!notes) return null;
@@ -109,6 +110,8 @@ export async function GET(request: NextRequest) {
       ...approvals.flatMap(item => [item.requestedBy, item.reviewedBy]).filter((id): id is string => Boolean(id)),
       ...approvals.map(approvalAcknowledgedBy).filter((id): id is string => Boolean(id)),
       ...complimentaryRecords.map(item => complimentaryAcknowledgedBy(item.notes)).filter((id): id is string => Boolean(id)),
+      ...approvals.map(item => item.acknowledgedByStaffId).filter((id): id is string => Boolean(id)),
+      ...complimentaryRecords.map(item => item.acknowledgedByStaffId).filter((id): id is string => Boolean(id)),
     ]));
     const staff = staffIds.length ? await prisma.staff.findMany({ where: { OR: [{ id: { in: staffIds } }, { userId: { in: staffIds } }] }, select: { id: true, userId: true, firstName: true, lastName: true } }) : [];
     const staffById = new Map<string, string>();
@@ -133,8 +136,8 @@ export async function GET(request: NextRequest) {
         amount: Number(item.amount), currency: item.currency, description: item.description,
         reason: approval?.reason || item.description, source: item.source, status: item.voidedAt ? 'VOIDED' : approval?.status || 'APPLIED',
         operator: display(approval?.requestedBy || item.postedBy), approver: display(approval?.reviewedBy), requestedBy: display(approval?.requestedBy),
-        beneficiary: name(item.folio.guest) || 'Customer not recorded',
-        acknowledgedBy: display(approval ? approvalAcknowledgedBy(approval) : null), acknowledgedAt: approval?.requestedAt || null,
+        beneficiary: approval?.beneficiaryType === 'STAFF' ? display(approval.beneficiaryStaffId) : name(item.folio.guest) || 'Customer not recorded',
+        acknowledgedBy: display(approval ? approvalAcknowledgedBy(approval) : null), acknowledgedAt: approval?.acknowledgedAt || null,
         requestedAt: approval?.requestedAt || null, reviewedAt: approval?.reviewedAt || null,
         approvalStatus: approval?.status || 'NOT_LINKED', executionStatus: approval?.executionStatus || null, approvalId: approval?.id || null,
       };
@@ -158,7 +161,7 @@ export async function GET(request: NextRequest) {
       operator: name(item.operator), approver: name(item.approver) || 'Not recorded', requestedBy: name(item.operator),
       requestedAt: item.createdAt, reviewedAt: item.verifiedAt, approvalStatus: item.status, executionStatus: null,
       approvalId: null, beneficiary: name(item.staff) || (item.guestId ? guestById.get(item.guestId) : null) || 'Customer not recorded', nightAuditor: name(item.nightAuditor) || 'Not recorded', notes: item.notes,
-      acknowledgedBy: display(complimentaryAcknowledgedBy(item.notes)), acknowledgedAt: complimentaryAcknowledgedBy(item.notes) ? item.createdAt : null,
+      acknowledgedBy: display(item.acknowledgedByStaffId || complimentaryAcknowledgedBy(item.notes)), acknowledgedAt: item.acknowledgedAt || (complimentaryAcknowledgedBy(item.notes) ? item.createdAt : null),
       })),
       ...complimentaryFolioItems.filter(item => !verifiedComplimentaryFolioItemIds.has(item.id)).map(item => ({
         id: item.id, kind: 'COMPLIMENTARY', businessDate: item.businessDate, createdAt: item.createdAt, folioId: item.folioId, operationId: item.operationId,

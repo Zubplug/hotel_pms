@@ -109,7 +109,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
         let reqPropertyId = body?.propertyId;
         if (reqPropertyId && !ctx.propertyIds.includes(reqPropertyId)) return NextResponse.json({ error: 'Forbidden property' }, { status: 403 });
-    const { propertyId, guestId, guestDetails, checkIn, checkOut, roomTypeId, roomId, adults, children, corporateAccountId, adjustmentType, adjustmentValue, adjustmentReason, acknowledgedByStaffId } = body;
+    const { propertyId, guestId, guestDetails, checkIn, checkOut, roomTypeId, roomId, adults, children, corporateAccountId, adjustmentType, adjustmentValue, adjustmentReason, acknowledgedByStaffId, compBeneficiaryType, compBeneficiaryStaffId, compSettlementType } = body;
 
     if (!propertyId || (!guestId && !guestDetails) || !checkIn || !checkOut || !roomTypeId || !roomId) {
       return errorResponse('BAD_REQUEST', 'Missing required fields', 400);
@@ -213,6 +213,9 @@ export async function POST(req: NextRequest) {
         adjustmentValue: Number(adjustmentValue),
         adjustmentReason,
         acknowledgedByStaffId,
+        compBeneficiaryType,
+        compBeneficiaryStaffId,
+        compSettlementType,
         createdBy: (session.user as any).staffId || session.user.id,
         userEmail: session.user.email ?? undefined,
         userRole: (session.user as any).role,

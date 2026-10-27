@@ -4,7 +4,9 @@ import { Percent, Hash } from 'lucide-react';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
 import { useProperty } from '@/components/PropertyProvider';
 import { useQuery } from '@tanstack/react-query';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SearchableSelect } from '@/components/ui/searchable-select';
+import { COMPLIMENTARY_REASONS, complimentaryReasonLabel } from '@/lib/complimentary-reasons';
+import { isConcessionManagementPosition } from '@/lib/concession-accountability';
 type TargetType = 'RESERVATION_ROOM' | 'FOLIO_ITEM';
 
 type FrontDeskDiscountModalProps = {
@@ -34,6 +36,8 @@ export function FrontDeskDiscountModal({ isOpen, targetType, targetId, targetTot
   const [type, setType] = useState<'percent' | 'amount'>('percent');
   const [value, setValue] = useState('');
   const [reason, setReason] = useState('');
+  const [beneficiaryType, setBeneficiaryType] = useState<'GUEST' | 'STAFF'>('GUEST');
+  const [beneficiaryStaffId, setBeneficiaryStaffId] = useState('');
   const [acknowledgedByStaffId, setAcknowledgedByStaffId] = useState('');
   const [confirmedHighValue, setConfirmedHighValue] = useState(false);
   
@@ -49,7 +53,9 @@ export function FrontDeskDiscountModal({ isOpen, targetType, targetId, targetTot
     enabled: !!propertyId && isOpen,
     staleTime: 300_000,
   });
-  const activeStaff = (staffResponse as any)?.data || staffResponse || [];
+  const allActiveStaff = (staffResponse as any)?.data || staffResponse || [];
+  const activeStaff = allActiveStaff;
+  const managementStaff = allActiveStaff.filter((staff: any) => isConcessionManagementPosition(staff.position || staff.role));
 
   if (!isOpen || !mounted) return null;
 
@@ -59,12 +65,16 @@ export function FrontDeskDiscountModal({ isOpen, targetType, targetId, targetTot
       setError('Please enter a valid discount value.');
       return;
     }
-    if (!reason.trim()) {
-      setError('A reason is required for discounts.');
+    if (!reason) {
+      setError('Please select an approved reason for the discount.');
       return;
     }
     if (!acknowledgedByStaffId) {
       setError('Please select the staff member who acknowledged this discount.');
+      return;
+    }
+    if (beneficiaryType === 'STAFF' && !beneficiaryStaffId) {
+      setError('Please select the staff member receiving this discount.');
       return;
     }
     const isHighValueFixedDiscount = type === 'amount' && Boolean(targetTotal) && numValue >= Number(targetTotal) * 0.5;
@@ -84,7 +94,9 @@ export function FrontDeskDiscountModal({ isOpen, targetType, targetId, targetTot
         discountType: type === 'amount' ? 'FIXED_AMOUNT' : 'PERCENTAGE',
         discountAmount: amount,
         discountPercent: percentage,
-        reason,
+        reason: complimentaryReasonLabel(reason),
+        beneficiaryType,
+        beneficiaryStaffId: beneficiaryType === 'STAFF' ? beneficiaryStaffId : null,
         acknowledgedByStaffId,
       };
       // Map targetId to the field name the backend expects per targetType
@@ -175,35 +187,31 @@ export function FrontDeskDiscountModal({ isOpen, targetType, targetId, targetTot
             )}
 
             <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">Benefit recipient</label>
+              <div className="flex bg-slate-100 p-1 rounded-xl mb-3">
+                {(['GUEST', 'STAFF'] as const).map((kind) => (
+                  <button key={kind} type="button" onClick={() => { setBeneficiaryType(kind); if (kind === 'GUEST') setBeneficiaryStaffId(''); }} className={`flex-1 py-2 rounded-lg text-sm font-medium ${beneficiaryType === kind ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500'}`}>
+                    {kind === 'GUEST' ? 'Guest / customer' : 'Staff member'}
+                  </button>
+                ))}
+              </div>
+              {beneficiaryType === 'STAFF' && (
+                <SearchableSelect value={beneficiaryStaffId} onChange={setBeneficiaryStaffId} placeholder="Select beneficiary staff" searchPlaceholder="Search active staff…" inputClassName="h-12 rounded-xl bg-slate-50 border-slate-200" options={activeStaff.map((staff: any) => ({ value: staff.id, label: `${staff.firstName} ${staff.lastName}`, searchText: `${staff.firstName} ${staff.lastName} ${staff.role || ''}` }))} />
+              )}
+            </div>
+
+            <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">
                 Acknowledged By
               </label>
-              <Select value={acknowledgedByStaffId} onValueChange={(val) => setAcknowledgedByStaffId(val || '')}>
-                <SelectTrigger className="w-full h-12 rounded-xl bg-slate-50 border-slate-200">
-                  <SelectValue placeholder="Select acknowledging staff" />
-                </SelectTrigger>
-                <SelectContent>
-                  {activeStaff.map((staff: any) => (
-                    <SelectItem key={staff.id} value={staff.id}>
-                      {staff.firstName} {staff.lastName}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <SearchableSelect value={acknowledgedByStaffId} onChange={setAcknowledgedByStaffId} placeholder="Select acknowledging staff" searchPlaceholder="Search management staff…" inputClassName="h-12 rounded-xl bg-slate-50 border-slate-200" options={managementStaff.map((staff: any) => ({ value: staff.id, label: `${staff.firstName} ${staff.lastName}`, searchText: `${staff.firstName} ${staff.lastName} ${staff.position || staff.role || ''}` }))} />
             </div>
 
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">
                 Reason
               </label>
-              <input
-                type="text"
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-                className="block w-full px-4 py-3 rounded-xl border-slate-200 bg-slate-50 text-slate-900 focus:border-blue-500 focus:ring-blue-500 transition-colors"
-                placeholder="e.g., Service Recovery, VIP Guest"
-                maxLength={100}
-              />
+              <SearchableSelect value={reason} onChange={setReason} placeholder="Select an approved reason" searchPlaceholder="Search approved reasons…" inputClassName="h-12 rounded-xl bg-slate-50 border-slate-200" options={COMPLIMENTARY_REASONS.map((option) => ({ value: option.value, label: option.label, searchText: option.label }))} />
             </div>
 
           </div>

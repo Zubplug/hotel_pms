@@ -21,7 +21,6 @@ import { CategoryTileGrid } from '@/components/pos/CategoryTileGrid';
 import { ProductCardStepper } from '@/components/pos/ProductCardStepper';
 // PosStaffStrip removed from header — orders accessible via sidebar
 import { ChargeModal } from '@/components/pos/ChargeModal';
-import { DiscountModal } from '@/components/pos/DiscountModal';
 
 import { ActionSuccessModal } from '@/components/pos/ActionSuccessModal';
 import { WaiterTicketsModal } from '@/components/pos/WaiterTicketsModal';
@@ -130,7 +129,6 @@ export default function PosApp() {
   const [showChargeModal, setShowChargeModal] = useState(false);
   const [showVoidOrderModal, setShowVoidOrderModal] = useState(false);
   const [isVoidingOrder, setIsVoidingOrder] = useState(false);
-  const [showDiscountModal, setShowDiscountModal] = useState(false);
 
   const [isPrintingCustomerReceipt, setIsPrintingCustomerReceipt] = useState(false);
   const [activeOrderType, setActiveOrderType] = useState<string>('TABLE');
@@ -175,7 +173,6 @@ export default function PosApp() {
     setShowActiveOrders(false);
     setShowChargeModal(false);
     setShowVoidOrderModal(false);
-    setShowDiscountModal(false);
     setShowKitchenModal(false);
     setShowPrinterSettings(false);
     setShowSyncCenter(false);
@@ -926,6 +923,14 @@ export default function PosApp() {
         roomNumber: string;
         coversRedeemed: number;
       };
+      complimentary?: {
+        beneficiaryType: 'GUEST' | 'STAFF';
+        beneficiaryGuestId?: string;
+        beneficiaryStaffId?: string;
+        acknowledgedByStaffId: string;
+        reason: string;
+        settlementType?: 'DUTY_MANAGER' | 'STAFF_PAY_LATER';
+      };
     }
   ) => {
     if (!operatorToken) { toast.error('No operator authenticated'); return; }
@@ -953,15 +958,20 @@ export default function PosApp() {
         if (roomChargeData.breakfastRedemption) {
           paymentData.breakfastRedemption = roomChargeData.breakfastRedemption;
         }
+        if (roomChargeData.complimentary) paymentData.complimentary = roomChargeData.complimentary;
       }
 
       const res = await provider.pos.payOrder(currentOrderId, paymentData, operatorToken);
       if (!res.error) {
+        const paymentStatus = String(res.data?.payment?.status ?? res.data?.status ?? '').toUpperCase();
+        const pendingApproval = paymentStatus === 'PENDING' || paymentStatus === 'PENDING_NIGHT_AUDIT';
         const paidAmount = total;
-        setCustomerDisplayPayment({ amount: paidAmount, change: 0, method });
-        window.setTimeout(() => setCustomerDisplayPayment(null), 6000);
+        if (!pendingApproval) {
+          setCustomerDisplayPayment({ amount: paidAmount, change: 0, method });
+          window.setTimeout(() => setCustomerDisplayPayment(null), 6000);
+        }
         // Auto print receipt if on desktop
-        if (HardwareBridge.isAvailable()) {
+        if (!pendingApproval && HardwareBridge.isAvailable()) {
           try {
              const receiptRes = await provider.pos.getReceipt(currentOrderId);
              if (receiptRes && receiptRes.data) {
@@ -1003,6 +1013,17 @@ export default function PosApp() {
                   { label: 'Folio', value: 'Updated successfully' },
                 ],
                 statusText: isOnline ? undefined : 'Saved offline · will sync automatically',
+              }
+            : pendingApproval
+            ? {
+                isOpen: true,
+                title: 'Pending approval',
+                message: 'This staff pay-later complimentary order remains open until an authorized reviewer approves it.',
+                meta: [
+                  { label: 'Settlement', value: 'Staff receivable · Pending review' },
+                  { label: 'Order', value: 'Not completed' },
+                ],
+                statusText: isOnline ? 'Awaiting Night Audit or management approval' : 'Saved offline · will sync for approval',
               }
             : {
                 isOpen: true,
@@ -1650,7 +1671,6 @@ export default function PosApp() {
                     <CreditCard className="w-4 h-4" />
                     CHARGE
                   </button>
-
                   {/* Void Order — only shown when all items are fully fired (no pending qty) */}
                   {(() => {
                     const allFired = cart.length > 0 && cart.every(i => (i.pendingQty ?? 0) === 0 && (i.firedQty ?? 0) > 0);
@@ -1817,17 +1837,6 @@ export default function PosApp() {
         posSessionId={posSessionId}
         bankingModel={bankingModel}
         currentOperatorId={activeOperator?.id}
-      />
-
-      {/* Discount Modal */}
-      <DiscountModal
-        isOpen={showDiscountModal}
-        orderId={currentOrderId || ''}
-        orderTotal={total}
-        onClose={() => setShowDiscountModal(false)}
-        onSuccess={() => {
-          setTableRefreshTrigger(Date.now());
-        }}
       />
 
 

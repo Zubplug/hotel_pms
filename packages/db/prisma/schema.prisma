@@ -1842,8 +1842,13 @@ model ComplimentaryRecord {
   guestId     String? @db.Uuid
   roomId      String? @db.Uuid
 
+  beneficiaryType String @default("GUEST")
+  settlementType String @default("DUTY_MANAGER")
   staffId String? @db.Uuid
   staff   Staff?  @relation("ComplimentaryBeneficiary", fields: [staffId], references: [id])
+  acknowledgedByStaffId String? @db.Uuid
+  acknowledgedBy        Staff?  @relation("ComplimentaryAcknowledgement", fields: [acknowledgedByStaffId], references: [id])
+  acknowledgedAt        DateTime? @db.Timestamptz
 
   grossAmount    Decimal @db.Decimal(18, 4)
   discountAmount Decimal @default(0) @db.Decimal(18, 4)
@@ -2413,6 +2418,9 @@ model Staff {
   complRecordsApproved   ComplimentaryRecord[]       @relation("ComplimentaryApprover")
   complRecordsAudited    ComplimentaryRecord[]       @relation("ComplimentaryAuditor")
   complRecordsBenefit    ComplimentaryRecord[]       @relation("ComplimentaryBeneficiary")
+  complimentaryAcknowledgements ComplimentaryRecord[] @relation("ComplimentaryAcknowledgement")
+  concessionAcknowledgements ApprovalRequest[] @relation("ApprovalAcknowledgement")
+  concessionBeneficiaries ApprovalRequest[] @relation("ApprovalStaffBeneficiary")
   staffReceivables       StaffReceivable[]
   bypassOperations       CheckInBypass[]             @relation("BypassOperator")
   bypassAcknowledgements CheckInBypass[]             @relation("BypassAcknowledger")
@@ -4916,6 +4924,14 @@ model ApprovalRequest {
 
   requestedBy String   @db.Uuid // Staff ID
   requestedAt DateTime @default(now()) @db.Timestamptz
+
+  beneficiaryType       String?
+  beneficiaryGuestId    String? @db.Uuid
+  beneficiaryStaffId    String? @db.Uuid
+  acknowledgedByStaffId String? @db.Uuid
+  acknowledgedAt        DateTime? @db.Timestamptz
+  acknowledgedBy        Staff? @relation("ApprovalAcknowledgement", fields: [acknowledgedByStaffId], references: [id])
+  beneficiaryStaff       Staff? @relation("ApprovalStaffBeneficiary", fields: [beneficiaryStaffId], references: [id])
 
   reviewedBy String?   @db.Uuid // Staff ID
   reviewedAt DateTime? @db.Timestamptz

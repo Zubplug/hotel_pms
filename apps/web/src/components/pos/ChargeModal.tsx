@@ -6,10 +6,12 @@ import {
   Search, Hotel, CheckCircle2, Printer, X, Coffee, Minus, Plus,
 } from 'lucide-react';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SearchableSelect } from '@/components/ui/searchable-select';
+import { COMPLIMENTARY_REASONS, complimentaryReasonLabel } from '@/lib/complimentary-reasons';
 
 interface InHouseGuest {
   reservationId: string;
+  guestId?: string;
   folioId: string;
   folioBalance: number;
   outstandingBalance?: number;
@@ -44,6 +46,14 @@ interface ChargeModalProps {
         roomNumber: string;
         coversRedeemed: number;
       };
+      complimentary?: {
+        beneficiaryType: 'GUEST' | 'STAFF';
+        beneficiaryGuestId?: string;
+        beneficiaryStaffId?: string;
+        acknowledgedByStaffId: string;
+        reason: string;
+        settlementType?: 'DUTY_MANAGER' | 'STAFF_PAY_LATER';
+      };
     }
   ) => Promise<void>;
   onPrintReceipt: () => Promise<void>;
@@ -54,6 +64,13 @@ interface ChargeModalProps {
 }
 
 type View = 'methods' | 'roomCharge' | 'compSelection';
+
+const MANAGEMENT_ACKNOWLEDGER_ROLES = [
+  'CEO', 'SUPER_ADMIN', 'ADMIN', 'DIRECTOR', 'GENERAL_MANAGER', 'HOTEL_MANAGER',
+  'MANAGER', 'FNB_MANAGER', 'RESTAURANT_MANAGER', 'BANQUET_MANAGER', 'EVENT_MANAGER',
+  'FINANCE_MANAGER', 'ACCOUNTANT', 'NIGHT_AUDITOR', 'OUTLET_MANAGER',
+  'DEPARTMENT_HEAD', 'HOD',
+].join(',');
 
 export function ChargeModal({
   isOpen,
@@ -74,7 +91,15 @@ export function ChargeModal({
 
   // ── Complimentary ──────────────────────────────────────────────────
   const [activeStaff, setActiveStaff] = useState<any[]>([]);
-  const [selectedStaffId, setSelectedStaffId] = useState<string>('');
+  const [managementStaff, setManagementStaff] = useState<any[]>([]);
+  const [beneficiaryType, setBeneficiaryType] = useState<'GUEST' | 'STAFF'>('GUEST');
+  const [beneficiaryGuestId, setBeneficiaryGuestId] = useState('');
+  const [beneficiaryGuestFolioId, setBeneficiaryGuestFolioId] = useState('');
+  const [beneficiaryGuestReservationId, setBeneficiaryGuestReservationId] = useState('');
+  const [beneficiaryStaffId, setBeneficiaryStaffId] = useState('');
+  const [acknowledgedByStaffId, setAcknowledgedByStaffId] = useState('');
+  const [complimentaryReason, setComplimentaryReason] = useState('');
+  const [staffSettlementType, setStaffSettlementType] = useState<'DUTY_MANAGER' | 'STAFF_PAY_LATER'>('DUTY_MANAGER');
   const [isLoadingStaff, setIsLoadingStaff] = useState(false);
 
   // ── Room Charge ────────────────────────────────────────────────────
@@ -104,8 +129,16 @@ export function ChargeModal({
       setGuestQuery('');
       setGuestResults([]);
       setSelectedGuest(null);
-      setSelectedStaffId('');
+      setBeneficiaryType('GUEST');
+      setBeneficiaryGuestId('');
+      setBeneficiaryGuestFolioId('');
+      setBeneficiaryGuestReservationId('');
+      setBeneficiaryStaffId('');
+      setAcknowledgedByStaffId('');
+      setComplimentaryReason('');
+      setStaffSettlementType('DUTY_MANAGER');
       setActiveStaff([]);
+      setManagementStaff([]);
       setEntitlement(null);
       setSelectedCovers(1);
     }
@@ -117,14 +150,18 @@ export function ChargeModal({
       const load = async () => {
         setIsLoadingStaff(true);
         try {
-          const res = await provider.pos.getActiveStaff('ALL');
-          if (res?.data) setActiveStaff(res.data);
+          const [posStaff, management] = await Promise.all([
+            provider.pos.getActiveStaff('ALL'),
+            provider.auth.getActiveStaff(MANAGEMENT_ACKNOWLEDGER_ROLES),
+          ]);
+          if (posStaff?.data) setActiveStaff(posStaff.data);
+          if (management?.data) setManagementStaff(management.data);
         } catch { /* ignore */ }
         finally { setIsLoadingStaff(false); }
       };
       load();
     }
-  }, [view, provider.pos, activeStaff.length]);
+  }, [view, provider.auth, provider.pos, activeStaff.length]);
 
   // ── Guest search (debounced) ───────────────────────────────────────
   const searchGuests = useCallback(async (q: string) => {
@@ -153,6 +190,14 @@ export function ChargeModal({
     }
   }, [view]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Complimentary beneficiaries use the same local, checked-in guest
+  // snapshot as room charges. This must not depend on network access.
+  useEffect(() => {
+    if (view === 'compSelection' && beneficiaryType === 'GUEST' && guestResults.length === 0) {
+      searchGuests('');
+    }
+  }, [view, beneficiaryType]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Fetch breakfast entitlement whenever selectedGuest is set
   useEffect(() => {
     if (!selectedGuest) {
@@ -163,14 +208,14 @@ export function ChargeModal({
     const fetchEntitlement = async () => {
       setIsLoadingEntitlement(true);
       try {
-        const res = await fetch(
-          `/api/v1/fnb/breakfast/entitlement?reservationId=${selectedGuest.reservationId}&roomNumber=${encodeURIComponent(displayRoomNumber(selectedGuest.roomNumber))}`
+        const res = await provider.pos.getBreakfastEntitlement(
+          selectedGuest.reservationId,
+          displayRoomNumber(selectedGuest.roomNumber),
         );
-        const json = await res.json();
-        if (!isCancelled && json?.data) {
-          setEntitlement(json.data);
-          if (json.data.remainingCovers > 0) {
-            setSelectedCovers(Math.max(1, json.data.remainingCovers));
+        if (!isCancelled && res?.data) {
+          setEntitlement(res.data);
+          if (res.data.remainingCovers > 0) {
+            setSelectedCovers(Math.max(1, res.data.remainingCovers));
           }
         }
       } catch {
@@ -181,7 +226,7 @@ export function ChargeModal({
     };
     fetchEntitlement();
     return () => { isCancelled = true; };
-  }, [selectedGuest]);
+  }, [selectedGuest, provider.pos]);
 
   // ── Handlers ───────────────────────────────────────────────────────
   const handleCharge = (method: string) => {
@@ -199,9 +244,23 @@ export function ChargeModal({
   };
 
   const handleComplimentaryCharge = () => {
-    if (!selectedStaffId) { setErrorMsg('Please select a beneficiary staff member.'); return; }
+    if (beneficiaryType === 'GUEST' && !beneficiaryGuestId) { setErrorMsg('Please select the checked-in guest beneficiary.'); return; }
+    if (beneficiaryType === 'STAFF' && !beneficiaryStaffId) { setErrorMsg('Please select the staff beneficiary.'); return; }
+    if (!acknowledgedByStaffId) { setErrorMsg('Please select who acknowledged this complimentary benefit.'); return; }
+    if (!complimentaryReason) { setErrorMsg('Please select a reason for the complimentary benefit.'); return; }
     setErrorMsg(null);
-    onCharge('COMPLIMENTARY', `STAFF:${selectedStaffId}`);
+    onCharge('COMPLIMENTARY', undefined, {
+      folioId: beneficiaryType === 'GUEST' ? beneficiaryGuestFolioId : '',
+      reservationId: beneficiaryType === 'GUEST' ? beneficiaryGuestReservationId : '', guestName: '', roomNumber: '',
+      complimentary: {
+        beneficiaryType,
+        beneficiaryGuestId: beneficiaryType === 'GUEST' ? beneficiaryGuestId : undefined,
+        beneficiaryStaffId: beneficiaryType === 'STAFF' ? beneficiaryStaffId : undefined,
+        acknowledgedByStaffId,
+        reason: complimentaryReasonLabel(complimentaryReason),
+        settlementType: beneficiaryType === 'STAFF' ? staffSettlementType : 'DUTY_MANAGER',
+      },
+    });
   };
 
   const handleRoomChargeConfirm = async () => {
@@ -508,29 +567,32 @@ export function ChargeModal({
               <BackButton onClick={() => setView('methods')} />
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-bold text-slate-700 mb-2">Select Beneficiary Staff</label>
+                  <label className="block text-sm font-bold text-slate-700 mb-2">Benefit Recipient</label>
+                  <div className="grid grid-cols-2 gap-2 mb-4">
+                    {(['GUEST', 'STAFF'] as const).map((type) => (
+                      <button key={type} type="button" onClick={() => setBeneficiaryType(type)} className={`rounded-xl border px-3 py-3 text-sm font-bold ${beneficiaryType === type ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-200 bg-white text-slate-500'}`}>
+                        {type === 'GUEST' ? 'Guest / Customer' : 'Staff Member'}
+                      </button>
+                    ))}
+                  </div>
+                  {beneficiaryType === 'GUEST' && <p className="mb-4 rounded-xl bg-slate-50 p-3 text-xs text-slate-500">Select a checked-in guest. The guest record, not the reservation record, is saved as the beneficiary.</p>}
+                  {beneficiaryType === 'GUEST' && <div className="mb-4"><input value={guestQuery} onChange={(e) => { setGuestQuery(e.target.value); setBeneficiaryGuestId(''); setBeneficiaryGuestFolioId(''); setBeneficiaryGuestReservationId(''); }} placeholder="Search checked-in guest by name or room" className="w-full h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-indigo-300" />{guestResults.length > 0 && <div className="mt-2 max-h-36 overflow-y-auto space-y-1">{guestResults.map((guest) => <button type="button" key={guest.reservationId} onClick={() => { const id = guest.guestId || ''; setBeneficiaryGuestId(id); setBeneficiaryGuestFolioId(guest.folioId || ''); setBeneficiaryGuestReservationId(guest.reservationId); setGuestQuery(`${guest.guestName} · Room ${displayRoomNumber(guest.roomNumber)}`); setGuestResults([]); }} className={`w-full rounded-lg border px-3 py-2 text-left text-xs ${beneficiaryGuestId === guest.guestId ? 'border-indigo-500 bg-indigo-50' : 'border-slate-200 bg-white'}`}><span className="font-bold text-slate-700">{guest.guestName}</span><span className="ml-2 text-slate-500">Room {displayRoomNumber(guest.roomNumber)}</span></button>)}</div>}</div>}
+                  {beneficiaryType === 'STAFF' && <>
+                  <label className="block text-sm font-bold text-slate-700 mb-2">Staff Beneficiary</label>
                   {isLoadingStaff ? (
                     <div className="flex items-center gap-2 text-sm text-slate-500">
                       <Loader2 className="w-4 h-4 animate-spin" /> Loading staff list...
                     </div>
                   ) : (
-                    <Select value={selectedStaffId} onValueChange={(v) => setSelectedStaffId(v || '')}>
-                      <SelectTrigger className="w-full h-12 rounded-xl bg-white border-slate-200">
-                        <SelectValue placeholder="Choose a staff member..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {activeStaff.map((s) => (
-                          <SelectItem key={s.id} value={s.id}>
-                            {s.firstName} {s.lastName} {s.department ? `(${s.department})` : ''}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
+                    <SearchableSelect value={beneficiaryStaffId} onChange={setBeneficiaryStaffId} placeholder="Choose a staff member..." searchPlaceholder="Search staff by name or department…" inputClassName="h-12 rounded-xl bg-white border-slate-200" options={activeStaff.map((s) => ({ value: s.id, label: `${s.firstName} ${s.lastName}${s.department ? ` · ${s.department}` : ''}`, searchText: `${s.firstName} ${s.lastName} ${s.department || ''}` }))} />
+                  )}</>}
                 </div>
+                {beneficiaryType === 'STAFF' && <div><label className="block text-sm font-bold text-slate-700 mb-2">Staff settlement</label><SearchableSelect value={staffSettlementType} onChange={(v) => setStaffSettlementType(v as 'DUTY_MANAGER' | 'STAFF_PAY_LATER')} searchPlaceholder="Search settlement types…" inputClassName="h-12 rounded-xl bg-white border-slate-200" options={[{ value: 'DUTY_MANAGER', label: 'Duty Manager · Free benefit', searchText: 'company sponsored duty meal benefit' }, { value: 'STAFF_PAY_LATER', label: 'Pay later · Staff receivable', searchText: 'pending approval staff receivable' }]} /><p className="mt-1.5 text-xs text-slate-500">Pay-later benefits require review by Night Audit, the General Manager, General Cashier, or Accountant before they become staff receivables.</p></div>}
+                <div><label className="block text-sm font-bold text-slate-700 mb-2">Acknowledged By</label><SearchableSelect value={acknowledgedByStaffId} onChange={setAcknowledgedByStaffId} placeholder="Select management staff" searchPlaceholder="Search management staff…" inputClassName="h-12 rounded-xl bg-white border-slate-200" options={managementStaff.map((s) => ({ value: s.id, label: `${s.firstName} ${s.lastName}${s.role ? ` · ${String(s.role).replaceAll('_', ' ')}` : ''}`, searchText: `${s.firstName} ${s.lastName} ${s.role || ''}` }))} /></div>
+                <div><label className="block text-sm font-bold text-slate-700 mb-2">Reason</label><SearchableSelect value={complimentaryReason} onChange={setComplimentaryReason} placeholder="Select an approved reason" searchPlaceholder="Search approved reasons…" inputClassName="h-12 rounded-xl bg-white border-slate-200" options={COMPLIMENTARY_REASONS.map((option) => ({ value: option.value, label: option.label, searchText: option.label }))} /></div>
                 <button
                   onClick={handleComplimentaryCharge}
-                  disabled={isProcessing || !selectedStaffId}
+                  disabled={isProcessing || !acknowledgedByStaffId || !complimentaryReason || (beneficiaryType === 'STAFF' && !beneficiaryStaffId) || (beneficiaryType === 'GUEST' && !beneficiaryGuestId)}
                   className="w-full h-14 rounded-xl font-bold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 transition-colors mt-4 shadow-sm"
                 >
                   {isProcessing ? 'Processing...' : 'Complete as Complimentary'}
