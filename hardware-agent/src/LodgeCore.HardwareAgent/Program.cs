@@ -30,17 +30,20 @@ builder.Services.AddSingleton<CommandProcessor>();
 // Locks & Hardware
 builder.Services.AddSingleton<DelunsLockProvider>();
 builder.Services.AddSingleton<HsLockProvider>();
+builder.Services.AddSingleton<Rfv2016LockProvider>();
+builder.Services.AddSingleton<XeederLockProvider>();
 builder.Services.AddSingleton<ProUsbLockProvider>();
-// builder.Services.AddSingleton<HomeLockProvider>(); // if kept
 
-builder.Services.AddSingleton<ILockProvider>(sp => 
+builder.Services.AddSingleton<ILockProvider>(sp =>
 {
     var settings = sp.GetRequiredService<IOptions<AgentSettings>>().Value;
     return settings.Provider?.ToUpperInvariant() switch
     {
-        "PROUSB"     => sp.GetRequiredService<ProUsbLockProvider>(),
-        "HSLOCK"     => sp.GetRequiredService<HsLockProvider>(),
-        _            => sp.GetRequiredService<DelunsLockProvider>(),  // default / DELUNS
+        "PROUSB"  => sp.GetRequiredService<ProUsbLockProvider>(),
+        "HSLOCK"  => sp.GetRequiredService<HsLockProvider>(),
+        "RFV2016" => sp.GetRequiredService<Rfv2016LockProvider>(),
+        "XEEDER"  => sp.GetRequiredService<XeederLockProvider>(),
+        _         => sp.GetRequiredService<DelunsLockProvider>(), // default / DELUNS
     };
 });
 builder.Services.AddSingleton<EncoderMonitor>();

@@ -1,0 +1,3 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { corporateApiRequest } from '@/lib/corporate-portal';
+export async function POST(request: NextRequest) { const key = request.headers.get('x-idempotency-key'); if (!key) return NextResponse.json({ error: 'Idempotency key is required.' }, { status: 400 }); const body = await request.text(); const result = await corporateApiRequest('/api/v1/corporate/events/booking', { method: 'POST', headers: { 'x-idempotency-key': key, 'content-type': 'application/json' }, body }); return NextResponse.json(result.ok ? result.data : { error: result.error }, { status: result.ok ? result.status : result.status || 502 }); }

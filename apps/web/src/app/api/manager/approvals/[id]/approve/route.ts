@@ -313,7 +313,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
       if (approval.type === 'CORPORATE_CREDIT') {
         if (!['GENERAL_MANAGER', 'HOTEL_MANAGER', 'MANAGER', 'DIRECTOR', 'CEO', 'ADMIN', 'SUPER_ADMIN'].includes(String(user.role).toUpperCase()) && !user.isSuperAdmin) throw new Error('MANAGER_APPROVAL_REQUIRED');
-        const details = (approval.details || {}) as { reservationId?: string };
+        const details = (approval.details || {}) as { reservationId?: string; eventId?: string; corporateAccountId?: string };
+        if (details.eventId) {
+          if (approval.expiresAt && approval.expiresAt <= new Date()) { await tx.approvalRequest.update({ where: { id: approval.id }, data: { status: 'EXPIRED', executionStatus: 'FAILED', reviewedBy: user.id, reviewedAt: new Date() } }); throw new Error('CORPORATE_APPROVAL_EXPIRED'); }
+          const event = await tx.event.findFirst({ where: { id: details.eventId, propertyId: approval.propertyId, corporateAccountId: details.corporateAccountId }, select: { id: true, status: true, financialStatus: true, property: { select: { organizationId: true } } } });
+          if (!event) throw new Error('CORPORATE_EVENT_NOT_FOUND');
+          await assertCorporateCreditAvailable(tx, { corporateAccountId: details.corporateAccountId || '', propertyId: approval.propertyId, additionalAmount: Number(approval.amount || 0) });
+          await tx.event.update({ where: { id: event.id }, data: { status: 'CONFIRMED', financialStatus: 'AR_OUTSTANDING' } });
+          const updated = await tx.approvalRequest.update({ where: { id: approval.id }, data: { status: 'APPROVED', executionStatus: 'APPLIED', reviewedBy: user.id, reviewedAt: new Date() } });
+          await tx.auditLog.create({ data: { organizationId: event.property.organizationId, propertyId: approval.propertyId, userId: user.id, action: 'CORPORATE_EVENT_CREDIT_APPROVED', resource: 'Event', resourceId: event.id, newValue: { status: 'CONFIRMED', approvalId: approval.id }, ipAddress: req.headers.get('x-forwarded-for') || '', userAgent: req.headers.get('user-agent') || '', requestId: crypto.randomUUID() } });
+          return { status: 'EXECUTED', approval: updated, eventId: event.id };
+        }
         if (!details.reservationId) throw new Error('CORPORATE_RESERVATION_NOT_FOUND');
         if (approval.expiresAt && approval.expiresAt <= new Date()) {
           await tx.approvalRequest.update({ where: { id: approval.id }, data: { status: 'EXPIRED', executionStatus: 'FAILED', reviewedBy: user.id, reviewedAt: new Date() } });

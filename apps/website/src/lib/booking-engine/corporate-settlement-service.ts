@@ -234,11 +234,12 @@ async function allocateCorporateGatewayReceipt(input: {
       },
     });
     if (invoice.eventInvoiceId) {
-      const eventInvoice = await input.tx.eventInvoice.findUnique({ where: { id: invoice.eventInvoiceId }, select: { id: true, totalAmount: true, paidAmount: true } });
+      const eventInvoice = await input.tx.eventInvoice.findUnique({ where: { id: invoice.eventInvoiceId }, select: { id: true, eventId: true, totalAmount: true, paidAmount: true } });
       if (eventInvoice) {
         const paidAmount = Number(eventInvoice.paidAmount) + applied;
         const nextStatus = paidAmount + 0.01 >= Number(eventInvoice.totalAmount) ? 'PAID' : 'PARTIAL';
         await input.tx.eventInvoice.update({ where: { id: eventInvoice.id }, data: { paidAmount, status: nextStatus } });
+        if (eventInvoice.eventId) await input.tx.event.update({ where: { id: eventInvoice.eventId }, data: { status: 'CONFIRMED', financialStatus: nextStatus === 'PAID' ? 'PAID' : 'PARTIALLY_PAID' } });
         if (nextStatus === 'PAID') await input.tx.leaseBillingSchedule.updateMany({ where: { invoiceId: eventInvoice.id }, data: { status: 'PAID' } });
       }
     }

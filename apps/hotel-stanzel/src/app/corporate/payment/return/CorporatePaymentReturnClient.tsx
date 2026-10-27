@@ -9,8 +9,9 @@ type PaymentState = 'loading' | 'pending' | 'confirmed' | 'failed' | 'expired' |
 export default function CorporatePaymentReturnClient() {
   const searchParams = useSearchParams();
   const reservationId = searchParams.get('reservationId');
+  const eventId = searchParams.get('eventId');
   const reference = searchParams.get('reference');
-  const [state, setState] = useState<PaymentState>(reservationId ? 'loading' : 'missing');
+  const [state, setState] = useState<PaymentState>(reservationId || eventId ? 'loading' : 'missing');
   const [confirmationNumber, setConfirmationNumber] = useState('');
   const [message, setMessage] = useState('Checking your reservation and payment confirmation…');
 
@@ -25,14 +26,14 @@ export default function CorporatePaymentReturnClient() {
   }[state]), [state]);
 
   useEffect(() => {
-    if (!reservationId) return;
+    if (!reservationId && !eventId) return;
     let active = true;
     let attempts = 0;
     let timer: ReturnType<typeof setTimeout> | undefined;
 
     const check = async () => {
       try {
-        const response = await fetch(`/api/corporate/booking/${encodeURIComponent(reservationId)}`, { cache: 'no-store' });
+        const response = await fetch(eventId ? `/api/corporate/events/${encodeURIComponent(eventId)}` : `/api/corporate/booking/${encodeURIComponent(reservationId!)}`, { cache: 'no-store' });
         const body = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(body.error || 'The reservation could not be found.');
         if (!active) return;
@@ -40,7 +41,7 @@ export default function CorporatePaymentReturnClient() {
         setConfirmationNumber(body.confirmationNumber || '');
         if (status === 'CONFIRMED') {
           setState('confirmed');
-          setMessage('Your payment has been verified and your corporate reservation is confirmed.');
+          setMessage(eventId ? 'Your payment has been verified and your corporate hall booking is confirmed.' : 'Your payment has been verified and your corporate reservation is confirmed.');
           return;
         }
         if (['CANCELLED', 'EXPIRED'].includes(status)) {
@@ -48,7 +49,7 @@ export default function CorporatePaymentReturnClient() {
           setMessage('This reservation payment window is no longer active. Please start a new booking if you still need these rooms.');
           return;
         }
-        if (['PENDING', 'PROCESSING'].includes(status) && attempts < 15) {
+        if ((eventId ? ['TENTATIVE', 'INQUIRY', 'PENDING'] : ['PENDING', 'PROCESSING']).includes(status) && attempts < 15) {
           attempts += 1;
           setState('pending');
           setMessage('Your payment is being verified. This usually takes only a few seconds.');
@@ -56,7 +57,7 @@ export default function CorporatePaymentReturnClient() {
           return;
         }
         setState(status === 'PENDING' ? 'pending' : 'failed');
-        setMessage(status === 'PENDING' ? 'Payment is still being verified. You can check Reservations shortly.' : 'The reservation was not confirmed. Please check your payment or try again.');
+        setMessage((eventId ? ['TENTATIVE', 'INQUIRY', 'PENDING'] : ['PENDING']).includes(status) ? 'Payment is still being verified. You can check Hall & Events shortly.' : 'The booking was not confirmed. Please check your payment or try again.');
       } catch (error) {
         if (!active) return;
         setState('error');
@@ -66,14 +67,14 @@ export default function CorporatePaymentReturnClient() {
 
     void check();
     return () => { active = false; if (timer) clearTimeout(timer); };
-  }, [reservationId, reference]);
+  }, [reservationId, eventId, reference]);
 
   const isSuccess = state === 'confirmed';
   const isPending = state === 'loading' || state === 'pending';
 
   return <main className="corporate-payment-return"><section className={`corporate-payment-card is-${state}`}>
     <div className="corporate-payment-mark" aria-hidden="true">{isSuccess ? '✓' : isPending ? '…' : '!'}</div>
-    <span className="booking-section-kicker">Corporate reservation</span>
+    <span className="booking-section-kicker">{eventId ? 'Corporate hall & event' : 'Corporate reservation'}</span>
     <h1>{statusLabel}</h1>
     <p>{message}</p>
     {confirmationNumber && <div className="corporate-payment-reference"><span>Confirmation number</span><strong>{confirmationNumber}</strong></div>}

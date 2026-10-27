@@ -55,6 +55,7 @@ export async function initializeCorporateInvoiceGatewayPayment(db: any, input: {
   idempotencyKey: string;
   email?: string;
   amount?: number;
+  eventId?: string;
 }) {
   const invoice = input.invoice;
   if (!invoice || invoice.propertyId !== input.propertyId || invoice.accountId == null || invoice.status === 'VOID') throw new CorporatePaymentInitializationError('INVALID_AMOUNT', 'Corporate invoice is not payable');
@@ -78,12 +79,13 @@ export async function initializeCorporateInvoiceGatewayPayment(db: any, input: {
   const account = await getBookingPaymentAccount(input.propertyId, 'STANDALONE_API');
   if (!account) throw new CorporatePaymentInitializationError('NO_PAYMENT_ACCOUNT', 'No payment account is configured for this property');
   const providerRef = `CORP-INV-${invoice.id.slice(0, 8)}-${crypto.randomBytes(5).toString('hex').toUpperCase()}`;
-  const metadata = { channel: 'CORPORATE_API', paymentMode: 'INVOICE', paymentTarget: 'STANDALONE_API', invoicePayment: true, corporateAccountId: input.corporateAccountId };
+  const metadata = { channel: 'CORPORATE_API', paymentMode: 'INVOICE', paymentTarget: 'STANDALONE_API', invoicePayment: true, corporateAccountId: input.corporateAccountId, eventId: input.eventId ?? null };
   const transaction = await db.bookingPaymentTransaction.create({ data: { organizationId: input.organizationId, propertyId: input.propertyId, cityLedgerInvoiceId: invoice.id, provider: account.provider, providerRef, amount, currency: invoice.currency, status: 'PENDING', idempotencyKey: input.idempotencyKey, metadata } });
   try {
     const secret = account.secret ?? resolveSecretRef(account.secretRef, account.provider === 'FLUTTERWAVE' ? 'FLW_SECRET_KEY' : 'PAYSTACK_SECRET_KEY');
     const provider = account.provider === 'FLUTTERWAVE' ? new FlutterwaveProvider(secret, account.webhookSecret ?? resolveSecretRef(account.webhookSecretRef, 'FLW_WEBHOOK_SECRET_HASH')) : new PaystackProvider(secret);
-    const callbackUrl = process.env.CORPORATE_API_PAYMENT_CALLBACK_URL || `${process.env.NEXT_PUBLIC_APP_URL || ''}/corporate/payment/return`;
+    const callbackBase = process.env.CORPORATE_API_PAYMENT_CALLBACK_URL || `${process.env.NEXT_PUBLIC_APP_URL || ''}/corporate/payment/return`;
+    const callbackUrl = input.eventId ? `${callbackBase}${callbackBase.includes('?') ? '&' : '?'}eventId=${encodeURIComponent(input.eventId)}&reference=${encodeURIComponent(providerRef)}` : callbackBase;
     const initialized = await provider.initializeTransaction({ amount, currency: invoice.currency, email, reference: providerRef, callbackUrl });
     await db.bookingPaymentTransaction.update({ where: { id: transaction.id }, data: { metadata: { ...metadata, authorizationUrl: initialized.authorizationUrl } } });
     return { providerRef, authorizationUrl: initialized.authorizationUrl, amount, currency: invoice.currency, idempotent: false };

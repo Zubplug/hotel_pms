@@ -66,6 +66,20 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           }
         }
       }
+      if (approval.type === 'CORPORATE_CREDIT' && (details as any).eventId) {
+        const rejectedEvent = await tx.event.findFirst({ where: { id: (details as any).eventId, propertyId: approval.propertyId }, include: { invoices: { include: { cityLedgerInvoice: true } } } });
+        await tx.event.updateMany({ where: { id: (details as any).eventId, propertyId: approval.propertyId, status: { not: 'CANCELLED' } }, data: { status: 'CANCELLED', financialStatus: 'QUOTE', notes: 'Corporate credit approval rejected.' } });
+        await tx.eventBooking.updateMany({ where: { eventId: (details as any).eventId, status: 'ACTIVE' }, data: { status: 'CANCELLED', cancellationReason: 'Corporate credit approval rejected.' } });
+        const rejectedInvoice = rejectedEvent?.invoices[0];
+        const cityInvoice = rejectedInvoice?.cityLedgerInvoice;
+        if (cityInvoice && ['OPEN', 'PARTIALLY_PAID'].includes(cityInvoice.status)) {
+          const release = Math.max(0, Number(cityInvoice.outstandingAmount));
+          await tx.cityLedgerInvoice.update({ where: { id: cityInvoice.id }, data: { status: 'VOID', outstandingAmount: 0 } });
+          await tx.cityLedgerEntry.updateMany({ where: { invoiceId: cityInvoice.id, type: 'TRANSFER_IN', status: 'OPEN' }, data: { status: 'SETTLED' } });
+          if (release > 0) await tx.cityLedgerAccount.update({ where: { id: cityInvoice.accountId }, data: { balance: { decrement: release } } });
+          if (rejectedInvoice) await tx.eventInvoice.update({ where: { id: rejectedInvoice.id }, data: { status: 'VOID', workflowStatus: 'REJECTED' } });
+        }
+      }
       const property = await tx.property.findUnique({ where: { id: approval.propertyId } });
       await tx.auditLog.create({
         data: {

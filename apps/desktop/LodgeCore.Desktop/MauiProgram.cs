@@ -26,17 +26,28 @@ public static class MauiProgram
             
             return providerType.ToLowerInvariant() switch
             {
-                "deluns" => new DelunsLockProvider(loggerFactory.CreateLogger<DelunsLockProvider>()),
-                "hslock" => new HsLockProvider(loggerFactory.CreateLogger<HsLockProvider>()),
+                "hslock"  => new HsLockProvider(loggerFactory.CreateLogger<HsLockProvider>()),
                 "rfv2016" => new Rfv2016LockProvider(loggerFactory.CreateLogger<Rfv2016LockProvider>()),
-                "xeeder" => new XeederLockProvider(
+                "xeeder"  => new XeederLockProvider(
                     loggerFactory.CreateLogger<XeederLockProvider>(),
                     Microsoft.Maui.Storage.Preferences.Default.Get("XeederHost", "127.0.0.1"),
                     Microsoft.Maui.Storage.Preferences.Default.Get("XeederPort", 7800),
                     Microsoft.Maui.Storage.Preferences.Default.Get("XeederConnectTimeoutMs", 3000),
                     Microsoft.Maui.Storage.Preferences.Default.Get("XeederCommandTimeoutMs", 5000)
                 ),
-                _        => new DelunsLockProvider(loggerFactory.CreateLogger<DelunsLockProvider>())
+                "prousb"  => new ProUsbLockProvider(
+                    loggerFactory.CreateLogger<ProUsbLockProvider>(),
+                    Microsoft.Extensions.Options.Options.Create(new LodgeCore.HardwareAgent.AgentSettings
+                    {
+                        Provider = "PROUSB",
+                        ExtendedSettings = new Dictionary<string, string>
+                        {
+                            ["ProUsbHotelCode"] = Microsoft.Maui.Storage.Preferences.Default.Get("ProUsbHotelCode", ""),
+                            ["ProUsbPort"]      = Microsoft.Maui.Storage.Preferences.Default.Get("ProUsbPort", "1"),
+                        }
+                    })
+                ),
+                _         => new DelunsLockProvider(loggerFactory.CreateLogger<DelunsLockProvider>())
             };
         });
         builder.Services.AddSingleton<HardwareInterop>();
