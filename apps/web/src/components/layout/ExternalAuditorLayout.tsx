@@ -142,20 +142,19 @@ export function ExternalAuditorLayout({ children }: { children: React.ReactNode 
 function AuditorSidebar({ pathname, userDisplayName, userInitials, logout, scopeExpiresAt, onNavigate }: { pathname: string | null; userDisplayName: string; userInitials: string; logout: () => void; scopeExpiresAt?: string; onNavigate?: () => void }) {
   return (
     <>
-      <div className="relative flex h-[88px] shrink-0 items-center gap-3 border-b border-white/[.08] px-5">
+      <div className="relative flex h-[78px] shrink-0 items-center gap-3 border-b border-white/[.08] px-5">
         <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-emerald-300/70 to-transparent" />
         <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-300 text-slate-950 shadow-lg shadow-emerald-300/20">
           <ShieldCheck className="h-5 w-5" />
         </div>
-        <div className="min-w-0 leading-tight">
+        <div className="min-w-0 flex-1 leading-tight">
           <p className="truncate text-[13px] font-bold tracking-[.16em] text-white">LODGECORE</p>
-          <p className="mt-1 truncate text-[10px] font-semibold uppercase tracking-[.18em] text-emerald-300">External audit</p>
+          <p className="mt-1 whitespace-nowrap text-[10px] font-semibold uppercase tracking-[.16em] text-emerald-300">External audit</p>
         </div>
-        <span className="ml-auto rounded-full border border-white/10 bg-white/[.04] px-2 py-1 text-[9px] font-bold uppercase tracking-[.14em] text-slate-500">Read only</span>
       </div>
 
-      <div className="flex flex-1 flex-col gap-1 overflow-y-auto px-3 py-5">
-        <div className="relative mb-5 overflow-hidden rounded-2xl border border-emerald-300/15 bg-gradient-to-br from-emerald-300/[.12] to-cyan-300/[.04] p-4">
+      <div className="min-h-0 flex-1 overflow-y-auto px-3 py-4 [scrollbar-color:rgba(148,163,184,.25)_transparent]">
+        <div className="relative mb-4 overflow-hidden rounded-2xl border border-emerald-300/15 bg-gradient-to-br from-emerald-300/[.12] to-cyan-300/[.04] p-3.5">
           <div className="absolute -right-6 -top-8 h-24 w-24 rounded-full bg-emerald-300/10 blur-2xl" />
           <div className="relative mb-3 flex items-center justify-between">
             <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[.16em] text-emerald-200"><LockKeyhole className="h-3.5 w-3.5" /> Secure scope</div>
@@ -170,7 +169,7 @@ function AuditorSidebar({ pathname, userDisplayName, userInitials, logout, scope
           return (
             <div key={item.name}>
               {item.section !== AUDITOR_NAV[index - 1]?.section && (
-                <div className="mb-2 mt-5 flex items-center gap-2 px-3 first:mt-0">
+                <div className="mb-1.5 mt-4 flex items-center gap-2 px-3 first:mt-0">
                   <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">{item.section}</p>
                   <span className="h-px flex-1 bg-white/[.06]" />
                 </div>
@@ -179,7 +178,7 @@ function AuditorSidebar({ pathname, userDisplayName, userInitials, logout, scope
                 href={item.href}
                 onClick={onNavigate}
                 className={cn(
-                  'group relative flex min-h-11 items-center rounded-xl px-3 py-2.5 text-[13px] font-medium transition-all',
+                  'group relative flex min-h-10 items-center rounded-xl px-3 py-2 text-[13px] font-medium transition-all',
                   isActive
                     ? 'bg-emerald-300/[.10] text-white shadow-sm ring-1 ring-emerald-300/15'
                     : 'text-slate-400 hover:bg-white/[.05] hover:text-slate-100'
@@ -200,7 +199,7 @@ function AuditorSidebar({ pathname, userDisplayName, userInitials, logout, scope
         })}
       </div>
 
-      <div className="border-t border-white/[.08] bg-slate-950/20 px-3 py-3">
+      <div className="border-t border-white/[.08] bg-slate-950/20 px-3 py-2.5">
         <DropdownMenu>
           <DropdownMenuTrigger className="w-full cursor-pointer rounded-2xl border border-transparent outline-none transition-colors hover:border-white/[.08] hover:bg-white/[.04]">
             <div className="flex w-full items-center gap-3 px-3 py-3 text-sm text-slate-300">
