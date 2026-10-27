@@ -2,174 +2,68 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import {
-  ArrowDownToLine,
-  ArrowUpRight,
-  BadgePercent,
-  BarChart3,
-  BookOpen,
-  CalendarDays,
-  CalendarRange,
-  CheckCircle2,
-  FileSpreadsheet,
-  FileText,
-  FileWarning,
-  Loader2,
-  LockKeyhole,
-  Printer,
-  SlidersHorizontal,
-  Table2,
-  X,
+  ArrowDownToLine, ArrowUpRight, BadgePercent, BarChart3, BookOpen, CalendarDays,
+  CalendarRange, FileSpreadsheet, FileText, FileWarning, Loader2, LockKeyhole,
+  Printer, ShieldCheck, SlidersHorizontal, Table2, TrendingUp, X,
 } from 'lucide-react';
 
 type ReportKey = 'management' | 'general-ledger' | 'trial-balance' | 'revenue' | 'night-audit' | 'controls';
 type PeriodKey = 'engagement' | '7d' | 'mtd' | 'ytd' | 'custom';
+type Scope = { propertyId: string; propertyName?: string; currency?: string; auditPeriodStart: string; auditPeriodEnd: string };
+type Report = { headers: string[]; rows: unknown[][]; scope?: Scope };
+type ControlPreview = { kind: string; businessDate: string; reference: string; guestName: string; amount: number; source: string; status: string; reason: string; operator: string | null; approver: string };
+type ReportDefinition = { key: ReportKey; title: string; description: string; group: string; source: string; icon: typeof BarChart3 };
 
-type Scope = {
-  propertyId: string;
-  propertyName?: string;
-  currency?: string;
-  auditPeriodStart: string;
-  auditPeriodEnd: string;
-};
-
-type Report = {
-  headers: string[];
-  rows: unknown[][];
-  scope?: Scope;
-};
-
-type ControlPreview = {
-  kind: string;
-  businessDate: string;
-  reference: string;
-  guestName: string;
-  amount: number;
-  source: string;
-  status: string;
-  reason: string;
-  operator: string | null;
-  approver: string;
-};
-
-type ReportDefinition = {
-  key: ReportKey;
-  title: string;
-  description: string;
-  group: string;
-  source: string;
-  icon: typeof BarChart3;
-};
-
-const reportDefinitions: ReportDefinition[] = [
-  { key: 'management', title: 'Management report', description: 'Occupancy, ADR, RevPAR, revenue, payments, exceptions, and close status for the authorized period.', group: 'Close & operating review', source: 'PMS close and revenue records', icon: BarChart3 },
-  { key: 'night-audit', title: 'Night audit summary', description: 'Daily close status, occupancy, room revenue, total revenue, and unresolved close signals.', group: 'Close & operating review', source: 'Night audit and occupancy snapshots', icon: CalendarDays },
-  { key: 'general-ledger', title: 'General ledger', description: 'Posted journal activity with account, source, debit, credit, and entry lineage.', group: 'Accounting reports', source: 'Posted journal entries', icon: BookOpen },
+const definitions: ReportDefinition[] = [
+  { key: 'management', title: 'Management report', description: 'Occupancy, ADR, RevPAR, revenue, payments, deductions, and close status.', group: 'Close & operating review', source: 'PMS close and revenue records', icon: BarChart3 },
+  { key: 'night-audit', title: 'Night audit summary', description: 'Daily close status, occupancy, room revenue, total revenue, and exceptions.', group: 'Close & operating review', source: 'Night audit and occupancy snapshots', icon: CalendarDays },
+  { key: 'general-ledger', title: 'General ledger', description: 'Posted journal activity with account, source, debit, credit, and lineage.', group: 'Accounting reports', source: 'Posted journal entries', icon: BookOpen },
   { key: 'trial-balance', title: 'Trial balance', description: 'Posted account balances for the selected review window.', group: 'Accounting reports', source: 'Posted ledger balances', icon: Table2 },
-  { key: 'revenue', title: 'Revenue audit', description: 'Source-level revenue activity across room, F&B, tax, and other revenue accounts.', group: 'Accounting reports', source: 'Revenue journal and source records', icon: FileSpreadsheet },
+  { key: 'revenue', title: 'Revenue audit', description: 'Source-level room, F&B, tax, and other revenue activity.', group: 'Accounting reports', source: 'Revenue journal and source records', icon: FileSpreadsheet },
   { key: 'controls', title: 'Discounts & complimentary', description: 'Concession activity with beneficiary, reason, operator, approver, and verification context.', group: 'Control schedules', source: 'Folio and complimentary registers', icon: BadgePercent },
 ];
 
 const dateKey = (value: Date) => `${value.getFullYear()}-${`${value.getMonth() + 1}`.padStart(2, '0')}-${`${value.getDate()}`.padStart(2, '0')}`;
-
-const periodRange = (key: Exclude<PeriodKey, 'engagement' | 'custom'>) => {
-  const today = new Date();
-  if (key === '7d') {
-    const start = new Date(today);
-    start.setDate(start.getDate() - 6);
-    return { start: dateKey(start), end: dateKey(today) };
-  }
-  if (key === 'mtd') return { start: dateKey(new Date(today.getFullYear(), today.getMonth(), 1)), end: dateKey(today) };
-  return { start: dateKey(new Date(today.getFullYear(), 0, 1)), end: dateKey(today) };
-};
-
+const periodRange = (key: Exclude<PeriodKey, 'engagement' | 'custom'>) => { const today = new Date(); if (key === '7d') { const start = new Date(today); start.setDate(start.getDate() - 6); return { start: dateKey(start), end: dateKey(today) }; } if (key === 'mtd') return { start: dateKey(new Date(today.getFullYear(), today.getMonth(), 1)), end: dateKey(today) }; return { start: dateKey(new Date(today.getFullYear(), 0, 1)), end: dateKey(today) }; };
 const formatPeriod = (start: string, end: string) => `${new Date(`${start}T00:00:00`).toLocaleDateString('en', { month: 'short', day: 'numeric', year: 'numeric' })} – ${new Date(`${end}T00:00:00`).toLocaleDateString('en', { month: 'short', day: 'numeric', year: 'numeric' })}`;
 const label = (value: string) => value.replaceAll('_', ' ').toLowerCase().replace(/(^|\s)\S/g, (match) => match.toUpperCase());
+const compact = (value: number, currency = 'NGN') => new Intl.NumberFormat('en', { style: 'currency', currency, notation: 'compact', maximumFractionDigits: 1 }).format(value);
+const valuesFor = (report: Report, name: string) => { const row = report.rows.find((item) => item[0] === name); return row ? row.slice(1).map((value) => Number(value) || 0) : []; };
+
+function PrintedAnalytics({ report, kind, currency }: { report: Report; kind: ReportKey; currency: string }) {
+  const interpretation: Record<ReportKey, { title: string; meaning: string; review: string; next: string }> = {
+    management: { title: 'How to read this management report', meaning: 'Start with total hotel revenue, then follow the revenue deductions to arrive at net revenue. Occupancy, ADR, and RevPAR explain the room-performance context while payment rows explain how revenue was collected.', review: 'Investigate unusual revenue movements, high deduction values, payment mismatches, and any close or exception signals before relying on the net result.', next: 'Use the Assurance workspace to reconcile differences and Evidence to inspect the underlying transactions.' },
+    'night-audit': { title: 'How to read this night-audit report', meaning: 'Each row represents one PMS business date. Revenue and occupancy describe the day that was closed; status and exceptions show whether the close completed cleanly.', review: 'Prioritize dates with non-final status, non-zero exceptions, missing close records, or revenue that does not agree with the supporting schedules.', next: 'Use Assurance for close-package reconciliation and Evidence for the transaction lineage behind an exception.' },
+    'general-ledger': { title: 'How to read this general ledger', meaning: 'Each row is a posted journal line. The entry, source, account, debit, and credit columns show how a business event reached the ledger.', review: 'Check that debits and credits balance by entry, the source is appropriate, and unusual accounts or late postings have supporting evidence.', next: 'Trace selected entries through the Evidence workspace and compare totals with the Trial balance.' },
+    'trial-balance': { title: 'How to read this trial balance', meaning: 'The report groups posted journal lines by account and shows total debits, credits, and the resulting net position for the review window.', review: 'Look for unexpected account balances, contra-revenue movements, dormant accounts with activity, and totals that do not agree with the general ledger.', next: 'Use the General ledger for entry-level testing and Assurance for revenue and settlement bridges.' },
+    revenue: { title: 'How to read this revenue audit', meaning: 'Each row is a non-voided source revenue charge with its business date, description, category, amount, currency, and originating module.', review: 'Test completeness, classification, business date, duplicate-looking charges, late postings, and the link between source revenue and posted accounts.', next: 'Use Evidence to inspect a folio transaction and its journal lineage.' },
+    controls: { title: 'How to read this control schedule', meaning: 'Each row represents a discount or complimentary concession. Beneficiary, reason, operator, approver, and status separate the business benefit from the accountability trail.', review: 'Focus on missing roles, rejected or unverified concessions, unusual amounts, unsupported reasons, and differences between the source record and approval evidence.', next: 'Use the Controls and Evidence workspaces to inspect approval history and immutable source events.' },
+  };
+  const guide = interpretation[kind];
+  const guidance = <section className="mb-7 rounded-2xl border border-slate-200 bg-slate-50 p-5 print:break-inside-avoid"><div className="flex items-start gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700"><ShieldCheck className="h-5 w-5" /></div><div><p className="text-[10px] font-bold uppercase tracking-[.15em] text-emerald-700">Auditor reading guide</p><h3 className="mt-1 text-base font-bold text-slate-900">{guide.title}</h3><p className="mt-2 text-xs leading-5 text-slate-600"><b>What it means:</b> {guide.meaning}</p><p className="mt-2 text-xs leading-5 text-slate-600"><b>Review focus:</b> {guide.review}</p><p className="mt-2 text-xs leading-5 text-slate-600"><b>Next step:</b> {guide.next}</p></div></div></section>;
+  if (kind === 'management') {
+    const gross = valuesFor(report, 'Total hotel revenue'); const net = valuesFor(report, 'Net revenue after deductions'); const refunds = valuesFor(report, 'Less: refunds and revenue adjustments').map(Math.abs); const discounts = valuesFor(report, 'Less: revenue rebates and discounts').map(Math.abs); const complimentary = valuesFor(report, 'Less: complimentary allowance').map(Math.abs); const max = Math.max(...gross, ...net, 1);
+    return <>{<section className="mb-7 grid gap-4 print:grid-cols-[1.25fr_.75fr]"><div className="rounded-2xl border border-slate-200 bg-slate-50 p-5"><div className="flex items-start justify-between"><div><p className="text-[10px] font-bold uppercase tracking-[.15em] text-slate-500">Revenue bridge</p><h3 className="mt-1 text-base font-bold text-slate-900">Gross to net revenue</h3><p className="mt-1 text-xs text-slate-500">Deductions are presented below operational revenue.</p></div><TrendingUp className="h-5 w-5 text-emerald-700" /></div><div className="mt-6 space-y-4">{['Last 7 days', 'MTD', 'YTD'].map((name, index) => <div key={name}><div className="mb-1 flex justify-between text-xs"><span className="font-semibold text-slate-600">{name}</span><b className="text-slate-900">{compact(net[index] || 0, currency)}</b></div><div className="h-2.5 rounded-full bg-slate-200"><div className="h-full rounded-full bg-emerald-600" style={{ width: `${Math.max(2, ((net[index] || 0) / max) * 100)}%` }} /></div><div className="mt-1 flex justify-between text-[10px] text-slate-400"><span>Gross {compact(gross[index] || 0, currency)}</span><span>Less {compact((refunds[index] || 0) + (discounts[index] || 0) + (complimentary[index] || 0), currency)}</span></div></div>)}</div></div><div className="rounded-2xl border border-slate-200 bg-white p-5"><p className="text-[10px] font-bold uppercase tracking-[.15em] text-slate-500">Deduction profile</p><h3 className="mt-1 text-base font-bold text-slate-900">Revenue reductions</h3><div className="mt-6 space-y-4">{[['Refunds & adjustments', refunds[1] || 0, 'bg-rose-500'], ['Rebates & discounts', discounts[1] || 0, 'bg-amber-500'], ['Complimentary allowance', complimentary[1] || 0, 'bg-violet-500']].map(([name, amount, color]) => <div key={String(name)}><div className="flex justify-between gap-2 text-xs"><span className="flex items-center gap-2 text-slate-600"><span className={`h-2 w-2 rounded-full ${color}`} />{name}</span><b className="text-slate-900">{compact(Number(amount), currency)}</b></div><div className="mt-2 h-1.5 rounded-full bg-slate-100"><div className={`h-full rounded-full ${color}`} style={{ width: `${Math.max(2, (Number(amount) / Math.max(refunds[1] || 0, discounts[1] || 0, complimentary[1] || 0, 1)) * 100)}%` }} /></div></div>)}</div></div></section>}{guidance}</>;
+  }
+  if (kind === 'night-audit') { const points = report.rows.slice(0, 14).map((row) => ({ date: String(row[0]).slice(5), value: Number(row[2]) || 0 })); const max = Math.max(...points.map((point) => point.value), 1); return <>{<section className="mb-7 rounded-2xl border border-slate-200 bg-slate-50 p-5"><p className="text-[10px] font-bold uppercase tracking-[.15em] text-slate-500">Close trend</p><h3 className="mt-1 text-base font-bold text-slate-900">Night-audit revenue by business date</h3><div className="mt-6 flex h-40 items-end gap-2">{points.map((point) => <div key={point.date} className="flex min-w-0 flex-1 flex-col items-center justify-end gap-2"><div className="w-full rounded-t-md bg-emerald-500" style={{ height: `${Math.max(5, (point.value / max) * 100)}%` }} title={compact(point.value, currency)} /><span className="truncate text-[9px] text-slate-500">{point.date}</span></div>)}{!points.length && <p className="w-full text-center text-sm text-slate-500">No night-audit records in this window.</p>}</div></section>}{guidance}</>;
+  }
+  return guidance;
+}
 
 export default function ExternalAuditorReports() {
-  const [scope, setScope] = useState<Scope | null>(null);
-  const [period, setPeriod] = useState<PeriodKey>('engagement');
-  const [customStart, setCustomStart] = useState('');
-  const [customEnd, setCustomEnd] = useState('');
-  const [selectedReport, setSelectedReport] = useState<ReportKey | null>(null);
-  const [report, setReport] = useState<Report | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    void fetch('/api/v1/external-auditor/context')
-      .then(async (response) => {
-        const value = await response.json();
-        if (!response.ok || !value.scopes?.[0]) throw new Error(value.error || 'No active engagement');
-        setScope(value.scopes[0] as Scope);
-      })
-      .catch((value: unknown) => setError(value instanceof Error ? value.message : 'Unable to load authorized scope'));
-  }, []);
-
-  const selectedRange = (nextPeriod = period) => {
-    if (nextPeriod === 'engagement') return { start: '', end: '' };
-    if (nextPeriod === 'custom') return { start: customStart, end: customEnd };
-    return periodRange(nextPeriod);
-  };
-
-  const periodStart = period === 'engagement' ? scope?.auditPeriodStart.slice(0, 10) || '' : selectedRange().start;
-  const periodEnd = period === 'engagement' ? scope?.auditPeriodEnd.slice(0, 10) || '' : selectedRange().end;
-  const selectedDefinition = reportDefinitions.find((item) => item.key === selectedReport);
-
-  const reportUrl = (key: ReportKey, format: 'json' | 'csv') => {
-    if (!scope) return '';
-    const range = selectedRange();
-    const params = new URLSearchParams({ propertyId: scope.propertyId, format });
-    if (range.start) params.set(key === 'controls' ? 'dateFrom' : 'startDate', range.start);
-    if (range.end) params.set(key === 'controls' ? 'dateTo' : 'endDate', range.end);
-    if (key !== 'controls') params.set('kind', key);
-    return key === 'controls' ? `/api/v1/external-auditor/controls?${params}` : `/api/v1/external-auditor/reports?${params}`;
-  };
-
-  const openReport = async (key: ReportKey) => {
-    if (!scope) {
-      setError('Reports are still loading the authorized property scope.');
-      return;
-    }
-    const range = selectedRange();
-    if (period === 'custom' && (!range.start || !range.end || range.start > range.end)) {
-      setError('Choose a valid custom review window before opening a report.');
-      return;
-    }
-    setSelectedReport(key);
-    setLoading(true);
-    setError('');
-    try {
-      const response = await fetch(reportUrl(key, 'json'));
-      const value = await response.json();
-      if (!response.ok) throw new Error(value.error || 'Unable to generate report');
-      if (key === 'controls') {
-        const items = value.items as ControlPreview[];
-        setReport({ scope: value.scope, headers: ['Type', 'Business date', 'Reference', 'Guest / beneficiary', 'Amount', 'Source', 'Status', 'Reason', 'Operator', 'Approver'], rows: items.map((item) => [item.kind, new Date(item.businessDate).toISOString().slice(0, 10), item.reference, item.guestName, item.amount, item.source, item.status, item.reason, item.operator, item.approver]) });
-      } else {
-        setReport(value as Report);
-      }
-    } catch (value) {
-      setError(value instanceof Error ? value.message : 'Unable to generate report');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const grouped = useMemo(() => reportDefinitions.reduce<Record<string, ReportDefinition[]>>((groups, item) => { (groups[item.group] ||= []).push(item); return groups; }, {}), []);
-
+  const [scope, setScope] = useState<Scope | null>(null); const [period, setPeriod] = useState<PeriodKey>('engagement'); const [customStart, setCustomStart] = useState(''); const [customEnd, setCustomEnd] = useState(''); const [selectedReport, setSelectedReport] = useState<ReportKey | null>(null); const [report, setReport] = useState<Report | null>(null); const [loading, setLoading] = useState(false); const [error, setError] = useState('');
+  useEffect(() => { void fetch('/api/v1/external-auditor/context').then(async (response) => { const value = await response.json(); if (!response.ok || !value.scopes?.[0]) throw new Error(value.error || 'No active engagement'); setScope(value.scopes[0] as Scope); }).catch((value: unknown) => setError(value instanceof Error ? value.message : 'Unable to load authorized scope')); }, []);
+  const selectedRange = (nextPeriod = period) => nextPeriod === 'engagement' ? { start: '', end: '' } : nextPeriod === 'custom' ? { start: customStart, end: customEnd } : periodRange(nextPeriod);
+  const periodStart = period === 'engagement' ? scope?.auditPeriodStart.slice(0, 10) || '' : selectedRange().start; const periodEnd = period === 'engagement' ? scope?.auditPeriodEnd.slice(0, 10) || '' : selectedRange().end; const selectedDefinition = definitions.find((item) => item.key === selectedReport);
+  const reportUrl = (key: ReportKey, format: 'json' | 'csv') => { if (!scope) return ''; const range = selectedRange(); const params = new URLSearchParams({ propertyId: scope.propertyId, format }); if (range.start) params.set(key === 'controls' ? 'dateFrom' : 'startDate', range.start); if (range.end) params.set(key === 'controls' ? 'dateTo' : 'endDate', range.end); if (key !== 'controls') params.set('kind', key); return key === 'controls' ? `/api/v1/external-auditor/controls?${params}` : `/api/v1/external-auditor/reports?${params}`; };
+  const openReport = async (key: ReportKey) => { if (!scope) return setError('Reports are still loading the authorized property scope.'); const range = selectedRange(); if (period === 'custom' && (!range.start || !range.end || range.start > range.end)) return setError('Choose a valid custom review window before opening a report.'); setSelectedReport(key); setLoading(true); setError(''); try { const response = await fetch(reportUrl(key, 'json')); const value = await response.json(); if (!response.ok) throw new Error(value.error || 'Unable to generate report'); if (key === 'controls') { const items = value.items as ControlPreview[]; setReport({ scope: value.scope, headers: ['Type', 'Business date', 'Reference', 'Guest / beneficiary', 'Amount', 'Source', 'Status', 'Reason', 'Operator', 'Approver'], rows: items.map((item) => [item.kind, new Date(item.businessDate).toISOString().slice(0, 10), item.reference, item.guestName, item.amount, item.source, item.status, item.reason, item.operator, item.approver]) }); } else setReport(value as Report); } catch (value) { setError(value instanceof Error ? value.message : 'Unable to generate report'); } finally { setLoading(false); } };
+  const grouped = useMemo(() => definitions.reduce<Record<string, ReportDefinition[]>>((groups, item) => { (groups[item.group] ||= []).push(item); return groups; }, {}), []);
   if (!scope && !error) return <div className="flex min-h-[40vh] items-center justify-center text-sm text-slate-500"><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading report scope…</div>;
-
-  return <div className="space-y-6 pb-10">
-    <header className="relative overflow-hidden rounded-3xl border border-white/[.09] bg-gradient-to-br from-[#173b39] via-[#172c3a] to-[#0b1422] p-6 shadow-2xl shadow-black/20 sm:p-8"><div className="pointer-events-none absolute -right-20 -top-28 h-72 w-72 rounded-full border-[42px] border-emerald-300/[.06]" /><div className="relative flex flex-col justify-between gap-6 lg:flex-row lg:items-end"><div><div className="mb-3 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[.2em] text-emerald-300"><FileText className="h-4 w-4" /> External audit · reporting</div><h1 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">Reports & schedules</h1><p className="mt-3 max-w-3xl text-sm leading-6 text-slate-400">Generate source-backed schedules for close review, accounting tie-out, revenue testing, and concession controls within the authorized PMS window.</p></div>{scope && <div className="rounded-2xl border border-white/[.08] bg-white/[.05] px-4 py-3 text-right"><p className="text-xs text-slate-500">Authorized property</p><p className="mt-1 font-semibold text-white">{scope.propertyName || 'PMS property'}</p><p className="mt-1 text-xs text-slate-500">{periodStart && periodEnd ? formatPeriod(periodStart, periodEnd) : 'Select a review window'}</p></div>}</div></header>
-
-    {scope && <section className="rounded-2xl border border-white/[.08] bg-white/[.035] p-4 shadow-xl shadow-black/5 sm:p-5"><div className="flex flex-wrap items-center justify-between gap-4"><div className="flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-300/10 text-emerald-300"><CalendarRange className="h-5 w-5" /></div><div><p className="text-sm font-semibold text-white">Report window</p><p className="text-xs text-slate-500">All schedules stay inside the authorized engagement scope.</p></div></div><div className="flex flex-wrap items-center gap-1 rounded-xl border border-white/[.07] bg-slate-950/40 p-1">{([['engagement', 'Engagement'], ['7d', 'Last 7 days'], ['mtd', 'MTD'], ['ytd', 'YTD']] as [PeriodKey, string][]).map(([key, name]) => <button type="button" key={key} onClick={() => setPeriod(key)} className={`rounded-lg px-3 py-2 text-xs font-semibold transition ${period === key ? 'bg-emerald-300 text-slate-950' : 'text-slate-400 hover:bg-white/[.07] hover:text-white'}`}>{name}</button>)}<button type="button" onClick={() => setPeriod('custom')} className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition ${period === 'custom' ? 'bg-white/[.12] text-white' : 'text-slate-400 hover:bg-white/[.07] hover:text-white'}`}><SlidersHorizontal className="h-3.5 w-3.5" /> Custom</button></div></div>{period === 'custom' && <div className="mt-4 flex flex-wrap items-end gap-3 border-t border-white/[.06] pt-4"><label className="text-xs text-slate-500">From<input type="date" value={customStart} min={scope.auditPeriodStart.slice(0, 10)} max={scope.auditPeriodEnd.slice(0, 10)} onChange={(event) => setCustomStart(event.target.value)} className="mt-1 block rounded-lg border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white" /></label><label className="text-xs text-slate-500">To<input type="date" value={customEnd} min={scope.auditPeriodStart.slice(0, 10)} max={scope.auditPeriodEnd.slice(0, 10)} onChange={(event) => setCustomEnd(event.target.value)} className="mt-1 block rounded-lg border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white" /></label><span className="text-xs text-slate-600">Apply the window by opening a report.</span></div>}</section>}
-
-    {error && <div className="flex items-start gap-3 rounded-xl border border-red-400/20 bg-red-400/[.07] p-4 text-sm text-red-200"><FileWarning className="mt-0.5 h-4 w-4" />{error}</div>}
-
-    <div className="space-y-6">{Object.entries(grouped).map(([group, definitions]) => <section key={group}><div className="mb-3 flex items-center justify-between gap-3"><div><h2 className="text-sm font-semibold text-white">{group}</h2><p className="mt-1 text-xs text-slate-600">{group === 'Control schedules' ? 'Exception-oriented registers for discounts and complimentary activity.' : 'Read-only schedules generated from the PMS source records.'}</p></div><span className="hidden items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-slate-600 sm:flex"><LockKeyhole className="h-3 w-3" /> Scoped</span></div><div className="grid gap-4 lg:grid-cols-2">{definitions.map((item) => <article key={item.key} className={`rounded-2xl border p-5 transition ${selectedReport === item.key ? 'border-emerald-300/30 bg-emerald-300/[.06]' : 'border-white/[.08] bg-white/[.035]'}`}><div className="flex items-start gap-4"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/[.06] text-emerald-300"><item.icon className="h-5 w-5" /></div><div className="min-w-0"><h3 className="font-semibold text-white">{item.title}</h3><p className="mt-1 text-sm leading-5 text-slate-500">{item.description}</p><p className="mt-3 text-[11px] uppercase tracking-[.1em] text-slate-700">Source · {item.source}</p></div></div><div className="mt-5"><button type="button" onClick={() => void openReport(item.key)} disabled={loading || !scope} className="inline-flex h-10 items-center gap-2 rounded-lg bg-emerald-300 px-3.5 text-sm font-semibold text-slate-950 transition hover:bg-emerald-200 disabled:cursor-wait disabled:opacity-50">{loading && selectedReport === item.key ? <Loader2 className="h-4 w-4 animate-spin" /> : <Table2 className="h-4 w-4" />} Open report</button></div></article>)}</div></section>)}</div>
-
-    <section className="rounded-2xl border border-white/[.08] bg-white/[.025] p-5"><div className="flex flex-wrap items-center justify-between gap-4"><div><p className="text-sm font-semibold text-white">Report discipline</p><p className="mt-1 max-w-2xl text-xs leading-5 text-slate-500">Use Reports for schedules and exports, Evidence for transaction lineage, Assurance for reconciliation, and Final Pack for the controlled handover snapshot.</p></div><a href="/external-auditor/assurance" className="inline-flex items-center gap-2 text-xs font-semibold text-emerald-300 hover:text-emerald-200">Open assurance <ArrowUpRight className="h-3.5 w-3.5" /></a></div></section>
-
-    {report && selectedReport && <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/90 p-3 backdrop-blur-sm sm:p-6" role="dialog" aria-modal="true"><div className="mx-auto flex min-h-full max-w-6xl flex-col"><div className="mb-3 flex flex-wrap items-center justify-between gap-3"><div><p className="text-[10px] font-bold uppercase tracking-[.18em] text-emerald-300">Read-only report preview</p><h2 className="mt-1 text-lg font-semibold text-white">{selectedDefinition?.title}</h2><p className="mt-1 text-xs text-slate-500">{report.rows.length.toLocaleString()} rows · {periodStart && periodEnd ? formatPeriod(periodStart, periodEnd) : 'Authorized engagement period'}</p></div><div className="flex items-center gap-2"><a href={reportUrl(selectedReport, 'csv')} className="inline-flex h-9 items-center gap-2 rounded-lg border border-white/10 px-3 text-sm text-slate-200 hover:bg-white/[.08]"><ArrowDownToLine className="h-4 w-4" /> Export CSV</a><button type="button" onClick={() => window.print()} className="inline-flex h-9 items-center gap-2 rounded-lg bg-emerald-300 px-3 text-sm font-semibold text-slate-950 hover:bg-emerald-200"><Printer className="h-4 w-4" /> Print</button><button type="button" onClick={() => { setReport(null); setSelectedReport(null); }} aria-label="Close report preview" className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 text-slate-300 hover:bg-white/[.08]"><X className="h-4 w-4" /></button></div></div><article className="mx-auto w-full max-w-[1000px] flex-1 bg-white p-6 text-slate-900 shadow-2xl sm:p-10 print:max-w-none print:shadow-none"><header className="border-b-2 border-slate-900 pb-5"><div className="flex items-start justify-between gap-6"><div><p className="text-[10px] font-bold uppercase tracking-[.24em] text-emerald-700">LodgeCore PMS</p><h1 className="mt-2 text-2xl font-bold uppercase tracking-tight">{scope?.propertyName || 'Property management report'}</h1><p className="mt-1 text-sm font-medium text-slate-600">{selectedDefinition?.title}</p></div><div className="text-right text-xs text-slate-500"><p className="font-semibold uppercase tracking-[.12em] text-slate-700">External audit</p><p className="mt-1">Read-only source schedule</p><p className="mt-1">Generated {new Date().toLocaleDateString()}</p></div></div><div className="mt-5 grid grid-cols-2 gap-4 text-xs"><div><p className="uppercase tracking-[.12em] text-slate-500">Authorized period</p><p className="mt-1 font-semibold">{periodStart && periodEnd ? formatPeriod(periodStart, periodEnd) : 'Full engagement'}</p></div><div className="text-right"><p className="uppercase tracking-[.12em] text-slate-500">Rows</p><p className="mt-1 font-semibold">{report.rows.length.toLocaleString()}</p></div></div></header><div className="mt-7 overflow-x-auto"><table className="w-full border-collapse text-[10px] leading-4"><thead><tr>{report.headers.map((header) => <th key={header} className="border-b-2 border-slate-800 px-2 py-2 text-left font-bold uppercase tracking-[.08em] text-slate-700">{header}</th>)}</tr></thead><tbody>{report.rows.map((row, index) => <tr key={index} className="odd:bg-slate-50">{row.map((cell, cellIndex) => <td key={cellIndex} className="border-b border-slate-200 px-2 py-2 align-top text-slate-700">{cell == null || cell === '' ? '—' : typeof cell === 'number' ? cell.toLocaleString('en-NG', { maximumFractionDigits: 2 }) : String(cell)}</td>)}</tr>)}</tbody></table>{!report.rows.length && <p className="py-16 text-center text-sm text-slate-500">No rows were returned for this authorized window.</p>}</div><footer className="mt-10 border-t border-slate-300 pt-4 text-[9px] text-slate-500"><div className="flex justify-between gap-4"><span>Generated from LodgeCore PMS source records</span><span>External auditor read-only report</span></div></footer></article></div></div>}
+  return <div className="space-y-6 pb-10"><header className="relative overflow-hidden rounded-3xl border border-white/[.09] bg-gradient-to-br from-[#173b39] via-[#172c3a] to-[#0b1422] p-6 shadow-2xl sm:p-8"><div className="pointer-events-none absolute -right-20 -top-28 h-72 w-72 rounded-full border-[42px] border-emerald-300/[.06]" /><div className="relative flex flex-col justify-between gap-6 lg:flex-row lg:items-end"><div><div className="mb-3 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[.2em] text-emerald-300"><FileText className="h-4 w-4" /> External audit · reporting</div><h1 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">Reports & schedules</h1><p className="mt-3 max-w-3xl text-sm leading-6 text-slate-400">Generate source-backed schedules for close review, accounting tie-out, revenue testing, and concession controls.</p></div>{scope && <div className="rounded-2xl border border-white/[.08] bg-white/[.05] px-4 py-3 text-right"><p className="text-xs text-slate-500">Authorized property</p><p className="mt-1 font-semibold text-white">{scope.propertyName || 'PMS property'}</p><p className="mt-1 text-xs text-slate-500">{periodStart && periodEnd ? formatPeriod(periodStart, periodEnd) : 'Select a review window'}</p></div>}</div></header>
+  {scope && <section className="rounded-2xl border border-white/[.08] bg-white/[.035] p-4 sm:p-5"><div className="flex flex-wrap items-center justify-between gap-4"><div className="flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-300/10 text-emerald-300"><CalendarRange className="h-5 w-5" /></div><div><p className="text-sm font-semibold text-white">Report window</p><p className="text-xs text-slate-500">All schedules stay inside the authorized engagement scope.</p></div></div><div className="flex flex-wrap items-center gap-1 rounded-xl border border-white/[.07] bg-slate-950/40 p-1">{([['engagement', 'Engagement'], ['7d', 'Last 7 days'], ['mtd', 'MTD'], ['ytd', 'YTD']] as [PeriodKey, string][]).map(([key, name]) => <button type="button" key={key} onClick={() => setPeriod(key)} className={`rounded-lg px-3 py-2 text-xs font-semibold ${period === key ? 'bg-emerald-300 text-slate-950' : 'text-slate-400 hover:bg-white/[.07] hover:text-white'}`}>{name}</button>)}<button type="button" onClick={() => setPeriod('custom')} className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold ${period === 'custom' ? 'bg-white/[.12] text-white' : 'text-slate-400 hover:bg-white/[.07] hover:text-white'}`}><SlidersHorizontal className="h-3.5 w-3.5" /> Custom</button></div></div>{period === 'custom' && <div className="mt-4 flex flex-wrap items-end gap-3 border-t border-white/[.06] pt-4"><label className="text-xs text-slate-500">From<input type="date" value={customStart} min={scope.auditPeriodStart.slice(0, 10)} max={scope.auditPeriodEnd.slice(0, 10)} onChange={(event) => setCustomStart(event.target.value)} className="mt-1 block rounded-lg border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white" /></label><label className="text-xs text-slate-500">To<input type="date" value={customEnd} min={scope.auditPeriodStart.slice(0, 10)} max={scope.auditPeriodEnd.slice(0, 10)} onChange={(event) => setCustomEnd(event.target.value)} className="mt-1 block rounded-lg border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white" /></label></div>}</section>}
+  {error && <div className="flex items-start gap-3 rounded-xl border border-red-400/20 bg-red-400/[.07] p-4 text-sm text-red-200"><FileWarning className="mt-0.5 h-4 w-4" />{error}</div>}
+  <div className="space-y-6">{Object.entries(grouped).map(([group, items]) => <section key={group}><div className="mb-3 flex items-center justify-between"><div><h2 className="text-sm font-semibold text-white">{group}</h2><p className="mt-1 text-xs text-slate-600">Read-only schedules generated from PMS source records.</p></div><span className="hidden items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-slate-600 sm:flex"><LockKeyhole className="h-3 w-3" /> Scoped</span></div><div className="grid gap-4 lg:grid-cols-2">{items.map((item) => <article key={item.key} className={`rounded-2xl border p-5 ${selectedReport === item.key ? 'border-emerald-300/30 bg-emerald-300/[.06]' : 'border-white/[.08] bg-white/[.035]'}`}><div className="flex items-start gap-4"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/[.06] text-emerald-300"><item.icon className="h-5 w-5" /></div><div><h3 className="font-semibold text-white">{item.title}</h3><p className="mt-1 text-sm leading-5 text-slate-500">{item.description}</p><p className="mt-3 text-[11px] uppercase tracking-[.1em] text-slate-700">Source · {item.source}</p></div></div><button type="button" onClick={() => void openReport(item.key)} disabled={loading || !scope} className="mt-5 inline-flex h-10 items-center gap-2 rounded-lg bg-emerald-300 px-3.5 text-sm font-semibold text-slate-950 disabled:opacity-50">{loading && selectedReport === item.key ? <Loader2 className="h-4 w-4 animate-spin" /> : <Table2 className="h-4 w-4" />} Open report</button></article>)}</div></section>)}</div>
+  <section className="rounded-2xl border border-white/[.08] bg-white/[.025] p-5"><div className="flex flex-wrap items-center justify-between gap-4"><div><p className="text-sm font-semibold text-white">Report discipline</p><p className="mt-1 max-w-2xl text-xs leading-5 text-slate-500">Use Reports for schedules, Evidence for transaction lineage, Assurance for reconciliation, and Final Pack for the controlled handover snapshot.</p></div><a href="/external-auditor/assurance" className="inline-flex items-center gap-2 text-xs font-semibold text-emerald-300">Open assurance <ArrowUpRight className="h-3.5 w-3.5" /></a></div></section>
+  {report && selectedReport && <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/90 p-3 backdrop-blur-sm sm:p-6" role="dialog" aria-modal="true"><div className="mx-auto flex min-h-full max-w-6xl flex-col"><div className="mb-3 flex flex-wrap items-center justify-between gap-3 print:hidden"><div><p className="text-[10px] font-bold uppercase tracking-[.18em] text-emerald-300">Read-only report preview</p><h2 className="mt-1 text-lg font-semibold text-white">{selectedDefinition?.title}</h2><p className="mt-1 text-xs text-slate-500">{report.rows.length.toLocaleString()} rows · {periodStart && periodEnd ? formatPeriod(periodStart, periodEnd) : 'Authorized engagement period'}</p></div><div className="flex items-center gap-2"><a href={reportUrl(selectedReport, 'csv')} className="inline-flex h-9 items-center gap-2 rounded-lg border border-white/10 px-3 text-sm text-slate-200"><ArrowDownToLine className="h-4 w-4" /> Export CSV</a><button type="button" onClick={() => window.print()} className="inline-flex h-9 items-center gap-2 rounded-lg bg-emerald-300 px-3 text-sm font-semibold text-slate-950"><Printer className="h-4 w-4" /> Print</button><button type="button" onClick={() => { setReport(null); setSelectedReport(null); }} aria-label="Close report preview" className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 text-slate-300"><X className="h-4 w-4" /></button></div></div><article className="mx-auto w-full max-w-[1000px] flex-1 bg-white p-6 text-slate-900 shadow-2xl sm:p-10 print:max-w-none print:shadow-none"><header className="border-b-2 border-slate-900 pb-5"><div className="flex items-start justify-between gap-6"><div><p className="text-[10px] font-bold uppercase tracking-[.24em] text-emerald-700">LodgeCore PMS</p><h1 className="mt-2 text-2xl font-bold uppercase tracking-tight">{scope?.propertyName || 'Property management report'}</h1><p className="mt-1 text-sm font-medium text-slate-600">{selectedDefinition?.title}</p></div><div className="text-right text-xs text-slate-500"><p className="font-semibold uppercase tracking-[.12em] text-slate-700">External audit</p><p className="mt-1">Read-only source schedule</p><p className="mt-1">Generated {new Date().toLocaleDateString()}</p></div></div><div className="mt-5 grid grid-cols-2 gap-4 text-xs"><div><p className="uppercase tracking-[.12em] text-slate-500">Authorized period</p><p className="mt-1 font-semibold">{periodStart && periodEnd ? formatPeriod(periodStart, periodEnd) : 'Full engagement'}</p></div><div className="text-right"><p className="uppercase tracking-[.12em] text-slate-500">Rows</p><p className="mt-1 font-semibold">{report.rows.length.toLocaleString()}</p></div></div></header><PrintedAnalytics report={report} kind={selectedReport} currency={scope?.currency || 'NGN'} /><div className="overflow-x-auto"><table className="w-full border-collapse text-[10px] leading-4"><thead><tr>{report.headers.map((header) => <th key={header} className="border-b-2 border-slate-800 px-2 py-2 text-left font-bold uppercase tracking-[.08em] text-slate-700">{header}</th>)}</tr></thead><tbody>{report.rows.map((row, index) => <tr key={index} className="odd:bg-slate-50">{row.map((cell, cellIndex) => <td key={cellIndex} className="border-b border-slate-200 px-2 py-2 align-top text-slate-700">{cell == null || cell === '' ? '—' : typeof cell === 'number' ? cell.toLocaleString('en-NG', { maximumFractionDigits: 2 }) : String(cell)}</td>)}</tr>)}</tbody></table>{!report.rows.length && <p className="py-16 text-center text-sm text-slate-500">No rows were returned for this authorized window.</p>}</div><footer className="mt-10 border-t border-slate-300 pt-4 text-[9px] text-slate-500"><div className="flex justify-between gap-4"><span>Generated from LodgeCore PMS source records</span><span>External auditor read-only report</span></div></footer></article></div></div>}
   </div>;
 }
