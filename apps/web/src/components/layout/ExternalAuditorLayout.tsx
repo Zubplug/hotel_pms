@@ -114,17 +114,17 @@ export function ExternalAuditorLayout({ children }: { children: React.ReactNode 
             className="fixed inset-0 bg-black/80 backdrop-blur-sm"
             onClick={() => setSidebarOpen(false)}
           />
-          <div className="fixed inset-y-0 left-0 w-64 bg-slate-900 border-r border-slate-800 shadow-xl flex flex-col">
+          <div className="fixed inset-y-0 left-0 w-[296px] bg-[#0a1220] border-r border-white/[.08] shadow-2xl shadow-black/50 flex flex-col">
             <AuditorSidebar {...sidebarProps} onNavigate={() => setSidebarOpen(false)} />
           </div>
         </div>
       )}
 
-      <div className="relative z-40 hidden lg:flex lg:w-64 lg:flex-col lg:fixed lg:inset-y-0 lg:border-r lg:border-slate-800 lg:bg-slate-900 pointer-events-auto">
+      <div className="relative z-40 hidden lg:flex lg:w-72 lg:flex-col lg:fixed lg:inset-y-0 lg:border-r lg:border-white/[.08] lg:bg-[#0a1220] pointer-events-auto">
         <AuditorSidebar {...sidebarProps} />
       </div>
 
-      <div className="relative flex min-w-0 flex-1 flex-col lg:pl-64">
+      <div className="relative flex min-w-0 flex-1 flex-col lg:pl-72">
         <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between border-b border-slate-800 bg-slate-950/95 px-3 backdrop-blur-xl sm:px-6">
           <div className="flex min-w-0 items-center gap-2.5 sm:gap-3"><Button aria-label="Open auditor navigation" variant="ghost" size="icon" className="h-10 w-10 shrink-0 rounded-xl border border-white/10 text-slate-300 hover:bg-white/10 hover:text-white lg:hidden" onClick={() => setSidebarOpen(true)}><Menu className="h-5 w-5" /></Button><div className="min-w-0"><p className="truncate text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-300 sm:tracking-[0.2em]">External audit</p><p className="truncate text-sm font-semibold capitalize text-white">{activePage}</p></div></div>
           <div className="flex shrink-0 items-center gap-2"><span className="hidden items-center gap-2 rounded-full border border-emerald-300/15 bg-emerald-300/[.06] px-3 py-1.5 text-xs font-semibold text-emerald-300 sm:flex"><LockKeyhole className="h-3.5 w-3.5" />Read-only scope</span></div>
@@ -142,21 +142,27 @@ export function ExternalAuditorLayout({ children }: { children: React.ReactNode 
 function AuditorSidebar({ pathname, userDisplayName, userInitials, logout, scopeExpiresAt, onNavigate }: { pathname: string | null; userDisplayName: string; userInitials: string; logout: () => void; scopeExpiresAt?: string; onNavigate?: () => void }) {
   return (
     <>
-      <div className="flex h-[76px] shrink-0 items-center px-5 border-b border-white/[.07] gap-3">
-        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-400 text-slate-950 shadow-lg shadow-emerald-400/10">
-          <ShieldCheck className="h-[18px] w-[18px]" />
+      <div className="relative flex h-[88px] shrink-0 items-center gap-3 border-b border-white/[.08] px-5">
+        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-emerald-300/70 to-transparent" />
+        <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-300 text-slate-950 shadow-lg shadow-emerald-300/20">
+          <ShieldCheck className="h-5 w-5" />
         </div>
-        <div className="flex flex-col leading-tight">
-          <span className="text-[13px] font-bold tracking-[.14em] text-white">LODGECORE</span>
-          <span className="text-[10px] uppercase text-emerald-400 font-semibold tracking-[.18em]">Audit workspace</span>
+        <div className="min-w-0 leading-tight">
+          <p className="truncate text-[13px] font-bold tracking-[.16em] text-white">LODGECORE</p>
+          <p className="mt-1 truncate text-[10px] font-semibold uppercase tracking-[.18em] text-emerald-300">External audit</p>
         </div>
+        <span className="ml-auto rounded-full border border-white/10 bg-white/[.04] px-2 py-1 text-[9px] font-bold uppercase tracking-[.14em] text-slate-500">Read only</span>
       </div>
 
-      <div className="flex flex-1 flex-col overflow-y-auto px-3 py-5 gap-1">
-        <div className="mb-5 rounded-2xl border border-emerald-400/15 bg-emerald-400/[.06] p-3.5">
-          <div className="mb-2 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[.16em] text-emerald-300"><LockKeyhole className="h-3.5 w-3.5" /> Controlled access</div>
-          <p className="text-xs leading-5 text-slate-400">Read-only engagement workspace. Every view is limited to the authorized property and period.</p>
-          {scopeExpiresAt && <p className="mt-3 border-t border-emerald-400/10 pt-3 text-[11px] text-slate-500">Access expires <span className="font-medium text-slate-300">{new Date(scopeExpiresAt).toLocaleDateString()}</span></p>}
+      <div className="flex flex-1 flex-col gap-1 overflow-y-auto px-3 py-5">
+        <div className="relative mb-5 overflow-hidden rounded-2xl border border-emerald-300/15 bg-gradient-to-br from-emerald-300/[.12] to-cyan-300/[.04] p-4">
+          <div className="absolute -right-6 -top-8 h-24 w-24 rounded-full bg-emerald-300/10 blur-2xl" />
+          <div className="relative mb-3 flex items-center justify-between">
+            <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[.16em] text-emerald-200"><LockKeyhole className="h-3.5 w-3.5" /> Secure scope</div>
+            <span className="h-2 w-2 rounded-full bg-emerald-300 shadow-[0_0_12px_rgba(110,231,183,.8)]" />
+          </div>
+          <p className="relative text-xs leading-5 text-slate-300">Read-only access to the authorized property, period, and audit evidence.</p>
+          {scopeExpiresAt && <p className="relative mt-3 border-t border-white/10 pt-3 text-[11px] text-slate-500">Access expires <span className="font-medium text-slate-200">{new Date(scopeExpiresAt).toLocaleDateString()}</span></p>}
         </div>
         {AUDITOR_NAV.map((item, index) => {
           const isActive = pathname === item.href || (item.href !== '/external-auditor' && pathname?.startsWith(item.href));
@@ -164,46 +170,49 @@ function AuditorSidebar({ pathname, userDisplayName, userInitials, logout, scope
           return (
             <div key={item.name}>
               {item.section !== AUDITOR_NAV[index - 1]?.section && (
-                <p className="mb-2 mt-5 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500 first:mt-0">
-                  {item.section}
-                </p>
+                <div className="mb-2 mt-5 flex items-center gap-2 px-3 first:mt-0">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">{item.section}</p>
+                  <span className="h-px flex-1 bg-white/[.06]" />
+                </div>
               )}
               <Link
                 href={item.href}
                 onClick={onNavigate}
                 className={cn(
-                  'group flex min-h-11 items-center rounded-xl px-3 py-2.5 text-sm font-medium transition-all',
+                  'group relative flex min-h-11 items-center rounded-xl px-3 py-2.5 text-[13px] font-medium transition-all',
                   isActive
-                    ? 'bg-white/[.09] text-white shadow-sm ring-1 ring-white/[.06]'
-                    : 'text-slate-400 hover:bg-white/[.05] hover:text-slate-200'
+                    ? 'bg-emerald-300/[.10] text-white shadow-sm ring-1 ring-emerald-300/15'
+                    : 'text-slate-400 hover:bg-white/[.05] hover:text-slate-100'
                 )}
               >
+                {isActive && <span className="absolute inset-y-2 left-0 w-0.5 rounded-full bg-emerald-300" />}
                 <item.icon
                   className={cn(
-                    'mr-3 h-4.5 w-4.5 shrink-0 transition-colors',
-                    isActive ? 'text-emerald-400' : 'text-slate-500 group-hover:text-emerald-400'
+                    'mr-3 h-[17px] w-[17px] shrink-0 transition-colors',
+                    isActive ? 'text-emerald-300' : 'text-slate-500 group-hover:text-emerald-300'
                   )}
                 />
-                {item.name}
+                <span className="truncate">{item.name}</span>
+                {isActive && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-emerald-300" />}
               </Link>
             </div>
           );
         })}
       </div>
 
-      <div className="border-t border-slate-800 px-4 py-4">
+      <div className="border-t border-white/[.08] bg-slate-950/20 px-3 py-3">
         <DropdownMenu>
-          <DropdownMenuTrigger className="rounded-lg hover:bg-slate-800/50 transition-colors cursor-pointer outline-none w-full">
-            <div className="flex w-full items-center gap-3 px-2 py-2 text-sm text-slate-300">
-              <div className="h-8 w-8 rounded-full bg-emerald-400/10 flex items-center justify-center text-emerald-300 text-xs font-bold shrink-0 border border-emerald-400/20">
+          <DropdownMenuTrigger className="w-full cursor-pointer rounded-2xl border border-transparent outline-none transition-colors hover:border-white/[.08] hover:bg-white/[.04]">
+            <div className="flex w-full items-center gap-3 px-3 py-3 text-sm text-slate-300">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-emerald-300/20 bg-emerald-300/10 text-xs font-bold text-emerald-200">
                 {userInitials}
               </div>
               <div className="flex-1 text-left min-w-0">
-                <p className="text-sm font-medium truncate">
+                <p className="truncate text-[13px] font-semibold text-slate-200">
                   {userDisplayName}
                 </p>
-                <p className="text-xs text-slate-500 truncate">
-                  Independent Auditor
+                <p className="mt-1 flex items-center gap-1.5 truncate text-[10px] uppercase tracking-[.12em] text-slate-500">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-300" /> Independent auditor
                 </p>
               </div>
               <ChevronDown className="h-4 w-4 text-slate-500 shrink-0" />
