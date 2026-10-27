@@ -6,6 +6,7 @@ import { requireOrganizationContext } from '@/lib/organization-access';
 import { requireStockUnitConversion } from '@/lib/inventory/UnitConversionService';
 import { getUnitConversionToBase } from '@/lib/inventory/units';
 import { isKitchenProductionStation, kitchenServiceOutletId } from '@/lib/inventory/kitchen-routing';
+import { assertModifierStockIsNotBaseRecipeIngredient } from '@/lib/pos/modifier-validation';
 
 export async function GET(
   _req: NextRequest,
@@ -92,6 +93,7 @@ export async function POST(
     if (groupMaxSelect !== null && (!Number.isInteger(groupMaxSelect) || groupMaxSelect < 1)) return errorResponse('BAD_REQUEST', 'Maximum selection must be a positive whole number', 400);
     if (body.groupRequired === true && !groupName) return errorResponse('BAD_REQUEST', 'Required modifiers must belong to a group', 400);
     if (body.stockItemId) await requireStockUnitConversion(prisma, String(body.stockItemId), body.unitOfMeasure || '');
+    await assertModifierStockIsNotBaseRecipeIngredient(prisma, productId, body.stockItemId);
     const modifier = await prisma.posProductModifier.create({
       data: {
         productId,

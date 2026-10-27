@@ -22,6 +22,9 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
   const stock = await prisma.stockItem.findMany({ where: { propertyId: recipe.propertyId, id: { in: ingredientIds }, isActive: true } });
   if (stock.length !== ingredients.length || ingredients.some((item: any) => !Number.isFinite(Number(item.quantity)) || Number(item.quantity) <= 0 || !item.unitOfMeasure)) return NextResponse.json({ error: 'Invalid ingredient quantity or unit' }, { status: 400 });
   for (const item of ingredients) await requireStockUnitConversion(prisma, item.stockItemId, item.unitOfMeasure);
+  const modifierStockItems = await prisma.posProductModifier.findMany({ where: { productId: recipe.posProductId, isActive: true, stockItemId: { not: null } }, select: { stockItemId: true } });
+  const modifierStockIds = new Set(modifierStockItems.map((modifier) => modifier.stockItemId));
+  if (ingredients.some((item: any) => modifierStockIds.has(item.stockItemId))) return NextResponse.json({ error: 'Recipe cannot include stock items that are selectable modifiers. Remove the overlap first.' }, { status: 400 });
   const targetMargin = Number(body.targetMargin ?? recipe.targetMargin);
   if (!Number.isFinite(targetMargin) || targetMargin < 0 || targetMargin > 100) return NextResponse.json({ error: 'Target margin must be between 0 and 100' }, { status: 400 });
   const saved = await prisma.$transaction(async (tx) => {

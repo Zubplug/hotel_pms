@@ -5,6 +5,7 @@ import { PosOrderStatus, ProductionStation } from '@hotel-pms/db';
 import { isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
 import { getPropertyBusinessDate } from '@/lib/date-utils';
 import { requireOrganizationContext } from "@/lib/organization-access";
+import { resolveSelectedModifiers } from '@/lib/pos/modifier-validation';
 
 // POST /api/v1/pos/orders
 export async function POST(req: NextRequest) {
@@ -79,12 +80,22 @@ export async function POST(req: NextRequest) {
           select: {
             id: true,
             productionStation: true,
+            name: true,
+            modifiers: {
+              where: { isActive: true },
+              select: { id: true, name: true, price: true, isActive: true, stockItemId: true, quantity: true, unitOfMeasure: true, groupName: true, groupRequired: true, groupMaxSelect: true },
+            },
             category: { select: { productionStation: true } },
           },
         })
       : [];
 
     const productMap = new Map(products.map((p: any) => [p.id, p]));
+    const normalizedItems = items.map((item: any) => {
+      const product = item.productId ? productMap.get(item.productId) : null;
+      if (!product) return item;
+      return { ...item, modifiers: resolveSelectedModifiers(product, item.modifiers) };
+    });
 
     // Resolve station per item
     function resolveStation(item: any): ProductionStation {
@@ -119,7 +130,7 @@ export async function POST(req: NextRequest) {
           taxAmount,
           total,
           items: {
-            create: items.map((item: any) => ({
+            create: normalizedItems.map((item: any) => ({
               productId:    item.productId ?? null,
               productName:  item.productName,
               quantity:     item.quantity,
@@ -163,8 +174,8 @@ export async function POST(req: NextRequest) {
 
       // Group items by station (excluding DIRECT and NONE)
       const stationGroups = new Map<ProductionStation, Array<{ id: string; item: any }>>();
-      for (let i = 0; i < items.length; i++) {
-        const item = items[i];
+      for (let i = 0; i < normalizedItems.length; i++) {
+        const item = normalizedItems[i];
         const station = resolveStation(item);
         if (station === 'DIRECT' || station === 'NONE') continue;
 

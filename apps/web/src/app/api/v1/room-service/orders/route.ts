@@ -5,6 +5,7 @@ import { getPropertyBusinessDate } from '@/lib/date-utils';
 import { successResponse, errorResponse } from '@/lib/api-response';
 import { verifyOperatorToken } from '@/lib/pos/operatorAuth';
 import { verifyRoomQrToken } from '@/lib/room-service/qrToken';
+import { resolveSelectedModifiers } from '@/lib/pos/modifier-validation';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /api/v1/room-service/orders
@@ -237,7 +238,7 @@ export async function POST(req: NextRequest) {
       taxAmount: number;
       total: number;
       notes: string | null;
-      modifiers: Array<{ name: string; price: number }>;
+      modifiers: Array<{ name: string; price: number; stockItemId: string | null; quantity: number; unitOfMeasure: any }>;
     }> = [];
 
     if (items.length > 0) {
@@ -262,20 +263,13 @@ export async function POST(req: NextRequest) {
         const baseUnitPrice = Number(dbProduct.price);
         const taxRate = Number(dbProduct.taxRate || 0);
 
-        const selectedModifiers: Array<{ name: string; price: number }> = [];
+        const selectedModifiers: Array<{ name: string; price: number; stockItemId: string | null; quantity: number; unitOfMeasure: any }> = [];
         let modifiersExtra = 0;
 
-        if (Array.isArray(item.modifiers)) {
-          for (const reqMod of item.modifiers) {
-            const dbMod = dbProduct.modifiers.find(
-              m => m.id === reqMod.id || m.name.toLowerCase() === reqMod.name?.toLowerCase()
-            );
-            if (dbMod) {
-              const modPrice = Number(dbMod.price || 0);
-              modifiersExtra += modPrice;
-              selectedModifiers.push({ name: dbMod.name, price: modPrice });
-            }
-          }
+        const resolvedModifiers = resolveSelectedModifiers(dbProduct, item.modifiers);
+        for (const modifier of resolvedModifiers) {
+          modifiersExtra += modifier.price;
+          selectedModifiers.push(modifier);
         }
 
         const effectiveUnitPrice = baseUnitPrice + modifiersExtra;
@@ -355,6 +349,9 @@ export async function POST(req: NextRequest) {
                       create: item.modifiers.map((m) => ({
                         name: m.name,
                         price: m.price,
+                        stockItemId: m.stockItemId,
+                        quantity: m.quantity,
+                        unitOfMeasure: m.unitOfMeasure,
                       })),
                     }
                   : undefined,

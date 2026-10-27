@@ -10,6 +10,7 @@ import { NotificationEngine } from "@/lib/notification-engine";
 import { getPropertyBusinessDate } from "@/lib/date-utils";
 import { hasEntitlement } from "@/lib/auth/entitlement";
 import { verifyDeviceCredential } from "@/lib/pos/device-credential";
+import { resolveSelectedModifiers } from "@/lib/pos/modifier-validation";
 
 // Legacy desktop SyncEvents use operation IDs such as `op_<device>_<ticks>`,
 // while HotelEvent.id is a PostgreSQL UUID. Keep the legacy ID as the
@@ -554,6 +555,27 @@ export async function POST(req: NextRequest) {
                  }
                  
                  const orderItems = payload.Items || payload.items || [];
+                 const orderProductIds = orderItems.map((item: any) => item.ProductId || item.productId).filter(Boolean);
+                 const orderProducts = orderProductIds.length
+                   ? await tx.posProduct.findMany({
+                       where: { id: { in: orderProductIds }, propertyId },
+                       select: {
+                         id: true,
+                         name: true,
+                         modifiers: {
+                           where: { isActive: true },
+                           select: { id: true, name: true, price: true, isActive: true, stockItemId: true, quantity: true, unitOfMeasure: true, groupName: true, groupRequired: true, groupMaxSelect: true },
+                         },
+                       },
+                     })
+                   : [];
+                 const orderProductMap = new Map(orderProducts.map((product: any) => [product.id, product]));
+                 const normalizedOrderItems = orderItems.map((item: any) => {
+                   const product = orderProductMap.get(item.ProductId || item.productId);
+                   return product
+                     ? { ...item, resolvedModifiers: resolveSelectedModifiers(product, item.Modifiers || item.modifiers) }
+                     : { ...item, resolvedModifiers: [] };
+                 });
                  const sessionId = isUuid(payload.SessionId) ? payload.SessionId : null;
                  const linkedSession = sessionId
                    ? await tx.posSession.findUnique({
@@ -589,7 +611,7 @@ export async function POST(req: NextRequest) {
                          serverStaffId: operatorId,
                          createdAt: new Date(event.occurredAt),
                          items: {
-                           create: orderItems.map((item: any) => ({
+                           create: normalizedOrderItems.map((item: any) => ({
                              id: item.Id || item.id || crypto.randomUUID(),
                              productId: item.ProductId || item.productId || null,
                              productName: item.ProductName || item.productName || 'POS item',
@@ -601,10 +623,13 @@ export async function POST(req: NextRequest) {
                              total: Number(item.Total ?? item.total ?? 0),
                              course: item.Course ?? item.course ?? null,
                              kitchenStatus: item.KitchenStatus || item.kitchenStatus || 'PENDING',
+                             modifiers: item.resolvedModifiers.length
+                               ? { create: item.resolvedModifiers }
+                               : undefined,
                            }))
                          }
                      },
-                     include: { items: true }
+                     include: { items: { include: { modifiers: true } } }
                  });
 
                  // Desktop ORDER_CREATED carries its KOTs inside the order
@@ -629,6 +654,7 @@ export async function POST(req: NextRequest) {
                            orderItemId: item.id,
                            productName: item.productName,
                            quantity: item.quantity,
+                           modifiers: item.modifiers?.map((modifier: any) => ({ name: modifier.name, price: Number(modifier.price || 0) })) || [],
                            course: item.course,
                          }))
                        }
@@ -1033,7 +1059,28 @@ export async function POST(req: NextRequest) {
                 seenItemIds.add(itemId);
                 return true;
               });
-              for (const item of items) {
+              const addedProductIds = items.map((item: any) => item.ProductId || item.productId).filter(Boolean);
+              const addedProducts = addedProductIds.length
+                ? await tx.posProduct.findMany({
+                    where: { id: { in: addedProductIds }, propertyId },
+                    select: {
+                      id: true,
+                      name: true,
+                      modifiers: {
+                        where: { isActive: true },
+                        select: { id: true, name: true, price: true, isActive: true, stockItemId: true, quantity: true, unitOfMeasure: true, groupName: true, groupRequired: true, groupMaxSelect: true },
+                      },
+                    },
+                  })
+                : [];
+              const addedProductMap = new Map(addedProducts.map((product: any) => [product.id, product]));
+              const normalizedAddedItems = items.map((item: any) => {
+                const product = addedProductMap.get(item.ProductId || item.productId);
+                return product
+                  ? { ...item, resolvedModifiers: resolveSelectedModifiers(product, item.Modifiers || item.modifiers) }
+                  : { ...item, resolvedModifiers: [] };
+              });
+              for (const item of normalizedAddedItems) {
                   const discountAmount = Number(item.Discount ?? item.discount ?? 0);
                   
                   if (discountAmount > 0) {
@@ -1075,7 +1122,10 @@ export async function POST(req: NextRequest) {
                           taxAmount: Number(item.TaxAmount ?? item.taxAmount ?? 0),
                           total: Number(item.Total ?? item.total ?? 0),
                           notes: item.Notes || item.notes,
-                          course: item.Course ?? item.course ?? null
+                          course: item.Course ?? item.course ?? null,
+                          modifiers: item.resolvedModifiers.length
+                            ? { create: item.resolvedModifiers }
+                            : undefined,
                       }
                   });
               }
@@ -1110,7 +1160,7 @@ export async function POST(req: NextRequest) {
                 let itemIds: string[] = [];
                 try { itemIds = JSON.parse(kot.ItemIdsJson || kot.itemIdsJson || '[]'); } catch { }
                 const station = String(kot.ProductionStation || kot.productionStation || 'KITCHEN').toUpperCase();
-                const batchItems = items.filter((item: any) => itemIds.includes(item.Id || item.id));
+                const batchItems = normalizedAddedItems.filter((item: any) => itemIds.includes(item.Id || item.id));
                 if (batchItems.length === 0) continue;
                 const latestBatch = await tx.posProductionBatch.aggregate({
                   where: { orderId: event.aggregateId, station: station as any },
@@ -1130,6 +1180,7 @@ export async function POST(req: NextRequest) {
                         orderItemId: item.Id || item.id,
                         productName: item.ProductName || item.productName || 'POS item',
                         quantity: Number(item.Quantity ?? item.quantity ?? 0),
+                        modifiers: item.resolvedModifiers || [],
                         course: item.Course ?? item.course ?? null,
                       }))
                     }
@@ -1154,7 +1205,27 @@ export async function POST(req: NextRequest) {
                   kot.roomServiceOperationId || kot.RoomServiceOperationId ||
                   (kotOrder.orderType === 'ROOM_SERVICE' && String(kot.operationId || kot.OperationId || '').startsWith('kot_')
                       ? (kot.operationId || kot.OperationId)
-                      : null);
+                  : null);
+              let serializedItemIds: string[] = [];
+              try { serializedItemIds = JSON.parse(kot.ItemIdsJson || kot.itemIdsJson || '[]'); } catch { }
+              const rawItemIds = [...new Set([
+                ...rawItems.map((item: any) => item.orderItemId || item.OrderItemId || item.id || item.Id),
+                ...serializedItemIds,
+              ].filter(Boolean))];
+              const persistedKotItems = rawItemIds.length
+                ? await tx.posOrderItem.findMany({ where: { id: { in: rawItemIds } }, include: { modifiers: true } })
+                : [];
+              const persistedKotItemMap = new Map<string, any>(persistedKotItems.map((item: any) => [item.id, item]));
+              const batchItems = rawItems.length
+                ? rawItems
+                : persistedKotItems.map((item: any) => ({
+                    id: item.id,
+                    orderItemId: item.id,
+                    productName: item.productName,
+                    quantity: item.quantity,
+                    modifiers: item.modifiers,
+                    course: item.course,
+                  }));
               const batchData = {
                   id: kot.id || kot.Id || crypto.randomUUID(),
                   orderId: kotOrderId,
@@ -1164,13 +1235,18 @@ export async function POST(req: NextRequest) {
                   firedAt: new Date(event.occurredAt),
                   firedByStaffId: operatorId,
                   items: {
-                      create: rawItems.map((item: any) => ({
+                      create: batchItems.map((item: any) => {
+                        const orderItemId = item.orderItemId || item.OrderItemId || item.id || item.Id;
+                        const persistedItem = persistedKotItemMap.get(orderItemId);
+                        return ({
                           id: item.id || item.Id || crypto.randomUUID(),
-                          orderItemId: item.orderItemId || item.OrderItemId,
+                          orderItemId,
                           productName: item.productName || item.ProductName,
                           quantity: item.quantity || item.Quantity,
+                          modifiers: item.modifiers || item.Modifiers || persistedItem?.modifiers?.map((modifier: any) => ({ name: modifier.name, price: Number(modifier.price || 0) })) || [],
                           course: item.course || item.Course
-                      }))
+                        });
+                      })
                   }
               };
 

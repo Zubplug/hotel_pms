@@ -4682,6 +4682,7 @@ public class LocalRepository
         await AssertPosSessionOpenAsync(order.SessionId);
         order.BusinessDate = session?.BusinessDate.Date ?? property.BusinessDate.Date;
         await AssertNightAuditAllowsAsync(order.PropertyId, order.BusinessDate);
+        await NormalizeAndValidateOfflineModifiersAsync(order.Items);
         
         // Mark everything with the operation ID and device attribution
         foreach (var item in order.Items)
@@ -6124,6 +6125,7 @@ public class LocalRepository
         if (order == null) throw new Exception("Order not found");
         await AssertNightAuditAllowsAsync(order.PropertyId, order.BusinessDate);
         await AssertPosSessionOpenAsync(order.SessionId);
+        await NormalizeAndValidateOfflineModifiersAsync(itemsToFire);
 
         var newItems = new List<LocalPosOrderItem>();
 
@@ -8062,6 +8064,80 @@ public class LocalRepository
             });
         }
         return result;
+    }
+
+    /// <summary>
+    /// Applies the same server-authoritative modifier rules while the terminal
+    /// is offline. Cached modifier prices, stock mappings, and group rules are
+    /// canonical; the order payload is never allowed to invent them.
+    /// </summary>
+    private async Task NormalizeAndValidateOfflineModifiersAsync(IEnumerable<LocalPosOrderItem> orderItems)
+    {
+        var items = orderItems.ToList();
+        var productIds = items
+            .Where(item => !string.IsNullOrWhiteSpace(item.ProductId))
+            .Select(item => item.ProductId!)
+            .Distinct()
+            .ToList();
+        if (productIds.Count == 0) return;
+
+        var products = await _dbContext.PosProducts
+            .Where(product => productIds.Contains(product.Id))
+            .ToDictionaryAsync(product => product.Id);
+        var modifiers = await _dbContext.PosProductModifiers
+            .Where(modifier => productIds.Contains(modifier.ProductId) && modifier.IsActive)
+            .ToListAsync();
+
+        foreach (var item in items)
+        {
+            if (string.IsNullOrWhiteSpace(item.ProductId) || !products.ContainsKey(item.ProductId)) continue;
+
+            var available = modifiers
+                .Where(modifier => modifier.ProductId == item.ProductId && modifier.IsActive)
+                .ToList();
+            var requested = item.Modifiers ?? new List<LocalPosOrderItemModifier>();
+            var selected = new List<LocalPosOrderItemModifier>();
+            var selectedIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var input in requested)
+            {
+                var inputName = input.Name.Trim();
+                var modifier = available.FirstOrDefault(candidate =>
+                    (!string.IsNullOrWhiteSpace(input.Id) && candidate.Id.Equals(input.Id, StringComparison.OrdinalIgnoreCase)) ||
+                    (!string.IsNullOrWhiteSpace(inputName) && candidate.Name.Equals(inputName, StringComparison.OrdinalIgnoreCase)));
+                if (modifier == null)
+                    throw new InvalidOperationException($"INVALID_MODIFIER: {input.Name} is not active for {products[item.ProductId].Name}.");
+                if (!selectedIds.Add(modifier.Id))
+                    throw new InvalidOperationException($"DUPLICATE_MODIFIER: {modifier.Name}.");
+
+                selected.Add(new LocalPosOrderItemModifier
+                {
+                    // The cached product-modifier ID is only a lookup key. An
+                    // order modifier needs its own ID because the same option
+                    // can be selected on multiple order lines.
+                    Id = Guid.NewGuid().ToString(),
+                    OrderItemId = item.Id,
+                    Name = modifier.Name,
+                    Price = modifier.Price,
+                    StockItemId = modifier.StockItemId,
+                    Quantity = modifier.Quantity,
+                    UnitOfMeasure = modifier.UnitOfMeasure,
+                    CreatedAt = input.CreatedAt == default ? DateTime.UtcNow : input.CreatedAt,
+                });
+            }
+
+            foreach (var group in available.Where(modifier => !string.IsNullOrWhiteSpace(modifier.GroupName)).GroupBy(modifier => modifier.GroupName!, StringComparer.OrdinalIgnoreCase))
+            {
+                var chosen = selected.Count(modifier => group.Any(candidate => candidate.Name.Equals(modifier.Name, StringComparison.OrdinalIgnoreCase)));
+                if (group.Any(modifier => modifier.GroupRequired) && chosen == 0)
+                    throw new InvalidOperationException($"REQUIRED_MODIFIER_GROUP: Select an option in {group.Key}.");
+                var maxSelect = group.Max(modifier => modifier.GroupMaxSelect ?? 0);
+                if (maxSelect > 0 && chosen > maxSelect)
+                    throw new InvalidOperationException($"MODIFIER_GROUP_LIMIT: Choose at most {maxSelect} option{(maxSelect == 1 ? string.Empty : "s")} in {group.Key}.");
+            }
+
+            item.Modifiers = selected;
+        }
     }
 
     public async Task<List<LocalPosProductModifier>> GetProductModifiersAsync(string productId)

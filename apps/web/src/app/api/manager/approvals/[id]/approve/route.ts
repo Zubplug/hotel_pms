@@ -13,6 +13,7 @@ import { InventoryService } from '@/lib/inventory/InventoryService';
 import { applyAvailableFolioCredit } from '@/lib/finance/apply-folio-credit';
 import { requireStockUnitConversion } from '@/lib/inventory/UnitConversionService';
 import { sendBookingRefundCompletedEmail } from '@/lib/email/booking-refund-email';
+import { assertModifierStockIsNotBaseRecipeIngredient } from '@/lib/pos/modifier-validation';
 
 const REFUND_STAGE_ROLES = {
   GENERAL_CASHIER_REVIEW: ['GENERAL_CASHIER', 'CASHIER', 'FRONT_DESK_CASHIER'],
@@ -146,6 +147,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           const stock = await tx.stockItem.findFirst({ where: { id: details.stockItemId, propertyId: approval.propertyId, isActive: true }, select: { id: true, baseUnit: true } });
           if (!stock) throw new Error('STOCK_ITEM_NOT_FOUND');
           await requireStockUnitConversion(tx, stock.id, details.unitOfMeasure || stock.baseUnit);
+          await assertModifierStockIsNotBaseRecipeIngredient(tx, product.id, stock.id);
         }
         const modifier = details.modifierId
           ? await tx.posProductModifier.update({ where: { id: details.modifierId }, data: { name: details.name, price: Number(details.price), stockItemId: details.stockItemId || null, quantity: Number(details.quantity || 1), unitOfMeasure: details.unitOfMeasure || null, groupName, groupRequired: details.groupRequired === true, groupMaxSelect } })

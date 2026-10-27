@@ -3,6 +3,7 @@ import prisma from '@hotel-pms/db';
 import { verifyOperatorToken } from '@/lib/pos/operatorAuth';
 import { ProductionStation } from '@hotel-pms/db';
 import { isNightAuditTransactionLocked } from '@/lib/night-audit-guard';
+import { resolveSelectedModifiers } from '@/lib/pos/modifier-validation';
 
 // POST /api/v1/pos/orders/[orderId]/fire
 // Fires additional items to an existing IN_SERVICE order.
@@ -79,13 +80,23 @@ export async function POST(
           where: { id: { in: productIds } },
           select: {
             id: true,
+            name: true,
             productionStation: true,
+            modifiers: {
+              where: { isActive: true },
+              select: { id: true, name: true, price: true, isActive: true, stockItemId: true, quantity: true, unitOfMeasure: true, groupName: true, groupRequired: true, groupMaxSelect: true },
+            },
             category: { select: { productionStation: true } },
           },
         })
       : [];
 
     const productMap = new Map(products.map((p: any) => [p.id, p]));
+    const normalizedItems = items.map((item) => {
+      const product = item.productId ? productMap.get(item.productId) : null;
+      if (!product) return item;
+      return { ...item, modifiers: resolveSelectedModifiers(product, item.modifiers) };
+    });
 
     function resolveStation(item: (typeof items)[0]): ProductionStation {
       const product = productMap.get(item.productId!);
@@ -97,7 +108,7 @@ export async function POST(
     const result = await prisma.$transaction(async (tx: any) => {
       // Create new order items
       const createdItems = await Promise.all(
-        items.map(item =>
+        normalizedItems.map(item =>
           tx.posOrderItem.create({
             data: {
               orderId,
@@ -137,8 +148,8 @@ export async function POST(
 
       // Group new items by station (excluding DIRECT and NONE)
       const stationGroups = new Map<ProductionStation, Array<{ id: string; item: (typeof items)[0] }>>();
-      for (let i = 0; i < items.length; i++) {
-        const item = items[i];
+      for (let i = 0; i < normalizedItems.length; i++) {
+        const item = normalizedItems[i];
         const station = resolveStation(item);
         if (station === 'DIRECT' || station === 'NONE') continue;
 
