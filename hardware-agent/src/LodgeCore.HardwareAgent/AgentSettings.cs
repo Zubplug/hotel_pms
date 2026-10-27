@@ -13,5 +13,5 @@ public class AgentSettings
     ///   "ProUsbHotelCode": "12345"   – dlsCoID for the ACS Hotel / proUSB system
     ///   "ProUsbPort": "1"             – USB port index (default 1)
     /// </summary>
-    public Dictionary&lt;string, string&gt; ExtendedSettings { get; set; } = new();
+    public Dictionary<string, string> ExtendedSettings { get; set; } = new();
 }
