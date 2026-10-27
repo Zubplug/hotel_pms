@@ -38,10 +38,22 @@ export async function GET(request: NextRequest) {
     const entries = await prisma.journalEntry.findMany({ where: { propertyId, entryDate: { gte: reportStart, lt: reportEnd } }, include: { lines: { include: { account: { select: { code: true, name: true, type: true } } } } }, orderBy: [{ entryDate: 'asc' }, { entryNumber: 'asc' }] });
 
     let rows: unknown[][];
+    let receivables: {
+      asOf: string;
+      currency: string;
+      totalOutstanding: number;
+      guestFolioDebt: number;
+      corporateCityLedger: number;
+      otherCityLedger: number;
+      dueToday: number;
+      overdue: number;
+      credits: number;
+      aging: { current: number; days1To30: number; days31To60: number; days61To90: number; days90Plus: number };
+    } | undefined;
     let headers: string[];
     if (kind === 'management') {
       headers = ['Metric', 'Last 7 days', 'MTD', 'YTD'];
-      const [occupancySnapshots, audits, payments, complimentary, discounts, refundsAndAdjustments, posOrders, reservationRooms] = await Promise.all([
+      const [occupancySnapshots, audits, payments, complimentary, discounts, refundsAndAdjustments, posOrders, reservationRooms, folios, cityLedgerAccounts, cityLedgerInvoices] = await Promise.all([
         prisma.occupancySnapshot.findMany({ where: { propertyId, businessDate: { gte: reportStart, lt: reportEnd } }, select: { businessDate: true, totalRooms: true, availableRooms: true, occupiedRooms: true, outOfOrderRooms: true, outOfServiceRooms: true, blockedRooms: true, occupancyPct: true, adr: true, revpar: true } }),
         prisma.nightAudit.findMany({ where: { propertyId, businessDate: { gte: reportStart, lt: reportEnd } }, select: { businessDate: true, totalRoomRevenue: true, totalRevenue: true } }),
         prisma.payment.findMany({ where: { propertyId, businessDate: { gte: reportStart, lt: reportEnd }, status: { in: ['COMPLETED', 'PARTIALLY_REFUNDED'] } }, select: { businessDate: true, method: true, amount: true } }),
@@ -50,6 +62,9 @@ export async function GET(request: NextRequest) {
         prisma.folioItem.findMany({ where: { folio: { propertyId }, businessDate: { gte: reportStart, lt: reportEnd }, type: { in: ['REFUND', 'ADJUSTMENT'] }, voidedAt: null }, select: { businessDate: true, amount: true } }),
         prisma.posOrder.findMany({ where: { propertyId, businessDate: { gte: reportStart, lt: reportEnd }, status: { notIn: ['VOIDED', 'CANCELLED'] } }, select: { businessDate: true, total: true, guestCount: true, outlet: { select: { name: true } } } }),
         prisma.reservationRoom.findMany({ where: { reservation: { propertyId }, checkIn: { lt: reportEnd }, checkOut: { gt: reportStart }, status: { not: 'CANCELLED' } }, select: { checkIn: true, checkOut: true, adults: true, children: true, status: true, reservation: { select: { status: true } } } }),
+        prisma.folio.findMany({ where: { propertyId, status: { not: 'VOID' } }, select: { type: true, reservationId: true, balance: true } }),
+        prisma.cityLedgerAccount.findMany({ where: { propertyId, status: 'ACTIVE' }, select: { type: true, balance: true, currency: true } }),
+        prisma.cityLedgerInvoice.findMany({ where: { propertyId, status: { not: 'VOID' }, outstandingAmount: { gt: 0 } }, select: { dueDate: true, outstandingAmount: true } }),
       ]);
       const periods = [{ label: 'Last 7 days', start: new Date() }, { label: 'MTD', start: new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1)) }, { label: 'YTD', start: new Date(Date.UTC(new Date().getUTCFullYear(), 0, 1)) }];
       periods[0].start.setUTCDate(periods[0].start.getUTCDate() - 6);
@@ -88,6 +103,30 @@ export async function GET(request: NextRequest) {
       const guestCount = (period: { start: Date }, field: 'adults' | 'children') => reservationRooms.filter((room) => {
         return inPeriod(room.checkIn, period) && room.status !== 'CANCELLED' && room.status !== 'NO_SHOW' && room.reservation.status !== 'CANCELLED' && room.reservation.status !== 'NO_SHOW';
       }).reduce((total, room) => total + room[field], 0);
+      const positive = (value: unknown) => Math.max(Number(value) || 0, 0);
+      const negative = (value: unknown) => Math.max(-(Number(value) || 0), 0);
+      const guestFolioDebt = folios.filter((folio) => folio.type === 'ROOM' && folio.reservationId).reduce((total, folio) => total + positive(folio.balance), 0);
+      const corporateCityLedger = cityLedgerAccounts.filter((account) => account.type === 'CORPORATE').reduce((total, account) => total + positive(account.balance), 0);
+      const otherCityLedger = cityLedgerAccounts.filter((account) => account.type !== 'CORPORATE').reduce((total, account) => total + positive(account.balance), 0);
+      const todayDate = new Date().toISOString().slice(0, 10);
+      const aging = { current: 0, days1To30: 0, days31To60: 0, days61To90: 0, days90Plus: 0 };
+      let dueToday = 0;
+      let overdue = 0;
+      for (const invoice of cityLedgerInvoices) {
+        const amount = positive(invoice.outstandingAmount);
+        const dueDate = invoice.dueDate.toISOString().slice(0, 10);
+        if (dueDate === todayDate) dueToday += amount;
+        if (dueDate >= todayDate) aging.current += amount;
+        else {
+          overdue += amount;
+          const days = Math.floor((Date.parse(`${todayDate}T00:00:00Z`) - Date.parse(`${dueDate}T00:00:00Z`)) / 86400000);
+          if (days <= 30) aging.days1To30 += amount;
+          else if (days <= 60) aging.days31To60 += amount;
+          else if (days <= 90) aging.days61To90 += amount;
+          else aging.days90Plus += amount;
+        }
+      }
+      receivables = { asOf: new Date().toISOString(), currency: cityLedgerAccounts[0]?.currency || 'NGN', totalOutstanding: guestFolioDebt + corporateCityLedger + otherCityLedger, guestFolioDebt, corporateCityLedger, otherCityLedger, dueToday, overdue, credits: folios.reduce((total, folio) => total + negative(folio.balance), 0) + cityLedgerAccounts.reduce((total, account) => total + negative(account.balance), 0), aging };
       const revenueRows = [...new Set(periods.flatMap(period => [...departmentsByPeriod(period).keys()]))].sort().map(department => metric(department, periods.map(period => departmentsByPeriod(period).get(department) || 0)));
       const outletNames = [...new Set(posOrders.map(order => order.outlet.name))].sort();
       const outletRows = outletNames.flatMap(outlet => [
@@ -161,7 +200,7 @@ export async function GET(request: NextRequest) {
       const body = [headers, ...rows].map(row => row.map(csvCell).join(',')).join('\n');
       return new NextResponse(`\ufeff${body}`, { headers: { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="auditor-${kind}.csv"`, 'Cache-Control': 'no-store' } });
     }
-    return NextResponse.json({ scope, kind, headers, rows }, { headers: { 'Cache-Control': 'no-store' } });
+    return NextResponse.json({ scope, kind, headers, rows, ...(receivables ? { receivables } : {}) }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
     if (error instanceof Error && error.message.startsWith('403')) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     console.error('External auditor report failed', error);
