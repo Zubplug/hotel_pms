@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
     const principal = await corporatePrincipalForProperty(auth.principal, propertyId, 'account:read');
     const now = new Date();
     const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-    const [events, leases, halls] = await Promise.all([
+    const [events, leases, halls, corporateAccount] = await Promise.all([
       prisma.event.findMany({
         where: { propertyId, corporateAccountId: principal.corporateAccountId, endDate: { gte: now }, status: { not: 'CANCELLED' } },
         orderBy: { startDate: 'asc' },
@@ -40,6 +40,10 @@ export async function GET(req: NextRequest) {
         orderBy: { name: 'asc' },
         select: { id: true, name: true, code: true, capacity: true, squareMeters: true, amenities: true, rate: true },
       }),
+      prisma.corporateAccount.findFirst({
+        where: { id: principal.corporateAccountId || '', propertyId, organizationId: auth.principal.organizationId, isActive: true },
+        select: { name: true, code: true, contactPerson: true, contactEmail: true, contactPhone: true, companyAddress: true, companyCity: true, companyCountry: true, cityLedgerAccount: { select: { currency: true } } },
+      }),
     ]);
 
     return withRequestId(successResponse({
@@ -54,6 +58,7 @@ export async function GET(req: NextRequest) {
         schedules: lease.schedules.map((schedule) => ({ ...schedule, amount: Number(schedule.amount) })),
       })),
       halls: halls.map((hall) => ({ ...hall, squareMeters: hall.squareMeters == null ? null : Number(hall.squareMeters), rate: hall.rate == null ? null : Number(hall.rate) })),
+      corporateAccount,
     }), auth.requestId);
   } catch (error) { return corporateError(error, auth.requestId); }
 }
