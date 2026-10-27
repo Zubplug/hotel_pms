@@ -96,7 +96,7 @@ export async function GET(request: NextRequest) {
     const staff = staffIds.length ? await prisma.staff.findMany({ where: { OR: [{ id: { in: staffIds } }, { userId: { in: staffIds } }] }, select: { id: true, userId: true, firstName: true, lastName: true } }) : [];
     const staffById = new Map<string, string>();
     for (const person of staff) { const value = name(person) || 'Unknown'; staffById.set(person.id, value); if (person.userId) staffById.set(person.userId, value); }
-    const display = (id?: string | null) => id ? staffById.get(id) || id : 'Not recorded';
+    const display = (id?: string | null) => id ? staffById.get(id) || 'Unknown staff' : 'Not recorded';
     const matches = (values: unknown[]) => !query || values.some(value => String(value ?? '').toLowerCase().includes(query));
     const passesFilters = (item: { amount: number; source: string; status: string; operator: string | null; approver: string; beneficiary: string }) =>
       (!Number.isFinite(minAmount) || Math.abs(item.amount) >= minAmount) &&
@@ -117,7 +117,9 @@ export async function GET(request: NextRequest) {
         reason: approval?.reason || item.description, source: item.source, status: item.voidedAt ? 'VOIDED' : approval?.status || 'APPLIED',
         operator: display(item.postedBy), approver: display(approval?.reviewedBy), requestedBy: display(approval?.requestedBy),
         beneficiary: 'Not applicable',
-        acknowledgedBy: display(approval?.reviewedBy), acknowledgedAt: approval?.reviewedAt || null,
+        // Approval review and acknowledgement are separate controls. ApprovalRequest
+        // has no acknowledgement field, so do not present the reviewer as an acknowledger.
+        acknowledgedBy: 'Not recorded', acknowledgedAt: null,
         requestedAt: approval?.requestedAt || null, reviewedAt: approval?.reviewedAt || null,
         approvalStatus: approval?.status || 'NOT_LINKED', executionStatus: approval?.executionStatus || null, approvalId: approval?.id || null,
       };
