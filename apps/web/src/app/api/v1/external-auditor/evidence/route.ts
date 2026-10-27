@@ -46,12 +46,12 @@ export async function GET(request: NextRequest) {
     if (detailId && detailSource === 'FOLIO') {
       const item = await prisma.folioItem.findFirst({ where: { id: detailId, folio: { propertyId }, businessDate: { gte: start, lt: end } }, include: { folio: { select: { folioNumber: true, propertyId: true } } } });
       if (!item) return NextResponse.json({ error: 'Evidence not found' }, { status: 404 });
-      const [auditLogs, financialLogs, journalLines, actorNames] = await Promise.all([
+      const [auditLogs, financialLogs, journalLines] = await Promise.all([
         prisma.auditLog.findMany({ where: { propertyId, OR: [{ resourceId: detailId }, ...(item.operationId ? [{ requestId: item.operationId }] : [])] }, orderBy: { createdAt: 'asc' } }),
         prisma.financialAuditLog.findMany({ where: { propertyId, OR: [{ transactionId: detailId }, { folioId: item.folioId }], businessDate: { gte: start, lt: end } }, orderBy: { createdAt: 'asc' } }),
         prisma.journalEntryLine.findMany({ where: { sourceId: detailId, entry: { propertyId, entryDate: { gte: start, lt: end } } }, select: { id: true, debit: true, credit: true, description: true, sourceType: true, account: { select: { code: true, name: true, type: true } }, entry: { select: { entryNumber: true, entryDate: true, status: true, source: true } } }, orderBy: { entry: { entryDate: 'asc' } } }),
-        resolveActors([item.postedBy, ...auditLogs.map(log => log.userId || '')], auditLogs.flatMap(log => [log.userEmail])),
       ]);
+      const actorNames = await resolveActors([item.postedBy, ...auditLogs.map(log => log.userId || '')], auditLogs.flatMap(log => [log.userEmail]));
       const resolvedAuditLogs = auditLogs.map(log => ({ ...log, actor: actorNames.get(log.userId || '') || actorNames.get(log.userEmail?.toLowerCase() || '') || log.userEmail || log.userRole || 'System' }));
       return NextResponse.json({ scope, evidence: { item: { ...item, actor: actorNames.get(item.postedBy) || 'Unknown actor' }, auditLogs: resolvedAuditLogs, financialLogs, journalLines } }, { headers: { 'Cache-Control': 'no-store' } });
     }

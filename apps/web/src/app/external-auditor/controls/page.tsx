@@ -20,7 +20,7 @@ type PeriodKey = '7d' | 'mtd' | 'ytd' | 'custom';
 const money = (value: number, currency: string) => new Intl.NumberFormat('en', { style: 'currency', currency, maximumFractionDigits: 2 }).format(value);
 const human = (value: string) => value.replaceAll('_', ' ').toLowerCase().replace(/(^|\s)\S/g, match => match.toUpperCase());
 const dateKey = (value: Date) => `${value.getFullYear()}-${`${value.getMonth() + 1}`.padStart(2, '0')}-${`${value.getDate()}`.padStart(2, '0')}`;
-const periodRange = (key: PeriodKey) => { const today = new Date(); if (key === '7d') { const start = new Date(today); start.setDate(start.getDate() - 6); return { start: dateKey(start), end: dateKey(today) }; } if (key === 'mtd') return { start: dateKey(new Date(today.getFullYear(), today.getMonth(), 1)), end: dateKey(today) }; if (key === 'ytd') return { start: dateKey(new Date(today.getFullYear(), 0, 1)), end: dateKey(today) }; return { start: '', end: '' }; };
+const periodRange = (key: PeriodKey) => { const today = new Date(); if (key === '7d') { const start = new Date(today); start.setDate(start.getDate() - 6); return { dateFrom: dateKey(start), dateTo: dateKey(today) }; } if (key === 'mtd') return { dateFrom: dateKey(new Date(today.getFullYear(), today.getMonth(), 1)), dateTo: dateKey(today) }; if (key === 'ytd') return { dateFrom: dateKey(new Date(today.getFullYear(), 0, 1)), dateTo: dateKey(today) }; return { dateFrom: '', dateTo: '' }; };
 const formatPeriod = (start: string, end: string) => `${new Date(`${start}T00:00:00`).toLocaleDateString('en', { month: 'short', day: 'numeric', year: 'numeric' })} – ${new Date(`${end}T00:00:00`).toLocaleDateString('en', { month: 'short', day: 'numeric', year: 'numeric' })}`;
 
 export default function RevenueControlsPage() {
