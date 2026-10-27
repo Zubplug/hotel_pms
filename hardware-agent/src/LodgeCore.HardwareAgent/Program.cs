@@ -29,17 +29,19 @@ builder.Services.AddSingleton<CommandProcessor>();
 
 // Locks & Hardware
 builder.Services.AddSingleton<DelunsLockProvider>();
+builder.Services.AddSingleton<HsLockProvider>();
+builder.Services.AddSingleton<ProUsbLockProvider>();
 // builder.Services.AddSingleton<HomeLockProvider>(); // if kept
 
 builder.Services.AddSingleton<ILockProvider>(sp => 
 {
     var settings = sp.GetRequiredService<IOptions<AgentSettings>>().Value;
-    if (settings.Provider?.Equals("DELUNS", StringComparison.OrdinalIgnoreCase) == true)
+    return settings.Provider?.ToUpperInvariant() switch
     {
-        return sp.GetRequiredService<DelunsLockProvider>();
-    }
-    // Fallback or default
-    return sp.GetRequiredService<DelunsLockProvider>(); 
+        "PROUSB"     => sp.GetRequiredService<ProUsbLockProvider>(),
+        "HSLOCK"     => sp.GetRequiredService<HsLockProvider>(),
+        _            => sp.GetRequiredService<DelunsLockProvider>(),  // default / DELUNS
+    };
 });
 builder.Services.AddSingleton<EncoderMonitor>();
 builder.Services.AddSingleton<DeviceHealthMonitor>();

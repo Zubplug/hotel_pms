@@ -304,6 +304,14 @@ public partial class MainPage : ContentPage
                 case "hardware.setLockProvider":
                     responseData = await hardwareInterop.SetLockProviderTypeAsync(parameters?["provider"]?.ToString() ?? "");
                     break;
+                case "hardware.getExtendedSettings":
+                    responseData = await hardwareInterop.GetExtendedSettingsAsync();
+                    break;
+                case "hardware.setExtendedSettings":
+                    responseData = await hardwareInterop.SetExtendedSettingsAsync(
+                        parameters?["proUsbHotelCode"]?.ToString(),
+                        parameters?["proUsbPort"]?.ToString());
+                    break;
                 case "hardware.openCashDrawer":
                     responseData = await pmsInterop.OpenCashDrawerAsync();
                     break;

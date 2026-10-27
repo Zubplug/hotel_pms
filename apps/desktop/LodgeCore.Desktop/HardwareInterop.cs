@@ -508,6 +508,7 @@ public class HardwareInterop
         if (activeProviderType.Contains("rfv2016")) activeProvider = "rfv2016";
         else if (activeProviderType.Contains("hslock")) activeProvider = "hslock";
         else if (activeProviderType.Contains("xeeder")) activeProvider = "xeeder";
+        else if (activeProviderType.Contains("prousb")) activeProvider = "prousb";
 
         return Task.FromResult(JsonSerializer.Serialize(new { 
             configuredProvider = configuredProvider, 
@@ -518,7 +519,7 @@ public class HardwareInterop
 
     public Task<string> SetLockProviderTypeAsync(string provider)
     {
-        var validProviders = new[] { "deluns", "rfv2016", "hslock", "xeeder" };
+        var validProviders = new[] { "deluns", "rfv2016", "hslock", "xeeder", "prousb" };
         var normalized = (provider ?? "").ToLowerInvariant().Trim();
 
         if (!validProviders.Contains(normalized))
@@ -533,6 +534,7 @@ public class HardwareInterop
         if (activeProviderType.Contains("rfv2016")) activeProvider = "rfv2016";
         else if (activeProviderType.Contains("hslock")) activeProvider = "hslock";
         else if (activeProviderType.Contains("xeeder")) activeProvider = "xeeder";
+        else if (activeProviderType.Contains("prousb")) activeProvider = "prousb";
 
         return Task.FromResult(JsonSerializer.Serialize(new { 
             configuredProvider = normalized, 
@@ -540,4 +542,43 @@ public class HardwareInterop
             restartRequired = normalized != activeProvider
         }, _jsonOptions));
     }
-}
+
+    // -----------------------------------------------------------------------
+    // EXTENDED SETTINGS — provider-specific config stored in MAUI Preferences.
+    // Currently used for: ProUsbHotelCode, ProUsbPort.
+    // -----------------------------------------------------------------------
+
+    /// <summary>Returns the current extended settings as a JSON object.</summary>
+    public Task<string> GetExtendedSettingsAsync()
+    {
+        var hotelCode = Microsoft.Maui.Storage.Preferences.Default.Get("ProUsbHotelCode", "");
+        var usbPort   = Microsoft.Maui.Storage.Preferences.Default.Get("ProUsbPort", "1");
+
+        return Task.FromResult(JsonSerializer.Serialize(new
+        {
+            success = true,
+            data = new { proUsbHotelCode = hotelCode, proUsbPort = usbPort }
+        }, _jsonOptions));
+    }
+
+    /// <summary>Persists extended settings from the UI into MAUI Preferences.</summary>
+    public Task<string> SetExtendedSettingsAsync(string? proUsbHotelCode, string? proUsbPort)
+    {
+        if (!string.IsNullOrWhiteSpace(proUsbHotelCode))
+        {
+            if (!int.TryParse(proUsbHotelCode.Trim(), out _))
+                return Task.FromResult(Fail("Hotel code must be a number."));
+
+            Microsoft.Maui.Storage.Preferences.Default.Set("ProUsbHotelCode", proUsbHotelCode.Trim());
+        }
+        else
+        {
+            // Empty string means clear the override; auto-discovery will be used
+            Microsoft.Maui.Storage.Preferences.Default.Remove("ProUsbHotelCode");
+        }
+
+        if (!string.IsNullOrWhiteSpace(proUsbPort))
+            Microsoft.Maui.Storage.Preferences.Default.Set("ProUsbPort", proUsbPort.Trim());
+
+        return Task.FromResult(JsonSerializer.Serialize(new { success = true }, _jsonOptions));
+    }
