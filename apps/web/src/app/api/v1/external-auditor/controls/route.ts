@@ -83,7 +83,9 @@ export async function GET(request: NextRequest) {
       }),
     ]);
 
-    const approvalIds = discountItems.map(item => item.discountApprovalId?.replace(/^PENDING:/, '')).filter((id): id is string => Boolean(id));
+    const approvalIds = discountItems
+      .map(item => item.discountApprovalId?.replace(/^PENDING:/, ''))
+      .filter((id): id is string => Boolean(id) && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id));
     const approvals = approvalIds.length ? await prisma.approvalRequest.findMany({ where: { id: { in: approvalIds }, propertyId, type: 'DISCOUNT' }, select: { id: true, status: true, executionStatus: true, requestedBy: true, requestedAt: true, reviewedBy: true, reviewedAt: true, amount: true, currency: true, reason: true, details: true, snapshot: true } }) : [];
     const approvalById = new Map(approvals.map(item => [item.id, item]));
 

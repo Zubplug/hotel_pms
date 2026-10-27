@@ -1,6 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { usePathname } from 'next/navigation';
 import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
 
 interface PropertyContextType {
@@ -15,11 +16,19 @@ export function PropertyProvider({ children }: { children: React.ReactNode }) {
   const [propertyId, setPropertyId] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const { status: sessionStatus } = useLodgeCoreSession();
+  const pathname = usePathname();
 
   useEffect(() => {
     if (sessionStatus === 'loading') return;
 
     if (sessionStatus === 'unauthenticated') {
+      setIsLoading(false);
+      return;
+    }
+
+    // External auditors use their authorized engagement scope, not the
+    // organization property directory. Avoid the organization-only endpoint.
+    if (pathname?.startsWith('/external-auditor')) {
       setIsLoading(false);
       return;
     }
@@ -55,7 +64,7 @@ export function PropertyProvider({ children }: { children: React.ReactNode }) {
     }
 
     autoSelectProperty();
-  }, [sessionStatus]);
+  }, [sessionStatus, pathname]);
 
   const handleSetPropertyId = (id: string) => {
     setPropertyId(id);

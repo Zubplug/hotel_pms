@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
         if (person.userId) names.set(person.userId, value);
       }
       for (const user of users) {
-        const value = staffNames.get(user.staffId || '') || `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'Unknown user';
+        const value = names.get(user.id) || staffNames.get(user.staffId || '') || `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'Unknown user';
         names.set(user.id, value);
         names.set(user.email.toLowerCase(), value);
       }
