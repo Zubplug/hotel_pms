@@ -411,11 +411,50 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
                          currency: payload.currency || 'NGN',
                          folioNumber: `AR-${conflict.propertyId.slice(0, 8).toUpperCase()}-${Date.now().toString().slice(-6)}`
                       }
-                   });
+                  });
                 }
+             }
+             if (!f && edgeEvent.eventType === 'GUEST_CREDIT_TRANSFER') {
+                // Older checkout-transfer conflicts can reference an edge-only
+                // folio that was never materialized in the cloud. There is no
+                // financial aggregate to force-apply in that case; resolve the
+                // stale event as a no-op rather than returning the generic
+                // "Aggregate not found" error from the resolver.
+                await tx.syncConflict.update({
+                  where: { id },
+                  data: {
+                    status: 'RESOLVED',
+                    resolution: 'REJECTED_NO_CLOUD_FOLIO',
+                    resolvedBy: session.user?.id || null,
+                    resolvedAt: new Date(),
+                  },
+                });
+                return;
              }
              if (!f) throw new Error('Aggregate not found');
              currentVersion = f.version;
+
+             if (edgeEvent.eventType === 'GUEST_CREDIT_TRANSFER') {
+                const transferReference = `CR_SYNC_${edgeEvent.idempotencyKey}`;
+                const alreadyRouted = await tx.cityLedgerEntry.findFirst({
+                  where: { reference: transferReference },
+                  select: { id: true },
+                });
+                const availableCredit = Math.max(0, -Number(f.balance));
+                if (alreadyRouted || availableCredit <= 0.01) {
+                  await tx.syncConflict.update({
+                    where: { id },
+                    data: {
+                      status: 'RESOLVED',
+                      resolution: alreadyRouted ? 'ALREADY_APPLIED' : 'REJECTED_NO_REMAINING_CREDIT',
+                      resolvedBy: session.user?.id || null,
+                      resolvedAt: new Date(),
+                    },
+                  });
+                  return;
+                }
+                throw new Error('DOMAIN_ERROR: This checkout credit still has cloud balance. Retry synchronization so the authoritative credit-transfer handler can reconcile it safely; do not force-apply it from Sync Center.');
+             }
 
              // Domain validation for Folios
              if (edgeEvent.eventType === 'CITY_LEDGER_SETTLEMENT') {
