@@ -12,6 +12,16 @@ export type CorporateEventQuoteInput = {
   expectedGuests: number;
   eventName?: string;
   paymentMode: 'PAY_LATER' | 'DEPOSIT' | 'FULL';
+  addOns?: Array<{ equipmentId: string; quantity: number }>;
+};
+
+export type CorporateEventAddon = {
+  equipmentId: string;
+  name: string;
+  description: string | null;
+  rentalPrice: number;
+  currency: string;
+  availableQuantity: number;
 };
 
 const QUOTE_TTL_SECONDS = 600;
@@ -31,7 +41,15 @@ function fingerprint(input: CorporateEventQuoteInput) {
     expectedGuests: input.expectedGuests,
     eventName: input.eventName?.trim() || null,
     paymentMode: input.paymentMode,
+    addOns: [...(input.addOns || [])].sort((a, b) => a.equipmentId.localeCompare(b.equipmentId)),
   })).digest('hex');
+}
+
+function normalizeAddOns(addOns: CorporateEventQuoteInput['addOns']) {
+  return [...(addOns || [])]
+    .filter((item) => item.quantity > 0)
+    .map((item) => ({ equipmentId: item.equipmentId, quantity: Math.floor(item.quantity) }))
+    .sort((a, b) => a.equipmentId.localeCompare(b.equipmentId));
 }
 
 function validate(input: CorporateEventQuoteInput) {
@@ -39,6 +57,26 @@ function validate(input: CorporateEventQuoteInput) {
   if (!Number.isInteger(input.expectedGuests) || input.expectedGuests < 1) throw new Error('INVALID_GUEST_COUNT');
   if (!Number.isFinite(input.startAt.getTime()) || !Number.isFinite(input.endAt.getTime()) || input.endAt <= input.startAt || input.startAt <= new Date()) throw new Error('INVALID_DATE_RANGE');
   if (input.requestType === 'HALL_AND_EVENT' && !input.eventName?.trim()) throw new Error('EVENT_NAME_REQUIRED');
+  if ((input.addOns || []).some((item) => !item.equipmentId || !Number.isInteger(item.quantity) || item.quantity < 0)) throw new Error('INVALID_ADDON_QUANTITY');
+}
+
+export async function getAvailableCorporateEventAddons(db: any, input: { propertyId: string; startAt: Date; endAt: Date }): Promise<CorporateEventAddon[]> {
+  const equipment = await db.eventEquipment.findMany({
+    where: { propertyId: input.propertyId, isActive: true },
+    orderBy: { name: 'asc' },
+    select: { id: true, name: true, description: true, totalStock: true, rentalPrice: true },
+  });
+  if (!equipment.length) return [];
+  const bookings = await db.eventEquipmentBooking.findMany({
+    where: {
+      equipmentId: { in: equipment.map((item: any) => item.id) },
+      eventBooking: { status: 'ACTIVE', event: { status: { not: 'CANCELLED' }, startDate: { lt: input.endAt }, endDate: { gt: input.startAt } } },
+    },
+    select: { equipmentId: true, quantity: true },
+  });
+  const used = new Map<string, number>();
+  for (const booking of bookings) used.set(booking.equipmentId, (used.get(booking.equipmentId) || 0) + booking.quantity);
+  return equipment.map((item: any) => ({ equipmentId: item.id, name: item.name, description: item.description, rentalPrice: round(Number(item.rentalPrice || 0)), currency: 'NGN', availableQuantity: Math.max(0, item.totalStock - (used.get(item.id) || 0)) })).filter((item) => item.availableQuantity > 0);
 }
 
 async function activeCorporateTerms(db: any, input: CorporateEventQuoteInput) {
@@ -114,7 +152,15 @@ export async function createCorporateEventQuote(db: any, input: CorporateEventQu
 
   const terms = await activeCorporateTerms(db, input);
   const pricing = await getCorporateHallPricing(db, input, hall);
-  const total = pricing.corporateRate;
+  const availableAddons = await getAvailableCorporateEventAddons(db, input);
+  const selectedAddons = normalizeAddOns(input.addOns);
+  const addonMap = new Map(availableAddons.map((item) => [item.equipmentId, item]));
+  for (const selected of selectedAddons) {
+    const addon = addonMap.get(selected.equipmentId);
+    if (!addon || selected.quantity > addon.availableQuantity) throw new Error('ADDON_UNAVAILABLE');
+  }
+  const addonTotal = round(selectedAddons.reduce((sum, selected) => sum + (addonMap.get(selected.equipmentId)?.rentalPrice || 0) * selected.quantity, 0));
+  const total = round(pricing.corporateRate + addonTotal);
   const requiredPayment = input.paymentMode === 'FULL' ? total : input.paymentMode === 'DEPOSIT' ? round(total * 0.5) : 0;
   const expiresAt = new Date(Date.now() + QUOTE_TTL_SECONDS * 1000);
   const snapshot = {
@@ -122,7 +168,8 @@ export async function createCorporateEventQuote(db: any, input: CorporateEventQu
     kind: 'CORPORATE_EVENT_HALL',
     request: { propertyId: input.propertyId, corporateAccountId: input.corporateAccountId, requestType: input.requestType, hallId: input.hallId, startAt: input.startAt.toISOString(), endAt: input.endAt.toISOString(), expectedGuests: input.expectedGuests, eventName: input.eventName?.trim() || null, paymentMode: input.paymentMode },
     hall: { id: hall.id, name: hall.name, code: hall.code, capacity: hall.capacity, photos: hall.photos, amenities: hall.amenities },
-    pricing: { standardRate: pricing.standardRate, corporateRate: pricing.corporateRate, discountAmount: pricing.discountAmount, discountPercent: pricing.discountPercent, subtotal: total, total, requiredPayment, currency: pricing.currency, rateSource: pricing.rule ? 'CORPORATE_CONTRACT' : 'STANDARD_HALL_RATE' },
+    pricing: { standardRate: pricing.standardRate, corporateRate: pricing.corporateRate, addonTotal, subtotal: total, total, discountAmount: pricing.discountAmount, discountPercent: pricing.discountPercent, requiredPayment, currency: pricing.currency, rateSource: pricing.rule ? 'CORPORATE_CONTRACT' : 'STANDARD_HALL_RATE' },
+    addons: { available: availableAddons, selected: selectedAddons },
     contract: terms ? { id: terms.contract.id, versionId: terms.version.id, version: terms.version.version } : null,
     negotiation: { available: pricing.negotiationAvailable },
   };

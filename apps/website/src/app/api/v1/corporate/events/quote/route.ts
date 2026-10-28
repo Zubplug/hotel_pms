@@ -14,6 +14,7 @@ const schema = z.object({
   expectedGuests: z.number().int().min(1).max(100000),
   eventName: z.string().trim().max(160).optional(),
   paymentMode: z.enum(['PAY_LATER', 'DEPOSIT', 'FULL']).default('PAY_LATER'),
+  addOns: z.array(z.object({ equipmentId: z.string().uuid(), quantity: z.number().int().min(0).max(1000) })).max(50).default([]),
 });
 
 export async function POST(req: NextRequest) {
@@ -28,7 +29,7 @@ export async function POST(req: NextRequest) {
     const quote = await createCorporateEventQuote(prisma as any, { ...parsed.data, organizationId: principal.organizationId, principalId: auth.principal.partnerId, corporateAccountId: principal.corporateAccountId, startAt: new Date(parsed.data.startAt), endAt: new Date(parsed.data.endAt) });
     return withRequestId(successResponse({ quoteId: quote.id, expiresAt: quote.expiresAt, snapshot: quote.snapshot }, 201), auth.requestId);
   } catch (error) {
-    const map: Record<string, [string, number]> = { HALL_UNAVAILABLE: ['HALL_UNAVAILABLE', 409], HALL_NO_LONGER_AVAILABLE: ['HALL_NO_LONGER_AVAILABLE', 409], INVALID_PAYMENT_MODE: ['BAD_REQUEST', 400], INVALID_GUEST_COUNT: ['BAD_REQUEST', 400], INVALID_DATE_RANGE: ['BAD_REQUEST', 400], EVENT_NAME_REQUIRED: ['BAD_REQUEST', 400], CORPORATE_ACCOUNT_UNAVAILABLE: ['CORPORATE_ACCOUNT_UNAVAILABLE', 409] };
+    const map: Record<string, [string, number]> = { HALL_UNAVAILABLE: ['HALL_UNAVAILABLE', 409], HALL_NO_LONGER_AVAILABLE: ['HALL_NO_LONGER_AVAILABLE', 409], ADDON_UNAVAILABLE: ['ADDON_UNAVAILABLE', 409], INVALID_ADDON_QUANTITY: ['BAD_REQUEST', 400], INVALID_PAYMENT_MODE: ['BAD_REQUEST', 400], INVALID_GUEST_COUNT: ['BAD_REQUEST', 400], INVALID_DATE_RANGE: ['BAD_REQUEST', 400], EVENT_NAME_REQUIRED: ['BAD_REQUEST', 400], CORPORATE_ACCOUNT_UNAVAILABLE: ['CORPORATE_ACCOUNT_UNAVAILABLE', 409] };
     if (map[(error as Error)?.message]) return withRequestId(errorResponse(map[(error as Error).message][0], (error as Error).message.replaceAll('_', ' ').toLowerCase(), map[(error as Error).message][1]), auth.requestId);
     return corporateError(error, auth.requestId);
   }
