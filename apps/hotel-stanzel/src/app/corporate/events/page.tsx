@@ -31,8 +31,7 @@ export default async function CorporateEventsPage() {
   const corporateProfile = result.data.corporateAccount || null;
 
   return <>
-    <section className="corporate-events-intro"><div><span className="portal-section-kicker">Venue services</span><h2>Plan your next company event.</h2><p>Review your upcoming functions, recurring hall leases, and the event spaces available to your corporate account.</p></div></section>
-    {propertyId && <CorporateEventRequest propertyId={propertyId} corporateProfile={corporateProfile} />}
+    <section className="corporate-events-intro"><div><span className="portal-section-kicker">Venue services</span><h2>Plan your next company event.</h2><p>Review your upcoming functions, recurring hall leases, and the event spaces available to your corporate account.</p></div>{propertyId && <CorporateEventRequest propertyId={propertyId} corporateProfile={corporateProfile} />}</section>
 
     <div className="corporate-events-metrics"><div><span>Upcoming events</span><strong>{upcomingEvents}</strong><small>Confirmed or planned functions</small></div><div><span>Active leases</span><strong>{activeLeases}</strong><small>Recurring venue agreements</small></div><div><span>Available halls</span><strong>{halls.length}</strong><small>Spaces at Stanzel Grand Resort</small></div></div>
 
