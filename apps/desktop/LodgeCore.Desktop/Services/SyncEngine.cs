@@ -4147,7 +4147,13 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
 
     private void ClearIsDirtyIfSafe(LocalDbContext dbContext, LodgeCore.Desktop.Data.Entities.LocalOutboxEvent evt)
     {
-        if (evt.AggregateType == "RESERVATION")
+        if (evt.EventType == "GUEST_CREDIT_REFUND_REQUESTED")
+        {
+            var refundRequest = dbContext.RefundRequests.Local.FirstOrDefault(x => x.IdempotencyKey == evt.IdempotencyKey)
+                                ?? dbContext.RefundRequests.FirstOrDefault(x => x.IdempotencyKey == evt.IdempotencyKey);
+            if (refundRequest != null) refundRequest.IsDirty = false;
+        }
+        else if (evt.AggregateType == "RESERVATION")
         {
             var res = dbContext.Reservations.Local.FirstOrDefault(x => x.Id == evt.AggregateId)
                       ?? dbContext.Reservations.FirstOrDefault(x => x.Id == evt.AggregateId);
