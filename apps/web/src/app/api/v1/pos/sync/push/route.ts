@@ -906,14 +906,13 @@ export async function POST(req: NextRequest) {
                 const res = await tx.reservation.findUnique({
                   where: { id: resId },
                   include: {
-                    room: true,
                     reservationRooms: {
                       where: { status: 'ACTIVE' },
                       include: { room: true },
                     },
                   }
                 });
-                const roomNum = payload.RoomNumber || payload.roomNumber || res?.room?.number || res?.reservationRooms?.[0]?.room?.number || '';
+                const roomNum = payload.RoomNumber || payload.roomNumber || res?.reservationRooms?.[0]?.room?.number || '';
 
                 // Atomically revalidate in-house status, corporate rate policy, discount suppression,
                 // and cover allowance with transaction-level advisory locking
