@@ -76,7 +76,7 @@ export async function getAvailableCorporateEventAddons(db: any, input: { propert
   });
   const used = new Map<string, number>();
   for (const booking of bookings) used.set(booking.equipmentId, (used.get(booking.equipmentId) || 0) + booking.quantity);
-  return equipment.map((item: any) => ({ equipmentId: item.id, name: item.name, description: item.description, rentalPrice: round(Number(item.rentalPrice || 0)), currency: 'NGN', availableQuantity: Math.max(0, item.totalStock - (used.get(item.id) || 0)) })).filter((item) => item.availableQuantity > 0);
+  return equipment.map((item: any): CorporateEventAddon => ({ equipmentId: item.id, name: item.name, description: item.description, rentalPrice: round(Number(item.rentalPrice || 0)), currency: 'NGN', availableQuantity: Math.max(0, item.totalStock - (used.get(item.id) || 0)) })).filter((item: CorporateEventAddon) => item.availableQuantity > 0);
 }
 
 async function activeCorporateTerms(db: any, input: CorporateEventQuoteInput) {
