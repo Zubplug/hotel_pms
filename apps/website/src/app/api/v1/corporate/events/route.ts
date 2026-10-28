@@ -42,7 +42,7 @@ export async function GET(req: NextRequest) {
       }),
       prisma.corporateAccount.findFirst({
         where: { id: principal.corporateAccountId || '', propertyId, organizationId: auth.principal.organizationId, isActive: true },
-        select: { name: true, code: true, contactPerson: true, contactEmail: true, contactPhone: true, companyAddress: true, companyCity: true, companyCountry: true, cityLedgerAccount: { select: { currency: true } } },
+        select: { name: true, code: true, contactPerson: true, contactEmail: true, contactPhone: true, companyAddress: true, companyCity: true, companyCountry: true, portalIdentity: { select: { email: true } }, cityLedgerAccount: { select: { currency: true } } },
       }),
     ]);
 

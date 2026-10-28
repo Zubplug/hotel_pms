@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { errorResponse, successResponse } from '@/lib/api-response';
 import { checkCorporateRateLimit } from '@/lib/corporate-api-auth';
 import { corporateError, corporatePrincipalForProperty, prisma, requireCorporateApi, withRequestId } from '@/lib/corporate-api-routes';
+import { getCorporateHallPricing } from '@/lib/booking-engine/corporate-event-quote-service';
 
 export async function GET(req: NextRequest) {
   const auth = await requireCorporateApi(req, 'account:read');
@@ -15,7 +16,7 @@ export async function GET(req: NextRequest) {
   if (!(await checkCorporateRateLimit(auth.principal, 'event-availability'))) return withRequestId(errorResponse('TOO_MANY_REQUESTS', 'Too many requests', 429), auth.requestId);
 
   try {
-    await corporatePrincipalForProperty(auth.principal, propertyId, 'account:read');
+    const principal = await corporatePrincipalForProperty(auth.principal, propertyId, 'account:read');
     const start = new Date(startAt);
     const end = new Date(endAt);
     if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start || start < new Date()) return withRequestId(errorResponse('BAD_REQUEST', 'Choose a future date with a valid time range', 400), auth.requestId);
@@ -36,9 +37,12 @@ export async function GET(req: NextRequest) {
       return bookingStart < end && bookingEnd > start;
     }));
 
+    const pricingInput = { organizationId: principal.organizationId, propertyId, principalId: principal.id, corporateAccountId: principal.corporateAccountId!, requestType: 'HALL_ONLY' as const, hallId: '', startAt: start, endAt: end, expectedGuests: guests, paymentMode: 'PAY_LATER' as const };
+    const pricedHalls = await Promise.all(available.map(async (hall) => ({ ...hall, squareMeters: hall.squareMeters == null ? null : Number(hall.squareMeters), rate: hall.rate == null ? null : Number(hall.rate), corporatePricing: hall.rate == null ? null : await getCorporateHallPricing(prisma as any, { ...pricingInput, hallId: hall.id }, hall) })));
+
     return withRequestId(successResponse({
       startAt: start.toISOString(), endAt: end.toISOString(), guests,
-      halls: available.map((hall) => ({ ...hall, squareMeters: hall.squareMeters == null ? null : Number(hall.squareMeters), rate: hall.rate == null ? null : Number(hall.rate) })),
+      halls: pricedHalls,
     }), auth.requestId);
   } catch (error) { return corporateError(error, auth.requestId); }
 }

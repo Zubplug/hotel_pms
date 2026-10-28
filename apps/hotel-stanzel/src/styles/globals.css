@@ -1774,3 +1774,6 @@ input[type="date"]::-webkit-date-and-time-value {
     transform: none;
   }
 }
+.corporate-event-flow { position: relative; z-index: 1; width: 100%; margin: 24px 0; padding: 0; background: transparent; }
+@media (max-width: 600px) { .corporate-event-flow { margin-top: 18px; padding: 0; } }
+.corporate-event-negotiation-action { display: flex; justify-content: flex-end; margin: -12px 0 18px; }.corporate-event-negotiation-action button { border: 1px solid #d9c49f; border-radius: 10px; padding: 10px 14px; color: #89652e; background: #fffaf1; cursor: pointer; font-size: 11px; font-weight: 800; }.corporate-event-negotiation-action span { color: #438065; font-size: 11px; font-weight: 800; }

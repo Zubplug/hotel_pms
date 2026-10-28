@@ -43,6 +43,8 @@ const draftSchema = z.object({
   negotiationEnabled: z.boolean().optional(),
   negotiationMinRooms: z.number().int().min(1).nullable().optional(),
   negotiationMinNights: z.number().int().min(1).nullable().optional(),
+  hallDiscountPercent: z.number().min(0).max(100).default(0),
+  hallNegotiationEnabled: z.boolean().optional(),
   effectiveFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   effectiveTo: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
   rules: z.array(ruleSchema).min(1),
@@ -93,7 +95,7 @@ export async function GET(req: NextRequest) {
       const contracts = await prisma.corporateContract.findMany({
         where: { organizationId, isPropertyDefault: true, defaultPropertyId: property.id },
         orderBy: { createdAt: 'desc' },
-        select: { id: true, reference: true, name: true, status: true, defaultCurrency: true, depositMinimumPercent: true, negotiationEnabled: true, negotiationMinRooms: true, negotiationMinNights: true, effectiveFrom: true, effectiveTo: true, isPropertyDefault: true, defaultPropertyId: true, defaultProperty: { select: { name: true, code: true } }, versions: { orderBy: { version: 'desc' }, select: { id: true, version: true, status: true, effectiveFrom: true, effectiveTo: true, submittedAt: true, approvedAt: true, rules: { select: { id: true, roomTypeId: true, amount: true, currency: true, minAdults: true, maxAdults: true, minChildren: true, maxChildren: true, minOccupancy: true, maxOccupancy: true, minStay: true, maxStay: true, minRooms: true, maxRooms: true, pricingFactors: true, sourceRatePlanId: true } } } } },
+        select: { id: true, reference: true, name: true, status: true, defaultCurrency: true, depositMinimumPercent: true, negotiationEnabled: true, negotiationMinRooms: true, negotiationMinNights: true, effectiveFrom: true, effectiveTo: true, isPropertyDefault: true, defaultPropertyId: true, defaultProperty: { select: { name: true, code: true } }, versions: { orderBy: { version: 'desc' }, select: { id: true, version: true, status: true, effectiveFrom: true, effectiveTo: true, submittedAt: true, approvedAt: true, termsSnapshot: true, rules: { select: { id: true, roomTypeId: true, amount: true, currency: true, minAdults: true, maxAdults: true, minChildren: true, maxChildren: true, minOccupancy: true, maxOccupancy: true, minStay: true, maxStay: true, minRooms: true, maxRooms: true, pricingFactors: true, sourceRatePlanId: true } } } } },
       });
       return successResponse(contracts);
     }
@@ -106,7 +108,7 @@ export async function GET(req: NextRequest) {
     const contracts = await prisma.corporateContract.findMany({
       where: { organizationId, ...(accountId ? { corporateAccountId: accountId } : { corporateBookingApplicationId: applicationId }) },
       orderBy: { createdAt: 'desc' },
-      include: { versions: { orderBy: { version: 'desc' }, select: { id: true, version: true, status: true, effectiveFrom: true, effectiveTo: true, rules: { select: { id: true, roomTypeId: true, amount: true, currency: true, minAdults: true, maxAdults: true, minOccupancy: true, maxOccupancy: true, minStay: true, maxStay: true } } } } },
+      include: { versions: { orderBy: { version: 'desc' }, select: { id: true, version: true, status: true, effectiveFrom: true, effectiveTo: true, termsSnapshot: true, rules: { select: { id: true, roomTypeId: true, amount: true, currency: true, minAdults: true, maxAdults: true, minOccupancy: true, maxOccupancy: true, minStay: true, maxStay: true } } } } },
     });
     return successResponse(contracts);
   } catch (error) {
@@ -169,7 +171,7 @@ export async function POST(req: NextRequest) {
       if (body.editContractId) {
         const existing = await tx.corporateContract.findFirst({ where: { id: body.editContractId, organizationId, isPropertyDefault: true, defaultPropertyId: identityPropertyId, status: 'ACTIVE' }, include: { versions: { orderBy: { version: 'desc' }, take: 1, select: { version: true } } } });
         if (!existing) throw Object.assign(new Error('The active property default contract could not be found'), { code: 'NOT_FOUND' });
-        const version = await tx.corporateContractVersion.create({ data: { contractId: existing.id, version: (existing.versions[0]?.version || 0) + 1, status: 'SUBMITTED', effectiveFrom, effectiveTo, submittedBy: session.user.id, submittedAt: new Date(), termsSnapshot: { channel: 'CORPORATE_API', scope: 'PROPERTY_DEFAULT_EDIT', name: body.name, defaultCurrency: body.defaultCurrency, depositMinimumPercent: body.depositMinimumPercent ?? null, negotiationEnabled, negotiationMinRooms, negotiationMinNights } } });
+        const version = await tx.corporateContractVersion.create({ data: { contractId: existing.id, version: (existing.versions[0]?.version || 0) + 1, status: 'SUBMITTED', effectiveFrom, effectiveTo, submittedBy: session.user.id, submittedAt: new Date(), termsSnapshot: { channel: 'CORPORATE_API', scope: 'PROPERTY_DEFAULT_EDIT', name: body.name, defaultCurrency: body.defaultCurrency, depositMinimumPercent: body.depositMinimumPercent ?? null, negotiationEnabled, negotiationMinRooms, negotiationMinNights, hallDiscountPercent: body.hallDiscountPercent, hallNegotiationEnabled: body.hallNegotiationEnabled ?? negotiationEnabled } } });
         const editRules = body.rules.map(rule => ({
           contractVersionId: version.id,
           propertyId: identityPropertyId,
@@ -197,7 +199,7 @@ export async function POST(req: NextRequest) {
           pricingFactors: rule.pricingFactors as any,
         }));
         await tx.corporateRateRule.createMany({ data: editRules });
-        await tx.approvalRequest.create({ data: { propertyId: identityPropertyId, type: 'CORPORATE_CONTRACT', status: 'PENDING', requestedBy: session.user.id, reason: `Review edited property default Corporate API contract ${existing.reference}`, details: { contractId: existing.id, versionId: version.id, stage: 'MANAGEMENT_REVIEW', reference: existing.reference, contractType: 'PROPERTY_DEFAULT', editExisting: true, proposedTerms: { name: body.name, defaultCurrency: body.defaultCurrency, depositMinimumPercent: body.depositMinimumPercent ?? null, negotiationEnabled, negotiationMinRooms, negotiationMinNights, effectiveFrom: body.effectiveFrom, effectiveTo: body.effectiveTo } }, snapshot: { contractId: existing.id, versionId: version.id, reference: existing.reference, name: body.name, defaultCurrency: body.defaultCurrency, depositMinimumPercent: body.depositMinimumPercent ?? null, rules: body.rules as any } } });
+        await tx.approvalRequest.create({ data: { propertyId: identityPropertyId, type: 'CORPORATE_CONTRACT', status: 'PENDING', requestedBy: session.user.id, reason: `Review edited property default Corporate API contract ${existing.reference}`, details: { contractId: existing.id, versionId: version.id, stage: 'MANAGEMENT_REVIEW', reference: existing.reference, contractType: 'PROPERTY_DEFAULT', editExisting: true, proposedTerms: { name: body.name, defaultCurrency: body.defaultCurrency, depositMinimumPercent: body.depositMinimumPercent ?? null, negotiationEnabled, negotiationMinRooms, negotiationMinNights, hallDiscountPercent: body.hallDiscountPercent, hallNegotiationEnabled: body.hallNegotiationEnabled ?? negotiationEnabled, effectiveFrom: body.effectiveFrom, effectiveTo: body.effectiveTo } }, snapshot: { contractId: existing.id, versionId: version.id, reference: existing.reference, name: body.name, defaultCurrency: body.defaultCurrency, depositMinimumPercent: body.depositMinimumPercent ?? null, hallDiscountPercent: body.hallDiscountPercent, hallNegotiationEnabled: body.hallNegotiationEnabled ?? negotiationEnabled, rules: body.rules as any } } });
         return { id: existing.id, versionId: version.id, status: 'ACTIVE', approvalStage: 'MANAGEMENT_REVIEW', editExisting: true };
       }
 
@@ -231,7 +233,7 @@ export async function POST(req: NextRequest) {
         effectiveFrom,
         effectiveTo,
         properties: { create: { propertyId: identityPropertyId, status: 'ACTIVE', effectiveFrom, effectiveTo } },
-        versions: { create: { version: 1, status: isApprovalRoutedDefault ? 'SUBMITTED' : 'DRAFT', effectiveFrom, effectiveTo, submittedBy: isApprovalRoutedDefault ? session.user.id : null, submittedAt: isApprovalRoutedDefault ? new Date() : null, termsSnapshot: { channel: 'CORPORATE_API', scope: body.isPropertyDefault ? 'PROPERTY_DEFAULT' : 'IDENTITY_NEGOTIATED', depositMinimumPercent: body.depositMinimumPercent ?? null, negotiationEnabled, negotiationMinRooms, negotiationMinNights, createdBy: session.user.id } } },
+        versions: { create: { version: 1, status: isApprovalRoutedDefault ? 'SUBMITTED' : 'DRAFT', effectiveFrom, effectiveTo, submittedBy: isApprovalRoutedDefault ? session.user.id : null, submittedAt: isApprovalRoutedDefault ? new Date() : null, termsSnapshot: { channel: 'CORPORATE_API', scope: body.isPropertyDefault ? 'PROPERTY_DEFAULT' : 'IDENTITY_NEGOTIATED', depositMinimumPercent: body.depositMinimumPercent ?? null, negotiationEnabled, negotiationMinRooms, negotiationMinNights, hallDiscountPercent: body.hallDiscountPercent, hallNegotiationEnabled: body.hallNegotiationEnabled ?? negotiationEnabled, createdBy: session.user.id } } },
       }, include: { versions: true } });
       const version = contract.versions[0];
       const defaultSourceRatePlanId = accountRatePlanId;
@@ -263,7 +265,7 @@ export async function POST(req: NextRequest) {
       })) });
       await tx.auditLog.create({ data: { organizationId, propertyId: identityPropertyId, userId: session.user.id, action: 'CREATE', resource: 'corporate_contract_draft', resourceId: contract.id, newValue: { contractId: contract.id, versionId: version.id, corporateAccountId: account?.id || null, corporateBookingApplicationId: application?.id || null, reference: body.reference }, requestId: crypto.randomUUID() } });
       if (isApprovalRoutedDefault) {
-        await tx.approvalRequest.create({ data: { propertyId: identityPropertyId, type: 'CORPORATE_CONTRACT', status: 'PENDING', requestedBy: session.user.id, reason: `Review property default Corporate API contract ${body.reference}`, details: { contractId: contract.id, versionId: version.id, stage: 'MANAGEMENT_REVIEW', reference: body.reference, contractType: 'PROPERTY_DEFAULT' }, snapshot: { contractId: contract.id, versionId: version.id, reference: body.reference, name: body.name, defaultCurrency: body.defaultCurrency, depositMinimumPercent: body.depositMinimumPercent ?? null, rules: body.rules as any } } });
+        await tx.approvalRequest.create({ data: { propertyId: identityPropertyId, type: 'CORPORATE_CONTRACT', status: 'PENDING', requestedBy: session.user.id, reason: `Review property default Corporate API contract ${body.reference}`, details: { contractId: contract.id, versionId: version.id, stage: 'MANAGEMENT_REVIEW', reference: body.reference, contractType: 'PROPERTY_DEFAULT' }, snapshot: { contractId: contract.id, versionId: version.id, reference: body.reference, name: body.name, defaultCurrency: body.defaultCurrency, depositMinimumPercent: body.depositMinimumPercent ?? null, hallDiscountPercent: body.hallDiscountPercent, hallNegotiationEnabled: body.hallNegotiationEnabled ?? negotiationEnabled, rules: body.rules as any } } });
       }
       return { id: contract.id, versionId: version.id, status: contract.status, approvalStage: isApprovalRoutedDefault ? 'MANAGEMENT_REVIEW' : null };
     });

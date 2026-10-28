@@ -11,14 +11,15 @@ const schema = z.object({
   reference: z.string().trim().max(80).optional(),
   requestedTerms: z.record(z.string(), z.unknown()),
   proposedRates: z.array(z.object({
-    roomTypeId: z.string().uuid(),
+    roomTypeId: z.string().uuid().optional(),
+    hallId: z.string().uuid().optional(),
     amount: z.number().positive(),
     currency: z.string().regex(/^[A-Z]{3}$/),
     minStay: z.number().int().min(1).optional(),
     maxStay: z.number().int().min(1).nullable().optional(),
     minRooms: z.number().int().min(1).optional(),
     maxRooms: z.number().int().min(1).nullable().optional(),
-  })).min(1),
+  }).refine((value) => Boolean(value.roomTypeId) !== Boolean(value.hallId), { message: 'Each proposed rate must reference one room type or hall' })).min(1),
 });
 
 export async function POST(req: NextRequest) {
@@ -31,8 +32,13 @@ export async function POST(req: NextRequest) {
     const principal = parsed.data.applicationId
       ? await corporatePrincipalForApplication(auth.principal, parsed.data.applicationId)
       : await corporatePrincipalForProperty(auth.principal, parsed.data.propertyId, 'rates:negotiate');
-    const roomTypes = await prisma.roomType.findMany({ where: { propertyId: parsed.data.propertyId, isActive: true, deletedAt: null, id: { in: parsed.data.proposedRates.map(rate => rate.roomTypeId) } }, select: { id: true } });
-    if (roomTypes.length !== new Set(parsed.data.proposedRates.map(rate => rate.roomTypeId)).size) return withRequestId(errorResponse('BAD_REQUEST', 'Every proposed rate must reference an active room type in this property', 400), auth.requestId);
+    const roomTypeIds = parsed.data.proposedRates.flatMap((rate) => rate.roomTypeId ? [rate.roomTypeId] : []);
+    const hallIds = parsed.data.proposedRates.flatMap((rate) => rate.hallId ? [rate.hallId] : []);
+    const [roomTypes, halls] = await Promise.all([
+      roomTypeIds.length ? prisma.roomType.findMany({ where: { propertyId: parsed.data.propertyId, isActive: true, deletedAt: null, id: { in: roomTypeIds } }, select: { id: true } }) : [],
+      hallIds.length ? prisma.hall.findMany({ where: { propertyId: parsed.data.propertyId, isActive: true, id: { in: hallIds } }, select: { id: true } }) : [],
+    ]);
+    if (roomTypes.length !== new Set(roomTypeIds).size || halls.length !== new Set(hallIds).size) return withRequestId(errorResponse('BAD_REQUEST', 'Every proposed rate must reference an active room type or hall in this property', 400), auth.requestId);
     const request = await prisma.corporateRateNegotiationRequest.create({
       data: {
         organizationId: principal.organizationId,
