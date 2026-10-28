@@ -39,7 +39,8 @@ export function SyncCenterPanel({ onClose, allowPosStaff = false }: { onClose?: 
   const { provider, isOnline } = useLodgeCoreProvider();
   const [busy, setBusy] = useState(false);
   const role = (session?.user as unknown as { role?: string } | undefined)?.role;
-  const isAuthorized = allowPosStaff || ['ADMIN', 'MANAGER', 'SYSTEM_ADMIN', 'RECEPTIONIST', 'FRONT_DESK', 'CASHIER', 'WAITER', 'POS', 'POS_OPERATOR'].includes(role || '');
+  const normalizedRole = String(role || '').toUpperCase();
+  const isAuthorized = allowPosStaff || ['ADMIN', 'MANAGER', 'SYSTEM_ADMIN', 'RECEPTIONIST', 'FRONT_DESK', 'FRONT_DESK_MANAGER', 'CASHIER', 'GENERAL_CASHIER', 'WAITER', 'POS', 'POS_OPERATOR'].includes(normalizedRole);
 
   const { data, refetch } = useQuery({
     queryKey: ['desktop', 'sync-queues'],
