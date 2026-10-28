@@ -582,3 +582,5 @@ public class HardwareInterop
 
         return Task.FromResult(JsonSerializer.Serialize(new { success = true }, _jsonOptions));
     }
+
+}
