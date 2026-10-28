@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Shield, AlertCircle, X, ChevronLeft, Loader2, RefreshCw } from 'lucide-react';
 import { useLodgeCoreProvider } from '@/lib/desktop/DataProviderContext';
-import { useLodgeCoreSession } from '@/lib/auth/useLodgeCoreSession';
 import { PinPad } from './PinPad';
 
 export type ManagerOverrideModalProps = {
@@ -35,6 +34,8 @@ const AUTHORIZER_ROLES = new Set([
   'FINANCE_MANAGER',
   'GENERAL_CASHIER',
   'NIGHT_AUDITOR',
+  'DEPARTMENT_HEAD',
+  'HOD',
 ]);
 
 const normalizeRole = (value: unknown) => String(value || '')
@@ -43,9 +44,7 @@ const normalizeRole = (value: unknown) => String(value || '')
   .replace(/[^A-Z0-9]+/g, '_');
 
 export function ManagerOverrideModal({ isOpen, actionName, onAuthorized, onCancel }: ManagerOverrideModalProps) {
-  const { provider, isDesktopMode } = useLodgeCoreProvider();
-  const { data: session } = useLodgeCoreSession();
-  const propertyId = (session?.user as any)?.propertyId || '';
+  const { provider } = useLodgeCoreProvider();
 
   const [step, setStep] = useState<Step>('select');
   const [managers, setManagers] = useState<ManagerProfile[]>([]);
@@ -59,13 +58,12 @@ export function ManagerOverrideModal({ isOpen, actionName, onAuthorized, onCance
     setLoading(true);
     try {
       let res: any;
-      if (isDesktopMode) {
-        res = await provider.auth.getActiveStaff(
-          'MANAGER,ADMIN,GENERAL_MANAGER,SUPER_ADMIN,OWNER,CEO,HOTEL_MANAGER,FNB_MANAGER,FRONT_DESK_MANAGER,FINANCE_MANAGER,GENERAL_CASHIER,NIGHT_AUDITOR'
-        );
-      } else if (propertyId) {
-        res = await provider.pos.getActiveStaff(propertyId);
-      }
+      // Void authorizers are property-wide management staff, not only POS
+      // operators assigned to the current outlet. Use the same source in
+      // desktop/offline and online modes so HODs and department heads appear.
+      res = await provider.auth.getActiveStaff(
+        'MANAGER,ADMIN,GENERAL_MANAGER,SUPER_ADMIN,OWNER,CEO,HOTEL_MANAGER,FNB_MANAGER,FRONT_DESK_MANAGER,FINANCE_MANAGER,GENERAL_CASHIER,NIGHT_AUDITOR,DEPARTMENT_HEAD,HOD'
+      );
       if (res?.data) {
         const fetched = res.data.filter((member: ManagerProfile) => {
           return AUTHORIZER_ROLES.has(normalizeRole(member.role))

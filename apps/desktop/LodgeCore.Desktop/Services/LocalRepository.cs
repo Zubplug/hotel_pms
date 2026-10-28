@@ -7822,7 +7822,8 @@ public class LocalRepository
         var value = (role ?? position ?? string.Empty).Trim().ToUpperInvariant().Replace(" ", "_").Replace("-", "_");
         return value is "MANAGER" or "ADMIN" or "GENERAL_MANAGER" or "SUPER_ADMIN" or "OWNER"
             or "CEO" or "HOTEL_MANAGER" or "FNB_MANAGER" or "FRONT_DESK_MANAGER"
-            or "FINANCE_MANAGER" or "GENERAL_CASHIER" or "NIGHT_AUDITOR";
+            or "FINANCE_MANAGER" or "GENERAL_CASHIER" or "NIGHT_AUDITOR"
+            or "DEPARTMENT_HEAD" or "HOD";
     }
 
     public void LogOverrideAudit(

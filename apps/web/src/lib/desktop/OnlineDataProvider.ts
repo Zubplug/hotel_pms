@@ -38,8 +38,11 @@ export const OnlineDataProvider: LodgeCoreDataProvider = {
     async provisionDevice(deviceToken) {
       throw new Error('Provisioning is only supported on Desktop');
     },
-    async getActiveStaff() {
-      throw new Error('getActiveStaff is only supported on Desktop offline auth');
+    async getActiveStaff(roleScope?: string, propertyId?: string) {
+      const params = new URLSearchParams({ scope: 'all' });
+      if (propertyId) params.set('propertyId', propertyId);
+      if (roleScope) params.set('roleScope', roleScope);
+      return apiFetchResult(`/api/v1/pos/staff?${params.toString()}`);
     },
     async login(staffId: string, pin: string, bankingModel?: string): Promise<{ success: boolean; error?: string; posSessionId?: string; bankingModel?: string }> {
       throw new Error('login is only supported on Desktop offline auth');

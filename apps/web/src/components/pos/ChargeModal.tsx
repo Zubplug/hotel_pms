@@ -151,7 +151,7 @@ export function ChargeModal({
         setIsLoadingStaff(true);
         try {
           const [posStaff, management] = await Promise.all([
-            provider.pos.getActiveStaff('ALL'),
+            provider.auth.getActiveStaff(),
             provider.auth.getActiveStaff(MANAGEMENT_ACKNOWLEDGER_ROLES),
           ]);
           if (posStaff?.data) setActiveStaff(posStaff.data);
@@ -309,22 +309,22 @@ export function ChargeModal({
     <Dialog open={isOpen} onOpenChange={(open) => {
       if (!isProcessing && !open) onClose();
     }}>
-      <DialogContent className="max-w-md p-0 overflow-hidden bg-slate-50 border-0 rounded-[2rem]">
+      <DialogContent className="flex max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] max-w-lg flex-col overflow-hidden rounded-[1.5rem] border-0 bg-slate-50 p-0 sm:max-h-[calc(100dvh-2rem)] sm:rounded-[2rem]">
 
         {/* ── Header ── */}
-        <div className="bg-indigo-600 px-8 py-10 text-center relative overflow-hidden">
+        <div className="relative shrink-0 overflow-hidden bg-indigo-600 px-5 py-6 text-center sm:px-8 sm:py-8">
           <div className="absolute inset-0 opacity-10 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-white via-transparent to-transparent" />
           <DialogTitle className="text-indigo-100 font-bold text-sm tracking-widest uppercase mb-2 relative z-10">
             {headerLabel}
           </DialogTitle>
-          <div className="text-5xl font-black text-white tracking-tight relative z-10">
+          <div className="relative z-10 text-3xl font-black tracking-tight text-white sm:text-5xl">
             {formatCurrency(total)}
           </div>
           <DialogDescription className="sr-only">Select payment method to complete the transaction.</DialogDescription>
         </div>
 
         {/* ── Content ── */}
-        <div className="p-8 pb-10 relative">
+        <div className="min-h-0 flex-1 overflow-y-auto p-4 pb-5 sm:p-6 sm:pb-7">
 
           {/* ── Payment methods ── */}
           {view === 'methods' && (
@@ -565,35 +565,29 @@ export function ChargeModal({
           {view === 'compSelection' && (
             <div className="animate-in fade-in slide-in-from-right-4 duration-300">
               <BackButton onClick={() => setView('methods')} />
-              <div className="space-y-4">
+              <div className="space-y-5">
                 <div>
-                  <label className="block text-sm font-bold text-slate-700 mb-2">Benefit Recipient</label>
-                  <div className="grid grid-cols-2 gap-2 mb-4">
+                  <label className="mb-2 block text-xs font-black uppercase tracking-[.16em] text-slate-500">Benefit recipient</label>
+                  <div className="grid grid-cols-2 gap-2">
                     {(['GUEST', 'STAFF'] as const).map((type) => (
-                      <button key={type} type="button" onClick={() => setBeneficiaryType(type)} className={`rounded-xl border px-3 py-3 text-sm font-bold ${beneficiaryType === type ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-200 bg-white text-slate-500'}`}>
+                      <button key={type} type="button" onClick={() => setBeneficiaryType(type)} className={`rounded-xl border px-3 py-3 text-sm font-bold transition-colors ${beneficiaryType === type ? 'border-indigo-500 bg-indigo-600 text-white shadow-sm' : 'border-slate-200 bg-white text-slate-600 hover:border-indigo-200 hover:bg-indigo-50'}`}>
                         {type === 'GUEST' ? 'Guest / Customer' : 'Staff Member'}
                       </button>
                     ))}
                   </div>
-                  {beneficiaryType === 'GUEST' && <p className="mb-4 rounded-xl bg-slate-50 p-3 text-xs text-slate-500">Select a checked-in guest. The guest record, not the reservation record, is saved as the beneficiary.</p>}
-                  {beneficiaryType === 'GUEST' && <div className="mb-4"><input value={guestQuery} onChange={(e) => { setGuestQuery(e.target.value); setBeneficiaryGuestId(''); setBeneficiaryGuestFolioId(''); setBeneficiaryGuestReservationId(''); }} placeholder="Search checked-in guest by name or room" className="w-full h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-indigo-300" />{guestResults.length > 0 && <div className="mt-2 max-h-36 overflow-y-auto space-y-1">{guestResults.map((guest) => <button type="button" key={guest.reservationId} onClick={() => { const id = guest.guestId || ''; setBeneficiaryGuestId(id); setBeneficiaryGuestFolioId(guest.folioId || ''); setBeneficiaryGuestReservationId(guest.reservationId); setGuestQuery(`${guest.guestName} · Room ${displayRoomNumber(guest.roomNumber)}`); setGuestResults([]); }} className={`w-full rounded-lg border px-3 py-2 text-left text-xs ${beneficiaryGuestId === guest.guestId ? 'border-indigo-500 bg-indigo-50' : 'border-slate-200 bg-white'}`}><span className="font-bold text-slate-700">{guest.guestName}</span><span className="ml-2 text-slate-500">Room {displayRoomNumber(guest.roomNumber)}</span></button>)}</div>}</div>}
-                  {beneficiaryType === 'STAFF' && <>
-                  <label className="block text-sm font-bold text-slate-700 mb-2">Staff Beneficiary</label>
-                  {isLoadingStaff ? (
-                    <div className="flex items-center gap-2 text-sm text-slate-500">
-                      <Loader2 className="w-4 h-4 animate-spin" /> Loading staff list...
-                    </div>
-                  ) : (
-                    <SearchableSelect value={beneficiaryStaffId} onChange={setBeneficiaryStaffId} placeholder="Choose a staff member..." searchPlaceholder="Search staff by name or department…" inputClassName="h-12 rounded-xl bg-white border-slate-200" options={activeStaff.map((s) => ({ value: s.id, label: `${s.firstName} ${s.lastName}${s.department ? ` · ${s.department}` : ''}`, searchText: `${s.firstName} ${s.lastName} ${s.department || ''}` }))} />
-                  )}</>}
                 </div>
-                {beneficiaryType === 'STAFF' && <div><label className="block text-sm font-bold text-slate-700 mb-2">Staff settlement</label><SearchableSelect value={staffSettlementType} onChange={(v) => setStaffSettlementType(v as 'DUTY_MANAGER' | 'STAFF_PAY_LATER')} searchPlaceholder="Search settlement types…" inputClassName="h-12 rounded-xl bg-white border-slate-200" options={[{ value: 'DUTY_MANAGER', label: 'Duty Manager · Free benefit', searchText: 'company sponsored duty meal benefit' }, { value: 'STAFF_PAY_LATER', label: 'Pay later · Staff receivable', searchText: 'pending approval staff receivable' }]} /><p className="mt-1.5 text-xs text-slate-500">Pay-later benefits require review by Night Audit, the General Manager, General Cashier, or Accountant before they become staff receivables.</p></div>}
-                <div><label className="block text-sm font-bold text-slate-700 mb-2">Acknowledged By</label><SearchableSelect value={acknowledgedByStaffId} onChange={setAcknowledgedByStaffId} placeholder="Select management staff" searchPlaceholder="Search management staff…" inputClassName="h-12 rounded-xl bg-white border-slate-200" options={managementStaff.map((s) => ({ value: s.id, label: `${s.firstName} ${s.lastName}${s.role ? ` · ${String(s.role).replaceAll('_', ' ')}` : ''}`, searchText: `${s.firstName} ${s.lastName} ${s.role || ''}` }))} /></div>
-                <div><label className="block text-sm font-bold text-slate-700 mb-2">Reason</label><SearchableSelect value={complimentaryReason} onChange={setComplimentaryReason} placeholder="Select an approved reason" searchPlaceholder="Search approved reasons…" inputClassName="h-12 rounded-xl bg-white border-slate-200" options={COMPLIMENTARY_REASONS.map((option) => ({ value: option.value, label: option.label, searchText: option.label }))} /></div>
+
+                {beneficiaryType === 'GUEST' && <div className="rounded-2xl border border-slate-200 bg-white p-4"><label className="mb-2 block text-sm font-bold text-slate-700">Checked-in guest</label><p className="mb-3 text-xs leading-5 text-slate-500">Select the guest who receives this benefit. The guest record is stored as the beneficiary.</p><input value={guestQuery} onChange={(e) => { setGuestQuery(e.target.value); setBeneficiaryGuestId(''); setBeneficiaryGuestFolioId(''); setBeneficiaryGuestReservationId(''); }} placeholder="Search by guest name or room" className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm outline-none transition focus:border-indigo-400 focus:bg-white focus:ring-2 focus:ring-indigo-200" />{guestResults.length > 0 && <div className="mt-2 max-h-40 space-y-1 overflow-y-auto">{guestResults.map((guest) => <button type="button" key={guest.reservationId} onClick={() => { const id = guest.guestId || ''; setBeneficiaryGuestId(id); setBeneficiaryGuestFolioId(guest.folioId || ''); setBeneficiaryGuestReservationId(guest.reservationId); setGuestQuery(`${guest.guestName} · Room ${displayRoomNumber(guest.roomNumber)}`); setGuestResults([]); }} className={`w-full rounded-xl border px-3 py-2.5 text-left text-xs transition ${beneficiaryGuestId === guest.guestId ? 'border-indigo-500 bg-indigo-50' : 'border-slate-200 bg-white hover:border-indigo-200 hover:bg-indigo-50'}`}><span className="font-bold text-slate-700">{guest.guestName}</span><span className="ml-2 text-slate-500">Room {displayRoomNumber(guest.roomNumber)}</span></button>)}</div>}</div>}
+
+                {beneficiaryType === 'STAFF' && <div className="rounded-2xl border border-slate-200 bg-white p-4"><label className="mb-2 block text-sm font-bold text-slate-700">Staff beneficiary</label>{isLoadingStaff ? <div className="flex items-center gap-2 text-sm text-slate-500"><Loader2 className="h-4 w-4 animate-spin" /> Loading staff list…</div> : <SearchableSelect value={beneficiaryStaffId} onChange={setBeneficiaryStaffId} placeholder="Choose a staff member…" searchPlaceholder="Search staff by name or department…" inputClassName="h-12 rounded-xl bg-slate-50 border-slate-200" options={activeStaff.map((s) => ({ value: s.id, label: `${s.firstName} ${s.lastName}${s.department ? ` · ${s.department}` : ''}`, searchText: `${s.firstName} ${s.lastName} ${s.department || ''}` }))} />}</div>}
+
+                {beneficiaryType === 'STAFF' && <div><label className="mb-2 block text-sm font-bold text-slate-700">Staff settlement</label><SearchableSelect value={staffSettlementType} onChange={(v) => setStaffSettlementType(v as 'DUTY_MANAGER' | 'STAFF_PAY_LATER')} searchPlaceholder="Search settlement types…" inputClassName="h-12 rounded-xl bg-white border-slate-200" options={[{ value: 'DUTY_MANAGER', label: 'Duty Manager · Free benefit', searchText: 'company sponsored duty meal benefit' }, { value: 'STAFF_PAY_LATER', label: 'Pay later · Staff receivable', searchText: 'pending approval staff receivable' }]} /><p className="mt-1.5 text-xs leading-5 text-slate-500">Pay-later benefits require review before becoming staff receivables.</p></div>}
+                <div><label className="mb-2 block text-sm font-bold text-slate-700">Authorized by</label><SearchableSelect value={acknowledgedByStaffId} onChange={setAcknowledgedByStaffId} placeholder="Select management staff" searchPlaceholder="Search management staff…" inputClassName="h-12 rounded-xl bg-white border-slate-200" options={managementStaff.map((s) => ({ value: s.id, label: `${s.firstName} ${s.lastName}${s.role ? ` · ${String(s.role).replaceAll('_', ' ')}` : ''}`, searchText: `${s.firstName} ${s.lastName} ${s.role || ''}` }))} /></div>
+                <div><label className="mb-2 block text-sm font-bold text-slate-700">Reason</label><SearchableSelect value={complimentaryReason} onChange={setComplimentaryReason} placeholder="Select an approved reason" searchPlaceholder="Search approved reasons…" inputClassName="h-12 rounded-xl bg-white border-slate-200" options={COMPLIMENTARY_REASONS.map((option) => ({ value: option.value, label: option.label, searchText: option.label }))} /></div>
                 <button
                   onClick={handleComplimentaryCharge}
                   disabled={isProcessing || !acknowledgedByStaffId || !complimentaryReason || (beneficiaryType === 'STAFF' && !beneficiaryStaffId) || (beneficiaryType === 'GUEST' && !beneficiaryGuestId)}
-                  className="w-full h-14 rounded-xl font-bold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 transition-colors mt-4 shadow-sm"
+                  className="sticky bottom-0 w-full rounded-xl bg-indigo-600 py-3.5 text-sm font-black text-white shadow-lg shadow-indigo-600/20 transition-colors hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {isProcessing ? 'Processing...' : 'Complete as Complimentary'}
                 </button>

@@ -15,6 +15,8 @@ export async function GET(req: NextRequest) {
     const propertyId = searchParams.get('propertyId') || (session.user as any).propertyId;
     let outletId = searchParams.get('outletId');
     const deviceIdentifier = searchParams.get('deviceId');
+    const includeAllActiveStaff = searchParams.get('scope') === 'all';
+    const roleScope = searchParams.get('roleScope');
 
     if (!propertyId) {
       return NextResponse.json({ error: 'Property ID required' }, { status: 400 });
@@ -37,12 +39,51 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Outlet access required' }, { status: 403 });
     }
 
+    // Staff positions are stored as free-form text and older records use
+    // spaces, hyphens, or underscores interchangeably.
+    const normalizePosition = (position: unknown) => String(position ?? '')
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, '');
+
     let staff;
 
-      // Staff positions are stored as free-form text and older records use
-      // spaces, hyphens, or underscores interchangeably. Keep this allow-list
-      // broad enough for both POS and pool terminals, then compare normalized
-      // values so valid staff are not hidden by spelling differences.
+    // Complimentary beneficiaries and acknowledgers are property-scoped, not
+    // POS-operator-scoped. Keep this branch separate from the terminal staff
+    // list below so ordinary employees and department heads are not hidden by
+    // POS access or outlet assignment rules.
+    if (includeAllActiveStaff) {
+      const roleKeys = new Set(
+        String(roleScope || '')
+          .split(',')
+          .map(normalizePosition)
+          .filter(Boolean),
+      );
+      const allActiveStaff = await prisma.staff.findMany({
+        where: {
+          propertyAccess: { has: propertyId },
+          organizationId: ctx.organizationId,
+          isActive: true,
+          deletedAt: null,
+        },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          department: true,
+          position: true,
+        },
+        orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
+      });
+
+      staff = allActiveStaff
+        .filter((member) => roleKeys.size === 0 || roleKeys.has(normalizePosition(member.position)))
+        .map((member) => ({ ...member, role: member.position }));
+      return NextResponse.json({ data: staff });
+    }
+
+      // Keep this allow-list broad enough for both POS and pool terminals, then
+      // compare normalized values so valid staff are not hidden by spelling differences.
       const allowedPositions = [
         'WAITER', 'WAITRESS', 'CASHIER', 'POS', 'POS_OPERATOR', 'POS_CASHIER',
         'MANAGER', 'GENERAL_MANAGER', 'FNB_MANAGER', 'HOTEL_MANAGER',
@@ -51,10 +92,6 @@ export async function GET(req: NextRequest) {
         'POOL_OPERATOR', 'POOL_MANAGER', 'SWIMMING_POOL_OPERATOR',
         'SWIMMING_POOL_MANAGER',
       ];
-      const normalizePosition = (position: unknown) => String(position ?? '')
-        .trim()
-        .toUpperCase()
-        .replace(/[^A-Z0-9]/g, '');
       const allowedPositionKeys = new Set(allowedPositions.map(normalizePosition));
       if (outletId) {
       // Outlet-scoped: only return staff explicitly assigned to this outlet.
