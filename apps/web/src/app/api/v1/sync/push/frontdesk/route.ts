@@ -753,6 +753,68 @@ export async function POST(req: NextRequest) {
                   `[sync/push] ${eventType} auto-resolved version mismatch for folio ${targetFolio.id} (edge folio ${aggregateId})`
                 );
               }
+            } else if (
+              updatedCount === 0 &&
+              eventType === "GUEST_CREDIT_TRANSFER"
+            ) {
+              // Checkout credit transfers are derived from the edge folio
+              // balance. A newer cloud event may legitimately have changed
+              // the folio version before this transfer arrives, so the edge
+              // version must not turn a safe checkout reconciliation into a
+              // manual financial conflict.
+              const targetFolio = await tx.folio.findUnique({
+                where: { id: aggregateId, propertyId },
+                select: {
+                  id: true,
+                  balance: true,
+                  currency: true,
+                  reservationId: true,
+                  reservation: {
+                    select: { status: true, primaryGuestId: true },
+                  },
+                },
+              });
+
+              if (targetFolio) {
+                const transferReference = `CR_SYNC_${idempotencyKey}`;
+                const alreadyRouted = await tx.cityLedgerEntry.findFirst({
+                  where: { reference: transferReference },
+                  select: { id: true },
+                });
+                const availableCredit = Math.max(0, -Number(targetFolio.balance));
+                const guestMatches = !targetFolio.reservation?.primaryGuestId ||
+                  targetFolio.reservation.primaryGuestId === payload.guestId;
+                const reservationMatches = !payload.reservationId ||
+                  targetFolio.reservationId === payload.reservationId;
+                const currencyMatches = !payload.currency ||
+                  targetFolio.currency === payload.currency;
+                const checkoutCompleted = targetFolio.reservation?.status === "CHECKED_OUT";
+
+                if (alreadyRouted || availableCredit <= 0.01) {
+                  // The cloud already settled the credit, or there is no
+                  // remaining credit to route. Treat this as an idempotent
+                  // no-op and let the normal event persistence complete.
+                  updatedCount = 1;
+                } else if (
+                  checkoutCompleted &&
+                  guestMatches &&
+                  reservationMatches &&
+                  currencyMatches
+                ) {
+                  // Accept at the current cloud version. The authoritative
+                  // GUEST_CREDIT_TRANSFER handler below will reconcile the
+                  // amount from the locked cloud balance rather than trusting
+                  // the stale offline amount.
+                  await tx.folio.updateMany({
+                    where: { id: targetFolio.id },
+                    data: { version: { increment: 1 } },
+                  });
+                  updatedCount = 1;
+                  console.log(
+                    `[sync/push] GUEST_CREDIT_TRANSFER auto-reconciled version mismatch for folio ${targetFolio.id}`
+                  );
+                }
+              }
             }
           } else if (aggregateType === "RESERVATION") {
             if (eventType === "CREATE") {
