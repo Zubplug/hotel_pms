@@ -755,8 +755,12 @@ export async function getFinancialAudit(ctx: TenantContext, propertyId: string) 
       room: { select: { number: true } },
     },
   });
+  const representedComplimentaryRecords = await prisma.complimentaryRecord.findMany({
+    where: { propertyId, businessDate, roomId: { not: null } },
+    select: { roomId: true },
+  });
   const representedComplimentaryRooms = new Set(
-    unverifiedComplimentary.map((record) => record.roomId).filter(Boolean),
+    representedComplimentaryRecords.map((record) => record.roomId).filter(Boolean),
   );
   const missingComplimentaryRecords = complimentaryRoomReservations
     .filter((room) => room.roomId && !representedComplimentaryRooms.has(room.roomId))
