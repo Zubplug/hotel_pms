@@ -78,15 +78,25 @@ export function ComplimentaryVerificationResolution({
 
     setIsSubmitting(true);
     try {
-      const response = await fetch('/api/v1/financial-control/complimentary', {
-        method: 'PATCH',
+      const isMissingApproval = Boolean(record.isMissingApproval);
+      const response = await fetch(isMissingApproval
+        ? '/api/v1/financial-control/complimentary/reconcile'
+        : '/api/v1/financial-control/complimentary', {
+        method: isMissingApproval ? 'POST' : 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          propertyId,
-          id: record.id,
-          status,
-          rejectionReason: status === 'REVERSED' ? notes : undefined,
-        }),
+        body: isMissingApproval
+          ? JSON.stringify({
+              propertyId,
+              reservationRoomId: record.reservationRoomId,
+              decision: status === 'VERIFIED' ? 'APPROVE' : 'REJECT',
+              rejectionReason: status === 'REVERSED' ? notes : undefined,
+            })
+          : JSON.stringify({
+              propertyId,
+              id: record.id,
+              status,
+              rejectionReason: status === 'REVERSED' ? notes : undefined,
+            }),
       });
 
       if (!response.ok) {
@@ -98,7 +108,7 @@ export function ComplimentaryVerificationResolution({
       
       // Update local state without full reload
       record.status = status;
-      toast.success(status === 'VERIFIED' ? 'Complimentary transaction verified' : 'Transaction rejected and POS order voided');
+      toast.success(status === 'VERIFIED' ? 'Complimentary reservation approved' : 'Complimentary reservation rejected');
       
     } catch (error: any) {
       console.error(error);
@@ -145,11 +155,11 @@ export function ComplimentaryVerificationResolution({
           <DialogHeader>
             <div className="flex items-start justify-between gap-4">
               <div>
-                <DialogTitle className="flex items-center gap-2 text-white">
+                  <DialogTitle className="flex items-center gap-2 text-white">
                   <Receipt className="w-5 h-5 text-indigo-400" />
                   Verify Complimentary
                 </DialogTitle>
-                <DialogDescription className="mt-1 text-slate-400">
+                  <DialogDescription className="mt-1 text-slate-400">
                   {currentIndex + 1} of {unverifiedRecords.length + currentIndex} pending review
                 </DialogDescription>
               </div>
@@ -202,6 +212,12 @@ export function ComplimentaryVerificationResolution({
                 </div>
 
                 <div className="grid grid-cols-2 gap-y-4 gap-x-6 text-sm relative z-10">
+                  {record.isMissingApproval && (
+                    <div className="col-span-2 rounded-lg border border-rose-400/25 bg-rose-400/[0.08] p-3 text-xs leading-5 text-rose-200">
+                      This reservation is marked complimentary, but its original approval record is missing. Approving here creates the missing audit record; rejecting restores the normal room charge.
+                    </div>
+                  )}
+                  {record.reservationRoom?.room?.number && <div><p className="text-slate-500 text-[11px] mb-1">Room / confirmation</p><p className="font-medium text-slate-200">{record.reservationRoom.room.number} · {record.reservationRoom.reservation?.confirmationNumber || '—'}</p></div>}
                   <div>
                     <p className="text-slate-500 text-[11px] mb-1">Reason</p>
                     <p className="font-medium text-slate-200">{record.reason}</p>
@@ -272,7 +288,7 @@ export function ComplimentaryVerificationResolution({
                       rows={3}
                       autoFocus
                     />
-                    <p className="text-[11px] text-slate-400">This rejects the request, voids any pending POS payment and voids the linked POS order. No accounting or inventory posting is created.</p>
+                    <p className="text-[11px] text-slate-400">{record.isMissingApproval ? 'This restores the normal room charge and records the rejection for audit.' : 'This rejects the request, voids any pending POS payment and voids the linked POS order. No accounting or inventory posting is created.'}</p>
                   </div>
                   <div className="flex gap-3">
                     <button 

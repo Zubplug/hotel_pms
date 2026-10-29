@@ -10,6 +10,7 @@
     "db:migrate": "prisma migrate dev",
     "db:seed": "prisma db seed",
     "db:sync:pricing": "tsx prisma/sync-2026-pricing-catalog.ts",
+    "db:seed:guest-complementary": "tsx prisma/seed_guest_complementary_menu.ts",
     "db:studio": "prisma studio",
     "test": "tsx --test tests/*.test.ts",
     "type-check": "tsc --noEmit",

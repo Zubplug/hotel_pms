@@ -97,6 +97,12 @@ export async function POST(req: NextRequest) {
       return { ...item, modifiers: resolveSelectedModifiers(product, item.modifiers) };
     });
 
+    const confirmedInitialPayments = payments.filter((payment: any) =>
+      ['CONFIRMED', 'PAID'].includes(String(payment.status ?? 'CONFIRMED').toUpperCase()),
+    );
+    const initialPaidTotal = confirmedInitialPayments.reduce((sum: number, payment: any) => sum + Number(payment.amount || 0), 0);
+    const initialFullyPaid = confirmedInitialPayments.length > 0 && initialPaidTotal >= Number(total || 0) - 0.01;
+
     // Resolve station per item
     function resolveStation(item: any): ProductionStation {
       const product = productMap.get(item.productId);
@@ -123,8 +129,9 @@ export async function POST(req: NextRequest) {
           guestCount:    guestCount ?? 1,
           serverStaffId: serverStaffId ?? body.serverStaffId ?? null,
           orderNumber,
-          status:        'SUBMITTED' as PosOrderStatus,
-          paymentStatus: 'UNPAID',
+          status:        initialFullyPaid ? 'CLOSED' as PosOrderStatus : 'SUBMITTED' as PosOrderStatus,
+          paymentStatus: initialFullyPaid ? 'PAID' : (initialPaidTotal > 0 ? 'PARTIALLY_PAID' : 'UNPAID'),
+          closedAt:      initialFullyPaid ? new Date() : null,
           businessDate:  activePosSession.businessDate || getPropertyBusinessDate(),
           subtotal,
           taxAmount,

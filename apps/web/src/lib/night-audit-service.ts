@@ -726,6 +726,75 @@ export async function getFinancialAudit(ctx: TenantContext, propertyId: string) 
     };
   });
 
+  // A legacy/front-desk path can mark a reservation room as COMPLIMENTARY
+  // without creating its control record. Surface that orphaned concession in
+  // the wizard instead of allowing the room-charge stage to fail with an
+  // unexplained reservation error.
+  const complimentaryRoomReservations = await prisma.reservationRoom.findMany({
+    where: {
+      discountType: 'COMPLIMENTARY',
+      status: 'ACTIVE',
+      checkIn: { lte: businessDate },
+      checkOut: { gt: businessDate },
+      reservation: { propertyId },
+    },
+    select: {
+      id: true,
+      roomId: true,
+      rateAmount: true,
+      currency: true,
+      discountReason: true,
+      reservation: {
+        select: {
+          id: true,
+          confirmationNumber: true,
+          createdBy: true,
+          primaryGuest: { select: { id: true, firstName: true, lastName: true } },
+        },
+      },
+      room: { select: { number: true } },
+    },
+  });
+  const representedComplimentaryRooms = new Set(
+    unverifiedComplimentary.map((record) => record.roomId).filter(Boolean),
+  );
+  const missingComplimentaryRecords = complimentaryRoomReservations
+    .filter((room) => room.roomId && !representedComplimentaryRooms.has(room.roomId))
+    .map((room) => ({
+      id: `MISSING_COMP_${room.id}`,
+      isMissingApproval: true,
+      propertyId,
+      businessDate,
+      reference: `COMP_MISSING_${room.id}`,
+      sourceModule: 'FRONT_DESK',
+      roomId: room.roomId,
+      guestId: room.reservation.primaryGuest?.id || null,
+      grossAmount: room.rateAmount,
+      complAmount: room.rateAmount,
+      netAmount: 0,
+      complType: 'FULL',
+      reason: room.discountReason || 'Complimentary reservation requires review',
+      operatorId: room.reservation.createdBy,
+      status: 'PENDING_NIGHT_AUDIT',
+      operator: null,
+      approver: null,
+      acknowledgedBy: null,
+      staff: null,
+      reservationRoom: {
+        roomId: room.roomId,
+        room: room.room,
+        reservation: {
+          confirmationNumber: room.reservation.confirmationNumber,
+          primaryGuest: room.reservation.primaryGuest,
+        },
+      },
+      requestedByName: room.reservation.createdBy || 'Reservation operator',
+      acknowledgedByName: null,
+      reservationRoomId: room.id,
+      reservationId: room.reservation.id,
+      currency: room.currency,
+    }));
+
   // Fetch unverified Check-In Bypasses
   // These represent unresolved financial exceptions where check-in occurred without deposit.
   const pendingCheckInBypasses = await prisma.checkInBypass.findMany({
@@ -742,7 +811,7 @@ export async function getFinancialAudit(ctx: TenantContext, propertyId: string) 
 
   const eventHall = await getEventHallAuditControl(ctx, propertyId, businessDate);
   const guestAmenity = await getGuestAmenityAuditControl(propertyId, businessDate);
-  return { openFolios, highBalances, rateVariances, pendingDiscounts: enrichedPendingDiscounts, pendingNightAuditPostings, unverifiedComplimentary: enrichedComplimentary, pendingCheckInBypasses, eventHall, guestAmenity };
+  return { openFolios, highBalances, rateVariances, pendingDiscounts: enrichedPendingDiscounts, pendingNightAuditPostings, unverifiedComplimentary: [...enrichedComplimentary, ...missingComplimentaryRecords], pendingCheckInBypasses, eventHall, guestAmenity };
 }
 
 export async function getCashReconciliation(ctx: TenantContext, propertyId: string) {
@@ -848,8 +917,12 @@ export async function getFnbControl(ctx: TenantContext, propertyId: string) {
     }
   });
 
+  // Payment settlement is authoritative for this control. Older/offline POS
+  // writes can persist a paid order with a stale SUBMITTED/IN_SERVICE header;
+  // those orders must not block Night Audit or disappear from revenue totals.
   const isSettledOrder = (order: typeof rawOrders[number]) =>
-    order.status === 'CLOSED' && order.payments.some((payment: any) => ['PAID', 'CONFIRMED'].includes(String(payment.status)));
+    order.paymentStatus === 'PAID' &&
+    order.payments.some((payment: any) => ['PAID', 'CONFIRMED'].includes(String(payment.status)));
   const settledOrders = rawOrders.filter(isSettledOrder);
   const openOrders = rawOrders.filter(o =>
     (o.status !== 'CLOSED' || !isSettledOrder(o))

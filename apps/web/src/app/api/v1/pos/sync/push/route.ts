@@ -884,7 +884,7 @@ export async function POST(req: NextRequest) {
                   if (confirmedTotal >= Number(order.total)) {
                       await tx.posOrder.update({
                           where: { id: orderId },
-                          data: { paymentStatus: 'PAID', updatedAt: new Date() },
+                          data: { paymentStatus: 'PAID', status: 'CLOSED', closedAt: new Date(), updatedAt: new Date() },
                       });
                   } else if (confirmedTotal > 0) {
                       await tx.posOrder.update({
