@@ -39,7 +39,9 @@ export async function POST(req: NextRequest) {
       const existing = await tx.complimentaryRecord.findFirst({ where: { propertyId, roomId: room.roomId, guestId: room.reservation.primaryGuestId, businessDate: property?.businessDate || undefined } });
       if (existing) return existing;
 
-      const operator = await tx.staff.findFirst({ where: { id: room.reservation.createdBy, propertyAccess: { has: propertyId }, isActive: true }, select: { id: true } });
+      const operator = room.reservation.createdBy
+        ? await tx.staff.findFirst({ where: { id: room.reservation.createdBy, propertyAccess: { has: propertyId }, isActive: true }, select: { id: true } })
+        : null;
       const operatorId = operator?.id || auditor.id;
       const amount = Number(room.rateAmount);
       const isApproved = decision === 'APPROVE';
@@ -80,7 +82,7 @@ export async function POST(req: NextRequest) {
       return record;
     });
 
-    return successResponse({ record, decision });
+    return successResponse({ record: result, decision });
   } catch (err: any) {
     console.error('[Complimentary reconciliation]', err);
     if (err.message === 'STAFF_NOT_FOUND') return errorResponse('FORBIDDEN', 'Authenticated user has no active staff profile', 403);
