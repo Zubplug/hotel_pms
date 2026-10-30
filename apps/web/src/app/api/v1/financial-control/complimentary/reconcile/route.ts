@@ -41,15 +41,25 @@ export async function POST(req: NextRequest) {
         // Keep compatibility with records created by the earlier reconciliation
         // path, which did not always use the same deterministic operation ID.
         || await tx.complimentaryRecord.findFirst({ where: { propertyId, roomId: room.roomId, guestId: room.reservation.primaryGuestId, businessDate: property?.businessDate || undefined } });
-      if (existing) return existing;
+      const isApproved = decision === 'APPROVE';
+      const isPending = existing && ['PENDING_NIGHT_AUDIT', 'UNRESOLVED'].includes(existing.status);
+      if (existing && !isPending) return existing;
 
       const operator = room.reservation.createdBy
         ? await tx.staff.findFirst({ where: { id: room.reservation.createdBy, propertyAccess: { has: propertyId }, isActive: true }, select: { id: true } })
         : null;
       const operatorId = operator?.id || auditor.id;
       const amount = Number(room.rateAmount);
-      const isApproved = decision === 'APPROVE';
-      const record = await tx.complimentaryRecord.upsert({
+      const decisionData = {
+        status: isApproved ? 'VERIFIED' : 'REVERSED',
+        approverId: isApproved ? auditor.id : null,
+        nightAuditorId: isApproved ? auditor.id : null,
+        verifiedAt: isApproved ? new Date() : null,
+        rejectionReason: isApproved ? null : String(rejectionReason).trim(),
+      } as const;
+      const record = existing
+        ? await tx.complimentaryRecord.update({ where: { id: existing.id }, data: decisionData })
+        : await tx.complimentaryRecord.upsert({
         where: { operationId },
         create: {
           propertyId,
@@ -70,18 +80,14 @@ export async function POST(req: NextRequest) {
           complType: 'FULL',
           reason: room.discountReason || 'Reconciled complimentary reservation',
           notes: JSON.stringify({ source: 'NIGHT_AUDIT_RECONCILIATION', reservationRoomId }),
-          status: isApproved ? 'VERIFIED' : 'REVERSED',
-          approverId: isApproved ? auditor.id : null,
-          nightAuditorId: isApproved ? auditor.id : null,
-          verifiedAt: isApproved ? new Date() : null,
-          rejectionReason: isApproved ? null : String(rejectionReason).trim(),
+          ...decisionData,
         },
         // A repeated Night Audit click is an idempotent retry. Do not change
         // the original audit decision or its audit trail on that retry.
         update: {},
       });
 
-      if (!isApproved && record.status === 'REVERSED') {
+      if (!isApproved && (record.status === 'REVERSED' || isPending)) {
         await tx.reservationRoom.update({
           where: { id: reservationRoomId },
           data: { discountType: null, discountAmount: null, discountPercent: null, discountReason: null, discountApprovalId: null },
