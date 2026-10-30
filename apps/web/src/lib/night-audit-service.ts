@@ -756,14 +756,26 @@ export async function getFinancialAudit(ctx: TenantContext, propertyId: string) 
     },
   });
   const representedComplimentaryRecords = await prisma.complimentaryRecord.findMany({
-    where: { propertyId, businessDate, roomId: { not: null } },
-    select: { roomId: true },
+    // Complimentary approval belongs to the reservation/guest's concession,
+    // not to each physical room-night. A multi-night complimentary stay that
+    // was verified yesterday must not become a new missing approval tonight.
+    // Keep this scoped by guest as well, because the same room can be reused
+    // by a different reservation later.
+    where: { propertyId, roomId: { not: null }, guestId: { not: null }, status: 'VERIFIED' },
+    select: { roomId: true, guestId: true },
   });
   const representedComplimentaryRooms = new Set(
-    representedComplimentaryRecords.map((record) => record.roomId).filter(Boolean),
+    representedComplimentaryRecords
+      .map((record) => record.roomId && record.guestId ? `${record.roomId}:${record.guestId}` : null)
+      .filter((key): key is string => Boolean(key)),
   );
   const missingComplimentaryRecords = complimentaryRoomReservations
-    .filter((room) => room.roomId && !representedComplimentaryRooms.has(room.roomId))
+    .filter((room) => {
+      const representationKey = room.roomId && room.reservation.primaryGuest?.id
+        ? `${room.roomId}:${room.reservation.primaryGuest.id}`
+        : null;
+      return Boolean(representationKey && !representedComplimentaryRooms.has(representationKey));
+    })
     .map((room) => ({
       id: `MISSING_COMP_${room.id}`,
       isMissingApproval: true,
