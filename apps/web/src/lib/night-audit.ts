@@ -522,7 +522,6 @@ export async function executeNightAudit(
                 ? await tx.complimentaryRecord.findFirst({
                     where: {
                       propertyId,
-                      businessDate,
                       roomId: activeRoom.roomId,
                       guestId: reservation.primaryGuestId,
                       sourceModule: 'FRONT_DESK',
@@ -536,7 +535,6 @@ export async function executeNightAudit(
                 ? await tx.complimentaryRecord.findFirst({
                     where: {
                       propertyId,
-                      businessDate,
                       roomId: activeRoom.roomId,
                       guestId: reservation.primaryGuestId,
                       sourceModule: 'FRONT_DESK',
