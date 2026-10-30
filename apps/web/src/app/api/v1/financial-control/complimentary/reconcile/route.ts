@@ -36,7 +36,11 @@ export async function POST(req: NextRequest) {
       if (!room || room.reservation.propertyId !== propertyId) throw new Error('RESERVATION_ROOM_NOT_FOUND');
       if (room.discountType !== 'COMPLIMENTARY' || room.status !== 'ACTIVE') throw new Error('COMPLIMENTARY_STATE_CHANGED');
 
-      const existing = await tx.complimentaryRecord.findFirst({ where: { propertyId, roomId: room.roomId, guestId: room.reservation.primaryGuestId, businessDate: property?.businessDate || undefined } });
+      const operationId = `COMP_RECONCILED_${reservationRoomId}`;
+      const existing = await tx.complimentaryRecord.findUnique({ where: { operationId } })
+        // Keep compatibility with records created by the earlier reconciliation
+        // path, which did not always use the same deterministic operation ID.
+        || await tx.complimentaryRecord.findFirst({ where: { propertyId, roomId: room.roomId, guestId: room.reservation.primaryGuestId, businessDate: property?.businessDate || undefined } });
       if (existing) return existing;
 
       const operator = room.reservation.createdBy
@@ -45,11 +49,12 @@ export async function POST(req: NextRequest) {
       const operatorId = operator?.id || auditor.id;
       const amount = Number(room.rateAmount);
       const isApproved = decision === 'APPROVE';
-      const record = await tx.complimentaryRecord.create({
-        data: {
+      const record = await tx.complimentaryRecord.upsert({
+        where: { operationId },
+        create: {
           propertyId,
           businessDate: property?.businessDate || new Date(),
-          reference: `COMP_RECONCILED_${reservationRoomId}`,
+          reference: operationId,
           sourceModule: 'FRONT_DESK',
           roomId: room.roomId,
           guestId: room.reservation.primaryGuestId,
@@ -58,7 +63,7 @@ export async function POST(req: NextRequest) {
           acknowledgedByStaffId: auditor.id,
           acknowledgedAt: new Date(),
           operatorId,
-          operationId: `COMP_RECONCILED_${reservationRoomId}`,
+          operationId,
           grossAmount: amount,
           complAmount: amount,
           netAmount: 0,
@@ -71,9 +76,12 @@ export async function POST(req: NextRequest) {
           verifiedAt: isApproved ? new Date() : null,
           rejectionReason: isApproved ? null : String(rejectionReason).trim(),
         },
+        // A repeated Night Audit click is an idempotent retry. Do not change
+        // the original audit decision or its audit trail on that retry.
+        update: {},
       });
 
-      if (!isApproved) {
+      if (!isApproved && record.status === 'REVERSED') {
         await tx.reservationRoom.update({
           where: { id: reservationRoomId },
           data: { discountType: null, discountAmount: null, discountPercent: null, discountReason: null, discountApprovalId: null },
