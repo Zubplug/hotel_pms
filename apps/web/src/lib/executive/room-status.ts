@@ -198,6 +198,8 @@ export interface RoomIntelligenceData {
       paid: number;
       credit: number;
       balance: number;
+      outstanding: number;
+      advanceCredit: number;
     } | null;
   } | null;
   nextArrival: {
