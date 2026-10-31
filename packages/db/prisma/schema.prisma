@@ -141,6 +141,7 @@ model Property {
   supportedCurrencies String[]
 
   businessDate DateTime? @db.Date
+  breakfastEligibilitySnapshotDate DateTime? @db.Date
   lastAuditAt  DateTime? @db.Timestamptz
   auditStatus  String? // 'OPEN' | 'IN_PROGRESS' | 'POSTING' | 'COMPLETED' | 'COMPLETED_WITH_EXCEPTIONS' | 'FAILED'
 
@@ -166,6 +167,7 @@ model Property {
   // Disabled means the General Cashier completes the bank transfer manually.
   autoBankReimbursementEnabled      Boolean                                    @default(false)
   nightAuditMovementSnapshots       NightAuditMovementSnapshot[]
+  breakfastEligibilitySnapshots     BreakfastEligibilitySnapshot[]
   referralProgram                   ReferralProgram?
   referralCampaigns                 ReferralCampaign[]
   referralClicks                    ReferralClick[]
@@ -8639,6 +8641,32 @@ model BreakfastRedemption {
   posOrder    PosOrder?   @relation(fields: [posOrderId], references: [id])
 
   @@unique([propertyId, reservationId, businessDate, operationId])
+  @@index([propertyId, businessDate])
+}
+
+// Immutable list of guests whose stay qualified for complimentary breakfast
+// at the close of a business date. The redeemable date is explicit because
+// breakfast is normally consumed the following morning, after Night Audit has
+// advanced the property business date.
+model BreakfastEligibilitySnapshot {
+  id                    String   @id @default(uuid()) @db.Uuid
+  propertyId            String   @db.Uuid
+  property             Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  businessDate          DateTime @db.Date
+  redeemableBusinessDate DateTime @db.Date
+  reservationId         String   @db.Uuid
+  reservationRoomId     String   @db.Uuid
+  guestId               String   @db.Uuid
+  roomId                String?  @db.Uuid
+  roomNumber            String
+  guestName             String
+  maxCoversAllowed      Int
+  status                String   @default("ELIGIBLE")
+  reason                String?
+  createdAt             DateTime @default(now()) @db.Timestamptz
+
+  @@unique([propertyId, redeemableBusinessDate, reservationRoomId])
+  @@index([propertyId, redeemableBusinessDate])
   @@index([propertyId, businessDate])
 }
 

@@ -259,20 +259,24 @@ export async function GET(req: NextRequest) {
       orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
     });
 
-    // Target window for Reservations: In-house + 3 days out + today's departures
-    const now = new Date();
-    const yesterday = new Date(now);
-    yesterday.setDate(yesterday.getDate() - 1);
-    const threeDaysFromNow = new Date(now);
-    threeDaysFromNow.setDate(threeDaysFromNow.getDate() + 3);
+    // Target window for Reservations: the operational in-house snapshot,
+    // three days out, and the current day's departures. This must be based on
+    // the property's business date rather than the terminal/server calendar
+    // date. During night audit those dates can differ, and using `new Date()`
+    // can leave the offline breakfast selector without the guest who qualified
+    // on the last audited business date.
+    const reservationWindowStart = new Date(syncBusinessDate);
+    reservationWindowStart.setUTCDate(reservationWindowStart.getUTCDate() - 1);
+    const reservationWindowEnd = new Date(syncBusinessDate);
+    reservationWindowEnd.setUTCDate(reservationWindowEnd.getUTCDate() + 3);
 
     const resBaseWhere = {
       propertyId,
       deletedAt: null,
       OR: [
         { status: 'CHECKED_IN' },
-        { status: 'CONFIRMED', checkIn: { lte: threeDaysFromNow, gte: yesterday } },
-        { checkOut: { gte: yesterday, lte: threeDaysFromNow } }
+        { status: 'CONFIRMED', checkIn: { lte: reservationWindowEnd, gte: reservationWindowStart } },
+        { checkOut: { gte: reservationWindowStart, lte: reservationWindowEnd } }
       ]
     };
 
@@ -308,6 +312,19 @@ export async function GET(req: NextRequest) {
     const reservations = Array.from(
       new Map([...operationalReservations, ...initiallyCancelledReservations].map((reservation) => [reservation.id, reservation])).values(),
     );
+
+    // Breakfast eligibility is an immutable Night Audit decision for the
+    // current redeemable business date. It is intentionally pulled by the
+    // property's business date on every sync, including incremental syncs,
+    // so a terminal cannot retain yesterday's guest list after cutover.
+    const breakfastEligibilitySnapshots = await prisma.breakfastEligibilitySnapshot.findMany({
+      where: {
+        propertyId,
+        redeemableBusinessDate: syncBusinessDate,
+        status: { in: ['ELIGIBLE', 'INELIGIBLE'] },
+      },
+      orderBy: [{ roomNumber: 'asc' }, { guestName: 'asc' }, { id: 'asc' }],
+    });
 
     // A folio can change without its reservation.updatedAt changing (for
     // example, a payment, room charge, or credit application). Pull folios as
@@ -975,6 +992,7 @@ export async function GET(req: NextRequest) {
       currency: property.baseCurrency,
       timezone: property.timezone,
       businessDate: property.businessDate,
+      breakfastEligibilitySnapshotDate: property.breakfastEligibilitySnapshotDate,
       auditStatus: property.auditStatus,
       isActive: property.isActive,
       kitchenServiceOutletId,
@@ -1011,6 +1029,7 @@ export async function GET(req: NextRequest) {
       ratePlans: finalRatePlans,
       rates: finalRates,
       reservations: plainReservations,
+      breakfastEligibilitySnapshots,
       guests:     Array.from(guestMap.values()),
       folios,
       eventInvoices,

@@ -227,11 +227,28 @@ public class LocalRepository
     /// </summary>
     public async Task<List<object>> GetInHouseGuestsAsync(string propertyId, string? query = null)
     {
+        // Use the property's operational date as the local source of truth.
+        // The desktop may be used while the terminal clock is still on the
+        // previous calendar day during/after Night Audit.
+        var property = await _dbContext.Properties
+            .AsNoTracking()
+            .FirstOrDefaultAsync(p => p.Id == propertyId);
+        var businessDate = property?.BusinessDate.Date ?? DateTime.UtcNow.Date;
+
         var reservations = await _dbContext.Reservations
             .Include(r => r.Guest)
             .Include(r => r.Folio)
             .Include(r => r.Rooms).ThenInclude(rr => rr.Room)
-            .Where(r => r.PropertyId == propertyId && r.Status == "CHECKED_IN")
+            .Where(r => r.PropertyId == propertyId
+                && r.Status == "CHECKED_IN"
+                // Only surface guests whose stay covers the current hotel
+                // business date. This prevents an old cached reservation from
+                // being selected for today's complimentary breakfast.
+                && r.CheckInDate.Date <= businessDate
+                // A guest checking out on the current business date still
+                // consumed the prior night's stay and is eligible for the
+                // current morning's breakfast.
+                && r.CheckOutDate.Date >= businessDate)
             .OrderBy(r => r.Guest != null ? r.Guest.LastName : "")
             .ToListAsync();
 
@@ -281,6 +298,36 @@ public class LocalRepository
             return new { eligible = false, reasonMessage = "No active checked-in reservation found." };
         }
 
+        var localProperty = await _dbContext.Properties.FirstOrDefaultAsync(p => p.Id == reservation.PropertyId);
+        var businessDate = localProperty?.BusinessDate.Date ?? DateTime.UtcNow.Date;
+        var auditedBreakfastRows = await _dbContext.BreakfastEligibilitySnapshots
+            .Where(s => s.PropertyId == reservation.PropertyId
+                && s.RedeemableBusinessDate.Date == businessDate)
+            .ToListAsync();
+        if (localProperty?.BreakfastEligibilitySnapshotDate?.Date == businessDate)
+        {
+            var auditedGuest = auditedBreakfastRows.FirstOrDefault(s => s.ReservationId == reservationId
+                && (string.IsNullOrWhiteSpace(roomNumber) || s.RoomNumber == roomNumber));
+            if (auditedGuest == null || !string.Equals(auditedGuest.Status, "ELIGIBLE", StringComparison.OrdinalIgnoreCase))
+            {
+                return new { eligible = false, reasonMessage = auditedGuest?.Reason ?? "Guest was not included in the completed Night Audit breakfast eligibility list." };
+            }
+
+            var auditedRedeemed = await _dbContext.BreakfastRedemptions
+                .Where(r => r.ReservationId == reservationId && r.BusinessDate.Date == businessDate)
+                .SumAsync(r => (int?)r.CoversRedeemed) ?? 0;
+            var auditedMax = Math.Max(1, auditedGuest.MaxCoversAllowed);
+            var auditedRemaining = Math.Max(0, auditedMax - auditedRedeemed);
+            return new
+            {
+                eligible = auditedRemaining > 0,
+                maxCoversAllowed = auditedMax,
+                coversAlreadyRedeemed = auditedRedeemed,
+                remainingCovers = auditedRemaining,
+                reasonMessage = auditedRemaining > 0 ? null : "All complimentary breakfast covers for this stay have already been redeemed today."
+            };
+        }
+
         string? ratePlanId = reservation.RatePlanId;
         if (string.IsNullOrEmpty(ratePlanId) && !string.IsNullOrEmpty(reservation.CorporateAccountId))
         {
@@ -313,7 +360,6 @@ public class LocalRepository
             if (!allowed) return new { eligible = false, reasonMessage = "Breakfast is suppressed for this discounted room rate." };
         }
 
-        var businessDate = (await _dbContext.Properties.FirstOrDefaultAsync(p => p.Id == reservation.PropertyId))?.BusinessDate.Date ?? DateTime.UtcNow.Date;
         var redeemed = await _dbContext.BreakfastRedemptions
             .Where(r => r.ReservationId == reservationId && r.BusinessDate.Date == businessDate)
             .SumAsync(r => (int?)r.CoversRedeemed) ?? 0;

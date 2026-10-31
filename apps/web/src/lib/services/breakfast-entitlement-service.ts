@@ -63,7 +63,7 @@ export class BreakfastEntitlementService {
 
     const property = await db.property.findUnique({
       where: { id: propertyId },
-      select: { id: true, businessDate: true, settings: true, timezone: true },
+      select: { id: true, businessDate: true, breakfastEligibilitySnapshotDate: true, settings: true, timezone: true },
     });
 
     if (!property) {
@@ -146,6 +146,55 @@ export class BreakfastEntitlementService {
     const activeRoom = reservation.reservationRooms?.[0] || null;
     const resolvedRoomNumber = activeRoom?.room?.number || roomNumber || '';
     const guestName = `${reservation.primaryGuest?.firstName || ''} ${reservation.primaryGuest?.lastName || ''}`.trim() || 'In-House Guest';
+
+    // Once Night Audit has produced a snapshot for this redeemable business
+    // date, it is the authoritative eligibility decision for both online and
+    // offline POS. This prevents a later reservation mutation from changing
+    // the guest list that was audited for the morning service.
+    const auditedRows = await db.breakfastEligibilitySnapshot.findMany({
+      where: { propertyId, redeemableBusinessDate: targetDate },
+    });
+    const snapshotDate = property.breakfastEligibilitySnapshotDate
+      ? this.normalizeDate(property.breakfastEligibilitySnapshotDate)
+      : null;
+    const snapshotIsAuthoritative = snapshotDate?.getTime() === targetDate.getTime();
+    if (snapshotIsAuthoritative) {
+      const auditedGuest = auditedRows.find((row: any) =>
+        row.reservationId === reservation.id
+        && (!roomNumber || row.roomNumber === resolvedRoomNumber),
+      );
+      const maxCoversAllowed = Math.max(1, auditedGuest?.maxCoversAllowed || reservation.adults || 1);
+      const existingRedemptions = await db.breakfastRedemption.findMany({
+        where: { propertyId, reservationId: reservation.id, businessDate: targetDate },
+      });
+      const coversAlreadyRedeemed = existingRedemptions.reduce((sum: number, row: any) => sum + row.coversRedeemed, 0);
+      const remainingCovers = Math.max(0, maxCoversAllowed - coversAlreadyRedeemed);
+      if (!auditedGuest || auditedGuest.status !== 'ELIGIBLE') {
+        return {
+          eligible: false,
+          reason: auditedGuest?.status === 'INELIGIBLE' ? 'FOOD_SUPPRESSED_DISCOUNT' : 'NOT_IN_HOUSE',
+          reasonMessage: auditedGuest?.reason || 'Guest was not included in the completed Night Audit breakfast eligibility list.',
+          roomNumber: resolvedRoomNumber,
+          guestName,
+          reservationId: reservation.id,
+          businessDate: dateStr,
+          maxCoversAllowed,
+          coversAlreadyRedeemed,
+          remainingCovers,
+        };
+      }
+      return {
+        eligible: remainingCovers > 0,
+        roomNumber: resolvedRoomNumber,
+        guestName,
+        reservationId: reservation.id,
+        businessDate: dateStr,
+        maxCoversAllowed,
+        coversAlreadyRedeemed,
+        remainingCovers,
+        reasonMessage: remainingCovers > 0 ? undefined : `All ${maxCoversAllowed} complimentary breakfast cover(s) for today have already been redeemed.`,
+      };
+    }
 
     // 2. Resolve Rate Breakdown Configuration & Policy Rules
     const breakdownConfig = resolveBreakdownConfig(property.settings as any);

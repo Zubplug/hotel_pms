@@ -16,6 +16,15 @@ namespace LodgeCore.Desktop.Services;
 /// </summary>
 public class SyncEngine : BackgroundService
 {
+    private static DateTime ParseSyncDate(JsonElement element, string propertyName, DateTime fallback)
+    {
+        return element.TryGetProperty(propertyName, out var value)
+            && value.ValueKind != JsonValueKind.Null
+            && DateTime.TryParse(value.GetString(), out var parsed)
+            ? parsed
+            : fallback;
+    }
+
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<SyncEngine> _logger;
     private readonly HttpClient _httpClient;
@@ -987,6 +996,10 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                     if (propEl.TryGetProperty("businessDate", out var bd) &&
                         bd.ValueKind != System.Text.Json.JsonValueKind.Null && DateTime.TryParse(bd.GetString(), out var parsedDate))
                         localProp.BusinessDate = parsedDate;
+                    if (propEl.TryGetProperty("breakfastEligibilitySnapshotDate", out var besd))
+                        localProp.BreakfastEligibilitySnapshotDate = besd.ValueKind != System.Text.Json.JsonValueKind.Null && DateTime.TryParse(besd.GetString(), out var parsedBreakfastSnapshotDate)
+                            ? parsedBreakfastSnapshotDate
+                            : null;
                     if (propEl.TryGetProperty("auditStatus", out var auditStatus) && auditStatus.ValueKind != System.Text.Json.JsonValueKind.Null)
                         localProp.AuditStatus = auditStatus.GetString() ?? localProp.AuditStatus;
                     if (propEl.TryGetProperty("kitchenServiceOutletId", out var kitchenOutlet) && kitchenOutlet.ValueKind != System.Text.Json.JsonValueKind.Null)
@@ -1035,6 +1048,9 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                         AuditStatus = propEl.TryGetProperty("auditStatus", out var auditStatus2) && auditStatus2.ValueKind != System.Text.Json.JsonValueKind.Null ? auditStatus2.GetString() ?? "OPEN" : "OPEN",
                         BusinessDate = propEl.TryGetProperty("businessDate", out var bd2) && bd2.ValueKind != System.Text.Json.JsonValueKind.Null && DateTime.TryParse(bd2.GetString(), out var parsedDate2) ? parsedDate2 : DateTime.UtcNow.Date
                     };
+                    if (propEl.TryGetProperty("breakfastEligibilitySnapshotDate", out var besd2) &&
+                        besd2.ValueKind != System.Text.Json.JsonValueKind.Null && DateTime.TryParse(besd2.GetString(), out var parsedBreakfastSnapshotDate2))
+                        localProp.BreakfastEligibilitySnapshotDate = parsedBreakfastSnapshotDate2;
                     dbContext.Properties.Add(localProp);
                 }
             }
@@ -1750,6 +1766,55 @@ Push HTTP Status:  {_lastPushHttpStatus?.ToString() ?? "Never"}
                 if (staleRes.Any() && !isIncremental)
                 {
                     dbContext.Reservations.RemoveRange(staleRes);
+                }
+            }
+
+            // 4.5. Night-Audit breakfast eligibility snapshot. This is the
+            // authoritative offline guest list for complimentary breakfast on
+            // the current property business date; it is not reconstructed from
+            // mutable reservation status.
+            if (root.TryGetProperty("breakfastEligibilitySnapshots", out var breakfastSnapshots)
+                && breakfastSnapshots.ValueKind == JsonValueKind.Array)
+            {
+                var incomingSnapshotIds = new HashSet<string>();
+                foreach (var el in breakfastSnapshots.EnumerateArray())
+                {
+                    var id = el.TryGetProperty("id", out var idEl) ? idEl.GetString() : null;
+                    if (string.IsNullOrWhiteSpace(id)) continue;
+                    incomingSnapshotIds.Add(id);
+
+                    var snapshot = dbContext.BreakfastEligibilitySnapshots.Local.FirstOrDefault(x => x.Id == id)
+                        ?? await dbContext.BreakfastEligibilitySnapshots.FirstOrDefaultAsync(x => x.Id == id, stoppingToken);
+                    if (snapshot == null)
+                    {
+                        snapshot = new LodgeCore.Desktop.Data.Entities.LocalBreakfastEligibilitySnapshot { Id = id };
+                        dbContext.BreakfastEligibilitySnapshots.Add(snapshot);
+                    }
+
+                    snapshot.PropertyId = propertyId;
+                    snapshot.BusinessDate = ParseSyncDate(el, "businessDate", snapshot.BusinessDate);
+                    snapshot.RedeemableBusinessDate = ParseSyncDate(el, "redeemableBusinessDate", snapshot.RedeemableBusinessDate);
+                    snapshot.ReservationId = el.TryGetProperty("reservationId", out var reservationId) ? reservationId.GetString() ?? "" : snapshot.ReservationId;
+                    snapshot.ReservationRoomId = el.TryGetProperty("reservationRoomId", out var roomId) ? roomId.GetString() ?? "" : snapshot.ReservationRoomId;
+                    snapshot.GuestId = el.TryGetProperty("guestId", out var guestId) ? guestId.GetString() ?? "" : snapshot.GuestId;
+                    snapshot.RoomId = el.TryGetProperty("roomId", out var assignedRoomId) && assignedRoomId.ValueKind != JsonValueKind.Null ? assignedRoomId.GetString() : null;
+                    snapshot.RoomNumber = el.TryGetProperty("roomNumber", out var roomNumber) ? roomNumber.GetString() ?? "Unassigned" : "Unassigned";
+                    snapshot.GuestName = el.TryGetProperty("guestName", out var guestName) ? guestName.GetString() ?? "In-House Guest" : "In-House Guest";
+                    snapshot.MaxCoversAllowed = el.TryGetProperty("maxCoversAllowed", out var maxCovers) && maxCovers.TryGetInt32(out var max) ? Math.Max(1, max) : 1;
+                    snapshot.Status = el.TryGetProperty("status", out var status) ? status.GetString() ?? "ELIGIBLE" : "ELIGIBLE";
+                    snapshot.Reason = el.TryGetProperty("reason", out var reason) && reason.ValueKind != JsonValueKind.Null ? reason.GetString() : null;
+                    snapshot.CreatedAt = ParseSyncDate(el, "createdAt", snapshot.CreatedAt);
+                }
+
+                var propertyBusinessDate = (await dbContext.Properties.FirstOrDefaultAsync(p => p.Id == propertyId, stoppingToken))?.BusinessDate.Date;
+                if (propertyBusinessDate.HasValue)
+                {
+                    var staleSnapshots = await dbContext.BreakfastEligibilitySnapshots
+                        .Where(x => x.PropertyId == propertyId
+                            && x.RedeemableBusinessDate.Date == propertyBusinessDate.Value
+                            && !incomingSnapshotIds.Contains(x.Id))
+                        .ToListAsync(stoppingToken);
+                    if (staleSnapshots.Count > 0) dbContext.BreakfastEligibilitySnapshots.RemoveRange(staleSnapshots);
                 }
             }
 

@@ -72,6 +72,7 @@ public class LocalDbContext : DbContext
     public DbSet<LocalLaundryOrderStatusHistory> LaundryOrderStatusHistory { get; set; } = null!;
     public DbSet<LocalOverrideAudit> OverrideAudits { get; set; } = null!;
     public DbSet<LocalBreakfastRedemption> BreakfastRedemptions { get; set; } = null!;
+    public DbSet<LocalBreakfastEligibilitySnapshot> BreakfastEligibilitySnapshots { get; set; } = null!;
     public DbSet<LocalPoolEntry> PoolEntries { get; set; } = null!;
 
     public LocalDbContext(DbContextOptions<LocalDbContext> options) : base(options)
@@ -354,6 +355,7 @@ public class LocalDbContext : DbContext
             "ALTER TABLE Properties ADD COLUMN RateBreakdownJson TEXT NULL",
             "ALTER TABLE Properties ADD COLUMN RateBreakdownConfigVersion INTEGER NOT NULL DEFAULT 1",
             "ALTER TABLE Properties ADD COLUMN FnbInventoryControlMode TEXT NOT NULL DEFAULT 'DEDUCT'",
+            "ALTER TABLE Properties ADD COLUMN BreakfastEligibilitySnapshotDate TEXT NULL",
             "ALTER TABLE RatePlans ADD COLUMN IncludeFoodAllocation INTEGER NOT NULL DEFAULT 0",
         };
         foreach (var sql in columns)
@@ -379,6 +381,26 @@ public class LocalDbContext : DbContext
             );
             CREATE INDEX IF NOT EXISTS IX_BreakfastRedemptions_PropertyId_ReservationId_BusinessDate
                 ON BreakfastRedemptions(PropertyId, ReservationId, BusinessDate);
+            CREATE TABLE IF NOT EXISTS BreakfastEligibilitySnapshots (
+                Id TEXT NOT NULL PRIMARY KEY,
+                PropertyId TEXT NOT NULL,
+                BusinessDate TEXT NOT NULL,
+                RedeemableBusinessDate TEXT NOT NULL,
+                ReservationId TEXT NOT NULL,
+                ReservationRoomId TEXT NOT NULL,
+                GuestId TEXT NOT NULL,
+                RoomId TEXT NULL,
+                RoomNumber TEXT NOT NULL,
+                GuestName TEXT NOT NULL,
+                MaxCoversAllowed INTEGER NOT NULL DEFAULT 1,
+                Status TEXT NOT NULL DEFAULT 'ELIGIBLE',
+                Reason TEXT NULL,
+                CreatedAt TEXT NOT NULL
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS IX_BreakfastEligibilitySnapshots_Property_Date_Room
+                ON BreakfastEligibilitySnapshots(PropertyId, RedeemableBusinessDate, ReservationRoomId);
+            CREATE INDEX IF NOT EXISTS IX_BreakfastEligibilitySnapshots_Property_Date
+                ON BreakfastEligibilitySnapshots(PropertyId, RedeemableBusinessDate);
         ");
     }
 
@@ -690,6 +712,13 @@ public class LocalDbContext : DbContext
             entity.HasKey(e => e.Id);
             entity.HasIndex(e => new { e.PropertyId, e.ReservationId, e.BusinessDate });
             entity.HasIndex(e => e.OperationId).IsUnique();
+        });
+
+        modelBuilder.Entity<LocalBreakfastEligibilitySnapshot>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => new { e.PropertyId, e.RedeemableBusinessDate, e.ReservationRoomId }).IsUnique();
+            entity.HasIndex(e => new { e.PropertyId, e.RedeemableBusinessDate });
         });
 
         modelBuilder.Entity<LocalPoolEntry>(entity =>

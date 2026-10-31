@@ -1424,6 +1424,89 @@ export async function executeNightAudit(
       await tx.nightAuditMovementSnapshot.createMany({ data: movementSnapshots });
     }
 
+    // Freeze the breakfast entitlement at the same audit cutoff as the other
+    // operational snapshots. Offline terminals must use this audited list for
+    // the new business date; deriving eligibility from a later reservation
+    // status can lose a guest after checkout or after a stale sync.
+    const breakfastConfig = resolveBreakdownConfig(property.settings as any);
+    const breakfastReservations = await tx.reservation.findMany({
+      where: {
+        propertyId,
+        status: 'CHECKED_IN',
+        primaryGuestId: { not: null },
+        reservationRooms: {
+          some: {
+            status: 'ACTIVE',
+            checkIn: { lte: businessDate },
+            checkOut: { gt: businessDate },
+          },
+        },
+      },
+      select: {
+        id: true,
+        primaryGuestId: true,
+        adults: true,
+        primaryGuest: { select: { firstName: true, lastName: true } },
+        corporateAccount: { select: { ratePlan: { select: { includeFoodAllocation: true } } } },
+        reservationRooms: {
+          where: {
+            status: 'ACTIVE',
+            checkIn: { lte: businessDate },
+            checkOut: { gt: businessDate },
+          },
+          select: {
+            id: true,
+            roomId: true,
+            adults: true,
+            discountType: true,
+            discountAmount: true,
+            room: { select: { number: true } },
+          },
+        },
+      },
+    });
+    const breakfastSnapshotRows = breakfastReservations.flatMap((reservation) => {
+      const corporateFoodOverride = reservation.corporateAccount?.ratePlan
+        ? Boolean(reservation.corporateAccount.ratePlan.includeFoodAllocation)
+        : null;
+      const guestName = `${reservation.primaryGuest?.firstName || ''} ${reservation.primaryGuest?.lastName || ''}`.replace(/\s+/g, ' ').trim() || 'In-House Guest';
+      const maxCoversAllowed = Math.max(1, reservation.adults || 1);
+
+      return reservation.reservationRooms.map((room) => {
+        const isDiscounted = Boolean(room.discountType) || Number(room.discountAmount || 0) > 0;
+        const eligible = typeof corporateFoodOverride === 'boolean'
+          ? corporateFoodOverride
+          : !isDiscounted || breakfastConfig.allowComplimentaryFoodOnDiscountedRooms;
+        const reason = eligible
+          ? null
+          : corporateFoodOverride === false
+            ? 'Complimentary breakfast is excluded under this corporate rate agreement.'
+            : 'Complimentary breakfast is suppressed on discounted room rates.';
+
+        return {
+          id: crypto.randomUUID(),
+          propertyId,
+          businessDate,
+          redeemableBusinessDate: nextBusinessDate,
+          reservationId: reservation.id,
+          reservationRoomId: room.id,
+          guestId: reservation.primaryGuestId!,
+          roomId: room.roomId,
+          roomNumber: room.room?.number || 'Unassigned',
+          guestName,
+          maxCoversAllowed,
+          status: eligible ? 'ELIGIBLE' : 'INELIGIBLE',
+          reason,
+        };
+      });
+    });
+    await tx.breakfastEligibilitySnapshot.deleteMany({
+      where: { propertyId, redeemableBusinessDate: nextBusinessDate },
+    });
+    if (breakfastSnapshotRows.length) {
+      await tx.breakfastEligibilitySnapshot.createMany({ data: breakfastSnapshotRows });
+    }
+
     const runUpdate = await tx.nightAudit.update({
       where: { id: auditRun.id },
       data: {
@@ -1494,6 +1577,7 @@ export async function executeNightAudit(
       where: { id: propertyId },
       data: {
         businessDate: nextBusinessDate,
+        breakfastEligibilitySnapshotDate: nextBusinessDate,
         lastAuditAt: new Date(),
         auditStatus: txErrors > 0 ? 'COMPLETED_WITH_EXCEPTIONS' : 'COMPLETED'
       }
