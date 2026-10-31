@@ -227,6 +227,9 @@ public class LocalRepository
     /// </summary>
     public async Task<List<object>> GetInHouseGuestsAsync(string propertyId, string? query = null)
     {
+        var propertyBusinessDate = (await _dbContext.Properties
+            .FirstOrDefaultAsync(p => p.Id == propertyId))?.BusinessDate.Date ?? DateTime.UtcNow.Date;
+        var previousAuditDate = propertyBusinessDate.AddDays(-1);
         var reservations = await _dbContext.Reservations
             .Include(r => r.Guest)
             .Include(r => r.Folio)
@@ -249,6 +252,7 @@ public class LocalRepository
         return reservations.Select(r =>
         {
             var room = r.Rooms.FirstOrDefault()?.Room;
+            var qualifiedLastAudit = HasComplimentaryFoodAllocation(r.Folio, previousAuditDate);
             return (object)new
             {
                 reservationId = r.Id,
@@ -266,20 +270,53 @@ public class LocalRepository
                 roomNumber = room?.Number ?? "–",
                 checkIn = r.CheckInDate,
                 checkOut = r.CheckOutDate,
-                isVip = r.Guest?.IsVip ?? false
+                isVip = r.Guest?.IsVip ?? false,
+                complimentaryFoodQualifiedLastAudit = qualifiedLastAudit
             };
         }).ToList();
+    }
+
+    private static bool HasComplimentaryFoodAllocation(LocalFolio? folio, DateTime auditDate)
+    {
+        if (folio == null || string.IsNullOrWhiteSpace(folio.TransactionsJson)) return false;
+        try
+        {
+            using var document = JsonDocument.Parse(folio.TransactionsJson);
+            if (!document.RootElement.TryGetProperty("items", out var items) || items.ValueKind != JsonValueKind.Array)
+                return false;
+
+            return items.EnumerateArray().Any(item =>
+            {
+                if (item.TryGetProperty("voidedAt", out var voidedAt) && voidedAt.ValueKind != JsonValueKind.Null && !string.IsNullOrWhiteSpace(voidedAt.GetString())) return false;
+                var source = item.TryGetProperty("source", out var sourceValue) ? sourceValue.GetString() : null;
+                var revenueCategory = item.TryGetProperty("revenueCategory", out var categoryValue) ? categoryValue.GetString() : null;
+                var revenueClass = item.TryGetProperty("revenueClass", out var classValue) ? classValue.GetString() : null;
+                if (!string.Equals(source, "ROOM_CHARGE", StringComparison.OrdinalIgnoreCase)
+                    || (!string.Equals(revenueCategory, "FNB", StringComparison.OrdinalIgnoreCase)
+                        && !string.Equals(revenueClass, "FOOD", StringComparison.OrdinalIgnoreCase))) return false;
+                if (!item.TryGetProperty("businessDate", out var dateValue)) return false;
+                return DateTime.TryParse(dateValue.GetString(), out var itemDate) && itemDate.Date == auditDate.Date;
+            });
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
     }
 
     public async Task<object> GetBreakfastEntitlementAsync(string reservationId, string roomNumber)
     {
         var reservation = await _dbContext.Reservations
             .Include(r => r.Rooms)
+            .Include(r => r.Folio)
             .FirstOrDefaultAsync(r => r.Id == reservationId);
         if (reservation == null || !string.Equals(reservation.Status, "CHECKED_IN", StringComparison.OrdinalIgnoreCase))
         {
             return new { eligible = false, reasonMessage = "No active checked-in reservation found." };
         }
+
+        var businessDate = (await _dbContext.Properties.FirstOrDefaultAsync(p => p.Id == reservation.PropertyId))?.BusinessDate.Date ?? DateTime.UtcNow.Date;
+        var qualifiedLastAudit = HasComplimentaryFoodAllocation(reservation.Folio, businessDate.AddDays(-1));
 
         string? ratePlanId = reservation.RatePlanId;
         if (string.IsNullOrEmpty(ratePlanId) && !string.IsNullOrEmpty(reservation.CorporateAccountId))
@@ -290,7 +327,7 @@ public class LocalRepository
         if (!string.IsNullOrEmpty(ratePlanId) && !string.IsNullOrEmpty(reservation.CorporateAccountId))
         {
             var ratePlan = await _dbContext.RatePlans.FirstOrDefaultAsync(rp => rp.Id == ratePlanId);
-            if (ratePlan != null && !ratePlan.IncludeFoodAllocation)
+            if (ratePlan != null && !ratePlan.IncludeFoodAllocation && !qualifiedLastAudit)
                 return new { eligible = false, reasonMessage = "Breakfast is excluded under this corporate rate agreement." };
         }
 
@@ -310,10 +347,9 @@ public class LocalRepository
                 }
                 catch (JsonException) { return new { eligible = false, reasonMessage = "Room-rate configuration is unavailable. Sync the terminal before redeeming breakfast." }; }
             }
-            if (!allowed) return new { eligible = false, reasonMessage = "Breakfast is suppressed for this discounted room rate." };
+            if (!allowed && !qualifiedLastAudit) return new { eligible = false, reasonMessage = "Breakfast is suppressed for this discounted room rate." };
         }
 
-        var businessDate = (await _dbContext.Properties.FirstOrDefaultAsync(p => p.Id == reservation.PropertyId))?.BusinessDate.Date ?? DateTime.UtcNow.Date;
         var redeemed = await _dbContext.BreakfastRedemptions
             .Where(r => r.ReservationId == reservationId && r.BusinessDate.Date == businessDate)
             .SumAsync(r => (int?)r.CoversRedeemed) ?? 0;
@@ -322,6 +358,7 @@ public class LocalRepository
         return new
         {
             eligible = remaining > 0,
+            qualifiedLastAudit,
             maxCoversAllowed = max,
             coversAlreadyRedeemed = redeemed,
             remainingCovers = remaining,

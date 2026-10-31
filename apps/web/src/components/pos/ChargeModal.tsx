@@ -22,6 +22,7 @@ interface InHouseGuest {
   checkIn: string;
   checkOut: string;
   isVip: boolean;
+  complimentaryFoodQualifiedLastAudit?: boolean;
 }
 
 const displayRoomNumber = (roomNumber: string | null | undefined) => {
@@ -415,6 +416,7 @@ export function ChargeModal({
                         {g.isVip && <span className="text-[10px] font-black text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full">VIP</span>}
                       </p>
                       <p className="text-xs text-slate-500">Room {displayRoomNumber(g.roomNumber)}</p>
+                      {g.complimentaryFoodQualifiedLastAudit && <p className="mt-0.5 text-[10px] font-bold text-amber-700">Qualified in last audit · complimentary food</p>}
                     </div>
                     <div className="text-right flex-shrink-0">
                       <p className={`text-xs font-bold ${formatFolioPosition(g).color}`}>{formatCurrency(formatFolioPosition(g).amount, g.currency)}</p>
