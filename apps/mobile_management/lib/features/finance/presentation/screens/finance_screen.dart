@@ -737,7 +737,75 @@ class _HeroRevenueRow extends StatelessWidget {
             ),
           ],
         ),
+        if (rev.otherRevenueBreakdown.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          _OtherRevenueBreakdown(rows: rev.otherRevenueBreakdown, fmt: fmt),
+        ],
       ],
+    );
+  }
+}
+
+class _OtherRevenueBreakdown extends StatelessWidget {
+  final List<AuditedDepartmentRevenue> rows;
+  final String Function(double) fmt;
+
+  const _OtherRevenueBreakdown({required this.rows, required this.fmt});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
+      decoration: BoxDecoration(
+        color: _bg0.withValues(alpha: 0.48),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'OTHER REVENUE DETAIL',
+            style: TextStyle(
+              fontSize: 9,
+              fontWeight: FontWeight.w800,
+              color: _textMuted,
+              letterSpacing: 1.2,
+            ),
+          ),
+          const SizedBox(height: 8),
+          ...rows.map(
+            (row) => Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      row.department,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: _textSecondary,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    fmt(row.netRevenue),
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                      color: _textPrimary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

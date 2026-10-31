@@ -5,6 +5,7 @@ export type ReceivablesPosition = {
   corporateReceivables: number;
   otherReceivables: number;
   totalReceivables: number;
+  receivableAccountCount: number;
   guestFolioCredits: number;
   depositsHeld: number;
   availableCredits: number;
@@ -55,6 +56,7 @@ export async function getReceivablesPosition(propertyId: string, now = new Date(
     const balance = Number(folio.balance);
     return sum + (balance > 0 ? balance : 0);
   }, 0);
+  const guestReceivableAccountCount = guestFolios.filter((folio) => Number(folio.balance) > 0).length;
   const guestFolioCredits = guestFolios.reduce((sum, folio) => {
     const balance = Number(folio.balance);
     return sum + (balance < 0 ? Math.abs(balance) : 0);
@@ -69,11 +71,13 @@ export async function getReceivablesPosition(propertyId: string, now = new Date(
 
   let corporateReceivables = 0;
   let otherReceivables = 0;
+  let cityLedgerReceivableAccountCount = 0;
   for (const account of cityLedgerAccounts) {
     // Refund-payable accounts are liabilities, not receivables.
     if (account.type === 'REFUND_PAYABLE') continue;
     const trueBalance = Math.max(0, Number(account.balance)) - (unappliedByAccount.get(account.id) || 0);
     if (trueBalance <= 0) continue;
+    cityLedgerReceivableAccountCount += 1;
     if (account.type === 'CORPORATE') corporateReceivables += trueBalance;
     else otherReceivables += trueBalance;
   }
@@ -90,6 +94,7 @@ export async function getReceivablesPosition(propertyId: string, now = new Date(
     corporateReceivables,
     otherReceivables,
     totalReceivables: guestReceivables + corporateReceivables + otherReceivables,
+    receivableAccountCount: guestReceivableAccountCount + cityLedgerReceivableAccountCount,
     guestFolioCredits,
     depositsHeld,
     availableCredits,

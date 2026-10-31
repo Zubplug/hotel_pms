@@ -100,6 +100,11 @@ export async function GET(req: NextRequest) {
     const departmentRevenue = Array.from(departmentTotals.entries())
       .map(([department, netRevenue]) => ({ department, netRevenue: Number(netRevenue.toFixed(2)) }))
       .sort((a, b) => Math.abs(b.netRevenue) - Math.abs(a.netRevenue));
+    const otherRevenueBreakdown = departmentRevenue.filter(({ department }) => {
+      const normalized = department.trim().toUpperCase().replace(/\s+/g, ' ');
+      const compact = normalized.replace(/[^A-Z0-9]/g, '');
+      return !['ROOMS', 'ROOMREVENUE', 'FB', 'FOODBEVERAGE', 'FOODANDBEVERAGE'].includes(compact);
+    });
 
     // ── 3. Live Since Last Audit (Unaudited Activity) ──────────────────────
     // Uses calculateDailyRevenue for businessDate (today) so live figures also
@@ -274,7 +279,7 @@ export async function GET(req: NextRequest) {
         id: 'outstanding-receivables', priority: 'P1', category: 'RECEIVABLES',
         title: 'Outstanding Receivables',
         summary: `₦${(receivablesPosition.totalReceivables / 1_000_000).toFixed(2)}M in guest and city-ledger balances`,
-        affectedCount: openFolios.length,
+        affectedCount: receivablesPosition.receivableAccountCount,
         totalAmount: receivablesPosition.totalReceivables,
       });
     }
@@ -285,7 +290,7 @@ export async function GET(req: NextRequest) {
       businessDate: businessDateLabel,
       lastAuditedBusinessDate: auditedBusinessDate ? format(auditedBusinessDate, 'yyyy-MM-dd') : null,
       property: { name: property.name, currency: property.baseCurrency || 'NGN' },
-      audited,
+      audited: { ...audited, otherRevenueBreakdown },
       accountRevenue,
       departmentRevenue,
       liveSinceLastAudit,

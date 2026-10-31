@@ -26,6 +26,7 @@ class AuditedPeriodData {
   final double discounts;
   final double refunds;
   final double netRevenue;
+  final List<AuditedDepartmentRevenue> otherRevenueBreakdown;
 
   AuditedPeriodData({
     required this.revenue,
@@ -35,6 +36,7 @@ class AuditedPeriodData {
     required this.discounts,
     required this.refunds,
     required this.netRevenue,
+    required this.otherRevenueBreakdown,
   });
 
   factory AuditedPeriodData.fromJson(Map<String, dynamic> json) =>
@@ -46,6 +48,9 @@ class AuditedPeriodData {
         discounts: (json['discounts'] ?? 0).toDouble(),
         refunds: (json['refunds'] ?? 0).toDouble(),
         netRevenue: (json['netRevenue'] ?? 0).toDouble(),
+        otherRevenueBreakdown: (json['otherRevenueBreakdown'] as List? ?? [])
+            .map((row) => AuditedDepartmentRevenue.fromJson(row))
+            .toList(),
       );
 }
 
