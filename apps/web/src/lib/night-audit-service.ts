@@ -656,6 +656,98 @@ export async function getFinancialAudit(ctx: TenantContext, propertyId: string) 
     }];
   });
 
+  // Keep the beneficiary register available after the room charge has already
+  // been posted, and include breakfast claims created by online or offline POS.
+  // The wizard must describe the current audit date, not only unposted work.
+  const postedFoodItems = await prisma.folioItem.findMany({
+    where: {
+      folio: { propertyId },
+      businessDate,
+      source: 'ROOM_CHARGE',
+      revenueCategory: 'FNB',
+      revenueClass: 'FOOD',
+      voidedAt: null,
+    },
+    select: {
+      amount: true,
+      folio: {
+        select: {
+          reservationId: true,
+          reservation: {
+            select: {
+              confirmationNumber: true,
+              primaryGuest: { select: { firstName: true, lastName: true } },
+              reservationRooms: { where: { status: 'ACTIVE' }, select: { room: { select: { number: true } } }, take: 1 },
+            },
+          },
+        },
+      },
+    },
+  });
+  const breakfastRedemptions = await prisma.breakfastRedemption.findMany({
+    where: { propertyId, businessDate },
+    orderBy: { createdAt: 'asc' },
+    select: {
+      id: true,
+      reservationId: true,
+      roomNumber: true,
+      coversRedeemed: true,
+      method: true,
+      operationId: true,
+      reservation: {
+        select: {
+          confirmationNumber: true,
+          primaryGuest: { select: { firstName: true, lastName: true } },
+        },
+      },
+    },
+  });
+  const pendingFoodBeneficiaries = pendingNightAuditPostings
+    .filter((posting: any) => Number(posting.rateBreakdown?.complimentaryFoodAmount || 0) > 0)
+    .map((posting: any) => ({
+      id: posting.operationId || posting.id,
+      reservationId: posting.id,
+      guestName: posting.guestName || 'Guest',
+      roomNumber: posting.roomNumber || '—',
+      confirmationNumber: posting.confirmationNumber || '—',
+      amount: Number(posting.rateBreakdown.complimentaryFoodAmount || 0),
+      coversRedeemed: 0,
+      source: 'ROOM_ENTITLEMENT',
+      status: 'PENDING_POSTING',
+    }));
+  const postedFoodByReservation = new Map<string, any>();
+  for (const item of postedFoodItems) {
+    if (!item.folio.reservation || !item.folio.reservationId) continue;
+    const reservationId = item.folio.reservationId;
+    const current = postedFoodByReservation.get(reservationId);
+    postedFoodByReservation.set(reservationId, {
+      id: `POSTED_FOOD_${reservationId}`,
+      reservationId,
+      guestName: `${item.folio.reservation.primaryGuest?.firstName || ''} ${item.folio.reservation.primaryGuest?.lastName || ''}`.trim() || 'Guest',
+      roomNumber: item.folio.reservation.reservationRooms[0]?.room?.number || '—',
+      confirmationNumber: item.folio.reservation.confirmationNumber || '—',
+      amount: (current?.amount || 0) + Number(item.amount || 0),
+      coversRedeemed: 0,
+      source: 'ROOM_ENTITLEMENT',
+      status: 'POSTED',
+    });
+  }
+  const postedFoodBeneficiaries = Array.from(postedFoodByReservation.values());
+  const posFoodBeneficiaries = breakfastRedemptions.map((redemption) => ({
+    id: redemption.operationId || redemption.id,
+    reservationId: redemption.reservationId,
+    guestName: `${redemption.reservation.primaryGuest?.firstName || ''} ${redemption.reservation.primaryGuest?.lastName || ''}`.trim() || 'Guest',
+    roomNumber: redemption.roomNumber || '—',
+    confirmationNumber: redemption.reservation.confirmationNumber || '—',
+    amount: 0,
+    coversRedeemed: redemption.coversRedeemed,
+    source: 'POS_BREAKFAST_REDEMPTION',
+    method: redemption.method,
+    status: 'REDEEMED',
+  }));
+  const complimentaryFoodBeneficiaries = [...pendingFoodBeneficiaries, ...postedFoodBeneficiaries, ...posFoodBeneficiaries]
+    .filter((item, index, all) => index === all.findIndex((candidate) => candidate.id === item.id));
+
   // Fetch unverified Complimentary transactions for the business date
   // These are hard blockers for the Night Audit.
   const unverifiedComplimentary = await prisma.complimentaryRecord.findMany({
@@ -827,7 +919,7 @@ export async function getFinancialAudit(ctx: TenantContext, propertyId: string) 
 
   const eventHall = await getEventHallAuditControl(ctx, propertyId, businessDate);
   const guestAmenity = await getGuestAmenityAuditControl(propertyId, businessDate);
-  return { openFolios, highBalances, rateVariances, pendingDiscounts: enrichedPendingDiscounts, pendingNightAuditPostings, unverifiedComplimentary: [...enrichedComplimentary, ...missingComplimentaryRecords], pendingCheckInBypasses, eventHall, guestAmenity };
+  return { openFolios, highBalances, rateVariances, pendingDiscounts: enrichedPendingDiscounts, pendingNightAuditPostings, complimentaryFoodBeneficiaries, unverifiedComplimentary: [...enrichedComplimentary, ...missingComplimentaryRecords], pendingCheckInBypasses, eventHall, guestAmenity };
 }
 
 export async function getCashReconciliation(ctx: TenantContext, propertyId: string) {
