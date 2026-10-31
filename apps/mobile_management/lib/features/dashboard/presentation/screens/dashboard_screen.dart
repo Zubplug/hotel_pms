@@ -95,11 +95,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
             child: ListView(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
               children: [
-                // ── 1. Hero Revenue Card ──────────────────────────────────
+                // ── 1. Audited performance summary ───────────────────────
                 HeroRevenueCard(
                   overview: data.executiveOverview,
                   trends: data.performanceTrends,
-                  businessDate: data.businessDate,
                 ),
                 const SizedBox(height: 14),
 
@@ -136,7 +135,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                       onActionTap: _handleAlertAction,
                     ),
                   ),
-                if (data.requiresAttention.isNotEmpty) const SizedBox(height: 14),
+                if (data.requiresAttention.isNotEmpty)
+                  const SizedBox(height: 14),
 
                 // ── 5. Room Status ────────────────────────────────────────
                 _AnimatedSection(
@@ -185,9 +185,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     bool multiProperty,
     WidgetRef ref,
   ) {
-    final propertyName = data?.propertyName
-        ?? profile?.authorization.properties.firstOrNull?.name
-        ?? 'Loading…';
+    final propertyName =
+        data?.propertyName ??
+        profile?.authorization.properties.firstOrNull?.name ??
+        'Loading…';
     final role = _formatRole(profile?.authorization.role ?? '');
     final initials = profile?.user.initials ?? '?';
 
@@ -372,9 +373,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
         // Avatar with user initials
         GestureDetector(
           onTap: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const ProfileScreen()),
-            );
+            Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => const ProfileScreen()));
           },
           child: Container(
             width: 36,
@@ -432,10 +433,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
   }
 
   /// Shows a bottom sheet to switch between properties (multi-property users only).
-  void _showPropertySwitcher(
-    BuildContext ctx,
-    UserProfileData profile,
-  ) {
+  void _showPropertySwitcher(BuildContext ctx, UserProfileData profile) {
     showModalBottomSheet(
       context: ctx,
       backgroundColor: Colors.transparent,
@@ -450,15 +448,17 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
       children: [
         _SkeletonCard(height: 200),
         const SizedBox(height: 14),
-        Row(children: [
-          Expanded(child: _SkeletonCard(height: 100)),
-          const SizedBox(width: 6),
-          Expanded(child: _SkeletonCard(height: 100)),
-          const SizedBox(width: 6),
-          Expanded(child: _SkeletonCard(height: 100)),
-          const SizedBox(width: 6),
-          Expanded(child: _SkeletonCard(height: 100)),
-        ]),
+        Row(
+          children: [
+            Expanded(child: _SkeletonCard(height: 100)),
+            const SizedBox(width: 6),
+            Expanded(child: _SkeletonCard(height: 100)),
+            const SizedBox(width: 6),
+            Expanded(child: _SkeletonCard(height: 100)),
+            const SizedBox(width: 6),
+            Expanded(child: _SkeletonCard(height: 100)),
+          ],
+        ),
         const SizedBox(height: 14),
         _SkeletonCard(height: 160),
         const SizedBox(height: 14),
@@ -481,7 +481,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
               shape: BoxShape.circle,
               border: Border.all(color: _border),
             ),
-            child: const Icon(Icons.cloud_off_rounded, color: _textMuted, size: 36),
+            child: const Icon(
+              Icons.cloud_off_rounded,
+              color: _textMuted,
+              size: 36,
+            ),
           ),
           const SizedBox(height: 20),
           const Text(
@@ -509,7 +513,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                 side: const BorderSide(color: _gold, width: 1),
               ),
             ),
-            child: const Text('Retry', style: TextStyle(fontWeight: FontWeight.w700)),
+            child: const Text(
+              'Retry',
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
           ),
         ],
       ),
@@ -535,7 +542,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                 color: _gold.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.rocket_launch_rounded, color: _gold, size: 48),
+              child: const Icon(
+                Icons.rocket_launch_rounded,
+                color: _gold,
+                size: 48,
+              ),
             ),
             const SizedBox(height: 24),
             const Text(
@@ -551,11 +562,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
             const Text(
               'This feature is currently under development. Stay tuned.',
               textAlign: TextAlign.center,
-              style: TextStyle(
-                color: _textMuted,
-                fontSize: 14,
-                height: 1.5,
-              ),
+              style: TextStyle(color: _textMuted, fontSize: 14, height: 1.5),
             ),
             const SizedBox(height: 32),
             SizedBox(
@@ -573,10 +580,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                 ),
                 child: const Text(
                   'Got it',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
                 ),
               ),
             ),
@@ -603,21 +607,20 @@ class _MainScreenStateAccessor {
   void switchTab(int index) {}
 }
 
-
 class _SectionLabel extends StatelessWidget {
   final String label;
   const _SectionLabel({required this.label});
 
   @override
   Widget build(BuildContext context) => Text(
-        label,
-        style: const TextStyle(
-          color: _textMuted,
-          fontSize: 10,
-          letterSpacing: 1.5,
-          fontWeight: FontWeight.w700,
-        ),
-      );
+    label,
+    style: const TextStyle(
+      color: _textMuted,
+      fontSize: 10,
+      letterSpacing: 1.5,
+      fontWeight: FontWeight.w700,
+    ),
+  );
 }
 
 /// Fades in each section with a small delay for a staggered reveal.
@@ -657,15 +660,15 @@ class _AnimatedSectionState extends State<_AnimatedSection>
 
   @override
   Widget build(BuildContext context) => FadeTransition(
-        opacity: _anim,
-        child: SlideTransition(
-          position: Tween<Offset>(
-            begin: const Offset(0, 0.04),
-            end: Offset.zero,
-          ).animate(_anim),
-          child: widget.child,
-        ),
-      );
+    opacity: _anim,
+    child: SlideTransition(
+      position: Tween<Offset>(
+        begin: const Offset(0, 0.04),
+        end: Offset.zero,
+      ).animate(_anim),
+      child: widget.child,
+    ),
+  );
 }
 
 /// Slim pulsing live indicator dot.
@@ -674,7 +677,8 @@ class _LiveDot extends StatefulWidget {
   State<_LiveDot> createState() => _LiveDotState();
 }
 
-class _LiveDotState extends State<_LiveDot> with SingleTickerProviderStateMixin {
+class _LiveDotState extends State<_LiveDot>
+    with SingleTickerProviderStateMixin {
   late AnimationController _ctrl;
   late Animation<double> _anim;
 
@@ -685,9 +689,10 @@ class _LiveDotState extends State<_LiveDot> with SingleTickerProviderStateMixin 
       vsync: this,
       duration: const Duration(milliseconds: 1000),
     )..repeat(reverse: true);
-    _anim = Tween<double>(begin: 0.4, end: 1.0).animate(
-      CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut),
-    );
+    _anim = Tween<double>(
+      begin: 0.4,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
   }
 
   @override
@@ -698,16 +703,16 @@ class _LiveDotState extends State<_LiveDot> with SingleTickerProviderStateMixin 
 
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
-        animation: _anim,
-        builder: (_, __) => Container(
-          width: 7,
-          height: 7,
-          decoration: BoxDecoration(
-            color: _emerald.withValues(alpha: _anim.value),
-            shape: BoxShape.circle,
-          ),
-        ),
-      );
+    animation: _anim,
+    builder: (_, __) => Container(
+      width: 7,
+      height: 7,
+      decoration: BoxDecoration(
+        color: _emerald.withValues(alpha: _anim.value),
+        shape: BoxShape.circle,
+      ),
+    ),
+  );
 }
 
 /// Skeleton loading shimmer card.
@@ -745,16 +750,16 @@ class _SkeletonCardState extends State<_SkeletonCard>
 
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
-        animation: _colorAnim,
-        builder: (_, __) => Container(
-          height: widget.height,
-          decoration: BoxDecoration(
-            color: _colorAnim.value,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: _border),
-          ),
-        ),
-      );
+    animation: _colorAnim,
+    builder: (_, __) => Container(
+      height: widget.height,
+      decoration: BoxDecoration(
+        color: _colorAnim.value,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _border),
+      ),
+    ),
+  );
 }
 
 /// Small unaudited footnote at the bottom.
@@ -763,16 +768,13 @@ class _UnauditedNote extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 4),
-        child: Text(
-          '* RevPAR, TRevPAR and live revenue figures are provisional until night audit completes.',
-          style: const TextStyle(
-            color: _textMuted,
-            fontSize: 10,
-          ),
-          textAlign: TextAlign.center,
-        ),
-      );
+    padding: const EdgeInsets.symmetric(horizontal: 4),
+    child: Text(
+      '* RevPAR, TRevPAR and live revenue figures are provisional until night audit completes.',
+      style: const TextStyle(color: _textMuted, fontSize: 10),
+      textAlign: TextAlign.center,
+    ),
+  );
 }
 
 // ─── Property Switcher Bottom Sheet ───────────────────────────────────────────
@@ -830,7 +832,11 @@ class _PropertySwitcherSheet extends StatelessWidget {
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(color: gold.withValues(alpha: 0.2)),
                   ),
-                  child: const Icon(Icons.apartment_rounded, color: gold, size: 16),
+                  child: const Icon(
+                    Icons.apartment_rounded,
+                    color: gold,
+                    size: 16,
+                  ),
                 ),
                 const SizedBox(width: 12),
                 const Column(
@@ -865,7 +871,11 @@ class _PropertySwitcherSheet extends StatelessWidget {
                       color: border,
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: const Icon(Icons.close_rounded, color: textMuted, size: 16),
+                    child: const Icon(
+                      Icons.close_rounded,
+                      color: textMuted,
+                      size: 16,
+                    ),
                   ),
                 ),
               ],
@@ -894,14 +904,10 @@ class _PropertySwitcherSheet extends StatelessWidget {
                 margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: isActive
-                      ? gold.withValues(alpha: 0.06)
-                      : cardBg,
+                  color: isActive ? gold.withValues(alpha: 0.06) : cardBg,
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(
-                    color: isActive
-                        ? gold.withValues(alpha: 0.3)
-                        : border,
+                    color: isActive ? gold.withValues(alpha: 0.3) : border,
                     width: isActive ? 1.5 : 1,
                   ),
                 ),
@@ -955,7 +961,9 @@ class _PropertySwitcherSheet extends StatelessWidget {
                           Text(
                             prop.name,
                             style: TextStyle(
-                              color: isActive ? textPrimary : textPrimary.withValues(alpha: 0.7),
+                              color: isActive
+                                  ? textPrimary
+                                  : textPrimary.withValues(alpha: 0.7),
                               fontSize: 14,
                               fontWeight: FontWeight.w700,
                             ),

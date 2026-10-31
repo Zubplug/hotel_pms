@@ -10,7 +10,8 @@ class FinanceProperty {
 
   FinanceProperty({required this.name, required this.currency});
 
-  factory FinanceProperty.fromJson(Map<String, dynamic> json) => FinanceProperty(
+  factory FinanceProperty.fromJson(Map<String, dynamic> json) =>
+      FinanceProperty(
         name: json['name'] ?? '',
         currency: json['currency'] ?? 'NGN',
       );
@@ -36,13 +37,55 @@ class AuditedPeriodData {
     required this.netRevenue,
   });
 
-  factory AuditedPeriodData.fromJson(Map<String, dynamic> json) => AuditedPeriodData(
+  factory AuditedPeriodData.fromJson(Map<String, dynamic> json) =>
+      AuditedPeriodData(
         revenue: (json['revenue'] ?? 0).toDouble(),
         roomRevenue: (json['roomRevenue'] ?? 0).toDouble(),
         fbRevenue: (json['fbRevenue'] ?? 0).toDouble(),
         otherRevenue: (json['otherRevenue'] ?? 0).toDouble(),
         discounts: (json['discounts'] ?? 0).toDouble(),
         refunds: (json['refunds'] ?? 0).toDouble(),
+        netRevenue: (json['netRevenue'] ?? 0).toDouble(),
+      );
+}
+
+class AuditedAccountRevenue {
+  final String department;
+  final String outlet;
+  final String accountCode;
+  final String accountName;
+  final double netRevenue;
+
+  AuditedAccountRevenue({
+    required this.department,
+    required this.outlet,
+    required this.accountCode,
+    required this.accountName,
+    required this.netRevenue,
+  });
+
+  factory AuditedAccountRevenue.fromJson(Map<String, dynamic> json) =>
+      AuditedAccountRevenue(
+        department: json['department'] ?? 'General',
+        outlet: json['outlet'] ?? 'N/A',
+        accountCode: json['accountCode'] ?? '',
+        accountName: json['accountName'] ?? '',
+        netRevenue: (json['netRevenue'] ?? 0).toDouble(),
+      );
+}
+
+class AuditedDepartmentRevenue {
+  final String department;
+  final double netRevenue;
+
+  AuditedDepartmentRevenue({
+    required this.department,
+    required this.netRevenue,
+  });
+
+  factory AuditedDepartmentRevenue.fromJson(Map<String, dynamic> json) =>
+      AuditedDepartmentRevenue(
+        department: json['department'] ?? 'General',
         netRevenue: (json['netRevenue'] ?? 0).toDouble(),
       );
 }
@@ -61,7 +104,8 @@ class LiveActivityData {
     required this.collections,
   });
 
-  factory LiveActivityData.fromJson(Map<String, dynamic> json) => LiveActivityData(
+  factory LiveActivityData.fromJson(Map<String, dynamic> json) =>
+      LiveActivityData(
         revenueActivity: (json['revenueActivity'] ?? 0).toDouble(),
         roomCharges: (json['roomCharges'] ?? 0).toDouble(),
         posSales: (json['posSales'] ?? 0).toDouble(),
@@ -88,13 +132,17 @@ class CashSession {
   });
 
   factory CashSession.fromJson(Map<String, dynamic> json) => CashSession(
-        label: json['label'] ?? '',
-        expected: (json['expected'] ?? 0).toDouble(),
-        declared: json['declared'] != null ? (json['declared'] as num).toDouble() : null,
-        variance: json['variance'] != null ? (json['variance'] as num).toDouble() : null,
-        status: json['status'] ?? 'OPEN',
-        businessDate: json['businessDate'] ?? '',
-      );
+    label: json['label'] ?? '',
+    expected: (json['expected'] ?? 0).toDouble(),
+    declared: json['declared'] != null
+        ? (json['declared'] as num).toDouble()
+        : null,
+    variance: json['variance'] != null
+        ? (json['variance'] as num).toDouble()
+        : null,
+    status: json['status'] ?? 'OPEN',
+    businessDate: json['businessDate'] ?? '',
+  );
 }
 
 class CashControlAggregate {
@@ -114,13 +162,16 @@ class CashControlAggregate {
     required this.sessions,
   });
 
-  factory CashControlAggregate.fromJson(Map<String, dynamic> json) => CashControlAggregate(
+  factory CashControlAggregate.fromJson(Map<String, dynamic> json) =>
+      CashControlAggregate(
         expected: (json['expected'] ?? 0).toDouble(),
         declared: (json['declared'] ?? 0).toDouble(),
         variance: (json['variance'] ?? 0).toDouble(),
         sessionsWithVariance: json['sessionsWithVariance'] ?? 0,
         significantVariances: json['significantVariances'] ?? 0,
-        sessions: (json['sessions'] as List? ?? []).map((s) => CashSession.fromJson(s)).toList(),
+        sessions: (json['sessions'] as List? ?? [])
+            .map((s) => CashSession.fromJson(s))
+            .toList(),
       );
 }
 
@@ -138,7 +189,8 @@ class TransactionControlAggregate {
     required this.overrides,
   });
 
-  factory TransactionControlAggregate.fromJson(Map<String, dynamic> json) => TransactionControlAggregate(
+  factory TransactionControlAggregate.fromJson(Map<String, dynamic> json) =>
+      TransactionControlAggregate(
         discounts: (json['discounts'] ?? 0).toDouble(),
         voids: (json['voids'] ?? 0).toDouble(),
         refunds: (json['refunds'] ?? 0).toDouble(),
@@ -152,13 +204,17 @@ class GuestCredits {
   final double creditsAvailable;
   final double creditsConsumed;
 
-  GuestCredits({required this.depositsHeld, required this.creditsAvailable, required this.creditsConsumed});
+  GuestCredits({
+    required this.depositsHeld,
+    required this.creditsAvailable,
+    required this.creditsConsumed,
+  });
 
   factory GuestCredits.fromJson(Map<String, dynamic> json) => GuestCredits(
-        depositsHeld: (json['depositsHeld'] ?? 0).toDouble(),
-        creditsAvailable: (json['creditsAvailable'] ?? 0).toDouble(),
-        creditsConsumed: (json['creditsConsumed'] ?? 0).toDouble(),
-      );
+    depositsHeld: (json['depositsHeld'] ?? 0).toDouble(),
+    creditsAvailable: (json['creditsAvailable'] ?? 0).toDouble(),
+    creditsConsumed: (json['creditsConsumed'] ?? 0).toDouble(),
+  );
 }
 
 // ─── Outstanding Receivables ─────────────────────────────────────────────────
@@ -175,7 +231,8 @@ class OutstandingReceivables {
     required this.other,
   });
 
-  factory OutstandingReceivables.fromJson(Map<String, dynamic> json) => OutstandingReceivables(
+  factory OutstandingReceivables.fromJson(Map<String, dynamic> json) =>
+      OutstandingReceivables(
         total: (json['total'] ?? 0).toDouble(),
         guestBalances: (json['guestBalances'] ?? 0).toDouble(),
         corporateReceivables: (json['corporateReceivables'] ?? 0).toDouble(),
@@ -204,14 +261,14 @@ class CurrentAlert {
   });
 
   factory CurrentAlert.fromJson(Map<String, dynamic> json) => CurrentAlert(
-        id: json['id'] ?? '',
-        priority: json['priority'] ?? 'P3',
-        category: json['category'] ?? 'FINANCE',
-        title: json['title'] ?? '',
-        summary: json['summary'] ?? '',
-        affectedCount: json['affectedCount'] ?? 0,
-        totalAmount: (json['totalAmount'] ?? 0).toDouble(),
-      );
+    id: json['id'] ?? '',
+    priority: json['priority'] ?? 'P3',
+    category: json['category'] ?? 'FINANCE',
+    title: json['title'] ?? '',
+    summary: json['summary'] ?? '',
+    affectedCount: json['affectedCount'] ?? 0,
+    totalAmount: (json['totalAmount'] ?? 0).toDouble(),
+  );
 }
 
 // ─── Root Model ───────────────────────────────────────────────────────────────
@@ -221,6 +278,8 @@ class FinanceDashboardData {
   final String? lastAuditedBusinessDate;
   final FinanceProperty property;
   final AuditedPeriodData audited;
+  final List<AuditedAccountRevenue> accountRevenue;
+  final List<AuditedDepartmentRevenue> departmentRevenue;
   final LiveActivityData liveSinceLastAudit;
   final CashControlAggregate cashControl;
   final TransactionControlAggregate transactionControls;
@@ -234,6 +293,8 @@ class FinanceDashboardData {
     required this.lastAuditedBusinessDate,
     required this.property,
     required this.audited,
+    required this.accountRevenue,
+    required this.departmentRevenue,
     required this.liveSinceLastAudit,
     required this.cashControl,
     required this.transactionControls,
@@ -250,12 +311,24 @@ class FinanceDashboardData {
       lastAuditedBusinessDate: d['lastAuditedBusinessDate'],
       property: FinanceProperty.fromJson(d['property'] ?? {}),
       audited: AuditedPeriodData.fromJson(d['audited'] ?? {}),
-      liveSinceLastAudit: LiveActivityData.fromJson(d['liveSinceLastAudit'] ?? {}),
+      accountRevenue: (d['accountRevenue'] as List? ?? [])
+          .map((a) => AuditedAccountRevenue.fromJson(a))
+          .toList(),
+      departmentRevenue: (d['departmentRevenue'] as List? ?? [])
+          .map((a) => AuditedDepartmentRevenue.fromJson(a))
+          .toList(),
+      liveSinceLastAudit: LiveActivityData.fromJson(
+        d['liveSinceLastAudit'] ?? {},
+      ),
       cashControl: CashControlAggregate.fromJson(d['cashControl'] ?? {}),
-      transactionControls: TransactionControlAggregate.fromJson(d['transactionControls'] ?? {}),
+      transactionControls: TransactionControlAggregate.fromJson(
+        d['transactionControls'] ?? {},
+      ),
       outstanding: OutstandingReceivables.fromJson(d['outstanding'] ?? {}),
       guestCredits: GuestCredits.fromJson(d['guestCredits'] ?? {}),
-      currentAlerts: (d['currentAlerts'] as List? ?? []).map((a) => CurrentAlert.fromJson(a)).toList(),
+      currentAlerts: (d['currentAlerts'] as List? ?? [])
+          .map((a) => CurrentAlert.fromJson(a))
+          .toList(),
     );
   }
 }

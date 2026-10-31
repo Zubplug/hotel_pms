@@ -1217,12 +1217,16 @@ class _PinSetupDialog extends StatefulWidget {
 class _PinSetupDialogState extends State<_PinSetupDialog> {
   final _pinController = TextEditingController();
   final _confirmController = TextEditingController();
+  final _pinFocus = FocusNode();
+  final _confirmFocus = FocusNode();
   String? _error;
 
   @override
   void dispose() {
     _pinController.dispose();
     _confirmController.dispose();
+    _pinFocus.dispose();
+    _confirmFocus.dispose();
     super.dispose();
   }
 
@@ -1241,61 +1245,258 @@ class _PinSetupDialogState extends State<_PinSetupDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      backgroundColor: _cardBg,
-      title: const Text(
-        'Create your mobile PIN',
-        style: TextStyle(color: _textPrimary),
-      ),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Use a six-digit PIN for faster future sign in.',
-            style: TextStyle(color: _textMuted, fontSize: 13),
-          ),
-          const SizedBox(height: 18),
-          TextField(
-            controller: _pinController,
-            autofocus: true,
-            obscureText: true,
-            keyboardType: TextInputType.number,
-            maxLength: 6,
-            style: const TextStyle(color: _textPrimary, letterSpacing: 8),
-            decoration: const InputDecoration(
-              labelText: 'New PIN',
-              counterText: '',
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 430),
+        child: SingleChildScrollView(
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(22, 22, 22, 18),
+            decoration: BoxDecoration(
+              color: _cardBg,
+              borderRadius: BorderRadius.circular(28),
+              border: Border.all(color: _goldLight.withValues(alpha: .28)),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x66000000),
+                  blurRadius: 32,
+                  offset: Offset(0, 16),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 50,
+                      height: 50,
+                      decoration: BoxDecoration(
+                        color: _goldLight.withValues(alpha: .12),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: _goldLight.withValues(alpha: .3),
+                        ),
+                      ),
+                      child: const Icon(
+                        Icons.lock_person_outlined,
+                        color: _goldLight,
+                        size: 25,
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Secure your access',
+                            style: TextStyle(
+                              color: _textPrimary,
+                              fontSize: 20,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: -.3,
+                            ),
+                          ),
+                          SizedBox(height: 5),
+                          Text(
+                            'Set a private PIN for faster sign in.',
+                            style: TextStyle(
+                              color: _textMuted,
+                              fontSize: 13,
+                              height: 1.35,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      icon: const Icon(
+                        Icons.close,
+                        color: _textMuted,
+                        size: 20,
+                      ),
+                      tooltip: 'Set up later',
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 22),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(13),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF17243A),
+                    borderRadius: BorderRadius.circular(15),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(
+                        Icons.verified_user_outlined,
+                        color: _goldLight,
+                        size: 18,
+                      ),
+                      SizedBox(width: 9),
+                      Expanded(
+                        child: Text(
+                          'Your PIN is protected by the LodgeCore security layer.',
+                          style: TextStyle(
+                            color: _textMuted,
+                            fontSize: 12,
+                            height: 1.3,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+                _pinInput(
+                  controller: _pinController,
+                  focusNode: _pinFocus,
+                  label: 'Create PIN',
+                  hint: '6 digits',
+                  onSubmitted: (_) => _confirmFocus.requestFocus(),
+                ),
+                const SizedBox(height: 12),
+                _pinInput(
+                  controller: _confirmController,
+                  focusNode: _confirmFocus,
+                  label: 'Confirm PIN',
+                  hint: 'Repeat your PIN',
+                  onSubmitted: (_) => _submit(),
+                ),
+                if (_error != null) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF3A1D25),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFF8D3D4D)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.error_outline,
+                          color: Colors.redAccent,
+                          size: 17,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _error!,
+                            style: const TextStyle(
+                              color: Colors.redAccent,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 22),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: _textMuted,
+                          side: const BorderSide(color: Color(0xFF34445E)),
+                          minimumSize: const Size.fromHeight(48),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                        child: const Text('Later'),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      flex: 2,
+                      child: FilledButton.icon(
+                        onPressed: _submit,
+                        icon: const Icon(Icons.arrow_forward_rounded, size: 18),
+                        label: const Text('Enable PIN'),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: _goldLight,
+                          foregroundColor: _bgDeep,
+                          minimumSize: const Size.fromHeight(48),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 10),
-          TextField(
-            controller: _confirmController,
-            obscureText: true,
-            keyboardType: TextInputType.number,
-            maxLength: 6,
-            style: const TextStyle(color: _textPrimary, letterSpacing: 8),
-            decoration: const InputDecoration(
-              labelText: 'Confirm PIN',
-              counterText: '',
-            ),
-          ),
-          if (_error != null) ...[
-            const SizedBox(height: 10),
-            Text(
-              _error!,
-              style: const TextStyle(color: Colors.redAccent, fontSize: 12),
-            ),
-          ],
-        ],
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Skip'),
         ),
-        FilledButton(onPressed: _submit, child: const Text('Enable PIN')),
-      ],
+      ),
+    );
+  }
+
+  Widget _pinInput({
+    required TextEditingController controller,
+    required FocusNode focusNode,
+    required String label,
+    required String hint,
+    required ValueChanged<String> onSubmitted,
+  }) {
+    return TextField(
+      controller: controller,
+      focusNode: focusNode,
+      autofocus: label == 'Create PIN',
+      obscureText: true,
+      keyboardType: TextInputType.number,
+      textInputAction: label == 'Create PIN'
+          ? TextInputAction.next
+          : TextInputAction.done,
+      maxLength: 6,
+      onChanged: (_) => setState(() => _error = null),
+      onSubmitted: onSubmitted,
+      style: const TextStyle(
+        color: _textPrimary,
+        fontSize: 19,
+        letterSpacing: 8,
+      ),
+      decoration: InputDecoration(
+        labelText: label,
+        hintText: hint,
+        counterText: '',
+        prefixIcon: const Icon(
+          Icons.dialpad_rounded,
+          color: _textMuted,
+          size: 20,
+        ),
+        filled: true,
+        fillColor: const Color(0xFF111C2E),
+        labelStyle: const TextStyle(color: _textMuted, fontSize: 13),
+        hintStyle: const TextStyle(color: Color(0xFF53627A), fontSize: 13),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 16,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: Color(0xFF2D3C55)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: _goldLight, width: 1.4),
+        ),
+      ),
     );
   }
 }

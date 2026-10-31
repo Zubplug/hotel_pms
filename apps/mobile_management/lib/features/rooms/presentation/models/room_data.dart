@@ -19,20 +19,17 @@ class PropertyInfo {
   final String name;
   final String timezone;
 
-  PropertyInfo({
-    required this.id,
-    required this.name,
-    required this.timezone,
-  });
+  PropertyInfo({required this.id, required this.name, required this.timezone});
 }
 
 class RoomOverview {
   final int total;
   final int occupied;
-  final int occupiedDirty; // checked-in rooms with dirty housekeeping (stayover dirty)
+  final int
+  occupiedDirty; // checked-in rooms with dirty housekeeping (stayover dirty)
   final int vacant;
   final int ready;
-  final int dirty;         // vacant rooms needing cleaning
+  final int dirty; // vacant rooms needing cleaning
   final int outOfOrder;
   final int outOfService;
 
@@ -52,10 +49,7 @@ class RoomTypeInfo {
   final String id;
   final String name;
 
-  RoomTypeInfo({
-    required this.id,
-    required this.name,
-  });
+  RoomTypeInfo({required this.id, required this.name});
 }
 
 class RoomItem {
@@ -114,6 +108,8 @@ class CurrentGuestInfo {
   final DateTime checkIn;
   final DateTime checkOut;
   final double? folioBalance;
+  final double? folioOutstanding;
+  final double? folioCredit;
 
   CurrentGuestInfo({
     this.name,
@@ -121,6 +117,8 @@ class CurrentGuestInfo {
     required this.checkIn,
     required this.checkOut,
     this.folioBalance,
+    this.folioOutstanding,
+    this.folioCredit,
   });
 }
 
@@ -147,11 +145,7 @@ class HousekeepingInfo {
   final DateTime? lastUpdatedAt;
   final String? assignedTo;
 
-  HousekeepingInfo({
-    required this.status,
-    this.lastUpdatedAt,
-    this.assignedTo,
-  });
+  HousekeepingInfo({required this.status, this.lastUpdatedAt, this.assignedTo});
 }
 
 class MaintenanceInfo {

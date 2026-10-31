@@ -7,25 +7,25 @@ import '../models/room_data.dart';
 import 'room_details_screen.dart';
 
 // ─── Design System ────────────────────────────────────────────────────────────
-const _bg           = Color(0xFF060B14);
-const _surface      = Color(0xFF0D1422);
+const _bg = Color(0xFF060B14);
+const _surface = Color(0xFF0D1422);
 const _surfaceRaised = Color(0xFF111927);
 
-const _border       = Color(0xFF1E2D40);
-const _borderHigh   = Color(0xFF263548);
-const _gold         = Color(0xFFD4AF37);
+const _border = Color(0xFF1E2D40);
+const _borderHigh = Color(0xFF263548);
+const _gold = Color(0xFFD4AF37);
 
-const _textPrimary  = Color(0xFFF0F4FF);
-const _textSecondary= Color(0xFF8B95B0);
-const _textMuted    = Color(0xFF4A5468);
+const _textPrimary = Color(0xFFF0F4FF);
+const _textSecondary = Color(0xFF8B95B0);
+const _textMuted = Color(0xFF4A5468);
 
 // Status colors
-const _statusOccupied   = Color(0xFF3B82F6);
-const _statusReady      = Color(0xFF10B981);
-const _statusDirty      = Color(0xFFF97316);
-const _statusOOO        = Color(0xFFEF4444);
-const _statusOOS        = Color(0xFF8B5CF6);
-const _statusStayDirty  = Color(0xFFF59E0B);
+const _statusOccupied = Color(0xFF3B82F6);
+const _statusReady = Color(0xFF10B981);
+const _statusDirty = Color(0xFFF97316);
+const _statusOOO = Color(0xFFEF4444);
+const _statusOOS = Color(0xFF8B5CF6);
+const _statusStayDirty = Color(0xFFF59E0B);
 
 // ─── Rooms Screen ─────────────────────────────────────────────────────────────
 class RoomsScreen extends ConsumerStatefulWidget {
@@ -50,9 +50,10 @@ class _RoomsScreenState extends ConsumerState<RoomsScreen>
       vsync: this,
       duration: const Duration(seconds: 2),
     )..repeat(reverse: true);
-    _pulseAnim = Tween<double>(begin: 0.35, end: 1.0).animate(
-      CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut),
-    );
+    _pulseAnim = Tween<double>(
+      begin: 0.35,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut));
   }
 
   @override
@@ -70,36 +71,55 @@ class _RoomsScreenState extends ConsumerState<RoomsScreen>
   Color _statusColor(RoomItem room) {
     if (_isStayoverDirty(room)) return _statusStayDirty;
     switch (room.displayStatus) {
-      case 'OCCUPIED':       return _statusOccupied;
-      case 'READY':          return _statusReady;
-      case 'DIRTY':          return _statusDirty;
-      case 'OUT_OF_ORDER':   return _statusOOO;
-      case 'OUT_OF_SERVICE': return _statusOOS;
-      default:               return _textMuted;
+      case 'OCCUPIED':
+        return _statusOccupied;
+      case 'READY':
+        return _statusReady;
+      case 'DIRTY':
+        return _statusDirty;
+      case 'OUT_OF_ORDER':
+        return _statusOOO;
+      case 'OUT_OF_SERVICE':
+        return _statusOOS;
+      default:
+        return _textMuted;
     }
   }
 
   String _statusLabel(RoomItem room) {
     if (_isStayoverDirty(room)) return 'STAY · DIRTY';
     switch (room.displayStatus) {
-      case 'OCCUPIED':       return 'OCCUPIED';
-      case 'READY':          return 'VACANT · READY';
-      case 'DIRTY':          return 'VACANT · DIRTY';
-      case 'OUT_OF_ORDER':   return 'OUT OF ORDER';
-      case 'OUT_OF_SERVICE': return 'OUT OF SERVICE';
-      default:               return room.displayStatus.replaceAll('_', ' ');
+      case 'OCCUPIED':
+        return 'OCCUPIED';
+      case 'READY':
+        return 'VACANT · READY';
+      case 'DIRTY':
+        return 'VACANT · DIRTY';
+      case 'OUT_OF_ORDER':
+        return 'OUT OF ORDER';
+      case 'OUT_OF_SERVICE':
+        return 'OUT OF SERVICE';
+      default:
+        return room.displayStatus.replaceAll('_', ' ');
     }
   }
 
   List<RoomItem> _filtered(List<RoomItem> rooms) {
     switch (_filter) {
-      case 'OCCUPIED': return rooms.where((r) => r.displayStatus == 'OCCUPIED').toList();
-      case 'READY':    return rooms.where((r) => r.displayStatus == 'READY').toList();
-      case 'DIRTY':    return rooms.where((r) =>
-          r.displayStatus == 'DIRTY' || _isStayoverDirty(r)).toList();
-      case 'OOO':      return rooms.where((r) => r.displayStatus == 'OUT_OF_ORDER').toList();
-      case 'OOS':      return rooms.where((r) => r.displayStatus == 'OUT_OF_SERVICE').toList();
-      default:         return rooms;
+      case 'OCCUPIED':
+        return rooms.where((r) => r.displayStatus == 'OCCUPIED').toList();
+      case 'READY':
+        return rooms.where((r) => r.displayStatus == 'READY').toList();
+      case 'DIRTY':
+        return rooms
+            .where((r) => r.displayStatus == 'DIRTY' || _isStayoverDirty(r))
+            .toList();
+      case 'OOO':
+        return rooms.where((r) => r.displayStatus == 'OUT_OF_ORDER').toList();
+      case 'OOS':
+        return rooms.where((r) => r.displayStatus == 'OUT_OF_SERVICE').toList();
+      default:
+        return rooms;
     }
   }
 
@@ -125,98 +145,96 @@ class _RoomsScreenState extends ConsumerState<RoomsScreen>
       color: _gold,
       backgroundColor: _surfaceRaised,
       child: CustomScrollView(
-      physics: const AlwaysScrollableScrollPhysics(
-        parent: BouncingScrollPhysics(),
-      ),
-      slivers: [
-        // ── Sticky App Bar ────────────────────────────────────────────────────
-        SliverAppBar(
-          pinned: true,
-          floating: false,
-          backgroundColor: _bg,
-          surfaceTintColor: Colors.transparent,
-          elevation: 0,
-          scrolledUnderElevation: 0,
-          toolbarHeight: 58,
-          automaticallyImplyLeading: false,
-          title: _RoomsHeaderContent(
-            data: data,
-            viewMode: _viewMode,
-            pulseAnim: _pulseAnim,
-            onViewModeChanged: (m) => setState(() => _viewMode = m),
-          ),
-          titleSpacing: 0,
+        physics: const AlwaysScrollableScrollPhysics(
+          parent: BouncingScrollPhysics(),
         ),
+        slivers: [
+          // ── Sticky App Bar ────────────────────────────────────────────────────
+          SliverAppBar(
+            pinned: true,
+            floating: false,
+            backgroundColor: _bg,
+            surfaceTintColor: Colors.transparent,
+            elevation: 0,
+            scrolledUnderElevation: 0,
+            toolbarHeight: 58,
+            automaticallyImplyLeading: false,
+            title: _RoomsHeaderContent(
+              data: data,
+              viewMode: _viewMode,
+              pulseAnim: _pulseAnim,
+              onViewModeChanged: (m) => setState(() => _viewMode = m),
+            ),
+            titleSpacing: 0,
+          ),
 
-        SliverToBoxAdapter(
-          child: Column(
-            children: [
-              const SizedBox(height: 16),
+          SliverToBoxAdapter(
+            child: Column(
+              children: [
+                const SizedBox(height: 16),
 
-              // ── Analytics Mini Bar ───────────────────────────────────────
-              _AnalyticsMiniBar(overview: data.overview, snapshot: data),
-              const SizedBox(height: 16),
+                // ── Analytics Mini Bar ───────────────────────────────────────
+                _AnalyticsMiniBar(overview: data.overview, snapshot: data),
+                const SizedBox(height: 16),
 
-              // ── Filter Bar ───────────────────────────────────────────────
-              _FilterBar(
-                selected: _filter,
-                overview: data.overview,
-                onSelect: (f) => setState(() => _filter = f),
-                rooms: data.rooms,
-                isStayoverDirty: _isStayoverDirty,
-              ),
-              const SizedBox(height: 16),
+                // ── Filter Bar ───────────────────────────────────────────────
+                _FilterBar(
+                  selected: _filter,
+                  overview: data.overview,
+                  onSelect: (f) => setState(() => _filter = f),
+                  rooms: data.rooms,
+                  isStayoverDirty: _isStayoverDirty,
+                ),
+                const SizedBox(height: 16),
 
-              // ── Results label ────────────────────────────────────────────
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Row(
-                  children: [
-                    Text(
-                      '${rooms.length}',
-                      style: const TextStyle(
-                        color: _textPrimary,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      rooms.length == 1 ? 'room' : 'rooms',
-                      style: const TextStyle(color: _textMuted, fontSize: 13),
-                    ),
-                    if (_filter != 'ALL') ...[
-                      const SizedBox(width: 6),
+                // ── Results label ────────────────────────────────────────────
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    children: [
                       Text(
-                        '· ${_filterLabel(_filter)}',
+                        '${rooms.length}',
                         style: const TextStyle(
-                          color: _gold,
+                          color: _textPrimary,
                           fontSize: 13,
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
+                      const SizedBox(width: 4),
+                      Text(
+                        rooms.length == 1 ? 'room' : 'rooms',
+                        style: const TextStyle(color: _textMuted, fontSize: 13),
+                      ),
+                      if (_filter != 'ALL') ...[
+                        const SizedBox(width: 6),
+                        Text(
+                          '· ${_filterLabel(_filter)}',
+                          style: const TextStyle(
+                            color: _gold,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
-              ),
-              const SizedBox(height: 10),
-            ],
+                const SizedBox(height: 10),
+              ],
+            ),
           ),
-        ),
 
-        // ── Room List / Grid ──────────────────────────────────────────────
-        if (rooms.isEmpty)
-          SliverFillRemaining(
-            child: _buildEmptyState(),
-          )
-        else if (_viewMode == _ViewMode.grid)
-          _buildGridSliver(rooms)
-        else
-          _buildListSliver(rooms),
+          // ── Room List / Grid ──────────────────────────────────────────────
+          if (rooms.isEmpty)
+            SliverFillRemaining(child: _buildEmptyState())
+          else if (_viewMode == _ViewMode.grid)
+            _buildGridSliver(rooms)
+          else
+            _buildListSliver(rooms),
 
-        const SliverToBoxAdapter(child: SizedBox(height: 80)),
-      ],
-    ),
+          const SliverToBoxAdapter(child: SizedBox(height: 80)),
+        ],
+      ),
     );
   }
 
@@ -266,13 +284,14 @@ class _RoomsScreenState extends ConsumerState<RoomsScreen>
     HapticFeedback.selectionClick();
     Navigator.of(ctx).push(
       PageRouteBuilder(
-        pageBuilder: (context, animation, secondaryAnimation) => RoomDetailsScreen(roomId: roomId),
+        pageBuilder: (context, animation, secondaryAnimation) =>
+            RoomDetailsScreen(roomId: roomId),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           return SlideTransition(
-            position: Tween<Offset>(
-              begin: const Offset(1, 0),
-              end: Offset.zero,
-            ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOut)),
+            position: Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero)
+                .animate(
+                  CurvedAnimation(parent: animation, curve: Curves.easeOut),
+                ),
             child: child,
           );
         },
@@ -343,14 +362,29 @@ class _RoomsScreenState extends ConsumerState<RoomsScreen>
               shape: BoxShape.circle,
               border: Border.all(color: const Color(0xFF3D1F1F)),
             ),
-            child: const Icon(Icons.wifi_off_rounded, color: _statusOOO, size: 36),
+            child: const Icon(
+              Icons.wifi_off_rounded,
+              color: _statusOOO,
+              size: 36,
+            ),
           ),
           const SizedBox(height: 20),
-          const Text('Could not load rooms', style: TextStyle(color: _textPrimary, fontSize: 17, fontWeight: FontWeight.w700)),
+          const Text(
+            'Could not load rooms',
+            style: TextStyle(
+              color: _textPrimary,
+              fontSize: 17,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
           const SizedBox(height: 8),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 40),
-            child: Text('$err', style: const TextStyle(color: _textSecondary, fontSize: 12), textAlign: TextAlign.center),
+            child: Text(
+              '$err',
+              style: const TextStyle(color: _textSecondary, fontSize: 12),
+              textAlign: TextAlign.center,
+            ),
           ),
           const SizedBox(height: 28),
           GestureDetector(
@@ -362,7 +396,14 @@ class _RoomsScreenState extends ConsumerState<RoomsScreen>
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: _gold),
               ),
-              child: const Text('Retry', style: TextStyle(color: _gold, fontWeight: FontWeight.w700, fontSize: 14)),
+              child: const Text(
+                'Retry',
+                style: TextStyle(
+                  color: _gold,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 14,
+                ),
+              ),
             ),
           ),
         ],
@@ -372,12 +413,18 @@ class _RoomsScreenState extends ConsumerState<RoomsScreen>
 
   String _filterLabel(String f) {
     switch (f) {
-      case 'OCCUPIED': return 'Occupied';
-      case 'READY':    return 'Vacant · Ready';
-      case 'DIRTY':    return 'Needs Cleaning';
-      case 'OOO':      return 'Out of Order';
-      case 'OOS':      return 'Out of Service';
-      default:         return 'All Rooms';
+      case 'OCCUPIED':
+        return 'Occupied';
+      case 'READY':
+        return 'Vacant · Ready';
+      case 'DIRTY':
+        return 'Needs Cleaning';
+      case 'OOO':
+        return 'Out of Order';
+      case 'OOS':
+        return 'Out of Service';
+      default:
+        return 'All Rooms';
     }
   }
 }
@@ -430,13 +477,15 @@ class _RoomsHeaderContent extends StatelessWidget {
                         height: 6,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: _statusReady.withValues(alpha: pulseAnim.value),
+                          color: _statusReady.withValues(
+                            alpha: pulseAnim.value,
+                          ),
                         ),
                       ),
                     ),
                     const SizedBox(width: 6),
                     const Text(
-                      'ROOMS',
+                      'ROOM OPERATIONS',
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w800,
@@ -446,7 +495,10 @@ class _RoomsHeaderContent extends StatelessWidget {
                     ),
                     const SizedBox(width: 8),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 2,
+                      ),
                       decoration: BoxDecoration(
                         color: _gold.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(20),
@@ -559,6 +611,27 @@ class _AnalyticsMiniBar extends StatelessWidget {
         ),
         child: Column(
           children: [
+            Row(
+              children: [
+                const Icon(Icons.insights_rounded, color: _gold, size: 15),
+                const SizedBox(width: 7),
+                const Text(
+                  'PROPERTY READINESS',
+                  style: TextStyle(
+                    color: _textSecondary,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  'Business date · ${snapshot.businessDate.day.toString().padLeft(2, '0')}/${snapshot.businessDate.month.toString().padLeft(2, '0')}',
+                  style: const TextStyle(color: _textMuted, fontSize: 10),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
             // Occupancy big number + stats
             Row(
               crossAxisAlignment: CrossAxisAlignment.center,
@@ -635,7 +708,9 @@ class _AnalyticsMiniBar extends StatelessWidget {
                 children: [
                   Container(height: 8, color: _surface),
                   FractionallySizedBox(
-                    widthFactor: overview.total > 0 ? overview.occupied / overview.total : 0,
+                    widthFactor: overview.total > 0
+                        ? overview.occupied / overview.total
+                        : 0,
                     child: Container(
                       height: 8,
                       decoration: BoxDecoration(
@@ -643,8 +718,8 @@ class _AnalyticsMiniBar extends StatelessWidget {
                           colors: occPct >= 80
                               ? [_statusReady, const Color(0xFF059669)]
                               : occPct >= 50
-                                  ? [_statusOccupied, const Color(0xFF2563EB)]
-                                  : [_statusDirty, const Color(0xFFEA580C)],
+                              ? [_statusOccupied, const Color(0xFF2563EB)]
+                              : [_statusDirty, const Color(0xFFEA580C)],
                         ),
                       ),
                     ),
@@ -658,13 +733,29 @@ class _AnalyticsMiniBar extends StatelessWidget {
             // Status breakdown row
             Row(
               children: [
-                _StatusStat(value: overview.occupied, label: 'Occupied', color: _statusOccupied),
+                _StatusStat(
+                  value: overview.occupied,
+                  label: 'Occupied',
+                  color: _statusOccupied,
+                ),
                 _vDivider(),
-                _StatusStat(value: overview.ready, label: 'Ready', color: _statusReady),
+                _StatusStat(
+                  value: overview.ready,
+                  label: 'Ready',
+                  color: _statusReady,
+                ),
                 _vDivider(),
-                _StatusStat(value: overview.dirty + overview.occupiedDirty, label: 'Dirty', color: _statusDirty),
+                _StatusStat(
+                  value: overview.dirty + overview.occupiedDirty,
+                  label: 'Dirty',
+                  color: _statusDirty,
+                ),
                 _vDivider(),
-                _StatusStat(value: overview.outOfOrder + overview.outOfService, label: 'OOO/OOS', color: _statusOOO),
+                _StatusStat(
+                  value: overview.outOfOrder + overview.outOfService,
+                  label: 'OOO/OOS',
+                  color: _statusOOO,
+                ),
               ],
             ),
           ],
@@ -685,7 +776,11 @@ class _QuickStatPill extends StatelessWidget {
   final String label;
   final String value;
   final Color color;
-  const _QuickStatPill({required this.label, required this.value, required this.color});
+  const _QuickStatPill({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) => Container(
@@ -724,7 +819,11 @@ class _StatusStat extends StatelessWidget {
   final int value;
   final String label;
   final Color color;
-  const _StatusStat({required this.value, required this.label, required this.color});
+  const _StatusStat({
+    required this.value,
+    required this.label,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) => Expanded(
@@ -741,7 +840,11 @@ class _StatusStat extends StatelessWidget {
         const SizedBox(height: 2),
         Text(
           label,
-          style: const TextStyle(color: _textMuted, fontSize: 9, letterSpacing: 0.3),
+          style: const TextStyle(
+            color: _textMuted,
+            fontSize: 9,
+            letterSpacing: 0.3,
+          ),
           textAlign: TextAlign.center,
         ),
       ],
@@ -766,22 +869,28 @@ class _FilterBar extends StatelessWidget {
   });
 
   static const _filters = [
-    ('ALL',      'All',       null),
-    ('OCCUPIED', 'Occupied',  _statusOccupied),
-    ('READY',    'Ready',     _statusReady),
-    ('DIRTY',    'Dirty',     _statusDirty),
-    ('OOO',      'OOO',       _statusOOO),
-    ('OOS',      'OOS',       _statusOOS),
+    ('ALL', 'All', null),
+    ('OCCUPIED', 'Occupied', _statusOccupied),
+    ('READY', 'Ready', _statusReady),
+    ('DIRTY', 'Dirty', _statusDirty),
+    ('OOO', 'OOO', _statusOOO),
+    ('OOS', 'OOS', _statusOOS),
   ];
 
   int _count(String f) {
     switch (f) {
-      case 'OCCUPIED': return overview.occupied;
-      case 'READY':    return overview.ready;
-      case 'DIRTY':    return overview.dirty + overview.occupiedDirty;
-      case 'OOO':      return overview.outOfOrder;
-      case 'OOS':      return overview.outOfService;
-      default:         return overview.total;
+      case 'OCCUPIED':
+        return overview.occupied;
+      case 'READY':
+        return overview.ready;
+      case 'DIRTY':
+        return overview.dirty + overview.occupiedDirty;
+      case 'OOO':
+        return overview.outOfOrder;
+      case 'OOS':
+        return overview.outOfService;
+      default:
+        return overview.total;
     }
   }
 
@@ -803,7 +912,10 @@ class _FilterBar extends StatelessWidget {
               onTap: () => onSelect(id),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 9,
+                ),
                 decoration: BoxDecoration(
                   color: isSelected
                       ? activeColor.withValues(alpha: 0.12)
@@ -832,13 +944,18 @@ class _FilterBar extends StatelessWidget {
                       label,
                       style: TextStyle(
                         fontSize: 12,
-                        fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                        fontWeight: isSelected
+                            ? FontWeight.w700
+                            : FontWeight.w500,
                         color: isSelected ? activeColor : _textSecondary,
                       ),
                     ),
                     const SizedBox(width: 6),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
                       decoration: BoxDecoration(
                         color: isSelected
                             ? activeColor.withValues(alpha: 0.2)
@@ -991,7 +1108,9 @@ class _PremiumRoomCard extends StatelessWidget {
                                       room.contextualNote!,
                                       style: TextStyle(
                                         fontSize: 11,
-                                        color: statusColor.withValues(alpha: 0.8),
+                                        color: statusColor.withValues(
+                                          alpha: 0.8,
+                                        ),
                                         fontStyle: FontStyle.italic,
                                       ),
                                       maxLines: 1,
@@ -1012,11 +1131,16 @@ class _PremiumRoomCard extends StatelessWidget {
                         children: [
                           // Status badge
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 5,
+                            ),
                             decoration: BoxDecoration(
                               color: statusColor.withValues(alpha: 0.12),
                               borderRadius: BorderRadius.circular(20),
-                              border: Border.all(color: statusColor.withValues(alpha: 0.35)),
+                              border: Border.all(
+                                color: statusColor.withValues(alpha: 0.35),
+                              ),
                             ),
                             child: Text(
                               statusLabel,
@@ -1036,7 +1160,11 @@ class _PremiumRoomCard extends StatelessWidget {
                               decoration: BoxDecoration(
                                 color: _statusStayDirty.withValues(alpha: 0.12),
                                 borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: _statusStayDirty.withValues(alpha: 0.3)),
+                                border: Border.all(
+                                  color: _statusStayDirty.withValues(
+                                    alpha: 0.3,
+                                  ),
+                                ),
                               ),
                               child: const Icon(
                                 Icons.cleaning_services_rounded,

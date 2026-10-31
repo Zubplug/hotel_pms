@@ -35,10 +35,12 @@ class LiveRoomsRepository implements RoomsRepository {
 
   RoomDashboardData _parseData(Map<String, dynamic> data) {
     final property = data['property'];
-    if (property == null) throw Exception('API response missing property field');
+    if (property == null)
+      throw Exception('API response missing property field');
 
     final businessDate = data['businessDate'];
-    if (businessDate == null) throw Exception('API response missing businessDate field');
+    if (businessDate == null)
+      throw Exception('API response missing businessDate field');
 
     return RoomDashboardData(
       property: PropertyInfo(
@@ -69,7 +71,9 @@ class LiveRoomsRepository implements RoomsRepository {
 
   List<RoomItem> _parseRooms(List<dynamic>? data) {
     if (data == null) throw Exception('API response missing rooms field');
-    return data.map((item) => _parseRoomItem(item as Map<String, dynamic>)).toList();
+    return data
+        .map((item) => _parseRoomItem(item as Map<String, dynamic>))
+        .toList();
   }
 
   @override
@@ -81,26 +85,38 @@ class LiveRoomsRepository implements RoomsRepository {
         final data = response.data['data'] ?? response.data;
         return _parseRoomDetails(data as Map<String, dynamic>);
       }
-      throw Exception('Room details API returned status ${response.statusCode}');
+      throw Exception(
+        'Room details API returned status ${response.statusCode}',
+      );
     } on DioException catch (e) {
       final status = e.response?.statusCode;
       final serverMessage = e.response?.data?['error'] as String?;
-      if (status == 401) throw Exception('Session expired. Please log in again.');
-      if (status == 403) throw Exception('Access denied: ${serverMessage ?? 'Insufficient permissions'}');
-      if (status == 404) throw Exception('Room not found: ${serverMessage ?? 'Check room ID and property access'}');
+      if (status == 401)
+        throw Exception('Session expired. Please log in again.');
+      if (status == 403)
+        throw Exception(
+          'Access denied: ${serverMessage ?? 'Insufficient permissions'}',
+        );
+      if (status == 404)
+        throw Exception(
+          'Room not found: ${serverMessage ?? 'Check room ID and property access'}',
+        );
       throw Exception('Network error loading room details: ${e.message}');
     }
   }
 
   RoomDetailsData _parseRoomDetails(Map<String, dynamic> data) {
     final property = data['property'];
-    if (property == null) throw Exception('Room details API response missing property field');
+    if (property == null)
+      throw Exception('Room details API response missing property field');
 
     final businessDate = data['businessDate'];
-    if (businessDate == null) throw Exception('Room details API response missing businessDate field');
+    if (businessDate == null)
+      throw Exception('Room details API response missing businessDate field');
 
     final room = data['room'];
-    if (room == null) throw Exception('Room details API response missing room field');
+    if (room == null)
+      throw Exception('Room details API response missing room field');
 
     return RoomDetailsData(
       property: PropertyInfo(
@@ -118,13 +134,17 @@ class LiveRoomsRepository implements RoomsRepository {
       nextArrival: data['nextArrival'] != null
           ? _parseNextArrival(data['nextArrival'] as Map<String, dynamic>)
           : null,
-      housekeeping: _parseHousekeeping(data['housekeeping'] as Map<String, dynamic>?),
+      housekeeping: _parseHousekeeping(
+        data['housekeeping'] as Map<String, dynamic>?,
+      ),
       maintenance: data['maintenance'] != null
           ? _parseMaintenance(data['maintenance'] as Map<String, dynamic>)
           : null,
       timeline: _parseTimeline(data['timeline'] as List<dynamic>?),
       managementAttention: data['managementAttention'] != null
-          ? ManagementAttention.fromJson(data['managementAttention'] as Map<String, dynamic>)
+          ? ManagementAttention.fromJson(
+              data['managementAttention'] as Map<String, dynamic>,
+            )
           : null,
     );
   }
@@ -149,12 +169,15 @@ class LiveRoomsRepository implements RoomsRepository {
   }
 
   CurrentGuestInfo _parseCurrentGuest(Map<String, dynamic> data) {
+    final folio = data['folio'] as Map<String, dynamic>?;
     return CurrentGuestInfo(
       name: data['name'] as String?,
       vipLevel: data['vipLevel'] as String?,
       checkIn: DateTime.parse(data['checkIn'] as String),
       checkOut: DateTime.parse(data['checkOut'] as String),
       folioBalance: (data['folioBalance'] as num?)?.toDouble(),
+      folioOutstanding: (folio?['outstanding'] as num?)?.toDouble(),
+      folioCredit: (folio?['advanceCredit'] as num?)?.toDouble(),
     );
   }
 
@@ -176,8 +199,10 @@ class LiveRoomsRepository implements RoomsRepository {
   }
 
   HousekeepingInfo _parseHousekeeping(Map<String, dynamic>? data) {
-    if (data == null) throw Exception('Room details API response missing housekeeping field');
-    if (data['status'] == null) throw Exception('Housekeeping missing status field');
+    if (data == null)
+      throw Exception('Room details API response missing housekeeping field');
+    if (data['status'] == null)
+      throw Exception('Housekeeping missing status field');
     return HousekeepingInfo(
       status: data['status'] as String,
       lastUpdatedAt: data['lastUpdatedAt'] != null
@@ -188,8 +213,10 @@ class LiveRoomsRepository implements RoomsRepository {
   }
 
   MaintenanceInfo _parseMaintenance(Map<String, dynamic> data) {
-    if (data['status'] == null) throw Exception('Maintenance missing status field');
-    if (data['reason'] == null) throw Exception('Maintenance missing reason field');
+    if (data['status'] == null)
+      throw Exception('Maintenance missing status field');
+    if (data['reason'] == null)
+      throw Exception('Maintenance missing reason field');
     return MaintenanceInfo(
       status: data['status'] as String,
       priority: data['priority'] as String,
@@ -207,8 +234,10 @@ class LiveRoomsRepository implements RoomsRepository {
     if (data == null) return [];
     return data.map((item) {
       final event = item as Map<String, dynamic>;
-      if (event['type'] == null) throw Exception('Timeline event missing type field');
-      if (event['timestamp'] == null) throw Exception('Timeline event missing timestamp field');
+      if (event['type'] == null)
+        throw Exception('Timeline event missing type field');
+      if (event['timestamp'] == null)
+        throw Exception('Timeline event missing timestamp field');
       return TimelineEvent(
         type: event['type'] as String,
         title: event['title'] as String,

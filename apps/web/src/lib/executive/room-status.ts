@@ -311,11 +311,9 @@ export async function getRoomIntelligenceView(
     if (showFolio && currentRes.reservation.folios.length > 0) {
       let totalCharges = 0;
       let totalPaid = 0;
-      let folioBalanceSum = 0;
       let availableCreditSum = 0;
 
       for (const folio of currentRes.reservation.folios) {
-        folioBalanceSum += Number(folio.balance);
         totalCharges += Number(folio.totalCharges || 0);
         totalPaid += Number(folio.totalPayments || 0);
         
@@ -326,14 +324,21 @@ export async function getRoomIntelligenceView(
         }
       }
       
-      // True net balance: positive means they owe money, negative means they have a credit balance
-      const netBalance = folioBalanceSum - availableCreditSum;
+      // Match Front Desk: the signed folio position comes from the
+      // authoritative counters. Available credits remain separate and must
+      // not be subtracted again from the folio balance.
+      const netBalance = totalCharges - totalPaid;
 
       folioData = {
         totalCharges,
         paid: totalPaid,
         credit: availableCreditSum,
-        balance: Math.abs(netBalance)
+        // Keep the sign: positive is guest debt, negative is advance credit.
+        balance: netBalance,
+        outstanding: Math.max(0, netBalance),
+        advanceCredit: availableCreditSum > 0
+          ? availableCreditSum
+          : Math.max(0, -netBalance),
       };
     }
 

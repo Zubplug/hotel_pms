@@ -8,21 +8,21 @@ import '../providers/rooms_provider.dart';
 import '../models/room_data.dart';
 
 // ─── Design Tokens ────────────────────────────────────────────────────────────
-const _bg            = Color(0xFF090D14);
-const _surface       = Color(0xFF111722);
+const _bg = Color(0xFF090D14);
+const _surface = Color(0xFF111722);
 const _surfaceRaised = Color(0xFF161E2C);
-const _border        = Color(0xFF263346);
+const _border = Color(0xFF263346);
 
-const _gold          = Color(0xFFE2C873);
-const _textPrimary   = Color(0xFFF8FAFC);
+const _gold = Color(0xFFE2C873);
+const _textPrimary = Color(0xFFF8FAFC);
 const _textSecondary = Color(0xFF94A3B8);
-const _textMuted     = Color(0xFF475569);
+const _textMuted = Color(0xFF475569);
 
-const _green         = Color(0xFF10B981);
-const _blue          = Color(0xFF3B82F6);
-const _orange        = Color(0xFFF59E0B);
-const _red           = Color(0xFFEF4444);
-const _violet        = Color(0xFF8B5CF6);
+const _green = Color(0xFF10B981);
+const _blue = Color(0xFF3B82F6);
+const _orange = Color(0xFFF59E0B);
+const _red = Color(0xFFEF4444);
+const _violet = Color(0xFF8B5CF6);
 
 // ─── Room Details Screen ──────────────────────────────────────────────────────
 class RoomDetailsScreen extends ConsumerStatefulWidget {
@@ -161,14 +161,25 @@ class _RoomDetailsScreenState extends ConsumerState<RoomDetailsScreen>
           const SizedBox(height: 16),
           const Text(
             'Failed to load room',
-            style: TextStyle(color: _textPrimary, fontSize: 17, fontWeight: FontWeight.w700),
+            style: TextStyle(
+              color: _textPrimary,
+              fontSize: 17,
+              fontWeight: FontWeight.w700,
+            ),
           ),
           const SizedBox(height: 8),
-          Text(e.toString(), style: const TextStyle(color: _textSecondary, fontSize: 12), textAlign: TextAlign.center),
+          Text(
+            e.toString(),
+            style: const TextStyle(color: _textSecondary, fontSize: 12),
+            textAlign: TextAlign.center,
+          ),
           const SizedBox(height: 24),
           TextButton(
             onPressed: () => ref.refresh(roomDetailsProvider(widget.roomId)),
-            child: const Text('Try Again', style: TextStyle(color: _gold, fontWeight: FontWeight.w700)),
+            child: const Text(
+              'Try Again',
+              style: TextStyle(color: _gold, fontWeight: FontWeight.w700),
+            ),
           ),
         ],
       ),
@@ -176,12 +187,28 @@ class _RoomDetailsScreenState extends ConsumerState<RoomDetailsScreen>
   );
 
   _StatusMeta _statusMeta(String status) => switch (status) {
-    'OCCUPIED'       => _StatusMeta(_blue,   Icons.person_rounded,           'Occupied'),
-    'READY'          => _StatusMeta(_green,  Icons.check_circle_rounded,     'Vacant · Ready'),
-    'DIRTY'          => _StatusMeta(_orange, Icons.cleaning_services_rounded,'Vacant · Dirty'),
-    'OUT_OF_ORDER'   => _StatusMeta(_red,    Icons.block_rounded,            'Out of Order'),
-    'OUT_OF_SERVICE' => _StatusMeta(_violet, Icons.engineering_rounded,      'Out of Service'),
-    _                => _StatusMeta(_textSecondary, Icons.help_outline_rounded, status.replaceAll('_', ' ')),
+    'OCCUPIED' => _StatusMeta(_blue, Icons.person_rounded, 'Occupied'),
+    'READY' => _StatusMeta(
+      _green,
+      Icons.check_circle_rounded,
+      'Vacant · Ready',
+    ),
+    'DIRTY' => _StatusMeta(
+      _orange,
+      Icons.cleaning_services_rounded,
+      'Vacant · Dirty',
+    ),
+    'OUT_OF_ORDER' => _StatusMeta(_red, Icons.block_rounded, 'Out of Order'),
+    'OUT_OF_SERVICE' => _StatusMeta(
+      _violet,
+      Icons.engineering_rounded,
+      'Out of Service',
+    ),
+    _ => _StatusMeta(
+      _textSecondary,
+      Icons.help_outline_rounded,
+      status.replaceAll('_', ' '),
+    ),
   };
 
   String _parseRoomNumber(String number) {
@@ -227,10 +254,7 @@ class _HeroHeader extends StatelessWidget {
         gradient: RadialGradient(
           center: Alignment.topRight,
           radius: 1.2,
-          colors: [
-            statusMeta.color.withValues(alpha: 0.15),
-            _bg,
-          ],
+          colors: [statusMeta.color.withValues(alpha: 0.15), _bg],
         ),
       ),
       child: Column(
@@ -253,12 +277,19 @@ class _HeroHeader extends StatelessWidget {
                     shape: BoxShape.circle,
                     border: Border.all(color: _border),
                   ),
-                  child: const Icon(Icons.arrow_back_rounded, color: _textPrimary, size: 18),
+                  child: const Icon(
+                    Icons.arrow_back_rounded,
+                    color: _textPrimary,
+                    size: 18,
+                  ),
                 ),
               ),
               if (data.managementAttention != null)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
                     color: _red.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(20),
@@ -269,7 +300,15 @@ class _HeroHeader extends StatelessWidget {
                     children: [
                       Icon(Icons.warning_amber_rounded, color: _red, size: 14),
                       SizedBox(width: 6),
-                      Text('ALERT', style: TextStyle(color: _red, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1)),
+                      Text(
+                        'ALERT',
+                        style: TextStyle(
+                          color: _red,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 1,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -308,6 +347,16 @@ class _HeroHeader extends StatelessWidget {
                         letterSpacing: -0.5,
                       ),
                     ),
+                    const SizedBox(height: 5),
+                    Text(
+                      'ROOM ${data.room.number}',
+                      style: const TextStyle(
+                        color: _textMuted,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1.1,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -322,7 +371,10 @@ class _HeroHeader extends StatelessWidget {
                   height: 1,
                   letterSpacing: -2.5,
                   shadows: [
-                    Shadow(color: statusMeta.color.withValues(alpha: 0.4), blurRadius: 24),
+                    Shadow(
+                      color: statusMeta.color.withValues(alpha: 0.4),
+                      blurRadius: 24,
+                    ),
                   ],
                 ),
               ),
@@ -363,7 +415,12 @@ class _HeroHeader extends StatelessWidget {
                   Expanded(
                     child: Text(
                       data.managementAttention!.message,
-                      style: const TextStyle(color: _red, fontSize: 13, fontWeight: FontWeight.w600, height: 1.4),
+                      style: const TextStyle(
+                        color: _red,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        height: 1.4,
+                      ),
                     ),
                   ),
                 ],
@@ -382,7 +439,12 @@ class _StatusPill extends StatelessWidget {
   final Color color;
   final bool solid;
 
-  const _StatusPill({required this.icon, required this.label, required this.color, this.solid = false});
+  const _StatusPill({
+    required this.icon,
+    required this.label,
+    required this.color,
+    this.solid = false,
+  });
 
   @override
   Widget build(BuildContext context) => Container(
@@ -418,9 +480,13 @@ class _SellabilityBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (color, icon, label) = switch (sellability) {
-      'READY_TO_SELL' => (_green, Icons.check_circle_outline_rounded, 'SELLABLE'),
-      'NOT_SELLABLE'  => (_red, Icons.block_rounded, 'NOT SELLABLE'),
-      _               => (_orange, Icons.pending_outlined, 'NOT READY'),
+      'READY_TO_SELL' => (
+        _green,
+        Icons.check_circle_outline_rounded,
+        'SELLABLE',
+      ),
+      'NOT_SELLABLE' => (_red, Icons.block_rounded, 'NOT SELLABLE'),
+      _ => (_orange, Icons.pending_outlined, 'NOT READY'),
     };
     return _StatusPill(icon: icon, label: label, color: color, solid: false);
   }
@@ -467,7 +533,9 @@ class _HistoryTab extends StatelessWidget {
   Widget build(BuildContext context) {
     const previewCount = 4;
     final hasMore = data.timeline.length > previewCount;
-    final displayed = timelineExpanded ? data.timeline : data.timeline.take(previewCount).toList();
+    final displayed = timelineExpanded
+        ? data.timeline
+        : data.timeline.take(previewCount).toList();
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 24, 20, 80),
@@ -477,13 +545,23 @@ class _HistoryTab extends StatelessWidget {
           children: [
             const Text(
               'Recent Activity',
-              style: TextStyle(color: _textPrimary, fontSize: 16, fontWeight: FontWeight.w700),
+              style: TextStyle(
+                color: _textPrimary,
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+              ),
             ),
             const Spacer(),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(color: _surfaceRaised, borderRadius: BorderRadius.circular(12)),
-              child: Text('${data.timeline.length} events', style: const TextStyle(color: _textSecondary, fontSize: 11)),
+              decoration: BoxDecoration(
+                color: _surfaceRaised,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                '${data.timeline.length} events',
+                style: const TextStyle(color: _textSecondary, fontSize: 11),
+              ),
             ),
           ],
         ),
@@ -491,19 +569,34 @@ class _HistoryTab extends StatelessWidget {
         if (displayed.isEmpty)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 40),
-            child: Center(child: Text('No activity recorded', style: TextStyle(color: _textMuted))),
+            child: Center(
+              child: Text(
+                'No activity recorded',
+                style: TextStyle(color: _textMuted),
+              ),
+            ),
           )
         else
           ...displayed.asMap().entries.map(
-            (e) => _TimelineEntry(event: e.value, isLast: e.key == displayed.length - 1),
+            (e) => _TimelineEntry(
+              event: e.value,
+              isLast: e.key == displayed.length - 1,
+            ),
           ),
         if (hasMore) ...[
           const SizedBox(height: 16),
           Center(
             child: TextButton.icon(
               onPressed: onToggleTimeline,
-              icon: Icon(timelineExpanded ? Icons.expand_less : Icons.expand_more, size: 16, color: _blue),
-              label: Text(timelineExpanded ? 'Show Less' : 'View All', style: const TextStyle(color: _blue)),
+              icon: Icon(
+                timelineExpanded ? Icons.expand_less : Icons.expand_more,
+                size: 16,
+                color: _blue,
+              ),
+              label: Text(
+                timelineExpanded ? 'Show Less' : 'View All',
+                style: const TextStyle(color: _blue),
+              ),
             ),
           ),
         ],
@@ -525,7 +618,10 @@ class _CurrentGuestCard extends StatelessWidget {
         title: 'CURRENT GUEST',
         child: const Padding(
           padding: EdgeInsets.only(top: 8),
-          child: Text('Room is unoccupied', style: TextStyle(color: _textMuted, fontSize: 14)),
+          child: Text(
+            'Room is unoccupied',
+            style: TextStyle(color: _textMuted, fontSize: 14),
+          ),
         ),
       );
     }
@@ -536,6 +632,13 @@ class _CurrentGuestCard extends StatelessWidget {
     final daysLeft = guest!.checkOut.difference(now).inDays;
     final isOverdue = daysLeft < 0;
     final isDepartingToday = daysLeft == 0;
+    final signedBalance = guest!.folioBalance ?? 0;
+    final outstanding =
+        guest!.folioOutstanding ?? (signedBalance > 0 ? signedBalance : 0);
+    final advanceCredit =
+        guest!.folioCredit ?? (signedBalance < 0 ? signedBalance.abs() : 0);
+    final hasOutstanding = outstanding > 0.01;
+    final hasCredit = advanceCredit > 0.01;
 
     return _PremiumCard(
       icon: Icons.person_rounded,
@@ -544,8 +647,18 @@ class _CurrentGuestCard extends StatelessWidget {
       trailing: guest!.vipLevel != null
           ? Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(color: _gold.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(6)),
-              child: Text(guest!.vipLevel!, style: const TextStyle(color: _gold, fontSize: 9, fontWeight: FontWeight.w800)),
+              decoration: BoxDecoration(
+                color: _gold.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(
+                guest!.vipLevel!,
+                style: const TextStyle(
+                  color: _gold,
+                  fontSize: 9,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
             )
           : null,
       child: Column(
@@ -554,15 +667,42 @@ class _CurrentGuestCard extends StatelessWidget {
           const SizedBox(height: 12),
           Text(
             guest!.name ?? '🔒 Restricted',
-            style: const TextStyle(color: _textPrimary, fontSize: 20, fontWeight: FontWeight.w700, letterSpacing: -0.5),
+            style: const TextStyle(
+              color: _textPrimary,
+              fontSize: 20,
+              fontWeight: FontWeight.w700,
+              letterSpacing: -0.5,
+            ),
           ),
           const SizedBox(height: 20),
           Row(
             children: [
-              _StatBlock(label: 'CHECK-IN', value: fmt.format(guest!.checkIn), icon: Icons.login_rounded),
-              _StatBlock(label: 'CHECK-OUT', value: fmt.format(guest!.checkOut), icon: Icons.logout_rounded, isAlert: isOverdue),
-              _StatBlock(label: 'NIGHTS', value: '$nights', icon: Icons.nights_stay_rounded),
-              _StatBlock(label: 'REMAINING', value: isOverdue ? 'OVR' : isDepartingToday ? 'TODAY' : '${daysLeft}d', icon: Icons.timer_outlined, highlightColor: isDepartingToday ? _orange : null),
+              _StatBlock(
+                label: 'CHECK-IN',
+                value: fmt.format(guest!.checkIn),
+                icon: Icons.login_rounded,
+              ),
+              _StatBlock(
+                label: 'CHECK-OUT',
+                value: fmt.format(guest!.checkOut),
+                icon: Icons.logout_rounded,
+                isAlert: isOverdue,
+              ),
+              _StatBlock(
+                label: 'NIGHTS',
+                value: '$nights',
+                icon: Icons.nights_stay_rounded,
+              ),
+              _StatBlock(
+                label: 'REMAINING',
+                value: isOverdue
+                    ? 'OVR'
+                    : isDepartingToday
+                    ? 'TODAY'
+                    : '${daysLeft}d',
+                icon: Icons.timer_outlined,
+                highlightColor: isDepartingToday ? _orange : null,
+              ),
             ],
           ),
           if (guest!.folioBalance != null) ...[
@@ -571,19 +711,53 @@ class _CurrentGuestCard extends StatelessWidget {
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: _bg,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: guest!.folioBalance! > 0 ? _orange.withValues(alpha: 0.3) : _border),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: hasOutstanding
+                      ? _red.withValues(alpha: 0.35)
+                      : hasCredit
+                      ? _green.withValues(alpha: 0.35)
+                      : _border,
+                ),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.receipt_long_rounded, size: 16, color: _textSecondary),
+                  Icon(
+                    hasOutstanding
+                        ? Icons.account_balance_wallet_outlined
+                        : hasCredit
+                        ? Icons.savings_outlined
+                        : Icons.check_circle_outline_rounded,
+                    size: 18,
+                    color: hasOutstanding
+                        ? _red
+                        : hasCredit
+                        ? _green
+                        : _textSecondary,
+                  ),
                   const SizedBox(width: 12),
-                  const Text('Folio Balance', style: TextStyle(color: _textSecondary, fontSize: 14)),
+                  Expanded(
+                    child: Text(
+                      hasOutstanding
+                          ? 'Outstanding balance'
+                          : hasCredit
+                          ? 'Advance credit'
+                          : 'Folio settled',
+                      style: const TextStyle(
+                        color: _textSecondary,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
                   const Spacer(),
                   Text(
-                    '₦${_fmtBalance(guest!.folioBalance!)}',
+                    '₦${_fmtBalance(hasOutstanding ? outstanding : advanceCredit)}',
                     style: TextStyle(
-                      color: guest!.folioBalance! > 0 ? _orange : _green,
+                      color: hasOutstanding
+                          ? _red
+                          : hasCredit
+                          ? _green
+                          : _textSecondary,
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
                     ),
@@ -599,7 +773,7 @@ class _CurrentGuestCard extends StatelessWidget {
 
   static String _fmtBalance(double v) {
     if (v >= 1000000) return '${(v / 1000000).toStringAsFixed(1)}M';
-    if (v >= 1000)    return '${(v / 1000).toStringAsFixed(1)}K';
+    if (v >= 1000) return '${(v / 1000).toStringAsFixed(1)}K';
     return v.toStringAsFixed(0);
   }
 }
@@ -611,7 +785,13 @@ class _StatBlock extends StatelessWidget {
   final bool isAlert;
   final Color? highlightColor;
 
-  const _StatBlock({required this.label, required this.value, required this.icon, this.isAlert = false, this.highlightColor});
+  const _StatBlock({
+    required this.label,
+    required this.value,
+    required this.icon,
+    this.isAlert = false,
+    this.highlightColor,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -624,13 +804,25 @@ class _StatBlock extends StatelessWidget {
             children: [
               Icon(icon, size: 12, color: _textSecondary),
               const SizedBox(width: 4),
-              Text(label, style: const TextStyle(color: _textSecondary, fontSize: 9, fontWeight: FontWeight.w600, letterSpacing: 0.5)),
+              Text(
+                label,
+                style: const TextStyle(
+                  color: _textSecondary,
+                  fontSize: 9,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.5,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 6),
           Text(
             value,
-            style: TextStyle(color: color, fontSize: 14, fontWeight: FontWeight.w700),
+            style: TextStyle(
+              color: color,
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+            ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
@@ -653,14 +845,18 @@ class _NextArrivalCard extends StatelessWidget {
         title: 'NEXT ARRIVAL',
         child: const Padding(
           padding: EdgeInsets.only(top: 8),
-          child: Text('No upcoming arrivals', style: TextStyle(color: _textMuted, fontSize: 14)),
+          child: Text(
+            'No upcoming arrivals',
+            style: TextStyle(color: _textMuted, fontSize: 14),
+          ),
         ),
       );
     }
 
     final dateFmt = DateFormat('EEE, MMM d');
     final now = DateTime.now();
-    final isToday = arrival!.arrivalDate.year == now.year &&
+    final isToday =
+        arrival!.arrivalDate.year == now.year &&
         arrival!.arrivalDate.month == now.month &&
         arrival!.arrivalDate.day == now.day;
 
@@ -671,8 +867,18 @@ class _NextArrivalCard extends StatelessWidget {
       trailing: isToday
           ? Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(color: _orange.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(6)),
-              child: const Text('TODAY', style: TextStyle(color: _orange, fontSize: 9, fontWeight: FontWeight.w800)),
+              decoration: BoxDecoration(
+                color: _orange.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: const Text(
+                'TODAY',
+                style: TextStyle(
+                  color: _orange,
+                  fontSize: 9,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
             )
           : null,
       child: Column(
@@ -681,18 +887,35 @@ class _NextArrivalCard extends StatelessWidget {
           const SizedBox(height: 12),
           Text(
             arrival!.guestName ?? '🔒 Restricted',
-            style: const TextStyle(color: _textPrimary, fontSize: 18, fontWeight: FontWeight.w700, letterSpacing: -0.5),
+            style: const TextStyle(
+              color: _textPrimary,
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              letterSpacing: -0.5,
+            ),
           ),
           const SizedBox(height: 16),
           Wrap(
             spacing: 12,
             runSpacing: 12,
             children: [
-              _InfoRow(icon: Icons.calendar_today_outlined, label: isToday ? 'Today' : dateFmt.format(arrival!.arrivalDate)),
+              _InfoRow(
+                icon: Icons.calendar_today_outlined,
+                label: isToday ? 'Today' : dateFmt.format(arrival!.arrivalDate),
+              ),
               if (arrival!.arrivalTime != null)
-                _InfoRow(icon: Icons.schedule_rounded, label: arrival!.arrivalTime!),
-              _InfoRow(icon: Icons.nights_stay_rounded, label: '${arrival!.nights} nights'),
-              _InfoRow(icon: Icons.info_outline_rounded, label: _capitalize(arrival!.status)),
+                _InfoRow(
+                  icon: Icons.schedule_rounded,
+                  label: arrival!.arrivalTime!,
+                ),
+              _InfoRow(
+                icon: Icons.nights_stay_rounded,
+                label: '${arrival!.nights} nights',
+              ),
+              _InfoRow(
+                icon: Icons.info_outline_rounded,
+                label: _capitalize(arrival!.status),
+              ),
             ],
           ),
         ],
@@ -717,8 +940,18 @@ class _HousekeepingCard extends StatelessWidget {
       title: 'HOUSEKEEPING',
       trailing: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: BoxDecoration(color: color.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(6)),
-        child: Text(hk.status, style: TextStyle(color: color, fontSize: 9, fontWeight: FontWeight.w800)),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Text(
+          hk.status,
+          style: TextStyle(
+            color: color,
+            fontSize: 9,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -727,14 +960,21 @@ class _HousekeepingCard extends StatelessWidget {
           if (hk.lastUpdatedAt != null)
             _InfoRow(
               icon: Icons.update_rounded,
-              label: '${hk.status == 'INSPECTED' ? 'Inspected' : 'Updated'}: ${timeago.format(hk.lastUpdatedAt!)}',
+              label:
+                  '${hk.status == 'INSPECTED' ? 'Inspected' : 'Updated'}: ${timeago.format(hk.lastUpdatedAt!)}',
             ),
           if (hk.assignedTo != null) ...[
             const SizedBox(height: 8),
-            _InfoRow(icon: Icons.badge_rounded, label: 'Assigned to ${hk.assignedTo!}'),
+            _InfoRow(
+              icon: Icons.badge_rounded,
+              label: 'Assigned to ${hk.assignedTo!}',
+            ),
           ],
           if (hk.lastUpdatedAt == null && hk.assignedTo == null)
-            const Text('No recent activity', style: TextStyle(color: _textMuted, fontSize: 14)),
+            const Text(
+              'No recent activity',
+              style: TextStyle(color: _textMuted, fontSize: 14),
+            ),
         ],
       ),
     );
@@ -754,8 +994,18 @@ class _MaintenanceCard extends StatelessWidget {
       title: 'MAINTENANCE',
       trailing: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: BoxDecoration(color: _red.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(6)),
-        child: Text(maintenance.status.replaceAll('_', ' '), style: const TextStyle(color: _red, fontSize: 9, fontWeight: FontWeight.w800)),
+        decoration: BoxDecoration(
+          color: _red.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Text(
+          maintenance.status.replaceAll('_', ' '),
+          style: const TextStyle(
+            color: _red,
+            fontSize: 9,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -763,7 +1013,12 @@ class _MaintenanceCard extends StatelessWidget {
           const SizedBox(height: 16),
           Text(
             maintenance.reason,
-            style: const TextStyle(color: _textPrimary, fontSize: 15, fontWeight: FontWeight.w500, height: 1.4),
+            style: const TextStyle(
+              color: _textPrimary,
+              fontSize: 15,
+              fontWeight: FontWeight.w500,
+              height: 1.4,
+            ),
           ),
           const SizedBox(height: 16),
           Wrap(
@@ -771,9 +1026,16 @@ class _MaintenanceCard extends StatelessWidget {
             runSpacing: 12,
             children: [
               if (maintenance.priority.isNotEmpty)
-                _InfoRow(icon: Icons.flag_rounded, label: 'Priority: ${maintenance.priority}', color: _red),
+                _InfoRow(
+                  icon: Icons.flag_rounded,
+                  label: 'Priority: ${maintenance.priority}',
+                  color: _red,
+                ),
               if (maintenance.reportedAt != null)
-                _InfoRow(icon: Icons.schedule_rounded, label: 'Reported ${timeago.format(maintenance.reportedAt!)}'),
+                _InfoRow(
+                  icon: Icons.schedule_rounded,
+                  label: 'Reported ${timeago.format(maintenance.reportedAt!)}',
+                ),
             ],
           ),
         ],
@@ -824,12 +1086,19 @@ class _PremiumCard extends StatelessWidget {
               const SizedBox(width: 8),
               Text(
                 title,
-                style: const TextStyle(color: _textSecondary, fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1.2),
+                style: const TextStyle(
+                  color: _textSecondary,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.2,
+                ),
               ),
               const Spacer(),
               ?trailing,
             ],
           ),
+          const SizedBox(height: 14),
+          Container(height: 1, color: _border.withValues(alpha: 0.7)),
           child,
         ],
       ),
@@ -851,7 +1120,14 @@ class _InfoRow extends StatelessWidget {
       children: [
         Icon(icon, size: 14, color: color ?? _textSecondary),
         const SizedBox(width: 6),
-        Text(label, style: TextStyle(color: color ?? _textSecondary, fontSize: 13, fontWeight: FontWeight.w500)),
+        Text(
+          label,
+          style: TextStyle(
+            color: color ?? _textSecondary,
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
       ],
     );
   }
@@ -864,17 +1140,17 @@ class _TimelineEntry extends StatelessWidget {
   const _TimelineEntry({required this.event, required this.isLast});
 
   Color _color() => switch (event.type) {
-    'MAINTENANCE'  => _red,
+    'MAINTENANCE' => _red,
     'HOUSEKEEPING' => _orange,
-    'RESERVATION'  => _blue,
-    _              => _textSecondary,
+    'RESERVATION' => _blue,
+    _ => _textSecondary,
   };
 
   IconData _icon() => switch (event.type) {
-    'MAINTENANCE'  => Icons.build_rounded,
+    'MAINTENANCE' => Icons.build_rounded,
     'HOUSEKEEPING' => Icons.cleaning_services_rounded,
-    'RESERVATION'  => Icons.hotel_rounded,
-    _              => Icons.info_outline_rounded,
+    'RESERVATION' => Icons.hotel_rounded,
+    _ => Icons.info_outline_rounded,
   };
 
   @override
@@ -897,7 +1173,13 @@ class _TimelineEntry extends StatelessWidget {
                 child: Icon(_icon(), color: color, size: 16),
               ),
               if (!isLast)
-                Expanded(child: Container(width: 2, color: _border, margin: const EdgeInsets.symmetric(vertical: 8))),
+                Expanded(
+                  child: Container(
+                    width: 2,
+                    color: _border,
+                    margin: const EdgeInsets.symmetric(vertical: 8),
+                  ),
+                ),
             ],
           ),
           const SizedBox(width: 16),
@@ -915,7 +1197,11 @@ class _TimelineEntry extends StatelessWidget {
                       Expanded(
                         child: Text(
                           event.title,
-                          style: const TextStyle(color: _textPrimary, fontSize: 15, fontWeight: FontWeight.w600),
+                          style: const TextStyle(
+                            color: _textPrimary,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                          ),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -923,7 +1209,11 @@ class _TimelineEntry extends StatelessWidget {
                       const SizedBox(width: 12),
                       Text(
                         DateFormat('HH:mm').format(event.timestamp),
-                        style: const TextStyle(color: _textMuted, fontSize: 12, fontWeight: FontWeight.w600),
+                        style: const TextStyle(
+                          color: _textMuted,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ],
                   ),
@@ -931,13 +1221,21 @@ class _TimelineEntry extends StatelessWidget {
                     const SizedBox(height: 6),
                     Text(
                       event.subtitle,
-                      style: const TextStyle(color: _textSecondary, fontSize: 13, height: 1.4),
+                      style: const TextStyle(
+                        color: _textSecondary,
+                        fontSize: 13,
+                        height: 1.4,
+                      ),
                     ),
                   ],
                   const SizedBox(height: 8),
                   Text(
                     DateFormat('MMM d, yyyy').format(event.timestamp),
-                    style: const TextStyle(color: _textMuted, fontSize: 11, fontWeight: FontWeight.w500),
+                    style: const TextStyle(
+                      color: _textMuted,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                 ],
               ),

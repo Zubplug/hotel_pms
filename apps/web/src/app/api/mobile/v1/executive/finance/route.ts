@@ -6,6 +6,7 @@ import { getPropertyBusinessDate, calculateDailyRevenue } from '@/lib/kpi';
 import { prisma } from '@hotel-pms/db';
 import { addDays, endOfDay, format, startOfDay, startOfMonth, startOfYear } from 'date-fns';
 import { fromZonedTime } from 'date-fns-tz';
+import { DailyAccountingService } from '@/lib/services/daily-accounting-service';
 
 export const dynamic = 'force-dynamic';
 
@@ -84,6 +85,20 @@ export async function GET(req: NextRequest) {
       audited.revenue = Number(lastAudit.totalRevenue || 0);
       audited.netRevenue = Number(lastAudit.totalRevenue || 0);
     }
+
+    // Finance reporting is presented from posted GL revenue accounts. The
+    // Night Audit snapshot remains the headline control total, while this
+    // account-level view explains how that audited total is distributed.
+    const accountRevenue = lastAudit
+      ? (await DailyAccountingService.getDailyRevenue(primaryPropertyId, auditedBusinessDate!)).rows
+      : [];
+    const departmentTotals = new Map<string, number>();
+    for (const row of accountRevenue) {
+      departmentTotals.set(row.department, (departmentTotals.get(row.department) || 0) + row.netRevenue);
+    }
+    const departmentRevenue = Array.from(departmentTotals.entries())
+      .map(([department, netRevenue]) => ({ department, netRevenue: Number(netRevenue.toFixed(2)) }))
+      .sort((a, b) => Math.abs(b.netRevenue) - Math.abs(a.netRevenue));
 
     // ── 3. Live Since Last Audit (Unaudited Activity) ──────────────────────
     // Uses calculateDailyRevenue for businessDate (today) so live figures also
@@ -280,6 +295,8 @@ export async function GET(req: NextRequest) {
       lastAuditedBusinessDate: auditedBusinessDate ? format(auditedBusinessDate, 'yyyy-MM-dd') : null,
       property: { name: property.name, currency: property.baseCurrency || 'NGN' },
       audited,
+      accountRevenue,
+      departmentRevenue,
       liveSinceLastAudit,
       cashControl,
       transactionControls,
