@@ -2482,6 +2482,10 @@ model User {
   staffId          String?   @db.Uuid
   email            String    @unique
   passwordHash     String
+  mobilePinHash    String?
+  mobilePinFailedAttempts Int @default(0)
+  mobilePinLockedUntil DateTime? @db.Timestamptz
+  mobilePinSetAt    DateTime? @db.Timestamptz
   firstName        String?
   middleName       String?
   lastName         String?

@@ -25,21 +25,20 @@ void main() async {
     FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
   } catch (_) {
     // Firebase config not yet added — FCM disabled, all other features work.
-    debugPrint('[LodgeCore] Firebase not configured — push notifications disabled.');
+    debugPrint(
+      '[LodgeCore] Firebase not configured — push notifications disabled.',
+    );
   }
 
-  runApp(
-    const ProviderScope(
-      child: LodgeCoreManagerApp(),
-    ),
-  );
+  runApp(const ProviderScope(child: LodgeCoreManagerApp()));
 }
 
 class LodgeCoreManagerApp extends ConsumerStatefulWidget {
   const LodgeCoreManagerApp({super.key});
 
   @override
-  ConsumerState<LodgeCoreManagerApp> createState() => _LodgeCoreManagerAppState();
+  ConsumerState<LodgeCoreManagerApp> createState() =>
+      _LodgeCoreManagerAppState();
 }
 
 class _LodgeCoreManagerAppState extends ConsumerState<LodgeCoreManagerApp> {
@@ -48,10 +47,9 @@ class _LodgeCoreManagerAppState extends ConsumerState<LodgeCoreManagerApp> {
     super.initState();
     // Listen to auth state — initialize FCM when the user logs in
     ref.listenManual(authProvider, (previous, next) {
-      if (next == AuthStatus.authenticated && previous != AuthStatus.authenticated) {
+      if (next == AuthStatus.authenticated &&
+          previous != AuthStatus.authenticated) {
         ref.read(fcmServiceProvider).initialize();
-      } else if (next == AuthStatus.unauthenticated && previous == AuthStatus.authenticated) {
-        ref.read(fcmServiceProvider).unregisterToken();
       }
     });
   }

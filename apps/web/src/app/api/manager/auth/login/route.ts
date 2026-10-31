@@ -13,14 +13,27 @@ if (!JWT_SECRET) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { email, password } = body;
+    const { email, password, identifier, pin } = body;
 
-    if (!email || !password) {
+    const pinLogin = typeof pin === 'string' && pin.length > 0;
+    if (pinLogin && (!identifier || !/^\d{6}$/.test(pin))) {
+      return errorResponse('BAD_REQUEST', 'Enter your email or phone number and a valid 6-digit PIN', 400);
+    }
+
+    if (!pinLogin && (!email || !password)) {
       return errorResponse('BAD_REQUEST', 'Email and password are required', 400);
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email },
+    let user = pinLogin
+      ? await prisma.user.findUnique({
+          where: { email: String(identifier).trim().toLowerCase() },
+          include: {
+            membership: true,
+            roles: { include: { role: { include: { permissions: { include: { permission: true } } } } } },
+          },
+        })
+      : await prisma.user.findUnique({
+      where: { email: String(email).trim().toLowerCase() },
       include: { 
         membership: true,
         roles: { 
@@ -31,14 +44,59 @@ export async function POST(req: NextRequest) {
       }
     });
 
-    if (!user || !user.passwordHash) {
+    // Phone is stored on Staff, while the authentication identity is User.
+    if (!user && pinLogin) {
+      const staff = await prisma.staff.findFirst({
+        where: {
+          isActive: true,
+          OR: [{ phone: String(identifier).trim() }, { email: String(identifier).trim().toLowerCase() }],
+        },
+        select: { userId: true },
+      });
+      if (staff?.userId) {
+        user = await prisma.user.findUnique({
+          where: { id: staff.userId },
+          include: {
+            membership: true,
+            roles: { include: { role: { include: { permissions: { include: { permission: true } } } } } },
+          },
+        });
+      }
+    }
+
+    if (!user) {
       return errorResponse('UNAUTHORIZED', 'Invalid credentials', 401);
     }
 
-    const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
+    if (pinLogin) {
+      if (user.mobilePinLockedUntil && user.mobilePinLockedUntil > new Date()) {
+        return errorResponse('TOO_MANY_REQUESTS', 'PIN temporarily locked. Try again later or use your password.', 429);
+      }
+      if (!user.mobilePinHash) {
+        return errorResponse('PIN_NOT_SET', 'Set up your mobile PIN using your password first.', 409);
+      }
 
-    if (!isPasswordValid) {
-      return errorResponse('UNAUTHORIZED', 'Invalid credentials', 401);
+      const isPinValid = await bcrypt.compare(pin, user.mobilePinHash);
+      if (!isPinValid) {
+        const failedAttempts = user.mobilePinFailedAttempts + 1;
+        await prisma.user.update({
+          where: { id: user.id },
+          data: {
+            mobilePinFailedAttempts: failedAttempts >= 5 ? 0 : failedAttempts,
+            mobilePinLockedUntil: failedAttempts >= 5 ? new Date(Date.now() + 15 * 60 * 1000) : null,
+          },
+        });
+        return errorResponse('UNAUTHORIZED', 'Invalid credentials', 401);
+      }
+
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { mobilePinFailedAttempts: 0, mobilePinLockedUntil: null, lastLoginAt: new Date() },
+      });
+    } else {
+      if (!user.passwordHash || !(await bcrypt.compare(password, user.passwordHash))) {
+        return errorResponse('UNAUTHORIZED', 'Invalid credentials', 401);
+      }
     }
 
     // Role extraction exactly as in lib/auth.ts

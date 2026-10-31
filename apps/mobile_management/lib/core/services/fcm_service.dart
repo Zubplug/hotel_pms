@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -12,6 +13,13 @@ class FcmService {
 
   Future<void> initialize() async {
     try {
+      if (Firebase.apps.isEmpty) {
+        debugPrint(
+          '[FcmService] Firebase is not configured; skipping push setup.',
+        );
+        return;
+      }
+
       // 1. Request notification permission
       final messaging = FirebaseMessaging.instance;
       final settings = await messaging.requestPermission(
@@ -26,7 +34,8 @@ class FcmService {
 
       // 1.5. Create high importance channel for Android pop-ups
       if (Platform.isAndroid) {
-        final flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
+        final flutterLocalNotificationsPlugin =
+            FlutterLocalNotificationsPlugin();
         const channel = AndroidNotificationChannel(
           'high_importance_channel',
           'High Importance Notifications',
@@ -35,7 +44,8 @@ class FcmService {
         );
         await flutterLocalNotificationsPlugin
             .resolvePlatformSpecificImplementation<
-                AndroidFlutterLocalNotificationsPlugin>()
+              AndroidFlutterLocalNotificationsPlugin
+            >()
             ?.createNotificationChannel(channel);
       }
 
@@ -59,10 +69,10 @@ class FcmService {
     try {
       final platform = Platform.isIOS ? 'ios' : 'android';
       final dio = _ref.read(dioProvider);
-      await dio.post('/manager/fcm/register', data: {
-        'token': token,
-        'platform': platform,
-      });
+      await dio.post(
+        '/manager/fcm/register',
+        data: {'token': token, 'platform': platform},
+      );
     } catch (_) {
       // Non-fatal — the app works without push; WebSocket handles real-time
     }

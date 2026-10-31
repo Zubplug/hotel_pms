@@ -1,15 +1,14 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../../../core/storage/secure_storage_provider.dart';
+import '../../../../core/services/fcm_service.dart';
 
 enum AuthStatus { unknown, authenticated, unauthenticated }
 
 class AuthNotifier extends StateNotifier<AuthStatus> {
   final TokenStorage _tokenStorage;
-  final FlutterSecureStorage _secureStorage;
   final Ref _ref;
 
-  AuthNotifier(this._tokenStorage, this._secureStorage, this._ref) : super(AuthStatus.unknown) {
+  AuthNotifier(this._tokenStorage, this._ref) : super(AuthStatus.unknown) {
     _init();
   }
 
@@ -26,10 +25,14 @@ class AuthNotifier extends StateNotifier<AuthStatus> {
   }
 
   Future<void> logout() async {
+    // Remove the device registration while the access token is still valid.
+    // Clearing tokens first makes the unregister request unauthorized, leaving
+    // this device subscribed to the previous user's push notifications.
+    await _ref.read(fcmServiceProvider).unregisterToken();
     await _tokenStorage.clearTokens();
-    await _secureStorage.deleteAll(); // Clear all sensitive cached data
+    await _tokenStorage.clearUserCache();
     state = AuthStatus.unauthenticated;
-    
+
     // Invalidate everything to clear in-memory state
     _ref.invalidate(authProvider);
   }
@@ -37,6 +40,5 @@ class AuthNotifier extends StateNotifier<AuthStatus> {
 
 final authProvider = StateNotifierProvider<AuthNotifier, AuthStatus>((ref) {
   final tokenStorage = ref.watch(tokenStorageProvider);
-  final secureStorage = ref.watch(secureStorageProvider);
-  return AuthNotifier(tokenStorage, secureStorage, ref);
+  return AuthNotifier(tokenStorage, ref);
 });
