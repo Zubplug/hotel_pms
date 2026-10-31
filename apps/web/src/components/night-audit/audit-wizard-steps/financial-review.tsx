@@ -25,7 +25,6 @@ export function FinancialReview({ data, onResolve }: FinancialReviewProps) {
   );
 
   const unverifiedCompl = unverifiedComplimentary?.filter((c: any) => c.status === 'PENDING_NIGHT_AUDIT') || [];
-  const complimentaryFoodBeneficiaries = data.financial.complimentaryFoodBeneficiaries || [];
 
   const hasIssues = (pendingNightAuditPostings?.length || 0) > 0 || unverifiedCompl.length > 0 || (pendingDiscounts?.length || 0) > 0 || (pendingCheckInBypasses?.length || 0) > 0 || (eventHall?.warnings || 0) > 0 || (eventHall?.blockers || 0) > 0 || (guestAmenity?.blockers?.length || 0) > 0 || (guestAmenity?.zeroCostItems?.length || 0) > 0;
 
@@ -60,46 +59,9 @@ export function FinancialReview({ data, onResolve }: FinancialReviewProps) {
     </div>
   ) : null;
 
-  const complimentaryFoodPanel = (
-    <div className="rounded-xl border border-cyan-400/15 bg-cyan-400/[.03] p-5">
-      <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
-        <div>
-          <h4 className="text-sm font-bold text-cyan-300">Complimentary Food Beneficiaries</h4>
-          <p className="mt-0.5 text-xs text-cyan-200/60">Guests entitled to the complimentary food allocation for the current audit business date.</p>
-        </div>
-        <span className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-xs font-bold text-cyan-300">
-          {complimentaryFoodBeneficiaries.length} guest{complimentaryFoodBeneficiaries.length === 1 ? '' : 's'}
-        </span>
-      </div>
-      {complimentaryFoodBeneficiaries.length > 0 ? (
-        <div className="mt-4 overflow-x-auto rounded-lg border border-white/[.06]">
-          <table className="w-full min-w-[620px] text-left text-xs">
-            <thead className="bg-white/[.03] text-[10px] uppercase tracking-wider text-slate-500">
-              <tr><th className="px-3 py-2">Guest</th><th className="px-3 py-2">Room</th><th className="px-3 py-2">Confirmation</th><th className="px-3 py-2">Source</th><th className="px-3 py-2 text-right">Food benefit</th></tr>
-            </thead>
-            <tbody className="divide-y divide-white/[.05]">
-              {complimentaryFoodBeneficiaries.map((guest: any) => (
-                <tr key={guest.id}>
-                  <td className="px-3 py-2 font-medium text-slate-200">{guest.guestName}</td>
-                  <td className="px-3 py-2 text-slate-400">{guest.roomNumber}</td>
-                  <td className="px-3 py-2 text-slate-400">{guest.confirmationNumber}</td>
-                  <td className="px-3 py-2 text-slate-400">{guest.source === 'POS_BREAKFAST_REDEMPTION' ? `Offline/online POS · ${guest.coversRedeemed} cover(s)` : guest.status === 'POSTED' ? 'Posted room entitlement' : 'Room entitlement'}</td>
-                  <td className="px-3 py-2 text-right font-semibold text-cyan-200">{formatMoney(guest.amount, currency)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : (
-        <p className="mt-4 rounded-lg border border-white/[.06] bg-white/[.02] p-3 text-xs text-slate-500">No current-date complimentary food beneficiaries.</p>
-      )}
-    </div>
-  );
-
   if (!hasIssues) {
     return (
       <div className="space-y-4">
-        {complimentaryFoodPanel}
         {guestAmenityPanel}
         <div className="flex items-center gap-3 rounded-2xl border border-emerald-400/20 bg-emerald-400/[0.07] p-5 text-sm text-emerald-300 shadow-[0_0_24px_rgba(16,185,129,0.05)]">
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-400/20 text-emerald-300"><CheckCircle2 className="h-4 w-4" /></span>
@@ -112,7 +74,6 @@ export function FinancialReview({ data, onResolve }: FinancialReviewProps) {
   return (
     <div className="space-y-6">
 
-      {complimentaryFoodPanel}
       {guestAmenityPanel}
 
       {eventHall && (eventHall.warnings > 0 || eventHall.blockers > 0) && (
