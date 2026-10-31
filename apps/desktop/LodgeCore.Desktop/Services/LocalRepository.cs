@@ -1086,7 +1086,12 @@ public class LocalRepository
             })
         });
 
-        room.Status = res.Status == "CHECKED_IN" ? "OCCUPIED" : "RESERVED";
+        var property = await _dbContext.Properties.FirstOrDefaultAsync(p => p.Id == res.PropertyId);
+        var assignedCheckInDate = (currentRoom?.CheckInDate ?? res.CheckInDate).Date;
+        var isArrivalToday = assignedCheckInDate == (property?.BusinessDate.Date ?? DateTime.UtcNow.Date);
+        room.Status = res.Status == "CHECKED_IN"
+            ? "OCCUPIED"
+            : res.Status == "CONFIRMED" && isArrivalToday ? "RESERVED" : "AVAILABLE";
         room.IsOccupied = res.Status == "CHECKED_IN";
         room.UpdatedAt = DateTime.UtcNow;
 

@@ -34,15 +34,18 @@ export async function getOperationalReview(ctx: TenantContext, propertyId: strin
       status: 'ACTIVE',
       roomId: { not: null },
     },
-    select: { roomId: true, reservation: { select: { status: true } } },
+    select: { roomId: true, checkIn: true, reservation: { select: { status: true } } },
   });
-  const expectedByRoom = new Map(activeRoomReservations.map((reservationRoom) => [reservationRoom.roomId!, reservationRoom.reservation.status]));
+  const expectedByRoom = new Map(activeRoomReservations.map((reservationRoom) => [reservationRoom.roomId!, reservationRoom]));
+  const businessDateKey = businessDate.toISOString().slice(0, 10);
 
   const roomReconciliation = rooms.map(room => {
-    const reservationStatus = expectedByRoom.get(room.id);
+    const reservation = expectedByRoom.get(room.id);
+    const reservationStatus = reservation?.reservation.status;
+    const arrivesToday = reservation?.checkIn.toISOString().slice(0, 10) === businessDateKey;
     const expected = room.status === 'OUT_OF_ORDER'
       ? 'OOO'
-      : reservationStatus === 'CHECKED_IN' ? 'OCCUPIED' : reservationStatus === 'CONFIRMED' ? 'RESERVED' : 'AVAILABLE';
+      : reservationStatus === 'CHECKED_IN' ? 'OCCUPIED' : reservationStatus === 'CONFIRMED' && arrivesToday ? 'RESERVED' : 'AVAILABLE';
     
     // We only care about PMS status mismatch vs Reservation status for discrepancies.
     // Housekeeping status (e.g. INSPECTED while OCCUPIED) is operationally valid and shouldn't block audit.
