@@ -4,6 +4,7 @@ import { getPropertyBusinessDate, calculateDailyRevenue, getExecutiveRevenueTren
 import { addDays, subDays } from 'date-fns';
 import { fromZonedTime, toZonedTime } from 'date-fns-tz';
 import { TaxRemittanceService } from './tax-remittance-service';
+import { getReceivablesPosition } from './receivables-position-service';
 
 export class AccountantAnalyticsService {
   /**
@@ -32,18 +33,11 @@ export class AccountantAnalyticsService {
     const bankBalance = cashAccounts.filter(a => a.type === 'BANK_ACCOUNT').reduce((sum, a) => sum + Number(a.balance), 0);
     const totalCash = safeBalance + bankBalance;
 
-    // 3. AR Outstanding (Guest Folios)
-    const arGuests = await prisma.folio.aggregate({
-      where: { propertyId, balance: { gt: 0 }, status: { not: 'CANCELLED' } },
-      _sum: { balance: true }
-    });
-
-    // 4. City Ledger Outstanding
-    const cityLedger = await prisma.cityLedgerAccount.aggregate({
-      where: { propertyId, balance: { gt: 0 } },
-      _sum: { balance: true }
-    });
-    const totalAR = Number(arGuests._sum.balance || 0) + Number(cityLedger._sum.balance || 0);
+    // 3. AR Outstanding — use the same subledger position as the executive
+    // finance screen. City-ledger folios are excluded from guest AR because
+    // their exposure is already represented by CityLedgerAccount balances.
+    const receivablesPosition = await getReceivablesPosition(propertyId, new Date());
+    const totalAR = receivablesPosition.totalReceivables;
 
     // 5. AP Outstanding (Suppliers)
     const apOutstanding = await prisma.supplierInvoice.aggregate({

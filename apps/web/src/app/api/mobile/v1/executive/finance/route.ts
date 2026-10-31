@@ -7,6 +7,7 @@ import { prisma } from '@hotel-pms/db';
 import { addDays, endOfDay, format, startOfDay, startOfMonth, startOfYear } from 'date-fns';
 import { fromZonedTime } from 'date-fns-tz';
 import { DailyAccountingService } from '@/lib/services/daily-accounting-service';
+import { getReceivablesPosition } from '@/lib/services/receivables-position-service';
 
 export const dynamic = 'force-dynamic';
 
@@ -125,12 +126,14 @@ export async function GET(req: NextRequest) {
 
     // ── 4. Cash Control (Variance reporting) ───────────────────────────────
     const fdSessions = await prisma.frontdeskSession.findMany({
-      where: { propertyId: primaryPropertyId, businessDate: { gte: sessionStartDate, lte: sessionEndDate } },
+      // Cash Control is an operational view: show only shifts that are
+      // currently active, not historical closed/reconciled sessions.
+      where: { propertyId: primaryPropertyId, status: 'OPEN', controlStatus: 'OPEN' },
       include: { staff: { select: { firstName: true, lastName: true } } },
     });
     
     const posSessions = await prisma.posSession.findMany({
-      where: { outlet: { propertyId: primaryPropertyId }, businessDate: { gte: sessionStartDate, lte: sessionEndDate } },
+      where: { outlet: { propertyId: primaryPropertyId }, status: 'OPEN', controlStatus: 'OPEN' },
       include: { outlet: { select: { name: true } } },
     });
 
@@ -170,7 +173,7 @@ export async function GET(req: NextRequest) {
       variance: totalVariance,
       sessionsWithVariance: sessionsWithVariance.length,
       significantVariances,
-      sessions: period === 'TODAY' ? allSessions : [], // Only include detailed list for TODAY
+      sessions: allSessions,
     };
 
     // ── 5. Transaction Controls (Using exact dates) ────────────────────────
@@ -208,9 +211,10 @@ export async function GET(req: NextRequest) {
     const highBalThreshold = settings.financial?.highBalanceThreshold || 150000;
 
     const openFolios = await prisma.folio.findMany({
-      where: { propertyId: primaryPropertyId, status: 'OPEN', balance: { gt: 0 } },
-      select: { balance: true, reservation: { select: { corporateAccountId: true } } },
+      where: { propertyId: primaryPropertyId, type: { not: 'CITY_LEDGER' }, status: 'OPEN', balance: { gt: 0 } },
+      select: { balance: true },
     });
+    const receivablesPosition = await getReceivablesPosition(primaryPropertyId, now);
 
     const highBalanceFolios = openFolios.filter((f: any) => Number(f.balance) > highBalThreshold);
     if (highBalanceFolios.length > 0) {
@@ -251,40 +255,27 @@ export async function GET(req: NextRequest) {
     }
 
     // ── 7. Guest Credits & Outstanding ─────────────────────────────────────
-    const outstandingTotal = openFolios.reduce((s: number, f: any) => s + Number(f.balance), 0);
-    const guestBalances = openFolios.filter((f: any) => !f.reservation?.corporateAccountId).reduce((s: number, f: any) => s + Number(f.balance), 0);
-    const corporateReceivables = openFolios.filter((f: any) => f.reservation?.corporateAccountId).reduce((s: number, f: any) => s + Number(f.balance), 0);
-
-    const [availableAgg, consumedAgg, allAgg] = await Promise.all([
-      prisma.folioCredit.aggregate({
-        where: { propertyId: primaryPropertyId, status: { in: ['AVAILABLE', 'PARTIALLY_APPLIED'] } },
-        _sum: { remainingAmount: true },
-      }),
-      prisma.folioCreditApplication.aggregate({
-        where: { credit: { propertyId: primaryPropertyId }, businessDate: { gte: controlStartDate, lte: controlEndDate } },
-        _sum: { amount: true },
-      }),
-      prisma.folioCredit.aggregate({
-        where: { propertyId: primaryPropertyId, status: { not: 'REFUNDED' }, createdAt: { gte: calendarStartDate, lte: calendarEndDate } },
-        _sum: { amount: true },
-      }),
-    ]);
-
     const guestCredits = {
-      depositsHeld: Number(allAgg._sum.amount || 0),
-      creditsAvailable: Number(availableAgg._sum.remainingAmount || 0),
-      creditsConsumed: Number(consumedAgg._sum.amount || 0),
+      depositsHeld: receivablesPosition.depositsHeld,
+      creditsAvailable: receivablesPosition.availableCredits,
+      creditsConsumed: receivablesPosition.consumedCredits,
+      guestFolioCredits: receivablesPosition.guestFolioCredits,
     };
 
-    const outstanding = { total: outstandingTotal, guestBalances, corporateReceivables, other: 0 };
+    const outstanding = {
+      total: receivablesPosition.totalReceivables,
+      guestBalances: receivablesPosition.guestReceivables,
+      corporateReceivables: receivablesPosition.corporateReceivables,
+      other: receivablesPosition.otherReceivables,
+    };
 
-    if (outstandingTotal > 1_000_000) {
+    if (receivablesPosition.totalReceivables > 1_000_000) {
       currentAlerts.push({
         id: 'outstanding-receivables', priority: 'P1', category: 'RECEIVABLES',
         title: 'Outstanding Receivables',
-        summary: `₦${(outstandingTotal / 1_000_000).toFixed(2)}M in open folio balances`,
+        summary: `₦${(receivablesPosition.totalReceivables / 1_000_000).toFixed(2)}M in guest and city-ledger balances`,
         affectedCount: openFolios.length,
-        totalAmount: outstandingTotal,
+        totalAmount: receivablesPosition.totalReceivables,
       });
     }
 

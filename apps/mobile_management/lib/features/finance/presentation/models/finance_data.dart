@@ -203,17 +203,20 @@ class GuestCredits {
   final double depositsHeld;
   final double creditsAvailable;
   final double creditsConsumed;
+  final double guestFolioCredits;
 
   GuestCredits({
     required this.depositsHeld,
     required this.creditsAvailable,
     required this.creditsConsumed,
+    required this.guestFolioCredits,
   });
 
   factory GuestCredits.fromJson(Map<String, dynamic> json) => GuestCredits(
     depositsHeld: (json['depositsHeld'] ?? 0).toDouble(),
     creditsAvailable: (json['creditsAvailable'] ?? 0).toDouble(),
     creditsConsumed: (json['creditsConsumed'] ?? 0).toDouble(),
+    guestFolioCredits: (json['guestFolioCredits'] ?? 0).toDouble(),
   );
 }
 

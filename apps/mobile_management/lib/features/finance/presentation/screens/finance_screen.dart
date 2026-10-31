@@ -266,7 +266,8 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen>
             // ── Cash Control ──
             _SectionLabel(
               title: 'CASH CONTROL',
-              subtitle: '${data.cashControl.sessions.length} sessions',
+              subtitle:
+                  '${data.cashControl.sessions.length} active shift${data.cashControl.sessions.length == 1 ? '' : 's'}',
               trailingBadge: data.cashControl.significantVariances > 0
                   ? '${data.cashControl.significantVariances} ALERT${data.cashControl.significantVariances > 1 ? 'S' : ''}'
                   : null,
@@ -1510,12 +1511,13 @@ class _BalanceSheetRow extends StatelessWidget {
         Expanded(
           child: _BalanceCard(
             title: 'GUEST CREDIT',
-            total: gc.depositsHeld,
-            totalLabel: 'Deposits Held',
+            total: gc.guestFolioCredits,
+            totalLabel: 'Guest Folio Credit',
             color: _emerald,
             icon: Icons.savings_rounded,
             lines: [
-              _BalanceLine('Available Credits', gc.creditsAvailable, fmt),
+              _BalanceLine('Deposits Held', gc.depositsHeld, fmt),
+              _BalanceLine('Available Deposits', gc.creditsAvailable, fmt),
               _BalanceLine('Consumed Credits', gc.creditsConsumed, fmt),
             ],
             fmt: fmt,

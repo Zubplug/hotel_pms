@@ -25,6 +25,10 @@ export async function GET(req: NextRequest) {
     const folios = await prisma.folio.findMany({
       where: {
         propertyId,
+        // City-ledger exposure is reported from CityLedgerAccount and must not
+        // be presented as a guest receivable or counted twice.
+        type: { not: 'CITY_LEDGER' },
+        status: { not: 'VOID' },
         balance: { gt: minBalance } // only positive balances (debt)
       },
       include: {
