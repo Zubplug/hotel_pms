@@ -2211,14 +2211,16 @@ export async function POST(req: NextRequest) {
               }
             }
 
+            const chargeSource = payload.source || "ROOM_CHARGE";
+            const isPosCharge = String(chargeSource).toUpperCase() === 'POS';
             await tx.folioItem.create({
               data: {
                 folioId: aggregateId,
                 businessDate: postingBusinessDate,
                 type: itemType,
-                source: payload.source || "ROOM_CHARGE",
-                revenueCategory: payload.revenueCategory || undefined,
-                revenueClass: payload.revenueClass || undefined,
+                source: chargeSource,
+                revenueCategory: payload.revenueCategory || (isPosCharge ? 'FNB' : undefined),
+                revenueClass: payload.revenueClass || (isPosCharge ? 'FOOD' : undefined),
                 description: payload.description,
                 quantity: 1,
                 unitAmount: amount,

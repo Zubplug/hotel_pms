@@ -32,7 +32,8 @@ export class PaymentService {
 
       // 2. Fetch Order
       const order = await tx.posOrder.findUnique({
-        where: { id: params.orderId }
+        where: { id: params.orderId },
+        include: { outlet: { select: { type: true } } },
       });
       if (!order) throw new Error('Order not found');
       if (order.status === 'CLOSED' || order.paymentStatus === 'PAID') {
@@ -40,6 +41,8 @@ export class PaymentService {
       }
 
       const propertyId = order.propertyId;
+      const outletType = String(order.outlet?.type || '').toUpperCase();
+      const isFoodOutlet = ['RESTAURANT', 'FNB', 'BAR'].includes(outletType);
 
       // 3. Room Charge Validation
       if (params.method === 'ROOM_CHARGE') {
@@ -78,6 +81,8 @@ export class PaymentService {
             businessDate: order.businessDate,
             type: 'CHARGE',
             source: 'POS' as FolioItemSource,
+            revenueCategory: isFoodOutlet ? 'FNB' : 'OTHER',
+            revenueClass: isFoodOutlet ? 'FOOD' : undefined,
             description: `POS Room Charge - Order #${order.orderNumber}`,
             quantity: 1,
             unitAmount: params.amount,
@@ -158,7 +163,14 @@ export class PaymentService {
           processedById: params.cashierId,
           businessDate: order.businessDate,
           paidAt: new Date(),
-          operationId
+          operationId,
+          ...(params.method === 'ROOM_CHARGE'
+            ? {
+                verificationStatus: 'VERIFIED',
+                verifiedAt: new Date(),
+                verificationNotes: 'Automatically verified: posted to an in-house guest folio as a room charge.',
+              }
+            : {}),
         }
       });
 

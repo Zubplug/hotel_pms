@@ -137,6 +137,13 @@ export async function POST(
           sessionId: sessionId || undefined,
           processedById: staffId || undefined,
           reference: idKey,
+          ...(method.toUpperCase() === 'ROOM_CHARGE'
+            ? {
+                verificationStatus: 'VERIFIED',
+                verifiedAt: new Date(),
+                verificationNotes: 'Automatically verified: posted to an in-house guest folio as a room charge.',
+              }
+            : {}),
         }
       });
 

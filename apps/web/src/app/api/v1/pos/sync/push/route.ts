@@ -773,6 +773,13 @@ export async function POST(req: NextRequest) {
                       method: method,
                       currency: payload.Currency || payload.currency || 'NGN',
                       status: paymentPendingApproval ? "PENDING" : "CONFIRMED",
+                      ...(String(method).toUpperCase() === 'ROOM_CHARGE' && !paymentPendingApproval
+                        ? {
+                            verificationStatus: 'VERIFIED',
+                            verifiedAt: new Date(event.occurredAt),
+                            verificationNotes: 'Automatically verified: posted to an in-house guest folio as a room charge.',
+                          }
+                        : {}),
                       operationId: event.idempotencyKey,
                       businessDate: order.businessDate,
                       sessionId: order.sessionId,
