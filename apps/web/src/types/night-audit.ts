@@ -58,6 +58,7 @@ export interface FinancialData {
   pendingCheckInBypasses: any[];
   rateVariances: any[];
   pendingNightAuditPostings?: any[];
+  complimentaryFoodBeneficiaries?: any[];
   eventHall?: {
     pendingBillingPeriods: any[];
     awaitingApproval: any[];
