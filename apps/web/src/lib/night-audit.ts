@@ -1433,7 +1433,6 @@ export async function executeNightAudit(
       where: {
         propertyId,
         status: 'CHECKED_IN',
-        primaryGuestId: { not: null },
         reservationRooms: {
           some: {
             status: 'ACTIVE',
@@ -1464,7 +1463,7 @@ export async function executeNightAudit(
           },
         },
       },
-    });
+    }) as any[];
     const breakfastSnapshotRows = breakfastReservations.flatMap((reservation) => {
       const corporateFoodOverride = reservation.corporateAccount?.ratePlan
         ? Boolean(reservation.corporateAccount.ratePlan.includeFoodAllocation)
@@ -1472,7 +1471,7 @@ export async function executeNightAudit(
       const guestName = `${reservation.primaryGuest?.firstName || ''} ${reservation.primaryGuest?.lastName || ''}`.replace(/\s+/g, ' ').trim() || 'In-House Guest';
       const maxCoversAllowed = Math.max(1, reservation.adults || 1);
 
-      return reservation.reservationRooms.map((room) => {
+      return reservation.reservationRooms.map((room: any) => {
         const isDiscounted = Boolean(room.discountType) || Number(room.discountAmount || 0) > 0;
         const eligible = typeof corporateFoodOverride === 'boolean'
           ? corporateFoodOverride
