@@ -165,7 +165,7 @@ export async function postNightAuditJournal(tx: any, input: {
   });
   if (!period) return { status: 'ACCOUNTING_PERIOD_LOCKED', journalEntryId: null, missingAccounts: ['OPEN_ACCOUNTING_PERIOD'], lineCount: 0 };
 
-  const [folioItems, payments, refunds, fnbDepartment, recreationDepartment, posOutlets, guestAmenityTransactions] = await Promise.all([
+  const [folioItems, payments, refunds, roomDepartment, fnbDepartment, recreationDepartment, posOutlets, guestAmenityTransactions] = await Promise.all([
     tx.folioItem.findMany({
       where: { 
         folio: { propertyId: input.propertyId }, 
@@ -188,6 +188,7 @@ export async function postNightAuditJournal(tx: any, input: {
       where: { propertyId: input.propertyId, businessDate: input.businessDate, status: 'COMPLETED' },
       select: { id: true, method: true, amount: true, reason: true, payment: { select: { method: true } } },
     }),
+    tx.department.findFirst({ where: { propertyId: input.propertyId, name: { in: ['Rooms', 'Room Revenue'] } }, select: { id: true } }),
     tx.department.findFirst({ where: { propertyId: input.propertyId, name: { in: ['F&B', 'Food & Beverage', 'Food and Beverage'] } }, select: { id: true } }),
     tx.department.findFirst({ where: { propertyId: input.propertyId, name: { in: ['Recreation', 'Pool'] } }, select: { id: true } }),
     tx.posOutlet.findMany({ where: { propertyId: input.propertyId }, select: { id: true, type: true } }),
@@ -207,14 +208,15 @@ export async function postNightAuditJournal(tx: any, input: {
       addLine(lines, { accountId: account('taxPayable').id, debit: 0, credit: amount, description: item.description, sourceType: 'FOLIO_ITEM', sourceId: item.id });
     } else if (item.type === 'DISCOUNT' || item.type === 'COMPLIMENTARY' || (item.type === 'ADJUSTMENT' && Number(item.amount) < 0)) {
       const contraAccount = item.type === 'COMPLIMENTARY' ? account('complimentary') : account('discounts');
-      addLine(lines, { accountId: contraAccount.id, debit: amount, credit: 0, description: item.description, sourceType: 'FOLIO_ITEM', sourceId: item.id });
+      const adjustmentDepartmentId = item.type === 'COMPLIMENTARY' || item.revenueCategory === 'FNB' ? fnbDepartment?.id : roomDepartment?.id;
+      addLine(lines, { accountId: contraAccount.id, debit: amount, credit: 0, description: item.description, sourceType: 'FOLIO_ITEM', sourceId: item.id, departmentId: adjustmentDepartmentId });
       addLine(lines, { accountId: account('guestLedger').id, debit: 0, credit: amount, description: item.description, sourceType: 'FOLIO_ITEM', sourceId: item.id });
     } else {
       // ── Revenue classification (precedence-ordered) ──────────────────────
       // 1. Service Charge breakdown lines (GL 2210) — room rate component
       if (item.revenueClass === 'SERVICE_CHARGE') {
         addLine(lines, { accountId: account('guestLedger').id, debit: amount, credit: 0, description: item.description, sourceType: 'FOLIO_ITEM', sourceId: item.id });
-        addLine(lines, { accountId: account('serviceCharge').id, debit: 0, credit: amount, description: item.description, sourceType: 'FOLIO_ITEM', sourceId: item.id });
+        addLine(lines, { accountId: account('serviceCharge').id, debit: 0, credit: amount, description: item.description, sourceType: 'FOLIO_ITEM', sourceId: item.id, departmentId: roomDepartment?.id });
         continue;
       }
       // 2. Event-hall and F&B breakdown lines resolved via dynamic event codes
@@ -238,7 +240,14 @@ export async function postNightAuditJournal(tx: any, input: {
             ? 'fnbRevenue'
             : 'otherRevenue';
       addLine(lines, { accountId: account('guestLedger').id, debit: amount, credit: 0, description: item.description, sourceType: 'FOLIO_ITEM', sourceId: item.id });
-      addLine(lines, { accountId: eventAccount?.id || account(key!).id, debit: 0, credit: amount, description: item.description, sourceType: 'FOLIO_ITEM', sourceId: item.id });
+      const revenueDepartmentId = eventAccount
+        ? (item.revenueClass === 'FOOD' || item.revenueCategory === 'FNB' ? fnbDepartment?.id : recreationDepartment?.id)
+        : key === 'roomsRevenue'
+          ? roomDepartment?.id
+          : key === 'fnbRevenue'
+            ? fnbDepartment?.id
+            : undefined;
+      addLine(lines, { accountId: eventAccount?.id || account(key!).id, debit: 0, credit: amount, description: item.description, sourceType: 'FOLIO_ITEM', sourceId: item.id, departmentId: revenueDepartmentId });
     }
   }
 

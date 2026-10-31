@@ -59,7 +59,16 @@ export class PosPaymentAccountingService {
     // Determine the ratio of THIS payment to the ENTIRE order for proportional recognition
     const paymentRatio = netOrderTotal > 0 ? (amount / netOrderTotal) : 1.0;
 
-    const lines: Array<{ accountId: string; debit: number; credit: number; description: string; sourceType: string; sourceId: string; }> = [];
+    const lines: Array<{
+      accountId: string;
+      debit: number;
+      credit: number;
+      description: string;
+      sourceType: string;
+      sourceId: string;
+      departmentId?: string;
+      outletId?: string;
+    }> = [];
 
     try {
       // 1. Resolve Asset GL Account for payment
@@ -147,6 +156,13 @@ export class PosPaymentAccountingService {
         select: { type: true }
       });
       const isRecreationOutlet = outlet?.type === 'RECREATION';
+      const department = await tx.department.findFirst({
+        where: {
+          propertyId: order.propertyId,
+          name: { in: isRecreationOutlet ? ['Recreation', 'Pool'] : ['F&B', 'Food & Beverage', 'Food and Beverage'] },
+        },
+        select: { id: true },
+      });
       let orderTotalFromItems = 0;
       const classTotals = new Map<string, number>();
 
@@ -198,6 +214,8 @@ export class PosPaymentAccountingService {
             description: `POS Gross Revenue (${fnbClass}) for Order ${order.id}`,
             sourceType: 'POS_PAYMENT',
             sourceId: payment.id,
+            departmentId: department?.id,
+            outletId: order.outletId,
           });
         }
       }

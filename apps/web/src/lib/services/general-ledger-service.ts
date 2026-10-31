@@ -62,7 +62,17 @@ export class GeneralLedgerService {
       description: string;
       reference?: string;
       sourceModule: string; // 'MANUAL', 'PAYROLL', 'AP', 'AR', etc.
-      lines: Array<{ accountId: string; debit: number; credit: number; description?: string; reference?: string; sourceType?: string; sourceId?: string }>;
+      lines: Array<{
+        accountId: string;
+        debit: number;
+        credit: number;
+        description?: string;
+        reference?: string;
+        sourceType?: string;
+        sourceId?: string;
+        departmentId?: string;
+        outletId?: string;
+      }>;
     },
     parentTx?: any
   ) {
@@ -113,6 +123,8 @@ export class GeneralLedgerService {
               reference: line.reference,
               sourceType: line.sourceType,
               sourceId: line.sourceId,
+              departmentId: line.departmentId,
+              outletId: line.outletId,
             }))
           }
         },

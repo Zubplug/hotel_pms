@@ -1,6 +1,20 @@
 import { prisma } from '@hotel-pms/db';
 
 export class DailyAccountingService {
+  private static revenueDepartment(accountCode: string, accountName: string) {
+    switch (accountCode) {
+      case '4050': return 'Rooms';
+      case '4100': return 'Recreation';
+      case '4250': return 'Food & Beverage';
+      case '4300': return 'Events & Banqueting';
+      case '4400': return 'Other Operating Revenue';
+      case '4900':
+      case '4910':
+      case '4950': return 'Revenue Adjustments';
+      default: return accountName || 'Unclassified Revenue';
+    }
+  }
+
   static async getBankDepositReconciliation(propertyId: string, businessDate: Date) {
     const deposits = await prisma.bankDeposit.findMany({ where: { propertyId, createdAt: { lte: new Date(businessDate.getTime() + 86400000) } }, include: { bankCashAccount: { select: { name: true, bankName: true, accountNumber: true } }, allocations: true }, orderBy: { createdAt: 'asc' } });
     const rows = deposits.map(deposit => ({ reference: deposit.depositReference, bankName: deposit.bankName || deposit.bankCashAccount?.bankName || 'Unassigned', bankAccount: deposit.bankAccount || deposit.bankCashAccount?.accountNumber || 'Unassigned', expected: Number(deposit.expectedAmount), declared: Number(deposit.declaredAmount || 0), confirmed: Number(deposit.bankConfirmedAmount || 0), difference: Number(deposit.difference || 0), status: deposit.status, shiftCount: deposit.allocations.length, depositDate: deposit.depositDate || deposit.createdAt }));
@@ -42,7 +56,7 @@ export class DailyAccountingService {
     `;
 
     const rows = rawData.map(row => ({
-      department: row.departmentName || 'General',
+      department: row.departmentName || DailyAccountingService.revenueDepartment(String(row.accountCode), String(row.accountName)),
       outlet: row.outletName || 'N/A',
       accountCode: row.accountCode,
       accountName: row.accountName,
