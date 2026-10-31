@@ -254,10 +254,10 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen>
             _HeroRevenueRow(data: data, fmt: fmt),
             const SizedBox(height: 20),
 
-            // ── Chart of Accounts Revenue ──
+            // ── Audited Department Revenue ──
             _SectionLabel(
-              title: 'REVENUE BY ACCOUNT',
-              subtitle: 'Posted general ledger',
+              title: 'REVENUE BY DEPARTMENT',
+              subtitle: 'Audited source allocation',
             ),
             const SizedBox(height: 12),
             _ChartOfAccountsCard(data: data, fmt: fmt),

@@ -100,11 +100,53 @@ export async function GET(req: NextRequest) {
     const departmentRevenue = Array.from(departmentTotals.entries())
       .map(([department, netRevenue]) => ({ department, netRevenue: Number(netRevenue.toFixed(2)) }))
       .sort((a, b) => Math.abs(b.netRevenue) - Math.abs(a.netRevenue));
-    const otherRevenueBreakdown = departmentRevenue.filter(({ department }) => {
-      const normalized = department.trim().toUpperCase().replace(/\s+/g, ' ');
-      const compact = normalized.replace(/[^A-Z0-9]/g, '');
-      return !['ROOMS', 'ROOMREVENUE', 'FB', 'FOODBEVERAGE', 'FOODANDBEVERAGE'].includes(compact);
-    });
+    const auditedOtherItems = lastAudit
+      ? await prisma.folioItem.findMany({
+          where: {
+            folio: { propertyId: primaryPropertyId },
+            businessDate: auditedBusinessDate!,
+            type: 'CHARGE',
+            voidedAt: null,
+          },
+          select: { amount: true, source: true, revenueCategory: true, revenueClass: true },
+        })
+      : [];
+    const otherBreakdownTotals = new Map<string, number>();
+    const ancillaryLabels: Record<string, string> = {
+      SPA: 'Spa',
+      LAUNDRY: 'Laundry',
+      TRANSPORT: 'Transport',
+      TELEPHONE: 'Telephone',
+      INTERNET: 'Internet',
+      MINIBAR: 'Minibar',
+      MANUAL: 'Manual Revenue',
+    };
+    for (const item of auditedOtherItems) {
+      const source = String(item.source).toUpperCase();
+      const category = String(item.revenueCategory).toUpperCase();
+      const revenueClass = String(item.revenueClass || '').toUpperCase();
+      let label: string | null = null;
+      if (revenueClass === 'HALL') label = 'Events · Hall';
+      else if (revenueClass === 'EQUIPMENT') label = 'Events · Equipment';
+      else if (revenueClass === 'FOOD' && source === 'OTHER') label = 'Events · Food';
+      else if ((source === 'ROOM_CHARGE' || source === 'DAY_USE_ROOM_CHARGE') && category === 'OTHER') label = 'Service Charge';
+      else if (category === 'OTHER') label = source === 'CITY_LEDGER' ? 'City Ledger Credit' : (ancillaryLabels[source] || 'Other Operating Revenue');
+      if (label) otherBreakdownTotals.set(label, (otherBreakdownTotals.get(label) || 0) + Number(item.amount));
+    }
+    const otherRevenueBreakdown = Array.from(otherBreakdownTotals.entries())
+      .map(([department, netRevenue]) => ({ department, netRevenue: Number(netRevenue.toFixed(2)) }))
+      .filter((row) => Math.abs(row.netRevenue) > 0.01)
+      .sort((a, b) => Math.abs(b.netRevenue) - Math.abs(a.netRevenue));
+    const classifiedOtherTotal = otherRevenueBreakdown.reduce((sum, row) => sum + row.netRevenue, 0);
+    const otherResidual = Number((audited.otherRevenue - classifiedOtherTotal).toFixed(2));
+    if (Math.abs(otherResidual) > 0.01) {
+      otherRevenueBreakdown.push({ department: 'Unclassified Other Revenue', netRevenue: otherResidual });
+    }
+    const auditedDepartmentRevenue = [
+      { department: 'Rooms', netRevenue: Number(audited.roomRevenue.toFixed(2)) },
+      { department: 'Food & Beverage', netRevenue: Number(audited.fbRevenue.toFixed(2)) },
+      ...otherRevenueBreakdown,
+    ].filter((row) => Math.abs(row.netRevenue) > 0.01);
 
     // ── 3. Live Since Last Audit (Unaudited Activity) ──────────────────────
     // Uses calculateDailyRevenue for businessDate (today) so live figures also
@@ -292,7 +334,8 @@ export async function GET(req: NextRequest) {
       property: { name: property.name, currency: property.baseCurrency || 'NGN' },
       audited: { ...audited, otherRevenueBreakdown },
       accountRevenue,
-      departmentRevenue,
+      departmentRevenue: auditedDepartmentRevenue,
+      postedDepartmentRevenue: departmentRevenue,
       liveSinceLastAudit,
       cashControl,
       transactionControls,
