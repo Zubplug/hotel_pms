@@ -68,15 +68,37 @@ export async function GET(req: NextRequest) {
           select: { amount: true, revenueClass: true, source: true },
         })
       : [];
+    // Corporate/city-ledger event invoices are recognized directly in the GL
+    // and do not necessarily create folio items. Include those audited journal
+    // lines so the mobile event/hall cards reconcile with Finance reporting.
+    const auditedEventGlRows = lastAudit
+      ? await prisma.$queryRaw<Array<{ category: string; netRevenue: unknown }>>`
+          SELECT i.category,
+                 COALESCE(SUM(l.credit), 0) - COALESCE(SUM(l.debit), 0) AS "netRevenue"
+          FROM "JournalEntryLine" l
+          JOIN "JournalEntry" e ON e.id = l."entryId"
+          JOIN "EventInvoiceItem" i ON i.id = l."sourceId"
+          WHERE e."propertyId" = ${propertyId}::uuid
+            AND e.status = 'POSTED'
+            AND e."isReversed" = false
+            AND e."entryDate" = ${revenueDate}
+            AND l."sourceType" = 'EVENT_INVOICE_ITEM'
+            AND i.category IN ('HALL', 'EQUIPMENT', 'FOOD')
+          GROUP BY i.category
+        `
+      : [];
+    const auditedEventGlRevenue = new Map(
+      auditedEventGlRows.map((row) => [row.category, Number(row.netRevenue)]),
+    );
     const auditedHallRevenue = auditedEventItems
       .filter((item) => item.revenueClass === 'HALL')
-      .reduce((sum, item) => sum + Number(item.amount), 0);
+      .reduce((sum, item) => sum + Number(item.amount), 0) + (auditedEventGlRevenue.get('HALL') || 0);
     const auditedEquipmentRevenue = auditedEventItems
       .filter((item) => item.revenueClass === 'EQUIPMENT')
-      .reduce((sum, item) => sum + Number(item.amount), 0);
+      .reduce((sum, item) => sum + Number(item.amount), 0) + (auditedEventGlRevenue.get('EQUIPMENT') || 0);
     const auditedEventFoodRevenue = auditedEventItems
       .filter((item) => item.revenueClass === 'FOOD' && item.source === 'OTHER')
-      .reduce((sum, item) => sum + Number(item.amount), 0);
+      .reduce((sum, item) => sum + Number(item.amount), 0) + (auditedEventGlRevenue.get('FOOD') || 0);
 
     // ── F&B Outlets scoped to this property ───────────────────────────────────
     const outlets = await prisma.posOutlet.findMany({
