@@ -6,12 +6,20 @@ import { resolveUser } from '@/lib/resolve-user';
 
 export const dynamic = 'force-dynamic';
 const asNumber = (value: unknown) => Number(value ?? 0);
+const RESERVATION_OVERSIGHT_ROLES = [
+  'ADMIN',
+  'MANAGER',
+  'DIRECTOR',
+  'EXECUTIVE',
+  'GENERAL_MANAGER',
+  'CEO',
+];
 
 export async function GET(req: NextRequest) {
   try {
     const user = await resolveUser(req);
     if (!user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
-    if (user.isSuperAdmin !== true && !['ADMIN', 'MANAGER', 'DIRECTOR', 'EXECUTIVE'].includes(user.role)) return errorResponse('FORBIDDEN', 'Executive or Management access required', 403);
+    if (user.isSuperAdmin !== true && !RESERVATION_OVERSIGHT_ROLES.includes(user.role)) return errorResponse('FORBIDDEN', 'Executive or Management access required', 403);
     const ctx = await requireOrganizationContext(user.id);
     const params = new URL(req.url).searchParams;
     const requestedPropertyId = params.get('propertyId');
