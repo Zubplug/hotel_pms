@@ -13,22 +13,35 @@ class ApprovalsRepository {
   ApprovalsRepository(this._dio);
 
   Future<List<dynamic>> fetchPendingApprovals() async {
-    final response = await _dio.get('/manager/approvals');
+    final response = await _dio.get('/mobile/v1/executive/approvals');
     if (response.statusCode == 200) {
       return response.data['data'] as List<dynamic>;
     }
     throw Exception('Failed to fetch approvals');
   }
 
-  Future<void> approveRequest(String id) async {
-    final response = await _dio.post('/manager/approvals/$id/approve');
+  Future<void> approveRequest(
+    String id, {
+    String source = 'APPROVAL_REQUEST',
+  }) async {
+    final response = await _dio.post(
+      '/mobile/v1/executive/approvals/$id',
+      data: {'action': 'APPROVE', 'source': source},
+    );
     if (response.statusCode != 200) {
       throw Exception('Failed to approve request');
     }
   }
 
-  Future<void> rejectRequest(String id) async {
-    final response = await _dio.post('/manager/approvals/$id/reject');
+  Future<void> rejectRequest(
+    String id,
+    String comment, {
+    String source = 'APPROVAL_REQUEST',
+  }) async {
+    final response = await _dio.post(
+      '/mobile/v1/executive/approvals/$id',
+      data: {'action': 'REJECT', 'comments': comment, 'source': source},
+    );
     if (response.statusCode != 200) {
       throw Exception('Failed to reject request');
     }

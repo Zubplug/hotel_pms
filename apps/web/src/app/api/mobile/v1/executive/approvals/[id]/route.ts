@@ -4,6 +4,10 @@ import { resolveUser } from '@/lib/resolve-user';
 import { prisma } from '@hotel-pms/db';
 import { createAuditLog } from '@/lib/audit';
 import * as crypto from 'crypto';
+import { requireOrganizationContext } from '@/lib/organization-access';
+import { CashExpenseService } from '@/lib/services/cash-expense-service';
+import { EmployeeExpenseReimbursementService } from '@/lib/services/employee-expense-reimbursement-service';
+import { ProcurementService } from '@/lib/inventory/ProcurementService';
 
 export async function POST(
   req: NextRequest,
@@ -18,9 +22,63 @@ export async function POST(
     const bodyText = await req.text();
     const body = bodyText ? JSON.parse(bodyText) : {};
     const { action, comments } = body; // action: 'APPROVE' | 'REJECT'
+    const source = String(body.source || 'APPROVAL_REQUEST').toUpperCase();
 
     if (!['APPROVE', 'REJECT'].includes(action)) {
       return errorResponse('INVALID_INPUT', 'Action must be APPROVE or REJECT', 400);
+    }
+
+    // Mobile-safe adapters for approval-center workflows that historically
+    // depended on a browser session. These use the same domain services and
+    // tenant scope as the web approval center.
+    if (source !== 'APPROVAL_REQUEST') {
+      const ctx = await requireOrganizationContext(user.id);
+      const propertyIds = [...ctx.propertyIds];
+      const note = String(comments || body.comment || body.reason || '').trim();
+      if (action === 'REJECT' && note.length < 5) {
+        return errorResponse('BAD_REQUEST', 'A rejection reason of at least 5 characters is required', 400);
+      }
+      if (source === 'EXPENSE') {
+        const result = action === 'APPROVE'
+          ? await CashExpenseService.approve(ctx, approvalId, user.role, note)
+          : await CashExpenseService.reject(ctx, approvalId, user.role, note);
+        return successResponse(result, 200);
+      }
+      if (source === 'EMPLOYEE_REIMBURSEMENT') {
+        const claim = await prisma.expenseClaim.findFirst({ where: { id: approvalId, propertyId: { in: propertyIds } }, select: { propertyId: true } });
+        if (!claim) return errorResponse('NOT_FOUND', 'Reimbursement request not found', 404);
+        const actor = { userId: user.id, role: user.role, propertyId: claim.propertyId };
+        const result = action === 'APPROVE'
+          ? await EmployeeExpenseReimbursementService.approve(approvalId, actor)
+          : await EmployeeExpenseReimbursementService.reject(approvalId, actor, note);
+        return successResponse(result, 200);
+      }
+      if (source === 'EMPLOYEE_BENEFIT') {
+        const loan = await prisma.employeeLoan.findFirst({ where: { id: approvalId, propertyId: { in: propertyIds }, status: 'MANAGER_REVIEW' }, select: { id: true, requestedBy: true } });
+        const advance = loan ? null : await prisma.salaryAdvance.findFirst({ where: { id: approvalId, propertyId: { in: propertyIds }, status: 'MANAGER_REVIEW' }, select: { id: true, requestedBy: true } });
+        if (!loan && !advance) return errorResponse('CONFLICT', 'Benefit request is no longer awaiting management review', 409);
+        if ((loan || advance)?.requestedBy === user.id) return errorResponse('FORBIDDEN', 'The requester cannot approve their own benefit', 403);
+        const result = await prisma.$transaction(async tx => {
+          if (loan) return tx.employeeLoan.update({ where: { id: loan.id }, data: action === 'APPROVE' ? { status: 'ACTIVE', approvedBy: user.id, approvedAt: new Date(), rejectionReason: null } : { status: 'REJECTED', rejectedBy: user.id, rejectedAt: new Date(), rejectionReason: note } });
+          return tx.salaryAdvance.update({ where: { id: advance!.id }, data: action === 'APPROVE' ? { status: 'APPROVED', approvedBy: user.id, approvedAt: new Date(), rejectionReason: null } : { status: 'REJECTED', rejectedBy: user.id, rejectedAt: new Date(), rejectionReason: note } });
+        });
+        return successResponse(result, 200);
+      }
+      if (source === 'PURCHASE_ORDER') {
+        const po = await prisma.purchaseOrder.findFirst({ where: { id: approvalId, propertyId: { in: propertyIds } }, select: { id: true, propertyId: true } });
+        if (!po) return errorResponse('NOT_FOUND', 'Purchase order not found', 404);
+        const result = action === 'APPROVE'
+          ? await ProcurementService.approvePO(po.id, user.id, user.role, user.isSuperAdmin)
+          : await ProcurementService.rejectPO(po.id, user.id, note, user.role, user.isSuperAdmin);
+        return successResponse(result, 200);
+      }
+      if (source === 'STOCK_TRANSFER') {
+        const transfer = await prisma.stockTransfer.findFirst({ where: { id: approvalId, propertyId: { in: propertyIds }, status: { in: ['PENDING_APPROVAL', 'ISSUED'] } }, select: { id: true } });
+        if (!transfer) return errorResponse('CONFLICT', 'Stock transfer is no longer awaiting review', 409);
+        const result = await prisma.stockTransfer.update({ where: { id: transfer.id }, data: action === 'APPROVE' ? { status: 'APPROVED', approvedBy: user.id, approvedAt: new Date() } : { status: 'REJECTED', notes: note } });
+        return successResponse(result, 200);
+      }
+      return errorResponse('BAD_REQUEST', `Unsupported mobile approval source: ${source}`, 400);
     }
 
     const idempotencyKey = req.headers.get('x-idempotency-key');
@@ -46,7 +104,7 @@ export async function POST(
       }
 
       // 3. Verify Capability / Limit (Assume simple role check for now as we don't have limit logic yet)
-      if (!['NIGHT_AUDITOR', 'MANAGER', 'ADMIN', 'SUPER_ADMIN', 'DIRECTOR', 'EXECUTIVE'].includes(user.role) && !user.isSuperAdmin) {
+      if (!['NIGHT_AUDITOR', 'GENERAL_MANAGER', 'HOTEL_MANAGER', 'MANAGER', 'ADMIN', 'SUPER_ADMIN', 'DIRECTOR', 'CEO', 'EXECUTIVE'].includes(user.role) && !user.isSuperAdmin) {
         throw new Error('FORBIDDEN:Executive access required');
       }
 

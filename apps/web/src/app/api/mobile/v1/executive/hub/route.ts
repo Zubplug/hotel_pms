@@ -92,6 +92,13 @@ export async function GET(req: NextRequest) {
       }
     });
 
+    const [pendingExpenses, pendingReimbursements, pendingLoans, pendingAdvances] = await Promise.all([
+      prisma.cashExpense.count({ where: { propertyId: { in: targetProperties }, status: 'PENDING_APPROVAL', currentApprovalStage: 'GENERAL_MANAGER' } }),
+      prisma.expenseClaim.count({ where: { propertyId: { in: targetProperties }, status: 'GENERAL_MANAGER_REVIEW' } }),
+      prisma.employeeLoan.count({ where: { propertyId: { in: targetProperties }, status: 'MANAGER_REVIEW' } }),
+      prisma.salaryAdvance.count({ where: { propertyId: { in: targetProperties }, status: 'MANAGER_REVIEW' } }),
+    ]);
+
     let totalPendingApprovals = 0;
     const approvalsByType = pendingApprovalsRaw.map(group => {
       totalPendingApprovals += group._count.id;
@@ -100,6 +107,15 @@ export async function GET(req: NextRequest) {
         count: group._count.id
       };
     });
+    const additionalApprovalCounts = [
+      ['EXPENSE', pendingExpenses],
+      ['EMPLOYEE_REIMBURSEMENT', pendingReimbursements],
+      ['EMPLOYEE_BENEFIT', pendingLoans + pendingAdvances],
+    ] as const;
+    for (const [type, count] of additionalApprovalCounts) {
+      if (count > 0) approvalsByType.push({ type, count });
+      totalPendingApprovals += count;
+    }
 
     // 4. Compute System Status
     const frontDeskTerminalsTotal = await prisma.posTerminal.count({

@@ -85,6 +85,7 @@ export async function GET(req: NextRequest) {
         propertyId: st.propertyId,
         property: st.property,
         type: 'STOCK_TRANSFER',
+        source: 'STOCK_TRANSFER',
         status: 'PENDING', // Mapped visually to 'Pending' in UI
         amount: totalValue,
         currency: 'NGN',
@@ -107,6 +108,7 @@ export async function GET(req: NextRequest) {
       propertyId: po.propertyId,
       property: po.property,
       type: 'PURCHASE_ORDER',
+      source: 'PURCHASE_ORDER',
       status: 'PENDING',
       amount: po.totalAmount,
       currency: po.currency,
@@ -161,15 +163,63 @@ export async function GET(req: NextRequest) {
     }) : [];
     const reviewRoomById = new Map(reviewRooms.map((room) => [room.id, room]));
     const enrichedApprovals = pendingApprovals.map((approval) => {
-      if (approval.type !== 'DISCOUNT') return approval;
+      if (approval.type !== 'DISCOUNT') return { ...approval, source: 'APPROVAL_REQUEST' };
       const snapshot = (approval.snapshot || {}) as Record<string, unknown>;
       const details = (approval.details || {}) as Record<string, unknown>;
       const roomId = String(snapshot.reservationRoomId || details.reservationRoomId || '');
       const reviewRoom = reviewRoomById.get(roomId);
-      return { ...approval, details: { ...details, review: reviewRoom || null } };
+      return { ...approval, source: 'APPROVAL_REQUEST', details: { ...details, review: reviewRoom || null } };
     });
 
-    const combined = [...enrichedApprovals, ...mappedTransfers, ...mappedPurchaseOrders]
+    const [cashExpenses, reimbursementClaims, employeeLoans, salaryAdvances] = await Promise.all([
+      prisma.cashExpense.findMany({
+        where: { propertyId: { in: targetProperties }, status: 'PENDING_APPROVAL', currentApprovalStage: 'GENERAL_MANAGER' },
+        orderBy: { createdAt: 'desc' }, take: 100,
+        select: { id: true, propertyId: true, expenseReference: true, amount: true, currency: true, category: true, description: true, payee: true, requestedBy: true, currentApprovalStage: true, requestedAt: true, createdAt: true },
+      }),
+      prisma.expenseClaim.findMany({
+        where: { propertyId: { in: targetProperties }, status: 'GENERAL_MANAGER_REVIEW' },
+        orderBy: { createdAt: 'desc' }, take: 100,
+        select: { id: true, propertyId: true, claimNumber: true, amount: true, currency: true, category: true, description: true, staff: { select: { firstName: true, lastName: true, employeeId: true } }, createdAt: true },
+      }),
+      prisma.employeeLoan.findMany({
+        where: { propertyId: { in: targetProperties }, status: 'MANAGER_REVIEW' },
+        orderBy: { createdAt: 'desc' }, take: 100,
+        select: { id: true, propertyId: true, loanNumber: true, principalAmount: true, reason: true, staff: { select: { firstName: true, lastName: true, employeeId: true } }, createdAt: true },
+      }),
+      prisma.salaryAdvance.findMany({
+        where: { propertyId: { in: targetProperties }, status: 'MANAGER_REVIEW' },
+        orderBy: { createdAt: 'desc' }, take: 100,
+        select: { id: true, propertyId: true, amount: true, reason: true, staff: { select: { firstName: true, lastName: true, employeeId: true } }, createdAt: true },
+      }),
+    ]);
+
+    const mappedExpenses = cashExpenses.map((item) => ({
+      id: item.id, propertyId: item.propertyId, source: 'EXPENSE', type: 'EXPENSE', status: 'PENDING',
+      amount: Number(item.amount), currency: item.currency, reason: item.description,
+      requestedBy: item.requestedBy, requestedAt: item.requestedAt.toISOString(),
+      details: { reference: item.expenseReference, category: item.category, payee: item.payee, stage: item.currentApprovalStage },
+    }));
+    const mappedClaims = reimbursementClaims.map((item) => ({
+      id: item.id, propertyId: item.propertyId, source: 'EMPLOYEE_REIMBURSEMENT', type: 'EMPLOYEE_REIMBURSEMENT', status: 'PENDING',
+      amount: Number(item.amount), currency: item.currency, reason: item.description,
+      requestedBy: item.staff.employeeId || `${item.staff.firstName || ''} ${item.staff.lastName || ''}`.trim(), requestedAt: item.createdAt.toISOString(),
+      details: { claimNumber: item.claimNumber, category: item.category, staffName: `${item.staff.firstName || ''} ${item.staff.lastName || ''}`.trim(), stage: 'GENERAL_MANAGER_REVIEW' },
+    }));
+    const mappedLoans = employeeLoans.map((item) => ({
+      id: item.id, propertyId: item.propertyId, source: 'EMPLOYEE_BENEFIT', type: 'EMPLOYEE_BENEFIT', status: 'PENDING',
+      amount: Number(item.principalAmount), currency: 'NGN', reason: item.reason,
+      requestedBy: item.staff.employeeId || `${item.staff.firstName || ''} ${item.staff.lastName || ''}`.trim(), requestedAt: item.createdAt.toISOString(),
+      details: { benefitType: 'LOAN', loanNumber: item.loanNumber, staffName: `${item.staff.firstName || ''} ${item.staff.lastName || ''}`.trim(), stage: 'MANAGER_REVIEW' },
+    }));
+    const mappedAdvances = salaryAdvances.map((item) => ({
+      id: item.id, propertyId: item.propertyId, source: 'EMPLOYEE_BENEFIT', type: 'EMPLOYEE_BENEFIT', status: 'PENDING',
+      amount: Number(item.amount), currency: 'NGN', reason: item.reason,
+      requestedBy: item.staff.employeeId || `${item.staff.firstName || ''} ${item.staff.lastName || ''}`.trim(), requestedAt: item.createdAt.toISOString(),
+      details: { benefitType: 'ADVANCE', staffName: `${item.staff.firstName || ''} ${item.staff.lastName || ''}`.trim(), stage: 'MANAGER_REVIEW' },
+    }));
+
+    const combined = [...enrichedApprovals, ...mappedTransfers, ...mappedPurchaseOrders, ...mappedExpenses, ...mappedClaims, ...mappedLoans, ...mappedAdvances]
       .sort((a, b) => new Date(b.requestedAt).getTime() - new Date(a.requestedAt).getTime())
       .slice(0, 100);
 
