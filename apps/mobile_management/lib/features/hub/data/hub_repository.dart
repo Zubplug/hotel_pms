@@ -76,78 +76,29 @@ class HubRepository {
     String? propertyId,
     String? date,
   }) async {
-    try {
-      final response = await _dio.get(
-        '/mobile/v1/executive/reservations',
-        queryParameters: {
-          if (propertyId != null) 'propertyId': propertyId,
-          if (date != null) 'date': date,
-        },
-      );
-      debugPrint(
-        '[ReservationRepository] Loaded reservations: '
-        'status=${response.statusCode}, property=$propertyId, date=$date',
-      );
-      return Map<String, dynamic>.from(response.data['data'] as Map);
-    } on DioException catch (e) {
-      debugPrint(
-        '[ReservationRepository] Request failed: '
-        'method=${e.requestOptions.method}, url=${e.requestOptions.uri}, '
-        'status=${e.response?.statusCode}, body=${e.response?.data}',
-      );
-      throw Exception(_apiErrorMessage(e, 'Unable to load reservations'));
-    } catch (e, stacktrace) {
-      debugPrint('[ReservationRepository] Parse/unexpected error: $e');
-      debugPrint('[ReservationRepository] Stacktrace: $stacktrace');
-      throw Exception('Unable to load reservations: $e');
-    }
+    final response = await _dio.get(
+      '/mobile/v1/executive/reservations',
+      queryParameters: {
+        if (propertyId != null) 'propertyId': propertyId,
+        if (date != null) 'date': date,
+      },
+    );
+    return Map<String, dynamic>.from(response.data['data'] as Map);
   }
 
   Future<Map<String, dynamic>> fetchReservationDetails(
     String id, {
     String? propertyId,
   }) async {
-    try {
-      final response = await _dio.get(
-        '/mobile/v1/executive/reservations',
-        queryParameters: {
-          'reservationId': id,
-          if (propertyId != null) 'propertyId': propertyId,
-        },
-      );
-      debugPrint(
-        '[ReservationRepository] Loaded reservation details: '
-        'status=${response.statusCode}, reservationId=$id, property=$propertyId',
-      );
-      return Map<String, dynamic>.from(
-        response.data['data']['reservation'] as Map,
-      );
-    } on DioException catch (e) {
-      debugPrint(
-        '[ReservationRepository] Details request failed: '
-        'method=${e.requestOptions.method}, url=${e.requestOptions.uri}, '
-        'status=${e.response?.statusCode}, body=${e.response?.data}',
-      );
-      throw Exception(
-        _apiErrorMessage(e, 'Unable to load reservation details'),
-      );
-    } catch (e, stacktrace) {
-      debugPrint('[ReservationRepository] Details parse/unexpected error: $e');
-      debugPrint('[ReservationRepository] Stacktrace: $stacktrace');
-      throw Exception('Unable to load reservation details: $e');
-    }
-  }
-
-  String _apiErrorMessage(DioException error, String fallback) {
-    final body = error.response?.data;
-    if (body is Map<String, dynamic>) {
-      final message = body['message'] ?? body['error'] ?? body['detail'];
-      if (message != null && message.toString().trim().isNotEmpty) {
-        return '$message (HTTP ${error.response?.statusCode ?? 'unknown'})';
-      }
-    }
-    return error.response?.statusCode == null
-        ? '$fallback: network error'
-        : '$fallback (HTTP ${error.response!.statusCode})';
+    final response = await _dio.get(
+      '/mobile/v1/executive/reservations',
+      queryParameters: {
+        'reservationId': id,
+        if (propertyId != null) 'propertyId': propertyId,
+      },
+    );
+    return Map<String, dynamic>.from(
+      response.data['data']['reservation'] as Map,
+    );
   }
 }
