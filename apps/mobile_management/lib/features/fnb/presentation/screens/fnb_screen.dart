@@ -803,6 +803,13 @@ class _OperationsCalendarState extends State<_OperationsCalendar> {
   }
 
   bool _isOnDay(FnbEvent event, DateTime day) {
+    if (event.bookings.isNotEmpty) {
+      return event.bookings.any((booking) {
+        final start = _dateOnly(booking.startTime);
+        final end = _dateOnly(booking.endTime);
+        return !start.isAfter(day) && !end.isBefore(day);
+      });
+    }
     final start = _dateOnly(event.startDate);
     final end = _dateOnly(event.endDate);
     return !start.isAfter(day) && !end.isBefore(day);
@@ -811,6 +818,19 @@ class _OperationsCalendarState extends State<_OperationsCalendar> {
   List<FnbEvent> _eventsFor(DateTime day) =>
       widget.events.where((event) => _isOnDay(event, day)).toList();
 
+  List<String> _hallsForEventOnDay(FnbEvent event, DateTime day) {
+    final bookings = event.bookings
+        .where((booking) {
+          final start = _dateOnly(booking.startTime);
+          final end = _dateOnly(booking.endTime);
+          return !start.isAfter(day) && !end.isBefore(day);
+        })
+        .map((booking) => booking.hall)
+        .toSet()
+        .toList();
+    return bookings.isEmpty ? event.halls : bookings;
+  }
+
   void _shift(int days) =>
       setState(() => _selectedDay = _selectedDay.add(Duration(days: days)));
 
@@ -818,7 +838,7 @@ class _OperationsCalendarState extends State<_OperationsCalendar> {
   Widget build(BuildContext context) {
     final selectedEvents = _eventsFor(_selectedDay);
     final bookedHallNames = selectedEvents
-        .expand((event) => event.halls)
+        .expand((event) => _hallsForEventOnDay(event, _selectedDay))
         .toSet();
     final availableHalls = widget.halls
         .where((hall) => !bookedHallNames.contains(hall.name))
@@ -920,8 +940,12 @@ class _OperationsCalendarState extends State<_OperationsCalendar> {
                 )
               else
                 ...selectedEvents.map(
-                  (event) =>
-                      _CalendarEventTile(event: event, accent: widget.accent),
+                  (event) => _CalendarEventTile(
+                    event: event,
+                    halls: _hallsForEventOnDay(event, _selectedDay),
+                    selectedDay: _selectedDay,
+                    accent: widget.accent,
+                  ),
                 ),
               const SizedBox(height: 8),
               _SectionHeader(
@@ -1071,8 +1095,15 @@ class _CalendarDayRow extends StatelessWidget {
 */
 class _CalendarEventTile extends StatelessWidget {
   final FnbEvent event;
+  final List<String> halls;
+  final DateTime selectedDay;
   final Color accent;
-  const _CalendarEventTile({required this.event, required this.accent});
+  const _CalendarEventTile({
+    required this.event,
+    required this.halls,
+    required this.selectedDay,
+    required this.accent,
+  });
 
   @override
   Widget build(BuildContext context) => Container(
@@ -1096,7 +1127,7 @@ class _CalendarEventTile extends StatelessWidget {
         ),
         const SizedBox(height: 4),
         Text(
-          '${DateFormat('HH:mm').format(event.startDate)} · ${event.halls.take(4).join(' · ')}',
+          '${DateFormat('dd MMM').format(selectedDay)} · ${halls.take(4).join(' · ')}',
           style: TextStyle(
             color: accent,
             fontSize: 9,

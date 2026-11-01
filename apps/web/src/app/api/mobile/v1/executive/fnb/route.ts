@@ -509,7 +509,11 @@ export async function GET(req: NextRequest) {
         actualGuests: true,
         bookings: {
           where: { status: 'ACTIVE' },
-          select: { hall: { select: { id: true, name: true, code: true, capacity: true } } },
+          select: {
+            startTime: true,
+            endTime: true,
+            hall: { select: { id: true, name: true, code: true, capacity: true } },
+          },
         },
         invoices: { select: { totalAmount: true, paidAmount: true, status: true } },
       },
@@ -575,6 +579,11 @@ export async function GET(req: NextRequest) {
         // Recurring events can have many booking rows for the same hall.
         // Management needs the distinct venue allocation, not every occurrence.
         halls: [...new Set(event.bookings.map((booking) => booking.hall.name))],
+        bookings: event.bookings.map((booking) => ({
+          hall: booking.hall.name,
+          startTime: booking.startTime.toISOString(),
+          endTime: booking.endTime.toISOString(),
+        })),
         totalAmount: Number(event.invoices.reduce((sum, invoice) => sum + Number(invoice.totalAmount), 0).toFixed(2)),
         paidAmount: Number(event.invoices.reduce((sum, invoice) => sum + Number(invoice.paidAmount), 0).toFixed(2)),
       })),

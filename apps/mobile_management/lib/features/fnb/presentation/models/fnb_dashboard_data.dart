@@ -132,6 +132,7 @@ class FnbEvent {
   final int expectedGuests;
   final int? actualGuests;
   final List<String> halls;
+  final List<FnbHallBooking> bookings;
   final double totalAmount;
   final double paidAmount;
 
@@ -145,6 +146,7 @@ class FnbEvent {
     required this.expectedGuests,
     required this.actualGuests,
     required this.halls,
+    required this.bookings,
     required this.totalAmount,
     required this.paidAmount,
   });
@@ -159,8 +161,31 @@ class FnbEvent {
     expectedGuests: (json['expectedGuests'] ?? 0) as int,
     actualGuests: json['actualGuests'] as int?,
     halls: (json['halls'] as List? ?? []).map((h) => h.toString()).toList(),
+    bookings: (json['bookings'] as List? ?? [])
+        .map(
+          (booking) => FnbHallBooking.fromJson(booking as Map<String, dynamic>),
+        )
+        .toList(),
     totalAmount: (json['totalAmount'] ?? 0).toDouble(),
     paidAmount: (json['paidAmount'] ?? 0).toDouble(),
+  );
+}
+
+class FnbHallBooking {
+  final String hall;
+  final DateTime startTime;
+  final DateTime endTime;
+
+  const FnbHallBooking({
+    required this.hall,
+    required this.startTime,
+    required this.endTime,
+  });
+
+  factory FnbHallBooking.fromJson(Map<String, dynamic> json) => FnbHallBooking(
+    hall: json['hall'] ?? '',
+    startTime: DateTime.tryParse(json['startTime'] ?? '') ?? DateTime.now(),
+    endTime: DateTime.tryParse(json['endTime'] ?? '') ?? DateTime.now(),
   );
 }
 
