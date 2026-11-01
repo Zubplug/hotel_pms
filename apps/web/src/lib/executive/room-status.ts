@@ -105,10 +105,13 @@ export async function calculateRoomStatuses(propertyId: string, businessDate: Da
       availabilityStatus = 'UNAVAILABLE';
     }
 
-    // Determine Housekeeping Status
-    // Assume PENDING/ASSIGNED/CLEANING as 'DIRTY' logically for readiness, 
-    // but the DB value is room.housekeepingStatus.
+    // Determine Housekeeping Status. A cancelled task is not an active
+    // housekeeping requirement; the PMS room status remains the fallback
+    // source for vacant-room sellability in that case.
     const isClean = room.housekeepingStatus === 'CLEAN' || room.housekeepingStatus === 'INSPECTED';
+    const activeHousekeepingWork = ['PENDING', 'ASSIGNED', 'CLEANING', 'MAINTENANCE_REQUIRED'].includes(room.housekeepingStatus);
+    const pmsRoomNeedsCleaning = ['DIRTY', 'CLEANING'].includes(room.status);
+    const needsHousekeeping = activeHousekeepingWork || pmsRoomNeedsCleaning;
 
     // Determine Display Status (Canonical)
     // Every active room must resolve to one of these statuses — no silent fallback.
@@ -124,8 +127,8 @@ export async function calculateRoomStatuses(propertyId: string, businessDate: Da
       displayStatus = 'OCCUPIED';
       overview.occupied++;
       // Track occupied rooms that are also dirty (stayover dirty)
-      if (!isClean) overview.occupiedDirty++;
-    } else if (isClean) {
+      if (activeHousekeepingWork) overview.occupiedDirty++;
+    } else if (!needsHousekeeping) {
       displayStatus = 'READY';
       overview.ready++;
       overview.vacant++;

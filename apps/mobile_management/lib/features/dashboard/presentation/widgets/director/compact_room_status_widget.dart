@@ -109,7 +109,7 @@ class CompactRoomStatusWidget extends StatelessWidget {
                   count: summary.occupied,
                   color: _sapphire,
                   subLabel: summary.occupiedDirty > 0
-                      ? '${summary.occupiedDirty} dirty'
+                      ? '${summary.occupiedDirty} stayover service'
                       : null,
                   subLabelColor: _amber,
                 ),

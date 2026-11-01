@@ -58,9 +58,19 @@ class _MainScreenState extends ConsumerState<MainScreen> {
           return const AuditorMainScreen();
         }
 
-        // Director / Manager dashboard tabs
+        // Only executive roles receive the executive KPI dashboard. Other
+        // authenticated users remain in the app and see the in-development
+        // dashboard state for their role; they are not routed into another
+        // operational workspace.
+        final canViewExecutiveDashboard = const {
+          'CEO',
+          'DIRECTOR',
+          'GENERAL_MANAGER',
+        }.contains(userRole);
         final List<Widget> screens = [
-          const DashboardScreen(),
+          canViewExecutiveDashboard
+              ? const DashboardScreen()
+              : _DashboardDevelopmentScreen(role: userRole),
           const RoomsScreen(),
           const FinanceScreen(),
           const FnbScreen(),
@@ -98,6 +108,57 @@ class _MainScreenState extends ConsumerState<MainScreen> {
       },
     );
   }
+}
+
+class _DashboardDevelopmentScreen extends StatelessWidget {
+  final String role;
+
+  const _DashboardDevelopmentScreen({required this.role});
+
+  String get _roleLabel => role
+      .split('_')
+      .map((part) => part.isEmpty ? part : '${part[0]}${part.substring(1).toLowerCase()}')
+      .join(' ');
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    backgroundColor: _bgDeep,
+    body: Center(
+      child: Padding(
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: _gold.withValues(alpha: .10),
+                shape: BoxShape.circle,
+                border: Border.all(color: _gold.withValues(alpha: .25)),
+              ),
+              child: const Icon(Icons.auto_awesome_rounded, color: _gold, size: 30),
+            ),
+            const SizedBox(height: 18),
+            const Text(
+              'Your dashboard is being prepared',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 19,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'The $_roleLabel mobile dashboard is currently in development. Your role workspace will appear here when it is ready.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: _textMuted, fontSize: 13, height: 1.45),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
 }
 
 /// Premium navigation bar with active pill indicator and badge support.

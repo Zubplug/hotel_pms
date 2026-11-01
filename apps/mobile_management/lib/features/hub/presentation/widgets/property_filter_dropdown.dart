@@ -39,38 +39,55 @@ class PropertyFilterDropdown extends ConsumerWidget {
     return GestureDetector(
       onTap: () => _showPropertySelector(context, ref, availableProperties, activeProperty),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        constraints: const BoxConstraints(maxWidth: 156),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
-          color: _surfaceNavy.withValues(alpha: 0.5),
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: const Color(0xFF1E3355), width: 1.5),
+          color: _surfaceNavy,
+          borderRadius: BorderRadius.circular(13),
+          border: Border.all(color: const Color(0xFF2B4267)),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x22000000),
+              blurRadius: 10,
+              offset: Offset(0, 4),
+            ),
+          ],
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              width: 8,
-              height: 8,
-              decoration: const BoxDecoration(
-                color: Color(0xFF22C55E),
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(color: Color(0x4022C55E), blurRadius: 4, spreadRadius: 1)
+            const Icon(Icons.business_rounded, color: _goldLight, size: 16),
+            const SizedBox(width: 7),
+            SizedBox(
+              width: 90,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'PROPERTY SCOPE',
+                    style: TextStyle(
+                      color: _textSecondary,
+                      fontSize: 7,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: .8,
+                    ),
+                  ),
+                  Text(
+                    displayText,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: _textPrimary,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                 ],
               ),
             ),
-            const SizedBox(width: 10),
-            Text(
-              displayText,
-              style: const TextStyle(
-                color: _textPrimary,
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 0.3,
-              ),
-            ),
-            const SizedBox(width: 6),
-            const Icon(Icons.keyboard_arrow_down_rounded, color: _textSecondary, size: 18),
+            const SizedBox(width: 4),
+            const Icon(Icons.expand_more_rounded, color: _textSecondary, size: 16),
           ],
         ),
       ),

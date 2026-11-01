@@ -37,7 +37,9 @@ export async function GET(req: NextRequest) {
         where: { id: reservationId, propertyId, deletedAt: null },
         include: {
           primaryGuest: { select: { id: true, firstName: true, lastName: true, email: true, phone: true, isVip: true, vipLevel: true, companyName: true } },
-          reservationRooms: { include: { room: { select: { id: true, number: true, displayName: true } } }, orderBy: { checkIn: 'asc' } },
+          // A reassignment leaves the old row on the reservation history. The
+          // mobile detail view must show the current room assignment only.
+          reservationRooms: { where: { status: 'ACTIVE' }, include: { room: { select: { id: true, number: true, displayName: true } } }, orderBy: { checkIn: 'asc' } },
           folios: {
             where: { status: { not: 'VOID' } },
             orderBy: { createdAt: 'asc' },
@@ -115,7 +117,9 @@ function serializeReservation(reservation: any, detailed = false, guestCreditAva
     adults: reservation.adults,
     children: reservation.children,
     currency: reservation.currency,
-    rooms: (reservation.reservationRooms || []).map((room: any) => ({ id: room.id, number: room.room?.number || 'Unassigned', status: room.status, rateAmount: asNumber(room.rateAmount), checkIn: room.checkIn, checkOut: room.checkOut, discountType: room.discountType || null, discountAmount: asNumber(room.discountAmount), discountPercent: asNumber(room.discountPercent), discountReason: room.discountReason || null })),
+    rooms: (reservation.reservationRooms || [])
+      .filter((room: any) => room.status === 'ACTIVE')
+      .map((room: any) => ({ id: room.id, number: room.room?.number || 'Unassigned', status: room.status, rateAmount: asNumber(room.rateAmount), checkIn: room.checkIn, checkOut: room.checkOut, discountType: room.discountType || null, discountAmount: asNumber(room.discountAmount), discountPercent: asNumber(room.discountPercent), discountReason: room.discountReason || null })),
     balanceSummary: {
       currency: folios[0]?.currency || reservation.currency || 'NGN',
       charges: totalCharges,

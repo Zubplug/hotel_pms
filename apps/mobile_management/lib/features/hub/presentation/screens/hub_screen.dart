@@ -67,23 +67,11 @@ class HubScreen extends ConsumerWidget {
           ],
         ),
         actions: [
-          IconButton(
-            tooltip: 'Search PMS',
-            icon: const Icon(Icons.search_rounded, color: _muted),
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const GlobalSearchScreen()),
-            ),
-          ),
-          const SizedBox(width: 8),
-        ],
-        bottom: const PreferredSize(
-          preferredSize: Size.fromHeight(58),
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(20, 2, 20, 12),
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
             child: PropertyFilterDropdown(),
           ),
-        ),
+        ],
       ),
       body: state.when(
         loading: () => const _HubLoading(),
@@ -161,7 +149,11 @@ class _HubBodyState extends State<_HubBody> {
             caption: 'Open an operational area',
           ),
           const SizedBox(height: 10),
-          _buildWorkspaces(context, data.modules, data.systemStatus),
+          _buildWorkspaces(
+            context,
+            data.modules.where((module) => module.id != 'sync').toList(),
+            data.systemStatus,
+          ),
           const SizedBox(height: 22),
           _SectionHeading(
             label: 'PROPERTY CONFIDENCE',

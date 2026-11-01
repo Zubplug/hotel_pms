@@ -24,7 +24,9 @@ class LiveExecutiveDashboardRepository implements ExecutiveDashboardRepository {
       }
       throw Exception('Failed to load dashboard data');
     } catch (e) {
-      // Fallback to cache on network error
+      // Never let cached executive data bypass the server's role restriction.
+      if (e is DioException && e.response != null) rethrow;
+      // Fallback to cache only when the request failed without an API response.
       final cachedData = await _storage.read(key: _cacheKey);
       if (cachedData != null) {
         return ExecutiveDashboardData.fromJson(jsonDecode(cachedData));
