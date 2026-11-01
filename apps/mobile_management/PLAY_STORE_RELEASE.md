@@ -18,6 +18,21 @@ The signed bundle will be generated at:
 
 `build/app/outputs/bundle/release/app-release.aab`
 
+## Encrypted signing backup
+
+The repository contains only the encrypted backup
+`PLAY_STORE_SIGNING_BACKUP.txt.enc`. The local plaintext backup remains
+Git-ignored. Decrypt it only into a private location using the keystore
+password:
+
+```sh
+openssl enc -d -aes-256-cbc -pbkdf2 -iter 600000 \
+  -in PLAY_STORE_SIGNING_BACKUP.txt.enc \
+  -out /private/tmp/lodgemobile-signing-backup.txt
+```
+
+Do not commit the decrypted output.
+
 ## Versioning
 
 The current first release is `1.0.0` with Android version code `1`. Increment the
