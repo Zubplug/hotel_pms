@@ -126,21 +126,14 @@ export async function GET(req: NextRequest) {
     // 5. Build Dynamic Management Modules based on permissions
     const modules = [];
     modules.push({ id: "reservations", title: "Reservations", icon: "book_online", route: "/reservations", enabled: true });
-    modules.push({ id: "guests", title: "Guests", icon: "people", route: "/guests", enabled: true });
     
     if (isSystemAdmin || ['MANAGER', 'DIRECTOR', 'EXECUTIVE'].includes(user.role)) {
-      modules.push({ id: "finance", title: "Finance", icon: "account_balance", route: "/finance", enabled: true });
       modules.push({ id: "reports", title: "Reports", icon: "assessment", route: "/reports", enabled: true });
     }
 
-    modules.push({ id: "pos", title: "POS", icon: "point_of_sale", route: "/pos", enabled: true });
-    modules.push({ id: "housekeeping", title: "Housekeeping", icon: "cleaning_services", route: "/housekeeping", enabled: true });
-    
-    // Some modules might be restricted to certain roles
+    // Sync remains in the Control Centre because it supports operational
+    // confidence across the property rather than duplicating a department.
     if (isSystemAdmin || user.role === 'DIRECTOR' || user.role === 'MANAGER') {
-      modules.push({ id: "maintenance", title: "Maintenance", icon: "build", route: "/maintenance", enabled: true });
-      modules.push({ id: "staff", title: "Staff", icon: "badge", route: "/staff", enabled: true });
-      modules.push({ id: "security", title: "Security", icon: "security", route: "/security", enabled: true });
       modules.push({ id: "sync", title: "Sync", icon: "sync", route: "/sync", enabled: true });
     }
 
