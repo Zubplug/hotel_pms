@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
     
     const isSystemAdmin = user.isSuperAdmin || user.role === 'SUPER_ADMIN' || user.role === 'ADMIN';
     
-    if (!isSystemAdmin && !['MANAGER', 'DIRECTOR', 'EXECUTIVE'].includes(user.role)) {
+    if (!isSystemAdmin && !['MANAGER', 'DIRECTOR', 'GENERAL_MANAGER', 'EXECUTIVE'].includes(user.role)) {
       return errorResponse('FORBIDDEN', 'Executive or Management access required', 403);
     }
 
@@ -127,7 +127,7 @@ export async function GET(req: NextRequest) {
     const modules = [];
     modules.push({ id: "reservations", title: "Reservations", icon: "book_online", route: "/reservations", enabled: true });
     
-    if (isSystemAdmin || ['MANAGER', 'DIRECTOR', 'EXECUTIVE'].includes(user.role)) {
+    if (isSystemAdmin || ['MANAGER', 'DIRECTOR', 'GENERAL_MANAGER', 'EXECUTIVE'].includes(user.role)) {
       modules.push({ id: "reports", title: "Reports", icon: "assessment", route: "/reports", enabled: true });
     }
 
