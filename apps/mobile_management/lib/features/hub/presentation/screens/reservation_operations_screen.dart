@@ -60,13 +60,7 @@ class _ReservationOperationsScreenState
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting)
           return const Center(child: CircularProgressIndicator(color: _gold));
-        if (snapshot.hasError)
-          return const Center(
-            child: Text(
-              'Unable to load reservations',
-              style: TextStyle(color: _white),
-            ),
-          );
+        if (snapshot.hasError) return _errorState(snapshot.error);
         final data = snapshot.data ?? {};
         final groups = [
           List<Map<String, dynamic>>.from(data['checkedIn'] ?? const []),
@@ -165,6 +159,40 @@ class _ReservationOperationsScreenState
       ),
     ),
   );
+
+  Widget _errorState(Object? error) {
+    final message =
+        error?.toString().replaceFirst('Exception: ', '') ?? 'Unknown error';
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.cloud_off_rounded, color: _red, size: 38),
+            const SizedBox(height: 12),
+            const Text(
+              'Reservations could not be loaded',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: _white, fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: _muted, fontSize: 12),
+            ),
+            const SizedBox(height: 16),
+            OutlinedButton.icon(
+              onPressed: () => setState(_load),
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Retry'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   Future<void> _openDetails(String id) async {
     await Navigator.of(context).push(

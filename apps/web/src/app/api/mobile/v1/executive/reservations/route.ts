@@ -13,6 +13,7 @@ const RESERVATION_OVERSIGHT_ROLES = [
   'EXECUTIVE',
   'GENERAL_MANAGER',
   'CEO',
+  'SUPER_ADMIN',
 ];
 
 export async function GET(req: NextRequest) {
@@ -29,6 +30,14 @@ export async function GET(req: NextRequest) {
       ? ctx.propertyIds[0]
       : requestedPropertyId;
     const reservationId = params.get('reservationId');
+    console.info('[Mobile Executive Reservations] request', {
+      userId: user.id,
+      role: user.role,
+      requestedPropertyId,
+      resolvedPropertyId: propertyId,
+      reservationId: reservationId || null,
+      date: params.get('date') || null,
+    });
     if (!propertyId || !ctx.propertyIds.includes(propertyId)) return errorResponse('FORBIDDEN', 'Access denied to this property', 403);
 
     if (reservationId) {
@@ -66,7 +75,12 @@ export async function GET(req: NextRequest) {
     const items = reservations.map((reservation) => serializeReservation(reservation));
     return successResponse({ date, propertyId, checkedIn: items.filter((item) => item.category === 'CHECKED_IN'), noShows: items.filter((item) => item.category === 'NO_SHOW'), reserved: items.filter((item) => item.category === 'RESERVED') }, 200);
   } catch (error: any) {
-    console.error('[Mobile Executive Reservations]', error);
+    console.error('[Mobile Executive Reservations] failed', {
+      message: error?.message,
+      code: error?.code,
+      name: error?.name,
+      stack: error?.stack,
+    });
     return errorResponse('INTERNAL_ERROR', error?.message || 'Unable to load reservations', 500);
   }
 }
