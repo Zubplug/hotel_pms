@@ -33,6 +33,9 @@ migrate_working_dir/
 /build/
 /coverage/
 
+# Local Play Store signing backup. Never commit signing credentials.
+PLAY_STORE_SIGNING_BACKUP.txt
+
 # Symbolication related
 app.*.symbols
 

@@ -1,9 +1,17 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
     id("com.google.gms.google-services")
+}
+
+val signingPropertiesFile = rootProject.file("key.properties")
+val signingProperties = Properties()
+if (signingPropertiesFile.exists()) {
+    signingPropertiesFile.inputStream().use { signingProperties.load(it) }
 }
 
 android {
@@ -22,21 +30,35 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.lodgecore.lodgemobile"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        create("release") {
+            if (signingPropertiesFile.exists()) {
+                keyAlias = signingProperties.getProperty("keyAlias")
+                keyPassword = signingProperties.getProperty("keyPassword")
+                storeFile = signingProperties.getProperty("storeFile")?.let { file(it) }
+                storePassword = signingProperties.getProperty("storePassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            if (!signingPropertiesFile.exists()) {
+                throw GradleException(
+                    "Release signing is not configured. Create apps/mobile_management/android/key.properties " +
+                        "from key.properties.example before building the Play Store bundle."
+                )
+            }
+            signingConfig = signingConfigs.getByName("release")
+            isMinifyEnabled = false
+            isShrinkResources = false
         }
     }
 }
