@@ -251,31 +251,132 @@ class ProfileScreen extends ConsumerWidget {
     );
   }
 
-  void _showLogoutConfirm(BuildContext context, WidgetRef ref) {
-    showDialog(
+  Future<void> _showLogoutConfirm(BuildContext context, WidgetRef ref) async {
+    final confirmed = await showModalBottomSheet<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: _cardBg,
-        title: const Text('Log Out', style: TextStyle(color: _textPrimary)),
-        content: const Text(
-          'Are you sure you want to log out of LodgeCore?',
-          style: TextStyle(color: _textSecondary),
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (sheetContext) => Container(
+        padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
+        decoration: const BoxDecoration(
+          color: _cardBg,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          border: Border(top: BorderSide(color: Color(0xFF2B4267))),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel', style: TextStyle(color: _textMuted)),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 42,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: _textMuted.withValues(alpha: .45),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: _red.withValues(alpha: .11),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: _red.withValues(alpha: .25)),
+                    ),
+                    child: const Icon(Icons.logout_rounded, color: _red, size: 23),
+                  ),
+                  const SizedBox(width: 13),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Sign out of LodgeCore?',
+                          style: TextStyle(
+                            color: _textPrimary,
+                            fontSize: 19,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        SizedBox(height: 4),
+                        Text(
+                          'Your session will be securely closed on this device.',
+                          style: TextStyle(color: _textSecondary, fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              Container(
+                padding: const EdgeInsets.all(13),
+                decoration: BoxDecoration(
+                  color: _surfaceNavy.withValues(alpha: .62),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFF2B4267)),
+                ),
+                child: const Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.verified_user_outlined, color: _goldLight, size: 18),
+                    SizedBox(width: 9),
+                    Expanded(
+                      child: Text(
+                        'Saved access credentials and cached account data will remain protected until you sign in again.',
+                        style: TextStyle(color: _textSecondary, fontSize: 11, height: 1.4),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(sheetContext, false),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: _textSecondary,
+                        minimumSize: const Size.fromHeight(48),
+                        side: const BorderSide(color: Color(0xFF2B4267)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      ),
+                      child: const Text('Stay signed in'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: () => Navigator.pop(sheetContext, true),
+                      icon: const Icon(Icons.logout_rounded, size: 17),
+                      label: const Text('Sign out'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: _red,
+                        foregroundColor: Colors.white,
+                        minimumSize: const Size.fromHeight(48),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        textStyle: const TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              ref.read(authProvider.notifier).logout();
-            },
-            child: const Text('Log Out', style: TextStyle(color: _red)),
-          ),
-        ],
+        ),
       ),
     );
+    if (confirmed == true && context.mounted) {
+      await ref.read(authProvider.notifier).logout();
+    }
   }
 
   Future<void> _showChangePasswordSheet(

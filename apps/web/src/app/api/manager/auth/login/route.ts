@@ -10,6 +10,26 @@ if (!JWT_SECRET) {
   throw new Error('AUTH_SECRET is required for manager authentication');
 }
 
+const authUserSelect = (withPinFields: boolean) => ({
+  id: true,
+  staffId: true,
+  email: true,
+  passwordHash: true,
+  isSuperAdmin: true,
+  sessionVersion: true,
+  ...(withPinFields
+    ? {
+        mobilePinHash: true,
+        mobilePinFailedAttempts: true,
+        mobilePinLockedUntil: true,
+      }
+    : {}),
+  membership: { select: { organizationId: true, status: true, role: true } },
+  roles: {
+    include: { role: { include: { permissions: { include: { permission: true } } } } },
+  },
+});
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -24,24 +44,14 @@ export async function POST(req: NextRequest) {
       return errorResponse('BAD_REQUEST', 'Email and password are required', 400);
     }
 
-    let user = pinLogin
+    let user: any = pinLogin
       ? await prisma.user.findUnique({
           where: { email: String(identifier).trim().toLowerCase() },
-          include: {
-            membership: true,
-            roles: { include: { role: { include: { permissions: { include: { permission: true } } } } } },
-          },
+          select: authUserSelect(true),
         })
       : await prisma.user.findUnique({
       where: { email: String(email).trim().toLowerCase() },
-      include: { 
-        membership: true,
-        roles: { 
-          include: { 
-            role: { include: { permissions: { include: { permission: true } } } } 
-          } 
-        } 
-      }
+      select: authUserSelect(false),
     });
 
     // Phone is stored on Staff, while the authentication identity is User.
@@ -56,10 +66,7 @@ export async function POST(req: NextRequest) {
       if (staff?.userId) {
         user = await prisma.user.findUnique({
           where: { id: staff.userId },
-          include: {
-            membership: true,
-            roles: { include: { role: { include: { permissions: { include: { permission: true } } } } } },
-          },
+          select: authUserSelect(true),
         });
       }
     }
@@ -153,7 +160,11 @@ export async function POST(req: NextRequest) {
     }, 200);
 
   } catch (error) {
-    console.error('[Manager Auth API POST]', error);
+    console.error('[Manager Auth API POST]', {
+      error,
+      code: error instanceof Error && 'code' in error ? (error as any).code : undefined,
+      meta: error instanceof Error && 'meta' in error ? (error as any).meta : undefined,
+    });
     return errorResponse('INTERNAL_ERROR', 'Authentication failed', 500);
   }
 }
