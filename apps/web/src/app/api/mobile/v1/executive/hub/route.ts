@@ -67,15 +67,16 @@ export async function GET(req: NextRequest) {
     });
 
     // 2c. Offline Terminals
+    // A registered terminal with no heartbeat has never completed setup and is
+    // not an operational outage. Only terminals that have reported at least
+    // once are included in online/offline health counts. This prevents old
+    // registration records from flooding the management alert queue.
     const fiveMinutesAgo = subMinutes(new Date(), 5);
     const offlineTerminalsCount = await prisma.posTerminal.count({
       where: {
         propertyId: { in: targetProperties },
-        OR: [
-          { lastSeenAt: { lt: fiveMinutesAgo } },
-          { lastSeenAt: null }
-        ],
-        registrationState: 'REGISTERED' // Only count registered terminals as offline
+        lastSeenAt: { lt: fiveMinutesAgo },
+        registrationState: 'REGISTERED'
       }
     });
 
@@ -102,14 +103,14 @@ export async function GET(req: NextRequest) {
 
     // 4. Compute System Status
     const frontDeskTerminalsTotal = await prisma.posTerminal.count({
-      where: { propertyId: { in: targetProperties }, terminalType: 'FRONT_DESK', registrationState: 'REGISTERED' }
+      where: { propertyId: { in: targetProperties }, terminalType: 'FRONT_DESK', registrationState: 'REGISTERED', lastSeenAt: { not: null } }
     });
     const frontDeskTerminalsOnline = await prisma.posTerminal.count({
       where: { propertyId: { in: targetProperties }, terminalType: 'FRONT_DESK', registrationState: 'REGISTERED', lastSeenAt: { gte: fiveMinutesAgo } }
     });
 
     const posTerminalsTotal = await prisma.posTerminal.count({
-      where: { propertyId: { in: targetProperties }, terminalType: { in: ['RESTAURANT_POS', 'BAR_POS'] }, registrationState: 'REGISTERED' }
+      where: { propertyId: { in: targetProperties }, terminalType: { in: ['RESTAURANT_POS', 'BAR_POS'] }, registrationState: 'REGISTERED', lastSeenAt: { not: null } }
     });
     const posTerminalsOnline = await prisma.posTerminal.count({
       where: { propertyId: { in: targetProperties }, terminalType: { in: ['RESTAURANT_POS', 'BAR_POS'] }, registrationState: 'REGISTERED', lastSeenAt: { gte: fiveMinutesAgo } }
@@ -117,7 +118,7 @@ export async function GET(req: NextRequest) {
 
     // Determine latest sync time across any terminal
     const latestSyncTerminal = await prisma.posTerminal.findFirst({
-      where: { propertyId: { in: targetProperties } },
+      where: { propertyId: { in: targetProperties }, lastSyncAt: { not: null } },
       orderBy: { lastSyncAt: 'desc' },
       select: { lastSyncAt: true }
     });
@@ -184,4 +185,3 @@ export async function GET(req: NextRequest) {
     return errorResponse('INTERNAL_ERROR', err?.message || 'Unexpected error fetching hub data', 500);
   }
 }
-
