@@ -14,7 +14,12 @@ export async function GET(req: NextRequest) {
     if (user.isSuperAdmin !== true && !['ADMIN', 'MANAGER', 'DIRECTOR', 'EXECUTIVE'].includes(user.role)) return errorResponse('FORBIDDEN', 'Executive or Management access required', 403);
     const ctx = await requireOrganizationContext(user.id);
     const params = new URL(req.url).searchParams;
-    const propertyId = params.get('propertyId') || ctx.propertyIds[0];
+    const requestedPropertyId = params.get('propertyId');
+    const propertyId = !requestedPropertyId ||
+      requestedPropertyId === 'AUTO_SELECT_FIRST' ||
+      requestedPropertyId === 'ALL_AUTHORIZED'
+      ? ctx.propertyIds[0]
+      : requestedPropertyId;
     const reservationId = params.get('reservationId');
     if (!propertyId || !ctx.propertyIds.includes(propertyId)) return errorResponse('FORBIDDEN', 'Access denied to this property', 403);
 
