@@ -22,7 +22,11 @@ class HubRepository {
       debugPrint('[HubRepository] Status: ${e.response?.statusCode}');
       debugPrint('[HubRepository] Response Data: ${e.response?.data}');
       if (e.response != null) {
-        throw Exception(e.response?.data['message'] ?? e.response?.data['error'] ?? 'Failed to load hub data (HTTP ${e.response?.statusCode})');
+        throw Exception(
+          e.response?.data['message'] ??
+              e.response?.data['error'] ??
+              'Failed to load hub data (HTTP ${e.response?.statusCode})',
+        );
       }
       throw Exception('Network error occurred: ${e.message}');
     } catch (e, stacktrace) {
@@ -34,12 +38,15 @@ class HubRepository {
 
   Future<void> approveRequest(String approvalId) async {
     try {
-      await _dio.post('/mobile/v1/executive/approvals/$approvalId', data: {
-        'action': 'APPROVE',
-      });
+      await _dio.post(
+        '/mobile/v1/executive/approvals/$approvalId',
+        data: {'action': 'APPROVE'},
+      );
     } on DioException catch (e) {
       if (e.response != null) {
-        throw Exception(e.response?.data['message'] ?? 'Failed to approve request');
+        throw Exception(
+          e.response?.data['message'] ?? 'Failed to approve request',
+        );
       }
       throw Exception('Network error occurred');
     } catch (e) {
@@ -49,17 +56,49 @@ class HubRepository {
 
   Future<void> rejectRequest(String approvalId, String comments) async {
     try {
-      await _dio.post('/mobile/v1/executive/approvals/$approvalId', data: {
-        'action': 'REJECT',
-        'comments': comments,
-      });
+      await _dio.post(
+        '/mobile/v1/executive/approvals/$approvalId',
+        data: {'action': 'REJECT', 'comments': comments},
+      );
     } on DioException catch (e) {
       if (e.response != null) {
-        throw Exception(e.response?.data['message'] ?? 'Failed to reject request');
+        throw Exception(
+          e.response?.data['message'] ?? 'Failed to reject request',
+        );
       }
       throw Exception('Network error occurred');
     } catch (e) {
       throw Exception('Failed to reject request: $e');
     }
+  }
+
+  Future<Map<String, dynamic>> fetchReservations({
+    String? propertyId,
+    String? date,
+  }) async {
+    final response = await _dio.get(
+      '/mobile/v1/executive/reservations',
+      queryParameters: {
+        if (propertyId != null) 'propertyId': propertyId,
+        if (date != null) 'date': date,
+      },
+    );
+    return Map<String, dynamic>.from(response.data['data'] as Map);
+  }
+
+  Future<Map<String, dynamic>> fetchReservationDetails(
+    String id, {
+    String? propertyId,
+  }) async {
+    final response = await _dio.get(
+      '/mobile/v1/executive/reservations',
+      queryParameters: {
+        'reservationId': id,
+        if (propertyId != null) 'propertyId': propertyId,
+      },
+    );
+    return Map<String, dynamic>.from(
+      response.data['data']['reservation'] as Map,
+    );
   }
 }

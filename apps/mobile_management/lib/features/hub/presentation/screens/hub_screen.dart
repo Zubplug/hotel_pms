@@ -10,6 +10,7 @@ import '../../../fnb/presentation/screens/fnb_screen.dart';
 import '../../../rooms/presentation/screens/rooms_screen.dart';
 import '../widgets/property_filter_dropdown.dart';
 import 'global_search_screen.dart';
+import 'reservation_operations_screen.dart';
 
 const _ink = Color(0xFF070D1A);
 const _panel = Color(0xFF101B30);
@@ -175,10 +176,12 @@ class _HubBodyState extends State<_HubBody> {
 
   int _attentionCount(HubData data) {
     final alerts = data.alerts;
+    // Terminal connectivity is monitored in Property Confidence. A single
+    // offline POS or front-desk device should not create a management
+    // decision item while the rest of the property remains operational.
     return data.approvalsSummary.totalPending +
         alerts.oooRooms +
-        alerts.cashVariances +
-        alerts.offlineTerminals;
+        alerts.cashVariances;
   }
 
   String _propertyLabel(HubData data) {
@@ -398,18 +401,6 @@ class _HubBodyState extends State<_HubBody> {
         ),
       );
     }
-    if (alerts.offlineTerminals > 0) {
-      rows.add(
-        _QueueRow(
-          icon: Icons.wifi_off_rounded,
-          title: 'Offline terminals',
-          detail:
-              '${alerts.offlineTerminals} device${alerts.offlineTerminals == 1 ? '' : 's'} are not reporting',
-          color: _orange,
-          onTap: () => _showTerminalStatus(context, data.systemStatus),
-        ),
-      );
-    }
     if (data.approvalsSummary.totalPending > 0) {
       rows.add(
         _QueueRow(
@@ -607,7 +598,8 @@ class _HubBodyState extends State<_HubBody> {
       'finance' || 'reports' => const FinanceScreen(),
       'pos' => const FnbScreen(),
       'housekeeping' => const RoomsScreen(),
-      'reservations' || 'guests' => const GlobalSearchScreen(),
+      'reservations' => const ReservationOperationsScreen(),
+      'guests' => const GlobalSearchScreen(),
       _ => null,
     };
 
