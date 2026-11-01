@@ -486,16 +486,18 @@ export async function GET(req: NextRequest) {
     // Keep this deliberately separate from POS revenue. Management needs to
     // see the forward event pipeline, hall loading and financial exposure even
     // when no POS transaction has been posted yet.
-    const eventWindowEnd = endOfDay(addDays(businessDate, 30));
+    const eventWindowStart = startOfDay(subDays(businessDate, 30));
+    const pipelineWindowEnd = endOfDay(addDays(businessDate, 30));
+    const calendarWindowEnd = endOfDay(addDays(businessDate, 365));
     const eventRows = await prisma.event.findMany({
       where: {
         propertyId,
         status: { not: 'CANCELLED' },
-        endDate: { gte: startOfDay(businessDate) },
-        startDate: { lte: eventWindowEnd },
+        endDate: { gte: eventWindowStart },
+        startDate: { lte: calendarWindowEnd },
       },
       orderBy: { startDate: 'asc' },
-      take: 50,
+      take: 200,
       select: {
         id: true,
         name: true,
@@ -525,8 +527,13 @@ export async function GET(req: NextRequest) {
     let eventPipelineValue = 0;
     let eventCollectedValue = 0;
     let eventOutstandingValue = 0;
+    const pipelineEvents = eventRows.filter(
+      (event) =>
+        event.endDate >= startOfDay(businessDate) &&
+        event.startDate <= pipelineWindowEnd,
+    );
 
-    for (const event of eventRows) {
+    for (const event of pipelineEvents) {
       eventStatusCounts.set(event.status, (eventStatusCounts.get(event.status) ?? 0) + 1);
       financialStatusCounts.set(event.financialStatus, (financialStatusCounts.get(event.financialStatus) ?? 0) + 1);
       for (const invoice of event.invoices) {
@@ -545,8 +552,8 @@ export async function GET(req: NextRequest) {
 
     const eventOverview = {
       windowDays: 30,
-      totalEvents: eventRows.length,
-      todayEvents: eventRows.filter((event) => event.startDate <= endOfDay(businessDate) && event.endDate >= startOfDay(businessDate)).length,
+      totalEvents: pipelineEvents.length,
+      todayEvents: pipelineEvents.filter((event) => event.startDate <= endOfDay(businessDate) && event.endDate >= startOfDay(businessDate)).length,
       confirmedEvents: eventStatusCounts.get('CONFIRMED') ?? 0,
       inServiceEvents: eventStatusCounts.get('IN_SERVICE') ?? 0,
       tentativeEvents: eventStatusCounts.get('TENTATIVE') ?? 0,
@@ -554,7 +561,9 @@ export async function GET(req: NextRequest) {
       collectedValue: Number(eventCollectedValue.toFixed(2)),
       outstandingValue: Number(eventOutstandingValue.toFixed(2)),
       financialStatusCounts: Object.fromEntries(financialStatusCounts),
-      events: eventRows.slice(0, 12).map((event) => ({
+        // Include recent historical events so the daily calendar can inspect
+        // the previous date and completed multi-day bookings.
+        events: eventRows.map((event) => ({
         id: event.id,
         name: event.name,
         status: event.status,

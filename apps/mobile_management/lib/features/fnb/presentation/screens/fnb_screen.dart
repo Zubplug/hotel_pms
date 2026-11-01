@@ -473,6 +473,7 @@ class _EventsManagementView extends StatelessWidget {
         const SizedBox(height: 24),
         _OperationsCalendar(
           events: e.events,
+          halls: data.hallOverview,
           title: 'EVENT CALENDAR',
           subtitle: 'Daily schedule, venue allocation and event status',
           accent: _gold,
@@ -485,16 +486,129 @@ class _EventsManagementView extends StatelessWidget {
               '${e.totalEvents} active events in the next ${e.windowDays} days',
         ),
         const SizedBox(height: 12),
-        if (e.events.isEmpty)
-          const _EmptyPanel(
-            icon: Icons.event_busy_rounded,
-            text: 'No upcoming events in the operating window',
-          )
-        else
-          ...e.events.map((event) => _EventRow(event: event)),
+        _PipelineSummary(overview: e),
       ],
     );
   }
+}
+
+class _PipelineSummary extends StatelessWidget {
+  final FnbEventOverview overview;
+  const _PipelineSummary({required this.overview});
+
+  @override
+  Widget build(BuildContext context) {
+    final collectedRatio = overview.pipelineValue > 0
+        ? (overview.collectedValue / overview.pipelineValue).clamp(0.0, 1.0)
+        : 0.0;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: _surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.insights_rounded, color: _gold, size: 18),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text(
+                  'COMMERCIAL OUTLOOK',
+                  style: TextStyle(
+                    color: _textPrimary,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: .8,
+                  ),
+                ),
+              ),
+              Text(
+                '${overview.totalEvents} events',
+                style: const TextStyle(color: _textMuted, fontSize: 10),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              _PipelineValue(
+                label: 'PIPELINE',
+                value: _money(overview.pipelineValue),
+                color: _gold,
+              ),
+              _PipelineValue(
+                label: 'COLLECTED',
+                value: _money(overview.collectedValue),
+                color: _emerald,
+              ),
+              _PipelineValue(
+                label: 'OUTSTANDING',
+                value: _money(overview.outstandingValue),
+                color: _rose,
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: collectedRatio.toDouble(),
+              minHeight: 5,
+              backgroundColor: _border,
+              valueColor: const AlwaysStoppedAnimation(_emerald),
+            ),
+          ),
+          const SizedBox(height: 9),
+          const Text(
+            'Select a date above to inspect the event schedule and hall availability.',
+            style: TextStyle(color: _textMuted, fontSize: 10, height: 1.4),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PipelineValue extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color color;
+  const _PipelineValue({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) => Expanded(
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            color: color,
+            fontSize: 8,
+            fontWeight: FontWeight.w800,
+            letterSpacing: .6,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: const TextStyle(
+            color: _textPrimary,
+            fontSize: 13,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 class _HallsManagementView extends StatelessWidget {
@@ -557,6 +671,7 @@ class _HallsManagementView extends StatelessWidget {
         const SizedBox(height: 24),
         _OperationsCalendar(
           events: data.eventOverview.events,
+          halls: halls,
           title: 'HALL OCCUPANCY CALENDAR',
           subtitle: 'Review hall commitments by day before scheduling',
           accent: _sapphire,
@@ -652,12 +767,14 @@ class _MetricTile {
 
 class _OperationsCalendar extends StatefulWidget {
   final List<FnbEvent> events;
+  final List<FnbHall> halls;
   final String title;
   final String subtitle;
   final Color accent;
 
   const _OperationsCalendar({
     required this.events,
+    required this.halls,
     required this.title,
     required this.subtitle,
     required this.accent,
@@ -669,7 +786,6 @@ class _OperationsCalendar extends StatefulWidget {
 
 class _OperationsCalendarState extends State<_OperationsCalendar> {
   late DateTime _selectedDay;
-  bool _weekView = true;
 
   DateTime _dateOnly(DateTime value) =>
       DateTime(value.year, value.month, value.day);
@@ -686,11 +802,6 @@ class _OperationsCalendarState extends State<_OperationsCalendar> {
         : today;
   }
 
-  DateTime get _weekStart {
-    final day = _dateOnly(_selectedDay);
-    return day.subtract(Duration(days: day.weekday - DateTime.monday));
-  }
-
   bool _isOnDay(FnbEvent event, DateTime day) {
     final start = _dateOnly(event.startDate);
     final end = _dateOnly(event.endDate);
@@ -705,11 +816,13 @@ class _OperationsCalendarState extends State<_OperationsCalendar> {
 
   @override
   Widget build(BuildContext context) {
-    final weekDays = List.generate(
-      7,
-      (index) => _weekStart.add(Duration(days: index)),
-    );
     final selectedEvents = _eventsFor(_selectedDay);
+    final bookedHallNames = selectedEvents
+        .expand((event) => event.halls)
+        .toSet();
+    final availableHalls = widget.halls
+        .where((hall) => !bookedHallNames.contains(hall.name))
+        .toList();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -731,7 +844,7 @@ class _OperationsCalendarState extends State<_OperationsCalendar> {
               Row(
                 children: [
                   IconButton(
-                    onPressed: () => _shift(_weekView ? -7 : -1),
+                    onPressed: () => _shift(-1),
                     icon: const Icon(
                       Icons.chevron_left_rounded,
                       color: _textSecondary,
@@ -739,11 +852,7 @@ class _OperationsCalendarState extends State<_OperationsCalendar> {
                   ),
                   Expanded(
                     child: Text(
-                      _weekView
-                          ? '${DateFormat('dd MMM').format(_weekStart)} – ${DateFormat('dd MMM yyyy').format(weekDays.last)}'
-                          : DateFormat(
-                              'EEEE, dd MMM yyyy',
-                            ).format(_selectedDay),
+                      DateFormat('EEEE, dd MMM yyyy').format(_selectedDay),
                       textAlign: TextAlign.center,
                       style: const TextStyle(
                         color: _textPrimary,
@@ -753,7 +862,7 @@ class _OperationsCalendarState extends State<_OperationsCalendar> {
                     ),
                   ),
                   IconButton(
-                    onPressed: () => _shift(_weekView ? 7 : 1),
+                    onPressed: () => _shift(1),
                     icon: const Icon(
                       Icons.chevron_right_rounded,
                       color: _textSecondary,
@@ -761,97 +870,47 @@ class _OperationsCalendarState extends State<_OperationsCalendar> {
                   ),
                 ],
               ),
-              Row(
-                children: [
-                  Expanded(
-                    child: _CalendarModeButton(
-                      label: 'WEEK',
-                      selected: _weekView,
-                      color: widget.accent,
-                      onTap: () => setState(() => _weekView = true),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: _CalendarModeButton(
-                      label: 'DAY',
-                      selected: !_weekView,
-                      color: widget.accent,
-                      onTap: () => setState(() => _weekView = false),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                height: 58,
-                child: Row(
-                  children: weekDays.map((day) {
-                    final selected = _dateOnly(day) == _dateOnly(_selectedDay);
-                    final count = _eventsFor(day).length;
-                    return Expanded(
-                      child: GestureDetector(
-                        onTap: () => setState(() => _selectedDay = day),
-                        child: Container(
-                          margin: const EdgeInsets.symmetric(horizontal: 2),
-                          padding: const EdgeInsets.symmetric(vertical: 6),
-                          decoration: BoxDecoration(
-                            color: selected
-                                ? widget.accent.withValues(alpha: .18)
-                                : Colors.transparent,
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: selected
-                                  ? widget.accent
-                                  : Colors.transparent,
-                            ),
-                          ),
-                          child: Column(
-                            children: [
-                              Text(
-                                DateFormat('E').format(day).substring(0, 2),
-                                style: const TextStyle(
-                                  color: _textMuted,
-                                  fontSize: 9,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                '${day.day}',
-                                style: TextStyle(
-                                  color: selected
-                                      ? _textPrimary
-                                      : _textSecondary,
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                              Text(
-                                '$count',
-                                style: TextStyle(
-                                  color: count > 0 ? widget.accent : _textMuted,
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ],
-                          ),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: () async {
+                  final picked = await showDatePicker(
+                    context: context,
+                    initialDate: _selectedDay,
+                    firstDate: DateTime(2020),
+                    lastDate: DateTime(2035),
+                    builder: (context, child) => Theme(
+                      data: Theme.of(context).copyWith(
+                        colorScheme: ColorScheme.dark(
+                          primary: widget.accent,
+                          surface: _surface,
                         ),
                       ),
-                    );
-                  }).toList(),
+                      child: child!,
+                    ),
+                  );
+                  if (picked != null) {
+                    setState(() => _selectedDay = _dateOnly(picked));
+                  }
+                },
+                icon: Icon(Icons.event_rounded, size: 15, color: widget.accent),
+                label: Text(
+                  'SELECT CUSTOM DATE',
+                  style: TextStyle(
+                    color: widget.accent,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: .7,
+                  ),
+                ),
+                style: OutlinedButton.styleFrom(
+                  side: BorderSide(color: widget.accent.withValues(alpha: .35)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(9),
+                  ),
                 ),
               ),
-              const SizedBox(height: 10),
-              if (_weekView)
-                ...weekDays.map(
-                  (day) => _CalendarDayRow(
-                    day: day,
-                    events: _eventsFor(day),
-                    accent: widget.accent,
-                  ),
-                )
-              else if (selectedEvents.isEmpty)
+              const SizedBox(height: 8),
+              if (selectedEvents.isEmpty)
                 const Padding(
                   padding: EdgeInsets.all(14),
                   child: Text(
@@ -864,6 +923,37 @@ class _OperationsCalendarState extends State<_OperationsCalendar> {
                   (event) =>
                       _CalendarEventTile(event: event, accent: widget.accent),
                 ),
+              const SizedBox(height: 8),
+              _SectionHeader(
+                icon: Icons.meeting_room_outlined,
+                title: 'AVAILABLE HALLS',
+                subtitle: 'Open for the selected date',
+              ),
+              const SizedBox(height: 8),
+              if (availableHalls.isEmpty)
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'All configured halls are committed on this date',
+                    style: TextStyle(color: _amber, fontSize: 10),
+                  ),
+                )
+              else
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: availableHalls
+                        .map(
+                          (hall) => _AvailabilityChip(
+                            label: hall.name,
+                            color: _emerald,
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ),
             ],
           ),
         ),
@@ -872,6 +962,27 @@ class _OperationsCalendarState extends State<_OperationsCalendar> {
   }
 }
 
+class _AvailabilityChip extends StatelessWidget {
+  final String label;
+  final Color color;
+  const _AvailabilityChip({required this.label, required this.color});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+    decoration: BoxDecoration(
+      color: color.withValues(alpha: .10),
+      borderRadius: BorderRadius.circular(8),
+      border: Border.all(color: color.withValues(alpha: .25)),
+    ),
+    child: Text(
+      label,
+      style: TextStyle(color: color, fontSize: 9, fontWeight: FontWeight.w700),
+    ),
+  );
+}
+
+/*
 class _CalendarModeButton extends StatelessWidget {
   final String label;
   final bool selected;
@@ -957,6 +1068,7 @@ class _CalendarDayRow extends StatelessWidget {
   );
 }
 
+*/
 class _CalendarEventTile extends StatelessWidget {
   final FnbEvent event;
   final Color accent;
@@ -996,6 +1108,7 @@ class _CalendarEventTile extends StatelessWidget {
   );
 }
 
+/*
 class _CalendarChip extends StatelessWidget {
   final String label;
   final Color color;
@@ -1018,6 +1131,9 @@ class _CalendarChip extends StatelessWidget {
   );
 }
 
+}
+*/
+/*
 class _EventRow extends StatelessWidget {
   final FnbEvent event;
   const _EventRow({required this.event});
@@ -1112,6 +1228,8 @@ class _EventRow extends StatelessWidget {
   }
 }
 
+}
+*/
 class _HallRow extends StatelessWidget {
   final FnbHall hall;
   const _HallRow({required this.hall});
