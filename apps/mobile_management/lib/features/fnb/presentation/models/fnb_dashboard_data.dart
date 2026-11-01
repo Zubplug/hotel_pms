@@ -12,6 +12,8 @@ class FnbDashboardData {
   final List<FnbPaymentMethod> paymentBreakdown;
   final List<FnbTrendDay> revenueBy7Days;
   final FnbPosOperations posOperations;
+  final FnbEventOverview eventOverview;
+  final List<FnbHall> hallOverview;
 
   FnbDashboardData({
     required this.businessDate,
@@ -22,6 +24,8 @@ class FnbDashboardData {
     required this.paymentBreakdown,
     required this.revenueBy7Days,
     required this.posOperations,
+    required this.eventOverview,
+    required this.hallOverview,
   });
 
   factory FnbDashboardData.fromJson(Map<String, dynamic> json) {
@@ -44,8 +48,132 @@ class FnbDashboardData {
           .map((e) => FnbTrendDay.fromJson(e as Map<String, dynamic>))
           .toList(),
       posOperations: FnbPosOperations.fromJson(json['posOperations'] ?? {}),
+      eventOverview: FnbEventOverview.fromJson(json['eventOverview'] ?? {}),
+      hallOverview: (json['hallOverview'] as List? ?? [])
+          .map((e) => FnbHall.fromJson(e as Map<String, dynamic>))
+          .toList(),
     );
   }
+}
+
+class FnbEventOverview {
+  final int windowDays;
+  final int totalEvents;
+  final int todayEvents;
+  final int confirmedEvents;
+  final int inServiceEvents;
+  final int tentativeEvents;
+  final double pipelineValue;
+  final double collectedValue;
+  final double outstandingValue;
+  final List<FnbEvent> events;
+
+  FnbEventOverview({
+    required this.windowDays,
+    required this.totalEvents,
+    required this.todayEvents,
+    required this.confirmedEvents,
+    required this.inServiceEvents,
+    required this.tentativeEvents,
+    required this.pipelineValue,
+    required this.collectedValue,
+    required this.outstandingValue,
+    required this.events,
+  });
+
+  factory FnbEventOverview.fromJson(Map<String, dynamic> json) =>
+      FnbEventOverview(
+        windowDays: (json['windowDays'] ?? 30) as int,
+        totalEvents: (json['totalEvents'] ?? 0) as int,
+        todayEvents: (json['todayEvents'] ?? 0) as int,
+        confirmedEvents: (json['confirmedEvents'] ?? 0) as int,
+        inServiceEvents: (json['inServiceEvents'] ?? 0) as int,
+        tentativeEvents: (json['tentativeEvents'] ?? 0) as int,
+        pipelineValue: (json['pipelineValue'] ?? 0).toDouble(),
+        collectedValue: (json['collectedValue'] ?? 0).toDouble(),
+        outstandingValue: (json['outstandingValue'] ?? 0).toDouble(),
+        events: (json['events'] as List? ?? [])
+            .map((e) => FnbEvent.fromJson(e as Map<String, dynamic>))
+            .toList(),
+      );
+}
+
+class FnbEvent {
+  final String id;
+  final String name;
+  final String status;
+  final String financialStatus;
+  final DateTime startDate;
+  final DateTime endDate;
+  final int expectedGuests;
+  final int? actualGuests;
+  final List<String> halls;
+  final double totalAmount;
+  final double paidAmount;
+
+  FnbEvent({
+    required this.id,
+    required this.name,
+    required this.status,
+    required this.financialStatus,
+    required this.startDate,
+    required this.endDate,
+    required this.expectedGuests,
+    required this.actualGuests,
+    required this.halls,
+    required this.totalAmount,
+    required this.paidAmount,
+  });
+
+  factory FnbEvent.fromJson(Map<String, dynamic> json) => FnbEvent(
+    id: json['id'] ?? '',
+    name: json['name'] ?? 'Unnamed event',
+    status: json['status'] ?? 'INQUIRY',
+    financialStatus: json['financialStatus'] ?? 'QUOTE',
+    startDate: DateTime.tryParse(json['startDate'] ?? '') ?? DateTime.now(),
+    endDate: DateTime.tryParse(json['endDate'] ?? '') ?? DateTime.now(),
+    expectedGuests: (json['expectedGuests'] ?? 0) as int,
+    actualGuests: json['actualGuests'] as int?,
+    halls: (json['halls'] as List? ?? []).map((h) => h.toString()).toList(),
+    totalAmount: (json['totalAmount'] ?? 0).toDouble(),
+    paidAmount: (json['paidAmount'] ?? 0).toDouble(),
+  );
+}
+
+class FnbHall {
+  final String id;
+  final String name;
+  final String code;
+  final int capacity;
+  final double? rate;
+  final int bookings;
+  final int plannedGuests;
+  final String? nextEvent;
+  final double utilization;
+
+  FnbHall({
+    required this.id,
+    required this.name,
+    required this.code,
+    required this.capacity,
+    required this.rate,
+    required this.bookings,
+    required this.plannedGuests,
+    required this.nextEvent,
+    required this.utilization,
+  });
+
+  factory FnbHall.fromJson(Map<String, dynamic> json) => FnbHall(
+    id: json['id'] ?? '',
+    name: json['name'] ?? '',
+    code: json['code'] ?? '',
+    capacity: (json['capacity'] ?? 0) as int,
+    rate: json['rate']?.toDouble(),
+    bookings: (json['bookings'] ?? 0) as int,
+    plannedGuests: (json['plannedGuests'] ?? 0) as int,
+    nextEvent: json['nextEvent'],
+    utilization: (json['utilization'] ?? 0).toDouble(),
+  );
 }
 
 class FnbSummary {
@@ -57,9 +185,9 @@ class FnbSummary {
   final double avgCheckPerCover;
   final int totalOrders;
   final double avgCheckPerOrder;
-  final double revenueTrend;   // % vs yesterday
-  final double voidRate;       // item-count based (%)
-  final double discountRate;   // % of gross revenue
+  final double revenueTrend; // % vs yesterday
+  final double voidRate; // item-count based (%)
+  final double discountRate; // % of gross revenue
 
   FnbSummary({
     required this.totalFnbRevenue,
@@ -80,17 +208,17 @@ class FnbSummary {
 
   factory FnbSummary.fromJson(Map<String, dynamic> json) {
     return FnbSummary(
-      totalFnbRevenue:   (json['totalFnbRevenue']   ?? 0).toDouble(),
-      foodRevenue:       (json['foodRevenue']        ?? 0).toDouble(),
-      beverageRevenue:   (json['beverageRevenue']    ?? 0).toDouble(),
-      barRevenue:        (json['barRevenue']         ?? 0).toDouble(),
-      totalCovers:       (json['totalCovers']        ?? 0) as int,
-      avgCheckPerCover:  (json['avgCheckPerCover']   ?? 0).toDouble(),
-      totalOrders:       (json['totalOrders']        ?? 0) as int,
-      avgCheckPerOrder:  (json['avgCheckPerOrder']   ?? 0).toDouble(),
-      revenueTrend:      (json['revenueTrend']       ?? 0).toDouble(),
-      voidRate:          (json['voidRate']           ?? 0).toDouble(),
-      discountRate:      (json['discountRate']       ?? 0).toDouble(),
+      totalFnbRevenue: (json['totalFnbRevenue'] ?? 0).toDouble(),
+      foodRevenue: (json['foodRevenue'] ?? 0).toDouble(),
+      beverageRevenue: (json['beverageRevenue'] ?? 0).toDouble(),
+      barRevenue: (json['barRevenue'] ?? 0).toDouble(),
+      totalCovers: (json['totalCovers'] ?? 0) as int,
+      avgCheckPerCover: (json['avgCheckPerCover'] ?? 0).toDouble(),
+      totalOrders: (json['totalOrders'] ?? 0) as int,
+      avgCheckPerOrder: (json['avgCheckPerOrder'] ?? 0).toDouble(),
+      revenueTrend: (json['revenueTrend'] ?? 0).toDouble(),
+      voidRate: (json['voidRate'] ?? 0).toDouble(),
+      discountRate: (json['discountRate'] ?? 0).toDouble(),
     );
   }
 }
@@ -116,13 +244,13 @@ class FnbOutlet {
 
   factory FnbOutlet.fromJson(Map<String, dynamic> json) {
     return FnbOutlet(
-      outletId:   json['outletId']   ?? '',
+      outletId: json['outletId'] ?? '',
       outletName: json['outletName'] ?? '',
       outletType: json['outletType'] ?? '',
-      revenue:    (json['revenue']   ?? 0).toDouble(),
-      covers:     (json['covers']    ?? 0) as int,
-      avgCheck:   (json['avgCheck']  ?? 0).toDouble(),
-      topItem:    json['topItem'] != null
+      revenue: (json['revenue'] ?? 0).toDouble(),
+      covers: (json['covers'] ?? 0) as int,
+      avgCheck: (json['avgCheck'] ?? 0).toDouble(),
+      topItem: json['topItem'] != null
           ? FnbTopItemRef.fromJson(json['topItem'])
           : null,
     );
@@ -138,14 +266,14 @@ class FnbTopItemRef {
   factory FnbTopItemRef.fromJson(Map<String, dynamic> json) {
     return FnbTopItemRef(
       name: json['name'] ?? '',
-      qty:  (json['qty'] ?? 0) as int,
+      qty: (json['qty'] ?? 0) as int,
     );
   }
 }
 
 class FnbTopItem {
   final String productName;
-  final String fnbClass;   // 'FOOD' | 'BEVERAGE' | 'OTHER'
+  final String fnbClass; // 'FOOD' | 'BEVERAGE' | 'OTHER'
   final int qty;
   final double revenue;
 
@@ -159,9 +287,9 @@ class FnbTopItem {
   factory FnbTopItem.fromJson(Map<String, dynamic> json) {
     return FnbTopItem(
       productName: json['productName'] ?? '',
-      fnbClass:    json['fnbClass']    ?? 'FOOD',
-      qty:         (json['qty']        ?? 0) as int,
-      revenue:     (json['revenue']    ?? 0).toDouble(),
+      fnbClass: json['fnbClass'] ?? 'FOOD',
+      qty: (json['qty'] ?? 0) as int,
+      revenue: (json['revenue'] ?? 0).toDouble(),
     );
   }
 }
@@ -181,10 +309,10 @@ class FnbHourlySlot {
 
   factory FnbHourlySlot.fromJson(Map<String, dynamic> json) {
     return FnbHourlySlot(
-      hour:    (json['hour']    ?? 0) as int,
+      hour: (json['hour'] ?? 0) as int,
       revenue: (json['revenue'] ?? 0).toDouble(),
-      orders:  (json['orders']  ?? 0) as int,
-      covers:  (json['covers']  ?? 0) as int,
+      orders: (json['orders'] ?? 0) as int,
+      covers: (json['covers'] ?? 0) as int,
     );
   }
 }
@@ -204,7 +332,7 @@ class FnbPaymentMethod {
     return FnbPaymentMethod(
       method: json['method'] ?? '',
       amount: (json['amount'] ?? 0).toDouble(),
-      pct:    (json['pct']    ?? 0).toDouble(),
+      pct: (json['pct'] ?? 0).toDouble(),
     );
   }
 }
@@ -228,12 +356,12 @@ class FnbTrendDay {
 
   factory FnbTrendDay.fromJson(Map<String, dynamic> json) {
     return FnbTrendDay(
-      date:             json['date']             ?? '',
-      foodRevenue:      (json['foodRevenue']      ?? 0).toDouble(),
-      beverageRevenue:  (json['beverageRevenue']  ?? 0).toDouble(),
-      barRevenue:       (json['barRevenue']       ?? 0).toDouble(),
-      fbRevenue:        (json['fbRevenue']        ?? 0).toDouble(),
-      total:            (json['total']            ?? 0).toDouble(),
+      date: json['date'] ?? '',
+      foodRevenue: (json['foodRevenue'] ?? 0).toDouble(),
+      beverageRevenue: (json['beverageRevenue'] ?? 0).toDouble(),
+      barRevenue: (json['barRevenue'] ?? 0).toDouble(),
+      fbRevenue: (json['fbRevenue'] ?? 0).toDouble(),
+      total: (json['total'] ?? 0).toDouble(),
     );
   }
 }
@@ -256,10 +384,10 @@ class FnbPosOperations {
   factory FnbPosOperations.fromJson(Map<String, dynamic> json) {
     return FnbPosOperations(
       terminalsOnline: (json['terminalsOnline'] ?? 0) as int,
-      terminalsTotal:  (json['terminalsTotal']  ?? 0) as int,
-      activeSessions:  (json['activeSessions']  ?? 0) as int,
-      voids:           FnbVoidsSummary.fromJson(json['voids'] ?? {}),
-      discounts:       FnbDiscountsSummary.fromJson(json['discounts'] ?? {}),
+      terminalsTotal: (json['terminalsTotal'] ?? 0) as int,
+      activeSessions: (json['activeSessions'] ?? 0) as int,
+      voids: FnbVoidsSummary.fromJson(json['voids'] ?? {}),
+      discounts: FnbDiscountsSummary.fromJson(json['discounts'] ?? {}),
     );
   }
 }
@@ -272,7 +400,7 @@ class FnbVoidsSummary {
 
   factory FnbVoidsSummary.fromJson(Map<String, dynamic> json) {
     return FnbVoidsSummary(
-      count:  (json['count']  ?? 0) as int,
+      count: (json['count'] ?? 0) as int,
       amount: (json['amount'] ?? 0).toDouble(),
     );
   }
@@ -286,7 +414,7 @@ class FnbDiscountsSummary {
 
   factory FnbDiscountsSummary.fromJson(Map<String, dynamic> json) {
     return FnbDiscountsSummary(
-      count:  (json['count']  ?? 0) as int,
+      count: (json['count'] ?? 0) as int,
       amount: (json['amount'] ?? 0).toDouble(),
     );
   }

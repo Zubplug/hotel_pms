@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { startOfDay, endOfDay, format, subDays } from 'date-fns';
+import { addDays, startOfDay, endOfDay, format, subDays } from 'date-fns';
 import { successResponse, errorResponse } from '@/lib/api-response';
 import { resolveUser } from '@/lib/resolve-user';
 import { requireOrganizationContext } from '@/lib/organization-access';
@@ -46,6 +46,16 @@ export async function GET(req: NextRequest) {
     const prismaModule = await import('@hotel-pms/db');
     const prisma = prismaModule.default;
 
+    // Management revenue is closed-period revenue only. The current business
+    // date may still contain unposted transactions, so use the latest completed
+    // night audit as the financial reporting date.
+    const lastAudit = await prisma.nightAudit.findFirst({
+      where: { propertyId, status: 'COMPLETED', businessDate: { lte: businessDate } },
+      orderBy: { businessDate: 'desc' },
+      include: { financialSnapshot: true },
+    });
+    const revenueDate = lastAudit?.businessDate ?? businessDate;
+
     // ── F&B Outlets scoped to this property ───────────────────────────────────
     const outlets = await prisma.posOutlet.findMany({
       where: { propertyId, isActive: true },
@@ -55,8 +65,11 @@ export async function GET(req: NextRequest) {
 
     // ── Authoritative Revenue (reuses kpi.ts — no double-counting) ───────────
     // calculateDailyRevenue uses FolioItem as the single source of truth.
-    const todayRevenue = await calculateDailyRevenue(propertyId, businessDate);
-    const totalFnbRevenue = todayRevenue.fbRevenue + todayRevenue.barRevenue;
+    const todayRevenue = await calculateDailyRevenue(propertyId, revenueDate);
+    const auditedFnbRevenue = lastAudit?.financialSnapshot?.fnbRevenue;
+    const totalFnbRevenue = auditedFnbRevenue == null
+      ? todayRevenue.fbRevenue + todayRevenue.barRevenue
+      : Number(auditedFnbRevenue);
 
     // ── Food / Beverage split within fbRevenue ────────────────────────────────
     // FolioItems (POS/RESTAURANT source) → join PosOrderItem → PosProduct.fnbClass
@@ -65,8 +78,8 @@ export async function GET(req: NextRequest) {
       where: {
         folio: { propertyId },
         businessDate: {
-          gte: startOfDay(businessDate),
-          lte: endOfDay(businessDate),
+          gte: startOfDay(revenueDate),
+          lte: endOfDay(revenueDate),
         },
         source: { in: ['POS', 'RESTAURANT'] },
         type: { in: ['CHARGE', 'DISCOUNT'] },
@@ -130,7 +143,7 @@ export async function GET(req: NextRequest) {
 
     // Clamp: totals must reconcile with authoritative fbRevenue
     // (floating-point drift guard)
-    const fbTotal = todayRevenue.fbRevenue;
+    const fbTotal = Math.max(0, totalFnbRevenue - todayRevenue.barRevenue);
     if (Math.abs(foodRevenue + beverageRevenue - fbTotal) > 1) {
       // Normalise proportionally to authoritative total
       const rawTotal = foodRevenue + beverageRevenue;
@@ -148,8 +161,8 @@ export async function GET(req: NextRequest) {
       where: {
         propertyId,
         businessDate: {
-          gte: startOfDay(businessDate),
-          lte: endOfDay(businessDate),
+          gte: startOfDay(revenueDate),
+          lte: endOfDay(revenueDate),
         },
         status: { in: ['CLOSED'] },
       },
@@ -167,8 +180,8 @@ export async function GET(req: NextRequest) {
       where: {
         folio: { propertyId },
         businessDate: {
-          gte: startOfDay(businessDate),
-          lte: endOfDay(businessDate),
+          gte: startOfDay(revenueDate),
+          lte: endOfDay(revenueDate),
         },
         source: { in: ['POS', 'RESTAURANT', 'BAR'] },
         type: { in: ['CHARGE', 'DISCOUNT'] },
@@ -326,8 +339,8 @@ export async function GET(req: NextRequest) {
       where: {
         propertyId,
         businessDate: {
-          gte: startOfDay(businessDate),
-          lte: endOfDay(businessDate),
+          gte: startOfDay(revenueDate),
+          lte: endOfDay(revenueDate),
         },
         status: 'CLOSED',
       },
@@ -349,8 +362,8 @@ export async function GET(req: NextRequest) {
         order: {
           propertyId,
           businessDate: {
-            gte: startOfDay(businessDate),
-            lte: endOfDay(businessDate),
+          gte: startOfDay(revenueDate),
+          lte: endOfDay(revenueDate),
           },
           status: 'CLOSED',
         },
@@ -381,8 +394,8 @@ export async function GET(req: NextRequest) {
         order: {
           propertyId,
           businessDate: {
-            gte: startOfDay(businessDate),
-            lte: endOfDay(businessDate),
+          gte: startOfDay(revenueDate),
+          lte: endOfDay(revenueDate),
           },
         },
       },
@@ -425,10 +438,112 @@ export async function GET(req: NextRequest) {
       where: { propertyId, status: 'OPEN' },
     });
 
+    // ── Events & Halls (management operating view) ──────────────────────────
+    // Keep this deliberately separate from POS revenue. Management needs to
+    // see the forward event pipeline, hall loading and financial exposure even
+    // when no POS transaction has been posted yet.
+    const eventWindowEnd = endOfDay(addDays(businessDate, 30));
+    const eventRows = await prisma.event.findMany({
+      where: {
+        propertyId,
+        status: { not: 'CANCELLED' },
+        endDate: { gte: startOfDay(businessDate) },
+        startDate: { lte: eventWindowEnd },
+      },
+      orderBy: { startDate: 'asc' },
+      take: 50,
+      select: {
+        id: true,
+        name: true,
+        status: true,
+        financialStatus: true,
+        startDate: true,
+        endDate: true,
+        expectedGuests: true,
+        actualGuests: true,
+        bookings: {
+          where: { status: 'ACTIVE' },
+          select: { hall: { select: { id: true, name: true, code: true, capacity: true } } },
+        },
+        invoices: { select: { totalAmount: true, paidAmount: true, status: true } },
+      },
+    });
+
+    const hallRows = await prisma.hall.findMany({
+      where: { propertyId, isActive: true },
+      orderBy: { name: 'asc' },
+      select: { id: true, name: true, code: true, capacity: true, rate: true },
+    });
+
+    const eventStatusCounts = new Map<string, number>();
+    const financialStatusCounts = new Map<string, number>();
+    const hallUsage = new Map<string, { bookings: number; guests: number; nextEvent: string | null }>();
+    let eventPipelineValue = 0;
+    let eventCollectedValue = 0;
+    let eventOutstandingValue = 0;
+
+    for (const event of eventRows) {
+      eventStatusCounts.set(event.status, (eventStatusCounts.get(event.status) ?? 0) + 1);
+      financialStatusCounts.set(event.financialStatus, (financialStatusCounts.get(event.financialStatus) ?? 0) + 1);
+      for (const invoice of event.invoices) {
+        eventPipelineValue += Number(invoice.totalAmount);
+        eventCollectedValue += Number(invoice.paidAmount);
+      }
+      for (const booking of event.bookings) {
+        const current = hallUsage.get(booking.hall.id) ?? { bookings: 0, guests: 0, nextEvent: null };
+        current.bookings += 1;
+        current.guests += event.actualGuests ?? event.expectedGuests;
+        current.nextEvent ??= event.name;
+        hallUsage.set(booking.hall.id, current);
+      }
+    }
+    eventOutstandingValue = Math.max(0, eventPipelineValue - eventCollectedValue);
+
+    const eventOverview = {
+      windowDays: 30,
+      totalEvents: eventRows.length,
+      todayEvents: eventRows.filter((event) => event.startDate <= endOfDay(businessDate) && event.endDate >= startOfDay(businessDate)).length,
+      confirmedEvents: eventStatusCounts.get('CONFIRMED') ?? 0,
+      inServiceEvents: eventStatusCounts.get('IN_SERVICE') ?? 0,
+      tentativeEvents: eventStatusCounts.get('TENTATIVE') ?? 0,
+      pipelineValue: Number(eventPipelineValue.toFixed(2)),
+      collectedValue: Number(eventCollectedValue.toFixed(2)),
+      outstandingValue: Number(eventOutstandingValue.toFixed(2)),
+      financialStatusCounts: Object.fromEntries(financialStatusCounts),
+      events: eventRows.slice(0, 12).map((event) => ({
+        id: event.id,
+        name: event.name,
+        status: event.status,
+        financialStatus: event.financialStatus,
+        startDate: event.startDate.toISOString(),
+        endDate: event.endDate.toISOString(),
+        expectedGuests: event.expectedGuests,
+        actualGuests: event.actualGuests,
+        halls: event.bookings.map((booking) => booking.hall.name),
+        totalAmount: Number(event.invoices.reduce((sum, invoice) => sum + Number(invoice.totalAmount), 0).toFixed(2)),
+        paidAmount: Number(event.invoices.reduce((sum, invoice) => sum + Number(invoice.paidAmount), 0).toFixed(2)),
+      })),
+    };
+
+    const hallOverview = hallRows.map((hall) => {
+      const usage = hallUsage.get(hall.id) ?? { bookings: 0, guests: 0, nextEvent: null };
+      return {
+        id: hall.id,
+        name: hall.name,
+        code: hall.code,
+        capacity: hall.capacity,
+        rate: hall.rate ? Number(hall.rate) : null,
+        bookings: usage.bookings,
+        plannedGuests: usage.guests,
+        nextEvent: usage.nextEvent,
+        utilization: hall.capacity > 0 ? Number(Math.min(100, (usage.guests / hall.capacity) * 100).toFixed(1)) : 0,
+      };
+    });
+
     // ── 7-Day Revenue Trend (business-date-aware, reuses calculateDailyRevenue) ─
     const trend7Days = [];
     for (let i = 6; i >= 0; i--) {
-      const dayDate = subDays(businessDate, i);
+      const dayDate = subDays(revenueDate, i);
       const dayRevenue = await calculateDailyRevenue(propertyId, dayDate);
       trend7Days.push({
         date: format(dayDate, 'yyyy-MM-dd'),
@@ -441,7 +556,7 @@ export async function GET(req: NextRequest) {
     }
 
     // For yesterday trend comparison
-    const yesterdayDate = subDays(businessDate, 1);
+    const yesterdayDate = subDays(revenueDate, 1);
     const yesterdayRevenue = await calculateDailyRevenue(propertyId, yesterdayDate);
     const yesterdayFnb = yesterdayRevenue.fbRevenue + yesterdayRevenue.barRevenue;
     const revenueTrend = yesterdayFnb > 0
@@ -454,8 +569,8 @@ export async function GET(req: NextRequest) {
         order: {
           propertyId,
           businessDate: {
-            gte: startOfDay(businessDate),
-            lte: endOfDay(businessDate),
+          gte: startOfDay(revenueDate),
+          lte: endOfDay(revenueDate),
           },
         },
       },
@@ -473,13 +588,15 @@ export async function GET(req: NextRequest) {
       : 0;
 
     return successResponse({
-      businessDate: format(businessDate, 'yyyy-MM-dd'),
+      businessDate: format(revenueDate, 'yyyy-MM-dd'),
+      currentBusinessDate: format(businessDate, 'yyyy-MM-dd'),
+      revenueStatus: lastAudit ? 'AUDITED' : 'UNAVAILABLE',
 
       summary: {
         totalFnbRevenue,
         foodRevenue: Number(foodRevenue.toFixed(2)),
         beverageRevenue: Number(beverageRevenue.toFixed(2)),
-        barRevenue: todayRevenue.barRevenue,
+        barRevenue: Number(Math.max(0, totalFnbRevenue - foodRevenue - beverageRevenue).toFixed(2)),
         totalCovers,
         avgCheckPerCover: Number(avgCheckPerCover.toFixed(2)),
         totalOrders,
@@ -510,6 +627,8 @@ export async function GET(req: NextRequest) {
           amount: totalDiscountAmount,
         },
       },
+      eventOverview,
+      hallOverview,
     }, 200);
 
   } catch (err: any) {

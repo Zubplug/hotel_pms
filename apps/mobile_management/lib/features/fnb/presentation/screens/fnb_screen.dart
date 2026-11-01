@@ -6,18 +6,21 @@ import '../models/fnb_dashboard_data.dart';
 import '../widgets/fnb_hero_card.dart';
 import '../widgets/fnb_outlet_cards.dart';
 import '../widgets/fnb_top_items.dart';
-import '../widgets/fnb_hourly_chart.dart';
-import '../widgets/fnb_revenue_trend.dart';
-import '../widgets/fnb_payment_breakdown.dart';
 import '../widgets/fnb_operations_strip.dart';
 
 // ─── Design Tokens ────────────────────────────────────────────────────────────
-const _bgDeep  = Color(0xFF070D1A);
+const _bgDeep = Color(0xFF070D1A);
 const _surface = Color(0xFF111827);
-const _border  = Color(0xFF1E3048);
+const _border = Color(0xFF1E3048);
 const _emerald = Color(0xFF10B981);
-const _textPrimary   = Color(0xFFF8FAFC);
-const _textMuted     = Color(0xFF64748B);
+const _sapphire = Color(0xFF3B82F6);
+const _violet = Color(0xFF8B5CF6);
+const _gold = Color(0xFFD4AF37);
+const _rose = Color(0xFFF43F5E);
+const _amber = Color(0xFFF59E0B);
+const _textPrimary = Color(0xFFF8FAFC);
+const _textSecondary = Color(0xFFCBD5E1);
+const _textMuted = Color(0xFF64748B);
 
 class FnbScreen extends ConsumerWidget {
   const FnbScreen({super.key});
@@ -30,8 +33,14 @@ class FnbScreen extends ConsumerWidget {
       backgroundColor: _bgDeep,
       body: state.when(
         loading: () => const _LoadingView(),
-        error: (err, _) => _ErrorView(error: err, onRetry: () => ref.invalidate(fnbDashboardProvider)),
-        data: (data) => _FnbBody(data: data, onRefresh: () async => ref.invalidate(fnbDashboardProvider)),
+        error: (err, _) => _ErrorView(
+          error: err,
+          onRetry: () => ref.invalidate(fnbDashboardProvider),
+        ),
+        data: (data) => _FnbBody(
+          data: data,
+          onRefresh: () async => ref.invalidate(fnbDashboardProvider),
+        ),
       ),
     );
   }
@@ -66,19 +75,26 @@ class _FnbBody extends StatelessWidget {
             flexibleSpace: Container(
               decoration: const BoxDecoration(
                 color: _bgDeep,
-                border: Border(bottom: BorderSide(color: Color(0xFF1E3048), width: 0.5)),
+                border: Border(
+                  bottom: BorderSide(color: Color(0xFF1E3048), width: 0.5),
+                ),
               ),
             ),
             title: Row(
               children: [
                 Container(
-                  width: 32, height: 32,
+                  width: 32,
+                  height: 32,
                   decoration: BoxDecoration(
                     color: _emerald.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(color: _emerald.withValues(alpha: 0.25)),
                   ),
-                  child: const Icon(Icons.restaurant_rounded, color: _emerald, size: 16),
+                  child: const Icon(
+                    Icons.dashboard_customize_rounded,
+                    color: _emerald,
+                    size: 16,
+                  ),
                 ),
                 const SizedBox(width: 10),
                 Column(
@@ -86,7 +102,7 @@ class _FnbBody extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     const Text(
-                      'F&B',
+                      'Hospitality Ops',
                       style: TextStyle(
                         color: _textPrimary,
                         fontSize: 16,
@@ -95,7 +111,7 @@ class _FnbBody extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      'As of $timeStr',
+                      'Audited control · $timeStr',
                       style: const TextStyle(color: _textMuted, fontSize: 10),
                     ),
                   ],
@@ -105,7 +121,10 @@ class _FnbBody extends StatelessWidget {
             actions: [
               Container(
                 margin: const EdgeInsets.only(right: 16),
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 5,
+                ),
                 decoration: BoxDecoration(
                   color: _surface,
                   borderRadius: BorderRadius.circular(8),
@@ -115,11 +134,23 @@ class _FnbBody extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Container(
-                      width: 6, height: 6,
-                      decoration: const BoxDecoration(color: _emerald, shape: BoxShape.circle),
+                      width: 6,
+                      height: 6,
+                      decoration: const BoxDecoration(
+                        color: _emerald,
+                        shape: BoxShape.circle,
+                      ),
                     ),
                     const SizedBox(width: 5),
-                    const Text('LIVE', style: TextStyle(color: _emerald, fontSize: 9, fontWeight: FontWeight.w800, letterSpacing: 1)),
+                    const Text(
+                      'LIVE',
+                      style: TextStyle(
+                        color: _emerald,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -131,94 +162,7 @@ class _FnbBody extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(16, 20, 16, 40),
             sliver: SliverList(
               delegate: SliverChildListDelegate([
-
-                // 1. HERO REVENUE CARD
-                FnbHeroCard(
-                  summary: data.summary,
-                  businessDate: data.businessDate,
-                ),
-
-                // 2. OUTLET PERFORMANCE
-                if (data.outletBreakdown.isNotEmpty) ...[
-                  const SizedBox(height: 28),
-                  _SectionHeader(
-                    icon: Icons.storefront_rounded,
-                    title: 'OUTLET PERFORMANCE',
-                    subtitle: '${data.outletBreakdown.length} active outlet${data.outletBreakdown.length == 1 ? '' : 's'}',
-                  ),
-                  const SizedBox(height: 12),
-                  FnbOutletCards(outlets: data.outletBreakdown),
-                ],
-
-                // 3. TOP SELLING ITEMS
-                if (data.topSellingItems.isNotEmpty) ...[
-                  const SizedBox(height: 28),
-                  _SectionHeader(
-                    icon: Icons.emoji_events_rounded,
-                    title: 'TOP SELLING ITEMS',
-                    subtitle: 'By revenue today',
-                  ),
-                  const SizedBox(height: 12),
-                  FnbTopItems(items: data.topSellingItems),
-                ],
-
-                // 4. HOURLY REVENUE
-                if (data.hourlyRevenue.isNotEmpty) ...[
-                  const SizedBox(height: 28),
-                  _SectionHeader(
-                    icon: Icons.schedule_rounded,
-                    title: 'REVENUE BY HOUR',
-                    subtitle: 'Order-time based · operational',
-                  ),
-                  const SizedBox(height: 12),
-                  FnbHourlyChart(hourlyData: data.hourlyRevenue),
-                ],
-
-                // 5. 7-DAY REVENUE TREND
-                if (data.revenueBy7Days.isNotEmpty) ...[
-                  const SizedBox(height: 28),
-                  _SectionHeader(
-                    icon: Icons.bar_chart_rounded,
-                    title: '7-DAY TREND',
-                    subtitle: 'Food · Beverage · Bar',
-                  ),
-                  const SizedBox(height: 12),
-                  FnbRevenueTrend(days: data.revenueBy7Days),
-                ],
-
-                // 6. PAYMENT BREAKDOWN
-                if (data.paymentBreakdown.isNotEmpty) ...[
-                  const SizedBox(height: 28),
-                  _SectionHeader(
-                    icon: Icons.credit_card_rounded,
-                    title: 'PAYMENT BREAKDOWN',
-                    subtitle: 'Settled orders today',
-                  ),
-                  const SizedBox(height: 12),
-                  FnbPaymentBreakdown(payments: data.paymentBreakdown),
-                ],
-
-                // 7. POS OPERATIONS
-                const SizedBox(height: 28),
-                _SectionHeader(
-                  icon: Icons.point_of_sale_rounded,
-                  title: 'POS OPERATIONS',
-                  subtitle: 'Terminals · Sessions · Exceptions',
-                ),
-                const SizedBox(height: 12),
-                FnbOperationsStrip(
-                  ops: data.posOperations,
-                  summary: data.summary,
-                ),
-
-                const SizedBox(height: 24),
-                // Disclaimer
-                Text(
-                  '* Revenue figures are authoritative from the LodgeCore accounting engine.\n'
-                  '  Hourly chart uses order-creation time (operational view).\n'
-                  '  Void rate is item-count based. All figures reflect business date ${data.businessDate}.',
-                  style: const TextStyle(color: _textMuted, fontSize: 9, height: 1.6),
-                ),
+                _ManagementWorkspace(data: data),
               ]),
             ),
           ),
@@ -226,6 +170,742 @@ class _FnbBody extends StatelessWidget {
       ),
     );
   }
+}
+
+class _ManagementWorkspace extends StatefulWidget {
+  final FnbDashboardData data;
+
+  const _ManagementWorkspace({required this.data});
+
+  @override
+  State<_ManagementWorkspace> createState() => _ManagementWorkspaceState();
+}
+
+class _ManagementWorkspaceState extends State<_ManagementWorkspace> {
+  int _view = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    final data = widget.data;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _CommandHero(data: data),
+        const SizedBox(height: 18),
+        _ViewSwitcher(
+          selected: _view,
+          onChanged: (value) => setState(() => _view = value),
+        ),
+        const SizedBox(height: 20),
+        if (_view == 0) _FnbManagementView(data: data),
+        if (_view == 1) _EventsManagementView(data: data),
+        if (_view == 2) _HallsManagementView(data: data),
+        const SizedBox(height: 24),
+        Text(
+          'Management view · business date ${data.businessDate}. Revenue is sourced from the accounting engine; event and hall figures reflect the next 30-day operating window.',
+          style: const TextStyle(color: _textMuted, fontSize: 9, height: 1.6),
+        ),
+      ],
+    );
+  }
+}
+
+class _CommandHero extends StatelessWidget {
+  final FnbDashboardData data;
+  const _CommandHero({required this.data});
+
+  @override
+  Widget build(BuildContext context) {
+    final event = data.eventOverview;
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF142A3D), Color(0xFF10211F)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: _sapphire.withValues(alpha: 0.28)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(9),
+                decoration: BoxDecoration(
+                  color: _sapphire.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.dashboard_customize_rounded,
+                  color: _sapphire,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'OPERATIONS CONTROL CENTRE',
+                      style: TextStyle(
+                        color: _textPrimary,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1.1,
+                      ),
+                    ),
+                    SizedBox(height: 3),
+                    Text(
+                      'F&B, events and venue readiness',
+                      style: TextStyle(color: _textMuted, fontSize: 11),
+                    ),
+                  ],
+                ),
+              ),
+              _StatusDot(
+                label: event.todayEvents > 0 ? 'ACTIVE DAY' : 'NO EVENTS',
+                color: event.todayEvents > 0 ? _amber : _emerald,
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              Expanded(
+                child: _HeroMetric(
+                  label: 'F&B TODAY',
+                  value: _money(data.summary.totalFnbRevenue),
+                  color: _emerald,
+                ),
+              ),
+              Expanded(
+                child: _HeroMetric(
+                  label: 'EVENTS / 30D',
+                  value: '${event.totalEvents}',
+                  color: _gold,
+                ),
+              ),
+              Expanded(
+                child: _HeroMetric(
+                  label: 'OPEN HALLS',
+                  value:
+                      '${data.hallOverview.where((h) => h.bookings == 0).length}',
+                  color: _sapphire,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ViewSwitcher extends StatelessWidget {
+  final int selected;
+  final ValueChanged<int> onChanged;
+  const _ViewSwitcher({required this.selected, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    const labels = ['F&B PERFORMANCE', 'EVENT PIPELINE', 'HALLS & VENUES'];
+    const icons = [
+      Icons.restaurant_rounded,
+      Icons.event_available_rounded,
+      Icons.meeting_room_rounded,
+    ];
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: _surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _border),
+      ),
+      child: Row(
+        children: List.generate(labels.length, (index) {
+          final active = selected == index;
+          return Expanded(
+            child: GestureDetector(
+              onTap: () => onChanged(index),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                padding: const EdgeInsets.symmetric(
+                  vertical: 11,
+                  horizontal: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: active
+                      ? _sapphire.withValues(alpha: 0.18)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Column(
+                  children: [
+                    Icon(
+                      icons[index],
+                      color: active ? _sapphire : _textMuted,
+                      size: 17,
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      labels[index],
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: active ? _textPrimary : _textMuted,
+                        fontSize: 8,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.4,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }),
+      ),
+    );
+  }
+}
+
+class _FnbManagementView extends StatelessWidget {
+  final FnbDashboardData data;
+  const _FnbManagementView({required this.data});
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      FnbHeroCard(summary: data.summary, businessDate: data.businessDate),
+      if (data.outletBreakdown.isNotEmpty) ...[
+        const SizedBox(height: 24),
+        _SectionHeader(
+          icon: Icons.storefront_rounded,
+          title: 'OUTLET COMMAND',
+          subtitle: 'Revenue, covers and average check by outlet',
+        ),
+        const SizedBox(height: 12),
+        FnbOutletCards(outlets: data.outletBreakdown),
+      ],
+      const SizedBox(height: 24),
+      _SectionHeader(
+        icon: Icons.point_of_sale_rounded,
+        title: 'SERVICE READINESS',
+        subtitle: 'Terminals, sessions and exceptions requiring attention',
+      ),
+      const SizedBox(height: 12),
+      FnbOperationsStrip(ops: data.posOperations, summary: data.summary),
+      if (data.topSellingItems.isNotEmpty) ...[
+        const SizedBox(height: 24),
+        _SectionHeader(
+          icon: Icons.emoji_events_rounded,
+          title: 'DEMAND SIGNALS',
+          subtitle: 'Top products and current trading pattern',
+        ),
+        const SizedBox(height: 12),
+        FnbTopItems(items: data.topSellingItems),
+      ],
+    ],
+  );
+}
+
+class _EventsManagementView extends StatelessWidget {
+  final FnbDashboardData data;
+  const _EventsManagementView({required this.data});
+
+  @override
+  Widget build(BuildContext context) {
+    final e = data.eventOverview;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _MetricGrid(
+          items: [
+            _MetricTile(
+              'TODAY',
+              '${e.todayEvents}',
+              'events scheduled',
+              Icons.today_rounded,
+              _amber,
+            ),
+            _MetricTile(
+              'CONFIRMED',
+              '${e.confirmedEvents}',
+              'in pipeline',
+              Icons.verified_rounded,
+              _emerald,
+            ),
+            _MetricTile(
+              'IN SERVICE',
+              '${e.inServiceEvents}',
+              'currently running',
+              Icons.play_circle_rounded,
+              _sapphire,
+            ),
+            _MetricTile(
+              'TENTATIVE',
+              '${e.tentativeEvents}',
+              'awaiting confirmation',
+              Icons.pending_actions_rounded,
+              _rose,
+            ),
+          ],
+        ),
+        const SizedBox(height: 24),
+        _SectionHeader(
+          icon: Icons.timeline_rounded,
+          title: 'EVENT PIPELINE',
+          subtitle:
+              '${e.totalEvents} active events in the next ${e.windowDays} days',
+        ),
+        const SizedBox(height: 12),
+        if (e.events.isEmpty)
+          const _EmptyPanel(
+            icon: Icons.event_busy_rounded,
+            text: 'No upcoming events in the operating window',
+          )
+        else
+          ...e.events.map((event) => _EventRow(event: event)),
+      ],
+    );
+  }
+}
+
+class _HallsManagementView extends StatelessWidget {
+  final FnbDashboardData data;
+  const _HallsManagementView({required this.data});
+
+  @override
+  Widget build(BuildContext context) {
+    final halls = data.hallOverview;
+    final booked = halls.where((h) => h.bookings > 0).length;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _MetricGrid(
+          items: [
+            _MetricTile(
+              'VENUES',
+              '${halls.length}',
+              'active halls',
+              Icons.meeting_room_rounded,
+              _sapphire,
+            ),
+            _MetricTile(
+              'BOOKED',
+              '$booked',
+              'with upcoming use',
+              Icons.event_seat_rounded,
+              _amber,
+            ),
+            _MetricTile(
+              'OPEN',
+              '${halls.length - booked}',
+              'available in window',
+              Icons.lock_open_rounded,
+              _emerald,
+            ),
+            _MetricTile(
+              'CAPACITY',
+              '${halls.fold<int>(0, (sum, hall) => sum + hall.capacity)}',
+              'total seats',
+              Icons.groups_rounded,
+              _violet,
+            ),
+          ],
+        ),
+        const SizedBox(height: 24),
+        _SectionHeader(
+          icon: Icons.grid_view_rounded,
+          title: 'VENUE BOARD',
+          subtitle: 'Capacity, utilization and next commitment',
+        ),
+        const SizedBox(height: 12),
+        if (halls.isEmpty)
+          const _EmptyPanel(
+            icon: Icons.meeting_room_outlined,
+            text: 'No active halls configured for this property',
+          )
+        else
+          ...halls.map((hall) => _HallRow(hall: hall)),
+      ],
+    );
+  }
+}
+
+class _MetricGrid extends StatelessWidget {
+  final List<_MetricTile> items;
+  const _MetricGrid({required this.items});
+
+  @override
+  Widget build(BuildContext context) => GridView.count(
+    shrinkWrap: true,
+    physics: const NeverScrollableScrollPhysics(),
+    crossAxisCount: 2,
+    childAspectRatio: 1.75,
+    mainAxisSpacing: 10,
+    crossAxisSpacing: 10,
+    children: items
+        .map(
+          (item) => Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: _surface,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: item.color.withValues(alpha: 0.22)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(item.icon, color: item.color, size: 18),
+                const Spacer(),
+                Text(
+                  item.value,
+                  style: const TextStyle(
+                    color: _textPrimary,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                Text(
+                  item.label,
+                  style: TextStyle(
+                    color: item.color,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.8,
+                  ),
+                ),
+                Text(
+                  item.subtitle,
+                  style: const TextStyle(color: _textMuted, fontSize: 9),
+                ),
+              ],
+            ),
+          ),
+        )
+        .toList(),
+  );
+}
+
+class _MetricTile {
+  final String label;
+  final String value;
+  final String subtitle;
+  final IconData icon;
+  final Color color;
+  const _MetricTile(
+    this.label,
+    this.value,
+    this.subtitle,
+    this.icon,
+    this.color,
+  );
+}
+
+class _EventRow extends StatelessWidget {
+  final FnbEvent event;
+  const _EventRow({required this.event});
+
+  @override
+  Widget build(BuildContext context) {
+    final statusColor = event.status == 'IN_SERVICE'
+        ? _sapphire
+        : event.status == 'CONFIRMED'
+        ? _emerald
+        : _amber;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: _surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  event.name,
+                  style: const TextStyle(
+                    color: _textPrimary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              _StatusDot(
+                label: event.status.replaceAll('_', ' '),
+                color: statusColor,
+              ),
+            ],
+          ),
+          const SizedBox(height: 9),
+          Row(
+            children: [
+              Icon(Icons.calendar_today_rounded, color: _textMuted, size: 12),
+              const SizedBox(width: 5),
+              Text(
+                DateFormat('dd MMM · HH:mm').format(event.startDate),
+                style: const TextStyle(color: _textSecondary, fontSize: 10),
+              ),
+              const SizedBox(width: 14),
+              Icon(Icons.groups_rounded, color: _textMuted, size: 13),
+              const SizedBox(width: 4),
+              Text(
+                '${event.actualGuests ?? event.expectedGuests} guests',
+                style: const TextStyle(color: _textSecondary, fontSize: 10),
+              ),
+            ],
+          ),
+          if (event.halls.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              event.halls.join(' · '),
+              style: const TextStyle(
+                color: _sapphire,
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              const Icon(
+                Icons.account_balance_rounded,
+                color: _textMuted,
+                size: 12,
+              ),
+              const SizedBox(width: 5),
+              Text(
+                'Commercial status: ${event.financialStatus.replaceAll('_', ' ')}',
+                style: const TextStyle(color: _textMuted, fontSize: 9),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HallRow extends StatelessWidget {
+  final FnbHall hall;
+  const _HallRow({required this.hall});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = hall.bookings == 0
+        ? _emerald
+        : hall.utilization >= 85
+        ? _rose
+        : _amber;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: _surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _border),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(11),
+                ),
+                child: Icon(Icons.meeting_room_rounded, color: color, size: 18),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      hall.name,
+                      style: const TextStyle(
+                        color: _textPrimary,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    Text(
+                      '${hall.code} · capacity ${hall.capacity}',
+                      style: const TextStyle(color: _textMuted, fontSize: 10),
+                    ),
+                  ],
+                ),
+              ),
+              Text(
+                hall.bookings == 0
+                    ? 'OPEN'
+                    : '${hall.bookings} BOOKING${hall.bookings == 1 ? '' : 'S'}',
+                style: TextStyle(
+                  color: color,
+                  fontSize: 9,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: LinearProgressIndicator(
+                    value: hall.utilization / 100,
+                    minHeight: 6,
+                    backgroundColor: _bgDeep,
+                    valueColor: AlwaysStoppedAnimation(color),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                '${hall.utilization.toStringAsFixed(0)}%',
+                style: TextStyle(
+                  color: color,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+          if (hall.nextEvent != null) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                const Icon(
+                  Icons.arrow_forward_rounded,
+                  color: _textMuted,
+                  size: 12,
+                ),
+                const SizedBox(width: 5),
+                Expanded(
+                  child: Text(
+                    hall.nextEvent!,
+                    style: const TextStyle(color: _textSecondary, fontSize: 10),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _StatusDot extends StatelessWidget {
+  final String label;
+  final Color color;
+  const _StatusDot({required this.label, required this.color});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+    decoration: BoxDecoration(
+      color: color.withValues(alpha: 0.12),
+      borderRadius: BorderRadius.circular(20),
+      border: Border.all(color: color.withValues(alpha: 0.25)),
+    ),
+    child: Text(
+      label,
+      style: TextStyle(
+        color: color,
+        fontSize: 8,
+        fontWeight: FontWeight.w800,
+        letterSpacing: 0.5,
+      ),
+    ),
+  );
+}
+
+class _HeroMetric extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color color;
+  const _HeroMetric({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        label,
+        style: const TextStyle(
+          color: _textMuted,
+          fontSize: 8,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.6,
+        ),
+      ),
+      const SizedBox(height: 5),
+      Text(
+        value,
+        style: TextStyle(
+          color: color,
+          fontSize: 15,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    ],
+  );
+}
+
+class _EmptyPanel extends StatelessWidget {
+  final IconData icon;
+  final String text;
+  const _EmptyPanel({required this.icon, required this.text});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: double.infinity,
+    padding: const EdgeInsets.all(24),
+    decoration: BoxDecoration(
+      color: _surface,
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(color: _border),
+    ),
+    child: Column(
+      children: [
+        Icon(icon, color: _textMuted, size: 28),
+        const SizedBox(height: 10),
+        Text(
+          text,
+          textAlign: TextAlign.center,
+          style: const TextStyle(color: _textMuted, fontSize: 12),
+        ),
+      ],
+    ),
+  );
+}
+
+String _money(double value) {
+  if (value >= 1000000) return '₦${(value / 1000000).toStringAsFixed(1)}M';
+  if (value >= 1000) return '₦${(value / 1000).toStringAsFixed(1)}K';
+  return '₦${value.toStringAsFixed(0)}';
 }
 
 // ─── Section Header ───────────────────────────────────────────────────────────
@@ -284,21 +964,30 @@ class _LoadingView extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 56, height: 56,
+              width: 56,
+              height: 56,
               decoration: BoxDecoration(
                 color: _emerald.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
                 border: Border.all(color: _emerald.withValues(alpha: 0.2)),
               ),
-              child: const Icon(Icons.restaurant_rounded, color: _emerald, size: 24),
+              child: const Icon(
+                Icons.dashboard_customize_rounded,
+                color: _emerald,
+                size: 24,
+              ),
             ),
             const SizedBox(height: 20),
             const SizedBox(
-              width: 24, height: 24,
+              width: 24,
+              height: 24,
               child: CircularProgressIndicator(color: _emerald, strokeWidth: 2),
             ),
             const SizedBox(height: 16),
-            const Text('Loading F&B Analytics…', style: TextStyle(color: _textMuted, fontSize: 13)),
+            const Text(
+              'Loading F&B Analytics…',
+              style: TextStyle(color: _textMuted, fontSize: 13),
+            ),
           ],
         ),
       ),
@@ -322,11 +1011,19 @@ class _ErrorView extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.restaurant_outlined, color: _textMuted, size: 48),
+              const Icon(
+                Icons.restaurant_outlined,
+                color: _textMuted,
+                size: 48,
+              ),
               const SizedBox(height: 16),
               const Text(
                 'Could not load F&B data',
-                style: TextStyle(color: _textPrimary, fontSize: 16, fontWeight: FontWeight.w600),
+                style: TextStyle(
+                  color: _textPrimary,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 8),
@@ -341,7 +1038,10 @@ class _ErrorView extends StatelessWidget {
               GestureDetector(
                 onTap: onRetry,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 12,
+                  ),
                   decoration: BoxDecoration(
                     color: _emerald.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(10),
@@ -349,7 +1049,11 @@ class _ErrorView extends StatelessWidget {
                   ),
                   child: const Text(
                     'Try Again',
-                    style: TextStyle(color: _emerald, fontWeight: FontWeight.w700, fontSize: 14),
+                    style: TextStyle(
+                      color: _emerald,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
+                    ),
                   ),
                 ),
               ),
