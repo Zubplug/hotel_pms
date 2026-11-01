@@ -4,6 +4,36 @@ import { PrismaAdapter } from '@auth/prisma-adapter';
 import prisma from '@hotel-pms/db';
 import bcrypt from 'bcryptjs';
 
+// Keep web email/password authentication independent from mobile-only fields.
+// An older production database can authenticate web users without selecting
+// mobile PIN or password-recovery columns that may still be awaiting migration.
+const webAuthUserSelect = {
+  id: true,
+  staffId: true,
+  email: true,
+  passwordHash: true,
+  firstName: true,
+  lastName: true,
+  isSuperAdmin: true,
+  isLodgeCoreAdmin: true,
+  sessionVersion: true,
+  membership: { select: { organizationId: true, status: true } },
+  roles: {
+    select: {
+      propertyId: true,
+      role: {
+        select: {
+          name: true,
+          organizationId: true,
+          permissions: {
+            select: { permission: { select: { name: true } } },
+          },
+        },
+      },
+    },
+  },
+} as const;
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(prisma),
   session: { strategy: 'jwt' },
@@ -66,14 +96,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           // provisioned. Fall back to the staff email so those accounts can be
           // linked during login instead of failing with a generic credential error.
           user = matches[0].userId
-            ? await prisma.user.findUnique({ where: { id: matches[0].userId }, include: { membership: true, roles: { include: { role: { include: { permissions: { include: { permission: true } } } } } } } })
-            : await prisma.user.findFirst({ where: { email: { equals: matches[0].email.trim(), mode: 'insensitive' } }, include: { membership: true, roles: { include: { role: { include: { permissions: { include: { permission: true } } } } } } } });
+            ? await prisma.user.findUnique({ where: { id: matches[0].userId }, select: webAuthUserSelect })
+            : await prisma.user.findFirst({ where: { email: { equals: matches[0].email.trim(), mode: 'insensitive' } }, select: webAuthUserSelect });
         } else {
           if (!credentials.email) return null;
           const email = String(credentials.email).trim().toLowerCase();
           user = await prisma.user.findUnique({
             where: { email },
-            include: { roles: { include: { role: { include: { permissions: { include: { permission: true } } } } } } },
+            select: webAuthUserSelect,
           });
         }
 
