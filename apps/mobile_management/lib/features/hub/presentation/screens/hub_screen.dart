@@ -6,6 +6,7 @@ import '../../data/hub_model.dart';
 import '../../providers/hub_provider.dart';
 import '../../../approvals/presentation/screens/approvals_screen.dart';
 import '../../../finance/presentation/screens/finance_screen.dart';
+import '../../../fnb/presentation/screens/fnb_screen.dart';
 import '../../../rooms/presentation/screens/rooms_screen.dart';
 import '../widgets/property_filter_dropdown.dart';
 import 'global_search_screen.dart';
@@ -159,7 +160,7 @@ class _HubBodyState extends State<_HubBody> {
             caption: 'Open an operational area',
           ),
           const SizedBox(height: 10),
-          _buildWorkspaces(data.modules),
+          _buildWorkspaces(context, data.modules, data.systemStatus),
           const SizedBox(height: 22),
           _SectionHeading(
             label: 'PROPERTY CONFIDENCE',
@@ -495,7 +496,11 @@ class _HubBodyState extends State<_HubBody> {
     );
   }
 
-  Widget _buildWorkspaces(List<HubModule> modules) {
+  Widget _buildWorkspaces(
+    BuildContext context,
+    List<HubModule> modules,
+    SystemStatus status,
+  ) {
     if (modules.isEmpty) {
       return const _EmptyPanel(
         icon: Icons.widgets_outlined,
@@ -515,61 +520,161 @@ class _HubBodyState extends State<_HubBody> {
       itemBuilder: (_, index) {
         final module = modules[index];
         final color = _workspaceColor(index);
-        return Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: _panel,
+        return Material(
+          color: _panel,
+          borderRadius: BorderRadius.circular(18),
+          child: InkWell(
+            onTap: () => _openWorkspace(context, module, status),
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: _line),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
+            child: Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: _line),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    width: 34,
-                    height: 34,
-                    decoration: BoxDecoration(
-                      color: color.withValues(alpha: .12),
-                      borderRadius: BorderRadius.circular(11),
-                    ),
-                    child: Icon(_iconFor(module.icon), color: color, size: 18),
+                  Row(
+                    children: [
+                      Container(
+                        width: 34,
+                        height: 34,
+                        decoration: BoxDecoration(
+                          color: color.withValues(alpha: .12),
+                          borderRadius: BorderRadius.circular(11),
+                        ),
+                        child: Icon(
+                          _iconFor(module.icon),
+                          color: color,
+                          size: 18,
+                        ),
+                      ),
+                      const Spacer(),
+                      Icon(
+                        module.enabled
+                            ? Icons.arrow_forward_rounded
+                            : Icons.lock_outline_rounded,
+                        color: module.enabled ? _muted : _faint,
+                        size: 16,
+                      ),
+                    ],
                   ),
                   const Spacer(),
-                  Icon(
-                    module.enabled
-                        ? Icons.arrow_forward_rounded
-                        : Icons.lock_outline_rounded,
-                    color: module.enabled ? _muted : _faint,
-                    size: 16,
+                  Text(
+                    module.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: _white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      height: 1.15,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    module.enabled ? 'Workspace' : 'Restricted',
+                    style: TextStyle(
+                      color: module.enabled ? _muted : _faint,
+                      fontSize: 11,
+                    ),
                   ),
                 ],
               ),
-              const Spacer(),
-              Text(
-                module.title,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: _white,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  height: 1.15,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                module.enabled ? 'Workspace' : 'Restricted',
-                style: TextStyle(
-                  color: module.enabled ? _muted : _faint,
-                  fontSize: 11,
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _openWorkspace(
+    BuildContext context,
+    HubModule module,
+    SystemStatus status,
+  ) {
+    if (!module.enabled) {
+      _showWorkspaceMessage(
+        context,
+        module.title,
+        'This workspace is restricted for your role.',
+      );
+      return;
+    }
+
+    final Widget? destination = switch (module.id) {
+      'finance' || 'reports' => const FinanceScreen(),
+      'pos' => const FnbScreen(),
+      'housekeeping' => const RoomsScreen(),
+      'reservations' || 'guests' => const GlobalSearchScreen(),
+      _ => null,
+    };
+
+    if (destination != null) {
+      Navigator.of(
+        context,
+      ).push(MaterialPageRoute(builder: (_) => destination));
+      return;
+    }
+
+    if (module.id == 'sync') {
+      _showTerminalStatus(context, status);
+      return;
+    }
+
+    _showWorkspaceMessage(
+      context,
+      module.title,
+      'This workspace is available in the full PMS console.',
+    );
+  }
+
+  void _showWorkspaceMessage(
+    BuildContext context,
+    String title,
+    String message,
+  ) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: _panel,
+      showDragHandle: true,
+      builder: (_) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(Icons.info_outline_rounded, color: _gold),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        color: _white,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      message,
+                      style: const TextStyle(
+                        color: _muted,
+                        fontSize: 12,
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 

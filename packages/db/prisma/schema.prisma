@@ -2482,6 +2482,7 @@ model User {
   staffId          String?   @db.Uuid
   email            String    @unique
   passwordHash     String
+  passwordSetAt    DateTime? @db.Timestamptz
   mobilePinHash    String?
   mobilePinFailedAttempts Int @default(0)
   mobilePinLockedUntil DateTime? @db.Timestamptz
@@ -2942,6 +2943,8 @@ model PasswordResetToken {
   userId    String    @db.Uuid
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   tokenHash String    @unique
+  purpose   String    @default("PASSWORD")
+  attempts  Int       @default(0)
   expiresAt DateTime  @db.Timestamptz
   usedAt    DateTime? @db.Timestamptz
   createdAt DateTime  @default(now()) @db.Timestamptz
