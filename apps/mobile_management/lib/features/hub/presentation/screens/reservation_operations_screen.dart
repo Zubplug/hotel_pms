@@ -106,7 +106,7 @@ class _ReservationOperationsScreenState
             _items(data['noShows']),
             _items(data['reserved']),
           ];
-                const labels = ['Checked in', 'No-shows', 'Reserved · all dates'];
+          const labels = ['Checked in', 'No-shows', 'Reserved · all dates'];
 
           return RefreshIndicator(
             color: _gold,
@@ -377,6 +377,11 @@ class _ReservationCard extends StatelessWidget {
     final roomLabel = rooms.isEmpty
         ? 'Room unassigned'
         : rooms.map((room) => room['number']).join(', ');
+    final benefit = _benefitForRooms(rooms);
+    final balanceSummary = Map<String, dynamic>.from(
+      item['balanceSummary'] ?? const {},
+    );
+    final outstanding = _amount(balanceSummary['outstanding']);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -470,6 +475,20 @@ class _ReservationCard extends StatelessWidget {
                                   fontSize: 11,
                                 ),
                               ),
+                              if (benefit != null) ...[
+                                const SizedBox(height: 9),
+                                _BenefitBadge(benefit: benefit),
+                              ],
+                              if (outstanding > 0.01) ...[
+                                const SizedBox(height: 7),
+                                _DebtBadge(
+                                  amount: outstanding,
+                                  currency:
+                                      balanceSummary['currency']?.toString() ??
+                                      item['currency']?.toString() ??
+                                      'NGN',
+                                ),
+                              ],
                             ],
                           ),
                         ),
@@ -660,7 +679,8 @@ class _ReservationDetailScreenState extends State<ReservationDetailScreen> {
       ),
     );
     final outstanding = signedBalance > 0.01 ? signedBalance : 0.0;
-    final currency = balanceSummary['currency']?.toString() ??
+    final currency =
+        balanceSummary['currency']?.toString() ??
         reservation['currency']?.toString() ??
         'NGN';
     final color = reservation['category'] == 'CHECKED_IN'
@@ -668,7 +688,6 @@ class _ReservationDetailScreenState extends State<ReservationDetailScreen> {
         : reservation['category'] == 'NO_SHOW'
         ? _red
         : _blue;
-
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 4, 20, 30),
       children: [
@@ -689,7 +708,8 @@ class _ReservationDetailScreenState extends State<ReservationDetailScreen> {
           const SizedBox(height: 12),
           _cityLedgerAction(
             guestName: name,
-            confirmationNumber: reservation['confirmationNumber']?.toString() ?? '—',
+            confirmationNumber:
+                reservation['confirmationNumber']?.toString() ?? '—',
             amount: outstanding,
             currency: currency,
           ),
@@ -785,8 +805,13 @@ class _ReservationDetailScreenState extends State<ReservationDetailScreen> {
               backgroundColor: _red,
               foregroundColor: Colors.white,
               minimumSize: const Size.fromHeight(44),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              textStyle: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+              ),
             ),
           ),
         ),
@@ -877,7 +902,11 @@ class _ReservationDetailScreenState extends State<ReservationDetailScreen> {
         children: [
           const Row(
             children: [
-              Icon(Icons.account_balance_wallet_outlined, color: _gold, size: 17),
+              Icon(
+                Icons.account_balance_wallet_outlined,
+                color: _gold,
+                size: 17,
+              ),
               SizedBox(width: 8),
               Text(
                 'GUEST BALANCE',
@@ -893,15 +922,43 @@ class _ReservationDetailScreenState extends State<ReservationDetailScreen> {
           const SizedBox(height: 13),
           Row(
             children: [
-              Expanded(child: _balanceMetric('Guest charges', charges, currency, _white)),
-              Expanded(child: _balanceMetric('Payments received', payments, currency, _green)),
+              Expanded(
+                child: _balanceMetric(
+                  'Guest charges',
+                  charges,
+                  currency,
+                  _white,
+                ),
+              ),
+              Expanded(
+                child: _balanceMetric(
+                  'Payments received',
+                  payments,
+                  currency,
+                  _green,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 14),
           Row(
             children: [
-              Expanded(child: _balanceMetric('Credit available', credit, currency, _blue)),
-              Expanded(child: _balanceMetric(positionLabel, balance.abs(), currency, positionColor)),
+              Expanded(
+                child: _balanceMetric(
+                  'Credit available',
+                  credit,
+                  currency,
+                  _blue,
+                ),
+              ),
+              Expanded(
+                child: _balanceMetric(
+                  positionLabel,
+                  balance.abs(),
+                  currency,
+                  positionColor,
+                ),
+              ),
             ],
           ),
         ],
@@ -909,14 +966,33 @@ class _ReservationDetailScreenState extends State<ReservationDetailScreen> {
     );
   }
 
-  Widget _balanceMetric(String label, double amount, String currency, Color color) => Padding(
+  Widget _balanceMetric(
+    String label,
+    double amount,
+    String currency,
+    Color color,
+  ) => Padding(
     padding: const EdgeInsets.only(right: 8),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _muted, fontSize: 10)),
+        Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(color: _muted, fontSize: 10),
+        ),
         const SizedBox(height: 4),
-        Text('$currency ${_wholeAmount(amount)}', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: color, fontSize: 14, fontWeight: FontWeight.w800)),
+        Text(
+          '$currency ${_wholeAmount(amount)}',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: color,
+            fontSize: 14,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
       ],
     ),
   );
@@ -1373,13 +1449,19 @@ class _CityLedgerCheckoutSheetState extends State<_CityLedgerCheckoutSheet> {
                       SizedBox(height: 4),
                       Text(
                         'Controlled departure transfer',
-                        style: TextStyle(color: _white, fontSize: 17, fontWeight: FontWeight.w800),
+                        style: TextStyle(
+                          color: _white,
+                          fontSize: 17,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                     ],
                   ),
                 ),
                 IconButton(
-                  onPressed: _submitting ? null : () => Navigator.of(context).pop(),
+                  onPressed: _submitting
+                      ? null
+                      : () => Navigator.of(context).pop(),
                   icon: const Icon(Icons.close_rounded, color: _muted),
                 ),
               ],
@@ -1394,7 +1476,14 @@ class _CityLedgerCheckoutSheetState extends State<_CityLedgerCheckoutSheet> {
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: _red.withValues(alpha: .24)),
                 ),
-                child: Text(_error!, style: const TextStyle(color: _red, fontSize: 12, height: 1.4)),
+                child: Text(
+                  _error!,
+                  style: const TextStyle(
+                    color: _red,
+                    fontSize: 12,
+                    height: 1.4,
+                  ),
+                ),
               ),
               const SizedBox(height: 12),
             ],
@@ -1433,13 +1522,15 @@ class _CityLedgerCheckoutSheetState extends State<_CityLedgerCheckoutSheet> {
                     onPressed: _submitting
                         ? null
                         : () => _reviewing
-                            ? setState(() => _reviewing = false)
-                            : Navigator.of(context).pop(),
+                              ? setState(() => _reviewing = false)
+                              : Navigator.of(context).pop(),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: _muted,
                       minimumSize: const Size.fromHeight(46),
                       side: const BorderSide(color: _line),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(13),
+                      ),
                     ),
                     child: Text(_reviewing ? 'Go back' : 'Cancel'),
                   ),
@@ -1448,17 +1539,44 @@ class _CityLedgerCheckoutSheetState extends State<_CityLedgerCheckoutSheet> {
                 Expanded(
                   flex: 2,
                   child: FilledButton.icon(
-                    onPressed: _submitting ? null : (_reviewing ? _submit : () => setState(() => _reviewing = true)),
+                    onPressed: _submitting
+                        ? null
+                        : (_reviewing
+                              ? _submit
+                              : () => setState(() => _reviewing = true)),
                     icon: _submitting
-                        ? const SizedBox(width: 17, height: 17, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                        : Icon(_reviewing ? Icons.verified_rounded : Icons.arrow_forward_rounded, size: 17),
-                    label: Text(_submitting ? 'Processing…' : (_reviewing ? 'Confirm transfer' : 'Review transfer')),
+                        ? const SizedBox(
+                            width: 17,
+                            height: 17,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : Icon(
+                            _reviewing
+                                ? Icons.verified_rounded
+                                : Icons.arrow_forward_rounded,
+                            size: 17,
+                          ),
+                    label: Text(
+                      _submitting
+                          ? 'Processing…'
+                          : (_reviewing
+                                ? 'Confirm transfer'
+                                : 'Review transfer'),
+                    ),
                     style: FilledButton.styleFrom(
                       backgroundColor: _red,
                       foregroundColor: Colors.white,
                       minimumSize: const Size.fromHeight(46),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13)),
-                      textStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(13),
+                      ),
+                      textStyle: const TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 12,
+                      ),
                     ),
                   ),
                 ),
@@ -1470,15 +1588,31 @@ class _CityLedgerCheckoutSheetState extends State<_CityLedgerCheckoutSheet> {
     );
   }
 
-  Widget _sheetRow(String label, String value, {Color valueColor = _white}) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 4),
-    child: Row(
-      children: [
-        Expanded(child: Text(label, style: const TextStyle(color: _muted, fontSize: 12))),
-        Flexible(child: Text(value, textAlign: TextAlign.right, style: TextStyle(color: valueColor, fontSize: 12, fontWeight: FontWeight.w800))),
-      ],
-    ),
-  );
+  Widget _sheetRow(String label, String value, {Color valueColor = _white}) =>
+      Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                style: const TextStyle(color: _muted, fontSize: 12),
+              ),
+            ),
+            Flexible(
+              child: Text(
+                value,
+                textAlign: TextAlign.right,
+                style: TextStyle(
+                  color: valueColor,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
 }
 
 class _LoadingState extends StatelessWidget {
@@ -1529,6 +1663,125 @@ class _ErrorState extends StatelessWidget {
       ),
     ),
   );
+}
+
+class _ReservationBenefit {
+  final String label;
+  final Color color;
+  final IconData icon;
+
+  const _ReservationBenefit({
+    required this.label,
+    required this.color,
+    required this.icon,
+  });
+}
+
+class _BenefitBadge extends StatelessWidget {
+  final _ReservationBenefit benefit;
+
+  const _BenefitBadge({required this.benefit});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+    decoration: BoxDecoration(
+      color: benefit.color.withValues(alpha: .10),
+      borderRadius: BorderRadius.circular(9),
+      border: Border.all(color: benefit.color.withValues(alpha: .28)),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(benefit.icon, color: benefit.color, size: 13),
+        const SizedBox(width: 5),
+        Flexible(
+          child: Text(
+            benefit.label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: benefit.color,
+              fontSize: 9,
+              fontWeight: FontWeight.w800,
+              letterSpacing: .65,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class _DebtBadge extends StatelessWidget {
+  final double amount;
+  final String currency;
+
+  const _DebtBadge({required this.amount, required this.currency});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+    decoration: BoxDecoration(
+      color: _red.withValues(alpha: .11),
+      borderRadius: BorderRadius.circular(9),
+      border: Border.all(color: _red.withValues(alpha: .3)),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Icon(Icons.warning_amber_rounded, color: _red, size: 13),
+        const SizedBox(width: 5),
+        Flexible(
+          child: Text(
+            'OUTSTANDING · $currency ${_wholeAmount(amount)}',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: _red,
+              fontSize: 9,
+              fontWeight: FontWeight.w800,
+              letterSpacing: .45,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+_ReservationBenefit? _benefitForRooms(List<dynamic> rooms) {
+  for (final rawRoom in rooms) {
+    final room = rawRoom is Map ? rawRoom : const <String, dynamic>{};
+    final type = room['discountType']?.toString();
+    if (type == 'COMPLIMENTARY') {
+      return const _ReservationBenefit(
+        label: 'COMPLIMENTARY BENEFIT',
+        color: _green,
+        icon: Icons.auto_awesome_rounded,
+      );
+    }
+  }
+
+  for (final rawRoom in rooms) {
+    final room = rawRoom is Map ? rawRoom : const <String, dynamic>{};
+    final type = room['discountType']?.toString();
+    if (type == 'PERCENTAGE' && _amount(room['discountPercent']) > 0) {
+      return _ReservationBenefit(
+        label: 'DISCOUNT ${_wholeAmount(_amount(room['discountPercent']))}%',
+        color: _gold,
+        icon: Icons.local_offer_rounded,
+      );
+    }
+    if (type == 'FIXED_AMOUNT' && _amount(room['discountAmount']) > 0) {
+      return const _ReservationBenefit(
+        label: 'DISCOUNT APPLIED',
+        color: _gold,
+        icon: Icons.local_offer_rounded,
+      );
+    }
+  }
+  return null;
 }
 
 DateTime? _parseDate(dynamic value) {

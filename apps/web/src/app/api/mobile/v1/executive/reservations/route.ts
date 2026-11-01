@@ -115,7 +115,7 @@ function serializeReservation(reservation: any, detailed = false, guestCreditAva
     adults: reservation.adults,
     children: reservation.children,
     currency: reservation.currency,
-    rooms: (reservation.reservationRooms || []).map((room: any) => ({ id: room.id, number: room.room?.number || 'Unassigned', status: room.status, rateAmount: asNumber(room.rateAmount), checkIn: room.checkIn, checkOut: room.checkOut })),
+    rooms: (reservation.reservationRooms || []).map((room: any) => ({ id: room.id, number: room.room?.number || 'Unassigned', status: room.status, rateAmount: asNumber(room.rateAmount), checkIn: room.checkIn, checkOut: room.checkOut, discountType: room.discountType || null, discountAmount: asNumber(room.discountAmount), discountPercent: asNumber(room.discountPercent), discountReason: room.discountReason || null })),
     balanceSummary: {
       currency: folios[0]?.currency || reservation.currency || 'NGN',
       charges: totalCharges,
