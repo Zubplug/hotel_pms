@@ -103,12 +103,14 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
         child: Column(
           children: [
             // ── Header ──────────────────────────────────────────────────────
-            _Header(
+            _CommandHeader(
               unreadCount: state.unreadCount,
               onMarkAll: state.unreadCount > 0
                   ? () => notifier.markAllAsRead()
                   : null,
             ),
+
+            _AttentionSummary(notifications: state.notifications),
 
             // ── Category Filter ──────────────────────────────────────────────
             _CategoryFilter(
@@ -270,6 +272,209 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
 }
 
 // ─── Header ───────────────────────────────────────────────────────────────────
+class _CommandHeader extends StatelessWidget {
+  final int unreadCount;
+  final VoidCallback? onMarkAll;
+
+  const _CommandHeader({required this.unreadCount, this.onMarkAll});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
+    decoration: const BoxDecoration(
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [Color(0xFF10233A), _bg],
+      ),
+    ),
+    child: Row(
+      children: [
+        _CommandHeaderIcon(
+          icon: Icons.arrow_back_ios_new_rounded,
+          onTap: () => Navigator.of(context).pop(),
+          tooltip: 'Close notifications',
+        ),
+        const SizedBox(width: 12),
+        const Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'OPERATIONS CONTROL',
+                style: TextStyle(
+                  color: _goldBright,
+                  fontSize: 9,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 1.6,
+                ),
+              ),
+              SizedBox(height: 4),
+              Text(
+                'Command inbox',
+                style: TextStyle(
+                  color: _textPrimary,
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -.5,
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (onMarkAll != null)
+          _CommandHeaderIcon(
+            icon: Icons.done_all_rounded,
+            onTap: onMarkAll!,
+            tooltip: 'Clear attention queue',
+          ),
+      ],
+    ),
+  );
+}
+
+class _AttentionSummary extends StatelessWidget {
+  final List<NotificationData> notifications;
+  const _AttentionSummary({required this.notifications});
+
+  @override
+  Widget build(BuildContext context) {
+    final critical = notifications
+        .where((n) => n.isCritical && !n.isRead)
+        .length;
+    final high = notifications
+        .where((n) => n.priority == 'High' && !n.isRead && !n.isCritical)
+        .length;
+    final unread = notifications.where((n) => !n.isRead).length;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: _surface,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: unread > 0 ? _gold.withValues(alpha: .32) : _border,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: unread > 0
+                    ? _gold.withValues(alpha: .14)
+                    : _green.withValues(alpha: .12),
+                borderRadius: BorderRadius.circular(15),
+              ),
+              child: Icon(
+                unread > 0 ? Icons.priority_high_rounded : Icons.check_rounded,
+                color: unread > 0 ? _goldBright : _green,
+                size: 25,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    unread == 0
+                        ? 'No action required'
+                        : '$unread items need attention',
+                    style: const TextStyle(
+                      color: _textPrimary,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    unread == 0
+                        ? 'Your operational inbox is clear.'
+                        : 'Prioritised alerts across your property portfolio.',
+                    style: const TextStyle(color: _textSecondary, fontSize: 10),
+                  ),
+                ],
+              ),
+            ),
+            if (critical > 0 || high > 0)
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  if (critical > 0)
+                    _SignalPill(label: '$critical critical', color: _red),
+                  if (high > 0) ...[
+                    const SizedBox(height: 5),
+                    _SignalPill(label: '$high high', color: _orange),
+                  ],
+                ],
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CommandHeaderIcon extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+  final String tooltip;
+
+  const _CommandHeaderIcon({
+    required this.icon,
+    required this.onTap,
+    required this.tooltip,
+  });
+
+  @override
+  Widget build(BuildContext context) => Tooltip(
+    message: tooltip,
+    child: InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Ink(
+        width: 44,
+        height: 44,
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: .07),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.white.withValues(alpha: .10)),
+        ),
+        child: Icon(icon, color: _textPrimary, size: 18),
+      ),
+    ),
+  );
+}
+
+class _SignalPill extends StatelessWidget {
+  final String label;
+  final Color color;
+  const _SignalPill({required this.label, required this.color});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 5),
+    decoration: BoxDecoration(
+      color: color.withValues(alpha: .12),
+      borderRadius: BorderRadius.circular(7),
+      border: Border.all(color: color.withValues(alpha: .25)),
+    ),
+    child: Text(
+      label.toUpperCase(),
+      style: TextStyle(
+        color: color,
+        fontSize: 8,
+        fontWeight: FontWeight.w800,
+        letterSpacing: .4,
+      ),
+    ),
+  );
+}
+
+/*
 class _Header extends StatelessWidget {
   final int unreadCount;
   final VoidCallback? onMarkAll;
@@ -433,6 +638,9 @@ class _HeaderIcon extends StatelessWidget {
     );
   }
 }
+
+}
+*/
 
 // ─── Category Filter ──────────────────────────────────────────────────────────
 class _CategoryFilter extends StatelessWidget {

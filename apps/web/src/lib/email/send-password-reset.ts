@@ -18,4 +18,23 @@ export async function sendPasswordResetEmail(input: PasswordResetEmail) {
   if (!response.ok) throw new Error(`Password reset email delivery failed (${response.status})`);
 }
 
+export async function sendRecoveryCodeEmail(input: { to: string; code: string; purpose: 'PASSWORD' | 'PIN'; expiresAt: Date }) {
+  const apiKey = process.env.RESEND_API_KEY;
+  const from = process.env.RESEND_FROM_EMAIL;
+  if (!apiKey || !from) throw new Error('Transactional email is not configured.');
+  const expires = input.expiresAt.toLocaleString('en-NG', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Africa/Lagos' });
+  const label = input.purpose === 'PIN' ? 'login PIN' : 'password';
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      from,
+      to: [input.to],
+      subject: `Your LodgeCore ${label} verification code`,
+      html: `<div style="font-family:Inter,Arial,sans-serif;line-height:1.6;color:#172033"><h2>Verify your ${label} reset</h2><p>Use this one-time code to reset your LodgeCore ${label}:</p><p style="font-size:32px;letter-spacing:8px;font-weight:800;color:#2563eb">${escapeHtml(input.code)}</p><p>This code expires at ${escapeHtml(expires)} and can only be used once.</p><p>If you did not request this, you can safely ignore this email.</p></div>`,
+    }),
+  });
+  if (!response.ok) throw new Error(`Recovery code email delivery failed (${response.status})`);
+}
+
 function escapeHtml(value: string) { return value.replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character] || character); }

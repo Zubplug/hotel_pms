@@ -4,9 +4,9 @@ import 'dashboard_screen.dart';
 import 'auditor_main_screen.dart';
 import 'package:mobile_management/features/rooms/presentation/screens/rooms_screen.dart';
 import 'package:mobile_management/features/finance/presentation/screens/finance_screen.dart';
-import 'package:mobile_management/features/profile/presentation/screens/profile_screen.dart';
 import 'package:mobile_management/features/profile/presentation/providers/profile_provider.dart';
 import 'package:mobile_management/features/fnb/presentation/screens/fnb_screen.dart';
+import 'package:mobile_management/features/hub/presentation/screens/hub_screen.dart';
 
 // ─── Design Tokens ────────────────────────────────────────────────────────────
 const _bgDeep = Color(0xFF070D1A);
@@ -56,7 +56,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
           const RoomsScreen(),
           const FinanceScreen(),
           const FnbScreen(),
-          const ProfileScreen(),
+          const HubScreen(),
         ];
 
         return Scaffold(
@@ -81,84 +81,13 @@ class _MainScreenState extends ConsumerState<MainScreen> {
               _PremiumNavBar(
                 currentIndex: _currentIndex,
                 onTap: (i) {
-                  if (i == 4) {
-                    _showComingSoonPopup(context);
-                  } else {
-                    setState(() => _currentIndex = i);
-                  }
+                  setState(() => _currentIndex = i);
                 },
               ),
             ],
           ),
         );
       },
-    );
-  }
-
-  void _showComingSoonPopup(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: _bgDeep,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(24),
-          side: BorderSide(color: _gold.withValues(alpha: 0.3), width: 1.5),
-        ),
-        contentPadding: const EdgeInsets.all(32),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: _gold.withValues(alpha: 0.1),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.rocket_launch_rounded,
-                color: _gold,
-                size: 48,
-              ),
-            ),
-            const SizedBox(height: 24),
-            const Text(
-              'COMING SOON',
-              style: TextStyle(
-                color: _gold,
-                fontSize: 16,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 2,
-              ),
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              'The Management Hub is currently under development. Stay tuned for advanced alerts and approvals.',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: _textMuted, fontSize: 14, height: 1.5),
-            ),
-            const SizedBox(height: 32),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () => Navigator.pop(ctx),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _gold,
-                  foregroundColor: _bgDeep,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  elevation: 0,
-                ),
-                child: const Text(
-                  'Got it',
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

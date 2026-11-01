@@ -471,14 +471,6 @@ class _EventsManagementView extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 24),
-        _OperationsCalendar(
-          events: e.events,
-          halls: data.hallOverview,
-          title: 'EVENT CALENDAR',
-          subtitle: 'Daily schedule, venue allocation and event status',
-          accent: _gold,
-        ),
-        const SizedBox(height: 24),
         _SectionHeader(
           icon: Icons.timeline_rounded,
           title: 'EVENT PIPELINE',
@@ -487,6 +479,14 @@ class _EventsManagementView extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         _PipelineSummary(overview: e),
+        const SizedBox(height: 24),
+        _OperationsCalendar(
+          events: e.events,
+          halls: data.hallOverview,
+          title: 'EVENT CALENDAR',
+          subtitle: 'Daily schedule, venue allocation and event status',
+          accent: _gold,
+        ),
       ],
     );
   }

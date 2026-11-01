@@ -24,6 +24,362 @@ class LoginScreen extends ConsumerStatefulWidget {
   ConsumerState<LoginScreen> createState() => _LoginScreenState();
 }
 
+enum _RecoveryPurpose { password, pin }
+
+class _RecoveryCodeSheet extends ConsumerStatefulWidget {
+  final String initialEmail;
+
+  const _RecoveryCodeSheet({required this.initialEmail});
+
+  @override
+  ConsumerState<_RecoveryCodeSheet> createState() => _RecoveryCodeSheetState();
+}
+
+class _RecoveryCodeSheetState extends ConsumerState<_RecoveryCodeSheet> {
+  late final TextEditingController _emailController;
+  final _codeController = TextEditingController();
+  final _newController = TextEditingController();
+  final _confirmController = TextEditingController();
+  _RecoveryPurpose _purpose = _RecoveryPurpose.password;
+  bool _codeSent = false;
+  bool _busy = false;
+  bool _showNew = false;
+  bool _showConfirm = false;
+  String? _error;
+
+  String get _purposeValue =>
+      _purpose == _RecoveryPurpose.pin ? 'PIN' : 'PASSWORD';
+  bool get _isPin => _purpose == _RecoveryPurpose.pin;
+
+  @override
+  void initState() {
+    super.initState();
+    _emailController = TextEditingController(text: widget.initialEmail);
+  }
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _codeController.dispose();
+    _newController.dispose();
+    _confirmController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _sendCode() async {
+    final email = _emailController.text.trim();
+    if (!email.contains('@')) {
+      setState(
+        () => _error = 'Enter the email address linked to your account.',
+      );
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await ref
+          .read(dioProvider)
+          .post(
+            '/auth/recovery-code',
+            data: {'email': email, 'purpose': _purposeValue},
+          );
+      if (mounted) setState(() => _codeSent = true);
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _error =
+              'Unable to send the verification code. Please try again.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _reset() async {
+    final code = _codeController.text.trim();
+    final next = _newController.text;
+    if (!RegExp(r'^\d{6}$').hasMatch(code)) {
+      setState(() => _error = 'Enter the six-digit verification code.');
+      return;
+    }
+    if (_isPin ? !RegExp(r'^\d{6}$').hasMatch(next) : next.length < 12) {
+      setState(
+        () => _error = _isPin
+            ? 'PIN must contain exactly 6 digits.'
+            : 'Use at least 12 characters for your new password.',
+      );
+      return;
+    }
+    if (next != _confirmController.text) {
+      setState(
+        () => _error = _isPin
+            ? 'PIN entries do not match.'
+            : 'Passwords do not match.',
+      );
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await ref
+          .read(dioProvider)
+          .patch(
+            '/auth/recovery-code',
+            data: {
+              'email': _emailController.text.trim(),
+              'code': code,
+              'purpose': _purposeValue,
+              if (_isPin) 'newPin': next else 'newPassword': next,
+            },
+          );
+      if (mounted) {
+        Navigator.of(context).pop(true);
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(
+          () => _error = error.toString().replaceFirst('Exception: ', ''),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final inset = MediaQuery.viewInsetsOf(context).bottom;
+    return Padding(
+      padding: EdgeInsets.only(bottom: inset),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(22, 12, 22, 24),
+        decoration: const BoxDecoration(
+          color: _cardBg,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 42,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: _textMuted,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+              const Text(
+                'Account recovery',
+                style: TextStyle(
+                  color: _textPrimary,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 5),
+              const Text(
+                'We will send a one-time verification code to your email.',
+                style: TextStyle(color: _textMuted, fontSize: 12),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: _recoveryChoice(
+                      _RecoveryPurpose.password,
+                      'Password',
+                      Icons.lock_outline_rounded,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _recoveryChoice(
+                      _RecoveryPurpose.pin,
+                      'Login PIN',
+                      Icons.pin_outlined,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              _recoveryField(
+                'ACCOUNT EMAIL',
+                _emailController,
+                TextInputType.emailAddress,
+              ),
+              if (_codeSent) ...[
+                const SizedBox(height: 14),
+                _recoveryField(
+                  'VERIFICATION CODE',
+                  _codeController,
+                  TextInputType.number,
+                  maxLength: 6,
+                ),
+                const SizedBox(height: 14),
+                _recoveryField(
+                  _isPin ? 'NEW 6-DIGIT PIN' : 'NEW PASSWORD',
+                  _newController,
+                  _isPin ? TextInputType.number : TextInputType.visiblePassword,
+                  obscure: !_showNew,
+                  maxLength: _isPin ? 6 : null,
+                  toggle: () => setState(() => _showNew = !_showNew),
+                ),
+                const SizedBox(height: 14),
+                _recoveryField(
+                  _isPin ? 'CONFIRM PIN' : 'CONFIRM PASSWORD',
+                  _confirmController,
+                  _isPin ? TextInputType.number : TextInputType.visiblePassword,
+                  obscure: !_showConfirm,
+                  maxLength: _isPin ? 6 : null,
+                  toggle: () => setState(() => _showConfirm = !_showConfirm),
+                ),
+              ],
+              if (_error != null) ...[
+                const SizedBox(height: 14),
+                Text(
+                  _error!,
+                  style: const TextStyle(color: Colors.redAccent, fontSize: 12),
+                ),
+              ],
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: ElevatedButton(
+                  onPressed: _busy ? null : (_codeSent ? _reset : _sendCode),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _goldLight,
+                    foregroundColor: _bgDeep,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                  child: _busy
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: _bgDeep,
+                          ),
+                        )
+                      : Text(
+                          _codeSent
+                              ? 'Verify and reset'
+                              : 'Send verification code',
+                          style: const TextStyle(fontWeight: FontWeight.w800),
+                        ),
+                ),
+              ),
+              if (_codeSent)
+                Center(
+                  child: TextButton(
+                    onPressed: _busy ? null : _sendCode,
+                    child: const Text(
+                      'Resend code',
+                      style: TextStyle(color: _goldLight),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _recoveryChoice(
+    _RecoveryPurpose purpose,
+    String label,
+    IconData icon,
+  ) {
+    final selected = _purpose == purpose;
+    return GestureDetector(
+      onTap: () => setState(() {
+        _purpose = purpose;
+        _codeSent = false;
+        _error = null;
+      }),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          color: selected ? _goldLight.withValues(alpha: .13) : _inputBg,
+          borderRadius: BorderRadius.circular(13),
+          border: Border.all(color: selected ? _goldLight : _inputBorder),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: selected ? _goldLight : _textMuted, size: 17),
+            const SizedBox(width: 7),
+            Text(
+              label,
+              style: TextStyle(
+                color: selected ? _goldLight : _textMuted,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _recoveryField(
+    String label,
+    TextEditingController controller,
+    TextInputType type, {
+    bool obscure = false,
+    int? maxLength,
+    VoidCallback? toggle,
+  }) {
+    return TextField(
+      controller: controller,
+      keyboardType: type,
+      obscureText: obscure,
+      maxLength: maxLength,
+      style: const TextStyle(color: _textPrimary),
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: const TextStyle(color: _textMuted, fontSize: 10),
+        counterText: '',
+        filled: true,
+        fillColor: _inputBg,
+        suffixIcon: toggle == null
+            ? null
+            : IconButton(
+                onPressed: toggle,
+                icon: Icon(
+                  obscure
+                      ? Icons.visibility_outlined
+                      : Icons.visibility_off_outlined,
+                  color: _textMuted,
+                  size: 19,
+                ),
+              ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(13),
+          borderSide: const BorderSide(color: _inputBorder),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(13),
+          borderSide: const BorderSide(color: _goldLight),
+        ),
+      ),
+    );
+  }
+}
+
 class _LoginScreenState extends ConsumerState<LoginScreen>
     with TickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
@@ -33,7 +389,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
   bool _isLoading = false;
   bool _rememberMe = false;
   bool _biometricAvailable = false;
-  bool _biometricEnabled = true;
+  bool _biometricEnabled = false;
   bool _biometricBusy = false;
   bool _usePassword = false;
   String? _errorMessage;
@@ -74,12 +430,27 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
       final tokenStorage = ref.read(tokenStorageProvider);
       final email = await tokenStorage.getRememberedEmail();
       final biometricToken = await tokenStorage.getBiometricToken();
+      final biometricSignature = await tokenStorage.getBiometricSignature();
       var biometricAvailable = false;
+      String? currentBiometricSignature;
       try {
+        final biometrics = await _localAuth.getAvailableBiometrics();
         biometricAvailable =
             await _localAuth.isDeviceSupported() &&
-            await _localAuth.canCheckBiometrics;
+            await _localAuth.canCheckBiometrics &&
+            biometrics.isNotEmpty;
+        if (biometricAvailable) {
+          currentBiometricSignature = _signatureFor(biometrics);
+        }
       } catch (_) {}
+      final biometricConfigured =
+          biometricToken != null &&
+          biometricToken.isNotEmpty &&
+          biometricSignature != null &&
+          biometricSignature == currentBiometricSignature;
+      if (!biometricConfigured && biometricToken != null) {
+        await tokenStorage.clearBiometricToken();
+      }
       if (email != null && email.isNotEmpty && mounted) {
         setState(() {
           _emailCtrl.text = email;
@@ -89,8 +460,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
       if (mounted) {
         setState(() {
           _biometricAvailable = biometricAvailable;
-          _biometricEnabled =
-              biometricToken != null && biometricToken.isNotEmpty;
+          _biometricEnabled = biometricConfigured;
         });
       }
     });
@@ -132,9 +502,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
           } else {
             await tokenStorage.clearRememberedEmail();
           }
-          if (_biometricAvailable && _biometricEnabled) {
-            await tokenStorage.saveBiometricToken(token);
-          } else if (!_biometricEnabled) {
+          var keepBiometricEnabled = _biometricAvailable && _biometricEnabled;
+          if (_usePassword && _biometricAvailable && !_biometricEnabled) {
+            final enroll = await _offerBiometricEnrollment();
+            keepBiometricEnabled = enroll;
+            if (mounted) setState(() => _biometricEnabled = enroll);
+          }
+          if (keepBiometricEnabled) {
+            final prepared = await _prepareBiometricToken(token);
+            if (!prepared && mounted) {
+              setState(() => _biometricEnabled = false);
+            }
+          } else {
             await tokenStorage.clearBiometricToken();
           }
           if (_usePassword) {
@@ -206,13 +585,89 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     }
   }
 
+  Future<bool> _offerBiometricEnrollment() async {
+    final enabled = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: _cardBg,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+        title: const Row(
+          children: [
+            Icon(Icons.fingerprint_rounded, color: _goldLight, size: 24),
+            SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Enable biometric sign in',
+                style: TextStyle(color: _textPrimary, fontSize: 18),
+              ),
+            ),
+          ],
+        ),
+        content: const Text(
+          'Use Face ID or your fingerprint for faster, secure access to LodgeCore. Your password is never stored on this device.',
+          style: TextStyle(color: _textMuted, height: 1.45),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Not now', style: TextStyle(color: _textMuted)),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: _goldLight,
+              foregroundColor: _bgDeep,
+            ),
+            child: const Text('Enable'),
+          ),
+        ],
+      ),
+    );
+    return enabled == true;
+  }
+
+  Future<void> _showRecoverySheet() async {
+    final reset = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _RecoveryCodeSheet(initialEmail: _emailCtrl.text.trim()),
+    );
+    if (reset == true && mounted) {
+      await ref.read(tokenStorageProvider).clearBiometricToken();
+      setState(
+        () => _errorMessage =
+            'Reset complete. Sign in with your new credentials.',
+      );
+    }
+  }
+
   Future<void> _handleBiometricLogin() async {
-    final token = await ref.read(tokenStorageProvider).getBiometricToken();
+    final tokenStorage = ref.read(tokenStorageProvider);
+    final token = await tokenStorage.getBiometricToken();
+    final storedSignature = await tokenStorage.getBiometricSignature();
+    String? currentSignature;
+    try {
+      currentSignature = _signatureFor(
+        await _localAuth.getAvailableBiometrics(),
+      );
+    } catch (_) {}
     if (token == null || token.isEmpty) {
       setState(
         () => _errorMessage =
             'Sign in with your password once to enable biometric access.',
       );
+      return;
+    }
+    if (storedSignature == null || storedSignature != currentSignature) {
+      await tokenStorage.clearBiometricToken();
+      if (mounted) {
+        setState(() {
+          _biometricEnabled = false;
+          _errorMessage =
+              'Biometric access was reset. Sign in with your password to enable it again.';
+        });
+      }
       return;
     }
 
@@ -227,10 +682,22 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
         persistAcrossBackgrounding: true,
       );
       if (authenticated) {
-        await ref
-            .read(tokenStorageProvider)
-            .saveTokens(accessToken: token, refreshToken: '');
-        await ref.read(authProvider.notifier).login(token);
+        final tokenStorage = ref.read(tokenStorageProvider);
+        await tokenStorage.saveTokens(accessToken: token, refreshToken: '');
+        try {
+          await ref.read(dioProvider).get('/mobile/v1/me');
+          await ref.read(authProvider.notifier).login(token);
+        } catch (_) {
+          await tokenStorage.clearTokens();
+          await tokenStorage.clearBiometricToken();
+          if (mounted) {
+            setState(() {
+              _biometricEnabled = false;
+              _errorMessage =
+                  'Your biometric session has expired. Sign in with your password to enable it again.';
+            });
+          }
+        }
       }
     } catch (_) {
       if (mounted) {
@@ -241,6 +708,41 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     } finally {
       if (mounted) setState(() => _biometricBusy = false);
     }
+  }
+
+  String _signatureFor(List<BiometricType> biometrics) {
+    final names = biometrics.map((biometric) => biometric.name).toList()
+      ..sort();
+    return names.join('|');
+  }
+
+  Future<bool> _prepareBiometricToken(String token) async {
+    final tokenStorage = ref.read(tokenStorageProvider);
+    final existingToken = await tokenStorage.getBiometricToken();
+    final existingSignature = await tokenStorage.getBiometricSignature();
+    final currentSignature = _signatureFor(
+      await _localAuth.getAvailableBiometrics(),
+    );
+    if (existingToken != null &&
+        existingToken.isNotEmpty &&
+        existingSignature == currentSignature) {
+      await tokenStorage.saveBiometricToken(token);
+      return true;
+    }
+
+    final authenticated = await _localAuth.authenticate(
+      localizedReason:
+          'Confirm your identity to enable LodgeCore biometric sign in',
+      biometricOnly: true,
+      persistAcrossBackgrounding: true,
+    );
+    if (!authenticated) {
+      await tokenStorage.clearBiometricToken();
+      return false;
+    }
+    await tokenStorage.saveBiometricToken(token);
+    await tokenStorage.saveBiometricSignature(currentSignature);
+    return true;
   }
 
   Widget _buildEnterpriseLogin(BuildContext context) {
@@ -939,9 +1441,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                                             ),
                                             const Spacer(),
                                             GestureDetector(
-                                              onTap: () {},
+                                              onTap: _showRecoverySheet,
                                               child: const Text(
-                                                'Forgot password?',
+                                                'Forgot password or PIN?',
                                                 style: TextStyle(
                                                   fontSize: 13,
                                                   color: _goldLight,

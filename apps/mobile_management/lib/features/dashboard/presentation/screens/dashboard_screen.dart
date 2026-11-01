@@ -333,18 +333,26 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
         Stack(
           alignment: Alignment.center,
           children: [
-            IconButton(
-              icon: const Icon(
-                Icons.notifications_outlined,
-                color: _textSecondary,
+            SizedBox(
+              width: 56,
+              height: 56,
+              child: IconButton(
+                tooltip: 'Open notifications',
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 56, minHeight: 56),
+                icon: const Icon(
+                  Icons.notifications_outlined,
+                  color: _textSecondary,
+                ),
+                onPressed: () {
+                  FocusManager.instance.primaryFocus?.unfocus();
+                  Navigator.of(context, rootNavigator: true).push(
+                    MaterialPageRoute(
+                      builder: (_) => const NotificationsScreen(),
+                    ),
+                  );
+                },
               ),
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const NotificationsScreen(),
-                  ),
-                );
-              },
             ),
             if (unreadCount > 0)
               Positioned(

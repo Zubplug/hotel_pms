@@ -11,6 +11,7 @@ class TokenStorage {
   static const _refreshTokenKey = 'refresh_token';
   static const _rememberedEmailKey = 'remembered_email';
   static const _biometricTokenKey = 'biometric_unlock_token';
+  static const _biometricSignatureKey = 'biometric_enrollment_signature';
 
   TokenStorage(this._storage);
 
@@ -45,6 +46,15 @@ class TokenStorage {
 
   Future<void> clearBiometricToken() async {
     await _storage.delete(key: _biometricTokenKey);
+    await _storage.delete(key: _biometricSignatureKey);
+  }
+
+  Future<void> saveBiometricSignature(String signature) async {
+    await _storage.write(key: _biometricSignatureKey, value: signature);
+  }
+
+  Future<String?> getBiometricSignature() async {
+    return _storage.read(key: _biometricSignatureKey);
   }
 
   Future<void> clearUserCache() async {
