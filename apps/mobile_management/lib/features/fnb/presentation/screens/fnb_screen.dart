@@ -471,6 +471,13 @@ class _EventsManagementView extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 24),
+        _OperationsCalendar(
+          events: e.events,
+          title: 'EVENT CALENDAR',
+          subtitle: 'Daily schedule, venue allocation and event status',
+          accent: _gold,
+        ),
+        const SizedBox(height: 24),
         _SectionHeader(
           icon: Icons.timeline_rounded,
           title: 'EVENT PIPELINE',
@@ -546,6 +553,13 @@ class _HallsManagementView extends StatelessWidget {
               _violet,
             ),
           ],
+        ),
+        const SizedBox(height: 24),
+        _OperationsCalendar(
+          events: data.eventOverview.events,
+          title: 'HALL OCCUPANCY CALENDAR',
+          subtitle: 'Review hall commitments by day before scheduling',
+          accent: _sapphire,
         ),
         const SizedBox(height: 24),
         _SectionHeader(
@@ -636,6 +650,374 @@ class _MetricTile {
   );
 }
 
+class _OperationsCalendar extends StatefulWidget {
+  final List<FnbEvent> events;
+  final String title;
+  final String subtitle;
+  final Color accent;
+
+  const _OperationsCalendar({
+    required this.events,
+    required this.title,
+    required this.subtitle,
+    required this.accent,
+  });
+
+  @override
+  State<_OperationsCalendar> createState() => _OperationsCalendarState();
+}
+
+class _OperationsCalendarState extends State<_OperationsCalendar> {
+  late DateTime _selectedDay;
+  bool _weekView = true;
+
+  DateTime _dateOnly(DateTime value) =>
+      DateTime(value.year, value.month, value.day);
+
+  @override
+  void initState() {
+    super.initState();
+    final today = _dateOnly(DateTime.now());
+    final firstEvent = widget.events.isEmpty
+        ? null
+        : _dateOnly(widget.events.first.startDate);
+    _selectedDay = firstEvent != null && firstEvent.isAfter(today)
+        ? firstEvent
+        : today;
+  }
+
+  DateTime get _weekStart {
+    final day = _dateOnly(_selectedDay);
+    return day.subtract(Duration(days: day.weekday - DateTime.monday));
+  }
+
+  bool _isOnDay(FnbEvent event, DateTime day) {
+    final start = _dateOnly(event.startDate);
+    final end = _dateOnly(event.endDate);
+    return !start.isAfter(day) && !end.isBefore(day);
+  }
+
+  List<FnbEvent> _eventsFor(DateTime day) =>
+      widget.events.where((event) => _isOnDay(event, day)).toList();
+
+  void _shift(int days) =>
+      setState(() => _selectedDay = _selectedDay.add(Duration(days: days)));
+
+  @override
+  Widget build(BuildContext context) {
+    final weekDays = List.generate(
+      7,
+      (index) => _weekStart.add(Duration(days: index)),
+    );
+    final selectedEvents = _eventsFor(_selectedDay);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _SectionHeader(
+          icon: Icons.calendar_month_rounded,
+          title: widget.title,
+          subtitle: widget.subtitle,
+        ),
+        const SizedBox(height: 10),
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: _surface,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: widget.accent.withValues(alpha: .22)),
+          ),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  IconButton(
+                    onPressed: () => _shift(_weekView ? -7 : -1),
+                    icon: const Icon(
+                      Icons.chevron_left_rounded,
+                      color: _textSecondary,
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      _weekView
+                          ? '${DateFormat('dd MMM').format(_weekStart)} – ${DateFormat('dd MMM yyyy').format(weekDays.last)}'
+                          : DateFormat(
+                              'EEEE, dd MMM yyyy',
+                            ).format(_selectedDay),
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: _textPrimary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => _shift(_weekView ? 7 : 1),
+                    icon: const Icon(
+                      Icons.chevron_right_rounded,
+                      color: _textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+              Row(
+                children: [
+                  Expanded(
+                    child: _CalendarModeButton(
+                      label: 'WEEK',
+                      selected: _weekView,
+                      color: widget.accent,
+                      onTap: () => setState(() => _weekView = true),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _CalendarModeButton(
+                      label: 'DAY',
+                      selected: !_weekView,
+                      color: widget.accent,
+                      onTap: () => setState(() => _weekView = false),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                height: 58,
+                child: Row(
+                  children: weekDays.map((day) {
+                    final selected = _dateOnly(day) == _dateOnly(_selectedDay);
+                    final count = _eventsFor(day).length;
+                    return Expanded(
+                      child: GestureDetector(
+                        onTap: () => setState(() => _selectedDay = day),
+                        child: Container(
+                          margin: const EdgeInsets.symmetric(horizontal: 2),
+                          padding: const EdgeInsets.symmetric(vertical: 6),
+                          decoration: BoxDecoration(
+                            color: selected
+                                ? widget.accent.withValues(alpha: .18)
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: selected
+                                  ? widget.accent
+                                  : Colors.transparent,
+                            ),
+                          ),
+                          child: Column(
+                            children: [
+                              Text(
+                                DateFormat('E').format(day).substring(0, 2),
+                                style: const TextStyle(
+                                  color: _textMuted,
+                                  fontSize: 9,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                '${day.day}',
+                                style: TextStyle(
+                                  color: selected
+                                      ? _textPrimary
+                                      : _textSecondary,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              Text(
+                                '$count',
+                                style: TextStyle(
+                                  color: count > 0 ? widget.accent : _textMuted,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+              const SizedBox(height: 10),
+              if (_weekView)
+                ...weekDays.map(
+                  (day) => _CalendarDayRow(
+                    day: day,
+                    events: _eventsFor(day),
+                    accent: widget.accent,
+                  ),
+                )
+              else if (selectedEvents.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.all(14),
+                  child: Text(
+                    'No events scheduled for this day',
+                    style: TextStyle(color: _textMuted, fontSize: 11),
+                  ),
+                )
+              else
+                ...selectedEvents.map(
+                  (event) =>
+                      _CalendarEventTile(event: event, accent: widget.accent),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _CalendarModeButton extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final Color color;
+  final VoidCallback onTap;
+  const _CalendarModeButton({
+    required this.label,
+    required this.selected,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+    onTap: onTap,
+    child: Container(
+      padding: const EdgeInsets.symmetric(vertical: 7),
+      decoration: BoxDecoration(
+        color: selected ? color.withValues(alpha: .16) : Colors.transparent,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        label,
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          color: selected ? color : _textMuted,
+          fontSize: 9,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 1,
+        ),
+      ),
+    ),
+  );
+}
+
+class _CalendarDayRow extends StatelessWidget {
+  final DateTime day;
+  final List<FnbEvent> events;
+  final Color accent;
+  const _CalendarDayRow({
+    required this.day,
+    required this.events,
+    required this.accent,
+  });
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: 7),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 48,
+          child: Text(
+            DateFormat('EEE\ndd').format(day),
+            style: const TextStyle(
+              color: _textMuted,
+              fontSize: 10,
+              height: 1.25,
+            ),
+          ),
+        ),
+        Expanded(
+          child: events.isEmpty
+              ? const Text(
+                  'No bookings',
+                  style: TextStyle(color: _textMuted, fontSize: 10),
+                )
+              : Wrap(
+                  spacing: 5,
+                  runSpacing: 4,
+                  children: events
+                      .take(3)
+                      .map(
+                        (event) =>
+                            _CalendarChip(label: event.name, color: accent),
+                      )
+                      .toList(),
+                ),
+        ),
+      ],
+    ),
+  );
+}
+
+class _CalendarEventTile extends StatelessWidget {
+  final FnbEvent event;
+  final Color accent;
+  const _CalendarEventTile({required this.event, required this.accent});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: double.infinity,
+    margin: const EdgeInsets.only(bottom: 7),
+    padding: const EdgeInsets.all(10),
+    decoration: BoxDecoration(
+      color: accent.withValues(alpha: .07),
+      borderRadius: BorderRadius.circular(10),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          event.name,
+          style: const TextStyle(
+            color: _textPrimary,
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          '${DateFormat('HH:mm').format(event.startDate)} · ${event.halls.take(4).join(' · ')}',
+          style: TextStyle(
+            color: accent,
+            fontSize: 9,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class _CalendarChip extends StatelessWidget {
+  final String label;
+  final Color color;
+  const _CalendarChip({required this.label, required this.color});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    constraints: const BoxConstraints(maxWidth: 190),
+    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+    decoration: BoxDecoration(
+      color: color.withValues(alpha: .12),
+      borderRadius: BorderRadius.circular(6),
+    ),
+    child: Text(
+      label,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: TextStyle(color: color, fontSize: 9, fontWeight: FontWeight.w700),
+    ),
+  );
+}
+
 class _EventRow extends StatelessWidget {
   final FnbEvent event;
   const _EventRow({required this.event});
@@ -697,7 +1079,11 @@ class _EventRow extends StatelessWidget {
           if (event.halls.isNotEmpty) ...[
             const SizedBox(height: 8),
             Text(
-              event.halls.join(' · '),
+              event.halls.length <= 4
+                  ? event.halls.join(' · ')
+                  : '${event.halls.take(4).join(' · ')} · +${event.halls.length - 4} more',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                 color: _sapphire,
                 fontSize: 10,
