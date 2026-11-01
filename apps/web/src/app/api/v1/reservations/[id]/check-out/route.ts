@@ -19,6 +19,7 @@ import { getApprovedRoomDiscount } from '@/lib/finance/approved-room-discount';
 import { fulfilReachBooking } from '@/lib/reach-commission';
 import { hasEntitlement } from '@/lib/auth/entitlement';
 import { computeRateBreakdown, resolveBreakdownConfig } from '@/lib/room-rate-breakdown';
+import { resolveUser } from '@/lib/resolve-user';
 
 export async function POST(
   req: NextRequest,
@@ -26,8 +27,13 @@ export async function POST(
 ) {
   try {
     const session = await auth();
-    if (!session?.user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
-    const ctx = await requireOrganizationContext((session.user as any).id || (session as any).user.id);
+    const mobileUser = session?.user ? null : await resolveUser(req);
+    const actor: any = session?.user || mobileUser;
+    if (!actor) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
+    const actorId = actor.id;
+    const actorEmail = actor.email || '';
+    const actorRole = String(actor.role || 'STAFF').toUpperCase();
+    const ctx = await requireOrganizationContext(actorId);
 
     const { id } = await params;
     const body = await req.json().catch(() => ({}));
@@ -57,14 +63,14 @@ export async function POST(
       return errorResponse('INVALID_STATE', `Cannot check out a reservation with status ${reservation.status}`, 409);
     }
 
-    await assertPropertyAccess(session.user.id, reservation.propertyId);
+    await assertPropertyAccess(actorId, reservation.propertyId);
     if (await isNightAuditTransactionLocked(reservation.propertyId)) {
       return errorResponse('NIGHT_AUDIT_IN_PROGRESS', 'Check-out is temporarily paused while Night Audit is posting.', 409);
     }
-    const userRole = String((session.user as any).role || 'STAFF').toUpperCase();
+    const userRole = actorRole;
     const isNightAuditor = userRole === 'NIGHT_AUDITOR' || userRole === 'GENERAL_CASHIER' || userRole === 'MANAGER' || userRole === 'ADMIN' || userRole === 'SUPER_ADMIN';
-    const canCheckOut = await hasPermission(session.user.id, 'reservation', 'update', reservation.propertyId);
-    const canPostCityLedger = await hasPermission(session.user.id, 'LEDGER', 'CREATE', reservation.propertyId);
+    const canCheckOut = await hasPermission(actorId, 'reservation', 'update', reservation.propertyId);
+    const canPostCityLedger = await hasPermission(actorId, 'LEDGER', 'CREATE', reservation.propertyId);
     if (!canCheckOut && !canPostCityLedger && !isNightAuditor) return errorResponse('FORBIDDEN', 'Insufficient permissions to complete checkout', 403);
 
     const checkoutProperty = await prisma.property.findUnique({
@@ -232,7 +238,7 @@ export async function POST(
                   amount: line.amount,
                   baseAmount: line.amount,
                   currency: room.currency || targetFolio.currency || 'NGN',
-                  postedBy: session.user.id,
+                  postedBy: actorId,
                   operationId: line.operationId,
                   reservationId: reservation.id,
                   guestId: reservation.primaryGuestId,
@@ -278,7 +284,7 @@ export async function POST(
             currency: folio.currency || 'NGN',
             source: 'CHECKOUT_GUEST_CREDIT',
             description: `Applied guest credit at checkout for reservation ${reservation.confirmationNumber}`,
-            appliedBy: session.user.id,
+            appliedBy: actorId,
             operationKey: `CHECKOUT_GUEST_CREDIT:${reservation.id}:${folio.id}`,
             businessDate: checkoutBusinessDate,
           });
@@ -290,7 +296,7 @@ export async function POST(
             reservationId: reservation.id,
             amount: Math.max(0, outstanding - sameFolioCreditApplied),
             currency: folio.currency || 'NGN',
-            appliedBy: session.user.id,
+            appliedBy: actorId,
             operationKey: `CHECKOUT_GUEST_CREDIT:${reservation.id}:${folio.id}`,
             businessDate: checkoutBusinessDate,
             description: `Applied previous-stay guest credit at checkout for reservation ${reservation.confirmationNumber}`,
@@ -377,7 +383,7 @@ export async function POST(
           guestName: (routeToSkipper || routeToGuestLedger) && reservation.primaryGuest ? `${reservation.primaryGuest.firstName} ${reservation.primaryGuest.lastName}` : undefined,
           guestPhone: (routeToSkipper || routeToGuestLedger) && reservation.primaryGuest?.phone ? reservation.primaryGuest.phone : undefined,
           confirmationNumber: reservation.confirmationNumber,
-          createdBy: session.user.id,
+          createdBy: actorId,
           keepFolioOpen: Boolean(reservation.corporateAccountId),
         });
       } else if (totalBalance > 0) {
@@ -452,7 +458,7 @@ export async function POST(
           data: {
             status: 'CLOSED',
             closedAt: new Date(),
-            closedBy: session.user.id,
+            closedBy: actorId,
             version: { increment: 1 }
           }
         });
@@ -477,7 +483,7 @@ export async function POST(
           await fulfilReachBooking(tx, {
             referralBookingId: booking.id,
             collectedRevenue,
-            actorId: session.user.id,
+            actorId,
             now: today,
           });
         }
@@ -490,9 +496,9 @@ export async function POST(
           data: {
             organizationId: property.organizationId,
             propertyId: property.id,
-            userId: session.user.id,
-            userEmail: session.user.email,
-            userRole: (session.user as any).role || 'STAFF',
+            userId: actorId,
+            userEmail: actorEmail,
+            userRole: actorRole,
             action: 'RESERVATION_CHECKED_OUT',
             resource: 'Reservation',
             resourceId: id,

@@ -101,4 +101,24 @@ class HubRepository {
       response.data['data']['reservation'] as Map,
     );
   }
+
+  Future<void> checkoutToCityLedger(String reservationId) async {
+    try {
+      await _dio.post(
+        '/v1/reservations/$reservationId/check-out',
+        data: {'forceSkipper': true},
+      );
+    } on DioException catch (error) {
+      final body = error.response?.data;
+      final nested = body is Map ? body['error'] : null;
+      final message = nested is Map
+          ? nested['message']
+          : body is Map
+          ? body['message']
+          : null;
+      throw Exception(
+        message?.toString() ?? 'Unable to complete City Ledger checkout',
+      );
+    }
+  }
 }

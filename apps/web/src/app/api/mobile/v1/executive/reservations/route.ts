@@ -38,11 +38,20 @@ export async function GET(req: NextRequest) {
         include: {
           primaryGuest: { select: { id: true, firstName: true, lastName: true, email: true, phone: true, isVip: true, vipLevel: true, companyName: true } },
           reservationRooms: { include: { room: { select: { id: true, number: true, displayName: true } } }, orderBy: { checkIn: 'asc' } },
-          folios: { where: { status: { not: 'VOID' } }, orderBy: { createdAt: 'asc' }, include: { items: { where: { voidedAt: null }, orderBy: { businessDate: 'asc' }, take: 100 } } },
+          folios: {
+            where: { status: { not: 'VOID' } },
+            orderBy: { createdAt: 'asc' },
+            include: {
+              items: { where: { voidedAt: null }, orderBy: { businessDate: 'asc' }, take: 100 },
+              payments: { where: { status: { in: ['COMPLETED', 'REFUNDED'] } }, orderBy: { createdAt: 'desc' }, take: 100 },
+              credits: { where: { status: { in: ['AVAILABLE', 'PARTIALLY_APPLIED'] } }, orderBy: { createdAt: 'asc' } },
+            },
+          },
         },
       });
       if (!reservation) return errorResponse('NOT_FOUND', 'Reservation not found', 404);
-      return successResponse({ reservation: serializeReservation(reservation, true) }, 200);
+      const guestCreditAvailable = await getGuestCreditAvailable(reservation.primaryGuestId);
+      return successResponse({ reservation: serializeReservation(reservation, true, guestCreditAvailable) }, 200);
     }
 
     const property = await prisma.property.findUnique({ where: { id: propertyId }, select: { businessDate: true } });
@@ -55,7 +64,10 @@ export async function GET(req: NextRequest) {
       where: { propertyId, deletedAt: null, OR: [
         { status: 'CHECKED_IN', checkIn: { lt: nextDay }, checkOut: { gt: day } },
         { status: 'NO_SHOW', checkIn: day },
-        { status: { in: ['CONFIRMED', 'PENDING'] }, checkIn: day },
+        // Reserved is a management register, not a daily arrival list. Keep
+        // every active confirmed/pending reservation visible regardless of its
+        // arrival date; checked-in and no-show remain business-date scoped.
+        { status: { in: ['CONFIRMED', 'PENDING'] } },
       ] },
       orderBy: [{ checkIn: 'asc' }, { primaryGuest: { lastName: 'asc' } }],
       include: {
@@ -72,10 +84,26 @@ export async function GET(req: NextRequest) {
   }
 }
 
-function serializeReservation(reservation: any, detailed = false) {
+async function getGuestCreditAvailable(guestId: string | null | undefined) {
+  if (!guestId) return 0;
+  const entries = await prisma.cityLedgerEntry.findMany({
+    where: { guestId, type: 'REFUND_OWED', status: 'OPEN' },
+    include: { allocations: { select: { amount: true } } },
+  });
+  return entries.reduce((sum, entry) => {
+    const allocated = entry.allocations.reduce((entrySum, allocation) => entrySum + asNumber(allocation.amount), 0);
+    return sum + Math.max(0, asNumber(entry.amount) - allocated);
+  }, 0);
+}
+
+function serializeReservation(reservation: any, detailed = false, guestCreditAvailable = 0) {
   const guest = reservation.primaryGuest;
   const folios = reservation.folios || [];
   const category = reservation.status === 'CHECKED_IN' ? 'CHECKED_IN' : reservation.status === 'NO_SHOW' ? 'NO_SHOW' : 'RESERVED';
+  const totalCharges = folios.reduce((sum: number, folio: any) => sum + asNumber(folio.totalCharges), 0);
+  const totalPayments = folios.reduce((sum: number, folio: any) => sum + asNumber(folio.totalPayments), 0);
+  const signedBalance = Math.round((totalCharges - totalPayments) * 100) / 100;
+  const availableFolioCredit = folios.reduce((sum: number, folio: any) => sum + (folio.credits || []).reduce((creditSum: number, credit: any) => creditSum + asNumber(credit.remainingAmount), 0), 0);
   return {
     id: reservation.id,
     confirmationNumber: reservation.confirmationNumber,
@@ -88,6 +116,15 @@ function serializeReservation(reservation: any, detailed = false) {
     children: reservation.children,
     currency: reservation.currency,
     rooms: (reservation.reservationRooms || []).map((room: any) => ({ id: room.id, number: room.room?.number || 'Unassigned', status: room.status, rateAmount: asNumber(room.rateAmount), checkIn: room.checkIn, checkOut: room.checkOut })),
-    folios: detailed ? folios.map((item: any) => ({ id: item.id, folioNumber: item.folioNumber, type: item.type, status: item.status, currency: item.currency, totalCharges: asNumber(item.totalCharges), totalPayments: asNumber(item.totalPayments), balance: asNumber(item.balance), items: (item.items || []).map((line: any) => ({ id: line.id, businessDate: line.businessDate, type: line.type, description: line.description, amount: asNumber(line.amount), currency: line.currency, revenueCategory: line.revenueCategory })) })) : folios.map((item: any) => ({ totalCharges: asNumber(item.totalCharges), totalPayments: asNumber(item.totalPayments), balance: asNumber(item.balance), currency: item.currency })),
+    balanceSummary: {
+      currency: folios[0]?.currency || reservation.currency || 'NGN',
+      charges: totalCharges,
+      payments: totalPayments,
+      credit: availableFolioCredit + guestCreditAvailable,
+      balance: signedBalance,
+      outstanding: Math.max(0, signedBalance),
+      inDebt: signedBalance > 0.01,
+    },
+    folios: detailed ? folios.map((item: any) => ({ id: item.id, folioNumber: item.folioNumber, type: item.type, status: item.status, currency: item.currency, totalCharges: asNumber(item.totalCharges), totalPayments: asNumber(item.totalPayments), balance: Math.round((asNumber(item.totalCharges) - asNumber(item.totalPayments)) * 100) / 100, availableCredit: (item.credits || []).reduce((sum: number, credit: any) => sum + asNumber(credit.remainingAmount), 0), items: (item.items || []).map((line: any) => ({ id: line.id, businessDate: line.businessDate, type: line.type, description: line.description, amount: asNumber(line.amount), currency: line.currency, revenueCategory: line.revenueCategory })) })) : folios.map((item: any) => ({ totalCharges: asNumber(item.totalCharges), totalPayments: asNumber(item.totalPayments), balance: Math.round((asNumber(item.totalCharges) - asNumber(item.totalPayments)) * 100) / 100, currency: item.currency })),
   };
 }

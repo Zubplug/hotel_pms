@@ -14,14 +14,22 @@ const _gold = Color(0xFFD4AF37);
 const _textMuted = Color(0xFF94A3B8);
 
 class MainScreen extends ConsumerStatefulWidget {
-  const MainScreen({super.key});
+  final int initialIndex;
+
+  const MainScreen({super.key, this.initialIndex = 0});
 
   @override
   ConsumerState<MainScreen> createState() => _MainScreenState();
 }
 
 class _MainScreenState extends ConsumerState<MainScreen> {
-  int _currentIndex = 0;
+  late int _currentIndex;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentIndex = widget.initialIndex.clamp(0, 4);
+  }
 
   /// Called by DashboardScreen (via ancestor lookup) to switch tabs from alert action chips.
   void switchTab(int index) {
