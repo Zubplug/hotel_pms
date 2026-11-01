@@ -8,8 +8,6 @@ import 'package:mobile_management/features/profile/presentation/screens/profile_
 import 'package:mobile_management/features/profile/presentation/providers/profile_provider.dart';
 import 'package:mobile_management/features/fnb/presentation/screens/fnb_screen.dart';
 
-
-
 // ─── Design Tokens ────────────────────────────────────────────────────────────
 const _bgDeep = Color(0xFF070D1A);
 const _gold = Color(0xFFD4AF37);
@@ -37,9 +35,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
     return profileState.when(
       loading: () => const Scaffold(
         backgroundColor: _bgDeep,
-        body: Center(
-          child: CircularProgressIndicator(color: _gold),
-        ),
+        body: Center(child: CircularProgressIndicator(color: _gold)),
       ),
       error: (err, _) => const Scaffold(
         backgroundColor: _bgDeep,
@@ -118,7 +114,11 @@ class _MainScreenState extends ConsumerState<MainScreen> {
                 color: _gold.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.rocket_launch_rounded, color: _gold, size: 48),
+              child: const Icon(
+                Icons.rocket_launch_rounded,
+                color: _gold,
+                size: 48,
+              ),
             ),
             const SizedBox(height: 24),
             const Text(
@@ -134,11 +134,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
             const Text(
               'The Management Hub is currently under development. Stay tuned for advanced alerts and approvals.',
               textAlign: TextAlign.center,
-              style: TextStyle(
-                color: _textMuted,
-                fontSize: 14,
-                height: 1.5,
-              ),
+              style: TextStyle(color: _textMuted, fontSize: 14, height: 1.5),
             ),
             const SizedBox(height: 32),
             SizedBox(
@@ -156,10 +152,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
                 ),
                 child: const Text(
                   'Got it',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
                 ),
               ),
             ),
@@ -180,11 +173,36 @@ class _PremiumNavBar extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final items = [
-      _NavItem(icon: Icons.home_outlined, activeIcon: Icons.home_rounded, label: 'Home', badge: 0),
-      _NavItem(icon: Icons.king_bed_outlined, activeIcon: Icons.king_bed_rounded, label: 'Rooms', badge: 0),
-      _NavItem(icon: Icons.account_balance_wallet_outlined, activeIcon: Icons.account_balance_wallet_rounded, label: 'Finance', badge: 0),
-      _NavItem(icon: Icons.restaurant_outlined, activeIcon: Icons.restaurant_rounded, label: 'F&B', badge: 0),
-      _NavItem(icon: Icons.apps_rounded, activeIcon: Icons.apps_rounded, label: 'Hub', badge: 0),
+      _NavItem(
+        icon: Icons.home_outlined,
+        activeIcon: Icons.home_rounded,
+        label: 'Home',
+        badge: 0,
+      ),
+      _NavItem(
+        icon: Icons.king_bed_outlined,
+        activeIcon: Icons.king_bed_rounded,
+        label: 'Rooms',
+        badge: 0,
+      ),
+      _NavItem(
+        icon: Icons.account_balance_wallet_outlined,
+        activeIcon: Icons.account_balance_wallet_rounded,
+        label: 'Finance',
+        badge: 0,
+      ),
+      _NavItem(
+        icon: Icons.dashboard_outlined,
+        activeIcon: Icons.dashboard_rounded,
+        label: 'Ops',
+        badge: 0,
+      ),
+      _NavItem(
+        icon: Icons.apps_rounded,
+        activeIcon: Icons.apps_rounded,
+        label: 'Hub',
+        badge: 0,
+      ),
     ];
 
     return Container(
@@ -205,12 +223,20 @@ class _PremiumNavBar extends ConsumerWidget {
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 200),
                     curve: Curves.easeOutCubic,
-                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 8,
+                      horizontal: 4,
+                    ),
                     decoration: BoxDecoration(
-                      color: isActive ? _gold.withValues(alpha: 0.08) : Colors.transparent,
+                      color: isActive
+                          ? _gold.withValues(alpha: 0.08)
+                          : Colors.transparent,
                       borderRadius: BorderRadius.circular(14),
                       border: isActive
-                          ? Border.all(color: _gold.withValues(alpha: 0.15), width: 1)
+                          ? Border.all(
+                              color: _gold.withValues(alpha: 0.15),
+                              width: 1,
+                            )
                           : null,
                     ),
                     child: Stack(
@@ -230,7 +256,9 @@ class _PremiumNavBar extends ConsumerWidget {
                               style: TextStyle(
                                 color: isActive ? _gold : _textMuted,
                                 fontSize: 10,
-                                fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
+                                fontWeight: isActive
+                                    ? FontWeight.w700
+                                    : FontWeight.w500,
                               ),
                             ),
                           ],
@@ -241,7 +269,10 @@ class _PremiumNavBar extends ConsumerWidget {
                             top: 0,
                             right: 4,
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 4,
+                                vertical: 2,
+                              ),
                               decoration: BoxDecoration(
                                 color: const Color(0xFFF43F5E),
                                 borderRadius: BorderRadius.circular(8),

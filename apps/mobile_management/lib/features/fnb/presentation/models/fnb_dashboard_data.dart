@@ -14,6 +14,7 @@ class FnbDashboardData {
   final FnbPosOperations posOperations;
   final FnbEventOverview eventOverview;
   final List<FnbHall> hallOverview;
+  final AuditedVenueRevenue auditedVenueRevenue;
 
   FnbDashboardData({
     required this.businessDate,
@@ -26,6 +27,7 @@ class FnbDashboardData {
     required this.posOperations,
     required this.eventOverview,
     required this.hallOverview,
+    required this.auditedVenueRevenue,
   });
 
   factory FnbDashboardData.fromJson(Map<String, dynamic> json) {
@@ -52,8 +54,30 @@ class FnbDashboardData {
       hallOverview: (json['hallOverview'] as List? ?? [])
           .map((e) => FnbHall.fromJson(e as Map<String, dynamic>))
           .toList(),
+      auditedVenueRevenue: AuditedVenueRevenue.fromJson(
+        json['auditedVenueRevenue'] ?? {},
+      ),
     );
   }
+}
+
+class AuditedVenueRevenue {
+  final double eventRevenue;
+  final double hallRevenue;
+  final double equipmentRevenue;
+
+  const AuditedVenueRevenue({
+    required this.eventRevenue,
+    required this.hallRevenue,
+    required this.equipmentRevenue,
+  });
+
+  factory AuditedVenueRevenue.fromJson(Map<String, dynamic> json) =>
+      AuditedVenueRevenue(
+        eventRevenue: (json['eventRevenue'] ?? 0).toDouble(),
+        hallRevenue: (json['hallRevenue'] ?? 0).toDouble(),
+        equipmentRevenue: (json['equipmentRevenue'] ?? 0).toDouble(),
+      );
 }
 
 class FnbEventOverview {

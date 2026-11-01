@@ -56,6 +56,28 @@ export async function GET(req: NextRequest) {
     });
     const revenueDate = lastAudit?.businessDate ?? businessDate;
 
+    const auditedEventItems = lastAudit
+      ? await prisma.folioItem.findMany({
+          where: {
+            folio: { propertyId },
+            businessDate: revenueDate,
+            type: 'CHARGE',
+            voidedAt: null,
+            revenueClass: { in: ['HALL', 'EQUIPMENT', 'FOOD'] },
+          },
+          select: { amount: true, revenueClass: true, source: true },
+        })
+      : [];
+    const auditedHallRevenue = auditedEventItems
+      .filter((item) => item.revenueClass === 'HALL')
+      .reduce((sum, item) => sum + Number(item.amount), 0);
+    const auditedEquipmentRevenue = auditedEventItems
+      .filter((item) => item.revenueClass === 'EQUIPMENT')
+      .reduce((sum, item) => sum + Number(item.amount), 0);
+    const auditedEventFoodRevenue = auditedEventItems
+      .filter((item) => item.revenueClass === 'FOOD' && item.source === 'OTHER')
+      .reduce((sum, item) => sum + Number(item.amount), 0);
+
     // ── F&B Outlets scoped to this property ───────────────────────────────────
     const outlets = await prisma.posOutlet.findMany({
       where: { propertyId, isActive: true },
@@ -591,6 +613,11 @@ export async function GET(req: NextRequest) {
       businessDate: format(revenueDate, 'yyyy-MM-dd'),
       currentBusinessDate: format(businessDate, 'yyyy-MM-dd'),
       revenueStatus: lastAudit ? 'AUDITED' : 'UNAVAILABLE',
+      auditedVenueRevenue: {
+        eventRevenue: Number((auditedHallRevenue + auditedEquipmentRevenue + auditedEventFoodRevenue).toFixed(2)),
+        hallRevenue: Number(auditedHallRevenue.toFixed(2)),
+        equipmentRevenue: Number(auditedEquipmentRevenue.toFixed(2)),
+      },
 
       summary: {
         totalFnbRevenue,

@@ -261,7 +261,7 @@ class _CommandHero extends StatelessWidget {
                     ),
                     SizedBox(height: 3),
                     Text(
-                      'F&B, events and venue readiness',
+                      'Food, events and venue readiness',
                       style: TextStyle(color: _textMuted, fontSize: 11),
                     ),
                   ],
@@ -278,7 +278,7 @@ class _CommandHero extends StatelessWidget {
             children: [
               Expanded(
                 child: _HeroMetric(
-                  label: 'F&B TODAY',
+                  label: 'AUDITED F&B',
                   value: _money(data.summary.totalFnbRevenue),
                   color: _emerald,
                 ),
@@ -424,6 +424,20 @@ class _EventsManagementView extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        _SectionHeader(
+          icon: Icons.account_balance_rounded,
+          title: 'AUDITED REVENUE',
+          subtitle: 'Closed financial performance for the reporting date',
+        ),
+        const SizedBox(height: 12),
+        AuditedRevenueCard(
+          title: 'AUDITED EVENT REVENUE',
+          subtitle: 'Hall, equipment and event food posted at night audit',
+          amount: data.auditedVenueRevenue.eventRevenue,
+          icon: Icons.event_available_rounded,
+          color: _gold,
+        ),
+        const SizedBox(height: 24),
         _MetricGrid(
           items: [
             _MetricTile(
@@ -487,6 +501,20 @@ class _HallsManagementView extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        _SectionHeader(
+          icon: Icons.account_balance_rounded,
+          title: 'AUDITED REVENUE',
+          subtitle: 'Closed financial performance for the reporting date',
+        ),
+        const SizedBox(height: 12),
+        AuditedRevenueCard(
+          title: 'AUDITED HALL REVENUE',
+          subtitle: 'Venue hire revenue posted at night audit',
+          amount: data.auditedVenueRevenue.hallRevenue,
+          icon: Icons.meeting_room_rounded,
+          color: _sapphire,
+        ),
+        const SizedBox(height: 24),
         _MetricGrid(
           items: [
             _MetricTile(
@@ -985,7 +1013,7 @@ class _LoadingView extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             const Text(
-              'Loading F&B Analytics…',
+              'Loading Hospitality Operations…',
               style: TextStyle(color: _textMuted, fontSize: 13),
             ),
           ],
@@ -1018,7 +1046,7 @@ class _ErrorView extends StatelessWidget {
               ),
               const SizedBox(height: 16),
               const Text(
-                'Could not load F&B data',
+                'Could not load Hospitality Operations',
                 style: TextStyle(
                   color: _textPrimary,
                   fontSize: 16,

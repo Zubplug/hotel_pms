@@ -12,6 +12,6 @@ class FnbRepository {
       final data = response.data['data'] ?? response.data;
       return FnbDashboardData.fromJson(data as Map<String, dynamic>);
     }
-    throw Exception('Failed to load F&B dashboard data');
+    throw Exception('Failed to load Hospitality Operations data');
   }
 }

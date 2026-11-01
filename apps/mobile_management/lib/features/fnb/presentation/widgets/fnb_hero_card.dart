@@ -22,6 +22,79 @@ String _fmtAmt(double v) {
   return '₦${_fmt.format(v)}';
 }
 
+class AuditedRevenueCard extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final double amount;
+  final IconData icon;
+  final Color color;
+
+  const AuditedRevenueCard({
+    super.key,
+    required this.title,
+    required this.subtitle,
+    required this.amount,
+    required this.icon,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: double.infinity,
+    padding: const EdgeInsets.all(18),
+    decoration: BoxDecoration(
+      gradient: LinearGradient(
+        colors: [color.withValues(alpha: 0.16), const Color(0xFF111827)],
+      ),
+      borderRadius: BorderRadius.circular(20),
+      border: Border.all(color: color.withValues(alpha: 0.28)),
+    ),
+    child: Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(11),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.14),
+            borderRadius: BorderRadius.circular(13),
+          ),
+          child: Icon(icon, color: color, size: 22),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: TextStyle(
+                  color: color,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 1.1,
+                ),
+              ),
+              const SizedBox(height: 5),
+              Text(
+                _fmtAmt(amount),
+                style: const TextStyle(
+                  color: _textPrimary,
+                  fontSize: 25,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                subtitle,
+                style: const TextStyle(color: _textMuted, fontSize: 10),
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
 /// Full-width hero card: total F&B revenue + covers + avg check + trend badge
 class FnbHeroCard extends StatelessWidget {
   final FnbSummary summary;
@@ -37,9 +110,11 @@ class FnbHeroCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final trendUp = summary.revenueTrend >= 0;
     final stackedTotal = summary.stackedTotal;
-    final foodPct   = stackedTotal > 0 ? summary.foodRevenue      / stackedTotal : 0.0;
-    final bevPct    = stackedTotal > 0 ? summary.beverageRevenue   / stackedTotal : 0.0;
-    final barPct    = stackedTotal > 0 ? summary.barRevenue        / stackedTotal : 0.0;
+    final foodPct = stackedTotal > 0 ? summary.foodRevenue / stackedTotal : 0.0;
+    final bevPct = stackedTotal > 0
+        ? summary.beverageRevenue / stackedTotal
+        : 0.0;
+    final barPct = stackedTotal > 0 ? summary.barRevenue / stackedTotal : 0.0;
 
     return Container(
       decoration: BoxDecoration(
@@ -64,10 +139,16 @@ class FnbHeroCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // ── Header row ──────────────────────────────────────────────────
-            Row(
+            Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              runSpacing: 8,
+              spacing: 8,
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: _emerald.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(6),
@@ -79,7 +160,7 @@ class FnbHeroCard extends StatelessWidget {
                       Icon(Icons.restaurant_rounded, color: _emerald, size: 12),
                       SizedBox(width: 5),
                       Text(
-                        'F&B INTELLIGENCE',
+                        'F&B PERFORMANCE',
                         style: TextStyle(
                           color: _emerald,
                           fontSize: 10,
@@ -90,22 +171,28 @@ class FnbHeroCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                const Spacer(),
                 // Trend badge
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: (trendUp ? _emerald : _rose).withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(
-                      color: (trendUp ? _emerald : _rose).withValues(alpha: 0.3),
+                      color: (trendUp ? _emerald : _rose).withValues(
+                        alpha: 0.3,
+                      ),
                     ),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(
-                        trendUp ? Icons.trending_up_rounded : Icons.trending_down_rounded,
+                        trendUp
+                            ? Icons.trending_up_rounded
+                            : Icons.trending_down_rounded,
                         color: trendUp ? _emerald : _rose,
                         size: 12,
                       ),
@@ -128,7 +215,7 @@ class FnbHeroCard extends StatelessWidget {
 
             // ── Total Revenue ────────────────────────────────────────────────
             Text(
-              'TOTAL F&B REVENUE',
+              'AUDITED F&B REVENUE',
               style: const TextStyle(
                 color: _textMuted,
                 fontSize: 10,
@@ -223,11 +310,26 @@ class FnbHeroCard extends StatelessWidget {
               // Legend
               Row(
                 children: [
-                  _MixLegend(color: _emerald,  label: 'Food',    value: _fmtAmt(summary.foodRevenue),      pct: foodPct),
+                  _MixLegend(
+                    color: _emerald,
+                    label: 'Food',
+                    value: _fmtAmt(summary.foodRevenue),
+                    pct: foodPct,
+                  ),
                   const SizedBox(width: 16),
-                  _MixLegend(color: _sapphire, label: 'Beverage', value: _fmtAmt(summary.beverageRevenue), pct: bevPct),
+                  _MixLegend(
+                    color: _sapphire,
+                    label: 'Beverage',
+                    value: _fmtAmt(summary.beverageRevenue),
+                    pct: bevPct,
+                  ),
                   const SizedBox(width: 16),
-                  _MixLegend(color: _violet,   label: 'Bar',     value: _fmtAmt(summary.barRevenue),       pct: barPct),
+                  _MixLegend(
+                    color: _violet,
+                    label: 'Bar',
+                    value: _fmtAmt(summary.barRevenue),
+                    pct: barPct,
+                  ),
                 ],
               ),
             ],
@@ -321,7 +423,8 @@ class _MixLegend extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-          width: 8, height: 8,
+          width: 8,
+          height: 8,
           decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
         const SizedBox(width: 5),
