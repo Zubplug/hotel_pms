@@ -76,7 +76,7 @@ export async function GET(req: NextRequest) {
       orderBy: { createdAt: 'desc' }, take: 100,
     }),
     prisma.approvalRequest.findMany({
-      where: { ...propertyFilter, type: 'ACCOUNT_DELETION', status: 'PENDING' },
+      where: { ...propertyFilter, type: 'ACCOUNT_DELETION', status: { in: ['PENDING', 'APPROVED'] } },
       orderBy: { createdAt: 'desc' }, take: 100,
     }),
   ]);
@@ -93,7 +93,7 @@ export async function GET(req: NextRequest) {
     contractId: (approval.details as { contractId?: string } | null)?.contractId || null,
     approvalStage: (approval.details as { stage?: string } | null)?.stage || 'GENERAL_CASHIER_REVIEW',
   }));
-  const accountDeletions = isManagement ? accountDeletionRequests.map((approval) => ({
+  const accountDeletions = isManagement ? accountDeletionRequests.filter((approval) => approval.status === 'PENDING' || (approval.details as { deletionStatus?: string } | null)?.deletionStatus === 'AWAITING_DATA_REVIEW').map((approval) => ({
     ...approval,
     approval,
     approvalStage: (approval.details as { stage?: string } | null)?.stage || 'PROPERTY_MANAGER_REVIEW',
