@@ -41,7 +41,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   try {
     const user = await resolveUser(req);
     if (!user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
-    if (!['NIGHT_AUDITOR', 'GENERAL_MANAGER', 'GENERAL_CASHIER', 'CASHIER', 'FRONT_DESK_CASHIER', 'FRONT_DESK_MANAGER', 'MANAGER', 'FINANCE_MANAGER', 'ACCOUNTANT', 'ADMIN', 'SUPER_ADMIN'].includes(user.role) && !user.isSuperAdmin) {
+    if (!['NIGHT_AUDITOR', 'GENERAL_MANAGER', 'HOTEL_MANAGER', 'DIRECTOR', 'CEO', 'GENERAL_CASHIER', 'CASHIER', 'FRONT_DESK_CASHIER', 'FRONT_DESK_MANAGER', 'MANAGER', 'FINANCE_MANAGER', 'ACCOUNTANT', 'ADMIN', 'SUPER_ADMIN'].includes(user.role) && !user.isSuperAdmin) {
       return errorResponse('FORBIDDEN', 'Manager access required', 403);
     }
     const body = await req.json().catch(() => ({}));
@@ -63,6 +63,20 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       // 2. Validate Authorization / Property Scope
       if (!allowedPropertyIds.includes(approval.propertyId)) {
         throw new Error('FORBIDDEN');
+      }
+
+      if (approval.type === 'ACCOUNT_DELETION') {
+        if (approval.status !== 'PENDING') throw new Error('CONFLICT');
+        const managementRoles = ['GENERAL_MANAGER', 'HOTEL_MANAGER', 'MANAGER', 'DIRECTOR', 'CEO', 'ADMIN', 'SUPER_ADMIN'];
+        if (!user.isSuperAdmin && !managementRoles.includes(String(user.role).toUpperCase())) throw new Error('MANAGER_APPROVAL_REQUIRED');
+        const details = (approval.details || {}) as Record<string, any>;
+        const now = new Date();
+        const updated = await tx.approvalRequest.update({
+          where: { id: approval.id },
+          data: { status: 'APPROVED', reviewedBy: user.id, reviewedAt: now, details: { ...details, stage: 'MANAGER_APPROVED', deletionStatus: 'AWAITING_DATA_REVIEW', managerApprovedBy: user.id, managerApprovedAt: now.toISOString(), managerNote: String(body.comment || body.notes || '').trim() || null } },
+        });
+        await tx.auditLog.create({ data: { organizationId: (await tx.property.findUnique({ where: { id: approval.propertyId } }))?.organizationId || '', propertyId: approval.propertyId, userId: user.id, action: 'ACCOUNT_DELETION_APPROVED_FOR_REVIEW', resource: 'ApprovalRequest', resourceId: approval.id, newValue: { deletionStatus: 'AWAITING_DATA_REVIEW', dataDeleted: false }, ipAddress: req.headers.get('x-forwarded-for') || '', userAgent: req.headers.get('user-agent') || '', requestId: crypto.randomUUID() } });
+        return { status: 'APPROVED_FOR_REVIEW', dataDeleted: false, approval: updated };
       }
 
       if (approval.type === 'CORPORATE_CONTRACT') {
@@ -679,6 +693,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     
     if (err.message === 'NOT_FOUND') return errorResponse('NOT_FOUND', 'Approval request not found', 404);
     if (err.message === 'FORBIDDEN') return errorResponse('FORBIDDEN', 'Access denied to this property', 403);
+    if (err.message === 'MANAGER_APPROVAL_REQUIRED') return errorResponse('FORBIDDEN', 'Property manager approval is required.', 403);
     if (err.message === 'ASSIGNED_APPROVER_REQUIRED') return errorResponse('FORBIDDEN', 'This refund is assigned to another approver.', 403);
     if (err.message === 'ASSIGNED_ROLE_REQUIRED') return errorResponse('FORBIDDEN', 'You do not hold the approval role assigned to this refund.', 403);
     if (err.message === 'REFUND_STAGE_ROLE_REQUIRED') return errorResponse('FORBIDDEN', 'This refund is not at your approval stage.', 403);

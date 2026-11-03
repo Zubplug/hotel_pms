@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
   if (!user.isSuperAdmin && !ACCESS_ROLES.has(user.role)) return NextResponse.json({ error: 'Approval center access required' }, { status: 403 });
 
   const propertyFilter = { propertyId: { in: user.allowedProperties } };
-  const [priceApprovalsRaw, refunds, refundApprovals, eventInvoicesRaw, stockTransfers, purchaseOrders, corporateApprovals] = await Promise.all([
+  const [priceApprovalsRaw, refunds, refundApprovals, eventInvoicesRaw, stockTransfers, purchaseOrders, corporateApprovals, accountDeletionRequests] = await Promise.all([
     prisma.approvalRequest.findMany({
       where: { ...propertyFilter, type: { in: ['POS_PRICE_CHANGE', 'POS_MENU_CREATE', 'POS_MODIFIER_CREATE', 'POS_MODIFIER_UPDATE'] }, status: { not: 'CANCELLED' } },
       orderBy: { createdAt: 'desc' }, take: 200,
@@ -75,6 +75,10 @@ export async function GET(req: NextRequest) {
       where: { ...propertyFilter, type: 'CORPORATE_CONTRACT', status: 'PENDING' },
       orderBy: { createdAt: 'desc' }, take: 100,
     }),
+    prisma.approvalRequest.findMany({
+      where: { ...propertyFilter, type: 'ACCOUNT_DELETION', status: 'PENDING' },
+      orderBy: { createdAt: 'desc' }, take: 100,
+    }),
   ]);
 
   const isAccountant = ['ACCOUNTANT', 'FINANCE_MANAGER'].includes(user.role) || user.isSuperAdmin;
@@ -89,6 +93,11 @@ export async function GET(req: NextRequest) {
     contractId: (approval.details as { contractId?: string } | null)?.contractId || null,
     approvalStage: (approval.details as { stage?: string } | null)?.stage || 'GENERAL_CASHIER_REVIEW',
   }));
+  const accountDeletions = isManagement ? accountDeletionRequests.map((approval) => ({
+    ...approval,
+    approval,
+    approvalStage: (approval.details as { stage?: string } | null)?.stage || 'PROPERTY_MANAGER_REVIEW',
+  })) : [];
   const priceApprovals = priceApprovalsRaw.filter((approval) => {
     const stage = (approval.details as { stage?: string } | null)?.stage;
     return (isAccountant && stage === 'ACCOUNTANT_REVIEW') || (isCashier && stage === 'GENERAL_CASHIER_REVIEW');
@@ -141,6 +150,7 @@ export async function GET(req: NextRequest) {
       stockTransfers,
       purchaseOrders: purchaseOrdersWithStockItems,
       corporateContracts,
+      accountDeletions,
       role: user.role,
     },
   });

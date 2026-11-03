@@ -56,6 +56,30 @@ class ProfileRepository {
     );
   }
 
+  Future<String> requestAccountDeletion({
+    required String propertyId,
+    required String reason,
+  }) async {
+    try {
+      final response = await _dio.post('/v1/account-deletion/requests', data: {
+        'propertyId': propertyId,
+        'reason': reason,
+      });
+      final data = response.data;
+      if (data is Map && data['data'] is Map) {
+        return data['data']['message']?.toString() ?? 'Request sent for manager review.';
+      }
+      return 'Request sent for manager review.';
+    } on DioException catch (e) {
+      final data = e.response?.data;
+      if (data is Map) {
+        final error = data['error'];
+        throw Exception(error is Map ? error['message'] ?? 'Unable to submit request' : data['message'] ?? 'Unable to submit request');
+      }
+      throw Exception(e.message ?? 'Unable to submit request');
+    }
+  }
+
   Future<void> _request(
     Future<Response<dynamic>> Function() request,
     String fallback,

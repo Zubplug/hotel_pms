@@ -7,6 +7,7 @@ import '../../../../core/storage/secure_storage_provider.dart';
 import '../../data/profile_repository.dart';
 import '../providers/profile_provider.dart';
 import '../models/user_profile.dart';
+import 'delete_account_screen.dart';
 
 // ─── Design Tokens ───────────────────────────────────────────────────────────
 const _bgDeep = Color(0xFF070D1A);
@@ -144,6 +145,18 @@ class ProfileScreen extends ConsumerWidget {
                     title: 'About LodgeCore',
                     icon: Icons.info_outline_rounded,
                     onTap: () {},
+                  ),
+                  _SettingsTile(
+                    title: 'Request account deletion',
+                    icon: Icons.delete_outline_rounded,
+                    onTap: () {
+                      final property = profile.authorization.properties.isNotEmpty ? profile.authorization.properties.first : null;
+                      if (property == null) {
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No property is available for this request.')));
+                        return;
+                      }
+                      Navigator.of(context).push(MaterialPageRoute(builder: (_) => DeleteAccountScreen(propertyId: property.id, propertyName: property.name)));
+                    },
                   ),
                 ]),
                 const SizedBox(height: 40),
