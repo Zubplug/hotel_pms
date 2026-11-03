@@ -7,7 +7,7 @@ import { evaluatePropertyAlerts } from '@/lib/attention-engine';
 import { fetchHotelPulse } from '@/lib/executive/hotel-pulse';
 
 export const dynamic = 'force-dynamic';
-const EXECUTIVE_DASHBOARD_ROLES = new Set(['CEO', 'DIRECTOR', 'GENERAL_MANAGER']);
+const EXECUTIVE_DASHBOARD_ROLES = new Set(['CEO', 'DIRECTOR', 'GENERAL_MANAGER', 'SUPER_ADMIN']);
 
 export async function GET(req: NextRequest) {
   try {
@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
       return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
     }
     if (!EXECUTIVE_DASHBOARD_ROLES.has(String(user.role || '').toUpperCase())) {
-      return errorResponse('FORBIDDEN', 'Executive dashboard access is restricted to CEO, Director, and General Manager roles', 403);
+      return errorResponse('FORBIDDEN', 'Executive dashboard access is restricted to CEO, Director, General Manager, and Super Admin roles', 403);
     }
     const ctx = await requireOrganizationContext(user.id);
     const primaryPropertyId = ctx.propertyIds[0];

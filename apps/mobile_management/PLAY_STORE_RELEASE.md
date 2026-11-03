@@ -1,6 +1,6 @@
 # LodgeMobile Play Store release
 
-The Android application ID is `com.lodgecore.lodgemobile`.
+The Android application ID is `com.lodgecore.management`.
 
 ## Signing
 

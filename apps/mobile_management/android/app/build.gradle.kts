@@ -30,7 +30,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.lodgecore.lodgemobile"
+        applicationId = "com.lodgecore.management"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode

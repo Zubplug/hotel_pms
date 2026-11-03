@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:mobile_management/features/authentication/presentation/providers/auth_provider.dart';
 import 'dashboard_screen.dart';
 import 'auditor_main_screen.dart';
 import 'package:mobile_management/features/rooms/presentation/screens/rooms_screen.dart';
@@ -66,11 +67,18 @@ class _MainScreenState extends ConsumerState<MainScreen> {
           'CEO',
           'DIRECTOR',
           'GENERAL_MANAGER',
+          'SUPER_ADMIN',
         }.contains(userRole);
+
+        // Roles without a mobile dashboard must not receive the shared
+        // operations navigation. Those tabs expose screens that are not yet
+        // provisioned for the role; keep the account usable with sign-out.
+        if (!canViewExecutiveDashboard) {
+          return _DashboardDevelopmentScreen(role: userRole);
+        }
+
         final List<Widget> screens = [
-          canViewExecutiveDashboard
-              ? const DashboardScreen()
-              : _DashboardDevelopmentScreen(role: userRole),
+          const DashboardScreen(),
           const RoomsScreen(),
           const FinanceScreen(),
           const FnbScreen(),
@@ -110,18 +118,22 @@ class _MainScreenState extends ConsumerState<MainScreen> {
   }
 }
 
-class _DashboardDevelopmentScreen extends StatelessWidget {
+class _DashboardDevelopmentScreen extends ConsumerWidget {
   final String role;
 
   const _DashboardDevelopmentScreen({required this.role});
 
   String get _roleLabel => role
       .split('_')
-      .map((part) => part.isEmpty ? part : '${part[0]}${part.substring(1).toLowerCase()}')
+      .map(
+        (part) => part.isEmpty
+            ? part
+            : '${part[0]}${part.substring(1).toLowerCase()}',
+      )
       .join(' ');
 
   @override
-  Widget build(BuildContext context) => Scaffold(
+  Widget build(BuildContext context, WidgetRef ref) => Scaffold(
     backgroundColor: _bgDeep,
     body: Center(
       child: Padding(
@@ -136,7 +148,11 @@ class _DashboardDevelopmentScreen extends StatelessWidget {
                 shape: BoxShape.circle,
                 border: Border.all(color: _gold.withValues(alpha: .25)),
               ),
-              child: const Icon(Icons.auto_awesome_rounded, color: _gold, size: 30),
+              child: const Icon(
+                Icons.auto_awesome_rounded,
+                color: _gold,
+                size: 30,
+              ),
             ),
             const SizedBox(height: 18),
             const Text(
@@ -152,7 +168,28 @@ class _DashboardDevelopmentScreen extends StatelessWidget {
             Text(
               'The $_roleLabel mobile dashboard is currently in development. Your role workspace will appear here when it is ready.',
               textAlign: TextAlign.center,
-              style: const TextStyle(color: _textMuted, fontSize: 13, height: 1.45),
+              style: const TextStyle(
+                color: _textMuted,
+                fontSize: 13,
+                height: 1.45,
+              ),
+            ),
+            const SizedBox(height: 28),
+            OutlinedButton.icon(
+              onPressed: () => ref.read(authProvider.notifier).logout(),
+              icon: const Icon(Icons.logout_rounded, size: 18),
+              label: const Text('Sign out'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.white,
+                side: BorderSide(color: _gold.withValues(alpha: .45)),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 22,
+                  vertical: 13,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
             ),
           ],
         ),
