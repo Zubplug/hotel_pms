@@ -289,7 +289,7 @@ class AuditorDashboardScreen extends ConsumerWidget {
               ),
             ),
             child: const Text(
-              'Review',
+              'Start audit',
               style: TextStyle(fontWeight: FontWeight.w800),
             ),
           ),

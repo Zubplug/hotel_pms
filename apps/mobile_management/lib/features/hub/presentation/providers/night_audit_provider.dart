@@ -1,10 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/night_audit_repository.dart';
 
-final nightAuditPreviewProvider = FutureProvider.family<NightAuditPreview, String>((ref, propertyId) async {
-  final repository = ref.watch(nightAuditRepositoryProvider);
-  return repository.getPreview(propertyId);
-});
+final nightAuditPreviewProvider =
+    FutureProvider.family<NightAuditPreview, String>((ref, propertyId) async {
+      final repository = ref.watch(nightAuditRepositoryProvider);
+      return repository.getPreview(propertyId);
+    });
 
 class NightAuditExecutionNotifier extends StateNotifier<AsyncValue<void>> {
   final Ref _ref;
@@ -19,10 +20,12 @@ class NightAuditExecutionNotifier extends StateNotifier<AsyncValue<void>> {
       state = const AsyncValue.data(null);
     } catch (e, stack) {
       state = AsyncValue.error(e, stack);
+      rethrow;
     }
   }
 }
 
-final nightAuditExecutionProvider = StateNotifierProvider<NightAuditExecutionNotifier, AsyncValue<void>>((ref) {
-  return NightAuditExecutionNotifier(ref);
-});
+final nightAuditExecutionProvider =
+    StateNotifierProvider<NightAuditExecutionNotifier, AsyncValue<void>>((ref) {
+      return NightAuditExecutionNotifier(ref);
+    });

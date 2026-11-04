@@ -90,6 +90,86 @@ class NightAuditRepository {
     return NightAuditPreview.fromJson(response.data['data']);
   }
 
+  Future<Map<String, dynamic>> getWorkflow(String propertyId) async {
+    final response = await _dio.get(
+      '/v1/night-audit/status',
+      queryParameters: {'propertyId': propertyId},
+    );
+    final data = response.data is Map ? response.data['data'] : null;
+    return data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{};
+  }
+
+  Future<void> voidPosOrder({
+    required String orderId,
+    required String propertyId,
+    required String reason,
+  }) async {
+    await _dio.post(
+      '/v1/night-audit/resolve/void-pos-order/$orderId',
+      data: {
+        'propertyId': propertyId,
+        'reason': reason,
+        'investigationConfirmed': true,
+      },
+    );
+  }
+
+  Future<void> verifyTransaction({
+    required String propertyId,
+    required String transactionId,
+    required String type,
+    required String status,
+    String? notes,
+  }) async {
+    await _dio.post(
+      '/v1/night-audit/resolve/verify-transaction',
+      data: {
+        'propertyId': propertyId,
+        'transactionId': transactionId,
+        'type': type,
+        'status': status,
+        if (notes != null && notes.trim().isNotEmpty) 'notes': notes.trim(),
+        'idempotencyKey':
+            'mobile-night-audit-$transactionId-${DateTime.now().millisecondsSinceEpoch}',
+      },
+    );
+  }
+
+  Future<void> verifyCheckInBypass({
+    required String propertyId,
+    required String bypassId,
+    required String action,
+    String? notes,
+  }) async {
+    await _dio.post(
+      '/v1/night-audit/verify-checkin-bypass',
+      data: {
+        'propertyId': propertyId,
+        'bypassId': bypassId,
+        'action': action,
+        if (notes != null && notes.trim().isNotEmpty) 'notes': notes.trim(),
+      },
+    );
+  }
+
+  Future<void> updateComplimentary({
+    required String propertyId,
+    required String recordId,
+    required String status,
+    String? rejectionReason,
+  }) async {
+    await _dio.patch(
+      '/v1/financial-control/complimentary',
+      data: {
+        'propertyId': propertyId,
+        'id': recordId,
+        'status': status,
+        if (rejectionReason != null && rejectionReason.trim().isNotEmpty)
+          'rejectionReason': rejectionReason.trim(),
+      },
+    );
+  }
+
   Future<Map<String, dynamic>> executeNightAudit(String propertyId) async {
     final response = await _dio.post(
       '/mobile/v1/executive/night-audit/execute',
