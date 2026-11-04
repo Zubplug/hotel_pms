@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../storage/secure_storage_provider.dart';
 import '../config/app_config.dart';
@@ -21,15 +22,34 @@ final dioProvider = Provider<Dio>((ref) {
         if (accessToken != null) {
           options.headers['Authorization'] = 'Bearer $accessToken';
         }
+        if (kDebugMode) {
+          debugPrint('[LodgeCore API] ${options.method} ${options.uri}');
+        }
         return handler.next(options);
       },
-      onError: (DioException e, handler) async {
-        if (e.response?.statusCode == 401) {
-          await tokenStorage.clearTokens();
-          // The router will automatically pick up the auth change if we use ref properly,
-          // but TokenStorage isn't the notifier. So we just clear the token.
-          // For a robust app, we'd trigger a logout event.
+      onResponse: (response, handler) {
+        if (kDebugMode) {
+          debugPrint(
+            '[LodgeCore API] ${response.statusCode} ${response.requestOptions.uri}',
+          );
         }
+        return handler.next(response);
+      },
+      onError: (DioException e, handler) async {
+        if (kDebugMode) {
+          debugPrint(
+            '[LodgeCore API ERROR] ${e.response?.statusCode ?? 'NETWORK'} '
+            '${e.requestOptions.method} ${e.requestOptions.uri}',
+          );
+          debugPrint('[LodgeCore API ERROR] ${e.message}');
+          if (e.response?.data != null) {
+            debugPrint('[LodgeCore API ERROR BODY] ${e.response?.data}');
+          }
+        }
+        // Do not clear credentials here. A 401 can be caused by a single
+        // endpoint's permission/property scope, and clearing tokens from a
+        // transport interceptor logs the user out during an ordinary refresh.
+        // Authentication expiry should be handled explicitly by the auth flow.
         return handler.next(e);
       },
     ),

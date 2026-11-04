@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireOrganizationContext } from '@/lib/organization-access';
 import { NextRequest } from 'next/server';
-import { auth } from '@/lib/auth';
 import { successResponse, errorResponse } from '@/lib/api-response';
 import { resolveUser } from '@/lib/resolve-user';
 import { assertPropertyAccess } from '@/lib/property-access';
@@ -12,13 +11,11 @@ import { activeOccupancyWhere, reconcileRoomOccupancy } from '@/lib/room-occupan
 
 export async function GET(req: NextRequest) {
   try {
-    let user: any = null;
-    const session = await auth();
-    if (session?.user) {
-      user = session.user;
-    } else {
-      user = await resolveUser(req);
-    }
+    // Use the shared resolver directly so mobile Bearer JWTs and web
+    // sessions follow the same authentication path as the other APIs.
+    // The previous auth()-first branch could bypass mobile token resolution
+    // and return 401 even though /api/mobile/v1/me was authenticated.
+    const user = await resolveUser(req);
     
     if (!user) return errorResponse('UNAUTHORIZED', 'Authentication required', 401);
 
