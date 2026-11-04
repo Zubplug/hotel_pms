@@ -7,6 +7,10 @@ import '../../../approvals/presentation/providers/approvals_provider.dart';
 import '../../../approvals/presentation/screens/approvals_screen.dart';
 import '../../../finance/presentation/providers/finance_provider.dart';
 import '../../../finance/presentation/models/finance_data.dart';
+import '../../../notifications/presentation/providers/notifications_provider.dart';
+import '../../../notifications/presentation/screens/notifications_screen.dart';
+import '../../../profile/presentation/screens/profile_screen.dart';
+import 'cashier_shifts_screen.dart';
 
 const _cashBg = Color(0xFF07111F);
 const _cashPanel = Color(0xFF101C30);
@@ -80,6 +84,94 @@ class _CashierBody extends StatelessWidget {
           backgroundColor: _cashBg,
           surfaceTintColor: Colors.transparent,
           elevation: 0,
+          actions: [
+            Container(
+              margin: const EdgeInsets.symmetric(vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              decoration: BoxDecoration(
+                color: _cashGreen.withValues(alpha: .1),
+                borderRadius: BorderRadius.circular(9),
+                border: Border.all(color: _cashGreen.withValues(alpha: .3)),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.circle, color: _cashGreen, size: 7),
+                  SizedBox(width: 5),
+                  Text(
+                    'LIVE',
+                    style: TextStyle(
+                      color: _cashGreen,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 2),
+            Consumer(
+              builder: (context, ref, _) {
+                final unread = ref.watch(unreadCountProvider);
+                return IconButton(
+                  tooltip: 'Notifications',
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const NotificationsScreen(),
+                    ),
+                  ),
+                  icon: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      const Icon(
+                        Icons.notifications_none_rounded,
+                        color: _cashText,
+                        size: 23,
+                      ),
+                      if (unread > 0)
+                        Positioned(
+                          right: -4,
+                          top: -5,
+                          child: Container(
+                            constraints: const BoxConstraints(minWidth: 15),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 3,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: _cashRed,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: _cashBg, width: 1.5),
+                            ),
+                            child: Text(
+                              unread > 99 ? '99+' : '$unread',
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 8,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                );
+              },
+            ),
+            IconButton(
+              tooltip: 'Profile',
+              onPressed: () => Navigator.of(
+                context,
+              ).push(MaterialPageRoute(builder: (_) => const ProfileScreen())),
+              icon: const Icon(
+                Icons.account_circle_outlined,
+                color: _cashText,
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: 8),
+          ],
           flexibleSpace: FlexibleSpaceBar(
             collapseMode: CollapseMode.parallax,
             background: _Header(data: data),
@@ -251,34 +343,6 @@ class _Header extends StatelessWidget {
                           style: const TextStyle(
                             color: _cashMuted,
                             fontSize: 11,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: _cashGreen.withValues(alpha: .1),
-                      borderRadius: BorderRadius.circular(9),
-                      border: Border.all(
-                        color: _cashGreen.withValues(alpha: .3),
-                      ),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.circle, color: _cashGreen, size: 7),
-                        SizedBox(width: 5),
-                        Text(
-                          'LIVE',
-                          style: TextStyle(
-                            color: _cashGreen,
-                            fontSize: 9,
-                            fontWeight: FontWeight.w800,
                           ),
                         ),
                       ],
@@ -706,6 +770,25 @@ class _QuickLinks extends StatelessWidget {
           style: OutlinedButton.styleFrom(
             foregroundColor: _cashGold,
             side: BorderSide(color: _cashGold.withValues(alpha: .45)),
+            padding: const EdgeInsets.symmetric(vertical: 15),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
+          ),
+        ),
+      ),
+      const SizedBox(height: 10),
+      SizedBox(
+        width: double.infinity,
+        child: OutlinedButton.icon(
+          onPressed: () => Navigator.of(this.context).push(
+            MaterialPageRoute(builder: (_) => const CashierShiftsScreen()),
+          ),
+          icon: const Icon(Icons.point_of_sale_rounded),
+          label: const Text('Open live shift control'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: _cashCyan,
+            side: BorderSide(color: _cashCyan.withValues(alpha: .45)),
             padding: const EdgeInsets.symmetric(vertical: 15),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(14),
