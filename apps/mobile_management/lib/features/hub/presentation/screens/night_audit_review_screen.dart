@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/night_audit_repository.dart';
+import '../../../finance/presentation/screens/finance_screen.dart';
+import '../../../fnb/presentation/screens/fnb_screen.dart';
 import '../providers/night_audit_provider.dart';
+import 'hub_screen.dart';
 
 const _bg = Color(0xFF070D1A);
 const _card = Color(0xFF111D33);
@@ -523,26 +526,38 @@ class _NightAuditReviewScreenState
             text(entry['detail']),
             style: const TextStyle(color: _muted, fontSize: 12, height: 1.35),
           ),
-          if (action == 'info')
-            const Padding(
-              padding: EdgeInsets.only(top: 10),
-              child: Text(
-                'Action must be completed in the responsible POS, front-desk or sync module.',
-                style: TextStyle(color: Colors.orangeAccent, fontSize: 11),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: () =>
+                  action == 'info' ? _openModule(entry) : _resolve(entry),
+              icon: const Icon(Icons.arrow_forward_rounded, size: 16),
+              label: Text(
+                action == 'void'
+                    ? 'Investigate / void'
+                    : action == 'info'
+                    ? 'Open module'
+                    : 'Review',
               ),
             ),
-          if (action != 'info')
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton.icon(
-                onPressed: () => _resolve(entry),
-                icon: const Icon(Icons.arrow_forward_rounded, size: 16),
-                label: Text(action == 'void' ? 'Investigate / void' : 'Review'),
-              ),
-            ),
+          ),
         ],
       ),
     );
+  }
+
+  Future<void> _openModule(Map<String, dynamic> entry) async {
+    final key = entry['key'];
+    final Widget screen;
+    if (key == 'pos-order' || key == 'fnb-order' || key == 'pos-session') {
+      screen = const FnbScreen();
+    } else if (key == 'frontdesk') {
+      screen = const FinanceScreen();
+    } else {
+      screen = const HubScreen();
+    }
+    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
+    if (mounted) ref.invalidate(nightAuditWorkflowProvider(widget.propertyId));
   }
 
   Widget _signOff(
