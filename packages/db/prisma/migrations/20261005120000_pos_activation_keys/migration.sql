@@ -26,6 +26,6 @@ ALTER TABLE "pos_activation_keys" ADD CONSTRAINT "pos_activation_keys_organizati
 ALTER TABLE "pos_activation_keys" ADD CONSTRAINT "pos_activation_keys_propertyId_fkey"
   FOREIGN KEY ("propertyId") REFERENCES "Property"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE "pos_activation_keys" ADD CONSTRAINT "pos_activation_keys_outletId_fkey"
-  FOREIGN KEY ("outletId") REFERENCES "pos_outlets"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+  FOREIGN KEY ("outletId") REFERENCES "PosOutlet"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE "pos_activation_keys" ADD CONSTRAINT "pos_activation_keys_activatedTerminalId_fkey"
   FOREIGN KEY ("activatedTerminalId") REFERENCES "pos_terminals"("id") ON DELETE SET NULL ON UPDATE CASCADE;

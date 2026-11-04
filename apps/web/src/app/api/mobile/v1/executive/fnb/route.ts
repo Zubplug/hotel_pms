@@ -72,7 +72,9 @@ export async function GET(req: NextRequest) {
     // and do not necessarily create folio items. Include those audited journal
     // lines so the mobile event/hall cards reconcile with Finance reporting.
     const auditedEventGlRows = lastAudit
-      ? await prisma.$queryRaw<Array<{ category: string; netRevenue: unknown }>>`
+      ? await (async () => {
+          try {
+            return await prisma.$queryRaw<Array<{ category: string; netRevenue: unknown }>>`
           SELECT i.category,
                  COALESCE(SUM(l.credit), 0) - COALESCE(SUM(l.debit), 0) AS "netRevenue"
           FROM "JournalEntryLine" l
@@ -85,7 +87,16 @@ export async function GET(req: NextRequest) {
             AND l."sourceType" = 'EVENT_INVOICE_ITEM'
             AND i.category IN ('HALL', 'EQUIPMENT', 'FOOD')
           GROUP BY i.category
-        `
+        `;
+          } catch (error) {
+            // Event-invoice GL reconciliation is an optional enhancement for
+            // this dashboard. Do not make the entire F&B/POS view unavailable
+            // when a production database has not applied the event accounting
+            // migration yet; folio/POS revenue remains authoritative.
+            console.error('[Mobile F&B Dashboard] Event GL reconciliation skipped', error);
+            return [];
+          }
+        })()
       : [];
     const auditedEventGlRevenue = new Map(
       auditedEventGlRows.map((row) => [row.category, Number(row.netRevenue)]),
@@ -462,10 +473,18 @@ export async function GET(req: NextRequest) {
     });
 
     // ── POS Terminal Status ───────────────────────────────────────────────────
-    const terminals = await prisma.posTerminal.findMany({
-      where: { propertyId, registrationState: 'REGISTERED' },
-      select: { lastSeenAt: true },
-    });
+    // Terminal registration is an optional newer migration. The Prisma model
+    // maps to the lower-case `pos_terminals` table; checking the mapped name
+    // keeps older production schemas from taking down the complete dashboard.
+    const terminalTableCheck = await prisma.$queryRaw<Array<{ exists: boolean }>>`
+      SELECT to_regclass('public.pos_terminals') IS NOT NULL AS "exists"
+    `;
+    const terminals = terminalTableCheck[0]?.exists
+      ? await prisma.posTerminal.findMany({
+          where: { propertyId, registrationState: 'REGISTERED' },
+          select: { lastSeenAt: true },
+        })
+      : [];
 
     const now = new Date();
     const OFFLINE_MINS = 30;
