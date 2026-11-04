@@ -444,16 +444,16 @@ class _ApprovalsScreenState extends ConsumerState<ApprovalsScreen> {
         context['primaryGuestName'] ??
         context['guest'];
     final text = value?.toString().trim() ?? '';
-    return text.isEmpty || _looksLikeId(text)
-        ? null
-        : formatRoomNumber(text, fallback: text);
+    return text.isEmpty || _looksLikeId(text) ? null : text;
   }
 
   String? _roomLabel(Map<String, dynamic> request) {
     final context = _requestContext(request);
     final value = context['roomNumber'] ?? context['roomNo'] ?? context['room'];
     final text = value?.toString().trim() ?? '';
-    return text.isEmpty || _looksLikeId(text) ? null : text;
+    return text.isEmpty || _looksLikeId(text)
+        ? null
+        : formatRoomNumber(text, fallback: text);
   }
 
   bool _looksLikeId(String value) => RegExp(
