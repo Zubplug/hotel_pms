@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../../dashboard/presentation/screens/main_screen.dart';
 import '../../data/hub_repository.dart';
 import '../../providers/hub_provider.dart';
+import '../../../../core/utils/room_number_formatter.dart';
 
 const _bg = Color(0xFF070D1A);
 const _panel = Color(0xFF101B30);
@@ -376,7 +377,7 @@ class _ReservationCard extends StatelessWidget {
         : 'Guest';
     final roomLabel = rooms.isEmpty
         ? 'Room unassigned'
-        : rooms.map((room) => room['number']).join(', ');
+        : rooms.map((room) => formatRoomNumber(room['number'])).join(', ');
     final benefit = _benefitForRooms(rooms);
     final balanceSummary = Map<String, dynamic>.from(
       item['balanceSummary'] ?? const {},
@@ -1166,7 +1167,7 @@ class _ReservationDetailScreenState extends State<ReservationDetailScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                room['number']?.toString() ?? 'Unassigned room',
+                formatRoomNumber(room['number']),
                 style: const TextStyle(
                   color: _white,
                   fontWeight: FontWeight.w700,
@@ -1214,7 +1215,7 @@ class _ReservationDetailScreenState extends State<ReservationDetailScreen> {
               _infoRow(
                 Icons.account_balance_wallet_outlined,
                 'Balance',
-                '${folio['currency'] ?? ''} ${folio['balance'] ?? '0'}',
+                '${folio['currency'] ?? ''} ${_wholeAmount(_amount(folio['balance']))}',
               ),
               _infoRow(
                 Icons.payments_outlined,
@@ -1226,16 +1227,39 @@ class _ReservationDetailScreenState extends State<ReservationDetailScreen> {
                 'Credit available',
                 '${folio['currency'] ?? ''} ${_wholeAmount(_amount(folio['availableCredit']))}',
               ),
+              if (List<dynamic>.from(folio['credits'] ?? const []).isNotEmpty)
+                _infoRow(
+                  Icons.credit_score_outlined,
+                  'Advanced credit entries',
+                  '${List<dynamic>.from(folio['credits']).length}',
+                ),
             ],
           ),
-          if (List<dynamic>.from(folio['items'] ?? const []).isNotEmpty) ...[
+          if (List<dynamic>.from(folio['credits'] ?? const []).isNotEmpty) ...[
             const SizedBox(height: 8),
-            _sectionCard('RECENT FOLIO ACTIVITY', Icons.timeline_rounded, [
-              for (final line in List<dynamic>.from(folio['items']))
+            _sectionCard('ADVANCED CREDIT', Icons.credit_score_outlined, [
+              for (final credit in List<dynamic>.from(folio['credits']))
                 _infoRow(
-                  Icons.circle,
+                  Icons.account_balance_wallet_outlined,
+                  credit['reference']?.toString().isNotEmpty == true
+                      ? credit['reference']
+                      : 'Credit advance',
+                  '${credit['currency'] ?? folio['currency'] ?? ''} ${_wholeAmount(_amount(credit['remainingAmount']))} available',
+                ),
+            ]),
+          ],
+          if (_folioHistory(folio).isNotEmpty) ...[
+            const SizedBox(height: 8),
+            _sectionCard('FOLIO TRANSACTION HISTORY', Icons.timeline_rounded, [
+              for (final line in _folioHistory(folio))
+                _infoRow(
+                  line['type'] == 'PAYMENT'
+                      ? Icons.payments_outlined
+                      : line['type'] == 'CREDIT_APPLICATION'
+                      ? Icons.credit_score_outlined
+                      : Icons.circle,
                   line['description'] ?? 'Folio item',
-                  '${line['currency'] ?? folio['currency'] ?? ''} ${line['amount'] ?? '0'}',
+                  '${line['currency'] ?? folio['currency'] ?? ''} ${_wholeAmount(_amount(line['amount']))}',
                 ),
             ]),
           ],
@@ -1243,6 +1267,39 @@ class _ReservationDetailScreenState extends State<ReservationDetailScreen> {
         ],
       ],
     );
+  }
+
+  List<Map<String, dynamic>> _folioHistory(dynamic folio) {
+    final data = Map<String, dynamic>.from(folio as Map);
+    final history = <Map<String, dynamic>>[];
+    for (final item in List<dynamic>.from(data['items'] ?? const [])) {
+      if (item is Map) {
+        history.add({
+          ...Map<String, dynamic>.from(item),
+          'type': item['type'] ?? 'CHARGE',
+        });
+      }
+    }
+    for (final payment in List<dynamic>.from(data['payments'] ?? const [])) {
+      if (payment is Map) history.add(Map<String, dynamic>.from(payment));
+    }
+    for (final application in List<dynamic>.from(
+      data['creditApplications'] ?? const [],
+    )) {
+      if (application is Map) {
+        history.add(Map<String, dynamic>.from(application));
+      }
+    }
+    history.sort((a, b) {
+      final aDate = DateTime.tryParse(
+        (a['createdAt'] ?? a['businessDate'] ?? '').toString(),
+      );
+      final bDate = DateTime.tryParse(
+        (b['createdAt'] ?? b['businessDate'] ?? '').toString(),
+      );
+      return (bDate ?? DateTime(1970)).compareTo(aDate ?? DateTime(1970));
+    });
+    return history;
   }
 
   Widget _statusPill(String label, Color color) => Container(

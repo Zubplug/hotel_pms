@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 
 import '../providers/rooms_provider.dart';
 import '../models/room_data.dart';
+import '../../../../core/utils/room_number_formatter.dart';
 
 // ─── Design Tokens ────────────────────────────────────────────────────────────
 const _bg = Color(0xFF090D14);
@@ -212,11 +213,7 @@ class _RoomDetailsScreenState extends ConsumerState<RoomDetailsScreen>
   };
 
   String _parseRoomNumber(String number) {
-    if (number.contains('.')) {
-      final parts = number.split('.');
-      if (parts.length >= 3) return parts.last;
-    }
-    return number;
+    return formatRoomNumber(number);
   }
 }
 
@@ -349,7 +346,7 @@ class _HeroHeader extends StatelessWidget {
                     ),
                     const SizedBox(height: 5),
                     Text(
-                      'ROOM ${data.room.number}',
+                      'ROOM ${formatRoomNumber(data.room.number)}',
                       style: const TextStyle(
                         color: _textMuted,
                         fontSize: 10,

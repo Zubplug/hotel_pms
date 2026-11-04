@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../providers/approvals_provider.dart';
 import '../../data/repositories/approvals_repository.dart';
 import '../../../../core/services/websocket_service.dart';
+import '../../../../core/utils/room_number_formatter.dart';
 
 class ApprovalsScreen extends ConsumerStatefulWidget {
   const ApprovalsScreen({super.key});
@@ -443,7 +444,9 @@ class _ApprovalsScreenState extends ConsumerState<ApprovalsScreen> {
         context['primaryGuestName'] ??
         context['guest'];
     final text = value?.toString().trim() ?? '';
-    return text.isEmpty || _looksLikeId(text) ? null : text;
+    return text.isEmpty || _looksLikeId(text)
+        ? null
+        : formatRoomNumber(text, fallback: text);
   }
 
   String? _roomLabel(Map<String, dynamic> request) {

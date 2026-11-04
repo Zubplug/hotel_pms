@@ -5,6 +5,7 @@ import '../../data/night_audit_repository.dart';
 import '../../../finance/presentation/screens/finance_screen.dart';
 import '../providers/night_audit_provider.dart';
 import 'hub_screen.dart';
+import '../../../../core/utils/room_number_formatter.dart';
 
 const _bg = Color(0xFF070D1A);
 const _card = Color(0xFF111D33);
@@ -961,7 +962,10 @@ class _NightAuditReviewScreenState
   Future<bool> _resolveRoomDiscrepancy(Map<String, dynamic> entry) async {
     final item = map(entry['item']);
     final roomId = text(item['roomId'], '');
-    final roomNumber = text(item['roomNumber'], 'Room');
+    final roomNumber = formatRoomNumber(
+      text(item['roomNumber'], 'Room'),
+      fallback: 'Room',
+    );
     final pmsStatus = text(item['pmsStatus']);
     final housekeepingStatus = text(item['hkStatus']);
     final expectedStatus = text(item['expected']);
@@ -1377,7 +1381,7 @@ class _NightAuditReviewScreenState
                           ),
                           _dialogPill(
                             Icons.hotel_rounded,
-                            'Room ${text(item['roomNumber'], 'Unassigned')}',
+                            'Room ${formatRoomNumber(text(item['roomNumber'], 'Unassigned'))}',
                           ),
                           _dialogPill(
                             Icons.calendar_today_rounded,
@@ -2166,11 +2170,10 @@ class _TransactionVerificationDialogState
         ? _map(reservationRooms.first)
         : <String, dynamic>{};
     final room = _map(firstRoom['room']);
-    final roomNumber =
-        room['number'] ??
-        reservation['roomNumber'] ??
-        folio['roomNumber'] ??
-        'N/A';
+    final roomNumber = formatRoomNumber(
+      room['number'] ?? reservation['roomNumber'] ?? folio['roomNumber'],
+      fallback: 'N/A',
+    );
     final pos = item['order'] != null;
     final operator = pos
         ? _map(_map(item['session'])['operator'])
@@ -3757,7 +3760,7 @@ class RoomChargesReviewScreen extends StatelessWidget {
 
   Widget _chargeCard(Map<String, dynamic> item) {
     final guest = item['guestName'] ?? item['primaryGuestName'] ?? 'Guest';
-    final room = item['roomNumber'] ?? '—';
+    final room = formatRoomNumber(item['roomNumber'], fallback: '—');
     final amount = _amount(item, 'netAmount', 'amount');
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -4441,17 +4444,19 @@ class _NightAuditBlockerDetailsScreenState
     final guestName =
         '${value(guest['firstName'], 'Guest')} ${value(guest['lastName'], '')}'
             .trim();
-    final roomNumber =
-        item['roomNumber'] ??
-        (item['reservationRooms'] is List &&
-                (item['reservationRooms'] as List).isNotEmpty
-            ? ((item['reservationRooms'] as List).first is Map
-                  ? ((item['reservationRooms'] as List).first['room'] is Map
-                        ? (item['reservationRooms'] as List)
-                              .first['room']['number']
-                        : null)
-                  : null)
-            : null);
+    final roomNumber = formatRoomNumber(
+      item['roomNumber'] ??
+          (item['reservationRooms'] is List &&
+                  (item['reservationRooms'] as List).isNotEmpty
+              ? ((item['reservationRooms'] as List).first is Map
+                    ? ((item['reservationRooms'] as List).first['room'] is Map
+                          ? (item['reservationRooms'] as List)
+                                .first['room']['number']
+                          : null)
+                    : null)
+              : null),
+      fallback: '—',
+    );
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
@@ -4511,8 +4516,8 @@ class _NightAuditBlockerDetailsScreenState
             spacing: 8,
             runSpacing: 8,
             children: [
-              if (roomNumber != null)
-                _infoPill(Icons.hotel_rounded, 'Room ${value(roomNumber)}'),
+              if (roomNumber != '—')
+                _infoPill(Icons.hotel_rounded, 'Room $roomNumber'),
               if (item['confirmationNumber'] != null)
                 _infoPill(
                   Icons.confirmation_number_outlined,

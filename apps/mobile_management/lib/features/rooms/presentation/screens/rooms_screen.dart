@@ -5,6 +5,7 @@ import '../providers/rooms_provider.dart';
 import '../models/room_data.dart';
 
 import 'room_details_screen.dart';
+import '../../../../core/utils/room_number_formatter.dart';
 
 // ─── Design System ────────────────────────────────────────────────────────────
 const _bg = Color(0xFF060B14);
@@ -1000,7 +1001,7 @@ class _PremiumRoomCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    String displayNumber = room.number;
+    String displayNumber = formatRoomNumber(room.number);
     String? locationText;
     if (room.number.contains('.')) {
       final parts = room.number.split('.');
@@ -1210,7 +1211,7 @@ class _RoomGridTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    String displayNumber = room.number;
+    String displayNumber = formatRoomNumber(room.number);
     if (room.number.contains('.')) {
       final parts = room.number.split('.');
       if (parts.length >= 3) displayNumber = parts.last;
