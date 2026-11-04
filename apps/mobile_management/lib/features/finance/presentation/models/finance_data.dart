@@ -180,6 +180,34 @@ class CashControlAggregate {
       );
 }
 
+class CashierSnapshot {
+  final double safeBalance;
+  final int pendingHandovers;
+  final double pendingHandoverValue;
+  final int pendingDeposits;
+  final double pendingDepositValue;
+  final int sessionsAwaitingReview;
+
+  const CashierSnapshot({
+    required this.safeBalance,
+    required this.pendingHandovers,
+    required this.pendingHandoverValue,
+    required this.pendingDeposits,
+    required this.pendingDepositValue,
+    required this.sessionsAwaitingReview,
+  });
+
+  factory CashierSnapshot.fromJson(Map<String, dynamic> json) =>
+      CashierSnapshot(
+        safeBalance: (json['safeBalance'] ?? 0).toDouble(),
+        pendingHandovers: json['pendingHandovers'] ?? 0,
+        pendingHandoverValue: (json['pendingHandoverValue'] ?? 0).toDouble(),
+        pendingDeposits: json['pendingDeposits'] ?? 0,
+        pendingDepositValue: (json['pendingDepositValue'] ?? 0).toDouble(),
+        sessionsAwaitingReview: json['sessionsAwaitingReview'] ?? 0,
+      );
+}
+
 // ─── Transaction Controls ────────────────────────────────────────────────────
 class TransactionControlAggregate {
   final double discounts;
@@ -290,6 +318,7 @@ class FinanceDashboardData {
   final List<AuditedDepartmentRevenue> departmentRevenue;
   final LiveActivityData liveSinceLastAudit;
   final CashControlAggregate cashControl;
+  final CashierSnapshot cashier;
   final TransactionControlAggregate transactionControls;
   final OutstandingReceivables outstanding;
   final GuestCredits guestCredits;
@@ -305,6 +334,7 @@ class FinanceDashboardData {
     required this.departmentRevenue,
     required this.liveSinceLastAudit,
     required this.cashControl,
+    required this.cashier,
     required this.transactionControls,
     required this.outstanding,
     required this.guestCredits,
@@ -329,6 +359,7 @@ class FinanceDashboardData {
         d['liveSinceLastAudit'] ?? {},
       ),
       cashControl: CashControlAggregate.fromJson(d['cashControl'] ?? {}),
+      cashier: CashierSnapshot.fromJson(d['cashier'] ?? {}),
       transactionControls: TransactionControlAggregate.fromJson(
         d['transactionControls'] ?? {},
       ),

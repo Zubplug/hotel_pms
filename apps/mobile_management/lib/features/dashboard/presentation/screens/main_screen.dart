@@ -8,6 +8,7 @@ import 'package:mobile_management/features/finance/presentation/screens/finance_
 import 'package:mobile_management/features/profile/presentation/providers/profile_provider.dart';
 import 'package:mobile_management/features/fnb/presentation/screens/fnb_screen.dart';
 import 'package:mobile_management/features/hub/presentation/screens/hub_screen.dart';
+import 'general_cashier_main_screen.dart';
 
 // ─── Design Tokens ────────────────────────────────────────────────────────────
 const _bgDeep = Color(0xFF070D1A);
@@ -57,6 +58,10 @@ class _MainScreenState extends ConsumerState<MainScreen> {
 
         if (userRole == 'NIGHT_AUDITOR') {
           return const AuditorMainScreen();
+        }
+
+        if (userRole == 'GENERAL_CASHIER') {
+          return const GeneralCashierMainScreen();
         }
 
         // Only executive roles receive the executive KPI dashboard. Other

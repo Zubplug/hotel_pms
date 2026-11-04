@@ -326,6 +326,33 @@ export async function GET(req: NextRequest) {
       });
     }
 
+    // Cash Management dashboard snapshot. Keep this alongside the existing
+    // finance response so mobile cashier users share the same property and
+    // business-date scope without a second dashboard query.
+    const [cashierSafe, pendingHandover, pendingDeposit, cashierReview] = await Promise.all([
+      prisma.cashAccount.findFirst({
+        where: { propertyId: primaryPropertyId, type: 'SAFE', isActive: true },
+        select: { balance: true },
+      }),
+      prisma.cashHandover.aggregate({
+        where: { propertyId: primaryPropertyId, status: 'PENDING' },
+        _count: { id: true },
+        _sum: { amount: true },
+      }),
+      prisma.bankDeposit.aggregate({
+        where: {
+          propertyId: primaryPropertyId,
+          status: { in: ['PENDING_HANDOVER', 'HANDED_OVER', 'UNDER_RECONCILIATION', 'EXCEPTION'] },
+        },
+        _count: { id: true },
+        _sum: { expectedAmount: true },
+      }),
+      Promise.all([
+        prisma.frontdeskSession.count({ where: { propertyId: primaryPropertyId, controlStatus: { in: ['SUBMITTED', 'UNDER_REVIEW', 'RETURNED'] } } }),
+        prisma.posSession.count({ where: { outlet: { propertyId: primaryPropertyId }, controlStatus: { in: ['SUBMITTED', 'UNDER_REVIEW', 'RETURNED'] } } }),
+      ]),
+    ]);
+
     // ── Response ───────────────────────────────────────────────────────────
     return successResponse({
       period,
@@ -338,6 +365,14 @@ export async function GET(req: NextRequest) {
       postedDepartmentRevenue: departmentRevenue,
       liveSinceLastAudit,
       cashControl,
+      cashier: {
+        safeBalance: Number(cashierSafe?.balance || 0),
+        pendingHandovers: pendingHandover._count.id,
+        pendingHandoverValue: Number(pendingHandover._sum.amount || 0),
+        pendingDeposits: pendingDeposit._count.id,
+        pendingDepositValue: Number(pendingDeposit._sum.expectedAmount || 0),
+        sessionsAwaitingReview: cashierReview[0] + cashierReview[1],
+      },
       transactionControls,
       outstanding,
       guestCredits,
