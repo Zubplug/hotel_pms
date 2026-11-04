@@ -677,6 +677,21 @@ class _ApprovalsScreenState extends ConsumerState<ApprovalsScreen> {
                   ),
                 ),
               ),
+              const SizedBox(height: 12),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: () =>
+                      _showApprovalDetails(request, amount, currency, type),
+                  icon: const Icon(Icons.open_in_new_rounded, size: 16),
+                  label: const Text('View approval details'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: const Color(0xFFD8AD52),
+                    padding: EdgeInsets.zero,
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ),
+              ),
               const SizedBox(height: 16),
               Row(
                 children: [
@@ -727,6 +742,10 @@ class _ApprovalsScreenState extends ConsumerState<ApprovalsScreen> {
       backgroundColor: const Color(0xFF101B30),
       showDragHandle: true,
       useSafeArea: true,
+      constraints: BoxConstraints(
+        maxWidth: 640,
+        maxHeight: MediaQuery.sizeOf(context).height * .94,
+      ),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
@@ -750,6 +769,14 @@ class _ApprovalsScreenState extends ConsumerState<ApprovalsScreen> {
                       ),
                     ),
                     _detailBadge(type),
+                    IconButton(
+                      onPressed: () => Navigator.pop(sheetContext),
+                      tooltip: 'Close details',
+                      icon: const Icon(
+                        Icons.close_rounded,
+                        color: Color(0xFF91A2BF),
+                      ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 12),
