@@ -26,18 +26,55 @@ class NightAuditPreview {
   });
 
   factory NightAuditPreview.fromJson(Map<String, dynamic> json) {
+    final operational = json['operational'] is Map
+        ? Map<String, dynamic>.from(json['operational'] as Map)
+        : const <String, dynamic>{};
+    final financial = json['financial'] is Map
+        ? Map<String, dynamic>.from(json['financial'] as Map)
+        : const <String, dynamic>{};
+    final businessDate = _parseDate(json['businessDate']) ?? DateTime.now();
     return NightAuditPreview(
-      timezone: json['timezone'],
-      businessDate: DateTime.parse(json['businessDate']),
-      nextBusinessDate: DateTime.parse(json['nextBusinessDate']),
-      audit: json['audit'],
-      projectedStayovers: json['projectedStayovers'] ?? 0,
-      pendingArrivals: json['pendingArrivals'] ?? 0,
-      unresolvedFolios: json['unresolvedFolios'] ?? 0,
-      openApprovals: json['openApprovals'] ?? 0,
-      warnings: List<String>.from(json['warnings'] ?? []),
+      timezone: json['timezone']?.toString() ?? 'UTC',
+      businessDate: businessDate,
+      nextBusinessDate:
+          _parseDate(json['nextBusinessDate']) ??
+          businessDate.add(const Duration(days: 1)),
+      audit: json['audit'] is Map
+          ? Map<String, dynamic>.from(json['audit'] as Map)
+          : null,
+      projectedStayovers: _asInt(json['projectedStayovers']),
+      pendingArrivals: _count(json['pendingArrivals'], operational['arrivals']),
+      unresolvedFolios: _count(
+        json['unresolvedFolios'],
+        financial['openFolios'],
+      ),
+      openApprovals: _count(
+        json['openApprovals'],
+        financial['pendingDiscounts'],
+      ),
+      warnings: _asStringList(json['warnings']),
     );
   }
+
+  static DateTime? _parseDate(dynamic value) =>
+      value == null ? null : DateTime.tryParse(value.toString());
+
+  static int _asInt(dynamic value) =>
+      value is num ? value.toInt() : int.tryParse('$value') ?? 0;
+
+  static int _listLength(dynamic value) => value is List ? value.length : 0;
+
+  static int _count(dynamic primary, dynamic fallback) {
+    final value = _asInt(primary);
+    return value > 0 ? value : _listLength(fallback);
+  }
+
+  static List<String> _asStringList(dynamic value) => value is List
+      ? value
+            .where((item) => item != null)
+            .map((item) => item.toString())
+            .toList()
+      : const [];
 }
 
 class NightAuditRepository {
