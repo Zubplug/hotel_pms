@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
+import '../config/app_config.dart';
 import '../storage/secure_storage_provider.dart';
 
 final webSocketServiceProvider = Provider<WebSocketService>((ref) {
@@ -12,7 +13,6 @@ final webSocketServiceProvider = Provider<WebSocketService>((ref) {
 class WebSocketService {
   final TokenStorage _tokenStorage;
   WebSocketChannel? _channel;
-  final String _wsUrl = 'ws://localhost:3000/api/v1/realtime'; // Adjust to actual WS URL
 
   WebSocketService(this._tokenStorage);
 
@@ -20,9 +20,20 @@ class WebSocketService {
     final token = await _tokenStorage.getAccessToken();
     if (token == null) return;
 
-    final uri = Uri.parse('$_wsUrl?token=$token');
+    final configuredUri = Uri.parse(AppConfig.wsUrl);
+    final scheme = configuredUri.scheme == 'https'
+        ? 'wss'
+        : configuredUri.scheme == 'http'
+        ? 'ws'
+        : configuredUri.scheme;
+    final uri = configuredUri.replace(
+      scheme: scheme,
+      port: configuredUri.port == 0 ? null : configuredUri.port,
+      queryParameters: {...configuredUri.queryParameters, 'token': token},
+    );
     try {
       _channel = WebSocketChannel.connect(uri);
+      await _channel!.ready;
       _channel!.stream.listen(
         (message) {
           _handleMessage(message);

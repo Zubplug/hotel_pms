@@ -54,6 +54,10 @@ class WebSocketService {
         fragment: configuredUri.fragment,
       );
       _channel = WebSocketChannel.connect(uri);
+      // The handshake can fail asynchronously after connect() returns. Await
+      // it inside this guarded block so a bad endpoint never becomes an
+      // unhandled WebSocketChannelException in the Flutter runtime.
+      await _channel!.ready;
 
       _channel!.stream.listen(
         (message) {
