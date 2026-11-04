@@ -141,6 +141,10 @@ class AuditorDashboardScreen extends ConsumerWidget {
               const SizedBox(height: 14),
               _buildKpiGrid(data),
               const SizedBox(height: 14),
+              _buildOperationsSnapshot(data),
+              const SizedBox(height: 14),
+              _buildControlQueue(data),
+              const SizedBox(height: 14),
               _buildReadinessCard(data),
               const SizedBox(height: 14),
               AuditExceptionsWidget(exceptions: data.auditExceptions),
@@ -296,6 +300,7 @@ class AuditorDashboardScreen extends ConsumerWidget {
 
   Widget _buildKpiGrid(AuditorDashboardData data) {
     final analytics = data.analytics;
+    final currency = NumberFormat.currency(symbol: '₦', decimalDigits: 0);
     return GridView.count(
       crossAxisCount: 2,
       shrinkWrap: true,
@@ -305,16 +310,38 @@ class AuditorDashboardScreen extends ConsumerWidget {
       childAspectRatio: 1.65,
       children: [
         _KpiCard(
-          label: 'Revenue',
+          label: 'Last audit revenue',
           value: _money(analytics.revenue),
+          detail: analytics.comparison(
+            analytics.revenue,
+            analytics.priorRevenue,
+          ),
           icon: Icons.trending_up_rounded,
           color: const Color(0xFF4ADE80),
         ),
         _KpiCard(
-          label: 'Payments',
-          value: _money(analytics.payments),
-          icon: Icons.payments_outlined,
-          color: const Color(0xFF60A5FA),
+          label: 'ADR',
+          value: currency.format(analytics.adr),
+          detail: analytics.comparison(analytics.adr, analytics.priorAdr),
+          icon: Icons.king_bed_outlined,
+          color: const Color(0xFF38BDF8),
+        ),
+        _KpiCard(
+          label: 'RevPAR',
+          value: currency.format(analytics.revpar),
+          detail: analytics.comparison(analytics.revpar, analytics.priorRevpar),
+          icon: Icons.hotel_class_outlined,
+          color: _auditGold,
+        ),
+        _KpiCard(
+          label: 'Net revenue',
+          value: currency.format(analytics.netRevenue),
+          detail: analytics.comparison(
+            analytics.netRevenue,
+            analytics.priorNetRevenue,
+          ),
+          icon: Icons.account_balance_wallet_outlined,
+          color: const Color(0xFFA78BFA),
         ),
         _KpiCard(
           label: 'Occupancy',
@@ -406,6 +433,150 @@ class AuditorDashboardScreen extends ConsumerWidget {
     );
   }
 
+  Widget _buildOperationsSnapshot(AuditorDashboardData data) {
+    final operations = data.operations;
+    return _sectionCard(
+      title: 'OPERATIONS SNAPSHOT',
+      icon: Icons.insights_rounded,
+      child: GridView.count(
+        crossAxisCount: 2,
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        mainAxisSpacing: 10,
+        crossAxisSpacing: 10,
+        childAspectRatio: 2.7,
+        children: [
+          _MiniMetric(
+            label: 'Arrivals',
+            value: operations.arrivals,
+            icon: Icons.login_rounded,
+            color: const Color(0xFF60A5FA),
+          ),
+          _MiniMetric(
+            label: 'Departures',
+            value: operations.departures,
+            icon: Icons.logout_rounded,
+            color: const Color(0xFFFBBF24),
+          ),
+          _MiniMetric(
+            label: 'In-house guests',
+            value: operations.inHouseGuests,
+            icon: Icons.groups_rounded,
+            color: const Color(0xFFA78BFA),
+          ),
+          _MiniMetric(
+            label: 'Room checks',
+            value: operations.roomReconciliation,
+            icon: Icons.bed_rounded,
+            color: const Color(0xFFF87171),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildControlQueue(AuditorDashboardData data) {
+    final controls = data.controls;
+    final items = [
+      _QueueMetric(
+        'Open F&B orders',
+        controls.fnbOpenOrders,
+        Icons.restaurant_rounded,
+      ),
+      _QueueMetric(
+        'Open POS sessions',
+        controls.openPosSessions,
+        Icons.point_of_sale_rounded,
+      ),
+      _QueueMetric(
+        'Front desk sessions',
+        controls.openFrontdeskSessions,
+        Icons.desktop_windows_rounded,
+      ),
+      _QueueMetric(
+        'Sync conflicts',
+        controls.financialSyncConflicts,
+        Icons.sync_problem_rounded,
+      ),
+      _QueueMetric(
+        'Complimentary review',
+        controls.unverifiedComplimentary,
+        Icons.card_giftcard_rounded,
+      ),
+      _QueueMetric(
+        'Pending bypasses',
+        controls.pendingCheckInBypasses,
+        Icons.verified_user_outlined,
+      ),
+      _QueueMetric(
+        'Unverified cash',
+        controls.unverifiedTransactions,
+        Icons.payments_outlined,
+      ),
+      _QueueMetric(
+        'Unposted POS orders',
+        controls.openPosOrders,
+        Icons.receipt_long_rounded,
+      ),
+    ];
+    final open = items.where((item) => item.value > 0).length;
+    return _sectionCard(
+      title: 'ATTENTION QUEUE',
+      icon: Icons.notifications_active_outlined,
+      trailing: Text(
+        open == 0 ? 'CLEAR' : '$open areas',
+        style: TextStyle(
+          color: open == 0 ? const Color(0xFF4ADE80) : _auditGold,
+          fontSize: 11,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+      child: Column(
+        children: items.map((item) => _QueueRow(item: item)).toList(),
+      ),
+    );
+  }
+
+  Widget _sectionCard({
+    required String title,
+    required IconData icon,
+    required Widget child,
+    Widget? trailing,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: _auditCard,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.white.withValues(alpha: .07)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, color: _auditGold, size: 19),
+              const SizedBox(width: 9),
+              Text(
+                title,
+                style: const TextStyle(
+                  color: _auditText,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 1.15,
+                ),
+              ),
+              const Spacer(),
+              ?trailing,
+            ],
+          ),
+          const SizedBox(height: 14),
+          child,
+        ],
+      ),
+    );
+  }
+
   String _money(double amount) =>
       NumberFormat.currency(symbol: '₦', decimalDigits: 0).format(amount);
 }
@@ -477,6 +648,107 @@ class _KpiCard extends StatelessWidget {
       ],
     ),
   );
+}
+
+class _MiniMetric extends StatelessWidget {
+  final String label;
+  final int value;
+  final IconData icon;
+  final Color color;
+  const _MiniMetric({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
+    decoration: BoxDecoration(
+      color: _auditSurface.withValues(alpha: .55),
+      borderRadius: BorderRadius.circular(12),
+    ),
+    child: Row(
+      children: [
+        Icon(icon, color: color, size: 17),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            label,
+            maxLines: 2,
+            style: const TextStyle(
+              color: _auditMuted,
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        Text(
+          '$value',
+          style: const TextStyle(
+            color: _auditText,
+            fontSize: 17,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class _QueueMetric {
+  final String label;
+  final int value;
+  final IconData icon;
+  const _QueueMetric(this.label, this.value, this.icon);
+}
+
+class _QueueRow extends StatelessWidget {
+  final _QueueMetric item;
+  const _QueueRow({required this.item});
+
+  @override
+  Widget build(BuildContext context) {
+    final open = item.value > 0;
+    final color = open ? const Color(0xFFFBBF24) : const Color(0xFF64748B);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 9),
+      child: Row(
+        children: [
+          Container(
+            width: 30,
+            height: 30,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: .12),
+              borderRadius: BorderRadius.circular(9),
+            ),
+            child: Icon(item.icon, color: color, size: 16),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              item.label,
+              style: const TextStyle(
+                color: _auditText,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          Text(
+            '${item.value}',
+            style: TextStyle(
+              color: open ? color : _auditMuted,
+              fontWeight: FontWeight.w800,
+              fontSize: 13,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _NotificationBadge extends StatelessWidget {

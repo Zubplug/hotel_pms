@@ -5,17 +5,14 @@ import 'package:intl/intl.dart';
 class CashReconciliationWidget extends StatelessWidget {
   final CashReconciliation reconciliation;
 
-  const CashReconciliationWidget({
-    super.key,
-    required this.reconciliation,
-  });
+  const CashReconciliationWidget({super.key, required this.reconciliation});
 
   @override
   Widget build(BuildContext context) {
     const surfaceNavy = Color(0xFF1E293B);
     const textSecondary = Color(0xFF94A3B8);
 
-    final currencyFormat = NumberFormat.currency(symbol: '\$');
+    final currencyFormat = NumberFormat.currency(symbol: '₦', decimalDigits: 0);
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -83,14 +80,22 @@ class CashReconciliationWidget extends StatelessWidget {
     );
   }
 
-  Widget _buildItem(String label, String value, IconData icon, bool hasIssues, {bool isWarning = false}) {
+  Widget _buildItem(
+    String label,
+    String value,
+    IconData icon,
+    bool hasIssues, {
+    bool isWarning = false,
+  }) {
     final issueColor = isWarning ? Colors.orangeAccent : Colors.redAccent;
     return Row(
       children: [
         Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: hasIssues ? issueColor.withValues(alpha: 0.1) : Colors.white.withValues(alpha: 0.05),
+            color: hasIssues
+                ? issueColor.withValues(alpha: 0.1)
+                : Colors.white.withValues(alpha: 0.05),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Icon(

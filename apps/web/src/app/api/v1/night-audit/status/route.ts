@@ -62,6 +62,7 @@ export async function GET(req: NextRequest) {
       prisma.nightAudit.findFirst({
         where: { propertyId, status: 'COMPLETED' },
         orderBy: [{ businessDate: 'desc' }, { completedAt: 'desc' }],
+        include: { financialSnapshot: true },
       }),
     ]);
 

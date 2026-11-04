@@ -73,6 +73,22 @@ class LiveAuditorDashboardRepository {
     final system = data['system'] ?? {};
     final cash = data['cash'] ?? {};
     final financial = data['financial'] ?? {};
+    final fnb = data['fnb'] ?? {};
+    final fnbExceptions = fnb['exceptions'] ?? {};
+    final lastCompletedAudit = data['lastCompletedAudit'];
+    final lastAuditRevenue = lastCompletedAudit is Map
+        ? lastCompletedAudit['totalRevenue']
+        : null;
+    final lastAuditSnapshot = lastCompletedAudit is Map
+        ? lastCompletedAudit['financialSnapshot']
+        : null;
+    final trend = data['analytics']?['trend'] is List
+        ? (data['analytics']['trend'] as List)
+        : const [];
+    final priorAudit = trend.length > 1 ? trend[trend.length - 2] : null;
+    final priorSnapshot = priorAudit is Map
+        ? priorAudit['financialSnapshot']
+        : null;
 
     return {
       'property': {'name': propertyName},
@@ -85,42 +101,93 @@ class LiveAuditorDashboardRepository {
         'currentStep': data['activeAudit']?['status'] ?? '',
         'progressPercent': _calculateProgress(auditState),
         'lastSuccessfulAudit': data['property']?['lastAuditAt'],
-        'blockingErrors': summary['blockers'] ?? [],
+        // The status API returns summary.blockers as a count, not an error
+        // list. Keep the count in auditExceptions and only pass a list here.
+        'blockingErrors': summary['blockers'] is List
+            ? summary['blockers']
+            : <String>[],
       },
       'auditExceptions': {
         'criticalCount': summary['blockers'] ?? 0,
         'warningCount': summary['warnings'] ?? 0,
       },
       'criticalDiscrepancies': {
-        'roomStatusDiscrepancies':
-            (operational['roomReconciliation'] as List?)?.length ?? 0,
+        'roomStatusDiscrepancies': _listLength(
+          operational['roomReconciliation'],
+        ),
         'occupancyDiscrepancies':
             data['analytics']?['occupancyDiscrepancies'] ?? 0,
         'unpostedCharges': data['analytics']?['latePostings'] ?? 0,
-        'openFolios':
-            (financial['highBalances'] as List?)?.length ?? 0, // Approximation
+        'openFolios': _listLength(financial['highBalances']), // Approximation
         'reservationsRequiringAttention':
-            ((operational['arrivals'] as List?)?.length ?? 0) +
-            ((operational['departures'] as List?)?.length ?? 0),
+            _listLength(operational['arrivals']) +
+            _listLength(operational['departures']),
       },
       'cashReconciliation': {
-        'openShifts': (system['openFrontdeskSessions'] as List?)?.length ?? 0,
-        'pendingHandovers': (cash['cashHandovers'] as List?)?.length ?? 0,
+        'openShifts': _listLength(system['openFrontdeskSessions']),
+        'pendingHandovers': _listLength(cash['cashHandovers']),
         'unreconciledCash': (data['analytics']?['cashVariance'] ?? 0)
             .toDouble(),
-        'posSessionsRequiringClosure':
-            (system['openPosSessions'] as List?)?.length ?? 0,
-        'outstandingDeposits': (cash['bankDeposits'] as List?)?.length ?? 0,
+        'posSessionsRequiringClosure': _listLength(system['openPosSessions']),
+        'outstandingDeposits': _listLength(cash['bankDeposits']),
       },
       'analytics': {
-        'revenue': (data['analytics']?['revenue'] ?? 0).toDouble(),
+        // The dashboard Revenue KPI represents the latest completed audit.
+        // Fall back to live revenue when there is no completed audit yet.
+        'revenue': _asDouble(lastAuditRevenue ?? data['analytics']?['revenue']),
+        'adr': _asDouble(
+          lastCompletedAudit is Map ? lastCompletedAudit['adr'] : null,
+        ),
+        'revpar': _asDouble(
+          lastCompletedAudit is Map ? lastCompletedAudit['revpar'] : null,
+        ),
+        'netRevenue': _asDouble(
+          lastAuditSnapshot is Map
+              ? (lastAuditSnapshot['netRevenue'] ?? lastAuditRevenue)
+              : lastAuditRevenue,
+        ),
+        'priorRevenue': _asDouble(
+          priorAudit is Map ? priorAudit['totalRevenue'] : null,
+        ),
+        'priorAdr': _asDouble(priorAudit is Map ? priorAudit['adr'] : null),
+        'priorRevpar': _asDouble(
+          priorAudit is Map ? priorAudit['revpar'] : null,
+        ),
+        'priorNetRevenue': _asDouble(
+          priorSnapshot is Map ? priorSnapshot['netRevenue'] : null,
+        ),
         'payments': (data['analytics']?['payments'] ?? 0).toDouble(),
         'inHouseGuests': data['analytics']?['inHouseGuests'] ?? 0,
         'latePostings': data['analytics']?['latePostings'] ?? 0,
         'rooms': data['analytics']?['rooms'] ?? {},
       },
+      'operations': {
+        'arrivals': _listLength(operational['arrivals']),
+        'departures': _listLength(operational['departures']),
+        'roomReconciliation': _listLength(operational['roomReconciliation']),
+        'inHouseGuests': data['analytics']?['inHouseGuests'] ?? 0,
+      },
+      'controls': {
+        'openPosOrders': _listLength(system['openPosOrders']),
+        'openPosSessions': _listLength(system['openPosSessions']),
+        'openFrontdeskSessions': _listLength(system['openFrontdeskSessions']),
+        'financialSyncConflicts': _listLength(system['financialSyncConflicts']),
+        'unverifiedComplimentary': _listLength(
+          financial['unverifiedComplimentary'],
+        ),
+        'pendingCheckInBypasses': _listLength(
+          financial['pendingCheckInBypasses'],
+        ),
+        'unverifiedTransactions': _listLength(cash['unverifiedTransactions']),
+        'fnbOpenOrders': _listLength(fnbExceptions['openOrders']),
+      },
     };
   }
+
+  int _listLength(dynamic value) => value is List ? value.length : 0;
+
+  double _asDouble(dynamic value) =>
+      value is num ? value.toDouble() : double.tryParse('$value') ?? 0;
 
   double _calculateProgress(String state) {
     switch (state) {

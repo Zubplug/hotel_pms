@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'auditor_dashboard_screen.dart';
-import 'package:mobile_management/features/hub/presentation/screens/night_audit_review_screen.dart';
-import 'package:mobile_management/features/hub/providers/hub_provider.dart';
-import 'package:mobile_management/features/notifications/presentation/screens/notifications_screen.dart';
-import 'package:mobile_management/features/profile/presentation/screens/profile_screen.dart';
-import 'package:mobile_management/features/profile/presentation/providers/profile_provider.dart';
+import 'package:mobile_management/features/rooms/presentation/screens/rooms_screen.dart';
+import 'package:mobile_management/features/finance/presentation/screens/finance_screen.dart';
+import 'package:mobile_management/features/fnb/presentation/screens/fnb_screen.dart';
+import 'package:mobile_management/features/hub/presentation/screens/hub_screen.dart';
 
 class AuditorMainScreen extends ConsumerStatefulWidget {
   const AuditorMainScreen({super.key});
@@ -25,9 +24,10 @@ class _AuditorMainScreenState extends ConsumerState<AuditorMainScreen> {
 
     final List<Widget> screens = [
       const AuditorDashboardScreen(),
-      const _AuditorReviewTab(),
-      const NotificationsScreen(),
-      const ProfileScreen(),
+      const RoomsScreen(),
+      const FinanceScreen(),
+      const FnbScreen(),
+      const HubScreen(),
     ];
 
     return Scaffold(
@@ -75,66 +75,50 @@ class _AuditorMainScreenState extends ConsumerState<AuditorMainScreen> {
             BottomNavigationBarItem(
               icon: Padding(
                 padding: EdgeInsets.only(bottom: 4),
-                child: Icon(Icons.fact_check_outlined),
+                child: Icon(Icons.king_bed_outlined),
               ),
               activeIcon: Padding(
                 padding: EdgeInsets.only(bottom: 4),
-                child: Icon(Icons.fact_check_rounded),
+                child: Icon(Icons.king_bed_rounded),
               ),
-              label: 'Review',
+              label: 'Rooms',
             ),
             BottomNavigationBarItem(
               icon: Padding(
                 padding: EdgeInsets.only(bottom: 4),
-                child: Icon(Icons.notifications_none_rounded),
+                child: Icon(Icons.account_balance_wallet_outlined),
               ),
               activeIcon: Padding(
                 padding: EdgeInsets.only(bottom: 4),
-                child: Icon(Icons.notifications_rounded),
+                child: Icon(Icons.account_balance_wallet_rounded),
               ),
-              label: 'Alerts',
+              label: 'Finance',
             ),
             BottomNavigationBarItem(
               icon: Padding(
                 padding: EdgeInsets.only(bottom: 4),
-                child: Icon(Icons.person_outline),
+                child: Icon(Icons.dashboard_outlined),
               ),
               activeIcon: Padding(
                 padding: EdgeInsets.only(bottom: 4),
-                child: Icon(Icons.person_rounded),
+                child: Icon(Icons.dashboard_rounded),
               ),
-              label: 'You',
+              label: 'Ops',
+            ),
+            BottomNavigationBarItem(
+              icon: Padding(
+                padding: EdgeInsets.only(bottom: 4),
+                child: Icon(Icons.apps_outlined),
+              ),
+              activeIcon: Padding(
+                padding: EdgeInsets.only(bottom: 4),
+                child: Icon(Icons.apps_rounded),
+              ),
+              label: 'Controls',
             ),
           ],
         ),
       ),
-    );
-  }
-}
-
-class _AuditorReviewTab extends ConsumerWidget {
-  const _AuditorReviewTab();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final propertyId = ref.watch(effectivePropertyIdProvider);
-    final selectedPropertyId = ref.watch(selectedHubPropertyProvider);
-    final propertyName = ref
-        .watch(profileProvider)
-        .maybeWhen(
-          data: (profile) {
-            final properties = profile.authorization.properties;
-            if (properties.isEmpty) return 'LodgeCore Property';
-            for (final property in properties) {
-              if (property.id == selectedPropertyId) return property.name;
-            }
-            return properties.first.name;
-          },
-          orElse: () => 'LodgeCore Property',
-        );
-    return NightAuditReviewScreen(
-      propertyId: propertyId,
-      propertyName: propertyName,
     );
   }
 }

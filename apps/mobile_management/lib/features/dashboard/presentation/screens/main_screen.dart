@@ -235,7 +235,7 @@ class _PremiumNavBar extends ConsumerWidget {
       _NavItem(
         icon: Icons.apps_rounded,
         activeIcon: Icons.apps_rounded,
-        label: 'Control',
+        label: 'Controls',
         badge: 0,
       ),
     ];

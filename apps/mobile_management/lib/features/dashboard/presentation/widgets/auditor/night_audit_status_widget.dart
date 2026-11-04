@@ -18,7 +18,6 @@ class NightAuditStatusWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const surfaceNavy = Color(0xFF1E293B);
-    const surfaceDeep = Color(0xFF0F172A);
     const textPrimary = Color(0xFFF8FAFC);
     const textSecondary = Color(0xFF94A3B8);
     const goldAccent = Color(0xFFD4AF37);
@@ -67,7 +66,11 @@ class NightAuditStatusWidget extends StatelessWidget {
                     children: [
                       Text(
                         'Business Date',
-                        style: TextStyle(fontSize: 11, color: textSecondary, letterSpacing: 0.4),
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: textSecondary,
+                          letterSpacing: 0.4,
+                        ),
                       ),
                       const SizedBox(height: 3),
                       Text(
@@ -135,7 +138,7 @@ class NightAuditStatusWidget extends StatelessWidget {
           const SizedBox(height: 16),
           Divider(height: 1, color: Colors.white.withValues(alpha: 0.06)),
 
-          // ── KPI Row: Revenue · Payments · Guests ────────────────
+          // ── KPI Row: Revenue · ADR · Guests ─────────────────────
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
             child: Row(
@@ -148,9 +151,9 @@ class NightAuditStatusWidget extends StatelessWidget {
                 ),
                 _dividerLine(),
                 _KpiTile(
-                  label: 'Payments',
-                  value: currencyFmt.format(analytics.payments),
-                  icon: Icons.payments_outlined,
+                  label: 'ADR',
+                  value: currencyFmt.format(analytics.adr),
+                  icon: Icons.king_bed_outlined,
                   color: const Color(0xFF60A5FA),
                 ),
                 _dividerLine(),
@@ -183,8 +186,8 @@ class NightAuditStatusWidget extends StatelessWidget {
                             startDegreeOffset: -90,
                             sections: _buildPieSections(analytics, goldAccent),
                           ),
-                          swapAnimationDuration: const Duration(milliseconds: 800),
-                          swapAnimationCurve: Curves.easeInOut,
+                          duration: const Duration(milliseconds: 800),
+                          curve: Curves.easeInOut,
                         ),
                         Center(
                           child: Column(
@@ -251,11 +254,11 @@ class NightAuditStatusWidget extends StatelessWidget {
   }
 
   Widget _dividerLine() => Container(
-        width: 1,
-        height: 36,
-        color: Colors.white.withValues(alpha: 0.07),
-        margin: const EdgeInsets.symmetric(horizontal: 12),
-      );
+    width: 1,
+    height: 36,
+    color: Colors.white.withValues(alpha: 0.07),
+    margin: const EdgeInsets.symmetric(horizontal: 12),
+  );
 
   String _formatBusinessDate(String raw) {
     // Try full ISO string first (e.g. '2026-09-04T00:00:00.000Z')
@@ -279,26 +282,39 @@ class NightAuditStatusWidget extends StatelessWidget {
   String _humanStep(String step) {
     return step
         .split('_')
-        .map((s) => s.isEmpty ? '' : '${s[0].toUpperCase()}${s.substring(1).toLowerCase()}')
+        .map(
+          (s) => s.isEmpty
+              ? ''
+              : '${s[0].toUpperCase()}${s.substring(1).toLowerCase()}',
+        )
         .join(' ');
   }
 
-  List<PieChartSectionData> _buildPieSections(NightAuditAnalytics analytics, Color goldAccent) {
+  List<PieChartSectionData> _buildPieSections(
+    NightAuditAnalytics analytics,
+    Color goldAccent,
+  ) {
     return [
       PieChartSectionData(
-        value: analytics.occupiedRooms > 0 ? analytics.occupiedRooms.toDouble() : 0.01,
+        value: analytics.occupiedRooms > 0
+            ? analytics.occupiedRooms.toDouble()
+            : 0.01,
         color: goldAccent,
         title: '',
         radius: 12,
       ),
       PieChartSectionData(
-        value: analytics.availableRooms > 0 ? analytics.availableRooms.toDouble() : 0.01,
+        value: analytics.availableRooms > 0
+            ? analytics.availableRooms.toDouble()
+            : 0.01,
         color: Colors.greenAccent,
         title: '',
         radius: 12,
       ),
       PieChartSectionData(
-        value: analytics.outOfOrderRooms > 0 ? analytics.outOfOrderRooms.toDouble() : 0.01,
+        value: analytics.outOfOrderRooms > 0
+            ? analytics.outOfOrderRooms.toDouble()
+            : 0.01,
         color: Colors.redAccent,
         title: '',
         radius: 12,
@@ -309,17 +325,41 @@ class NightAuditStatusWidget extends StatelessWidget {
   _StatusConfig _getStatusConfig(String state) {
     switch (state) {
       case 'COMPLETED':
-        return _StatusConfig('Completed', Icons.check_circle_outline_rounded, Colors.greenAccent);
+        return _StatusConfig(
+          'Completed',
+          Icons.check_circle_outline_rounded,
+          Colors.greenAccent,
+        );
       case 'IN_PROGRESS':
-        return _StatusConfig('In Progress', Icons.sync_rounded, Colors.orangeAccent);
+        return _StatusConfig(
+          'In Progress',
+          Icons.sync_rounded,
+          Colors.orangeAccent,
+        );
       case 'POSTING':
-        return _StatusConfig('Posting', Icons.cloud_upload_outlined, Colors.amberAccent);
+        return _StatusConfig(
+          'Posting',
+          Icons.cloud_upload_outlined,
+          Colors.amberAccent,
+        );
       case 'FAILED':
-        return _StatusConfig('Failed', Icons.error_outline_rounded, Colors.redAccent);
+        return _StatusConfig(
+          'Failed',
+          Icons.error_outline_rounded,
+          Colors.redAccent,
+        );
       case 'OVERDUE':
-        return _StatusConfig('Overdue', Icons.warning_amber_rounded, Colors.redAccent);
+        return _StatusConfig(
+          'Overdue',
+          Icons.warning_amber_rounded,
+          Colors.redAccent,
+        );
       default:
-        return _StatusConfig('Pending', Icons.schedule_rounded, const Color(0xFF94A3B8));
+        return _StatusConfig(
+          'Pending',
+          Icons.schedule_rounded,
+          const Color(0xFF94A3B8),
+        );
     }
   }
 }
@@ -376,8 +416,8 @@ class _OccupancyPill extends StatelessWidget {
     final color = pct >= 80
         ? Colors.greenAccent
         : pct >= 50
-            ? Colors.amberAccent
-            : Colors.redAccent;
+        ? Colors.amberAccent
+        : Colors.redAccent;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -410,7 +450,12 @@ class _KpiTile extends StatelessWidget {
   final String value;
   final IconData icon;
   final Color color;
-  const _KpiTile({required this.label, required this.value, required this.icon, required this.color});
+  const _KpiTile({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -427,7 +472,11 @@ class _KpiTile extends StatelessWidget {
               const SizedBox(width: 4),
               Text(
                 label,
-                style: TextStyle(fontSize: 10, color: textSecondary, letterSpacing: 0.3),
+                style: TextStyle(
+                  fontSize: 10,
+                  color: textSecondary,
+                  letterSpacing: 0.3,
+                ),
               ),
             ],
           ),
@@ -575,8 +624,7 @@ class _AuditTimeline extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: surfaceDeep,
-        borderRadius:
-            const BorderRadius.vertical(bottom: Radius.circular(16)),
+        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)),
       ),
       padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
       child: Column(
@@ -748,4 +796,3 @@ class _TimelineStep {
     required this.statusColor,
   });
 }
-

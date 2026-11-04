@@ -8,6 +8,8 @@ class AuditorDashboardData {
   final CriticalDiscrepancies criticalDiscrepancies;
   final CashReconciliation cashReconciliation;
   final NightAuditAnalytics analytics;
+  final NightAuditOperations operations;
+  final AuditControlCounts controls;
 
   AuditorDashboardData({
     required this.propertyName,
@@ -18,24 +20,91 @@ class AuditorDashboardData {
     required this.criticalDiscrepancies,
     required this.cashReconciliation,
     required this.analytics,
+    required this.operations,
+    required this.controls,
   });
 
   factory AuditorDashboardData.fromJson(Map<String, dynamic> json) {
     return AuditorDashboardData(
       propertyName: json['property']?['name'] ?? 'LodgeCore Property',
-      lastUpdatedAt: DateTime.parse(json['generatedAt'] ?? DateTime.now().toIso8601String()),
+      lastUpdatedAt: DateTime.parse(
+        json['generatedAt'] ?? DateTime.now().toIso8601String(),
+      ),
       businessDate: json['businessDate'] ?? '',
       auditStatus: AuditStatus.fromJson(json['auditStatus'] ?? {}),
       auditExceptions: AuditExceptions.fromJson(json['auditExceptions'] ?? {}),
-      criticalDiscrepancies: CriticalDiscrepancies.fromJson(json['criticalDiscrepancies'] ?? {}),
-      cashReconciliation: CashReconciliation.fromJson(json['cashReconciliation'] ?? {}),
+      criticalDiscrepancies: CriticalDiscrepancies.fromJson(
+        json['criticalDiscrepancies'] ?? {},
+      ),
+      cashReconciliation: CashReconciliation.fromJson(
+        json['cashReconciliation'] ?? {},
+      ),
       analytics: NightAuditAnalytics.fromJson(json['analytics'] ?? {}),
+      operations: NightAuditOperations.fromJson(json['operations'] ?? {}),
+      controls: AuditControlCounts.fromJson(json['controls'] ?? {}),
     );
   }
 }
 
+class NightAuditOperations {
+  final int arrivals;
+  final int departures;
+  final int roomReconciliation;
+  final int inHouseGuests;
+
+  const NightAuditOperations({
+    required this.arrivals,
+    required this.departures,
+    required this.roomReconciliation,
+    required this.inHouseGuests,
+  });
+
+  factory NightAuditOperations.fromJson(Map<String, dynamic> json) =>
+      NightAuditOperations(
+        arrivals: json['arrivals'] ?? 0,
+        departures: json['departures'] ?? 0,
+        roomReconciliation: json['roomReconciliation'] ?? 0,
+        inHouseGuests: json['inHouseGuests'] ?? 0,
+      );
+}
+
+class AuditControlCounts {
+  final int openPosOrders;
+  final int openPosSessions;
+  final int openFrontdeskSessions;
+  final int financialSyncConflicts;
+  final int unverifiedComplimentary;
+  final int pendingCheckInBypasses;
+  final int unverifiedTransactions;
+  final int fnbOpenOrders;
+
+  const AuditControlCounts({
+    required this.openPosOrders,
+    required this.openPosSessions,
+    required this.openFrontdeskSessions,
+    required this.financialSyncConflicts,
+    required this.unverifiedComplimentary,
+    required this.pendingCheckInBypasses,
+    required this.unverifiedTransactions,
+    required this.fnbOpenOrders,
+  });
+
+  factory AuditControlCounts.fromJson(Map<String, dynamic> json) =>
+      AuditControlCounts(
+        openPosOrders: json['openPosOrders'] ?? 0,
+        openPosSessions: json['openPosSessions'] ?? 0,
+        openFrontdeskSessions: json['openFrontdeskSessions'] ?? 0,
+        financialSyncConflicts: json['financialSyncConflicts'] ?? 0,
+        unverifiedComplimentary: json['unverifiedComplimentary'] ?? 0,
+        pendingCheckInBypasses: json['pendingCheckInBypasses'] ?? 0,
+        unverifiedTransactions: json['unverifiedTransactions'] ?? 0,
+        fnbOpenOrders: json['fnbOpenOrders'] ?? 0,
+      );
+}
+
 class AuditStatus {
-  final String state; // 'PENDING' | 'IN_PROGRESS' | 'POSTING' | 'COMPLETED' | 'FAILED' | 'OVERDUE'
+  final String
+  state; // 'PENDING' | 'IN_PROGRESS' | 'POSTING' | 'COMPLETED' | 'FAILED' | 'OVERDUE'
   final DateTime? startedAt;
   final DateTime? completedAt;
   final String currentStep;
@@ -56,12 +125,20 @@ class AuditStatus {
   factory AuditStatus.fromJson(Map<String, dynamic> json) {
     return AuditStatus(
       state: json['state'] ?? 'NOT_STARTED',
-      startedAt: json['startedAt'] != null ? DateTime.tryParse(json['startedAt']) : null,
-      completedAt: json['completedAt'] != null ? DateTime.tryParse(json['completedAt']) : null,
+      startedAt: json['startedAt'] != null
+          ? DateTime.tryParse(json['startedAt'])
+          : null,
+      completedAt: json['completedAt'] != null
+          ? DateTime.tryParse(json['completedAt'])
+          : null,
       currentStep: json['currentStep'] ?? '',
       progressPercent: (json['progressPercent'] ?? 0).toDouble(),
-      lastSuccessfulAudit: json['lastSuccessfulAudit'] != null ? DateTime.tryParse(json['lastSuccessfulAudit']) : null,
-      blockingErrors: (json['blockingErrors'] as List?)?.map((e) => e.toString()).toList() ?? [],
+      lastSuccessfulAudit: json['lastSuccessfulAudit'] != null
+          ? DateTime.tryParse(json['lastSuccessfulAudit'])
+          : null,
+      blockingErrors: json['blockingErrors'] is List
+          ? (json['blockingErrors'] as List).map((e) => e.toString()).toList()
+          : [],
     );
   }
 }
@@ -70,10 +147,7 @@ class AuditExceptions {
   final int criticalCount;
   final int warningCount;
 
-  AuditExceptions({
-    required this.criticalCount,
-    required this.warningCount,
-  });
+  AuditExceptions({required this.criticalCount, required this.warningCount});
 
   factory AuditExceptions.fromJson(Map<String, dynamic> json) {
     return AuditExceptions(
@@ -104,7 +178,8 @@ class CriticalDiscrepancies {
       occupancyDiscrepancies: json['occupancyDiscrepancies'] ?? 0,
       unpostedCharges: json['unpostedCharges'] ?? 0,
       openFolios: json['openFolios'] ?? 0,
-      reservationsRequiringAttention: json['reservationsRequiringAttention'] ?? 0,
+      reservationsRequiringAttention:
+          json['reservationsRequiringAttention'] ?? 0,
     );
   }
 }
@@ -137,6 +212,13 @@ class CashReconciliation {
 
 class NightAuditAnalytics {
   final double revenue;
+  final double adr;
+  final double revpar;
+  final double netRevenue;
+  final double priorRevenue;
+  final double priorAdr;
+  final double priorRevpar;
+  final double priorNetRevenue;
   final double payments;
   final int inHouseGuests;
   final int latePostings;
@@ -147,6 +229,13 @@ class NightAuditAnalytics {
 
   NightAuditAnalytics({
     required this.revenue,
+    required this.adr,
+    required this.revpar,
+    required this.netRevenue,
+    required this.priorRevenue,
+    required this.priorAdr,
+    required this.priorRevpar,
+    required this.priorNetRevenue,
     required this.payments,
     required this.inHouseGuests,
     required this.latePostings,
@@ -163,6 +252,13 @@ class NightAuditAnalytics {
     final rooms = json['rooms'] as Map<String, dynamic>? ?? {};
     return NightAuditAnalytics(
       revenue: (json['revenue'] ?? 0).toDouble(),
+      adr: (json['adr'] ?? 0).toDouble(),
+      revpar: (json['revpar'] ?? 0).toDouble(),
+      netRevenue: (json['netRevenue'] ?? 0).toDouble(),
+      priorRevenue: (json['priorRevenue'] ?? 0).toDouble(),
+      priorAdr: (json['priorAdr'] ?? 0).toDouble(),
+      priorRevpar: (json['priorRevpar'] ?? 0).toDouble(),
+      priorNetRevenue: (json['priorNetRevenue'] ?? 0).toDouble(),
       payments: (json['payments'] ?? 0).toDouble(),
       inHouseGuests: json['inHouseGuests'] ?? 0,
       latePostings: json['latePostings'] ?? 0,
@@ -171,5 +267,14 @@ class NightAuditAnalytics {
       availableRooms: rooms['available'] ?? 0,
       outOfOrderRooms: rooms['outOfOrder'] ?? 0,
     );
+  }
+
+  double changePercent(double current, double prior) =>
+      prior == 0 ? 0 : ((current - prior) / prior) * 100;
+
+  String comparison(double current, double prior) {
+    if (prior == 0) return 'No prior audit';
+    final change = changePercent(current, prior);
+    return '${change >= 0 ? '▲' : '▼'} ${change.abs().toStringAsFixed(1)}% vs prior';
   }
 }
