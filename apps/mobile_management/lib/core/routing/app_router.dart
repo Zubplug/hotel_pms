@@ -8,20 +8,32 @@ import '../../features/authentication/presentation/providers/auth_provider.dart'
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authProvider);
+  final authNotifier = ref.read(authProvider.notifier);
 
   return GoRouter(
     initialLocation: '/boot',
     redirect: (context, state) {
-      final isGoingToLogin = state.matchedLocation == '/login' || 
-                             state.matchedLocation == '/welcome' || 
-                             state.matchedLocation == '/boot';
-      
+      final isGoingToLogin =
+          state.matchedLocation == '/login' ||
+          state.matchedLocation == '/welcome' ||
+          state.matchedLocation == '/boot';
+
       if (authState == AuthStatus.unknown) {
         return '/boot'; // Stay on splash while loading
       }
 
-      if (authState == AuthStatus.unauthenticated && !isGoingToLogin) {
-        return '/welcome';
+      if (authState == AuthStatus.unauthenticated) {
+        if (state.matchedLocation == '/boot') {
+          return authNotifier.hasSeenWelcome ? '/login' : '/welcome';
+        }
+        if (state.matchedLocation == '/welcome' &&
+            authNotifier.hasSeenWelcome) {
+          return '/login';
+        }
+        if (state.matchedLocation != '/login' &&
+            state.matchedLocation != '/welcome') {
+          return '/login';
+        }
       }
 
       if (authState == AuthStatus.authenticated && isGoingToLogin) {
@@ -31,22 +43,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       return null;
     },
     routes: [
-      GoRoute(
-        path: '/boot',
-        builder: (context, state) => const SplashScreen(),
-      ),
+      GoRoute(path: '/boot', builder: (context, state) => const SplashScreen()),
       GoRoute(
         path: '/welcome',
         builder: (context, state) => const WelcomeScreen(),
       ),
-      GoRoute(
-        path: '/login',
-        builder: (context, state) => const LoginScreen(),
-      ),
-      GoRoute(
-        path: '/',
-        builder: (context, state) => const MainScreen(),
-      ),
+      GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
+      GoRoute(path: '/', builder: (context, state) => const MainScreen()),
     ],
   );
 });

@@ -532,67 +532,123 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
   }
 
   void _showComingSoonPopup(BuildContext context) {
-    showDialog(
+    showDialog<void>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: _bgDeep,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(24),
-          side: BorderSide(color: _gold.withValues(alpha: 0.3), width: 1.5),
-        ),
-        contentPadding: const EdgeInsets.all(32),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: _gold.withValues(alpha: 0.1),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.rocket_launch_rounded,
-                color: _gold,
-                size: 48,
-              ),
-            ),
-            const SizedBox(height: 24),
-            const Text(
-              'COMING SOON',
-              style: TextStyle(
-                color: _gold,
-                fontSize: 16,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 2,
-              ),
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              'This feature is currently under development. Stay tuned.',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: _textMuted, fontSize: 14, height: 1.5),
-            ),
-            const SizedBox(height: 32),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () => Navigator.pop(ctx),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _gold,
-                  foregroundColor: _bgDeep,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+      barrierColor: Colors.black.withValues(alpha: .78),
+      builder: (ctx) => Dialog(
+        backgroundColor: _surface,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 28),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 430),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(22, 22, 22, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 46,
+                      height: 46,
+                      decoration: BoxDecoration(
+                        color: _gold.withValues(alpha: .12),
+                        borderRadius: BorderRadius.circular(15),
+                        border: Border.all(color: _gold.withValues(alpha: .28)),
+                      ),
+                      child: const Icon(
+                        Icons.rocket_launch_rounded,
+                        color: _gold,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'EXECUTIVE INSIGHT',
+                            style: TextStyle(
+                              color: _gold,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 1.2,
+                            ),
+                          ),
+                          SizedBox(height: 5),
+                          Text(
+                            'Coming soon',
+                            style: TextStyle(
+                              color: _textPrimary,
+                              fontSize: 19,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      icon: const Icon(Icons.close_rounded, color: _textMuted),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 18),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: _gold.withValues(alpha: .07),
+                    borderRadius: BorderRadius.circular(15),
+                    border: Border.all(color: _gold.withValues(alpha: .18)),
                   ),
-                  elevation: 0,
+                  child: const Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(Icons.auto_awesome_rounded, color: _gold, size: 19),
+                      SizedBox(width: 9),
+                      Expanded(
+                        child: Text(
+                          'This executive feature is being prepared for a future release.',
+                          style: TextStyle(
+                            color: _textPrimary,
+                            fontSize: 13,
+                            height: 1.4,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                child: const Text(
-                  'Got it',
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                const SizedBox(height: 16),
+                const Text(
+                  'The current dashboard remains fully available for monitoring hotel performance, operations, revenue, and alerts.',
+                  textAlign: TextAlign.left,
+                  style: TextStyle(
+                    color: _textMuted,
+                    fontSize: 13,
+                    height: 1.5,
+                  ),
                 ),
-              ),
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: _gold,
+                      foregroundColor: _bgDeep,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                    child: const Text(
+                      'Understood',
+                      style: TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );

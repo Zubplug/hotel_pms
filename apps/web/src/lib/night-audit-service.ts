@@ -557,7 +557,7 @@ export async function getFinancialAudit(ctx: TenantContext, propertyId: string) 
   const approvalRoomById = new Map(approvalRooms.map((room) => [room.id, room]));
   const staffIds = Array.from(new Set(pendingDiscounts.flatMap((approval) => {
     const { details, snapshot } = approvalSnapshot(approval);
-    return [approval.requestedBy, approval.reviewedBy, details.acknowledgedBy, details.acknowledgedById, details.acknowledgedByStaffId, snapshot.acknowledgedBy, snapshot.acknowledgedById, snapshot.acknowledgedByStaffId]
+    return [approval.requestedBy, approval.reviewedBy, approval.acknowledgedByStaffId, details.acknowledgedBy, details.acknowledgedById, details.acknowledgedByStaffId, snapshot.acknowledgedBy, snapshot.acknowledgedById, snapshot.acknowledgedByStaffId]
       .filter(isUuid);
   })));
   const approvalStaff = await prisma.staff.findMany({
@@ -574,7 +574,7 @@ export async function getFinancialAudit(ctx: TenantContext, propertyId: string) 
     const { details, snapshot } = approvalSnapshot(approval);
     const reservationRoomId = snapshot.reservationRoomId || details.reservationRoomId;
     const room = typeof reservationRoomId === 'string' ? approvalRoomById.get(reservationRoomId) : undefined;
-    const acknowledgedById = details.acknowledgedBy || details.acknowledgedById || details.acknowledgedByStaffId || snapshot.acknowledgedBy || snapshot.acknowledgedById || snapshot.acknowledgedByStaffId;
+    const acknowledgedById = approval.acknowledgedByStaffId || details.acknowledgedBy || details.acknowledgedById || details.acknowledgedByStaffId || snapshot.acknowledgedBy || snapshot.acknowledgedById || snapshot.acknowledgedByStaffId;
     return {
       ...approval,
       requester: staffById.get(approval.requestedBy) || null,
@@ -882,7 +882,10 @@ export async function getCashReconciliation(ctx: TenantContext, propertyId: stri
           folioNumber: true,
           reservation: {
             select: {
-              primaryGuest: { select: { firstName: true, lastName: true } }
+              primaryGuest: { select: { firstName: true, lastName: true } },
+              reservationRooms: {
+                select: { room: { select: { number: true } } },
+              },
             }
           }
         }
@@ -907,7 +910,20 @@ export async function getCashReconciliation(ctx: TenantContext, propertyId: stri
       order: {
         select: {
           id: true,
-          outlet: { select: { name: true } }
+          outlet: { select: { name: true } },
+          folio: {
+            select: {
+              folioNumber: true,
+              reservation: {
+                select: {
+                  primaryGuest: { select: { firstName: true, lastName: true } },
+                  reservationRooms: {
+                    select: { room: { select: { number: true } } },
+                  },
+                },
+              },
+            },
+          },
         }
       },
       session: {

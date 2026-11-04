@@ -889,75 +889,16 @@ class _NightAuditReviewScreenState
     await showDialog<void>(
       context: context,
       barrierColor: Colors.black.withValues(alpha: .78),
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: _card,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
-        title: Row(
-          children: [
-            Icon(
-              Icons.account_balance_wallet_rounded,
-              color: Colors.amberAccent,
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(title, style: const TextStyle(color: _text)),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(message, style: const TextStyle(color: _muted, height: 1.4)),
-            const SizedBox(height: 14),
-            _cashDetail(
-              'Reference',
-              item['handoverReference'] ?? item['id'] ?? '—',
-            ),
-            _cashDetail(
-              'Location',
-              item['location'] ?? item['drawerName'] ?? '—',
-            ),
-            if (item['amount'] != null)
-              _cashDetail('Amount', '₦${item['amount']}'),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Close'),
-          ),
-        ],
+      builder: (dialogContext) => _CashFollowUpDialog(
+        title: title,
+        message: message,
+        item: item,
+        isHandover: isHandover,
+        onClose: () => Navigator.pop(dialogContext),
       ),
     );
     return false;
   }
-
-  Widget _cashDetail(String label, dynamic value) => Padding(
-    padding: const EdgeInsets.only(top: 7),
-    child: Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(
-          width: 82,
-          child: Text(
-            label,
-            style: const TextStyle(color: _muted, fontSize: 11),
-          ),
-        ),
-        Expanded(
-          child: Text(
-            value?.toString() ?? '—',
-            style: const TextStyle(
-              color: _text,
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ),
-      ],
-    ),
-  );
 
   Future<bool> _resolveRoomDiscrepancy(Map<String, dynamic> entry) async {
     final item = map(entry['item']);
@@ -1856,45 +1797,115 @@ class _NightAuditReviewScreenState
     if (action == 'discount') {
       return _resolveDiscount(entry);
     }
+    if (action == 'bypass') {
+      return _resolveBypass(entry);
+    }
     if (action == 'transaction') {
       return _resolveTransaction(entry);
     }
     final notes = TextEditingController();
     final approved = await showDialog<bool>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
+      barrierColor: Colors.black.withValues(alpha: .78),
+      builder: (dialogContext) => Dialog(
         backgroundColor: _card,
-        title: Text(text(entry['title']), style: const TextStyle(color: _text)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'Review ${{'void': 'the order before voiding it', 'complimentary': 'the complimentary record', 'bypass': 'the check-in bypass', 'transaction': 'the transaction'}[action] ?? 'this record'}.',
-              style: const TextStyle(color: _muted),
+        insetPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 24),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 460),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(22, 22, 22, 18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 46,
+                      height: 46,
+                      decoration: BoxDecoration(
+                        color: Colors.indigoAccent.withValues(alpha: .14),
+                        borderRadius: BorderRadius.circular(15),
+                      ),
+                      child: const Icon(
+                        Icons.fact_check_rounded,
+                        color: Colors.indigoAccent,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        text(entry['title']),
+                        style: const TextStyle(
+                          color: _text,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () => Navigator.pop(dialogContext, false),
+                      icon: const Icon(Icons.close_rounded, color: _muted),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Review ${{'void': 'the order before voiding it', 'complimentary': 'the complimentary record', 'bypass': 'the check-in bypass', 'transaction': 'the transaction'}[action] ?? 'this record'} before resolving this audit control.',
+                  style: const TextStyle(
+                    color: _muted,
+                    height: 1.4,
+                    fontSize: 12,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: notes,
+                  minLines: 3,
+                  maxLines: 5,
+                  style: const TextStyle(color: _text, fontSize: 13),
+                  decoration: InputDecoration(
+                    labelText: 'Audit note / reason',
+                    labelStyle: const TextStyle(color: _muted),
+                    filled: true,
+                    fillColor: Colors.white.withValues(alpha: .035),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide(
+                        color: Colors.white.withValues(alpha: .1),
+                      ),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide(
+                        color: Colors.white.withValues(alpha: .1),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.pop(dialogContext, false),
+                        child: const Text('Keep unresolved'),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: FilledButton.icon(
+                        onPressed: () => Navigator.pop(dialogContext, true),
+                        icon: const Icon(Icons.check_rounded, size: 18),
+                        label: const Text('Confirm'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: notes,
-              minLines: 2,
-              maxLines: 4,
-              style: const TextStyle(color: _text),
-              decoration: const InputDecoration(
-                labelText: 'Review note / reason',
-                labelStyle: TextStyle(color: _muted),
-              ),
-            ),
-          ],
+          ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Confirm'),
-          ),
-        ],
       ),
     );
     if (approved != true || !mounted) return false;
@@ -1956,6 +1967,56 @@ class _NightAuditReviewScreenState
     }
   }
 
+  Future<bool> _resolveBypass(Map<String, dynamic> entry) async {
+    final item = map(entry['item']);
+    final decision = await showDialog<Map<String, String>>(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: .78),
+      builder: (dialogContext) => _CheckInBypassDialog(
+        item: item,
+        onClose: () => Navigator.pop(dialogContext),
+      ),
+    );
+    if (decision == null || !mounted) return false;
+
+    try {
+      await ref
+          .read(nightAuditRepositoryProvider)
+          .verifyCheckInBypass(
+            propertyId: widget.propertyId,
+            bypassId: text(item['id']),
+            action: decision['action']!,
+            notes: decision['notes'],
+          );
+      ref.invalidate(nightAuditWorkflowProvider(widget.propertyId));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              decision['action'] == 'VERIFY'
+                  ? 'Check-in bypass verified'
+                  : 'Check-in bypass rejected',
+            ),
+            backgroundColor: decision['action'] == 'VERIFY'
+                ? Colors.green.shade700
+                : Colors.orange.shade800,
+          ),
+        );
+      }
+      return true;
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Bypass review failed: $error'),
+            backgroundColor: Colors.red.shade700,
+          ),
+        );
+      }
+      return false;
+    }
+  }
+
   Future<bool> _resolveTransaction(Map<String, dynamic> entry) async {
     final item = map(entry['item']);
     final result = await showDialog<Map<String, String>>(
@@ -2009,6 +2070,58 @@ class _NightAuditReviewScreenState
   Future<bool> _resolveDiscount(Map<String, dynamic> entry) async {
     final item = map(entry['item']);
     final details = map(item['details']);
+    final reservationRoom = map(item['reservationRoom']);
+    final reservation = map(reservationRoom['reservation']);
+    final guest = map(reservation['primaryGuest']);
+    final room = map(reservationRoom['room']);
+    final guestName =
+        '${text(guest['firstName'], 'Guest')} ${text(guest['lastName'], '')}'
+            .trim();
+    final corporateAccountName = text(
+      map(reservation['corporateAccount'])['name'],
+      '',
+    );
+    final roomNumber = formatRoomNumber(
+      room['number'] ?? item['roomNumber'],
+      fallback: 'Not assigned',
+    );
+    final currency = text(
+      reservationRoom['currency'] ?? item['currency'],
+      'NGN',
+    );
+    final currencyFormatter = NumberFormat.currency(
+      locale: 'en_NG',
+      name: currency,
+      symbol: currency == 'NGN' ? '₦' : currency,
+    );
+    final rate = num.tryParse(reservationRoom['rateAmount']?.toString() ?? '');
+    final discountType = text(
+      reservationRoom['discountType'] ?? details['discountType'],
+      '',
+    ).toUpperCase();
+    final discountAmount = num.tryParse(
+      (reservationRoom['discountAmount'] ??
+                  details['discountAmount'] ??
+                  item['amount'])
+              ?.toString() ??
+          '',
+    );
+    final discountPercent = num.tryParse(
+      (reservationRoom['discountPercent'] ?? details['discountPercent'])
+              ?.toString() ??
+          '',
+    );
+    final discountDisplay =
+        discountType.contains('PERCENT') && discountPercent != null
+        ? '${discountPercent.toStringAsFixed(discountPercent % 1 == 0 ? 0 : 2)}%'
+        : discountAmount == null
+        ? 'Not recorded'
+        : currencyFormatter.format(discountAmount);
+    final stayDates =
+        reservationRoom['checkIn'] != null ||
+            reservationRoom['checkOut'] != null
+        ? '${_displayDate(reservationRoom['checkIn'])} – ${_displayDate(reservationRoom['checkOut'])}'
+        : 'Not recorded';
     final decision = await showDialog<String>(
       context: context,
       barrierColor: Colors.black.withValues(alpha: .78),
@@ -2018,15 +2131,32 @@ class _NightAuditReviewScreenState
             'A management decision is required before room charges can be posted.',
         accent: Colors.amberAccent,
         fields: {
-          'Type': text(details['targetType'], 'RESERVATION_ROOM'),
+          'Guest': guestName,
+          'Room': roomNumber,
+          'Confirmation': text(
+            reservation['confirmationNumber'],
+            'Not recorded',
+          ),
+          'Stay': stayDates,
+          'Room type': text(map(room['roomType'])['name'], 'Not recorded'),
+          if (corporateAccountName.isNotEmpty)
+            'Corporate account': corporateAccountName,
+          'Discount': discountDisplay,
+          if (rate != null) 'Room rate': currencyFormatter.format(rate),
+          'Type': text(details['targetType'], 'Room charge'),
           'Requested by': text(item['requestedByName'] ?? item['requestedBy']),
           'Acknowledged by': text(
             item['acknowledgedByName'],
             'Not acknowledged',
           ),
           'Reason': text(
-            item['reason'] ?? details['reason'],
+            reservationRoom['discountReason'] ??
+                item['reason'] ??
+                details['reason'],
             'No reason provided',
+          ),
+          'Submitted': _displayDateTime(
+            item['requestedAt'] ?? item['createdAt'],
           ),
         },
         actions: const {
@@ -2114,6 +2244,583 @@ class _NightAuditReviewScreenState
     child: Text(
       message,
       style: const TextStyle(color: _muted, fontSize: 12, height: 1.4),
+    ),
+  );
+}
+
+class _CashFollowUpDialog extends StatelessWidget {
+  final String title;
+  final String message;
+  final Map<String, dynamic> item;
+  final bool isHandover;
+  final VoidCallback onClose;
+
+  const _CashFollowUpDialog({
+    required this.title,
+    required this.message,
+    required this.item,
+    required this.isHandover,
+    required this.onClose,
+  });
+
+  String value(dynamic input, [String fallback = 'Not recorded']) {
+    if (input == null || input.toString().trim().isEmpty) return fallback;
+    return input.toString();
+  }
+
+  String money(dynamic input) {
+    final amount = num.tryParse(input?.toString() ?? '');
+    if (amount == null) return 'Not recorded';
+    return NumberFormat.currency(locale: 'en_NG', symbol: '₦').format(amount);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const accent = Colors.amberAccent;
+    final reference = value(
+      item['handoverReference'] ?? item['reference'] ?? item['id'],
+    );
+    final location = value(
+      item['location'] ?? item['drawerName'] ?? item['terminalName'],
+    );
+    final owner = value(
+      item['cashierName'] ?? item['staffName'] ?? item['createdByName'],
+    );
+
+    return Dialog(
+      backgroundColor: _card,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 24),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 470),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(22, 22, 22, 18),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: accent.withValues(alpha: .14),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Icon(
+                      isHandover
+                          ? Icons.swap_horiz_rounded
+                          : Icons.savings_rounded,
+                      color: accent,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'CASH CONTROL FOLLOW-UP',
+                          style: TextStyle(
+                            color: accent,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
+                        const SizedBox(height: 5),
+                        Text(
+                          title,
+                          style: const TextStyle(
+                            color: _text,
+                            fontSize: 19,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: onClose,
+                    icon: const Icon(Icons.close_rounded, color: _muted),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 13),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(13),
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: .07),
+                  borderRadius: BorderRadius.circular(15),
+                  border: Border.all(color: accent.withValues(alpha: .2)),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(
+                      Icons.info_outline_rounded,
+                      color: accent,
+                      size: 19,
+                    ),
+                    const SizedBox(width: 9),
+                    Expanded(
+                      child: Text(
+                        message,
+                        style: const TextStyle(
+                          color: _text,
+                          fontSize: 12,
+                          height: 1.4,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(15),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: .035),
+                  borderRadius: BorderRadius.circular(17),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: .08),
+                  ),
+                ),
+                child: Column(
+                  children: [
+                    _detail('Reference', reference),
+                    _detail('Location / drawer', location),
+                    _detail('Responsible cashier', owner),
+                    _detail('Amount', money(item['amount'])),
+                    if (item['createdAt'] != null)
+                      _detail('Created', _displayDateTime(item['createdAt'])),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(13),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: .025),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.assignment_ind_outlined,
+                      color: _muted,
+                      size: 18,
+                    ),
+                    SizedBox(width: 9),
+                    Expanded(
+                      child: Text(
+                        'Next step: coordinate with the General Cashier or responsible cashier. Complete the physical custody action in Cash Control, then refresh this audit step.',
+                        style: TextStyle(
+                          color: _muted,
+                          fontSize: 12,
+                          height: 1.4,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 15),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: onClose,
+                  icon: const Icon(Icons.check_rounded, size: 18),
+                  label: const Text('Understood'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Colors.indigoAccent,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _detail(String label, String value) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 5),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Text(
+            label,
+            style: const TextStyle(color: _muted, fontSize: 12),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Flexible(
+          child: Text(
+            value,
+            textAlign: TextAlign.right,
+            style: const TextStyle(
+              color: _text,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class _CheckInBypassDialog extends StatefulWidget {
+  final Map<String, dynamic> item;
+  final VoidCallback onClose;
+
+  const _CheckInBypassDialog({required this.item, required this.onClose});
+
+  @override
+  State<_CheckInBypassDialog> createState() => _CheckInBypassDialogState();
+}
+
+class _CheckInBypassDialogState extends State<_CheckInBypassDialog> {
+  late final TextEditingController notes;
+
+  @override
+  void initState() {
+    super.initState();
+    notes = TextEditingController(text: 'Reviewed during night audit');
+  }
+
+  @override
+  void dispose() {
+    notes.dispose();
+    super.dispose();
+  }
+
+  String value(dynamic input, [String fallback = 'Not recorded']) {
+    if (input == null || input.toString().trim().isEmpty) return fallback;
+    return input.toString();
+  }
+
+  Map<String, dynamic> mapValue(dynamic input) =>
+      input is Map ? Map<String, dynamic>.from(input) : <String, dynamic>{};
+
+  String money(dynamic input) {
+    final amount = num.tryParse(input?.toString() ?? '');
+    if (amount == null) return '₦0.00';
+    return NumberFormat.currency(locale: 'en_NG', symbol: '₦').format(amount);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final reservation = mapValue(widget.item['reservation']);
+    final guest = mapValue(reservation['primaryGuest']);
+    final operator = mapValue(widget.item['operator']);
+    final acknowledgedBy = mapValue(widget.item['acknowledgedBy']);
+    final folios = reservation['folios'] is List
+        ? reservation['folios'] as List
+        : const [];
+    final firstFolio = folios.isNotEmpty ? mapValue(folios.first) : {};
+    final guestName =
+        '${value(guest['firstName'], 'Guest')} ${value(guest['lastName'], '')}'
+            .trim();
+    final reservationRooms = reservation['reservationRooms'] is List
+        ? reservation['reservationRooms'] as List
+        : const [];
+    final firstRoom = reservationRooms.isNotEmpty
+        ? mapValue(reservationRooms.first)
+        : <String, dynamic>{};
+    final room = mapValue(firstRoom['room']);
+    final roomNumber = formatRoomNumber(
+      room['number'] ?? reservation['roomNumber'] ?? widget.item['roomNumber'],
+      fallback: 'Not assigned',
+    );
+    const accent = Colors.redAccent;
+
+    return Dialog(
+      backgroundColor: _card,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 24),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 480),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(22, 22, 22, 18),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: accent.withValues(alpha: .14),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: const Icon(Icons.no_accounts_rounded, color: accent),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'CHECK-IN BYPASS REVIEW',
+                          style: TextStyle(
+                            color: accent,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
+                        SizedBox(height: 5),
+                        Text(
+                          'Verify deposit exception',
+                          style: TextStyle(
+                            color: _text,
+                            fontSize: 19,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: widget.onClose,
+                    icon: const Icon(Icons.close_rounded, color: _muted),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(13),
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: .07),
+                  borderRadius: BorderRadius.circular(15),
+                  border: Border.all(color: accent.withValues(alpha: .2)),
+                ),
+                child: const Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.shield_outlined, color: accent, size: 19),
+                    SizedBox(width: 9),
+                    Expanded(
+                      child: Text(
+                        'This is a night-audit blocker. Confirm the exception, guest exposure, and approval context before making a decision.',
+                        style: TextStyle(
+                          color: _text,
+                          fontSize: 12,
+                          height: 1.4,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(15),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: .035),
+                  borderRadius: BorderRadius.circular(17),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: .08),
+                  ),
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 23,
+                          backgroundColor: _gold.withValues(alpha: .16),
+                          child: Text(
+                            guestName.substring(0, 1).toUpperCase(),
+                            style: const TextStyle(
+                              color: _gold,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 11),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                guestName,
+                                style: const TextStyle(
+                                  color: _text,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                'Guest reservation',
+                                style: const TextStyle(
+                                  color: _muted,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    _detailRow('Room', roomNumber),
+                    _detailRow(
+                      'Confirmation',
+                      value(reservation['confirmationNumber']),
+                    ),
+                    _detailRow(
+                      'Outstanding balance',
+                      money(firstFolio['balance']),
+                    ),
+                    _detailRow(
+                      'Requested by',
+                      '${value(operator['firstName'], '')} ${value(operator['lastName'], '')}'
+                          .trim(),
+                    ),
+                    _detailRow(
+                      'Acknowledged by',
+                      '${value(acknowledgedBy['firstName'], '')} ${value(acknowledgedBy['lastName'], '')}'
+                          .trim(),
+                    ),
+                    _detailRow('Reason', value(widget.item['reason'])),
+                    if (widget.item['createdAt'] != null)
+                      _detailRow(
+                        'Raised',
+                        _displayDateTime(widget.item['createdAt']),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 17),
+              const Text(
+                'AUDIT NOTE',
+                style: TextStyle(
+                  color: _muted,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1.2,
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: notes,
+                minLines: 2,
+                maxLines: 4,
+                style: const TextStyle(color: _text, fontSize: 13),
+                decoration: InputDecoration(
+                  hintText: 'Record the evidence or decision rationale',
+                  hintStyle: const TextStyle(color: _muted),
+                  filled: true,
+                  fillColor: Colors.white.withValues(alpha: .035),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide(
+                      color: Colors.white.withValues(alpha: .1),
+                    ),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide(
+                      color: Colors.white.withValues(alpha: .1),
+                    ),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: const BorderSide(color: _gold),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => Navigator.pop(context, {
+                        'action': 'REJECT',
+                        'notes': notes.text.trim(),
+                      }),
+                      icon: const Icon(Icons.close_rounded, size: 18),
+                      label: const Text('Reject'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.redAccent,
+                        side: BorderSide(
+                          color: Colors.redAccent.withValues(alpha: .45),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: () => Navigator.pop(context, {
+                        'action': 'VERIFY',
+                        'notes': notes.text.trim(),
+                      }),
+                      icon: const Icon(Icons.verified_rounded, size: 18),
+                      label: const Text('Verify'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: Colors.green.shade700,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              SizedBox(
+                width: double.infinity,
+                child: TextButton(
+                  onPressed: widget.onClose,
+                  child: const Text('Keep unresolved'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _detailRow(String label, String value) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 5),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Text(
+            label,
+            style: const TextStyle(color: _muted, fontSize: 12),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Flexible(
+          child: Text(
+            value.isEmpty ? 'Not recorded' : value,
+            textAlign: TextAlign.right,
+            style: const TextStyle(
+              color: _text,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ],
     ),
   );
 }

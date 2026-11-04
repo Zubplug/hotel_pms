@@ -135,6 +135,46 @@ export async function GET(req: NextRequest) {
       ...(staff.userId ? [[staff.userId, staff] as const] : []),
     ]));
 
+    const managementRoles = new Set([
+      'GENERAL_MANAGER',
+      'HOTEL_MANAGER',
+      'MANAGER',
+      'DIRECTOR',
+      'CEO',
+      'EXECUTIVE',
+      'ADMIN',
+      'NIGHT_AUDITOR',
+    ]);
+    const stageRoles: Record<string, Set<string>> = {
+      ACCOUNTANT_REVIEW: new Set(['ACCOUNTANT', 'FINANCE_MANAGER']),
+      GENERAL_CASHIER_REVIEW: new Set(['GENERAL_CASHIER', 'CASHIER', 'FRONT_DESK_CASHIER']),
+      MANAGEMENT_REVIEW: managementRoles,
+      GENERAL_MANAGER_REVIEW: managementRoles,
+      PROPERTY_MANAGER_REVIEW: managementRoles,
+      MANAGER_REVIEW: managementRoles,
+    };
+    const canViewApproval = (approval: (typeof pendingApprovals)[number]) => {
+      if (user.isSuperAdmin) return true;
+
+      const details = (approval.details || {}) as Record<string, unknown>;
+      const assignedUserId = details.approverId || details.currentApproverId || details.assignedTo;
+      if (assignedUserId && String(assignedUserId) !== user.id) return false;
+
+      const requester = requesterById.get(approval.requestedBy);
+      if (approval.requestedBy === user.id || requester?.userId === user.id) return false;
+
+      const requiredRole = details.approverRole || details.requiredRole;
+      if (requiredRole && String(requiredRole).toUpperCase() !== role) return false;
+
+      const stage = String(details.stage || details.approvalStage || '').toUpperCase();
+      if (stage && stageRoles[stage]) return stageRoles[stage].has(role);
+
+      // Legacy requests may not have a stage. Keep them with management users,
+      // which matches the historic executive approval behavior.
+      return managementRoles.has(role);
+    };
+    const scopedPendingApprovals = pendingApprovals.filter(canViewApproval);
+
     const discountRoomIds = pendingApprovals
       .filter((approval) => approval.type === 'DISCOUNT')
       .map((approval) => {
@@ -172,7 +212,7 @@ export async function GET(req: NextRequest) {
       },
     }) : [];
     const reviewRoomById = new Map(reviewRooms.map((room) => [room.id, room]));
-    const enrichedApprovals = pendingApprovals.map((approval) => {
+    const enrichedApprovals = scopedPendingApprovals.map((approval) => {
       const staff = requesterById.get(approval.requestedBy);
       const requestedByName = staff
         ? `${staff.firstName || ''} ${staff.lastName || ''}`.replace(/\s+/g, ' ').trim()

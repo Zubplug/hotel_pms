@@ -19,7 +19,7 @@ final dioProvider = Provider<Dio>((ref) {
     InterceptorsWrapper(
       onRequest: (options, handler) async {
         final accessToken = await tokenStorage.getAccessToken();
-        if (accessToken != null) {
+        if (accessToken != null && accessToken.isNotEmpty) {
           options.headers['Authorization'] = 'Bearer $accessToken';
         }
         if (kDebugMode) {

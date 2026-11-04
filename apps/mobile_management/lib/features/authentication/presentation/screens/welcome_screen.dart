@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../providers/auth_provider.dart';
 
 const _navy = Color(0xFF071321);
 const _navySoft = Color(0xFF10243A);
@@ -7,14 +9,14 @@ const _gold = Color(0xFFD6A956);
 const _ink = Color(0xFFEAF0F5);
 const _muted = Color(0xFF8EA2B7);
 
-class WelcomeScreen extends StatefulWidget {
+class WelcomeScreen extends ConsumerStatefulWidget {
   const WelcomeScreen({super.key});
 
   @override
-  State<WelcomeScreen> createState() => _WelcomeScreenState();
+  ConsumerState<WelcomeScreen> createState() => _WelcomeScreenState();
 }
 
-class _WelcomeScreenState extends State<WelcomeScreen>
+class _WelcomeScreenState extends ConsumerState<WelcomeScreen>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
   late final Animation<double> _fade;
@@ -23,6 +25,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
   @override
   void initState() {
     super.initState();
+    ref.read(authProvider.notifier).markWelcomeShown();
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 900),
