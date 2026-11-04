@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../../../approvals/presentation/screens/approvals_screen.dart';
 import '../../../fnb/presentation/screens/fnb_screen.dart';
 import '../../../finance/presentation/screens/finance_screen.dart';
+import '../../../hub/presentation/screens/hub_screen.dart';
 import '../../../rooms/presentation/screens/rooms_screen.dart';
 import 'general_cashier_dashboard_screen.dart';
 
@@ -28,7 +28,7 @@ class _GeneralCashierMainScreenState extends State<GeneralCashierMainScreen> {
       RoomsScreen(),
       FinanceScreen(),
       FnbScreen(),
-      ApprovalsScreen(),
+      HubScreen(),
     ];
 
     return Scaffold(
@@ -68,7 +68,12 @@ class _GeneralCashierMainScreenState extends State<GeneralCashierMainScreen> {
                 Icons.restaurant_rounded,
                 'Ops',
               ),
-              _navItem(4, Icons.rule_outlined, Icons.rule_rounded, 'Controls'),
+              _navItem(
+                4,
+                Icons.dashboard_outlined,
+                Icons.dashboard_rounded,
+                'Hub',
+              ),
             ],
           ),
         ),

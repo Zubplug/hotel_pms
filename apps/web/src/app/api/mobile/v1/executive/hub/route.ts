@@ -142,6 +142,10 @@ export async function GET(req: NextRequest) {
     // 5. Build Dynamic Management Modules based on permissions
     const modules = [];
     modules.push({ id: "reservations", title: "Reservations", icon: "book_online", route: "/reservations", enabled: true });
+
+    if (isSystemAdmin || ['MANAGER', 'DIRECTOR', 'GENERAL_MANAGER', 'EXECUTIVE', 'GENERAL_CASHIER', 'NIGHT_AUDITOR'].includes(user.role)) {
+      modules.push({ id: "approvals", title: "Approval Centre", icon: "fact_check", route: "/approvals", enabled: true });
+    }
     
     if (isSystemAdmin || ['MANAGER', 'DIRECTOR', 'GENERAL_MANAGER', 'EXECUTIVE', 'NIGHT_AUDITOR'].includes(user.role)) {
       modules.push({ id: "reports", title: "Reports", icon: "assessment", route: "/reports", enabled: true });

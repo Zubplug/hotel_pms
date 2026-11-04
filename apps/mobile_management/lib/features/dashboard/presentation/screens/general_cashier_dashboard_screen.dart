@@ -252,18 +252,6 @@ class _CashierBody extends StatelessWidget {
               const SizedBox(height: 10),
               _ReviewCard(data: data),
               const SizedBox(height: 20),
-              const _SectionHeading(
-                title: 'CONTROL QUEUE',
-                subtitle:
-                    'Resolve exceptions before they become reconciliation issues.',
-              ),
-              const SizedBox(height: 10),
-              _ControlQueue(
-                data: data,
-                approvalCount: approvalCount,
-                currency: currency,
-              ),
-              const SizedBox(height: 20),
               _QuickLinks(context: context),
             ]),
           ),
@@ -758,112 +746,6 @@ class _ReviewCard extends StatelessWidget {
               ? _cashCyan
               : _cashGreen,
           size: 16,
-        ),
-      ],
-    ),
-  );
-}
-
-class _ControlQueue extends StatelessWidget {
-  final FinanceDashboardData data;
-  final int approvalCount;
-  final String currency;
-
-  const _ControlQueue({
-    required this.data,
-    required this.approvalCount,
-    required this.currency,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final rows = <Widget>[
-      _QueueRow(
-        icon: Icons.rule_rounded,
-        title: 'Approvals',
-        detail:
-            '$approvalCount request${approvalCount == 1 ? '' : 's'} awaiting decision',
-        color: approvalCount > 0 ? _cashAmber : _cashGreen,
-      ),
-      _QueueRow(
-        icon: Icons.compare_arrows_rounded,
-        title: 'Cash variances',
-        detail: data.cashControl.sessionsWithVariance == 0
-            ? 'No open till variance'
-            : '${data.cashControl.sessionsWithVariance} session variance · ${_money(data.cashControl.variance.abs(), currency)}',
-        color: data.cashControl.sessionsWithVariance > 0
-            ? _cashRed
-            : _cashGreen,
-      ),
-      _QueueRow(
-        icon: Icons.receipt_long_rounded,
-        title: 'Transaction controls',
-        detail:
-            '${data.transactionControls.refunds.toStringAsFixed(0)} refunds · ${data.transactionControls.overrides} overrides',
-        color: _cashCyan,
-      ),
-    ];
-    return Container(
-      decoration: BoxDecoration(
-        color: _cashPanel,
-        borderRadius: BorderRadius.circular(17),
-        border: Border.all(color: _cashLine),
-      ),
-      child: Column(
-        children: [
-          for (var i = 0; i < rows.length; i++) ...[
-            rows[i],
-            if (i < rows.length - 1) const Divider(height: 1, color: _cashLine),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _QueueRow extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String detail;
-  final Color color;
-
-  const _QueueRow({
-    required this.icon,
-    required this.title,
-    required this.detail,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.all(14),
-    child: Row(
-      children: [
-        Icon(icon, color: color, size: 19),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: const TextStyle(
-                  color: _cashText,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 12,
-                ),
-              ),
-              const SizedBox(height: 3),
-              Text(
-                detail,
-                style: const TextStyle(color: _cashMuted, fontSize: 11),
-              ),
-            ],
-          ),
-        ),
-        Icon(
-          Icons.chevron_right_rounded,
-          color: _cashMuted.withValues(alpha: .6),
         ),
       ],
     ),

@@ -587,6 +587,7 @@ class _HubBodyState extends State<_HubBody> {
     }
 
     final Widget? destination = switch (module.id) {
+      'approvals' => const ApprovalsScreen(),
       'finance' || 'reports' => const FinanceScreen(),
       'pos' => const FnbScreen(),
       'housekeeping' => const RoomsScreen(),
