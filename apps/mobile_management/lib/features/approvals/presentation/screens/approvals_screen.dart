@@ -641,7 +641,7 @@ class _ApprovalsScreenState extends ConsumerState<ApprovalsScreen> {
                 ),
                 const SizedBox(height: 9),
               ],
-              const Text(
+              Text(
                 type.toUpperCase() == 'DISCOUNT'
                     ? 'DISCOUNT UNDER REVIEW'
                     : 'AMOUNT UNDER REVIEW',
