@@ -30,6 +30,11 @@ function mapPaymentMethod(method: string): string {
   }
 }
 
+// FolioItem.posTransactionId is intentionally a string for legacy/offline
+// compatibility. Only cloud PosOrder UUIDs can be used in Prisma UUID filters;
+// older rows may contain POS order references such as `POS-...`.
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 export async function GET(req: NextRequest) {
   try {
     // ── Auth ──────────────────────────────────────────────────────────────────
@@ -149,7 +154,9 @@ export async function GET(req: NextRequest) {
 
     // Collect posOrderIds to fetch product fnbClass
     const posOrderIds = [...new Set(
-      fnbFolioItems.map((fi) => fi.posTransactionId).filter(Boolean) as string[]
+      fnbFolioItems
+        .map((fi) => fi.posTransactionId)
+        .filter((id): id is string => Boolean(id && UUID_PATTERN.test(id)))
     )];
 
     // For each posOrder, get fnbClass of the items (weighted proxy)
@@ -250,7 +257,9 @@ export async function GET(req: NextRequest) {
     });
 
     const allOrderIds = [...new Set(
-      allFnbFolioItemsWithOutlet.map((fi) => fi.posTransactionId).filter(Boolean) as string[]
+      allFnbFolioItemsWithOutlet
+        .map((fi) => fi.posTransactionId)
+        .filter((id): id is string => Boolean(id && UUID_PATTERN.test(id)))
     )];
 
     const ordersWithMeta = allOrderIds.length > 0
