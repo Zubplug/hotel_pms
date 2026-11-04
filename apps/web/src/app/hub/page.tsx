@@ -204,8 +204,8 @@ export default async function HubPage() {
               {tiles.filter(t => {
                 const requiredCapabilities = Array.isArray(t.cap) ? t.cap : [t.cap];
                 return requiredCapabilities.some(capability => capabilities.includes(capability)) && enabledModules.includes(t.module);
-              }).map(tile => (
-                <Link key={tile.cap} href={tile.href} className={`
+                }).map(tile => (
+                <Link key={Array.isArray(tile.cap) ? tile.cap[0] : tile.cap} href={tile.href} className={`
                   ${tile.color} rounded-2xl p-6 flex flex-col items-center justify-center
                   shadow-lg transition-all duration-200 transform hover:scale-105 hover:shadow-xl
                   aspect-square text-white group cursor-pointer
