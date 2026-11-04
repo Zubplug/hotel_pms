@@ -35,8 +35,21 @@ Do not commit the decrypted output.
 
 ## Versioning
 
-The current release is `1.0.1` with Android version code `2`. Increment the
+The current release is `1.0.2` with Android version code `3`. Increment the
 build number for every Play upload.
+
+## Release notes — 1.0.2 (Build 3)
+
+- Added a professional Night Audit review flow with dedicated blocker dialogs
+  for check-in bypasses, discounts, transactions, cash handovers, and cash drops.
+- Added clearer audit verification details, including guest, room, reservation,
+  balance, staff, acknowledgement, and audit-note information.
+- Improved approval scoping so users see only approval work relevant to their
+  role and assignment.
+- Improved room-number display and transaction reservation context.
+- Fixed logout routing, first-install welcome behavior, and stale-session 401s.
+- Improved dashboard and approval dialog presentation for a more consistent
+  management experience.
 
 Before submission, complete the Play Console requirements for the app:
 
