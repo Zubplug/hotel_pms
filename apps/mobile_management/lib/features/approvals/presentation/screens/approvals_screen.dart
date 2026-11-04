@@ -736,155 +736,158 @@ class _ApprovalsScreenState extends ConsumerState<ApprovalsScreen> {
     String type,
   ) {
     final reason = request['reason']?.toString() ?? 'No reason provided';
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: const Color(0xFF101B30),
-      showDragHandle: true,
-      useSafeArea: true,
-      constraints: BoxConstraints(
-        maxWidth: 640,
-        maxHeight: MediaQuery.sizeOf(context).height * .94,
-      ),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      builder: (sheetContext) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
-          child: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (pageContext) => Scaffold(
+          backgroundColor: const Color(0xFF101B30),
+          appBar: AppBar(
+            backgroundColor: const Color(0xFF101B30),
+            foregroundColor: const Color(0xFFF1F5FF),
+            elevation: 0,
+            title: const Text(
+              'Approval review',
+              style: TextStyle(fontWeight: FontWeight.w800),
+            ),
+          ),
+          body: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: Text(
-                        _requestTitle(type),
-                        style: TextStyle(
-                          color: Color(0xFFF1F5FF),
-                          fontSize: 21,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                    _detailBadge(type),
-                    IconButton(
-                      onPressed: () => Navigator.pop(sheetContext),
-                      tooltip: 'Close details',
-                      icon: const Icon(
-                        Icons.close_rounded,
-                        color: Color(0xFF91A2BF),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(13),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF16243D),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: const Color(0xFF243653)),
-                  ),
-                  child: const Row(
-                    children: [
-                      Icon(
-                        Icons.shield_outlined,
-                        color: Color(0xFF42D392),
-                        size: 18,
-                      ),
-                      SizedBox(width: 9),
-                      Expanded(
-                        child: Text(
-                          'Review the request context before making a decision. Approval actions are authenticated.',
-                          style: TextStyle(
-                            color: Color(0xFFB8C5D9),
-                            fontSize: 11,
-                            height: 1.4,
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            _requestTitle(type),
+                            style: TextStyle(
+                              color: Color(0xFFF1F5FF),
+                              fontSize: 21,
+                              fontWeight: FontWeight.w800,
+                            ),
                           ),
                         ),
+                        _detailBadge(type),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(13),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF16243D),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: const Color(0xFF243653)),
                       ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  '${currency == 'NGN' ? '₦' : currency}${amount.toStringAsFixed(2)}',
-                  style: const TextStyle(
-                    color: Color(0xFFD8AD52),
-                    fontSize: 28,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                const SizedBox(height: 18),
-                _detailLine('Request ID', request['id']?.toString() ?? '—'),
-                _detailLine('Requested by', _requesterLabel(request)),
-                if (_guestLabel(request) != null)
-                  _detailLine('Guest', _guestLabel(request)!),
-                if (_roomLabel(request) != null)
-                  _detailLine('Room', _roomLabel(request)!),
-                _detailLine('Submitted', _submittedLabel(request)),
-                const SizedBox(height: 14),
-                const Text(
-                  'Reason',
-                  style: TextStyle(
-                    color: Color(0xFF91A2BF),
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: .8,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  reason,
-                  style: const TextStyle(
-                    color: Color(0xFFD7E1F2),
-                    fontSize: 14,
-                    height: 1.45,
-                  ),
-                ),
-                ..._buildRequestDetails(type, request),
-                const SizedBox(height: 20),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: () {
-                          Navigator.pop(sheetContext);
-                          _handleReject(request['id'].toString(), type);
-                        },
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: const Color(0xFFF07478),
-                          side: const BorderSide(color: Color(0xFFF07478)),
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                        ),
-                        child: const Text('Reject'),
+                      child: const Row(
+                        children: [
+                          Icon(
+                            Icons.shield_outlined,
+                            color: Color(0xFF42D392),
+                            size: 18,
+                          ),
+                          SizedBox(width: 9),
+                          Expanded(
+                            child: Text(
+                              'Review the request context before making a decision. Approval actions are authenticated.',
+                              style: TextStyle(
+                                color: Color(0xFFB8C5D9),
+                                fontSize: 11,
+                                height: 1.4,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: FilledButton(
-                        onPressed: () {
-                          Navigator.pop(sheetContext);
-                          _handleApprove(
-                            request['id'].toString(),
-                            type,
-                            amount,
-                          );
-                        },
-                        style: FilledButton.styleFrom(
-                          backgroundColor: const Color(0xFF42D392),
-                          foregroundColor: const Color(0xFF070D1A),
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                        ),
-                        child: const Text('Approve'),
+                    const SizedBox(height: 8),
+                    Text(
+                      '${currency == 'NGN' ? '₦' : currency}${amount.toStringAsFixed(2)}',
+                      style: const TextStyle(
+                        color: Color(0xFFD8AD52),
+                        fontSize: 28,
+                        fontWeight: FontWeight.w900,
                       ),
                     ),
+                    const SizedBox(height: 18),
+                    _detailLine('Request ID', request['id']?.toString() ?? '—'),
+                    _detailLine('Requested by', _requesterLabel(request)),
+                    if (_guestLabel(request) != null)
+                      _detailLine('Guest', _guestLabel(request)!),
+                    if (_roomLabel(request) != null)
+                      _detailLine('Room', _roomLabel(request)!),
+                    _detailLine('Submitted', _submittedLabel(request)),
+                    const SizedBox(height: 14),
+                    const Text(
+                      'Reason',
+                      style: TextStyle(
+                        color: Color(0xFF91A2BF),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: .8,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      reason,
+                      style: const TextStyle(
+                        color: Color(0xFFD7E1F2),
+                        fontSize: 14,
+                        height: 1.45,
+                      ),
+                    ),
+                    ..._buildRequestDetails(type, request),
+                    const SizedBox(height: 20),
+                    const SizedBox(height: 92),
                   ],
                 ),
-              ],
+              ),
+            ),
+          ),
+          bottomNavigationBar: SafeArea(
+            top: false,
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 14),
+              decoration: const BoxDecoration(
+                color: Color(0xFF0B1426),
+                border: Border(top: BorderSide(color: Color(0xFF243653))),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(pageContext);
+                        _handleReject(request['id'].toString(), type);
+                      },
+                      icon: const Icon(Icons.close_rounded, size: 17),
+                      label: const Text('Reject'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFFF07478),
+                        side: const BorderSide(color: Color(0xFFF07478)),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: () {
+                        Navigator.pop(pageContext);
+                        _handleApprove(request['id'].toString(), type, amount);
+                      },
+                      icon: const Icon(Icons.check_rounded, size: 17),
+                      label: const Text('Approve'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: const Color(0xFF42D392),
+                        foregroundColor: const Color(0xFF070D1A),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
