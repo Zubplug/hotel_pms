@@ -128,7 +128,7 @@ export async function GET(req: NextRequest) {
     const requesterIds = [...new Set(pendingApprovals.map((approval) => approval.requestedBy).filter(Boolean))];
     const requesterStaff = requesterIds.length ? await prisma.staff.findMany({
       where: { OR: [{ id: { in: requesterIds } }, { userId: { in: requesterIds } }] },
-      select: { id: true, userId: true, firstName: true, lastName: true, employeeId: true, position: true, role: true },
+      select: { id: true, userId: true, firstName: true, lastName: true, employeeId: true, position: true, department: true },
     }) : [];
     const requesterById = new Map(requesterStaff.flatMap((staff) => [
       [staff.id, staff] as const,
@@ -180,7 +180,7 @@ export async function GET(req: NextRequest) {
       const requesterDetails = {
         requestedByName: requestedByName || null,
         requesterEmployeeId: staff?.employeeId || null,
-        requesterPosition: staff?.position || staff?.role || null,
+        requesterPosition: staff?.position || staff?.department || null,
       };
       if (approval.type !== 'DISCOUNT') {
         return { ...approval, source: 'APPROVAL_REQUEST', details: { ...((approval.details || {}) as Record<string, unknown>), ...requesterDetails } };

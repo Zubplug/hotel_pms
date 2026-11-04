@@ -340,7 +340,7 @@ class _ApprovalsScreenState extends ConsumerState<ApprovalsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
+              Text(
                 'Management decisions',
                 style: TextStyle(
                   color: Color(0xFFF1F5FF),
@@ -505,6 +505,43 @@ class _ApprovalsScreenState extends ConsumerState<ApprovalsScreen> {
     return null;
   }
 
+  String _discountMode(Map<String, dynamic> request) {
+    final context = _requestContext(request);
+    final explicit = (context['discountType'] ?? context['type'])
+        ?.toString()
+        .toUpperCase();
+    if (explicit == 'PERCENTAGE' || explicit == 'PERCENT') return 'PERCENTAGE';
+    if (explicit == 'FIXED_AMOUNT' || explicit == 'AMOUNT') return 'AMOUNT';
+    final percent = num.tryParse(
+      (context['discountPercent'] ?? context['percentage'] ?? '').toString(),
+    );
+    return percent != null && percent > 0 ? 'PERCENTAGE' : 'AMOUNT';
+  }
+
+  String _primaryAmountLabel(
+    String type,
+    Map<String, dynamic> request,
+    double amount,
+    String currency,
+  ) {
+    if (type.toUpperCase() == 'DISCOUNT') {
+      final context = _requestContext(request);
+      if (_discountMode(request) == 'PERCENTAGE') {
+        final percent = num.tryParse(
+          (context['discountPercent'] ?? context['percentage'] ?? '0')
+              .toString(),
+        );
+        return '${percent?.toStringAsFixed(2) ?? '0.00'}% discount';
+      }
+      final fixedAmount = num.tryParse(
+        (context['discountAmount'] ?? context['discountValue'] ?? amount)
+            .toString(),
+      );
+      return '${_formatAmount(fixedAmount ?? amount, currency)} discount';
+    }
+    return _formatAmount(amount, currency);
+  }
+
   String _displayType(String type) {
     switch (type.toUpperCase()) {
       case 'DISCOUNT':
@@ -605,7 +642,9 @@ class _ApprovalsScreenState extends ConsumerState<ApprovalsScreen> {
                 const SizedBox(height: 9),
               ],
               const Text(
-                'AMOUNT UNDER REVIEW',
+                type.toUpperCase() == 'DISCOUNT'
+                    ? 'DISCOUNT UNDER REVIEW'
+                    : 'AMOUNT UNDER REVIEW',
                 style: TextStyle(
                   color: Color(0xFF91A2BF),
                   fontSize: 10,
@@ -615,7 +654,7 @@ class _ApprovalsScreenState extends ConsumerState<ApprovalsScreen> {
               ),
               const SizedBox(height: 5),
               Text(
-                _formatAmount(amount, currency),
+                _primaryAmountLabel(type, request, amount, currency),
                 style: const TextStyle(
                   fontSize: 28,
                   fontWeight: FontWeight.w900,
@@ -817,7 +856,7 @@ class _ApprovalsScreenState extends ConsumerState<ApprovalsScreen> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      _formatAmount(amount, currency),
+                      _primaryAmountLabel(type, request, amount, currency),
                       style: const TextStyle(
                         color: Color(0xFFD8AD52),
                         fontSize: 28,
@@ -1045,8 +1084,19 @@ class _ApprovalsScreenState extends ConsumerState<ApprovalsScreen> {
         'stage',
       ],
     };
-    final requestedKeys =
+    var requestedKeys =
         keysByType[type.toUpperCase()] ?? detailMap.keys.toList();
+    if (type.toUpperCase() == 'DISCOUNT') {
+      final mode = _discountMode(request);
+      requestedKeys = requestedKeys.where((key) {
+        if (mode == 'PERCENTAGE') {
+          return key != 'discountAmount' &&
+              key != 'originalAmount' &&
+              key != 'finalAmount';
+        }
+        return key != 'discountPercent';
+      }).toList();
+    }
     final rows = <Widget>[];
     for (final key in requestedKeys) {
       final value =
