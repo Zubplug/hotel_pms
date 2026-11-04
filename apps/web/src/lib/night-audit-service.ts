@@ -156,8 +156,14 @@ export async function getSystemIntegrity(ctx: TenantContext, propertyId: string)
       
     const expectedCash = session.status === 'OPEN' ? calculatedExpectedCash : Number(session.systemExpectedCash ?? calculatedExpectedCash);
     const { payments, cashMovements, ...rest } = session;
+    const cashIn = movementTotal(['CASH_IN', 'CASH_TRANSFER_IN']);
+    const cashOut = movementTotal(['REFUND', 'REFUND_CASH', 'PAID_OUT', 'CASH_DROP', 'CASH_TRANSFER_OUT']);
     return {
       ...rest,
+      staffName: `${session.staff.firstName} ${session.staff.lastName}`.trim(),
+      cashReceipts,
+      cashIn,
+      cashOut,
       expectedCash // Inject dynamically calculated expected cash
     };
   });

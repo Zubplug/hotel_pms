@@ -865,9 +865,19 @@ function FrontdeskShiftResolution({ item, onSuccess, onClose }: { item: any; onS
       </DialogHeader>
       {error && <div className="p-3 bg-rose-400/[0.04] text-rose-300 rounded-lg text-sm border border-rose-400/20">{error}</div>}
       <div className="py-4 space-y-4">
-        <div className="flex items-center justify-between p-3 border border-white/[0.08] rounded-lg bg-white/[0.03]">
-          <span className="text-sm font-medium text-slate-300">Expected Cash Drawer</span>
-          <span className="font-bold text-white tabular-nums">{expected.toFixed(2)}</span>
+        <div className="grid grid-cols-2 gap-3 rounded-xl border border-white/[0.08] bg-white/[0.03] p-4 text-xs">
+          <div><p className="text-slate-500">Shift status</p><p className="mt-1 font-semibold text-white">{item.status || 'OPEN'}</p></div>
+          <div><p className="text-slate-500">Staff</p><p className="mt-1 font-semibold text-white">{item.staffName || 'Not recorded'}</p></div>
+          <div><p className="text-slate-500">Opened</p><p className="mt-1 font-semibold text-white">{item.openedAt ? format(new Date(item.openedAt), 'MMM d, yyyy HH:mm') : 'Not recorded'}</p></div>
+          <div><p className="text-slate-500">Shift reference</p><p className="mt-1 font-semibold text-white">{item.shiftReference || 'Not recorded'}</p></div>
+          <div><p className="text-slate-500">Opening float</p><p className="mt-1 font-semibold text-white">₦{Number(item.openingFloat || 0).toLocaleString('en-NG', { minimumFractionDigits: 2 })}</p></div>
+          <div><p className="text-slate-500">Cash receipts</p><p className="mt-1 font-semibold text-white">₦{Number(item.cashReceipts || 0).toLocaleString('en-NG', { minimumFractionDigits: 2 })}</p></div>
+          <div><p className="text-slate-500">Cash in / transfers</p><p className="mt-1 font-semibold text-white">₦{Number(item.cashIn || 0).toLocaleString('en-NG', { minimumFractionDigits: 2 })}</p></div>
+          <div><p className="text-slate-500">Cash out / drops</p><p className="mt-1 font-semibold text-white">₦{Number(item.cashOut || 0).toLocaleString('en-NG', { minimumFractionDigits: 2 })}</p></div>
+          <div className="col-span-2 flex items-center justify-between border-t border-white/[0.08] pt-3">
+            <span className="font-medium text-slate-300">Expected Cash Drawer</span>
+            <span className="font-bold text-amber-200 tabular-nums">₦{expected.toLocaleString('en-NG', { minimumFractionDigits: 2 })}</span>
+          </div>
         </div>
         <div className="space-y-2">
           <label className="text-sm font-medium text-slate-300">Actual Declared Cash</label>

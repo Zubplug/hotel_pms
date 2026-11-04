@@ -280,6 +280,17 @@ class _NightAuditReviewScreenState
     final fnb = map(data['fnb']);
     final exceptions = map(fnb['exceptions']);
     final result = <Map<String, dynamic>>[];
+    final systemOpenPosOrders = list(system['openPosOrders']);
+    final fnbOpenOrders = list(exceptions['openOrders']);
+    final systemOrderIds = systemOpenPosOrders
+        .map((order) => map(order)['id']?.toString())
+        .whereType<String>()
+        .toSet();
+    final additionalFnbOrders = fnbOpenOrders
+        .where(
+          (order) => !systemOrderIds.contains(map(order)['id']?.toString()),
+        )
+        .toList();
     void add(
       String key,
       String title,
@@ -303,7 +314,7 @@ class _NightAuditReviewScreenState
       'pos-order',
       'Open POS order',
       'Investigate and settle or void this order.',
-      system['openPosOrders'],
+      systemOpenPosOrders,
       'void',
     );
     add(
@@ -338,7 +349,7 @@ class _NightAuditReviewScreenState
       'fnb-order',
       'Open F&B order',
       'The responsible waiter must settle or void this order.',
-      exceptions['openOrders'],
+      additionalFnbOrders,
       'info',
     );
     add(
@@ -1818,6 +1829,23 @@ class _SystemControlDialogState extends State<_SystemControlDialog> {
                   fontSize: 12,
                 ),
               ),
+              if (widget.kind == 'pos-session') ...[
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.indigoAccent.withValues(alpha: .08),
+                    borderRadius: BorderRadius.circular(13),
+                    border: Border.all(
+                      color: Colors.indigoAccent.withValues(alpha: .22),
+                    ),
+                  ),
+                  child: const Text(
+                    'Open POS orders are reviewed separately from this cashier session.',
+                    style: TextStyle(color: _text, fontSize: 11, height: 1.35),
+                  ),
+                ),
+              ],
               const SizedBox(height: 18),
               Container(
                 padding: const EdgeInsets.all(14),
@@ -1842,9 +1870,82 @@ class _SystemControlDialogState extends State<_SystemControlDialog> {
                       _row('Outlet', value(widget.item['outletName'])),
                     if (widget.item['openedByName'] != null)
                       _row('Opened by', value(widget.item['openedByName'])),
+                    if (widget.kind == 'pos-session') ...[
+                      _row(
+                        'Session status',
+                        value(widget.item['status'], 'OPEN'),
+                      ),
+                      _row(
+                        'Banking model',
+                        value(
+                          widget.item['bankingModel'] ??
+                              widget.item['bankType'],
+                          'Not recorded',
+                        ),
+                      ),
+                      _row(
+                        'Terminal',
+                        value(
+                          mapValue(widget.item['device'])['name'],
+                          'Not recorded',
+                        ),
+                      ),
+                      _row('Opening cash', _money(widget.item['openingCash'])),
+                      _row('Cash sales', _money(widget.item['cashSales'])),
+                    ],
+                    if (widget.kind == 'frontdesk') ...[
+                      _row(
+                        'Shift status',
+                        value(widget.item['status'], 'OPEN'),
+                      ),
+                      _row(
+                        'Staff',
+                        value(widget.item['staffName'], 'Not recorded'),
+                      ),
+                      _row(
+                        'Opened',
+                        value(widget.item['openedAt'], 'Not recorded'),
+                      ),
+                      _row(
+                        'Shift reference',
+                        value(widget.item['shiftReference'], 'Not recorded'),
+                      ),
+                      _row(
+                        'Opening float',
+                        _money(widget.item['openingFloat']),
+                      ),
+                      _row(
+                        'Cash receipts',
+                        _money(widget.item['cashReceipts']),
+                      ),
+                      _row(
+                        'Cash in / transfers',
+                        _money(widget.item['cashIn']),
+                      ),
+                      _row('Cash out / drops', _money(widget.item['cashOut'])),
+                    ],
+                    if (widget.kind == 'fnb-order') ...[
+                      _row(
+                        'Waiter',
+                        value(widget.item['waiterName'], 'Unknown waiter'),
+                      ),
+                      _row(
+                        'Table',
+                        value(widget.item['tableNumber'], 'Not recorded'),
+                      ),
+                      _row(
+                        'Order status',
+                        value(widget.item['status'], 'OPEN'),
+                      ),
+                      _row('Order total', _money(widget.item['total'])),
+                    ],
                     if (isCash)
                       _row('Expected cash', '₦${expected.toStringAsFixed(2)}'),
-                    if (isSync)
+                    if (isSync) ...[
+                      _row(
+                        'Aggregate',
+                        value(widget.item['aggregateType'], 'Financial record'),
+                      ),
                       _row(
                         'Event',
                         value(
@@ -1852,6 +1953,22 @@ class _SystemControlDialogState extends State<_SystemControlDialog> {
                           'Financial event',
                         ),
                       ),
+                      _row(
+                        'Device',
+                        value(
+                          mapValue(widget.item['hotelEvent'])['deviceId'],
+                          'Not recorded',
+                        ),
+                      ),
+                      if (mapValue(widget.item['errorDetails'])['message'] !=
+                          null)
+                        _row(
+                          'Issue',
+                          value(
+                            mapValue(widget.item['errorDetails'])['message'],
+                          ),
+                        ),
+                    ],
                   ],
                 ),
               ),
@@ -1978,6 +2095,11 @@ class _SystemControlDialogState extends State<_SystemControlDialog> {
 
   Map<String, dynamic> mapValue(dynamic input) =>
       input is Map ? Map<String, dynamic>.from(input) : <String, dynamic>{};
+
+  String _money(dynamic amount) {
+    final number = num.tryParse(amount?.toString() ?? '');
+    return number == null ? '₦0.00' : '₦${number.toStringAsFixed(2)}';
+  }
 
   Widget _row(String label, String value) => Padding(
     padding: const EdgeInsets.symmetric(vertical: 5),
