@@ -143,7 +143,7 @@ export async function GET(req: NextRequest) {
     const modules = [];
     modules.push({ id: "reservations", title: "Reservations", icon: "book_online", route: "/reservations", enabled: true });
     
-    if (isSystemAdmin || ['MANAGER', 'DIRECTOR', 'GENERAL_MANAGER', 'EXECUTIVE'].includes(user.role)) {
+    if (isSystemAdmin || ['MANAGER', 'DIRECTOR', 'GENERAL_MANAGER', 'EXECUTIVE', 'NIGHT_AUDITOR'].includes(user.role)) {
       modules.push({ id: "reports", title: "Reports", icon: "assessment", route: "/reports", enabled: true });
     }
 

@@ -10,6 +10,7 @@ import {
   Banknote, 
   Package, 
   BarChart3, 
+  FileText,
   Moon, 
   RefreshCw, 
   Wrench,
@@ -176,6 +177,7 @@ export default async function HubPage() {
     { cap: 'ACCESS_INVENTORY', module: 'MODULE_OPERATIONS', label: 'INVENTORY', icon: Package, href: '/inventory', color: 'bg-amber-600 hover:bg-amber-700' },
     { cap: 'ACCESS_MAINTENANCE', module: 'MODULE_OPERATIONS', label: 'MAINTENANCE', icon: Wrench, href: '/maintenance', color: 'bg-orange-600 hover:bg-orange-700' },
     { cap: 'ACCESS_MANAGEMENT', module: 'MODULE_ENTERPRISE', label: 'MANAGEMENT', icon: BarChart3, href: '/general-manager', color: 'bg-slate-700 hover:bg-slate-600' },
+    { cap: ['ACCESS_REPORTS', 'ACCESS_MANAGEMENT'], module: 'MODULE_ENTERPRISE', label: 'REPORTS', icon: FileText, href: '/reports', color: 'bg-indigo-700 hover:bg-indigo-600' },
     { cap: 'ACCESS_HR', module: 'MODULE_ENTERPRISE', label: 'HR & PAYROLL', icon: Users, href: '/hr', color: 'bg-teal-600 hover:bg-teal-700' },
     { cap: 'ACCESS_NIGHT_AUDIT', module: 'MODULE_PMS', label: 'NIGHT AUDIT', icon: Moon, href: '/night-audit', color: 'bg-purple-600 hover:bg-purple-700' },
     { cap: 'ACCESS_SYNC_CENTER', module: 'MODULE_PMS', label: 'SYNC CENTER', icon: RefreshCw, href: '/sync-center', color: 'bg-blue-600 hover:bg-blue-700' },
@@ -199,7 +201,10 @@ export default async function HubPage() {
           {/* Main Tiles Area - Takes up 8 columns */}
           <div className="md:col-span-8">
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-6">
-              {tiles.filter(t => capabilities.includes(t.cap) && enabledModules.includes(t.module)).map(tile => (
+              {tiles.filter(t => {
+                const requiredCapabilities = Array.isArray(t.cap) ? t.cap : [t.cap];
+                return requiredCapabilities.some(capability => capabilities.includes(capability)) && enabledModules.includes(t.module);
+              }).map(tile => (
                 <Link key={tile.cap} href={tile.href} className={`
                   ${tile.color} rounded-2xl p-6 flex flex-col items-center justify-center
                   shadow-lg transition-all duration-200 transform hover:scale-105 hover:shadow-xl

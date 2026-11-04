@@ -14,6 +14,7 @@ const RESERVATION_OVERSIGHT_ROLES = [
   'GENERAL_MANAGER',
   'CEO',
   'SUPER_ADMIN',
+  'NIGHT_AUDITOR',
 ];
 
 export async function GET(req: NextRequest) {
